@@ -159,10 +159,7 @@ pub mod pallet {
 		/// Emits an [`Event::CallPaused`] event on success.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::pause())]
-		pub fn pause(
-			origin: OriginFor<T>,
-			full_name: RuntimeCallNameOf<T>,
-		) -> DispatchResult {
+		pub fn pause(origin: OriginFor<T>, full_name: RuntimeCallNameOf<T>) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
 			Self::do_pause(full_name).map_err(Into::into)

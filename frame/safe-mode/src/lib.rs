@@ -273,7 +273,7 @@ pub mod pallet {
 		/// Reserves [`Config::ExtendStakeAmount`] from the caller's account.
 		/// Emits an [`Event::Extended`] event on success.
 		/// Errors with [`Error::Exited`] if the safe-mode is entered.
-		/// Errors with [`Error::NotConfigured`] if the stake amount is `None` .
+		/// Errors with [`Error::NotConfigured`] if the stake amount is `None`.
 		///
 		/// This may be called by any signed origin with [`Config::ExtendStakeAmount`] free
 		/// currency to reserve. This call can be disabled for all origins by configuring
@@ -306,8 +306,9 @@ pub mod pallet {
 		/// Errors with [`Error::Exited`] if the safe-mode is inactive.
 		///
 		/// Note: `safe-mode` will be automatically deactivated by [`Pallet::on_initialize`] hook
-		/// after the block height is greater than [`EnteredUntil`] found in storage.
-		/// Emits an [`Event::Exited`] with [`ExitReason::Timeout`] event on hook.
+		/// after the block height is greater than the [`EnteredUntil`] storage item.
+		/// Emits an [`Event::Exited`] with [`ExitReason::Timeout`] event when deactivated in the
+		/// hook.
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::force_exit())]
 		pub fn force_exit(origin: OriginFor<T>) -> DispatchResult {
@@ -316,13 +317,13 @@ pub mod pallet {
 			Self::do_exit(ExitReason::Force).map_err(Into::into)
 		}
 
-		/// Slash a stake for an account that entered or extended safe-mode at a specific
-		/// block earlier.
+		/// Slash a stake for an account that entered or extended safe-mode at a given
+		/// historical block.
 		///
-		/// This can be called while safe-mode is entered.
+		/// This can only be called while safe-mode is entered.
 		///
 		/// Emits a [`Event::StakeSlashed`] event on success.
-		/// Errors with [`Error::Entered`] if the safe-mode is entered.
+		/// Errors with [`Error::Entered`] if safe-mode is entered.
 		///
 		/// Can only be called by the [`Config::ForceStakeOrigin`] origin.
 		#[pallet::call_index(5)]
