@@ -54,6 +54,15 @@ pub struct ActiveCursor<Cursor, BlockNumber> {
 	started_at: BlockNumber,
 }
 
+impl<Cursor, BlockNumber> MigrationCursor<Cursor, BlockNumber> {
+	pub fn as_active(&self) -> Option<&ActiveCursor<Cursor, BlockNumber>> {
+		match self {
+			MigrationCursor::Active(active) => Some(active),
+			MigrationCursor::Stuck => None,
+		}
+	}
+}
+
 impl<Cursor, BlockNumber> ActiveCursor<Cursor, BlockNumber> {
 	pub(crate) fn advance(&mut self, current_block: BlockNumber) {
 		self.index.saturating_inc();
@@ -89,6 +98,9 @@ pub mod pallet {
 
 		/// The identifier type that is shared across all migrations.
 		type Identifier: codec::FullCodec + codec::MaxEncodedLen + scale_info::TypeInfo;
+
+		/// Notification handler for status updates regarding runtime upgrades.
+		type UpgradeStatusHandler: UpgradeStatusHandler;
 
 		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
@@ -139,21 +151,26 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			if Cursor::<T>::exists() {
-				defensive!("Ongoing migrations interrupted - chain stuck");
-				Self::deposit_event(Event::UpgradeFailed);
-				Cursor::<T>::set(Some(MigrationCursor::Stuck));
-				return T::WeightInfo::on_runtime_upgrade()
-			}
+			use FailedUpgradeHandling::*;
 
-			if T::Migrations::get().len() > 0 {
+			if let Some(cursor) = Cursor::<T>::get() {
+				log::error!("Ongoing migrations interrupted - chain stuck");
+				Self::deposit_event(Event::UpgradeFailed);
+
+				let maybe_index = cursor.as_active().map(|c| c.index);
+				match T::UpgradeStatusHandler::failed(maybe_index) {
+					KeepStuck => Cursor::<T>::set(Some(MigrationCursor::Stuck)),
+					ForceUnstuck => Cursor::<T>::kill(),
+				}
+			} else if T::Migrations::get().len() > 0 {
 				Cursor::<T>::set(Some(MigrationCursor::Active(ActiveCursor {
 					index: 0,
 					inner_cursor: None,
-					// TODO is this +1 correct?
+					// +1 to get the step index.
 					started_at: System::<T>::block_number().saturating_add(1u32.into()),
 				})));
 				Self::deposit_event(Event::UpgradeStarted);
+				T::UpgradeStatusHandler::started();
 			}
 
 			T::WeightInfo::on_runtime_upgrade()
@@ -161,6 +178,7 @@ pub mod pallet {
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut meter = WeightMeter::from_limit(T::ServiceWeight::get());
+			meter.defensive_saturating_accrue(T::WeightInfo::on_init_base());
 
 			let mut cursor = match Cursor::<T>::get() {
 				None => {
@@ -175,11 +193,14 @@ pub mod pallet {
 			};
 			debug_assert!(<Self as ExtrinsicSuspenderQuery>::is_suspended());
 
+			meter.defensive_saturating_accrue(T::WeightInfo::on_init_loop_base());
 			let migrations = T::Migrations::get();
-			for iteration in 0.. {
+			let mut iteration = 0;
+			while meter.check_accrue(T::WeightInfo::on_init_loop_base()) { // TODO
 				let Some(migration) = migrations.get(cursor.index as usize) else {
 					Self::deposit_event(Event::UpgradeCompleted { migrations: migrations.len() as u32 });
 					Cursor::<T>::kill();
+					T::UpgradeStatusHandler::completed();
 					return meter.consumed;
 				};
 				if Historic::<T>::contains_key(&migration.id()) {

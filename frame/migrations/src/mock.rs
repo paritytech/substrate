@@ -162,12 +162,14 @@ impl crate::Config for Test {
 	type Migrations = MigrationsStorage;
 	type Cursor = MockedCursor;
 	type Identifier = MockedIdentifier;
+	type UpgradeStatusHandler = LoggingUpgradeStatusHandler<()>;
 	type ServiceWeight = ServiceWeight;
 	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
+	sp_tracing::try_init_simple();
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
@@ -225,4 +227,24 @@ impl<E: IntoRecord> IntoRecords for Vec<E> {
 pub fn assert_events<E: IntoRecord>(events: Vec<E>) {
 	assert_eq!(System::events(), events.into_records());
 	System::reset_events();
+}
+
+/// Wraps an [`UpgradeStatusHandler`] and adds logging.
+pub struct LoggingUpgradeStatusHandler<T>(core::marker::PhantomData<T>);
+impl<T: UpgradeStatusHandler> UpgradeStatusHandler for LoggingUpgradeStatusHandler<T> {
+	fn started() {
+		log::info!("UpgradeStatusHandler started");
+		T::started();
+	}
+
+	fn completed() {
+		log::info!("UpgradeStatusHandler completed");
+		T::completed();
+	}
+
+	fn failed(migration: Option<u32>) -> FailedUpgradeHandling {
+		let res = T::failed(migration);
+		log::error!("UpgradeStatusHandler failed at: {migration:?}, handling as {res:?}");
+		res
+	}
 }

@@ -122,21 +122,9 @@ fn historic_skipping_works() {
 	});
 }
 
-#[test]
-#[cfg(debug_assertions)]
-#[should_panic(expected = "Defensive")]
-fn upgrade_fails_when_migration_active_err() {
-	upgrade_fails_when_migration_active();
-}
-
-#[test]
-#[cfg(not(debug_assertions))]
-fn upgrade_fails_when_migration_active_ok() {
-	upgrade_fails_when_migration_active();
-}
-
 /// When another upgrade happens while a migration is still running, it should stuck the chain.
 // FAIL-CI we could still check the unique id and only fail if it changed...
+#[test]
 fn upgrade_fails_when_migration_active() {
 	test_closure(|| {
 		MigrationsStorage::set(vec![(SucceedAfter, 10)]);
@@ -157,7 +145,7 @@ fn upgrade_fails_when_migration_active() {
 		]);
 		// Upgrade again.
 		Migrations::on_runtime_upgrade();
-		// -- Defensive triggered --
+		// -- Defensive path --
 		assert_eq!(Cursor::<T>::get(), Some(MigrationCursor::Stuck));
 		assert_events(vec![Event::UpgradeFailed]);
 	});

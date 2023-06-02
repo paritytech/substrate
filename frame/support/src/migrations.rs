@@ -288,3 +288,39 @@ impl ExtrinsicSuspenderQuery for () {
 		false
 	}
 }
+
+/// Notification handler for status updates regarding runtime upgrades.
+pub trait UpgradeStatusHandler {
+	/// Notifies of the start of a runtime upgrade.
+	///
+	/// Can be used to pause XCM etc.
+	fn started() {}
+
+	/// Notifies of the completion of a runtime upgrade.
+	///
+	/// Can be used to resume XCM etc.
+	fn completed() {}
+
+	/// Infallibly handle a failed runtime upgrade.
+	///
+	/// Gets optionally passed in the index of the migration that caused the failure.
+	fn failed(migration: Option<u32>) -> FailedUpgradeHandling;
+}
+
+/// How to proceed after a runtime upgrade failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailedUpgradeHandling {
+	/// Resume extrinsic processing of the chain. This will not resume the upgrade.
+	///
+	/// This should be supplemented with additional measures to ensure that the broken chain state
+	/// does not get further messed up by user extrinsics.
+	ForceUnstuck,
+	/// Do nothing and keep blocking extrinsics.
+	KeepStuck,
+}
+
+impl UpgradeStatusHandler for () {
+	fn failed(_migration: Option<u32>) -> FailedUpgradeHandling {
+		FailedUpgradeHandling::KeepStuck
+	}
+}
