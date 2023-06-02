@@ -26,10 +26,7 @@ use frame_support::{
 };
 use sp_core::Get;
 use sp_runtime::{traits::Zero, Saturating};
-use sp_std::{
-	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	vec::Vec,
-};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
 /// pallet.
@@ -66,41 +63,42 @@ where
 		BTreeMap<T::AccountId, BalanceOf<T>>,
 		frame_support::weights::Weight,
 	) {
-		let deposit_of = crate::DepositOf::<T>::iter().collect::<Vec<_>>();
-		let deposit_of_len = deposit_of.len() as u64;
+		let mut deposit_of_len = 0;
 
 		// Get all deposits (reserved).
 		let mut total_voting_vec_entries: u64 = 0;
-		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T>> = deposit_of
-			.into_iter()
+		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T>> = crate::DepositOf::<T>::iter()
 			.flat_map(|(_prop_index, (accounts, balance))| {
+				// Count the number of deposits
+				deposit_of_len.saturating_accrue(1);
+
 				// Track the total number of vec entries to calculate the weight of the reads.
-				total_voting_vec_entries += accounts.len() as u64;
+				total_voting_vec_entries.saturating_accrue(accounts.len() as u64);
+
 				// Create a vec of tuples where each account is associated with the given balance
 				accounts.into_iter().map(|account| (account, balance)).collect::<Vec<_>>()
 			})
 			.fold(BTreeMap::new(), |mut acc, (account, balance)| {
 				// Add the balance to the account's existing balance in the accumulator
-				*acc.entry(account).or_insert(Zero::zero()) =
-					acc.entry(account.clone()).or_insert(Zero::zero()).saturating_add(balance);
+				acc.entry(account.clone()).or_insert(Zero::zero()).saturating_accrue(balance);
 				acc
 			});
 
 		// Voter accounts have amounts locked.
-		let voting_of = crate::VotingOf::<T>::iter().collect::<Vec<_>>();
-		let voting_of_len = voting_of.len() as u64;
 		let account_stakes: BTreeMap<T::AccountId, BalanceOf<T>> = crate::VotingOf::<T>::iter()
 			.map(|(account_id, voting)| (account_id, voting.locked_balance()))
 			.collect();
+		let voting_of_len = account_stakes.len() as u64;
 
 		(
 			account_deposits,
 			account_stakes,
 			RocksDbWeight::get().reads(
-				deposit_of_len +
-				voting_of_len +
-				// Max items in a Voting enum is MaxVotes + 5
-				total_voting_vec_entries * (T::MaxVotes::get() as u64 + 5),
+				deposit_of_len.saturating_add(voting_of_len).saturating_add(
+					// Max items in a Voting enum is MaxVotes + 5
+					total_voting_vec_entries
+						.saturating_mul(T::MaxVotes::get().saturating_add(5) as u64),
+				),
 			),
 		)
 	}
@@ -125,6 +123,7 @@ where
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
+		use sp_std::collections::btree_set::BTreeSet;
 
 		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposits, account_locks, _) = Self::get_account_deposits_and_locks();
@@ -186,8 +185,8 @@ where
 		}
 
 		RocksDbWeight::get().reads_writes(
-			account_stakes.len() as u64 + account_deposits.len() as u64,
-			account_stakes.len() as u64 + account_deposits.len() as u64,
+			account_stakes.len().saturating_add(account_deposits.len()) as u64,
+			account_stakes.len().saturating_add(account_deposits.len()) as u64,
 		) + initial_reads
 	}
 
