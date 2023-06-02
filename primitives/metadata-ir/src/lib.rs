@@ -81,7 +81,6 @@ mod test {
 			extrinsic: ExtrinsicMetadataIR {
 				ty: meta_type::<()>(),
 				version: 0,
-				len_ty: meta_type::<()>(),
 				address_ty: meta_type::<()>(),
 				call_ty: meta_type::<()>(),
 				signature_ty: meta_type::<()>(),
