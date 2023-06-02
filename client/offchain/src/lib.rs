@@ -247,16 +247,15 @@ mod tests {
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
 	use sc_network::{config::MultiaddrWithPeerId, types::ProtocolName, ReputationChange};
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_transaction_pool::BasicPool;
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 	use sp_consensus::BlockOrigin;
-	use sp_runtime::generic::BlockId;
 	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
 		runtime::{
-			substrate_test_pallet::pallet::Call as PalletCall, Block, ExtrinsicBuilder, RuntimeCall,
+			substrate_test_pallet::pallet::Call as PalletCall, ExtrinsicBuilder, RuntimeCall,
 		},
-		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient, TestClientBuilderExt,
+		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	};
 
 	struct TestNetwork();
@@ -337,34 +336,14 @@ mod tests {
 		}
 	}
 
-	struct TestPool(Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>);
-
-	impl sc_transaction_pool_api::OffchainSubmitTransaction<Block> for TestPool {
-		fn submit_at(
-			&self,
-			at: &BlockId<Block>,
-			extrinsic: <Block as traits::Block>::Extrinsic,
-		) -> Result<(), ()> {
-			let source = sc_transaction_pool_api::TransactionSource::Local;
-			futures::executor::block_on(self.0.submit_one(&at, source, extrinsic))
-				.map(|_| ())
-				.map_err(|_| ())
-		}
-	}
-
 	#[test]
 	fn should_call_into_runtime_and_produce_extrinsic() {
 		sp_tracing::try_init_simple();
 
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let pool = TestPool(BasicPool::new_full(
-			Default::default(),
-			true.into(),
-			None,
-			spawner,
-			client.clone(),
-		));
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 		let network = Arc::new(TestNetwork());
 		let header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
@@ -373,9 +352,9 @@ mod tests {
 		futures::executor::block_on(offchain.on_block_imported(&header, network, false));
 
 		// then
-		assert_eq!(pool.0.status().ready, 1);
+		assert_eq!(pool.status().ready, 1);
 		assert!(matches!(
-			pool.0.ready().next().unwrap().data().function,
+			pool.ready().next().unwrap().data().function,
 			RuntimeCall::SubstrateTest(PalletCall::storage_change { .. })
 		));
 	}

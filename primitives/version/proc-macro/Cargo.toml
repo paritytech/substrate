@@ -1,6 +1,6 @@
 [package]
 name = "sp-version-proc-macro"
-version = "4.0.0"
+version = "8.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -22,4 +22,4 @@ quote = "1.0.28"
 syn = { version = "2.0.16", features = ["full", "fold", "extra-traits", "visit"] }
 
 [dev-dependencies]
-sp-version = { version = "6.0.0", path = ".." }
+sp-version = { version = "22.0.0", path = ".." }

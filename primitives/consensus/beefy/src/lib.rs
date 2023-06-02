@@ -47,7 +47,7 @@ use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
-use sp_runtime::traits::{Hash, NumberFor};
+use sp_runtime::traits::{Hash, Keccak256, NumberFor};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
@@ -156,6 +156,8 @@ impl<AuthorityId> ValidatorSet<AuthorityId> {
 /// The index of an authority.
 pub type AuthorityIndex = u32;
 
+/// The Hashing used within MMR.
+pub type MmrHashing = Keccak256;
 /// The type used to represent an MMR root hash.
 pub type MmrRootHash = H256;
 
