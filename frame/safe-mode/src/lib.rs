@@ -34,6 +34,7 @@ use frame_support::{
 		CallMetadata, Contains, Defensive, GetCallMetadata, PalletInfoAccess,
 	},
 	weights::Weight,
+	DefaultNoBound,
 };
 use frame_system::pallet_prelude::*;
 use sp_arithmetic::traits::Zero;
@@ -216,16 +217,9 @@ pub mod pallet {
 
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
+	#[cfg_attr(feature = "std", derive(DefaultNoBound))]
 	pub struct GenesisConfig<T: Config> {
 		pub entered_until: Option<T::BlockNumber>,
-	}
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		// NOTE: `derive(Default)` does not work together with `#[pallet::genesis_config]`.
-		// We therefore need to add a trivial default impl.
-		fn default() -> Self {
-			Self { entered_until: None }
-		}
 	}
 
 	#[pallet::genesis_build]

@@ -26,6 +26,7 @@ use frame_support::{
 	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
 	traits::{CallMetadata, Contains, GetCallMetadata, IsSubType, IsType},
+	DefaultNoBound,
 };
 use frame_system::pallet_prelude::*;
 use sp_runtime::{traits::Dispatchable, DispatchResult};
@@ -128,25 +129,18 @@ pub mod pallet {
 
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
+	#[cfg_attr(feature = "std", derive(DefaultNoBound))]
 	pub struct GenesisConfig<T: Config> {
 		/// The initially paused calls.
 		pub paused: Vec<RuntimeCallNameOf<T>>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		// NOTE: `derive(Default)` does not work together with `#[pallet::genesis_config]`.
-		// We therefore need to add a trivial default impl.
-		fn default() -> Self {
-			Self { paused: Default::default() }
-		}
-	}
-
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			for (pallet_name, maybe_call_name) in &self.paused {
-				PausedCalls::<T>::insert((pallet_name, maybe_call_name), ());
+			for call in &self.paused {
+				Pallet::<T>::ensure_can_pause(&call).expect("Genesis data is known good; qed");
+				PausedCalls::<T>::insert(&call, ());
 			}
 		}
 	}
