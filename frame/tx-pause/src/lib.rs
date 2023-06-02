@@ -120,7 +120,7 @@ pub mod pallet {
 
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
-	#[cfg_attr(feature = "std", derive(DefaultNoBound))]
+	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		/// The initially paused calls.
 		pub paused: Vec<RuntimeCallNameOf<T>>,

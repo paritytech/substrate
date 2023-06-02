@@ -256,22 +256,21 @@ impl pallet_tx_pause::Config for Runtime {
 }
 
 parameter_types! {
-	pub const SignedEnterDuration: u32 = 10;
-	pub const ExtendDuration: u32 = 20;
-	pub const EnterStakeAmount: Balance = 10 * DOLLARS;
-	pub const ExtendStakeAmount: Balance = 15 * DOLLARS;
-	pub const ReleaseDelay: u32 = 15;
-	pub const SafeModeHoldReason: HoldReason = HoldReason::SafeMode;
+	pub const EnterDuration: BlockNumber = 4 * HOURS;
+	pub const EnterStakeAmount: Balance = 2_000_000 * DOLLARS;
+	pub const ExtendDuration: BlockNumber = 2 * HOURS;
+	pub const ExtendStakeAmount: Balance = 1_000_000 * DOLLARS;
+	pub const ReleaseDelay: u32 = 2 * DAYS;
 }
 
 impl pallet_safe_mode::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type HoldReason = SafeModeHoldReason;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type WhitelistedCalls = SafeModeWhitelistedCalls;
-	type EnterDuration = ConstU32<{ 2 * DAYS }>;
+	type EnterDuration = EnterDuration;
 	type EnterStakeAmount = EnterStakeAmount;
-	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
+	type ExtendDuration = ExtendDuration;
 	type ExtendStakeAmount = ExtendStakeAmount;
 	type ForceEnterOrigin = EnsureRootWithSuccess<AccountId, ConstU32<9>>;
 	type ForceExtendOrigin = EnsureRootWithSuccess<AccountId, ConstU32<11>>;

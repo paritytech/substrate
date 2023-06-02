@@ -60,7 +60,8 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type for this pallet, used for Stakes.
-		type Currency: FunHoldInspect<Self::AccountId> + FunHoldMutate<Self::AccountId, Reason = Self::RuntimeHoldReason>;
+		type Currency: FunHoldInspect<Self::AccountId>
+			+ FunHoldMutate<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
 		/// The hold reason when reserving funds for entering or extending the safe-mode.
 		type RuntimeHoldReason: From<HoldReason>;
@@ -216,7 +217,7 @@ pub mod pallet {
 
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
-	#[cfg_attr(feature = "std", derive(DefaultNoBound))]
+	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub entered_until: Option<T::BlockNumber>,
 	}
@@ -233,6 +234,7 @@ pub mod pallet {
 	/// A reason for the pallet placing a hold on funds.
 	#[pallet::composite_enum]
 	pub enum HoldReason {
+		/// Funds are held for entering or extending the safe-mode.
 		#[codec(index = 0)]
 		EnterOrExtend,
 	}
@@ -468,9 +470,13 @@ impl<T: Config> Pallet<T> {
 			ensure!(now > block.saturating_add(delay), Error::<T>::CannotReleaseYet);
 		}
 
-		let amount =
-			T::Currency::release(&&HoldReason::EnterOrExtend.into(), &account, amount, Precision::BestEffort)
-				.map_err(|_| Error::<T>::CurrencyError)?;
+		let amount = T::Currency::release(
+			&&HoldReason::EnterOrExtend.into(),
+			&account,
+			amount,
+			Precision::BestEffort,
+		)
+		.map_err(|_| Error::<T>::CurrencyError)?;
 		Self::deposit_event(Event::<T>::StakeReleased { account, amount });
 		Ok(())
 	}
