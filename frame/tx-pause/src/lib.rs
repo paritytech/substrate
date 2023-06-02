@@ -104,10 +104,10 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The call is (already or still) paused.
+		/// The call is paused.
 		IsPaused,
 
-		/// The call is (already or still) unpaused.
+		/// The call is unpaused.
 		IsUnpaused,
 
 		/// The call is listed as safe and cannot be paused.
