@@ -20,7 +20,7 @@
 use _feps::ExtendedBalance;
 use frame_support::{
 	parameter_types, traits,
-	traits::{GenesisBuild, Hooks},
+	traits::{GenesisBuild, Hooks, UnfilteredDispatchable},
 	weights::constants,
 };
 use frame_system::EnsureRoot;
@@ -42,9 +42,10 @@ use sp_staking::{
 use sp_std::prelude::*;
 use std::collections::BTreeMap;
 
+use codec::Decode;
 use frame_election_provider_support::{onchain, ElectionDataProvider, SequentialPhragmen, Weight};
 use pallet_election_provider_multi_phase::{
-	unsigned::MinerConfig, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
+	unsigned::MinerConfig, Call, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
 };
 use pallet_staking::StakerStatus;
 use parking_lot::RwLock;
@@ -617,7 +618,6 @@ pub fn roll_to(n: BlockNumber, delay_solution: bool) {
 			});
 		}
 		ElectionProviderMultiPhase::on_initialize(b);
-		ElectionProviderMultiPhase::offchain_worker(b);
 
 		Staking::on_initialize(b);
 		if b != n {
@@ -628,14 +628,54 @@ pub fn roll_to(n: BlockNumber, delay_solution: bool) {
 	}
 }
 
-pub fn roll_one(delay_solution: bool) {
+// Progress to given block, triggering session and era changes as we progress and ensuring that
+// there is a solution queued when expected.
+pub fn roll_to_with_ocw(n: BlockNumber, pool: Arc<RwLock<PoolState>>, delay_solution: bool) {
+	for b in (System::block_number()) + 1..=n {
+		System::set_block_number(b);
+		Session::on_initialize(b);
+		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
+
+		ElectionProviderMultiPhase::on_initialize(b);
+		ElectionProviderMultiPhase::offchain_worker(b);
+
+		if !delay_solution && pool.read().transactions.len() > 0 {
+			// build and submit extrinsics queued in the pool by ocw.
+			let encoded = pool.read().transactions[0].clone();
+			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
+			let call = match extrinsic.call {
+				RuntimeCall::ElectionProviderMultiPhase(call @ Call::submit_unsigned { .. }) =>
+					call,
+				_ => panic!(
+					"unexpected error when decoding the submit_unsigned extrinsic from the pool."
+				),
+			};
+			crate::assert_ok!(call.dispatch_bypass_filter(RuntimeOrigin::none()));
+
+			pool.try_write().unwrap().transactions.clear();
+		}
+
+		Staking::on_initialize(b);
+		if b != n {
+			Staking::on_finalize(System::block_number());
+		}
+
+		log_current_time();
+	}
+}
+// helper to progress one block ahead.
+pub fn roll_one(pool: Arc<RwLock<PoolState>>, delay_solution: bool) {
 	let bn = System::block_number().saturating_add(1);
-	roll_to(bn, delay_solution);
+	roll_to_with_ocw(bn, pool, delay_solution);
 }
 
 /// Progresses from the current block number (whatever that may be) to the block where the session
 /// `session_index` starts.
-pub(crate) fn start_session(session_index: SessionIndex, delay_solution: bool) {
+pub(crate) fn start_session(
+	session_index: SessionIndex,
+	pool: Arc<RwLock<PoolState>>,
+	delay_solution: bool,
+) {
 	let end: u64 = if Offset::get().is_zero() {
 		Period::get() * (session_index as u64)
 	} else {
@@ -644,7 +684,7 @@ pub(crate) fn start_session(session_index: SessionIndex, delay_solution: bool) {
 
 	assert!(end >= System::block_number());
 
-	roll_to(end, delay_solution);
+	roll_to_with_ocw(end, pool, delay_solution);
 
 	// session must have progressed properly.
 	assert_eq!(
@@ -657,29 +697,35 @@ pub(crate) fn start_session(session_index: SessionIndex, delay_solution: bool) {
 }
 
 /// Go one session forward.
-pub(crate) fn advance_session() {
+pub(crate) fn advance_session(pool: Arc<RwLock<PoolState>>) {
 	let current_index = Session::current_index();
-	start_session(current_index + 1, false);
+	start_session(current_index + 1, pool, false);
 }
 
-pub(crate) fn advance_session_delayed_solution() {
+pub(crate) fn advance_session_delayed_solution(pool: Arc<RwLock<PoolState>>) {
 	let current_index = Session::current_index();
-	start_session(current_index + 1, true);
+	start_session(current_index + 1, pool, true);
 }
 
-pub(crate) fn start_next_active_era() -> Result<(), ()> {
-	start_active_era(active_era() + 1, false)
+pub(crate) fn start_next_active_era(pool: Arc<RwLock<PoolState>>) -> Result<(), ()> {
+	start_active_era(active_era() + 1, pool, false)
 }
 
-pub(crate) fn start_next_active_era_delayed_solution() -> Result<(), ()> {
-	start_active_era(active_era() + 1, true)
+pub(crate) fn start_next_active_era_delayed_solution(
+	pool: Arc<RwLock<PoolState>>,
+) -> Result<(), ()> {
+	start_active_era(active_era() + 1, pool, true)
 }
 
 /// Progress until the given era.
-pub(crate) fn start_active_era(era_index: EraIndex, delay_solution: bool) -> Result<(), ()> {
+pub(crate) fn start_active_era(
+	era_index: EraIndex,
+	pool: Arc<RwLock<PoolState>>,
+	delay_solution: bool,
+) -> Result<(), ()> {
 	let era_before = current_era();
 
-	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into(), delay_solution);
+	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into(), pool, delay_solution);
 
 	log!(
 		info,

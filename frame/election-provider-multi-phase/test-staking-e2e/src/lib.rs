@@ -53,12 +53,14 @@ fn log_current_time() {
 
 #[test]
 fn block_progression_works() {
-	ExtBuilder::default().build_and_execute(|| {
+	let (mut ext, pool_state, _) = ExtBuilder::default().build_offchainify();
+
+	ext.execute_with(|| {
 		assert_eq!(active_era(), 0);
 		assert_eq!(Session::current_index(), 0);
 		assert!(ElectionProviderMultiPhase::current_phase().is_off());
 
-		assert!(start_next_active_era().is_ok());
+		assert!(start_next_active_era(pool_state.clone()).is_ok());
 		assert_eq!(active_era(), 1);
 		assert_eq!(Session::current_index(), <SessionsPerEra as Get<u32>>::get());
 
@@ -68,12 +70,14 @@ fn block_progression_works() {
 		assert!(ElectionProviderMultiPhase::current_phase().is_signed());
 	});
 
-	ExtBuilder::default().build_and_execute(|| {
+	let (mut ext, pool_state, _) = ExtBuilder::default().build_offchainify();
+
+	ext.execute_with(|| {
 		assert_eq!(active_era(), 0);
 		assert_eq!(Session::current_index(), 0);
 		assert!(ElectionProviderMultiPhase::current_phase().is_off());
 
-		assert!(start_next_active_era_delayed_solution().is_ok());
+		assert!(start_next_active_era_delayed_solution(pool_state).is_ok());
 		// if the solution is delayed, EPM will end up in emergency mode..
 		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
 		// .. era won't progress..
@@ -85,27 +89,43 @@ fn block_progression_works() {
 
 #[test]
 fn offchainify_works() {
+	use pallet_election_provider_multi_phase::QueuedSolution;
+
 	let staking_builder = StakingExtBuilder::default();
 	let epm_builder = EpmExtBuilder::default();
-	let (mut ext, pool_state, offchain_state) = ExtBuilder::default()
+	let (mut ext, pool_state, _) = ExtBuilder::default()
 		.epm(epm_builder)
 		.staking(staking_builder)
 		.build_offchainify();
 
 	ext.execute_with(|| {
-		println!("Initial offchain_state (@ {:?}): {:?}", offchain_state, System::block_number());
+		// test ocw progression and solution queue if submission when unsigned phase submission is
+		// not delayed.
+		for _ in 0..100 {
+			roll_one(pool_state.clone(), false);
+			let current_phase = ElectionProviderMultiPhase::current_phase();
 
-		for _ in 0..25 {
-			roll_one(true);
-			println!("offchain_state (@ {:?})\n {:?}", offchain_state, System::block_number());
-			println!("pool_state: \n{:?}", pool_state.read().transactions);
-			match pallet_election_provider_multi_phase::QueuedSolution::<Runtime>::get() {
-				Some(solution) => println!(">>>>> queued solution with score {:?}", solution.score),
-				None => println!("No solution queued"),
+			let result = match QueuedSolution::<Runtime>::get() {
+				Some(_solution) if !current_phase.is_unsigned() =>
+					Err("solution must be queued only in unsigned phase."),
+				None if current_phase.is_unsigned() =>
+					Err("solution must be queued during unsigned phase."),
+				_ => Ok(()),
 			};
 
-			println!("EVENTS: {:?}", epm_events());
-			println!("\n\n")
+			assert_ok!(result);
+		}
+		// test ocw solution queue if submission in unsigned phase is delayed.
+		for _ in 0..100 {
+			roll_one(pool_state.clone(), true);
+
+			let result = match QueuedSolution::<Runtime>::get() {
+				Some(_solution) =>
+					Err("solution must never be submitted since it has been delayed."),
+				_ => Ok(()),
+			};
+
+			assert_ok!(result);
 		}
 	})
 }
@@ -126,8 +146,9 @@ fn offchainify_works() {
 /// restarts. Note that in this test case, the emergency throttling is disabled.
 fn enters_emergency_phase_after_forcing_before_elect() {
 	let epm_builder = EpmExtBuilder::default().disable_emergency_throttling();
+	let (mut ext, pool_state, _) = ExtBuilder::default().epm(epm_builder).build_offchainify();
 
-	ExtBuilder::default().epm(epm_builder).build_and_execute(|| {
+	ext.execute_with(|| {
 		log!(
 			trace,
 			"current validators (staking): {:?}",
@@ -144,15 +165,15 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 
 		assert_eq!(pallet_staking::ForceEra::<Runtime>::get(), pallet_staking::Forcing::ForceNew);
 
-		advance_session_delayed_solution();
+		advance_session_delayed_solution(pool_state.clone());
 		assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
 		log_current_time();
 
 		let era_before_delayed_next = Staking::current_era();
 		// try to advance 2 eras.
-		assert!(start_next_active_era_delayed_solution().is_ok());
+		assert!(start_next_active_era_delayed_solution(pool_state.clone()).is_ok());
 		assert_eq!(Staking::current_era(), era_before_delayed_next);
-		assert!(start_next_active_era().is_err());
+		assert!(start_next_active_era(pool_state).is_err());
 		assert_eq!(Staking::current_era(), era_before_delayed_next);
 
 		// EPM is still in emergency phase.
@@ -196,41 +217,43 @@ fn continous_slashes_below_offending_threshold() {
 	let staking_builder = StakingExtBuilder::default().validator_count(10);
 	let epm_builder = EpmExtBuilder::default().disable_emergency_throttling();
 
-	ExtBuilder::default()
-		.staking(staking_builder)
+	let (mut ext, pool_state, _) = ExtBuilder::default()
 		.epm(epm_builder)
-		.build_and_execute(|| {
-			assert_eq!(Session::validators().len(), 10);
-			let mut active_validator_set = Session::validators();
+		.staking(staking_builder)
+		.build_offchainify();
 
-			roll_to_epm_signed();
+	ext.execute_with(|| {
+		assert_eq!(Session::validators().len(), 10);
+		let mut active_validator_set = Session::validators();
 
-			// set a minimum election score.
-			assert!(set_minimum_election_score(500, 1000, 500).is_ok());
+		roll_to_epm_signed();
 
-			// slash 10% of the active validators and progress era until the minimum trusted score
-			// is reached.
-			while active_validator_set.len() > 0 {
-				let slashed = slash_percentage(Perbill::from_percent(10));
-				assert_eq!(slashed.len(), 1);
+		// set a minimum election score.
+		assert!(set_minimum_election_score(500, 1000, 500).is_ok());
 
-				// break loop when era does not progress; EPM is in emergency phase as election
-				// failed due to election minimum score.
-				if start_next_active_era().is_err() {
-					assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
-					break
-				}
+		// slash 10% of the active validators and progress era until the minimum trusted score
+		// is reached.
+		while active_validator_set.len() > 0 {
+			let slashed = slash_percentage(Perbill::from_percent(10));
+			assert_eq!(slashed.len(), 1);
 
-				active_validator_set = Session::validators();
-
-				log!(
-					trace,
-					"slashed 10% of active validators ({:?}). After slash: {:?}",
-					slashed,
-					active_validator_set
-				);
+			// break loop when era does not progress; EPM is in emergency phase as election
+			// failed due to election minimum score.
+			if start_next_active_era(pool_state.clone()).is_err() {
+				assert!(ElectionProviderMultiPhase::current_phase().is_emergency());
+				break
 			}
-		});
+
+			active_validator_set = Session::validators();
+
+			log!(
+				trace,
+				"slashed 10% of active validators ({:?}). After slash: {:?}",
+				slashed,
+				active_validator_set
+			);
+		}
+	});
 }
 
 #[test]
@@ -250,54 +273,53 @@ fn set_validation_intention_after_chilled() {
 	use frame_election_provider_support::SortedListProvider;
 	use pallet_staking::{Event, Forcing, Nominators};
 
-	let staking_builder = StakingExtBuilder::default();
-	let epm_builder = EpmExtBuilder::default();
+	let (mut ext, pool_state, _) = ExtBuilder::default()
+		.epm(EpmExtBuilder::default())
+		.staking(StakingExtBuilder::default())
+		.build_offchainify();
 
-	ExtBuilder::default()
-		.staking(staking_builder)
-		.epm(epm_builder)
-		.build_and_execute(|| {
-			assert_eq!(active_era(), 0);
-			// validator is part of the validator set.
-			assert!(Session::validators().contains(&81));
-			assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&81));
+	ext.execute_with(|| {
+		assert_eq!(active_era(), 0);
+		// validator is part of the validator set.
+		assert!(Session::validators().contains(&81));
+		assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&81));
 
-			// nominate validator 81.
-			assert_ok!(Staking::nominate(RuntimeOrigin::signed(21), vec![81]));
-			assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![81]);
+		// nominate validator 81.
+		assert_ok!(Staking::nominate(RuntimeOrigin::signed(21), vec![81]));
+		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![81]);
 
-			// validator is slashed. it is removed from the `VoterList` through chilling but in the
-			// current era, the validator is still part of the active validator set.
-			add_slash(&81);
-			assert!(Session::validators().contains(&81));
-			assert!(!<Runtime as pallet_staking::Config>::VoterList::contains(&81));
-			assert_eq!(
-				staking_events(),
-				[
-					Event::Chilled { stash: 81 },
-					Event::ForceEra { mode: Forcing::ForceNew },
-					Event::SlashReported {
-						validator: 81,
-						slash_era: 0,
-						fraction: Perbill::from_percent(10)
-					}
-				],
-			);
+		// validator is slashed. it is removed from the `VoterList` through chilling but in the
+		// current era, the validator is still part of the active validator set.
+		add_slash(&81);
+		assert!(Session::validators().contains(&81));
+		assert!(!<Runtime as pallet_staking::Config>::VoterList::contains(&81));
+		assert_eq!(
+			staking_events(),
+			[
+				Event::Chilled { stash: 81 },
+				Event::ForceEra { mode: Forcing::ForceNew },
+				Event::SlashReported {
+					validator: 81,
+					slash_era: 0,
+					fraction: Perbill::from_percent(10)
+				}
+			],
+		);
 
-			// after the nominator is slashed and chilled, the nominations remain.
-			assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![81]);
+		// after the nominator is slashed and chilled, the nominations remain.
+		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![81]);
 
-			// validator sets intention to stake again in the same era it was chilled.
-			assert_ok!(Staking::validate(RuntimeOrigin::signed(81), Default::default()));
+		// validator sets intention to stake again in the same era it was chilled.
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(81), Default::default()));
 
-			// progress era and check that the slashed validator is still part of the validator
-			// set.
-			assert!(start_next_active_era().is_ok());
-			assert_eq!(active_era(), 1);
-			assert!(Session::validators().contains(&81));
-			assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&81));
+		// progress era and check that the slashed validator is still part of the validator
+		// set.
+		assert!(start_next_active_era(pool_state).is_ok());
+		assert_eq!(active_era(), 1);
+		assert!(Session::validators().contains(&81));
+		assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&81));
 
-			// nominations are still active as before the slash.
-			assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![81]);
-		})
+		// nominations are still active as before the slash.
+		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![81]);
+	})
 }
