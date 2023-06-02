@@ -81,18 +81,9 @@ pub mod pallet {
 
 		/// Maximum length for pallet and call SCALE encoded string names.
 		///
-		/// Too long names will not be truncated but handled like [`Self::PauseTooLongNames`]
-		/// specifies.
+		/// TOO LONG NAMES WILL BE TREATED AS PAUSED.
 		#[pallet::constant]
 		type MaxNameLen: Get<u32>;
-
-		/// Handles the edge-case when trying to pause a call with a too long name.
-		///
-		/// `true` ensures that all calls of the runtime can be paused. Otherwise there could be a
-		/// situation where a call is callable but not pause-able, which would could be exploited.
-		/// In mostly all situations this can be set to `true` without any downside.
-		#[pallet::constant]
-		type PauseTooLongNames: Get<bool>;
 
 		// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -206,7 +197,7 @@ impl<T: Config> Pallet<T> {
 
 		match (pallet, call) {
 			(Ok(pallet), Ok(call)) => Self::is_paused(&(pallet, call)),
-			_ => T::PauseTooLongNames::get(),
+			_ => true,
 		}
 	}
 

@@ -148,7 +148,6 @@ impl pallet_proxy::Config for Test {
 
 parameter_types! {
 	pub const MaxNameLen: u32 = 50;
-	pub const PauseTooLongNames: bool = false;
 }
 
 frame_support::ord_parameter_types! {
@@ -177,7 +176,6 @@ impl Config for Test {
 	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
 	type WhitelistedCalls = WhitelistedCalls;
 	type MaxNameLen = MaxNameLen;
-	type PauseTooLongNames = PauseTooLongNames;
 	type WeightInfo = ();
 }
 

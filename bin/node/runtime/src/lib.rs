@@ -248,7 +248,6 @@ impl pallet_tx_pause::Config for Runtime {
 	type UnpauseOrigin = EnsureRoot<AccountId>;
 	type WhitelistedCalls = TxPauseWhitelistedCalls;
 	type MaxNameLen = ConstU32<256>;
-	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
 }
 
