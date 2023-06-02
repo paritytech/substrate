@@ -25,7 +25,7 @@ use frame_support::{
 };
 use pallet_treasury::BalanceOf;
 use sp_runtime::{traits::Zero, Saturating};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::collections::btree_map::BTreeMap;
 
 /// A migration that unreserves all tip deposits.
 ///
@@ -46,18 +46,19 @@ impl<T: crate::Config<I>, I: 'static> UnreserveAllFunds<T, I> {
 	///   reserved balance by this pallet
 	/// * `frame_support::weights::Weight`: The weight of this operation.
 	fn get_deposits() -> (BTreeMap<T::AccountId, BalanceOf<T, I>>, frame_support::weights::Weight) {
-		let tips = crate::Tips::<T, I>::iter().collect::<Vec<_>>();
-		let tips_len = tips.len();
-		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T, I>> = tips
-			.into_iter()
+		let mut tips_len = 0;
+		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T, I>> = crate::Tips::<T, I>::iter()
 			.map(|(_hash, open_tip)| open_tip)
 			.fold(BTreeMap::new(), |mut acc, tip| {
+				// Count the total number of tips
+				tips_len += 1;
+
 				// Add the balance to the account's existing deposit in the accumulator
 				acc.entry(tip.finder).or_insert(Zero::zero()).saturating_accrue(tip.deposit);
 				acc
 			});
 
-		(account_deposits, RocksDbWeight::get().reads(tips_len as u64))
+		(account_deposits, RocksDbWeight::get().reads(tips_len))
 	}
 }
 
