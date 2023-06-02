@@ -209,8 +209,6 @@ pub trait EllipticCurves {
 	/// Returns encoded:
 	/// ArkScaleProjective<ark_ed_on_bls12_377::EdwardsProjective>
 	fn ed_on_bls12_377_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
-		let test =
-			<ark_ed_on_bls12_377::EdwardsConfig as ark_ec::CurveConfig>::ScalarField::default();
 		ed_on_bls12_377::msm(bases, scalars)
 	}
 
