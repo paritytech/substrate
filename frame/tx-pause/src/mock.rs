@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test utilities for transaction pause (tx pause) pallet.
+//! Tests and test utilities for transaction pause pallet.
 
 #![cfg(test)]
 
