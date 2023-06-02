@@ -73,7 +73,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G1 for bls12_377
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bls12_377::G1Affine]>
-	/// scalars: ArkScale<&[<ark_bls12_377::SWCurveConfig as CurveConfig>::ScalarField]>
+	/// scalars: ArkScale<&[<ark_bls12_377::g1::Config as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_bls12_377::G1Projective>
 	fn bls12_377_msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_377::msm_g1(bases, scalars)
@@ -82,7 +82,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G2 for bls12_377
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bls12_377::G2Affine]>
-	/// scalars: ArkScale<&[<ark_bls12_377::SWCurveConfig as CurveConfig>::ScalarField]>
+	/// scalars: ArkScale<&[<ark_bls12_377::g2::Config as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_bls12_377::G2Projective>
 	fn bls12_377_msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_377::msm_g2(bases, scalars)
@@ -92,7 +92,7 @@ pub trait EllipticCurves {
 	/// Receives encoded:
 	/// a: ArkScale<Vec<<Bls12<ark_bls12_381::Config> as Pairing>::G1Prepared>>
 	/// b: ArkScale<Vec<<Bls12<ark_bls12_381::Config> as Pairing>::G2Prepared>>
-	/// Returns encoded: ArkScale<MillerLoopOutput<Bls12<Config>>
+	/// Returns encoded: ArkScale<MillerLoopOutput<Bls12<Config>>>
 	fn bls12_381_multi_miller_loop(a: Vec<u8>, b: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_381::multi_miller_loop(a, b)
 	}
@@ -125,7 +125,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G1 for bls12_381
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bls12_381::G1Affine]>
-	/// scalars: ArkScale<&[<ark_bls12_381::Config as CurveConfig>::ScalarField]>
+	/// scalars: ArkScale<&[<ark_bls12_381::g1::Config as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_bls12_381::G1Projective>
 	fn bls12_381_msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_381::msm_g1(bases, scalars)
@@ -134,7 +134,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G2 for bls12_381
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bls12_381::G2Affine]>
-	/// scalars: ArkScale<&[<ark_bls12_381::Config as CurveConfig>::ScalarField]>
+	/// scalars: ArkScale<&[<ark_bls12_381::g2::Config as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_bls12_381::G2Projective>
 	fn bls12_381_msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_381::msm_g2(bases, scalars)
@@ -177,7 +177,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G1 for bw6_761
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bw6_761::G1Affine]>
-	/// scalars: ArkScale<&[<ark_bw6_761::Config as CurveConfig>::ScalarField]>
+	/// scalars: ArkScale<&[<ark_bw6_761::g1::Config as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_bw6_761::G1Projective>
 	fn bw6_761_msm_g1(bases: Vec<u8>, bigints: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bw6_761::msm_g1(bases, bigints)
@@ -186,7 +186,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G2 for bw6_761
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bw6_761::G2Affine]>
-	/// scalars: ArkScale<&[<ark_bw6_761::Config as CurveConfig>::ScalarField]>
+	/// scalars: ArkScale<&[<ark_bw6_761::g2::Config as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_bw6_761::G2Projective>
 	fn bw6_761_msm_g2(bases: Vec<u8>, bigints: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bw6_761::msm_g2(bases, bigints)
@@ -204,7 +204,7 @@ pub trait EllipticCurves {
 	/// Compute msm on ed_on_bls12_377
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_ed_on_bls12_377::EdwardsAffine]>
-	/// scalars: ArkScale<&[<ark_ed_on_bls12_377::EdwardsCurveConfig as CurveConfig>::ScalarField]>
+	/// scalars: ArkScale<&[<ark_ed_on_bls12_377::EdwardsConfig as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_ed_on_bls12_377::EdrwardsProjective>
 	fn ed_on_bls12_377_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		ed_on_bls12_377::msm(bases, scalars)
@@ -238,7 +238,7 @@ pub trait EllipticCurves {
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_ed_on_bls12_381_bandersnatch::SWAffine]>
 	/// scalars:
-	/// ArkScale<&[<ark_ed_on_bls12_381_bandersnatch::SWCurveConfig as CurveConfig>::ScalarField]>
+	/// ArkScale<&[<ark_ed_on_bls12_381_bandersnatch::SWConfig as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_ed_on_bls12_381_bandersnatch::SWProjective>
 	fn ed_on_bls12_381_bandersnatch_sw_msm(
 		bases: Vec<u8>,
@@ -250,7 +250,8 @@ pub trait EllipticCurves {
 	/// Compute twisted edwards msm on ed_on_bls12_381_bandersnatch
 	/// Receives encoded:
 	/// base: ArkScaleProjective<ark_ed_on_bls12_381_bandersnatch::EdwardsProjective>
-	/// scalar: ArkScale<&[u64]>
+	/// scalars:
+	/// ArkScale<&[<ark_ed_on_bls12_381_bandersnatch::EdwardsConfig as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_ed_on_bls12_381_bandersnatch::EdwardsProjective>
 	fn ed_on_bls12_381_bandersnatch_te_msm(
 		bases: Vec<u8>,
