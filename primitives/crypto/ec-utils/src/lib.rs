@@ -125,7 +125,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G1 for bls12_381
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bls12_381::G1Affine]>
-	/// scalars: ArkScale<&[<ark_bls12_381::Fr]>
+	/// scalars: ArkScale<&[ark_bls12_381::Fr]>
 	/// Returns encoded: ArkScaleProjective<ark_bls12_381::G1Projective>
 	fn bls12_381_msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_381::msm_g1(bases, scalars)
@@ -134,7 +134,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G2 for bls12_381
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bls12_381::G2Affine]>
-	/// scalars: ArkScale<&[<ark_bls12_381::Fr]>
+	/// scalars: ArkScale<&[ark_bls12_381::Fr]>
 	/// Returns encoded: ArkScaleProjective<ark_bls12_381::G2Projective>
 	fn bls12_381_msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_381::msm_g2(bases, scalars)
@@ -205,7 +205,7 @@ pub trait EllipticCurves {
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_ed_on_bls12_377::EdwardsAffine]>
 	/// scalars:
-	/// ArkScale<&[<ark_ed_on_bls12_377::Fr]>
+	/// ArkScale<&[ark_ed_on_bls12_377::Fr]>
 	/// Returns encoded:
 	/// ArkScaleProjective<ark_ed_on_bls12_377::EdwardsProjective>
 	fn ed_on_bls12_377_msm(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
