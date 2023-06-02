@@ -157,7 +157,7 @@ mod benchmarks {
 		let block: T::BlockNumber = 1u32.into();
 		let bal: BalanceOf<T> = 1u32.into();
 		Stakes::<T>::insert(&alice, &block, &bal);
-		T::Currency::hold(&T::HoldReason::get(), &alice, bal)?;
+		T::Currency::hold(&HoldReason::EnterOrExtend.into(), &alice, bal)?;
 		EnteredUntil::<T>::put(&block);
 		assert!(SafeMode::<T>::do_exit(ExitReason::Force).is_ok());
 
@@ -186,7 +186,7 @@ mod benchmarks {
 		let block: T::BlockNumber = 1u32.into();
 		let bal: BalanceOf<T> = 1u32.into();
 		Stakes::<T>::insert(&alice, &block, &bal);
-		T::Currency::hold(&T::HoldReason::get(), &alice, bal)?;
+		T::Currency::hold(&&HoldReason::EnterOrExtend.into(), &alice, bal)?;
 		EnteredUntil::<T>::put(&block);
 
 		assert_eq!(T::Currency::balance(&alice), init_bal::<T>() - 1u32.into());
@@ -216,7 +216,7 @@ mod benchmarks {
 		let block: T::BlockNumber = 1u32.into();
 		let bal: BalanceOf<T> = 1u32.into();
 		Stakes::<T>::insert(&alice, &block, &bal);
-		T::Currency::hold(&T::HoldReason::get(), &alice, bal)?;
+		T::Currency::hold(&&HoldReason::EnterOrExtend.into(), &alice, bal)?;
 		EnteredUntil::<T>::put(&block);
 		assert!(SafeMode::<T>::do_exit(ExitReason::Force).is_ok());
 

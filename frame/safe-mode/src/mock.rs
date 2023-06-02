@@ -79,7 +79,7 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ConstU32<10>;
 	type ReserveIdentifier = Self::BlockNumber;
-	type HoldIdentifier = HoldReason;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type FreezeIdentifier = ();
 	type MaxHolds = ConstU32<10>;
 	type MaxFreezes = ConstU32<0>;
@@ -186,7 +186,7 @@ frame_support::ord_parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type HoldReason = SafeModeHoldReason;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type WhitelistedCalls = WhitelistedCalls;
 	type EnterDuration = EnterDuration;
 	type EnterStakeAmount = EnterStakeAmount;

@@ -60,11 +60,10 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type for this pallet, used for Stakes.
-		type Currency: FunHoldInspect<Self::AccountId> + FunHoldMutate<Self::AccountId>;
+		type Currency: FunHoldInspect<Self::AccountId> + FunHoldMutate<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
-		/// Create a hold reason for a specific cause.
-		#[pallet::constant]
-		type HoldReason: Get<<Self::Currency as FunHoldInspect<Self::AccountId>>::Reason>;
+		/// The hold reason when reserving funds for entering or extending the safe-mode.
+		type RuntimeHoldReason: From<HoldReason>;
 
 		/// Contains all runtime calls in any pallet that can be dispatched even while the safe-mode
 		/// is entered.
@@ -229,6 +228,13 @@ pub mod pallet {
 				EnteredUntil::<T>::put(block);
 			}
 		}
+	}
+
+	/// A reason for the pallet placing a hold on funds.
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		#[codec(index = 0)]
+		EnterOrExtend,
 	}
 
 	#[pallet::call]
@@ -463,7 +469,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let amount =
-			T::Currency::release(&T::HoldReason::get(), &account, amount, Precision::BestEffort)
+			T::Currency::release(&&HoldReason::EnterOrExtend.into(), &account, amount, Precision::BestEffort)
 				.map_err(|_| Error::<T>::CurrencyError)?;
 		Self::deposit_event(Event::<T>::StakeReleased { account, amount });
 		Ok(())
@@ -478,7 +484,7 @@ impl<T: Config> Pallet<T> {
 
 		// FAIL-CI check these args
 		let burned = T::Currency::burn_held(
-			&T::HoldReason::get(),
+			&&HoldReason::EnterOrExtend.into(),
 			&account,
 			amount,
 			Precision::BestEffort,
@@ -495,11 +501,11 @@ impl<T: Config> Pallet<T> {
 	/// Errors if the account already has a hold for the same reason.
 	fn hold(who: T::AccountId, amount: BalanceOf<T>) -> Result<(), Error<T>> {
 		let block = <frame_system::Pallet<T>>::block_number();
-		if !T::Currency::balance_on_hold(&T::HoldReason::get(), &who).is_zero() {
+		if !T::Currency::balance_on_hold(&HoldReason::EnterOrExtend.into(), &who).is_zero() {
 			return Err(Error::<T>::AlreadyStaked.into())
 		}
 
-		T::Currency::hold(&T::HoldReason::get(), &who, amount)
+		T::Currency::hold(&HoldReason::EnterOrExtend.into(), &who, amount)
 			.map_err(|_| Error::<T>::CurrencyError)?;
 		Stakes::<T>::insert(&who, block, amount);
 		Self::deposit_event(Event::<T>::StakePlaced { account: who, amount });
