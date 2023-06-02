@@ -10163,7 +10163,6 @@ dependencies = [
  "futures-timer",
  "linked-hash-map",
  "log",
- "num-traits",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sc-block-builder",
