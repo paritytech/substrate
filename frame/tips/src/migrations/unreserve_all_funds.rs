@@ -53,10 +53,7 @@ impl<T: crate::Config<I>, I: 'static> UnreserveAllFunds<T, I> {
 			.map(|(_hash, open_tip)| open_tip)
 			.fold(BTreeMap::new(), |mut acc, tip| {
 				// Add the balance to the account's existing deposit in the accumulator
-				*acc.entry(tip.finder).or_insert(Zero::zero()) = acc
-					.entry(tip.finder.clone())
-					.or_insert(Zero::zero())
-					.saturating_add(tip.deposit);
+				acc.entry(tip.finder).or_insert(Zero::zero()).saturating_accrue(tip.deposit);
 				acc
 			});
 
