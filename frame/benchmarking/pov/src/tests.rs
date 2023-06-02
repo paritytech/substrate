@@ -184,7 +184,7 @@ mod mock {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = u32;
+		type Nonce = u32;
 		type BlockNumber = u64;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;

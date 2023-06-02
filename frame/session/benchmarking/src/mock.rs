@@ -27,7 +27,7 @@ use frame_support::{
 use sp_runtime::traits::IdentityLookup;
 
 type AccountId = u64;
-type AccountIndex = u32;
+type AccountNonce = u32;
 type BlockNumber = u64;
 type Balance = u64;
 
@@ -53,7 +53,7 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
+	type Nonce = AccountNonce;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;

@@ -210,7 +210,7 @@ mod tests {
 		type SS58Prefix = ();
 		type BaseCallFilter = frame_support::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = AccountId;
+		type Nonce = AccountId;
 		type BlockNumber = BlockNumber;
 		type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;

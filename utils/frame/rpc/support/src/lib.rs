@@ -58,7 +58,7 @@ use sp_storage::{StorageData, StorageKey};
 /// # 	type BlockLength = ();
 /// # 	type RuntimeOrigin = RuntimeOrigin;
 /// # 	type RuntimeCall = RuntimeCall;
-/// # 	type Index = u64;
+/// # 	type Nonce = u64;
 /// # 	type BlockNumber = u64;
 /// # 	type Hash = Hash;
 /// # 	type Hashing = BlakeTwo256;

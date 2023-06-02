@@ -852,7 +852,7 @@ mod tests {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = u64;
+		type Nonce = u64;
 		type RuntimeCall = RuntimeCall;
 		type BlockNumber = u64;
 		type Hash = sp_core::H256;

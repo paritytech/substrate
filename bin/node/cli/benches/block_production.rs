@@ -154,7 +154,7 @@ fn prepare_benchmark(client: &FullClient) -> (usize, Vec<OpaqueExtrinsic>) {
 	let src = Sr25519Keyring::Alice.pair();
 	let dst: MultiAddress<AccountId32, u32> = Sr25519Keyring::Bob.to_account_id().into();
 
-	// Add as many tranfer extrinsics as possible into a single block.
+	// Add as many transfer extrinsics as possible into a single block.
 	for nonce in 0.. {
 		let extrinsic: OpaqueExtrinsic = create_extrinsic(
 			client,

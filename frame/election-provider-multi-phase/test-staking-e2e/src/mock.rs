@@ -71,7 +71,7 @@ frame_support::construct_runtime!(
 );
 
 pub(crate) type AccountId = u128;
-pub(crate) type AccountIndex = u32;
+pub(crate) type AccountNonce = u32;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u64;
 pub(crate) type VoterIndex = u32;
@@ -84,7 +84,7 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
+	type Nonce = AccountNonce;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;

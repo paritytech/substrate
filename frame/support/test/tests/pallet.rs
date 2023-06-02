@@ -648,7 +648,7 @@ frame_support::parameter_types!(
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
+	type Nonce = u64;
 	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;

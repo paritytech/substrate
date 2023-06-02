@@ -183,7 +183,7 @@ fn panic_execution_with_foreign_code_gives_error() {
 	let mut t = new_test_ext(bloaty_code_unwrap());
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
+		AccountInfo::<<Runtime as frame_system::Config>::Nonce, _> {
 			providers: 1,
 			data: (69u128, 0u128, 0u128, 1u128 << 127),
 			..Default::default()
@@ -209,7 +209,7 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 	let mut t = new_test_ext(compact_code_unwrap());
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
+		AccountInfo::<<Runtime as frame_system::Config>::Nonce, _> {
 			providers: 1,
 			data: (69u128, 0u128, 0u128, 1u128 << 127),
 			..Default::default()
@@ -235,7 +235,7 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 	let mut t = new_test_ext(compact_code_unwrap());
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
+		AccountInfo::<<Runtime as frame_system::Config>::Nonce, _> {
 			providers: 1,
 			data: (111 * DOLLARS, 0u128, 0u128, 1u128 << 127),
 			..Default::default()
@@ -245,7 +245,7 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
 		AccountInfo::<
-			<Runtime as frame_system::Config>::Index,
+			<Runtime as frame_system::Config>::Nonce,
 			<Runtime as frame_system::Config>::AccountData,
 		>::default()
 		.encode(),
@@ -277,7 +277,7 @@ fn successful_execution_with_foreign_code_gives_ok() {
 	let mut t = new_test_ext(bloaty_code_unwrap());
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
+		AccountInfo::<<Runtime as frame_system::Config>::Nonce, _> {
 			providers: 1,
 			data: (111 * DOLLARS, 0u128, 0u128, 1u128 << 127),
 			..Default::default()
@@ -287,7 +287,7 @@ fn successful_execution_with_foreign_code_gives_ok() {
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
 		AccountInfo::<
-			<Runtime as frame_system::Config>::Index,
+			<Runtime as frame_system::Config>::Nonce,
 			<Runtime as frame_system::Config>::AccountData,
 		>::default()
 		.encode(),
@@ -766,7 +766,7 @@ fn panic_execution_gives_error() {
 	let mut t = new_test_ext(bloaty_code_unwrap());
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
+		AccountInfo::<<Runtime as frame_system::Config>::Nonce, _> {
 			data: (0 * DOLLARS, 0u128, 0u128, 0u128),
 			..Default::default()
 		}
@@ -795,7 +795,7 @@ fn successful_execution_gives_ok() {
 	let mut t = new_test_ext(compact_code_unwrap());
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(alice()),
-		AccountInfo::<<Runtime as frame_system::Config>::Index, _> {
+		AccountInfo::<<Runtime as frame_system::Config>::Nonce, _> {
 			providers: 1,
 			data: (111 * DOLLARS, 0u128, 0u128, 1u128 << 127),
 			..Default::default()
@@ -805,7 +805,7 @@ fn successful_execution_gives_ok() {
 	t.insert(
 		<frame_system::Account<Runtime>>::hashed_key_for(bob()),
 		AccountInfo::<
-			<Runtime as frame_system::Config>::Index,
+			<Runtime as frame_system::Config>::Nonce,
 			<Runtime as frame_system::Config>::AccountData,
 		>::default()
 		.encode(),

@@ -342,7 +342,7 @@ mod mock {
 	use sp_runtime::testing::H256;
 
 	type AccountId = u64;
-	type AccountIndex = u32;
+	type AccountNonce = u32;
 	type BlockNumber = u64;
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -365,7 +365,7 @@ mod mock {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = AccountIndex;
+		type Nonce = AccountNonce;
 		type BlockNumber = BlockNumber;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;

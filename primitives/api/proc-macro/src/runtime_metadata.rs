@@ -30,13 +30,13 @@ use crate::{
 /// Get the type parameter argument without lifetime or mutability
 /// of a runtime metadata function.
 ///
-/// In the following example, both the `AccountId` and `Index` generic
+/// In the following example, both the `AccountId` and `Nonce` generic
 /// type parameters must implement `scale_info::TypeInfo` because they
 /// are added into the metadata using `scale_info::meta_type`.
 ///
 /// ```ignore
-/// trait ExampleAccountNonceApi<AccountId, Index> {
-///   fn account_nonce<'a>(account: &'a AccountId) -> Index;
+/// trait ExampleAccountNonceApi<AccountId, Nonce> {
+///   fn account_nonce<'a>(account: &'a AccountId) -> Nonce;
 /// }
 /// ```
 ///

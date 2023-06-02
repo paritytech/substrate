@@ -240,16 +240,6 @@ pub mod pallet {
 			+ Copy
 			+ MaxEncodedLen;
 
-		type Index: Parameter
-		+ Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ Default
-		+ MaybeDisplay
-		+ AtLeast32Bit
-		+ Copy
-		+ MaxEncodedLen;
-
 		/// The block number type used by the runtime.
 		type BlockNumber: Parameter
 			+ Member
