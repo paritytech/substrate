@@ -341,9 +341,9 @@ pub mod pallet {
 		///
 		/// Emits a [`Event::StakeReleased`] event on success.
 		/// Errors with [`Error::Entered`] if the safe-mode is entered.
-		/// Errors with [`Error::CannotReleaseYet`] if [`Config::ReleaseDelay`] block have not passed since safe-mode was entered.
-		/// Errors with [`Error::NoStake`] if the payee has no reserved currency at the
-		/// block specified.
+		/// Errors with [`Error::CannotReleaseYet`] if [`Config::ReleaseDelay`] block have not
+		/// passed since safe-mode was entered. Errors with [`Error::NoStake`] if the payee has no
+		/// reserved currency at the block specified.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::release_stake())]
 		pub fn release_stake(
@@ -382,7 +382,8 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Automatically exits safe-mode when the current block number is greater than [`EnteredUntil`].
+		/// Automatically exits safe-mode when the current block number is greater than
+		/// [`EnteredUntil`].
 		fn on_initialize(current: T::BlockNumber) -> Weight {
 			let Some(limit) = EnteredUntil::<T>::get() else {
 				return T::WeightInfo::on_initialize_noop();

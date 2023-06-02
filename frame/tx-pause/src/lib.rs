@@ -79,7 +79,7 @@ pub mod pallet {
 		/// added here.
 		type WhitelistedCalls: Contains<RuntimeCallNameOf<Self>>;
 
-		/// Maximum length for pallet and call SCALE encoded string names.
+		/// Maximum length for pallet name and call name SCALE encoded string names.
 		///
 		/// TOO LONG NAMES WILL BE TREATED AS PAUSED.
 		#[pallet::constant]

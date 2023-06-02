@@ -24,9 +24,7 @@ use frame_support::traits::{fungible::Mutate as FunMutate, UnfilteredDispatchabl
 use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, One, Zero};
 
-#[benchmarks(
-	where T::Currency: FunMutate<T::AccountId>,
-)]
+#[benchmarks(where T::Currency: FunMutate<T::AccountId>)]
 mod benchmarks {
 	use super::*;
 

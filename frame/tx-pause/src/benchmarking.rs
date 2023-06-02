@@ -18,29 +18,35 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::{Pallet as TxPause, *};
+use frame_benchmarking::v2::*;
 
-use frame_benchmarking::benchmarks;
+#[benchmarks]
+mod benchmarks {
+	use super::*;
 
-benchmarks! {
-	pause {
+	#[benchmark]
+	fn pause() {
 		let origin = T::PauseOrigin::try_successful_origin()
 			.expect("Tx-pause pallet is not usable without pause origin");
 		let full_name = name::<T>();
 
-	}: _<T::RuntimeOrigin>(origin, full_name.clone())
-	verify {
-		assert!(PausedCalls::<T>::get(full_name).is_some())
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, full_name.clone());
+
+		assert!(PausedCalls::<T>::get(full_name).is_some());
 	}
 
-  unpause {
+	#[benchmark]
+	fn unpause() {
 		let unpause_origin = T::UnpauseOrigin::try_successful_origin()
 			.expect("Tx-pause pallet is not usable without pause origin");
 		let full_name = name::<T>();
 		TxPause::<T>::do_pause(full_name.clone()).unwrap();
 
-		}: _<T::RuntimeOrigin>(unpause_origin, full_name.clone())
-	verify {
-		assert!(PausedCalls::<T>::get(full_name).is_none())
+		#[extrinsic_call]
+		_(unpause_origin as T::RuntimeOrigin, full_name.clone());
+
+		assert!(PausedCalls::<T>::get(full_name).is_none());
 	}
 
 	impl_benchmark_test_suite!(TxPause, crate::mock::new_test_ext(), crate::mock::Test);
