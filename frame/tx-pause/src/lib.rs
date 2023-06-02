@@ -200,6 +200,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Return whether this call is paused.
+	pub fn is_paused(full_name: &RuntimeCallNameOf<T>) -> bool {
+		if T::WhitelistedCalls::contains(full_name) {
+			return false
+		}
+
+		<PausedCalls<T>>::contains_key(full_name)
+	}
+
+	/// Same as [`Self::is_paused`] but for non-MEL-bound inputs.
 	pub fn is_paused_unbound(pallet: Vec<u8>, call: Vec<u8>) -> bool {
 		let pallet = PalletNameOf::<T>::try_from(pallet);
 		let call = PalletCallNameOf::<T>::try_from(call);
@@ -208,15 +217,6 @@ impl<T: Config> Pallet<T> {
 			(Ok(pallet), Ok(call)) => Self::is_paused(&(pallet, call)),
 			_ => T::PauseTooLongNames::get(),
 		}
-	}
-
-	/// Return whether this call is paused.
-	pub fn is_paused(full_name: &RuntimeCallNameOf<T>) -> bool {
-		if T::WhitelistedCalls::contains(full_name) {
-			return false
-		}
-
-		<PausedCalls<T>>::contains_key(full_name)
 	}
 
 	/// Ensure that this call can be paused.
