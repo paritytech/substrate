@@ -21,14 +21,14 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
-sp-io = { version = "8.0.0", default-features = false, optional = true, path = "../../primitives/io" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "23.0.0", default-features = false, optional = true, path = "../../primitives/io" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../primitives/timestamp" }
 
 [dev-dependencies]
-sp-core = { version = "8.0.0", path = "../../primitives/core" }
-sp-io = { version = "8.0.0", path = "../../primitives/io" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-io = { version = "23.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]

@@ -16,8 +16,8 @@ hash-db = { version = "0.16.0", default-features = false }
 [dev-dependencies]
 array-bytes = "4.1"
 env_logger = "0.9"
-sp-core = { version = "8.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 
 [features]
 debug = ["array-bytes", "log"]

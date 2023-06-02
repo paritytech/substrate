@@ -14,10 +14,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 bytes = { version = "1.1.0", default-features = false }
-sp-core = { version = "8.0.0", default-features = false, path = "../../core" }
-sp-io = { version = "8.0.0", default-features = false, path = "../../io" }
-sp-runtime-interface = { version = "8.0.0", default-features = false, path = "../" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../std" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../core" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../io" }
+sp-runtime-interface = { version = "17.0.0", default-features = false, path = "../" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder", optional = true }

@@ -512,10 +512,22 @@ macro_rules! morph_types {
 morph_types! {
 	/// Morpher to disregard the source value and replace with another.
 	pub type Replace<V: TypedGet> = |_| -> V::Type { V::get() };
+
 	/// Mutator which reduces a scalar by a particular amount.
 	pub type ReduceBy<N: TypedGet> = |r: N::Type| -> N::Type {
 		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
 	} where N::Type: CheckedSub | Zero;
+
+	/// A `TryMorph` implementation to reduce a scalar by a particular amount, checking for
+	/// underflow.
+	pub type CheckedReduceBy<N: TypedGet>: TryMorph = |r: N::Type| -> Result<N::Type, ()> {
+		r.checked_sub(&N::get()).ok_or(())
+	} where N::Type: CheckedSub;
+
+	/// A `TryMorph` implementation to enforce an upper limit for a result of the outer morphed type.
+	pub type MorphWithUpperLimit<L: TypedGet, M>: TryMorph = |r: L::Type| -> Result<L::Type, ()> {
+		M::try_morph(r).map(|m| m.min(L::get()))
+	} where L::Type: Ord, M: TryMorph<L::Type, Outcome = L::Type>;
 }
 
 /// Extensible conversion trait. Generic over both source and destination types.
@@ -527,6 +539,15 @@ pub trait Convert<A, B> {
 impl<A, B: Default> Convert<A, B> for () {
 	fn convert(_: A) -> B {
 		Default::default()
+	}
+}
+
+/// Adapter which turns a `Get` implementation into a `Convert` implementation which always returns
+/// in the same value no matter the input.
+pub struct ConvertToValue<T>(sp_std::marker::PhantomData<T>);
+impl<X, Y, T: Get<Y>> Convert<X, Y> for ConvertToValue<T> {
+	fn convert(_: X) -> Y {
+		T::get()
 	}
 }
 
@@ -1763,7 +1784,7 @@ macro_rules! impl_opaque_keys_inner {
 /// }
 /// ```
 #[macro_export]
-#[cfg(feature = "std")]
+#[cfg(any(feature = "serde", feature = "std"))]
 macro_rules! impl_opaque_keys {
 	{
 		$( #[ $attr:meta ] )*
@@ -1793,7 +1814,7 @@ macro_rules! impl_opaque_keys {
 }
 
 #[macro_export]
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "serde")))]
 #[doc(hidden)]
 macro_rules! impl_opaque_keys {
 	{
