@@ -339,15 +339,15 @@ pub mod pallet {
 		}
 
 		/// Permissionlessly release a stake for an account that entered safe-mode at a
-		/// specific block earlier.
+		/// given historical block.
 		///
 		/// The call can be completely disabled by setting [`Config::ReleaseDelay`] to `None`.
-		/// This cannot be called while safe-mode is entered and not until the
-		/// [`Config::ReleaseDelay`] block height is passed.
+		/// This cannot be called while safe-mode is entered and not until
+		/// [`Config::ReleaseDelay`] blocks have passed since safe-mode was entered.
 		///
 		/// Emits a [`Event::StakeReleased`] event on success.
 		/// Errors with [`Error::Entered`] if the safe-mode is entered.
-		/// Errors with [`Error::CannotReleaseYet`] if the [`Config::ReleaseDelay`] .
+		/// Errors with [`Error::CannotReleaseYet`] if [`Config::ReleaseDelay`] block have not passed since safe-mode was entered.
 		/// Errors with [`Error::NoStake`] if the payee has no reserved currency at the
 		/// block specified.
 		#[pallet::call_index(6)]
@@ -362,15 +362,15 @@ pub mod pallet {
 			Self::do_release(false, account, block).map_err(Into::into)
 		}
 
-		/// Force to release a stake for an account that entered safe-mode at a specific
-		/// block earlier.
+		/// Force to release a stake for an account that entered safe-mode at a given
+		/// historical block.
 		///
 		/// This can be called while safe-mode is still entered.
 		///
 		/// Emits a [`Event::StakeReleased`] event on success.
-		/// Errors with [`Error::Entered`] if the safe-mode is entered.
+		/// Errors with [`Error::Entered`] if safe-mode is entered.
 		/// Errors with [`Error::NoStake`] if the payee has no reserved currency at the
-		/// block specified.
+		/// specified block.
 		///
 		/// Can only be called by the [`Config::ForceStakeOrigin`] origin.
 		#[pallet::call_index(7)]
@@ -388,14 +388,14 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Automatically exits the safe-mode when the period runs out.
+		/// Automatically exits safe-mode when the current block number is greater than [`EnteredUntil`].
 		fn on_initialize(current: T::BlockNumber) -> Weight {
 			let Some(limit) = EnteredUntil::<T>::get() else {
 				return T::WeightInfo::on_initialize_noop();
 			};
 
 			if current > limit {
-				let _ = Self::do_exit(ExitReason::Timeout).defensive_proof("Must exit; qed");
+				let _ = Self::do_exit(ExitReason::Timeout).defensive_proof("Only Errors if safe-mode is not entered. Safe-mode has already been checked to be entered; qed");
 				T::WeightInfo::on_initialize_exit()
 			} else {
 				T::WeightInfo::on_initialize_noop()
@@ -443,7 +443,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Logic for the [`crate::Pallet::force_exit`] call.
 	///
-	/// Errors if the safe-mode is already exited.
+	/// Errors if safe-mode is already exited.
 	pub(crate) fn do_exit(reason: ExitReason) -> Result<(), Error<T>> {
 		let _until = EnteredUntil::<T>::take().ok_or(Error::<T>::Exited)?;
 		Self::deposit_event(Event::Exited { reason });
@@ -464,7 +464,7 @@ impl<T: Config> Pallet<T> {
 
 			let delay = T::ReleaseDelay::get().ok_or(Error::<T>::NotConfigured)?;
 			let now = <frame_system::Pallet<T>>::block_number();
-			ensure!(now > (block.saturating_add(delay)), Error::<T>::CannotReleaseYet);
+			ensure!(now > block.saturating_add(delay), Error::<T>::CannotReleaseYet);
 		}
 
 		let amount =
@@ -497,7 +497,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Place a hold for exactly `amount` and store it in `Stakes`.
 	///
-	/// This errors if the account already has a hold for the same reason.
+	/// Errors if the account already has a hold for the same reason.
 	fn hold(who: T::AccountId, amount: BalanceOf<T>) -> Result<(), Error<T>> {
 		let block = <frame_system::Pallet<T>>::block_number();
 		if !T::Currency::balance_on_hold(&T::HoldReason::get(), &who).is_zero() {
@@ -512,12 +512,12 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Return whether the `safe-mode` is entered.
+	/// Return whether `safe-mode` is entered.
 	pub fn is_entered() -> bool {
 		EnteredUntil::<T>::exists()
 	}
 
-	/// Return whether this call is allowed to be dispatched.
+	/// Return whether the given call is allowed to be dispatched.
 	pub fn is_allowed(call: &T::RuntimeCall) -> bool
 	where
 		T::RuntimeCall: GetCallMetadata,
@@ -540,7 +540,7 @@ impl<T: Config> Contains<T::RuntimeCall> for Pallet<T>
 where
 	T::RuntimeCall: GetCallMetadata,
 {
-	/// Return whether this call is allowed to be dispatched.
+	/// Return whether the given call is allowed to be dispatched.
 	fn contains(call: &T::RuntimeCall) -> bool {
 		Pallet::<T>::is_allowed(call)
 	}

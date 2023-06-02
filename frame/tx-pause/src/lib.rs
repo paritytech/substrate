@@ -88,7 +88,7 @@ pub mod pallet {
 		/// Handles the edge-case when trying to pause a call with a too long name.
 		///
 		/// `true` ensures that all calls of the runtime can be paused. Otherwise there could be a
-		/// situation where a call is callable but not pause-able, which would could be exploited.
+		/// situation where a call is callable but not pause-able, which could be exploited.
 		/// In mostly all situations this can be set to `true` without any downside.
 		#[pallet::constant]
 		type PauseTooLongNames: Get<bool>;
@@ -110,7 +110,7 @@ pub mod pallet {
 		/// The call is (already or still) unpaused.
 		IsUnpaused,
 
-		/// The call is listed as safe and cannot be paused.
+		/// The call is whitelisted and cannot be paused.
 		Unpausable,
 
 		// The pallet or call does not exist in the runtime.
