@@ -101,7 +101,7 @@ impl pallet_transaction_storage::Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = GenesisConfig {
+	let t = RuntimeGenesisConfig {
 		system: Default::default(),
 		balances: pallet_balances::GenesisConfig::<Test> {
 			balances: vec![(1, 1000000000), (2, 100), (3, 100), (4, 100)],

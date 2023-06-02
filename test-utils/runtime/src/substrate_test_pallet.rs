@@ -55,7 +55,7 @@ pub mod pallet {
 	pub type Authorities<T> = StorageValue<_, Vec<Public>, ValueQuery>;
 
 	#[pallet::genesis_config]
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	pub struct GenesisConfig {
 		pub authorities: Vec<Public>,
 	}

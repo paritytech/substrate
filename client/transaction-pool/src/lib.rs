@@ -52,8 +52,8 @@ use std::{
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
 	error::Error as TxPoolError, ChainEvent, ImportNotificationStream, MaintainedTransactionPool,
-	PoolFuture, PoolStatus, ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
-	TransactionStatusStreamFor, TxHash,
+	OffchainTransactionPoolFactory, PoolFuture, PoolStatus, ReadyTransactions, TransactionFor,
+	TransactionPool, TransactionSource, TransactionStatusStreamFor, TxHash,
 };
 use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{

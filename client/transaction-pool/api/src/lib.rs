@@ -413,7 +413,7 @@ impl<Block: BlockT> OffchainTransactionPoolFactory<Block> {
 	}
 }
 
-/// Wraps a `pool` and `block_hash` to implemented [`sp_core::offchain::TransactionPool`].
+/// Wraps a `pool` and `block_hash` to implement [`sp_core::offchain::TransactionPool`].
 struct OffchainTransactionPool<Block: BlockT> {
 	block_hash: Block::Hash,
 	pool: Arc<dyn OffchainSubmitTransaction<Block>>,

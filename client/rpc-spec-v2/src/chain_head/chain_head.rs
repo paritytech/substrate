@@ -152,7 +152,7 @@ where
 	fn chain_head_unstable_follow(
 		&self,
 		mut sink: SubscriptionSink,
-		runtime_updates: bool,
+		with_runtime: bool,
 	) -> SubscriptionResult {
 		let sub_id = match self.accept_subscription(&mut sink) {
 			Ok(sub_id) => sub_id,
@@ -162,7 +162,7 @@ where
 			},
 		};
 		// Keep track of the subscription.
-		let Some(rx_stop) = self.subscriptions.insert_subscription(sub_id.clone(), runtime_updates) else {
+		let Some(rx_stop) = self.subscriptions.insert_subscription(sub_id.clone(), with_runtime) else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
 			debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription already accepted", sub_id);
@@ -179,7 +179,7 @@ where
 				client,
 				backend,
 				subscriptions.clone(),
-				runtime_updates,
+				with_runtime,
 				sub_id.clone(),
 			);
 
@@ -410,8 +410,8 @@ where
 		};
 
 		let fut = async move {
-			// Reject subscription if runtime_updates is false.
-			if !block_guard.has_runtime_updates() {
+			// Reject subscription if with_runtime is false.
+			if !block_guard.has_runtime() {
 				let _ = sink.reject(ChainHeadRpcError::InvalidParam(
 					"The runtime updates flag must be set".into(),
 				));
