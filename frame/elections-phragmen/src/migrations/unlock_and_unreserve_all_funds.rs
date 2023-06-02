@@ -67,13 +67,12 @@ where
 		BTreeMap<T::AccountId, BalanceOf<T>>,
 		frame_support::weights::Weight,
 	) {
+		use crate::Voting;
 		use sp_runtime::Saturating;
 
 		let members = crate::Members::<T>::get();
 		let runner_ups = crate::RunnersUp::<T>::get();
 		let candidates = crate::Candidates::<T>::get();
-		let voters: Vec<(T::AccountId, crate::Voter<T::AccountId, BalanceOf<T>>)> =
-			crate::Voting::<T>::iter().collect::<Vec<_>>();
 
 		// Get the total amount deposited (Members, RunnerUps, Candidates and Voters all can have
 		// deposits).
@@ -83,22 +82,22 @@ where
 			.chain(runner_ups.iter())
 			.map(|member| (member.who.clone(), member.deposit))
 			.chain(candidates.iter().map(|(candidate, amount)| (candidate.clone(), *amount)))
-			.chain(voters.iter().map(|(account_id, voter)| (account_id.clone(), voter.deposit)))
+			.chain(
+				Voting::<T>::iter().map(|(account_id, voter)| (account_id.clone(), voter.deposit)),
+			)
 			// Finally, aggregate the tuples into a Map.
 			.fold(BTreeMap::new(), |mut acc, (id, deposit)| {
-				*acc.entry(id).or_insert(Zero::zero()) =
-					acc.entry(id.clone()).or_insert(Zero::zero()).saturating_add(deposit);
+				acc.entry(id.clone()).or_insert(Zero::zero()).saturating_accrue(deposit);
 				acc
 			});
 
-		// Get the total amount staked (only Voters stake).
-		let account_staked_sums: BTreeMap<T::AccountId, BalanceOf<T>> = voters
-			.iter()
+		// Get the total amount staked (only Voters stake) and count the number of voters.
+		let mut voters_len = 0;
+		let account_staked_sums: BTreeMap<T::AccountId, BalanceOf<T>> = Voting::<T>::iter()
 			.map(|(account_id, voter)| (account_id.clone(), voter.stake))
 			.fold(BTreeMap::new(), |mut acc, (id, stake)| {
-				*acc.entry(id).or_insert(Zero::zero()) =
-					acc.entry(id.clone()).or_insert(Zero::zero()).saturating_add(stake);
-
+				voters_len.saturating_accrue(1);
+				acc.entry(id.clone()).or_insert(Zero::zero()).saturating_accrue(stake);
 				acc
 			});
 
@@ -106,10 +105,12 @@ where
 			account_deposited_sums,
 			account_staked_sums,
 			RocksDbWeight::get().reads(
-				members.len() as u64 +
-					runner_ups.len() as u64 +
-					candidates.len() as u64 +
-					(voters.len() as u64) * T::MaxVotesPerVoter::get() as u64,
+				members
+					.len()
+					.saturating_add(runner_ups.len())
+					.saturating_add(candidates.len())
+					.saturating_add(voters_len.saturating_mul(T::MaxVotesPerVoter::get() as usize))
+					as u64,
 			),
 		)
 	}
@@ -247,10 +248,12 @@ where
 			T::Currency::remove_lock(T::PalletId::get(), account);
 		}
 
-		RocksDbWeight::get().reads_writes(
-			(account_deposited_sums.len() + account_staked_sums.len()) as u64,
-			(account_deposited_sums.len() + account_staked_sums.len()) as u64,
-		) + initial_reads
+		RocksDbWeight::get()
+			.reads_writes(
+				(account_deposited_sums.len().saturating_add(account_staked_sums.len())) as u64,
+				(account_deposited_sums.len().saturating_add(account_staked_sums.len())) as u64,
+			)
+			.saturating_add(initial_reads)
 	}
 
 	#[cfg(feature = "try-runtime")]
