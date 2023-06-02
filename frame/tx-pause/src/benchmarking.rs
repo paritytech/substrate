@@ -47,7 +47,7 @@ benchmarks! {
 }
 
 /// Longest possible name.
-fn name<T: Config>() -> FullNameOf<T> {
+fn name<T: Config>() -> RuntimeCallNameOf<T> {
 	let max_len = T::MaxNameLen::get() as usize;
 	(vec![1; max_len].try_into().unwrap(), vec![1; max_len].try_into().unwrap())
 }

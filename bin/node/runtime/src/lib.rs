@@ -59,7 +59,7 @@ use pallet_nis::WithMaximumOf;
 use pallet_session::historical as pallet_session_historical;
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
-use pallet_tx_pause::FullNameOf;
+use pallet_tx_pause::RuntimeCallNameOf;
 use scale_info::TypeInfo;
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
@@ -230,9 +230,9 @@ impl Contains<RuntimeCall> for SafeModeWhitelistedCalls {
 /// Calls that cannot be paused by the tx-pause pallet.
 pub struct TxPauseWhitelistedCalls;
 /// Whitelist `Balances::transfer_keep_alive`, all others are pauseable.
-impl Contains<FullNameOf<Runtime>> for TxPauseWhitelistedCalls {
-	fn contains(full_name: &FullNameOf<Runtime>) -> bool {
-		let unpausables: Vec<FullNameOf<Runtime>> = vec![(
+impl Contains<RuntimeCallNameOf<Runtime>> for TxPauseWhitelistedCalls {
+	fn contains(full_name: &RuntimeCallNameOf<Runtime>) -> bool {
+		let unpausables: Vec<RuntimeCallNameOf<Runtime>> = vec![(
 			b"Balances".to_vec().try_into().unwrap(),
 			b"transfer_keep_alive".to_vec().try_into().unwrap(),
 		)];

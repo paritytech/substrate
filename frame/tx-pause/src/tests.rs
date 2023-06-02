@@ -227,8 +227,8 @@ pub fn call_transfer_keep_alive(dest: u64, value: u64) -> RuntimeCall {
 	RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { dest, value })
 }
 
-pub fn full_name<T: Config>(pallet_name: &[u8], call_name: &[u8]) -> FullNameOf<T> {
-	<FullNameOf<T>>::from((
+pub fn full_name<T: Config>(pallet_name: &[u8], call_name: &[u8]) -> RuntimeCallNameOf<T> {
+	<RuntimeCallNameOf<T>>::from((
 		pallet_name.to_vec().try_into().unwrap(),
 		call_name.to_vec().try_into().unwrap(),
 	))
