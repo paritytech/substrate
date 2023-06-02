@@ -269,7 +269,7 @@ pub enum SteppedMigrationError {
 	/// Can be resolved by calling with at least `required` weight. Note that calling it with
 	/// exactly `required` weight could cause it to not make any progress.
 	InsufficientWeight { required: Weight },
-	// permanent errors:
+	// Permanent errors:
 	/// The migration encountered a permanent error and cannot continue.
 	///
 	/// This can happen if the storage is corrupted or an assumption got invalidated while the
