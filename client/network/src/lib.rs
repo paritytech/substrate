@@ -243,17 +243,20 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod discovery;
-mod peer_info;
+mod peer_store;
+mod peerset;
 mod protocol;
+mod protocol_controller;
 mod service;
-mod transport;
 
 pub mod config;
+pub mod discovery;
 pub mod error;
 pub mod event;
 pub mod network_state;
+pub mod peer_info;
 pub mod request_responses;
+pub mod transport;
 pub mod types;
 pub mod utils;
 
@@ -267,6 +270,7 @@ pub use sc_network_common::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
 		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
+	types::ReputationChange,
 };
 pub use service::{
 	signature::Signature,
@@ -280,8 +284,6 @@ pub use service::{
 	OutboundFailure, PublicKey,
 };
 pub use types::ProtocolName;
-
-pub use sc_peerset::ReputationChange;
 
 /// The maximum allowed number of established connections per peer.
 ///

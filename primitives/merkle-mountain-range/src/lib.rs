@@ -101,13 +101,13 @@ impl<T: codec::Encode + codec::Decode + Clone + PartialEq + fmt::Debug> FullLeaf
 /// This type does not implement SCALE encoding/decoding on purpose to avoid confusion,
 /// it would have to be SCALE-compatible with the concrete leaf type, but due to SCALE limitations
 /// it's not possible to know how many bytes the encoding of concrete leaf type uses.
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(RuntimeDebug, Clone, PartialEq)]
 pub struct OpaqueLeaf(
 	/// Raw bytes of the leaf type encoded in its compact form.
 	///
 	/// NOTE it DOES NOT include length prefix (like `Vec<u8>` encoding would).
-	#[cfg_attr(feature = "std", serde(with = "sp_core::bytes"))]
+	#[cfg_attr(feature = "serde", serde(with = "sp_core::bytes"))]
 	pub Vec<u8>,
 );
 

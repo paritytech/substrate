@@ -148,8 +148,8 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, sp_consensus_beefy::ValidatorSetId, SessionIndex>;
 
 	/// Block number where BEEFY consensus is enabled/started.
-	/// If changing this, make sure `Self::ValidatorSetId` is also reset to
-	/// `GENESIS_AUTHORITY_SET_ID` in the state of the new block number configured here.
+	/// By changing this (through governance or sudo), BEEFY consensus is effectively
+	/// restarted from the new block number.
 	#[pallet::storage]
 	#[pallet::getter(fn genesis_block)]
 	pub(super) type GenesisBlock<T: Config> =
@@ -166,7 +166,6 @@ pub mod pallet {
 		pub genesis_block: Option<BlockNumberFor<T>>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			// BEEFY genesis will be first BEEFY-MANDATORY block,

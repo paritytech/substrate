@@ -113,7 +113,13 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	}
 	debug_assert_eq!(fn_weight.len(), methods.len());
 
-	let fn_doc = methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
+	let fn_doc = methods
+		.iter()
+		.map(|method| {
+			let reference = format!("See [`Pallet::{}`].", method.name);
+			quote!(#reference)
+		})
+		.collect::<Vec<_>>();
 
 	let args_name = methods
 		.iter()
@@ -175,9 +181,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
-	let default_docs = [syn::parse_quote!(
-		r"Contains one variant per dispatchable that can be called by an extrinsic."
-	)];
+	let default_docs =
+		[syn::parse_quote!(r"Contains a variant per dispatchable extrinsic that this pallet has.")];
 	let docs = if docs.is_empty() { &default_docs[..] } else { &docs[..] };
 
 	let maybe_compile_error = if def.call.is_none() {
@@ -274,7 +279,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				#frame_support::Never,
 			),
 			#(
-				#( #[doc = #fn_doc] )*
+				#[doc = #fn_doc]
 				#[codec(index = #call_index)]
 				#fn_name {
 					#(

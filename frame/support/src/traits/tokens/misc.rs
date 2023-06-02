@@ -20,7 +20,7 @@
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
-use sp_runtime::{traits::Convert, ArithmeticError, DispatchError, FixedPointOperand, TokenError};
+use sp_runtime::{traits::Convert, ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
 
 /// The origin of funds to be used for a deposit operation.
@@ -221,24 +221,17 @@ impl WithdrawReasons {
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
 pub trait AssetId:
-	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+	FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
 {
 }
-impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
+impl<T: FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
 	for T
 {
 }
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
 pub trait Balance:
-	AtLeast32BitUnsigned
-	+ FullCodec
-	+ Copy
-	+ Default
-	+ Debug
-	+ scale_info::TypeInfo
-	+ MaxEncodedLen
-	+ FixedPointOperand
+	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo + MaxEncodedLen
 {
 }
 impl<
@@ -248,8 +241,7 @@ impl<
 			+ Default
 			+ Debug
 			+ scale_info::TypeInfo
-			+ MaxEncodedLen
-			+ FixedPointOperand,
+			+ MaxEncodedLen,
 	> Balance for T
 {
 }
@@ -270,8 +262,8 @@ pub trait ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> {
 	) -> Result<OutBalance, Self::Error>;
 }
 
-/// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
-/// downstream to extend logic of Uniques current functionality.
+/// Trait to handle NFT locking mechanism to ensure interactions with the asset can be implemented
+/// downstream to extend logic of Uniques/Nfts current functionality.
 pub trait Locker<CollectionId, ItemId> {
 	/// Check if the asset should be locked and prevent interactions with the asset from executing.
 	fn is_locked(collection: CollectionId, item: ItemId) -> bool;
