@@ -32,11 +32,10 @@
 //! In addition, for each, set, the peerset also holds a list of reserved nodes towards which it
 //! will at all time try to maintain a connection with.
 
-mod peer_store;
-mod protocol_controller;
-
-use peer_store::{PeerStore, PeerStoreHandle, PeerStoreProvider};
-use protocol_controller::{ProtocolController, ProtocolHandle};
+use crate::{
+	peer_store::{PeerStore, PeerStoreHandle, PeerStoreProvider},
+	protocol_controller::{ProtocolController, ProtocolHandle},
+};
 
 use futures::{
 	channel::oneshot,
@@ -45,6 +44,7 @@ use futures::{
 	stream::Stream,
 };
 use log::debug;
+use sc_network_common::types::ReputationChange;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use serde_json::json;
 use std::{
@@ -53,9 +53,7 @@ use std::{
 	task::{Context, Poll},
 };
 
-pub use libp2p_identity::PeerId;
-
-pub use peer_store::BANNED_THRESHOLD;
+use libp2p::PeerId;
 
 pub const LOG_TARGET: &str = "peerset";
 
@@ -94,27 +92,6 @@ impl From<usize> for SetId {
 impl From<SetId> for usize {
 	fn from(id: SetId) -> Self {
 		id.0
-	}
-}
-
-/// Description of a reputation adjustment for a node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ReputationChange {
-	/// Reputation delta.
-	pub value: i32,
-	/// Reason for reputation change.
-	pub reason: &'static str,
-}
-
-impl ReputationChange {
-	/// New reputation change with given delta and reason.
-	pub const fn new(value: i32, reason: &'static str) -> ReputationChange {
-		Self { value, reason }
-	}
-
-	/// New reputation change that forces minimum possible reputation.
-	pub const fn new_fatal(reason: &'static str) -> ReputationChange {
-		Self { value: i32::MIN, reason }
 	}
 }
 
@@ -262,8 +239,6 @@ pub struct Peerset {
 	from_controllers: TracingUnboundedReceiver<Message>,
 	/// Receiver for messages from the `PeersetHandle` and from `to_self`.
 	from_handle: TracingUnboundedReceiver<Action>,
-	/// Sending side of `from_handle`.
-	to_self: TracingUnboundedSender<Action>,
 }
 
 impl Peerset {
@@ -292,9 +267,9 @@ impl Peerset {
 		let (protocol_handles, protocol_controllers): (Vec<ProtocolHandle>, Vec<_>) =
 			controllers.into_iter().unzip();
 
-		let (to_self, from_handle) = tracing_unbounded("mpsc_peerset_messages", 10_000);
+		let (tx, from_handle) = tracing_unbounded("mpsc_peerset_messages", 10_000);
 
-		let handle = PeersetHandle { tx: to_self.clone() };
+		let handle = PeersetHandle { tx };
 
 		let protocol_controller_futures =
 			join_all(protocol_controllers.into_iter().map(|c| c.run().boxed()));
@@ -306,7 +281,6 @@ impl Peerset {
 			protocol_controller_futures,
 			from_controllers,
 			from_handle,
-			to_self,
 		};
 
 		(peerset, handle)
@@ -336,14 +310,6 @@ impl Peerset {
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, _reason: DropReason) {
 		self.protocol_handles[set_id.0].dropped(peer_id);
-	}
-
-	/// Reports an adjustment to the reputation of the given peer.
-	pub fn report_peer(&mut self, peer_id: PeerId, score_diff: ReputationChange) {
-		// We don't immediately perform the adjustments in order to have state consistency. We
-		// don't want the reporting here to take priority over messages sent using the
-		// `PeersetHandle`.
-		let _ = self.to_self.unbounded_send(Action::ReportPeer(peer_id, score_diff));
 	}
 
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.

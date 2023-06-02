@@ -328,8 +328,8 @@ mod tests {
 	use sc_client_db::offchain::LocalStorage;
 	use sc_network::{
 		config::MultiaddrWithPeerId, types::ProtocolName, NetworkPeers, NetworkStateInfo,
+		ReputationChange,
 	};
-	use sc_peerset::ReputationChange;
 	use sp_core::offchain::{DbExternalities, Externalities};
 	use std::time::SystemTime;
 

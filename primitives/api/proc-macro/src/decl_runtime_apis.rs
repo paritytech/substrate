@@ -539,8 +539,6 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 			input.supertraits.push(parse_quote!( #crate_::Core<#block_ident> ));
 		}
 
-		// The client side trait is only required when compiling with the feature `std` or `test`.
-		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
 		input.items = self.fold_item_trait_items(input.items, input.generics.params.len());
 
 		fold::fold_item_trait(self, input)
@@ -584,12 +582,13 @@ fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 	});
 
 	quote!(
-		#[cfg(any(feature = "std", test))]
-		impl < #( #impl_generics, )* > #crate_::RuntimeApiInfo
-			for dyn #trait_name < #( #ty_generics, )* >
-		{
-			#id
-			#version
+		#crate_::std_enabled! {
+			impl < #( #impl_generics, )* > #crate_::RuntimeApiInfo
+				for dyn #trait_name < #( #ty_generics, )* >
+			{
+				#id
+				#version
+			}
 		}
 	)
 }
@@ -636,7 +635,11 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 		let runtime_info = api_version.map(|v| generate_runtime_info_impl(&decl, v))?;
 
-		result.push(quote!( #decl #runtime_info #( #errors )* ));
+		result.push(quote!(
+			#crate_::std_enabled! { #decl }
+			#runtime_info
+			#( #errors )*
+		));
 	}
 
 	Ok(quote!( #( #result )* ))
