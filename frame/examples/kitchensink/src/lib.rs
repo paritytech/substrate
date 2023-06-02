@@ -91,8 +91,8 @@ pub mod pallet {
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
-	// #[pallet::origin]
-	// pub type Origin<T> = frame_system::RawOrigin<<T as frame_system::Config>::AccountId>;
+	#[pallet::origin]
+	pub type Origin<T> = frame_system::RawOrigin<<T as frame_system::Config>::AccountId>;
 
 	// first, we showcase all the possible storage types, with most of their details.
 
