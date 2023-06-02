@@ -2634,7 +2634,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "15.1.0"
-source = "git+https://github.com/paritytech/frame-metadata.git?branch=lexnv/extrinsic_decode_info#b3de61b949a9fa57e599a642b4d70aab8c91fa28"
+source = "git+https://github.com/paritytech/frame-metadata.git?branch=lexnv/extrinsic_decode_info#04213d23e314ab6e42e5840f94787aaede60b627"
 dependencies = [
  "cfg-if",
  "parity-scale-codec",
