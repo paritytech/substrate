@@ -202,7 +202,6 @@ pub fn run_to_block(n: u32) {
 }
 
 // Traits to make using events less insufferable:
-
 pub trait IntoRecord {
 	fn into_record(self) -> EventRecord<<Test as frame_system::Config>::RuntimeEvent, H256>;
 }
