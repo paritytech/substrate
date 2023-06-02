@@ -29,7 +29,7 @@ use sp_runtime::{
 };
 
 type AccountId = u128;
-type AccountNonce = u32;
+type Nonce = u32;
 type BlockNumber = u64;
 type Balance = u128;
 
@@ -44,7 +44,7 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Nonce = AccountNonce;
+	type Nonce = Nonce;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
