@@ -217,12 +217,15 @@ frame_support::construct_runtime!(
 	}
 );
 
+pub const BAL_ACC0: u64 = 1234;
+pub const BAL_ACC1: u64 = 5678;
+
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
 		// The 0 account is NOT a special origin, the rest may be.
-		balances: vec![(0, 1234), (1, 5678), (2, 5678), (3, 5678), (4, 5678)],
+		balances: vec![(0, BAL_ACC0), (1, BAL_ACC1), (2, 5678), (3, 5678), (4, 5678)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();

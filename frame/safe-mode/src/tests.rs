@@ -39,7 +39,7 @@ macro_rules! hypothetically {
 	};
 }
 
-/// Assert something to be would be [*hypothetically*] `Ok` without actually doing it.
+/// Assert something to be [*hypothetically*] `Ok` without actually committing it.
 ///
 /// Reverts any storage changes made by the closure.
 macro_rules! hypothetically_ok {
@@ -169,7 +169,6 @@ fn can_filter_balance_calls_when_activated() {
 			call_transfer().dispatch(RuntimeOrigin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
-		// TODO ^^^ consider refactor to throw a safe mode error, not generic `CallFiltered`
 	});
 }
 
@@ -340,9 +339,9 @@ fn can_force_release_stake_with_config_origin() {
 			0,
 			activated_at_block
 		));
-		assert_eq!(Balances::free_balance(&0), 1234); // accounts set in mock genesis
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0); // accounts set in mock genesis
 
-		Balances::make_free_balance_be(&0, 1234);
+		Balances::make_free_balance_be(&0, BAL_ACC0);
 		let activated_and_extended_at_block = System::block_number();
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(1)));
@@ -358,7 +357,7 @@ fn can_force_release_stake_with_config_origin() {
 			0,
 			activated_and_extended_at_block
 		));
-		assert_eq!(Balances::free_balance(&0), 1234); // accounts set in mock genesis
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0); // accounts set in mock genesis
 	});
 }
 
@@ -369,7 +368,7 @@ fn can_release_stake_while_entered() {
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert!(SafeMode::is_entered());
 
-		assert_eq!(Balances::free_balance(&0), 1234 - mock::EnterStakeAmount::get());
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get());
 
 		// We could slash in the same block or any later.
 		for i in 0..mock::EnterDuration::get() + 10 {
@@ -386,7 +385,7 @@ fn can_release_stake_while_entered() {
 			0,
 			1
 		),);
-		assert_eq!(Balances::free_balance(&0), 1234);
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0);
 		// ... it wont work ever again.
 		assert_err!(
 			SafeMode::force_release_stake(
@@ -434,22 +433,22 @@ fn can_slash_stake_from_extend_block() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(1)));
-		assert_eq!(Balances::free_balance(&0), 1234 - mock::EnterStakeAmount::get());
-		assert_eq!(Balances::free_balance(&1), 5678 - mock::ExtendStakeAmount::get());
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get());
+		assert_eq!(Balances::free_balance(&1), BAL_ACC1 - mock::ExtendStakeAmount::get());
 
 		assert_ok!(SafeMode::force_slash_stake(
 			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
 			0,
 			1
 		),);
-		assert_eq!(Balances::free_balance(&0), 1234 - mock::EnterStakeAmount::get());
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get());
 
 		assert_ok!(SafeMode::force_slash_stake(
 			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
 			1,
 			1
 		),);
-		assert_eq!(Balances::free_balance(&1), 5678 - mock::ExtendStakeAmount::get());
+		assert_eq!(Balances::free_balance(&1), BAL_ACC1 - mock::ExtendStakeAmount::get());
 
 		// But never again.
 		assert_err!(
@@ -480,9 +479,9 @@ fn can_slash_stake_with_config_origin() {
 			0,
 			activated_at_block
 		));
-		assert_eq!(Balances::free_balance(&0), 1234 - mock::EnterStakeAmount::get()); // accounts set in mock genesis
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get()); // accounts set in mock genesis
 
-		Balances::make_free_balance_be(&0, 1234);
+		Balances::make_free_balance_be(&0, BAL_ACC0);
 		let activated_and_extended_at_block = System::block_number();
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(1)));
@@ -498,7 +497,7 @@ fn can_slash_stake_with_config_origin() {
 			0,
 			activated_and_extended_at_block
 		));
-		assert_eq!(Balances::free_balance(&0), 1234 - mock::EnterStakeAmount::get()); // accounts set in
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get()); // accounts set in
 		                                                                      // mock genesis
 	});
 }
