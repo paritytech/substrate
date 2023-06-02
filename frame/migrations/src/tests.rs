@@ -122,7 +122,7 @@ fn historic_skipping_works() {
 	});
 }
 
-/// When another upgrade happens while a migration is still running, it should stuck the chain.
+/// When another upgrade happens while a migration is still running, it should set the cursor to stuck.
 #[test]
 fn upgrade_fails_when_migration_active() {
 	test_closure(|| {
