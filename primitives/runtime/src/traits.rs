@@ -554,7 +554,7 @@ pub trait ConvertBack<A, B>: Convert<A, B> {
 
 /// Fallible conversion trait returning a Result. Generic over both source and destination types.
 ///
-/// In case an `Error` is returned, it must alwats be the operand which is returned.
+/// In case an `Error` is returned, it must always be the operand which is returned.
 pub trait TryConvertBack<A, B>: TryConvert<A, B> {
 	/// Make conversion.
 	fn try_convert_back(b: B) -> Result<A, B>;
