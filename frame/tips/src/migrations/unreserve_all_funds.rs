@@ -27,6 +27,9 @@ use pallet_treasury::BalanceOf;
 use sp_runtime::{traits::Zero, Saturating};
 use sp_std::collections::btree_map::BTreeMap;
 
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
+
 /// A migration that unreserves all tip deposits.
 ///
 /// Useful to prevent funds from being locked up when the pallet is deprecated.
@@ -138,7 +141,6 @@ where
 		account_reserved_before_bytes: Vec<u8>,
 	) -> Result<(), sp_runtime::TryRuntimeError> {
 		use codec::Decode;
-		use frame_support::ensure;
 
 		let account_reserved_before = BTreeMap::<T::AccountId, BalanceOf<T, I>>::decode(
 			&mut &account_reserved_before_bytes[..],
@@ -156,15 +158,13 @@ where
 				.expect("account deposit must exist to be in account_reserved_before, qed");
 			let expected_reserved_after =
 				actual_reserved_before.saturating_sub(expected_amount_deducted);
-			ensure!(
+			assert!(
 				actual_reserved_after == expected_reserved_after,
-				format!(
-					"Reserved balance for {:?} is incorrect. actual before: {:?}, actual after, {:?}, expected deducted: {:?}",
-					account,
-					actual_reserved_before,
-					actual_reserved_after,
-					expected_amount_deducted
-				),
+				"Reserved balance for {:?} is incorrect. actual before: {:?}, actual after, {:?}, expected deducted: {:?}",
+				account,
+				actual_reserved_before,
+				actual_reserved_after,
+				expected_amount_deducted
 			);
 		}
 
