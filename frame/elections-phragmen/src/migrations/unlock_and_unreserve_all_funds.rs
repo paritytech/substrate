@@ -26,7 +26,10 @@ use frame_support::{
 };
 use sp_core::Get;
 use sp_runtime::traits::Zero;
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::collections::btree_map::BTreeMap;
+
+#[cfg(feature = "try-runtime")]
+use sp_std::vec::Vec;
 
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
 /// pallet.
