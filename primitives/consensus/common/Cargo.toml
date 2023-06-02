@@ -18,10 +18,10 @@ async-trait = "0.1.57"
 futures = { version = "0.3.21", features = ["thread-pool"] }
 log = "0.4.17"
 thiserror = "1.0.30"
-sp-core = { version = "8.0.0", path = "../../core" }
+sp-core = { version = "21.0.0", path = "../../core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
-sp-runtime = { version = "8.0.0", path = "../../runtime" }
-sp-state-machine = { version = "0.14.0", path = "../../state-machine" }
+sp-runtime = { version = "24.0.0", path = "../../runtime" }
+sp-state-machine = { version = "0.28.0", path = "../../state-machine" }
 
 [dev-dependencies]
 futures = "0.3.21"

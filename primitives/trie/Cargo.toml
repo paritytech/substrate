@@ -1,6 +1,6 @@
 [package]
 name = "sp-trie"
-version = "8.0.0"
+version = "22.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Patricia trie stuff using a parity-scale-codec node format"
 repository = "https://github.com/paritytech/substrate/"
@@ -31,8 +31,8 @@ thiserror = { version = "1.0.30", optional = true }
 tracing = { version = "0.1.29", optional = true }
 trie-db = { version = "0.27.0", default-features = false }
 trie-root = { version = "0.18.0", default-features = false }
-sp-core = { version = "8.0.0", default-features = false, path = "../core" }
-sp-std = { version = "6.0.0", default-features = false, path = "../std" }
+sp-core = { version = "21.0.0", default-features = false, path = "../core" }
+sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 schnellru = { version = "0.2.1", optional = true }
 
 [dev-dependencies]
@@ -40,7 +40,7 @@ array-bytes = "4.1"
 criterion = "0.4.0"
 trie-bench = "0.37.0"
 trie-standardmap = "0.16.0"
-sp-runtime = { version = "8.0.0", path = "../runtime" }
+sp-runtime = { version = "24.0.0", path = "../runtime" }
 
 [features]
 default = ["std"]

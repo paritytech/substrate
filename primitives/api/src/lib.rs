@@ -750,3 +750,6 @@ decl_runtime_apis! {
 		fn metadata_versions() -> sp_std::vec::Vec<u32>;
 	}
 }
+
+sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
+sp_core::generate_feature_enabled_macro!(std_disabled, not(feature = "std"), $);

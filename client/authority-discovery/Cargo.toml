@@ -34,12 +34,12 @@ sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../primitives/authority-discovery" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "8.0.0", path = "../../primitives/core" }
-sp-keystore = { version = "0.14.0", path = "../../primitives/keystore" }
-sp-runtime = { version = "8.0.0", path = "../../primitives/runtime" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 async-trait = "0.1.56"
 
 [dev-dependencies]
 quickcheck = { version = "1.0.3", default-features = false }
-sp-tracing = { version = "7.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

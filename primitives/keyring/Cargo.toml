@@ -1,6 +1,6 @@
 [package]
 name = "sp-keyring"
-version = "8.0.0"
+version = "24.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -16,5 +16,5 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 lazy_static = "1.4.0"
 strum = { version = "0.24.1", features = ["derive"], default-features = false }
-sp-core = { version = "8.0.0", path = "../core" }
-sp-runtime = { version = "8.0.0", path = "../runtime" }
+sp-core = { version = "21.0.0", path = "../core" }
+sp-runtime = { version = "24.0.0", path = "../runtime" }
