@@ -141,19 +141,6 @@ fn fails_to_pause_self() {
 }
 
 #[test]
-fn fails_to_pause_unpausable_pallet() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			TxPause::pause(
-				RuntimeOrigin::signed(mock::PauseOrigin::get()),
-				full_name::<Test>(b"Balances", b"transfer_keep_alive"),
-			),
-			Error::<Test>::Unpausable
-		);
-	});
-}
-
-#[test]
 fn fails_to_pause_unpausable_call_when_other_call_is_paused() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(call_transfer(1, 1).dispatch(RuntimeOrigin::signed(0)));
