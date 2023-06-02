@@ -138,6 +138,7 @@ where
 		account_reserved_before_bytes: Vec<u8>,
 	) -> Result<(), sp_runtime::TryRuntimeError> {
 		use codec::Decode;
+		use frame_support::ensure;
 
 		let account_reserved_before = BTreeMap::<T::AccountId, BalanceOf<T, I>>::decode(
 			&mut &account_reserved_before_bytes[..],
@@ -155,13 +156,15 @@ where
 				.expect("account deposit must exist to be in account_reserved_before, qed");
 			let expected_reserved_after =
 				actual_reserved_before.saturating_sub(expected_amount_deducted);
-			assert!(
+			ensure!(
 				actual_reserved_after == expected_reserved_after,
-				"Reserved balance for {:?} is incorrect. actual before: {:?}, actual after, {:?}, expected deducted: {:?}",
-				account,
-				actual_reserved_before,
-				actual_reserved_after,
-				expected_amount_deducted,
+				format!(
+					"Reserved balance for {:?} is incorrect. actual before: {:?}, actual after, {:?}, expected deducted: {:?}",
+					account,
+					actual_reserved_before,
+					actual_reserved_after,
+					expected_amount_deducted
+				),
 			);
 		}
 
