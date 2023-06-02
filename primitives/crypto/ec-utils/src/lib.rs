@@ -125,7 +125,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G1 for bls12_381
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bls12_381::G1Affine]>
-	/// scalars: ArkScale<&[<Sark_bls12_381::WCurveConfig as CurveConfig>::ScalarField]>
+	/// scalars: ArkScale<&[<ark_bls12_381::Config as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_bls12_381::G1Projective>
 	fn bls12_381_msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_381::msm_g1(bases, scalars)
@@ -134,7 +134,7 @@ pub trait EllipticCurves {
 	/// Compute a msm on G2 for bls12_381
 	/// Receives encoded:
 	/// bases: ArkScale<&[ark_bls12_381::G2Affine]>
-	/// scalars: ArkScale<&[<ark_bls12_381::SWCurveConfig as CurveConfig>::ScalarField]>
+	/// scalars: ArkScale<&[<ark_bls12_381::Config as CurveConfig>::ScalarField]>
 	/// Returns encoded: ArkScaleProjective<ark_bls12_381::G2Projective>
 	fn bls12_381_msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_381::msm_g2(bases, scalars)
@@ -236,10 +236,10 @@ pub trait EllipticCurves {
 
 	/// Compute short weierstrass msm on ed_on_bls12_381_bandersnatch
 	/// Receives encoded:
-	/// bases: ArkScale<&[ed_on_bls12_381_bandersnatch::SWAffine]>
+	/// bases: ArkScale<&[ark_ed_on_bls12_381_bandersnatch::SWAffine]>
 	/// scalars:
-	/// ArkScale<&[<ed_on_bls12_381_bandersnatch::SWCurveConfig as CurveConfig>::ScalarField]>
-	/// Returns encoded: ArkScaleProjective<ed_on_bls12_381_bandersnatch::SWProjective>
+	/// ArkScale<&[<ark_ed_on_bls12_381_bandersnatch::SWCurveConfig as CurveConfig>::ScalarField]>
+	/// Returns encoded: ArkScaleProjective<ark_ed_on_bls12_381_bandersnatch::SWProjective>
 	fn ed_on_bls12_381_bandersnatch_sw_msm(
 		bases: Vec<u8>,
 		scalars: Vec<u8>,
@@ -249,9 +249,9 @@ pub trait EllipticCurves {
 
 	/// Compute twisted edwards msm on ed_on_bls12_381_bandersnatch
 	/// Receives encoded:
-	/// base: ArkScaleProjective<ed_on_bls12_381_bandersnatch::EdwardsProjective>
+	/// base: ArkScaleProjective<ark_ed_on_bls12_381_bandersnatch::EdwardsProjective>
 	/// scalar: ArkScale<&[u64]>
-	/// Returns encoded: ArkScaleProjective<ed_on_bls12_381_bandersnatch::EdwardsProjective>
+	/// Returns encoded: ArkScaleProjective<ark_ed_on_bls12_381_bandersnatch::EdwardsProjective>
 	fn ed_on_bls12_381_bandersnatch_te_msm(
 		bases: Vec<u8>,
 		scalars: Vec<u8>,
