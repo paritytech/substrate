@@ -50,7 +50,7 @@ use std::{
 	net::Ipv4Addr,
 	path::{Path, PathBuf},
 	pin::Pin,
-	str::{self, FromStr},
+	str::{self, FromStr}, num::NonZeroUsize,
 };
 
 pub use libp2p::{
@@ -605,6 +605,9 @@ pub struct NetworkConfiguration {
 	/// the presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
 
+	/// None will end up using default Kadmelia value.
+	pub kademlia_replication_factor: Option<NonZeroUsize>,
+
 	/// Enable serving block data over IPFS bitswap.
 	pub ipfs_server: bool,
 
@@ -657,6 +660,7 @@ impl NetworkConfiguration {
 			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
+			kademlia_replication_factor: None,
 			yamux_window_size: None,
 			ipfs_server: false,
 		}
