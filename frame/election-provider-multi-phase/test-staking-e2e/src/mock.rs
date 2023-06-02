@@ -24,7 +24,7 @@ use frame_support::{
 	weights::constants,
 };
 use frame_system::EnsureRoot;
-use sp_core::{ConstU32, Get, H256};
+use sp_core::{ConstU32, Get};
 use sp_npos_elections::{ElectionScore, VoteWeight};
 use sp_runtime::{
 	offchain::{
@@ -32,7 +32,7 @@ use sp_runtime::{
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
 	testing,
-	traits::{IdentityLookup, Zero},
+	traits::Zero,
 	transaction_validity, PerU16, Perbill,
 };
 use sp_staking::{
@@ -51,10 +51,14 @@ use pallet_staking::StakerStatus;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
+#[use_attr]
+use frame_support::derive_impl;
+use frame_support::macro_magic::use_attr;
+
 use crate::{log, log_current_time};
 
-pub const INIT_TIMESTAMP: u64 = 30_000;
-pub const BLOCK_TIME: u64 = 1000;
+pub const INIT_TIMESTAMP: BlockNumber = 30_000;
+pub const BLOCK_TIME: BlockNumber = 1000;
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -77,39 +81,24 @@ frame_support::construct_runtime!(
 	}
 );
 
-pub(crate) type AccountId = u128;
+pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u32;
-pub(crate) type BlockNumber = u64;
+pub(crate) type BlockNumber = u32;
 pub(crate) type Balance = u64;
 pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
-pub(crate) type Moment = u64;
+pub(crate) type Moment = u32;
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = traits::Everything;
-	type BlockWeights = BlockWeights;
-	type BlockLength = ();
-	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
-	type Hash = H256;
-	type Hashing = sp_runtime::traits::BlakeTwo256;
-	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ();
-	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<Balance>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = traits::ConstU32<16>;
+
+	type AccountData = pallet_balances::AccountData<Balance>;
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
@@ -141,7 +130,7 @@ impl pallet_balances::Config for Runtime {
 impl pallet_timestamp::Config for Runtime {
 	type Moment = Moment;
 	type OnTimestampSet = ();
-	type MinimumPeriod = traits::ConstU64<5>;
+	type MinimumPeriod = traits::ConstU32<5>;
 	type WeightInfo = ();
 }
 
@@ -548,7 +537,7 @@ impl ExtBuilder {
 		ext.execute_with(|| {
 			System::set_block_number(1);
 			Session::on_initialize(1);
-			<Staking as Hooks<u64>>::on_initialize(1);
+			<Staking as Hooks<u32>>::on_initialize(1);
 			Timestamp::set_timestamp(INIT_TIMESTAMP);
 		});
 
@@ -676,10 +665,10 @@ pub(crate) fn start_session(
 	pool: Arc<RwLock<PoolState>>,
 	delay_solution: bool,
 ) {
-	let end: u64 = if Offset::get().is_zero() {
-		Period::get() * (session_index as u64)
+	let end = if Offset::get().is_zero() {
+		Period::get() * session_index
 	} else {
-		Offset::get() * (session_index as u64) + Period::get() * (session_index as u64)
+		Offset::get() * session_index + Period::get() * session_index
 	};
 
 	assert!(end >= System::block_number());
@@ -838,7 +827,7 @@ pub(crate) fn slash_through_offending_threshold() {
 
 // Slashes a percentage of the active nominators that haven't been slashed yet, with
 // a minimum of 1 validator slash.
-pub(crate) fn slash_percentage(percentage: Perbill) -> Vec<u128> {
+pub(crate) fn slash_percentage(percentage: Perbill) -> Vec<AccountId> {
 	let validators = Session::validators();
 	let mut remaining_slashes = (percentage * validators.len() as u32).max(1);
 	let mut slashed = vec![];

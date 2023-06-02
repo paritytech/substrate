@@ -281,25 +281,25 @@ fn set_validation_intention_after_chilled() {
 	ext.execute_with(|| {
 		assert_eq!(active_era(), 0);
 		// validator is part of the validator set.
-		assert!(Session::validators().contains(&81));
-		assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&81));
+		assert!(Session::validators().contains(&41));
+		assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&41));
 
 		// nominate validator 81.
-		assert_ok!(Staking::nominate(RuntimeOrigin::signed(21), vec![81]));
-		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![81]);
+		assert_ok!(Staking::nominate(RuntimeOrigin::signed(21), vec![41]));
+		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![41]);
 
 		// validator is slashed. it is removed from the `VoterList` through chilling but in the
 		// current era, the validator is still part of the active validator set.
-		add_slash(&81);
-		assert!(Session::validators().contains(&81));
-		assert!(!<Runtime as pallet_staking::Config>::VoterList::contains(&81));
+		add_slash(&41);
+		assert!(Session::validators().contains(&41));
+		assert!(!<Runtime as pallet_staking::Config>::VoterList::contains(&41));
 		assert_eq!(
 			staking_events(),
 			[
-				Event::Chilled { stash: 81 },
+				Event::Chilled { stash: 41 },
 				Event::ForceEra { mode: Forcing::ForceNew },
 				Event::SlashReported {
-					validator: 81,
+					validator: 41,
 					slash_era: 0,
 					fraction: Perbill::from_percent(10)
 				}
@@ -307,19 +307,19 @@ fn set_validation_intention_after_chilled() {
 		);
 
 		// after the nominator is slashed and chilled, the nominations remain.
-		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![81]);
+		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![41]);
 
 		// validator sets intention to stake again in the same era it was chilled.
-		assert_ok!(Staking::validate(RuntimeOrigin::signed(81), Default::default()));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(41), Default::default()));
 
 		// progress era and check that the slashed validator is still part of the validator
 		// set.
 		assert!(start_next_active_era(pool_state).is_ok());
 		assert_eq!(active_era(), 1);
-		assert!(Session::validators().contains(&81));
-		assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&81));
+		assert!(Session::validators().contains(&41));
+		assert!(<Runtime as pallet_staking::Config>::VoterList::contains(&41));
 
 		// nominations are still active as before the slash.
-		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![81]);
+		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![41]);
 	})
 }
