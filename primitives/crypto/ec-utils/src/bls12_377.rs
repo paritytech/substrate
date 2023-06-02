@@ -26,57 +26,35 @@ use ark_bls12_377::{g1, g2, Bls12_377};
 use sp_std::vec::Vec;
 
 /// Compute a multi miller loop through arkworks
-/// Receives encoded:
-/// a: ArkScale<Vec<<Bls12<Bls12Config> as Pairing>::G1Prepared>>
-/// b: ArkScale<Vec<<Bls12<Bls12Config> as Pairing>::G2Prepared>>
-/// Returns encoded: MillerLoopOutput<Bls12<Bls12Config>>
 pub fn multi_miller_loop(a: Vec<u8>, b: Vec<u8>) -> Result<Vec<u8>, ()> {
 	multi_miller_loop_generic::<Bls12_377>(a, b)
 }
 
 /// Compute a final exponentiation through arkworks
-/// Receives encoded: MillerLoopOutput<Bls12<Bls12Config>>
-/// Returns encoded:ArkScale<PairingOutput<Bls12<Bls12Config>>>
 pub fn final_exponentiation(target: Vec<u8>) -> Result<Vec<u8>, ()> {
 	final_exponentiation_generic::<Bls12_377>(target)
 }
 
 /// Compute a multi scalar multiplication for short_weierstrass through
 /// arkworks on G1.
-/// Receives encoded:
-/// bases: ArkScale<&[G1Affine]>
-/// scalars: ArkScale<&[<SWCurveConfig as CurveConfig>::ScalarField]>
-/// Returns encoded: ArkScaleProjective<G1Projective>
 pub fn msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 	msm_sw_generic::<g1::Config>(bases, scalars)
 }
 
 /// Compute a multi scalar multiplication for short_weierstrass through
 /// arkworks on G2.
-/// Receives encoded:
-/// bases: ArkScale<&[G2Affine]>
-/// scalars: ArkScale<&[<SWCurveConfig as CurveConfig>::ScalarField]>
-/// Returns encoded: ArkScaleProjective<G2Projective>
 pub fn msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 	msm_sw_generic::<g2::Config>(bases, scalars)
 }
 
 /// Compute a projective scalar multiplication for short_weierstrass
 /// through arkworks on G1.
-/// Receives encoded:
-/// base: ArkScaleProjective<G1Projective>
-/// scalar: ArkScale<&[u64]>
-/// Returns encoded: ArkScaleProjective<G1Projective>
 pub fn mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_generic::<g1::Config>(base, scalar)
 }
 
 /// Compute a projective scalar multiplication for short_weierstrass
 /// through arkworks on G2.
-/// Receives encoded:
-/// base: ArkScaleProjective<G2Projective>
-/// scalar: ArkScale<&[u64]>
-/// Returns encoded: ArkScaleProjective<G2Projective>
 pub fn mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
 	mul_projective_generic::<g2::Config>(base, scalar)
 }

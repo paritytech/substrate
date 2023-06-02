@@ -34,70 +34,6 @@ use sp_runtime_interface::runtime_interface;
 /// All type are (de-)serialized through the wrapper types from the ark-scale trait.
 #[runtime_interface]
 pub trait EllipticCurves {
-	/// Compute a multi Miller loop on bls12_381
-	/// Given:
-	/// ark_bls12_381::Bls12Config;
-	/// Receives encoded:
-	/// a: ArkScale<Vec<<Bls12<Bls12Config> as Pairing>::G1Prepared>>
-	/// b: ArkScale<Vec<<Bls12<Bls12Config> as Pairing>::G2Prepared>>
-	/// Returns encoded: MillerLoopOutput<Bls12<Bls12Config>>
-	fn bls12_381_multi_miller_loop(a: Vec<u8>, b: Vec<u8>) -> Result<Vec<u8>, ()> {
-		bls12_381::multi_miller_loop(a, b)
-	}
-
-	/// Compute a final exponentiation on bls12_381
-	/// Given:
-	/// ark_bls12_381::Bls12Config;
-	/// Receives encoded: MillerLoopOutput<Bls12<Bls12Config>>
-	/// Returns encoded:ArkScale<PairingOutput<Bls12<Bls12Config>>>
-	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, ()> {
-		bls12_381::final_exponentiation(f12)
-	}
-
-	/// Compute a projective multiplication on G1 for bls12_381
-	/// Given:
-	/// ark_bls12_381::G1Projective;
-	/// Receives encoded:
-	/// base: ArkScaleProjective<G1Projective>
-	/// scalar: ArkScale<&[u64]>
-	/// Returns encoded: ArkScaleProjective<G1Projective>
-	fn bls12_381_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-		bls12_381::mul_projective_g1(base, scalar)
-	}
-
-	/// Compute a projective multiplication on G2 for bls12_381
-	/// Given:
-	/// ark_bls12_381::G2Projective;
-	/// Receives encoded:
-	/// base: ArkScaleProjective<G2Projective>
-	/// scalar: ArkScale<&[u64]>
-	/// Returns encoded: ArkScaleProjective<G2Projective>
-	fn bls12_381_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
-		bls12_381::mul_projective_g2(base, scalar)
-	}
-
-	/// Compute a msm on G1 for bls12_381
-	/// Receives encoded:
-	/// Given:
-	/// ark_bls12_381::{G1Affine, G1Projective, SWCurveConfig};
-	/// bases: ArkScale<&[G1Affine]>
-	/// scalars: ArkScale<&[<SWCurveConfig as CurveConfig>::ScalarField]>
-	/// Returns encoded: ArkScaleProjective<G1Projective>
-	fn bls12_381_msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
-		bls12_381::msm_g1(bases, scalars)
-	}
-
-	/// Compute a msm on G2 for bls12_381
-	/// Receives encoded:
-	/// Given:
-	/// ark_bls12_381::{G2Affine, G2Projective, SWCurveConfig};
-	/// bases: ArkScale<&[G2Affine]>
-	/// scalars: ArkScale<&[<SWCurveConfig as CurveConfig>::ScalarField]>
-	/// Returns encoded: ArkScaleProjective<G2Projective>
-	fn bls12_381_msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
-		bls12_381::msm_g2(bases, scalars)
-	}
-
 	/// Compute a multi Miller loop for bls12_377
 	/// Receives encoded:
 	/// Given:
@@ -161,6 +97,70 @@ pub trait EllipticCurves {
 	/// Returns encoded: ArkScaleProjective<G2Projective>
 	fn bls12_377_msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_377::msm_g2(bases, scalars)
+	}
+	
+	/// Compute a multi Miller loop on bls12_381
+	/// Given:
+	/// ark_bls12_381::Bls12Config;
+	/// Receives encoded:
+	/// a: ArkScale<Vec<<Bls12<Bls12Config> as Pairing>::G1Prepared>>
+	/// b: ArkScale<Vec<<Bls12<Bls12Config> as Pairing>::G2Prepared>>
+	/// Returns encoded: MillerLoopOutput<Bls12<Bls12Config>>
+	fn bls12_381_multi_miller_loop(a: Vec<u8>, b: Vec<u8>) -> Result<Vec<u8>, ()> {
+		bls12_381::multi_miller_loop(a, b)
+	}
+
+	/// Compute a final exponentiation on bls12_381
+	/// Given:
+	/// ark_bls12_381::Bls12Config;
+	/// Receives encoded: MillerLoopOutput<Bls12<Bls12Config>>
+	/// Returns encoded:ArkScale<PairingOutput<Bls12<Bls12Config>>>
+	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, ()> {
+		bls12_381::final_exponentiation(f12)
+	}
+
+	/// Compute a projective multiplication on G1 for bls12_381
+	/// Given:
+	/// ark_bls12_381::G1Projective;
+	/// Receives encoded:
+	/// base: ArkScaleProjective<G1Projective>
+	/// scalar: ArkScale<&[u64]>
+	/// Returns encoded: ArkScaleProjective<G1Projective>
+	fn bls12_381_mul_projective_g1(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
+		bls12_381::mul_projective_g1(base, scalar)
+	}
+
+	/// Compute a projective multiplication on G2 for bls12_381
+	/// Given:
+	/// ark_bls12_381::G2Projective;
+	/// Receives encoded:
+	/// base: ArkScaleProjective<G2Projective>
+	/// scalar: ArkScale<&[u64]>
+	/// Returns encoded: ArkScaleProjective<G2Projective>
+	fn bls12_381_mul_projective_g2(base: Vec<u8>, scalar: Vec<u8>) -> Result<Vec<u8>, ()> {
+		bls12_381::mul_projective_g2(base, scalar)
+	}
+
+	/// Compute a msm on G1 for bls12_381
+	/// Receives encoded:
+	/// Given:
+	/// ark_bls12_381::{G1Affine, G1Projective, SWCurveConfig};
+	/// bases: ArkScale<&[G1Affine]>
+	/// scalars: ArkScale<&[<SWCurveConfig as CurveConfig>::ScalarField]>
+	/// Returns encoded: ArkScaleProjective<G1Projective>
+	fn bls12_381_msm_g1(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
+		bls12_381::msm_g1(bases, scalars)
+	}
+
+	/// Compute a msm on G2 for bls12_381
+	/// Receives encoded:
+	/// Given:
+	/// ark_bls12_381::{G2Affine, G2Projective, SWCurveConfig};
+	/// bases: ArkScale<&[G2Affine]>
+	/// scalars: ArkScale<&[<SWCurveConfig as CurveConfig>::ScalarField]>
+	/// Returns encoded: ArkScaleProjective<G2Projective>
+	fn bls12_381_msm_g2(bases: Vec<u8>, scalars: Vec<u8>) -> Result<Vec<u8>, ()> {
+		bls12_381::msm_g2(bases, scalars)
 	}
 
 	/// Compute a multi Miller loop on bw6_761
