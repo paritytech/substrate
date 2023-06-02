@@ -530,15 +530,65 @@ morph_types! {
 	} where L::Type: Ord, M: TryMorph<L::Type, Outcome = L::Type>;
 }
 
-/// Extensible conversion trait. Generic over both source and destination types.
+/// Infallible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
 	fn convert(a: A) -> B;
 }
 
+/// Fallible conversion trait returning a Result. Generic over both source and destination types.
+///
+/// In case an `Error` is returned, it must alwats be the operand which is returned.
+pub trait TryConvert<A, B> {
+	/// Make conversion.
+	fn try_convert(a: A) -> Result<B, A>;
+}
+
+/// Reversing infallible conversion trait. Generic over both source and destination types.
+///
+/// This specifically reverses the conversion.
+pub trait ConvertBack<A, B>: Convert<A, B> {
+	/// Make conversion back.
+	fn convert_back(b: B) -> A;
+}
+
+/// Fallible conversion trait returning a Result. Generic over both source and destination types.
+///
+/// In case an `Error` is returned, it must alwats be the operand which is returned.
+pub trait TryConvertBack<A, B>: TryConvert<A, B> {
+	/// Make conversion.
+	fn try_convert_back(b: B) -> Result<A, B>;
+}
+
 impl<A, B: Default> Convert<A, B> for () {
 	fn convert(_: A) -> B {
 		Default::default()
+	}
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A, B> TryConvert<A, B> for Tuple {
+	fn try_convert(a: A) -> Result<B, A> {
+		for_tuples!( #(
+			let a = match Tuple::try_convert(a) {
+				Ok(b) => return Ok(b),
+				Err(a) => a,
+			};
+		)* );
+		Err(a)
+	}
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A, B> TryConvertBack<A, B> for Tuple {
+	fn try_convert_back(b: B) -> Result<A, B> {
+		for_tuples!( #(
+			let b = match Tuple::try_convert_back(b) {
+				Ok(a) => return Ok(a),
+				Err(b) => b,
+			};
+		)* );
+		Err(b)
 	}
 }
 
@@ -550,6 +600,16 @@ impl<X, Y, T: Get<Y>> Convert<X, Y> for ConvertToValue<T> {
 		T::get()
 	}
 }
+impl<X, Y, T: Get<Y>> TryConvert<X, Y> for ConvertToValue<T> {
+	fn try_convert(_: X) -> Result<Y, X> {
+		Ok(T::get())
+	}
+}
+impl<X, Y, T: Get<Y>> TryConvertBack<X, Y> for ConvertToValue<T> {
+	fn try_convert_back(y: Y) -> Result<X, Y> {
+		Err(y)
+	}
+}
 
 /// A structure that performs identity conversion.
 pub struct Identity;
@@ -558,24 +618,51 @@ impl<T> Convert<T, T> for Identity {
 		a
 	}
 }
+impl<T> TryConvert<T, T> for Identity {
+	fn try_convert(a: T) -> Result<T, T> {
+		Ok(a)
+	}
+}
 impl<T> ConvertBack<T, T> for Identity {
 	fn convert_back(a: T) -> T {
 		a
 	}
 }
+impl<T> TryConvertBack<T, T> for Identity {
+	fn try_convert_back(a: T) -> Result<T, T> {
+		Ok(a)
+	}
+}
 
 /// A structure that performs standard conversion using the standard Rust conversion traits.
 pub struct ConvertInto;
-impl<A, B: From<A>> Convert<A, B> for ConvertInto {
+impl<A: Into<B>, B> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B {
 		a.into()
 	}
 }
+impl<A: Into<B>, B> TryConvert<A, B> for ConvertInto {
+	fn try_convert(a: A) -> Result<B, A> {
+		Ok(a.into())
+	}
+}
+impl<A: Into<B>, B: Into<A>> TryConvertBack<A, B> for ConvertInto {
+	fn try_convert_back(b: B) -> Result<A, B> {
+		Ok(b.into())
+	}
+}
 
-/// Extensible conversion trait. Generic over both source and destination types.
-pub trait ConvertBack<A, B>: Convert<A, B> {
-	/// Make conversion back.
-	fn convert_back(b: B) -> A;
+/// A structure that performs standard conversion using the standard Rust conversion traits.
+pub struct TryConvertInto;
+impl<A: Clone + TryInto<B>, B> TryConvert<A, B> for TryConvertInto {
+	fn try_convert(a: A) -> Result<B, A> {
+		a.clone().try_into().map_err(|_| a)
+	}
+}
+impl<A: Clone + TryInto<B>, B: Clone + TryInto<A>> TryConvertBack<A, B> for TryConvertInto {
+	fn try_convert_back(b: B) -> Result<A, B> {
+		b.clone().try_into().map_err(|_| b)
+	}
 }
 
 /// Convenience type to work around the highly unergonomic syntax needed
