@@ -256,10 +256,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			let next = Historic::<T>::clear(
-				limit.unwrap_or_default(),
-				map_cursor.as_ref().map(|c| c.as_slice()),
-			);
+			let next = Historic::<T>::clear(limit.unwrap_or_default(), map_cursor.as_deref());
 			Self::deposit_event(Event::HistoricCleared { next_cursor: next.maybe_cursor });
 
 			Ok(())
