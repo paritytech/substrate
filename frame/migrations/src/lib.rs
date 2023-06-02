@@ -33,6 +33,7 @@ use frame_support::{
 	traits::Get,
 	weights::{Weight, WeightMeter},
 };
+use core::ops::ControlFlow;
 use frame_system::Pallet as System;
 use sp_runtime::Saturating;
 
@@ -71,12 +72,15 @@ impl<Cursor, BlockNumber> ActiveCursor<Cursor, BlockNumber> {
 	}
 }
 
+pub type MigrationsOf<T> = Vec<Box<dyn SteppedMigration<Cursor = <T as Config>::Cursor, Identifier = <T as Config>::Identifier>>>;
+pub type CursorOf<T> = MigrationCursor<<T as Config>::Cursor, <T as frame_system::Config>::BlockNumber>;
+pub type ActiveCursorOf<T> = ActiveCursor<<T as Config>::Cursor, <T as frame_system::Config>::BlockNumber>;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_std::{boxed::Box, vec::Vec};
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -89,9 +93,7 @@ pub mod pallet {
 		///
 		/// Should only be updated in a runtime-upgrade once all the old ones have completed. (Check
 		/// `Cursor` for `None`).
-		type Migrations: Get<
-			Vec<Box<dyn SteppedMigration<Cursor = Self::Cursor, Identifier = Self::Identifier>>>,
-		>;
+		type Migrations: Get<MigrationsOf<Self>>;
 
 		/// The cursor type that is shared across all migrations.
 		type Cursor: codec::FullCodec + codec::MaxEncodedLen + scale_info::TypeInfo + Parameter;
@@ -114,7 +116,7 @@ pub mod pallet {
 	/// `None` indicates that no migration process is running.
 	#[pallet::storage]
 	pub type Cursor<T: Config> =
-		StorageValue<_, MigrationCursor<T::Cursor, T::BlockNumber>, OptionQuery>;
+		StorageValue<_, CursorOf<T>, OptionQuery>;
 
 	/// Set of all successfully executed migrations.
 	///
@@ -183,63 +185,31 @@ pub mod pallet {
 			let mut cursor = match Cursor::<T>::get() {
 				None => {
 					log::debug!(target: LOG_TARGET, "[Block {n:?}] Waiting for cursor to become `Some`.");
-					return meter.consumed
+					return meter.consumed;
 				},
 				Some(MigrationCursor::Active(cursor)) => cursor,
 				Some(MigrationCursor::Stuck) => {
 					defensive!("Migration stuck. Governance intervention required.");
-					return meter.consumed
+					return meter.consumed;
 				},
 			};
+
 			debug_assert!(<Self as ExtrinsicSuspenderQuery>::is_suspended());
 
-			meter.defensive_saturating_accrue(T::WeightInfo::on_init_loop_base());
 			let migrations = T::Migrations::get();
-			let mut iteration = 0;
-			while meter.check_accrue(T::WeightInfo::on_init_loop_base()) { // TODO
-				let Some(migration) = migrations.get(cursor.index as usize) else {
-					Self::deposit_event(Event::UpgradeCompleted { migrations: migrations.len() as u32 });
-					Cursor::<T>::kill();
-					T::UpgradeStatusHandler::completed();
-					return meter.consumed;
-				};
-				if Historic::<T>::contains_key(&migration.id()) {
-					Self::deposit_event(Event::MigrationSkippedHistoric { index: cursor.index });
-					cursor.advance(System::<T>::block_number());
-					continue
+			for i in 0.. {
+				if !meter.check_accrue(T::WeightInfo::on_init_base()) {
+					break;
 				}
-
-				let took = System::<T>::block_number().saturating_sub(cursor.started_at);
-				match migration.transactional_step(cursor.inner_cursor.clone(), &mut meter) {
-					Ok(Some(next_cursor)) => {
-						Self::deposit_event(Event::MigrationAdvanced {
-							index: cursor.index,
-							step: took,
-						});
-						cursor.inner_cursor = Some(next_cursor);
-						// A migration has to make maximal progress per step, we therefore break.
-						break
+				
+				match Self::exec_migration(&mut meter, &migrations, cursor, i == 0) {
+					None => return meter.consumed,
+					Some(ControlFlow::Break(last_cursor)) => {
+						cursor = last_cursor;
+						break;
 					},
-					Ok(None) => {
-						Self::deposit_event(Event::MigrationCompleted {
-							index: cursor.index,
-							took,
-						});
-						Historic::<T>::insert(&migration.id(), ());
-						cursor.advance(System::<T>::block_number());
-					},
-					Err(SteppedMigrationError::InsufficientWeight { required }) => {
-						if iteration == 0 || required.any_gt(meter.limit) {
-							Cursor::<T>::set(Some(MigrationCursor::Stuck));
-							Self::deposit_event(Event::UpgradeFailed);
-						} // else: Hope that it gets better next time.
-						return meter.consumed
-					},
-					Err(SteppedMigrationError::Failed | SteppedMigrationError::Timeout) => {
-						Self::deposit_event(Event::MigrationFailed { index: cursor.index, took });
-						Self::deposit_event(Event::UpgradeFailed);
-						Cursor::<T>::set(Some(MigrationCursor::Stuck));
-						return meter.consumed
+					Some(ControlFlow::Continue(next_cursor)) => {
+						cursor = next_cursor;
 					},
 				}
 			}
@@ -276,6 +246,57 @@ pub mod pallet {
 			Self::deposit_event(Event::HistoricCleared);
 
 			Ok(())
+		}
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	fn exec_migration(meter: &mut WeightMeter, migrations: &MigrationsOf<T>, mut cursor: ActiveCursorOf<T>, is_first: bool) -> Option<ControlFlow<ActiveCursorOf<T>, ActiveCursorOf<T>>> {
+		let Some(migration) = migrations.get(cursor.index as usize) else {
+			Self::deposit_event(Event::UpgradeCompleted { migrations: migrations.len() as u32 });
+			Cursor::<T>::kill();
+			T::UpgradeStatusHandler::completed();
+			return None;
+		};
+		if Historic::<T>::contains_key(&migration.id()) {
+			Self::deposit_event(Event::MigrationSkippedHistoric { index: cursor.index });
+			cursor.advance(System::<T>::block_number());
+			return Some(ControlFlow::Continue(cursor));
+		}
+
+		let took = System::<T>::block_number().saturating_sub(cursor.started_at);
+		match migration.transactional_step(cursor.inner_cursor.clone(), meter) {
+			Ok(Some(next_cursor)) => {
+				Self::deposit_event(Event::MigrationAdvanced {
+					index: cursor.index,
+					step: took,
+				});
+				cursor.inner_cursor = Some(next_cursor);
+				// A migration has to make maximal progress per step, we therefore break.
+				return Some(ControlFlow::Break(cursor));
+			},
+			Ok(None) => {
+				Self::deposit_event(Event::MigrationCompleted {
+					index: cursor.index,
+					took,
+				});
+				Historic::<T>::insert(&migration.id(), ());
+				cursor.advance(System::<T>::block_number());
+				return Some(ControlFlow::Continue(cursor));
+			},
+			Err(SteppedMigrationError::InsufficientWeight { required }) => {
+				if is_first || required.any_gt(meter.limit) {
+					Cursor::<T>::set(Some(MigrationCursor::Stuck));
+					Self::deposit_event(Event::UpgradeFailed);
+				} // else: Hope that it gets better in the next block.
+				return None;
+			},
+			Err(SteppedMigrationError::Failed | SteppedMigrationError::Timeout) => {
+				Self::deposit_event(Event::MigrationFailed { index: cursor.index, took });
+				Self::deposit_event(Event::UpgradeFailed);
+				Cursor::<T>::set(Some(MigrationCursor::Stuck));
+				return None;
+			},
 		}
 	}
 }

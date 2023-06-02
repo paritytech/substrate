@@ -1864,6 +1864,7 @@ impl pallet_migrations::Config for Runtime {
 	type Migrations = ();
 	type Cursor = ();
 	type Identifier = ();
+	type UpgradeStatusHandler = ();
 	type ServiceWeight = MbmServiceWeight;
 	type WeightInfo = pallet_migrations::weights::SubstrateWeight<Runtime>;
 }

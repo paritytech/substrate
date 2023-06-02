@@ -38,6 +38,17 @@ mod benches {
 	}
 
 	#[benchmark]
+	fn on_init_fast_path() {
+		Cursor::<T>::set(Some(cursor::<T>()));
+		System::<T>::set_block_number(1u32.into());
+
+		#[block]
+		{
+			Pallet::<T>::on_initialize(1u32.into());
+		}
+	}
+
+	#[benchmark]
 	fn on_init_base() {
 		Cursor::<T>::set(Some(cursor::<T>()));
 		System::<T>::set_block_number(1u32.into());
@@ -49,7 +60,17 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn on_init_loop_base() {
+	fn load_migrations() {
+		Pallet::<T>::on_initialize();
+
+		#[block]
+		{
+			Pallet::<T>::on_initialize(1u32.into());
+		}
+	}
+
+	#[benchmark]
+	fn on_init_loop() {
 		System::<T>::set_block_number(1u32.into());
 		Pallet::<T>::on_runtime_upgrade();
 
