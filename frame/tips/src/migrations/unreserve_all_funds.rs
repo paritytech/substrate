@@ -172,7 +172,7 @@ where
 	}
 }
 
-#[cfg(test)]
+#[cfg(all(feature = "try-runtime", test))]
 mod test {
 	use super::*;
 	use crate::{
@@ -231,7 +231,12 @@ mod test {
 			);
 
 			// Execute the migration
+			let bytes = match UnreserveAllFunds::<Test, ()>::pre_upgrade() {
+				Ok(bytes) => bytes,
+				Err(e) => panic!("pre_upgrade failed: {:?}", e),
+			};
 			UnreserveAllFunds::<Test, ()>::on_runtime_upgrade();
+			assert_ok!(UnreserveAllFunds::<Test, ()>::post_upgrade(bytes));
 
 			// Check the deposits were were unreserved
 			assert_eq!(
