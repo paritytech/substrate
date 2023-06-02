@@ -117,7 +117,12 @@ where
 			),
 		)
 	}
+}
 
+impl<T: crate::Config> OnRuntimeUpgrade for UnlockAndUnreserveAllFunds<T>
+where
+	BalanceOf<T>: Sum,
+{
 	/// Collects pre-migration data useful for validating the migration was successful, and also
 	/// checks the integrity of deposited and reserved balances.
 	///
@@ -130,8 +135,8 @@ where
 	///
 	/// Fails with a `TryRuntimeError` if there's a discrepancy between the amount
 	/// reported as staked by the pallet and the amount actually locked in `Balances`.
-	#[cfg(any(feature = "try-runtime", test))]
-	fn do_pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
 		use sp_std::collections::btree_set::BTreeSet;
 
@@ -172,12 +177,47 @@ where
 		Ok(account_reserved_before.encode())
 	}
 
+	/// Executes the migration.
+	///
+	/// Steps:
+	/// 1. Retrieves the deposit and stake amounts from the pallet.
+	/// 2. Unreserves the deposited funds for each account.
+	/// 3. Unlocks the staked funds for each account.
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		// Get staked and deposited balances as reported by this pallet.
+		let (account_deposited_sums, account_staked_sums, initial_reads) =
+			Self::get_account_deposited_and_staked_sums();
+
+		// Deposited funds need to be unreserved.
+		for (account, unreserve_amount) in account_deposited_sums.iter() {
+			if unreserve_amount.is_zero() {
+				continue
+			}
+			T::Currency::unreserve(&account, *unreserve_amount);
+		}
+
+		// Staked funds need to be unlocked.
+		for (account, amount) in account_staked_sums.iter() {
+			if amount.is_zero() {
+				continue
+			}
+			T::Currency::remove_lock(T::PalletId::get(), account);
+		}
+
+		RocksDbWeight::get()
+			.reads_writes(
+				(account_deposited_sums.len().saturating_add(account_staked_sums.len())) as u64,
+				(account_deposited_sums.len().saturating_add(account_staked_sums.len())) as u64,
+			)
+			.saturating_add(initial_reads)
+	}
+
 	/// Performs post-upgrade sanity checks:
 	///
 	/// 1. All expected locks were removed after the migration.
 	/// 2. The reserved balance for each account has been reduced by the expected amount.
-	#[cfg(any(feature = "try-runtime", test))]
-	fn do_post_upgrade(
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(
 		account_reserved_before_bytes: Vec<u8>,
 	) -> Result<(), sp_runtime::TryRuntimeError> {
 		use codec::Decode;
@@ -215,59 +255,7 @@ where
 	}
 }
 
-impl<T: crate::Config> OnRuntimeUpgrade for UnlockAndUnreserveAllFunds<T>
-where
-	BalanceOf<T>: Sum,
-{
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
-		Self::do_pre_upgrade()
-	}
-
-	/// Executes the migration.
-	///
-	/// Steps:
-	/// 1. Retrieves the deposit and stake amounts from the pallet.
-	/// 2. Unreserves the deposited funds for each account.
-	/// 3. Unlocks the staked funds for each account.
-	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		// Get staked and deposited balances as reported by this pallet.
-		let (account_deposited_sums, account_staked_sums, initial_reads) =
-			Self::get_account_deposited_and_staked_sums();
-
-		// Deposited funds need to be unreserved.
-		for (account, unreserve_amount) in account_deposited_sums.iter() {
-			if unreserve_amount.is_zero() {
-				continue
-			}
-			T::Currency::unreserve(&account, *unreserve_amount);
-		}
-
-		// Staked funds need to be unlocked.
-		for (account, amount) in account_staked_sums.iter() {
-			if amount.is_zero() {
-				continue
-			}
-			T::Currency::remove_lock(T::PalletId::get(), account);
-		}
-
-		RocksDbWeight::get()
-			.reads_writes(
-				(account_deposited_sums.len().saturating_add(account_staked_sums.len())) as u64,
-				(account_deposited_sums.len().saturating_add(account_staked_sums.len())) as u64,
-			)
-			.saturating_add(initial_reads)
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(
-		account_reserved_before_bytes: Vec<u8>,
-	) -> Result<(), sp_runtime::TryRuntimeError> {
-		Self::do_post_upgrade(account_reserved_before_bytes)
-	}
-}
-
-#[cfg(test)]
+#[cfg(all(feature = "try-runtime", test))]
 mod test {
 	use super::*;
 	use crate::{
@@ -299,10 +287,10 @@ mod test {
 			);
 
 			// Run the migration.
-			let bytes = UnlockAndUnreserveAllFunds::<Test>::do_pre_upgrade()
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
 				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
 			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::do_post_upgrade(bytes));
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the candidate reserved balance was reduced by the expected amount.
 			assert_eq!(
@@ -322,7 +310,7 @@ mod test {
 			// Set up initial state.
 			<Test as crate::Config>::Currency::make_free_balance_be(&runner_up, initial_balance);
 			assert_ok!(<Test as crate::Config>::Currency::reserve(&runner_up, initial_reserved));
-			RunnersUp::<Test>::set(vec![SeatHolder { who: runner_up, deposit, stake: 0 }]);
+			RunnersUp::<Test>::set(vec![SeatHolder { who: runner_up, deposit, stake: 10 }]);
 			assert_ok!(<Test as crate::Config>::Currency::reserve(&runner_up, deposit));
 
 			// Sanity check: ensure initial Balance state was set up correctly.
@@ -332,10 +320,10 @@ mod test {
 			);
 
 			// Run the migration.
-			let bytes = UnlockAndUnreserveAllFunds::<Test>::do_pre_upgrade()
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
 				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
 			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::do_post_upgrade(bytes));
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the reserved balance was reduced by the expected amount.
 			assert_eq!(
@@ -355,7 +343,7 @@ mod test {
 			// Set up initial state.
 			<Test as crate::Config>::Currency::make_free_balance_be(&member, initial_balance);
 			assert_ok!(<Test as crate::Config>::Currency::reserve(&member, initial_reserved));
-			Members::<Test>::set(vec![SeatHolder { who: member, deposit, stake: 0 }]);
+			Members::<Test>::set(vec![SeatHolder { who: member, deposit, stake: 10 }]);
 			assert_ok!(<Test as crate::Config>::Currency::reserve(&member, deposit));
 
 			// Sanity check: ensure initial Balance state was set up correctly.
@@ -365,10 +353,10 @@ mod test {
 			);
 
 			// Run the migration.
-			let bytes = UnlockAndUnreserveAllFunds::<Test>::do_pre_upgrade()
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
 				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
 			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::do_post_upgrade(bytes));
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the reserved balance was reduced by the expected amount.
 			assert_eq!(
@@ -425,10 +413,10 @@ mod test {
 			);
 
 			// Run the migration.
-			let bytes = UnlockAndUnreserveAllFunds::<Test>::do_pre_upgrade()
+			let bytes = UnlockAndUnreserveAllFunds::<Test>::pre_upgrade()
 				.unwrap_or_else(|e| panic!("pre_upgrade failed: {:?}", e));
 			UnlockAndUnreserveAllFunds::<Test>::on_runtime_upgrade();
-			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::do_post_upgrade(bytes));
+			assert_ok!(UnlockAndUnreserveAllFunds::<Test>::post_upgrade(bytes));
 
 			// Assert the voter lock was removed and the reserved balance was reduced by the
 			// expected amount.
