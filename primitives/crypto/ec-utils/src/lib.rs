@@ -92,13 +92,13 @@ pub trait EllipticCurves {
 	/// Receives encoded:
 	/// a: ArkScale<Vec<<Bls12<ark_bls12_381::Config> as Pairing>::G1Prepared>>
 	/// b: ArkScale<Vec<<Bls12<ark_bls12_381::Config> as Pairing>::G2Prepared>>
-	/// Returns encoded: MillerLoopOutput<Bls12<Config>>
+	/// Returns encoded: ArkScale<MillerLoopOutput<Bls12<Config>>
 	fn bls12_381_multi_miller_loop(a: Vec<u8>, b: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_381::multi_miller_loop(a, b)
 	}
 
 	/// Compute a final exponentiation on bls12_381
-	/// Receives encoded: MillerLoopOutput<Bls12<ark_bls12_381::Config>>
+	/// Receives encoded: ArkScale<MillerLoopOutput<Bls12<ark_bls12_381::Config>>>
 	/// Returns encoded:ArkScale<PairingOutput<Bls12<ark_bls12_381::Config>>>
 	fn bls12_381_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_381::final_exponentiation(f12)
@@ -144,14 +144,14 @@ pub trait EllipticCurves {
 	/// Receives encoded:
 	/// a: ArkScale<Vec<<BW6<ark_bw6_761::Config> as Pairing>::G1Prepared>>
 	/// b: ArkScale<Vec<<BW6<ark_bw6_761::Config> as Pairing>::G2Prepared>>
-	/// Returns encoded: MillerLoopOutput<Bls12<ark_bw6_761::Config>>
+	/// Returns encoded: ArkScale<MillerLoopOutput<Bls12<ark_bw6_761::Config>>>
 	fn bw6_761_multi_miller_loop(a: Vec<u8>, b: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bw6_761::multi_miller_loop(a, b)
 	}
 
 	/// Compute a final exponentiation on bw6_761
-	/// Receives encoded: MillerLoopOutput<BW6<ark_bw6_761::Config>>
-	/// Returns encoded:ArkScale<PairingOutput<BW6<ark_bw6_761::Config>>>
+	/// Receives encoded: ArkScale<MillerLoopOutput<BW6<ark_bw6_761::Config>>>
+	/// Returns encoded: ArkScale<PairingOutput<BW6<ark_bw6_761::Config>>>
 	fn bw6_761_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bw6_761::final_exponentiation(f12)
 	}
@@ -237,9 +237,9 @@ pub trait EllipticCurves {
 	/// Compute short weierstrass msm on ed_on_bls12_381_bandersnatch
 	/// Receives encoded:
 	/// bases: ArkScale<&[ed_on_bls12_381_bandersnatch::SWAffine]>
-	/// scalars: ArkScale<&[<ed_on_bls12_381_bandersnatch::SWCurveConfig as
-	/// CurveConfig>::ScalarField]> Returns encoded:
-	/// ArkScaleProjective<ed_on_bls12_381_bandersnatch::SWProjective>
+	/// scalars:
+	/// ArkScale<&[<ed_on_bls12_381_bandersnatch::SWCurveConfig as CurveConfig>::ScalarField]>
+	/// Returns encoded: ArkScaleProjective<ed_on_bls12_381_bandersnatch::SWProjective>
 	fn ed_on_bls12_381_bandersnatch_sw_msm(
 		bases: Vec<u8>,
 		scalars: Vec<u8>,
