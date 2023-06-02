@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 /// The kitchen-sink catalog of the the FRAME macros and their various syntax options.
 ///
 /// This example does not focus on pallet instancing, `dev_mode`, and does nto include any 'where'
@@ -12,10 +13,14 @@ pub use pallet::*;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
+
+pub mod weights;
+pub use weights::*;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -44,6 +49,9 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		/// The overarching runtime event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		/// Type representing the weight of this pallet
+		type WeightInfo: WeightInfo;
 
 		/// This is a normal Rust type, nothing specific to FRAME here.
 		type Currency: frame_support::traits::tokens::fungible::Inspect<Self::AccountId>;
@@ -83,8 +91,8 @@ pub mod pallet {
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
-	#[pallet::origin]
-	pub type Origin<T> = frame_system::RawOrigin<<T as frame_system::Config>::AccountId>;
+	// #[pallet::origin]
+	// pub type Origin<T> = frame_system::RawOrigin<<T as frame_system::Config>::AccountId>;
 
 	// first, we showcase all the possible storage types, with most of their details.
 
@@ -157,24 +165,23 @@ pub mod pallet {
 		pub bar: T::BlockNumber,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			unimplemented!()
+			Self { foo: 0, bar: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			
+			Foo::<T>::put(self.foo);
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_foo_benchmark())]
 		pub fn set_foo(
 			_: OriginFor<T>,
 			new_foo: u32,

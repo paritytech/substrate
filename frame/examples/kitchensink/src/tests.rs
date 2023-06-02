@@ -78,6 +78,8 @@ parameter_types! {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	
 	type Currency = Balances;
 	type InMetadata = InMetadata;
 

@@ -19,8 +19,11 @@
 
 // Only enable this module for benchmarking.
 #![cfg(feature = "runtime-benchmarks")]
+use super::*;
 
-use crate::*;
+#[allow(unused)]
+use crate::Pallet as Kitchensink;
+
 use frame_benchmarking::v2::*;
 use frame_system::RawOrigin;
 
@@ -59,5 +62,5 @@ mod benchmarks {
 	//
 	// The line generates three steps per benchmark, with repeat=1 and the three steps are
 	//   [low, mid, high] of the range.
-	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Kitchensink, crate::tests::new_test_ext(), crate::tests::Test);
 }
