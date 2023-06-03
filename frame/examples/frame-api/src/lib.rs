@@ -28,7 +28,6 @@ mod tests {
 	type UncheckedExtrinsic = MockUncheckedExtrinsic<Test>;
 	type Block = MockBlock<Test>;
 
-	For testing the pallet, we construct a mock runtime.
 	construct_runtime!(
 		pub enum Test
 		where

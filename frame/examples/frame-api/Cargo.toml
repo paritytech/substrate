@@ -8,6 +8,8 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 
 frame = { path = "../../", default-features = false, features = ["runtime"] }
+# TODO: can't still remove this becuase of derive_impl... CI-FAIL
+frame-support = { path = "../../support", default-features = false }
 
 [features]
 default = ["std"]
@@ -16,6 +18,7 @@ std = [
 	"scale-info/std",
 
 	"frame/std",
+	"frame-support/std",
 ]
 
 

@@ -62,14 +62,14 @@ pub use frame_support::pallet_macros as _;
 
 pub mod prelude {
 	pub use frame_support::pallet_prelude::*;
-	pub use frame_system::{self as frame_system, pallet_prelude::*};
+	pub use frame_system::{self, pallet_prelude::*};
 	pub use sp_std::prelude::*;
 }
 
 #[cfg(feature = "std")]
 pub mod testing_prelude {
 	#[cfg(feature = "runtime")]
-	pub use super::runtime::prelude::*;
+	pub use super::runtime::testing_prelude::*;
 
 	pub use frame_support::{
 		assert_err, assert_err_ignore_postinfo, assert_error_encoded_size, assert_noop, assert_ok,
@@ -130,6 +130,11 @@ pub mod runtime {
 		pub use sp_version::{create_runtime_str, runtime_version, RuntimeVersion};
 	}
 
+	#[cfg(feature = "std")]
+	pub mod testing_prelude {
+		pub use frame_support::construct_runtime;
+	}
+
 	/// A set of opinionated types aliases commonly used in runtimes.
 	///
 	/// This is one set of opinionated types. They are compatible with one another, but are not
@@ -161,7 +166,8 @@ pub mod runtime {
 		type HeaderInner<T> =
 			sp_runtime::generic::Header<BlockNumberOf<T>, <T as SysConfig>::Hashing>;
 
-		// NOTE: `AccountIndex` is provided for future compatibility.
+		// NOTE: `AccountIndex` is provided for future compatibility, if you want to introduce
+		// something like `pallet-indices`.
 		type ExtrinsicInner<T, Extra, AccountIndex = ()> = sp_runtime::generic::UncheckedExtrinsic<
 			sp_runtime::MultiAddress<AccountId, AccountIndex>,
 			<T as SysConfig>::RuntimeCall,

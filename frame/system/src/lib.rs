@@ -234,6 +234,43 @@ pub mod pallet {
 			type BlockLength = ();
 			type DbWeight = ();
 		}
+
+		/// Default configurations of this pallet in a solo-chain environment.
+		///
+		/// ## Considerations:
+		///
+		/// By default, this type makes the following choices:
+		///
+		/// * Use a normal 32 byte account id, with a [`DefaultConfig::Lookup`] that implies no
+		///   'account-indexing' pallet is being used.
+		/// * Given that we don't know anything about the existence of a currency system in scope,
+		///   an [`DefaultConfig::AccountData`] is chosen that has no addition data. overwrite this
+		///   if you use `pallet-balances` or similar.
+		/// * Make sure to overwrite [`DefaultConfig::Version`].
+		/// * 2s block time, and a default 5mb block size is used.
+		pub struct SolochainDefaultConfig;
+
+		#[frame_support::register_default_impl(SolochainDefaultConfig)]
+		impl DefaultConfig for SolochainDefaultConfig {
+			type Index = u32;
+			type BlockNumber = u32;
+			type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
+			type Hash = sp_core::hash::H256;
+			type Hashing = sp_runtime::traits::BlakeTwo256;
+			type AccountId = sp_runtime::AccountId32;
+			type Lookup = sp_runtime::traits::AccountIdLookup<Self::AccountId, ()>;
+			type BlockHashCount = frame_support::traits::ConstU32<1024>;
+			type MaxConsumers = frame_support::traits::ConstU32<128>;
+			type AccountData = crate::AccountInfo<Self::Index, ()>;
+			type OnNewAccount = ();
+			type OnKilledAccount = ();
+			type SystemWeightInfo = ();
+			type SS58Prefix = ();
+			type Version = ();
+			type BlockWeights = ();
+			type BlockLength = ();
+			type DbWeight = ();
+		}
 	}
 
 	/// System configuration trait. Implemented by runtime.
