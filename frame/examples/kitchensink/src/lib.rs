@@ -1,11 +1,33 @@
+// This file is part of Substrate.
+
+// Copyright (C) Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! <!-- markdown-link-check-disable -->
+//! # Kitchensink Example Pallet
+//!
+//! **This pallet serves as an example and is not meant to be used in production.**
+//! 
+//! The kitchen-sink catalog of the the FRAME macros and their various syntax options.
+//! 
+//! This example does not focus on pallet instancing, `dev_mode`, and does nto include any 'where'
+//! clauses on `T`. These will both incur additional complexity to the syntax, but are not discussed
+//! here.
+
+// Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
-/// The kitchen-sink catalog of the the FRAME macros and their various syntax options.
-///
-/// This example does not focus on pallet instancing, `dev_mode`, and does nto include any 'where'
-/// clauses on `T`. These will both incur additional complexity to the syntax, but are not discussed
-/// here.
-// TODO: link to a particular example pallet that highlights each of these.
-// https://github.com/paritytech/substrate/issues/13951
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
