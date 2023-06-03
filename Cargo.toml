@@ -106,6 +106,7 @@ members = [
 	"frame/election-provider-support/benchmarking",
 	"frame/election-provider-support/solution-type",
 	"frame/election-provider-support/solution-type/fuzzer",
+	"frame/examples",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
 	"frame/examples/kitchensink",

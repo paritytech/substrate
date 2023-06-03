@@ -6528,6 +6528,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-examples"
+version = "4.0.0-dev"
+dependencies = [
+ "pallet-default-config-example",
+ "pallet-dev-mode",
+ "pallet-example-basic",
+ "pallet-example-kitchensink",
+ "pallet-example-offchain-worker",
+]
+
+[[package]]
 name = "pallet-fast-unstake"
 version = "4.0.0-dev"
 dependencies = [
