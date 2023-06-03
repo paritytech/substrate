@@ -122,10 +122,10 @@
 //!
 //! ```ignore
 //! #[cfg(feature = "try-runtime")]
-//! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
+//! fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {}
 //!
 //! #[cfg(feature = "try-runtime")]
-//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
+//! fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
@@ -141,7 +141,7 @@
 //!
 //! ```ignore
 //! #[cfg(feature = "try-runtime")]
-//! fn try_state(_: BlockNumber) -> Result<(), &'static str> {}
+//! fn try_state(_: BlockNumber) -> Result<(), TryRuntimeError> {}
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that

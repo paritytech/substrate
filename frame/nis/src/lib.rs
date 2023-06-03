@@ -162,11 +162,7 @@ pub mod pallet {
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{
-			fungible::{
-				self,
-				hold::{Inspect as FunHoldInspect, Mutate as FunHoldMutate},
-				Balanced as FunBalanced,
-			},
+			fungible::{self, hold::Mutate as FunHoldMutate, Balanced as FunBalanced},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
 			tokens::{
 				Fortitude::Polite,
@@ -216,13 +212,10 @@ pub mod pallet {
 		type Currency: FunInspect<Self::AccountId, Balance = Self::CurrencyBalance>
 			+ FunMutate<Self::AccountId>
 			+ FunBalanced<Self::AccountId>
-			+ FunHoldInspect<Self::AccountId>
-			+ FunHoldMutate<Self::AccountId>;
+			+ FunHoldMutate<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
-		/// The identifier of the hold reason.
-
-		#[pallet::constant]
-		type HoldReason: Get<<Self::Currency as FunHoldInspect<Self::AccountId>>::Reason>;
+		/// Overarching hold reason.
+		type RuntimeHoldReason: From<HoldReason>;
 
 		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
 		/// `From<u64>`.
@@ -569,14 +562,14 @@ pub mod pallet {
 				|q| -> Result<(u32, BalanceOf<T>), DispatchError> {
 					let queue_full = q.len() == T::MaxQueueLen::get() as usize;
 					ensure!(!queue_full || q[0].amount < amount, Error::<T>::BidTooLow);
-					T::Currency::hold(&T::HoldReason::get(), &who, amount)?;
+					T::Currency::hold(&HoldReason::NftReceipt.into(), &who, amount)?;
 
 					// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
 					let mut bid = Bid { amount, who: who.clone() };
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
 						let _ = T::Currency::release(
-							&T::HoldReason::get(),
+							&HoldReason::NftReceipt.into(),
 							&bid.who,
 							bid.amount,
 							BestEffort,
@@ -637,7 +630,7 @@ pub mod pallet {
 			queue.remove(pos);
 			let new_len = queue.len() as u32;
 
-			T::Currency::release(&T::HoldReason::get(), &bid.who, bid.amount, BestEffort)?;
+			T::Currency::release(&HoldReason::NftReceipt.into(), &bid.who, bid.amount, BestEffort)?;
 
 			Queues::<T>::insert(duration, queue);
 			QueueTotals::<T>::mutate(|qs| {
@@ -729,7 +722,7 @@ pub mod pallet {
 			let dropped = receipt.proportion.is_zero();
 
 			if amount > on_hold {
-				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)?;
+				T::Currency::release(&HoldReason::NftReceipt.into(), &who, on_hold, Exact)?;
 				let deficit = amount - on_hold;
 				// Try to transfer deficit from pot to receipt owner.
 				summary.receipts_on_hold.saturating_reduce(on_hold);
@@ -744,7 +737,7 @@ pub mod pallet {
 					// Transfer excess of `on_hold` to the pot if we have now fully compensated for
 					// the receipt.
 					T::Currency::transfer_on_hold(
-						&T::HoldReason::get(),
+						&HoldReason::NftReceipt.into(),
 						&who,
 						&our_account,
 						on_hold,
@@ -760,7 +753,7 @@ pub mod pallet {
 					)?;
 					summary.receipts_on_hold.saturating_reduce(on_hold);
 				}
-				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)?;
+				T::Currency::release(&HoldReason::NftReceipt.into(), &who, amount, Exact)?;
 			}
 
 			if dropped {
@@ -852,7 +845,7 @@ pub mod pallet {
 			ensure!(owner == who, Error::<T>::NotOwner);
 
 			// Unreserve and transfer the funds to the pot.
-			let reason = T::HoldReason::get();
+			let reason = HoldReason::NftReceipt.into();
 			let us = Self::account_id();
 			T::Currency::transfer_on_hold(&reason, &who, &us, on_hold, Exact, Free, Polite)
 				.map_err(|_| Error::<T>::Unfunded)?;
@@ -903,7 +896,7 @@ pub mod pallet {
 			)?;
 
 			// Transfer the funds from the pot to the owner and reserve
-			let reason = T::HoldReason::get();
+			let reason = HoldReason::NftReceipt.into();
 			let us = Self::account_id();
 			T::Currency::transfer_and_hold(&reason, &us, &who, amount, Exact, Expendable, Polite)?;
 
@@ -959,7 +952,7 @@ pub mod pallet {
 			let mut item = Receipts::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
 			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
 
-			let reason = T::HoldReason::get();
+			let reason = HoldReason::NftReceipt.into();
 			T::Currency::transfer_on_hold(&reason, &owner, dest, on_hold, Exact, OnHold, Polite)?;
 
 			item.owner = Some((dest.clone(), on_hold));

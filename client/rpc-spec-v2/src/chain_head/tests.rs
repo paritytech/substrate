@@ -128,7 +128,7 @@ async fn follow_subscription_produces_blocks() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -142,7 +142,7 @@ async fn follow_subscription_produces_blocks() {
 		block_hash: format!("{:?}", best_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -199,7 +199,7 @@ async fn follow_with_runtime() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -214,7 +214,7 @@ async fn follow_with_runtime() {
 		block_hash: format!("{:?}", best_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -264,7 +264,7 @@ async fn follow_with_runtime() {
 		block_hash: format!("{:?}", best_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 }
@@ -492,7 +492,7 @@ async fn call_runtime_without_flag() {
 		FollowEvent::BestBlockChanged(_)
 	);
 
-	// Valid runtime call on a subscription started with `runtime_updates` false.
+	// Valid runtime call on a subscription started with `with_runtime` false.
 	let alice_id = AccountKeyring::Alice.to_account_id();
 	let call_parameters = format!("0x{:?}", HexDisplay::from(&alice_id.encode()));
 	let err = api
@@ -681,7 +681,7 @@ async fn follow_generates_initial_blocks() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -691,7 +691,7 @@ async fn follow_generates_initial_blocks() {
 		block_hash: format!("{:?}", block_1_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -701,7 +701,7 @@ async fn follow_generates_initial_blocks() {
 		block_hash: format!("{:?}", block_2_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	// Check block 3.
@@ -710,7 +710,7 @@ async fn follow_generates_initial_blocks() {
 		block_hash: format!("{:?}", block_3_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -730,7 +730,7 @@ async fn follow_generates_initial_blocks() {
 		block_hash: format!("{:?}", block_4_hash),
 		parent_block_hash: format!("{:?}", block_2_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -913,7 +913,7 @@ async fn follow_prune_best_block() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -963,7 +963,7 @@ async fn follow_prune_best_block() {
 		block_hash: format!("{:?}", block_1_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -978,7 +978,7 @@ async fn follow_prune_best_block() {
 		block_hash: format!("{:?}", block_3_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -993,7 +993,7 @@ async fn follow_prune_best_block() {
 		block_hash: format!("{:?}", block_4_hash),
 		parent_block_hash: format!("{:?}", block_3_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1008,7 +1008,7 @@ async fn follow_prune_best_block() {
 		block_hash: format!("{:?}", block_2_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1118,7 +1118,7 @@ async fn follow_forks_pruned_block() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", block_3_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1142,7 +1142,7 @@ async fn follow_forks_pruned_block() {
 		block_hash: format!("{:?}", block_6_hash),
 		parent_block_hash: format!("{:?}", block_3_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1233,7 +1233,7 @@ async fn follow_report_multiple_pruned_block() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1242,7 +1242,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_1_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1251,7 +1251,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_2_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1260,7 +1260,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_3_hash),
 		parent_block_hash: format!("{:?}", block_2_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1270,7 +1270,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_4_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1279,7 +1279,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_5_hash),
 		parent_block_hash: format!("{:?}", block_4_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1325,7 +1325,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_6_hash),
 		parent_block_hash: format!("{:?}", block_3_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1511,7 +1511,7 @@ async fn follow_finalized_before_new_block() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1521,7 +1521,7 @@ async fn follow_finalized_before_new_block() {
 		block_hash: format!("{:?}", block_1_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1556,7 +1556,7 @@ async fn follow_finalized_before_new_block() {
 		block_hash: format!("{:?}", block_2_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
