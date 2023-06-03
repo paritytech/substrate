@@ -311,6 +311,20 @@ pub enum ChainEvent<B: BlockT> {
 	},
 }
 
+impl<B: BlockT> ChainEvent<B> {
+	/// Returns the block hash associated to the event.
+	pub fn hash(&self) -> B::Hash {
+		match self {
+			Self::NewBestBlock { hash, .. } | Self::Finalized { hash, .. } => *hash,
+		}
+	}
+
+	/// Is `self == Self::Finalized`?
+	pub fn is_finalized(&self) -> bool {
+		matches!(self, Self::Finalized { .. })
+	}
+}
+
 /// Trait for transaction pool maintenance.
 #[async_trait]
 pub trait MaintainedTransactionPool: TransactionPool {
