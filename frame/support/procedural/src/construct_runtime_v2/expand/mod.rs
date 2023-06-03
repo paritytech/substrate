@@ -23,16 +23,7 @@ use quote::ToTokens;
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
     let runtime_struct = runtime_struct::expand_runtime_struct(&mut def);
 
-    let new_items = quote::quote!(
+    quote::quote!(
 		#runtime_struct
-	);
-
-	def.item
-		.content
-		.as_mut()
-		.expect("This is checked by parsing")
-		.1
-		.push(syn::Item::Verbatim(new_items));
-
-	def.item.into_token_stream()
+	)
 }

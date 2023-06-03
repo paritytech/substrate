@@ -18,9 +18,9 @@
 use crate::construct_runtime_v2::expand::Def;
 
 pub fn expand_runtime_struct(def: &mut Def) -> proc_macro2::TokenStream {
-    // let runtime_ident = &def.runtime_struct.runtime;
+    let runtime_ident = &def.runtime_struct.ident;
 
     quote::quote_spanned!(def.runtime_struct.attr_span =>
-        // pub struct #runtime_ident;
+        pub struct #runtime_ident;
     )
 }

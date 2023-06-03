@@ -17,6 +17,7 @@
 
 use syn::spanned::Spanned;
 pub struct RuntimeStructDef {
+	pub ident: syn::Ident,
 	pub attr_span: proc_macro2::Span,
 }
 
@@ -34,6 +35,7 @@ impl RuntimeStructDef {
 		};
 
         Ok(Self {
+			ident: item.ident.clone(),
             attr_span
         })
     }
