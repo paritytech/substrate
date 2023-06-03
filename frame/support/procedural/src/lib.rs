@@ -22,6 +22,7 @@
 mod benchmark;
 mod clone_no_bound;
 mod construct_runtime;
+mod construct_runtime_v2;
 mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
@@ -1737,4 +1738,9 @@ pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
+}
+
+#[proc_macro_attribute]
+pub fn construct_runtime_v2(attr: TokenStream, item: TokenStream) -> TokenStream {
+	construct_runtime_v2::construct_runtime(attr, item)
 }

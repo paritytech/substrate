@@ -294,6 +294,12 @@ construct_runtime!(
 	}
 );
 
+#[frame_support::construct_runtime_v2]
+mod runtime {
+	#[frame::runtime]
+	pub struct Runtime2;
+}
+
 /// The address format for describing accounts.
 pub type Address = sp_runtime::MultiAddress<AccountId, ()>;
 /// Block header type as expected by this runtime.
