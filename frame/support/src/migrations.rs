@@ -22,6 +22,7 @@ use crate::{
 	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
 	weights::{RuntimeDbWeight, Weight, WeightMeter},
 };
+use codec::{Decode, Encode, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_core::Get;
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
@@ -261,7 +262,7 @@ pub trait SteppedMigration {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode, MaxEncodedLen, scale_info::TypeInfo)]
 pub enum SteppedMigrationError {
 	// Transient errors:
 	/// The remaining weight is not enough to do anything.
@@ -270,13 +271,14 @@ pub enum SteppedMigrationError {
 	/// exactly `required` weight could cause it to not make any progress.
 	InsufficientWeight { required: Weight },
 	// Permanent errors:
-	/// The migration encountered a permanent error and cannot continue.
+	/// The migration cannot decode its cursor and therefore not proceed.
 	///
-	/// This can happen if the storage is corrupted or an assumption got invalidated while the
-	/// migration was running.
+	/// This should not happen unless (1) the migration itself returned an invalid cursor in a
+	/// previous iteration, (2) the storage got corrupted or (3) there is a bug in the caller's
+	/// code.
+	InvalidCursor,
+	/// The migration encountered a permanent error and cannot continue.
 	Failed,
-	/// The migration took longer that its [`SteppedMigration::max_steps`].
-	Timeout,
 }
 
 pub trait ExtrinsicSuspenderQuery {

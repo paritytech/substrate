@@ -65,11 +65,12 @@ pub enum MockedMigrationKind {
 }
 use MockedMigrationKind::*; // C style
 
-pub struct MockedMigrate(MockedMigrationKind, u32);
+/// A migration that succeeds or fails after a certain number of steps.
+pub struct MockedMigration(MockedMigrationKind, u32);
 
-impl SteppedMigration for MockedMigrate {
-	type Cursor = BoundedVec<u8, ConstU32<1024>>;
-	type Identifier = BoundedVec<u8, ConstU32<32>>;
+impl SteppedMigration for MockedMigration {
+	type Cursor = MockedCursor;
+	type Identifier = MockedIdentifier;
 
 	fn id(&self) -> Self::Identifier {
 		mocked_id(self.0, self.1)
@@ -82,7 +83,7 @@ impl SteppedMigration for MockedMigrate {
 	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
 		let mut count: u32 =
 			cursor.as_ref().and_then(|c| Decode::decode(&mut &c[..]).ok()).unwrap_or(0);
-		log::debug!("MockedMigrate: Step {}", count);
+		log::debug!("MockedMigration: Step {}", count);
 		if count != self.1 {
 			count += 1;
 			return Ok(Some(count.encode().try_into().unwrap()))
@@ -90,11 +91,11 @@ impl SteppedMigration for MockedMigrate {
 
 		match self.0 {
 			SucceedAfter => {
-				log::debug!("MockedMigrate: Succeeded after {} steps", count);
+				log::debug!("MockedMigration: Succeeded after {} steps", count);
 				Ok(None)
 			},
 			FailAfter => {
-				log::debug!("MockedMigrate: Failed after {} steps", count);
+				log::debug!("MockedMigration: Failed after {} steps", count);
 				Err(SteppedMigrationError::Failed)
 			},
 		}
@@ -102,16 +103,18 @@ impl SteppedMigration for MockedMigrate {
 }
 
 type MockedCursor = BoundedVec<u8, ConstU32<1024>>;
-type MockedIdentifier = BoundedVec<u8, ConstU32<32>>;
+type MockedIdentifier = BoundedVec<u8, ConstU32<256>>;
 
 frame_support::parameter_types! {
 	pub const ServiceWeight: Weight = Weight::MAX;
 }
 
 thread_local! {
+	/// The configs for the migrations to run.
 	pub static MIGRATIONS: RefCell<Vec<(MockedMigrationKind, u32)>> = RefCell::new(vec![]);
 }
 
+/// Dynamically set the migrations to run.
 pub struct MigrationsStorage;
 impl Get<Vec<Box<dyn SteppedMigration<Cursor = MockedCursor, Identifier = MockedIdentifier>>>>
 	for MigrationsStorage
@@ -123,7 +126,7 @@ impl Get<Vec<Box<dyn SteppedMigration<Cursor = MockedCursor, Identifier = Mocked
 				.clone()
 				.into_iter()
 				.map(|(k, v)| {
-					Box::new(MockedMigrate(k, v))
+					Box::new(MockedMigration(k, v))
 						as Box<
 							dyn SteppedMigration<
 								Cursor = MockedCursor,
@@ -141,20 +144,6 @@ impl MigrationsStorage {
 	pub fn set(migrations: Vec<(MockedMigrationKind, u32)>) {
 		MIGRATIONS.with(|m| *m.borrow_mut() = migrations);
 	}
-}
-
-pub fn mocked_id(kind: MockedMigrationKind, steps: u32) -> MockedIdentifier {
-	format!("MockedMigrate({:?}, {})", kind, steps)
-		.as_bytes()
-		.to_vec()
-		.try_into()
-		.unwrap()
-}
-
-pub fn historic() -> Vec<MockedIdentifier> {
-	let mut historic = Historic::<Test>::iter_keys().collect::<Vec<_>>();
-	historic.sort();
-	historic
 }
 
 impl crate::Config for Test {
@@ -246,4 +235,18 @@ impl<T: UpgradeStatusHandler> UpgradeStatusHandler for LoggingUpgradeStatusHandl
 		log::error!("UpgradeStatusHandler failed at: {migration:?}, handling as {res:?}");
 		res
 	}
+}
+
+pub fn mocked_id(kind: MockedMigrationKind, steps: u32) -> MockedIdentifier {
+	format!("MockedMigration({:?}, {})", kind, steps)
+		.as_bytes()
+		.to_vec()
+		.try_into()
+		.unwrap()
+}
+
+pub fn historic() -> Vec<MockedIdentifier> {
+	let mut historic = Historic::<Test>::iter_keys().collect::<Vec<_>>();
+	historic.sort();
+	historic
 }

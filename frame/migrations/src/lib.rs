@@ -288,8 +288,16 @@ impl<T: Config> Pallet<T> {
 			Ok(Some(next_cursor)) => {
 				Self::deposit_event(Event::MigrationAdvanced { index: cursor.index, step: took });
 				cursor.inner_cursor = Some(next_cursor);
-				// A migration has to make maximal progress per step, we therefore break.
-				return Some(ControlFlow::Break(cursor))
+
+				if migration.max_steps().map_or(false, |max| took > max.into()) {
+					Self::deposit_event(Event::MigrationFailed { index: cursor.index, took });
+					Self::deposit_event(Event::UpgradeFailed);
+					Cursor::<T>::set(Some(MigrationCursor::Stuck));
+					None
+				} else {
+					// A migration has to make maximal progress per step, we therefore break.
+					Some(ControlFlow::Break(cursor))
+				}
 			},
 			Ok(None) => {
 				Self::deposit_event(Event::MigrationCompleted { index: cursor.index, took });
@@ -304,7 +312,7 @@ impl<T: Config> Pallet<T> {
 				} // else: Hope that it gets better in the next block.
 				return None
 			},
-			Err(SteppedMigrationError::Failed | SteppedMigrationError::Timeout) => {
+			Err(SteppedMigrationError::InvalidCursor | SteppedMigrationError::Failed) => {
 				Self::deposit_event(Event::MigrationFailed { index: cursor.index, took });
 				Self::deposit_event(Event::UpgradeFailed);
 				Cursor::<T>::set(Some(MigrationCursor::Stuck));
