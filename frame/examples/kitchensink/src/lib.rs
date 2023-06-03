@@ -19,9 +19,9 @@
 //! # Kitchensink Example Pallet
 //!
 //! **This pallet serves as an example and is not meant to be used in production.**
-//! 
+//!
 //! The kitchen-sink catalog of the the FRAME macros and their various syntax options.
-//! 
+//!
 //! This example does not focus on pallet instancing, `dev_mode`, and does nto include any 'where'
 //! clauses on `T`. These will both incur additional complexity to the syntax, but are not discussed
 //! here.
@@ -251,9 +251,7 @@ pub mod pallet {
 	/// info.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
-		fn integrity_test() {
-			
-		}
+		fn integrity_test() {}
 
 		fn offchain_worker(_n: T::BlockNumber) {
 			unimplemented!()

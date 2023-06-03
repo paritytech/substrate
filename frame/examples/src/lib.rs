@@ -16,23 +16,22 @@
 // limitations under the License.
 
 //! # FRAME Pallet Examples
-//! 
+//!
 //! This crate contains examples of FRAME pallets. It is not intended to be used in production.
-//! 
+//!
 //! ## Pallets
-//! 
+//!
 //! - [**`pallet_example_basic`**](./basic): A simple example of a FRAME pallet demonstrating
 //! concepts, APIs and structures common to most FRAME runtimes.
-//! 
+//!
 //! - [**`pallet_example_offchain_worker`**](./offchain-worker): A simple example of a FRAME pallet
 //!   demonstrating concepts, APIs and structures common to most offchain workers.
-//! 
+//!
 //! - [**`pallet-default-config-example`**](./default-config): A simple example of a FRAME pallet
-//!   demonstrating the simpler way to implement `Config` trait of pallets. 
-//! 
-//! - [**`pallet-dev-mode`**](./dev-mode): A simple example of a FRAME pallet demonstrating
-//!   the ease of requirements for a pallet in dev mode.
-//! 
+//!   demonstrating the simpler way to implement `Config` trait of pallets.
+//!
+//! - [**`pallet-dev-mode`**](./dev-mode): A simple example of a FRAME pallet demonstrating the ease
+//!   of requirements for a pallet in dev mode.
+//!
 //! - [**`pallet-example-kitchensink`**](./kitchensink): A simple example of a FRAME pallet
 //!   demonstrating a catalog of the the FRAME macros and their various syntax options.
-//! 
