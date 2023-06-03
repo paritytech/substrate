@@ -429,9 +429,9 @@ benchmarks! {
 			+ 1 // offence
 			+ 3 // reporter (reward + endowment)
 			+ 1 // offenders reported
-			+ 2 // offenders slashed
+			+ 3 // offenders slashed
 			+ 1 // offenders chilled
-			+ 2 * n // nominators slashed
+			+ 3 * n // nominators slashed
 		);
 	}
 
@@ -466,9 +466,9 @@ benchmarks! {
 			+ 1 // offence
 			+ 3 // reporter (reward + endowment)
 			+ 1 // offenders reported
-			+ 2 // offenders slashed
+			+ 3 // offenders slashed
 			+ 1 // offenders chilled
-			+ 2 * n // nominators slashed
+			+ 3 * n // nominators slashed
 		);
 	}
 

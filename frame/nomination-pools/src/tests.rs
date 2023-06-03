@@ -4269,10 +4269,7 @@ mod create {
 			assert!(!BondedPools::<Runtime>::contains_key(2));
 			assert!(!RewardPools::<Runtime>::contains_key(2));
 			assert!(!PoolMembers::<Runtime>::contains_key(11));
-			assert_err!(
-				StakingMock::active_stake(&next_pool_stash),
-				DispatchError::Other("balance not found")
-			);
+			assert_err!(StakingMock::active_stake(&next_pool_stash), "balance not found");
 
 			Balances::make_free_balance_be(&11, StakingMock::minimum_nominator_bond() + ed);
 			assert_ok!(Pools::create(
