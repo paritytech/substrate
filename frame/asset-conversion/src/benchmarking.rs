@@ -17,8 +17,6 @@
 
 //! Asset Conversion pallet benchmarking.
 
-#![cfg(feature = "runtime-benchmarks")]
-
 use super::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{
