@@ -1,6 +1,6 @@
 [package]
 name = "sp-io"
-version = "8.0.0"
+version = "23.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -18,15 +18,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 bytes = { version = "1.1.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["bytes"] }
-sp-core = { version = "8.0.0", default-features = false, path = "../core" }
-sp-keystore = { version = "0.14.0", default-features = false, optional = true, path = "../keystore" }
-sp-std = { version = "6.0.0", default-features = false, path = "../std" }
+sp-core = { version = "21.0.0", default-features = false, path = "../core" }
+sp-keystore = { version = "0.27.0", default-features = false, optional = true, path = "../keystore" }
+sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 libsecp256k1 = { version = "0.7", optional = true }
-sp-state-machine = { version = "0.14.0", default-features = false, optional = true, path = "../state-machine" }
-sp-runtime-interface = { version = "8.0.0", default-features = false, path = "../runtime-interface" }
-sp-trie = { version = "8.0.0", default-features = false, optional = true, path = "../trie" }
-sp-externalities = { version = "0.14.0", default-features = false, path = "../externalities" }
-sp-tracing = { version = "7.0.0", default-features = false, path = "../tracing" }
+sp-state-machine = { version = "0.28.0", default-features = false, optional = true, path = "../state-machine" }
+sp-runtime-interface = { version = "17.0.0", default-features = false, path = "../runtime-interface" }
+sp-trie = { version = "22.0.0", default-features = false, optional = true, path = "../trie" }
+sp-externalities = { version = "0.19.0", default-features = false, path = "../externalities" }
+sp-tracing = { version = "10.0.0", default-features = false, path = "../tracing" }
 log = { version = "0.4.17", optional = true }
 futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
 secp256k1 = { version = "0.24.0", features = ["recovery", "global-context"], optional = true }
