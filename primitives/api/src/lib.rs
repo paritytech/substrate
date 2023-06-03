@@ -91,10 +91,7 @@ pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 pub use sp_runtime::{
 	generic::BlockId,
-	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Hash as HashT, HashFor,
-		Header as HeaderT, NumberFor,
-	},
+	traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, NumberFor},
 	transaction_validity::TransactionValidity,
 	RuntimeString, TransactionOutcome,
 };
@@ -263,15 +260,12 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// ```rust
 /// use sp_version::create_runtime_str;
 /// #
-/// # use sp_runtime::traits::{GetNodeBlockType, Block as BlockT};
+/// # use sp_runtime::traits::Block as BlockT;
 /// # use sp_test_primitives::Block;
 /// #
-/// # /// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
-/// # /// trait are done by the `construct_runtime!` macro in a real runtime.
+/// # /// The declaration of the `Runtime` type is done by the `construct_runtime!` macro
+/// # /// in a real runtime.
 /// # pub struct Runtime {}
-/// # impl GetNodeBlockType for Runtime {
-/// #     type NodeBlock = Block;
-/// # }
 /// #
 /// # sp_api::decl_runtime_apis! {
 /// #     /// Declare the api trait.
