@@ -88,32 +88,6 @@ fn remove_supported_attributes(attrs: &mut Vec<Attribute>) -> HashMap<&'static s
 	result
 }
 
-/// Visits the ast and checks if `Block` ident is used somewhere.
-struct IsUsingBlock {
-	result: bool,
-}
-
-impl<'ast> Visit<'ast> for IsUsingBlock {
-	fn visit_ident(&mut self, i: &'ast Ident) {
-		if i == BLOCK_GENERIC_IDENT {
-			self.result = true;
-		}
-	}
-}
-
-/// Replace all occurrences of `Block` with `NodeBlock`
-struct ReplaceBlockWithNodeBlock {}
-
-impl Fold for ReplaceBlockWithNodeBlock {
-	fn fold_ident(&mut self, input: Ident) -> Ident {
-		if input == BLOCK_GENERIC_IDENT {
-			Ident::new("NodeBlock", Span::call_site())
-		} else {
-			input
-		}
-	}
-}
-
 /// Versioned API traits are used to catch missing methods when implementing a specific version of a
 /// versioned API. They contain all non-versioned methods (aka stable methods) from the main trait
 /// and all versioned methods for the specific version. This means that there is one trait for each
