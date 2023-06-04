@@ -65,8 +65,7 @@ impl<T: crate::Config<I>, I: 'static> UnreserveAllFunds<T, I> {
 	}
 }
 
-impl<T: crate::Config<I> + pallet_treasury::Config<I>, I: 'static> OnRuntimeUpgrade
-	for UnreserveAllFunds<T, I>
+impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for UnreserveAllFunds<T, I>
 where
 	BalanceOf<T, I>: Sum,
 {
