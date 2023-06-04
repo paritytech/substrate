@@ -34,9 +34,9 @@ use sp_std::vec::Vec;
 /// The pallet should be made inoperable before or immediately after this migration is run.
 ///
 /// (See also the `RemovePallet` migration in `frame/support/src/migrations.rs`)
-pub struct UnreserveAllFunds<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
+pub struct UnreserveDeposits<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
 
-impl<T: crate::Config<I>, I: 'static> UnreserveAllFunds<T, I> {
+impl<T: crate::Config<I>, I: 'static> UnreserveDeposits<T, I> {
 	/// Calculates and returns the total amount reserved by each account by this pallet from open
 	/// tips.
 	///
@@ -64,7 +64,7 @@ impl<T: crate::Config<I>, I: 'static> UnreserveAllFunds<T, I> {
 	}
 }
 
-impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for UnreserveAllFunds<T, I>
+impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for UnreserveDeposits<T, I>
 where
 	BalanceOf<T, I>: Sum,
 {
@@ -179,7 +179,7 @@ where
 mod test {
 	use super::*;
 	use crate::{
-		migrations::unreserve_all_funds::UnreserveAllFunds,
+		migrations::unreserve_deposits::UnreserveDeposits,
 		tests::{new_test_ext, RuntimeOrigin, Test, Tips},
 	};
 	use frame_support::{assert_ok, traits::TypedGet};
@@ -233,12 +233,12 @@ mod test {
 			);
 
 			// Execute the migration
-			let bytes = match UnreserveAllFunds::<Test, ()>::pre_upgrade() {
+			let bytes = match UnreserveDeposits::<Test, ()>::pre_upgrade() {
 				Ok(bytes) => bytes,
 				Err(e) => panic!("pre_upgrade failed: {:?}", e),
 			};
-			UnreserveAllFunds::<Test, ()>::on_runtime_upgrade();
-			assert_ok!(UnreserveAllFunds::<Test, ()>::post_upgrade(bytes));
+			UnreserveDeposits::<Test, ()>::on_runtime_upgrade();
+			assert_ok!(UnreserveDeposits::<Test, ()>::post_upgrade(bytes));
 
 			// Check the deposits were were unreserved
 			assert_eq!(

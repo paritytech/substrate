@@ -23,4 +23,4 @@
 pub mod v4;
 
 /// A migration that unreserves all funds held in the context of this pallet.
-pub mod unreserve_all_funds;
+pub mod unreserve_deposits;
