@@ -18,7 +18,7 @@
 //! ## A static size tracker for the election snapshot data.
 //!
 //! ### Overview
-
+//!
 //! The goal of the size tracker is to provide a static, no-allocation byte tracker to be
 //! used by the election data provider when preparing the results of
 //! [`ElectionDataProvider::electing_voters`]. The [`StaticTracker`] implementation uses
@@ -82,13 +82,13 @@ use frame_election_provider_support::{
 #[derive(Clone, Copy, Debug)]
 pub struct StaticTracker<DataProvider> {
 	pub size: usize,
-	pub num_voters: usize,
+	pub counter: usize,
 	_marker: sp_std::marker::PhantomData<DataProvider>,
 }
 
 impl<DataProvider> Default for StaticTracker<DataProvider> {
 	fn default() -> Self {
-		Self { size: 0, num_voters: 0, _marker: Default::default() }
+		Self { size: 0, counter: 0, _marker: Default::default() }
 	}
 }
 
@@ -107,24 +107,17 @@ where
 	) -> Result<(), ()> {
 		let tracker_size_after = {
 			let voter_hint = Self::voter_size_hint(voter);
-			Self::final_byte_size_of(self.num_voters + 1, self.size.saturating_add(voter_hint))
+			Self::final_byte_size_of(self.counter + 1, self.size.saturating_add(voter_hint))
 		};
 
 		match bounds.size_exhausted(SizeBound(tracker_size_after as u32)) {
 			true => Err(()),
 			false => {
 				self.size = tracker_size_after;
-				self.num_voters += 1;
+				self.counter += 1;
 				Ok(())
 			},
 		}
-	}
-
-	/// Size of the SCALE encoded prefix with a given length.
-	#[inline]
-	fn length_prefix(len: usize) -> usize {
-		use codec::{Compact, CompactLen};
-		Compact::<u32>::compact_len(&(len as u32))
 	}
 
 	/// Calculates the size of the voter to register based on [`Encode::size_hint`].
@@ -135,6 +128,37 @@ where
 			.size_hint()
 			.saturating_add(vote_weight.size_hint())
 			.saturating_add(voter_account.size_hint().saturating_mul(targets.len()))
+	}
+
+	/// Tries to register a new target.
+	///
+	/// If the new target exhausts the provided bounds, return an error. Otherwise, the internal
+	/// state of the tracker is updated with the new registered target.
+	pub fn try_register_target(
+		&mut self,
+		target: DataProvider::AccountId,
+		bounds: &DataProviderBounds,
+	) -> Result<(), ()> {
+		let tracker_size_after = Self::final_byte_size_of(
+			self.counter + 1,
+			self.size.saturating_add(target.size_hint()),
+		);
+
+		match bounds.size_exhausted(SizeBound(tracker_size_after as u32)) {
+			true => Err(()),
+			false => {
+				self.size = tracker_size_after;
+				self.counter += 1;
+				Ok(())
+			},
+		}
+	}
+
+	/// Size of the SCALE encoded prefix with a given length.
+	#[inline]
+	fn length_prefix(len: usize) -> usize {
+		use codec::{Compact, CompactLen};
+		Compact::<u32>::compact_len(&(len as u32))
 	}
 
 	/// Calculates the final size in bytes of the SCALE encoded snapshot voter struct.
@@ -167,10 +191,7 @@ mod tests {
 		voters.push(voter);
 
 		assert_eq!(
-			StaticTracker::<Staking>::final_byte_size_of(
-				size_tracker.num_voters,
-				size_tracker.size
-			),
+			StaticTracker::<Staking>::final_byte_size_of(size_tracker.counter, size_tracker.size),
 			voters.encoded_size()
 		);
 
@@ -180,10 +201,7 @@ mod tests {
 		voters.push(voter);
 
 		assert_eq!(
-			StaticTracker::<Staking>::final_byte_size_of(
-				size_tracker.num_voters,
-				size_tracker.size
-			),
+			StaticTracker::<Staking>::final_byte_size_of(size_tracker.counter, size_tracker.size),
 			voters.encoded_size()
 		);
 
@@ -193,10 +211,7 @@ mod tests {
 		voters.push(voter);
 
 		assert_eq!(
-			StaticTracker::<Staking>::final_byte_size_of(
-				size_tracker.num_voters,
-				size_tracker.size
-			),
+			StaticTracker::<Staking>::final_byte_size_of(size_tracker.counter, size_tracker.size),
 			voters.encoded_size()
 		);
 	}
@@ -212,10 +227,7 @@ mod tests {
 		voters.push(voter);
 
 		assert_eq!(
-			StaticTracker::<Staking>::final_byte_size_of(
-				size_tracker.num_voters,
-				size_tracker.size
-			),
+			StaticTracker::<Staking>::final_byte_size_of(size_tracker.counter, size_tracker.size),
 			voters.encoded_size()
 		);
 

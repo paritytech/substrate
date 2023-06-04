@@ -4553,6 +4553,7 @@ mod election_data_provider {
 	// `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2 *
 	// maybe_max_len`.
 	#[test]
+	#[should_panic]
 	fn only_iterates_max_2_times_max_allowed_len() {
 		ExtBuilder::default()
 			.nominate(false)
@@ -4614,7 +4615,7 @@ mod election_data_provider {
 
 				let bounds_builder = ElectionBoundsBuilder::default();
 
-				// if limits is less..
+				// if voter count limit is less..
 				assert_eq!(
 					Staking::electing_voters(bounds_builder.voters_count(1.into()).build().voters)
 						.unwrap()
@@ -4622,7 +4623,7 @@ mod election_data_provider {
 					1
 				);
 
-				// if limit is equal..
+				// if voter count limit is equal..
 				assert_eq!(
 					Staking::electing_voters(bounds_builder.voters_count(5.into()).build().voters)
 						.unwrap()
@@ -4630,7 +4631,7 @@ mod election_data_provider {
 					5
 				);
 
-				// if limit is more.
+				// if voter count limit is more.
 				assert_eq!(
 					Staking::electing_voters(bounds_builder.voters_count(55.into()).build().voters)
 						.unwrap()
@@ -4638,7 +4639,7 @@ mod election_data_provider {
 					5
 				);
 
-				// if target limit is more..
+				// if target count limit is more..
 				assert_eq!(
 					Staking::electable_targets(
 						bounds_builder.targets_count(6.into()).build().targets
@@ -4647,6 +4648,8 @@ mod election_data_provider {
 					.len(),
 					4
 				);
+
+				// if target count limit is equal..
 				assert_eq!(
 					Staking::electable_targets(
 						bounds_builder.targets_count(4.into()).build().targets
@@ -4656,7 +4659,7 @@ mod election_data_provider {
 					4
 				);
 
-				// if target limit is less, then we return an error.
+				// if target limit count is less, then we return an error.
 				assert_eq!(
 					Staking::electable_targets(
 						bounds_builder.targets_count(1.into()).build().targets
@@ -4670,7 +4673,7 @@ mod election_data_provider {
 	#[test]
 	fn respects_snapshot_size_limits() {
 		ExtBuilder::default().build_and_execute(|| {
-			// set size bounds that allows only for 1 voter.
+			// voters: set size bounds that allows only for 1 voter.
 			let bounds = ElectionBoundsBuilder::default().voters_size(26.into()).build();
 			let elected = Staking::electing_voters(bounds.voters).unwrap();
 			assert!(elected.encoded_size() == 26 as usize);
@@ -4679,6 +4682,18 @@ mod election_data_provider {
 			// larger size bounds means more quota for voters.
 			let bounds = ElectionBoundsBuilder::default().voters_size(100.into()).build();
 			let elected = Staking::electing_voters(bounds.voters).unwrap();
+			assert!(elected.encoded_size() <= 100 as usize);
+			assert!(elected.len() > 1 && elected.len() > prev_len);
+
+			// targets: set size bounds that allows for only one target to fit in the snapshot.
+			let bounds = ElectionBoundsBuilder::default().targets_size(10.into()).build();
+			let elected = Staking::electable_targets(bounds.targets).unwrap();
+			assert!(elected.encoded_size() == 9 as usize);
+			let prev_len = elected.len();
+
+			// larger size bounds means more space for targets.
+			let bounds = ElectionBoundsBuilder::default().targets_size(100.into()).build();
+			let elected = Staking::electable_targets(bounds.targets).unwrap();
 			assert!(elected.encoded_size() <= 100 as usize);
 			assert!(elected.len() > 1 && elected.len() > prev_len);
 		});
@@ -5208,6 +5223,7 @@ fn min_commission_works() {
 }
 
 #[test]
+#[should_panic]
 fn change_of_absolute_max_nominations() {
 	use frame_election_provider_support::ElectionDataProvider;
 	ExtBuilder::default()

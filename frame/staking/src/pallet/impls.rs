@@ -841,11 +841,10 @@ impl<T: Config> Pallet<T> {
 				// because the nominators is not decodable since they have more nomination than
 				// `T::NominationsQuota::get_quota`. The latter can rarely happen, and is not
 				// really an emergency or bug if it does.
-				log!(
-					warn,
-					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
-					voter
-				);
+				defensive!(
+				    "DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
+                    voter,
+                );
 			}
 		}
 
@@ -873,14 +872,12 @@ impl<T: Config> Pallet<T> {
 	/// Get the targets for an upcoming npos election.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets(target_bounds: DataProviderBounds) -> Vec<T::AccountId> {
+	pub fn get_npos_targets(bounds: DataProviderBounds) -> Vec<T::AccountId> {
+		let mut targets_size_tracker: StaticTracker<Self> = StaticTracker::default();
+
 		let final_predicted_len = {
 			let all_target_count = T::TargetList::count();
-			target_bounds
-				.count
-				.unwrap_or(all_target_count.into())
-				.min(all_target_count.into())
-				.0
+			bounds.count.unwrap_or(all_target_count.into()).min(all_target_count.into()).0
 		};
 
 		let mut all_targets = Vec::<T::AccountId>::with_capacity(final_predicted_len as usize);
@@ -897,6 +894,14 @@ impl<T: Config> Pallet<T> {
 				},
 				None => break,
 			};
+
+			if targets_size_tracker.try_register_target(target.clone(), &bounds).is_err() {
+				// no more space left for the election snapshot, stop iterating.
+				Self::deposit_event(Event::<T>::SnapshotTargetsSizeExceeded {
+					size: targets_size_tracker.size as u32,
+				});
+				break
+			}
 
 			if Validators::<T>::contains_key(&target) {
 				all_targets.push(target);
@@ -1044,15 +1049,20 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	}
 
 	fn electable_targets(bounds: DataProviderBounds) -> data_provider::Result<Vec<T::AccountId>> {
-		let target_count = T::TargetList::count();
+		let targets = Self::get_npos_targets(bounds);
 
 		// We can't handle this case yet -- return an error. WIP to improve handling this case in
 		// <https://github.com/paritytech/substrate/pull/13195>.
-		if bounds.exhausted(None, CountBound(target_count as u32).into()) {
+		if bounds.exhausted(None, CountBound(T::TargetList::count() as u32).into()) {
 			return Err("Target snapshot too big")
 		}
 
-		Ok(Self::get_npos_targets(bounds))
+		debug_assert!(!bounds.exhausted(
+			SizeBound(targets.encoded_size() as u32).into(),
+			CountBound(targets.len() as u32).into()
+		));
+
+		Ok(targets)
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {

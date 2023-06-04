@@ -694,8 +694,10 @@ pub mod pallet {
 		PayoutStarted { era_index: EraIndex, validator_stash: T::AccountId },
 		/// A validator has set their preferences.
 		ValidatorPrefsSet { stash: T::AccountId, prefs: ValidatorPrefs },
-		/// Voters size limit reached due to too many nominations.
+		/// Voters size limit reached.
 		SnapshotVotersSizeExceeded { size: u32 },
+		/// Targets size limit reached.
+		SnapshotTargetsSizeExceeded { size: u32 },
 		/// A new force era mode was set.
 		ForceEra { mode: Forcing },
 	}

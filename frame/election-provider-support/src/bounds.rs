@@ -20,9 +20,9 @@
 //! ### Overview
 //!
 //! This module defines and implements types that help creating and handling election bounds.
-//! [`DataProviderBounds`] encapsulates the upper limits for the results of provided by
-//! `DataProvider` implementors. Those limits can be defined over two axis: number of elements
-//! returned (`count`) and/or the size of the returned SCALE encoded structure (`size`).
+//! [`DataProviderBounds`] encapsulates the upper limits for the results provided by `DataProvider`
+//! implementors. Those limits can be defined over two axis: number of elements returned (`count`)
+//!  and/or the size of the returned SCALE encoded structure (`size`).
 //!
 //! [`ElectionBoundsBuilder`] is a helper to construct data election bounds and it aims at
 //! preventing the caller from mistake the order of size and count limits.
@@ -51,8 +51,8 @@
 //!
 //! ### Implementation details
 //!
-//! As a norm, a default or `None` bound is unbounded (i.e. unlimited). In general, be careful when
-//! using unbounded election bounds in production.
+//! A default or `None` bound means that no bounds are enfirced (i.e. unlimited result size). In
+//! general, be careful when using unbounded election bounds in production.
 
 use core::ops::Add;
 use sp_runtime::traits::Zero;
@@ -82,7 +82,7 @@ impl Add for CountBound {
 
 impl Zero for CountBound {
 	fn is_zero(&self) -> bool {
-		self.0 == 0
+		self.0 == 0u32
 	}
 	fn zero() -> Self {
 		CountBound(0)
@@ -109,7 +109,7 @@ impl From<u32> for SizeBound {
 
 impl Zero for SizeBound {
 	fn is_zero(&self) -> bool {
-		self.0 == 0
+		self.0 == 0u32
 	}
 	fn zero() -> Self {
 		SizeBound(0)
@@ -126,8 +126,8 @@ impl Add for SizeBound {
 /// Data bounds for election data.
 ///
 /// Limits the data returned by `DataProvider` implementors, defined over two axis: `count`,
-/// defining the maximum number of elements returned and `size`, defining the limit in size (bytes)
-/// of the SCALE encoded result.
+/// defining the maximum number of elements returned, and `size`, defining the limit in size
+/// (bytes) of the SCALE encoded result.
 ///
 /// `None` represents unlimited bounds in both `count` and `size` axis.
 #[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
@@ -324,14 +324,14 @@ mod test {
 	use frame_support::{assert_err, assert_ok};
 
 	#[test]
-	fn data_provider_bounds_unbounded() {
+	fn data_provider_bounds_unbounded_works() {
 		let bounds = DataProviderBounds::default();
 		assert!(!bounds.exhausted(None, None));
 		assert!(!bounds.exhausted(SizeBound(u32::MAX).into(), CountBound(u32::MAX).into()));
 	}
 
 	#[test]
-	fn election_bounds_builder_and_exhausted_bounds() {
+	fn election_bounds_builder_and_exhausted_bounds_work() {
 		// voter bounds exhausts if count > 100 or size > 1_000; target bounds exhausts if count >
 		// 200 or size > 2_000.
 		let bounds = ElectionBoundsBuilder::default()
