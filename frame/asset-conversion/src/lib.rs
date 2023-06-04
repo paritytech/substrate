@@ -1084,7 +1084,7 @@ pub mod pallet {
 		}
 
 		/// Returns the next pool asset id for benchmark purposes only.
-		#[cfg(feature = "runtime-benchmarks")]
+		#[cfg(any(test, feature = "runtime-benchmarks"))]
 		pub fn get_next_pool_asset_id() -> T::PoolAssetId {
 			NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
 		}
