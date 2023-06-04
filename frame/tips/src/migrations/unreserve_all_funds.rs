@@ -19,10 +19,7 @@
 //! pallet.
 
 use core::iter::Sum;
-use frame_support::{
-	traits::{OnRuntimeUpgrade, ReservableCurrency},
-	weights::constants::RocksDbWeight,
-};
+use frame_support::traits::{OnRuntimeUpgrade, ReservableCurrency};
 use pallet_treasury::BalanceOf;
 use sp_runtime::{traits::Zero, Saturating};
 use sp_std::collections::btree_map::BTreeMap;
@@ -49,6 +46,8 @@ impl<T: crate::Config<I>, I: 'static> UnreserveAllFunds<T, I> {
 	///   reserved balance by this pallet
 	/// * `frame_support::weights::Weight`: The weight of this operation.
 	fn get_deposits() -> (BTreeMap<T::AccountId, BalanceOf<T, I>>, frame_support::weights::Weight) {
+		use frame_support::traits::Get;
+
 		let mut tips_len = 0;
 		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T, I>> = crate::Tips::<T, I>::iter()
 			.map(|(_hash, open_tip)| open_tip)
@@ -61,7 +60,7 @@ impl<T: crate::Config<I>, I: 'static> UnreserveAllFunds<T, I> {
 				acc
 			});
 
-		(account_deposits, RocksDbWeight::get().reads(tips_len))
+		(account_deposits, T::DbWeight::get().reads(tips_len))
 	}
 }
 
@@ -118,6 +117,8 @@ where
 
 	/// Executes the migration, unreserving funds that are locked in Tip deposits.
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		use frame_support::traits::Get;
+
 		// Get staked and deposited balances as reported by this pallet.
 		let (account_deposits, initial_reads) = Self::get_deposits();
 
@@ -129,7 +130,7 @@ where
 			T::Currency::unreserve(&account, *unreserve_amount);
 		}
 
-		RocksDbWeight::get()
+		T::DbWeight::get()
 			.reads_writes(account_deposits.len() as u64, account_deposits.len() as u64)
 			.saturating_add(initial_reads)
 	}
@@ -157,14 +158,17 @@ where
 				.expect("account deposit must exist to be in account_reserved_before, qed");
 			let expected_reserved_after =
 				actual_reserved_before.saturating_sub(expected_amount_deducted);
-			assert!(
-				actual_reserved_after == expected_reserved_after,
-				"Reserved balance for {:?} is incorrect. actual before: {:?}, actual after, {:?}, expected deducted: {:?}",
-				account,
-				actual_reserved_before,
-				actual_reserved_after,
-				expected_amount_deducted
-			);
+
+			if actual_reserved_after != expected_reserved_after {
+				log::error!(
+					"Reserved balance for {:?} is incorrect. actual before: {:?}, actual after, {:?}, expected deducted: {:?}",
+					account,
+					actual_reserved_before,
+					actual_reserved_after,
+					expected_amount_deducted
+				);
+				return Err("Reserved balance is incorrect".into())
+			}
 		}
 
 		Ok(())
@@ -178,8 +182,7 @@ mod test {
 		migrations::unreserve_all_funds::UnreserveAllFunds,
 		tests::{new_test_ext, RuntimeOrigin, Test, Tips},
 	};
-	use frame_support::assert_ok;
-	use sp_core::TypedGet;
+	use frame_support::{assert_ok, traits::TypedGet};
 
 	#[test]
 	fn unreserve_all_funds_works() {
