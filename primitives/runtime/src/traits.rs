@@ -572,7 +572,7 @@ impl<A: Clone, B> MaybeConvert<A, B> for Tuple {
 /// Reversing fallible conversion trait returning an [Option]. Generic over both source and
 /// destination types.
 pub trait MaybeConvertBack<A, B>: MaybeConvert<A, B> {
-	/// Make conversion.
+	/// Attempt to make conversion back.
 	fn maybe_convert_back(b: B) -> Option<A>;
 }
 
@@ -589,11 +589,10 @@ impl<A: Clone, B: Clone> MaybeConvertBack<A, B> for Tuple {
 	}
 }
 
-/// Fallible conversion trait returning a [Result]. Generic over both source and destination types.
-///
-/// In case a [Result::Err] is returned, the inner must always be the operand.
+/// Fallible conversion trait which returns the argument in the case of being unable to convert.
+/// Generic over both source and destination types.
 pub trait TryConvert<A, B> {
-	/// Make conversion.
+	/// Attempt to make conversion. If returning [Result::Err], the inner must always be `a`.
 	fn try_convert(a: A) -> Result<B, A>;
 }
 
@@ -610,12 +609,11 @@ impl<A, B> TryConvert<A, B> for Tuple {
 	}
 }
 
-/// Reversing fallible conversion trait returning a [Result]. Generic over both source and
-/// destination types.
-///
-/// In case a [Result::Err] is returned, the inner must always be the operand.
+/// Reversing fallible conversion trait which returns the argument in the case of being unable to
+/// convert back. Generic over both source and destination types.
 pub trait TryConvertBack<A, B>: TryConvert<A, B> {
-	/// Make conversion.
+	/// Attempt to make conversion back. If returning [Result::Err], the inner must always be `b`.
+
 	fn try_convert_back(b: B) -> Result<A, B>;
 }
 
@@ -632,12 +630,11 @@ impl<A, B> TryConvertBack<A, B> for Tuple {
 	}
 }
 
-/// Derivative bound for types which define a bi-directional fallible [Option] conversion between
-/// two types from reference to a value.
+/// Definition for a bi-directional, fallible conversion between two types.
 pub trait MaybeEquivalence<A, B> {
-	/// Attempt to convert A -> B in the equivalence.
+	/// Attempt to convert reference of `A` into value of `B`, returning `None` if not possible.
 	fn convert(a: &A) -> Option<B>;
-	/// Attempt to convert B -> A in the equivalence.
+	/// Attempt to convert reference of `B` into value of `A`, returning `None` if not possible.
 	fn convert_back(b: &B) -> Option<A>;
 }
 
