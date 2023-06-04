@@ -91,11 +91,7 @@ fn existential_weight<T: pallet_staking::Config>(
 fn path_to_header_file() -> Option<PathBuf> {
 	let mut workdir: &Path = &std::env::current_dir().ok()?;
 	while !workdir.join(".git").exists() {
-		if let Some(parent) = workdir.parent() {
-			workdir = parent;
-		} else {
-			return None
-		}
+		workdir = workdir.parent()?;
 	}
 
 	for file_name in &["HEADER-APACHE2", "HEADER-GPL3", "HEADER", "file_header.txt"] {
