@@ -89,7 +89,7 @@ fn get_git_commit_id(mut path: &Path) -> String {
 	let git = path.join(".git");
 	let head = git.join("HEAD");
 	let head_contents = std::fs::read_to_string(head).expect("Repository should have a HEAD");
-	let branch = head_contents.strip_prefix("ref: ").expect(".git/HEAD to start 'ref: '");
+	let branch = head_contents.strip_prefix("ref: ").expect(".git/HEAD to start 'ref: '").trim();
 	std::fs::read_to_string(git.join(branch)).expect("Head references a commit")
 }
 
