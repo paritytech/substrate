@@ -550,7 +550,7 @@ pub trait ConvertBack<A, B>: Convert<A, B> {
 	fn convert_back(b: B) -> A;
 }
 
-/// Fallible conversion trait returning a `Option`. Generic over both source and destination types.
+/// Fallible conversion trait returning an [Option]. Generic over both source and destination types.
 pub trait MaybeConvert<A, B> {
 	/// Attempt to make conversion.
 	fn maybe_convert(a: A) -> Option<B>;
@@ -569,7 +569,7 @@ impl<A: Clone, B> MaybeConvert<A, B> for Tuple {
 	}
 }
 
-/// Reversing fallible conversion trait returning an `Option`. Generic over both source and
+/// Reversing fallible conversion trait returning an [Option]. Generic over both source and
 /// destination types.
 pub trait MaybeConvertBack<A, B>: MaybeConvert<A, B> {
 	/// Make conversion.
@@ -589,9 +589,9 @@ impl<A: Clone, B: Clone> MaybeConvertBack<A, B> for Tuple {
 	}
 }
 
-/// Fallible conversion trait returning a `Result`. Generic over both source and destination types.
+/// Fallible conversion trait returning a [Result]. Generic over both source and destination types.
 ///
-/// In case an `Error` is returned, it must alwats be the operand which is returned.
+/// In case a [Result::Err] is returned, the inner must always be the operand.
 pub trait TryConvert<A, B> {
 	/// Make conversion.
 	fn try_convert(a: A) -> Result<B, A>;
@@ -610,10 +610,10 @@ impl<A, B> TryConvert<A, B> for Tuple {
 	}
 }
 
-/// Reversing fallible conversion trait returning a `Result`. Generic over both source and
+/// Reversing fallible conversion trait returning a [Result]. Generic over both source and
 /// destination types.
 ///
-/// In case an `Error` is returned, it must alwats be the operand which is returned.
+/// In case a [Result::Err] is returned, the inner must always be the operand.
 pub trait TryConvertBack<A, B>: TryConvert<A, B> {
 	/// Make conversion.
 	fn try_convert_back(b: B) -> Result<A, B>;
@@ -632,7 +632,7 @@ impl<A, B> TryConvertBack<A, B> for Tuple {
 	}
 }
 
-/// Derivative bound for types which define a bi-directional fallible `Option` conversion between
+/// Derivative bound for types which define a bi-directional fallible [Option] conversion between
 /// two types from reference to a value.
 pub trait MaybeEquivalence<A, B> {
 	/// Attempt to convert A -> B in the equivalence.
@@ -663,7 +663,7 @@ impl<A, B> MaybeEquivalence<A, B> for Tuple {
 	}
 }
 
-/// Adapter which turns a `Get` implementation into a `Convert` implementation which always returns
+/// Adapter which turns a [Get] implementation into a [Convert] implementation which always returns
 /// in the same value no matter the input.
 pub struct ConvertToValue<T>(sp_std::marker::PhantomData<T>);
 impl<X, Y, T: Get<Y>> Convert<X, Y> for ConvertToValue<T> {
