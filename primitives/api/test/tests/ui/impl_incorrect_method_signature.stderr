@@ -1,35 +1,35 @@
 error[E0053]: method `test` has an incompatible type for trait
-  --> tests/ui/impl_incorrect_method_signature.rs:19:17
+  --> tests/ui/impl_incorrect_method_signature.rs:16:17
    |
-19 |         fn test(data: String) {}
+16 |         fn test(data: String) {}
    |                       ^^^^^^
    |                       |
    |                       expected `u64`, found `std::string::String`
    |                       help: change the parameter type to match the trait: `u64`
    |
 note: type in trait
-  --> tests/ui/impl_incorrect_method_signature.rs:13:17
+  --> tests/ui/impl_incorrect_method_signature.rs:10:17
    |
-13 |         fn test(data: u64);
+10 |         fn test(data: u64);
    |                       ^^^
    = note: expected signature `fn(u64)`
               found signature `fn(std::string::String)`
 
 error[E0308]: mismatched types
-  --> tests/ui/impl_incorrect_method_signature.rs:19:11
+  --> tests/ui/impl_incorrect_method_signature.rs:16:11
    |
-17 | / sp_api::impl_runtime_apis! {
-18 | |     impl self::Api<Block> for Runtime {
-19 | |         fn test(data: String) {}
+14 | / sp_api::impl_runtime_apis! {
+15 | |     impl self::Api<Block> for Runtime {
+16 | |         fn test(data: String) {}
    | |                 ^^^^ expected `u64`, found `String`
-20 | |     }
+17 | |     }
 ...  |
-32 | |     }
-33 | | }
+29 | |     }
+30 | | }
    | |_- arguments to this function are incorrect
    |
 note: associated function defined here
-  --> tests/ui/impl_incorrect_method_signature.rs:13:6
+  --> tests/ui/impl_incorrect_method_signature.rs:10:6
    |
-13 |         fn test(data: u64);
+10 |         fn test(data: u64);
    |            ^^^^
