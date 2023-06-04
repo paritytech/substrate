@@ -94,7 +94,7 @@ fn path_to_header_file() -> Option<PathBuf> {
 		if let Some(parent) = workdir.parent() {
 			workdir = parent;
 		} else {
-			return None;
+			return None
 		}
 	}
 
