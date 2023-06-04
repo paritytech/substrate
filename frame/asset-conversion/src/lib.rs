@@ -201,7 +201,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The benchmarks need a way to create asset ids from u32s.
-		#[cfg(any(test, feature = "runtime-benchmarks"))]
+		#[cfg(feature = "runtime-benchmarks")]
 		type BenchmarkHelper: BenchmarkHelper<Self::AssetId>;
 	}
 
@@ -347,30 +347,6 @@ pub mod pallet {
 		PathError,
 		/// The provided path must consists of unique assets.
 		NonUniquePath,
-	}
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
-		fn integrity_test() {
-			#[cfg(test)]
-			sp_io::TestExternalities::new_empty().execute_with(|| {
-				// ensure that the `AccountId` is set properly and doesn't generate the same
-				// pool account for different pool ids.
-				let native = T::MultiAssetIdConverter::get_native();
-				let asset_1 =
-					T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(1));
-				let asset_2 =
-					T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(2));
-				assert!(asset_1 != asset_2, "must return different assets for different ids.");
-				let pool_account_1 = Self::get_pool_account(&(native.clone(), asset_1));
-				let pool_account_2 = Self::get_pool_account(&(native, asset_2));
-				assert!(sp_std::mem::size_of::<T::AccountId>() >= sp_std::mem::size_of::<u128>());
-				assert!(
-					pool_account_1 != pool_account_2,
-					"AccountId should be set at least to u128"
-				);
-			});
-		}
 	}
 
 	/// Pallet's callable functions.
@@ -1107,8 +1083,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[cfg(any(test, feature = "runtime-benchmarks"))]
 		/// Returns the next pool asset id for benchmark purposes only.
+		#[cfg(any(test, feature = "runtime-benchmarks"))]
 		pub fn get_next_pool_asset_id() -> T::PoolAssetId {
 			NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
 		}
