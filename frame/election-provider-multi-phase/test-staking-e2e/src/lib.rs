@@ -280,7 +280,7 @@ fn set_validation_intention_after_chilled() {
 #[test]
 /// Active ledger balance may fall below ED if account chills before unbounding.
 ///
-/// Unbonding call fails if the remaining ledger's stash balance falls below the existencial
+/// Unbonding call fails if the remaining ledger's stash balance falls below the existential
 /// deposit. However, if the stash is chilled before unbonding, the ledger's active balance may
 /// be below ED. In that case, only the stash (or root) can kill the ledger entry by calling
 /// `withdraw_unbonded` after the bonding period has passed.
