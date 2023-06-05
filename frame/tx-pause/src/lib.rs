@@ -123,7 +123,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		/// The initially paused calls.
+		/// Initially paused calls.
 		pub paused: Vec<RuntimeCallNameOf<T>>,
 	}
 
