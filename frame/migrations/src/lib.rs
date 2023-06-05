@@ -131,13 +131,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub use pallet::*;
-
 mod benchmarking;
 mod mock;
 mod tests;
 pub mod weights;
 
+pub use pallet::*;
 pub use weights::WeightInfo;
 
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -182,6 +181,7 @@ impl<Cursor, BlockNumber> MigrationCursor<Cursor, BlockNumber> {
 }
 
 impl<Cursor, BlockNumber> ActiveCursor<Cursor, BlockNumber> {
+	/// Advance the cursor to the next migration.
 	pub(crate) fn advance(&mut self, current_block: BlockNumber) {
 		self.index.saturating_inc();
 		self.inner_cursor = None;
@@ -218,6 +218,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// The overarching event type of the runtime.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// All the multi-block migrations to run.
@@ -373,6 +374,11 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Clear the entries of the `Historic` set.
+		///
+		/// the `map_cursor` must be set to the last value that was returned by the
+		/// `HistoricCleared` event. The first time `None` can be used. `limit` must be chosen in a
+		/// way to result in a sensible weight.
 		#[pallet::call_index(1)]
 		#[pallet::weight({0})] // FAIL-CI
 		pub fn clear_historic(
@@ -391,6 +397,10 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Try to make progress on the current migration.
+	///
+	/// Returns whether processing should continue or break for this block. The `meter` contains the
+	/// remaining weight that can be consumed.
 	fn exec_migration(
 		meter: &mut WeightMeter,
 		migrations: &MigrationsOf<T>,
