@@ -1775,7 +1775,7 @@ where
 /// Parameters passed to [`import_queue`].
 pub struct ImportQueueParams<'a, Block: BlockT, BI, Client, CIDP, SelectChain, Spawn> {
 	/// The BABE link that is created by [`block_import`].
-	pub babe_link: BabeLink<Block>,
+	pub link: BabeLink<Block>,
 	/// The block import that should be wrapped.
 	pub block_import: BI,
 	/// Optional justification import.
@@ -1815,7 +1815,7 @@ pub struct ImportQueueParams<'a, Block: BlockT, BI, Client, CIDP, SelectChain, S
 /// of it, otherwise crucial import logic will be omitted.
 pub fn import_queue<Block: BlockT, Client, SelectChain, BI, CIDP, Spawn>(
 	ImportQueueParams {
-		babe_link,
+		link: babe_link,
 		block_import,
 		justification_import,
 		client,

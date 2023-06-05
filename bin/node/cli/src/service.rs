@@ -208,7 +208,7 @@ pub fn new_partial(
 	let slot_duration = babe_link.config().slot_duration();
 	let (import_queue, babe_worker_handle) =
 		sc_consensus_babe::import_queue(sc_consensus_babe::ImportQueueParams {
-			babe_link: babe_link.clone(),
+			link: babe_link.clone(),
 			block_import: block_import.clone(),
 			justification_import: Some(Box::new(justification_import)),
 			client: client.clone(),

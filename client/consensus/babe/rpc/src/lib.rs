@@ -222,7 +222,7 @@ mod tests {
 				.expect("can initialize block-import");
 
 		let (_, babe_worker_handle) = sc_consensus_babe::import_queue(ImportQueueParams {
-			babe_link: link.clone(),
+			link: link.clone(),
 			block_import: block_import.clone(),
 			justification_import: None,
 			client: client.clone(),
