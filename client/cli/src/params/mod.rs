@@ -19,6 +19,7 @@ mod database_params;
 mod import_params;
 mod keystore_params;
 mod message_params;
+mod mixnet_params;
 mod network_params;
 mod node_key_params;
 mod offchain_worker_params;
@@ -39,9 +40,10 @@ use sp_runtime::{
 use std::{fmt::Debug, str::FromStr};
 
 pub use crate::params::{
-	database_params::*, import_params::*, keystore_params::*, message_params::*, network_params::*,
-	node_key_params::*, offchain_worker_params::*, prometheus_params::*, pruning_params::*,
-	runtime_params::*, shared_params::*, telemetry_params::*, transaction_pool_params::*,
+	database_params::*, import_params::*, keystore_params::*, message_params::*, mixnet_params::*,
+	network_params::*, node_key_params::*, offchain_worker_params::*, prometheus_params::*,
+	pruning_params::*, runtime_params::*, shared_params::*, telemetry_params::*,
+	transaction_pool_params::*,
 };
 
 /// Parse Ss58AddressFormat
