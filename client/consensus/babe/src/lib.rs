@@ -993,7 +993,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CIDP> {
 	config: BabeConfiguration,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
 	telemetry: Option<TelemetryHandle>,
-	offchain_tx_pool: OffchainTransactionPoolFactory<Block>,
+	offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
 }
 
 impl<Block, Client, SelectChain, CIDP> BabeVerifier<Block, Client, SelectChain, CIDP>
@@ -1102,7 +1102,7 @@ where
 		let mut runtime_api = self.client.runtime_api();
 
 		// Register the offchain tx pool to be able to use it from the runtime.
-		runtime_api.register_extension(self.offchain_tx_pool.offchain_transaction_pool(best_hash));
+		runtime_api.register_extension(self.offchain_tx_pool_factory.offchain_transaction_pool(best_hash));
 
 		runtime_api
 			.submit_report_equivocation_unsigned_extrinsic(
@@ -1801,7 +1801,7 @@ pub struct ImportQueueParams<'a, Block: BlockT, BI, Client, CIDP, SelectChain, S
 	/// The offchain transaction pool factory.
 	///
 	/// Will be used when sending equivocation reports.
-	pub offchain_tx_pool: OffchainTransactionPoolFactory<Block>,
+	pub offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
 }
 
 /// Start an import queue for the BABE consensus algorithm.
@@ -1824,7 +1824,7 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, BI, CIDP, Spawn>(
 		spawner,
 		registry,
 		telemetry,
-		offchain_tx_pool,
+		offchain_tx_pool_factory,
 	}: ImportQueueParams<'_, Block, BI, Client, CIDP, SelectChain, Spawn>,
 ) -> ClientResult<(DefaultImportQueue<Block, Client>, BabeWorkerHandle<Block>)>
 where
@@ -1857,7 +1857,7 @@ where
 		epoch_changes: babe_link.epoch_changes.clone(),
 		telemetry,
 		client: client.clone(),
-		offchain_tx_pool,
+		offchain_tx_pool_factory,
 	};
 
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
