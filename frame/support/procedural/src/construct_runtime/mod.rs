@@ -217,6 +217,7 @@ fn construct_runtime_final_expansion(
 		name,
 		pallets,
 		pallets_token,
+		where_section,
 	} = definition;
 
 	let system_pallet =
@@ -277,7 +278,22 @@ fn construct_runtime_final_expansion(
 	let integrity_test = decl_integrity_test(&scrate);
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
+	let warning = if let Some(where_section) = where_section {
+		Some(proc_macro_warning::Warning::new_deprecated("WhereSection") 
+		.old("use where section") 
+		.new("use `frame_system::Config` to set the `Block` type and remove this section") 
+		.help_links(&[ 
+			"https://github.com/paritytech/substrate/pull/14193" 
+		]) 
+		.span(where_section.span) 
+		.build())
+	} else {
+		None
+	};
+
 	let res = quote!(
+		#warning
+
 		#scrate_decl
 
 		// Prevent UncheckedExtrinsic to print unused warning.

@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use frame_support_procedural_tools::syn_ext as ext;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use std::collections::{HashMap, HashSet};
 use syn::{
@@ -62,6 +62,7 @@ pub enum RuntimeDeclaration {
 #[derive(Debug)]
 pub struct ImplicitRuntimeDeclaration {
 	pub name: Ident,
+	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<PalletDeclaration>,
 }
 
@@ -69,6 +70,7 @@ pub struct ImplicitRuntimeDeclaration {
 #[derive(Debug)]
 pub struct ExplicitRuntimeDeclaration {
 	pub name: Ident,
+	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<Pallet>,
 	pub pallets_token: token::Brace,
 }
@@ -85,6 +87,11 @@ impl Parse for RuntimeDeclaration {
 		}
 
 		let name = input.parse::<syn::Ident>()?;
+		let where_section = if input.peek(token::Where) {
+			Some(input.parse()?)
+		} else {
+			None
+		};
 		let pallets =
 			input.parse::<ext::Braces<ext::Punctuated<PalletDeclaration, Token![,]>>>()?;
 		let pallets_token = pallets.token;
@@ -93,15 +100,94 @@ impl Parse for RuntimeDeclaration {
 			PalletsConversion::Implicit(pallets) =>
 				Ok(RuntimeDeclaration::Implicit(ImplicitRuntimeDeclaration {
 					name,
+					where_section,
 					pallets,
 				})),
 			PalletsConversion::Explicit(pallets) =>
 				Ok(RuntimeDeclaration::Explicit(ExplicitRuntimeDeclaration {
 					name,
+					where_section,
 					pallets,
 					pallets_token,
 				})),
 		}
+	}
+}
+
+#[derive(Debug)]
+pub struct WhereSection {
+	pub span: Span,
+	pub block: syn::TypePath,
+	pub node_block: syn::TypePath,
+	pub unchecked_extrinsic: syn::TypePath,
+}
+
+impl Parse for WhereSection {
+	fn parse(input: ParseStream) -> Result<Self> {
+		input.parse::<token::Where>()?;
+
+		let mut definitions = Vec::new();
+		while !input.peek(token::Brace) {
+			let definition: WhereDefinition = input.parse()?;
+			definitions.push(definition);
+			if !input.peek(Token![,]) {
+				if !input.peek(token::Brace) {
+					return Err(input.error("Expected `,` or `{`"))
+				}
+				break
+			}
+			input.parse::<Token![,]>()?;
+		}
+		let block = remove_kind(input, WhereKind::Block, &mut definitions)?.value;
+		let node_block = remove_kind(input, WhereKind::NodeBlock, &mut definitions)?.value;
+		let unchecked_extrinsic =
+			remove_kind(input, WhereKind::UncheckedExtrinsic, &mut definitions)?.value;
+		if let Some(WhereDefinition { ref kind_span, ref kind, .. }) = definitions.first() {
+			let msg = format!(
+				"`{:?}` was declared above. Please use exactly one declaration for `{:?}`.",
+				kind, kind
+			);
+			return Err(Error::new(*kind_span, msg))
+		}
+		Ok(Self { span: input.span(), block, node_block, unchecked_extrinsic })
+	}
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum WhereKind {
+	Block,
+	NodeBlock,
+	UncheckedExtrinsic,
+}
+
+#[derive(Debug)]
+pub struct WhereDefinition {
+	pub kind_span: Span,
+	pub kind: WhereKind,
+	pub value: syn::TypePath,
+}
+
+impl Parse for WhereDefinition {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let lookahead = input.lookahead1();
+		let (kind_span, kind) = if lookahead.peek(keyword::Block) {
+			(input.parse::<keyword::Block>()?.span(), WhereKind::Block)
+		} else if lookahead.peek(keyword::NodeBlock) {
+			(input.parse::<keyword::NodeBlock>()?.span(), WhereKind::NodeBlock)
+		} else if lookahead.peek(keyword::UncheckedExtrinsic) {
+			(input.parse::<keyword::UncheckedExtrinsic>()?.span(), WhereKind::UncheckedExtrinsic)
+		} else {
+			return Err(lookahead.error())
+		};
+
+		Ok(Self {
+			kind_span,
+			kind,
+			value: {
+				let _: Token![=] = input.parse()?;
+				input.parse()?
+			},
+		})
 	}
 }
 
@@ -419,6 +505,22 @@ impl PalletPart {
 	/// The name of this pallet part.
 	pub fn name(&self) -> &'static str {
 		self.keyword.name()
+	}
+}
+
+fn remove_kind(
+	input: ParseStream,
+	kind: WhereKind,
+	definitions: &mut Vec<WhereDefinition>,
+) -> Result<WhereDefinition> {
+	if let Some(pos) = definitions.iter().position(|d| d.kind == kind) {
+		Ok(definitions.remove(pos))
+	} else {
+		let msg = format!(
+			"Missing associated type for `{:?}`. Add `{:?}` = ... to where section.",
+			kind, kind
+		);
+		Err(input.error(msg))
 	}
 }
 
