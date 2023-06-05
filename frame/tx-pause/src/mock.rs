@@ -90,7 +90,7 @@ impl pallet_utility::Config for Test {
 	type WeightInfo = ();
 }
 
-/// Mocked proxies to check that the tx-pause also works with the proxy pallet.
+/// Mocked proxies to check that tx-pause also works with the proxy pallet.
 #[derive(
 	Copy,
 	Clone,
