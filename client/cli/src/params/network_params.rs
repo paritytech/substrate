@@ -191,8 +191,8 @@ impl NetworkParams {
 				]
 			};
 
-			// Enable WebRTC for non-validators and developers by default.
-			if !is_validator || is_dev {
+			// Enable WebRTC for developers by default.
+			if is_dev {
 				addrs.push(
 					Multiaddr::empty()
 						.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
