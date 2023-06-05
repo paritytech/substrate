@@ -40,7 +40,7 @@ pub trait SafeMode {
 	/// Should error when already entered with `AlreadyEntered`.
 	fn enter(duration: Self::BlockNumber) -> Result<(), SafeModeError>;
 
-	/// Extend the safe mode for `duration` blocks.
+	/// Extend safe mode for `duration` blocks.
 	///
 	/// Should error when not entered with `AlreadyExited`.
 	fn extend(duration: Self::BlockNumber) -> Result<(), SafeModeError>;
