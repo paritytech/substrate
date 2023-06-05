@@ -175,7 +175,7 @@ pub mod pallet {
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
-	/// The set of open multisig operations
+	/// The set of open multisig operations.
 	#[pallet::storage]
 	pub type Multisigs<T: Config> = StorageDoubleMap<
 		_,
