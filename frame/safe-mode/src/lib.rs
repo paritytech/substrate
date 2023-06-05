@@ -206,7 +206,6 @@ pub mod pallet {
 	/// This helps governance to have an overview of outstanding deposits that should be returned or
 	/// slashed.
 	#[pallet::storage]
-	#[pallet::getter(fn reserves)]
 	pub type Deposits<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
