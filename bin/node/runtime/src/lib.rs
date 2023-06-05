@@ -276,6 +276,7 @@ impl pallet_safe_mode::Config for Runtime {
 	type ForceExitOrigin = EnsureRoot<AccountId>;
 	type ForceDepositOrigin = EnsureRoot<AccountId>;
 	type ReleaseDelay = ReleaseDelay;
+	type Notify = ();
 	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }
 
