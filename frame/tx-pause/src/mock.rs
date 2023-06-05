@@ -156,16 +156,13 @@ frame_support::ord_parameter_types! {
 }
 
 /// Calls that are never allowed to be paused.
-#[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
 pub struct WhitelistedCalls;
 impl Contains<RuntimeCallNameOf<Test>> for WhitelistedCalls {
 	fn contains(full_name: &RuntimeCallNameOf<Test>) -> bool {
-		let unpausables: Vec<RuntimeCallNameOf<Test>> = vec![(
-			b"Balances".to_vec().try_into().unwrap(),
-			b"transfer_keep_alive".to_vec().try_into().unwrap(),
-		)];
-
-		unpausables.contains(full_name)
+		match (full_name.0.as_slice(), full_name.1.as_slice()) {
+			(b"Balances", b"transfer_keep_alive") => true,
+			_ => false,
+		}
 	}
 }
 

@@ -235,12 +235,10 @@ pub struct TxPauseWhitelistedCalls;
 /// Whitelist `Balances::transfer_keep_alive`, all others are pauseable.
 impl Contains<RuntimeCallNameOf<Runtime>> for TxPauseWhitelistedCalls {
 	fn contains(full_name: &RuntimeCallNameOf<Runtime>) -> bool {
-		let unpausables: Vec<RuntimeCallNameOf<Runtime>> = vec![(
-			b"Balances".to_vec().try_into().unwrap(),
-			b"transfer_keep_alive".to_vec().try_into().unwrap(),
-		)];
-
-		unpausables.contains(full_name)
+		match (full_name.0.as_slice(), full_name.1.as_slice()) {
+			(b"Balances", b"transfer_keep_alive") => true,
+			_ => false,
+		}
 	}
 }
 

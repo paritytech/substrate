@@ -512,7 +512,7 @@ fn can_slash_deposit_with_config_origin() {
 			0,
 			activated_at_block
 		));
-                 // accounts set in mock genesis
+		// accounts set in mock genesis
 		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterDepositAmount::get());
 
 		Balances::make_free_balance_be(&0, BAL_ACC0);
@@ -531,7 +531,7 @@ fn can_slash_deposit_with_config_origin() {
 			0,
 			activated_and_extended_at_block
 		));
-                 // accounts set in mock genesis
+		// accounts set in mock genesis
 		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterDepositAmount::get());
 	});
 }
