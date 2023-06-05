@@ -530,7 +530,7 @@ morph_types! {
 	} where L::Type: Ord, M: TryMorph<L::Type, Outcome = L::Type>;
 }
 
-/// Extensible conversion trait. Generic over both source and destination types.
+/// Infallible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
 	fn convert(a: A) -> B;
@@ -542,12 +542,158 @@ impl<A, B: Default> Convert<A, B> for () {
 	}
 }
 
-/// Adapter which turns a `Get` implementation into a `Convert` implementation which always returns
+/// Reversing infallible conversion trait. Generic over both source and destination types.
+///
+/// This specifically reverses the conversion.
+pub trait ConvertBack<A, B>: Convert<A, B> {
+	/// Make conversion back.
+	fn convert_back(b: B) -> A;
+}
+
+/// Fallible conversion trait returning an [Option]. Generic over both source and destination types.
+pub trait MaybeConvert<A, B> {
+	/// Attempt to make conversion.
+	fn maybe_convert(a: A) -> Option<B>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A: Clone, B> MaybeConvert<A, B> for Tuple {
+	fn maybe_convert(a: A) -> Option<B> {
+		for_tuples!( #(
+			match Tuple::maybe_convert(a.clone()) {
+				Some(b) => return Some(b),
+				None => {},
+			}
+		)* );
+		None
+	}
+}
+
+/// Reversing fallible conversion trait returning an [Option]. Generic over both source and
+/// destination types.
+pub trait MaybeConvertBack<A, B>: MaybeConvert<A, B> {
+	/// Attempt to make conversion back.
+	fn maybe_convert_back(b: B) -> Option<A>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A: Clone, B: Clone> MaybeConvertBack<A, B> for Tuple {
+	fn maybe_convert_back(b: B) -> Option<A> {
+		for_tuples!( #(
+			match Tuple::maybe_convert_back(b.clone()) {
+				Some(a) => return Some(a),
+				None => {},
+			}
+		)* );
+		None
+	}
+}
+
+/// Fallible conversion trait which returns the argument in the case of being unable to convert.
+/// Generic over both source and destination types.
+pub trait TryConvert<A, B> {
+	/// Attempt to make conversion. If returning [Result::Err], the inner must always be `a`.
+	fn try_convert(a: A) -> Result<B, A>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A, B> TryConvert<A, B> for Tuple {
+	fn try_convert(a: A) -> Result<B, A> {
+		for_tuples!( #(
+			let a = match Tuple::try_convert(a) {
+				Ok(b) => return Ok(b),
+				Err(a) => a,
+			};
+		)* );
+		Err(a)
+	}
+}
+
+/// Reversing fallible conversion trait which returns the argument in the case of being unable to
+/// convert back. Generic over both source and destination types.
+pub trait TryConvertBack<A, B>: TryConvert<A, B> {
+	/// Attempt to make conversion back. If returning [Result::Err], the inner must always be `b`.
+
+	fn try_convert_back(b: B) -> Result<A, B>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A, B> TryConvertBack<A, B> for Tuple {
+	fn try_convert_back(b: B) -> Result<A, B> {
+		for_tuples!( #(
+			let b = match Tuple::try_convert_back(b) {
+				Ok(a) => return Ok(a),
+				Err(b) => b,
+			};
+		)* );
+		Err(b)
+	}
+}
+
+/// Definition for a bi-directional, fallible conversion between two types.
+pub trait MaybeEquivalence<A, B> {
+	/// Attempt to convert reference of `A` into value of `B`, returning `None` if not possible.
+	fn convert(a: &A) -> Option<B>;
+	/// Attempt to convert reference of `B` into value of `A`, returning `None` if not possible.
+	fn convert_back(b: &B) -> Option<A>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A, B> MaybeEquivalence<A, B> for Tuple {
+	fn convert(a: &A) -> Option<B> {
+		for_tuples!( #(
+			match Tuple::convert(a) {
+				Some(b) => return Some(b),
+				None => {},
+			}
+		)* );
+		None
+	}
+	fn convert_back(b: &B) -> Option<A> {
+		for_tuples!( #(
+			match Tuple::convert_back(b) {
+				Some(a) => return Some(a),
+				None => {},
+			}
+		)* );
+		None
+	}
+}
+
+/// Adapter which turns a [Get] implementation into a [Convert] implementation which always returns
 /// in the same value no matter the input.
 pub struct ConvertToValue<T>(sp_std::marker::PhantomData<T>);
 impl<X, Y, T: Get<Y>> Convert<X, Y> for ConvertToValue<T> {
 	fn convert(_: X) -> Y {
 		T::get()
+	}
+}
+impl<X, Y, T: Get<Y>> MaybeConvert<X, Y> for ConvertToValue<T> {
+	fn maybe_convert(_: X) -> Option<Y> {
+		Some(T::get())
+	}
+}
+impl<X, Y, T: Get<Y>> MaybeConvertBack<X, Y> for ConvertToValue<T> {
+	fn maybe_convert_back(_: Y) -> Option<X> {
+		None
+	}
+}
+impl<X, Y, T: Get<Y>> TryConvert<X, Y> for ConvertToValue<T> {
+	fn try_convert(_: X) -> Result<Y, X> {
+		Ok(T::get())
+	}
+}
+impl<X, Y, T: Get<Y>> TryConvertBack<X, Y> for ConvertToValue<T> {
+	fn try_convert_back(y: Y) -> Result<X, Y> {
+		Err(y)
+	}
+}
+impl<X, Y, T: Get<Y>> MaybeEquivalence<X, Y> for ConvertToValue<T> {
+	fn convert(_: &X) -> Option<Y> {
+		Some(T::get())
+	}
+	fn convert_back(_: &Y) -> Option<X> {
+		None
 	}
 }
 
@@ -563,19 +709,100 @@ impl<T> ConvertBack<T, T> for Identity {
 		a
 	}
 }
+impl<T> MaybeConvert<T, T> for Identity {
+	fn maybe_convert(a: T) -> Option<T> {
+		Some(a)
+	}
+}
+impl<T> MaybeConvertBack<T, T> for Identity {
+	fn maybe_convert_back(a: T) -> Option<T> {
+		Some(a)
+	}
+}
+impl<T> TryConvert<T, T> for Identity {
+	fn try_convert(a: T) -> Result<T, T> {
+		Ok(a)
+	}
+}
+impl<T> TryConvertBack<T, T> for Identity {
+	fn try_convert_back(a: T) -> Result<T, T> {
+		Ok(a)
+	}
+}
+impl<T: Clone> MaybeEquivalence<T, T> for Identity {
+	fn convert(a: &T) -> Option<T> {
+		Some(a.clone())
+	}
+	fn convert_back(a: &T) -> Option<T> {
+		Some(a.clone())
+	}
+}
 
 /// A structure that performs standard conversion using the standard Rust conversion traits.
 pub struct ConvertInto;
-impl<A, B: From<A>> Convert<A, B> for ConvertInto {
+impl<A: Into<B>, B> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B {
 		a.into()
 	}
 }
+impl<A: Into<B>, B> MaybeConvert<A, B> for ConvertInto {
+	fn maybe_convert(a: A) -> Option<B> {
+		Some(a.into())
+	}
+}
+impl<A: Into<B>, B: Into<A>> MaybeConvertBack<A, B> for ConvertInto {
+	fn maybe_convert_back(b: B) -> Option<A> {
+		Some(b.into())
+	}
+}
+impl<A: Into<B>, B> TryConvert<A, B> for ConvertInto {
+	fn try_convert(a: A) -> Result<B, A> {
+		Ok(a.into())
+	}
+}
+impl<A: Into<B>, B: Into<A>> TryConvertBack<A, B> for ConvertInto {
+	fn try_convert_back(b: B) -> Result<A, B> {
+		Ok(b.into())
+	}
+}
+impl<A: Clone + Into<B>, B: Clone + Into<A>> MaybeEquivalence<A, B> for ConvertInto {
+	fn convert(a: &A) -> Option<B> {
+		Some(a.clone().into())
+	}
+	fn convert_back(b: &B) -> Option<A> {
+		Some(b.clone().into())
+	}
+}
 
-/// Extensible conversion trait. Generic over both source and destination types.
-pub trait ConvertBack<A, B>: Convert<A, B> {
-	/// Make conversion back.
-	fn convert_back(b: B) -> A;
+/// A structure that performs standard conversion using the standard Rust conversion traits.
+pub struct TryConvertInto;
+impl<A: Clone + TryInto<B>, B> MaybeConvert<A, B> for TryConvertInto {
+	fn maybe_convert(a: A) -> Option<B> {
+		a.clone().try_into().ok()
+	}
+}
+impl<A: Clone + TryInto<B>, B: Clone + TryInto<A>> MaybeConvertBack<A, B> for TryConvertInto {
+	fn maybe_convert_back(b: B) -> Option<A> {
+		b.clone().try_into().ok()
+	}
+}
+impl<A: Clone + TryInto<B>, B> TryConvert<A, B> for TryConvertInto {
+	fn try_convert(a: A) -> Result<B, A> {
+		a.clone().try_into().map_err(|_| a)
+	}
+}
+impl<A: Clone + TryInto<B>, B: Clone + TryInto<A>> TryConvertBack<A, B> for TryConvertInto {
+	fn try_convert_back(b: B) -> Result<A, B> {
+		b.clone().try_into().map_err(|_| b)
+	}
+}
+impl<A: Clone + TryInto<B>, B: Clone + TryInto<A>> MaybeEquivalence<A, B> for TryConvertInto {
+	fn convert(a: &A) -> Option<B> {
+		a.clone().try_into().ok()
+	}
+	fn convert_back(b: &B) -> Option<A> {
+		b.clone().try_into().ok()
+	}
 }
 
 /// Convenience type to work around the highly unergonomic syntax needed
