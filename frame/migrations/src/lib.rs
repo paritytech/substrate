@@ -15,6 +15,114 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![deny(rustdoc::broken_intra_doc_links)]
+
+//! # `pallet-migrations`
+//!
+//! Provides multi block migrations for FRAME runtimes.
+//!
+//! ## Overview
+//!
+//! The pallet takes care of execution a batch of multi-step migrations over multiple blocks. The
+//! process starts on each runtime upgrade. Normal and operational transactions are pause while this
+//! is on-going.
+//!
+//! ### Example
+//!
+//! This example demonstrates a simple mocked walk through the basis success path. The pallet is
+//! configured with two migrations: one succeeding after just one step, and the second one
+//! succeeding after two steps. A runtime upgrade is then enacted and the block number is advanced
+//! until all migrations had time to execute. Afterwards the recorded historic migrations are
+//! checked and the events are asserted.
+#![doc = docify::embed!("frame/migrations/src/tests.rs", simple_works)]
+//!
+//! ## Pallet API
+//!
+//! See the [`pallet`] module for more information about the interfaces this pallet exposes,
+//! including its configuration trait, dispatchables, storage items, events and errors.
+//!
+//! Otherwise noteworthy API of this pallet include its implementation of the
+//! [`ExtrinsicSuspenderQuery`] trait. This can be plugged into `frame-executive` to check for
+//! transaction suspension.
+//!
+//! ### Design Goals
+//!
+//! 1. Must automatically execute migrations over multiple blocks.
+//! 2. Must prevent other (non-mandatory) transactions to execute in the meantime.
+//! 3. Must respect pessimistic weight bounds of migrations.
+//! 4. Must execute migrations in order. Skipping is not allowed; rather an all-or-nothing.
+//! 5. Must prevent re-execution of migrations.
+//! 6. Must provide transactional storage semantics for migrations.
+//! 7. Must guarantee progress.
+//!
+//! ### Design
+//!
+//! Migrations are provided to the pallet via a `Get<Vec<Box<dyn SteppedMigration...`. This was done
+//! to have the most flexibility when it comes to iterating and inspecting the migrations. It also
+//! simplifies the trait bounds since all associated types of the trait must be provided by the
+//! pallet. The actual progress of the pallet is stored in its `Cursor` storage item. This can
+//! either be [`MigrationCursor::Active`] or `Stuck`. In the active case it points to the currently
+//! active migration and stores its inner cursor. The inner cursor can then be used by the migration
+//! to store its inner state and advance. Each time when the migration returns `Some(cursor)`, it
+//! signals the pallet that it is not done yet. The cursor is re-set on each runtime upgrade. This
+//! ensures that it starts to execute at the first migration of the vector. The pallets cursor is
+//! only ever incremented and put into `Stuck` once it encounters an error (Goal 4). Once in the
+//! stuck state, the pallet will stay stuck until it is resolved through manual intervention.
+//! As soon as the cursor of the pallet becomes some; the transaction processing will be paused by
+//! returning `true` from [`ExtrinsicSuspenderQuery::is_suspended`]. This ensures that no other
+//! transactions are processed until the pallet is done (Goal 2). `on_initialize` the pallet will
+//! load the current migration and check whether it was already executed in the past by checking for
+//! membership of its ID in the `Historic` set. Historic migrations are ignored without causing an
+//! error. Each successfully executed migration is added to this set (Goal 5). This proceeds until
+//! no more migrations can be loaded. This causes event `UpgradeCompleted` to be emitted (Goal 1).
+//! The execution of each migrations happens by calling [`SteppedMigration::transactional_step`].
+//! This function wraps the inner `step` function into a transactional layer to allow rollback in
+//! the error case (Goal 6). Weight limits must be checked by the migration itself. The pallet
+//! provides a [`WeightMeter`] for that cause. The pallet may return
+//! [`SteppedMigrationError::InsufficientWeight`] at any point. The pallet will react to this with a
+//! case decision: if that migration was exclusively execute in this block, and therefore got the
+//! maximal amount of weight possible, the pallet becomes `Stuck`. Otherwise one re-attempt is done
+//! with the same logic in the next block (Goal 3). Progress of the pallet is guaranteed by
+//! providing once: a timeout for each migration via [`SteppedMigration::max_steps`]. The pallet
+//! **ONLY** guarantees progress if this is set to sensible limits (Goal 7).
+//!
+//! ### Scenario: Governance cleanup
+//!
+//! Every now and then, governance can make use of the `clear_historic` call. This ensures that no
+//! old migrations pile up in the `Historic` set. This can probably be done very rarely, since the
+//! storage should not grow quickly and the lookup weight does not suffer much.
+//!
+//! ### Scenario: Successful upgrade
+//!
+//! The standard procedure for a successful runtime upgrade can look like this:
+//! 1. Migrations are configured in the `Migrations` config item. All migrations expose `max_steps`,
+//! error tolerance, check their weight bounds and have a unique identifier. 2. The runtime upgrade
+//! is enacted. Events `UpgradeStarted` is followed by lots of `MigrationAdvanced`. Finally an
+//! `UpgradeCompleted` is emitted.  
+//! 3. The code of the executed migrations can be removed from the runtime. Eventually governance
+//! can call `clear_historic` to clean up the `Historic` set.
+//!
+//! ### Advice: Failed migrations
+//!
+//! Failed migrations are not added to the `Historic` blacklist. This means that an erroneous
+//! migration must be removed of fixed manually. This already applies - even before taking the
+//! historic set into account.
+//!
+//! ### Advice: Failed upgrades
+//!
+//! Failed upgrade cannot automatically be handled but requires governance intervention. Set up
+//! monitoring for event `UpgradeFailed` to act in this case. Hook [`UpgradeStatusHandler::failed`]
+//! should be setup in a way that it allows governance to act, but still prevent other transactions
+//! from interacting with the inconsistent storage state. Note that this is paramount, since the
+//! inconsistent state might contain faulty balance amount or similar that could cause great harm.
+//! One way to implement this would be to use the `SafeMode` or `TxPause` pallets that can prevent
+//! most user interactions but still allow a whitelisted set of governance calls.
+//!
+//! ### Remark: Transactional processing
+//!
+//! You can see the transactional semantics for migrational steps as mostly useless, since in the
+//! stuck case the state is messed up anyway. This just prevents it from messing up even more.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
@@ -38,7 +146,7 @@ use frame_system::Pallet as System;
 use sp_runtime::Saturating;
 use sp_std::{boxed::Box, vec::Vec};
 
-const LOG_TARGET: &'static str = "runtime::migrations";
+const LOG: &'static str = "runtime::migrations";
 
 /// Points to the next migration to execute.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
@@ -49,6 +157,7 @@ pub enum MigrationCursor<Cursor, BlockNumber> {
 	Stuck,
 }
 
+/// Points to the currently active migration and its inner cursor.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 pub struct ActiveCursor<Cursor, BlockNumber> {
 	index: u32,
@@ -57,6 +166,7 @@ pub struct ActiveCursor<Cursor, BlockNumber> {
 }
 
 impl<Cursor, BlockNumber> MigrationCursor<Cursor, BlockNumber> {
+	/// Maybe return self as an `ActiveCursor`.
 	pub fn as_active(&self) -> Option<&ActiveCursor<Cursor, BlockNumber>> {
 		match self {
 			MigrationCursor::Active(active) => Some(active),
@@ -144,10 +254,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Runtime upgrade started.
-		UpgradeStarted,
+		/// Runtime upgrade started with `migrations` in the queue.
+		///
+		/// This can be used to design a progress indicator in combination with counting the
+		/// `MigrationCompleted` and `MigrationSkippedHistoric` events.
+		UpgradeStarted { migrations: u32 },
 		/// Runtime upgrade completed with `migrations`.
-		UpgradeCompleted { migrations: u32 },
+		UpgradeCompleted,
 		/// Runtime upgrade failed.
 		///
 		/// This is very bad and will require governance intervention.
@@ -163,7 +276,10 @@ pub mod pallet {
 		/// This implies that the whole upgrade failed and governance intervention is required.
 		MigrationFailed { index: u32, blocks: T::BlockNumber },
 		/// The list of historical migrations has been cleared.
-		HistoricCleared { next_cursor: Option<Vec<u8>> },
+		HistoricCleared {
+			/// Should be passed to `clear_historic` in a successive call.
+			next_cursor: Option<Vec<u8>>,
+		},
 	}
 
 	#[pallet::hooks]
@@ -172,7 +288,7 @@ pub mod pallet {
 			use FailedUpgradeHandling::*;
 
 			if let Some(cursor) = Cursor::<T>::get() {
-				log::error!("Ongoing migrations interrupted - chain stuck");
+				log::error!(target: LOG, "Ongoing migrations interrupted - chain stuck");
 				Self::deposit_event(Event::UpgradeFailed);
 
 				let maybe_index = cursor.as_active().map(|c| c.index);
@@ -180,13 +296,17 @@ pub mod pallet {
 					KeepStuck => Cursor::<T>::set(Some(MigrationCursor::Stuck)),
 					ForceUnstuck => Cursor::<T>::kill(),
 				}
-			} else if T::Migrations::get().len() > 0 {
+				return T::WeightInfo::on_runtime_upgrade()
+			}
+
+			let migrations = T::Migrations::get().len() as u32;
+			if migrations > 0 {
 				Cursor::<T>::set(Some(MigrationCursor::Active(ActiveCursor {
 					index: 0,
 					inner_cursor: None,
 					started_at: System::<T>::block_number(),
 				})));
-				Self::deposit_event(Event::UpgradeStarted);
+				Self::deposit_event(Event::UpgradeStarted { migrations });
 				T::UpgradeStatusHandler::started();
 			}
 
@@ -199,12 +319,12 @@ pub mod pallet {
 
 			let mut cursor = match Cursor::<T>::get() {
 				None => {
-					log::debug!(target: LOG_TARGET, "[Block {n:?}] Waiting for cursor to become `Some`.");
+					log::debug!(target: LOG, "[Block {n:?}] Waiting for cursor to become `Some`.");
 					return meter.consumed
 				},
 				Some(MigrationCursor::Active(cursor)) => cursor,
 				Some(MigrationCursor::Stuck) => {
-					log::error!("Migration stuck. Governance intervention required.");
+					log::error!(target: LOG, "Migration stuck. Governance intervention required.");
 					return meter.consumed
 				},
 			};
@@ -272,7 +392,7 @@ impl<T: Config> Pallet<T> {
 		is_first: bool,
 	) -> Option<ControlFlow<ActiveCursorOf<T>, ActiveCursorOf<T>>> {
 		let Some(migration) = migrations.get(cursor.index as usize) else {
-			Self::deposit_event(Event::UpgradeCompleted { migrations: migrations.len() as u32 });
+			Self::deposit_event(Event::UpgradeCompleted);
 			Cursor::<T>::kill();
 			T::UpgradeStatusHandler::completed();
 			return None;

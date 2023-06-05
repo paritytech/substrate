@@ -24,6 +24,33 @@ use crate::{
 use frame_support::traits::OnRuntimeUpgrade;
 
 #[test]
+#[docify::export]
+fn simple_works() {
+	use Event::*;
+	test_closure(|| {
+		// Add three migrations. Each taking one block longer.
+		MigrationsStorage::set(vec![(SucceedAfter, 1), (SucceedAfter, 2)]);
+
+		System::set_block_number(1);
+		Migrations::on_runtime_upgrade();
+		run_to_block(10);
+
+		// Check that the executed migrations are recorded into `Historical`.
+		assert_eq!(historic(), vec![mocked_id(SucceedAfter, 1), mocked_id(SucceedAfter, 2),]);
+		// Check that we got all events.
+		assert_events(vec![
+			UpgradeStarted { migrations: 2 },
+			MigrationAdvanced { index: 0, blocks: 1 },
+			MigrationCompleted { index: 0, blocks: 2 },
+			MigrationAdvanced { index: 1, blocks: 0 },
+			MigrationAdvanced { index: 1, blocks: 1 },
+			MigrationCompleted { index: 1, blocks: 2 },
+			UpgradeCompleted,
+		]);
+	});
+}
+
+#[test]
 fn basic_works() {
 	test_closure(|| {
 		// Add three migrations. Each taking one block longer.
@@ -44,14 +71,14 @@ fn basic_works() {
 		);
 		// Check that we got all events.
 		assert_events(vec![
-			Event::UpgradeStarted,
+			Event::UpgradeStarted { migrations: 3 },
 			Event::MigrationCompleted { index: 0, blocks: 1 },
 			Event::MigrationAdvanced { index: 1, blocks: 0 },
 			Event::MigrationCompleted { index: 1, blocks: 1 },
 			Event::MigrationAdvanced { index: 2, blocks: 0 },
 			Event::MigrationAdvanced { index: 2, blocks: 1 },
 			Event::MigrationCompleted { index: 2, blocks: 2 },
-			Event::UpgradeCompleted { migrations: 3 },
+			Event::UpgradeCompleted,
 		]);
 	});
 }
@@ -82,7 +109,7 @@ fn historic_skipping_works() {
 		);
 		// Events received.
 		assert_events(vec![
-			Event::UpgradeStarted,
+			Event::UpgradeStarted { migrations: 5 },
 			Event::MigrationCompleted { index: 0, blocks: 1 },
 			Event::MigrationSkippedHistoric { index: 1 },
 			Event::MigrationAdvanced { index: 2, blocks: 0 },
@@ -91,7 +118,7 @@ fn historic_skipping_works() {
 			Event::MigrationAdvanced { index: 3, blocks: 1 },
 			Event::MigrationCompleted { index: 3, blocks: 2 },
 			Event::MigrationSkippedHistoric { index: 4 },
-			Event::UpgradeCompleted { migrations: 5 },
+			Event::UpgradeCompleted,
 		]);
 
 		// Now go for another upgrade; just to make sure that it wont execute again.
@@ -111,13 +138,13 @@ fn historic_skipping_works() {
 
 		// Everything got skipped.
 		assert_events(vec![
-			Event::UpgradeStarted,
+			Event::UpgradeStarted { migrations: 5 },
 			Event::MigrationSkippedHistoric { index: 0 },
 			Event::MigrationSkippedHistoric { index: 1 },
 			Event::MigrationSkippedHistoric { index: 2 },
 			Event::MigrationSkippedHistoric { index: 3 },
 			Event::MigrationSkippedHistoric { index: 4 },
-			Event::UpgradeCompleted { migrations: 5 },
+			Event::UpgradeCompleted,
 		]);
 	});
 }
@@ -139,7 +166,7 @@ fn upgrade_fails_when_migration_active() {
 		//);
 		// Events received.
 		assert_events(vec![
-			Event::UpgradeStarted,
+			Event::UpgradeStarted { migrations: 1 },
 			Event::MigrationAdvanced { index: 0, blocks: 1 },
 			Event::MigrationAdvanced { index: 0, blocks: 2 },
 		]);
@@ -162,7 +189,7 @@ fn migration_timeout_errors() {
 
 		// Times out after taking more than 3 steps.
 		assert_events(vec![
-			Event::UpgradeStarted,
+			Event::UpgradeStarted { migrations: 1 },
 			Event::MigrationAdvanced { index: 0, blocks: 1 },
 			Event::MigrationAdvanced { index: 0, blocks: 2 },
 			Event::MigrationAdvanced { index: 0, blocks: 3 },
