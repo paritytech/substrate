@@ -926,7 +926,7 @@ impl Notifications {
 
 	/// Function that is called when the peerset wants us to accept a connection
 	/// request from a peer.
-	fn peerset_report_accept(&mut self, index: crate::peerset::IncomingIndex) {
+	fn protocol_report_accept(&mut self, index: crate::peerset::IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index)
 		{
 			self.incoming.remove(pos)
@@ -1012,7 +1012,7 @@ impl Notifications {
 	}
 
 	/// Function that is called when the peerset wants us to reject an incoming peer.
-	fn peerset_report_reject(&mut self, index: crate::peerset::IncomingIndex) {
+	fn protocol_report_reject(&mut self, index: crate::peerset::IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index)
 		{
 			self.incoming.remove(pos)
@@ -2139,7 +2139,7 @@ impl NetworkBehaviour for Notifications {
 					self.peerset_report_preaccept(index);
 				},
 				Poll::Ready(Some(crate::peerset::Message::Reject(index))) => {
-					self.peerset_report_reject(index);
+					self.protocol_report_reject(index);
 				},
 				Poll::Ready(Some(crate::peerset::Message::Connect { peer_id, set_id, .. })) => {
 					self.peerset_report_connect(peer_id, set_id);
@@ -2180,11 +2180,11 @@ impl NetworkBehaviour for Notifications {
 		{
 			match result {
 				Ok(ValidationResult::Accept) => {
-					self.peerset_report_accept(index);
+					self.protocol_report_accept(index);
 				},
 				Ok(ValidationResult::Reject) => {
 					// TODO(aaro): remove connection from peerset
-					self.peerset_report_reject(index);
+					self.protocol_report_reject(index);
 				},
 				Err(_) => {
 					error!(target: "sub-libp2p", "Protocol has shut down");
@@ -2624,7 +2624,7 @@ mod tests {
 		// attempt to connect to the peer and verify that the peer state is `Enabled`;
 		// we rely on implementation detail that incoming indices are counted from 0
 		// to not mock the `Peerset`
-		notif.peerset_report_accept(IncomingIndex(0));
+		notif.protocol_report_accept(IncomingIndex(0));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 	}
 
@@ -2706,7 +2706,7 @@ mod tests {
 		);
 		// we rely on the implementation detail that incoming indices are counted from 0
 		// to not mock the `Peerset`
-		notif.peerset_report_accept(IncomingIndex(0));
+		notif.protocol_report_accept(IncomingIndex(0));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 
 		// disconnect peer and verify that the state is `Disabled`
@@ -2827,7 +2827,7 @@ mod tests {
 			IncomingPeer { alive: false, incoming_id: crate::peerset::IncomingIndex(0), .. },
 		));
 
-		notif.peerset_report_accept(crate::peerset::IncomingIndex(0));
+		notif.protocol_report_accept(crate::peerset::IncomingIndex(0));
 		assert_eq!(notif.incoming.len(), 0);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(PeerState::Disabled { .. })));
 	}
@@ -3080,7 +3080,7 @@ mod tests {
 
 		// We rely on the implementation detail that incoming indices are counted
 		// from 0 to not mock the `Peerset`.
-		notif.peerset_report_accept(crate::peerset::IncomingIndex(0));
+		notif.protocol_report_accept(crate::peerset::IncomingIndex(0));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 
 		// open new substream
@@ -3946,7 +3946,7 @@ mod tests {
 
 		// we rely on the implementation detail that incoming indices are counted from 0
 		// to not mock the `Peerset`
-		notif.peerset_report_accept(IncomingIndex(0));
+		notif.protocol_report_accept(IncomingIndex(0));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 
 		let event = conn_yielder.open_substream(peer, 0, connected, vec![1, 2, 3, 4]);
@@ -4277,7 +4277,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	#[cfg(debug_assertions)]
-	fn peerset_report_accept_incoming_peer() {
+	fn protocol_report_accept_incoming_peer() {
 		let (mut notif, _peerset, _notif_service) = development_notifs();
 		let peer = PeerId::random();
 		let conn = ConnectionId::new_unchecked(0);
@@ -4315,13 +4315,13 @@ mod tests {
 		));
 
 		notif.peers.remove(&(peer, set_id));
-		notif.peerset_report_accept(crate::peerset::IncomingIndex(0));
+		notif.protocol_report_accept(crate::peerset::IncomingIndex(0));
 	}
 
 	#[test]
 	#[should_panic]
 	#[cfg(debug_assertions)]
-	fn peerset_report_accept_not_incoming_peer() {
+	fn protocol_report_accept_not_incoming_peer() {
 		let (mut notif, _peerset, _notif_service) = development_notifs();
 		let peer = PeerId::random();
 		let conn = ConnectionId::new_unchecked(0);
@@ -4367,7 +4367,7 @@ mod tests {
 
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 		notif.incoming[0].alive = true;
-		notif.peerset_report_accept(crate::peerset::IncomingIndex(0));
+		notif.protocol_report_accept(crate::peerset::IncomingIndex(0));
 	}
 
 	#[test]
@@ -4408,7 +4408,7 @@ mod tests {
 	fn accept_non_existent_connection() {
 		let (mut notif, _peerset, _notif_service) = development_notifs();
 
-		notif.peerset_report_accept(0.into());
+		notif.protocol_report_accept(0.into());
 
 		assert!(notif.peers.is_empty());
 		assert!(notif.incoming.is_empty());
@@ -4418,7 +4418,7 @@ mod tests {
 	fn reject_non_existent_connection() {
 		let (mut notif, _peerset, _notif_service) = development_notifs();
 
-		notif.peerset_report_reject(0.into());
+		notif.protocol_report_reject(0.into());
 
 		assert!(notif.peers.is_empty());
 		assert!(notif.incoming.is_empty());
@@ -4458,7 +4458,7 @@ mod tests {
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 
 		notif.incoming[0].alive = false;
-		notif.peerset_report_reject(0.into());
+		notif.protocol_report_reject(0.into());
 
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 	}
@@ -4503,7 +4503,7 @@ mod tests {
 		));
 
 		notif.peers.remove(&(peer, set_id));
-		notif.peerset_report_reject(0.into());
+		notif.protocol_report_reject(0.into());
 	}
 
 	#[test]
