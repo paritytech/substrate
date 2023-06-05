@@ -191,7 +191,7 @@ impl<T: Config> Pallet<T> {
 		<PausedCalls<T>>::contains_key(full_name)
 	}
 
-	/// Same as [`Self::is_paused`] but for non-MEL-bound inputs.
+	/// Same as [`Self::is_paused`] but for inputs unbound by max-encoded-len.
 	pub fn is_paused_unbound(pallet: Vec<u8>, call: Vec<u8>) -> bool {
 		let pallet = PalletNameOf::<T>::try_from(pallet);
 		let call = PalletCallNameOf::<T>::try_from(call);
