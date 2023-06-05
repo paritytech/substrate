@@ -344,7 +344,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn received_heartbeats)]
 	pub(crate) type ReceivedHeartbeats<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, SessionIndex, Twox64Concat, AuthIndex, bool>;
+		StorageDoubleMap<_, Twox64Concat, SessionIndex, Twox64Concat, AuthIndex, ()>;
 
 	/// For each session index, we keep a mapping of `ValidatorId<T>` to the
 	/// number of blocks authored by the given authority.
@@ -401,7 +401,7 @@ pub mod pallet {
 			if let (false, Some(public)) = (exists, public) {
 				Self::deposit_event(Event::<T>::HeartbeatReceived { authority_id: public.clone() });
 
-				ReceivedHeartbeats::<T>::insert(&current_session, &heartbeat.authority_index, true);
+				ReceivedHeartbeats::<T>::insert(&current_session, &heartbeat.authority_index, ());
 
 				Ok(())
 			} else if exists {
