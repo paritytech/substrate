@@ -30,7 +30,7 @@ pub trait SafeMode {
 		Self::remaining().is_some()
 	}
 
-	/// How many more blocks the safe mode will stay entered.
+	/// How many more blocks safe mode will stay entered.
 	///
 	/// If this returns `0`, then the safe mode will exit in the next block.
 	fn remaining() -> Option<Self::BlockNumber>;
