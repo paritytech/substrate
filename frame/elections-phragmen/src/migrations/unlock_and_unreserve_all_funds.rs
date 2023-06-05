@@ -20,10 +20,7 @@
 
 use crate::BalanceOf;
 use core::iter::Sum;
-use frame_support::{
-	traits::{LockableCurrency, OnRuntimeUpgrade, ReservableCurrency},
-	weights::constants::RocksDbWeight,
-};
+use frame_support::traits::{LockableCurrency, OnRuntimeUpgrade, ReservableCurrency};
 use sp_core::Get;
 use sp_runtime::traits::Zero;
 use sp_std::collections::btree_map::BTreeMap;
@@ -107,7 +104,7 @@ where
 		(
 			account_deposited_sums,
 			account_staked_sums,
-			RocksDbWeight::get().reads(
+			T::DbWeight::get().reads(
 				members
 					.len()
 					.saturating_add(runner_ups.len())
@@ -204,7 +201,7 @@ where
 			T::Currency::remove_lock(T::PalletId::get(), account);
 		}
 
-		RocksDbWeight::get()
+		T::DbWeight::get()
 			.reads_writes(
 				(account_deposited_sums.len().saturating_add(account_staked_sums.len())) as u64,
 				(account_deposited_sums.len().saturating_add(account_staked_sums.len())) as u64,
