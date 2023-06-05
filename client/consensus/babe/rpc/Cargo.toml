@@ -20,6 +20,7 @@ thiserror = "1.0"
 sc-consensus-babe = { version = "0.10.0-dev", path = "../" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../rpc-api" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../transaction-pool/api" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 sp-application-crypto = { version = "23.0.0", path = "../../../../primitives/application-crypto" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }

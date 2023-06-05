@@ -9133,6 +9133,7 @@ dependencies = [
  "sc-consensus-epochs",
  "sc-keystore",
  "sc-rpc-api",
+ "sc-transaction-pool-api",
  "serde",
  "serde_json",
  "sp-api",

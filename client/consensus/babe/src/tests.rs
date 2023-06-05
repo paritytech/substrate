@@ -26,7 +26,7 @@ use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_epochs::{EpochIdentifier, EpochIdentifierPosition};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_network_test::{Block as TestBlock, *};
-use sc_transaction_pool_api::{LocalTransactionPool, RejectAllTxPool};
+use sc_transaction_pool_api::RejectAllTxPool;
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
