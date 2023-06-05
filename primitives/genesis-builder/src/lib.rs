@@ -34,10 +34,47 @@
 sp_api::decl_runtime_apis! {
 	/// API to interact with GenesisConfig for the runtime
 	pub trait GenesisBuilder {
-		/// Instantiate default `GenesisConfig` and serializes it to json blob.
-		fn default_genesis_config_as_json() -> sp_std::vec::Vec<u8>;
+		/// Get the default `GenesisConfig` as a JSON blob.
+		///
+		/// This function instantiates the default `GenesisConfig` struct for the runtime and serializes it into
+		/// a JSON blob.
+		///
+		/// # Returns
+		///
+		/// A `Vec<u8>` containing the JSON representation of the default `GenesisConfig`.
+		fn get_default_as_json() -> sp_std::vec::Vec<u8>;
 
-		/// Deserialize the `GenesisConfig` from given json blob and put it into the storage.
-		fn build_genesis_config_from_json(json: sp_std::vec::Vec<u8>);
+		/// Build `GenesisConfig` from a JSON blob and store it in the storage.
+		///
+		/// This function deserializes the `GenesisConfig` from the given JSON blob and puts it into the storage.
+		/// If the provided JSON blob is incorrect or the deserialization fails, this method will panic.
+		/// It is recommended to log any errors encountered during the process.
+		///
+		/// # Arguments
+		///
+		/// * `json` - A `Vec<u8>` representing the JSON blob containing the `GenesisConfig`.
+		fn build_from_json(json: sp_std::vec::Vec<u8>);
+
+		/// Patch default `GenesisConfig` using given JSON patch and store it in the storage.
+		///
+		/// This function generates the `GenesisConfig` for the runtime by applying a provided JSON patch.
+		/// The patch modifies the default `GenesisConfig` allowing customization of the specific keys.
+		/// The resulting `GenesisConfig` is then deserialized from the patched JSON representation and
+		/// stored in the storage.
+		///
+		/// If the provided JSON patch is incorrect or the deserialization fails, this method will panic.
+		/// It is recommended to log any errors encountered during the process.
+		///
+		/// The patching process modifies the default `GenesisConfig` according to the following rules:
+		///
+		/// 1. Existing keys in the default configuration will be overridden by the corresponding values in the patch.
+		/// 2. If a key exists in the patch but not in the default configuration, it will be added to the resulting `GenesisConfig`.
+		/// 3. Keys in the default configuration that have null values in the patch will be removed from the resulting
+		///    `GenesisConfig`. This is helpful for changing enum variant value.
+		///
+		/// # Arguments
+		///
+		/// * `patch_json` - A `Vec<u8>` representing the JSON patch to be applied to the `GenesisConfig`.
+		fn build_from_patch_json(patch_json: Vec<u8>);
 	}
 }
