@@ -32,7 +32,7 @@ pub trait TransactionPause {
 
 	/// Whether this call can be paused.
 	///
-	/// This should hold for the current block and may change in the future.
+	/// This holds for the current block, but may change in the future.
 	fn can_pause(call: Self::CallIdentifier) -> bool;
 
 	/// Pause this call immediately.
