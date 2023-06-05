@@ -45,7 +45,7 @@ pub trait EllipticCurves {
 	}
 
 	/// Compute a final exponentiation for bls12_377
-	/// Receives encoded: ArkScale<MillerLoopOutput<Bls12<ark_bls12_377::Config>>
+	/// Receives encoded: ArkScale<MillerLoopOutput<Bls12<ark_bls12_377::Config>>>
 	/// Returns encoded: ArkScale<PairingOutput<Bls12<ark_bls12_377::Config>>>
 	fn bls12_377_final_exponentiation(f12: Vec<u8>) -> Result<Vec<u8>, ()> {
 		bls12_377::final_exponentiation(f12)
