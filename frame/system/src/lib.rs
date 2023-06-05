@@ -72,8 +72,8 @@ use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
 	generic,
 	traits::{
-		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, Block, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Extrinsic, Hash, Lookup, LookupError, MaybeDisplay,
+		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
+		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
 	DispatchError, RuntimeDebug,
@@ -218,6 +218,7 @@ pub mod pallet {
 			type Index = u32;
 			type BlockNumber = u32;
 			type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
+			type Block = sp_runtime::generic::Block<Self::Header, sp_runtime::OpaqueExtrinsic>;
 			type Hash = sp_core::hash::H256;
 			type Hashing = sp_runtime::traits::BlakeTwo256;
 			type AccountId = u64;
@@ -251,15 +252,6 @@ pub mod pallet {
 		/// except Root.
 		#[pallet::no_default]
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
-
-		/// The Block type used by the runtime.
-		type Block: Block;
-
-		/// The Block type used by the node.
-		type NodeBlock: Block;
-
-		/// The UncheckedExtrinsic type used by the runtime.
-		type UncheckedExtrinsic: Extrinsic;
 
 		/// Block & extrinsics weights: base values and limits.
 		#[pallet::constant]
@@ -348,6 +340,10 @@ pub mod pallet {
 
 		/// The block header.
 		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
+
+		/// The Block type used by the runtime. This is used by `construct_runtime` to retrieve the
+		/// extrinsics or other block specific data as needed.
+		type Block: Parameter + traits::Block<Header = Self::Header, Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]

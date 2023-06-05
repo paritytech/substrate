@@ -256,8 +256,7 @@ fn construct_runtime_final_expansion(
 
 	let frame_system = generate_crate_access_2018("frame-system")?;
 	let block = quote!(<#name as #frame_system::Config>::Block);
-	let node_block = quote!(<#name as #frame_system::Config>::NodeBlock);
-	let unchecked_extrinsic = quote!(<#name as #frame_system::Config>::UncheckedExtrinsic);
+	let unchecked_extrinsic = quote!(<#block as #scrate::sp_runtime::traits::Block>::Extrinsic);
 
 	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 
@@ -292,9 +291,6 @@ fn construct_runtime_final_expansion(
 			#scrate::scale_info::TypeInfo
 		)]
 		pub struct #name;
-		impl #scrate::sp_runtime::traits::GetNodeBlockType for #name {
-			type NodeBlock = #node_block;
-		}
 		impl #scrate::sp_runtime::traits::GetRuntimeBlockType for #name {
 			type RuntimeBlock = #block;
 		}

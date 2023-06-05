@@ -156,10 +156,6 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	/// The block type for the runtime.
 	type Block = Block;
-	/// The block type for the node.
-	type NodeBlock = Block;
-	/// The UncheckedExtrinsic type for the runtime.
-	type UncheckedExtrinsic = UncheckedExtrinsic;
 	/// Block & extrinsics weights: base values and limits.
 	type BlockWeights = BlockWeights;
 	/// The maximum length of a block (in bytes).
