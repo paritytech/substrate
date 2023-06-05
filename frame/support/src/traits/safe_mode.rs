@@ -53,9 +53,9 @@ pub trait SafeMode {
 
 /// The error type for [`SafeMode`].
 pub enum SafeModeError {
-	/// The safe mode is already entered.
+	/// Safe mode is already entered.
 	AlreadyEntered,
-	/// The safe mode is already exited.
+	/// Safe mode is already exited.
 	AlreadyExited,
 	/// Unknown error.
 	Unknown,
