@@ -162,8 +162,8 @@ impl Contains<RuntimeCall> for WhitelistedCalls {
 parameter_types! {
 	pub const EnterDuration: u64 = 7;
 	pub const ExtendDuration: u64 = 30;
-	pub const EnterStakeAmount: u64 = 100;
-	pub const ExtendStakeAmount: u64 = 100;
+	pub const EnterDepositAmount: u64 = 100;
+	pub const ExtendDepositAmount: u64 = 100;
 	pub const ReleaseDelay: u64 = 20;
 	pub const SafeModeHoldReason: HoldReason = HoldReason::SafeMode;
 
@@ -180,7 +180,7 @@ parameter_types! {
 
 frame_support::ord_parameter_types! {
 	pub const ForceExitOrigin: u64 = 100;
-	pub const ForceStakeOrigin: u64 = 200;
+	pub const ForceDepositOrigin: u64 = 200;
 }
 
 impl Config for Test {
@@ -189,13 +189,13 @@ impl Config for Test {
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type WhitelistedCalls = WhitelistedCalls;
 	type EnterDuration = EnterDuration;
-	type EnterStakeAmount = EnterStakeAmount;
+	type EnterDepositAmount = EnterDepositAmount;
 	type ExtendDuration = ExtendDuration;
-	type ExtendStakeAmount = ExtendStakeAmount;
+	type ExtendDepositAmount = ExtendDepositAmount;
 	type ForceEnterOrigin = EnsureSignedBy<IsInVec<ForceEnterOrigins>, u64>;
 	type ForceExtendOrigin = EnsureSignedBy<IsInVec<ForceExtendOrigins>, u64>;
 	type ForceExitOrigin = EnsureSignedBy<ForceExitOrigin, Self::AccountId>;
-	type ForceStakeOrigin = EnsureSignedBy<ForceStakeOrigin, Self::AccountId>;
+	type ForceDepositOrigin = EnsureSignedBy<ForceDepositOrigin, Self::AccountId>;
 	type ReleaseDelay = ReleaseDelay;
 	type WeightInfo = ();
 }

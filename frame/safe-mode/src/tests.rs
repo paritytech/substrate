@@ -68,8 +68,8 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 			frame_system::Error::<Test>::CallFiltered
 		);
 		assert_ok!(SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())));
-		assert_ok!(SafeMode::force_release_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_release_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			activated_at_block
 		));
@@ -81,8 +81,8 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 			frame_system::Error::<Test>::CallFiltered
 		);
 		assert_ok!(SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())));
-		assert_ok!(SafeMode::force_slash_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_slash_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			activated_at_block + 2
 		));
@@ -106,44 +106,44 @@ fn fails_to_extend_if_not_activated() {
 }
 
 #[test]
-fn fails_to_force_release_stakes_with_wrong_block() {
+fn fails_to_force_release_deposits_with_wrong_block() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		run_to(mock::EnterDuration::get() + activated_at_block + 1);
 
 		assert_err!(
-			SafeMode::force_release_stake(
-				RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+			SafeMode::force_release_deposit(
+				RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 				0,
 				activated_at_block + 1
 			),
-			Error::<Test>::NoStake
+			Error::<Test>::NoDeposit
 		);
 
 		assert_err!(
-			SafeMode::force_slash_stake(
-				RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+			SafeMode::force_slash_deposit(
+				RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 				0,
 				activated_at_block + 1
 			),
-			Error::<Test>::NoStake
+			Error::<Test>::NoDeposit
 		);
 	});
 }
 
 #[test]
-fn fails_to_release_stakes_too_early() {
+fn fails_to_release_deposits_too_early() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_ok!(SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())));
 		assert_err!(
-			SafeMode::release_stake(RuntimeOrigin::signed(2), 0, activated_at_block),
+			SafeMode::release_deposit(RuntimeOrigin::signed(2), 0, activated_at_block),
 			Error::<Test>::CannotReleaseYet
 		);
 		run_to(activated_at_block + mock::ReleaseDelay::get() + 1);
-		assert_ok!(SafeMode::release_stake(RuntimeOrigin::signed(2), 0, activated_at_block));
+		assert_ok!(SafeMode::release_deposit(RuntimeOrigin::signed(2), 0, activated_at_block));
 	});
 }
 
@@ -221,10 +221,10 @@ fn can_activate() {
 			EnteredUntil::<Test>::get().unwrap(),
 			System::block_number() + mock::EnterDuration::get()
 		);
-		assert_eq!(Balances::reserved_balance(0), mock::EnterStakeAmount::get());
+		assert_eq!(Balances::reserved_balance(0), mock::EnterDepositAmount::get());
 		assert_noop!(SafeMode::enter(RuntimeOrigin::signed(0)), Error::<Test>::Entered);
-		// Assert the stake.
-		assert_eq!(Stakes::<Test>::get(0, 1), Some(mock::EnterStakeAmount::get()));
+		// Assert the deposit.
+		assert_eq!(Deposits::<Test>::get(0, 1), Some(mock::EnterDepositAmount::get()));
 	});
 }
 
@@ -232,12 +232,12 @@ fn can_activate() {
 fn cannot_extend() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
-		assert_err!(SafeMode::extend(RuntimeOrigin::signed(0)), Error::<Test>::AlreadyStaked);
+		assert_err!(SafeMode::extend(RuntimeOrigin::signed(0)), Error::<Test>::AlreadyDeposited);
 		assert_eq!(
 			EnteredUntil::<Test>::get().unwrap(),
 			System::block_number() + mock::EnterDuration::get()
 		);
-		assert_eq!(Balances::reserved_balance(0), mock::EnterStakeAmount::get());
+		assert_eq!(Balances::reserved_balance(0), mock::EnterDepositAmount::get());
 	});
 }
 
@@ -251,11 +251,11 @@ fn fails_signed_origin_when_explicit_origin_required() {
 		assert_err!(SafeMode::force_extend(RuntimeOrigin::signed(0)), DispatchError::BadOrigin);
 		assert_err!(SafeMode::force_exit(RuntimeOrigin::signed(0)), DispatchError::BadOrigin);
 		assert_err!(
-			SafeMode::force_slash_stake(RuntimeOrigin::signed(0), 0, activated_at_block),
+			SafeMode::force_slash_deposit(RuntimeOrigin::signed(0), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_release_stake(RuntimeOrigin::signed(0), 0, activated_at_block),
+			SafeMode::force_release_deposit(RuntimeOrigin::signed(0), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 	});
@@ -323,19 +323,19 @@ fn can_force_extend_with_config_origin() {
 }
 
 #[test]
-fn can_force_release_stake_with_config_origin() {
+fn can_force_release_deposit_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
-		hypothetically_ok!(SafeMode::force_release_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		hypothetically_ok!(SafeMode::force_release_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			activated_at_block
 		),);
 		run_to(mock::EnterDuration::get() + activated_at_block + 1);
 
-		assert_ok!(SafeMode::force_release_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_release_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			activated_at_block
 		));
@@ -352,8 +352,8 @@ fn can_force_release_stake_with_config_origin() {
 				1,
 		);
 
-		assert_ok!(SafeMode::force_release_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_release_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			activated_and_extended_at_block
 		));
@@ -362,44 +362,44 @@ fn can_force_release_stake_with_config_origin() {
 }
 
 #[test]
-fn can_release_stake_while_entered() {
+fn can_release_deposit_while_entered() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(System::block_number(), 1);
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert!(SafeMode::is_entered());
 
-		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get());
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterDepositAmount::get());
 
 		// We could slash in the same block or any later.
 		for i in 0..mock::EnterDuration::get() + 10 {
 			run_to(i);
-			hypothetically_ok!(SafeMode::force_release_stake(
-				RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+			hypothetically_ok!(SafeMode::force_release_deposit(
+				RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 				0,
 				1
 			));
 		}
 		// Now once we slash once
-		assert_ok!(SafeMode::force_release_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_release_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			1
 		),);
 		assert_eq!(Balances::free_balance(&0), BAL_ACC0);
 		// ... it wont work ever again.
 		assert_err!(
-			SafeMode::force_release_stake(
-				RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+			SafeMode::force_release_deposit(
+				RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 				0,
 				1
 			),
-			Error::<Test>::NoStake
+			Error::<Test>::NoDeposit
 		);
 	});
 }
 
 #[test]
-fn can_slash_stake_while_entered() {
+fn can_slash_deposit_while_entered() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(System::block_number(), 1);
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
@@ -408,78 +408,90 @@ fn can_slash_stake_while_entered() {
 		// We could slash in the same block or any later.
 		for i in 0..mock::EnterDuration::get() + 10 {
 			run_to(i);
-			hypothetically_ok!(SafeMode::force_slash_stake(
-				RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+			hypothetically_ok!(SafeMode::force_slash_deposit(
+				RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 				0,
 				1
 			));
 		}
 		// Now once we slash once
-		assert_ok!(SafeMode::force_slash_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_slash_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			1
 		),);
 		// ... it wont work ever again.
 		assert_err!(
-			SafeMode::force_slash_stake(RuntimeOrigin::signed(mock::ForceStakeOrigin::get()), 0, 1),
-			Error::<Test>::NoStake
+			SafeMode::force_slash_deposit(
+				RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
+				0,
+				1
+			),
+			Error::<Test>::NoDeposit
 		);
 	});
 }
 
 #[test]
-fn can_slash_stake_from_extend_block() {
+fn can_slash_deposit_from_extend_block() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
 		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(1)));
-		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get());
-		assert_eq!(Balances::free_balance(&1), BAL_ACC1 - mock::ExtendStakeAmount::get());
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterDepositAmount::get());
+		assert_eq!(Balances::free_balance(&1), BAL_ACC1 - mock::ExtendDepositAmount::get());
 
-		assert_ok!(SafeMode::force_slash_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_slash_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			1
 		),);
-		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get());
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterDepositAmount::get());
 
-		assert_ok!(SafeMode::force_slash_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_slash_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			1,
 			1
 		),);
-		assert_eq!(Balances::free_balance(&1), BAL_ACC1 - mock::ExtendStakeAmount::get());
+		assert_eq!(Balances::free_balance(&1), BAL_ACC1 - mock::ExtendDepositAmount::get());
 
 		// But never again.
 		assert_err!(
-			SafeMode::force_slash_stake(RuntimeOrigin::signed(mock::ForceStakeOrigin::get()), 0, 1),
-			Error::<Test>::NoStake
+			SafeMode::force_slash_deposit(
+				RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
+				0,
+				1
+			),
+			Error::<Test>::NoDeposit
 		);
 		assert_err!(
-			SafeMode::force_slash_stake(RuntimeOrigin::signed(mock::ForceStakeOrigin::get()), 1, 1),
-			Error::<Test>::NoStake
+			SafeMode::force_slash_deposit(
+				RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
+				1,
+				1
+			),
+			Error::<Test>::NoDeposit
 		);
 	});
 }
 
 #[test]
-fn can_slash_stake_with_config_origin() {
+fn can_slash_deposit_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
-		hypothetically_ok!(SafeMode::force_slash_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		hypothetically_ok!(SafeMode::force_slash_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			activated_at_block
 		),);
 		run_to(mock::EnterDuration::get() + activated_at_block + 1);
 
-		assert_ok!(SafeMode::force_slash_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_slash_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			activated_at_block
 		));
-		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get()); // accounts set in mock genesis
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterDepositAmount::get()); // accounts set in mock genesis
 
 		Balances::make_free_balance_be(&0, BAL_ACC0);
 		let activated_and_extended_at_block = System::block_number();
@@ -492,13 +504,14 @@ fn can_slash_stake_with_config_origin() {
 				1,
 		);
 
-		assert_ok!(SafeMode::force_slash_stake(
-			RuntimeOrigin::signed(mock::ForceStakeOrigin::get()),
+		assert_ok!(SafeMode::force_slash_deposit(
+			RuntimeOrigin::signed(mock::ForceDepositOrigin::get()),
 			0,
 			activated_and_extended_at_block
 		));
-		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterStakeAmount::get()); // accounts set in
-		                                                                          // mock genesis
+		assert_eq!(Balances::free_balance(&0), BAL_ACC0 - mock::EnterDepositAmount::get()); // accounts set
+		                                                                            // in
+		                                                                            // mock genesis
 	});
 }
 
@@ -511,22 +524,22 @@ fn fails_when_explicit_origin_required() {
 		assert_err!(SafeMode::force_extend(signed(1)), DispatchError::BadOrigin);
 		assert_err!(SafeMode::force_exit(signed(1)), DispatchError::BadOrigin);
 		assert_err!(
-			SafeMode::force_slash_stake(signed(1), 0, activated_at_block),
+			SafeMode::force_slash_deposit(signed(1), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_release_stake(signed(1), 0, activated_at_block),
+			SafeMode::force_release_deposit(signed(1), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 
 		assert_err!(SafeMode::force_enter(signed(1)), DispatchError::BadOrigin);
 		assert_err!(SafeMode::force_exit(signed(1)), DispatchError::BadOrigin);
 		assert_err!(
-			SafeMode::force_slash_stake(signed(1), 0, activated_at_block),
+			SafeMode::force_slash_deposit(signed(1), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_release_stake(signed(1), 0, activated_at_block),
+			SafeMode::force_release_deposit(signed(1), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 
@@ -539,7 +552,7 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_slash_stake(
+			SafeMode::force_slash_deposit(
 				RuntimeOrigin::signed(mock::ForceExitOrigin::get()),
 				0,
 				activated_at_block
@@ -547,7 +560,7 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_release_stake(
+			SafeMode::force_release_deposit(
 				RuntimeOrigin::signed(mock::ForceExitOrigin::get()),
 				0,
 				activated_at_block
@@ -556,15 +569,15 @@ fn fails_when_explicit_origin_required() {
 		);
 
 		assert_err!(
-			SafeMode::force_enter(RuntimeOrigin::signed(mock::ForceStakeOrigin::get())),
+			SafeMode::force_enter(RuntimeOrigin::signed(mock::ForceDepositOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_extend(RuntimeOrigin::signed(mock::ForceStakeOrigin::get())),
+			SafeMode::force_extend(RuntimeOrigin::signed(mock::ForceDepositOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceStakeOrigin::get())),
+			SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceDepositOrigin::get())),
 			DispatchError::BadOrigin
 		);
 	});

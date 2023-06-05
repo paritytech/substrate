@@ -16,6 +16,7 @@
 // limitations under the License.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![deny(rustdoc::broken_intra_doc_links)]
 
 mod benchmarking;
 pub mod mock;

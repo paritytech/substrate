@@ -16,6 +16,7 @@
 // limitations under the License.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![deny(rustdoc::broken_intra_doc_links)]
 
 mod benchmarking;
 pub mod mock;
@@ -59,7 +60,7 @@ pub mod pallet {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Currency type for this pallet, used for Stakes.
+		/// Currency type for this pallet, used for Deposits.
 		type Currency: FunHoldInspect<Self::AccountId>
 			+ FunHoldMutate<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
@@ -87,13 +88,13 @@ pub mod pallet {
 		///
 		/// `None` disallows permissionlessly enabling the safe-mode and is a sane default.
 		#[pallet::constant]
-		type EnterStakeAmount: Get<Option<BalanceOf<Self>>>;
+		type EnterDepositAmount: Get<Option<BalanceOf<Self>>>;
 
 		/// The amount that will be reserved upon calling [`Pallet::extend`].
 		///
 		/// `None` disallows permissionlessly extending the safe-mode and is a sane default.
 		#[pallet::constant]
-		type ExtendStakeAmount: Get<Option<BalanceOf<Self>>>;
+		type ExtendDepositAmount: Get<Option<BalanceOf<Self>>>;
 
 		/// The origin that may call [`Pallet::force_enter`].
 		///
@@ -108,16 +109,17 @@ pub mod pallet {
 		/// The origin that may call [`Pallet::force_enter`].
 		type ForceExitOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// The only origin that can force to release or slash a stake.
-		type ForceStakeOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		/// The only origin that can force to release or slash a deposit.
+		type ForceDepositOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The minimal duration a deposit will remain reserved after safe-mode is entered or
-		/// extended, unless [`Pallet::force_release_stake`] is successfully called sooner.
+		/// extended, unless [`Pallet::force_release_deposit`] is successfully called sooner.
 		///
-		/// Every stake is tied to a specific activation or extension, thus each stake can be
+		/// Every deposit is tied to a specific activation or extension, thus each deposit can be
 		/// released independently after the delay for it has passed.
 		///
-		/// `None` disallows permissionlessly releasing the safe-mode stakes and is a sane default.
+		/// `None` disallows permissionlessly releasing the safe-mode deposits and is a sane
+		/// default.
 		#[pallet::constant]
 		type ReleaseDelay: Get<Option<Self::BlockNumber>>;
 
@@ -137,12 +139,12 @@ pub mod pallet {
 		NotConfigured,
 
 		/// There is no balance reserved.
-		NoStake,
+		NoDeposit,
 
-		/// The account already has a stake reserved and can therefore not enter or extend again.
-		AlreadyStaked,
+		/// The account already has a deposit reserved and can therefore not enter or extend again.
+		AlreadyDeposited,
 
-		/// This stake cannot be released yet.
+		/// This deposit cannot be released yet.
 		CannotReleaseYet,
 
 		/// An error from the underlying `Currency`.
@@ -162,18 +164,18 @@ pub mod pallet {
 		Exited { reason: ExitReason },
 
 		/// An account reserved funds for either entering or extending the safe-mode.
-		StakePlaced { account: T::AccountId, amount: BalanceOf<T> },
+		DepositPlaced { account: T::AccountId, amount: BalanceOf<T> },
 
 		/// An account had a reserve released that was reserved.
-		StakeReleased { account: T::AccountId, amount: BalanceOf<T> },
+		DepositReleased { account: T::AccountId, amount: BalanceOf<T> },
 
 		/// An account had reserve slashed that was reserved.
-		StakeSlashed { account: T::AccountId, amount: BalanceOf<T> },
+		DepositSlashed { account: T::AccountId, amount: BalanceOf<T> },
 
 		/// Could not hold funds for entering or extending the safe-mode.
 		///
 		/// This error comes from the underlying `Currency`.
-		CannotStake,
+		CannotDeposit,
 
 		/// Could not release funds for entering or extending the safe-mode.
 		///
@@ -201,11 +203,11 @@ pub mod pallet {
 
 	/// Holds the reserve that was taken from an account at a specific block number.
 	///
-	/// This helps governance to have an overview of outstanding stakes that should be returned or
+	/// This helps governance to have an overview of outstanding deposits that should be returned or
 	/// slashed.
 	#[pallet::storage]
 	#[pallet::getter(fn reserves)]
-	pub type Stakes<T: Config> = StorageDoubleMap<
+	pub type Deposits<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
@@ -243,10 +245,10 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Enter safe-mode permissionlessly for [`Config::EnterDuration`] blocks.
 		///
-		/// Reserves [`Config::EnterStakeAmount`] from the caller's account.
+		/// Reserves [`Config::EnterDepositAmount`] from the caller's account.
 		/// Emits an [`Event::Entered`] event on success.
 		/// Errors with [`Error::Entered`] if the safe-mode is already entered.
-		/// Errors with [`Error::NotConfigured`] if the stake amount is `None`.
+		/// Errors with [`Error::NotConfigured`] if the deposit amount is `None`.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::enter())]
 		pub fn enter(origin: OriginFor<T>) -> DispatchResult {
@@ -272,14 +274,14 @@ pub mod pallet {
 		/// Extend the safe-mode permissionlessly for [`Config::ExtendDuration`] blocks.
 		///
 		/// This accumulates on top of the current remaining duration.
-		/// Reserves [`Config::ExtendStakeAmount`] from the caller's account.
+		/// Reserves [`Config::ExtendDepositAmount`] from the caller's account.
 		/// Emits an [`Event::Extended`] event on success.
 		/// Errors with [`Error::Exited`] if the safe-mode is entered.
-		/// Errors with [`Error::NotConfigured`] if the stake amount is `None`.
+		/// Errors with [`Error::NotConfigured`] if the deposit amount is `None`.
 		///
-		/// This may be called by any signed origin with [`Config::ExtendStakeAmount`] free
+		/// This may be called by any signed origin with [`Config::ExtendDepositAmount`] free
 		/// currency to reserve. This call can be disabled for all origins by configuring
-		/// [`Config::ExtendStakeAmount`] to `None`.
+		/// [`Config::ExtendDepositAmount`] to `None`.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::extend())]
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
@@ -319,42 +321,42 @@ pub mod pallet {
 			Self::do_exit(ExitReason::Force).map_err(Into::into)
 		}
 
-		/// Slash a stake for an account that entered or extended safe-mode at a given
+		/// Slash a deposit for an account that entered or extended safe-mode at a given
 		/// historical block.
 		///
 		/// This can only be called while safe-mode is entered.
 		///
-		/// Emits a [`Event::StakeSlashed`] event on success.
+		/// Emits a [`Event::DepositSlashed`] event on success.
 		/// Errors with [`Error::Entered`] if safe-mode is entered.
 		///
-		/// Can only be called by the [`Config::ForceStakeOrigin`] origin.
+		/// Can only be called by the [`Config::ForceDepositOrigin`] origin.
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::force_slash_stake())]
-		pub fn force_slash_stake(
+		#[pallet::weight(T::WeightInfo::force_slash_deposit())]
+		pub fn force_slash_deposit(
 			origin: OriginFor<T>,
 			account: T::AccountId,
 			block: T::BlockNumber,
 		) -> DispatchResult {
-			T::ForceStakeOrigin::ensure_origin(origin)?;
+			T::ForceDepositOrigin::ensure_origin(origin)?;
 
-			Self::do_force_slash(account, block).map_err(Into::into)
+			Self::do_force_deposit(account, block).map_err(Into::into)
 		}
 
-		/// Permissionlessly release a stake for an account that entered safe-mode at a
+		/// Permissionlessly release a deposit for an account that entered safe-mode at a
 		/// given historical block.
 		///
 		/// The call can be completely disabled by setting [`Config::ReleaseDelay`] to `None`.
 		/// This cannot be called while safe-mode is entered and not until
 		/// [`Config::ReleaseDelay`] blocks have passed since safe-mode was entered.
 		///
-		/// Emits a [`Event::StakeReleased`] event on success.
+		/// Emits a [`Event::DepositReleased`] event on success.
 		/// Errors with [`Error::Entered`] if the safe-mode is entered.
 		/// Errors with [`Error::CannotReleaseYet`] if [`Config::ReleaseDelay`] block have not
-		/// passed since safe-mode was entered. Errors with [`Error::NoStake`] if the payee has no
+		/// passed since safe-mode was entered. Errors with [`Error::NoDeposit`] if the payee has no
 		/// reserved currency at the block specified.
 		#[pallet::call_index(6)]
-		#[pallet::weight(T::WeightInfo::release_stake())]
-		pub fn release_stake(
+		#[pallet::weight(T::WeightInfo::release_deposit())]
+		pub fn release_deposit(
 			origin: OriginFor<T>,
 			account: T::AccountId,
 			block: T::BlockNumber,
@@ -364,25 +366,25 @@ pub mod pallet {
 			Self::do_release(false, account, block).map_err(Into::into)
 		}
 
-		/// Force to release a stake for an account that entered safe-mode at a given
+		/// Force to release a deposit for an account that entered safe-mode at a given
 		/// historical block.
 		///
 		/// This can be called while safe-mode is still entered.
 		///
-		/// Emits a [`Event::StakeReleased`] event on success.
+		/// Emits a [`Event::DepositReleased`] event on success.
 		/// Errors with [`Error::Entered`] if safe-mode is entered.
-		/// Errors with [`Error::NoStake`] if the payee has no reserved currency at the
+		/// Errors with [`Error::NoDeposit`] if the payee has no reserved currency at the
 		/// specified block.
 		///
-		/// Can only be called by the [`Config::ForceStakeOrigin`] origin.
+		/// Can only be called by the [`Config::ForceDepositOrigin`] origin.
 		#[pallet::call_index(7)]
-		#[pallet::weight(T::WeightInfo::force_release_stake())]
-		pub fn force_release_stake(
+		#[pallet::weight(T::WeightInfo::force_release_deposit())]
+		pub fn force_release_deposit(
 			origin: OriginFor<T>,
 			account: T::AccountId,
 			block: T::BlockNumber,
 		) -> DispatchResult {
-			T::ForceStakeOrigin::ensure_origin(origin)?;
+			T::ForceDepositOrigin::ensure_origin(origin)?;
 
 			Self::do_release(true, account, block).map_err(Into::into)
 		}
@@ -416,7 +418,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(!Self::is_entered(), Error::<T>::Entered);
 
 		if let Some(who) = who {
-			let amount = T::EnterStakeAmount::get().ok_or(Error::<T>::NotConfigured)?;
+			let amount = T::EnterDepositAmount::get().ok_or(Error::<T>::NotConfigured)?;
 			Self::hold(who, amount)?;
 		}
 
@@ -434,7 +436,7 @@ impl<T: Config> Pallet<T> {
 		let mut until = EnteredUntil::<T>::get().ok_or(Error::<T>::Exited)?;
 
 		if let Some(who) = who {
-			let amount = T::ExtendStakeAmount::get().ok_or(Error::<T>::NotConfigured)?;
+			let amount = T::ExtendDepositAmount::get().ok_or(Error::<T>::NotConfigured)?;
 			Self::hold(who, amount)?;
 		}
 
@@ -453,14 +455,14 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Logic for the [`crate::Pallet::release_stake`] and
-	/// [`crate::Pallet::force_release_stake`] calls.
+	/// Logic for the [`crate::Pallet::release_deposit`] and
+	/// [`crate::Pallet::force_release_deposit`] calls.
 	pub(crate) fn do_release(
 		force: bool,
 		account: T::AccountId,
 		block: T::BlockNumber,
 	) -> Result<(), Error<T>> {
-		let amount = Stakes::<T>::take(&account, &block).ok_or(Error::<T>::NoStake)?;
+		let amount = Deposits::<T>::take(&account, &block).ok_or(Error::<T>::NoDeposit)?;
 
 		if !force {
 			ensure!(!Self::is_entered(), Error::<T>::Entered);
@@ -477,16 +479,16 @@ impl<T: Config> Pallet<T> {
 			Precision::BestEffort,
 		)
 		.map_err(|_| Error::<T>::CurrencyError)?;
-		Self::deposit_event(Event::<T>::StakeReleased { account, amount });
+		Self::deposit_event(Event::<T>::DepositReleased { account, amount });
 		Ok(())
 	}
 
-	/// Logic for the [`crate::Pallet::slash_stake`] call.
-	pub(crate) fn do_force_slash(
+	/// Logic for the [`crate::Pallet::slash_deposit`] call.
+	pub(crate) fn do_force_deposit(
 		account: T::AccountId,
 		block: T::BlockNumber,
 	) -> Result<(), Error<T>> {
-		let amount = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NoStake)?;
+		let amount = Deposits::<T>::take(&account, block).ok_or(Error::<T>::NoDeposit)?;
 
 		let burned = T::Currency::burn_held(
 			&&HoldReason::EnterOrExtend.into(),
@@ -497,23 +499,23 @@ impl<T: Config> Pallet<T> {
 		)
 		.map_err(|_| Error::<T>::CurrencyError)?;
 		defensive_assert!(burned == amount, "Could not burn the full held amount");
-		Self::deposit_event(Event::<T>::StakeSlashed { account, amount });
+		Self::deposit_event(Event::<T>::DepositSlashed { account, amount });
 		Ok(())
 	}
 
-	/// Place a hold for exactly `amount` and store it in `Stakes`.
+	/// Place a hold for exactly `amount` and store it in `Deposits`.
 	///
 	/// Errors if the account already has a hold for the same reason.
 	fn hold(who: T::AccountId, amount: BalanceOf<T>) -> Result<(), Error<T>> {
 		let block = <frame_system::Pallet<T>>::block_number();
 		if !T::Currency::balance_on_hold(&HoldReason::EnterOrExtend.into(), &who).is_zero() {
-			return Err(Error::<T>::AlreadyStaked.into())
+			return Err(Error::<T>::AlreadyDeposited.into())
 		}
 
 		T::Currency::hold(&HoldReason::EnterOrExtend.into(), &who, amount)
 			.map_err(|_| Error::<T>::CurrencyError)?;
-		Stakes::<T>::insert(&who, block, amount);
-		Self::deposit_event(Event::<T>::StakePlaced { account: who, amount });
+		Deposits::<T>::insert(&who, block, amount);
+		Self::deposit_event(Event::<T>::DepositPlaced { account: who, amount });
 
 		Ok(())
 	}

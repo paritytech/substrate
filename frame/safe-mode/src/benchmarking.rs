@@ -54,7 +54,7 @@ mod benchmarks {
 	/// Permissionless enter - if configured.
 	#[benchmark]
 	fn enter() -> Result<(), BenchmarkError> {
-		T::EnterStakeAmount::get().ok_or_else(|| BenchmarkError::Weightless)?;
+		T::EnterDepositAmount::get().ok_or_else(|| BenchmarkError::Weightless)?;
 
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
@@ -88,7 +88,7 @@ mod benchmarks {
 	/// Permissionless extend - if configured.
 	#[benchmark]
 	fn extend() -> Result<(), BenchmarkError> {
-		T::ExtendStakeAmount::get().ok_or_else(|| BenchmarkError::Weightless)?;
+		T::ExtendDepositAmount::get().ok_or_else(|| BenchmarkError::Weightless)?;
 
 		let alice: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&alice, init_bal::<T>());
@@ -144,19 +144,19 @@ mod benchmarks {
 		Ok(())
 	}
 
-	/// Permissionless release of a stake - if configured.
+	/// Permissionless release of a deposit - if configured.
 	#[benchmark]
-	fn release_stake() -> Result<(), BenchmarkError> {
+	fn release_deposit() -> Result<(), BenchmarkError> {
 		let delay = T::ReleaseDelay::get().ok_or_else(|| BenchmarkError::Weightless)?;
 
 		let alice: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(alice.clone());
 
 		T::Currency::set_balance(&alice, init_bal::<T>());
-		// Mock the storage. This is needed in case the `EnterStakeAmount` is zero.
+		// Mock the storage. This is needed in case the `EnterDepositAmount` is zero.
 		let block: T::BlockNumber = 1u32.into();
 		let bal: BalanceOf<T> = 1u32.into();
-		Stakes::<T>::insert(&alice, &block, &bal);
+		Deposits::<T>::insert(&alice, &block, &bal);
 		T::Currency::hold(&HoldReason::EnterOrExtend.into(), &alice, bal)?;
 		EnteredUntil::<T>::put(&block);
 		assert!(SafeMode::<T>::do_exit(ExitReason::Force).is_ok());
@@ -168,24 +168,24 @@ mod benchmarks {
 		#[extrinsic_call]
 		_(origin, alice.clone(), 1u32.into());
 
-		assert!(!Stakes::<T>::contains_key(&alice, &block));
+		assert!(!Deposits::<T>::contains_key(&alice, &block));
 		assert_eq!(T::Currency::balance(&alice), init_bal::<T>());
 		Ok(())
 	}
 
-	/// Forceful release of a stake - if configured.
+	/// Forceful release of a deposit - if configured.
 	#[benchmark]
-	fn force_release_stake() -> Result<(), BenchmarkError> {
-		let force_origin =
-			T::ForceStakeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+	fn force_release_deposit() -> Result<(), BenchmarkError> {
+		let force_origin = T::ForceDepositOrigin::try_successful_origin()
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let alice: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&alice, init_bal::<T>());
 
-		// Mock the storage. This is needed in case the `EnterStakeAmount` is zero.
+		// Mock the storage. This is needed in case the `EnterDepositAmount` is zero.
 		let block: T::BlockNumber = 1u32.into();
 		let bal: BalanceOf<T> = 1u32.into();
-		Stakes::<T>::insert(&alice, &block, &bal);
+		Deposits::<T>::insert(&alice, &block, &bal);
 		T::Currency::hold(&&HoldReason::EnterOrExtend.into(), &alice, bal)?;
 		EnteredUntil::<T>::put(&block);
 
@@ -199,23 +199,23 @@ mod benchmarks {
 		#[extrinsic_call]
 		_(force_origin as T::RuntimeOrigin, alice.clone(), block);
 
-		assert!(!Stakes::<T>::contains_key(&alice, block));
+		assert!(!Deposits::<T>::contains_key(&alice, block));
 		assert_eq!(T::Currency::balance(&alice), init_bal::<T>());
 		Ok(())
 	}
 
 	#[benchmark]
-	fn force_slash_stake() -> Result<(), BenchmarkError> {
-		let force_origin =
-			T::ForceStakeOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+	fn force_slash_deposit() -> Result<(), BenchmarkError> {
+		let force_origin = T::ForceDepositOrigin::try_successful_origin()
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let alice: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&alice, init_bal::<T>());
 
-		// Mock the storage. This is needed in case the `EnterStakeAmount` is zero.
+		// Mock the storage. This is needed in case the `EnterDepositAmount` is zero.
 		let block: T::BlockNumber = 1u32.into();
 		let bal: BalanceOf<T> = 1u32.into();
-		Stakes::<T>::insert(&alice, &block, &bal);
+		Deposits::<T>::insert(&alice, &block, &bal);
 		T::Currency::hold(&&HoldReason::EnterOrExtend.into(), &alice, bal)?;
 		EnteredUntil::<T>::put(&block);
 		assert!(SafeMode::<T>::do_exit(ExitReason::Force).is_ok());
@@ -223,7 +223,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		_(force_origin as T::RuntimeOrigin, alice.clone(), block);
 
-		assert!(!Stakes::<T>::contains_key(&alice, block));
+		assert!(!Deposits::<T>::contains_key(&alice, block));
 		assert_eq!(T::Currency::balance(&alice), init_bal::<T>() - 1u32.into());
 		Ok(())
 	}
