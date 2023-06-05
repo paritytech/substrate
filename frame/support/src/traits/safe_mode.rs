@@ -32,7 +32,7 @@ pub trait SafeMode {
 
 	/// How many more blocks safe mode will stay entered.
 	///
-	/// If this returns `0`, then the safe mode will exit in the next block.
+	/// If this returns `0`, then safe mode will exit in the next block.
 	fn remaining() -> Option<Self::BlockNumber>;
 
 	/// Enter the safe mode for `duration` blocks.
