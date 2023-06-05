@@ -42,7 +42,7 @@ use sc_network::{
 	service::traits::{NotificationEvent, ValidationResult},
 	types::ProtocolName,
 	utils::LruHashSet,
-	NotificationService,
+	NotificationService, ReputationChange,
 };
 use sc_network_common::{
 	role::Roles,
@@ -99,7 +99,7 @@ const INACTIVITY_EVICT_THRESHOLD: Duration = Duration::from_secs(30);
 const INITIAL_EVICTION_WAIT_PERIOD: Duration = Duration::from_secs(2 * 60);
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Peer has different genesis.
 	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
 	/// Peer send us a block announcement that failed at validation.
@@ -722,7 +722,7 @@ where
 							.disconnect_peer(peer, self.block_announce_protocol_name.clone());
 						self.network_service.report_peer(
 							peer,
-							sc_peerset::ReputationChange::new_fatal("Invalid justification"),
+							ReputationChange::new_fatal("Invalid justification"),
 						);
 					}
 				},

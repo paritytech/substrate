@@ -321,7 +321,7 @@ pub mod pallet {
 
 		/// Set the parameters.
 		///
-		/// - `origin`: A origin complying with `ParamsOrigin` or root.
+		/// - `origin`: An origin complying with `ParamsOrigin` or root.
 		/// - `params`: The new parameters for the pallet.
 		#[pallet::weight(T::WeightInfo::set_params())]
 		#[pallet::call_index(1)]

@@ -27,14 +27,13 @@ use crate::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::signature::Signature,
 	types::ProtocolName,
-	NotificationsSink,
+	NotificationsSink, ReputationChange,
 };
 
 use futures::{channel::oneshot, Stream};
 use libp2p::{Multiaddr, PeerId};
 
 use sc_network_common::role::ObservedRole;
-use sc_peerset::ReputationChange;
 
 use std::{collections::HashSet, fmt::Debug, future::Future, pin::Pin, sync::Arc};
 

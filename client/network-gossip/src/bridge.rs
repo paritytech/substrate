@@ -24,10 +24,9 @@ use crate::{
 use sc_network::{
 	service::traits::{NotificationEvent, ValidationResult},
 	types::ProtocolName,
-	NotificationService,
+	NotificationService, ReputationChange,
 };
 use sc_network_common::sync::SyncEvent;
-use sc_peerset::ReputationChange;
 
 use futures::{
 	channel::mpsc::{channel, Receiver, Sender},
