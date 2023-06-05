@@ -20,10 +20,7 @@
 
 use crate::{BalanceOf, DEMOCRACY_ID};
 use core::iter::Sum;
-use frame_support::{
-	traits::{LockableCurrency, OnRuntimeUpgrade, ReservableCurrency},
-	weights::constants::RocksDbWeight,
-};
+use frame_support::traits::{LockableCurrency, OnRuntimeUpgrade, ReservableCurrency};
 use sp_core::Get;
 use sp_runtime::{traits::Zero, Saturating};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
@@ -93,7 +90,7 @@ where
 		(
 			account_deposits,
 			account_stakes,
-			RocksDbWeight::get().reads(
+			T::DbWeight::get().reads(
 				deposit_of_len.saturating_add(voting_of_len).saturating_add(
 					// Max items in a Voting enum is MaxVotes + 5
 					total_voting_vec_entries
@@ -184,7 +181,7 @@ where
 			T::Currency::remove_lock(DEMOCRACY_ID, account);
 		}
 
-		RocksDbWeight::get().reads_writes(
+		T::DbWeight::get().reads_writes(
 			account_stakes.len().saturating_add(account_deposits.len()) as u64,
 			account_stakes.len().saturating_add(account_deposits.len()) as u64,
 		) + initial_reads
