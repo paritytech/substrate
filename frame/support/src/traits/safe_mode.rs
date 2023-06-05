@@ -25,7 +25,7 @@ pub trait SafeMode {
 	/// Block number type.
 	type BlockNumber;
 
-	/// Whether the safe mode is entered.
+	/// Whether safe mode is entered.
 	fn is_entered() -> bool {
 		Self::remaining().is_some()
 	}
