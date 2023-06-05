@@ -45,7 +45,7 @@ pub trait SafeMode {
 	/// Should error when not entered with `AlreadyExited`.
 	fn extend(duration: Self::BlockNumber) -> Result<(), SafeModeError>;
 
-	/// Exit the safe mode immediately.
+	/// Exit safe mode immediately.
 	///
 	/// This takes effect already in the same block.
 	fn exit() -> Result<(), SafeModeError>;
