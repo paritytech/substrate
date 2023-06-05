@@ -298,6 +298,30 @@ construct_runtime!(
 mod runtime {
 	#[frame::runtime]
 	pub struct Runtime2;
+
+	#[frame::pallets]
+	pub struct AllPallets {
+		System: frame_system,
+		Timestamp: pallet_timestamp,
+		Aura: pallet_aura,
+		Grandpa: pallet_grandpa,
+		Balances: pallet_balances,
+		TransactionPayment: pallet_transaction_payment,
+		Sudo: pallet_sudo,
+		TemplateModule: pallet_template,
+	}
+
+	#[frame::indices]
+	pub enum AllPalletIndices {
+		System = 0,
+		Timestamp = 1,
+		Aura = 2,
+		Grandpa = 3,
+		Balances = 4,
+		TransactionPayment = 5,
+		Sudo = 6,
+		TemplateModule = 7,
+	}
 }
 
 /// The address format for describing accounts.

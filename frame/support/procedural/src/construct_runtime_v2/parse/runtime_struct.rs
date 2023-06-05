@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use syn::spanned::Spanned;
+
 pub struct RuntimeStructDef {
 	pub ident: syn::Ident,
 	pub attr_span: proc_macro2::Span,

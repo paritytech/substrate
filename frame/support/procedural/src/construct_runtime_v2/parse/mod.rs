@@ -16,12 +16,14 @@
 // limitations under the License.
 
 pub mod runtime_struct;
+pub mod pallets;
 pub mod helper;
 
 use syn::spanned::Spanned;
 pub struct Def {
     pub item: syn::ItemMod,
     pub runtime_struct: runtime_struct::RuntimeStructDef,
+	pub pallets: pallets::AllPalletsDef,
 }
 
 impl Def {
@@ -37,6 +39,7 @@ impl Def {
 			.1;
 
         let mut runtime_struct = None;
+		let mut pallets = None;
 
         for (index, item) in items.iter_mut().enumerate() {
             let runtime_attr: Option<RuntimeAttr> = helper::take_first_item_runtime_attr(item)?;
@@ -45,6 +48,12 @@ impl Def {
 				Some(RuntimeAttr::Runtime(span)) if runtime_struct.is_none() => {
 					let p = runtime_struct::RuntimeStructDef::try_from(span, index, item)?;
 					runtime_struct = Some(p);
+				},
+				Some(RuntimeAttr::Pallets(span)) if pallets.is_none() => {
+					let p = pallets::AllPalletsDef::try_from(span, index, item)?;
+					pallets = Some(p);
+				},
+				Some(RuntimeAttr::Indices(span)) => {
 				},
                 Some(attr) => {
 					let msg = "Invalid duplicated attribute";
@@ -58,6 +67,8 @@ impl Def {
 			item,
 			runtime_struct: runtime_struct
 				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[frame::runtime]`"))?,
+			pallets: pallets
+				.ok_or_else(|| syn::Error::new(item_span, "Missing `#[frame::pallets]`"))?,
         };
 
         Ok(def)
@@ -67,16 +78,22 @@ impl Def {
 mod keyword {
     syn::custom_keyword!(frame);
     syn::custom_keyword!(runtime);
+	syn::custom_keyword!(pallets);
+	syn::custom_keyword!(indices);
 }
 
 enum RuntimeAttr {
     Runtime(proc_macro2::Span),
+	Pallets(proc_macro2::Span),
+	Indices(proc_macro2::Span),
 }
 
 impl RuntimeAttr {
 	fn span(&self) -> proc_macro2::Span {
 		match self {
 			Self::Runtime(span) => *span,
+			Self::Pallets(span) => *span,
+			Self::Indices(span) => *span,
 		}
 	}
 }
@@ -92,6 +109,10 @@ impl syn::parse::Parse for RuntimeAttr {
         let lookahead = content.lookahead1();
 		if lookahead.peek(keyword::runtime) {
 			Ok(RuntimeAttr::Runtime(content.parse::<keyword::runtime>()?.span()))
+        } else if lookahead.peek(keyword::pallets) {
+			Ok(RuntimeAttr::Pallets(content.parse::<keyword::pallets>()?.span()))
+        } else if lookahead.peek(keyword::indices) {
+			Ok(RuntimeAttr::Indices(content.parse::<keyword::indices>()?.span()))
         } else {
 			Err(lookahead.error())
 		}

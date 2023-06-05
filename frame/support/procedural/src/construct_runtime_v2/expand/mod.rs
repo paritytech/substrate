@@ -18,12 +18,11 @@
 mod runtime_struct;
 
 use crate::construct_runtime_v2::Def;
-use quote::ToTokens;
 
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
     let runtime_struct = runtime_struct::expand_runtime_struct(&mut def);
 
     quote::quote!(
-		#runtime_struct
-	)
+      #runtime_struct
+    )
 }
