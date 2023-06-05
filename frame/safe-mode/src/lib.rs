@@ -488,7 +488,6 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), Error<T>> {
 		let amount = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NoStake)?;
 
-		// FAIL-CI check these args
 		let burned = T::Currency::burn_held(
 			&&HoldReason::EnterOrExtend.into(),
 			&account,
