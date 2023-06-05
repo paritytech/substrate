@@ -37,18 +37,21 @@ use crate::commitment::{Commitment, SignedCommitment};
 /// Ethereum Mainnet), in a commit-reveal like scheme, where first we submit only the signed
 /// commitment witness and later on, the client picks only some signatures to verify at random.
 #[derive(Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
-pub struct SignedCommitmentWitness<TBlockNumber, TMerkleRoot> {
+pub struct SignedCommitmentWitness<TBlockNumber, TSignatureAccumulator> {
 	/// The full content of the commitment.
 	pub commitment: Commitment<TBlockNumber>,
 
 	/// The bit vector of validators who signed the commitment.
 	pub signed_by: Vec<bool>, // TODO [ToDr] Consider replacing with bitvec crate
 
-	/// A merkle root of signatures in the original signed commitment.
-	pub signatures_merkle_root: TMerkleRoot,
+	/// Either a merkle root of signatures in the original signed commitment or a single aggregated
+	/// BLS signature aggregating all original signatures.
+	pub signature_accumulator: TSignatureAccumulator,
 }
 
-impl<TBlockNumber, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, TMerkleRoot> {
+impl<TBlockNumber, TSignatureAccumulator>
+	SignedCommitmentWitness<TBlockNumber, TSignatureAccumulator>
+{
 	/// Convert [SignedCommitment] into [SignedCommitmentWitness].
 	///
 	/// This takes a [SignedCommitment], which contains full signatures
@@ -57,18 +60,18 @@ impl<TBlockNumber, TMerkleRoot> SignedCommitmentWitness<TBlockNumber, TMerkleRoo
 	/// and a merkle root of all signatures.
 	///
 	/// Returns the full list of signatures along with the witness.
-	pub fn from_signed<TMerkelize, TSignature>(
+	pub fn from_signed<TSignatureAggregator, TSignature>(
 		signed: SignedCommitment<TBlockNumber, TSignature>,
-		merkelize: TMerkelize,
+		aggregator: TSignatureAggregator,
 	) -> (Self, Vec<Option<TSignature>>)
 	where
-		TMerkelize: FnOnce(&[Option<TSignature>]) -> TMerkleRoot,
+		TSignatureAggregator: FnOnce(&[Option<TSignature>]) -> TSignatureAccumulator,
 	{
 		let SignedCommitment { commitment, signatures } = signed;
 		let signed_by = signatures.iter().map(|s| s.is_some()).collect();
-		let signatures_merkle_root = merkelize(&signatures);
+		let signature_accumulator = aggregator(&signatures);
 
-		(Self { commitment, signed_by, signatures_merkle_root }, signatures)
+		(Self { commitment, signed_by, signature_accumulator }, signatures)
 	}
 }
 
@@ -80,15 +83,30 @@ mod tests {
 	use super::*;
 	use codec::Decode;
 
-	use crate::{crypto, known_payloads, Payload, KEY_TYPE};
+	use crate::{
+		bls_crypto::Signature as BLSSignature, ecdsa_crypto, known_payloads, Payload, KEY_TYPE,
+	};
+	use bls_like::{
+		pop::SignatureAggregatorAssumingPoP, EngineBLS, SerializableToBytes, Signed, BLS377,
+	};
 
 	type TestCommitment = Commitment<u128>;
-	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
+
+	///types for ecdsa signed commitment
+	type TestSignedCommitment = SignedCommitment<u128, ecdsa_crypto::Signature>;
 	type TestSignedCommitmentWitness =
-		SignedCommitmentWitness<u128, Vec<Option<crypto::Signature>>>;
+		SignedCommitmentWitness<u128, Vec<Option<ecdsa_crypto::Signature>>>;
+
+	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
+	struct ECDSABLSSignaturePair(ecdsa_crypto::Signature, BLSSignature);
+
+	///types for commitment containing  bls signature along side ecdsa signature
+	type TestBLSSignedCommitment = SignedCommitment<u128, ECDSABLSSignaturePair>;
+	type TestBLSSignedCommitmentWitness =
+		SignedCommitmentWitness<u128, [u8; BLS377::SIGNATURE_SERIALIZED_SIZE]>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
-	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
+	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
 		let store: KeystorePtr = MemoryKeystore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
@@ -103,7 +121,25 @@ mod tests {
 		(sig1.into(), sig2.into())
 	}
 
-	fn signed_commitment() -> TestSignedCommitment {
+	///generates mock aggregatable bls signature for generating test commitment
+	///BLS signatures
+	fn mock_bls_signatures() -> (BLSSignature, BLSSignature) {
+		let store: KeystorePtr = MemoryKeyStore::new().into();
+
+		let mut alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
+		store.insert(KEY_TYPE, "//Alice", alice.public().as_ref())
+				.unwrap();
+
+		let msg = b"This is the first message";
+		let sig1 = alice.sign(msg);
+
+		let msg = b"This is the second message";
+		let sig2 = alice.sign(msg);
+
+		(sig1.into(), sig2.into())
+	}
+
+	fn ecdsa_signed_commitment() -> TestSignedCommitment {
 		let payload = Payload::from_single_entry(
 			known_payloads::MMR_ROOT_ID,
 			"Hello World!".as_bytes().to_vec(),
@@ -111,29 +147,83 @@ mod tests {
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
-		let sigs = mock_signatures();
+		let sigs = mock_ecdsa_signatures();
 
 		SignedCommitment { commitment, signatures: vec![None, None, Some(sigs.0), Some(sigs.1)] }
+	}
+
+	fn ecdsa_and_bls_signed_commitment() -> TestBLSSignedCommitment {
+		let payload = Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".as_bytes().to_vec());
+		let commitment: TestCommitment =
+			Commitment { payload, block_number: 5, validator_set_id: 0 };
+
+		let ecdsa_sigs = mock_ecdsa_signatures();
+		let bls_sigs = mock_bls_signatures();
+
+		SignedCommitment {
+			commitment,
+			signatures: vec![
+				None,
+				None,
+				Some(ECDSABLSSignaturePair(ecdsa_sigs.0, bls_sigs.0)),
+				Some(ECDSABLSSignaturePair(ecdsa_sigs.1, bls_sigs.1)),
+			],
+		}
 	}
 
 	#[test]
 	fn should_convert_signed_commitment_to_witness() {
 		// given
-		let signed = signed_commitment();
+		let signed = ecdsa_signed_commitment();
 
 		// when
 		let (witness, signatures) =
 			TestSignedCommitmentWitness::from_signed(signed, |sigs| sigs.to_vec());
 
 		// then
-		assert_eq!(witness.signatures_merkle_root, signatures);
+		assert_eq!(witness.signature_accumulator, signatures);
+	}
+
+	#[test]
+	fn should_convert_dually_signed_commitment_to_witness() {
+		// given
+		let signed = ecdsa_and_bls_signed_commitment();
+
+		// when
+		let (witness, signatures) = TestBLSSignedCommitmentWitness::from_signed::<
+			_,
+			_,
+		>(signed, |sigs| {
+			//we are going to aggregate the signatures here
+			let mut aggregatedsigs: SignatureAggregatorAssumingPoP<BLS377> =
+				SignatureAggregatorAssumingPoP::new();
+			sigs.iter().filter_map(|sig| {
+				sig.clone().map(|sig| {
+					aggregatedsigs.add_signature(
+						&(bls_like::Signature::from_bytes(
+							<BLSSignature as AsRef<[u8]>>::as_ref(&sig.1.clone())
+								.try_into()
+								.unwrap(),
+						))
+						.unwrap(),
+					)
+				})
+			});
+			(&aggregatedsigs).signature().to_bytes()
+		});
+	        
+	        BLSSignature::try_from(witness.signature_accumulator.as_slice()).unwrap();
 	}
 
 	#[test]
 	fn should_encode_and_decode_witness() {
 		// given
-		let signed = signed_commitment();
-		let (witness, _) = TestSignedCommitmentWitness::from_signed(signed, |sigs| sigs.to_vec());
+		let signed = ecdsa_signed_commitment();
+		let (witness, _) =
+			TestSignedCommitmentWitness::from_signed::<_, _, >(
+				signed,
+				|sigs: &[std::option::Option<ecdsa_crypto::Signature>]| sigs.to_vec(),
+			);
 
 		// when
 		let encoded = codec::Encode::encode(&witness);
