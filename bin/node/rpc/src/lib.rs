@@ -92,6 +92,8 @@ pub struct FullDeps<C, P, SC, B> {
 	pub statement_store: Arc<dyn sp_statement_store::StatementStore>,
 	/// The backend used by the node.
 	pub backend: Arc<B>,
+	/// Mixnet API.
+	pub mixnet_api: Option<sc_mixnet::Api>,
 }
 
 /// Instantiate all Full RPC extensions.
@@ -106,6 +108,7 @@ pub fn create_full<C, P, SC, B>(
 		grandpa,
 		statement_store,
 		backend,
+		mixnet_api,
 	}: FullDeps<C, P, SC, B>,
 ) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
@@ -133,6 +136,7 @@ where
 	use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
 	use sc_rpc::{
 		dev::{Dev, DevApiServer},
+		mixnet::MixnetApiServer,
 		statement::StatementApiServer,
 	};
 	use sc_rpc_spec_v2::chain_spec::{ChainSpec, ChainSpecApiServer};
@@ -195,6 +199,11 @@ where
 	let statement_store =
 		sc_rpc::statement::StatementStore::new(statement_store, deny_unsafe).into_rpc();
 	io.merge(statement_store)?;
+
+	if let Some(mixnet_api) = mixnet_api {
+		let mixnet = sc_rpc::mixnet::Mixnet::new(mixnet_api).into_rpc();
+		io.merge(mixnet)?;
+	}
 
 	Ok(io)
 }

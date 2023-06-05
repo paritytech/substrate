@@ -107,5 +107,6 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Run
 			trash_data_count: Default::default(),
 			..Default::default()
 		},
+		mixnet: Default::default(),
 	}
 }

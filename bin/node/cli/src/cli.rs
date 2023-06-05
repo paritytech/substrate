@@ -27,6 +27,10 @@ pub struct Cli {
 	#[clap(flatten)]
 	pub run: sc_cli::RunCmd,
 
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub mixnet_params: sc_cli::MixnetParams,
+
 	/// Disable automatic hardware benchmarks.
 	///
 	/// By default these benchmarks are automatically ran at startup and measure

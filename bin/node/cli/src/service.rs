@@ -135,6 +135,7 @@ pub fn create_extrinsic(
 /// Creates a new partial node.
 pub fn new_partial(
 	config: &Configuration,
+	mixnet_config: Option<&sc_mixnet::Config>,
 ) -> Result<
 	sc_service::PartialComponents<
 		FullClient,
@@ -155,6 +156,7 @@ pub fn new_partial(
 			grandpa::SharedVoterState,
 			Option<Telemetry>,
 			Arc<StatementStore>,
+			Option<sc_mixnet::ApiBackend>,
 		),
 	>,
 	ServiceError,
@@ -247,6 +249,8 @@ pub fn new_partial(
 	)
 	.map_err(|e| ServiceError::Other(format!("Statement store error: {:?}", e)))?;
 
+	let (mixnet_api, mixnet_api_backend) = mixnet_config.map(sc_mixnet::Api::new).unzip();
+
 	let (rpc_extensions_builder, rpc_setup) = {
 		let (_, grandpa_link, _) = &import_setup;
 
@@ -288,6 +292,7 @@ pub fn new_partial(
 				},
 				statement_store: rpc_statement_store.clone(),
 				backend: rpc_backend.clone(),
+				mixnet_api: mixnet_api.as_ref().cloned(),
 			};
 
 			node_rpc::create_full(deps).map_err(Into::into)
@@ -304,7 +309,14 @@ pub fn new_partial(
 		select_chain,
 		import_queue,
 		transaction_pool,
-		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry, statement_store),
+		other: (
+			rpc_extensions_builder,
+			import_setup,
+			rpc_setup,
+			telemetry,
+			statement_store,
+			mixnet_api_backend,
+		),
 	})
 }
 
@@ -327,6 +339,7 @@ pub struct NewFullBase {
 /// Creates a full service from the configuration.
 pub fn new_full_base(
 	config: Configuration,
+	mixnet_config: Option<sc_mixnet::Config>,
 	disable_hardware_benchmarks: bool,
 	with_startup_data: impl FnOnce(
 		&sc_consensus_babe::BabeBlockImport<Block, FullClient, FullGrandpaBlockImport>,
@@ -348,30 +361,35 @@ pub fn new_full_base(
 		keystore_container,
 		select_chain,
 		transaction_pool,
-		other: (rpc_builder, import_setup, rpc_setup, mut telemetry, statement_store),
-	} = new_partial(&config)?;
+		other:
+			(rpc_builder, import_setup, rpc_setup, mut telemetry, statement_store, mixnet_api_backend),
+	} = new_partial(&config, mixnet_config.as_ref())?;
 
 	let shared_voter_state = rpc_setup;
 	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
 	let mut net_config = sc_network::config::FullNetworkConfiguration::new(&config.network);
 
-	let grandpa_protocol_name = grandpa::protocol_standard_name(
-		&client.block_hash(0).ok().flatten().expect("Genesis block exists; qed"),
-		&config.chain_spec,
-	);
+	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
+
+	let grandpa_protocol_name = grandpa::protocol_standard_name(&genesis_hash, &config.chain_spec);
 	net_config.add_notification_protocol(grandpa::grandpa_peers_set_config(
 		grandpa_protocol_name.clone(),
 	));
 
 	let statement_handler_proto = sc_network_statement::StatementHandlerPrototype::new(
-		client
-			.block_hash(0u32.into())
-			.ok()
-			.flatten()
-			.expect("Genesis block exists; qed"),
+		genesis_hash,
 		config.chain_spec.fork_id(),
 	);
 	net_config.add_notification_protocol(statement_handler_proto.set_config());
+
+	let mixnet_protocol_name =
+		sc_mixnet::protocol_name(genesis_hash.as_ref(), config.chain_spec.fork_id());
+	if let Some(mixnet_config) = &mixnet_config {
+		net_config.add_notification_protocol(sc_mixnet::peers_set_config(
+			mixnet_protocol_name.clone(),
+			mixnet_config,
+		));
+	}
 
 	let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
 		backend.clone(),
@@ -390,6 +408,19 @@ pub fn new_full_base(
 			block_announce_validator_builder: None,
 			warp_sync_params: Some(WarpSyncParams::WithProvider(warp_sync)),
 		})?;
+
+	if let Some(mixnet_config) = mixnet_config {
+		let mixnet = sc_mixnet::run(
+			mixnet_config,
+			mixnet_api_backend.expect("Mixnet API backend created if mixnet enabled"),
+			client.clone(),
+			sync_service.clone(),
+			network.clone(),
+			mixnet_protocol_name,
+			transaction_pool.clone(),
+		);
+		task_manager.spawn_handle().spawn("mixnet", None, mixnet);
+	}
 
 	let role = config.role.clone();
 	let force_authoring = config.force_authoring;
@@ -546,7 +577,7 @@ pub fn new_full_base(
 		// and vote data availability than the observer. The observer has not
 		// been tested extensively yet and having most nodes in a network run it
 		// could lead to finality stalls.
-		let grandpa_config = grandpa::GrandpaParams {
+		let grandpa_params = grandpa::GrandpaParams {
 			config: grandpa_config,
 			link: grandpa_link,
 			network: network.clone(),
@@ -563,7 +594,7 @@ pub fn new_full_base(
 		task_manager.spawn_essential_handle().spawn_blocking(
 			"grandpa-voter",
 			None,
-			grandpa::run_grandpa_voter(grandpa_config)?,
+			grandpa::run_grandpa_voter(grandpa_params)?,
 		);
 	}
 
@@ -623,8 +654,9 @@ pub fn new_full_base(
 
 /// Builds a new service for a full client.
 pub fn new_full(config: Configuration, cli: Cli) -> Result<TaskManager, ServiceError> {
+	let mixnet_config = cli.mixnet_params.config(config.role.is_authority());
 	let database_source = config.database.clone();
-	let task_manager = new_full_base(config, cli.no_hardware_benchmarks, |_, _| ())
+	let task_manager = new_full_base(config, mixnet_config, cli.no_hardware_benchmarks, |_, _| ())
 		.map(|NewFullBase { task_manager, .. }| task_manager)?;
 
 	sc_storage_monitor::StorageMonitorService::try_spawn(
@@ -702,6 +734,7 @@ mod tests {
 				let NewFullBase { task_manager, client, network, sync, transaction_pool, .. } =
 					new_full_base(
 						config,
+						None,
 						false,
 						|block_import: &sc_consensus_babe::BabeBlockImport<Block, _, _>,
 						 babe_link: &sc_consensus_babe::BabeLink<Block>| {
@@ -876,7 +909,7 @@ mod tests {
 			crate::chain_spec::tests::integration_test_config_with_two_authorities(),
 			|config| {
 				let NewFullBase { task_manager, client, network, sync, transaction_pool, .. } =
-					new_full_base(config, false, |_, _| ())?;
+					new_full_base(config, None, false, |_, _| ())?;
 				Ok(sc_service_test::TestNetComponents::new(
 					task_manager,
 					client,
