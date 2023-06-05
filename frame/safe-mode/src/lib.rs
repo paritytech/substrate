@@ -32,7 +32,7 @@ use frame_support::{
 			Inspect as FunInspect,
 		},
 		tokens::{Fortitude, Precision},
-		CallMetadata, Contains, Defensive, GetCallMetadata, PalletInfoAccess,
+		CallMetadata, Contains, Defensive, GetCallMetadata, PalletInfoAccess, SafeModeNotify,
 	},
 	weights::Weight,
 	DefaultNoBound,
@@ -111,6 +111,9 @@ pub mod pallet {
 
 		/// The only origin that can force to release or slash a deposit.
 		type ForceDepositOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// Notifies external logic when the safe-mode is being entered or exited.
+		type Notify: SafeModeNotify;
 
 		/// The minimal duration a deposit will remain reserved after safe-mode is entered or
 		/// extended, unless [`Pallet::force_release_deposit`] is successfully called sooner.
@@ -424,6 +427,7 @@ impl<T: Config> Pallet<T> {
 		let until = <frame_system::Pallet<T>>::block_number().saturating_add(duration);
 		EnteredUntil::<T>::put(until);
 		Self::deposit_event(Event::Entered { until });
+		T::Notify::entered();
 		Ok(())
 	}
 
@@ -451,6 +455,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn do_exit(reason: ExitReason) -> Result<(), Error<T>> {
 		let _until = EnteredUntil::<T>::take().ok_or(Error::<T>::Exited)?;
 		Self::deposit_event(Event::Exited { reason });
+		T::Notify::exited();
 		Ok(())
 	}
 

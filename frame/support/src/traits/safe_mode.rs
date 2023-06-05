@@ -60,3 +60,17 @@ pub enum SafeModeError {
 	/// Unknown error.
 	Unknown,
 }
+
+/// A trait to notify when the runtime enters or exits safe mode.
+pub trait SafeModeNotify {
+	/// Called when the runtime enters safe mode.
+	fn entered();
+
+	/// Called when the runtime exits safe mode.
+	fn exited();
+}
+
+impl SafeModeNotify for () {
+	fn entered() {}
+	fn exited() {}
+}

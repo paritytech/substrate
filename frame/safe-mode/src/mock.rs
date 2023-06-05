@@ -24,7 +24,7 @@ use crate as pallet_safe_mode;
 
 use frame_support::{
 	parameter_types,
-	traits::{ConstU64, Everything, InsideBoth, InstanceFilter, IsInVec},
+	traits::{ConstU64, Everything, InsideBoth, InstanceFilter, IsInVec, SafeModeNotify},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
@@ -161,7 +161,7 @@ impl Contains<RuntimeCall> for WhitelistedCalls {
 
 parameter_types! {
 	pub const EnterDuration: u64 = 7;
-	pub const ExtendDuration: u64 = 30;
+	pub const ExtendDuration: u64 = 10;
 	pub const EnterDepositAmount: u64 = 100;
 	pub const ExtendDepositAmount: u64 = 100;
 	pub const ReleaseDelay: u64 = 20;
@@ -176,6 +176,23 @@ parameter_types! {
 	// NOTE: The account ID maps to the duration. Easy for testing.
 	pub ForceEnterOrigins: Vec<u64> = vec![ForceEnterWeak::get(), ForceEnterStrong::get()];
 	pub ForceExtendOrigins: Vec<u64> = vec![ForceExtendWeak::get(), ForceExtendStrong::get()];
+
+	pub storage Notifications: Vec<(u64, bool)> = vec![];
+}
+
+pub struct MockedNotify;
+impl SafeModeNotify for MockedNotify {
+	fn entered() {
+		let mut ns = Notifications::get();
+		ns.push((<frame_system::Pallet<Test>>::block_number(), true));
+		Notifications::set(&ns);
+	}
+
+	fn exited() {
+		let mut ns = Notifications::get();
+		ns.push((<frame_system::Pallet<Test>>::block_number(), false));
+		Notifications::set(&ns);
+	}
 }
 
 frame_support::ord_parameter_types! {
@@ -197,6 +214,7 @@ impl Config for Test {
 	type ForceExitOrigin = EnsureSignedBy<ForceExitOrigin, Self::AccountId>;
 	type ForceDepositOrigin = EnsureSignedBy<ForceDepositOrigin, Self::AccountId>;
 	type ReleaseDelay = ReleaseDelay;
+	type Notify = MockedNotify;
 	type WeightInfo = ();
 }
 

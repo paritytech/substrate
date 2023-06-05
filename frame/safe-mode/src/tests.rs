@@ -222,9 +222,25 @@ fn can_activate() {
 			System::block_number() + mock::EnterDuration::get()
 		);
 		assert_eq!(Balances::reserved_balance(0), mock::EnterDepositAmount::get());
+		assert_eq!(Notifications::get(), vec![(1, true)]);
 		assert_noop!(SafeMode::enter(RuntimeOrigin::signed(0)), Error::<Test>::Entered);
+		assert_eq!(Notifications::get(), vec![(1, true)]);
 		// Assert the deposit.
 		assert_eq!(Deposits::<Test>::get(0, 1), Some(mock::EnterDepositAmount::get()));
+	});
+}
+
+#[test]
+fn notify_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(0)));
+		assert_eq!(Notifications::get(), vec![(1, true)]);
+		run_to(10);
+		assert_eq!(Notifications::get(), vec![(1, true), (9, false)]);
+		assert_ok!(SafeMode::enter(RuntimeOrigin::signed(1)));
+		assert_ok!(SafeMode::extend(RuntimeOrigin::signed(2)));
+		run_to(30);
+		assert_eq!(Notifications::get(), vec![(1, true), (9, false), (10, true), (28, false)]);
 	});
 }
 
@@ -238,6 +254,7 @@ fn cannot_extend() {
 			System::block_number() + mock::EnterDuration::get()
 		);
 		assert_eq!(Balances::reserved_balance(0), mock::EnterDepositAmount::get());
+		assert_eq!(Notifications::get(), vec![(1, true)]);
 	});
 }
 
@@ -274,6 +291,7 @@ fn fails_force_deactivate_if_not_activated() {
 			SafeMode::force_exit(RuntimeOrigin::signed(mock::ForceExitOrigin::get())),
 			Error::<Test>::Exited
 		);
+		assert!(Notifications::get().is_empty());
 	});
 }
 
@@ -281,6 +299,7 @@ fn fails_force_deactivate_if_not_activated() {
 fn can_force_activate_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::force_enter(signed(ForceEnterStrong::get())));
+		assert_eq!(Notifications::get(), vec![(1, true)]);
 		assert_eq!(
 			EnteredUntil::<Test>::get().unwrap(),
 			System::block_number() + ForceEnterStrong::get()
@@ -289,6 +308,7 @@ fn can_force_activate_with_config_origin() {
 			SafeMode::force_enter(signed(ForceEnterStrong::get())),
 			Error::<Test>::Entered
 		);
+		assert_eq!(Notifications::get(), vec![(1, true)]);
 	});
 }
 
@@ -302,6 +322,7 @@ fn can_force_deactivate_with_config_origin() {
 		);
 		assert_ok!(SafeMode::force_enter(signed(ForceEnterWeak::get())));
 		assert_ok!(SafeMode::force_exit(RuntimeOrigin::signed(ForceExitOrigin::get())));
+		assert_eq!(Notifications::get(), vec![(1, true), (1, false)]);
 	});
 }
 
