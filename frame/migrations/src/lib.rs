@@ -29,7 +29,7 @@ pub use weights::WeightInfo;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use core::ops::ControlFlow;
 use frame_support::{
-	defensive,
+	dispatch::DispatchClass,
 	migrations::*,
 	traits::Get,
 	weights::{Weight, WeightMeter},
@@ -155,13 +155,13 @@ pub mod pallet {
 		/// Migration `index` was skipped, since it already executed in the past.
 		MigrationSkippedHistoric { index: u32 },
 		/// Migration `index` made progress.
-		MigrationAdvanced { index: u32, step: T::BlockNumber },
+		MigrationAdvanced { index: u32, blocks: T::BlockNumber },
 		/// Migration `index` completed.
-		MigrationCompleted { index: u32, took: T::BlockNumber },
+		MigrationCompleted { index: u32, blocks: T::BlockNumber },
 		/// Migration `index` failed.
 		///
 		/// This implies that the whole upgrade failed and governance intervention is required.
-		MigrationFailed { index: u32, took: T::BlockNumber },
+		MigrationFailed { index: u32, blocks: T::BlockNumber },
 		/// The list of historical migrations has been cleared.
 		HistoricCleared { next_cursor: Option<Vec<u8>> },
 	}
@@ -184,7 +184,7 @@ pub mod pallet {
 				Cursor::<T>::set(Some(MigrationCursor::Active(ActiveCursor {
 					index: 0,
 					inner_cursor: None,
-					started_at: System::<T>::block_number().saturating_add(1u32.into()),
+					started_at: System::<T>::block_number(),
 				})));
 				Self::deposit_event(Event::UpgradeStarted);
 				T::UpgradeStatusHandler::started();
@@ -204,11 +204,11 @@ pub mod pallet {
 				},
 				Some(MigrationCursor::Active(cursor)) => cursor,
 				Some(MigrationCursor::Stuck) => {
-					defensive!("Migration stuck. Governance intervention required.");
+					log::error!("Migration stuck. Governance intervention required.");
 					return meter.consumed
 				},
 			};
-			debug_assert!(<Self as ExtrinsicSuspenderQuery>::is_suspended());
+			debug_assert!(<Self as ExtrinsicSuspenderQuery>::is_suspended(DispatchClass::Normal));
 
 			let migrations = T::Migrations::get();
 			for i in 0.. {
@@ -283,14 +283,15 @@ impl<T: Config> Pallet<T> {
 			return Some(ControlFlow::Continue(cursor))
 		}
 
-		let took = System::<T>::block_number().saturating_sub(cursor.started_at);
+		let blocks = System::<T>::block_number().saturating_sub(cursor.started_at);
 		match migration.transactional_step(cursor.inner_cursor.clone(), meter) {
 			Ok(Some(next_cursor)) => {
-				Self::deposit_event(Event::MigrationAdvanced { index: cursor.index, step: took });
+				Self::deposit_event(Event::MigrationAdvanced { index: cursor.index, blocks });
 				cursor.inner_cursor = Some(next_cursor);
 
-				if migration.max_steps().map_or(false, |max| took > max.into()) {
-					Self::deposit_event(Event::MigrationFailed { index: cursor.index, took });
+				// We only do one step per block.
+				if migration.max_steps().map_or(false, |max| blocks > max.into()) {
+					Self::deposit_event(Event::MigrationFailed { index: cursor.index, blocks });
 					Self::deposit_event(Event::UpgradeFailed);
 					Cursor::<T>::set(Some(MigrationCursor::Stuck));
 					None
@@ -300,7 +301,7 @@ impl<T: Config> Pallet<T> {
 				}
 			},
 			Ok(None) => {
-				Self::deposit_event(Event::MigrationCompleted { index: cursor.index, took });
+				Self::deposit_event(Event::MigrationCompleted { index: cursor.index, blocks });
 				Historic::<T>::insert(&migration.id(), ());
 				cursor.advance(System::<T>::block_number());
 				return Some(ControlFlow::Continue(cursor))
@@ -313,7 +314,7 @@ impl<T: Config> Pallet<T> {
 				return None
 			},
 			Err(SteppedMigrationError::InvalidCursor | SteppedMigrationError::Failed) => {
-				Self::deposit_event(Event::MigrationFailed { index: cursor.index, took });
+				Self::deposit_event(Event::MigrationFailed { index: cursor.index, blocks });
 				Self::deposit_event(Event::UpgradeFailed);
 				Cursor::<T>::set(Some(MigrationCursor::Stuck));
 				return None
@@ -323,7 +324,10 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> ExtrinsicSuspenderQuery for Pallet<T> {
-	fn is_suspended() -> bool {
-		Cursor::<T>::exists()
+	fn is_suspended(class: DispatchClass) -> bool {
+		match class {
+			DispatchClass::Mandatory => false,
+			DispatchClass::Normal | DispatchClass::Operational => Cursor::<T>::exists(),
+		}
 	}
 }

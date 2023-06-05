@@ -23,6 +23,7 @@ use core::cell::RefCell;
 #[use_attr]
 use frame_support::derive_impl;
 use frame_support::{
+	dispatch::DispatchClass,
 	macro_magic::use_attr,
 	migrations::*,
 	traits::{OnFinalize, OnInitialize},
@@ -62,6 +63,7 @@ impl frame_system::Config for Test {
 pub enum MockedMigrationKind {
 	SucceedAfter,
 	FailAfter,
+	TimeoutAfter,
 }
 use MockedMigrationKind::*; // C style
 
@@ -76,6 +78,10 @@ impl SteppedMigration for MockedMigration {
 		mocked_id(self.0, self.1)
 	}
 
+	fn max_steps(&self) -> Option<u32> {
+		matches!(self.0, TimeoutAfter).then(|| self.1)
+	}
+
 	fn step(
 		&self,
 		cursor: &Option<Self::Cursor>,
@@ -84,7 +90,7 @@ impl SteppedMigration for MockedMigration {
 		let mut count: u32 =
 			cursor.as_ref().and_then(|c| Decode::decode(&mut &c[..]).ok()).unwrap_or(0);
 		log::debug!("MockedMigration: Step {}", count);
-		if count != self.1 {
+		if count != self.1 || matches!(self.0, TimeoutAfter) {
 			count += 1;
 			return Ok(Some(count.encode().try_into().unwrap()))
 		}
@@ -98,6 +104,7 @@ impl SteppedMigration for MockedMigration {
 				log::debug!("MockedMigration: Failed after {} steps", count);
 				Err(SteppedMigrationError::Failed)
 			},
+			TimeoutAfter => unreachable!(),
 		}
 	}
 }
@@ -170,9 +177,9 @@ pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
 
 pub struct LoggingSuspender<Inner>(core::marker::PhantomData<Inner>);
 impl<Inner: ExtrinsicSuspenderQuery> ExtrinsicSuspenderQuery for LoggingSuspender<Inner> {
-	fn is_suspended() -> bool {
-		let res = Inner::is_suspended();
-		log::debug!("IsSuspended: {res}");
+	fn is_suspended(class: DispatchClass) -> bool {
+		let res = Inner::is_suspended(class);
+		log::debug!("Is {class:?} suspended: {res}");
 		res
 	}
 }
@@ -213,7 +220,7 @@ impl<E: IntoRecord> IntoRecords for Vec<E> {
 }
 
 pub fn assert_events<E: IntoRecord>(events: Vec<E>) {
-	assert_eq!(System::events(), events.into_records());
+	pretty_assertions::assert_eq!(events.into_records(), System::events());
 	System::reset_events();
 }
 

@@ -16,9 +16,9 @@
 // limitations under the License.
 
 #[cfg(feature = "try-runtime")]
-use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
-	storage::transactional::with_transaction_opaque_err,
+	dispatch::DispatchClass,
+	storage::{transactional::with_transaction_opaque_err, unhashed::contains_prefixed_key},
 	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
 	weights::{RuntimeDbWeight, Weight, WeightMeter},
 };
@@ -281,12 +281,13 @@ pub enum SteppedMigrationError {
 	Failed,
 }
 
+/// Check whether transaction processing is suspended on the runtime level.
 pub trait ExtrinsicSuspenderQuery {
-	fn is_suspended() -> bool;
+	fn is_suspended(class: DispatchClass) -> bool;
 }
 
 impl ExtrinsicSuspenderQuery for () {
-	fn is_suspended() -> bool {
+	fn is_suspended(_class: DispatchClass) -> bool {
 		false
 	}
 }

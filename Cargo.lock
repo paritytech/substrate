@@ -6716,6 +6716,7 @@ dependencies = [
  "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
+ "pretty_assertions",
  "scale-info",
  "sp-core",
  "sp-io",

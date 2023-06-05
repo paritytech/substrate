@@ -27,20 +27,13 @@ sp-runtime = { version = "24.0.0", path = "../../primitives/runtime", default-fe
 sp-tracing = { version = "10.0.0", path = "../../primitives/tracing", features = [ "std" ] }
 sp-core = { version = "21.0.0", path = "../../primitives/core", features = [ "std" ] }
 sp-io = { version = "23.0.0", path = "../../primitives/io", features = [ "std" ] }
+pretty_assertions = "1.3.0"
 
 [features]
 default = ["std"]
 
-std = [
-	"codec/std",
-	"frame-benchmarking?/std",
-	"frame-support/std",
-	"frame-system/std",
-	"scale-info/std",
-	"sp-std/std",
-	"sp-runtime/std",
-]
+std = ["codec/std", "frame-benchmarking?/std", "frame-support/std", "frame-system/std", "scale-info/std", "sp-std/std", "sp-runtime/std"]
 
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "frame-support/runtime-benchmarks", "frame-system/runtime-benchmarks", "sp-runtime/runtime-benchmarks",]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "frame-support/runtime-benchmarks", "frame-system/runtime-benchmarks", "sp-runtime/runtime-benchmarks"]
 
-try-runtime = ["frame-support/try-runtime", "sp-runtime/try-runtime",]
+try-runtime = ["frame-support/try-runtime", "sp-runtime/try-runtime"]

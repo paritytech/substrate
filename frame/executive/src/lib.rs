@@ -587,9 +587,7 @@ impl<
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
 		// Check whether we need to error because extrinsics are paused.
-		let r = if dispatch_info.class != DispatchClass::Mandatory &&
-			ExtrinsicSuspender::is_suspended()
-		{
+		let r = if ExtrinsicSuspender::is_suspended(dispatch_info.class) {
 			// no refunds
 			Err(DispatchError::Suspended.with_weight(dispatch_info.weight))
 		} else {
