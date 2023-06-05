@@ -36,17 +36,17 @@ sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-network = { version = "0.10.0-dev", path = "../" }
 sc-network-common = { version = "0.10.0-dev", path = "../common" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
-sp-arithmetic = { version = "7.0.0", path = "../../../primitives/arithmetic" }
+sp-arithmetic = { version = "16.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
 sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
-sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 tokio = { version = "1.22.0", features = ["macros"] }
 quickcheck = { version = "1.0.3", default-features = false }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sp-test-primitives = { version = "2.0.0", path = "../../../primitives/test-primitives" }
-sp-tracing = { version = "7.0.0", path = "../../../primitives/tracing" }
+sp-tracing = { version = "10.0.0", path = "../../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

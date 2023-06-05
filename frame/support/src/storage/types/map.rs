@@ -484,7 +484,7 @@ mod test {
 	use crate::{
 		hash::*,
 		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
-		storage::types::ValueQuery,
+		storage::{types::ValueQuery, IterableStorageMap},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
@@ -699,6 +699,15 @@ mod test {
 			C::insert(4, 10);
 			A::translate::<u8, _>(|k, v| Some((k * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40), (3, 30)]);
+
+			let translate_next = |k: u16, v: u8| Some((v as u16 / k).into());
+			let k = A::translate_next::<u8, _>(None, translate_next);
+			let k = A::translate_next::<u8, _>(k, translate_next);
+			assert_eq!(None, A::translate_next::<u8, _>(k, translate_next));
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 10), (3, 10)]);
+
+			let _ = A::translate_next::<u8, _>(None, |_, _| None);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(3, 10)]);
 
 			let mut entries = vec![];
 			A::build_metadata(vec![], &mut entries);
