@@ -57,34 +57,39 @@
 //!
 //! ### Design
 //!
-//! Migrations are provided to the pallet via a `Get<Vec<Box<dyn SteppedMigration...`. This was done
-//! to have the most flexibility when it comes to iterating and inspecting the migrations. It also
-//! simplifies the trait bounds since all associated types of the trait must be provided by the
-//! pallet. The actual progress of the pallet is stored in its `Cursor` storage item. This can
-//! either be [`MigrationCursor::Active`] or `Stuck`. In the active case it points to the currently
-//! active migration and stores its inner cursor. The inner cursor can then be used by the migration
-//! to store its inner state and advance. Each time when the migration returns `Some(cursor)`, it
-//! signals the pallet that it is not done yet. The cursor is re-set on each runtime upgrade. This
-//! ensures that it starts to execute at the first migration of the vector. The pallets cursor is
-//! only ever incremented and put into `Stuck` once it encounters an error (Goal 4). Once in the
-//! stuck state, the pallet will stay stuck until it is resolved through manual intervention.
-//! As soon as the cursor of the pallet becomes some; the transaction processing will be paused by
-//! returning `true` from [`ExtrinsicSuspenderQuery::is_suspended`]. This ensures that no other
-//! transactions are processed until the pallet is done (Goal 2). `on_initialize` the pallet will
-//! load the current migration and check whether it was already executed in the past by checking for
-//! membership of its ID in the `Historic` set. Historic migrations are ignored without causing an
-//! error. Each successfully executed migration is added to this set (Goal 5). This proceeds until
-//! no more migrations can be loaded. This causes event `UpgradeCompleted` to be emitted (Goal 1).
+//! Migrations are provided to the pallet through the storage item `Migrations` of type
+//! `Get<Vec<Box<dyn SteppedMigration<…`. This was done to have the most flexibility when it comes
+//! to iterating and inspecting the migrations. It also simplifies the trait bounds since all
+//! associated types of the trait must be provided by the pallet.  
+//! The actual progress of the pallet is stored in its `Cursor` storage item. This can either be
+//! [`MigrationCursor::Active`] or `Stuck`. In the active case it points to the currently active
+//! migration and stores its inner cursor. The inner cursor can then be used by the migration to
+//! store its inner state and advance. Each time when the migration returns `Some(cursor)`, it
+//! signals the pallet that it is not done yet.   
+//! The cursor is re-set on each runtime upgrade. This ensures that it starts to execute at the
+//! first migration of the vector. The pallets cursor is only ever incremented and put into `Stuck`
+//! once it encounters an error (Goal 4). Once in the stuck state, the pallet will stay stuck until
+//! it is resolved through manual intervention.  
+//! As soon as the cursor of the pallet becomes `Some(_)`; the transaction processing will be paused
+//! by returning `true` from [`ExtrinsicSuspenderQuery::is_suspended`]. This ensures that no other
+//! transactions are processed until the pallet is done (Goal 2).  
+//! `on_initialize` the pallet will load the current migration and check whether it was already
+//! executed in the past by checking for membership of its ID in the `Historic` set. Historic
+//! migrations are ignored without causing an error. Each successfully executed migration is added
+//! to this set (Goal 5).  
+//! This proceeds until no more migrations can be loaded. This causes event `UpgradeCompleted` to be
+//! emitted (Goal 1).  
 //! The execution of each migrations happens by calling [`SteppedMigration::transactional_step`].
 //! This function wraps the inner `step` function into a transactional layer to allow rollback in
-//! the error case (Goal 6). Weight limits must be checked by the migration itself. The pallet
-//! provides a [`WeightMeter`] for that cause. The pallet may return
-//! [`SteppedMigrationError::InsufficientWeight`] at any point. The pallet will react to this with a
-//! case decision: if that migration was exclusively execute in this block, and therefore got the
-//! maximal amount of weight possible, the pallet becomes `Stuck`. Otherwise one re-attempt is done
-//! with the same logic in the next block (Goal 3). Progress of the pallet is guaranteed by
-//! providing once: a timeout for each migration via [`SteppedMigration::max_steps`]. The pallet
-//! **ONLY** guarantees progress if this is set to sensible limits (Goal 7).
+//! the error case (Goal 6).  
+//! Weight limits must be checked by the migration itself. The pallet provides a [`WeightMeter`] for
+//! that cause. The pallet may return [`SteppedMigrationError::InsufficientWeight`] at any point.
+//! The pallet will react to this with a case decision: if that migration was exclusively execute in
+//! this block, and therefore got the maximal amount of weight possible, the pallet becomes `Stuck`.
+//! Otherwise one re-attempt is done with the same logic in the next block (Goal 3).  
+//! Progress of the pallet is guaranteed by providing once: a timeout for each migration via
+//! [`SteppedMigration::max_steps`]. The pallet **ONLY** guarantees progress if this is set to
+//! sensible limits (Goal 7).
 //!
 //! ### Scenario: Governance cleanup
 //!
@@ -96,17 +101,10 @@
 //!
 //! The standard procedure for a successful runtime upgrade can look like this:
 //! 1. Migrations are configured in the `Migrations` config item. All migrations expose `max_steps`,
-//! error tolerance, check their weight bounds and have a unique identifier. 2. The runtime upgrade
-//! is enacted. Events `UpgradeStarted` is followed by lots of `MigrationAdvanced`. Finally an
-//! `UpgradeCompleted` is emitted.  
-//! 3. The code of the executed migrations can be removed from the runtime. Eventually governance
-//! can call `clear_historic` to clean up the `Historic` set.
-//!
-//! ### Advice: Failed migrations
-//!
-//! Failed migrations are not added to the `Historic` blacklist. This means that an erroneous
-//! migration must be removed of fixed manually. This already applies - even before taking the
-//! historic set into account.
+//! error tolerance, check their weight bounds and have a unique identifier.  
+//! 2. The runtime upgrade is enacted. Events `UpgradeStarted` is followed by lots of
+//! `MigrationAdvanced`. Finally an `UpgradeCompleted` is emitted.  
+//! 3. Cleanup as described on the governance scenario can happen at any time.
 //!
 //! ### Advice: Failed upgrades
 //!
@@ -114,14 +112,22 @@
 //! monitoring for event `UpgradeFailed` to act in this case. Hook [`UpgradeStatusHandler::failed`]
 //! should be setup in a way that it allows governance to act, but still prevent other transactions
 //! from interacting with the inconsistent storage state. Note that this is paramount, since the
-//! inconsistent state might contain faulty balance amount or similar that could cause great harm.
-//! One way to implement this would be to use the `SafeMode` or `TxPause` pallets that can prevent
-//! most user interactions but still allow a whitelisted set of governance calls.
+//! inconsistent state might contain faulty balance amount or similar that could cause great harm if
+//! user transactions don't remain suspended. One way to implement this would be to use the
+//! `SafeMode` or `TxPause` pallets that can prevent most user interactions but still allow a
+//! whitelisted set of governance calls.
+//!
+//! ### Remark: Failed migrations
+//!
+//! Failed migrations are not added to the `Historic` blacklist. This means that an erroneous
+//! migration must be removed of fixed manually. This already applies - even before taking the
+//! historic set into account.
 //!
 //! ### Remark: Transactional processing
 //!
 //! You can see the transactional semantics for migrational steps as mostly useless, since in the
-//! stuck case the state is messed up anyway. This just prevents it from messing up even more.
+//! stuck case the state is already messed up. This just prevents it from getting messed up even
+//! more, but does not prevent it in the first place.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

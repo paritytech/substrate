@@ -1989,6 +1989,7 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	AllPalletsWithSystem,
 	Migrations,
+	MultiBlockMigrations,
 >;
 
 // All migrations executed on runtime upgrade as a nested tuple of types implementing

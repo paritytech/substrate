@@ -6712,6 +6712,7 @@ version = "1.0.0"
 dependencies = [
  "docify",
  "frame-benchmarking",
+ "frame-executive",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",
@@ -6719,11 +6720,14 @@ dependencies = [
  "parity-scale-codec",
  "pretty_assertions",
  "scale-info",
+ "sp-api",
+ "sp-block-builder",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
  "sp-tracing",
+ "sp-version",
 ]
 
 [[package]]
