@@ -16,11 +16,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
 scale-info = { version = "2.0.1", features = ["derive"] }
 
-sp-runtime = { version = "8.0.0", path = "../../../primitives/runtime" }
-sp-io = { version = "8.0.0", path = "../../../primitives/io" }
-sp-std = { version = "6.0.0", path = "../../../primitives/std" }
+sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
+sp-io = { version = "23.0.0", path = "../../../primitives/io" }
+sp-std = { version = "8.0.0", path = "../../../primitives/std" }
 sp-staking = { version = "4.0.0-dev", path = "../../../primitives/staking" }
-sp-core = { version = "8.0.0", path = "../../../primitives/core" }
+sp-core = { version = "21.0.0", path = "../../../primitives/core" }
 
 frame-system = { version = "4.0.0-dev", path = "../../system" }
 frame-support = { version = "4.0.0-dev", path = "../../support" }
@@ -33,5 +33,5 @@ pallet-bags-list = { version = "4.0.0-dev", path = "../../bags-list" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
 pallet-nomination-pools = { version = "1.0.0-dev", path = ".." }
 
-sp-tracing = { version = "7.0.0", path = "../../../primitives/tracing" }
+sp-tracing = { version = "10.0.0", path = "../../../primitives/tracing" }
 log = { version = "0.4.0" }
