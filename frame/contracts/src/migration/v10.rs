@@ -46,9 +46,9 @@ use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 mod old {
 	use super::*;
 
-	pub type BalanceOf<T: Config, Currency: CurrencyOf<T>> = <Currency as frame_support::traits::Currency<
-			<T as frame_system::Config>::AccountId,
-		>>::Balance;
+	pub type BalanceOf<T, Currency> = <Currency as frame_support::traits::Currency<
+		<T as frame_system::Config>::AccountId,
+	>>::Balance;
 
 	/// Old Currency type traits
 	///
@@ -137,7 +137,7 @@ type ContractInfoOf<T: Config, Currency: old::CurrencyOf<T>> = StorageMap<
 	ContractInfo<T, Currency>,
 >;
 
-impl<T: Config, Currency: old::CurrencyOf<T>> Migrate for Migration<T, Currency> {
+impl<T: Config, Currency: old::CurrencyOf<T> + 'static> Migrate for Migration<T, Currency> {
 	const VERSION: u16 = 10;
 
 	fn max_step_weight() -> Weight {
