@@ -243,7 +243,6 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod peer_store;
 mod protocol;
 mod service;
 
@@ -253,6 +252,7 @@ pub mod error;
 pub mod event;
 pub mod network_state;
 pub mod peer_info;
+pub mod peer_store;
 pub mod peerset;
 pub mod protocol_controller;
 pub mod request_responses;
