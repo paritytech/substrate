@@ -54,11 +54,60 @@ use wasm_timer::Delay;
 
 use crate::{
 	peer_store::PeerStoreProvider,
-	peerset::{IncomingIndex, Message, SetConfig, SetId},
+	peerset::{IncomingIndex, Message},
 };
 
 /// Log target for this file.
 pub const LOG_TARGET: &str = "peerset";
+
+/// `Notifications` protocol identifier. For historical reasons it's called `SetId`, because it
+/// used to refer to a set of peers in a peerset for this protocol.
+///
+/// Can be constructed using the `From<usize>` trait implementation based on the index of the set
+/// within [`PeersetConfig::sets`]. For example, the first element of [`PeersetConfig::sets`] is
+/// later referred to with `SetId::from(0)`. It is intended that the code responsible for building
+/// the [`PeersetConfig`] is also responsible for constructing the [`SetId`]s.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SetId(usize);
+
+impl SetId {
+	pub const fn from(id: usize) -> Self {
+		Self(id)
+	}
+}
+
+impl From<usize> for SetId {
+	fn from(id: usize) -> Self {
+		Self(id)
+	}
+}
+
+impl From<SetId> for usize {
+	fn from(id: SetId) -> Self {
+		id.0
+	}
+}
+
+/// Configuration for a set of nodes for a specific protocol.
+//
+// TODO: merge this with [`crate::config::SetConfig`].
+#[derive(Debug)]
+pub struct ProtoSetConfig {
+	/// Maximum number of ingoing links to peers.
+	pub in_peers: u32,
+
+	/// Maximum number of outgoing links to peers.
+	pub out_peers: u32,
+
+	/// Lists of nodes we should always be connected to.
+	///
+	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
+	/// >			otherwise it will not be able to connect to them.
+	pub reserved_nodes: HashSet<PeerId>,
+
+	/// If true, we only accept nodes in [`SetConfig::reserved_nodes`].
+	pub reserved_only: bool,
+}
 
 /// External API actions.
 #[derive(Debug)]
@@ -217,7 +266,7 @@ impl ProtocolController {
 	/// Construct new [`ProtocolController`].
 	pub fn new(
 		set_id: SetId,
-		config: SetConfig,
+		config: ProtoSetConfig,
 		to_notifications: TracingUnboundedSender<Message>,
 		peer_store: Box<dyn PeerStoreProvider>,
 	) -> (ProtocolHandle, ProtocolController) {
@@ -742,10 +791,10 @@ impl ProtocolController {
 
 #[cfg(test)]
 mod tests {
-	use super::{Direction, PeerState, ProtocolController, ProtocolHandle};
+	use super::{Direction, PeerState, ProtoSetConfig, ProtocolController, ProtocolHandle, SetId};
 	use crate::{
 		peer_store::PeerStoreProvider,
-		peerset::{IncomingIndex, Message, SetConfig, SetId},
+		peerset::{IncomingIndex, Message},
 		ReputationChange,
 	};
 	use libp2p::PeerId;
@@ -772,7 +821,7 @@ mod tests {
 		let reserved2 = PeerId::random();
 
 		// Add first reserved node via config.
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: std::iter::once(reserved1).collect(),
@@ -834,7 +883,7 @@ mod tests {
 		let reserved2 = PeerId::random();
 
 		// Add first reserved node via config.
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: std::iter::once(reserved1).collect(),
@@ -885,7 +934,7 @@ mod tests {
 		let reserved2 = PeerId::random();
 
 		// Add first reserved node via config.
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: std::iter::once(reserved1).collect(),
@@ -943,7 +992,7 @@ mod tests {
 		let peer2 = PeerId::random();
 		let candidates = vec![peer1, peer2];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Less slots than candidates.
 			out_peers: 2,
@@ -995,7 +1044,7 @@ mod tests {
 		let reserved_nodes = [reserved1, reserved2].iter().cloned().collect();
 
 		let config =
-			SetConfig { in_peers: 10, out_peers: 10, reserved_nodes, reserved_only: false };
+			ProtoSetConfig { in_peers: 10, out_peers: 10, reserved_nodes, reserved_only: false };
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
 		let mut peer_store = MockPeerStoreHandle::new();
@@ -1030,7 +1079,7 @@ mod tests {
 		let candidates1 = vec![peer1, peer2];
 		let candidates2 = vec![peer3];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Less slots than candidates.
 			out_peers: 2,
@@ -1100,7 +1149,7 @@ mod tests {
 
 	#[test]
 	fn in_reserved_only_mode_no_peers_are_requested_from_peer_store_and_connected() {
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Make sure we have slots available.
 			out_peers: 2,
@@ -1126,7 +1175,7 @@ mod tests {
 
 	#[test]
 	fn in_reserved_only_mode_no_regular_peers_are_accepted() {
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			// Make sure we have slots available.
 			in_peers: 2,
 			out_peers: 0,
@@ -1163,7 +1212,7 @@ mod tests {
 		let peer2 = PeerId::random();
 		let candidates = vec![peer1, peer2];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 0,
 			// Make sure we have slots available.
 			out_peers: 10,
@@ -1210,7 +1259,7 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
@@ -1270,7 +1319,7 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
@@ -1302,7 +1351,7 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
@@ -1348,7 +1397,7 @@ mod tests {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: [peer1, peer2].iter().cloned().collect(),
@@ -1394,7 +1443,7 @@ mod tests {
 		let peer2 = PeerId::random();
 		let outgoing_candidates = vec![peer1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: HashSet::new(),
@@ -1436,7 +1485,7 @@ mod tests {
 		let peer2 = PeerId::random();
 		let outgoing_candidates = vec![peer1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: HashSet::new(),
@@ -1495,7 +1544,7 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
@@ -1551,7 +1600,7 @@ mod tests {
 		let peer2 = PeerId::random();
 		let outgoing_candidates = vec![peer1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: HashSet::new(),
@@ -1603,7 +1652,7 @@ mod tests {
 		let reserved1 = PeerId::random();
 		let reserved2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
@@ -1663,7 +1712,7 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: HashSet::new(),
@@ -1715,7 +1764,7 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: HashSet::new(),
@@ -1768,7 +1817,7 @@ mod tests {
 		let regular2 = PeerId::random();
 		let outgoing_candidates = vec![regular1];
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 1,
 			out_peers: 1,
 			reserved_nodes: HashSet::new(),
@@ -1821,7 +1870,7 @@ mod tests {
 		let peer1 = PeerId::random();
 		let peer2 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 1,
 			out_peers: 10,
 			reserved_nodes: HashSet::new(),
@@ -1851,7 +1900,7 @@ mod tests {
 	fn banned_regular_incoming_node_is_rejected() {
 		let peer1 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: HashSet::new(),
@@ -1876,7 +1925,7 @@ mod tests {
 	fn banned_reserved_incoming_node_is_rejected() {
 		let reserved1 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: std::iter::once(reserved1).collect(),
@@ -1902,7 +1951,7 @@ mod tests {
 	fn we_dont_connect_to_banned_reserved_node() {
 		let reserved1 = PeerId::random();
 
-		let config = SetConfig {
+		let config = ProtoSetConfig {
 			in_peers: 10,
 			out_peers: 10,
 			reserved_nodes: std::iter::once(reserved1).collect(),

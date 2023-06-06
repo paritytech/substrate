@@ -1040,7 +1040,10 @@ impl Codec for GenericCodec {
 mod tests {
 	use super::*;
 
-	use crate::peerset::{Peerset, PeersetConfig, SetConfig};
+	use crate::{
+		peerset::{Peerset, PeersetConfig},
+		protocol_controller::ProtoSetConfig,
+	};
 	use futures::{channel::oneshot, executor::LocalPool, task::Spawn};
 	use libp2p::{
 		core::{
@@ -1074,7 +1077,7 @@ mod tests {
 
 		let config = PeersetConfig {
 			bootnodes: vec![],
-			sets: vec![SetConfig {
+			sets: vec![ProtoSetConfig {
 				in_peers: u32::max_value(),
 				out_peers: u32::max_value(),
 				reserved_nodes: Default::default(),

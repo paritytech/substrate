@@ -18,7 +18,10 @@
 
 #![cfg(test)]
 
-use crate::protocol::notifications::{Notifications, NotificationsOut, ProtocolConfig};
+use crate::{
+	protocol::notifications::{Notifications, NotificationsOut, ProtocolConfig},
+	protocol_controller::{ProtoSetConfig, SetId},
+};
 
 use futures::prelude::*;
 use libp2p::{
@@ -72,7 +75,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				} else {
 					vec![]
 				},
-				sets: vec![crate::peerset::SetConfig {
+				sets: vec![ProtoSetConfig {
 					in_peers: 25,
 					out_peers: 25,
 					reserved_nodes: Default::default(),
@@ -268,10 +271,9 @@ fn reconnect_after_disconnect() {
 					ServiceState::NotConnected => {
 						service1_state = ServiceState::FirstConnec;
 						if service2_state == ServiceState::FirstConnec {
-							service1.behaviour_mut().disconnect_peer(
-								Swarm::local_peer_id(&service2),
-								crate::peerset::SetId::from(0),
-							);
+							service1
+								.behaviour_mut()
+								.disconnect_peer(Swarm::local_peer_id(&service2), SetId::from(0));
 						}
 					},
 					ServiceState::Disconnected => service1_state = ServiceState::ConnectedAgain,
@@ -291,10 +293,9 @@ fn reconnect_after_disconnect() {
 					ServiceState::NotConnected => {
 						service2_state = ServiceState::FirstConnec;
 						if service1_state == ServiceState::FirstConnec {
-							service1.behaviour_mut().disconnect_peer(
-								Swarm::local_peer_id(&service2),
-								crate::peerset::SetId::from(0),
-							);
+							service1
+								.behaviour_mut()
+								.disconnect_peer(Swarm::local_peer_id(&service2), SetId::from(0));
 						}
 					},
 					ServiceState::Disconnected => service2_state = ServiceState::ConnectedAgain,

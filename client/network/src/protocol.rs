@@ -19,6 +19,7 @@
 use crate::{
 	config::{self, NonReservedPeerMode},
 	error,
+	protocol_controller::{ProtoSetConfig, SetId},
 	types::ProtocolName,
 	ReputationChange,
 };
@@ -62,7 +63,7 @@ pub mod message;
 pub(crate) const BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE: u64 = 16 * 1024 * 1024;
 
 /// Identifier of the peerset for the block announces protocol.
-const HARDCODED_PEERSETS_SYNC: crate::peerset::SetId = crate::peerset::SetId::from(0);
+const HARDCODED_PEERSETS_SYNC: SetId = SetId::from(0);
 /// Number of hardcoded peersets (the constants right above). Any set whose identifier is equal or
 /// superior to this value corresponds to a user-defined protocol.
 const NUM_HARDCODED_PEERSETS: usize = 1;
@@ -90,7 +91,7 @@ pub struct Protocol<B: BlockT> {
 	/// event to the outer layers, we also shouldn't propagate this "substream closed" event. To
 	/// solve this, an entry is added to this map whenever an invalid handshake is received.
 	/// Entries are removed when the corresponding "substream closed" is later received.
-	bad_handshake_substreams: HashSet<(PeerId, crate::peerset::SetId)>,
+	bad_handshake_substreams: HashSet<(PeerId, SetId)>,
 	/// Connected peers.
 	peers: HashMap<PeerId, Roles>,
 	sync_substream_validations: FuturesUnordered<PendingSyncSubstreamValidation>,
@@ -128,7 +129,7 @@ impl<B: BlockT> Protocol<B> {
 			}
 
 			// Set number 0 is used for block announces.
-			sets.push(crate::peerset::SetConfig {
+			sets.push(ProtoSetConfig {
 				in_peers: network_config.default_peers_set.in_peers,
 				out_peers: network_config.default_peers_set.out_peers,
 				reserved_nodes: default_sets_reserved.clone(),
@@ -146,7 +147,7 @@ impl<B: BlockT> Protocol<B> {
 				let reserved_only =
 					set_cfg.set_config.non_reserved_mode == NonReservedPeerMode::Deny;
 
-				sets.push(crate::peerset::SetConfig {
+				sets.push(ProtoSetConfig {
 					in_peers: set_cfg.set_config.in_peers,
 					out_peers: set_cfg.set_config.out_peers,
 					reserved_nodes,
@@ -209,7 +210,7 @@ impl<B: BlockT> Protocol<B> {
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: ProtocolName) {
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name)
 		{
-			self.behaviour.disconnect_peer(peer_id, crate::peerset::SetId::from(position));
+			self.behaviour.disconnect_peer(peer_id, SetId::from(position));
 			self.peers.remove(peer_id);
 		} else {
 			warn!(target: "sub-libp2p", "disconnect_peer() with invalid protocol name")
@@ -234,8 +235,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Set handshake for the notification protocol.
 	pub fn set_notification_handshake(&mut self, protocol: ProtocolName, handshake: Vec<u8>) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.behaviour
-				.set_notif_protocol_handshake(crate::peerset::SetId::from(index), handshake);
+			self.behaviour.set_notif_protocol_handshake(SetId::from(index), handshake);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -273,8 +273,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Sets the list of reserved peers for the given protocol/peerset.
 	pub fn set_reserved_peerset_peers(&self, protocol: ProtocolName, peers: HashSet<PeerId>) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle
-				.set_reserved_peers(crate::peerset::SetId::from(index), peers);
+			self.peerset_handle.set_reserved_peers(SetId::from(index), peers);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -287,8 +286,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle
-				.remove_reserved_peer(crate::peerset::SetId::from(index), peer);
+			self.peerset_handle.remove_reserved_peer(SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -301,7 +299,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Adds a `PeerId` to the list of reserved peers.
 	pub fn add_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.add_reserved_peer(crate::peerset::SetId::from(index), peer);
+			self.peerset_handle.add_reserved_peer(SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
