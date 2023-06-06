@@ -76,8 +76,7 @@ pub mod pallet {
 		/// The currency mechanism, used for paying for deposits.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
-		/// The origin which may forcibly create or destroy an item or otherwise alter privileged
-		/// attributes.
+		/// The origin which may forcibly set the royalty for a collection or an item
 		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Identifier for the NFT collection.
@@ -115,8 +114,8 @@ pub mod pallet {
 		type ItemRoyaltyDeposit: Get<DepositBalanceOf<Self>>;
 	}
 
-	/// The storage for NFT collections with a royalty
-	/// This will be the royalty used for all items in the collection unless overridden in `ItemRoyalty`
+	/// Collections with a royalty.
+	/// The royalty set here will apply to all items in the collection unless overridden in `ItemRoyalty`
 	#[pallet::storage]
 	pub type CollectionRoyalty<T: Config> = StorageMap<
 		_,
@@ -126,8 +125,8 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The storage for NFT items with a royalty.
-	/// Setting the royalty in this storage will override the royalty set in `CollectionRoyalty` only for the specific item.
+	/// Items with a royalty.
+	/// Overrides `CollectionRoyalty` for the specific item.
 	#[pallet::storage]
 	pub type ItemRoyalty<T: Config> = StorageMap<
 		_,
@@ -137,7 +136,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// The storage for royalty recipient(s) and the percentage of the total royalty each will receive.
+	/// The storage for collection royalty recipient(s) and the percentage of the total royalty each will receive.
 	#[pallet::storage]
 	pub type CollectionRoyaltyRecipients<T: Config> = StorageMap<
 		_,
@@ -146,7 +145,7 @@ pub mod pallet {
 		BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
 	>;
 
-	/// The storage for royalty recipient(s) and the percentage of the total royalty each will receive.
+	/// The storage for item royalty recipient(s) and the percentage of the total royalty each will receive.
 	/// Setting the recipients in this storage will override the recipient(s) set in `CollectionRoyaltyRecipients` only for the specific item.
 	#[pallet::storage]
 	pub type ItemRoyaltyRecipients<T: Config> = StorageMap<
@@ -242,7 +241,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Set the royalty for an existing collection.
 		///
-		/// The origin must be the actual owner of the `collection` or the `ForceOrigin`.
+		/// The origin must be the owner of the `collection` or the `ForceOrigin`.
 		///
 		/// - `collection_id`: The NFT collection id.
 		/// - `royalty_percentage`: Royalty percentage to be set.
@@ -360,7 +359,7 @@ pub mod pallet {
 
 		/// Create royalty recipients for an existing collection.
 		///
-		/// Origin must be Signed and must not be the owner of the `collection`.
+		/// Origin must be Signed and must be the owner of the `collection` or `ForceOrigin`.
 		///
 		/// - `collection`: The collection of the item.
 		/// - `recipients`: The recipients of the royalties.
@@ -393,9 +392,7 @@ pub mod pallet {
 			let royalties_recipients: BoundedVec<_, T::MaxRecipients> =
 				recipients.try_into().map_err(|_| Error::<T>::MaxRecipientsLimit)?;
 
-			// Should we do this? Or should we allow to overwrite the recipients that way we have
-			// only one extrinsic for creating recipients and updating them. Ensure that the
-			// collection does not have any royalty recipients yet
+			// Recipients can only be set once
 			ensure!(
 				!CollectionRoyaltyRecipients::<T>::contains_key(&collection_id),
 				Error::<T>::RoyaltyRecipientsAlreadyExist
@@ -421,7 +418,7 @@ pub mod pallet {
 
 		/// Create royalty recipients for an existing item.
 		///
-		/// Origin must be Signed and must not be the owner of the `collection`.
+		/// Origin must be Signed and must be the owner of the `item` or `ForceOrigin`.
 		///
 		/// - `collection`: The collection of the item.
 		/// - `item`: The id of the item.
