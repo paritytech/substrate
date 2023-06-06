@@ -2157,12 +2157,14 @@ mod tests {
 			sets.push(crate::peerset::SetConfig {
 				in_peers: 25,
 				out_peers: 25,
-				bootnodes: Vec::new(),
 				reserved_nodes: HashSet::new(),
 				reserved_only: false,
 			});
 
-			crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig { sets })
+			crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig {
+				bootnodes: Vec::new(),
+				sets,
+			})
 		};
 
 		(

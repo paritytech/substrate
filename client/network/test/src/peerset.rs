@@ -130,14 +130,14 @@ fn test_once() {
 	let mut reserved_nodes = HashSet::<PeerId>::new();
 
 	let (mut peerset, peerset_handle) = Peerset::from_config(PeersetConfig {
+		bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
+			.map(|_| {
+				let id = PeerId::random();
+				known_nodes.insert(id, State::Disconnected);
+				id
+			})
+			.collect(),
 		sets: vec![SetConfig {
-			bootnodes: (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
-				.map(|_| {
-					let id = PeerId::random();
-					known_nodes.insert(id, State::Disconnected);
-					id
-				})
-				.collect(),
 			reserved_nodes: {
 				(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
 					.map(|_| {

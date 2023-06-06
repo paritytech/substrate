@@ -131,7 +131,6 @@ impl<B: BlockT> Protocol<B> {
 			sets.push(crate::peerset::SetConfig {
 				in_peers: network_config.default_peers_set.in_peers,
 				out_peers: network_config.default_peers_set.out_peers,
-				bootnodes,
 				reserved_nodes: default_sets_reserved.clone(),
 				reserved_only: network_config.default_peers_set.non_reserved_mode ==
 					NonReservedPeerMode::Deny,
@@ -150,13 +149,12 @@ impl<B: BlockT> Protocol<B> {
 				sets.push(crate::peerset::SetConfig {
 					in_peers: set_cfg.set_config.in_peers,
 					out_peers: set_cfg.set_config.out_peers,
-					bootnodes: Vec::new(),
 					reserved_nodes,
 					reserved_only,
 				});
 			}
 
-			crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig { sets })
+			crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig { bootnodes, sets })
 		};
 
 		let behaviour = {
