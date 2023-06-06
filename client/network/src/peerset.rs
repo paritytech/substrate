@@ -34,7 +34,7 @@
 
 use crate::{
 	peer_store::{PeerStore, PeerStoreHandle, PeerStoreProvider},
-	protocol_controller::{ProtocolController, ProtocolHandle},
+	protocol_controller::{ProtoSetConfig, ProtocolController, ProtocolHandle, SetId},
 };
 
 use futures::{
@@ -66,33 +66,6 @@ enum Action {
 	ReportPeer(PeerId, ReputationChange),
 	AddKnownPeer(PeerId),
 	PeerReputation(PeerId, oneshot::Sender<i32>),
-}
-
-/// Identifier of a set in the peerset.
-///
-/// Can be constructed using the `From<usize>` trait implementation based on the index of the set
-/// within [`PeersetConfig::sets`]. For example, the first element of [`PeersetConfig::sets`] is
-/// later referred to with `SetId::from(0)`. It is intended that the code responsible for building
-/// the [`PeersetConfig`] is also responsible for constructing the [`SetId`]s.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SetId(usize);
-
-impl SetId {
-	pub const fn from(id: usize) -> Self {
-		Self(id)
-	}
-}
-
-impl From<usize> for SetId {
-	fn from(id: usize) -> Self {
-		Self(id)
-	}
-}
-
-impl From<SetId> for usize {
-	fn from(id: SetId) -> Self {
-		id.0
-	}
 }
 
 /// Shared handle to the peer set manager (PSM). Distributed around the code.
@@ -195,26 +168,7 @@ pub struct PeersetConfig {
 	/// Bootnodes.
 	pub bootnodes: Vec<PeerId>,
 	/// List of sets of nodes the peerset manages.
-	pub sets: Vec<SetConfig>,
-}
-
-/// Configuration for a single set of nodes.
-#[derive(Debug)]
-pub struct SetConfig {
-	/// Maximum number of ingoing links to peers.
-	pub in_peers: u32,
-
-	/// Maximum number of outgoing links to peers.
-	pub out_peers: u32,
-
-	/// Lists of nodes we should always be connected to.
-	///
-	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
-	/// >			otherwise it will not be able to connect to them.
-	pub reserved_nodes: HashSet<PeerId>,
-
-	/// If true, we only accept nodes in [`SetConfig::reserved_nodes`].
-	pub reserved_only: bool,
+	pub sets: Vec<ProtoSetConfig>,
 }
 
 /// Side of the peer set manager owned by the network. In other words, the "receiving" side.
@@ -283,7 +237,7 @@ impl Peerset {
 
 	/// Returns the list of reserved peers.
 	pub fn reserved_peers(&self, set_id: SetId, pending_response: oneshot::Sender<Vec<PeerId>>) {
-		self.protocol_handles[set_id.0].reserved_peers(pending_response);
+		self.protocol_handles[usize::from(set_id)].reserved_peers(pending_response);
 	}
 
 	/// Indicate that we received an incoming connection. Must be answered either with
@@ -296,7 +250,7 @@ impl Peerset {
 	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
 	// `PeerId` before that message has been read by the user. In this situation we must not answer.
 	pub fn incoming(&mut self, set_id: SetId, peer_id: PeerId, index: IncomingIndex) {
-		self.protocol_handles[set_id.0].incoming_connection(peer_id, index);
+		self.protocol_handles[usize::from(set_id)].incoming_connection(peer_id, index);
 	}
 
 	/// Indicate that we dropped an active connection with a peer, or that we failed to connect.
@@ -304,7 +258,7 @@ impl Peerset {
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, _reason: DropReason) {
-		self.protocol_handles[set_id.0].dropped(peer_id);
+		self.protocol_handles[usize::from(set_id)].dropped(peer_id);
 	}
 
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
@@ -340,13 +294,13 @@ impl Stream for Peerset {
 			if let Some(action) = action {
 				match action {
 					Action::AddReservedPeer(set_id, peer_id) =>
-						self.protocol_handles[set_id.0].add_reserved_peer(peer_id),
+						self.protocol_handles[usize::from(set_id)].add_reserved_peer(peer_id),
 					Action::RemoveReservedPeer(set_id, peer_id) =>
-						self.protocol_handles[set_id.0].remove_reserved_peer(peer_id),
+						self.protocol_handles[usize::from(set_id)].remove_reserved_peer(peer_id),
 					Action::SetReservedPeers(set_id, peer_ids) =>
-						self.protocol_handles[set_id.0].set_reserved_peers(peer_ids),
+						self.protocol_handles[usize::from(set_id)].set_reserved_peers(peer_ids),
 					Action::SetReservedOnly(set_id, reserved_only) =>
-						self.protocol_handles[set_id.0].set_reserved_only(reserved_only),
+						self.protocol_handles[usize::from(set_id)].set_reserved_only(reserved_only),
 					Action::ReportPeer(peer_id, score_diff) =>
 						self.peer_store_handle.report_peer(peer_id, score_diff),
 					Action::AddKnownPeer(peer_id) => self.peer_store_handle.add_known_peer(peer_id),
