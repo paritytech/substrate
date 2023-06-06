@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! Keystore traits
-
+#[cfg(feature = "std")]
 pub mod testing;
 
 #[cfg(feature = "bls-experimental")]
