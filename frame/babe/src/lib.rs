@@ -811,7 +811,7 @@ impl<T: Config> Pallet<T> {
 
 			// how many slots were skipped between current and last block
 			let lateness = current_slot.saturating_sub(CurrentSlot::<T>::get() + 1);
-			let lateness = T::BlockNumber::from(*lateness as u32);
+			let lateness = BlockNumberOf::<T>::from(*lateness as u32);
 
 			Lateness::<T>::put(lateness);
 			CurrentSlot::<T>::put(current_slot);

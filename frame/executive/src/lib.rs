@@ -732,7 +732,7 @@ mod tests {
 			}
 
 			fn offchain_worker(n: T::BlockNumber) {
-				assert_eq!(T::BlockNumber::from(1u32), n);
+				assert_eq!(BlockNumberOf::<T>::from(1u32), n);
 			}
 		}
 

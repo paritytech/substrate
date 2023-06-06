@@ -196,6 +196,9 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 	}
 }
 
+pub type HeaderOf<T> = <<T as Config>::Block as traits::Block>::Header;
+pub type BlockNumberOf<T> = <<<T as Config>::Block as traits::Block>::Header as traits::Header>::Number;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
@@ -684,7 +687,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
+			<BlockHash<T>>::insert::<_, T::Hash>(BlockNumberOf::<T>::zero(), hash69());
 			<ParentHash<T>>::put::<T::Hash>(hash69());
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
@@ -1464,8 +1467,8 @@ impl<T: Config> Pallet<T> {
 	pub fn externalities() -> TestExternalities {
 		TestExternalities::new(sp_core::storage::Storage {
 			top: map![
-				<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
-				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
+				<BlockHash<T>>::hashed_key_for(BlockNumberOf::<T>::zero()) => [69u8; 32].encode(),
+				<Number<T>>::hashed_key().to_vec() => BlockNumberOf::<T>::one().encode(),
 				<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 			],
 			children_default: map![],

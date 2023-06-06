@@ -67,14 +67,14 @@ mod module {
 		fn default() -> Self {
 			Self {
 				max_actors: 10,
-				reward_period: T::BlockNumber::default(),
-				unbonding_period: T::BlockNumber::default(),
+				reward_period: BlockNumberOf::<T>::default(),
+				unbonding_period: BlockNumberOf::<T>::default(),
 
 				// not currently used
 				min_actors: 5,
-				bonding_period: T::BlockNumber::default(),
-				min_service_period: T::BlockNumber::default(),
-				startup_grace_period: T::BlockNumber::default(),
+				bonding_period: BlockNumberOf::<T>::default(),
+				min_service_period: BlockNumberOf::<T>::default(),
+				startup_grace_period: BlockNumberOf::<T>::default(),
 			}
 		}
 	}

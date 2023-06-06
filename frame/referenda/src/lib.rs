@@ -1056,7 +1056,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 		// Default the alarm to the end of the world.
 		let timeout = status.submitted + T::UndecidingTimeout::get();
-		let mut alarm = T::BlockNumber::max_value();
+		let mut alarm = BlockNumberOf::<T>::max_value();
 		let branch;
 		match &mut status.deciding {
 			None => {
@@ -1187,7 +1187,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		}
 
-		let dirty_alarm = if alarm < T::BlockNumber::max_value() {
+		let dirty_alarm = if alarm < BlockNumberOf::<T>::max_value() {
 			Self::ensure_alarm_at(&mut status, index, alarm)
 		} else {
 			Self::ensure_no_alarm(&mut status)
