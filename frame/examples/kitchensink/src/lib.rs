@@ -192,7 +192,7 @@ pub mod pallet {
 		}
 	}
 
-	/// Allows you to define how `genesis_configuration is built. 
+	/// Allows you to define how `genesis_configuration is built.
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
@@ -234,10 +234,7 @@ pub mod pallet {
 		SomethingHappened(u32),
 		/// A simple struct-style variant. Note that we use `AccountId` from `T` because `T:
 		/// Config`, which by extension implies `T: frame_system::Config`.
-		SomethingDetailedHappened {
-			at: u32,
-			to: T::AccountId,
-		},
+		SomethingDetailedHappened { at: u32, to: T::AccountId },
 		/// Another variant.
 		SomeoneJoined(T::AccountId),
 	}
@@ -291,7 +288,7 @@ pub mod pallet {
 		}
 	}
 
-	/// Allows you to define an enum on the pallet which will then instruct 
+	/// Allows you to define an enum on the pallet which will then instruct
 	/// `construct_runtime` to amalgamate all similarly-named enums from other
 	/// pallets into an aggregate enum.
 	#[pallet::composite_enum]
