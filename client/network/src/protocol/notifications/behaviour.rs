@@ -20,7 +20,7 @@ use crate::{
 	protocol::notifications::handler::{
 		self, NotificationsSink, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut,
 	},
-	protocol_controller::SetId,
+	protocol_controller::{IncomingIndex, Message, SetId},
 	types::ProtocolName,
 };
 
@@ -130,7 +130,7 @@ pub struct Notifications {
 
 	/// We generate indices to identify incoming connections. This is the next value for the index
 	/// to use when a connection is incoming.
-	next_incoming_index: crate::peerset::IncomingIndex,
+	next_incoming_index: IncomingIndex,
 
 	/// Events to produce from `poll()`.
 	events: VecDeque<ToSwarm<NotificationsOut, NotifsHandlerIn>>,
@@ -229,7 +229,7 @@ enum PeerState {
 		backoff_until: Option<Instant>,
 
 		/// Incoming index tracking this connection.
-		incoming_index: crate::peerset::IncomingIndex,
+		incoming_index: IncomingIndex,
 
 		/// List of connections with this peer, and their state.
 		connections: SmallVec<[(ConnectionId, ConnectionState); crate::MAX_CONNECTIONS_PER_PEER]>,
@@ -298,7 +298,7 @@ struct IncomingPeer {
 	/// connection corresponding to it has been closed or replaced already.
 	alive: bool,
 	/// Id that the we sent to the peerset.
-	incoming_id: crate::peerset::IncomingIndex,
+	incoming_id: IncomingIndex,
 }
 
 /// Event that can be emitted by the `Notifications`.
@@ -380,7 +380,7 @@ impl Notifications {
 			delays: Default::default(),
 			next_delay_id: DelayId(0),
 			incoming: SmallVec::new(),
-			next_incoming_index: crate::peerset::IncomingIndex(0),
+			next_incoming_index: IncomingIndex(0),
 			events: VecDeque::new(),
 		}
 	}
@@ -832,7 +832,7 @@ impl Notifications {
 
 	/// Function that is called when the peerset wants us to accept a connection
 	/// request from a peer.
-	fn peerset_report_accept(&mut self, index: crate::peerset::IncomingIndex) {
+	fn peerset_report_accept(&mut self, index: IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index)
 		{
 			self.incoming.remove(pos)
@@ -918,7 +918,7 @@ impl Notifications {
 	}
 
 	/// Function that is called when the peerset wants us to reject an incoming peer.
-	fn peerset_report_reject(&mut self, index: crate::peerset::IncomingIndex) {
+	fn peerset_report_reject(&mut self, index: IncomingIndex) {
 		let incoming = if let Some(pos) = self.incoming.iter().position(|i| i.incoming_id == index)
 		{
 			self.incoming.remove(pos)
@@ -2008,16 +2008,16 @@ impl NetworkBehaviour for Notifications {
 		// Note that the peerset is a *best effort* crate, and we have to use defensive programming.
 		loop {
 			match futures::Stream::poll_next(Pin::new(&mut self.peerset), cx) {
-				Poll::Ready(Some(crate::peerset::Message::Accept(index))) => {
+				Poll::Ready(Some(Message::Accept(index))) => {
 					self.peerset_report_accept(index);
 				},
-				Poll::Ready(Some(crate::peerset::Message::Reject(index))) => {
+				Poll::Ready(Some(Message::Reject(index))) => {
 					self.peerset_report_reject(index);
 				},
-				Poll::Ready(Some(crate::peerset::Message::Connect { peer_id, set_id, .. })) => {
+				Poll::Ready(Some(Message::Connect { peer_id, set_id, .. })) => {
 					self.peerset_report_connect(peer_id, set_id);
 				},
-				Poll::Ready(Some(crate::peerset::Message::Drop { peer_id, set_id, .. })) => {
+				Poll::Ready(Some(Message::Drop { peer_id, set_id, .. })) => {
 					self.peerset_report_disconnect(peer_id, set_id);
 				},
 				Poll::Ready(None) => {
@@ -2099,8 +2099,8 @@ impl NetworkBehaviour for Notifications {
 mod tests {
 	use super::*;
 	use crate::{
-		peerset::IncomingIndex, protocol::notifications::handler::tests::*,
-		protocol_controller::ProtoSetConfig,
+		protocol::notifications::handler::tests::*,
+		protocol_controller::{IncomingIndex, ProtoSetConfig},
 	};
 	use libp2p::swarm::AddressRecord;
 	use std::{collections::HashSet, iter};
@@ -2308,7 +2308,7 @@ mod tests {
 
 		assert!(std::matches!(
 			notif.incoming.pop(),
-			Some(IncomingPeer { alive: true, incoming_id: crate::peerset::IncomingIndex(0), .. }),
+			Some(IncomingPeer { alive: true, incoming_id: IncomingIndex(0), .. }),
 		));
 	}
 
@@ -2632,17 +2632,17 @@ mod tests {
 
 		assert!(std::matches!(
 			notif.incoming[0],
-			IncomingPeer { alive: true, incoming_id: crate::peerset::IncomingIndex(0), .. },
+			IncomingPeer { alive: true, incoming_id: IncomingIndex(0), .. },
 		));
 
 		notif.disconnect_peer(&peer, set_id);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Disabled { .. })));
 		assert!(std::matches!(
 			notif.incoming[0],
-			IncomingPeer { alive: false, incoming_id: crate::peerset::IncomingIndex(0), .. },
+			IncomingPeer { alive: false, incoming_id: IncomingIndex(0), .. },
 		));
 
-		notif.peerset_report_accept(crate::peerset::IncomingIndex(0));
+		notif.peerset_report_accept(IncomingIndex(0));
 		assert_eq!(notif.incoming.len(), 0);
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(PeerState::Disabled { .. })));
 	}
@@ -2777,7 +2777,7 @@ mod tests {
 		assert!(notif.peers.get(&(peer, set_id)).is_none());
 		assert!(std::matches!(
 			notif.incoming[0],
-			IncomingPeer { alive: false, incoming_id: crate::peerset::IncomingIndex(0), .. },
+			IncomingPeer { alive: false, incoming_id: IncomingIndex(0), .. },
 		));
 	}
 
@@ -2883,7 +2883,7 @@ mod tests {
 
 		// We rely on the implementation detail that incoming indices are counted
 		// from 0 to not mock the `Peerset`.
-		notif.peerset_report_accept(crate::peerset::IncomingIndex(0));
+		notif.peerset_report_accept(IncomingIndex(0));
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 
 		// open new substream
@@ -4081,11 +4081,11 @@ mod tests {
 
 		assert!(std::matches!(
 			notif.incoming[0],
-			IncomingPeer { alive: true, incoming_id: crate::peerset::IncomingIndex(0), .. },
+			IncomingPeer { alive: true, incoming_id: IncomingIndex(0), .. },
 		));
 
 		notif.peers.remove(&(peer, set_id));
-		notif.peerset_report_accept(crate::peerset::IncomingIndex(0));
+		notif.peerset_report_accept(IncomingIndex(0));
 	}
 
 	#[test]
@@ -4123,7 +4123,7 @@ mod tests {
 
 		assert!(std::matches!(
 			notif.incoming[0],
-			IncomingPeer { alive: true, incoming_id: crate::peerset::IncomingIndex(0), .. },
+			IncomingPeer { alive: true, incoming_id: IncomingIndex(0), .. },
 		));
 
 		notif.peerset_report_connect(peer, set_id);
@@ -4134,7 +4134,7 @@ mod tests {
 
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Enabled { .. })));
 		notif.incoming[0].alive = true;
-		notif.peerset_report_accept(crate::peerset::IncomingIndex(0));
+		notif.peerset_report_accept(IncomingIndex(0));
 	}
 
 	#[test]
@@ -4260,7 +4260,7 @@ mod tests {
 		assert!(std::matches!(notif.peers.get(&(peer, set_id)), Some(&PeerState::Incoming { .. })));
 		assert!(std::matches!(
 			notif.incoming[0],
-			IncomingPeer { alive: true, incoming_id: crate::peerset::IncomingIndex(0), .. },
+			IncomingPeer { alive: true, incoming_id: IncomingIndex(0), .. },
 		));
 
 		notif.peers.remove(&(peer, set_id));
