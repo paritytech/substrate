@@ -15,18 +15,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "try-runtime")]
-use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
-	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
+	traits::{
+		GetStorageVersion, NoStorageVersionSet, OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
+	},
 	weights::{RuntimeDbWeight, Weight},
 };
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_core::Get;
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
 use sp_std::marker::PhantomData;
+
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
+
+pub struct VersionedRuntimeUpgrade<From, To, Inner, Pallet, Weight> {
+	_marker: PhantomData<(From, To, Inner, Pallet, Weight)>,
+}
+impl<
+		From: Get<StorageVersion>,
+		To: Get<StorageVersion>,
+		Inner: OnRuntimeUpgrade,
+		Pallet: GetStorageVersion + PalletInfoAccess,
+		DbWeight: Get<RuntimeDbWeight>,
+	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<From, To, Inner, Pallet, DbWeight>
+{
+	fn on_runtime_upgrade() -> Weight {
+		let on_chain_version = Pallet::on_chain_storage_version();
+		if on_chain_version == From::get() {
+			// Execute the migration
+			let weight = Inner::on_runtime_upgrade();
+
+			// Update the on-chain version
+			To::get().put::<Pallet>();
+
+			weight
+		} else {
+			log::warn!(
+				"{} VersionedOnRuntimeUpgrade not applied. VersionedOnRuntimeUpgrade From: {:?},
+				current on-chain version: {:?}.",
+				Pallet::name(),
+				From::get(),
+				on_chain_version
+			);
+			DbWeight::get().reads(1)
+		}
+	}
+}
 
 /// Can store the current pallet version in storage.
 pub trait StoreCurrentStorageVersion<T: GetStorageVersion + PalletInfoAccess> {
@@ -185,6 +220,8 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		use crate::storage::unhashed::contains_prefixed_key;
+
 		let hashed_prefix = twox_128(P::get().as_bytes());
 		match contains_prefixed_key(&hashed_prefix) {
 			true => log::info!("Found {} keys pre-removal 👀", P::get()),
@@ -198,6 +235,8 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+		use crate::storage::unhashed::contains_prefixed_key;
+
 		let hashed_prefix = twox_128(P::get().as_bytes());
 		match contains_prefixed_key(&hashed_prefix) {
 			true => {
