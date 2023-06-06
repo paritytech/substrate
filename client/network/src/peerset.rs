@@ -257,7 +257,7 @@ impl Peerset {
 	///
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
-	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, _reason: DropReason) {
+	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId) {
 		self.protocol_handles[usize::from(set_id)].dropped(peer_id);
 	}
 
@@ -330,14 +330,4 @@ impl Stream for Peerset {
 
 		Poll::Pending
 	}
-}
-
-/// Reason for calling [`Peerset::dropped`].
-#[derive(Debug)]
-pub enum DropReason {
-	/// Substream or connection has been closed for an unknown reason.
-	Unknown,
-	/// Substream or connection has been explicitly refused by the target. In other words, the
-	/// peer doesn't actually belong to this set.
-	Refused,
 }

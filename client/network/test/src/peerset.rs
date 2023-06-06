@@ -23,7 +23,7 @@ use rand::{
 	seq::IteratorRandom,
 };
 use sc_peerset::{
-	DropReason, IncomingIndex, Message, Peerset, PeersetConfig, ReputationChange, SetConfig, SetId,
+	IncomingIndex, Message, Peerset, PeersetConfig, ReputationChange, SetConfig, SetId,
 };
 use std::{
 	collections::{HashMap, HashSet},
@@ -322,7 +322,7 @@ fn test_once() {
 						last_state = Some(*state);
 						*state = State::Disconnected;
 
-						peerset.dropped(SetId::from(0), id, DropReason::Unknown);
+						peerset.dropped(SetId::from(0), id);
 
 						current_peer = Some(id);
 						current_event = Some(Event::Disconnected);

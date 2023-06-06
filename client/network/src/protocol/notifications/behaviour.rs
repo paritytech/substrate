@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	peerset::DropReason,
 	protocol::notifications::handler::{
 		self, NotificationsSink, NotifsHandler, NotifsHandlerIn, NotifsHandlerOut,
 	},
@@ -441,7 +440,7 @@ impl Notifications {
 			// DisabledPendingEnable => Disabled.
 			PeerState::DisabledPendingEnable { connections, timer_deadline, timer: _ } => {
 				trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-				self.peerset.dropped(set_id, *peer_id, DropReason::Unknown);
+				self.peerset.dropped(set_id, *peer_id);
 				*entry.into_mut() =
 					PeerState::Disabled { connections, backoff_until: Some(timer_deadline) }
 			},
@@ -451,7 +450,7 @@ impl Notifications {
 			// If relevant, the external API is instantly notified.
 			PeerState::Enabled { mut connections } => {
 				trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-				self.peerset.dropped(set_id, *peer_id, DropReason::Unknown);
+				self.peerset.dropped(set_id, *peer_id);
 
 				if connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_))) {
 					trace!(target: "sub-libp2p", "External API <= Closed({}, {:?})", peer_id, set_id);
@@ -853,7 +852,7 @@ impl Notifications {
 				_ => {
 					trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})",
 						incoming.peer_id, incoming.set_id);
-					self.peerset.dropped(incoming.set_id, incoming.peer_id, DropReason::Unknown);
+					self.peerset.dropped(incoming.set_id, incoming.peer_id);
 				},
 			}
 			return
@@ -1191,7 +1190,7 @@ impl NetworkBehaviour for Notifications {
 
 							if connections.is_empty() {
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
+								self.peerset.dropped(set_id, peer_id);
 								*entry.get_mut() = PeerState::Backoff { timer, timer_deadline };
 							} else {
 								*entry.get_mut() = PeerState::DisabledPendingEnable {
@@ -1345,7 +1344,7 @@ impl NetworkBehaviour for Notifications {
 
 							if connections.is_empty() {
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
+								self.peerset.dropped(set_id, peer_id);
 								let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 
 								let delay_id = self.next_delay_id;
@@ -1367,7 +1366,7 @@ impl NetworkBehaviour for Notifications {
 								matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
 							}) {
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
+								self.peerset.dropped(set_id, peer_id);
 
 								*entry.get_mut() =
 									PeerState::Disabled { connections, backoff_until: None };
@@ -1415,7 +1414,7 @@ impl NetworkBehaviour for Notifications {
 								st @ PeerState::Requested |
 								st @ PeerState::PendingRequest { .. } => {
 									trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-									self.peerset.dropped(set_id, peer_id, DropReason::Unknown);
+									self.peerset.dropped(set_id, peer_id);
 
 									let now = Instant::now();
 									let ban_duration = match st {
@@ -1743,7 +1742,7 @@ impl NetworkBehaviour for Notifications {
 								.any(|(_, s)| matches!(s, ConnectionState::Opening))
 							{
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.peerset.dropped(set_id, peer_id, DropReason::Refused);
+								self.peerset.dropped(set_id, peer_id);
 								*entry.into_mut() =
 									PeerState::Disabled { connections, backoff_until: None };
 							} else {
@@ -1917,7 +1916,7 @@ impl NetworkBehaviour for Notifications {
 							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
 						}) {
 							trace!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-							self.peerset.dropped(set_id, peer_id, DropReason::Refused);
+							self.peerset.dropped(set_id, peer_id);
 
 							let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 							*entry.into_mut() = PeerState::Disabled {
