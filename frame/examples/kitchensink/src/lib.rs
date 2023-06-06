@@ -192,6 +192,7 @@ pub mod pallet {
 		}
 	}
 
+	/// Allows you to define how `genesis_configuration is built. 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
@@ -199,6 +200,8 @@ pub mod pallet {
 		}
 	}
 
+	/// The call declaration. This states the entry points that we handle. The
+	/// macro takes care of the marshalling of arguments and dispatch.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
