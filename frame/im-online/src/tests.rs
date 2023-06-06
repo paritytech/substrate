@@ -205,8 +205,6 @@ fn late_heartbeat_and_invalid_keys_len_should_fail() {
 
 #[test]
 fn should_generate_heartbeats() {
-	use frame_support::traits::OffchainWorker;
-
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, state) = TestTransactionPoolExt::new();
@@ -364,8 +362,6 @@ fn should_not_send_a_report_if_already_online() {
 
 #[test]
 fn should_handle_missing_progress_estimates() {
-	use frame_support::traits::OffchainWorker;
-
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, state) = TestTransactionPoolExt::new();

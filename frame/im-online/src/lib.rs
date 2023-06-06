@@ -339,25 +339,25 @@ pub mod pallet {
 	/// more accurate then the value we calculate for `HeartbeatAfter`.
 	#[pallet::storage]
 	#[pallet::getter(fn heartbeat_after)]
-	pub(crate) type HeartbeatAfter<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type HeartbeatAfter<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// The current set of keys that may issue a heartbeat.
 	#[pallet::storage]
 	#[pallet::getter(fn keys)]
-	pub(crate) type Keys<T: Config> =
+	pub(super) type Keys<T: Config> =
 		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxKeys>, ValueQuery>;
 
 	/// For each session index, we keep a mapping of `SessionIndex` and `AuthIndex`.
 	#[pallet::storage]
 	#[pallet::getter(fn received_heartbeats)]
-	pub(crate) type ReceivedHeartbeats<T: Config> =
+	pub(super) type ReceivedHeartbeats<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, SessionIndex, Twox64Concat, AuthIndex, ()>;
 
 	/// For each session index, we keep a mapping of `ValidatorId<T>` to the
 	/// number of blocks authored by the given authority.
 	#[pallet::storage]
 	#[pallet::getter(fn authored_blocks)]
-	pub(crate) type AuthoredBlocks<T: Config> = StorageDoubleMap<
+	pub(super) type AuthoredBlocks<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		SessionIndex,

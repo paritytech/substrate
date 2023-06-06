@@ -62,7 +62,17 @@ mod v0 {
 		SessionIndex,
 		Twox64Concat,
 		AuthIndex,
-		WrapperOpaque<BoundedOpaqueNetworkState<u32, u32, T::MaxPeerInHeartbeats>>,
+		WrapperOpaque<
+			BoundedOpaqueNetworkState<
+				<T as Config>::MaxPeerInHeartbeats, /* XXX: use similar type because
+				                                     * `MaxPeerDataEncodingSize` was removed in
+				                                     * v1 */
+				<T as Config>::MaxPeerInHeartbeats, /* XXX: use similar type because
+				                                     * `MaxPeerDataEncodingSize` was removed in
+				                                     * v1 */
+				<T as Config>::MaxPeerInHeartbeats,
+			>,
+		>,
 	>;
 }
 
@@ -74,16 +84,13 @@ pub mod v1 {
 
 	impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), TryRuntimeError> {
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			ensure!(StorageVersion::get::<Pallet<T>>() == 0, "can only upgrade from version 0");
 
-			log::info!(
-				target: TARGET,
-				"Migrating {} received heartbeats",
-				v0::ReceivedHeartbeats::<T>::iter().count()
-			);
+			let count = v0::ReceivedHeartbeats::<T>::iter().count();
+			log::info!(target: TARGET, "Migrating {} received heartbeats", count);
 
-			Ok(())
+			Ok((count as u32).encode())
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -97,19 +104,18 @@ pub mod v1 {
 			}
 
 			let count = v0::ReceivedHeartbeats::<T>::iter().count();
-			weight.saturating_accrue(
-				T::DbWeight::get().reads(v0::ReceivedHeartbeats::<T>::iter().count() as u64),
-			);
-			weight.saturating_accrue(
-				T::DbWeight::get().writes(v0::ReceivedHeartbeats::<T>::iter().count() as u64),
-			);
+			weight.saturating_accrue(T::DbWeight::get().reads(count as u64));
+			weight.saturating_accrue(T::DbWeight::get().writes(count as u64));
 
-			v0::ReceivedHeartbeats::<T>::translate::<_, _>(
-				|k: T::SessionIndex, T::AccountId, state: _| {
-					log::trace!(target: TARGET, "Migrated received heartbeat for {:?}...", k);
-					Some(())
-				},
-			);
+			let heartbeats = v0::ReceivedHeartbeats::<T>::drain().collect::<Vec<_>>();
+			for (session_index, auth_index, _) in heartbeats {
+				log::trace!(
+					target: TARGET,
+					"Migrated received heartbeat for {:?}...",
+					(session_index, auth_index)
+				);
+				crate::ReceivedHeartbeats::<T>::insert(session_index, auth_index, ());
+			}
 
 			StorageVersion::new(1).put::<Pallet<T>>();
 			weight.saturating_add(T::DbWeight::get().writes(1))
@@ -117,13 +123,19 @@ pub mod v1 {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(state: Vec<u8>) -> DispatchResult {
-			ensure!(StorageVersion::get::<Pallet<T>>() == 1, "must upgrade");
+			let old_received_heartbeats: u32 =
+				Decode::decode(&mut &state[..]).expect("pre_upgrade provides a valid state; qed");
+			let new_received_heartbeats = crate::ReceivedHeartbeats::<T>.iter().count();
 
-			log::info!(
-				target: TARGET,
-				"Migrated {} received heartbeats",
-				crate::ReceivedHeartbeats::<T>::iter().count()
-			);
+			if new_received_heartbeats != old_received_heartbeats {
+				log::error!(
+					target: TARGET,
+					"migrated {} received heartbeats, expected {}",
+					new_received_heartbeats,
+					old_received_heartbeats
+				);
+			}
+			ensure!(StorageVersion::get::<Pallet<T>>() == 1, "must upgrade");
 
 			Ok(())
 		}
@@ -134,9 +146,7 @@ pub mod v1 {
 #[cfg(feature = "try-runtime")]
 mod test {
 	use super::*;
-	use crate::mock::{Test as T, *};
-
-	use frame_support::bounded_vec;
+	use crate::mock::*;
 
 	#[test]
 	fn migration_works() {
@@ -150,7 +160,7 @@ mod test {
 
 			assert_eq!(v0::ReceivedHeartbeats::<T>::iter().count(), 2);
 			assert_eq!(
-				v1::ReceivedHeartbeats::<T>::iter().count(),
+				crate::ReceivedHeartbeats::<T>::iter().count(),
 				0,
 				"V1 storage should be corrupted"
 			);
@@ -160,11 +170,14 @@ mod test {
 			v1::Migration::<T>::post_upgrade(state).unwrap();
 
 			assert_eq!(v0::ReceivedHeartbeats::<T>::iter().count(), 2);
-			assert_eq!(v1::ReceivedHeartbeats::<T>::iter().count(), 2);
+			assert_eq!(crate::ReceivedHeartbeats::<T>::iter().count(), 2);
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 
-			assert!(v1::ReceivedHeartbeats::<T>::contains(&current_session, AuthIndex::from(0)));
-			assert_eq!((), v1::ReceivedHeartbeats::<T>::get(&current_session, AuthIndex::from(1)));
+			assert!(crate::ReceivedHeartbeats::<T>::contains(&current_session, AuthIndex::from(0)));
+			assert_eq!(
+				(),
+				crate::ReceivedHeartbeats::<T>::get(&current_session, AuthIndex::from(1))
+			);
 		});
 	}
 }
