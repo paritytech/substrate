@@ -82,7 +82,7 @@ mod benchmarks {
             royalty_percentage: Permill::from_percent(10)
         };
 
-		assert_eq!(CollectionWithRoyalty::<T>::get(collection_id), Some(royaltiy_details));
+		assert_eq!(CollectionRoyalty::<T>::get(collection_id), Some(royaltiy_details));
 	}
 
     #[benchmark]
@@ -100,7 +100,7 @@ mod benchmarks {
             royalty_percentage: Permill::from_percent(10)
         };
 
-		assert_eq!(ItemWithRoyalty::<T>::get((collection_id, item_id)), Some(royaltiy_details));
+		assert_eq!(ItemRoyalty::<T>::get((collection_id, item_id)), Some(royaltiy_details));
 	}
 
     #[benchmark]
@@ -168,7 +168,7 @@ mod benchmarks {
             royalty_percentage: Permill::from_percent(10)
         };
 
-		assert_eq!(CollectionWithRoyalty::<T>::get(collection_id), Some(royaltiy_details));
+		assert_eq!(CollectionRoyalty::<T>::get(collection_id), Some(royaltiy_details));
 	}
 
     #[benchmark]
@@ -190,7 +190,7 @@ mod benchmarks {
             royalty_percentage: Permill::from_percent(10)
         };
 
-		assert_eq!(ItemWithRoyalty::<T>::get((collection_id, item_id)), Some(royaltiy_details));
+		assert_eq!(ItemRoyalty::<T>::get((collection_id, item_id)), Some(royaltiy_details));
 	}
 
 	impl_benchmark_test_suite!(NftsRoyalty, crate::mock::new_test_ext(), crate::mock::Test);
