@@ -864,7 +864,7 @@ impl<T: Config> Pallet<T> {
 			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight),
 			Unprocessable { permanent: false } => Err(Error::<T>::TemporarilyUnprocessable),
 			Unprocessable { permanent: true } | Processed =>
-				Self::remove_overweight(origin, book_state, page, page_index, pos, payload.len()),
+				Self::remove(origin, book_state, page, page_index, pos, payload.len()),
 		}?;
 		let page_weight = match page_removed {
 			true => T::WeightInfo::execute_overweight_page_removed(),
@@ -951,14 +951,8 @@ impl<T: Config> Pallet<T> {
 		let (page, book_state, message_pos, message) =
 			Self::extract_overweight(&origin, page_index, message_index)?;
 		// A post-dispatch refund is not needed since we don't process the message.
-		let _page_removed = Self::remove_overweight(
-			origin.clone(),
-			book_state,
-			page,
-			page_index,
-			message_pos,
-			message.len(),
-		)?;
+		let _page_removed =
+			Self::remove(origin.clone(), book_state, page, page_index, message_pos, message.len())?;
 		let id = sp_io::hashing::blake2_256(&message);
 		Self::deposit_event(Event::OverweightDiscarded { id, origin, page_index, message_index });
 
@@ -987,10 +981,10 @@ impl<T: Config> Pallet<T> {
 		Ok((page, book_state, pos, msg))
 	}
 
-	/// Remove an overweight message.
+	/// Remove a message.
 	///
-	/// Returns whether the page was removed.
-	fn remove_overweight(
+	/// Returns whether the page was also removed in the process.
+	fn remove(
 		origin: MessageOriginOf<T>,
 		mut book_state: BookStateOf<T>,
 		mut page: PageOf<T>,
