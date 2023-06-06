@@ -116,9 +116,9 @@ pub mod pallet {
 	}
 
 	/// The storage for NFT collections with a royalty
-	/// This will be the royalty used for all items in the collection unless overridden in `ItemWithRoyalty`
+	/// This will be the royalty used for all items in the collection unless overridden in `ItemRoyalty`
 	#[pallet::storage]
-	pub type CollectionWithRoyalty<T: Config> = StorageMap<
+	pub type CollectionRoyalty<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		T::NftCollectionId,
@@ -127,9 +127,9 @@ pub mod pallet {
 	>;
 
 	/// The storage for NFT items with a royalty.
-	/// Setting the royalty in this storage will override the royalty set in `CollectionWithRoyalty` only for the specific item.
+	/// Setting the royalty in this storage will override the royalty set in `CollectionRoyalty` only for the specific item.
 	#[pallet::storage]
-	pub type ItemWithRoyalty<T: Config> = StorageMap<
+	pub type ItemRoyalty<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		(T::NftCollectionId, T::NftItemId),
@@ -274,12 +274,12 @@ pub mod pallet {
 
 			// The collection royalty can only be set once
 			ensure!(
-				<CollectionWithRoyalty<T>>::get(collection_id).is_none(),
+				<CollectionRoyalty<T>>::get(collection_id).is_none(),
 				Error::<T>::RoyaltyAlreadyExists
 			);
 
 			// Set the royalty for the collection
-			CollectionWithRoyalty::<T>::insert(
+			CollectionRoyalty::<T>::insert(
 				collection_id,
 				RoyaltyDetails::<T::AccountId> {
 					royalty_percentage,
@@ -335,11 +335,11 @@ pub mod pallet {
 
 			// Check whether the item has already a royalty, if so do not allow to set it again
 			ensure!(
-				<ItemWithRoyalty<T>>::get((collection_id, item_id)).is_none(),
+				<ItemRoyalty<T>>::get((collection_id, item_id)).is_none(),
 				Error::<T>::RoyaltyAlreadyExists
 			);
 
-			ItemWithRoyalty::<T>::insert(
+			ItemRoyalty::<T>::insert(
 				(collection_id, item_id),
 				RoyaltyDetails::<T::AccountId> {
 					royalty_percentage,
@@ -501,11 +501,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 
-			let item_royalties = <CollectionWithRoyalty<T>>::take(collection_id)
+			let item_royalties = <CollectionRoyalty<T>>::take(collection_id)
 				.ok_or(Error::<T>::NoRoyaltyExists)?;
 			ensure!(item_royalties.royalty_recipient == caller, Error::<T>::NoPermission);
 
-			CollectionWithRoyalty::<T>::insert(
+			CollectionRoyalty::<T>::insert(
 				collection_id,
 				RoyaltyDetails::<T::AccountId> {
 					royalty_percentage: item_royalties.royalty_percentage,
@@ -539,11 +539,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 
-			let item_royalties = <ItemWithRoyalty<T>>::take((collection_id, item_id))
+			let item_royalties = <ItemRoyalty<T>>::take((collection_id, item_id))
 				.ok_or(Error::<T>::NoRoyaltyExists)?;
 			ensure!(item_royalties.royalty_recipient == caller, Error::<T>::NoPermission);
 
-			ItemWithRoyalty::<T>::insert(
+			ItemRoyalty::<T>::insert(
 				(collection_id, item_id),
 				RoyaltyDetails::<T::AccountId> {
 					royalty_percentage: item_royalties.royalty_percentage,
@@ -587,10 +587,10 @@ pub mod pallet {
 
 			// Item royalty supersedes collection royalty
 			let item_royalty: RoyaltyDetails<T::AccountId>;
-			if let Some(nft_item_royalty) = <ItemWithRoyalty<T>>::get((collection_id, item_id))  {
+			if let Some(nft_item_royalty) = <ItemRoyalty<T>>::get((collection_id, item_id))  {
 				item_royalty = nft_item_royalty;
 			} else {
-				item_royalty = <CollectionWithRoyalty<T>>::get(collection_id).ok_or(Error::<T>::NoRoyaltyExists)?;
+				item_royalty = <CollectionRoyalty<T>>::get(collection_id).ok_or(Error::<T>::NoRoyaltyExists)?;
 			}
 
 			// Transfer royalty to the royalty recipient or recipients, by default just the recipiend
@@ -639,7 +639,7 @@ pub mod pallet {
 		/// This will also redeem the deposit initially paid for creating the collection royalty.
 		/// If the royalty was set with `ForceOrigin` then no deposit will be redeemed.
 		///
-		/// Origin must be Signed and must be the owner of `CollectionWithRoyalty` or the `ForceOrigin`.
+		/// Origin must be Signed and must be the owner of `CollectionRoyalty` or the `ForceOrigin`.
 		///
 		/// - `collection_id`: The `collection_id` that has an associated royalty that no longer exists.
 		///
@@ -665,8 +665,8 @@ pub mod pallet {
 				T::Currency::unreserve(owner, T::CollectionRoyaltyDeposit::get());
 			}
 
-			// Delete the collection from `CollectionWithRoyalty`
-			<CollectionWithRoyalty<T>>::remove(collection_id);
+			// Delete the collection from `CollectionRoyalty`
+			<CollectionRoyalty<T>>::remove(collection_id);
 
 			// Delete the list of recipients from `CollectionRoyaltyRecipients`
 			<CollectionRoyaltyRecipients<T>>::remove(collection_id);
@@ -683,7 +683,7 @@ pub mod pallet {
 		/// This will also redeem the deposit initially paid for creating the item royalty.
 		/// If the royalty was set with `ForceOrigin` then no deposit will be redeemed.
 		///
-		/// Origin must be Signed and must be the owner of `ItemWithRoyalty` or the `ForceOrigin`.
+		/// Origin must be Signed and must be the owner of `ItemRoyalty` or the `ForceOrigin`.
 		///
 		/// - `collection_id`: The `collection_id` that the item belongs to.
 		/// - `item_id`: The `item_id` that has an associated royalty that no longer exists.
@@ -714,8 +714,8 @@ pub mod pallet {
 				T::Currency::unreserve(owner, T::CollectionRoyaltyDeposit::get());
 			}
 
-			// Delete the item from `ItemWithRoyalty`
-			<ItemWithRoyalty<T>>::remove((collection_id, item_id));
+			// Delete the item from `ItemRoyalty`
+			<ItemRoyalty<T>>::remove((collection_id, item_id));
 
 			// Delete the list of recipients from `ItemRoyaltyRecipients`
 			<ItemRoyaltyRecipients<T>>::remove((collection_id, item_id));
