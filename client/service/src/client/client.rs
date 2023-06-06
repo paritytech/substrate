@@ -938,12 +938,16 @@ where
 		// leaf or if the finalized block number is greater than last best number recorded
 		// by the backend. This last condition may apply in case of consensus implementations
 		// not always checking this condition.
-		let block_number = self.backend.blockchain().number(hash).unwrap().unwrap();
+		let block_number = self
+			.backend
+			.blockchain()
+			.number(hash)?
+			.ok_or(Error::MissingHeader(format!("{hash:?}")))?;
 		if self.backend.blockchain().leaves()?.len() > 1 || info.best_number < block_number {
 			let route_from_best =
 				sp_blockchain::tree_route(self.backend.blockchain(), info.best_hash, hash)?;
 
-			// if the block is not a direct ancestor of the current best chain,
+			// If the block is not a direct ancestor of the current best chain,
 			// then some other block is the common ancestor.
 			if route_from_best.common_block().hash != hash {
 				// NOTE: we're setting the finalized block as best block, this might
