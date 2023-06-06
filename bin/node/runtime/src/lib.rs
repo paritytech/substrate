@@ -1983,7 +1983,7 @@ pub type Executive = frame_executive::Executive<
 type Migrations = (
 	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
 	pallet_alliance::migration::Migration<Runtime>,
-	pallet_contracts::Migration<Runtime, <Runtime as pallet_contracts::Config>::Migrations>,
+	pallet_contracts::Migration<Runtime>,
 );
 
 type EventRecord = frame_system::EventRecord<
