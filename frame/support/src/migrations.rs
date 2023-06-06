@@ -29,33 +29,42 @@ use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
-pub struct VersionedRuntimeUpgrade<From, To, Inner, Pallet, Weight> {
-	_marker: PhantomData<(From, To, Inner, Pallet, Weight)>,
+pub struct VersionedRuntimeUpgrade<Version, Inner, Pallet, Weight> {
+	_marker: PhantomData<(Version, Inner, Pallet, Weight)>,
 }
 impl<
-		From: Get<StorageVersion>,
-		To: Get<StorageVersion>,
+		Version: Get<StorageVersion>,
 		Inner: OnRuntimeUpgrade,
-		Pallet: GetStorageVersion + PalletInfoAccess,
+		Pallet: GetStorageVersion<CurrentStorageVersion = StorageVersion> + PalletInfoAccess,
 		DbWeight: Get<RuntimeDbWeight>,
-	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<From, To, Inner, Pallet, DbWeight>
+	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<Version, Inner, Pallet, DbWeight>
 {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		let current_version = Pallet::current_storage_version();
+		if current_version < Version::get() + 1 {
+			log::warn!("{} version specified in the pallet is less than the version that will be set on-chain. This almost certinally isn't supposed to happen, the pallet version probably needs to be incremented.", Pallet::name());
+		}
+
+		Inner::pre_upgrade()
+	}
+
 	fn on_runtime_upgrade() -> Weight {
 		let on_chain_version = Pallet::on_chain_storage_version();
-		if on_chain_version == From::get() {
+		if on_chain_version == Version::get() {
 			// Execute the migration
 			let weight = Inner::on_runtime_upgrade();
 
 			// Update the on-chain version
-			To::get().put::<Pallet>();
+			let next = Version::get() + 1;
+			next.put::<Pallet>();
 
-			weight
+			weight.saturating_add(DbWeight::get().reads_writes(1, 1))
 		} else {
 			log::warn!(
-				"{} VersionedOnRuntimeUpgrade not applied. VersionedOnRuntimeUpgrade From: {:?},
-				current on-chain version: {:?}.",
+				"{} VersionedOnRuntimeUpgrade v{:?} skipped because current on-chain version is {:?}.",
 				Pallet::name(),
-				From::get(),
+				Version::get(),
 				on_chain_version
 			);
 			DbWeight::get().reads(1)
