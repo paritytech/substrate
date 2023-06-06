@@ -934,7 +934,7 @@ where
 			return Err(sp_blockchain::Error::NotInFinalizedChain)
 		}
 
-		// We may need to cohercively update the best block if there is more than one
+		// We may need to coercively update the best block if there is more than one
 		// leaf or if the finalized block number is greater than last best number recorded
 		// by the backend. This last condition may apply in case of consensus implementations
 		// not always checking this condition.
