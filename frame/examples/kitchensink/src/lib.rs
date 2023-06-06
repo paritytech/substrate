@@ -15,7 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! <!-- markdown-link-check-disable -->
 //! # Kitchensink Example Pallet
 //!
 //! **This pallet serves as an example and is not meant to be used in production.**
@@ -90,6 +89,7 @@ pub mod pallet {
 		type InMetadata: Get<u32>;
 	}
 
+	/// Allows you to define some extra constants to be added into constant metadata.
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
 		#[allow(non_snake_case)]
@@ -108,11 +108,11 @@ pub mod pallet {
 	/// The pallet struct. There's nothing special to FRAME about this; it can implement functions
 	/// in an impl blocks, traits and so on.
 	#[pallet::pallet]
-	// #[pallet::generate_storage_info] // TODO: should be removed.
 	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
+	/// Allows you to define some origin for the pallet.
 	#[pallet::origin]
 	pub type Origin<T> = frame_system::RawOrigin<<T as frame_system::Config>::AccountId>;
 
@@ -291,11 +291,16 @@ pub mod pallet {
 		}
 	}
 
+	/// Allows you to define an enum on the pallet which will then instruct 
+	/// `construct_runtime` to amalgamate all similarly-named enums from other
+	/// pallets into an aggregate enum.
 	#[pallet::composite_enum]
 	pub enum HoldReason {
 		Staking,
 	}
 
+	/// Allows the pallet to validate some unsigned transaction. See
+	/// [`sp_runtime::traits::ValidateUnsigned`] for more info.
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
@@ -308,6 +313,8 @@ pub mod pallet {
 		}
 	}
 
+	/// Allows the pallet to provide some inherent. See [`frame_support::inherent::ProvideInherent`]
+	/// for more info.
 	#[pallet::inherent]
 	impl<T: Config> ProvideInherent for Pallet<T> {
 		type Call = Call<T>;
