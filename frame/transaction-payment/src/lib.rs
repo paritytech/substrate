@@ -744,7 +744,8 @@ where
 		// returns the scarce resource, i.e. the one that is limiting the number of transactions.
 		let max_tx_per_block_weight = max_block_weight
 			.checked_div_per_component(&bounded_weight)
-			.expect("bounded_weight is non-zero; qed");
+			.defensive_proof("bounded_weight is non-zero; qed")
+			.unwrap_or(1);
 		let max_tx_per_block_length = max_block_length / bounded_length;
 		// Given our current knowledge this value is going to be in a reasonable range - i.e.
 		// less than 10^9 (2^30), so multiplying by the `tip` value is unlikely to overflow the
