@@ -94,7 +94,10 @@ impl<
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		let current_version = Pallet::current_storage_version();
 		if current_version < Version::get() + 1 {
-			log::warn!("{} version specified in the pallet is less than the version that will be set on-chain. This almost certinally isn't supposed to happen, the pallet version probably needs to be incremented.", Pallet::name());
+			log::warn!(
+				"Pallet '{}' appears to be misconfigured: its version is less than the on-chain version that will be set by this VersionedRuntimeUpgrade. Please ensure the pallet version is set correctly.",
+				Pallet::name()
+			);
 		}
 
 		Inner::pre_upgrade()
