@@ -78,6 +78,8 @@ fn set_up_balances(initial_balance: u64) {
 fn nft_set_collection_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
 		assert_ok!(NftsRoyalty::set_collection_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
@@ -135,6 +137,8 @@ fn nft_set_collection_royalty_fail_no_permission() {
 fn nft_set_collection_royalty_fail_ovewrite() {
 	new_test_ext().execute_with(|| {
 		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
 		assert_ok!(NftsRoyalty::set_collection_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
@@ -157,6 +161,8 @@ fn nft_set_collection_royalty_fail_ovewrite() {
 fn nft_set_item_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
 		let mint_id = mint_item();
 		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
@@ -224,6 +230,8 @@ fn nft_set_item_royalty_fail_no_permission() {
 fn nft_set_item_royalty_fail_ovewrite() {
 	new_test_ext().execute_with(|| {
 		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
 		let mint_id = mint_item();
 		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
@@ -248,6 +256,8 @@ fn nft_set_item_royalty_fail_ovewrite() {
 fn transfer_collection_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
 		assert_ok!(NftsRoyalty::set_collection_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
@@ -283,6 +293,8 @@ fn transfer_collection_royalty_should_work() {
 fn transfer_collection_royalty_should_fail_if_no_royalty_recipient() {
 	new_test_ext().execute_with(|| {
 		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
 		assert_ok!(NftsRoyalty::set_collection_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
@@ -313,6 +325,8 @@ fn transfer_collection_royalty_should_fail_if_no_royalty_recipient() {
 fn transfer_item_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
 		let mint_id = mint_item();
 		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
@@ -352,6 +366,8 @@ fn transfer_item_royalty_should_work() {
 fn transfer_item_royalty_should_fail_if_no_royalty_recipient() {
 	new_test_ext().execute_with(|| {
 		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
 		let mint_id = mint_item();
 		assert_ok!(NftsRoyalty::set_item_royalty(
 			RuntimeOrigin::signed(account(1)),
@@ -779,6 +795,8 @@ fn nft_set_collection_royalty_recipients_fail_limit_recipients() {
 fn nft_set_collection_royalty_recipients_fail_ovewrite() {
 	new_test_ext().execute_with(|| {
 		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
 		assert_ok!(NftsRoyalty::set_collection_royalty_recipients(
 			RuntimeOrigin::signed(account(1)),
 			0,

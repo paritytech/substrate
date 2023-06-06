@@ -17,9 +17,18 @@
 
 //! Various basic types for use in the NFTs Royalty pallet.
 
+use super::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::Permill;
+
+pub(super) type DepositBalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+
+pub(super) type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+
+pub(super) type ItemPrice<T> = BalanceOf<T>;
 
 /// Stores the details of an item with royalty.
 #[derive(Decode, Encode, Clone, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo, Debug)]

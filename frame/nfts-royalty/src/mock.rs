@@ -137,6 +137,8 @@ impl Config for Test {
 	type NftItemId = <Self as pallet_nfts::Config>::ItemId;
 	type Nfts = Nfts;
 	type MaxRecipients = ConstU32<3>;
+	type CollectionRoyaltyDeposit = ConstU64<1>;
+	type ItemRoyaltyDeposit = ConstU64<1>;
 }
 
 // Build genesis storage according to the mock runtime.
