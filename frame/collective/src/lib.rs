@@ -272,7 +272,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
 	pub type Voting<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, T::BlockNumber>, OptionQuery>;
+		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, frame_system::BlockNumberOf<T>>, OptionQuery>;
 
 	/// Proposals so far.
 	#[pallet::storage]

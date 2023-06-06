@@ -515,7 +515,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<frame_system::BlockNumberOf<T>> for Pallet<T, I> {
 		#[cfg(not(feature = "insecure_zero_ed"))]
 		fn integrity_test() {
 			assert!(

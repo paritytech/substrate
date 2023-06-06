@@ -305,7 +305,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		BountyIndex,
-		Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>,
+		Bounty<T::AccountId, BalanceOf<T, I>, frame_system::BlockNumberOf<T>>,
 	>;
 
 	/// The description of each bounty.
