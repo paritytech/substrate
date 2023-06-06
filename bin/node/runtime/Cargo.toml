@@ -69,7 +69,7 @@ pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../
 pallet-child-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/child-bounties" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts" }
-pallet-contracts-primitives = { version = "7.0.0", default-features = false, path = "../../../frame/contracts/primitives/" }
+pallet-contracts-primitives = { version = "24.0.0", default-features = false, path = "../../../frame/contracts/primitives/" }
 pallet-conviction-voting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/conviction-voting" }
 pallet-core-fellowship = { version = "4.0.0-dev", default-features = false, path = "../../../frame/core-fellowship" }
 pallet-democracy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/democracy" }
