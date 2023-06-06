@@ -22,12 +22,10 @@
 
 pub mod middleware;
 
+use crate::middleware::NodeHealthProxyLayer;
 use http::header::HeaderValue;
 use jsonrpsee::{
-	server::{
-		middleware::proxy_get_request::ProxyGetRequestLayer, AllowHosts, ServerBuilder,
-		ServerHandle,
-	},
+	server::{AllowHosts, ServerBuilder, ServerHandle},
 	RpcModule,
 };
 use std::{error::Error as StdError, net::SocketAddr};
@@ -89,8 +87,8 @@ pub async fn start_server<M: Send + Sync + 'static>(
 	let host_filter = hosts_filtering(cors.is_some(), &addrs);
 
 	let middleware = tower::ServiceBuilder::new()
-		// Proxy `GET /health` requests to internal `system_health` method.
-		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
+		// Proxy `GET /health, /health/readiness` requests to the internal `system_health` method.
+		.layer(NodeHealthProxyLayer::new())
 		.layer(try_into_cors(cors)?);
 
 	let mut builder = ServerBuilder::new()
