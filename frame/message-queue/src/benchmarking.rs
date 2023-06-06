@@ -296,7 +296,7 @@ mod benchmarks {
 
 		assert_last_event::<T>(
 			Event::OverweightDiscarded {
-				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
+				id: sp_io::hashing::blake2_256(&((msgs - 1) as u32).encode()),
 				origin: 0.into(),
 				page_index: 0,
 				message_index,
@@ -328,7 +328,7 @@ mod benchmarks {
 
 		assert_last_event::<T>(
 			Event::OverweightDiscarded {
-				hash: T::Hashing::hash(&((msgs - 1) as u32).encode()),
+				id: sp_io::hashing::blake2_256(&((msgs - 1) as u32).encode()),
 				origin: 0.into(),
 				page_index: 0,
 				message_index,

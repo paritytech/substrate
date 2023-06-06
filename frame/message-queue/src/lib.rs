@@ -515,22 +515,19 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Message discarded due to an inability to decode the item. Usually caused by state
-		/// corruption.
-		Discarded { hash: T::Hash },
-		/// An overweight message was explicitly discarded by a privileged origin.
-		OverweightDiscarded {
-			hash: T::Hash,
-			origin: MessageOriginOf<T>,
-			page_index: PageIndex,
-			message_index: T::Size,
-		},
 		/// Message discarded due to an error in the `MessageProcessor` (usually a format error).
 		ProcessingFailed { id: [u8; 32], origin: MessageOriginOf<T>, error: ProcessMessageError },
 		/// Message is processed.
 		Processed { id: [u8; 32], origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
 		/// Message placed in overweight queue.
 		OverweightEnqueued {
+			id: [u8; 32],
+			origin: MessageOriginOf<T>,
+			page_index: PageIndex,
+			message_index: T::Size,
+		},
+		/// An overweight message was explicitly discarded by a privileged origin.
+		OverweightDiscarded {
 			id: [u8; 32],
 			origin: MessageOriginOf<T>,
 			page_index: PageIndex,
@@ -660,7 +657,7 @@ pub mod pallet {
 			page: PageIndex,
 			index: T::Size,
 		) -> DispatchResult {
-			let () = T::DiscardOverweightOrigin::ensure_origin(origin, &queue)?;
+			T::DiscardOverweightOrigin::ensure_origin(origin, &queue)?;
 
 			Self::do_discard_overweight(queue, page, index).map_err(Into::into)
 		}
@@ -962,8 +959,8 @@ impl<T: Config> Pallet<T> {
 			message_pos,
 			message.len(),
 		)?;
-		let hash = T::Hashing::hash(&message);
-		Self::deposit_event(Event::OverweightDiscarded { hash, origin, page_index, message_index });
+		let id = sp_io::hashing::blake2_256(&message);
+		Self::deposit_event(Event::OverweightDiscarded { id, origin, page_index, message_index });
 
 		Ok(())
 	}
