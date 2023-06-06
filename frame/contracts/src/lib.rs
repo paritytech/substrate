@@ -328,12 +328,22 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
+			let mut remaining_weight = remaining_weight;
 
-			let (result, weight) = Migration::<T>::migrate(remaining_weight);
-			let remaining_weight = remaining_weight.saturating_sub(weight);
+			loop {
+				let (result, weight) = Migration::<T>::migrate(remaining_weight);
+				remaining_weight.saturating_reduce(weight);
 
-			if !matches!(result, Completed | NoMigrationInProgress) {
-				return weight
+				match result {
+					// There is not enough weight to perform a migration, or make any progress, we
+					// just return the remaining weight.
+					NoMigrationPerformed | InProgress { steps_done: 0 } => return remaining_weight,
+					// Migration is still in progress, we can start the next step.
+					InProgress { .. } => {},
+					// There are no migration in progress, or we are done with all migrations, we
+					// can do some more work with the remaining weight.
+					Completed | NoMigrationInProgress => break,
+				}
 			}
 
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
