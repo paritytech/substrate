@@ -372,7 +372,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 #[cfg(feature = "runtime-benchmarks")]
 pub fn new_bench_ext() -> sp_io::TestExternalities {
-	RuntimeGenesisConfig::default().build_storage().unwrap().into()
+	BuildStorage::build_storage(&RuntimeGenesisConfig::default()).unwrap().into()
 }
 
 pub fn test_cid() -> Cid {
