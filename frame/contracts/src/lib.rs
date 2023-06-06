@@ -320,7 +320,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxDebugBufferLen: Get<u32>;
 
-		/// The sequence of migrations applied.
+		/// The sequence of migration steps that will be applied during a migration.
 		type Migrations: MigrateSequence;
 	}
 
