@@ -47,7 +47,7 @@ use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
-use sp_runtime::traits::Hash;
+use sp_runtime::traits::{Hash, Keccak256, NumberFor};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
@@ -110,9 +110,10 @@ pub mod ecdsa_crypto {
 ///
 /// Your code should use the above types as concrete types for all crypto related
 /// functionality.
+
 pub mod bls_crypto {
-	use sp_application_crypto::{app_crypto, bls};
-	app_crypto!(bls, crate::KEY_TYPE);
+	use sp_application_crypto::{app_crypto, bls377};
+	app_crypto!(bls377, crate::KEY_TYPE);
 
 	/// Identity of a BEEFY authority using BLS as its crypto.
 	pub type AuthorityId = Public;
@@ -328,7 +329,6 @@ sp_api::decl_runtime_apis! {
 
 		/// Return the current active BEEFY validator set
 		fn validator_set() -> Option<ValidatorSet<AuthorityId>>;
-	}
 
 		/// Submits an unsigned extrinsic to report an equivocation. The caller
 		/// must provide the equivocation proof and a key ownership proof
@@ -340,7 +340,7 @@ sp_api::decl_runtime_apis! {
 		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_equivocation_unsigned_extrinsic(
 			equivocation_proof:
-				EquivocationProof<NumberFor<Block>, crypto::AuthorityId, crypto::Signature>,
+				EquivocationProof<NumberFor<Block>, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>,
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 
@@ -357,16 +357,17 @@ sp_api::decl_runtime_apis! {
 		/// older states to be available.
 		fn generate_key_ownership_proof(
 			set_id: ValidatorSetId,
-			authority_id: crypto::AuthorityId,
+			authority_id: ecdsa_crypto::AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
 	}
+
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use sp_application_crypto::ecdsa::{self, Public};
-	use sp_core::{blake2_256, crypto::Wraps, keccak_256, Pair};
+	use sp_core::{blake2_256, ecdsa_crypto::Wraps, keccak_256, Pair};
 	use sp_runtime::traits::{BlakeTwo256, Keccak256};
 
 	#[test]

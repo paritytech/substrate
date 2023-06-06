@@ -58,3 +58,11 @@ serde = [
 	"sp-core/serde",
 	"sp-runtime/serde",
 ]
+
+# This feature adds BLS crypto primitives. It should not be used in production since
+# the BLS implementation and interface may still be subject to significant change.
+bls-experimental = [
+ 	 "w3f-bls",
+ 	 "sp-core/bls-experimental",
+ 	 "sp-application-crypto/bls-experimental",	 
+]
