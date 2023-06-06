@@ -28,7 +28,7 @@ use sp_runtime::TryRuntimeError;
 /// The log target.
 const TARGET: &'static str = "runtime::im-online::migration::v1";
 
-/// The original data layout of the im-online pallet without a specific version number.
+/// The original data layout of the im-online pallet (`ReceivedHeartbeats` storage item).
 mod v0 {
 	use super::*;
 	use frame_support::traits::WrapperOpaque;
@@ -56,13 +56,6 @@ mod v0 {
 	}
 
 	#[storage_alias]
-	pub(crate) type HeartbeatAfter<T: Config> = StorageValue<Pallet<T>, T::BlockNumber, ValueQuery>;
-
-	#[storage_alias]
-	pub(crate) type Keys<T: Config> =
-		StorageValue<Pallet<T>, WeakBoundedVec<T::AuthorityId, T::MaxKeys>, ValueQuery>;
-
-	#[storage_alias]
 	pub(crate) type ReceivedHeartbeats<T: Config> = StorageDoubleMap<
 		Pallet<T>,
 		Twox64Concat,
@@ -71,23 +64,12 @@ mod v0 {
 		AuthIndex,
 		WrapperOpaque<BoundedOpaqueNetworkState<u32, u32, T::MaxPeerInHeartbeats>>,
 	>;
-
-	#[storage_alias]
-	pub(crate) type AuthoredBlocks<T: pallet::Config> = StorageDoubleMap<
-		Pallet<T>,
-		Twox64Concat,
-		SessionIndex,
-		Twox64Concat,
-		ValidatorId<T>,
-		u32,
-		ValueQuery,
-	>;
 }
 
 pub mod v1 {
 	use super::*;
 
-	/// Migration for moving im-online from V0 to V1 storage.
+	/// Simple migration that replaces `ReceivedHeartbeats` values with `()`.
 	pub struct Migration<T>(sp_std::marker::PhantomData<T>);
 
 	impl<T: Config> OnRuntimeUpgrade for Migration<T> {
@@ -105,17 +87,32 @@ pub mod v1 {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			ReceivedHeartbeats::<T>::translate::<_, _>(
+			let mut weight = T::DbWeight::get().reads(1);
+			if StorageVersion::get::<Pallet<T>>() != 0 {
+				log::warn!(
+					target: TARGET,
+					"Skipping migration because current storage version is not 0"
+				);
+				return weight
+			}
+
+			let count = v0::ReceivedHeartbeats::<T>::iter().count();
+			weight.saturating_accrue(
+				T::DbWeight::get().reads(v0::ReceivedHeartbeats::<T>::iter().count() as u64),
+			);
+			weight.saturating_accrue(
+				T::DbWeight::get().writes(v0::ReceivedHeartbeats::<T>::iter().count() as u64),
+			);
+
+			v0::ReceivedHeartbeats::<T>::translate::<_, _>(
 				|k: T::SessionIndex, T::AccountId, state: _| {
-					log::info!(target: TARGET, "Migrated received heartbeat for {:?}...", k);
+					log::trace!(target: TARGET, "Migrated received heartbeat for {:?}...", k);
 					Some(())
 				},
 			);
 
 			StorageVersion::new(1).put::<Pallet<T>>();
-
-			let count = ReceivedHeartbeats::<T>::iter().count();
-			T::DbWeight::get().reads_writes(count as Weight + 1, count as Weight + 1)
+			weight.saturating_add(T::DbWeight::get().writes(1))
 		}
 
 		#[cfg(feature = "try-runtime")]

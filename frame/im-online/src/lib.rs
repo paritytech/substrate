@@ -84,13 +84,17 @@ pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	pallet_prelude::*,
 	traits::{
 		EstimateNextSessionRotation, Get, OneSessionHandler, ValidatorSet,
 		ValidatorSetWithIdentification,
 	},
 	BoundedSlice, WeakBoundedVec,
 };
-use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
+use frame_system::{
+	offchain::{SendTransactionTypes, SubmitTransaction},
+	pallet_prelude::*,
+};
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_application_crypto::RuntimeAppPublic;
@@ -105,9 +109,6 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
-
-use frame_support::pallet_prelude::*;
-use frame_system::pallet_prelude::*;
 
 pub mod sr25519 {
 	mod app_sr25519 {
