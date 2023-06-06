@@ -4771,9 +4771,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic"
-version = "0.3.3"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "686f3703e9d296140171bbd6a6fa560e6059a35299ee3ce8c5bd646afa0c3992"
+checksum = "0a2d6d7fe4741b5621cf7c8048e472933877c7ea870cbf1420da55ea9f3bb08c"
 dependencies = [
  "macro_magic_core",
  "macro_magic_macros",
@@ -4783,9 +4783,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic_core"
-version = "0.3.3"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e060da9399c1535b3f190084d7c6121bb3355b70c610110cff3f4978526f54e2"
+checksum = "3005604258419767cacc5989c2dd75263f8b33773dd680734f598eb88baf5370"
 dependencies = [
  "derive-syn-parse",
  "macro_magic_core_macros",
@@ -4796,9 +4796,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic_core_macros"
-version = "0.3.3"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fb9865e03b9641e57448b9743915eadd0f642e41a41c4d9eaa8b5b861d887b0"
+checksum = "de6267819c9042df1a9e62ca279e5a34254ad5dfdcb13ff988f560d75576e8b4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4807,9 +4807,9 @@ dependencies = [
 
 [[package]]
 name = "macro_magic_macros"
-version = "0.3.3"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68cf083ba5ba151ce3230a7c687cb5c890498adae59c85f3be7e8e741a6c9f65"
+checksum = "dc7176ac15ab2ed7f335e2398f729b9562dae0c233705bc1e1e3acd8452d403d"
 dependencies = [
  "macro_magic_core",
  "quote",
