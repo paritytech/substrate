@@ -367,7 +367,7 @@ sp_api::decl_runtime_apis! {
 mod tests {
 	use super::*;
 	use sp_application_crypto::ecdsa::{self, Public};
-	use sp_core::{blake2_256, ecdsa_crypto::Wraps, keccak_256, Pair};
+	use sp_core::{blake2_256, crypto::Wraps, keccak_256, Pair};
 	use sp_runtime::traits::{BlakeTwo256, Keccak256};
 
 	#[test]

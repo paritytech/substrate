@@ -86,8 +86,8 @@ mod tests {
 	use crate::{
 		bls_crypto::Signature as BLSSignature, ecdsa_crypto, known_payloads, Payload, KEY_TYPE,
 	};
-	use bls_like::{
-		pop::SignatureAggregatorAssumingPoP, EngineBLS, SerializableToBytes, Signed, BLS377,
+	use w3f_bls::{
+		single_pop_aggregator::SignatureAggregatorAssumingPoP, SerializableToBytes, Message, Signed, BLS377,
 	};
 
 	type TestCommitment = Commitment<u128>;
@@ -103,7 +103,7 @@ mod tests {
 	///types for commitment containing  bls signature along side ecdsa signature
 	type TestBLSSignedCommitment = SignedCommitment<u128, ECDSABLSSignaturePair>;
 	type TestBLSSignedCommitmentWitness =
-		SignedCommitmentWitness<u128, [u8; BLS377::SIGNATURE_SERIALIZED_SIZE]>;
+		SignedCommitmentWitness<u128, Vec<u8>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
@@ -124,9 +124,9 @@ mod tests {
 	///generates mock aggregatable bls signature for generating test commitment
 	///BLS signatures
 	fn mock_bls_signatures() -> (BLSSignature, BLSSignature) {
-		let store: KeystorePtr = MemoryKeyStore::new().into();
+		let store: KeystorePtr = MemoryKeystore::new().into();
 
-		let mut alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
+		let alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
 		store.insert(KEY_TYPE, "//Alice", alice.public().as_ref())
 				.unwrap();
 
@@ -190,17 +190,18 @@ mod tests {
 		let signed = ecdsa_and_bls_signed_commitment();
 
 		// when
-		let (witness, signatures) = TestBLSSignedCommitmentWitness::from_signed::<
+		let (witness, _signatures) = TestBLSSignedCommitmentWitness::from_signed::<
 			_,
 			_,
 		>(signed, |sigs| {
 			//we are going to aggregate the signatures here
-			let mut aggregatedsigs: SignatureAggregatorAssumingPoP<BLS377> =
-				SignatureAggregatorAssumingPoP::new();
-			sigs.iter().filter_map(|sig| {
+
+		    let mut aggregatedsigs: SignatureAggregatorAssumingPoP<BLS377> =
+				SignatureAggregatorAssumingPoP::new(Message::new(b"",b"mock payload"));
+			let _ = sigs.iter().filter_map(|sig| {
 				sig.clone().map(|sig| {
 					aggregatedsigs.add_signature(
-						&(bls_like::Signature::from_bytes(
+						&(w3f_bls::Signature::from_bytes(
 							<BLSSignature as AsRef<[u8]>>::as_ref(&sig.1.clone())
 								.try_into()
 								.unwrap(),

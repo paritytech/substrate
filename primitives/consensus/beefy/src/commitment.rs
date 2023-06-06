@@ -254,10 +254,6 @@ mod tests {
 	use hex::ToHex;
 	use codec::Decode;
 	use crate::{bls_crypto::Signature as BLSSignature, ecdsa_crypto, known_payloads, KEY_TYPE};
-	use bls_like::{
-		pop::SignatureAggregatorAssumingPoP, Keypair, SerializableToBytes, Signed,
-		SignedMessage as BLSSignedMessage, BLS377,
-	};
 	use sp_core::{keccak_256, Pair};
 	use sp_keystore::{testing::MemoryKeystore, KeystorePtr};
 
@@ -278,7 +274,7 @@ mod tests {
 	struct ECDSABLSSignaturePair(ecdsa_crypto::Signature, BLSSignature);
 
 	type TestBLSSignedCommitment = SignedCommitment<u128, ECDSABLSSignaturePair>;
-	type TestVersionedBLSFinalityProof = VersionedFinalityProof<u128, ECDSABLSSignaturePair>;
+	//type TestVersionedBLSFinalityProof = VersionedFinalityProof<u128, ECDSABLSSignaturePair>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
@@ -299,9 +295,9 @@ mod tests {
 	///generates mock aggregatable bls signature for generating test commitment
 	///BLS signatures
 	fn mock_bls_signatures() -> (BLSSignature, BLSSignature) {
-		let store: KeyStorePtr = MemoryKeystore::new().into();
+		let store: KeystorePtr = MemoryKeystore::new().into();
 
-		let mut alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
+		let alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
 		store.insert(KEY_TYPE, "//Alice", alice.public().as_ref())
 				.unwrap();
 
