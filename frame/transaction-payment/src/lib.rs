@@ -54,7 +54,7 @@ use frame_support::{
 	dispatch::{
 		DispatchClass, DispatchInfo, DispatchResult, GetDispatchInfo, Pays, PostDispatchInfo,
 	},
-	traits::{EstimateCallFee, Get},
+	traits::{Defensive, EstimateCallFee, Get},
 	weights::{Weight, WeightToFee},
 };
 pub use pallet::*;
