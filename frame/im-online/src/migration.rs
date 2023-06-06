@@ -69,13 +69,7 @@ mod v0 {
 		SessionIndex,
 		Twox64Concat,
 		AuthIndex,
-		WrapperOpaque<
-			BoundedOpaqueNetworkState<
-				T::MaxPeerDataEncodingSize,
-				T::MaxPeerDataEncodingSize,
-				T::MaxPeerInHeartbeats,
-			>,
-		>,
+		WrapperOpaque<BoundedOpaqueNetworkState<u32, u32, T::MaxPeerInHeartbeats>>,
 	>;
 
 	#[storage_alias]
@@ -91,7 +85,7 @@ mod v0 {
 }
 
 pub mod v1 {
-	use super::{v0::BoundedOpaqueNetworkState, *};
+	use super::*;
 
 	/// Migration for moving im-online from V0 to V1 storage.
 	pub struct Migration<T>(sp_std::marker::PhantomData<T>);
@@ -111,8 +105,8 @@ pub mod v1 {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			ReceivedHeartbeats::<T>::translate::<BoundedOpaqueNetworkState<T>, _>(
-				|k: T::SessionIndex, T::AccountId, state: BoundedOpaqueNetworkState<T>| {
+			ReceivedHeartbeats::<T>::translate::<_, _>(
+				|k: T::SessionIndex, T::AccountId, state: _| {
 					log::info!(target: TARGET, "Migrated received heartbeat for {:?}...", k);
 					Some(())
 				},
