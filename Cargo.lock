@@ -6596,6 +6596,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-example-kitchensink"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-example-offchain-worker"
 version = "4.0.0-dev"
 dependencies = [
@@ -6610,6 +6627,17 @@ dependencies = [
  "sp-keystore",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-examples"
+version = "4.0.0-dev"
+dependencies = [
+ "pallet-default-config-example",
+ "pallet-dev-mode",
+ "pallet-example-basic",
+ "pallet-example-kitchensink",
+ "pallet-example-offchain-worker",
 ]
 
 [[package]]
