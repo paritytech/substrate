@@ -67,18 +67,14 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 
 		let (peerset, handle) =
 			crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig {
+				bootnodes: if index == 0 {
+					keypairs.iter().skip(1).map(|keypair| keypair.public().to_peer_id()).collect()
+				} else {
+					vec![]
+				},
 				sets: vec![crate::peerset::SetConfig {
 					in_peers: 25,
 					out_peers: 25,
-					bootnodes: if index == 0 {
-						keypairs
-							.iter()
-							.skip(1)
-							.map(|keypair| keypair.public().to_peer_id())
-							.collect()
-					} else {
-						vec![]
-					},
 					reserved_nodes: Default::default(),
 					reserved_only: false,
 				}],

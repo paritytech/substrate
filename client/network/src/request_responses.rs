@@ -1073,10 +1073,10 @@ mod tests {
 			.boxed();
 
 		let config = PeersetConfig {
+			bootnodes: vec![],
 			sets: vec![SetConfig {
 				in_peers: u32::max_value(),
 				out_peers: u32::max_value(),
-				bootnodes: vec![],
 				reserved_nodes: Default::default(),
 				reserved_only: false,
 			}],

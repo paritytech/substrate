@@ -775,7 +775,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 0,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: true,
 		};
@@ -838,7 +837,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 0,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: true,
 		};
@@ -890,7 +888,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 0,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: true,
 		};
@@ -950,7 +947,6 @@ mod tests {
 			in_peers: 0,
 			// Less slots than candidates.
 			out_peers: 2,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -998,13 +994,8 @@ mod tests {
 		let outgoing_candidates = vec![regular1, regular2];
 		let reserved_nodes = [reserved1, reserved2].iter().cloned().collect();
 
-		let config = SetConfig {
-			in_peers: 10,
-			out_peers: 10,
-			bootnodes: Vec::new(),
-			reserved_nodes,
-			reserved_only: false,
-		};
+		let config =
+			SetConfig { in_peers: 10, out_peers: 10, reserved_nodes, reserved_only: false };
 		let (tx, mut rx) = tracing_unbounded("mpsc_test_to_notifications", 100);
 
 		let mut peer_store = MockPeerStoreHandle::new();
@@ -1043,7 +1034,6 @@ mod tests {
 			in_peers: 0,
 			// Less slots than candidates.
 			out_peers: 2,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1114,7 +1104,6 @@ mod tests {
 			in_peers: 0,
 			// Make sure we have slots available.
 			out_peers: 2,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: true,
 		};
@@ -1141,7 +1130,6 @@ mod tests {
 			// Make sure we have slots available.
 			in_peers: 2,
 			out_peers: 0,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: true,
 		};
@@ -1179,7 +1167,6 @@ mod tests {
 			in_peers: 0,
 			// Make sure we have slots available.
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: true,
 		};
@@ -1226,7 +1213,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1287,7 +1273,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1320,7 +1305,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: true,
 		};
@@ -1367,7 +1351,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [peer1, peer2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1414,7 +1397,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1457,7 +1439,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1517,7 +1498,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1574,7 +1554,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1627,7 +1606,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: [reserved1, reserved2].iter().cloned().collect(),
 			reserved_only: false,
 		};
@@ -1688,7 +1666,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1741,7 +1718,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1795,7 +1771,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 1,
 			out_peers: 1,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1849,7 +1824,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 1,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1880,7 +1854,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: HashSet::new(),
 			reserved_only: false,
 		};
@@ -1906,7 +1879,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: false,
 		};
@@ -1933,7 +1905,6 @@ mod tests {
 		let config = SetConfig {
 			in_peers: 10,
 			out_peers: 10,
-			bootnodes: Vec::new(),
 			reserved_nodes: std::iter::once(reserved1).collect(),
 			reserved_only: false,
 		};

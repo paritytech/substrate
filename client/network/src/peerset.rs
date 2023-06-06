@@ -192,6 +192,8 @@ impl From<u64> for IncomingIndex {
 /// Configuration to pass when creating the peer set manager.
 #[derive(Debug)]
 pub struct PeersetConfig {
+	/// Bootnodes.
+	pub bootnodes: Vec<PeerId>,
 	/// List of sets of nodes the peerset manages.
 	pub sets: Vec<SetConfig>,
 }
@@ -204,12 +206,6 @@ pub struct SetConfig {
 
 	/// Maximum number of outgoing links to peers.
 	pub out_peers: u32,
-
-	/// List of bootstrap nodes to initialize the set with.
-	///
-	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
-	/// > otherwise it will not be able to connect to them.
-	pub bootnodes: Vec<PeerId>,
 
 	/// Lists of nodes we should always be connected to.
 	///
@@ -244,8 +240,7 @@ pub struct Peerset {
 impl Peerset {
 	/// Builds a new peerset from the given configuration.
 	pub fn from_config(config: PeersetConfig) -> (Peerset, PeersetHandle) {
-		let default_set_config = &config.sets[0];
-		let peer_store = PeerStore::new(default_set_config.bootnodes.clone());
+		let peer_store = PeerStore::new(config.bootnodes);
 
 		let (to_notifications, from_controllers) =
 			tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
