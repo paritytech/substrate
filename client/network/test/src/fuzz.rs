@@ -17,13 +17,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use libp2p_identity::PeerId;
+use libp2p::PeerId;
 use rand::{
 	distributions::{Distribution, Uniform, WeightedIndex},
 	seq::IteratorRandom,
 };
-use sc_peerset::{
-	IncomingIndex, Message, Peerset, PeersetConfig, ReputationChange, SetConfig, SetId,
+use sc_network::{
+	peerset::{Peerset, PeersetConfig},
+	protocol_controller::{IncomingIndex, Message, ProtoSetConfig, SetId},
+	ReputationChange,
 };
 use std::{
 	collections::{HashMap, HashSet},
@@ -83,16 +85,16 @@ fn discard_incoming_index(state: State) -> BareState {
 	}
 }
 
-#[test]
-fn run() {
+#[tokio::test]
+async fn run() {
 	sp_tracing::try_init_simple();
 
 	for _ in 0..50 {
-		test_once();
+		test_once().await;
 	}
 }
 
-fn test_once() {
+async fn test_once() {
 	// Allowed events that can be received in a specific state.
 	let allowed_events: HashMap<BareState, HashSet<Event>> = [
 		(
@@ -137,7 +139,7 @@ fn test_once() {
 				id
 			})
 			.collect(),
-		sets: vec![SetConfig {
+		sets: vec![ProtoSetConfig {
 			reserved_nodes: {
 				(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
 					.map(|_| {

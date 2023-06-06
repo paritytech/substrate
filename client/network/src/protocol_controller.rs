@@ -68,6 +68,7 @@ pub const LOG_TARGET: &str = "peerset";
 pub struct SetId(usize);
 
 impl SetId {
+	/// Const conversion function for initialization of hardcoded peerset indices.
 	pub const fn from(id: usize) -> Self {
 		Self(id)
 	}

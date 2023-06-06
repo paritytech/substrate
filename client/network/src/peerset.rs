@@ -57,6 +57,7 @@ use std::{
 
 use libp2p::PeerId;
 
+/// Log target for this file.
 pub const LOG_TARGET: &str = "peerset";
 
 #[derive(Debug)]
