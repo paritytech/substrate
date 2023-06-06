@@ -17,7 +17,7 @@ array-bytes = "4.1"
 async-trait = "0.1.57"
 codec = { package = "parity-scale-codec", version = "3.2.2" }
 futures = "0.3.21"
-serde = "1.0.136"
+serde = "1.0.163"
 serde_json = "1.0.85"
 sc-client-api = { version = "4.0.0-dev", path = "../../client/api" }
 sc-client-db = { version = "0.10.0-dev", default-features = false, features = [

@@ -43,7 +43,7 @@
 
 use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
 use libp2p::PeerId;
-use log::{error, trace, warn};
+use log::{debug, error, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_arithmetic::traits::SaturatedConversion;
 use std::{
@@ -530,7 +530,7 @@ impl ProtocolController {
 				self.drop_connection(peer_id);
 			},
 			None => {
-				warn!(
+				debug!(
 					target: LOG_TARGET,
 					"Trying to disconnect unknown peer {} from {:?}.", peer_id, self.set_id,
 				);
