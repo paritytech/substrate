@@ -29,9 +29,56 @@ use sp_std::marker::PhantomData;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+/// Struct to make it easier to write correct versioned runtime upgrades.
+///
+/// The struct allows developers to write migrations without worrying about checking and setting
+/// pallet storage versions. Instead, the developer wraps their migration in this struct which takes
+/// care of checking and setting storage versions using best practices.
+///
+/// It takes 4 type parameters:
+/// - `Version`: The version being upgraded *from*.
+/// - `Inner`: An implementation of `OnRuntimeUpgrade`.
+/// - `Pallet`: The Pallet being upgraded.
+/// - `Weight`: The runtime's RuntimeDbWeight implementation.
+///
+/// Example:
+/// ```ignore
+/// parameter_types! {
+/// 	pub const V4ToV5: StorageVersion = StorageVersion::new(4);
+/// 	pub const V5ToV6: StorageVersion = StorageVersion::new(5);
+/// }
+///
+/// // Migrations to pass to the Executive pallet.
+/// pub type Migrations = (
+/// 	// ...other migrations
+/// 	VersionedRuntimeUpgrade<
+/// 		V4ToV5,
+/// 		parachains_configuration::migration::v5::MigrateToV5<Runtime>,
+/// 		Configuration,
+/// 		RocksDbWeight,
+/// 	>,
+/// 	VersionedRuntimeUpgrade<
+/// 		V5ToV6,
+/// 		parachains_configuration::migration::v6::MigrateToV6<Runtime>,
+/// 		Configuration,
+/// 		RocksDbWeight,
+/// 	>,
+/// 	// ...other migrations
+/// );
+/// ```
 pub struct VersionedRuntimeUpgrade<Version, Inner, Pallet, Weight> {
 	_marker: PhantomData<(Version, Inner, Pallet, Weight)>,
 }
+
+/// Implementation of the `OnRuntimeUpgrade` trait for `VersionedRuntimeUpgrade`.
+///
+/// Primarily, it
+/// 1. Logs a warning in `pre_upgrade` if the storage version specified in the pallet appears to be
+/// misconfigured before returning `Inner::pre_upgrade`.
+///
+/// 2. Performs the actual runtime upgrade in `on_runtime_upgrade` only if the on-chain version of
+/// the pallet's storage matches `Version`. If the versions do not match, it emits a log
+/// notifying the developer that the migration is a noop.
 impl<
 		Version: Get<StorageVersion>,
 		Inner: OnRuntimeUpgrade,
@@ -39,6 +86,10 @@ impl<
 		DbWeight: Get<RuntimeDbWeight>,
 	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<Version, Inner, Pallet, DbWeight>
 {
+	/// VersionedRuntimeUpgrade pre-upgrade checks.
+	///
+	/// Logs a warning if the storage version specified in the pallet appears to be misconfigured,
+	/// before returning `Inner::pre_upgrade`.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		let current_version = Pallet::current_storage_version();
@@ -49,6 +100,12 @@ impl<
 		Inner::pre_upgrade()
 	}
 
+	/// Actually executes the versioned runtime upgrade.
+	///
+	/// `on_runtime_upgrade` first checks if the pallet's on-chain storage version matches the
+	/// version of this upgrade. If it matches, it calls `Inner::on_runtime_upgrade` and returns the
+	/// weight. If it does not match, it writes a log notifying the developer that the migration is
+	/// a noop.
 	fn on_runtime_upgrade() -> Weight {
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == Version::get() {
