@@ -129,3 +129,42 @@ pub mod v1 {
 		}
 	}
 }
+
+#[cfg(test)]
+#[cfg(feature = "try-runtime")]
+mod test {
+	use super::*;
+	use crate::mock::{Test as T, *};
+
+	use frame_support::bounded_vec;
+
+	#[test]
+	fn migration_works() {
+		new_test_ext().execute_with(|| {
+			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0);
+
+			// Insert some received heartbeats into the v0 storage:
+			let current_session = T::ValidatorSet::session_index();
+			v0::ReceivedHeartbeats::<T>::insert(&current_session, AuthIndex::from(0), ());
+			v0::ReceivedHeartbeats::<T>::insert(&current_session, AuthIndex::from(1), ());
+
+			assert_eq!(v0::ReceivedHeartbeats::<T>::iter().count(), 2);
+			assert_eq!(
+				v1::ReceivedHeartbeats::<T>::iter().count(),
+				0,
+				"V1 storage should be corrupted"
+			);
+
+			let state = v1::Migration::<T>::pre_upgrade().unwrap();
+			let _w = v1::Migration::<T>::on_runtime_upgrade();
+			v1::Migration::<T>::post_upgrade(state).unwrap();
+
+			assert_eq!(v0::ReceivedHeartbeats::<T>::iter().count(), 2);
+			assert_eq!(v1::ReceivedHeartbeats::<T>::iter().count(), 2);
+			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
+
+			assert!(v1::ReceivedHeartbeats::<T>::contains(&current_session, AuthIndex::from(0)));
+			assert_eq!((), v1::ReceivedHeartbeats::<T>::get(&current_session, AuthIndex::from(1)));
+		});
+	}
+}
