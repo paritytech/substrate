@@ -235,7 +235,7 @@ pub mod pallet {
 			at: u32,
 			to: T::AccountId,
 		},
-		// /// Another variant.
+		/// Another variant.
 		SomeoneJoined(T::AccountId),
 	}
 
