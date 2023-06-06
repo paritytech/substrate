@@ -34,7 +34,9 @@
 
 use crate::{
 	peer_store::{PeerStore, PeerStoreHandle, PeerStoreProvider},
-	protocol_controller::{ProtoSetConfig, ProtocolController, ProtocolHandle, SetId},
+	protocol_controller::{
+		IncomingIndex, Message, ProtoSetConfig, ProtocolController, ProtocolHandle, SetId,
+	},
 };
 
 use futures::{
@@ -122,43 +124,6 @@ impl PeersetHandle {
 
 		// The channel can only be closed if the peerset no longer exists.
 		rx.await.map_err(|_| ())
-	}
-}
-
-/// Message that can be sent by the peer set manager (PSM).
-#[derive(Debug, PartialEq)]
-pub enum Message {
-	/// Request to open a connection to the given peer. From the point of view of the PSM, we are
-	/// immediately connected.
-	Connect {
-		/// Set id to connect on.
-		set_id: SetId,
-		/// Peer to connect to.
-		peer_id: PeerId,
-	},
-
-	/// Drop the connection to the given peer, or cancel the connection attempt after a `Connect`.
-	Drop {
-		/// Set id to disconnect on.
-		set_id: SetId,
-		/// Peer to disconnect from.
-		peer_id: PeerId,
-	},
-
-	/// Equivalent to `Connect` for the peer corresponding to this incoming index.
-	Accept(IncomingIndex),
-
-	/// Equivalent to `Drop` for the peer corresponding to this incoming index.
-	Reject(IncomingIndex),
-}
-
-/// Opaque identifier for an incoming connection. Allocated by the network.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct IncomingIndex(pub u64);
-
-impl From<u64> for IncomingIndex {
-	fn from(val: u64) -> Self {
-		Self(val)
 	}
 }
 

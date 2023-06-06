@@ -52,10 +52,7 @@ use std::{
 };
 use wasm_timer::Delay;
 
-use crate::{
-	peer_store::PeerStoreProvider,
-	peerset::{IncomingIndex, Message},
-};
+use crate::peer_store::PeerStoreProvider;
 
 /// Log target for this file.
 pub const LOG_TARGET: &str = "peerset";
@@ -107,6 +104,43 @@ pub struct ProtoSetConfig {
 
 	/// If true, we only accept nodes in [`SetConfig::reserved_nodes`].
 	pub reserved_only: bool,
+}
+
+/// Message that is sent by [`ProtocolController`] to `Notifications`.
+#[derive(Debug, PartialEq)]
+pub enum Message {
+	/// Request to open a connection to the given peer. From the point of view of the PSM, we are
+	/// immediately connected.
+	Connect {
+		/// Set id to connect on.
+		set_id: SetId,
+		/// Peer to connect to.
+		peer_id: PeerId,
+	},
+
+	/// Drop the connection to the given peer, or cancel the connection attempt after a `Connect`.
+	Drop {
+		/// Set id to disconnect on.
+		set_id: SetId,
+		/// Peer to disconnect from.
+		peer_id: PeerId,
+	},
+
+	/// Equivalent to `Connect` for the peer corresponding to this incoming index.
+	Accept(IncomingIndex),
+
+	/// Equivalent to `Drop` for the peer corresponding to this incoming index.
+	Reject(IncomingIndex),
+}
+
+/// Opaque identifier for an incoming connection. Allocated by the network.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IncomingIndex(pub u64);
+
+impl From<u64> for IncomingIndex {
+	fn from(val: u64) -> Self {
+		Self(val)
+	}
 }
 
 /// External API actions.
@@ -791,12 +825,8 @@ impl ProtocolController {
 
 #[cfg(test)]
 mod tests {
-	use super::{Direction, PeerState, ProtoSetConfig, ProtocolController, ProtocolHandle, SetId};
-	use crate::{
-		peer_store::PeerStoreProvider,
-		peerset::{IncomingIndex, Message},
-		ReputationChange,
-	};
+	use super::*;
+	use crate::{peer_store::PeerStoreProvider, ReputationChange};
 	use libp2p::PeerId;
 	use sc_utils::mpsc::{tracing_unbounded, TryRecvError};
 	use std::collections::HashSet;
