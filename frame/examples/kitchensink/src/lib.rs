@@ -18,14 +18,13 @@
 //! # Kitchensink Example Pallet
 //!
 //! **This pallet serves as an example and is not meant to be used in production.**
-//! 
+//!
 //! The kitchen-sink catalog of the the FRAME macros and their various syntax options.
-//! 
+//!
 //! This example does not focus on pallet instancing, `dev_mode`, and does nto include any 'where'
 //! clauses on `T`. These will both incur additional complexity to the syntax, but are not discussed
 //! here.
 
-// Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
@@ -236,7 +235,7 @@ pub mod pallet {
 			at: u32,
 			to: T::AccountId,
 		},
-		// /// Another variant.
+		/// Another variant.
 		SomeoneJoined(T::AccountId),
 	}
 
@@ -251,9 +250,7 @@ pub mod pallet {
 	/// info.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
-		fn integrity_test() {
-			
-		}
+		fn integrity_test() {}
 
 		fn offchain_worker(_n: T::BlockNumber) {
 			unimplemented!()

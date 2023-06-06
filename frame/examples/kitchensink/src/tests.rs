@@ -18,11 +18,10 @@
 //! Tests for pallet-example-kitchensink.
 
 use crate::*;
-use frame_support::{traits::ConstU64, parameter_types};
-use sp_runtime::BuildStorage;
-use frame_support::macro_magic::use_attr;
 #[use_attr]
 use frame_support::derive_impl;
+use frame_support::{macro_magic::use_attr, parameter_types, traits::ConstU64};
+use sp_runtime::BuildStorage;
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example_kitchensink;
 
@@ -42,7 +41,7 @@ frame_support::construct_runtime!(
 	}
 );
 
-/// Using a default config for [`frame_system`] in tests. See `default-config` example for more 
+/// Using a default config for [`frame_system`] in tests. See `default-config` example for more
 /// details.
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
@@ -79,11 +78,11 @@ parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
-	
+
 	type Currency = Balances;
 	type InMetadata = InMetadata;
 
-	const FOO:u32 = 100;
+	const FOO: u32 = 100;
 
 	fn some_function() -> u32 {
 		5u32
@@ -93,14 +92,11 @@ impl Config for Test {
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = GenesisConfig {
+	let t = RuntimeGenesisConfig {
 		// We use default for brevity, but you can configure as desired if needed.
 		system: Default::default(),
 		balances: Default::default(),
-		kitchensink: pallet_example_kitchensink::GenesisConfig {
-			bar: 32,
-			foo: 24,
-		},
+		kitchensink: pallet_example_kitchensink::GenesisConfig { bar: 32, foo: 24 },
 	}
 	.build_storage()
 	.unwrap();
