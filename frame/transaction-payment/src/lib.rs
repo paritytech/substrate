@@ -106,9 +106,16 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 /// with tests that the combination of this `M` and `V` is not such that the multiplier can drop to
 /// zero and never recover.
 ///
-/// note that `s'` is interpreted as a portion in the _normal transaction_ capacity of the block.
+/// Note that `s'` is interpreted as a portion in the _normal transaction_ capacity of the block.
 /// For example, given `s' == 0.25` and `AvailableBlockRatio = 0.75`, then the target fullness is
 /// _0.25 of the normal capacity_ and _0.1875 of the entire block_.
+///
+/// Since block weight is multi-dimension, we use the scarcer resource, referred as limiting
+/// dimension, for calculation of fees. We determine the limiting dimension by comparing the
+/// dimensions using the ratio of `dimension_value / max_dimension_value` and selecting the largest
+/// ratio. For instance, if a block is 30% full based on `ref_time` and 25% full based on
+/// `proof_size`, we identify `ref_time` as the limiting dimension, indicating that the block is 30%
+/// full.
 ///
 /// This implementation implies the bound:
 /// - `v ≤ p / k * (s − s')`
