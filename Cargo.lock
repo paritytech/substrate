@@ -5208,6 +5208,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "multihash"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfd8a792c1694c6da4f68db0a9d707c72bd260994da179e6030a5dcee00bb815"
+dependencies = [
+ "core2",
+ "digest 0.10.7",
+ "multihash-derive",
+ "sha2 0.10.6",
+ "unsigned-varint",
+]
+
+[[package]]
 name = "multihash-derive"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8912,7 +8925,7 @@ dependencies = [
  "ip_network",
  "libp2p",
  "log",
- "multihash 0.17.0",
+ "multihash 0.18.1",
  "parity-scale-codec",
  "prost",
  "prost-build",
