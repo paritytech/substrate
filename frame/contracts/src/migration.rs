@@ -197,14 +197,7 @@ pub trait MigrateSequence: private::Sealed {
 }
 
 /// Performs all necessary migrations based on `StorageVersion`.
-// #[cfg(not(any(feature = "runtime-benchmarks", test)))]
 pub struct Migration<T: Config, M: MigrateSequence>(PhantomData<(T, M)>);
-
-// /// Custom migration for running runtime-benchmarks and tests.
-// #[cfg(any(feature = "runtime-benchmarks", test))]
-// pub struct Migration<T: Config, M: MigrateSequence = (NoopMigration<1>, NoopMigration<2>)>(
-// 	PhantomData<(T, M)>,
-// );
 
 #[cfg(feature = "try-runtime")]
 impl<T: Config, M: MigrateSequence> Migration<T, M> {
