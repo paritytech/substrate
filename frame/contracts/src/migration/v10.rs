@@ -23,7 +23,7 @@ use crate::{
 	exec::AccountIdOf,
 	migration::{IsFinished, Migrate},
 	weights::WeightInfo,
-	BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
+	CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
 use core::cmp::{max, min};
@@ -32,9 +32,8 @@ use frame_support::{
 	pallet_prelude::*,
 	storage_alias,
 	traits::{
-		fungible::Inspect,
-		tokens::{Fortitude::Polite, Preservation::Preserve},
-		Currency, ExistenceRequirement, ReservableCurrency,
+		tokens::{fungible::Inspect, Fortitude::Polite, Preservation::Preserve},
+		ExistenceRequirement, ReservableCurrency,
 	},
 	DefaultNoBound,
 };
@@ -47,29 +46,46 @@ use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 mod old {
 	use super::*;
 
+	pub type BalanceOf<T: Config, Currency: CurrencyOf<T>> = <Currency as frame_support::traits::Currency<
+			<T as frame_system::Config>::AccountId,
+		>>::Balance;
+
+	/// Old Currency type traits
+	///
+	/// This trait holds what the old [`T::Currency`] type required before is was replaced by
+	/// [`T::Fungible`]
+	pub trait CurrencyOf<T: Config>:
+		ReservableCurrency<<T as frame_system::Config>::AccountId>
+		+ Inspect<<T as frame_system::Config>::AccountId, Balance = BalanceOf<T, Self>>
+	{
+	}
+
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
-	pub struct ContractInfo<T: Config> {
+	pub struct ContractInfo<T: Config, Currency: CurrencyOf<T>> {
 		pub trie_id: TrieId,
 		pub code_hash: CodeHash<T>,
 		pub storage_bytes: u32,
 		pub storage_items: u32,
-		pub storage_byte_deposit: BalanceOf<T>,
-		pub storage_item_deposit: BalanceOf<T>,
-		pub storage_base_deposit: BalanceOf<T>,
+		pub storage_byte_deposit: BalanceOf<T, Currency>,
+		pub storage_item_deposit: BalanceOf<T, Currency>,
+		pub storage_base_deposit: BalanceOf<T, Currency>,
 	}
 
 	#[storage_alias]
-	pub type ContractInfoOf<T: Config> = StorageMap<
+	pub type ContractInfoOf<T: Config, Currency: CurrencyOf<T>> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
 		<T as frame_system::Config>::AccountId,
-		ContractInfo<T>,
+		ContractInfo<T, Currency>,
 	>;
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_contrat_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+pub fn store_old_contract_info<T: Config, Currency: old::CurrencyOf<T>>(
+	account: T::AccountId,
+	info: crate::ContractInfo<T, Currency>,
+) {
 	let info = old::ContractInfo {
 		trie_id: info.trie_id,
 		code_hash: info.code_hash,
@@ -79,7 +95,7 @@ pub fn store_old_contrat_info<T: Config>(account: T::AccountId, info: crate::Con
 		storage_item_deposit: Default::default(),
 		storage_base_deposit: Default::default(),
 	};
-	old::ContractInfoOf::<T>::insert(account, info);
+	old::ContractInfoOf::<T, Currency>::insert(account, info);
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
@@ -96,28 +112,32 @@ impl<T: Config> Deref for DepositAccount<T> {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
-pub struct ContractInfo<T: Config> {
+pub struct ContractInfo<T: Config, Currency: old::CurrencyOf<T>> {
 	pub trie_id: TrieId,
 	deposit_account: DepositAccount<T>,
 	pub code_hash: CodeHash<T>,
 	storage_bytes: u32,
 	storage_items: u32,
-	pub storage_byte_deposit: BalanceOf<T>,
-	storage_item_deposit: BalanceOf<T>,
-	storage_base_deposit: BalanceOf<T>,
+	pub storage_byte_deposit: old::BalanceOf<T, Currency>,
+	storage_item_deposit: old::BalanceOf<T, Currency>,
+	storage_base_deposit: old::BalanceOf<T, Currency>,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
-pub struct Migration<T: Config> {
+pub struct Migration<T: Config, Currency: old::CurrencyOf<T>> {
 	last_key: Option<BoundedVec<u8, ConstU32<256>>>,
-	_phantom: PhantomData<T>,
+	_phantom: PhantomData<(T, Currency)>,
 }
 
 #[storage_alias]
-type ContractInfoOf<T: Config> =
-	StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
+type ContractInfoOf<T: Config, Currency: old::CurrencyOf<T>> = StorageMap<
+	Pallet<T>,
+	Twox64Concat,
+	<T as frame_system::Config>::AccountId,
+	ContractInfo<T, Currency>,
+>;
 
-impl<T: Config> Migrate for Migration<T> {
+impl<T: Config, Currency: old::CurrencyOf<T>> Migrate for Migration<T, Currency> {
 	const VERSION: u16 = 10;
 
 	fn max_step_weight() -> Weight {
@@ -126,13 +146,15 @@ impl<T: Config> Migrate for Migration<T> {
 
 	fn step(&mut self) -> (IsFinished, Weight) {
 		let mut iter = if let Some(last_key) = self.last_key.take() {
-			old::ContractInfoOf::<T>::iter_from(last_key.to_vec())
+			old::ContractInfoOf::<T, Currency>::iter_from(last_key.to_vec())
 		} else {
-			old::ContractInfoOf::<T>::iter()
+			old::ContractInfoOf::<T, Currency>::iter()
 		};
 
 		if let Some((account, contract)) = iter.next() {
-			let min_balance = Pallet::<T>::min_balance();
+			let min_balance = <Currency as frame_support::traits::Currency<
+				<T as frame_system::Config>::AccountId,
+			>>::minimum_balance();
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 
 			// Store last key for next migration step
@@ -150,7 +172,7 @@ impl<T: Config> Migrate for Migration<T> {
 
 			// Unreserve the existing deposit
 			// Note we can't use repatriate_reserve, because it only works with existing accounts
-			let remaining = T::Currency::unreserve(&account, old_deposit);
+			let remaining = Currency::unreserve(&account, old_deposit);
 			if !remaining.is_zero() {
 				log::warn!(
 					target: LOG_TARGET,
@@ -163,9 +185,9 @@ impl<T: Config> Migrate for Migration<T> {
 			// Attempt to transfer the old deposit to the deposit account.
 			let amount = old_deposit
 				.saturating_sub(min_balance)
-				.min(T::Currency::reducible_balance(&account, Preserve, Polite));
+				.min(Currency::reducible_balance(&account, Preserve, Polite));
 
-			let new_deposit = T::Currency::transfer(
+			let new_deposit = Currency::transfer(
 				&account,
 				&deposit_account,
 				amount,
@@ -182,7 +204,7 @@ impl<T: Config> Migrate for Migration<T> {
 			// If it fails we fallback to minting the ED.
 			.unwrap_or_else(|err| {
 				log::error!(target: LOG_TARGET, "Failed to transfer ED, reason: {:?}", err);
-				T::Currency::deposit_creating(&deposit_account, min_balance);
+				Currency::deposit_creating(&deposit_account, min_balance);
 				min_balance
 			});
 
@@ -222,7 +244,7 @@ impl<T: Config> Migrate for Migration<T> {
 				storage_base_deposit,
 			};
 
-			ContractInfoOf::<T>::insert(&account, new_contract_info);
+			ContractInfoOf::<T, Currency>::insert(&account, new_contract_info);
 			(IsFinished::No, T::WeightInfo::v10_migration_step())
 		} else {
 			log::debug!(target: LOG_TARGET, "Done Migrating contract info");
@@ -232,7 +254,7 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
-		let sample: Vec<_> = old::ContractInfoOf::<T>::iter().take(10).collect();
+		let sample: Vec<_> = old::ContractInfoOf::<T, Currency>::iter().take(10).collect();
 
 		log::debug!(target: LOG_TARGET, "Taking sample of {} contracts", sample.len());
 		Ok(sample.encode())
@@ -240,14 +262,16 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let sample =
-			<Vec<(T::AccountId, old::ContractInfo<T>)> as Decode>::decode(&mut &state[..]).unwrap();
+		let sample = <Vec<(T::AccountId, old::ContractInfo<T, Currency>)> as Decode>::decode(
+			&mut &state[..],
+		)
+		.unwrap();
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
 		for (account, old_contract) in sample {
 			log::debug!(target: LOG_TARGET, "===");
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
-			let contract = ContractInfoOf::<T>::get(&account).unwrap();
+			let contract = ContractInfoOf::<T, Currency>::get(&account).unwrap();
 			ensure!(old_contract.trie_id == contract.trie_id, "invalid trie_id");
 			ensure!(old_contract.code_hash == contract.code_hash, "invalid code_hash");
 			ensure!(old_contract.storage_bytes == contract.storage_bytes, "invalid storage_bytes");

@@ -58,9 +58,9 @@ fn invalid_version(version: StorageVersion) -> ! {
 /// The cursor used to store the state of the current migration step.
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
 
-// In benchmark and tests we use noop migrations, to test and bench the migration framework itself.
-#[cfg(not(any(feature = "runtime-benchmarks", test)))]
-type Migrations<T> = (v9::Migration<T>, v10::Migration<T>, v11::Migration<T>);
+// // In benchmark and tests we use noop migrations, to test and bench the migration framework
+// itself. #[cfg(not(any(feature = "runtime-benchmarks", test)))]
+// type Migrations<T, C> = (v9::Migration<T>, v10::Migration<T, C>, v11::Migration<T>);
 
 /// IsFinished describes whether a migration is finished or not.
 pub enum IsFinished {
@@ -207,7 +207,7 @@ pub trait MigrateSequence: private::Sealed {
 
 /// Performs all necessary migrations based on `StorageVersion`.
 #[cfg(not(any(feature = "runtime-benchmarks", test)))]
-pub struct Migration<T: Config, M: MigrateSequence = Migrations<T>>(PhantomData<(T, M)>);
+pub struct Migration<T: Config, M: MigrateSequence = ()>(PhantomData<(T, M)>);
 
 /// Custom migration for running runtime-benchmarks and tests.
 #[cfg(any(feature = "runtime-benchmarks", test))]
