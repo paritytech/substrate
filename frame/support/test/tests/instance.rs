@@ -89,7 +89,7 @@ mod module1 {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
 	where
-		T::BlockNumber: std::fmt::Display,
+		frame_system::BlockNumberOf<T>: std::fmt::Display,
 	{
 		fn build(&self) {
 			<Value<T, I>>::put(self.value.clone());
@@ -123,7 +123,7 @@ mod module1 {
 	#[pallet::inherent]
 	impl<T: Config<I>, I: 'static> ProvideInherent for Pallet<T, I>
 	where
-		T::BlockNumber: From<u32>,
+		frame_system::BlockNumberOf<T>: From<u32>,
 	{
 		type Call = Call<T, I>;
 		type Error = MakeFatalError<()>;
@@ -198,7 +198,7 @@ mod module2 {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
 	where
-		T::BlockNumber: std::fmt::Display,
+		frame_system::BlockNumberOf<T>: std::fmt::Display,
 	{
 		fn build(&self) {
 			<Value<T, I>>::put(self.value.clone());

@@ -127,8 +127,8 @@ impl VestingAction {
 	/// Pick the schedules that this action dictates should continue vesting undisturbed.
 	fn pick_schedules<T: Config>(
 		&self,
-		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
-	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, T::BlockNumber>> + '_ {
+		schedules: Vec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>>,
+	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>> + '_ {
 		schedules.into_iter().enumerate().filter_map(move |(index, schedule)| {
 			if self.should_remove(index) {
 				None
@@ -201,7 +201,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<VestingInfo<BalanceOf<T>, T::BlockNumber>, MaxVestingSchedulesGet<T>>,
+		BoundedVec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>, MaxVestingSchedulesGet<T>>,
 	>;
 
 	/// Storage version of the pallet.
@@ -216,7 +216,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		pub vesting: Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>,
+		pub vesting: Vec<(T::AccountId, frame_system::BlockNumberOf<T>, frame_system::BlockNumberOf<T>, BalanceOf<T>)>,
 	}
 
 	#[pallet::genesis_build]
@@ -237,7 +237,7 @@ pub mod pallet {
 				assert!(!balance.is_zero(), "Currencies must be init'd before vesting");
 				// Total genesis `balance` minus `liquid` equals funds locked for vesting
 				let locked = balance.saturating_sub(liquid);
-				let length_as_balance = T::BlockNumberToBalance::convert(length);
+				let length_as_balance = frame_system::BlockNumberOf<T>ToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
 				if !vesting_info.is_valid() {
@@ -342,7 +342,7 @@ pub mod pallet {
 		pub fn vested_transfer(
 			origin: OriginFor<T>,
 			target: AccountIdLookupOf<T>,
-			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
+			schedule: VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>,
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
 			let transactor = <T::Lookup as StaticLookup>::unlookup(transactor);
@@ -371,7 +371,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			source: AccountIdLookupOf<T>,
 			target: AccountIdLookupOf<T>,
-			schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
+			schedule: VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_vested_transfer(source, target, schedule)
@@ -433,13 +433,13 @@ impl<T: Config> Pallet<T> {
 	// Create a new `VestingInfo`, based off of two other `VestingInfo`s.
 	// NOTE: We assume both schedules have had funds unlocked up through the current block.
 	fn merge_vesting_info(
-		now: T::BlockNumber,
-		schedule1: VestingInfo<BalanceOf<T>, T::BlockNumber>,
-		schedule2: VestingInfo<BalanceOf<T>, T::BlockNumber>,
-	) -> Option<VestingInfo<BalanceOf<T>, T::BlockNumber>> {
-		let schedule1_ending_block = schedule1.ending_block_as_balance::<T::BlockNumberToBalance>();
-		let schedule2_ending_block = schedule2.ending_block_as_balance::<T::BlockNumberToBalance>();
-		let now_as_balance = T::BlockNumberToBalance::convert(now);
+		now: frame_system::BlockNumberOf<T>,
+		schedule1: VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>,
+		schedule2: VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>,
+	) -> Option<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>> {
+		let schedule1_ending_block = schedule1.ending_block_as_balance::<frame_system::BlockNumberOf<T>ToBalance>();
+		let schedule2_ending_block = schedule2.ending_block_as_balance::<frame_system::BlockNumberOf<T>ToBalance>();
+		let now_as_balance = frame_system::BlockNumberOf<T>ToBalance::convert(now);
 
 		// Check if one or both schedules have ended.
 		match (schedule1_ending_block <= now_as_balance, schedule2_ending_block <= now_as_balance) {
@@ -454,8 +454,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let locked = schedule1
-			.locked_at::<T::BlockNumberToBalance>(now)
-			.saturating_add(schedule2.locked_at::<T::BlockNumberToBalance>(now));
+			.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now)
+			.saturating_add(schedule2.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now));
 		// This shouldn't happen because we know at least one ending block is greater than now,
 		// thus at least a schedule a some locked balance.
 		debug_assert!(
@@ -468,7 +468,7 @@ impl<T: Config> Pallet<T> {
 
 		let per_block = {
 			let duration = ending_block
-				.saturating_sub(T::BlockNumberToBalance::convert(starting_block))
+				.saturating_sub(frame_system::BlockNumberOf<T>ToBalance::convert(starting_block))
 				.max(One::one());
 			(locked / duration).max(One::one())
 		};
@@ -483,7 +483,7 @@ impl<T: Config> Pallet<T> {
 	fn do_vested_transfer(
 		source: AccountIdLookupOf<T>,
 		target: AccountIdLookupOf<T>,
-		schedule: VestingInfo<BalanceOf<T>, T::BlockNumber>,
+		schedule: VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>,
 	) -> DispatchResult {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
@@ -531,16 +531,16 @@ impl<T: Config> Pallet<T> {
 	///
 	/// NOTE: the amount locked does not include any schedules that are filtered out via `action`.
 	fn report_schedule_updates(
-		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
+		schedules: Vec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>>,
 		action: VestingAction,
-	) -> (Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>, BalanceOf<T>) {
+	) -> (Vec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>>, BalanceOf<T>) {
 		let now = <frame_system::Pallet<T>>::block_number();
 
 		let mut total_locked_now: BalanceOf<T> = Zero::zero();
 		let filtered_schedules = action
 			.pick_schedules::<T>(schedules)
 			.filter(|schedule| {
-				let locked_now = schedule.locked_at::<T::BlockNumberToBalance>(now);
+				let locked_now = schedule.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now);
 				let keep = !locked_now.is_zero();
 				if keep {
 					total_locked_now = total_locked_now.saturating_add(locked_now);
@@ -570,10 +570,10 @@ impl<T: Config> Pallet<T> {
 	/// Write an accounts updated vesting schedules to storage.
 	fn write_vesting(
 		who: &T::AccountId,
-		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
+		schedules: Vec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>>,
 	) -> Result<(), DispatchError> {
 		let schedules: BoundedVec<
-			VestingInfo<BalanceOf<T>, T::BlockNumber>,
+			VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>,
 			MaxVestingSchedulesGet<T>,
 		> = schedules.try_into().map_err(|_| Error::<T>::AtMaxVestingSchedules)?;
 
@@ -602,9 +602,9 @@ impl<T: Config> Pallet<T> {
 	/// Execute a `VestingAction` against the given `schedules`. Returns the updated schedules
 	/// and locked amount.
 	fn exec_action(
-		schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>,
+		schedules: Vec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>>,
 		action: VestingAction,
-	) -> Result<(Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>>, BalanceOf<T>), DispatchError> {
+	) -> Result<(Vec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>>, BalanceOf<T>), DispatchError> {
 		let (schedules, locked_now) = match action {
 			VestingAction::Merge { index1: idx1, index2: idx2 } => {
 				// The schedule index is based off of the schedule ordering prior to filtering out
@@ -625,7 +625,7 @@ impl<T: Config> Pallet<T> {
 					schedules.push(new_schedule);
 					// (we use `locked_at` in case this is a schedule that started in the past)
 					let new_schedule_locked =
-						new_schedule.locked_at::<T::BlockNumberToBalance>(now);
+						new_schedule.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now);
 					// and 2) update the locked amount to reflect the schedule we just added.
 					locked_now = locked_now.saturating_add(new_schedule_locked);
 				} // In the None case there was no new schedule to account for.
@@ -649,14 +649,14 @@ where
 	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
 {
 	type Currency = T::Currency;
-	type Moment = T::BlockNumber;
+	type Moment = frame_system::BlockNumberOf<T>;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
 		if let Some(v) = Self::vesting(who) {
 			let now = <frame_system::Pallet<T>>::block_number();
 			let total_locked_now = v.iter().fold(Zero::zero(), |total, schedule| {
-				schedule.locked_at::<T::BlockNumberToBalance>(now).saturating_add(total)
+				schedule.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now).saturating_add(total)
 			});
 			Some(T::Currency::free_balance(who).min(total_locked_now))
 		} else {
@@ -680,7 +680,7 @@ where
 		who: &T::AccountId,
 		locked: BalanceOf<T>,
 		per_block: BalanceOf<T>,
-		starting_block: T::BlockNumber,
+		starting_block: frame_system::BlockNumberOf<T>,
 	) -> DispatchResult {
 		if locked.is_zero() {
 			return Ok(())
@@ -713,7 +713,7 @@ where
 		who: &T::AccountId,
 		locked: BalanceOf<T>,
 		per_block: BalanceOf<T>,
-		starting_block: T::BlockNumber,
+		starting_block: frame_system::BlockNumberOf<T>,
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
 		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {

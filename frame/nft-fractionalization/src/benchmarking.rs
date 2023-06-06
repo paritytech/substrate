@@ -58,7 +58,7 @@ where
 
 fn mint_nft<T: Config>(nft_id: T::NftId) -> (T::AccountId, AccountIdLookupOf<T>)
 where
-	T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
+	T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, frame_system::BlockNumberOf<T>, T::NftCollectionId>>
 		+ Mutate<T::AccountId, ItemConfig>,
 {
 	let caller: T::AccountId = whitelisted_caller();
@@ -84,7 +84,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 benchmarks! {
 	where_clause {
 		where
-			T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
+			T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, frame_system::BlockNumberOf<T>, T::NftCollectionId>>
 				+ Mutate<T::AccountId, ItemConfig>,
 	}
 

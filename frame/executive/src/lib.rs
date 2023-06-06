@@ -712,17 +712,17 @@ mod tests {
 		impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 			// module hooks.
 			// one with block number arg and one without
-			fn on_initialize(n: T::BlockNumber) -> Weight {
+			fn on_initialize(n: frame_system::BlockNumberOf<T>) -> Weight {
 				println!("on_initialize({})", n);
 				Weight::from_parts(175, 0)
 			}
 
-			fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
+			fn on_idle(n: frame_system::BlockNumberOf<T>, remaining_weight: Weight) -> Weight {
 				println!("on_idle{}, {})", n, remaining_weight);
 				Weight::from_parts(175, 0)
 			}
 
-			fn on_finalize(n: T::BlockNumber) {
+			fn on_finalize(n: frame_system::BlockNumberOf<T>) {
 				println!("on_finalize({})", n);
 			}
 
@@ -731,7 +731,7 @@ mod tests {
 				Weight::from_parts(200, 0)
 			}
 
-			fn offchain_worker(n: T::BlockNumber) {
+			fn offchain_worker(n: frame_system::BlockNumberOf<T>) {
 				assert_eq!(BlockNumberOf::<T>::from(1u32), n);
 			}
 		}

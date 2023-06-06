@@ -389,7 +389,7 @@ pub mod pallet {
 		pub fn last_active(who: &T::AccountId) -> Result<CycleIndexOf<T>, DispatchError> {
 			Ok(Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?.last_active)
 		}
-		pub fn cycle_period() -> T::BlockNumber {
+		pub fn cycle_period() -> frame_system::BlockNumberOf<T> {
 			T::RegistrationPeriod::get() + T::PayoutPeriod::get()
 		}
 		fn do_payout(who: T::AccountId, beneficiary: T::AccountId) -> DispatchResult {

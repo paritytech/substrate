@@ -400,7 +400,7 @@ pub mod pallet {
 	/// more accurate then the value we calculate for `HeartbeatAfter`.
 	#[pallet::storage]
 	#[pallet::getter(fn heartbeat_after)]
-	pub(crate) type HeartbeatAfter<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(crate) type HeartbeatAfter<T: Config> = StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
 
 	/// The current set of keys that may issue a heartbeat.
 	#[pallet::storage]
@@ -470,7 +470,7 @@ pub mod pallet {
 		))]
 		pub fn heartbeat(
 			origin: OriginFor<T>,
-			heartbeat: Heartbeat<T::BlockNumber>,
+			heartbeat: Heartbeat<frame_system::BlockNumberOf<T>>,
 			// since signature verification is done in `validate_unsigned`
 			// we can skip doing it here again.
 			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature,
@@ -591,7 +591,7 @@ pub mod pallet {
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
 impl<T: Config + pallet_authorship::Config>
-	pallet_authorship::EventHandler<ValidatorId<T>, T::BlockNumber> for Pallet<T>
+	pallet_authorship::EventHandler<ValidatorId<T>, frame_system::BlockNumberOf<T>> for Pallet<T>
 {
 	fn note_author(author: ValidatorId<T>) {
 		Self::note_authorship(author);
@@ -637,7 +637,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(crate) fn send_heartbeats(
-		block_number: T::BlockNumber,
+		block_number: frame_system::BlockNumberOf<T>,
 	) -> OffchainResult<T, impl Iterator<Item = OffchainResult<T, ()>>> {
 		const START_HEARTBEAT_RANDOM_PERIOD: Permill = Permill::from_percent(10);
 		const START_HEARTBEAT_FINAL_PERIOD: Permill = Permill::from_percent(80);
@@ -700,7 +700,7 @@ impl<T: Config> Pallet<T> {
 		authority_index: u32,
 		key: T::AuthorityId,
 		session_index: SessionIndex,
-		block_number: T::BlockNumber,
+		block_number: frame_system::BlockNumberOf<T>,
 		validators_len: u32,
 	) -> OffchainResult<T, ()> {
 		// A helper function to prepare heartbeat call.
@@ -770,7 +770,7 @@ impl<T: Config> Pallet<T> {
 	fn with_heartbeat_lock<R>(
 		authority_index: u32,
 		session_index: SessionIndex,
-		now: T::BlockNumber,
+		now: frame_system::BlockNumberOf<T>,
 		f: impl FnOnce() -> OffchainResult<T, R>,
 	) -> OffchainResult<T, R> {
 		let key = {
@@ -780,7 +780,7 @@ impl<T: Config> Pallet<T> {
 		};
 		let storage = StorageValueRef::persistent(&key);
 		let res = storage.mutate(
-			|status: Result<Option<HeartbeatStatus<T::BlockNumber>>, StorageRetrievalError>| {
+			|status: Result<Option<HeartbeatStatus<frame_system::BlockNumberOf<T>>>, StorageRetrievalError>| {
 				// Check if there is already a lock for that particular block.
 				// This means that the heartbeat has already been sent, and we are just waiting
 				// for it to be included. However if it doesn't get included for INCLUDE_THRESHOLD

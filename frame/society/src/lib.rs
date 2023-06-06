@@ -582,7 +582,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Vec<(T::BlockNumber, BalanceOf<T, I>)>,
+		Vec<(frame_system::BlockNumberOf<T>, BalanceOf<T, I>)>,
 		ValueQuery,
 	>;
 
@@ -613,7 +613,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: frame_system::BlockNumberOf<T>) -> Weight {
 			let mut members = vec![];
 
 			let mut weight = Weight::zero();
@@ -1529,7 +1529,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Bump the payout amount of `who`, to be unlocked at the given block number.
-	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T, I>) {
+	fn bump_payout(who: &T::AccountId, when: frame_system::BlockNumberOf<T>, value: BalanceOf<T, I>) {
 		if !value.is_zero() {
 			<Payouts<T, I>>::mutate(who, |payouts| {
 				match payouts.binary_search_by_key(&when, |x| x.0) {
@@ -1554,7 +1554,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		candidate: &T::AccountId,
 		value: BalanceOf<T, I>,
 		kind: BidKind<T::AccountId, BalanceOf<T, I>>,
-		maturity: T::BlockNumber,
+		maturity: frame_system::BlockNumberOf<T>,
 	) {
 		let value = match kind {
 			BidKind::Deposit(deposit) => {
@@ -1649,7 +1649,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// This is a rather opaque calculation based on the formula here:
 	/// https://www.desmos.com/calculator/9itkal1tce
-	fn lock_duration(x: u32) -> T::BlockNumber {
+	fn lock_duration(x: u32) -> frame_system::BlockNumberOf<T> {
 		let lock_pc = 100 - 50_000 / (x + 500);
 		Percent::from_percent(lock_pc as u8) * T::MaxLockDuration::get()
 	}

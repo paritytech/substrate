@@ -46,8 +46,8 @@ pub trait Config:
 {
 }
 
-impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
-	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
+impl<T: Config> OnInitialize<frame_system::BlockNumberOf<T>> for Pallet<T> {
+	fn on_initialize(n: frame_system::BlockNumberOf<T>) -> frame_support::weights::Weight {
 		pallet_session::Pallet::<T>::on_initialize(n)
 	}
 }

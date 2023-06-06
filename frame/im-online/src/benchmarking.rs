@@ -39,7 +39,7 @@ pub fn create_heartbeat<T: Config>(
 	k: u32,
 	e: u32,
 ) -> Result<
-	(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature),
+	(crate::Heartbeat<frame_system::BlockNumberOf<T>>, <T::AuthorityId as RuntimeAppPublic>::Signature),
 	&'static str,
 > {
 	let mut keys = Vec::new();

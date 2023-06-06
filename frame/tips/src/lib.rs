@@ -173,7 +173,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::Hash,
-		OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
+		OpenTip<T::AccountId, BalanceOf<T, I>, frame_system::BlockNumberOf<T>, T::Hash>,
 		OptionQuery,
 	>;
 
@@ -470,7 +470,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// `O(T)` and one storage access.
 	fn insert_tip_and_check_closing(
-		tip: &mut OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
+		tip: &mut OpenTip<T::AccountId, BalanceOf<T, I>, frame_system::BlockNumberOf<T>, T::Hash>,
 		tipper: T::AccountId,
 		tip_value: BalanceOf<T, I>,
 	) -> bool {
@@ -515,7 +515,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Plus `O(T)` (`T` is Tippers length).
 	fn payout_tip(
 		hash: T::Hash,
-		tip: OpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
+		tip: OpenTip<T::AccountId, BalanceOf<T, I>, frame_system::BlockNumberOf<T>, T::Hash>,
 	) {
 		let mut tips = tip.tips;
 		Self::retain_active_tips(&mut tips);
@@ -577,7 +577,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		for (hash, old_tip) in storage_key_iter::<
 			T::Hash,
-			OldOpenTip<T::AccountId, BalanceOf<T, I>, T::BlockNumber, T::Hash>,
+			OldOpenTip<T::AccountId, BalanceOf<T, I>, frame_system::BlockNumberOf<T>, T::Hash>,
 			Twox64Concat,
 		>(module, item)
 		.drain()

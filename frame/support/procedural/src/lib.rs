@@ -1534,7 +1534,7 @@ pub fn unbounded(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::whitelist_storage]
-/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+/// pub(super) type Number<T: Config> = StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
 /// ```
 ///
 /// NOTE: As with all `pallet::*` attributes, this one _must_ be written as

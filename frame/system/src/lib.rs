@@ -597,7 +597,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn block_hash)]
 	pub type BlockHash<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, T::Hash, ValueQuery>;
+		StorageMap<_, Twox64Concat, BlockNumberOf<T>, T::Hash, ValueQuery>;
 
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
@@ -610,7 +610,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_number)]
-	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type Number<T: Config> = StorageValue<_, BlockNumberOf<T>, ValueQuery>;
 
 	/// Hash of the previous block.
 	#[pallet::storage]
@@ -649,14 +649,14 @@ pub mod pallet {
 	/// allows light-clients to leverage the changes trie storage tracking mechanism and
 	/// in case of changes fetch the list of events of interest.
 	///
-	/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
+	/// The value has the type `(BlockNumberOf<T>, EventIndex)` because if we used only just
 	/// the `EventIndex` then in case if the topic has the same contents on the next block
 	/// no notification will be triggered thus the event might be lost.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	#[pallet::getter(fn event_topics)]
 	pub(super) type EventTopics<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(BlockNumberOf<T>, EventIndex)>, ValueQuery>;
 
 	/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 	#[pallet::storage]
@@ -1359,7 +1359,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, digest: &generic::Digest) {
+	pub fn initialize(number: &BlockNumberOf<T>, parent_hash: &T::Hash, digest: &generic::Digest) {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -1513,7 +1513,7 @@ impl<T: Config> Pallet<T> {
 	/// Set the block number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn set_block_number(n: T::BlockNumber) {
+	pub fn set_block_number(n: BlockNumberOf<T>) {
 		<Number<T>>::put(n);
 	}
 
