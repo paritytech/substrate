@@ -59,6 +59,7 @@ pub trait ProcessMessage {
 		message: &[u8],
 		origin: Self::Origin,
 		meter: &mut WeightMeter,
+		id: &mut [u8; 32],
 	) -> Result<bool, ProcessMessageError>;
 }
 

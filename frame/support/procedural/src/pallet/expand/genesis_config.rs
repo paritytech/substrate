@@ -94,7 +94,6 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 					"]
 				));
 			}
-			attrs.push(syn::parse_quote!( #[cfg(feature = "std")] ));
 			attrs.push(syn::parse_quote!(
 				#[derive(#frame_support::Serialize, #frame_support::Deserialize)]
 			));
@@ -126,7 +125,7 @@ pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
 						stringify!($pallet_name),
 						"` does not have the std feature enabled, this will cause the `",
 						$pallet_path,
-						"::GenesisConfig` type to be undefined."
+						"::GenesisConfig` type to not implement serde traits."
 					));
 				};
 			}

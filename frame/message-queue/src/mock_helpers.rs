@@ -62,6 +62,7 @@ where
 		_message: &[u8],
 		_origin: Self::Origin,
 		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
 	) -> Result<bool, ProcessMessageError> {
 		let required = Weight::from_parts(REQUIRED_WEIGHT, REQUIRED_WEIGHT);
 

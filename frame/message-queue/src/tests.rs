@@ -24,6 +24,7 @@ use crate::{mock::*, *};
 use frame_support::{assert_noop, assert_ok, assert_storage_noop, StorageNoopGuard};
 use frame_system::RawOrigin;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use sp_core::blake2_256;
 
 #[test]
 fn mocked_weight_works() {
@@ -179,7 +180,7 @@ fn service_queues_failing_messages_works() {
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_last_event::<Test>(
 			Event::ProcessingFailed {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"badformat"),
+				id: blake2_256(b"badformat"),
 				origin: MessageOrigin::Here,
 				error: ProcessMessageError::BadFormat,
 			}
@@ -188,7 +189,7 @@ fn service_queues_failing_messages_works() {
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_last_event::<Test>(
 			Event::ProcessingFailed {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"corrupt"),
+				id: blake2_256(b"corrupt"),
 				origin: MessageOrigin::Here,
 				error: ProcessMessageError::Corrupt,
 			}
@@ -197,7 +198,7 @@ fn service_queues_failing_messages_works() {
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_last_event::<Test>(
 			Event::ProcessingFailed {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"unsupported"),
+				id: blake2_256(b"unsupported"),
 				origin: MessageOrigin::Here,
 				error: ProcessMessageError::Unsupported,
 			}
@@ -678,7 +679,7 @@ fn service_page_item_skips_perm_overweight_message() {
 		assert_eq!(weight.consumed, 2.into_weight());
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"TooMuch"),
+				id: blake2_256(b"TooMuch"),
 				origin: MessageOrigin::Here,
 				message_index: 0,
 				page_index: 0,
@@ -1052,7 +1053,7 @@ fn execute_overweight_works() {
 		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"weight=6"),
+				id: blake2_256(b"weight=6"),
 				origin: MessageOrigin::Here,
 				message_index: 0,
 				page_index: 0,
@@ -1196,7 +1197,7 @@ fn permanently_overweight_book_unknits() {
 		assert_eq!(MessageQueue::service_queues(8.into_weight()), 4.into_weight());
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"weight=9"),
+				id: blake2_256(b"weight=9"),
 				origin: Here,
 				message_index: 0,
 				page_index: 0,

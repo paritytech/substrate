@@ -80,18 +80,16 @@ pub use metadata::{
 };
 
 mod hooks;
-#[cfg(feature = "std")]
-pub use hooks::GenesisBuild;
 pub use hooks::{
-	Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
-	OnTimestampSet,
+	GenesisBuild, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize,
+	OnRuntimeUpgrade, OnTimestampSet,
 };
 
 pub mod schedule;
 mod storage;
 pub use storage::{
-	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
-	TrackedStorageKey, WhitelistedStorageKeys,
+	Incrementable, Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait,
+	StorageInstance, TrackedStorageKey, WhitelistedStorageKeys,
 };
 
 mod dispatch;
