@@ -16,6 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! [`PeerStore`] manages peer reputations and provides connection candidates to
+//! [`crate::protocol_controller::ProtocolController`].
+
 use libp2p::PeerId;
 use log::trace;
 use parking_lot::Mutex;
@@ -49,6 +52,7 @@ const INVERSE_DECREMENT: i32 = 50;
 /// remove it, once the reputation value reaches 0.
 const FORGET_AFTER: Duration = Duration::from_secs(3600);
 
+/// Trait providing peer reputation management and connection candidates.
 pub trait PeerStoreProvider: Debug + Send {
 	/// Check whether the peer is banned.
 	fn is_banned(&self, peer_id: &PeerId) -> bool;
@@ -69,6 +73,7 @@ pub trait PeerStoreProvider: Debug + Send {
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId>;
 }
 
+/// Actual implementation of peer reputations and connection candidates provider.
 #[derive(Debug, Clone)]
 pub struct PeerStoreHandle {
 	inner: Arc<Mutex<PeerStoreInner>>,
@@ -289,6 +294,7 @@ impl PeerStoreInner {
 	}
 }
 
+/// Worker part of [`PeerStoreHandle`]
 #[derive(Debug)]
 pub struct PeerStore {
 	inner: Arc<Mutex<PeerStoreInner>>,
