@@ -18,15 +18,10 @@
 //! Migration framework for pallets.
 
 /// Macro to include all migration modules.
-/// We only want to make these modules public when `runtime-benchmarks` is
-/// enabled, so we can access migration code in benchmarks.
 macro_rules! use_modules {
     ($($module:ident),*) => {
         $(
-            #[cfg(feature = "runtime-benchmarks")]
             pub mod $module;
-            #[cfg(not(feature = "runtime-benchmarks"))]
-            mod $module;
         )*
     };
 }
@@ -57,10 +52,6 @@ fn invalid_version(version: StorageVersion) -> ! {
 
 /// The cursor used to store the state of the current migration step.
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
-
-// In benchmark and tests we use noop migrations, to test and bench the migration framework itself.
-#[cfg(not(any(feature = "runtime-benchmarks", test)))]
-type Migrations<T> = (v9::Migration<T>, v10::Migration<T>, v11::Migration<T>);
 
 /// IsFinished describes whether a migration is finished or not.
 pub enum IsFinished {
@@ -206,14 +197,14 @@ pub trait MigrateSequence: private::Sealed {
 }
 
 /// Performs all necessary migrations based on `StorageVersion`.
-#[cfg(not(any(feature = "runtime-benchmarks", test)))]
-pub struct Migration<T: Config, M: MigrateSequence = Migrations<T>>(PhantomData<(T, M)>);
+// #[cfg(not(any(feature = "runtime-benchmarks", test)))]
+pub struct Migration<T: Config, M: MigrateSequence>(PhantomData<(T, M)>);
 
-/// Custom migration for running runtime-benchmarks and tests.
-#[cfg(any(feature = "runtime-benchmarks", test))]
-pub struct Migration<T: Config, M: MigrateSequence = (NoopMigration<1>, NoopMigration<2>)>(
-	PhantomData<(T, M)>,
-);
+// /// Custom migration for running runtime-benchmarks and tests.
+// #[cfg(any(feature = "runtime-benchmarks", test))]
+// pub struct Migration<T: Config, M: MigrateSequence = (NoopMigration<1>, NoopMigration<2>)>(
+// 	PhantomData<(T, M)>,
+// );
 
 #[cfg(feature = "try-runtime")]
 impl<T: Config, M: MigrateSequence> Migration<T, M> {

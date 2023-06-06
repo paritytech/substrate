@@ -87,12 +87,12 @@ mod address;
 mod benchmarking;
 mod exec;
 mod gas;
-mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -319,6 +319,9 @@ pub mod pallet {
 		/// The maximum length of the debug buffer in bytes.
 		#[pallet::constant]
 		type MaxDebugBufferLen: Get<u32>;
+
+		/// The sequence of migrations applied.
+		type Migrations: MigrateSequence;
 	}
 
 	#[pallet::hooks]
@@ -326,7 +329,7 @@ pub mod pallet {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
 
-			let (result, weight) = Migration::<T>::migrate(remaining_weight);
+			let (result, weight) = Migration::<T, T::Migrations>::migrate(remaining_weight);
 			let remaining_weight = remaining_weight.saturating_sub(weight);
 
 			if !matches!(result, Completed | NoMigrationInProgress) {
@@ -338,7 +341,7 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			Migration::<T>::integrity_test();
+			Migration::<T, T::Migrations>::integrity_test();
 
 			// Total runtime memory limit
 			let max_runtime_mem: u32 = T::Schedule::get().limits.runtime_memory;
@@ -518,7 +521,7 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			determinism: Determinism,
 		) -> DispatchResult {
-			Migration::<T>::ensure_migrated()?;
+			Migration::<T, T::Migrations>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into), determinism)
 				.map(|_| ())
@@ -534,7 +537,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			code_hash: CodeHash<T>,
 		) -> DispatchResultWithPostInfo {
-			Migration::<T>::ensure_migrated()?;
+			Migration::<T, T::Migrations>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			<PrefabWasmModule<T>>::remove(&origin, code_hash)?;
 			// we waive the fee because removing unused code is beneficial
@@ -558,7 +561,7 @@ pub mod pallet {
 			dest: AccountIdLookupOf<T>,
 			code_hash: CodeHash<T>,
 		) -> DispatchResult {
-			Migration::<T>::ensure_migrated()?;
+			Migration::<T, T::Migrations>::ensure_migrated()?;
 			ensure_root(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<ContractInfoOf<T>>::try_mutate(&dest, |contract| {
@@ -608,7 +611,7 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			Migration::<T>::ensure_migrated()?;
+			Migration::<T, T::Migrations>::ensure_migrated()?;
 			let common = CommonInput {
 				origin: Origin::from_runtime_origin(origin)?,
 				value,
@@ -668,7 +671,7 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			Migration::<T>::ensure_migrated()?;
+			Migration::<T, T::Migrations>::ensure_migrated()?;
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
@@ -711,7 +714,7 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			Migration::<T>::ensure_migrated()?;
+			Migration::<T, T::Migrations>::ensure_migrated()?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
@@ -746,7 +749,7 @@ pub mod pallet {
 			ensure_signed(origin)?;
 
 			let weight_limit = weight_limit.saturating_add(T::WeightInfo::migrate());
-			let (result, weight) = Migration::<T>::migrate(weight_limit);
+			let (result, weight) = Migration::<T, T::Migrations>::migrate(weight_limit);
 
 			match result {
 				Completed =>
@@ -1272,7 +1275,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 
 macro_rules! ensure_no_migration_in_progress {
 	() => {
-		if Migration::<T>::in_progress() {
+		if Migration::<T, T::Migrations>::in_progress() {
 			return ContractResult {
 				gas_consumed: Zero::zero(),
 				gas_required: Zero::zero(),
@@ -1412,7 +1415,7 @@ impl<T: Config> Pallet<T> {
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
-		Migration::<T>::ensure_migrated()?;
+		Migration::<T, T::Migrations>::ensure_migrated()?;
 		let schedule = T::Schedule::get();
 		let module = PrefabWasmModule::from_code(
 			code,
@@ -1433,7 +1436,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Query storage of a specified contract under a specified key.
 	pub fn get_storage(address: T::AccountId, key: Vec<u8>) -> GetStorageResult {
-		if Migration::<T>::in_progress() {
+		if Migration::<T, T::Migrations>::in_progress() {
 			return Err(ContractAccessError::MigrationInProgress)
 		}
 		let contract_info =
