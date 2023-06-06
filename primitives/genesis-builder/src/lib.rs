@@ -74,7 +74,7 @@ sp_api::decl_runtime_apis! {
 		///
 		/// # Arguments
 		///
-		/// * `patch_json` - A `Vec<u8>` representing the JSON patch to be applied to the `GenesisConfig`.
+		/// * `patch_json` - A `Vec<u8>` representing the JSON patch to be applied to the default `GenesisConfig`.
 		fn build_from_patch_json(patch_json: Vec<u8>);
 	}
 }
