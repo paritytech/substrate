@@ -396,7 +396,7 @@ pub struct Neighbours<MessageOrigin> {
 /// Each queue has exactly one book which holds all of its pages. All pages of a book combined
 /// contain all of the messages of its queue; hence the name *Book*.
 /// Books can be chained together in a double-linked fashion through their `ready_neighbours` field.
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, DefaultNoBound)]
 pub struct BookState<MessageOrigin> {
 	/// The first page with some items to be processed in it. If this is `>= end`, then there are
 	/// no pages with items to be processing in them.
@@ -415,12 +415,11 @@ pub struct BookState<MessageOrigin> {
 	message_count: u64,
 	/// The total size of all unprocessed messages stored at present.
 	size: u64,
-}
-
-impl<MessageOrigin> Default for BookState<MessageOrigin> {
-	fn default() -> Self {
-		Self { begin: 0, end: 0, count: 0, ready_neighbours: None, message_count: 0, size: 0 }
-	}
+	/// Whether the queue is suspended from execution.
+	///
+	/// `false` indicates that manual processing will fail and that it will not be put into the
+	/// ready-ring automatically on message enqueueing.
+	suspended: bool,
 }
 
 /// Handler code for when the items in a queue change.
