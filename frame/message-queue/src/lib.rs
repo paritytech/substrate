@@ -653,13 +653,13 @@ pub mod pallet {
 		)]
 		pub fn discard_overweight(
 			origin: OriginFor<T>,
-			queue: MessageOriginOf<T>,
+			message_origin: MessageOriginOf<T>,
 			page: PageIndex,
 			index: T::Size,
 		) -> DispatchResult {
-			T::DiscardOverweightOrigin::ensure_origin(origin, &queue)?;
+			T::DiscardOverweightOrigin::ensure_origin(origin, &message_origin)?;
 
-			Self::do_discard_overweight(queue, page, index).map_err(Into::into)
+			Self::do_discard_overweight(message_origin, page, index).map_err(Into::into)
 		}
 	}
 }

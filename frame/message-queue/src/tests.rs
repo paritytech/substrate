@@ -1048,6 +1048,11 @@ fn execute_overweight_works() {
 		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 1);
 		assert!(Pages::<Test>::contains_key(origin, 0));
+		// Does not work on unprocessed message:
+		assert_noop!(
+			<MessageQueue as ServiceQueues>::execute_overweight(7.into_weight(), (origin, 0, 0)),
+			ExecuteOverweightError::NotFound
+		);
 
 		// Mark the message as permanently overweight.
 		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
