@@ -23,7 +23,7 @@ use crate::protocol::notifications::handler::{
 
 #[tokio::test]
 async fn validate_and_accept_substream() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (handle, _stream) = proto.split();
 
 	let peer_id = PeerId::random();
@@ -44,7 +44,7 @@ async fn validate_and_accept_substream() {
 
 #[tokio::test]
 async fn substream_opened() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (sink, _, _) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 
@@ -71,7 +71,7 @@ async fn substream_opened() {
 
 #[tokio::test]
 async fn send_sync_notification() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (sink, _, mut sync_rx) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 	let peer_id = PeerId::random();
@@ -119,7 +119,7 @@ async fn send_sync_notification() {
 
 #[tokio::test]
 async fn send_async_notification() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (sink, mut async_rx, _) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 	let peer_id = PeerId::random();
@@ -167,7 +167,7 @@ async fn send_async_notification() {
 
 #[tokio::test]
 async fn send_sync_notification_to_non_existent_peer() {
-	let (proto, notif) = notification_service("/proto/1".into());
+	let (proto, notif) = notification_service("/proto/1".into(), None);
 	let (_sink, _, _sync_rx) = NotificationsSink::new(PeerId::random());
 	let (_handle, _stream) = proto.split();
 	let peer = PeerId::random();
@@ -183,7 +183,7 @@ async fn send_sync_notification_to_non_existent_peer() {
 
 #[tokio::test]
 async fn send_async_notification_to_non_existent_peer() {
-	let (proto, notif) = notification_service("/proto/1".into());
+	let (proto, notif) = notification_service("/proto/1".into(), None);
 	let (_sink, _, _sync_rx) = NotificationsSink::new(PeerId::random());
 	let (_handle, _stream) = proto.split();
 	let peer = PeerId::random();
@@ -199,7 +199,7 @@ async fn send_async_notification_to_non_existent_peer() {
 
 #[tokio::test]
 async fn receive_notification() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (sink, _, _sync_rx) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 	let peer_id = PeerId::random();
@@ -253,7 +253,7 @@ async fn receive_notification() {
 
 #[tokio::test]
 async fn backpressure_works() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (sink, mut async_rx, _) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 	let peer_id = PeerId::random();
@@ -313,7 +313,7 @@ async fn backpressure_works() {
 
 #[tokio::test]
 async fn peer_disconnects_then_sync_notification_is_sent() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (sink, _, sync_rx) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 	let peer_id = PeerId::random();
@@ -363,7 +363,7 @@ async fn peer_disconnects_then_sync_notification_is_sent() {
 
 #[tokio::test]
 async fn peer_disconnects_then_async_notification_is_sent() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (sink, async_rx, _) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 	let peer_id = PeerId::random();
@@ -418,7 +418,7 @@ async fn peer_disconnects_then_async_notification_is_sent() {
 
 #[tokio::test]
 async fn cloned_service_opening_substream_works() {
-	let (proto, mut notif1) = notification_service("/proto/1".into());
+	let (proto, mut notif1) = notification_service("/proto/1".into(), None);
 	let (_sink, _async_rx, _) = NotificationsSink::new(PeerId::random());
 	let (handle, _stream) = proto.split();
 	let mut notif2 = notif1.clone().unwrap();
@@ -458,7 +458,7 @@ async fn cloned_service_opening_substream_works() {
 
 #[tokio::test]
 async fn cloned_service_one_service_rejects_substream() {
-	let (proto, mut notif1) = notification_service("/proto/1".into());
+	let (proto, mut notif1) = notification_service("/proto/1".into(), None);
 	let (_sink, _async_rx, _) = NotificationsSink::new(PeerId::random());
 	let (handle, _stream) = proto.split();
 	let mut notif2 = notif1.clone().unwrap();
@@ -497,7 +497,7 @@ async fn cloned_service_one_service_rejects_substream() {
 
 #[tokio::test]
 async fn cloned_service_opening_substream_sending_and_receiving_notifications_work() {
-	let (proto, mut notif1) = notification_service("/proto/1".into());
+	let (proto, mut notif1) = notification_service("/proto/1".into(), None);
 	let (sink, _, mut sync_rx) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 	let mut notif2 = notif1.clone().unwrap();
@@ -580,7 +580,7 @@ async fn cloned_service_opening_substream_sending_and_receiving_notifications_wo
 
 #[tokio::test]
 async fn sending_notifications_using_notifications_sink_works() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (sink, mut async_rx, mut sync_rx) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 	let peer_id = PeerId::random();
@@ -652,13 +652,13 @@ async fn sending_notifications_using_notifications_sink_works() {
 
 #[test]
 fn try_to_get_notifications_sink_for_non_existent_peer() {
-	let (_proto, notif) = notification_service("/proto/1".into());
+	let (_proto, notif) = notification_service("/proto/1".into(), None);
 	assert!(notif.notification_sink(&PeerId::random()).is_none());
 }
 
 #[tokio::test]
 async fn notification_sink_replaced() {
-	let (proto, mut notif) = notification_service("/proto/1".into());
+	let (proto, mut notif) = notification_service("/proto/1".into(), None);
 	let (sink, mut async_rx, mut sync_rx) = NotificationsSink::new(PeerId::random());
 	let (mut handle, _stream) = proto.split();
 	let peer_id = PeerId::random();

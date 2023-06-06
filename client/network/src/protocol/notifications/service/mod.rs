@@ -30,6 +30,7 @@ use futures::{
 	StreamExt,
 };
 use libp2p::PeerId;
+use prometheus_endpoint::Registry;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -142,6 +143,9 @@ pub struct NotificationHandle {
 
 	/// Connected peers.
 	peers: HashMap<PeerId, NotificationsSink>,
+
+	/// Prometheus metrics.
+	metrics: Option<metrics::Metrics>,
 }
 
 impl NotificationHandle {
@@ -151,8 +155,9 @@ impl NotificationHandle {
 		tx: mpsc::Sender<NotificationCommand>,
 		rx: TracingUnboundedReceiver<InnerNotificationEvent>,
 		subscribers: Arc<Mutex<Vec<TracingUnboundedSender<InnerNotificationEvent>>>>,
+		metrics: Option<metrics::Metrics>,
 	) -> Self {
-		Self { protocol, tx, rx, subscribers, peers: HashMap::new() }
+		Self { protocol, tx, rx, subscribers, peers: HashMap::new(), metrics }
 	}
 }
 
@@ -178,7 +183,7 @@ impl NotificationService for NotificationHandle {
 
 		self.peers
 			.get(&peer)
-			// TODO: check what the current implementation does in case the peer doesn't exist
+			// TODO(aaro): check what the current implementation does in case the peer doesn't exist
 			.ok_or_else(|| error::Error::PeerDoesntExist(*peer))?
 			.send_sync_notification(notification);
 		Ok(())
@@ -194,7 +199,7 @@ impl NotificationService for NotificationHandle {
 
 		self.peers
 			.get(&peer)
-			// TODO: check what the current implementation does in case the peer doesn't exist
+			// TODO(aaro): check what the current implementation does in case the peer doesn't exist
 			.ok_or_else(|| error::Error::PeerDoesntExist(*peer))?
 			.reserve_notification()
 			.await
@@ -255,6 +260,7 @@ impl NotificationService for NotificationHandle {
 			rx: event_rx,
 			peers: self.peers.clone(),
 			subscribers: self.subscribers.clone(),
+			metrics: self.metrics.clone(),
 		}))
 	}
 
@@ -280,6 +286,9 @@ pub struct ProtocolHandlePair {
 
 	// Receiver for notification commands received from the protocol implementation.
 	rx: mpsc::Receiver<NotificationCommand>,
+
+	/// Prometheus metrics.
+	metrics: Option<metrics::Metrics>,
 }
 
 impl ProtocolHandlePair {
@@ -288,8 +297,9 @@ impl ProtocolHandlePair {
 		protocol: ProtocolName,
 		subscribers: Subscribers,
 		rx: mpsc::Receiver<NotificationCommand>,
+		metrics: Option<metrics::Metrics>,
 	) -> Self {
-		Self { protocol, subscribers, rx }
+		Self { protocol, subscribers, rx, metrics }
 	}
 
 	/// Consume `self` and split [`ProtocolHandlePair`] into a handle which allows it to send events
@@ -298,7 +308,7 @@ impl ProtocolHandlePair {
 		self,
 	) -> (ProtocolHandle, Box<dyn Stream<Item = NotificationCommand> + Send + Unpin>) {
 		(
-			ProtocolHandle::new(self.protocol, self.subscribers),
+			ProtocolHandle::new(self.protocol, self.subscribers, self.metrics),
 			Box::new(ReceiverStream::new(self.rx)),
 		)
 	}
@@ -316,11 +326,18 @@ pub struct ProtocolHandle {
 
 	/// Number of connected peers.
 	num_peers: usize,
+
+	/// Prometheus metrics.
+	metrics: Option<metrics::Metrics>,
 }
 
 impl ProtocolHandle {
-	fn new(protocol: ProtocolName, subscribers: Subscribers) -> Self {
-		Self { protocol, subscribers, num_peers: 0usize }
+	fn new(
+		protocol: ProtocolName,
+		subscribers: Subscribers,
+		metrics: Option<metrics::Metrics>,
+	) -> Self {
+		Self { protocol, subscribers, num_peers: 0usize, metrics }
 	}
 
 	/// Report to the protocol that a substream has been opened and it must be validated by the
@@ -399,8 +416,9 @@ impl ProtocolHandle {
 		negotiated_fallback: Option<ProtocolName>,
 		sink: NotificationsSink,
 	) -> Result<(), ()> {
-		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+		metrics::register_substream_opened(&self.metrics, &self.protocol);
 
+		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
 		log::trace!(target: LOG_TARGET, "{}: substream opened for {peer:?}", self.protocol);
 
 		subscribers.retain(|subscriber| {
@@ -421,8 +439,9 @@ impl ProtocolHandle {
 
 	/// Substream was closed.
 	pub fn report_substream_closed(&mut self, peer: PeerId) -> Result<(), ()> {
-		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+		metrics::register_substream_closed(&self.metrics, &self.protocol);
 
+		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
 		log::trace!(target: LOG_TARGET, "{}: substream closed for {peer:?}", self.protocol);
 
 		subscribers.retain(|subscriber| {
@@ -441,8 +460,9 @@ impl ProtocolHandle {
 		peer: PeerId,
 		notification: Vec<u8>,
 	) -> Result<(), ()> {
-		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+		metrics::register_notification_received(&self.metrics, &self.protocol, notification.len());
 
+		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
 		log::trace!(target: LOG_TARGET, "{}: notification received from {peer:?}", self.protocol);
 
 		subscribers.retain(|subscriber| {
@@ -494,13 +514,15 @@ impl ProtocolHandle {
 /// Handle pair allows `Notifications` and the protocol to communicate with each other directly.
 pub fn notification_service(
 	protocol: ProtocolName,
+	metrics: Option<Registry>,
 ) -> (ProtocolHandlePair, Box<dyn NotificationService>) {
 	let (cmd_tx, cmd_rx) = mpsc::channel(64); // TODO: zzz
 	let (event_tx, event_rx) = tracing_unbounded("mpsc-notification-to-protocol", 100_000);
 	let subscribers = Arc::new(Mutex::new(vec![event_tx]));
+	let metrics = metrics.map_or(None, |registry| metrics::register(&registry).ok());
 
 	(
-		ProtocolHandlePair::new(protocol.clone(), subscribers.clone(), cmd_rx),
-		Box::new(NotificationHandle::new(protocol.clone(), cmd_tx, event_rx, subscribers)),
+		ProtocolHandlePair::new(protocol.clone(), subscribers.clone(), cmd_rx, metrics.clone()),
+		Box::new(NotificationHandle::new(protocol.clone(), cmd_tx, event_rx, subscribers, metrics)),
 	)
 }
