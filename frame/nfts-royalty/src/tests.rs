@@ -19,7 +19,8 @@
 
 use super::Event as NftsRoyaltyEvent;
 use crate::{
-	mock::*, Error, CollectionRoyalty, ItemRoyalty, RoyaltyDetails, CollectionRoyaltyRecipients, ItemRoyaltyRecipients,
+	mock::*, CollectionRoyalty, CollectionRoyaltyRecipients, Error, ItemRoyalty,
+	ItemRoyaltyRecipients, RoyaltyDetails,
 };
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 
