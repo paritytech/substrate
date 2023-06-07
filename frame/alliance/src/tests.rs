@@ -299,7 +299,7 @@ fn close_works() {
 				})),
 				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Executed {
 					proposal_hash: hash,
-					result: Err(DispatchError::BadOrigin),
+					result: Ok(()),
 				}))
 			]
 		);

@@ -67,7 +67,7 @@
 //!
 //! An account pair can become bonded using the [`bond`](Call::bond) call.
 //!
-//! Stash accounts can change their associated controller using the
+//! Stash accounts can update their associated controller back to the stash account using the
 //! [`set_controller`](Call::set_controller) call.
 //!
 //! There are three possible roles that any staked account pair can be in: `Validator`, `Nominator`
@@ -849,8 +849,19 @@ impl<Balance: AtLeast32BitUnsigned + Clone, T: Get<&'static PiecewiseLinear<'sta
 }
 
 /// Mode of era-forcing.
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	TypeInfo,
+	MaxEncodedLen,
+	serde::Serialize,
+	serde::Deserialize,
+)]
 pub enum Forcing {
 	/// Not forcing anything - just let whatever happen.
 	NotForcing,

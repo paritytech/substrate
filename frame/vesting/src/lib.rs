@@ -214,15 +214,9 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub vesting: Vec<(T::AccountId, T::BlockNumber, T::BlockNumber, BalanceOf<T>)>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			GenesisConfig { vesting: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]

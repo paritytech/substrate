@@ -173,7 +173,7 @@ fn construct_genesis_should_work_with_native() {
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000 * DOLLARS,
 	)
-	.build_storage();
+	.build();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
 	let backend = InMemoryBackend::from((storage, StateVersion::default()));
@@ -204,7 +204,7 @@ fn construct_genesis_should_work_with_wasm() {
 		vec![AccountKeyring::One.into(), AccountKeyring::Two.into()],
 		1000 * DOLLARS,
 	)
-	.build_storage();
+	.build();
 	let genesis_hash = insert_genesis_block(&mut storage);
 
 	let backend = InMemoryBackend::from((storage, StateVersion::default()));
@@ -2000,4 +2000,42 @@ fn use_dalek_ext_works() {
 		.runtime_api()
 		.verify_ed25519(a1.hash(), zero_ed_sig(), zero_ed_pub(), vec![])
 		.unwrap());
+}
+
+#[test]
+fn finalize_after_best_block_updates_best() {
+	let mut client = substrate_test_runtime_client::new();
+
+	// G -> A1
+	let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	block_on(client.import(BlockOrigin::Own, a1.clone())).unwrap();
+
+	// A1 -> A2
+	let a2 = client
+		.new_block_at(a1.hash(), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
+
+	// A2 -> A3
+	let a3 = client
+		.new_block_at(a2.hash(), Default::default(), false)
+		.unwrap()
+		.build()
+		.unwrap()
+		.block;
+	let (header, extrinsics) = a3.clone().deconstruct();
+	let mut import_params = BlockImportParams::new(BlockOrigin::Own, header);
+	import_params.body = Some(extrinsics);
+	import_params.fork_choice = Some(ForkChoiceStrategy::Custom(false));
+	block_on(client.import_block(import_params)).unwrap();
+
+	assert_eq!(client.chain_info().best_hash, a2.hash());
+
+	client.finalize_block(a3.hash(), None).unwrap();
+
+	assert_eq!(client.chain_info().finalized_hash, a3.hash());
+	assert_eq!(client.chain_info().best_hash, a3.hash());
 }
