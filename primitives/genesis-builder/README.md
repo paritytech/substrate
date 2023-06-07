@@ -1,3 +1,5 @@
-Substrate genesis builder
+Substrate genesis builder.
 
-License: GPL-3.0-or-later WITH Classpath-exception-2.0
+Refer to the module doc for more details.
+
+License: Apache-2.0
