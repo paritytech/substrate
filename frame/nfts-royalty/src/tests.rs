@@ -537,15 +537,18 @@ fn buy_should_work_with_multiple_recipients_at_collection_level() {
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
-					royalty_percentage: Permill::from_percent(20)
+					royalty_percentage: Permill::from_percent(20),
+					deposit: 0
 				},
 				RoyaltyDetails {
 					royalty_recipient: account(2),
-					royalty_percentage: Permill::from_percent(60)
+					royalty_percentage: Permill::from_percent(60),
+					deposit: 0
 				},
 				RoyaltyDetails {
 					royalty_recipient: account(3),
-					royalty_percentage: Permill::from_percent(20)
+					royalty_percentage: Permill::from_percent(20),
+					deposit: 0
 				}
 			],
 		));
@@ -595,15 +598,18 @@ fn buy_should_work_with_multiple_recipients_at_item_level() {
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
-					royalty_percentage: Permill::from_percent(50)
+					royalty_percentage: Permill::from_percent(50),
+					deposit: 0,
 				},
 				RoyaltyDetails {
 					royalty_recipient: account(2),
-					royalty_percentage: Permill::from_percent(25)
+					royalty_percentage: Permill::from_percent(25),
+					deposit: 0,
 				},
 				RoyaltyDetails {
 					royalty_recipient: account(3),
-					royalty_percentage: Permill::from_percent(25)
+					royalty_percentage: Permill::from_percent(25),
+					deposit: 0,
 				}
 			],
 		));
@@ -614,15 +620,18 @@ fn buy_should_work_with_multiple_recipients_at_item_level() {
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
-					royalty_percentage: Permill::from_percent(20)
+					royalty_percentage: Permill::from_percent(20),
+					deposit: 0,
 				},
 				RoyaltyDetails {
 					royalty_recipient: account(2),
-					royalty_percentage: Permill::from_percent(60)
+					royalty_percentage: Permill::from_percent(60),
+					deposit: 0,
 				},
 				RoyaltyDetails {
 					royalty_recipient: account(3),
-					royalty_percentage: Permill::from_percent(20)
+					royalty_percentage: Permill::from_percent(20),
+					deposit: 0,
 				}
 			],
 		));
@@ -707,7 +716,8 @@ fn nft_set_collection_royalty_recipients_should_work() {
 			0,
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
-				royalty_percentage: Permill::from_percent(100)
+				royalty_percentage: Permill::from_percent(100),
+				deposit: 0,
 			}],
 		));
 		// Read royalty pallet's storage.
@@ -734,7 +744,8 @@ fn nft_set_collection_royalty_recipients_fail_item_not_exist() {
 				0,
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
-					royalty_percentage: Permill::from_percent(100)
+					royalty_percentage: Permill::from_percent(100),
+					deposit: 0,
 				}],
 			),
 			Error::<Test>::CollectionDoesNotExist
@@ -752,7 +763,8 @@ fn nft_set_collection_royalty_recipients_fail_no_permission() {
 				0,
 				vec![RoyaltyDetails {
 					royalty_recipient: account(2),
-					royalty_percentage: Permill::from_percent(100)
+					royalty_percentage: Permill::from_percent(100),
+					deposit: 0,
 				}],
 			),
 			Error::<Test>::NoPermission
@@ -770,19 +782,23 @@ fn nft_set_collection_royalty_recipients_fail_limit_recipients() {
 				vec![
 					RoyaltyDetails {
 						royalty_recipient: account(1),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 					RoyaltyDetails {
 						royalty_recipient: account(2),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 					RoyaltyDetails {
 						royalty_recipient: account(3),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 					RoyaltyDetails {
 						royalty_recipient: account(4),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					}
 				],
 			),
@@ -802,7 +818,8 @@ fn nft_set_collection_royalty_recipients_fail_ovewrite() {
 			0,
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
-				royalty_percentage: Permill::from_percent(100)
+				royalty_percentage: Permill::from_percent(100),
+				deposit: 0,
 			}],
 		));
 		assert_noop!(
@@ -811,7 +828,8 @@ fn nft_set_collection_royalty_recipients_fail_ovewrite() {
 				0,
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
-					royalty_percentage: Permill::from_percent(100)
+					royalty_percentage: Permill::from_percent(100),
+					deposit: 0,
 				}],
 			),
 			Error::<Test>::RoyaltyRecipientsAlreadyExist
@@ -829,11 +847,13 @@ fn nft_set_collection_royalty_recipients_fail_invalid_percentage() {
 				vec![
 					RoyaltyDetails {
 						royalty_recipient: account(1),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 					RoyaltyDetails {
 						royalty_recipient: account(2),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 				],
 			),
@@ -853,7 +873,8 @@ fn nft_set_item_royalty_recipients_should_work() {
 			mint_id,
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
-				royalty_percentage: Permill::from_percent(100)
+				royalty_percentage: Permill::from_percent(100),
+				deposit: 0,
 			}],
 		));
 		// Read royalty pallet's storage.
@@ -883,7 +904,8 @@ fn nft_set_item_royalty_recipients_fail_item_not_exist() {
 				32,
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
-					royalty_percentage: Permill::from_percent(100)
+					royalty_percentage: Permill::from_percent(100),
+					deposit: 0,
 				}],
 			),
 			Error::<Test>::NftDoesNotExist
@@ -903,7 +925,8 @@ fn nft_set_item_royalty_recipients_fail_no_permission() {
 				mint_id,
 				vec![RoyaltyDetails {
 					royalty_recipient: account(2),
-					royalty_percentage: Permill::from_percent(100)
+					royalty_percentage: Permill::from_percent(100),
+					deposit: 0,
 				}],
 			),
 			Error::<Test>::NoPermission
@@ -923,19 +946,23 @@ fn nft_set_item_royalty_recipients_fail_limit_recipients() {
 				vec![
 					RoyaltyDetails {
 						royalty_recipient: account(1),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 					RoyaltyDetails {
 						royalty_recipient: account(2),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 					RoyaltyDetails {
 						royalty_recipient: account(3),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 					RoyaltyDetails {
 						royalty_recipient: account(4),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					}
 				],
 			),
@@ -955,7 +982,8 @@ fn nft_set_item_royalty_recipients_fail_ovewrite() {
 			mint_id,
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
-				royalty_percentage: Permill::from_percent(100)
+				royalty_percentage: Permill::from_percent(100),
+				deposit: 0,
 			}],
 		));
 		assert_noop!(
@@ -965,7 +993,8 @@ fn nft_set_item_royalty_recipients_fail_ovewrite() {
 				mint_id,
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
-					royalty_percentage: Permill::from_percent(100)
+					royalty_percentage: Permill::from_percent(100),
+					deposit: 0,
 				}],
 			),
 			Error::<Test>::RoyaltyRecipientsAlreadyExist
@@ -985,11 +1014,13 @@ fn nft_set_item_royalty_recipients_fail_invalid_percentage() {
 				vec![
 					RoyaltyDetails {
 						royalty_recipient: account(1),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 					RoyaltyDetails {
 						royalty_recipient: account(2),
-						royalty_percentage: Permill::from_percent(25)
+						royalty_percentage: Permill::from_percent(25),
+						deposit: 0,
 					},
 				],
 			),

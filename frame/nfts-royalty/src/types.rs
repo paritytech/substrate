@@ -32,10 +32,14 @@ pub(super) type ItemPrice<T> = BalanceOf<T>;
 
 /// Stores the details of an item with royalty.
 #[derive(Decode, Encode, Clone, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo, Debug)]
-pub struct RoyaltyDetails<AccountId> {
+pub struct RoyaltyDetails<AccountId, BalanceOf> {
 	/// Royalty percentage for item.
 	pub royalty_percentage: Permill,
 
 	/// Account that the royalty will go to.
 	pub royalty_recipient: AccountId,
+
+	/// The amount held in reserve of the `depositor`,
+	/// to be returned once this royaltiy is removed.
+	pub deposit: BalanceOf,
 }
