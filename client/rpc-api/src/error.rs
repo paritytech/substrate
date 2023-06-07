@@ -17,8 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 /// Base error code for RPC modules.
-pub mod base
-{
+pub mod base {
 	pub const AUTHOR: i32 = 1000;
 	pub const SYSTEM: i32 = 2000;
 	pub const CHAIN: i32 = 3000;
