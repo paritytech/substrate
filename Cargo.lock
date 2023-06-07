@@ -11281,7 +11281,7 @@ dependencies = [
 
 [[package]]
 name = "sp-genesis-builder"
-version = "0.1.0-dev"
+version = "0.1.0"
 dependencies = [
  "serde_json",
  "sp-api",
