@@ -19,7 +19,7 @@
 //! See <https://github.com/paritytech/substrate/pull/13702>.
 
 use crate::{
-	migration::{IsFinished, Migrate},
+	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
 	Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
@@ -69,7 +69,7 @@ pub struct Migration<T: Config> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: Config> Migrate for Migration<T> {
+impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 11;
 
 	// It would be more correct to make our use the now removed [DeletionQueueDepth](https://github.com/paritytech/substrate/pull/13702/files#diff-70e9723e9db62816e35f6f885b6770a8449c75a6c2733e9fa7a245fe52c4656c)

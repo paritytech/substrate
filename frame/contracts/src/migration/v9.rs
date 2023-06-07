@@ -18,7 +18,7 @@
 //! Update `CodeStorage` with the new `determinism` field.
 
 use crate::{
-	migration::{IsFinished, Migrate},
+	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
 	CodeHash, Config, Determinism, Pallet, Weight, LOG_TARGET,
 };
@@ -83,7 +83,7 @@ pub struct Migration<T: Config> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: Config> Migrate for Migration<T> {
+impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 9;
 
 	fn max_step_weight() -> Weight {

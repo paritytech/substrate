@@ -21,7 +21,7 @@
 use crate::{
 	address::AddressGenerator,
 	exec::AccountIdOf,
-	migration::{IsFinished, Migrate},
+	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
 	BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
@@ -117,7 +117,7 @@ pub struct Migration<T: Config> {
 type ContractInfoOf<T: Config> =
 	StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
 
-impl<T: Config> Migrate for Migration<T> {
+impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 10;
 
 	fn max_step_weight() -> Weight {
