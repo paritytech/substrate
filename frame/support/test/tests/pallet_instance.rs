@@ -422,9 +422,9 @@ fn error_expand() {
 #[test]
 fn runtime_error_outer_enum_expand() {
 	// assert that all variants of the Example pallet are included into the
-	// RuntimeError definition.
-	match RuntimeError::Example(pallet::Error::InsufficientProposersBalance) {
-		RuntimeError::Example(example) => match example {
+	// ModuleErrorType definition.
+	match ModuleErrorType::Example(pallet::Error::InsufficientProposersBalance) {
+		ModuleErrorType::Example(example) => match example {
 			pallet::Error::InsufficientProposersBalance => (),
 			pallet::Error::NonExistentStorageValue => (),
 			// Extra pattern added by `construct_runtime`.
