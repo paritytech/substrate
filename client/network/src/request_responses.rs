@@ -35,7 +35,9 @@
 //! is used to handle incoming requests.
 
 use crate::{
-	peer_store::BANNED_THRESHOLD, peerset::PeersetHandle, types::ProtocolName, ReputationChange,
+	peer_store::{PeerStoreHandle, BANNED_THRESHOLD},
+	types::ProtocolName,
+	ReputationChange,
 };
 
 use futures::{channel::oneshot, prelude::*};
@@ -279,7 +281,7 @@ pub struct RequestResponsesBehaviour {
 	send_feedback: HashMap<ProtocolRequestId, oneshot::Sender<()>>,
 
 	/// Primarily used to get a reputation of a node.
-	peerset: PeersetHandle,
+	peer_store: PeerStoreHandle,
 
 	/// Pending message request, holds `MessageRequest` as a Future state to poll it
 	/// until we get a response from `Peerset`
@@ -317,7 +319,7 @@ impl RequestResponsesBehaviour {
 	/// the same protocol is passed twice.
 	pub fn new(
 		list: impl Iterator<Item = ProtocolConfig>,
-		peerset: PeersetHandle,
+		peer_store: PeerStoreHandle,
 	) -> Result<Self, RegisterError> {
 		let mut protocols = HashMap::new();
 		for protocol in list {
@@ -354,7 +356,7 @@ impl RequestResponsesBehaviour {
 			pending_responses: Default::default(),
 			pending_responses_arrival_time: Default::default(),
 			send_feedback: Default::default(),
-			peerset,
+			peer_store,
 			message_request: None,
 		})
 	}

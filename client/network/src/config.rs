@@ -273,6 +273,11 @@ impl NonReservedPeerMode {
 			_ => None,
 		}
 	}
+
+	/// If we are in "reserved-only" peer mode.
+	pub fn is_reserved_only(&self) -> bool {
+		matches!(self, NonReservedPeerMode::Deny)
+	}
 }
 
 /// Sync operation mode.
