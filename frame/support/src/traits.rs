@@ -113,7 +113,7 @@ pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, St
 mod messages;
 pub use messages::{
 	EnqueueMessage, ExecuteOverweightError, Footprint, NoopServiceQueues, ProcessMessage,
-	ProcessMessageError, ServiceQueues, TransformOrigin,
+	ProcessMessageError, QueuePausedQuery, ServiceQueues, TransformOrigin,
 };
 
 #[cfg(feature = "try-runtime")]
