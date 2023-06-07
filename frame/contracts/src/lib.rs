@@ -321,6 +321,13 @@ pub mod pallet {
 		type MaxDebugBufferLen: Get<u32>;
 
 		/// The sequence of migration steps that will be applied during a migration.
+		///
+		/// # Examples
+		/// ```ignore
+		/// impl pallet_contracts::Config for Runtime {
+		/// 	// ...
+		/// 	type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// ```
 		type Migrations: MigrateSequence;
 	}
 
