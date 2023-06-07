@@ -43,16 +43,21 @@ pub struct MetadataIR<T: Form = MetaForm> {
 	pub call_enum_ty: T::Type,
 	/// The type of the outer `RuntimeEvent` enum.
 	pub event_enum_ty: T::Type,
-	/// The module error type of the `DispatchError::Module` variant.
+	/// The module error type of the
+	/// [`DispatchError::Module`](https://docs.rs/sp-runtime/24.0.0/sp_runtime/enum.DispatchError.html#variant.Module) variant.
 	///
-	/// This provides useful information for decoding the `ModuleError` and has a similar
-	/// shape with `call_enum_ty` and `event_enum_ty`.
+	/// The `Module` variant will be 5 scale encoded bytes which are normally decoded into
+	/// an `{ index: u8, error: [u8; 4] }` struct. This type ID points to an enum type which
+	/// instead interprets the first `index` byte as a pallet variant, and the remaining `error`
+	/// bytes as the appropriate `pallet::Error` type. It is an equally valid way to decode the
+	/// error bytes, and can be more informative.
 	///
 	/// # Note
 	///
-	/// This type cannot be used directly to decode `sp_runtime::DispatchError` from the
-	/// chain. It provides just the information needed to decode
-	/// `sp_runtime::DispatchError::Module`.
+	/// - This type cannot be used directly to decode `sp_runtime::DispatchError` from the chain.
+	///   It provides just the information needed to decode `sp_runtime::DispatchError::Module`.
+	/// - Decoding the 5 error bytes into this type will not always lead to all of the bytes being
+	///   consumed; many error types do not require all of the bytes to represent them fully.
 	pub module_error_enum_ty: T::Type,
 }
 
