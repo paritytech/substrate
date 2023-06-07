@@ -118,8 +118,6 @@ fn heartbeat(
 	id: UintAuthorityId,
 	validators: Vec<u64>,
 ) -> dispatch::DispatchResult {
-	use frame_support::unsigned::ValidateUnsigned;
-
 	let heartbeat = Heartbeat {
 		block_number,
 		session_index,

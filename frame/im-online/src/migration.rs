@@ -64,10 +64,10 @@ mod v0 {
 		AuthIndex,
 		WrapperOpaque<
 			BoundedOpaqueNetworkState<
-				<T as Config>::MaxPeerInHeartbeats, /* XXX: use similar type because
+				<T as Config>::MaxPeerInHeartbeats, /* XXX: used `MaxPeerInHeartbeats` because
 				                                     * `MaxPeerDataEncodingSize` was removed in
 				                                     * v1 */
-				<T as Config>::MaxPeerInHeartbeats, /* XXX: use similar type because
+				<T as Config>::MaxPeerInHeartbeats, /* XXX: used `MaxPeerInHeartbeats` because
 				                                     * `MaxPeerDataEncodingSize` was removed in
 				                                     * v1 */
 				<T as Config>::MaxPeerInHeartbeats,
@@ -114,7 +114,7 @@ pub mod v1 {
 					"Migrated received heartbeat for {:?}...",
 					(session_index, auth_index)
 				);
-				crate::ReceivedHeartbeats::<T>::insert(session_index, auth_index, ());
+				crate::ReceivedHeartbeats::<T>::insert(session_index, auth_index, true);
 			}
 
 			StorageVersion::new(1).put::<Pallet<T>>();
@@ -125,9 +125,9 @@ pub mod v1 {
 		fn post_upgrade(state: Vec<u8>) -> DispatchResult {
 			let old_received_heartbeats: u32 =
 				Decode::decode(&mut &state[..]).expect("pre_upgrade provides a valid state; qed");
-			let new_received_heartbeats = crate::ReceivedHeartbeats::<T>.iter().count();
+			let new_received_heartbeats = crate::ReceivedHeartbeats::<T>::iter().count();
 
-			if new_received_heartbeats != old_received_heartbeats {
+			if new_received_heartbeats != old_received_heartbeats as usize {
 				log::error!(
 					target: TARGET,
 					"migrated {} received heartbeats, expected {}",
@@ -146,7 +146,8 @@ pub mod v1 {
 #[cfg(feature = "try-runtime")]
 mod test {
 	use super::*;
-	use crate::mock::*;
+	use crate::mock::{new_test_ext, Runtime as T};
+	use frame_support::traits::WrapperOpaque;
 
 	#[test]
 	fn migration_works() {
@@ -154,30 +155,37 @@ mod test {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0);
 
 			// Insert some received heartbeats into the v0 storage:
-			let current_session = T::ValidatorSet::session_index();
-			v0::ReceivedHeartbeats::<T>::insert(&current_session, AuthIndex::from(0), ());
-			v0::ReceivedHeartbeats::<T>::insert(&current_session, AuthIndex::from(1), ());
+			let current_session = <T as pallet::Config>::ValidatorSet::session_index();
+			v0::ReceivedHeartbeats::<T>::insert(
+				&current_session,
+				0,
+				WrapperOpaque(v0::BoundedOpaqueNetworkState {
+					peer_id: WeakBoundedVec::force_from(Default::default(), None),
+					external_addresses: Default::default(),
+				}),
+			);
+			v0::ReceivedHeartbeats::<T>::insert(
+				&current_session,
+				1,
+				WrapperOpaque(v0::BoundedOpaqueNetworkState {
+					peer_id: WeakBoundedVec::force_from(Default::default(), None),
+					external_addresses: Default::default(),
+				}),
+			);
 
 			assert_eq!(v0::ReceivedHeartbeats::<T>::iter().count(), 2);
-			assert_eq!(
-				crate::ReceivedHeartbeats::<T>::iter().count(),
-				0,
-				"V1 storage should be corrupted"
-			);
+			assert_eq!(crate::ReceivedHeartbeats::<T>::iter().count(), 0, "V1 storage corrupted");
 
 			let state = v1::Migration::<T>::pre_upgrade().unwrap();
 			let _w = v1::Migration::<T>::on_runtime_upgrade();
 			v1::Migration::<T>::post_upgrade(state).unwrap();
 
-			assert_eq!(v0::ReceivedHeartbeats::<T>::iter().count(), 2);
+			assert_eq!(v0::ReceivedHeartbeats::<T>::iter().count(), 0);
 			assert_eq!(crate::ReceivedHeartbeats::<T>::iter().count(), 2);
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 
-			assert!(crate::ReceivedHeartbeats::<T>::contains(&current_session, AuthIndex::from(0)));
-			assert_eq!(
-				(),
-				crate::ReceivedHeartbeats::<T>::get(&current_session, AuthIndex::from(1))
-			);
+			assert!(crate::ReceivedHeartbeats::<T>::contains_key(&current_session, 0));
+			assert_eq!(Some(true), crate::ReceivedHeartbeats::<T>::get(&current_session, 1));
 		});
 	}
 }
