@@ -275,6 +275,11 @@ impl NonReservedPeerMode {
 			_ => None,
 		}
 	}
+
+	/// If we are in "reserved-only" peer mode.
+	pub fn is_reserved_only(&self) -> bool {
+		matches!(self, NonReservedPeerMode::Deny)
+	}
 }
 
 /// The configuration of a node's secret key, describing the type of key

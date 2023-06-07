@@ -36,8 +36,9 @@ use crate::{
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	peerset::PeersetHandle,
+	peer_store::{PeerStore, PeerStoreHandle, PeerStoreProvider},
 	protocol::{self, NotifsHandlerError, Protocol, Ready},
+	protocol_controller::{ProtoSetConfig, ProtocolController, SetId},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		signature::{Signature, SigningError},
@@ -115,9 +116,6 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	local_identity: Keypair,
 	/// Bandwidth logging system. Can be queried to know the average bandwidth consumed.
 	bandwidth: Arc<transport::BandwidthSinks>,
-	/// Peerset manager (PSM); manages the reputation of nodes and indicates the network which
-	/// nodes it should be connected to or not.
-	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
@@ -262,11 +260,56 @@ where
 			)
 		};
 
-		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
+		let peer_store = PeerStore::new(
+			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
+		);
+		let peer_store_handle = peer_store.handle();
+
+		// Spawn `PeerStore` runner.
+		(params.executor)(peer_store.run().boxed());
+
+		let (to_notifications, from_controllers) =
+			tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
+
+		// We must prepend a hardcoded default peer set to notification protocols.
+		let all_peer_sets_iter = iter::once(&network_config.default_peers_set)
+			.chain(notification_protocols.iter().map(|protocol| &protocol.set_config));
+
+		let (protocol_handles, protocol_controllers): (Vec<_>, Vec<_>) = all_peer_sets_iter
+			.enumerate()
+			.map(|(set_id, set_config)| {
+				let proto_set_config = ProtoSetConfig {
+					in_peers: set_config.in_peers,
+					out_peers: set_config.out_peers,
+					reserved_nodes: set_config
+						.reserved_nodes
+						.iter()
+						.map(|node| node.peer_id)
+						.collect(),
+					reserved_only: set_config.non_reserved_mode.is_reserved_only(),
+				};
+
+				ProtocolController::new(
+					SetId::from(set_id),
+					proto_set_config,
+					to_notifications.clone(),
+					Box::new(peer_store_handle.clone()),
+				)
+			})
+			.unzip();
+
+		// Spawn `ProtocolController` runners.
+		protocol_controllers
+			.into_iter()
+			.for_each(|controller| (params.executor)(controller.run().boxed()));
+
+		let protocol = Protocol::new(
 			From::from(&params.role),
 			&network_config,
 			notification_protocols,
 			params.block_announce_config,
+			peer_store_handle,
+			protocol_handles,
 			params.tx,
 		)?;
 
@@ -279,10 +322,43 @@ where
 				.entry(bootnode.peer_id)
 				.or_default()
 				.push(bootnode.multiaddr.clone());
-			known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 		}
 
 		let boot_node_ids = Arc::new(boot_node_ids);
+
+		let known_addresses = {
+			// Collect all reserved nodes and bootnodes addresses.
+			let mut addresses: Vec<_> = network_config
+				.default_peers_set
+				.reserved_nodes
+				.iter()
+				.map(|reserved| (reserved.peer_id, reserved.multiaddr.clone()))
+				.chain(
+					notification_protocols
+						.iter()
+						.map(|protocol| {
+							protocol
+								.set_config
+								.reserved_nodes
+								.iter()
+								.map(|reserved| (reserved.peer_id, reserved.multiaddr.clone()))
+						})
+						.flatten(),
+				)
+				.chain(
+					network_config
+						.boot_nodes
+						.iter()
+						.map(|bootnode| (bootnode.peer_id, bootnode.multiaddr.clone())),
+				)
+				.collect();
+
+			// Remove possible duplicates.
+			addresses.sort();
+			addresses.dedup();
+
+			addresses
+		};
 
 		// Check for duplicate bootnodes.
 		network_config.boot_nodes.iter().try_for_each(|bootnode| {
@@ -301,6 +377,14 @@ where
 				Ok(())
 			}
 		})?;
+
+		// let boot_node_ids = Arc::new(
+		// 	network_config
+		// 		.boot_nodes
+		// 		.iter()
+		// 		.map(|bootnode| bootnode.peer_id)
+		// 		.collect::<HashSet<_>>(),
+		// );
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 
@@ -350,7 +434,7 @@ where
 					local_public,
 					discovery_config,
 					request_response_protocols,
-					peerset_handle.clone(),
+					peer_store_handle.clone(),
 				);
 
 				match result {
@@ -430,7 +514,6 @@ where
 			external_addresses: external_addresses.clone(),
 			listen_addresses: listen_addresses.clone(),
 			num_connected: num_connected.clone(),
-			peerset: peerset_handle,
 			local_peer_id,
 			local_identity,
 			to_worker,
@@ -454,6 +537,7 @@ where
 			metrics,
 			boot_node_ids,
 			reported_invalid_boot_nodes: Default::default(),
+			peer_store_handle,
 			_marker: Default::default(),
 			_block: Default::default(),
 		})
@@ -793,7 +877,7 @@ where
 	}
 
 	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
-		self.peerset.report_peer(who, cost_benefit);
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::ReportPeer(who, cost_benefit));
 	}
 
 	fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName) {
@@ -1095,6 +1179,7 @@ enum ServiceToWorkerMsg {
 	GetValue(KademliaKey),
 	PutValue(KademliaKey, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
+	ReportPeer(PeerId, ReputationChange),
 	SetReservedOnly(bool),
 	AddReserved(PeerId),
 	RemoveReserved(PeerId),
@@ -1155,6 +1240,8 @@ where
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
+	/// Peer reputation store handle.
+	peer_store_handle: PeerStoreHandle,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -1280,6 +1367,8 @@ where
 				.remove_set_reserved_peer(protocol, peer_id),
 			ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 				self.network_service.behaviour_mut().add_known_address(peer_id, addr),
+			ServiceToWorkerMsg::ReportPeer(peer_id, reputation_change) =>
+				self.peer_store_handle.report_peer(peer_id, reputation_change),
 			ServiceToWorkerMsg::EventStream(sender) => self.event_streams.push(sender),
 			ServiceToWorkerMsg::Request {
 				target,
