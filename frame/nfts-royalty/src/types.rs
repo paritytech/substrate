@@ -32,12 +32,25 @@ pub(super) type ItemPrice<T> = BalanceOf<T>;
 
 /// Stores the details of an item with royalty.
 #[derive(Decode, Encode, Clone, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo, Debug)]
-pub struct RoyaltyDetails<AccountId, BalanceOf> {
+pub struct RoyaltyDetails<AccountId> {
+	/// Royalty percentage for item.
+	pub royalty_recipient_percentage: Permill,
+
+	/// Admin of the royalty.
+	pub royalty_recipient: AccountId,
+}
+/// Stores the details of an item with royalty.
+#[derive(Decode, Encode, Clone, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo, Debug)]
+#[scale_info(skip_type_params(MaxRecipients))]
+pub struct RoyaltyConfig<AccountId, BalanceOf, MaxRecipients: Get<u32>> {
 	/// Royalty percentage for item.
 	pub royalty_percentage: Permill,
 
-	/// Account that the royalty will go to.
-	pub royalty_recipient: AccountId,
+	/// Admin of the royalty.
+	pub royalty_admin: AccountId,
+
+	/// List of account that the royalty will go to.
+	pub recipients: BoundedVec<RoyaltyDetails<AccountId>, MaxRecipients>,
 
 	/// The amount held in reserve of the `depositor`,
 	/// to be returned once this royaltiy is removed.
