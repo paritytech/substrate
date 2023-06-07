@@ -32,7 +32,7 @@
 //!
 //! ```rust
 //! use pallet_contracts::migration::{v10, v11, v12};
-//! type Migrations = (v10, v11, v12);
+//! type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
 //! ```
 //!
 //! ## Notes:
