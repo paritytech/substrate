@@ -309,7 +309,7 @@ pub mod pallet {
 
 		/// The number of blocks a member must wait between giving a retirement notice and retiring.
 		/// Supposed to be greater than time required to `kick_member`.
-		type RetirementPeriod: Get<Self::BlockNumber>;
+		type RetirementPeriod: Get<frame_system::BlockNumberOf<Self>>;
 	}
 
 	#[pallet::error]

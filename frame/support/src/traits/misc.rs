@@ -17,7 +17,7 @@
 
 //! Smaller traits used in FRAME which don't need their own file.
 
-use crate::dispatch::{DispatchResult, Parameter};
+use crate::dispatch::DispatchResult;
 use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
@@ -28,7 +28,7 @@ pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
 	ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
 };
-use sp_runtime::{traits::Block as BlockT, DispatchError};
+use sp_runtime::{traits::{Block as BlockT, Parameter}, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
 #[doc(hidden)]

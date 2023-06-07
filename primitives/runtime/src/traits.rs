@@ -1093,6 +1093,12 @@ pub trait IsMember<MemberId> {
 	fn is_member(member_id: &MemberId) -> bool;
 }
 
+/// A type that can be used as a parameter in a dispatchable function.
+///
+/// When using `decl_module` all arguments for call functions must implement this trait.
+pub trait Parameter: Codec + EncodeLike + Clone + Eq + Debug + scale_info::TypeInfo {}
+impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + Debug + scale_info::TypeInfo {}
+
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Hashing`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
@@ -1100,7 +1106,8 @@ pub trait IsMember<MemberId> {
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Header number.
-	type Number: Member
+	type Number: Parameter
+		+ Member
 		+ MaybeSerializeDeserialize
 		+ Debug
 		+ sp_std::hash::Hash
@@ -1108,7 +1115,12 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 		+ MaybeDisplay
 		+ AtLeast32BitUnsigned
 		+ Codec
-		+ sp_std::str::FromStr;
+		+ sp_std::str::FromStr
+		+ EncodeLike
+		+ Default
+		+ scale_info::TypeInfo
+		+ MaxEncodedLen
+		+ Bounded;
 	/// Header hash type
 	type Hash: Member
 		+ MaybeSerializeDeserialize

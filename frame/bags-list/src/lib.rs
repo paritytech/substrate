@@ -260,7 +260,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberOf<T>> for Pallet<T, I> {
 		fn integrity_test() {
 			// ensure they are strictly increasing, this also implies that duplicates are detected.
 			assert!(
@@ -270,7 +270,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
+		fn try_state(_: BlockNumberOf<T>) -> Result<(), TryRuntimeError> {
 			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}

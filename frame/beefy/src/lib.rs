@@ -153,7 +153,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn genesis_block)]
 	pub(super) type GenesisBlock<T: Config> =
-		StorageValue<_, Option<BlockNumberFor<T>>, ValueQuery>;
+		StorageValue<_, Option<BlockNumberOf<T>>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -163,7 +163,7 @@ pub mod pallet {
 		/// Should match the session where initial authorities are active.
 		/// *Note:* Ideally use block number where GRANDPA authorities are changed,
 		/// to guarantee the client gets a finality notification for exactly this block.
-		pub genesis_block: Option<BlockNumberFor<T>>,
+		pub genesis_block: Option<BlockNumberOf<T>>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -208,7 +208,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
 				EquivocationProof<
-					BlockNumberFor<T>,
+					BlockNumberOf<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
 				>,
@@ -240,7 +240,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
 				EquivocationProof<
-					BlockNumberFor<T>,
+					BlockNumberOf<T>,
 					T::BeefyId,
 					<T::BeefyId as RuntimeAppPublic>::Signature,
 				>,
@@ -284,7 +284,7 @@ impl<T: Config> Pallet<T> {
 	/// will push the transaction to the pool. Only useful in an offchain context.
 	pub fn submit_unsigned_equivocation_report(
 		equivocation_proof: EquivocationProof<
-			BlockNumberFor<T>,
+			BlockNumberOf<T>,
 			T::BeefyId,
 			<T::BeefyId as RuntimeAppPublic>::Signature,
 		>,

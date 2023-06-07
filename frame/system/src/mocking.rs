@@ -17,6 +17,7 @@
 
 //! Provide types to help defining a mock environment when testing pallets.
 
+use crate::BlockNumberOf;
 use sp_runtime::generic;
 
 /// An unchecked extrinsic type to be used in tests.
@@ -29,6 +30,6 @@ pub type MockUncheckedExtrinsic<T, Signature = (), Extra = ()> = generic::Unchec
 
 /// An implementation of `sp_runtime::traits::Block` to be used in tests.
 pub type MockBlock<T> = generic::Block<
-	generic::Header<<T as crate::Config>::BlockNumber, sp_runtime::traits::BlakeTwo256>,
+	generic::Header<BlockNumberOf<T>, sp_runtime::traits::BlakeTwo256>,
 	MockUncheckedExtrinsic<T>,
 >;

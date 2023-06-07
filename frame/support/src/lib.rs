@@ -96,7 +96,7 @@ pub mod unsigned {
 #[cfg(any(feature = "std", feature = "runtime-benchmarks", feature = "try-runtime", test))]
 pub use self::storage::storage_noop_guard::StorageNoopGuard;
 pub use self::{
-	dispatch::{Callable, Parameter},
+	dispatch::Callable,
 	hash::{
 		Blake2_128, Blake2_128Concat, Blake2_256, Hashable, Identity, ReversibleStorageHasher,
 		StorageHasher, Twox128, Twox256, Twox64Concat,
@@ -112,7 +112,7 @@ pub use self::{
 	},
 };
 pub use sp_runtime::{
-	self, print, traits::Printable, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
+	self, print, traits::{Parameter, Printable}, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
 };
 
 use codec::{Decode, Encode};
@@ -1540,7 +1540,7 @@ pub mod testing_prelude {
 pub mod pallet_prelude {
 	pub use crate::{
 		dispatch::{
-			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter,
+			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo,
 			Pays,
 		},
 		ensure,
@@ -1565,7 +1565,7 @@ pub mod pallet_prelude {
 	pub use frame_support_procedural::register_default_impl;
 	pub use scale_info::TypeInfo;
 	pub use sp_runtime::{
-		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
+		traits::{MaybeSerializeDeserialize, Member, Parameter, ValidateUnsigned},
 		transaction_validity::{
 			InvalidTransaction, TransactionLongevity, TransactionPriority, TransactionSource,
 			TransactionTag, TransactionValidity, TransactionValidityError, UnknownTransaction,
@@ -1842,19 +1842,19 @@ pub mod pallet_prelude {
 /// The item the attribute attaches to must be defined as follows:
 /// ```ignore
 /// #[pallet::hooks]
-/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> $optional_where_clause {
+/// impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> $optional_where_clause {
 ///     ...
 /// }
 /// ```
 /// I.e. a regular trait implementation with generic bound: `T: Config`, for the trait
-/// `Hooks<BlockNumberFor<T>>` (they are defined in preludes), for the type `Pallet<T>` and
+/// `Hooks<BlockNumberOf<T>>` (they are defined in preludes), for the type `Pallet<T>` and
 /// with an optional where clause.
 ///
 /// If no `#[pallet::hooks]` exists, then the following default implementation is
 /// automatically generated:
 /// ```ignore
 /// #[pallet::hooks]
-/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+/// impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {}
 /// ```
 ///
 /// Also see [`pallet::hooks`](`frame_support::pallet_macros::hooks`)
@@ -2418,8 +2418,8 @@ pub mod pallet_prelude {
 ///
 /// 	// Implement the pallet hooks.
 /// 	#[pallet::hooks]
-/// 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-/// 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+/// 	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
+/// 		fn on_initialize(_n: BlockNumberOf<T>) -> Weight {
 /// 			unimplemented!();
 /// 		}
 ///
@@ -2604,7 +2604,7 @@ pub mod pallet_prelude {
 /// 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 ///
 /// 	#[pallet::hooks]
-/// 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+/// 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberOf<T>> for Pallet<T, I> {
 /// 	}
 ///
 /// 	#[pallet::call]

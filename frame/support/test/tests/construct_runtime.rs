@@ -89,7 +89,7 @@ mod module2 {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		fn integrity_test() {
 			IntegrityTestExec::mutate(|i| *i += 1);
 		}
@@ -137,7 +137,7 @@ mod nested {
 		}
 
 		#[pallet::hooks]
-		impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 			fn integrity_test() {
 				IntegrityTestExec::mutate(|i| *i += 1);
 			}

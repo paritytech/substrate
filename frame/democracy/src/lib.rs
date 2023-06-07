@@ -226,14 +226,14 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The Scheduler.
-		type Scheduler: ScheduleNamed<Self::BlockNumber, CallOf<Self>, Self::PalletsOrigin>;
+		type Scheduler: ScheduleNamed<frame_system::BlockNumberOf<Self>, CallOf<Self>, Self::PalletsOrigin>;
 
 		/// The Preimage provider.
 		type Preimages: QueryPreimage + StorePreimage;
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
+			+ LockableCurrency<Self::AccountId, Moment = frame_system::BlockNumberOf<Self>>;
 
 		/// The period between a proposal being approved and enacted.
 		///
@@ -241,22 +241,22 @@ pub mod pallet {
 		/// voting stakers have an opportunity to remove themselves from the system in the case
 		/// where they are on the losing side of a vote.
 		#[pallet::constant]
-		type EnactmentPeriod: Get<Self::BlockNumber>;
+		type EnactmentPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// How often (in blocks) new public referenda are launched.
 		#[pallet::constant]
-		type LaunchPeriod: Get<Self::BlockNumber>;
+		type LaunchPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// How often (in blocks) to check for new votes.
 		#[pallet::constant]
-		type VotingPeriod: Get<Self::BlockNumber>;
+		type VotingPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The minimum period of vote locking.
 		///
 		/// It should be no shorter than enactment period to ensure that in the case of an approval,
 		/// those successful voters are locked into the consequences that their votes entail.
 		#[pallet::constant]
-		type VoteLockingPeriod: Get<Self::BlockNumber>;
+		type VoteLockingPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
 		#[pallet::constant]
@@ -270,11 +270,11 @@ pub mod pallet {
 
 		/// Minimum voting period allowed for a fast-track referendum.
 		#[pallet::constant]
-		type FastTrackVotingPeriod: Get<Self::BlockNumber>;
+		type FastTrackVotingPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 		#[pallet::constant]
-		type CooloffPeriod: Get<Self::BlockNumber>;
+		type CooloffPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The maximum number of votes for an account.
 		///
@@ -563,7 +563,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		/// Weight: see `begin_block`
 		fn on_initialize(n: frame_system::BlockNumberOf<T>) -> Weight {
 			Self::begin_block(n)

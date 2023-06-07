@@ -130,7 +130,7 @@ pub mod pallet {
 		type Moment: Parameter
 			+ Default
 			+ AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment>
+			+ Scale<frame_system::BlockNumberOf<Self>, Output = Self::Moment>
 			+ Copy
 			+ MaxEncodedLen
 			+ scale_info::StaticTypeInfo;
@@ -163,16 +163,16 @@ pub mod pallet {
 	pub(super) type DidUpdate<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		/// dummy `on_initialize` to return the weight used in `on_finalize`.
-		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(_n: BlockNumberOf<T>) -> Weight {
 			// weight of `on_finalize`
 			T::WeightInfo::on_finalize()
 		}
 
 		/// ## Complexity
 		/// - `O(1)`
-		fn on_finalize(_n: BlockNumberFor<T>) {
+		fn on_finalize(_n: BlockNumberOf<T>) {
 			assert!(DidUpdate::<T>::take(), "Timestamp must be updated once in the block");
 		}
 	}

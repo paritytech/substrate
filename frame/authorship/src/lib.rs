@@ -45,14 +45,14 @@ pub mod pallet {
 		/// Find the author of a block.
 		type FindAuthor: FindAuthor<Self::AccountId>;
 		/// An event handler for authored blocks.
-		type EventHandler: EventHandler<Self::AccountId, Self::BlockNumber>;
+		type EventHandler: EventHandler<Self::AccountId, frame_system::BlockNumberOf<Self>>;
 	}
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		fn on_initialize(_: frame_system::BlockNumberOf<T>) -> Weight {
 			if let Some(author) = Self::author() {
 				T::EventHandler::note_author(author);

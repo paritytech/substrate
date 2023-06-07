@@ -175,7 +175,7 @@ pub mod pallet {
 
 		/// Period between successive spends.
 		#[pallet::constant]
-		type SpendPeriod: Get<Self::BlockNumber>;
+		type SpendPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		#[pallet::constant]
@@ -307,7 +307,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberOf<T>> for Pallet<T, I> {
 		/// ## Complexity
 		/// - `O(A)` where `A` is the number of approvals
 		fn on_initialize(n: frame_system::BlockNumberOf<T>) -> Weight {

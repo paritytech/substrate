@@ -17,10 +17,10 @@
 
 //! Traits for dealing with validation and validators.
 
-use crate::{dispatch::Parameter, weights::Weight};
+use crate::weights::Weight;
 use codec::{Codec, Decode, MaxEncodedLen};
 use sp_runtime::{
-	traits::{Convert, Zero},
+	traits::{Convert, Zero, Parameter},
 	BoundToRuntimeAppPublic, ConsensusEngineId, Permill, RuntimeAppPublic,
 };
 use sp_staking::SessionIndex;

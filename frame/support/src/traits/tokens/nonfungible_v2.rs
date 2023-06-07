@@ -26,11 +26,11 @@
 
 use super::nonfungibles_v2 as nonfungibles;
 use crate::{
-	dispatch::{DispatchResult, Parameter},
+	dispatch::DispatchResult,
 	traits::Get,
 };
 use codec::{Decode, Encode};
-use sp_runtime::TokenError;
+use sp_runtime::{TokenError, traits::Parameter};
 use sp_std::prelude::*;
 
 /// Trait for providing an interface to a read-only NFT-like item.

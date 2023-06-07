@@ -333,15 +333,15 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		/// Initialization
-		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(now: BlockNumberOf<T>) -> Weight {
 			Self::initialize(now);
 			Weight::zero()
 		}
 
 		/// Block finalization
-		fn on_finalize(_now: BlockNumberFor<T>) {
+		fn on_finalize(_now: BlockNumberOf<T>) {
 			// at the end of the block, we can safely include the new VRF output
 			// from this block into the under-construction randomness. If we've determined
 			// that this block was the first in a new epoch, the changeover logic has

@@ -105,7 +105,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T>
 	where
 		<T as frame_system::Config>::AccountId: From<sp_statement_store::AccountId>,
 		sp_statement_store::AccountId: From<<T as frame_system::Config>::AccountId>,
@@ -113,7 +113,7 @@ pub mod pallet {
 		<T as frame_system::Config>::RuntimeEvent: TryInto<pallet::Event<T>>,
 		sp_statement_store::BlockHash: From<<T as frame_system::Config>::Hash>,
 	{
-		fn offchain_worker(now: BlockNumberFor<T>) {
+		fn offchain_worker(now: BlockNumberOf<T>) {
 			log::trace!(target: LOG_TARGET, "Collecting statements at #{:?}", now);
 			Pallet::<T>::collect_statements();
 		}

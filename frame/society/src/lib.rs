@@ -388,7 +388,7 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// Something that provides randomness in the runtime.
-		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
+		type Randomness: Randomness<Self::Hash, frame_system::BlockNumberOf<Self>>;
 
 		/// The minimum amount of a deposit required for a bid to be made.
 		#[pallet::constant]
@@ -413,11 +413,11 @@ pub mod pallet {
 
 		/// The number of blocks between candidate/membership rotation periods.
 		#[pallet::constant]
-		type RotationPeriod: Get<Self::BlockNumber>;
+		type RotationPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The maximum duration of the payout lock.
 		#[pallet::constant]
-		type MaxLockDuration: Get<Self::BlockNumber>;
+		type MaxLockDuration: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The origin that is allowed to call `found`.
 		type FounderSetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
@@ -427,7 +427,7 @@ pub mod pallet {
 
 		/// The number of blocks between membership challenges.
 		#[pallet::constant]
-		type ChallengePeriod: Get<Self::BlockNumber>;
+		type ChallengePeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The maximum number of candidates that we accept per round.
 		#[pallet::constant]
@@ -612,7 +612,7 @@ pub mod pallet {
 	pub(super) type MaxMembers<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberOf<T>> for Pallet<T, I> {
 		fn on_initialize(n: frame_system::BlockNumberOf<T>) -> Weight {
 			let mut members = vec![];
 

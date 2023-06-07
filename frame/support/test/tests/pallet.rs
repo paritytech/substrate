@@ -175,17 +175,17 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T>
 	where
 		T::AccountId: From<SomeType2> + From<SomeType1> + SomeAssociation1,
 	{
-		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(_: BlockNumberOf<T>) -> Weight {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
 			Weight::from_parts(10, 0)
 		}
-		fn on_finalize(_: BlockNumberFor<T>) {
+		fn on_finalize(_: BlockNumberOf<T>) {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(20));
@@ -526,15 +526,15 @@ pub mod pallet2 {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T>
 	where
 		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
-		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+		fn on_initialize(_: BlockNumberOf<T>) -> Weight {
 			Self::deposit_event(Event::Something(11));
 			Weight::zero()
 		}
-		fn on_finalize(_: BlockNumberFor<T>) {
+		fn on_finalize(_: BlockNumberOf<T>) {
 			Self::deposit_event(Event::Something(21));
 		}
 		fn on_runtime_upgrade() -> Weight {

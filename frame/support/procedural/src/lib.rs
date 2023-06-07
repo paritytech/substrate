@@ -1207,19 +1207,19 @@ pub fn storage_version(_: TokenStream, _: TokenStream) -> TokenStream {
 /// The item the attribute attaches to must be defined as follows:
 /// ```ignore
 /// #[pallet::hooks]
-/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> $optional_where_clause {
+/// impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> $optional_where_clause {
 ///     ...
 /// }
 /// ```
 /// I.e. a regular trait implementation with generic bound: `T: Config`, for the trait
-/// `Hooks<BlockNumberFor<T>>` (they are defined in preludes), for the type `Pallet<T>` and
+/// `Hooks<BlockNumberOf<T>>` (they are defined in preludes), for the type `Pallet<T>` and
 /// with an optional where clause.
 ///
 /// If no `#[pallet::hooks]` exists, then the following default implementation is
 /// automatically generated:
 /// ```ignore
 /// #[pallet::hooks]
-/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+/// impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {}
 /// ```
 ///
 /// ## Macro expansion

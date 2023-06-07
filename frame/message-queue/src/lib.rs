@@ -558,8 +558,8 @@ pub mod pallet {
 	>;
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
+		fn on_initialize(_n: BlockNumberOf<T>) -> Weight {
 			if let Some(weight_limit) = T::ServiceWeight::get() {
 				Self::service_queues(weight_limit)
 			} else {

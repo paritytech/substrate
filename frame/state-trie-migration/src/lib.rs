@@ -804,8 +804,8 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
+		fn on_initialize(_: BlockNumberOf<T>) -> Weight {
 			if let Some(limits) = Self::auto_limits() {
 				let mut task = Self::migration_process();
 				if let Err(e) = task.migrate_until_exhaustion(limits) {
@@ -1097,7 +1097,7 @@ mod mock {
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
+		type Header = sp_runtime::generic::Header<frame_system::BlockNumberOf<Self>, BlakeTwo256>;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();

@@ -348,7 +348,7 @@ pub mod pallet {
 		/// rough time when we should start considering sending heartbeats, since the workers
 		/// avoids sending them at the very beginning of the session, assuming there is a
 		/// chance the authority will produce a block and they won't be necessary.
-		type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
+		type NextSessionRotation: EstimateNextSessionRotation<frame_system::BlockNumberOf<Self>>;
 
 		/// A type that gives us the ability to submit unresponsiveness offence reports.
 		type ReportUnresponsiveness: ReportOffence<
@@ -506,8 +506,8 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn offchain_worker(now: BlockNumberFor<T>) {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
+		fn offchain_worker(now: BlockNumberOf<T>) {
 			// Only send messages if we are a potential validator.
 			if sp_io::offchain::is_validator() {
 				for res in Self::send_heartbeats(now).into_iter().flatten() {

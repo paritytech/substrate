@@ -288,7 +288,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		/// Execute the scheduled calls
 		fn on_initialize(now: frame_system::BlockNumberOf<T>) -> Weight {
 			let mut weight_counter = WeightMeter::from_limit(T::MaximumWeight::get());

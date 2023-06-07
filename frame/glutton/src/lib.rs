@@ -151,7 +151,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		fn integrity_test() {
 			assert!(
 				!T::WeightInfo::waste_ref_time_iter(1).ref_time().is_zero(),
@@ -163,7 +163,7 @@ pub mod pallet {
 			);
 		}
 
-		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
+		fn on_idle(_: BlockNumberOf<T>, remaining_weight: Weight) -> Weight {
 			let mut meter = WeightMeter::from_limit(remaining_weight);
 			if !meter.check_accrue(T::WeightInfo::empty_on_idle()) {
 				return T::WeightInfo::empty_on_idle()

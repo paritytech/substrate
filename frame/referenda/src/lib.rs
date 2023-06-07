@@ -161,8 +161,8 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
-		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self, I>, PalletsOriginOf<Self>>
-			+ ScheduleNamed<Self::BlockNumber, CallOf<Self, I>, PalletsOriginOf<Self>>;
+		type Scheduler: ScheduleAnon<frame_system::BlockNumberOf<Self>, CallOf<Self, I>, PalletsOriginOf<Self>>
+			+ ScheduleNamed<frame_system::BlockNumberOf<Self>, CallOf<Self, I>, PalletsOriginOf<Self>>;
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
@@ -197,25 +197,25 @@ pub mod pallet {
 		/// The number of blocks after submission that a referendum must begin being decided by.
 		/// Once this passes, then anyone may cancel the referendum.
 		#[pallet::constant]
-		type UndecidingTimeout: Get<Self::BlockNumber>;
+		type UndecidingTimeout: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// Quantization level for the referendum wakeup scheduler. A higher number will result in
 		/// fewer storage reads/writes needed for smaller voters, but also result in delays to the
 		/// automatic referendum status changes. Explicit servicing instructions are unaffected.
 		#[pallet::constant]
-		type AlarmInterval: Get<Self::BlockNumber>;
+		type AlarmInterval: Get<frame_system::BlockNumberOf<Self>>;
 
 		// The other stuff.
 		/// Information concerning the different referendum tracks.
 		#[pallet::constant]
 		type Tracks: Get<
 				Vec<(
-					<Self::Tracks as TracksInfo<BalanceOf<Self, I>, Self::BlockNumber>>::Id,
-					TrackInfo<BalanceOf<Self, I>, Self::BlockNumber>,
+					<Self::Tracks as TracksInfo<BalanceOf<Self, I>, frame_system::BlockNumberOf<Self>>>::Id,
+					TrackInfo<BalanceOf<Self, I>, frame_system::BlockNumberOf<Self>>,
 				)>,
 			> + TracksInfo<
 				BalanceOf<Self, I>,
-				Self::BlockNumber,
+				frame_system::BlockNumberOf<Self>,
 				RuntimeOrigin = <Self::RuntimeOrigin as OriginTrait>::PalletsOrigin,
 			>;
 

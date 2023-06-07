@@ -51,8 +51,8 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberOf<T>> for Pallet<T, I> {
+		fn on_initialize(_: BlockNumberOf<T>) -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(10));
 				Weight::from_parts(10, 0)
@@ -61,7 +61,7 @@ pub mod pallet {
 				Weight::from_parts(11, 0)
 			}
 		}
-		fn on_finalize(_: BlockNumberFor<T>) {
+		fn on_finalize(_: BlockNumberOf<T>) {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(20));
 			} else {

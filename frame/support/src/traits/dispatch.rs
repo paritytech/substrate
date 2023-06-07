@@ -17,10 +17,10 @@
 
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
-use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
+use crate::dispatch::{DispatchResultWithPostInfo, RawOrigin};
 use codec::MaxEncodedLen;
 use sp_runtime::{
-	traits::{BadOrigin, Get, Member, Morph, TryMorph},
+	traits::{BadOrigin, Get, Member, Morph, Parameter, TryMorph},
 	Either,
 };
 use sp_std::{cmp::Ordering, marker::PhantomData};

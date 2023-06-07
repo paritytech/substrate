@@ -275,7 +275,7 @@ pub mod pallet {
 		/// The base period for the duration queues. This is the common multiple across all
 		/// supported freezing durations that can be bid upon.
 		#[pallet::constant]
-		type BasePeriod: Get<Self::BlockNumber>;
+		type BasePeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The minimum amount of funds that may be placed in a bid. Note that this
 		/// does not actually limit the amount which may be represented in a receipt since bids may
@@ -296,7 +296,7 @@ pub mod pallet {
 		/// A larger value results in fewer storage hits each block, but a slower period to get to
 		/// the target.
 		#[pallet::constant]
-		type IntakePeriod: Get<Self::BlockNumber>;
+		type IntakePeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The maximum amount of bids that can consolidated into receipts in a single intake. A
 		/// larger value here means less of the block available for transactions should there be a
@@ -306,7 +306,7 @@ pub mod pallet {
 
 		/// The maximum proportion which may be thawed and the period over which it is reset.
 		#[pallet::constant]
-		type ThawThrottle: Get<(Perquintill, Self::BlockNumber)>;
+		type ThawThrottle: Get<(Perquintill, frame_system::BlockNumberOf<Self>)>;
 	}
 
 	#[pallet::pallet]
@@ -507,7 +507,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		fn on_initialize(n: frame_system::BlockNumberOf<T>) -> Weight {
 			let mut weight_counter =
 				WeightCounter { used: Weight::zero(), limit: T::MaxIntakeWeight::get() };

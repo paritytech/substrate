@@ -136,14 +136,14 @@ pub mod pallet {
 		/// every `GRACE_PERIOD` blocks. We use Local Storage to coordinate
 		/// sending between distinct runs of this offchain worker.
 		#[pallet::constant]
-		type GracePeriod: Get<Self::BlockNumber>;
+		type GracePeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// Number of blocks of cooldown after unsigned transaction is included.
 		///
 		/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval`
 		/// blocks.
 		#[pallet::constant]
-		type UnsignedInterval: Get<Self::BlockNumber>;
+		type UnsignedInterval: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// A configuration for base priority of unsigned transactions.
 		///
@@ -161,7 +161,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		/// Offchain Worker entry point.
 		///
 		/// By implementing `fn offchain_worker` you declare a new offchain worker.

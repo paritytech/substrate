@@ -326,7 +326,7 @@ pub mod pallet {{
 	pub struct Pallet{decl_gen}(PhantomData{use_gen_tuple});
 
 	#[pallet::hooks]
-	impl{impl_gen} Hooks<BlockNumberFor<T>> for Pallet{use_gen}
+	impl{impl_gen} Hooks<BlockNumberOf<T>> for Pallet{use_gen}
 		// TODO_MAYBE_WHERE_CLAUSE
 	{{
 		// TODO_ON_FINALIZE

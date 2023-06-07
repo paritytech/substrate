@@ -393,12 +393,12 @@ pub mod pallet {
 		type ValidatorIdOf: Convert<Self::AccountId, Option<Self::ValidatorId>>;
 
 		/// Indicator for when to end the session.
-		type ShouldEndSession: ShouldEndSession<Self::BlockNumber>;
+		type ShouldEndSession: ShouldEndSession<frame_system::BlockNumberOf<Self>>;
 
 		/// Something that can predict the next session rotation. This should typically come from
 		/// the same logical unit that provides [`ShouldEndSession`], yet, it gives a best effort
 		/// estimate. It is helpful to implement [`EstimateNextNewSession`].
-		type NextSessionRotation: EstimateNextSessionRotation<Self::BlockNumber>;
+		type NextSessionRotation: EstimateNextSessionRotation<frame_system::BlockNumberOf<Self>>;
 
 		/// Handler for managing new session.
 		type SessionManager: SessionManager<Self::ValidatorId>;
@@ -556,7 +556,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
 		fn on_initialize(n: frame_system::BlockNumberOf<T>) -> Weight {

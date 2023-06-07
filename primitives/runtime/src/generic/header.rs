@@ -23,11 +23,13 @@ use crate::{
 	scale_info::TypeInfo,
 	traits::{
 		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeSerialize,
-		MaybeSerializeDeserialize, Member, SimpleBitOps,
+		MaybeSerializeDeserialize, Member, SimpleBitOps, Parameter,
 	},
 };
+use codec::{EncodeLike, MaxEncodedLen};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::traits::Bounded;
 use sp_core::U256;
 use sp_std::fmt::Debug;
 
@@ -77,7 +79,8 @@ where
 
 impl<Number, Hash> traits::Header for Header<Number, Hash>
 where
-	Number: Member
+	Number: Parameter
+		+ Member
 		+ MaybeSerializeDeserialize
 		+ Debug
 		+ sp_std::hash::Hash
@@ -87,7 +90,12 @@ where
 		+ Copy
 		+ Into<U256>
 		+ TryFrom<U256>
-		+ sp_std::str::FromStr,
+		+ sp_std::str::FromStr
+		+ EncodeLike
+		+ Default
+		+ scale_info::TypeInfo
+		+ MaxEncodedLen
+		+ Bounded,
 	Hash: HashT,
 	Hash::Output: Default
 		+ sp_std::hash::Hash

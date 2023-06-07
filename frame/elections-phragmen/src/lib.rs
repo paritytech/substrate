@@ -203,7 +203,7 @@ pub mod pallet {
 		type PalletId: Get<LockIdentifier>;
 
 		/// The currency that people are electing with.
-		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+		type Currency: LockableCurrency<Self::AccountId, Moment = frame_system::BlockNumberOf<Self>>
 			+ ReservableCurrency<Self::AccountId>;
 
 		/// What to do when the members change.
@@ -249,7 +249,7 @@ pub mod pallet {
 		/// round will happen. If set to zero, no elections are ever triggered and the module will
 		/// be in passive mode.
 		#[pallet::constant]
-		type TermDuration: Get<Self::BlockNumber>;
+		type TermDuration: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The maximum number of candidates in a phragmen election.
 		///
@@ -281,7 +281,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		/// What to do at the end of each block.
 		///
 		/// Checks if an election needs to happen or not.

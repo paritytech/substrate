@@ -119,7 +119,7 @@ pub mod pallet_prelude {
 	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
 	/// Type alias for the `BlockNumber` associated type of system config.
-	pub type BlockNumberFor<T> = <T as super::Config>::BlockNumber;
+	pub type BlockNumberOf<T> = <T as super::Config>::BlockNumber;
 }
 
 /// Provides an implementation of [`frame_support::traits::Randomness`] that should only be used in

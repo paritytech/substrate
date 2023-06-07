@@ -18,13 +18,13 @@
 //! Traits and associated data structures concerned with voting, and moving between tokens and
 //! votes.
 
-use crate::dispatch::{DispatchError, Parameter};
+use crate::dispatch::DispatchError;
 use codec::{HasCompact, MaxEncodedLen};
 use sp_arithmetic::{
 	traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto},
 	Perbill,
 };
-use sp_runtime::traits::Member;
+use sp_runtime::traits::{Member, Parameter};
 use sp_std::prelude::*;
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type

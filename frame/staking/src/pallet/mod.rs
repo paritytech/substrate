@@ -87,7 +87,7 @@ pub mod pallet {
 		/// The staking balance.
 		type Currency: LockableCurrency<
 			Self::AccountId,
-			Moment = Self::BlockNumber,
+			Moment = frame_system::BlockNumberOf<Self>,
 			Balance = Self::CurrencyBalance,
 		>;
 		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
@@ -118,14 +118,14 @@ pub mod pallet {
 		/// Something that provides the election functionality.
 		type ElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = frame_system::BlockNumberOf<Self>,
 			// we only accept an election provider that has staking as data provider.
 			DataProvider = Pallet<Self>,
 		>;
 		/// Something that provides the election functionality at genesis.
 		type GenesisElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = frame_system::BlockNumberOf<Self>,
 			DataProvider = Pallet<Self>,
 		>;
 
@@ -200,7 +200,7 @@ pub mod pallet {
 
 		/// Something that can estimate the next session change, accurately or as a best effort
 		/// guess.
-		type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
+		type NextNewSession: EstimateNextNewSession<frame_system::BlockNumberOf<Self>>;
 
 		/// The maximum number of nominators rewarded for each validator.
 		///
@@ -757,13 +757,13 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
+		fn on_initialize(_now: BlockNumberOf<T>) -> Weight {
 			// just return the weight of the on_finalize.
 			T::DbWeight::get().reads(1)
 		}
 
-		fn on_finalize(_n: BlockNumberFor<T>) {
+		fn on_finalize(_n: BlockNumberOf<T>) {
 			// Set the start of the first era.
 			if let Some(mut active_era) = Self::active_era() {
 				if active_era.start.is_none() {
@@ -805,7 +805,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(n: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
+		fn try_state(n: BlockNumberOf<T>) -> Result<(), sp_runtime::TryRuntimeError> {
 			Self::do_try_state(n)
 		}
 	}

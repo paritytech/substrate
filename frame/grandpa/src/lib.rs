@@ -113,12 +113,12 @@ pub mod pallet {
 		/// (from an offchain context).
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
-			(EquivocationProof<Self::Hash, Self::BlockNumber>, Self::KeyOwnerProof),
+			(EquivocationProof<Self::Hash, frame_system::BlockNumberOf<Self>>, Self::KeyOwnerProof),
 		>;
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		fn on_finalize(block_number: frame_system::BlockNumberOf<T>) {
 			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {
@@ -191,7 +191,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<EquivocationProof<T::Hash, T::BlockNumber>>,
+			equivocation_proof: Box<EquivocationProof<T::Hash, frame_system::BlockNumberOf<T>>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
@@ -217,7 +217,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<EquivocationProof<T::Hash, T::BlockNumber>>,
+			equivocation_proof: Box<EquivocationProof<T::Hash, frame_system::BlockNumberOf<T>>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -245,8 +245,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::note_stalled())]
 		pub fn note_stalled(
 			origin: OriginFor<T>,
-			delay: T::BlockNumber,
-			best_finalized_block_number: T::BlockNumber,
+			delay: frame_system::BlockNumberOf<T>,
+			best_finalized_block_number: frame_system::BlockNumberOf<T>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
