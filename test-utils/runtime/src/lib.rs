@@ -40,6 +40,8 @@ use frame_system::{
 	limits::{BlockLength, BlockWeights},
 	CheckNonce, CheckWeight,
 };
+#[cfg(feature = "genesis-config")]
+use sc_genesis_builder::GenesisBuilderHelper;
 use scale_info::TypeInfo;
 use sp_std::prelude::*;
 
@@ -469,62 +471,6 @@ pub(crate) const TEST_RUNTIME_BABE_EPOCH_CONFIGURATION: BabeEpochConfiguration =
 		c: (3, 10),
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
-
-////////////////////////////////////////////////////////////////////////////////
-// todo: to be moved to some shared utils
-
-use frame_support::traits::GenesisBuild;
-use serde_json::Value;
-
-pub struct GenesisBuilderHelper<R, GC>(sp_std::marker::PhantomData<(R, GC)>);
-
-impl<R, GC> GenesisBuilderHelper<R, GC>
-where
-	GC: Default + GenesisBuild<R>,
-{
-	fn merge(a: &mut Value, b: Value) {
-		match (a, b) {
-			(Value::Object(a), Value::Object(b)) =>
-				for (k, v) in b {
-					if v.is_null() {
-						a.remove(&k);
-					} else {
-						Self::merge(a.entry(k).or_insert(Value::Null), v);
-					}
-				},
-			(a, b) => *a = b,
-		};
-	}
-
-	pub fn get_default_as_json() -> sp_std::vec::Vec<u8> {
-		serde_json::to_string(&GC::default())
-			.expect("serialization to json is expected to work. qed.")
-			.into_bytes()
-	}
-
-	pub fn build_from_json(json: sp_std::vec::Vec<u8>) {
-		let gc = serde_json::from_slice::<GC>(&json)
-			.expect("provided json blob is expected to be valid. qed.");
-		<GC as GenesisBuild<R>>::build(&gc);
-	}
-
-	fn build_with_patch(patch_json: sp_std::vec::Vec<u8>) {
-		let mut json = serde_json::to_value(&GC::default())
-			.expect("serialization to json is expected to work. qed.");
-
-		let patch: Value = serde_json::from_slice(&patch_json)
-			.expect("provided json patch is expected to be valid. qed.");
-
-		Self::merge(&mut json, patch);
-
-		let gc = serde_json::from_value::<GC>(json)
-			.expect("patched default config json is expected to be valid. qed.");
-
-		<GC as GenesisBuild<R>>::build(&gc);
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
 
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
@@ -1268,7 +1214,7 @@ mod tests {
 		use super::*;
 		use crate::genesismap::GenesisStorageBuilder;
 		use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutor};
-		use serde_json::{json, Value};
+		use serde_json::json;
 		use sp_application_crypto::Ss58Codec;
 		use sp_core::traits::{CallContext, CodeExecutor, Externalities, RuntimeCode};
 		use sp_state_machine::BasicExternalities;
@@ -1305,7 +1251,7 @@ mod tests {
 			NativeElseWasmExecutor::<LocalExecutorDispatch>::new_with_wasm_executor(
 				WasmExecutor::builder().build(),
 			)
-				.call(t, &runtime_code, method, data, use_native, CallContext::Offchain)
+			.call(t, &runtime_code, method, data, use_native, CallContext::Offchain)
 		}
 
 		#[test]
@@ -1403,7 +1349,10 @@ mod tests {
 				let output = std::process::Command::new(executable)
 					.env("RUN_TEST", "1")
 					.env("RUST_LOG", "error")
-					.args(&["--nocapture", "build_genesis_config_from_invalid_json_logs_parser_error"])
+					.args(&[
+						"--nocapture",
+						"build_genesis_config_from_invalid_json_logs_parser_error",
+					])
 					.output()
 					.unwrap();
 
@@ -1471,7 +1420,8 @@ mod tests {
 				)
 				.unwrap()
 				.clone();
-			let authority_key_vec = Vec::<sp_core::sr25519::Public>::decode(&mut &value[..]).unwrap();
+			let authority_key_vec =
+				Vec::<sp_core::sr25519::Public>::decode(&mut &value[..]).unwrap();
 			assert_eq!(authority_key_vec.len(), 2);
 			assert_eq!(authority_key_vec[0], sp_keyring::AccountKeyring::Ferdie.public());
 			assert_eq!(authority_key_vec[1], sp_keyring::AccountKeyring::Alice.public());

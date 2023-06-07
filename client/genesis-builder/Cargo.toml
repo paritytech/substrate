@@ -1,0 +1,33 @@
+[package]
+name = "sc-genesis-builder"
+version = "0.1.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Substrate GenesisConfig builder helpers"
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde_json = { version = "1.0.85", default-features = false, features = ["alloc"] }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
+
+sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../primitives/genesis-builder" }
+
+
+[features]
+default = [ "std" ]
+std = [
+	"frame-support/std",
+	"sp-std/std",
+	"sp-api/std",
+	"serde_json/std",
+	"sp-runtime/std",
+	"sp-genesis-builder/std",
+]
