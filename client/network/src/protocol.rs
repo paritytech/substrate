@@ -17,9 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	config::{self, NonReservedPeerMode},
-	error,
-	protocol_controller::{ProtoSetConfig, SetId},
+	config, error,
+	peer_store::{PeerStoreHandle, PeerStoreProvider},
+	protocol_controller::{self, SetId},
 	types::ProtocolName,
 	ReputationChange,
 };
@@ -80,7 +80,11 @@ type PendingSyncSubstreamValidation =
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT> {
 	/// Used to report reputation changes.
-	peerset_handle: crate::peerset::PeersetHandle,
+	peer_store_handle: PeerStoreHandle,
+	/// Used to modify reserved peers.
+	protocol_controller_handles: Vec<protocol_controller::ProtocolHandle>,
+	/// Shortcut for sync protocol controller handle.
+	sync_protocol_controller_handle: protocol_controller::ProtocolHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: Notifications,
 	/// List of notifications protocols that have been registered.
@@ -106,61 +110,13 @@ impl<B: BlockT> Protocol<B> {
 		network_config: &config::NetworkConfiguration,
 		notification_protocols: Vec<config::NonDefaultSetConfig>,
 		block_announces_protocol: config::NonDefaultSetConfig,
+		peer_store_handle: PeerStoreHandle,
+		protocol_controller_handles: Vec<protocol_controller::ProtocolHandle>,
 		tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
-	) -> error::Result<(Self, crate::peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
-		let mut known_addresses = Vec::new();
-
-		let (peerset, peerset_handle) = {
-			let mut sets =
-				Vec::with_capacity(NUM_HARDCODED_PEERSETS + notification_protocols.len());
-
-			let mut default_sets_reserved = HashSet::new();
-			for reserved in network_config.default_peers_set.reserved_nodes.iter() {
-				default_sets_reserved.insert(reserved.peer_id);
-
-				if !reserved.multiaddr.is_empty() {
-					known_addresses.push((reserved.peer_id, reserved.multiaddr.clone()));
-				}
-			}
-
-			let mut bootnodes = Vec::with_capacity(network_config.boot_nodes.len());
-			for bootnode in network_config.boot_nodes.iter() {
-				bootnodes.push(bootnode.peer_id);
-			}
-
-			// Set number 0 is used for block announces.
-			sets.push(ProtoSetConfig {
-				in_peers: network_config.default_peers_set.in_peers,
-				out_peers: network_config.default_peers_set.out_peers,
-				reserved_nodes: default_sets_reserved.clone(),
-				reserved_only: network_config.default_peers_set.non_reserved_mode ==
-					NonReservedPeerMode::Deny,
-			});
-
-			for set_cfg in &notification_protocols {
-				let mut reserved_nodes = HashSet::new();
-				for reserved in set_cfg.set_config.reserved_nodes.iter() {
-					reserved_nodes.insert(reserved.peer_id);
-					known_addresses.push((reserved.peer_id, reserved.multiaddr.clone()));
-				}
-
-				let reserved_only =
-					set_cfg.set_config.non_reserved_mode == NonReservedPeerMode::Deny;
-
-				sets.push(ProtoSetConfig {
-					in_peers: set_cfg.set_config.in_peers,
-					out_peers: set_cfg.set_config.out_peers,
-					reserved_nodes,
-					reserved_only,
-				});
-			}
-
-			crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig { bootnodes, sets })
-		};
-
+	) -> error::Result<Self> {
 		let behaviour = {
 			Notifications::new(
-				peerset,
+				protocol_controller_handles.clone(),
 				// NOTE: Block announcement protocol is still very much hardcoded into `Protocol`.
 				// 	This protocol must be the first notification protocol given to
 				// `Notifications`
@@ -179,8 +135,13 @@ impl<B: BlockT> Protocol<B> {
 			)
 		};
 
+		let sync_protocol_controller_handle =
+			protocol_controller_handles[usize::from(HARDCODED_PEERSETS_SYNC)].clone();
+
 		let protocol = Self {
-			peerset_handle: peerset_handle.clone(),
+			peer_store_handle,
+			protocol_controller_handles,
+			sync_protocol_controller_handle,
 			behaviour,
 			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
 				.chain(notification_protocols.iter().map(|s| s.notifications_protocol.clone()))
@@ -193,7 +154,7 @@ impl<B: BlockT> Protocol<B> {
 			_marker: Default::default(),
 		};
 
-		Ok((protocol, peerset_handle, known_addresses))
+		Ok(protocol)
 	}
 
 	/// Returns the list of all the peers we have an open channel to.
@@ -229,7 +190,7 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Adjusts the reputation of a node.
 	pub fn report_peer(&self, who: PeerId, reputation: ReputationChange) {
-		self.peerset_handle.report_peer(who, reputation)
+		self.peer_store_handle.report_peer(who, reputation)
 	}
 
 	/// Set handshake for the notification protocol.
@@ -247,33 +208,33 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Set whether the syncing peers set is in reserved-only mode.
 	pub fn set_reserved_only(&self, reserved_only: bool) {
-		self.peerset_handle.set_reserved_only(HARDCODED_PEERSETS_SYNC, reserved_only);
+		self.sync_protocol_controller_handle.set_reserved_only(reserved_only);
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
 	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.remove_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
+		self.sync_protocol_controller_handle.remove_reserved_peer(peer);
 	}
 
 	/// Returns the list of reserved peers.
 	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
-		self.behaviour.reserved_peers(HARDCODED_PEERSETS_SYNC, pending_response);
+		self.sync_protocol_controller_handle.reserved_peers(pending_response);
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
 	pub fn add_reserved_peer(&self, peer: PeerId) {
-		self.peerset_handle.add_reserved_peer(HARDCODED_PEERSETS_SYNC, peer);
+		self.sync_protocol_controller_handle.add_reserved_peer(peer);
 	}
 
 	/// Sets the list of reserved peers for syncing purposes.
 	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
-		self.peerset_handle.set_reserved_peers(HARDCODED_PEERSETS_SYNC, peers);
+		self.sync_protocol_controller_handle.set_reserved_peers(peers);
 	}
 
 	/// Sets the list of reserved peers for the given protocol/peerset.
 	pub fn set_reserved_peerset_peers(&self, protocol: ProtocolName, peers: HashSet<PeerId>) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.set_reserved_peers(SetId::from(index), peers);
+			self.protocol_controller_handles[index].set_reserved_peers(peers);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -286,7 +247,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.remove_reserved_peer(SetId::from(index), peer);
+			self.protocol_controller_handles[index].remove_reserved_peer(peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -299,7 +260,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Adds a `PeerId` to the list of reserved peers.
 	pub fn add_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.add_reserved_peer(SetId::from(index), peer);
+			self.protocol_controller_handles[index].add_reserved_peer(peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -315,7 +276,7 @@ impl<B: BlockT> Protocol<B> {
 	pub fn add_known_peer(&mut self, peer_id: PeerId) {
 		// TODO: get rid of this function and call `Peerset`/`PeerStore` directly
 		// from `NetworkWorker`.
-		self.peerset_handle.add_known_peer(peer_id);
+		self.peer_store_handle.add_known_peer(peer_id);
 	}
 }
 
@@ -493,7 +454,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 								peer_id,
 								msg,
 							);
-							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+							self.peer_store_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 							CustomMessageOutcome::None
 						},
 						Err(err) => {
@@ -534,7 +495,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 										err,
 										err2,
 									);
-									self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+									self.peer_store_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 									CustomMessageOutcome::None
 								},
 							}
@@ -571,7 +532,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							debug!(target: "sync", "Failed to parse remote handshake: {}", err);
 							self.bad_handshake_substreams.insert((peer_id, set_id));
 							self.behaviour.disconnect_peer(&peer_id, set_id);
-							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+							self.peer_store_handle.report_peer(peer_id, rep::BAD_MESSAGE);
 							self.peers.remove(&peer_id);
 							CustomMessageOutcome::None
 						},
