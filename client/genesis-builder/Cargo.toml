@@ -15,9 +15,7 @@ sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primit
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
-
 sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../primitives/genesis-builder" }
-
 
 [features]
 default = [ "std" ]
