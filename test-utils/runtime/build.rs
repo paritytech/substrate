@@ -25,7 +25,7 @@ fn main() {
 			// to this value by default. This is because some of our tests
 			// (`restoration_of_globals`) depend on the stack-size.
 			.append_to_rust_flags("-Clink-arg=-zstack-size=1048576")
-			.enable_feature("genesis-config")
+			.enable_feature("genesis-builder")
 			.import_memory()
 			.build();
 	}
@@ -37,7 +37,7 @@ fn main() {
 			.export_heap_base()
 			.import_memory()
 			.set_file_name("wasm_binary_logging_disabled.rs")
-			.enable_feature("genesis-config")
+			.enable_feature("genesis-builder")
 			.enable_feature("disable-logging")
 			.build();
 	}

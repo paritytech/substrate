@@ -40,7 +40,7 @@ use frame_system::{
 	limits::{BlockLength, BlockWeights},
 	CheckNonce, CheckWeight,
 };
-#[cfg(feature = "genesis-config")]
+#[cfg(feature = "genesis-builder")]
 use sc_genesis_builder::GenesisBuilderHelper;
 use scale_info::TypeInfo;
 use sp_std::prelude::*;
@@ -716,7 +716,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	#[cfg(feature = "genesis-config")]
+	#[cfg(feature = "genesis-builder")]
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
 		fn get_default_as_json() -> Vec<u8> {
 			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::get_default_as_json()
@@ -1209,8 +1209,8 @@ mod tests {
 		})
 	}
 
-	#[cfg(feature = "genesis-config")]
-	mod genesis_config_tests {
+	#[cfg(feature = "genesis-builder")]
+	mod genesis_builder_tests {
 		use super::*;
 		use crate::genesismap::GenesisStorageBuilder;
 		use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutor};

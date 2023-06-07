@@ -73,9 +73,9 @@ substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-build
 [features]
 default = [
 	"std",
-	"genesis-config",
+	"genesis-builder",
 ]
-genesis-config = []
+genesis-builder = []
 std = [
 	"array-bytes",
 	"sp-genesis-builder/std",
