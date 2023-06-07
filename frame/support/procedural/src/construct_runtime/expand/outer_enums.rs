@@ -30,11 +30,20 @@ pub enum OuterEnumType {
 	Error,
 }
 
-impl std::fmt::Display for OuterEnumType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl OuterEnumType {
+	/// The name of the structure this enum represents.
+	fn struct_name(&self) -> &str {
 		match self {
-			OuterEnumType::Event => write!(f, "Event"),
-			OuterEnumType::Error => write!(f, "Error"),
+			OuterEnumType::Event => "RuntimeEvent",
+			OuterEnumType::Error => "ModuleErrorType",
+		}
+	}
+
+	/// The name of the variant (ie `Event` or `Error`).
+	fn variant_name(&self) -> &str {
+		match self {
+			OuterEnumType::Event => "Event",
+			OuterEnumType::Error => "Error",
 		}
 	}
 }
@@ -87,12 +96,13 @@ pub fn expand_outer_enum(
 	// Specific for events to query via `is_event_part_defined!`.
 	let mut query_enum_part_macros = Vec::new();
 
-	let enum_name_str = enum_ty.to_string();
-	let enum_name_ident = Ident::new(&format!("Runtime{}", enum_ty), Span::call_site());
+	let enum_name_str = enum_ty.variant_name();
+	let enum_name_ident = Ident::new(&format!("{}", enum_ty.struct_name()), Span::call_site());
+
 	for pallet_decl in pallet_decls {
-		let Some(pallet_entry) = pallet_decl.find_part(&enum_name_str) else {
-            continue
-        };
+		let Some(pallet_entry) = pallet_decl.find_part(enum_name_str) else {
+			continue
+		};
 
 		let path = &pallet_decl.path;
 		let pallet_name = &pallet_decl.name;
@@ -103,7 +113,7 @@ pub fn expand_outer_enum(
 		if instance.is_some() && generics.params.is_empty() {
 			let msg = format!(
 				"Instantiable pallet with no generic `{}` cannot \
-                    be constructed: pallet `{}` must have generic `{}`",
+					be constructed: pallet `{}` must have generic `{}`",
 				enum_name_str, pallet_name, enum_name_str,
 			);
 			return Err(syn::Error::new(pallet_name.span(), msg))
@@ -139,14 +149,18 @@ pub fn expand_outer_enum(
 		}
 	}
 
-	let extra_derives =
+	// Derives specific to the `RuntimeEvent.
+	let event_custom_derives =
 		if enum_ty == OuterEnumType::Event { quote!(Clone, PartialEq, Eq,) } else { quote!() };
+
+	// // Implementation specific to the `ModuleErrorType` type.
+	let error_custom_impl = generate_error_impl(scrate, enum_ty);
 
 	Ok(quote! {
 		#( #query_enum_part_macros )*
 
 		#[derive(
-			#extra_derives
+			#event_custom_derives
 			#scrate::codec::Encode,
 			#scrate::codec::Decode,
 			#scrate::scale_info::TypeInfo,
@@ -158,6 +172,8 @@ pub fn expand_outer_enum(
 		}
 
 		#enum_conversions
+
+		#error_custom_impl
 	})
 }
 
@@ -238,6 +254,27 @@ fn expand_enum_conversion(
 					Self::#variant_name(evt) => Ok(evt),
 					_ => Err(()),
 				}
+			}
+		}
+	}
+}
+
+fn generate_error_impl(scrate: &TokenStream, enum_ty: OuterEnumType) -> TokenStream {
+	// Implementation is specific to `Error`s.
+	if enum_ty == OuterEnumType::Event {
+		return quote! {}
+	}
+
+	let enum_name_ident = Ident::new(&format!("{}", enum_ty.struct_name()), Span::call_site());
+
+	quote! {
+		impl #enum_name_ident {
+			pub fn from_dispatch_error(err: #scrate::sp_runtime::DispatchError) -> Option<Self> {
+				let #scrate::sp_runtime::DispatchError::Module(module_error) = err else { return None };
+
+				let bytes: Vec<u8> = #scrate::codec::Encode::encode(&module_error);
+				let cursor = &mut &bytes[..];
+				#scrate::codec::Decode::decode(cursor).ok()
 			}
 		}
 	}
