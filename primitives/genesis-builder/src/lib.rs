@@ -28,7 +28,7 @@
 //!   storage. Allows to build
 //! customized configuration.
 //!
-//! Providing externalities with empty storage and putting GenesisConfig into storage allows to
+//! Providing externalities with empty storage and putting `GenesisConfig` into storage allows to
 //! catch and build the raw storage of `GenesisConfig` which is the foundation for genesis block.
 
 sp_api::decl_runtime_apis! {
