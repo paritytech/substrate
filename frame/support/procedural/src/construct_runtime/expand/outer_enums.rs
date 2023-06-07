@@ -97,7 +97,7 @@ pub fn expand_outer_enum(
 	let mut query_enum_part_macros = Vec::new();
 
 	let enum_name_str = enum_ty.variant_name();
-	let enum_name_ident = Ident::new(&format!("{}", enum_ty.struct_name()), Span::call_site());
+	let enum_name_ident = Ident::new(enum_ty.struct_name(), Span::call_site());
 
 	for pallet_decl in pallet_decls {
 		let Some(pallet_entry) = pallet_decl.find_part(enum_name_str) else {
@@ -265,7 +265,7 @@ fn generate_error_impl(scrate: &TokenStream, enum_ty: OuterEnumType) -> TokenStr
 		return quote! {}
 	}
 
-	let enum_name_ident = Ident::new(&format!("{}", enum_ty.struct_name()), Span::call_site());
+	let enum_name_ident = Ident::new(enum_ty.struct_name(), Span::call_site());
 
 	quote! {
 		impl #enum_name_ident {
