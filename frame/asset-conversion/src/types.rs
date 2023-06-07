@@ -50,13 +50,13 @@ pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 }
 
 /// Benchmark Helper
-#[cfg(any(test, feature = "runtime-benchmarks"))]
+#[cfg(feature = "runtime-benchmarks")]
 pub trait BenchmarkHelper<AssetId> {
 	/// Returns an asset id from a given integer.
 	fn asset_id(asset_id: u32) -> AssetId;
 }
 
-#[cfg(any(test, feature = "runtime-benchmarks"))]
+#[cfg(feature = "runtime-benchmarks")]
 impl<AssetId> BenchmarkHelper<AssetId> for ()
 where
 	AssetId: From<u32>,
