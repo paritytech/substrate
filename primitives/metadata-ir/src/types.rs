@@ -43,8 +43,17 @@ pub struct MetadataIR<T: Form = MetaForm> {
 	pub call_enum_ty: T::Type,
 	/// The type of the outer `RuntimeEvent` enum.
 	pub event_enum_ty: T::Type,
-	/// The type of the outer `RuntimeError` enum.
-	pub error_enum_ty: T::Type,
+	/// The module error type of the `DispatchError::Module` variant.
+	///
+	/// This provides useful information for decoding the `ModuleError` and has a similar
+	/// shape with `call_enum_ty` and `event_enum_ty`.
+	///
+	/// # Note
+	///
+	/// This type cannot be used directly to decode `sp_runtime::DispatchError` from the
+	/// chain. It provides just the information needed to decode
+	/// `sp_runtime::DispatchError::Module`.
+	pub module_error_enum_ty: T::Type,
 }
 
 /// Metadata of a runtime trait.
