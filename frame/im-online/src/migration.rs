@@ -18,7 +18,10 @@
 //! Storage migrations for the im-online pallet.
 
 use super::*;
-use frame_support::{storage_alias, traits::OnRuntimeUpgrade};
+use frame_support::{
+	storage_alias,
+	traits::{ConstU32, OnRuntimeUpgrade},
+};
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
@@ -64,12 +67,8 @@ mod v0 {
 		AuthIndex,
 		WrapperOpaque<
 			BoundedOpaqueNetworkState<
-				<T as Config>::MaxPeerInHeartbeats, /* XXX: used `MaxPeerInHeartbeats` because
-				                                     * `MaxPeerDataEncodingSize` was removed in
-				                                     * v1 */
-				<T as Config>::MaxPeerInHeartbeats, /* XXX: used `MaxPeerInHeartbeats` because
-				                                     * `MaxPeerDataEncodingSize` was removed in
-				                                     * v1 */
+				ConstU32<1_000>,
+				ConstU32<1_000>,
 				<T as Config>::MaxPeerInHeartbeats,
 			>,
 		>,
