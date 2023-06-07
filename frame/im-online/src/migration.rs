@@ -172,19 +172,22 @@ mod test {
 				}),
 			);
 
+			// Check that the v0 storage is populated
 			assert_eq!(v0::ReceivedHeartbeats::<T>::iter().count(), 2);
 			assert_eq!(crate::ReceivedHeartbeats::<T>::iter().count(), 0, "V1 storage corrupted");
 
+			// Perform the migration
 			let state = v1::Migration::<T>::pre_upgrade().unwrap();
 			let _w = v1::Migration::<T>::on_runtime_upgrade();
 			v1::Migration::<T>::post_upgrade(state).unwrap();
 
+			// Check that the v1 storage is populated and v0 storage is empty
 			assert_eq!(v0::ReceivedHeartbeats::<T>::iter().count(), 0);
 			assert_eq!(crate::ReceivedHeartbeats::<T>::iter().count(), 2);
-			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
-
 			assert!(crate::ReceivedHeartbeats::<T>::contains_key(&current_session, 0));
 			assert_eq!(Some(true), crate::ReceivedHeartbeats::<T>::get(&current_session, 1));
+
+			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 		});
 	}
 }
