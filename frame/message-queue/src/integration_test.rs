@@ -124,11 +124,11 @@ impl Config for Test {
 #[test]
 #[ignore] // Only run in the CI.
 fn stress_test_enqueue_and_service() {
-	let blocks = 20;
+	let blocks = 200;
 	let max_queues = 10_000;
 	let max_messages_per_queue = 10_000;
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
-	let mut rng = StdRng::seed_from_u64(42);
+	let mut rng = StdRng::seed_from_u64(1337);
 
 	new_test_ext::<Test>().execute_with(|| {
 		let mut msgs_remaining = 0;
@@ -171,12 +171,12 @@ fn stress_test_enqueue_and_service() {
 #[test]
 #[ignore] // Only run in the CI.
 fn stress_test_queue_suspension() {
-	let blocks = 20;
+	let blocks = 200;
 	let max_queues = 10_000;
 	let max_messages_per_queue = 10_000;
 	let (max_suspend_per_block, max_resume_per_block) = (100, 50);
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
-	let mut rng = StdRng::seed_from_u64(41);
+	let mut rng = StdRng::seed_from_u64(42);
 
 	new_test_ext::<Test>().execute_with(|| {
 		let mut suspended = BTreeSet::<u32>::new();

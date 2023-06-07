@@ -287,6 +287,12 @@ where
 	ext
 }
 
+/// Run this closure in test externalities.
+pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
+	let mut ext = new_test_ext::<Test>();
+	ext.execute_with(f)
+}
+
 /// Set the weight of a specific weight function.
 pub fn set_weight(name: &str, w: Weight) {
 	MockedWeightInfo::set_weight::<Test>(name, w);

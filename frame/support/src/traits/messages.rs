@@ -69,8 +69,14 @@ pub trait ProcessMessage {
 pub enum ExecuteOverweightError {
 	/// The referenced message was not found.
 	NotFound,
+	/// The message was already processed.
+	AlreadyProcessed,
 	/// The available weight was insufficient to execute the message.
 	InsufficientWeight,
+	/// The queue is suspended.
+	QueueSuspended,
+	/// Some unspecified other error.
+	Other,
 }
 
 /// Can service queues and execute overweight messages.
@@ -131,6 +137,18 @@ pub trait EnqueueMessage<Origin: MaxEncodedLen> {
 
 	/// Return the state footprint of the given queue.
 	fn footprint(origin: Origin) -> Footprint;
+
+	fn suspend(origin: Origin) {
+		Self::set_suspension(origin, true)
+	}
+
+	fn resume(origin: Origin) {
+		Self::set_suspension(origin, false)
+	}
+
+	fn is_suspended(origin: Origin) -> bool;
+
+	fn set_suspension(origin: Origin, suspended: bool);
 }
 
 impl<Origin: MaxEncodedLen> EnqueueMessage<Origin> for () {
@@ -145,6 +163,10 @@ impl<Origin: MaxEncodedLen> EnqueueMessage<Origin> for () {
 	fn footprint(_: Origin) -> Footprint {
 		Footprint::default()
 	}
+	fn is_suspended(_: Origin) -> bool {
+		false
+	}
+	fn set_suspension(_: Origin, _: bool) {}
 }
 
 /// Transform the origin of an [`EnqueueMessage`] via `C::convert`.
@@ -171,6 +193,14 @@ impl<E: EnqueueMessage<O>, O: MaxEncodedLen, N: MaxEncodedLen, C: Convert<N, O>>
 
 	fn footprint(origin: N) -> Footprint {
 		E::footprint(C::convert(origin))
+	}
+
+	fn is_suspended(origin: N) -> bool {
+		E::is_suspended(C::convert(origin))
+	}
+
+	fn set_suspension(origin: N, suspended: bool) {
+		E::set_suspension(C::convert(origin), suspended)
 	}
 }
 

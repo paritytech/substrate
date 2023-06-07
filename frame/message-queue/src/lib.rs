@@ -533,6 +533,7 @@ pub mod pallet {
 		/// Such errors are expected, but not guaranteed, to resolve themselves eventually through
 		/// retrying.
 		TemporarilyUnprocessable,
+		QueueSuspended,
 	}
 
 	/// The index of the first and last (non-empty) pages.
@@ -671,6 +672,8 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Return the two ready ring neighbours of `origin`.
 	fn ready_ring_knit(origin: &MessageOriginOf<T>) -> Result<Neighbours<MessageOriginOf<T>>, ()> {
+		debug_assert!(!BookStateFor::<T>::get(origin).suspended);
+
 		if let Some(head) = ServiceHead::<T>::get() {
 			let mut head_book_state = BookStateFor::<T>::get(&head);
 			let mut head_neighbours = head_book_state.ready_neighbours.take().ok_or(())?;
@@ -769,7 +772,7 @@ impl<T: Config> Pallet<T> {
 				BookStateFor::<T>::insert(origin, book_state);
 				return
 			}
-		} else {
+		} else if !book_state.suspended {
 			debug_assert!(
 				book_state.ready_neighbours.is_none(),
 				"Must not be in ready ring if not ready"
@@ -802,6 +805,7 @@ impl<T: Config> Pallet<T> {
 		weight_limit: Weight,
 	) -> Result<Weight, Error<T>> {
 		let mut book_state = BookStateFor::<T>::get(&origin);
+		ensure!(!book_state.suspended, Error::<T>::QueueSuspended);
 		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
 		let (pos, is_processed, payload) =
 			page.peek_index(index.into() as usize).ok_or(Error::<T>::NoMessage)?;
@@ -928,6 +932,8 @@ impl<T: Config> Pallet<T> {
 	/// Execute any messages remaining to be processed in the queue of `origin`, using up to
 	/// `weight_limit` to do so. Any messages which would take more than `overweight_limit` to
 	/// execute are deemed overweight and ignored.
+	///
+	/// Returns whether any messages were process and the possible next queue.
 	fn service_queue(
 		origin: MessageOriginOf<T>,
 		weight: &mut WeightMeter,
@@ -941,8 +947,13 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let mut book_state = BookStateFor::<T>::get(&origin);
-		let mut total_processed = 0;
+		if book_state.suspended {
+			let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
+			return (false, next_ready)
+		}
 
+		let mut total_processed = 0;
+		// FAIL-CI looks ugly now
 		while book_state.end > book_state.begin {
 			let (processed, status) =
 				Self::service_page(&origin, &mut book_state, weight, overweight_limit);
@@ -956,6 +967,7 @@ impl<T: Config> Pallet<T> {
 			book_state.begin.saturating_inc();
 		}
 		let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
+		// There can be no change on a suspended queue.
 		if book_state.begin >= book_state.end {
 			// No longer ready - unknit.
 			if let Some(neighbours) = book_state.ready_neighbours.take() {
@@ -1283,7 +1295,10 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight.remaining()).map_err(
 			|e| match e {
 				Error::<T>::InsufficientWeight => ExecuteOverweightError::InsufficientWeight,
-				_ => ExecuteOverweightError::NotFound,
+				Error::<T>::QueueSuspended => ExecuteOverweightError::QueueSuspended,
+				Error::<T>::NoPage | Error::<T>::NoMessage => ExecuteOverweightError::NotFound,
+				Error::<T>::AlreadyProcessed => ExecuteOverweightError::AlreadyProcessed,
+				_ => ExecuteOverweightError::Other,
 			},
 		)
 	}
@@ -1328,5 +1343,19 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 	fn footprint(origin: MessageOriginOf<T>) -> Footprint {
 		let book_state = BookStateFor::<T>::get(&origin);
 		Footprint { count: book_state.message_count, size: book_state.size }
+	}
+
+	fn is_suspended(origin: MessageOriginOf<T>) -> bool {
+		BookStateFor::<T>::get(&origin).suspended
+	}
+
+	fn set_suspension(origin: MessageOriginOf<T>, suspended: bool) {
+		let _ = BookStateFor::<T>::try_mutate_exists(&origin, |book| match book {
+			Some(book) => {
+				book.suspended = suspended;
+				Ok(())
+			},
+			None => Err(()),
+		});
 	}
 }
