@@ -1241,9 +1241,9 @@ impl pallet_contracts::Config for Runtime {
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = ConstBool<false>;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
-    #[cfg(not(feature = "runtime-benchmarks"))]
+	#[cfg(not(feature = "runtime-benchmarks"))]
 	type Migrations = ();
-    #[cfg(feature = "runtime-benchmarks")]
+	#[cfg(feature = "runtime-benchmarks")]
 	type Migrations = (NoopMigration<1>, NoopMigration<2>);
 }
 

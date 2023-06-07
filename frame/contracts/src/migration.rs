@@ -30,8 +30,9 @@
 //! To configure a migration to v12 for a runtime using v9 of `pallet-contracts` on the chain, you
 //! would set the `Migrations` trait as follows:
 //!
-//! ```rust
-//! use pallet_contracts::migration::{v10, v11, v12};
+//! ```
+//! use pallet_contracts::migration::{v9, v10, v11};
+//! # pub enum Runtime {};
 //! type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
 //! ```
 //!
