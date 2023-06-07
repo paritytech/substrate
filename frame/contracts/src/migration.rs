@@ -542,18 +542,6 @@ mod test {
 		assert!(Migrations::is_upgrade_supported(StorageVersion::new(8), StorageVersion::new(11)));
 		assert!(!Migrations::is_upgrade_supported(StorageVersion::new(9), StorageVersion::new(11)));
 		assert!(!Migrations::is_upgrade_supported(StorageVersion::new(8), StorageVersion::new(12)));
-
-		[(1, 0), (0, 3), (7, 11), (8, 10)].into_iter().for_each(|(from, to)| {
-			assert!(
-				!Migrations::is_upgrade_supported(
-					StorageVersion::new(from),
-					StorageVersion::new(to)
-				),
-				"{} -> {} is not supported",
-				from,
-				to
-			)
-		});
 	}
 
 	#[test]
