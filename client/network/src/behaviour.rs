@@ -178,7 +178,7 @@ impl<B: BlockT> Behaviour<B> {
 			discovery: disco_config.finish(),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
 				request_response_protocols.into_iter(),
-				peer_store_handle,
+				Box::new(peer_store_handle),
 			)?,
 		})
 	}
