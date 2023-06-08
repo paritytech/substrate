@@ -268,7 +268,7 @@ where
 		// Spawn `PeerStore` runner.
 		(params.executor)(peer_store.run().boxed());
 
-		let (to_notifications, from_controllers) =
+		let (to_notifications, from_protocol_controllers) =
 			tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
 
 		// We must prepend a hardcoded default peer set to notification protocols.
@@ -310,6 +310,7 @@ where
 			params.block_announce_config,
 			peer_store_handle,
 			protocol_handles,
+			from_protocol_controllers,
 			params.tx,
 		)?;
 

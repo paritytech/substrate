@@ -48,7 +48,6 @@ use futures::{
 use log::debug;
 use sc_network_common::types::ReputationChange;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use serde_json::json;
 use std::{
 	collections::HashSet,
 	pin::Pin,
@@ -225,13 +224,6 @@ impl Peerset {
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId) {
 		self.protocol_handles[usize::from(set_id)].dropped(peer_id);
-	}
-
-	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
-	pub fn debug_info(&mut self) -> serde_json::Value {
-		// TODO: Check what info we can include here.
-		//       Issue reference: https://github.com/paritytech/substrate/issues/14160.
-		json!("unimplemented")
 	}
 
 	/// Returns the number of peers that we have discovered.
