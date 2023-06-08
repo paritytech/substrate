@@ -902,4 +902,59 @@ mod score {
 		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 16]));
 		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 25]));
 	}
+
+	#[test]
+	fn average_works() {
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).average(ElectionScore::from([20, 20, 20])),
+			ElectionScore::from([15, 15, 15])
+		);
+		// rounds down.
+		assert_eq!(
+			ElectionScore::from([1, 1, 1]).average(ElectionScore::from([2, 2, 2])),
+			ElectionScore::from([1, 1, 1])
+		);
+		assert_eq!(
+			ElectionScore::default().average(ElectionScore::from([20, 20, 20])),
+			ElectionScore::from([10, 10, 10])
+		);
+		assert_eq!(
+			ElectionScore::from([50, 50, 50]).average(ElectionScore::default()),
+			ElectionScore::from([25, 25, 25])
+		);
+		assert_eq!(
+			ElectionScore::default().average(ElectionScore::default()),
+			ElectionScore::default()
+		);
+	}
+
+	#[test]
+	fn fraction_of_works() {
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(50)),
+			ElectionScore::from([5, 5, 5])
+		);
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(100)),
+			ElectionScore::from([10, 10, 10])
+		);
+		// rounds up.
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(77)),
+			ElectionScore::from([8, 8, 8])
+		);
+		// rounds down.
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(74)),
+			ElectionScore::from([7, 7, 7])
+		);
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(0)),
+			ElectionScore::default()
+		);
+		assert_eq!(
+			ElectionScore::default().fraction_of(Percent::from_percent(50)),
+			ElectionScore::default()
+		);
+	}
 }

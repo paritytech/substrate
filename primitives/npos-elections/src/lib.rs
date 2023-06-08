@@ -79,7 +79,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
+use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Percent, Rational128, ThresholdOrd};
 use sp_core::{bounded::BoundedVec, RuntimeDebug};
 use sp_std::{
 	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc, vec,
@@ -195,6 +195,24 @@ impl ElectionScore {
 
 			// anything else is not a good score.
 			_ => false,
+		}
+	}
+
+	/// Calculates the average score betweel self and another election score.
+	pub fn average(self, other: Self) -> Self {
+		Self {
+			minimal_stake: self.minimal_stake.saturating_add(other.minimal_stake) / 2,
+			sum_stake: (self.sum_stake.saturating_add(other.sum_stake)) / 2,
+			sum_stake_squared: (self.sum_stake_squared.saturating_add(other.sum_stake_squared)) / 2,
+		}
+	}
+
+	/// Calculates the fraction of an election score.
+	pub fn fraction_of(self, fraction: Percent) -> Self {
+		Self {
+			minimal_stake: fraction * self.minimal_stake,
+			sum_stake: fraction * self.sum_stake,
+			sum_stake_squared: fraction * self.sum_stake_squared,
 		}
 	}
 }

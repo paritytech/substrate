@@ -301,6 +301,8 @@ parameter_types! {
 	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
+	pub static MinimumUntrustedScoreUpdateInterval: Option<u32> = Some(3);
+	pub static MinimumUntrustedScoreMargin: Percent = Percent::from_percent(50);
 
 	#[derive(Debug)]
 	pub static MaxWinners: u32 = 200;
@@ -413,6 +415,8 @@ impl crate::Config for Runtime {
 	type MaxWinners = MaxWinners;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+	type MinimumUntrustedScoreUpdateInterval = MinimumUntrustedScoreUpdateInterval;
+	type MinimumUntrustedScoreMargin = MinimumUntrustedScoreMargin;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

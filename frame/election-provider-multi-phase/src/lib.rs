@@ -245,7 +245,7 @@ use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
 	traits::{CheckedAdd, Zero},
-	UpperOf,
+	Percent, UpperOf,
 };
 use sp_npos_elections::{BoundedSupports, ElectionScore, IdentifierT, Supports, VoteWeight};
 use sp_runtime::{
@@ -676,6 +676,18 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
 
+		/// Number of successful elections that must pass before updating [`MinimumUntrustedScore`]
+		/// through the on-chain rolling base mechanism. If set to `None`, the on-chain update is
+		/// disabled.
+		#[pallet::constant]
+		type MinimumUntrustedScoreUpdateInterval: Get<Option<u32>>;
+
+		/// Margin when updating the minimum untrusted score on-chain. The final value will be
+		/// adjusted down based on this margin before the [`MinimumUntrustedScore`] is updated
+		/// on-chain.
+		#[pallet::constant]
+		type MinimumUntrustedScoreMargin: Get<Percent>;
+
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
@@ -959,13 +971,36 @@ pub mod pallet {
 		///
 		/// This check can be turned off by setting the value to `None`.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::DbWeight::get().writes(2))]
 		pub fn set_minimum_untrusted_score(
 			origin: OriginFor<T>,
 			maybe_next_score: Option<ElectionScore>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			<MinimumUntrustedScore<T>>::set(maybe_next_score);
+
+			// reset minimum untrusted score average.
+			<MinimumUntrustedScoreAvg<T>>::put((
+				0,
+				maybe_next_score.unwrap_or(ElectionScore::default()),
+			));
+
+			Ok(())
+		}
+
+		/// Set a new value for `MinimumUntrustedScoreBackstop`.
+		///
+		/// Dispatch origin must be aligned with `T::ForceOrigin`.
+		///
+		/// This check can be turned off by setting the value to `None`.
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		pub fn set_minimum_untrusted_score_backstop(
+			origin: OriginFor<T>,
+			maybe_score_backstop: Option<ElectionScore>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			<MinimumUntrustedScoreBackstop<T>>::set(maybe_score_backstop);
 			Ok(())
 		}
 
@@ -1156,6 +1191,8 @@ pub mod pallet {
 		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// There was a phase transition in a given round.
 		PhaseTransitioned { from: Phase<T::BlockNumber>, to: Phase<T::BlockNumber>, round: u32 },
+		/// A new minimum untrusted score has been set through the on-chain update mechanism.
+		NewMinimumUntrustedScore { score: ElectionScore },
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1334,6 +1371,19 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn minimum_untrusted_score)]
 	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
+
+	/// Rolling average of the [`MinimumUntrustedScore`] up to the previous
+	/// [`MinimumUntrustedScoreUpdateInterval`] elections. The index refers to how many successful
+	/// elections have passed since the current rolling average calculation started.
+	#[pallet::storage]
+	pub type MinimumUntrustedScoreAvg<T: Config> = StorageValue<_, (u32, ElectionScore)>;
+
+	/// Lower bound of the value that the [`MinimumUntrustedScore`] may be updated to through the
+	/// on-chain mechanism.
+	///
+	/// Can be set via `set_minimum_untrusted_score_configs`.
+	#[pallet::storage]
+	pub type MinimumUntrustedScoreBackstop<T: Config> = StorageValue<_, ElectionScore>;
 
 	/// The current storage version.
 	///
@@ -1558,6 +1608,7 @@ impl<T: Config> Pallet<T> {
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
+				Self::try_update_minimum_untrusted_score(score);
 				supports
 			})
 			.map_err(|err| {
@@ -1567,6 +1618,50 @@ impl<T: Config> Pallet<T> {
 				}
 				err
 			})
+	}
+
+	/// Attempts to update the `MinimumUntrustedScore` if at least
+	/// `MinimumUntrustedScoreUpdateInterval` successful election have passed since the last 
+    /// update. If not ready yet, update the minimum untrusted score rolling average in
+    /// the storage.
+	///
+	/// If the untrusted minimum score is updated, the new value is a percentage (defined by
+	/// `MinimumUntrustedScoreMargin`) of the rolling average of the previous election scores.
+	fn try_update_minimum_untrusted_score(score: ElectionScore) {
+		let update_interval =
+			if let Some(update_interval) = T::MinimumUntrustedScoreUpdateInterval::get() {
+				update_interval
+			} else {
+				// if update interval is not set, the on-chain update mechanism is disabled. return
+				// early.
+				return
+			};
+
+		let (sliding_window_counter, rolling_average_score) =
+			<MinimumUntrustedScoreAvg<T>>::get().unwrap_or((0, score));
+		let average_score = rolling_average_score.average(score);
+
+		// not yet time to update the minimum untrusted score. Update the score average and return
+		// early.
+		if sliding_window_counter < update_interval {
+			<MinimumUntrustedScoreAvg<T>>::put((sliding_window_counter + 1, average_score));
+			return
+		}
+
+		let minimum_untrusted_score =
+			if let Some(backstop_election_score) = <MinimumUntrustedScoreBackstop<T>>::get() {
+				average_score
+					.fraction_of(T::MinimumUntrustedScoreMargin::get())
+					.max(backstop_election_score)
+			} else {
+				average_score.fraction_of(T::MinimumUntrustedScoreMargin::get())
+			};
+
+		// resets the minimum untrusted score average state.
+		<MinimumUntrustedScoreAvg<T>>::put((0, minimum_untrusted_score));
+		<MinimumUntrustedScore<T>>::put(minimum_untrusted_score);
+
+		Self::deposit_event(Event::NewMinimumUntrustedScore { score: minimum_untrusted_score });
 	}
 
 	/// record the weight of the given `supports`.
