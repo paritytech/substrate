@@ -627,6 +627,111 @@ async fn fallback_name_working() {
 }
 
 #[tokio::test]
+async fn write_notification_over_main_and_legacy_protocols() {
+	sp_tracing::try_init_simple();
+	// Node 1 supports the protocols "new" and "old". Node 2 only supports "old". Checks whether
+	// they can connect.
+	const NEW_PROTOCOL_NAME: &str = "/new-shiny-protocol-that-isnt-PROTOCOL_NAME";
+
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+	let (node1, mut events_stream1) = TestNetworkBuilder::new()
+		.with_notification_protocol(config::NonDefaultSetConfig {
+			notifications_protocol: NEW_PROTOCOL_NAME.into(),
+			fallback_names: vec![PROTOCOL_NAME.into()],
+			max_notification_size: 1024 * 1024,
+			handshake: None,
+			set_config: Default::default(),
+		})
+		.with_config(config::NetworkConfiguration {
+			listen_addresses: vec![listen_addr.clone()],
+			transport: TransportConfig::MemoryOnly,
+			..config::NetworkConfiguration::new_local()
+		})
+		.build()
+		.start_network();
+
+	let (network2, mut events_stream2) = TestNetworkBuilder::new()
+		.with_set_config(config::SetConfig {
+			reserved_nodes: vec![MultiaddrWithPeerId {
+				multiaddr: listen_addr,
+				peer_id: node1.local_peer_id(),
+			}],
+			..Default::default()
+		})
+		.build()
+		.start_network();
+
+	let receiver = tokio::spawn(async move {
+		let mut old_msg_received = false;
+		let mut new_msg_received = false;
+
+		// Wait for the `NotificationStreamOpened` and send notification over the protocol
+		loop {
+			match events_stream2.next().await.unwrap() {
+				Event::NotificationStreamOpened {
+					remote, protocol, negotiated_fallback, ..
+				} => {
+					assert_eq!(protocol, PROTOCOL_NAME.into());
+					assert_eq!(negotiated_fallback, None);
+					network2.write_notification(
+						remote,
+						protocol,
+						"hello over old name".as_bytes().to_vec(),
+					);
+				},
+				Event::NotificationsReceived { messages, .. } => {
+					assert_eq!(messages.len(), 1);
+					assert_eq!(messages[0].0, PROTOCOL_NAME.into());
+
+					if messages[0].1 == "hello over old name".as_bytes().to_vec() {
+						old_msg_received = true;
+					} else if messages[0].1 == "hello over new name".as_bytes().to_vec() {
+						new_msg_received = true;
+					} else {
+						panic!("invalid message received")
+					}
+
+					if old_msg_received && new_msg_received {
+						break
+					}
+				},
+				_ => {},
+			};
+		}
+	});
+
+	// Wait for the `NotificationStreamOpened` and send notifications over the old and new protocols
+	loop {
+		match events_stream1.next().await.unwrap() {
+			Event::NotificationStreamOpened { remote, protocol, negotiated_fallback, .. }
+				if protocol == NEW_PROTOCOL_NAME.into() =>
+			{
+				assert_eq!(negotiated_fallback, Some(PROTOCOL_NAME.into()));
+				node1.write_notification(
+					remote,
+					protocol,
+					"hello over new name".as_bytes().to_vec(),
+				);
+				node1.write_notification(
+					remote,
+					negotiated_fallback.unwrap(),
+					"hello over old name".as_bytes().to_vec(),
+				);
+			},
+			Event::NotificationsReceived { messages, .. } => {
+				assert_eq!(messages.len(), 1);
+				assert_eq!(messages[0].0, NEW_PROTOCOL_NAME.into());
+				assert_eq!(messages[0].1, "hello over old name".as_bytes().to_vec());
+				break
+			},
+			_ => {},
+		};
+	}
+
+	receiver.await.unwrap();
+}
+
+#[tokio::test]
 #[should_panic(expected = "don't match the transport")]
 async fn ensure_listen_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];

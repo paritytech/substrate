@@ -449,6 +449,7 @@ where
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
+			legacy_protocols: HashMap::new(),
 			_marker: Default::default(),
 			_block: Default::default(),
 		})
@@ -1153,6 +1154,8 @@ where
 	_marker: PhantomData<H>,
 	/// Marker for block type
 	_block: PhantomData<B>,
+	/// Mapping from the main protocol to legacy protocol, if legacy protocol was negotiated.
+	legacy_protocols: HashMap<ProtocolName, ProtocolName>,
 }
 
 impl<B, H> NetworkWorker<B, H>
@@ -1436,6 +1439,16 @@ where
 				}
 				{
 					let mut peers_notifications_sinks = self.peers_notifications_sinks.lock();
+
+					// if legacy protocol was negotiated, save the notification sink under that
+					// protocol as well so protocols can use the legacy name to send notifications.
+					if let Some(legacy_protocol) = &negotiated_fallback {
+						let _previous_value = peers_notifications_sinks
+							.insert((remote, legacy_protocol.clone()), notifications_sink.clone());
+						debug_assert!(_previous_value.is_none());
+						self.legacy_protocols.insert(protocol.clone(), legacy_protocol.clone());
+					}
+
 					let _previous_value = peers_notifications_sinks
 						.insert((remote, protocol.clone()), notifications_sink);
 					debug_assert!(_previous_value.is_none());
@@ -1454,6 +1467,21 @@ where
 				notifications_sink,
 			}) => {
 				let mut peers_notifications_sinks = self.peers_notifications_sinks.lock();
+
+				if let Some(legacy_protocol) = self.legacy_protocols.get(&protocol) {
+					if let Some(s) =
+						peers_notifications_sinks.get_mut(&(remote, legacy_protocol.clone()))
+					{
+						*s = notifications_sink.clone();
+					} else {
+						error!(
+							target: "sub-libp2p",
+							"NotificationStreamReplaced for non-existing legacy substream"
+						);
+						debug_assert!(false);
+					}
+				}
+
 				if let Some(s) = peers_notifications_sinks.get_mut(&(remote, protocol)) {
 					*s = notifications_sink;
 				} else {
