@@ -2170,7 +2170,7 @@ mod tests {
 		}
 
 		fn register_protocol(&self, _protocol_handle: ProtocolHandle) {
-			unimplemented!()
+			// Not a real peer store, do nothing.
 		}
 
 		fn report_disconnect(&mut self, _peer_id: PeerId) {
@@ -3014,8 +3014,6 @@ mod tests {
 
 		// check peer information
 		assert_eq!(notif.open_peers().collect::<Vec<_>>(), vec![&peer],);
-		//assert_eq!(notif.num_discovered_peers(), 0usize);
-		todo!("^");
 
 		// close the other connection and verify that notification replacement event is emitted
 		notif.on_swarm_event(FromSwarm::ConnectionClosed(
