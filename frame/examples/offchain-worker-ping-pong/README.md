@@ -6,7 +6,7 @@ A simple pallet demonstrating concepts, APIs and structures common to most offch
 Run `cargo doc --package pallet-example-offchain-worker-ping-pong --open` to view this module's
 documentation.
 
-This is a simple example pallet to showcase how the runtime can and should interact with an  offchain worker asynchronously.
+This is a simple example pallet to showcase how the runtime can and should interact with an offchain worker asynchronously.
 It also showcases the potential pitfalls and security considerations that come with it.
 
 It is based on [this example by `gnunicorn`](https://gnunicorn.github.io/substrate-offchain-cb/),
