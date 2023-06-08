@@ -213,7 +213,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 	t.register_extension(TransactionPoolExt::new(pool));
 	t.register_extension(KeystoreExt::new(keystore));
 
-	let price_payload = PongPayload {
+	let pong_payload = PongPayload {
 		block_number: 1,
 		nonce: NONCE,
 		public: <Test as SigningTypes>::Public::from(public_key),
@@ -233,13 +233,13 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 			signature,
 		}) = tx.call
 		{
-			assert_eq!(body, price_payload);
+			assert_eq!(body, pong_payload);
 
 			let signature_valid =
 				<PongPayload<
 					<Test as SigningTypes>::Public,
 					<Test as frame_system::Config>::BlockNumber,
-				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
+				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&pong_payload, signature);
 
 			assert!(signature_valid);
 		}
