@@ -293,6 +293,8 @@ pub mod pallet {
 
 			Authorities::<T>::set(authorities);
 
+			Self::deposit_event(Event::AuthorityAdded { authority });
+
 			Ok(().into())
 		}
 
@@ -314,6 +316,8 @@ pub mod pallet {
 
 			Authorities::<T>::set(authorities);
 
+			Self::deposit_event(Event::AuthorityAdded { authority });
+
 			Ok(().into())
 		}
 	}
@@ -324,6 +328,10 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
 		NewPrice { price: u32, maybe_who: Option<T::AccountId> },
+		/// Event generated when a new authority is added.
+		AuthorityAdded { authority: T::AccountId },
+		/// Event generated when an authority is removed.
+		AuthorityRemoved { authority: T::AccountId },
 	}
 
 	/// A vector of recently submitted prices.

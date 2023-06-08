@@ -349,6 +349,8 @@ pub mod pallet {
 
 			Authorities::<T>::set(authorities);
 
+			Self::deposit_event(Event::AuthorityAdded { authority });
+
 			Ok(().into())
 		}
 
@@ -370,6 +372,8 @@ pub mod pallet {
 
 			Authorities::<T>::set(authorities);
 
+			Self::deposit_event(Event::AuthorityAdded { authority });
+
 			Ok(().into())
 		}
 	}
@@ -390,6 +394,10 @@ pub mod pallet {
 		PongAckAuthenticated { nonce: u32 },
 		/// Event generated when new pong_unsigned* transaction is accepted.
 		PongAckUnauthenticated { nonce: u32, unsigned_type: UnsignedType },
+		/// Event generated when a new authority is added.
+		AuthorityAdded { authority: T::AccountId },
+		/// Event generated when an authority is removed.
+		AuthorityRemoved { authority: T::AccountId },
 	}
 
 	#[pallet::validate_unsigned]
