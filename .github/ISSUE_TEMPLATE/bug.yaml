@@ -16,6 +16,14 @@ body:
       options:
         - label: This is not a support question.
           required: true
+  - type: checkboxes
+    id: labels
+    attributes:
+      label: Have you labeled this issue correctly?
+      description: Please label this issue correctly, specially with one of the **Tx** ones. Check <https://paritytech.github.io/labels/doc_substrate.html> for more info.
+      options:
+        - label: I have labeled this issue correctly.
+          required: true
   - type: textarea
     id: bug
     attributes:
