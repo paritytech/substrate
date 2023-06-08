@@ -705,8 +705,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn ready_ring_unknit(origin: &MessageOriginOf<T>, neighbours: Neighbours<MessageOriginOf<T>>) {
-		debug_assert!(!T::QueuePausedQuery::is_paused(origin));
-
 		if origin == &neighbours.next {
 			debug_assert!(
 				origin == &neighbours.prev,
@@ -783,7 +781,7 @@ impl<T: Config> Pallet<T> {
 				BookStateFor::<T>::insert(origin, book_state);
 				return
 			}
-		} else if !T::QueuePausedQuery::is_paused(origin) {
+		} else {
 			debug_assert!(
 				book_state.ready_neighbours.is_none(),
 				"Must not be in ready ring if not ready"

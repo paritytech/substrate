@@ -1233,6 +1233,9 @@ fn ready_ring_knit_and_unknit_works() {
 		BookStateFor::<Test>::insert(There, empty_book::<Test>());
 		BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
 
+		// Pausing should make no difference:
+		PausedQueues::set(vec![Here, There, Everywhere(0)]);
+
 		// Knit them into the ready ring.
 		assert_ring(&[]);
 		knit(&Here);
@@ -1416,6 +1419,33 @@ fn execute_overweight_respects_suspension() {
 			(origin, 0, 0)
 		));
 
+		assert_last_event::<Test>(
+			Event::Processed {
+				id: blake2_256(b"weight=5"),
+				origin,
+				weight_used: 5.into_weight(),
+				success: true,
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
+fn service_queue_suspension_ready_ring_works() {
+	test_closure(|| {
+		let origin = MessageOrigin::Here;
+		PausedQueues::set(vec![origin]);
+		MessageQueue::enqueue_message(msg("weight=5"), origin);
+
+		MessageQueue::service_queues(Weight::MAX);
+		// It did not execute but is in the ready ring.
+		assert!(System::events().is_empty(), "Paused");
+		assert_ring(&[origin]);
+
+		// Now when we un-pause, it will execute.
+		PausedQueues::take();
+		MessageQueue::service_queues(Weight::MAX);
 		assert_last_event::<Test>(
 			Event::Processed {
 				id: blake2_256(b"weight=5"),
