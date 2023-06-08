@@ -75,7 +75,7 @@ fn set_up_balances(initial_balance: u64) {
 }
 
 #[test]
-fn nft_set_collection_royalty_should_work() {
+fn set_collection_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		set_up_balances(100);
@@ -95,6 +95,10 @@ fn nft_set_collection_royalty_should_work() {
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
+
+		// Check that the deposit was taken
+		assert_eq!(Balances::free_balance(&account(1)), 99);
+
 		// Check the event was emitted
 		assert_eq!(
 			last_event(),
@@ -109,7 +113,7 @@ fn nft_set_collection_royalty_should_work() {
 }
 
 #[test]
-fn nft_set_collection_royalty_fail_item_not_exist() {
+fn set_collection_royalty_fail_item_not_exist() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			NftsRoyalty::set_collection_royalty(
@@ -128,7 +132,7 @@ fn nft_set_collection_royalty_fail_item_not_exist() {
 }
 
 #[test]
-fn nft_set_collection_royalty_fail_no_permission() {
+fn set_collection_royalty_fail_no_permission() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		assert_noop!(
@@ -148,7 +152,7 @@ fn nft_set_collection_royalty_fail_no_permission() {
 }
 
 #[test]
-fn nft_set_collection_royalty_fail_ovewrite() {
+fn set_collection_royalty_fail_ovewrite() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let initial_balance = 100;
@@ -179,7 +183,7 @@ fn nft_set_collection_royalty_fail_ovewrite() {
 	});
 }
 #[test]
-fn nft_set_collection_royalty_fail_limit_recipients() {
+fn set_collection_royalty_fail_limit_recipients() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		set_up_balances(100);
@@ -214,7 +218,7 @@ fn nft_set_collection_royalty_fail_limit_recipients() {
 }
 
 #[test]
-fn nft_set_collection_royalty_fail_invalid_percentages() {
+fn set_collection_royalty_fail_invalid_percentages() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		set_up_balances(100);
@@ -245,7 +249,7 @@ fn nft_set_collection_royalty_fail_invalid_percentages() {
 }
 
 #[test]
-fn nft_set_item_royalty_should_work() {
+fn set_item_royalty_should_work() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let initial_balance = 100;
@@ -266,12 +270,17 @@ fn nft_set_item_royalty_should_work() {
 		let mut items: Vec<_> = Account::<Test>::iter().map(|x| x.0).collect();
 		items.sort();
 		assert_eq!(items, vec![(account(1), 0, mint_id)]);
+
 		// Read royalty pallet's storage.
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, mint_id)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
+
+		// Check that the deposit was taken
+		assert_eq!(Balances::free_balance(&account(1)), 99);
+
 		// Check the event was emitted
 		assert_eq!(
 			last_event(),
@@ -287,7 +296,7 @@ fn nft_set_item_royalty_should_work() {
 }
 
 #[test]
-fn nft_set_item_royalty_fail_item_not_exist() {
+fn set_item_royalty_fail_item_not_exist() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			NftsRoyalty::set_item_royalty(
@@ -307,7 +316,7 @@ fn nft_set_item_royalty_fail_item_not_exist() {
 }
 
 #[test]
-fn nft_set_item_royalty_fail_no_permission() {
+fn set_item_royalty_fail_no_permission() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let mint_id = mint_item();
@@ -329,7 +338,7 @@ fn nft_set_item_royalty_fail_no_permission() {
 }
 
 #[test]
-fn nft_set_item_royalty_fail_ovewrite() {
+fn set_item_royalty_fail_ovewrite() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let initial_balance = 100;
@@ -364,7 +373,7 @@ fn nft_set_item_royalty_fail_ovewrite() {
 }
 
 #[test]
-fn nft_set_item_royalty_fail_limit_recipients() {
+fn set_item_royalty_fail_limit_recipients() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		set_up_balances(100);
@@ -401,7 +410,7 @@ fn nft_set_item_royalty_fail_limit_recipients() {
 }
 
 #[test]
-fn nft_set_item_royalty_fail_invalid_percentages() {
+fn set_item_royalty_fail_invalid_percentages() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		set_up_balances(100);
@@ -923,6 +932,94 @@ fn error_if_buy_item_not_on_sale() {
 		assert_noop!(
 			NftsRoyalty::buy(RuntimeOrigin::signed(account(2)), 0, 42, 50),
 			Error::<Test>::NotForSale
+		);
+	});
+}
+
+#[test]
+fn remove_collection_royalty_should_work() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
+
+		assert_ok!(NftsRoyalty::set_collection_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			Permill::from_percent(5),
+			account(1),
+			vec![
+				RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_recipient_percentage: Permill::from_percent(100),
+				},
+			],
+		));
+
+		// Check that the deposit was taken
+		assert_eq!(Balances::total_balance(&account(1)), initial_balance - 10);
+
+		assert_ok!(NftsRoyalty::remove_collection_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+		));
+
+		// Check the balance of royalty owner -> initial balance + deposit.
+		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 10);
+		
+		// Check the event was emitted
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::CollectionRoyaltyRemoved {
+				nft_collection: 0,
+			}
+		);
+	});
+}
+
+#[test]
+fn remove_item_royalty_should_work() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
+
+		// Create an item
+		let mint_id = mint_item();
+
+		assert_ok!(NftsRoyalty::set_item_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			mint_id,
+			Permill::from_percent(5),
+			account(1),
+			vec![
+				RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_recipient_percentage: Permill::from_percent(100),
+				},
+			],
+		));
+
+		// Check that the deposit was taken
+		assert_eq!(Balances::total_balance(&account(1)), initial_balance - 10);
+
+		assert_ok!(NftsRoyalty::remove_item_royalty(
+			RuntimeOrigin::signed(account(1)),
+			0,
+			mint_id,
+		));
+
+		// Check the balance of royalty owner -> initial balance + deposit.
+		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 10);
+		
+		// Check the event was emitted
+		assert_eq!(
+			last_event(),
+			NftsRoyaltyEvent::ItemRoyaltyRemoved {
+				nft_collection: 0,
+				nft: 42,
+			}
 		);
 	});
 }
