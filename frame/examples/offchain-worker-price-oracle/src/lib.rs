@@ -151,6 +151,30 @@ pub mod pallet {
 		type MaxAuthorities: Get<u32>;
 	}
 
+	/// Events for the pallet.
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// Event generated when new price is accepted to contribute to the average.
+		NewPrice { price: u32, maybe_who: Option<T::AccountId> },
+		/// Event generated when a new authority is added.
+		AuthorityAdded { authority: T::AccountId },
+		/// Event generated when an authority is removed.
+		AuthorityRemoved { authority: T::AccountId },
+	}
+
+	/// A vector of recently submitted prices.
+	///
+	/// This is used to calculate average price, should have bounded size.
+	#[pallet::storage]
+	#[pallet::getter(fn prices)]
+	pub(super) type Prices<T: Config> = StorageValue<_, BoundedVec<u32, T::MaxPrices>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn authorities)]
+	pub(super) type Authorities<T: Config> =
+	StorageValue<_, BoundedVec<T::AccountId, T::MaxAuthorities>, ValueQuery>;
+
 	#[pallet::error]
 	pub enum Error<T> {
 		NotAuthority,
@@ -321,30 +345,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 	}
-
-	/// Events for the pallet.
-	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		/// Event generated when new price is accepted to contribute to the average.
-		NewPrice { price: u32, maybe_who: Option<T::AccountId> },
-		/// Event generated when a new authority is added.
-		AuthorityAdded { authority: T::AccountId },
-		/// Event generated when an authority is removed.
-		AuthorityRemoved { authority: T::AccountId },
-	}
-
-	/// A vector of recently submitted prices.
-	///
-	/// This is used to calculate average price, should have bounded size.
-	#[pallet::storage]
-	#[pallet::getter(fn prices)]
-	pub(super) type Prices<T: Config> = StorageValue<_, BoundedVec<u32, T::MaxPrices>, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> =
-		StorageValue<_, BoundedVec<T::AccountId, T::MaxAuthorities>, ValueQuery>;
 }
 
 impl<T: Config> Pallet<T> {

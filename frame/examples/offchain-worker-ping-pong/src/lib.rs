@@ -190,6 +190,51 @@ pub mod pallet {
 		TooManyPings,
 	}
 
+	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq, scale_info::TypeInfo)]
+	pub enum UnsignedType {
+		UnsignedWithSignedPayload,
+		RawUnsigned,
+	}
+
+	/// Events for the pallet.
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// Event generated when new ping is received.
+		Ping { nonce: u32 },
+		/// Event generated when new pong_signed transaction is accepted.
+		PongAckAuthenticated { nonce: u32 },
+		/// Event generated when new pong_unsigned* transaction is accepted.
+		PongAckUnauthenticated { nonce: u32, unsigned_type: UnsignedType },
+		/// Event generated when a new authority is added.
+		AuthorityAdded { authority: T::AccountId },
+		/// Event generated when an authority is removed.
+		AuthorityRemoved { authority: T::AccountId },
+	}
+
+	/// A struct for wrapping the ping nonce.
+	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+	pub struct Ping(pub u32);
+
+	/// A vector of recently submitted pings.
+	#[pallet::storage]
+	#[pallet::getter(fn pings)]
+	pub(super) type Pings<T: Config> = StorageValue<_, BoundedVec<Ping, T::MaxPings>, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn authorities)]
+	pub(super) type Authorities<T: Config> =
+	StorageValue<_, BoundedVec<T::AccountId, T::MaxAuthorities>, ValueQuery>;
+
+	/// Defines the block when next unsigned transaction will be accepted.
+	///
+	/// To prevent spam of unsigned (and unpaid!) transactions on the network,
+	/// we only allow one transaction every `T::UnsignedInterval` blocks.
+	/// This storage entry defines when new transaction is going to be accepted.
+	#[pallet::storage]
+	#[pallet::getter(fn next_unsigned_at)]
+	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
@@ -378,28 +423,6 @@ pub mod pallet {
 		}
 	}
 
-	#[derive(Clone, Debug, Encode, Decode, PartialEq, Eq, scale_info::TypeInfo)]
-	pub enum UnsignedType {
-		UnsignedWithSignedPayload,
-		RawUnsigned,
-	}
-
-	/// Events for the pallet.
-	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		/// Event generated when new ping is received.
-		Ping { nonce: u32 },
-		/// Event generated when new pong_signed transaction is accepted.
-		PongAckAuthenticated { nonce: u32 },
-		/// Event generated when new pong_unsigned* transaction is accepted.
-		PongAckUnauthenticated { nonce: u32, unsigned_type: UnsignedType },
-		/// Event generated when a new authority is added.
-		AuthorityAdded { authority: T::AccountId },
-		/// Event generated when an authority is removed.
-		AuthorityRemoved { authority: T::AccountId },
-	}
-
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
@@ -444,29 +467,6 @@ pub mod pallet {
 			}
 		}
 	}
-
-	/// A struct for wrapping the ping nonce.
-	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
-	pub struct Ping(pub u32);
-
-	/// A vector of recently submitted pings.
-	#[pallet::storage]
-	#[pallet::getter(fn pings)]
-	pub(super) type Pings<T: Config> = StorageValue<_, BoundedVec<Ping, T::MaxPings>, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> =
-		StorageValue<_, BoundedVec<T::AccountId, T::MaxAuthorities>, ValueQuery>;
-
-	/// Defines the block when next unsigned transaction will be accepted.
-	///
-	/// To prevent spam of unsigned (and unpaid!) transactions on the network,
-	/// we only allow one transaction every `T::UnsignedInterval` blocks.
-	/// This storage entry defines when new transaction is going to be accepted.
-	#[pallet::storage]
-	#[pallet::getter(fn next_unsigned_at)]
-	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 }
 
 /// Payload used by this example crate to hold pong response
