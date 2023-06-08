@@ -28,8 +28,8 @@ use crate::{
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
-	DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, Origin, Pallet,
-	Schedule,
+	DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, NoopMigration,
+	Origin, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -439,6 +439,7 @@ impl Config for Test {
 	type UnsafeUnstableInterface = UnstableInterface;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
 	type HoldReason = HoldReason;
+	type Migrations = (NoopMigration<1>, NoopMigration<2>);
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);

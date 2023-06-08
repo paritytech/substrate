@@ -199,6 +199,7 @@ members = [
 	"primitives/core",
 	"primitives/core/hashing",
 	"primitives/core/hashing/proc-macro",
+	"primitives/crypto/ec-utils",
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/externalities",
