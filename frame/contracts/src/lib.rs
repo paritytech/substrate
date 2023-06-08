@@ -323,12 +323,10 @@ pub mod pallet {
 		/// The sequence of migration steps that will be applied during a migration.
 		///
 		/// # Examples
-		/// ```ignore
-		/// impl pallet_contracts::Config for Runtime {
-		/// 	// ...
-		/// 	type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
-		/// 	// ...
-		/// }
+		/// ```
+		/// use pallet_contracts::migration::{v9, v10, v11};
+		/// # struct Runtime {};
+		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
 		/// ```
 		type Migrations: MigrateSequence;
 	}
