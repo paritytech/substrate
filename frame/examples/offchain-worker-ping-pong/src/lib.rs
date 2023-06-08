@@ -495,9 +495,7 @@ impl<T: Config> Pallet<T> {
 
 		ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
 			// We set base priority to 2**20 and hope it's included before any other
-			// transactions in the pool. Next we tweak the priority depending on how much
-			// it differs from the current average. (the more it differs the more priority it
-			// has).
+			// transactions in the pool.
 			.priority(T::UnsignedPriority::get().saturating_add(0))
 			// This transaction does not require anything else to go before into the pool.
 			// In theory we could require `previous_unsigned_at` transaction to go first,
