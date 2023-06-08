@@ -303,6 +303,13 @@ impl<T> Morph<T> for Identity {
 	}
 }
 
+impl<T> Morph<T> for () {
+	type Outcome = ();
+	fn morph(_: T) -> () {
+		()
+	}
+}
+
 /// Extensible conversion trait. Generic over only source type, with destination type being
 /// associated.
 pub trait TryMorph<A> {

@@ -25,8 +25,12 @@ use super::*;
 use crate as pallet_message_queue;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64},
+	traits::{
+		AsEnsureOriginWithContainsPair, ConstU32, ConstU64, EitherOfWithArg, Everything, IsInVec,
+		MapSuccess, *,
+	},
 };
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -36,6 +40,7 @@ use sp_std::collections::btree_map::BTreeMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
+type AccountId = u32;
 
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -58,7 +63,7 @@ impl frame_system::Config for Test {
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
@@ -73,6 +78,37 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
+
+pub const ALICE: AccountId = 1;
+pub const BOB: AccountId = 2;
+pub const CHARLIE: AccountId = 3;
+
+parameter_types! {
+	pub AliceBobCharlie: Vec<AccountId> = vec![ALICE, BOB, CHARLIE];
+}
+
+/// The mapping which account can discard messages from which queue.
+pub struct AllowedDiscarders;
+impl ContainsPair<AccountId, MessageOrigin> for AllowedDiscarders {
+	fn contains(a: &AccountId, b: &MessageOrigin) -> bool {
+		b == &MessageOrigin::Everywhere(*a)
+	}
+}
+
+/// The origin that can discard overweight messages.
+type DiscardOverweightOrigin = EitherOfWithArg<
+	// Root can discard from any queue.
+	AsEnsureOriginWithContainsPair<EnsureRoot<AccountId>, Everything>,
+	// `Alice`, `Bob` and `Charlie` can discard from their own queue.
+	MapSuccess<
+		AsEnsureOriginWithContainsPair<
+			EnsureSignedBy<IsInVec<AliceBobCharlie>, AccountId>,
+			AllowedDiscarders,
+		>,
+		(),
+	>,
+>;
+
 parameter_types! {
 	pub const HeapSize: u32 = 24;
 	pub const MaxStale: u32 = 2;
@@ -82,6 +118,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = MockedWeightInfo;
 	type MessageProcessor = RecordingMessageProcessor;
+	type DiscardOverweightOrigin = DiscardOverweightOrigin;
 	type Size = u32;
 	type QueueChangeHandler = RecordingQueueChangeHandler;
 	type HeapSize = HeapSize;
@@ -120,6 +157,18 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 	fn execute_overweight_page_removed() -> Weight {
 		WeightForCall::get()
 			.get("execute_overweight_page_removed")
+			.copied()
+			.unwrap_or_default()
+	}
+	fn discard_overweight_page_updated() -> Weight {
+		WeightForCall::get()
+			.get("discard_overweight_page_updated")
+			.copied()
+			.unwrap_or_default()
+	}
+	fn discard_overweight_page_removed() -> Weight {
+		WeightForCall::get()
+			.get("discard_overweight_page_removed")
 			.copied()
 			.unwrap_or_default()
 	}

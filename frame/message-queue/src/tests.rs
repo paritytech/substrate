@@ -22,6 +22,7 @@
 use crate::{mock::*, *};
 
 use frame_support::{assert_noop, assert_ok, assert_storage_noop, StorageNoopGuard};
+use frame_system::RawOrigin;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sp_core::blake2_256;
 
@@ -749,7 +750,7 @@ fn note_processed_at_pos_works() {
 			assert!(!processed);
 			assert_eq!(page.remaining as usize, msgs - i);
 
-			page.note_processed_at_pos(pos);
+			page.note_processed_at_pos(pos).unwrap();
 
 			let (_, processed, _) = page.peek_index(i).unwrap();
 			assert!(processed);
@@ -765,12 +766,12 @@ fn note_processed_at_pos_works() {
 }
 
 #[test]
-fn note_processed_at_pos_idempotent() {
+fn note_processed_at_pos_twice_errors() {
 	let (mut page, _) = full_page::<Test>();
-	page.note_processed_at_pos(0);
+	page.note_processed_at_pos(0).unwrap();
 
 	let original = page.clone();
-	page.note_processed_at_pos(0);
+	page.note_processed_at_pos(0).unwrap_err();
 	assert_eq!(page.heap, original.heap);
 }
 
@@ -787,7 +788,7 @@ fn is_complete_works() {
 			if i % 2 == 0 {
 				page.skip_first(false);
 			} else {
-				page.note_processed_at_pos(msg_enc_len * i);
+				page.note_processed_at_pos(msg_enc_len * i).unwrap();
 			}
 		}
 		// Not complete since `skip_first` was called with `false`.
@@ -796,7 +797,7 @@ fn is_complete_works() {
 			if i % 2 == 0 {
 				assert!(!page.is_complete());
 				let (pos, _, _) = page.peek_index(i).unwrap();
-				page.note_processed_at_pos(pos);
+				page.note_processed_at_pos(pos).unwrap();
 			}
 		}
 		assert!(page.is_complete());
@@ -1041,14 +1042,20 @@ fn execute_overweight_works() {
 		// Enqueue a message
 		let origin = MessageOrigin::Here;
 		MessageQueue::enqueue_message(msg("weight=6"), origin);
+		assert_eq!(QueueChanges::take(), vec![(origin, 1, 8)]);
+
 		// Load the current book
 		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 1);
 		assert!(Pages::<Test>::contains_key(origin, 0));
+		// Does not work on unprocessed message:
+		assert_noop!(
+			<MessageQueue as ServiceQueues>::execute_overweight(7.into_weight(), (origin, 0, 0)),
+			ExecuteOverweightError::NotFound
+		);
 
 		// Mark the message as permanently overweight.
 		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
-		assert_eq!(QueueChanges::take(), vec![(origin, 1, 8)]);
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
 				id: blake2_256(b"weight=6"),
@@ -1086,6 +1093,95 @@ fn execute_overweight_works() {
 		assert!(!Pages::<Test>::contains_key(origin, 0), "Page is gone");
 		// The book should have been unknit from the ready ring.
 		assert!(!ServiceHead::<Test>::exists(), "No ready book");
+	});
+}
+
+#[test]
+fn discarding_overweight_works() {
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("bump_service_head", 1.into_weight());
+		set_weight("service_queue_base", 1.into_weight());
+		set_weight("service_page_base_completion", 1.into_weight());
+
+		let origin = MessageOrigin::Here;
+		MessageQueue::enqueue_messages(
+			[msg("weight=9"), msg("weight=8"), msg("weight=7")].into_iter(),
+			origin,
+		);
+		assert_eq!(QueueChanges::take(), vec![(origin, 3, 24)]);
+
+		// Mark the messages as permanently overweight.
+		assert_eq!(MessageQueue::service_queues(6.into_weight()), 6.into_weight());
+
+		// Sanity check the book and page.
+		let book = BookStateFor::<Test>::get(origin);
+		assert_eq!((book.message_count, book.count, book.size), (3, 3, 24));
+		assert!(QueueChanges::take().is_empty());
+		assert!(Pages::<Test>::contains_key(origin, 0));
+
+		// Now actually discard the messages.
+		for i in 0..=2u64 {
+			assert_ok!(MessageQueue::do_discard_overweight(origin, i as u32, 0));
+
+			// Check that the message was discarded.
+			let book = BookStateFor::<Test>::get(origin);
+			assert_eq!(
+				(book.message_count, book.count, book.size),
+				(2 - i, 2 - i as u32, 16 - i * 8)
+			);
+			assert!(!Pages::<Test>::contains_key(origin, i as u32));
+			assert_eq!(QueueChanges::take(), vec![(origin, 2 - i, 16 - i * 8)]);
+		}
+
+		assert_eq!(Pages::<Test>::iter().count(), 0, "All pages are gone");
+	});
+}
+
+#[test]
+fn discarding_overweight_bad_origin() {
+	new_test_ext::<Test>().execute_with(|| {
+		assert_noop!(
+			MessageQueue::discard_overweight(
+				RawOrigin::Signed(10).into(),
+				MessageOrigin::Here,
+				0,
+				0
+			),
+			DispatchError::BadOrigin
+		);
+	});
+	// Bob gets a `BadOrigin` error on Alice's queue.
+	new_test_ext::<Test>().execute_with(|| {
+		assert_noop!(
+			MessageQueue::discard_overweight(RawOrigin::Signed(BOB).into(), ALICE.into(), 0, 0),
+			DispatchError::BadOrigin,
+		);
+	});
+	// ... but a `NoPage` error on his own queue.
+	new_test_ext::<Test>().execute_with(|| {
+		assert_noop!(
+			MessageQueue::discard_overweight(RawOrigin::Signed(BOB).into(), BOB.into(), 0, 0),
+			Error::<Test>::NoPage,
+		);
+	});
+}
+
+#[test]
+fn discarding_overweight_bad_address() {
+	// Wrong page index.
+	new_test_ext::<Test>().execute_with(|| {
+		assert_noop!(
+			MessageQueue::discard_overweight(RawOrigin::Root.into(), MessageOrigin::Here, 10, 0),
+			Error::<Test>::NoPage
+		);
+	});
+	// Wrong message index.
+	new_test_ext::<Test>().execute_with(|| {
+		MessageQueue::enqueue_messages([msg("")].into_iter(), MessageOrigin::Here);
+		assert_noop!(
+			MessageQueue::discard_overweight(RawOrigin::Root.into(), MessageOrigin::Here, 0, 1),
+			Error::<Test>::NoMessage
+		);
 	});
 }
 
@@ -1314,4 +1410,24 @@ fn enqueue_messages_works() {
 		assert_eq!((book.begin, book.end), (0, 4));
 		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
 	});
+}
+
+/// Assert that there is a valid `DiscardOverweightOrigin` for benchmark tests.
+#[test]
+#[cfg(feature = "runtime-benchmarks")]
+fn bench_setup_sane() {
+	new_test_ext::<Test>().execute_with(|| {
+		let queue: MessageOriginOf<Test> = 0.into();
+		let _origin: <Test as frame_system::Config>::RuntimeOrigin =
+			<Test as crate::Config>::DiscardOverweightOrigin::try_successful_origin(&queue)
+				.expect("Benchmarks need a valid discard origin when running them as tests");
+	});
+}
+
+#[test]
+fn item_header_constant_encoded_len() {
+	let m = ItemHeader::<<Test as Config>::Size>::max_encoded_len();
+	let s = ItemHeader::<<Test as Config>::Size> { payload_len: 0, is_processed: false };
+
+	assert_eq!(m, s.encode().len());
 }

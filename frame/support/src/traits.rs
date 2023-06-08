@@ -96,9 +96,9 @@ mod dispatch;
 #[allow(deprecated)]
 pub use dispatch::EnsureOneOf;
 pub use dispatch::{
-	AsEnsureOriginWithArg, CallerTrait, EitherOf, EitherOfDiverse, EnsureOrigin,
-	EnsureOriginEqualOrHigherPrivilege, EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin,
-	OriginTrait, TryMapSuccess, UnfilteredDispatchable,
+	AsEnsureOriginWithArg, AsEnsureOriginWithContainsPair, CallerTrait, EitherOf, EitherOfDiverse,
+	EitherOfWithArg, EnsureOrigin, EnsureOriginEqualOrHigherPrivilege, EnsureOriginWithArg,
+	MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess, UnfilteredDispatchable,
 };
 
 mod voting;
@@ -112,8 +112,8 @@ pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, St
 
 mod messages;
 pub use messages::{
-	EnqueueMessage, ExecuteOverweightError, Footprint, NoopServiceQueues, ProcessMessage,
-	ProcessMessageError, ServiceQueues, TransformOrigin,
+	DiscardOverweightError, EnqueueMessage, ExecuteOverweightError, Footprint, NoopServiceQueues,
+	ProcessMessage, ProcessMessageError, ServiceQueues, TransformOrigin,
 };
 
 #[cfg(feature = "try-runtime")]
