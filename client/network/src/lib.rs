@@ -253,7 +253,6 @@ pub mod event;
 pub mod network_state;
 pub mod peer_info;
 pub mod peer_store;
-pub mod peerset;
 pub mod protocol_controller;
 pub mod request_responses;
 pub mod transport;
