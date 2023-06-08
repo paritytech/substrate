@@ -305,10 +305,9 @@ where
 
 		let protocol = Protocol::new(
 			From::from(&params.role),
-			&network_config,
-			notification_protocols,
+			notification_protocols.clone(),
 			params.block_announce_config,
-			peer_store_handle,
+			peer_store_handle.clone(),
 			protocol_handles,
 			from_protocol_controllers,
 			params.tx,
@@ -1467,7 +1466,10 @@ where
 				},
 			SwarmEvent::Behaviour(BehaviourOut::ReputationChanges { peer, changes }) => {
 				for change in changes {
-					self.network_service.behaviour().user_protocol().report_peer(peer, change);
+					self.network_service
+						.behaviour_mut()
+						.user_protocol_mut()
+						.report_peer(peer, change);
 				}
 			},
 			SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {

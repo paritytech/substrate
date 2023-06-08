@@ -64,9 +64,6 @@ pub(crate) const BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE: u64 = 16 * 1024 * 
 
 /// Identifier of the peerset for the block announces protocol.
 const HARDCODED_PEERSETS_SYNC: SetId = SetId::from(0);
-/// Number of hardcoded peersets (the constants right above). Any set whose identifier is equal or
-/// superior to this value corresponds to a user-defined protocol.
-const NUM_HARDCODED_PEERSETS: usize = 1;
 
 mod rep {
 	use crate::ReputationChange as Rep;
@@ -107,7 +104,6 @@ impl<B: BlockT> Protocol<B> {
 	/// Create a new instance.
 	pub fn new(
 		roles: Roles,
-		network_config: &config::NetworkConfiguration,
 		notification_protocols: Vec<config::NonDefaultSetConfig>,
 		block_announces_protocol: config::NonDefaultSetConfig,
 		peer_store_handle: PeerStoreHandle,
@@ -191,7 +187,7 @@ impl<B: BlockT> Protocol<B> {
 	}
 
 	/// Adjusts the reputation of a node.
-	pub fn report_peer(&self, who: PeerId, reputation: ReputationChange) {
+	pub fn report_peer(&mut self, who: PeerId, reputation: ReputationChange) {
 		self.peer_store_handle.report_peer(who, reputation)
 	}
 
