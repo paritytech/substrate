@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use crate::mock::{new_test_ext, Aura, MockDisabledValidators, System, Test};
+use crate::mock::{new_test_ext, Aura, MockDisabledValidators, System};
 use codec::Encode;
 use frame_support::traits::OnInitialize;
 use sp_consensus_aura::{Slot, AURA_ENGINE_ID};
@@ -59,6 +59,8 @@ fn disabled_validators_cannot_author_blocks() {
 #[should_panic(expected = "Slot must increase")]
 fn pallet_requires_slot_to_increase_unless_allowed() {
 	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+		crate::mock::AllowMultipleBlocksPerSlot::set(false);
+
 		let slot = Slot::from(1);
 		let pre_digest =
 			Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())] };
@@ -82,7 +84,7 @@ fn pallet_can_allow_unchanged_slot() {
 		System::reset_events();
 		System::initialize(&42, &System::parent_hash(), &pre_digest);
 
-		crate::AllowMultipleBlocksPerSlot::<Test>::put(true);
+		crate::mock::AllowMultipleBlocksPerSlot::set(true);
 
 		// and we should be able to initialize the block with the same slot a second time.
 		Aura::on_initialize(42);
@@ -101,7 +103,7 @@ fn pallet_always_rejects_decreasing_slot() {
 		System::reset_events();
 		System::initialize(&42, &System::parent_hash(), &pre_digest);
 
-		crate::AllowMultipleBlocksPerSlot::<Test>::put(true);
+		crate::mock::AllowMultipleBlocksPerSlot::set(true);
 
 		Aura::on_initialize(42);
 		System::finalize();
