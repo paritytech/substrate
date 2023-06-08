@@ -22,7 +22,7 @@ use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
+		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuildStorage, Get, Hooks,
 		Imbalance, OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,

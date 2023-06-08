@@ -21,7 +21,7 @@ use crate as root_offences;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild, Hooks, OneSessionHandler},
+	traits::{ConstU32, ConstU64, GenesisBuildStorage, Hooks, OneSessionHandler},
 };
 use pallet_staking::StakerStatus;
 use sp_core::H256;

@@ -72,6 +72,8 @@ use sp_runtime::{
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
+#[cfg(feature = "std")]
+use frame_support::traits::GenesisBuildStorage;
 use frame_support::{
 	print,
 	traits::{
@@ -239,15 +241,15 @@ pub mod pallet {
 
 	#[cfg(feature = "std")]
 	impl GenesisConfig {
-		/// Direct implementation of `GenesisBuild::assimilate_storage`.
+		/// Direct implementation of `GenesisBuildStorage::assimilate_storage`.
 		#[deprecated(
-			note = "use `<GensisConfig<T, I> as GenesisBuild<T, I>>::assimilate_storage` instead"
+			note = "use `<GensisConfig<T, I> as GenesisBuildStorage<T, I>>::assimilate_storage` instead"
 		)]
 		pub fn assimilate_storage<T: Config<I>, I: 'static>(
 			&self,
 			storage: &mut sp_runtime::Storage,
 		) -> Result<(), String> {
-			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
+			<Self as GenesisBuildStorage<T, I>>::assimilate_storage(self, storage)
 		}
 	}
 

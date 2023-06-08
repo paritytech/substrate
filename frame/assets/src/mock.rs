@@ -23,7 +23,7 @@ use crate as pallet_assets;
 use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, GenesisBuild},
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, GenesisBuildStorage},
 };
 use sp_core::H256;
 use sp_io::storage;

@@ -22,7 +22,7 @@ use crate as pallet_scored_pool;
 
 use frame_support::{
 	bounded_vec, construct_runtime, ord_parameter_types, parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild},
+	traits::{ConstU32, ConstU64, GenesisBuildStorage},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;

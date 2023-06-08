@@ -26,7 +26,8 @@ use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{
-		ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
+		ConstU128, ConstU32, ConstU64, GenesisBuildStorage, KeyOwnerProofSystem, OnFinalize,
+		OnInitialize,
 	},
 };
 use pallet_session::historical as pallet_session_historical;

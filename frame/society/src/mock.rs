@@ -22,7 +22,7 @@ use crate as pallet_society;
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64, GenesisBuildStorage},
 };
 use frame_support_test::TestRandomness;
 use frame_system::EnsureSignedBy;

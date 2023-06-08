@@ -22,7 +22,7 @@ use crate as pallet_node_authorization;
 
 use frame_support::{
 	ord_parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild},
+	traits::{ConstU32, ConstU64, GenesisBuildStorage},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;

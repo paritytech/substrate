@@ -168,7 +168,7 @@ mod tests {
 	use crate as pallet_authority_discovery;
 	use frame_support::{
 		parameter_types,
-		traits::{ConstU32, ConstU64, GenesisBuild},
+		traits::{ConstU32, ConstU64, GenesisBuildStorage},
 	};
 	use sp_application_crypto::Pair;
 	use sp_authority_discovery::AuthorityPair;
@@ -310,7 +310,7 @@ mod tests {
 		// Build genesis.
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-		GenesisBuild::<Test>::assimilate_storage(
+		GenesisBuildStorage::<Test>::assimilate_storage(
 			&pallet_authority_discovery::GenesisConfig { keys: vec![] },
 			&mut t,
 		)

@@ -20,7 +20,7 @@
 use _feps::ExtendedBalance;
 use frame_support::{
 	parameter_types, traits,
-	traits::{GenesisBuild, Hooks},
+	traits::{GenesisBuildStorage, Hooks},
 	weights::constants,
 };
 use frame_system::EnsureRoot;

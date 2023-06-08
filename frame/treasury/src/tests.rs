@@ -26,10 +26,8 @@ use sp_runtime::{
 };
 
 use frame_support::{
-	assert_err_ignore_postinfo, assert_noop, assert_ok,
-	pallet_prelude::GenesisBuild,
-	parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	assert_err_ignore_postinfo, assert_noop, assert_ok, parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuildStorage, OnInitialize},
 	PalletId,
 };
 
@@ -154,7 +152,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
+	GenesisBuildStorage::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
 	t.into()
 }
 
@@ -439,7 +437,7 @@ fn genesis_funding_works() {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
+	GenesisBuildStorage::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {

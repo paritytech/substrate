@@ -23,10 +23,8 @@ use super::*;
 use crate as pallet_bounties;
 
 use frame_support::{
-	assert_noop, assert_ok,
-	pallet_prelude::GenesisBuild,
-	parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	assert_noop, assert_ok, parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuildStorage, OnInitialize},
 	PalletId,
 };
 
@@ -1081,7 +1079,8 @@ fn genesis_funding_works() {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
+	GenesisBuildStorage::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t)
+		.unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {

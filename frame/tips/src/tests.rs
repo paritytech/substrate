@@ -28,11 +28,9 @@ use sp_runtime::{
 use sp_storage::Storage;
 
 use frame_support::{
-	assert_noop, assert_ok,
-	pallet_prelude::GenesisBuild,
-	parameter_types,
+	assert_noop, assert_ok, parameter_types,
 	storage::StoragePrefixedMap,
-	traits::{ConstU32, ConstU64, SortedMembers, StorageVersion},
+	traits::{ConstU32, ConstU64, GenesisBuildStorage, SortedMembers, StorageVersion},
 	PalletId,
 };
 
@@ -578,7 +576,8 @@ fn genesis_funding_works() {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
+	GenesisBuildStorage::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t)
+		.unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {

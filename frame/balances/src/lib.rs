@@ -167,7 +167,7 @@ pub mod weights;
 
 use codec::{Codec, MaxEncodedLen};
 #[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
+use frame_support::traits::GenesisBuildStorage;
 use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
@@ -499,18 +499,18 @@ pub mod pallet {
 
 	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
-		/// Direct implementation of `GenesisBuild::build_storage`.
+		/// Direct implementation of `GenesisBuildStorage::build_storage`.
 		///
 		/// Kept in order not to break dependency.
 		pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
-			<Self as GenesisBuild<T, I>>::build_storage(self)
+			<Self as GenesisBuildStorage<T, I>>::build_storage(self)
 		}
 
-		/// Direct implementation of `GenesisBuild::assimilate_storage`.
+		/// Direct implementation of `GenesisBuildStorage::assimilate_storage`.
 		///
 		/// Kept in order not to break dependency.
 		pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
+			<Self as GenesisBuildStorage<T, I>>::assimilate_storage(self, storage)
 		}
 	}
 

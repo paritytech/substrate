@@ -20,7 +20,7 @@ use frame_support::{
 	assert_ok,
 	pallet_prelude::*,
 	parameter_types,
-	traits::{ConstU64, ConstU8},
+	traits::{ConstU64, ConstU8, GenesisBuildStorage},
 	PalletId,
 };
 use sp_runtime::{

@@ -20,7 +20,7 @@ use frame_benchmarking::frame_support::assert_ok;
 use frame_support::{
 	pallet_prelude::*,
 	parameter_types,
-	traits::{ConstU64, Currency},
+	traits::{ConstU64, Currency, GenesisBuildStorage},
 	weights::constants::WEIGHT_REF_TIME_PER_SECOND,
 };
 use sp_runtime::traits::{Convert, IdentityLookup};

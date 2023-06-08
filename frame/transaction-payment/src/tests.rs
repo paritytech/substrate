@@ -25,7 +25,7 @@ use sp_runtime::{testing::TestXt, traits::One, transaction_validity::InvalidTran
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
-	traits::{Currency, GenesisBuild},
+	traits::{Currency, GenesisBuildStorage},
 	weights::Weight,
 };
 use frame_system as system;
@@ -100,7 +100,7 @@ impl ExtBuilder {
 
 		if let Some(multiplier) = self.initial_multiplier {
 			let genesis = pallet::GenesisConfig { multiplier };
-			GenesisBuild::<Runtime>::assimilate_storage(&genesis, &mut t).unwrap();
+			GenesisBuildStorage::<Runtime>::assimilate_storage(&genesis, &mut t).unwrap();
 		}
 
 		t.into()

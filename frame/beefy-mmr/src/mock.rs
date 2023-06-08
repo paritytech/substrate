@@ -21,7 +21,7 @@ use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
-	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
+	traits::{ConstU16, ConstU32, ConstU64, GenesisBuildStorage},
 	BasicExternalities,
 };
 use sp_consensus_beefy::mmr::MmrLeafVersion;

@@ -101,7 +101,7 @@ use sp_core::storage::well_known_keys;
 use sp_weights::{RuntimeDbWeight, Weight};
 
 #[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
+use frame_support::traits::GenesisBuildStorage;
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
 
@@ -693,21 +693,21 @@ pub mod pallet {
 
 #[cfg(feature = "std")]
 impl GenesisConfig {
-	/// Direct implementation of `GenesisBuild::build_storage`.
+	/// Direct implementation of `GenesisBuildStorage::build_storage`.
 	///
 	/// Kept in order not to break dependency.
 	pub fn build_storage<T: Config>(&self) -> Result<sp_runtime::Storage, String> {
-		<Self as GenesisBuild<T>>::build_storage(self)
+		<Self as GenesisBuildStorage<T>>::build_storage(self)
 	}
 
-	/// Direct implementation of `GenesisBuild::assimilate_storage`.
+	/// Direct implementation of `GenesisBuildStorage::assimilate_storage`.
 	///
 	/// Kept in order not to break dependency.
 	pub fn assimilate_storage<T: Config>(
 		&self,
 		storage: &mut sp_runtime::Storage,
 	) -> Result<(), String> {
-		<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
+		<Self as GenesisBuildStorage<T>>::assimilate_storage(self, storage)
 	}
 }
 
