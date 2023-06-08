@@ -27,7 +27,7 @@
 //!
 //! ## Example:
 //!
-//! To configure a migration to `v12` for a runtime using `v9` of pallet-contracts on the chain, you
+//! To configure a migration to `v11` for a runtime using `v8` of pallet-contracts on the chain, you
 //! would set the `Migrations` type as follows:
 //!
 //! ```
