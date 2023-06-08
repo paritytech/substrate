@@ -848,7 +848,8 @@ impl Notifications {
 				_ => {
 					trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})",
 						incoming.peer_id, incoming.set_id);
-					self.protocol_controller_handles[usize::from(incoming.set_id)].dropped(incoming.peer_id);
+					self.protocol_controller_handles[usize::from(incoming.set_id)]
+						.dropped(incoming.peer_id);
 				},
 			}
 			return
@@ -1186,7 +1187,8 @@ impl NetworkBehaviour for Notifications {
 
 							if connections.is_empty() {
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
+								self.protocol_controller_handles[usize::from(set_id)]
+									.dropped(peer_id);
 								*entry.get_mut() = PeerState::Backoff { timer, timer_deadline };
 							} else {
 								*entry.get_mut() = PeerState::DisabledPendingEnable {
@@ -1340,7 +1342,8 @@ impl NetworkBehaviour for Notifications {
 
 							if connections.is_empty() {
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
+								self.protocol_controller_handles[usize::from(set_id)]
+									.dropped(peer_id);
 								let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 
 								let delay_id = self.next_delay_id;
@@ -1362,7 +1365,8 @@ impl NetworkBehaviour for Notifications {
 								matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
 							}) {
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
+								self.protocol_controller_handles[usize::from(set_id)]
+									.dropped(peer_id);
 
 								*entry.get_mut() =
 									PeerState::Disabled { connections, backoff_until: None };
@@ -1410,7 +1414,8 @@ impl NetworkBehaviour for Notifications {
 								st @ PeerState::Requested |
 								st @ PeerState::PendingRequest { .. } => {
 									trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-									self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
+									self.protocol_controller_handles[usize::from(set_id)]
+										.dropped(peer_id);
 
 									let now = Instant::now();
 									let ban_duration = match st {
@@ -1739,7 +1744,8 @@ impl NetworkBehaviour for Notifications {
 								.any(|(_, s)| matches!(s, ConnectionState::Opening))
 							{
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
+								self.protocol_controller_handles[usize::from(set_id)]
+									.dropped(peer_id);
 								*entry.into_mut() =
 									PeerState::Disabled { connections, backoff_until: None };
 							} else {
@@ -2103,7 +2109,7 @@ mod tests {
 	use crate::{
 		peer_store::PeerStoreProvider,
 		protocol::notifications::handler::tests::*,
-		protocol_controller::{IncomingIndex, ProtoSetConfig, ProtocolHandle, ProtocolController},
+		protocol_controller::{IncomingIndex, ProtoSetConfig, ProtocolController, ProtocolHandle},
 		ReputationChange,
 	};
 	use libp2p::swarm::AddressRecord;
@@ -2157,27 +2163,27 @@ mod tests {
 	struct MockPeerStore {}
 
 	impl PeerStoreProvider for MockPeerStore {
-		fn is_banned(&self, peer_id: &PeerId) -> bool {
+		fn is_banned(&self, _peer_id: &PeerId) -> bool {
 			unimplemented!()
 		}
 
-		fn register_protocol(&self, protocol_handle: ProtocolHandle) {
+		fn register_protocol(&self, _protocol_handle: ProtocolHandle) {
 			unimplemented!()
 		}
 
-		fn report_disconnect(&mut self, peer_id: PeerId) {
+		fn report_disconnect(&mut self, _peer_id: PeerId) {
 			unimplemented!()
 		}
 
-		fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange) {
+		fn report_peer(&mut self, _peer_id: PeerId, _change: ReputationChange) {
 			unimplemented!()
 		}
 
-		fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
+		fn peer_reputation(&self, _peer_id: &PeerId) -> i32 {
 			unimplemented!()
 		}
 
-		fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {
+		fn outgoing_candidates(&self, _count: usize, _ignored: HashSet<&PeerId>) -> Vec<PeerId> {
 			unimplemented!()
 		}
 	}
