@@ -45,8 +45,8 @@
 //! When `pong_*` extrinsics are executed, they emit an `PongAck*` event so we can track with existing UIs.
 //!
 //! The `PongAck*` events come in two different flavors:
-//! - `PongAckAuthenticated`: emitted when the call was made by an **authenticated** offchain worker
-//! - `PongAckUnauthenticated`: emitted when the call was made by an **unauthenticated** offchain worker
+//! - `PongAckAuthenticated`: emitted when the call was made by an **authenticated** offchain worker (whitelisted via `Authorities` storage)
+//! - `PongAckUnauthenticated`: emitted when the call was made by an **unauthenticated** offchain worker (or potentially malicious actors
 //!
 //! The security implications from `PongAckUnauthenticated` should be obvious: not **ONLY** offchain workers can
 //! call `pong_unsigned*`. **ANYONE** can do it, and they can actually use a different `nonce`
