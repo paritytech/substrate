@@ -53,8 +53,8 @@ use sp_std::{marker::PhantomData, prelude::*};
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
-	ensure,
-	traits::{EnsureOrigin, PollStatus, Polling, RankedMembers, VoteTally},
+	ensure, ignoring_arg,
+	traits::{EnsureOrigin, EnsureOriginWithArg, PollStatus, Polling, RankedMembers, VoteTally},
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 
@@ -263,7 +263,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	type Success = Rank;
 
 	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let who = frame_system::EnsureSigned::try_origin(o)?;
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(rank),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
@@ -276,6 +276,12 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	}
 }
 
+ignoring_arg! {
+	impl<{ T: Config<I>, I: 'static, const MIN_RANK: u16, A }>
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureRanked<T, I, MIN_RANK>
+	{}
+}
+
 /// Guard to ensure that the given origin is a member of the collective. The account ID of the
 /// member is the `Success` value.
 pub struct EnsureMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
@@ -285,7 +291,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	type Success = T::AccountId;
 
 	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let who = frame_system::EnsureSigned::try_origin(o)?;
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(who),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
@@ -298,6 +304,12 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	}
 }
 
+ignoring_arg! {
+	impl<{ T: Config<I>, I: 'static, const MIN_RANK: u16, A }>
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureMember<T, I, MIN_RANK>
+	{}
+}
+
 /// Guard to ensure that the given origin is a member of the collective. The pair of both the
 /// account ID and the rank of the member is the `Success` value.
 pub struct EnsureRankedMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
@@ -307,7 +319,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	type Success = (T::AccountId, Rank);
 
 	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let who = frame_system::EnsureSigned::try_origin(o)?;
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok((who, rank)),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
@@ -321,6 +333,12 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 			.expect("Could not add members for benchmarks");
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
+}
+
+ignoring_arg! {
+	impl<{ T: Config<I>, I: 'static, const MIN_RANK: u16, A }>
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureRankedMember<T, I, MIN_RANK>
+	{}
 }
 
 #[frame_support::pallet]
