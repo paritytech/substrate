@@ -22,8 +22,8 @@
 //! This Runtime API allows to construct `GenesisConfig`, in particular:
 //! - serialize the runtime default `GenesisConfig` struct into json format,
 //! - put the GenesisConfig struct into the storage. Internally this operation calls
-//!   `GenesisBuild::build` function for all runtime pallets, which is typically provided
-//!   by pallet's author.
+//!   `GenesisBuild::build` function for all runtime pallets, which is typically provided by
+//!   pallet's author.
 //! - deserialize the `GenesisConfig` from given json blob and put `GenesisConfig` into the state
 //!   storage. Allows to build customized configuration.
 //!
@@ -35,24 +35,9 @@ sp_api::decl_runtime_apis! {
 	pub trait GenesisBuilder {
 		/// Get the default `GenesisConfig` as a JSON blob.
 		///
-		/// This function instantiates the default `GenesisConfig` struct for the runtime and serializes it into
-		/// a JSON blob.
-		///
-		/// # Returns
-		///
-		/// A `Vec<u8>` containing the JSON representation of the default `GenesisConfig`.
+		/// This function instantiates the default `GenesisConfig` struct for the runtime and serializes it into a JSON
+		/// blob. It returns a `Vec<u8>` containing the JSON representation of the default `GenesisConfig`.
 		fn get_default_as_json() -> sp_std::vec::Vec<u8>;
-
-		/// Build `GenesisConfig` from a JSON blob and store it in the storage.
-		///
-		/// This function deserializes the `GenesisConfig` from the given JSON blob and puts it into the storage.
-		/// If the provided JSON blob is incorrect or the deserialization fails, this method will panic.
-		/// It is recommended to log any errors encountered during the process.
-		///
-		/// # Arguments
-		///
-		/// * `json` - A `Vec<u8>` representing the JSON blob containing the `GenesisConfig`.
-		fn build_from_json(json: sp_std::vec::Vec<u8>);
 
 		/// Patch default `GenesisConfig` using given JSON patch and store it in the storage.
 		///
@@ -62,18 +47,15 @@ sp_api::decl_runtime_apis! {
 		/// stored in the storage.
 		///
 		/// If the provided JSON patch is incorrect or the deserialization fails, this method will panic.
-		/// It is recommended to log any errors encountered during the process.
+		/// Any errors encountered during this process should be logged.
 		///
 		/// The patching process modifies the default `GenesisConfig` according to the following rules:
-		///
 		/// 1. Existing keys in the default configuration will be overridden by the corresponding values in the patch.
 		/// 2. If a key exists in the patch but not in the default configuration, it will be added to the resulting `GenesisConfig`.
 		/// 3. Keys in the default configuration that have null values in the patch will be removed from the resulting
 		///    `GenesisConfig`. This is helpful for changing enum variant value.
 		///
-		/// # Arguments
-		///
-		/// * `patch_json` - A `Vec<u8>` representing the JSON patch to be applied to the default `GenesisConfig`.
-		fn build_with_patch(patch_json: sp_std::vec::Vec<u8>);
+		/// Please note the patch may contain full `GenesisConfig`.
+		fn build_config(patch: sp_std::vec::Vec<u8>);
 	}
 }
