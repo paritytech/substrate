@@ -38,7 +38,7 @@ use libp2p::{
 use log::{debug, error, warn};
 
 use sc_network_common::{role::Roles, sync::message::BlockAnnouncesHandshake};
-use sc_utils::mpsc::TracingUnboundedSender;
+use sc_utils::mpsc::{TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 
 use std::{
@@ -112,11 +112,13 @@ impl<B: BlockT> Protocol<B> {
 		block_announces_protocol: config::NonDefaultSetConfig,
 		peer_store_handle: PeerStoreHandle,
 		protocol_controller_handles: Vec<protocol_controller::ProtocolHandle>,
+		from_protocol_controllers: TracingUnboundedReceiver<protocol_controller::Message>,
 		tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
 	) -> error::Result<Self> {
 		let behaviour = {
 			Notifications::new(
 				protocol_controller_handles.clone(),
+				from_protocol_controllers,
 				// NOTE: Block announcement protocol is still very much hardcoded into `Protocol`.
 				// 	This protocol must be the first notification protocol given to
 				// `Notifications`
@@ -164,7 +166,7 @@ impl<B: BlockT> Protocol<B> {
 
 	/// Returns the number of discovered nodes that we keep in memory.
 	pub fn num_discovered_peers(&self) -> usize {
-		self.behaviour.num_discovered_peers()
+		self.peer_store_handle.num_known_peers()
 	}
 
 	/// Disconnects the given peer if we are connected to it.
