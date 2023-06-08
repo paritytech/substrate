@@ -58,10 +58,6 @@ fn invalid_version(version: StorageVersion) -> ! {
 /// The cursor used to store the state of the current migration step.
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
 
-// // In benchmark and tests we use noop migrations, to test and bench the migration framework
-// itself. #[cfg(not(any(feature = "runtime-benchmarks", test)))]
-// type Migrations<T, C> = (v9::Migration<T>, v10::Migration<T, C>, v11::Migration<T>);
-
 /// IsFinished describes whether a migration is finished or not.
 pub enum IsFinished {
 	Yes,
