@@ -273,12 +273,12 @@ pub mod pallet {
 						log::error!("Error: {}", e);
 					}
 				} else if unsigned_type == T::BlockNumber::from(1u32) {
-					// node needs to be loaded with keys
+					// node needs to be loaded with keys as the payload will be signed
 					if let Err(e) = Self::ocw_pong_unsigned_for_any_account(block_number) {
 						log::error!("Error: {}", e);
 					}
 				} else if unsigned_type == T::BlockNumber::from(2u32) {
-					// node needs to be loaded with keys
+					// node needs to be loaded with keys as the payload will be signed
 					if let Err(e) = Self::ocw_pong_unsigned_for_all_accounts(block_number) {
 						log::error!("Error: {}", e);
 					}
