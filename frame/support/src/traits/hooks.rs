@@ -359,15 +359,22 @@ pub trait Hooks<BlockNumber> {
 	fn integrity_test() {}
 }
 
+/// Marker trait, indicating that something is the GenesisConfig for Pallet.
+pub trait PalletGenesisConfig<T, I = ()> {}
+
 /// A trait to define the build function of a genesis config, T and I are placeholder for pallet
 /// trait and pallet instance.
 pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeDeserialize {
 	/// The build function is called within an externalities allowing storage APIs.
 	/// Thus one can write to storage using regular pallet storages.
 	fn build(&self);
+}
 
+#[cfg(feature = "std")]
+/// A trait to define functions to build the  storage for a genesis config, T and I are placeholder
+/// for pallet trait and pallet instance.
+pub trait GenesisBuildStorage<T, I = ()>: GenesisBuild<T, I> {
 	/// Build the storage using `build` inside default storage.
-	#[cfg(feature = "std")]
 	fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
 		let mut storage = Default::default();
 		self.assimilate_storage(&mut storage)?;
@@ -382,6 +389,12 @@ pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeD
 			Ok(())
 		})
 	}
+}
+
+#[cfg(feature = "std")]
+impl<GB, T, I> GenesisBuildStorage<T, I> for GB where
+	GB: GenesisBuild<T, I> + PalletGenesisConfig<T, I>
+{
 }
 
 /// A trait which is called when the timestamp is set in the runtime.

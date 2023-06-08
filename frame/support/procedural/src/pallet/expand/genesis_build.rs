@@ -43,6 +43,9 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 	let where_clause = &genesis_build.where_clause;
 
 	quote::quote_spanned!(genesis_build.attr_span =>
+		impl<#type_impl_gen> #frame_support::traits::PalletGenesisConfig<#trait_use_gen>
+			for #gen_cfg_ident<#gen_cfg_use_gen> #where_clause {}
+
 		#[cfg(feature = "std")]
 		impl<#type_impl_gen> #frame_support::sp_runtime::BuildModuleGenesisStorage<#trait_use_gen>
 			for #gen_cfg_ident<#gen_cfg_use_gen> #where_clause
