@@ -35,15 +35,8 @@ where
 			.into_bytes()
 	}
 
-	/// Build `GenesisConfig` from a JSON blob and store it in the storage.
-	pub fn build_from_json(json: sp_std::vec::Vec<u8>) {
-		let gc = serde_json::from_slice::<GC>(&json)
-			.expect("provided json blob is expected to be valid. qed.");
-		<GC as GenesisBuild<R>>::build(&gc);
-	}
-
 	/// Patch default `GenesisConfig` using given JSON patch and store it in the storage.
-	pub fn build_with_patch(patch_json: sp_std::vec::Vec<u8>) {
+	pub fn build_config(patch_json: sp_std::vec::Vec<u8>) {
 		let mut json = serde_json::to_value(&GC::default())
 			.expect("serialization to json is expected to work. qed.");
 

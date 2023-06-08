@@ -722,12 +722,8 @@ impl_runtime_apis! {
 			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::get_default_as_json()
 		}
 
-		fn build_from_json(json: sp_std::vec::Vec<u8>) {
-			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::build_from_json(json)
-		}
-
-		fn build_with_patch(patch_json: sp_application_crypto::Vec<u8>) {
-			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::build_with_patch(patch_json);
+		fn build_config(patch_json: sp_application_crypto::Vec<u8>) {
+			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::build_config(patch_json);
 		}
 
 	}
@@ -1260,7 +1256,7 @@ mod tests {
 			let default_minimal_json = r#"{"system":{"code":"0x"},"babe":{"authorities":[],"epochConfig":{"c": [ 3, 10 ],"allowed_slots":"PrimaryAndSecondaryPlainSlots"}},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
 			let mut t = BasicExternalities::new_empty();
 
-			executor_call(&mut t, "GenesisBuilder_build_from_json", &default_minimal_json.encode())
+			executor_call(&mut t, "GenesisBuilder_build_config", &default_minimal_json.encode())
 				.0
 				.unwrap();
 
@@ -1314,7 +1310,7 @@ mod tests {
 			let j = include_str!("test_json/default_genesis_config.json");
 
 			let mut t = BasicExternalities::new_empty();
-			executor_call(&mut t, "GenesisBuilder_build_from_json", &j.encode()).0.unwrap();
+			executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
 
 			let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
 
@@ -1330,7 +1326,7 @@ mod tests {
 		fn build_genesis_config_from_invalid_json() -> Result<Vec<u8>> {
 			let j = include_str!("test_json/default_genesis_config_invalid.json");
 			let mut t = BasicExternalities::new_empty();
-			executor_call(&mut t, "GenesisBuilder_build_from_json", &j.encode()).0
+			executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0
 		}
 
 		#[test]
@@ -1403,7 +1399,7 @@ mod tests {
 
 			// Build genesis config using custom json:
 			let mut t = BasicExternalities::new_empty();
-			executor_call(&mut t, "GenesisBuilder_build_with_patch", &patch.to_string().encode())
+			executor_call(&mut t, "GenesisBuilder_build_config", &patch.to_string().encode())
 				.0
 				.unwrap();
 
