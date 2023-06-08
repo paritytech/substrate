@@ -26,7 +26,7 @@ use crate::{
 
 use bytes::BytesMut;
 use fnv::FnvHashMap;
-use futures::{channel::oneshot, prelude::*};
+use futures::prelude::*;
 use libp2p::{
 	core::{ConnectedPoint, Endpoint, Multiaddr},
 	swarm::{
@@ -439,7 +439,7 @@ impl Notifications {
 			// DisabledPendingEnable => Disabled.
 			PeerState::DisabledPendingEnable { connections, timer_deadline, timer: _ } => {
 				trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-				self.report_peer_dropped(set_id, *peer_id);
+				self.protocol_controller_handles[usize::from(set_id)].dropped(*peer_id);
 				*entry.into_mut() =
 					PeerState::Disabled { connections, backoff_until: Some(timer_deadline) }
 			},
@@ -449,7 +449,7 @@ impl Notifications {
 			// If relevant, the external API is instantly notified.
 			PeerState::Enabled { mut connections } => {
 				trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-				self.report_peer_dropped(set_id, *peer_id);
+				self.protocol_controller_handles[usize::from(set_id)].dropped(*peer_id);
 
 				if connections.iter().any(|(_, s)| matches!(s, ConnectionState::Open(_))) {
 					trace!(target: "sub-libp2p", "External API <= Closed({}, {:?})", peer_id, set_id);
@@ -536,27 +536,11 @@ impl Notifications {
 		}
 	}
 
-	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self, set_id: SetId, pending_response: oneshot::Sender<Vec<PeerId>>) {
-		self.protocol_controller_handles[usize::from(set_id)].reserved_peers(pending_response);
-	}
-
 	/// Returns the state of the peerset manager, for debugging purposes.
 	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
 		// TODO: Check what info we can include here.
 		//       Issue reference: https://github.com/paritytech/substrate/issues/14160.
 		serde_json::json!("unimplemented")
-	}
-
-	/// Report to `ProtocolController` that peer has dropped.
-	fn report_peer_dropped(&self, set_id: SetId, peer_id: PeerId) {
-		self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
-	}
-
-	/// Request incoming connection approval from `ProtocolController`.
-	fn request_incoming(&self, set_id: SetId, peer_id: PeerId, incoming_index: IncomingIndex) {
-		self.protocol_controller_handles[usize::from(set_id)]
-			.incoming_connection(peer_id, incoming_index);
 	}
 
 	/// Function that is called when the peerset wants us to connect to a peer.
@@ -864,7 +848,7 @@ impl Notifications {
 				_ => {
 					trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})",
 						incoming.peer_id, incoming.set_id);
-					self.report_peer_dropped(incoming.set_id, incoming.peer_id);
+					self.protocol_controller_handles[usize::from(incoming.set_id)].dropped(incoming.peer_id);
 				},
 			}
 			return
@@ -1202,7 +1186,7 @@ impl NetworkBehaviour for Notifications {
 
 							if connections.is_empty() {
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.report_peer_dropped(set_id, peer_id);
+								self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
 								*entry.get_mut() = PeerState::Backoff { timer, timer_deadline };
 							} else {
 								*entry.get_mut() = PeerState::DisabledPendingEnable {
@@ -1356,7 +1340,7 @@ impl NetworkBehaviour for Notifications {
 
 							if connections.is_empty() {
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.report_peer_dropped(set_id, peer_id);
+								self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
 								let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 
 								let delay_id = self.next_delay_id;
@@ -1378,7 +1362,7 @@ impl NetworkBehaviour for Notifications {
 								matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
 							}) {
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.report_peer_dropped(set_id, peer_id);
+								self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
 
 								*entry.get_mut() =
 									PeerState::Disabled { connections, backoff_until: None };
@@ -1426,7 +1410,7 @@ impl NetworkBehaviour for Notifications {
 								st @ PeerState::Requested |
 								st @ PeerState::PendingRequest { .. } => {
 									trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-									self.report_peer_dropped(set_id, peer_id);
+									self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
 
 									let now = Instant::now();
 									let ban_duration = match st {
@@ -1598,7 +1582,8 @@ impl NetworkBehaviour for Notifications {
 
 								trace!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}).",
 									peer_id, incoming_id);
-								self.request_incoming(set_id, peer_id, incoming_id);
+								self.protocol_controller_handles[usize::from(set_id)]
+									.incoming_connection(peer_id, incoming_id);
 								self.incoming.push(IncomingPeer {
 									peer_id,
 									set_id,
@@ -1754,7 +1739,7 @@ impl NetworkBehaviour for Notifications {
 								.any(|(_, s)| matches!(s, ConnectionState::Opening))
 							{
 								trace!(target: "sub-libp2p", "PSM <= Dropped({}, {:?})", peer_id, set_id);
-								self.report_peer_dropped(set_id, peer_id);
+								self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
 								*entry.into_mut() =
 									PeerState::Disabled { connections, backoff_until: None };
 							} else {
@@ -1928,7 +1913,7 @@ impl NetworkBehaviour for Notifications {
 							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
 						}) {
 							trace!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
-							self.report_peer_dropped(set_id, peer_id);
+							self.protocol_controller_handles[usize::from(set_id)].dropped(peer_id);
 
 							let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
 							*entry.into_mut() = PeerState::Disabled {
@@ -2118,10 +2103,11 @@ mod tests {
 	use crate::{
 		peer_store::PeerStoreProvider,
 		protocol::notifications::handler::tests::*,
-		protocol_controller::{IncomingIndex, Message, ProtoSetConfig, ProtocolHandle},
+		protocol_controller::{IncomingIndex, ProtoSetConfig, ProtocolHandle, ProtocolController},
+		ReputationChange,
 	};
 	use libp2p::swarm::AddressRecord;
-	use sc_utuls::mpsc::tracing_unbounded;
+	use sc_utils::mpsc::tracing_unbounded;
 	use std::{collections::HashSet, iter};
 
 	impl PartialEq for ConnectionState {
@@ -2167,6 +2153,7 @@ mod tests {
 		}
 	}
 
+	#[derive(Debug)]
 	struct MockPeerStore {}
 
 	impl PeerStoreProvider for MockPeerStore {
@@ -2199,7 +2186,7 @@ mod tests {
 		let (to_notifications, from_controller) =
 			tracing_unbounded("test_controller_to_notifications", 10_000);
 
-		let (controller, handle) = ProtocolController::new(
+		let (handle, controller) = ProtocolController::new(
 			SetId::from(0),
 			ProtoSetConfig {
 				in_peers: 25,
@@ -2208,7 +2195,7 @@ mod tests {
 				reserved_only: false,
 			},
 			to_notifications,
-			MockPeerStore {},
+			Box::new(MockPeerStore {}),
 		);
 
 		(
