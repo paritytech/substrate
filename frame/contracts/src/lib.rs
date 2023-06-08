@@ -339,9 +339,9 @@ pub mod pallet {
 					// just return the remaining weight.
 					NoMigrationPerformed | InProgress { steps_done: 0 } => return remaining_weight,
 					// Migration is still in progress, we can start the next step.
-					InProgress { .. } => {},
-					// There are no migration in progress, or we are done with all migrations, we
-					// can do some more work with the remaining weight.
+					InProgress { .. } => continue,
+					// Either no migration is in progress, or we are done with all migrations, we
+					// can do some more other work with the remaining weight.
 					Completed | NoMigrationInProgress => break,
 				}
 			}

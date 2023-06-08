@@ -23,12 +23,12 @@
 //! # Usage
 //!
 //! A migration step is defined under `src/migration/vX.rs`, where `X` is the version number.
-//! For example, `vX.rs` defines a migration from version X to version X + 1.
+//! For example, `vX.rs` defines a migration from version `X - 1` to version `X`.
 //!
 //! ## Example:
 //!
-//! To configure a migration to v12 for a runtime using v9 of `pallet-contracts` on the chain, you
-//! would set the `Migrations` trait as follows:
+//! To configure a migration to `v12` for a runtime using `v9` of pallet-contracts on the chain, you
+//! would set the `Migrations` type as follows:
 //!
 //! ```
 //! use pallet_contracts::migration::{v9, v10, v11};
