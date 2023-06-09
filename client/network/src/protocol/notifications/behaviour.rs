@@ -536,13 +536,6 @@ impl Notifications {
 		}
 	}
 
-	/// Returns the state of the peerset manager, for debugging purposes.
-	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
-		// TODO: Check what info we can include here.
-		//       Issue reference: https://github.com/paritytech/substrate/issues/14160.
-		serde_json::json!("unimplemented")
-	}
-
 	/// Function that is called when the peerset wants us to connect to a peer.
 	fn peerset_report_connect(&mut self, peer_id: PeerId, set_id: SetId) {
 		// If `PeerId` is unknown to us, insert an entry, start dialing, and return early.

@@ -694,7 +694,11 @@ where
 			external_addresses,
 			connected_peers,
 			not_connected_peers,
-			peerset: swarm.behaviour_mut().user_protocol_mut().peerset_debug_info(),
+			// TODO: Check what info we can include here.
+			//       Issue reference: https://github.com/paritytech/substrate/issues/14160.
+			peerset: serde_json::json!(
+				"Unimplemented. See https://github.com/paritytech/substrate/issues/14160."
+			),
 		}
 	}
 
@@ -1312,8 +1316,7 @@ where
 			}
 			metrics
 				.peerset_num_discovered
-				.set(self.network_service.behaviour_mut().user_protocol().num_discovered_peers()
-					as u64);
+				.set(self.peer_store_handle.num_known_peers() as u64);
 			metrics.pending_connections.set(
 				Swarm::network_info(&self.network_service).connection_counters().num_pending()
 					as u64,
@@ -1483,10 +1486,7 @@ where
 				},
 			SwarmEvent::Behaviour(BehaviourOut::ReputationChanges { peer, changes }) => {
 				for change in changes {
-					self.network_service
-						.behaviour_mut()
-						.user_protocol_mut()
-						.report_peer(peer, change);
+					self.peer_store_handle.report_peer(peer, change);
 				}
 			},
 			SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
@@ -1509,10 +1509,10 @@ where
 						.behaviour_mut()
 						.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
 				}
-				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
+				self.peer_store_handle.add_known_peer(peer_id);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id)) => {
-				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
+				self.peer_store_handle.add_known_peer(peer_id);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) => {
 				if let Some(metrics) = self.metrics.as_ref() {
