@@ -355,17 +355,13 @@ where
 				.reserved_nodes
 				.iter()
 				.map(|reserved| (reserved.peer_id, reserved.multiaddr.clone()))
-				.chain(
-					notification_protocols
+				.chain(notification_protocols.iter().flat_map(|protocol| {
+					protocol
+						.set_config
+						.reserved_nodes
 						.iter()
-						.flat_map(|protocol| {
-							protocol
-								.set_config
-								.reserved_nodes
-								.iter()
-								.map(|reserved| (reserved.peer_id, reserved.multiaddr.clone()))
-						})
-				)
+						.map(|reserved| (reserved.peer_id, reserved.multiaddr.clone()))
+				}))
 				.chain(
 					network_config
 						.boot_nodes
