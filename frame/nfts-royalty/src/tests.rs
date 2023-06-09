@@ -957,7 +957,7 @@ fn remove_collection_royalty_should_work() {
 		));
 
 		// Check that the deposit was taken
-		assert_eq!(Balances::total_balance(&account(1)), initial_balance - 10);
+		assert_eq!(Balances::free_balance(&account(1)), initial_balance - 1);
 
 		assert_ok!(NftsRoyalty::remove_collection_royalty(
 			RuntimeOrigin::signed(account(1)),
@@ -965,7 +965,7 @@ fn remove_collection_royalty_should_work() {
 		));
 
 		// Check the balance of royalty owner -> initial balance + deposit.
-		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 10);
+		assert_eq!(Balances::free_balance(&account(1)), initial_balance);
 		
 		// Check the event was emitted
 		assert_eq!(
@@ -1002,7 +1002,7 @@ fn remove_item_royalty_should_work() {
 		));
 
 		// Check that the deposit was taken
-		assert_eq!(Balances::total_balance(&account(1)), initial_balance - 10);
+		assert_eq!(Balances::free_balance(&account(1)), initial_balance - 1);
 
 		assert_ok!(NftsRoyalty::remove_item_royalty(
 			RuntimeOrigin::signed(account(1)),
@@ -1011,7 +1011,7 @@ fn remove_item_royalty_should_work() {
 		));
 
 		// Check the balance of royalty owner -> initial balance + deposit.
-		assert_eq!(Balances::total_balance(&account(1)), initial_balance + 10);
+		assert_eq!(Balances::free_balance(&account(1)), initial_balance);
 		
 		// Check the event was emitted
 		assert_eq!(
