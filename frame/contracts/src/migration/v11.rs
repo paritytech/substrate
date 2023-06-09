@@ -121,7 +121,8 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let len = <u32 as Decode>::decode(&mut &state[..]).unwrap();
+		let len = <u32 as Decode>::decode(&mut &state[..])
+			.expect("pre_upgrade_step provides a valid state; qed");
 		let counter = <DeletionQueueCounter<T>>::get();
 		ensure!(counter.insert_counter == len, "invalid insert counter");
 		ensure!(counter.delete_counter == 0, "invalid delete counter");

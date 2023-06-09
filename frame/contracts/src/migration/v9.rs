@@ -126,8 +126,8 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let sample =
-			<Vec<(CodeHash<T>, old::PrefabWasmModule)> as Decode>::decode(&mut &state[..]).unwrap();
+		let sample = <Vec<(CodeHash<T>, old::PrefabWasmModule)> as Decode>::decode(&mut &state[..])
+			.expect("pre_upgrade_step provides a valid state; qed");
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contract codes", sample.len());
 		for (code_hash, old) in sample {

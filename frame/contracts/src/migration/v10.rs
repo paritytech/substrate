@@ -240,8 +240,8 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let sample =
-			<Vec<(T::AccountId, old::ContractInfo<T>)> as Decode>::decode(&mut &state[..]).unwrap();
+		let sample = <Vec<(T::AccountId, old::ContractInfo<T>)> as Decode>::decode(&mut &state[..])
+			.expect("pre_upgrade_step provides a valid state; qed");
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
 		for (account, old_contract) in sample {
