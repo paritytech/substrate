@@ -21,10 +21,9 @@
 
 use crate::{
 	chain_extension::ChainExtension,
+	ensure,
 	storage::meter::Diff,
-	wasm::{
-		runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, PrefabWasmModule,
-	},
+	wasm::{runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, WasmBlob},
 	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
 use codec::{Encode, MaxEncodedLen};
@@ -56,6 +55,7 @@ pub enum TryInstantiate {
 }
 
 /// The inner deserialized module is valid (this is Guaranteed by `new` method).
+/// TODO: get rid of parity_wasm dependency here
 struct ContractModule(elements::Module);
 
 impl ContractModule {
@@ -280,6 +280,7 @@ impl ContractModule {
 				},
 			}
 		}
+		// TODO drop this as we use it now from wasmi
 		Ok(imported_mem_type)
 	}
 
@@ -287,7 +288,7 @@ impl ContractModule {
 		elements::serialize(self.0).map_err(|_| "error serializing contract module")
 	}
 }
-
+// TODO: remove this once got rid of parity_wasm dep
 fn get_memory_limits<T: Config>(
 	module: Option<&MemoryType>,
 	schedule: &Schedule<T>,
@@ -324,7 +325,7 @@ fn validate<E, T>(
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
-) -> Result<(Vec<u8>, (u32, u32)), (DispatchError, &'static str)>
+) -> Result<Vec<u8>, (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
@@ -361,7 +362,7 @@ where
 		(Error::<T>::CodeRejected.into(), "validation of new code failed")
 	})?;
 
-	let (code, (initial, maximum)) = (|| {
+	let code = (|| {
 		let contract_module = ContractModule::new(code)?;
 		contract_module.scan_exports()?;
 		contract_module.ensure_no_internal_memory()?;
@@ -370,12 +371,12 @@ where
 		contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
-
-		let memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+		/// TODO: it is done here just to check that module imported memory satisfies the schedule
+		let _memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 
 		let code = contract_module.into_wasm_code()?;
 
-		Ok((code, memory_limits))
+		Ok(code)
 	})()
 	.map_err(|msg: &str| {
 		log::debug!(target: LOG_TARGET, "new code rejected: {}", msg);
@@ -390,68 +391,55 @@ where
 		// We don't actually ever run any code so we can get away with a minimal stack which
 		// reduces the amount of memory that needs to be zeroed.
 		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
-		PrefabWasmModule::<T>::instantiate::<E, _>(
-			&code,
-			(),
-			(initial, maximum),
-			stack_limits,
-			AllowDeprecatedInterface::No,
-		)
-		.map_err(|err| {
+		WasmBlob::<T>::instantiate::<E, _>(&code, (), stack_limits, AllowDeprecatedInterface::No)
+			.map_err(|err| {
 			log::debug!(target: LOG_TARGET, "{}", err);
 			(Error::<T>::CodeRejected.into(), "new code rejected on wasmi instantiation")
 		})?;
 	}
 
-	Ok((code, (initial, maximum)))
+	Ok(code)
 }
 
-/// Loads the given module given in `code` and performs some checks on it.
+/// Validates the given binary `code` is a valid Wasm module satisfying following constraints:
 ///
-/// The checks are:
+/// - the module doesn't define an internal memory instance;
+/// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`;
+/// - all imported functions from the external environment matches defined by `env` module.
 ///
-/// - the provided code is a valid wasm module
-/// - the module doesn't define an internal memory instance
-/// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`
-/// - all imported functions from the external environment matches defined by `env` module
+/// TODO: re-phrase
+/// Also constructs contract owner_info (metadata?) by calculating the deposit.
 pub fn prepare<E, T>(
 	code: CodeVec<T>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
-) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)>
+) -> Result<(CodeVec<T>, OwnerInfo<T>), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
 {
-	let (code, (initial, maximum)) =
-		validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
+	let checked_code = validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
 
-	let code_len = code.len();
+	let err = |_| (<Error<T>>::CodeTooLarge.into(), "preparation enlarged the code excessively");
 
-	let mut module = PrefabWasmModule {
-		initial,
-		maximum,
-		code: code.clone().try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
-		code_hash: T::Hashing::hash(&code),
-		owner_info: None,
-		determinism,
-	};
+	let changed_code: CodeVec<T> = checked_code.try_into().map_err(err)?;
+	/// TODO: either remove this, or if the code rally changes, explain in the docs, why
+	ensure!(
+		code == changed_code,
+		(<Error<T>>::CodeTooLarge.into(), "preparation altered the code")
+	);
 
-	// We need to add the sizes of the `#[codec(skip)]` fields which are stored in different
-	// storage items. This is also why we have `3` items added and not only one.
-	let bytes_added = module
-		.encoded_size()
-		.saturating_add(code_len)
-		.saturating_add(<OwnerInfo<T>>::max_encoded_len()) as u32;
-	let deposit = Diff { bytes_added, items_added: 3, ..Default::default() }
+	// Calculate deposit for storing contract code and owner info in different storage items.
+	let bytes_added = code.len().saturating_add(<OwnerInfo<T>>::max_encoded_len()) as u32;
+	let deposit = Diff { bytes_added, items_added: 2, ..Default::default() }
 		.update_contract::<T>(None)
 		.charge_or_zero();
 
-	module.owner_info = Some(OwnerInfo { owner, deposit, refcount: 0 });
+	let owner_info = OwnerInfo { owner, deposit, determinism, refcount: 0 };
 
-	Ok(module)
+	Ok((code, owner_info))
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
@@ -469,22 +457,22 @@ pub mod benchmarking {
 		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
-	) -> Result<PrefabWasmModule<T>, &'static str> {
+	) -> Result<(CodeVec<T>, OwnerInfo<T>), &'static str> {
+		/// TODO: remove
 		let contract_module = ContractModule::new(&code, schedule)?;
-		let memory_limits = get_memory_limits(contract_module.scan_imports(&[])?, schedule)?;
-		Ok(PrefabWasmModule {
-			initial: memory_limits.0,
-			maximum: memory_limits.1,
-			code_hash: T::Hashing::hash(&code),
-			code: contract_module.into_wasm_code()?.try_into().map_err(|_| "Code too large")?,
-			owner_info: Some(OwnerInfo {
-				owner,
-				// this is a helper function for benchmarking which skips deposit collection
-				deposit: Default::default(),
-				refcount: 0,
-			}),
+		/// TODO: it is done here just to check that module imported memory satisfies the schedule
+		let _memory_limits = get_memory_limits(contract_module.scan_imports(&[])?, schedule)?;
+
+		let code = code.try_into().map_err(|_| "Code too large!")?;
+		let owner_info = OwnerInfo {
+			owner,
+			// this is a helper function for benchmarking which skips deposit collection
+			deposit: Default::default(),
+			refcount: 0,
 			determinism: Determinism::Enforced,
-		})
+		};
+
+		Ok(code, owner_info)
 	}
 }
 
@@ -499,9 +487,9 @@ mod tests {
 	use pallet_contracts_proc_macro::define_env;
 	use std::fmt;
 
-	impl fmt::Debug for PrefabWasmModule<Test> {
+	impl fmt::Debug for CodeVec<Test> {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-			write!(f, "PreparedContract {{ .. }}")
+			write!(f, "ContractCode {{ .. }}")
 		}
 	}
 

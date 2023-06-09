@@ -182,26 +182,26 @@ impl<T: Config> GasMeter<T> {
 		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
 	}
 
-	/// Update the `ref_time` component of the `gas_left` to bring it into line with
-	/// the Wasm engine gas meter. Passed `consumed` value is scaled by multiplying it by the
-	/// weight of a basic operation, as such an operation in wasmi engine costs 1.
+	/// Charge self with the `ref_time` Weight corresponding to `wasmi_fuel` consumed on the engine
+	/// side. Passed value is scaled by multiplying it by the weight of a basic operation, as such
+	/// an operation in wasmi engine costs 1.
 	///
-	/// This is used for gas synchronizations with the engine in every host function.
+	/// This is used for gas syncs with the engine in every host function.
 	///
-	/// Returns the updated `ref_time` value for the gas left in the meter.
+	/// Returns the updated gas_left Weight value from the meter.
 	/// Normally this would never fail, as engine should fail first when out of gas.
-	pub fn sync_reftime(&mut self, consumed: u64) -> Result<u64, DispatchError> {
+	pub fn charge_fuel(&mut self, wasmi_fuel: u64) -> Result<Weight, DispatchError> {
 		let ref_time = self.gas_left.ref_time_mut();
-		if !consumed.is_zero() {
+		if !wasmi_fuel.is_zero() {
 			let reftime_consumed =
-				consumed.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
+				wasmi_fuel.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
 			*ref_time = self
 				.gas_limit
 				.ref_time()
 				.checked_sub(reftime_consumed)
 				.ok_or_else(|| Error::<T>::OutOfGas)?;
 		}
-		Ok(*ref_time)
+		Ok(self.gas_left)
 	}
 
 	/// Returns the amount of gas that is required to run the same call.

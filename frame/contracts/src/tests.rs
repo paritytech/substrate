@@ -25,7 +25,7 @@ use crate::{
 	exec::{Frame, Key},
 	storage::DeletionQueueManager,
 	tests::test_utils::{get_contract, get_contract_checked},
-	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
+	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, Config, ContractInfo, ContractInfoOf, DefaultAddressGenerator,
 	DeletionQueueCounter, Error, Origin, Pallet, Schedule,
@@ -2461,85 +2461,6 @@ fn refcounter() {
 		// refcount is `0` but code should still exists because it needs to be removed manually
 		assert!(crate::PristineCode::<Test>::contains_key(&code_hash));
 		assert!(crate::CodeStorage::<Test>::contains_key(&code_hash));
-	});
-}
-
-#[test]
-fn reinstrument_does_charge() {
-	let (wasm, code_hash) = compile_module::<Test>("return_with_data").unwrap();
-	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		let min_balance = <Test as Config>::Currency::minimum_balance();
-		let zero = 0u32.to_le_bytes().encode();
-		let code_len = wasm.len() as u32;
-
-		let addr = Contracts::bare_instantiate(
-			ALICE,
-			min_balance * 100,
-			GAS_LIMIT,
-			None,
-			Code::Upload(wasm),
-			zero.clone(),
-			vec![],
-			false,
-		)
-		.result
-		.unwrap()
-		.account_id;
-
-		// Call the contract two times without reinstrument
-
-		let result0 = Contracts::bare_call(
-			ALICE,
-			addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			zero.clone(),
-			false,
-			Determinism::Enforced,
-		);
-		assert!(!result0.result.unwrap().did_revert());
-
-		let result1 = Contracts::bare_call(
-			ALICE,
-			addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			zero.clone(),
-			false,
-			Determinism::Enforced,
-		);
-		assert!(!result1.result.unwrap().did_revert());
-
-		// They should match because both where called with the same schedule.
-		assert_eq!(result0.gas_consumed, result1.gas_consumed);
-
-		// We cannot change the schedule. Instead, we decrease the version of the deployed
-		// contract below the current schedule's version.
-		crate::CodeStorage::mutate(&code_hash, |code: &mut Option<PrefabWasmModule<Test>>| {
-			code.as_mut().unwrap().decrement_version();
-		});
-
-		// This call should trigger reinstrumentation
-		let result2 = Contracts::bare_call(
-			ALICE,
-			addr.clone(),
-			0,
-			GAS_LIMIT,
-			None,
-			zero.clone(),
-			false,
-			Determinism::Enforced,
-		);
-		assert!(!result2.result.unwrap().did_revert());
-		assert!(result2.gas_consumed.ref_time() > result1.gas_consumed.ref_time());
-		assert_eq!(
-			result2.gas_consumed.ref_time(),
-			result1.gas_consumed.ref_time() +
-				<Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
-		);
 	});
 }
 

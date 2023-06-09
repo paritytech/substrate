@@ -12646,23 +12646,12 @@ dependencies = [
 
 [[package]]
 name = "wasmi"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06c326c93fbf86419608361a2c925a31754cf109da1b8b55737070b4d6669422"
-dependencies = [
- "parity-wasm",
- "wasmi-validation",
- "wasmi_core 0.2.1",
-]
-
-[[package]]
-name = "wasmi"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "677160b1166881badada1137afc6457777126f328ae63a18058b504f546f0828"
 dependencies = [
  "smallvec",
- "spin 0.9.5",
+ "spin 0.9.8",
  "wasmi_arena",
  "wasmi_core 0.12.0",
  "wasmparser-nostd",

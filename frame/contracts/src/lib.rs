@@ -101,7 +101,7 @@ use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
-	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
+	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate, WasmBlob},
 	weights::WeightInfo,
 };
 use codec::{Codec, Decode, Encode, HasCompact};
@@ -510,7 +510,7 @@ pub mod pallet {
 			code_hash: CodeHash<T>,
 		) -> DispatchResultWithPostInfo {
 			let origin = ensure_signed(origin)?;
-			<PrefabWasmModule<T>>::remove(&origin, code_hash)?;
+			<WasmBlob<T>>::remove(&origin, code_hash)?;
 			// we waive the fee because removing unused code is beneficial
 			Ok(Pays::No.into())
 		}
@@ -540,8 +540,8 @@ pub mod pallet {
 				} else {
 					return Err(<Error<T>>::ContractNotFound.into())
 				};
-				<PrefabWasmModule<T>>::add_user(code_hash)?;
-				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
+				<WasmBlob<T>>::add_user(code_hash)?;
+				<WasmBlob<T>>::remove_user(contract.code_hash);
 				Self::deposit_event(
 					vec![T::Hashing::hash_of(&dest), code_hash, contract.code_hash],
 					Event::ContractCodeUpdated {
@@ -619,8 +619,7 @@ pub mod pallet {
 		///
 		/// Instantiation is executed as follows:
 		///
-		/// - The supplied `code` is deployed, and a `code_hash` is created for that
-		///   code.
+		/// - The supplied `code` is deployed, and a `code_hash` is created for that code.
 		/// - If the `code_hash` already exists on the chain the underlying `code` will be shared.
 		/// - The destination address is computed based on the sender, code_hash and the salt.
 		/// - The smart-contract account is created at the computed address.
@@ -858,7 +857,12 @@ pub mod pallet {
 		Indeterministic,
 	}
 
+	/// A mapping from an original code hash to the original code, untouched by instrumentation.
+	#[pallet::storage]
+	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeVec<T>>;
+
 	/// A mapping between an original code hash and Wasm code, ready for execution.
+	/// TODO: delete
 	#[pallet::storage]
 	pub(crate) type CodeStorage<T: Config> =
 		StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
@@ -1069,7 +1073,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 					},
 			};
 		let schedule = T::Schedule::get();
-		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
+		let result = ExecStack::<T, WasmBlob<T>>::run_call(
 			origin.clone(),
 			dest.clone(),
 			&mut gas_meter,
@@ -1112,7 +1116,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 			let origin = contract_origin.account_id()?;
 			let (extra_deposit, executable) = match &self.code {
 				Code::Upload(binary) => {
-					let executable = PrefabWasmModule::from_code(
+					let (executable, owner_info) = WasmBlob::from_code(
 						binary.clone(),
 						&schedule,
 						origin.clone(),
@@ -1130,12 +1134,10 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 					// uploaded module does not already exist. This deposit is not part of the
 					// storage meter because it is not transferred to the contract but
 					// reserved on the uploading account.
-					(executable.open_deposit(), executable)
+					(executable.open_deposit(owner_info), executable)
 				},
-				Code::Existing(hash) => (
-					Default::default(),
-					PrefabWasmModule::from_storage(*hash, &schedule, &mut gas_meter)?,
-				),
+				Code::Existing(hash) =>
+					(Default::default(), WasmBlob::from_storage(*hash, &schedule, &mut gas_meter)?),
 			};
 			let contract_origin = Origin::from_account_id(origin.clone());
 			let mut storage_meter = StorageMeter::new(
@@ -1144,7 +1146,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				common.value.saturating_add(extra_deposit),
 			)?;
 			let CommonInput { value, data, debug_message, .. } = common;
-			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+			let result = ExecStack::<T, WasmBlob<T>>::run_instantiate(
 				origin.clone(),
 				executable,
 				&mut gas_meter,
@@ -1270,14 +1272,9 @@ impl<T: Config> Pallet<T> {
 		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module = PrefabWasmModule::from_code(
-			code,
-			&schedule,
-			origin,
-			determinism,
-			TryInstantiate::Instantiate,
-		)
-		.map_err(|(err, _)| err)?;
+		let module =
+			WasmBlob::from_code(code, &schedule, origin, determinism, TryInstantiate::Instantiate)
+				.map_err(|(err, _)| err)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -1325,17 +1322,8 @@ impl<T: Config> Pallet<T> {
 		owner: T::AccountId,
 	) -> frame_support::dispatch::DispatchResult {
 		let schedule = T::Schedule::get();
-		PrefabWasmModule::store_code_unchecked(code, &schedule, owner)?;
+		WasmBlob::store_code_unchecked(code, &schedule, owner)?;
 		Ok(())
-	}
-
-	/// This exists so that benchmarks can determine the weight of running an instrumentation.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn reinstrument_module(
-		module: &mut PrefabWasmModule<T>,
-		schedule: &Schedule<T>,
-	) -> frame_support::dispatch::DispatchResult {
-		self::wasm::reinstrument(module, schedule).map(|_| ())
 	}
 
 	/// Deposit a pallet contracts event. Handles the conversion to the overarching event type.

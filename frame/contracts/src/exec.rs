@@ -882,7 +882,7 @@ where
 
 			// Sync this frame's gas meter with the engine's one.
 			let frame = self.top_frame_mut();
-			frame.nested_gas.sync_reftime(output.reftime_consumed)?;
+			frame.nested_gas.charge_fuel(output.reftime_consumed)?;
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {

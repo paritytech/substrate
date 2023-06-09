@@ -19,9 +19,7 @@
 /// ! sandbox to execute the wasm code. This is because we do not need the full
 /// ! environment that provides the seal interface as imported functions.
 use super::{code::WasmModule, Config};
-use crate::wasm::{
-	AllowDeprecatedInterface, AllowUnstableInterface, Environment, PrefabWasmModule,
-};
+use crate::wasm::{AllowDeprecatedInterface, AllowUnstableInterface, Environment};
 use wasmi::{errors::LinkerError, Func, Linker, StackLimits, Store};
 
 /// Minimal execution environment without any imported functions.
@@ -46,7 +44,7 @@ impl<T: Config> From<&WasmModule<T>> for Sandbox {
 			.as_ref()
 			.map(|mem| (mem.min_pages, mem.max_pages))
 			.unwrap_or((0, 0));
-		let (store, _memory, instance) = PrefabWasmModule::<T>::instantiate::<EmptyEnv, _>(
+		let (store, _memory, instance) = WasmBlob::<T>::instantiate::<EmptyEnv, _>(
 			&module.code,
 			(),
 			memory,
