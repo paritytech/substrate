@@ -93,7 +93,7 @@ pub struct Protocol<B: BlockT> {
 	/// solve this, an entry is added to this map whenever an invalid handshake is received.
 	/// Entries are removed when the corresponding "substream closed" is later received.
 	bad_handshake_substreams: HashSet<(PeerId, SetId)>,
-	/// Connected peers.
+	/// Connected peers on sync protocol.
 	peers: HashMap<PeerId, Roles>,
 	sync_substream_validations: FuturesUnordered<PendingSyncSubstreamValidation>,
 	tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
@@ -170,7 +170,6 @@ impl<B: BlockT> Protocol<B> {
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name)
 		{
 			self.behaviour.disconnect_peer(peer_id, SetId::from(position));
-			self.peers.remove(peer_id);
 		} else {
 			warn!(target: "sub-libp2p", "disconnect_peer() with invalid protocol name")
 		}
@@ -181,7 +180,7 @@ impl<B: BlockT> Protocol<B> {
 		self.behaviour.peerset_debug_info()
 	}
 
-	/// Returns the number of peers we're connected to.
+	/// Returns the number of peers we're connected to on sync protocol.
 	pub fn num_connected_peers(&self) -> usize {
 		self.peers.len()
 	}
@@ -531,7 +530,6 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							self.bad_handshake_substreams.insert((peer_id, set_id));
 							self.behaviour.disconnect_peer(&peer_id, set_id);
 							self.peer_store_handle.report_peer(peer_id, rep::BAD_MESSAGE);
-							self.peers.remove(&peer_id);
 							CustomMessageOutcome::None
 						},
 					}
