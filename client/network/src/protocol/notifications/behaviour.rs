@@ -2002,30 +2002,29 @@ impl NetworkBehaviour for Notifications {
 			return Poll::Ready(event)
 		}
 
-		// Poll for instructions from the peerset.
-		// Note that the peerset is a *best effort* crate, and we have to use defensive programming.
+		// Poll for instructions from the protocol controllers.
 		loop {
-			match self.from_protocol_controllers.next().now_or_never() {
-				Some(Some(Message::Accept(index))) => {
+			match futures::Stream::poll_next(Pin::new(&mut self.from_protocol_controllers), cx) {
+				Poll::Ready(Some(Message::Accept(index))) => {
 					self.peerset_report_accept(index);
 				},
-				Some(Some(Message::Reject(index))) => {
+				Poll::Ready(Some(Message::Reject(index))) => {
 					self.peerset_report_reject(index);
 				},
-				Some(Some(Message::Connect { peer_id, set_id, .. })) => {
+				Poll::Ready(Some(Message::Connect { peer_id, set_id, .. })) => {
 					self.peerset_report_connect(peer_id, set_id);
 				},
-				Some(Some(Message::Drop { peer_id, set_id, .. })) => {
+				Poll::Ready(Some(Message::Drop { peer_id, set_id, .. })) => {
 					self.peerset_report_disconnect(peer_id, set_id);
 				},
-				Some(None) => {
+				Poll::Ready(None) => {
 					error!(
 						target: "sub-libp2p",
 						"Protocol controllers receiver stream has returned None",
 					);
 					break
 				},
-				None => break,
+				Poll::Pending => break,
 			}
 		}
 
