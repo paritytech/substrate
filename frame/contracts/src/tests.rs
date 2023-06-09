@@ -27,9 +27,9 @@ use crate::{
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
+	BalanceOf, Code, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
 	DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, NoopMigration,
-	Origin, Pallet, Schedule,
+	Origin, Pallet, PristineCode, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -357,8 +357,7 @@ impl pallet_proxy::Config for Test {
 
 parameter_types! {
 	pub MySchedule: Schedule<Test> = {
-		let mut schedule = <Schedule<Test>>::default();
-		schedule.instruction_weights.fallback = 1;
+		let schedule = <Schedule<Test>>::default();
 		schedule
 	};
 	pub static DepositPerByte: BalanceOf<Test> = 1;
@@ -2564,7 +2563,7 @@ fn refcounter() {
 		assert_refcount!(code_hash, 1);
 
 		// Pristine code should still be there
-		crate::PristineCode::<Test>::get(code_hash).unwrap();
+		PristineCode::<Test>::get(code_hash).unwrap();
 
 		// remove the last contract
 		assert_ok!(Contracts::call(
@@ -2579,7 +2578,6 @@ fn refcounter() {
 
 		// refcount is `0` but code should still exists because it needs to be removed manually
 		assert!(crate::PristineCode::<Test>::contains_key(&code_hash));
-		assert!(crate::CodeStorage::<Test>::contains_key(&code_hash));
 	});
 }
 
@@ -3294,14 +3292,15 @@ fn upload_code_works() {
 		// Drop previous events
 		initialize_block(2);
 
-		assert!(!<CodeStorage<Test>>::contains_key(code_hash));
+		assert!(!PristineCode::<Test>::contains_key(&code_hash));
+
 		assert_ok!(Contracts::upload_code(
 			RuntimeOrigin::signed(ALICE),
 			wasm,
 			Some(codec::Compact(1_000)),
 			Determinism::Enforced,
 		));
-		assert!(<CodeStorage<Test>>::contains_key(code_hash));
+		assert!(PristineCode::<Test>::contains_key(&code_hash));
 
 		assert_eq!(
 			System::events(),
@@ -3389,9 +3388,10 @@ fn remove_code_works() {
 			Determinism::Enforced,
 		));
 
-		assert!(<CodeStorage<Test>>::contains_key(code_hash));
+		assert!(PristineCode::<Test>::contains_key(&code_hash));
+
 		assert_ok!(Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash));
-		assert!(!<CodeStorage<Test>>::contains_key(code_hash));
+		assert!(!PristineCode::<Test>::contains_key(&code_hash));
 
 		assert_eq!(
 			System::events(),

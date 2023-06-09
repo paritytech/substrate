@@ -362,8 +362,6 @@ pub trait Executable<T: Config>: Sized {
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
-		schedule: &Schedule<T>,
-		reftime_limit: u64,
 	) -> ExecResult;
 
 	/// The code hash of the executable.
@@ -871,20 +869,11 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
-			// Take the ref_time part of the gas_left from the current frame.
-			let frame = self.top_frame();
-			let reftime_left = frame.nested_gas.gas_left().ref_time();
-			let schedule = &self.schedule().clone();
-
 			// Call into the Wasm blob.
 			// We pass `reftime_left` into the execution engine to initialize its gas metering.
 			let output = executable
-				.execute(self, &entry_point, input_data, schedule, reftime_left)
+				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
-
-			// Sync this frame's gas meter with the engine's one.
-			let frame = self.top_frame_mut();
-			frame.nested_gas.charge_fuel(output.reftime_consumed)?;
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {
@@ -1644,8 +1633,8 @@ mod tests {
 			}
 		}
 
-		fn code_hash(&self) -> &CodeHash<Test> {
-			&self.code_hash
+		fn code_hash(&self) -> CodeHash<Test> {
+			self.code_hash
 		}
 
 		fn code_len(&self) -> u32 {

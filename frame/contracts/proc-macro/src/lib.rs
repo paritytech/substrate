@@ -680,8 +680,8 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			quote! {
 				let __gas_before__ = {
 					let engine_consumed = __caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
-					let reftime_consumed = engine_consumed.saturating_mul(<E::T as Config>::Schedule::get().instruction_weights.base as u64);
-				   __caller__.data_mut().ext.gas_meter_mut().charge_fuel(reftime_consumed).map_err(#into_trap).map_err(#into_host)?.ref_time()
+					let reftime_consumed = engine_consumed.saturating_mul(__caller__.data_mut().ext().schedule().instruction_weights.base as u64);
+				   __caller__.data_mut().ext().gas_meter_mut().charge_fuel(reftime_consumed).map_err(#into_trap).map_err(#into_host)?.ref_time()
 				};
 			}
 		} else {
@@ -689,9 +689,9 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		};
 		let sync_gas_after = if expand_blocks {
 			quote! {
-				let gas_after = __caller__.data().ext.gas_meter().gas_left().ref_time();
+				let gas_after = __caller__.data_mut().ext().gas_meter().gas_left().ref_time();
 				let host_consumed = __gas_before__.saturating_sub(gas_after);
-				let fuel_consumed = host_consumed.checked_div(<E::T as Config>::Schedule::get().instruction_weights.base as u64).ok_or(Error::<E::T>::InvalidSchedule).map_err(#into_trap).map_err(#into_host)?;
+				let fuel_consumed = host_consumed.checked_div(__caller__.data_mut().ext().schedule().instruction_weights.base as u64).ok_or(Error::<E::T>::InvalidSchedule).map_err(#into_trap).map_err(#into_host)?;
 				__caller__.consume_fuel(fuel_consumed).map_err(|_| TrapReason::from(Error::<E::T>::OutOfGas)).map_err(#into_host)?;
 			}
 		} else {

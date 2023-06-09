@@ -422,24 +422,22 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
-		schedule: &Schedule<T>,
-		reftime_limit: u64,
 	) -> ExecResult {
-		let runtime = Runtime::new(ext, input_data);
 		let code = self.code.as_slice();
 		// Extract memory limits from the module.
 		let contract_module = prepare::ContractModule::new(code)?;
 		let memory_limits =
-			prepare::get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+			prepare::get_memory_limits(contract_module.scan_imports::<T>(&[])?, ext.schedule())?;
 		// Instantiate the Wasm module to the engine.
+		let runtime = Runtime::new(ext, input_data);
 		let (mut store, memory, instance) = Self::instantiate::<crate::wasm::runtime::Env, _>(
 			code,
 			runtime,
 			memory_limits,
 			StackLimits::default(),
 			match function {
-				ExportedFunction::Constructor => AllowDeprecatedInterface::No,
 				ExportedFunction::Call => AllowDeprecatedInterface::Yes,
+				ExportedFunction::Constructor => AllowDeprecatedInterface::No,
 			},
 		)
 		.map_err(|msg| {
@@ -448,9 +446,14 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		})?;
 		store.data_mut().set_memory(memory);
 
-		// Set fuel limit for the Wasm module execution.
+		// Set fuel limit for the wasmi execution.
 		// We normalize it by the base instruction weight, as its cost in wasmi engine is 1.
-		let fuel_limit = reftime_limit
+		let fuel_limit = store
+			.data_mut()
+			.ext()
+			.gas_meter_mut()
+			.gas_left()
+			.ref_time()
 			.checked_div(T::Schedule::get().instruction_weights.base as u64)
 			.ok_or(Error::<T>::InvalidSchedule)?;
 		store
@@ -472,11 +475,12 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 
 		let result = exported_func.call(&mut store, &[], &mut []);
 		let engine_consumed = store.fuel_consumed().expect("Fuel metering is enabled; qed");
-		// Scale the value back to `ref_time` weight.
+		// Scale the value back to ref_time` weight.
 		let reftime_consumed =
 			engine_consumed.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
-
-		store.into_data().to_execution_result(result, reftime_consumed)
+		// Sync this frame's gas meter with the engine's one.
+		store.data_mut().ext().gas_meter_mut().charge_fuel(reftime_consumed)?;
+		store.into_data().to_execution_result(result)
 	}
 
 	fn code_hash(&self) -> CodeHash<T> {
@@ -738,6 +742,9 @@ mod tests {
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
 		}
+		fn gas_meter(&self) -> &GasMeter<Self::T> {
+			&self.gas_meter
+		}
 		fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T> {
 			&mut self.gas_meter
 		}
@@ -795,13 +802,16 @@ mod tests {
 		type RuntimeConfig = <MockExt as Ext>::T;
 		RuntimeConfig::set_unstable_interface(unstable_interface);
 		let wasm = wat::parse_str(wat).unwrap();
-		let schedule = crate::Schedule::default();
 		let executable = if skip_checks {
-			WasmBlob::<RuntimeConfig>::from_code_unchecked(wasm, &schedule, ALICE)?
+			WasmBlob::<RuntimeConfig>::from_code_unchecked(
+				wasm,
+				ext.borrow_mut().schedule(),
+				ALICE,
+			)?
 		} else {
 			WasmBlob::<RuntimeConfig>::from_code(
 				wasm,
-				&schedule,
+				ext.borrow_mut().schedule(),
 				ALICE,
 				Determinism::Enforced,
 				TryInstantiate::Instantiate,

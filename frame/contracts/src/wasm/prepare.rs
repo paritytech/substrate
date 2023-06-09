@@ -459,10 +459,10 @@ pub mod benchmarking {
 		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
-	) -> Result<(WasmBlob<T>, OwnerInfo<T>), &'static str> {
-		let contract_module = ContractModule::new(&code, schedule)?;
-		/// We do this here just to check that module's memory import satisfies the schedule
-		let _memory_limits = get_memory_limits(contract_module.scan_imports(&[])?, schedule)?;
+	) -> Result<WasmBlob<T>, &'static str> {
+		let contract_module = ContractModule::new(&code)?;
+		// We do this here just to check that module's memory import satisfies the schedule
+		let _memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 
 		let code = code.try_into().map_err(|_| "Code too large!")?;
 		let owner_info = OwnerInfo {
@@ -473,7 +473,7 @@ pub mod benchmarking {
 			determinism: Determinism::Enforced,
 		};
 
-		Ok(Self { code, owner_info })
+		Ok(WasmBlob { code, owner_info })
 	}
 }
 
@@ -488,7 +488,7 @@ mod tests {
 	use pallet_contracts_proc_macro::define_env;
 	use std::fmt;
 
-	impl fmt::Debug for CodeVec<Test> {
+	impl fmt::Debug for WasmBlob<Test> {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 			write!(f, "ContractCode {{ .. }}")
 		}

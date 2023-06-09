@@ -6326,7 +6326,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "wasm-instrument 0.4.0",
- "wasmi 0.29.0",
+ "wasmi",
  "wasmparser-nostd",
  "wat",
 ]
