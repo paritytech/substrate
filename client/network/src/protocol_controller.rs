@@ -57,13 +57,11 @@ use crate::peer_store::PeerStoreProvider;
 /// Log target for this file.
 pub const LOG_TARGET: &str = "peerset";
 
-/// `Notifications` protocol identifier. For historical reasons it's called `SetId`, because it
+/// `Notifications` protocol index. For historical reasons it's called `SetId`, because it
 /// used to refer to a set of peers in a peerset for this protocol.
 ///
-/// Can be constructed using the `From<usize>` trait implementation based on the index of the set
-/// within [`PeersetConfig::sets`]. For example, the first element of [`PeersetConfig::sets`] is
-/// later referred to with `SetId::from(0)`. It is intended that the code responsible for building
-/// the [`PeersetConfig`] is also responsible for constructing the [`SetId`]s.
+/// Can be constructed using the `From<usize>` trait implementation based on the index of the
+/// protocol in `Notifications`.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SetId(usize);
 
@@ -101,7 +99,7 @@ pub struct ProtoSetConfig {
 	/// >			otherwise it will not be able to connect to them.
 	pub reserved_nodes: HashSet<PeerId>,
 
-	/// If true, we only accept nodes in [`SetConfig::reserved_nodes`].
+	/// If true, we only accept nodes in [`ProtoSetConfig::reserved_nodes`].
 	pub reserved_only: bool,
 }
 
@@ -261,8 +259,7 @@ impl Default for PeerState {
 	}
 }
 
-/// Side of [`ProtocolHandle`] responsible for all the logic. Currently all instances are
-/// owned by [`crate::Peerset`], but they should eventually be moved to corresponding protocols.
+/// Worker side of [`ProtocolHandle`] responsible for all the logic.
 #[derive(Debug)]
 pub struct ProtocolController {
 	/// Set id to use when sending connect/drop requests to `Notifications`.
