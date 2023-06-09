@@ -184,7 +184,7 @@ macro_rules! ignoring_arg {
 				<Self as EnsureOrigin<$o_param>>::try_origin(o)
 			}
 			#[cfg(feature = "runtime-benchmarks")]
-			fn try_successful_origin(_: &$t_param) -> Result<O, ()> {
+			fn try_successful_origin(_: &$t_param) -> Result<$o_param, ()> {
 				<Self as EnsureOrigin<$o_param>>::try_successful_origin()
 			}
 		}

@@ -272,7 +272,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		EnsureRankedMember::<T, I, MIN_RANK>::try_successful_origin()
+		<EnsureRankedMember<T, I, MIN_RANK> as EnsureOrigin<_>>::try_successful_origin()
 	}
 }
 
@@ -300,7 +300,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
-		EnsureRankedMember::<T, I, MIN_RANK>::try_successful_origin()
+		<EnsureRankedMember<T, I, MIN_RANK> as EnsureOrigin<_>>::try_successful_origin()
 	}
 }
 
