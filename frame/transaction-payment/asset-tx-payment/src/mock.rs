@@ -19,19 +19,23 @@ use crate as pallet_asset_tx_payment;
 use codec;
 use frame_support::{
 	dispatch::DispatchClass,
+	instances::Instance2,
+	ord_parameter_types,
 	pallet_prelude::*,
 	parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, FindAuthor},
+	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, Imbalance, OnUnbalanced},
 	weights::{Weight, WeightToFee as WeightToFeeT},
-	ConsensusEngineId,
+	PalletId,
 };
 use frame_system as system;
-use frame_system::EnsureRoot;
+use frame_system::{EnsureRoot, EnsureSignedBy};
+use pallet_asset_conversion::{NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, ConvertInto, IdentityLookup, SaturatedConversion},
+	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup, SaturatedConversion},
+	Permill,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -40,8 +44,7 @@ type Balance = u64;
 type AccountId = u64;
 
 frame_support::construct_runtime!(
-	pub struct Runtime
-	where
+	pub enum Runtime where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
@@ -50,7 +53,8 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
 		Assets: pallet_assets,
-		Authorship: pallet_authorship,
+		PoolAssets: pallet_assets::<Instance2>,
+		AssetConversion: pallet_asset_conversion,
 		AssetTxPayment: pallet_asset_tx_payment,
 	}
 );
@@ -144,9 +148,28 @@ impl WeightToFeeT for TransactionByteFee {
 	}
 }
 
+parameter_types! {
+	pub(crate) static TipUnbalancedAmount: u64 = 0;
+	pub(crate) static FeeUnbalancedAmount: u64 = 0;
+}
+
+pub struct DealWithFees;
+impl OnUnbalanced<pallet_balances::NegativeImbalance<Runtime>> for DealWithFees {
+	fn on_unbalanceds<B>(
+		mut fees_then_tips: impl Iterator<Item = pallet_balances::NegativeImbalance<Runtime>>,
+	) {
+		if let Some(fees) = fees_then_tips.next() {
+			FeeUnbalancedAmount::mutate(|a| *a += fees.peek());
+			if let Some(tips) = fees_then_tips.next() {
+				TipUnbalancedAmount::mutate(|a| *a += tips.peek());
+			}
+		}
+	}
+}
+
 impl pallet_transaction_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
+	type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 	type WeightToFee = WeightToFee;
 	type LengthToFee = TransactionByteFee;
 	type FeeMultiplierUpdate = ();
@@ -179,38 +202,71 @@ impl pallet_assets::Config for Runtime {
 	}
 }
 
-pub struct HardcodedAuthor;
-pub(crate) const BLOCK_AUTHOR: AccountId = 1234;
-impl FindAuthor<AccountId> for HardcodedAuthor {
-	fn find_author<'a, I>(_: I) -> Option<AccountId>
-	where
-		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
-	{
-		Some(BLOCK_AUTHOR)
+impl pallet_assets::Config<Instance2> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = u64;
+	type RemoveItemsLimit = ConstU32<1000>;
+	type AssetId = u32;
+	type AssetIdParameter = u32;
+	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<AssetConversionOrigin, u64>>;
+	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type AssetDeposit = ConstU64<0>;
+	type AssetAccountDeposit = ConstU64<0>;
+	type MetadataDepositBase = ConstU64<0>;
+	type MetadataDepositPerByte = ConstU64<0>;
+	type ApprovalDeposit = ConstU64<0>;
+	type StringLimit = ConstU32<50>;
+	type Freezer = ();
+	type Extra = ();
+	type WeightInfo = ();
+	type CallbackHandle = ();
+	pallet_assets::runtime_benchmarks_enabled! {
+		type BenchmarkHelper = ();
 	}
 }
 
-impl pallet_authorship::Config for Runtime {
-	type FindAuthor = HardcodedAuthor;
-	type EventHandler = ();
+parameter_types! {
+	pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
+	pub storage AllowMultiAssetPools: bool = false;
+	pub storage LiquidityWithdrawalFee: Permill = Permill::from_percent(0); // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
+	pub const MaxSwapPathLength: u32 = 4;
 }
 
-pub struct CreditToBlockAuthor;
-impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
-	fn handle_credit(credit: Credit<AccountId, Assets>) {
-		if let Some(author) = pallet_authorship::Pallet::<Runtime>::author() {
-			// What to do in case paying the author fails (e.g. because `fee < min_balance`)
-			// default: drop the result which will trigger the `OnDrop` of the imbalance.
-			let _ = <Assets as Balanced<AccountId>>::resolve(&author, credit);
-		}
-	}
+ord_parameter_types! {
+	pub const AssetConversionOrigin: u64 = AccountIdConversion::<u64>::into_account_truncating(&AssetConversionPalletId::get());
+}
+
+impl pallet_asset_conversion::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type AssetBalance = <Self as pallet_balances::Config>::Balance;
+	type AssetId = u32;
+	type PoolAssetId = u32;
+	type Assets = Assets;
+	type PoolAssets = PoolAssets;
+	type PalletId = AssetConversionPalletId;
+	type WeightInfo = ();
+	type LPFee = ConstU32<3>; // means 0.3%
+	type PoolSetupFee = ConstU64<100>; // should be more or equal to the existential deposit
+	type PoolSetupFeeReceiver = AssetConversionOrigin;
+	type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
+	type AllowMultiAssetPools = AllowMultiAssetPools;
+	type MaxSwapPathLength = MaxSwapPathLength;
+	type MintMinLiquidity = ConstU64<100>; // 100 is good enough when the main currency has 12 decimals.
+
+	type Balance = u64;
+	type HigherPrecisionBalance = u128;
+
+	type MultiAssetId = NativeOrAssetId<u32>;
+	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Fungibles = Assets;
-	type OnChargeAssetTransaction = FungiblesAdapter<
-		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
-		CreditToBlockAuthor,
-	>;
+	type OnChargeAssetTransaction = AssetConversionAdapter<AssetConversion>;
 }

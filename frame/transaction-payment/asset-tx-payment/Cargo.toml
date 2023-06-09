@@ -35,8 +35,8 @@ serde_json = "1.0.85"
 sp-storage = { version = "13.0.0", default-features = false, path = "../../../primitives/storage" }
 
 pallet-assets = { version = "4.0.0-dev", path = "../../assets" }
-pallet-authorship = { version = "4.0.0-dev", path = "../../authorship" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
+pallet-asset-conversion = { version = "4.0.0-dev", path = "../../asset-conversion" }
 
 [features]
 default = ["std"]

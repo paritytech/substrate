@@ -41,10 +41,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchInfo, DispatchResult, PostDispatchInfo},
 	traits::{
-		tokens::{
-			fungibles::{Balanced, Credit, Inspect},
-			WithdrawConsequence,
-		},
+		tokens::fungibles::{Balanced, Inspect},
 		IsType,
 	},
 	DefaultNoBound,
@@ -104,7 +101,7 @@ pub enum InitialPayment<T: Config> {
 	/// The initial fee was payed in the native currency.
 	Native(LiquidityInfoOf<T>),
 	/// The initial fee was payed in an asset.
-	Asset(Credit<T::AccountId, T::Fungibles>),
+	Asset(LiquidityInfoOf<T>),
 }
 
 pub use pallet::*;
@@ -159,7 +156,7 @@ where
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	Credit<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
+	LiquidityInfoOf<T>: IsType<ChargeAssetLiquidityOf<T>>,
 {
 	/// Utility constructor. Used only in client/factory code.
 	pub fn from(tip: BalanceOf<T>, asset_id: Option<ChargeAssetIdOf<T>>) -> Self {
@@ -216,7 +213,7 @@ where
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	Credit<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
+	LiquidityInfoOf<T>: IsType<ChargeAssetLiquidityOf<T>>,
 {
 	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
 	type AccountId = T::AccountId;
@@ -284,21 +281,24 @@ where
 						len as u32, info, post_info, tip,
 					);
 
-					let (converted_fee, converted_tip) =
-						T::OnChargeAssetTransaction::correct_and_deposit_fee(
-							&who,
-							info,
-							post_info,
-							actual_fee.into(),
-							tip.into(),
-							already_withdrawn.into(),
-						)?;
-					Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
-						who,
-						actual_fee: converted_fee,
-						tip: converted_tip,
-						asset_id,
-					});
+					match T::OnChargeAssetTransaction::correct_and_deposit_fee(
+						&who,
+						info,
+						post_info,
+						actual_fee.into(),
+						tip.into(),
+						already_withdrawn.into(),
+					)? {
+						(Some(converted_fee), Some(converted_tip)) => {
+							Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
+								who,
+								actual_fee: converted_fee,
+								tip: converted_tip,
+								asset_id,
+							});
+						},
+						_ => {},
+					}
 				},
 				InitialPayment::Nothing => {
 					// `actual_fee` should be zero here for any signed extrinsic. It would be

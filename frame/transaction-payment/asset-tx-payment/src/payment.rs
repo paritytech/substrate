@@ -19,18 +19,13 @@ use crate::Config;
 
 use codec::FullCodec;
 use frame_support::{
-	traits::{
-		fungibles::{Balanced, Credit, Inspect},
-		tokens::{
-			Balance, ConversionToAssetBalance, Fortitude::Polite, Precision::Exact,
-			Preservation::Protect,
-		},
-	},
+	ensure,
+	traits::{fungibles::SwapForNative, tokens::Balance},
 	unsigned::TransactionValidityError,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, MaybeSerializeDeserialize, One, PostDispatchInfoOf},
+	traits::{DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf},
 	transaction_validity::InvalidTransaction,
 };
 use sp_std::{fmt::Debug, marker::PhantomData};
@@ -70,105 +65,81 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
 		already_withdrawn: Self::LiquidityInfo,
-	) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), TransactionValidityError>;
-}
-
-/// Allows specifying what to do with the withdrawn asset fees.
-pub trait HandleCredit<AccountId, B: Balanced<AccountId>> {
-	/// Implement to determine what to do with the withdrawn asset fees.
-	/// Default for `CreditOf` from the assets pallet is to burn and
-	/// decrease total issuance.
-	fn handle_credit(credit: Credit<AccountId, B>);
-}
-
-/// Default implementation that just drops the credit according to the `OnDrop` in the underlying
-/// imbalance type.
-impl<A, B: Balanced<A>> HandleCredit<A, B> for () {
-	fn handle_credit(_credit: Credit<A, B>) {}
+	) -> Result<(Option<AssetBalanceOf<T>>, Option<AssetBalanceOf<T>>), TransactionValidityError>;
 }
 
 /// Implements the asset transaction for a balance to asset converter (implementing
-/// [`ConversionToAssetBalance`]) and a credit handler (implementing [`HandleCredit`]).
+/// [`SwapForNative`]).
 ///
-/// The credit handler is given the complete fee in terms of the asset used for the transaction.
-pub struct FungiblesAdapter<CON, HC>(PhantomData<(CON, HC)>);
+/// The converter is given the complete fee in terms of the asset used for the transaction.
+pub struct AssetConversionAdapter<CON>(PhantomData<CON>);
 
-/// Default implementation for a runtime instantiating this pallet, a balance to asset converter and
-/// a credit handler.
-impl<T, CON, HC> OnChargeAssetTransaction<T> for FungiblesAdapter<CON, HC>
+/// Default implementation for a runtime instantiating this pallet, an asset to native swapper.
+impl<T, CON> OnChargeAssetTransaction<T> for AssetConversionAdapter<CON>
 where
 	T: Config,
-	CON: ConversionToAssetBalance<BalanceOf<T>, AssetIdOf<T>, AssetBalanceOf<T>>,
-	HC: HandleCredit<T::AccountId, T::Fungibles>,
+	CON: SwapForNative<
+		T::RuntimeOrigin,
+		T::AccountId,
+		BalanceOf<T>,
+		AssetBalanceOf<T>,
+		AssetIdOf<T>,
+	>,
 	AssetIdOf<T>: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo,
 {
 	type Balance = BalanceOf<T>;
 	type AssetId = AssetIdOf<T>;
-	type LiquidityInfo = Credit<T::AccountId, T::Fungibles>;
+	type LiquidityInfo = LiquidityInfoOf<T>;
 
 	/// Withdraw the predicted fee from the transaction origin.
 	///
 	/// Note: The `fee` already includes the `tip`.
 	fn withdraw_fee(
 		who: &T::AccountId,
-		_call: &T::RuntimeCall,
-		_info: &DispatchInfoOf<T::RuntimeCall>,
+		call: &T::RuntimeCall,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		asset_id: Self::AssetId,
-		fee: Self::Balance,
-		_tip: Self::Balance,
+		fee: BalanceOf<T>,
+		tip: BalanceOf<T>,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError> {
-		// We don't know the precision of the underlying asset. Because the converted fee could be
-		// less than one (e.g. 0.5) but gets rounded down by integer division we introduce a minimum
-		// fee.
-		let min_converted_fee = if fee.is_zero() { Zero::zero() } else { One::one() };
-		let converted_fee = CON::to_asset_balance(fee, asset_id)
-			.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?
-			.max(min_converted_fee);
-		let can_withdraw =
-			<T::Fungibles as Inspect<T::AccountId>>::can_withdraw(asset_id, who, converted_fee);
-		if !matches!(can_withdraw, WithdrawConsequence::Success) {
-			return Err(InvalidTransaction::Payment.into())
-		}
-		<T::Fungibles as Balanced<T::AccountId>>::withdraw(
-			asset_id,
-			who,
-			converted_fee,
-			Exact,
-			Protect,
-			Polite,
-		)
-		.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))
+		// convert the asset into native currency
+		let asset_consumed =
+			CON::swap_tokens_for_exact_native(who.clone(), asset_id, fee, None, who.clone(), true)
+				.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
+
+		ensure!(asset_consumed > Zero::zero(), InvalidTransaction::Payment);
+
+		// charge the fee in native currency
+		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)
 	}
 
-	/// Hand the fee and the tip over to the `[HandleCredit]` implementation.
-	/// Since the predicted fee might have been too high, parts of the fee may be refunded.
+	/// Delegate to the OnChargeTransaction functionality.
 	///
 	/// Note: The `corrected_fee` already includes the `tip`.
-	///
-	/// Returns the fee and tip in the asset used for payment as (fee, tip).
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
-		_dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
-		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
-		corrected_fee: Self::Balance,
-		tip: Self::Balance,
+		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
+		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
+		corrected_fee: BalanceOf<T>,
+		tip: BalanceOf<T>,
 		paid: Self::LiquidityInfo,
-	) -> Result<(AssetBalanceOf<T>, AssetBalanceOf<T>), TransactionValidityError> {
-		let min_converted_fee = if corrected_fee.is_zero() { Zero::zero() } else { One::one() };
-		// Convert the corrected fee and tip into the asset used for payment.
-		let converted_fee = CON::to_asset_balance(corrected_fee, paid.asset())
-			.map_err(|_| -> TransactionValidityError { InvalidTransaction::Payment.into() })?
-			.max(min_converted_fee);
-		let converted_tip = CON::to_asset_balance(tip, paid.asset())
-			.map_err(|_| -> TransactionValidityError { InvalidTransaction::Payment.into() })?;
-
-		// Calculate how much refund we should return.
-		let (final_fee, refund) = paid.split(converted_fee);
-		// Refund to the account that paid the fees. If this fails, the account might have dropped
-		// below the existential balance. In that case we don't refund anything.
-		let _ = <T::Fungibles as Balanced<T::AccountId>>::resolve(who, refund);
-		// Handle the final fee, e.g. by transferring to the block author or burning.
-		HC::handle_credit(final_fee);
-		Ok((converted_fee, converted_tip))
+	) -> Result<(Option<AssetBalanceOf<T>>, Option<AssetBalanceOf<T>>), TransactionValidityError> {
+		// Refund to the account that paid the fees. If this fails, the account might have
+		// dropped below the existential balance. In that case we don't refund anything.
+		//
+		// NOTE: We do not automatically convert the native token back to the asset,
+		// otherwise the fee could go back and forth between the two currencies each time incurring
+		// dex charges over the course of several transactions. It's better for the user
+		// that it stays in native. Smart wallets should realise if there's enough native currency
+		// built up to pay the transaction with.
+		<T::OnChargeTransaction>::correct_and_deposit_fee(
+			who,
+			dispatch_info,
+			post_info,
+			corrected_fee,
+			tip,
+			paid,
+		)?;
+		Ok((None, None))
 	}
 }
