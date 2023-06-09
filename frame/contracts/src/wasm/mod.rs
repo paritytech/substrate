@@ -20,7 +20,6 @@
 
 mod prepare;
 mod runtime;
-mod parse;
 
 #[cfg(doc)]
 pub use crate::wasm::runtime::api_doc;
@@ -39,10 +38,9 @@ pub use crate::wasm::{
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::{GasMeter, Token},
-	wasm::prepare::IMPORT_MODULE_MEMORY,
 	weights::WeightInfo,
-	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeStorage, CodeVec, Config, Error, Event,
-	OwnerInfoOf, Pallet, PristineCode, Schedule, Weight, LOG_TARGET,
+	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeVec, Config, Error, Event, OwnerInfoOf,
+	Pallet, PristineCode, Schedule, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -51,48 +49,24 @@ use frame_support::{
 	traits::ReservableCurrency,
 };
 use sp_core::Get;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{traits::Hash, RuntimeDebug};
 use sp_std::prelude::*;
 use wasmi::{
-	Config as WasmiConfig, Engine, ExternType, FuelConsumptionMode, Instance, Linker, Memory,
-	MemoryType, Module, StackLimits, Store,
+	Config as WasmiConfig, Engine, FuelConsumptionMode, Instance, Linker, Memory, MemoryType,
+	Module, StackLimits, Store,
 };
 
-/// A prepared wasm module ready for execution.
-///
-/// # Note
-///
-/// This data structure is immutable once created and stored.
-#[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+/// TODO: docs
+#[derive(Encode, Decode, scale_info::TypeInfo)]
 #[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
-pub struct PrefabWasmModule<T: Config> {
-	/// Initial memory size of a contract's sandbox.
-	#[codec(compact)]
-	initial: u32,
-	/// The maximum memory size of a contract's sandbox.
-	#[codec(compact)]
-	maximum: u32,
-	/// Module's code.
+pub struct WasmBlob<T: Config> {
 	code: CodeVec<T>,
-	/// A code that might contain non deterministic features and is therefore never allowed
-	/// to be run on chain. Specifically this code can never be instantiated into a contract
-	/// and can just be used through a delegate call.
-	determinism: Determinism,
-	/// The code hash of the stored code.
-	///
-	/// As the map key there is no need to store the hash in the value, too. It is set manually
-	/// when loading the module from storage.
-	#[codec(skip)]
-	code_hash: CodeHash<T>,
 	// This isn't needed for contract execution and does not get loaded from storage by default.
 	// It is `Some` if and only if this struct was generated from code.
 	#[codec(skip)]
-	owner_info: Option<OwnerInfo<T>>,
+	pub owner_info: OwnerInfo<T>,
 }
-
-/// TODO: docs
-pub struct WasmBlob<T: Config>(CodeVec<T>);
 
 /// Contract metadata, such as:
 /// - owner of the contract,
@@ -174,50 +148,38 @@ impl<T: Config> Token<T> for CodeToken {
 	}
 }
 
-impl<T: Config> From<CodeVec<T>> for WasmBlob<T> {
-	fn from(code: CodeVec<T>) -> Self {
-		Self(code)
-	}
-}
-
 impl<T: Config> WasmBlob<T> {
 	/// Create the module by checking the `code`.
 	///
 	/// This does **not** store the module. For this one need to either call [`Self::store`]
 	/// or [`<Self as Executable>::execute`][`Executable::execute`].
-	/// TODO: rename to validate?
-	/// TODO: move to ContractCode<Wasm> trait
 	pub fn from_code(
 		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 		determinism: Determinism,
 		try_instantiate: TryInstantiate,
-	) -> Result<(Self, OwnerInfo<T>), (DispatchError, &'static str)> {
-		let (code, owner_info) = prepare::prepare::<runtime::Env, T>(
-			// TODO: this preparation is specific to wasm
+	) -> Result<Self, (DispatchError, &'static str)> {
+		prepare::prepare::<runtime::Env, T>(
 			code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 			schedule,
 			owner,
 			determinism,
 			try_instantiate,
-		)?;
-		Ok((code.into(), owner_info)) // TODO: refactor
+		)
 	}
 
 	/// Store the code without instantiating it.
 	///
 	/// Otherwise the code is stored when [`<Self as Executable>::execute`][`Executable::execute`]
 	/// is called.
-	/// TODO: move to ContractCode trait as default impl
-	pub fn store(self, owner_info: OwnerInfo<T>) -> DispatchResult {
-		Self::store_code(self, owner_info, false)
+	pub fn store(self) -> DispatchResult {
+		Self::store_code(self, false)
 	}
 
 	/// Remove the code from storage and refund the deposit to its owner.
 	///
 	/// Applies all necessary checks before removing the code.
-	/// TODO: move to ContractCode trait default impl
 	pub fn remove(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
 		Self::try_remove_code(origin, code_hash)
 	}
@@ -226,7 +188,6 @@ impl<T: Config> WasmBlob<T> {
 	///
 	/// Returns `0` if the module is already in storage and hence no deposit will
 	/// be charged when storing it.
-	/// TODO: move to ContractCode trait default impl
 	pub fn open_deposit(&self, owner_info: OwnerInfo<T>) -> BalanceOf<T> {
 		<OwnerInfoOf<T>>::try_get(self.code_hash()).map_or(owner_info.deposit, |_| 0u32.into())
 	}
@@ -234,19 +195,19 @@ impl<T: Config> WasmBlob<T> {
 	/// Creates and returns an instance of the supplied code.
 	///
 	/// This is either used for later executing a contract or for validation of a contract.
-	/// When validating we pass `()` as `host_state`. Please note that such a dummy instance must
+	/// When validating we pass `()` a `host_state`. Please note that such a dummy instance must
 	/// **never** be called/executed since it will panic the executor.
-	/// TODO: move to ContractCode<Wasm> trait
 	pub fn instantiate<E, H>(
 		code: &[u8],
 		host_state: H,
+		memory_limits: (u32, u32),
 		stack_limits: StackLimits,
 		allow_deprecated: AllowDeprecatedInterface,
 	) -> Result<(Store<H>, Memory, Instance), wasmi::Error>
 	where
 		E: Environment<H>,
 	{
-		let mut config = WasmiConfig::default(); // TODO: this method is specific to wasm
+		let mut config = WasmiConfig::default();
 		config
 			.set_stack_limits(stack_limits)
 			.wasm_multi_value(false)
@@ -271,18 +232,15 @@ impl<T: Config> WasmBlob<T> {
 			allow_deprecated,
 		)?;
 
-		// TODO: implement
-		let mem_limits = Self::get_memory_limits(code)
-			.map_err(|_| wasmi::errors::MemoryError::InvalidMemoryType)?;
-
-		// TODO: do we really need this?
-		// Here we allocate this memory in the _store_. It allocates _inital_ val, but allows it to grow up
-		// to max number of mem pages, if neccesary.
-		let memory = Memory::new(&mut store, MemoryType::new(mem_limits.0, Some(mem_limits.1))?).expect(
-			"We checked the limits versus our `Schedule`,
-			 which specifies the max amount of memory pages
-			 well below u16::MAX; qed",
-		);
+		// Here we allocate this memory in the _store_. It allocates _inital_ val, but allows it to
+		// grow up to max number of mem pages, if neccesary.
+		let memory =
+			Memory::new(&mut store, MemoryType::new(memory_limits.0, Some(memory_limits.1))?)
+				.expect(
+					"We checked the limits versus our `Schedule`,
+					 which specifies the max amount of memory pages
+					 well below u16::MAX; qed",
+				);
 		linker
 			.define("env", "memory", memory)
 			.expect("We just created the linker. It has no define with this name attached; qed");
@@ -292,58 +250,24 @@ impl<T: Config> WasmBlob<T> {
 		Ok((store, memory, instance))
 	}
 
-	fn get_memory_limits(code: &[u8]) -> Result<(u32, u32), &'static str> {
-		validate::mem_limits(code)
-// -- move / rewrite to wasm::validate
-		let mut mem_type = None;
-		for import in *imports {
-			match *import.ty() {
-				ExternType::Memory(ref memory_type) => {
-					if import.module() != IMPORT_MODULE_MEMORY {
-						return Err("Invalid module for imported memory")
-					}
-					if import.name() != "memory" {
-						return Err("Memory import must have the field name 'memory'")
-					}
-					mem_type = Some(memory_type);
-					break
-				},
-				_ => continue,
-			}
-		}
-
-		// We don't need to check here if module memory limits satisfy the schedule,
-		// as this is already being done during the code uploading.
-		// If none memory imported then set its limits to (0,0).
-		// Any access to it will lead to out of bounds trap.
-		let get_limits = mem_type.map_or(Default::default(), |mt| {
-			(
-				mt.initial_pages().0,
-				mt.maximum_pages().ok_or("Maximum number of pages should be always declared.")?.0,
-			)
-		});
-		Ok(get_limits)
-	}
-
 	/// Put the module blob into storage.
 	///
 	/// Increments the refcount of the in-storage `prefab_module` if it already exists in storage
 	/// under the specified `code_hash`.
-	/// TODO: move to ContractCode trait default impl
-	fn store_code(code: Self, owner_info: OwnerInfo<T>, instantiated: bool) -> DispatchResult {
-		let code_hash = Self::code_hash(&code); // TODO: move to impl
+	fn store_code(mut module: Self, instantiated: bool) -> DispatchResult {
+		let code_hash = &module.code_hash();
 		<OwnerInfoOf<T>>::mutate(code_hash, |stored_owner_info| {
 			match stored_owner_info {
 				// Instantiate existing contract.
 				Some(stored_owner_info) if instantiated => {
 					stored_owner_info.refcount = stored_owner_info.refcount.checked_add(1).expect(
 						"
-					  refcount is 64bit. Generating this overflow would require to store
-					  _at least_ 18 exabyte of data assuming that a contract consumes only
-					  one byte of data. Any node would run out of storage space before hitting
-					  this overflow;
-					  qed
-					  ",
+					 refcount is 64bit. Generating this overflow would require to store
+					 _at least_ 18 exabyte of data assuming that a contract consumes only
+					 one byte of data. Any node would run out of storage space before hitting
+					 this overflow;
+					 qed
+					",
 					);
 					Ok(())
 				},
@@ -355,11 +279,11 @@ impl<T: Config> WasmBlob<T> {
 				None => {
 					// This `None` case happens only in freshly uploaded modules. This means that
 					// the `owner` is always the origin of the current transaction.
-					T::Currency::reserve(&owner_info.owner, owner_info.deposit)
+					T::Currency::reserve(&module.owner_info.owner, module.owner_info.deposit)
 						.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
-					owner_info.refcount = if instantiated { 1 } else { 0 };
-					<PristineCode<T>>::insert(&code_hash, code.0);
-					*stored_owner_info = Some(owner_info);
+					module.owner_info.refcount = if instantiated { 1 } else { 0 };
+					<PristineCode<T>>::insert(code_hash, module.code);
+					*stored_owner_info = Some(module.owner_info);
 					<Pallet<T>>::deposit_event(
 						vec![*code_hash],
 						Event::CodeStored { code_hash: *code_hash },
@@ -371,7 +295,6 @@ impl<T: Config> WasmBlob<T> {
 	}
 
 	/// Try to remove code together with all associated information.
-	/// TODO: move to ContractCode trait default impl
 	fn try_remove_code(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
 		<OwnerInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
 			if let Some(owner_info) = existing {
@@ -389,7 +312,6 @@ impl<T: Config> WasmBlob<T> {
 	}
 
 	/// Load code with the given code hash.
-	/// TODO: move to ContractCode trait default impl
 	fn load_code(
 		code_hash: CodeHash<T>,
 		gas_meter: &mut GasMeter<T>,
@@ -410,7 +332,6 @@ impl<T: Config> WasmBlob<T> {
 	///
 	/// A contract whose refcount dropped to zero isn't automatically removed. A `remove_code`
 	/// transaction must be submitted by the original uploader to do so.
-	/// TODO: move to ContractCode trait default impl
 	fn decrement_refcount(code_hash: CodeHash<T>) {
 		<OwnerInfoOf<T>>::mutate(code_hash, |existing| {
 			if let Some(info) = existing {
@@ -424,7 +345,6 @@ impl<T: Config> WasmBlob<T> {
 	/// # Errors
 	///
 	/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
-	/// TODO: move to ContractCode trait default impl
 	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
 		<OwnerInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
 			if let Some(info) = existing {
@@ -436,7 +356,6 @@ impl<T: Config> WasmBlob<T> {
 		})
 	}
 	/// See [`Self::from_code_unchecked`].
-	/// TODO: move to ContractCode trait default impl
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_unchecked(
 		code: Vec<u8>,
@@ -454,14 +373,12 @@ impl<T: Config> WasmBlob<T> {
 	/// This is useful for benchmarking where we don't want validation of the module to skew
 	/// our results. This also does not collect any deposit from the `owner`. Also useful
 	/// during testing when we want to deploy codes that do not pass the instantiation checks.
-	/// TODO: move to ContractCode<Wasm> trait
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	fn from_code_unchecked(
 		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: T::AccountId,
-	) -> Result<(Self, OwnerInfo<T>), DispatchError> {
-		// TODO: this is wasm-specific
+	) -> Result<Self, DispatchError> {
 		prepare::benchmarking::prepare(code, schedule, owner)
 			.map_err::<DispatchError, _>(Into::into)
 	}
@@ -475,18 +392,21 @@ impl<T: Config> OwnerInfo<T> {
 	}
 }
 
-// TODO
-// WasmModule : Stored
-// impl Executable for Stored
-// impl Executable for WasmModule
-
 impl<T: Config> Executable<T> for WasmBlob<T> {
 	fn from_storage(
 		code_hash: CodeHash<T>,
 		_schedule: &Schedule<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
-		Self::load_code(code_hash, gas_meter).map(|code| code.into())
+		let code = Self::load_code(code_hash, gas_meter)?;
+		let code_hash = T::Hashing::hash(&code);
+		// We store owner info at the same time as contract code,
+		// therefore this query shouldn't really fail.
+		// We consider its failure equal to CodeNotFound, as contract code without
+		// owner_info is unusable in this pallet.
+		let owner_info = <OwnerInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
+
+		Ok(Self { code, owner_info })
 	}
 
 	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
@@ -502,13 +422,20 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
+		schedule: &Schedule<T>,
 		reftime_limit: u64,
 	) -> ExecResult {
 		let runtime = Runtime::new(ext, input_data);
+		let code = self.code.as_slice();
+		// Extract memory limits from the module.
+		let contract_module = prepare::ContractModule::new(code)?;
+		let memory_limits =
+			prepare::get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+		// Instantiate the Wasm module to the engine.
 		let (mut store, memory, instance) = Self::instantiate::<crate::wasm::runtime::Env, _>(
-			self.0.as_slice(),
+			code,
 			runtime,
-			// TODO del			(self.initial, self.maximum),
+			memory_limits,
 			StackLimits::default(),
 			match function {
 				ExportedFunction::Constructor => AllowDeprecatedInterface::No,
@@ -552,12 +479,12 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		store.into_data().to_execution_result(result, reftime_consumed)
 	}
 
-	fn code_hash(&self) -> &CodeHash<T> {
-		T::Hashing::hash(self)
+	fn code_hash(&self) -> CodeHash<T> {
+		T::Hashing::hash(&self.code)
 	}
 
 	fn code_len(&self) -> u32 {
-		self.len() as u32
+		self.code.len() as u32
 	}
 
 	fn is_deterministic(&self) -> bool {

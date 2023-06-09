@@ -101,7 +101,7 @@ use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
-	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate, WasmBlob},
+	wasm::{OwnerInfo, TryInstantiate, WasmBlob},
 	weights::WeightInfo,
 };
 use codec::{Codec, Decode, Encode, HasCompact};
@@ -929,12 +929,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeVec<T>>;
 
-	/// A mapping between an original code hash and Wasm code, ready for execution.
-	/// TODO: delete
-	#[pallet::storage]
-	pub(crate) type CodeStorage<T: Config> =
-		StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
-
 	/// A mapping between an original code hash and its owner information.
 	#[pallet::storage]
 	pub(crate) type OwnerInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, OwnerInfo<T>>;
@@ -1217,7 +1211,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 			let origin = contract_origin.account_id()?;
 			let (extra_deposit, executable) = match &self.code {
 				Code::Upload(binary) => {
-					let (executable, owner_info) = WasmBlob::from_code(
+					let executable = WasmBlob::from_code(
 						binary.clone(),
 						&schedule,
 						origin.clone(),
@@ -1231,6 +1225,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 							.map(|buffer| buffer.try_extend(&mut msg.bytes()));
 						err
 					})?;
+					let owner_info = executable.owner_info.clone();
 					// The open deposit will be charged during execution when the
 					// uploaded module does not already exist. This deposit is not part of the
 					// storage meter because it is not transferred to the contract but
@@ -1422,11 +1417,11 @@ impl<T: Config> Pallet<T> {
 		let module =
 			WasmBlob::from_code(code, &schedule, origin, determinism, TryInstantiate::Instantiate)
 				.map_err(|(err, _)| err)?;
-		let deposit = module.open_deposit();
+		let deposit = module.open_deposit(module.owner_info.clone());
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
 		}
-		let result = CodeUploadReturnValue { code_hash: *module.code_hash(), deposit };
+		let result = CodeUploadReturnValue { code_hash: module.code_hash(), deposit };
 		module.store()?;
 		Ok(result)
 	}

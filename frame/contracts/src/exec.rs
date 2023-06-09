@@ -362,11 +362,12 @@ pub trait Executable<T: Config>: Sized {
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
+		schedule: &Schedule<T>,
 		reftime_limit: u64,
 	) -> ExecResult;
 
 	/// The code hash of the executable.
-	fn code_hash(&self) -> &CodeHash<T>;
+	fn code_hash(&self) -> CodeHash<T>;
 
 	/// Size of the conract code in bytes.
 	fn code_len(&self) -> u32;
@@ -765,11 +766,11 @@ where
 				FrameArgs::Instantiate { sender, nonce, executable, salt, input_data } => {
 					let account_id = Contracts::<T>::contract_address(
 						&sender,
-						executable.code_hash(),
+						&executable.code_hash(),
 						input_data,
 						salt,
 					);
-					let contract = ContractInfo::new(&account_id, nonce, *executable.code_hash())?;
+					let contract = ContractInfo::new(&account_id, nonce, executable.code_hash())?;
 					(
 						account_id,
 						contract,
@@ -851,7 +852,7 @@ where
 		let frame = self.top_frame();
 		let entry_point = frame.entry_point;
 		let delegated_code_hash =
-			if frame.delegate_caller.is_some() { Some(*executable.code_hash()) } else { None };
+			if frame.delegate_caller.is_some() { Some(executable.code_hash()) } else { None };
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
@@ -873,11 +874,12 @@ where
 			// Take the ref_time part of the gas_left from the current frame.
 			let frame = self.top_frame();
 			let reftime_left = frame.nested_gas.gas_left().ref_time();
+			let schedule = &self.schedule().clone();
 
 			// Call into the Wasm blob.
 			// We pass `reftime_left` into the execution engine to initialize its gas metering.
 			let output = executable
-				.execute(self, &entry_point, input_data, reftime_left)
+				.execute(self, &entry_point, input_data, schedule, reftime_left)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
 			// Sync this frame's gas meter with the engine's one.

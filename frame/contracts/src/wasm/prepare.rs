@@ -26,8 +26,8 @@ use crate::{
 	wasm::{runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, WasmBlob},
 	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
-use codec::{Encode, MaxEncodedLen};
-use sp_runtime::{traits::Hash, DispatchError};
+use codec::MaxEncodedLen;
+use sp_runtime::DispatchError;
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{
 	self, External, Internal, MemoryType, Type, ValueType,
@@ -54,17 +54,16 @@ pub enum TryInstantiate {
 	Skip,
 }
 
-/// The inner deserialized module is valid (this is Guaranteed by `new` method).
-/// TODO: get rid of parity_wasm dependency here
-struct ContractModule(elements::Module);
+/// The inner deserialized module is valid (this is guaranteed by `new` method).
+pub struct ContractModule(elements::Module);
 
 impl ContractModule {
 	/// Creates a new instance of `ContractModule`.
 	///
 	/// Returns `Err` if the `code` couldn't be decoded or
 	/// if it contains an invalid module.
-	fn new(code: &[u8]) -> Result<Self, &'static str> {
-		let module = elements::deserialize_buffer(code).map_err(|_| "Can't decode wasm code")?;
+	pub fn new(code: &[u8]) -> Result<Self, &'static str> {
+		let module = elements::deserialize_buffer(code).map_err(|_| "Can't decode Wasm code")?;
 
 		// Return a `ContractModule` instance with
 		// __valid__ module.
@@ -242,7 +241,7 @@ impl ContractModule {
 	/// and enforces and returns the memory type declared by the contract if any.
 	///
 	/// `import_fn_banlist`: list of function names that are disallowed to be imported
-	fn scan_imports<T: Config>(
+	pub fn scan_imports<T: Config>(
 		&self,
 		import_fn_banlist: &[&[u8]],
 	) -> Result<Option<&MemoryType>, &'static str> {
@@ -280,7 +279,7 @@ impl ContractModule {
 				},
 			}
 		}
-		// TODO drop this as we use it now from wasmi
+
 		Ok(imported_mem_type)
 	}
 
@@ -288,8 +287,8 @@ impl ContractModule {
 		elements::serialize(self.0).map_err(|_| "error serializing contract module")
 	}
 }
-// TODO: remove this once got rid of parity_wasm dep
-fn get_memory_limits<T: Config>(
+
+pub fn get_memory_limits<T: Config>(
 	module: Option<&MemoryType>,
 	schedule: &Schedule<T>,
 ) -> Result<(u32, u32), &'static str> {
@@ -298,20 +297,17 @@ fn get_memory_limits<T: Config>(
 		let limits = memory_type.limits();
 		match (limits.initial(), limits.maximum()) {
 			(initial, Some(maximum)) if initial > maximum =>
-				Err("Requested initial number of pages should not exceed the requested maximum"),
+				Err("Requested initial number of memory pages should not exceed the requested maximum"),
 			(_, Some(maximum)) if maximum > schedule.limits.memory_pages =>
-				Err("Maximum number of pages should not exceed the configured maximum."),
+				Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule."),
 			(initial, Some(maximum)) => Ok((initial, maximum)),
-			(_, None) => {
-				// Maximum number of pages should be always declared.
-				// This isn't a hard requirement and can be treated as a maximum set
-				// to configured maximum.
-				Err("Maximum number of pages should be always declared.")
+			(initial, None) => {
+				Ok((initial, schedule.limits.memory_pages))
 			},
 		}
 	} else {
-		// If none memory imported then just create an empty placeholder.
-		// Any access to it will lead to out of bounds trap.
+		// None memory imported in the Wasm module,
+		// any access to it will lead to out of bounds trap.
 		Ok((0, 0))
 	}
 }
@@ -371,7 +367,7 @@ where
 		contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
-		/// TODO: it is done here just to check that module imported memory satisfies the schedule
+		// We do it here just to check that module imported memory satisfies the Schedule limits
 		let _memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 
 		let code = contract_module.into_wasm_code()?;
@@ -391,8 +387,14 @@ where
 		// We don't actually ever run any code so we can get away with a minimal stack which
 		// reduces the amount of memory that needs to be zeroed.
 		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
-		WasmBlob::<T>::instantiate::<E, _>(&code, (), stack_limits, AllowDeprecatedInterface::No)
-			.map_err(|err| {
+		WasmBlob::<T>::instantiate::<E, _>(
+			&code,
+			(),
+			Default::default(),
+			stack_limits,
+			AllowDeprecatedInterface::No,
+		)
+		.map_err(|err| {
 			log::debug!(target: LOG_TARGET, "{}", err);
 			(Error::<T>::CodeRejected.into(), "new code rejected on wasmi instantiation")
 		})?;
@@ -415,7 +417,7 @@ pub fn prepare<E, T>(
 	owner: AccountIdOf<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
-) -> Result<(CodeVec<T>, OwnerInfo<T>), (DispatchError, &'static str)>
+) -> Result<WasmBlob<T>, (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
@@ -425,13 +427,13 @@ where
 	let err = |_| (<Error<T>>::CodeTooLarge.into(), "preparation enlarged the code excessively");
 
 	let changed_code: CodeVec<T> = checked_code.try_into().map_err(err)?;
-	/// TODO: either remove this, or if the code rally changes, explain in the docs, why
+	// TODO: either remove this, or if the code really changes, explain in the docs, why
 	ensure!(
 		code == changed_code,
 		(<Error<T>>::CodeTooLarge.into(), "preparation altered the code")
 	);
 
-	// Calculate deposit for storing contract code and owner info in different storage items.
+	// Calculate deposit for storing contract code and owner info in two different storage items.
 	let bytes_added = code.len().saturating_add(<OwnerInfo<T>>::max_encoded_len()) as u32;
 	let deposit = Diff { bytes_added, items_added: 2, ..Default::default() }
 		.update_contract::<T>(None)
@@ -439,7 +441,7 @@ where
 
 	let owner_info = OwnerInfo { owner, deposit, determinism, refcount: 0 };
 
-	Ok((code, owner_info))
+	Ok(WasmBlob { code, owner_info })
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
@@ -457,10 +459,9 @@ pub mod benchmarking {
 		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
-	) -> Result<(CodeVec<T>, OwnerInfo<T>), &'static str> {
-		/// TODO: remove
+	) -> Result<(WasmBlob<T>, OwnerInfo<T>), &'static str> {
 		let contract_module = ContractModule::new(&code, schedule)?;
-		/// TODO: it is done here just to check that module imported memory satisfies the schedule
+		/// We do this here just to check that module's memory import satisfies the schedule
 		let _memory_limits = get_memory_limits(contract_module.scan_imports(&[])?, schedule)?;
 
 		let code = code.try_into().map_err(|_| "Code too large!")?;
@@ -472,7 +473,7 @@ pub mod benchmarking {
 			determinism: Determinism::Enforced,
 		};
 
-		Ok(code, owner_info)
+		Ok(Self { code, owner_info })
 	}
 }
 
