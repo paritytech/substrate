@@ -83,11 +83,15 @@ mod tests {
 	use super::*;
 	use codec::Decode;
 
-	use crate::{
-		bls_crypto::Signature as BLSSignature, ecdsa_crypto, known_payloads, Payload, KEY_TYPE,
-	};
+	use crate::{ecdsa_crypto, known_payloads, Payload, KEY_TYPE};
+
+	#[cfg(feature = "bls-experimental")]
+	use crate::bls_crypto::Signature as BLSSignature;
+
+	#[cfg(feature = "bls-experimental")]
 	use w3f_bls::{
-		single_pop_aggregator::SignatureAggregatorAssumingPoP, SerializableToBytes, Message, Signed, BLS377,
+		single_pop_aggregator::SignatureAggregatorAssumingPoP, Message, SerializableToBytes,
+		Signed, BLS377,
 	};
 
 	type TestCommitment = Commitment<u128>;
@@ -97,13 +101,15 @@ mod tests {
 	type TestSignedCommitmentWitness =
 		SignedCommitmentWitness<u128, Vec<Option<ecdsa_crypto::Signature>>>;
 
+	#[cfg(feature = "bls-experimental")]
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
 	struct ECDSABLSSignaturePair(ecdsa_crypto::Signature, BLSSignature);
 
 	///types for commitment containing  bls signature along side ecdsa signature
+	#[cfg(feature = "bls-experimental")]
 	type TestBLSSignedCommitment = SignedCommitment<u128, ECDSABLSSignaturePair>;
-	type TestBLSSignedCommitmentWitness =
-		SignedCommitmentWitness<u128, Vec<u8>>;
+	#[cfg(feature = "bls-experimental")]
+	type TestBLSSignedCommitmentWitness = SignedCommitmentWitness<u128, Vec<u8>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
@@ -123,12 +129,12 @@ mod tests {
 
 	///generates mock aggregatable bls signature for generating test commitment
 	///BLS signatures
+	#[cfg(feature = "bls-experimental")]
 	fn mock_bls_signatures() -> (BLSSignature, BLSSignature) {
 		let store: KeystorePtr = MemoryKeystore::new().into();
 
 		let alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
-		store.insert(KEY_TYPE, "//Alice", alice.public().as_ref())
-				.unwrap();
+		store.insert(KEY_TYPE, "//Alice", alice.public().as_ref()).unwrap();
 
 		let msg = b"This is the first message";
 		let sig1 = alice.sign(msg);
@@ -152,8 +158,12 @@ mod tests {
 		SignedCommitment { commitment, signatures: vec![None, None, Some(sigs.0), Some(sigs.1)] }
 	}
 
+	#[cfg(feature = "bls-experimental")]
 	fn ecdsa_and_bls_signed_commitment() -> TestBLSSignedCommitment {
-		let payload = Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".as_bytes().to_vec());
+		let payload = Payload::from_single_entry(
+			known_payloads::MMR_ROOT_ID,
+			"Hello World!".as_bytes().to_vec(),
+		);
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -185,46 +195,44 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg(feature = "bls-experimental")]
 	fn should_convert_dually_signed_commitment_to_witness() {
 		// given
 		let signed = ecdsa_and_bls_signed_commitment();
 
 		// when
-		let (witness, _signatures) = TestBLSSignedCommitmentWitness::from_signed::<
-			_,
-			_,
-		>(signed, |sigs| {
-			//we are going to aggregate the signatures here
+		let (witness, _signatures) =
+			TestBLSSignedCommitmentWitness::from_signed::<_, _>(signed, |sigs| {
+				//we are going to aggregate the signatures here
 
-		    let mut aggregatedsigs: SignatureAggregatorAssumingPoP<BLS377> =
-				SignatureAggregatorAssumingPoP::new(Message::new(b"",b"mock payload"));
-			let _ = sigs.iter().filter_map(|sig| {
-				sig.clone().map(|sig| {
-					aggregatedsigs.add_signature(
-						&(w3f_bls::Signature::from_bytes(
-							<BLSSignature as AsRef<[u8]>>::as_ref(&sig.1.clone())
-								.try_into()
-								.unwrap(),
-						))
-						.unwrap(),
-					)
-				})
+				let mut aggregatedsigs: SignatureAggregatorAssumingPoP<BLS377> =
+					SignatureAggregatorAssumingPoP::new(Message::new(b"", b"mock payload"));
+				let _ = sigs.iter().filter_map(|sig| {
+					sig.clone().map(|sig| {
+						aggregatedsigs.add_signature(
+							&(w3f_bls::Signature::from_bytes(
+								<BLSSignature as AsRef<[u8]>>::as_ref(&sig.1.clone())
+									.try_into()
+									.unwrap(),
+							))
+							.unwrap(),
+						)
+					})
+				});
+				(&aggregatedsigs).signature().to_bytes()
 			});
-			(&aggregatedsigs).signature().to_bytes()
-		});
-	        
-	        BLSSignature::try_from(witness.signature_accumulator.as_slice()).unwrap();
+
+		BLSSignature::try_from(witness.signature_accumulator.as_slice()).unwrap();
 	}
 
 	#[test]
 	fn should_encode_and_decode_witness() {
 		// given
 		let signed = ecdsa_signed_commitment();
-		let (witness, _) =
-			TestSignedCommitmentWitness::from_signed::<_, _, >(
-				signed,
-				|sigs: &[std::option::Option<ecdsa_crypto::Signature>]| sigs.to_vec(),
-			);
+		let (witness, _) = TestSignedCommitmentWitness::from_signed::<_, _>(
+			signed,
+			|sigs: &[std::option::Option<ecdsa_crypto::Signature>]| sigs.to_vec(),
+		);
 
 		// when
 		let encoded = codec::Encode::encode(&witness);

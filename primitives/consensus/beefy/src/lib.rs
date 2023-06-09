@@ -111,6 +111,7 @@ pub mod ecdsa_crypto {
 /// Your code should use the above types as concrete types for all crypto related
 /// functionality.
 
+#[cfg(feature = "bls-experimental")]
 pub mod bls_crypto {
 	use sp_application_crypto::{app_crypto, bls377};
 	app_crypto!(bls377, crate::KEY_TYPE);

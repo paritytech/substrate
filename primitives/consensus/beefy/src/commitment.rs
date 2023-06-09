@@ -251,11 +251,15 @@ impl<N, S> From<SignedCommitment<N, S>> for VersionedFinalityProof<N, S> {
 mod tests {
 
 	use super::*;
-	use hex::ToHex;
+	use crate::{ecdsa_crypto, known_payloads, KEY_TYPE};
 	use codec::Decode;
-	use crate::{bls_crypto::Signature as BLSSignature, ecdsa_crypto, known_payloads, KEY_TYPE};
+	#[cfg(feature = "bls-experimental")]
+	use hex::ToHex;
 	use sp_core::{keccak_256, Pair};
 	use sp_keystore::{testing::MemoryKeystore, KeystorePtr};
+
+	#[cfg(feature = "bls-experimental")]
+	use crate::bls_crypto::Signature as BLSSignature;
 
 	type TestCommitment = Commitment<u128>;
 
@@ -267,12 +271,15 @@ mod tests {
 	type TestVersionedFinalityProof = VersionedFinalityProof<u128, ecdsa_crypto::Signature>;
 
 	///types for commitment supporting aggregatable bls signature
+	#[cfg(feature = "bls-experimental")]
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
 	struct BLSAggregatableSignature(BLSSignature);
 
+	#[cfg(feature = "bls-experimental")]
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
 	struct ECDSABLSSignaturePair(ecdsa_crypto::Signature, BLSSignature);
 
+	#[cfg(feature = "bls-experimental")]
 	type TestBLSSignedCommitment = SignedCommitment<u128, ECDSABLSSignaturePair>;
 	//type TestVersionedBLSFinalityProof = VersionedFinalityProof<u128, ECDSABLSSignaturePair>;
 
@@ -294,12 +301,12 @@ mod tests {
 
 	///generates mock aggregatable bls signature for generating test commitment
 	///BLS signatures
+	#[cfg(feature = "bls-experimental")]
 	fn mock_bls_signatures() -> (BLSSignature, BLSSignature) {
 		let store: KeystorePtr = MemoryKeystore::new().into();
 
 		let alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
-		store.insert(KEY_TYPE, "//Alice", alice.public().as_ref())
-				.unwrap();
+		store.insert(KEY_TYPE, "//Alice", alice.public().as_ref()).unwrap();
 
 		let msg = b"This is the first message";
 		let sig1 = alice.sign(msg);
@@ -333,7 +340,7 @@ mod tests {
 	}
 
 	#[test]
-	fn signed_commitment_encode_decode() {
+	fn signed_commitment_encode_decode_ecdsa() {
 		// given
 		let payload =
 			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
@@ -365,6 +372,18 @@ mod tests {
 			"
 			)
 		);
+	}
+
+	#[test]
+	#[cfg(feature = "bls-experimental")]
+	fn signed_commitment_encode_decode_ecdsa_n_bls() {
+		// given
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
+		let commitment: TestCommitment =
+			Commitment { payload, block_number: 5, validator_set_id: 0 };
+
+		let ecdsa_sigs = mock_ecdsa_signatures();
 
 		//including bls signature
 		let bls_signed_msgs = mock_bls_signatures();
