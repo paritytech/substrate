@@ -154,6 +154,9 @@ impl<B: BlockT> Protocol<B> {
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: ProtocolName) {
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name)
 		{
+			// Note: no need to remove a peer from `self.peers` if we are dealing with sync
+			// protocol, because it will be done when handling
+			// `NotificationsOut::CustomProtocolClosed`.
 			self.behaviour.disconnect_peer(peer_id, SetId::from(position));
 		} else {
 			warn!(target: "sub-libp2p", "disconnect_peer() with invalid protocol name")
