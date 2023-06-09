@@ -46,22 +46,17 @@ use sp_std::vec::Vec;
 ///
 /// Example:
 /// ```ignore
-/// parameter_types! {
-/// 	pub const V4ToV5: StorageVersion = StorageVersion::new(4);
-/// 	pub const V5ToV6: StorageVersion = StorageVersion::new(5);
-/// }
-///
 /// // Migrations to pass to the Executive pallet.
 /// pub type Migrations = (
 /// 	// ...other migrations
 /// 	VersionedRuntimeUpgrade<
-/// 		V4ToV5,
+/// 		Const16<4>, // V4ToV5
 /// 		parachains_configuration::migration::v5::MigrateToV5<Runtime>,
 /// 		Configuration,
 /// 		RocksDbWeight,
 /// 	>,
 /// 	VersionedRuntimeUpgrade<
-/// 		V5ToV6,
+/// 		Const16<5>, // V5ToV6
 /// 		parachains_configuration::migration::v6::MigrateToV6<Runtime>,
 /// 		Configuration,
 /// 		RocksDbWeight,
@@ -83,7 +78,7 @@ pub struct VersionedRuntimeUpgrade<Version, Inner, Pallet, Weight> {
 /// the pallets storage matches `Version`. If the versions do not match, it writes a log notifying
 /// the developer that the migration is a noop.
 impl<
-		Version: Get<StorageVersion>,
+		Version: Get<u16>,
 		Inner: OnRuntimeUpgrade,
 		Pallet: GetStorageVersion<CurrentStorageVersion = StorageVersion> + PalletInfoAccess,
 		DbWeight: Get<RuntimeDbWeight>,
@@ -119,7 +114,7 @@ impl<
 			let weight = Inner::on_runtime_upgrade();
 
 			// Update the on-chain version
-			let next = Version::get() + 1;
+			let next = StorageVersion::new(Version::get() + 1);
 			next.put::<Pallet>();
 
 			weight.saturating_add(DbWeight::get().reads_writes(1, 1))
