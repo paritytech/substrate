@@ -97,6 +97,14 @@ pub mod weights;
 
 #[cfg(test)]
 mod tests;
+pub use crate::{
+	address::{AddressGenerator, DefaultAddressGenerator},
+	exec::Frame,
+	migration::{MigrateSequence, Migration, NoopMigration},
+	pallet::*,
+	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
+	wasm::Determinism,
+};
 use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
@@ -115,6 +123,7 @@ use frame_support::{
 	error::BadOrigin,
 	traits::{
 		fungible::{Inspect, InspectHold, Mutate, MutateHold},
+		tokens::Balance,
 		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
@@ -130,15 +139,6 @@ use scale_info::TypeInfo;
 use smallvec::Array;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
-
-pub use crate::{
-	address::{AddressGenerator, DefaultAddressGenerator},
-	exec::Frame,
-	migration::{MigrateSequence, Migration, NoopMigration},
-	pallet::*,
-	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
-	wasm::Determinism,
-};
 
 #[cfg(doc)]
 pub use crate::wasm::api_doc;
@@ -331,7 +331,8 @@ pub mod pallet {
 		/// ```
 		/// use pallet_contracts::migration::{v9, v10, v11};
 		/// # struct Runtime {};
-		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// # struct Currency {};
+		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime, Currency>, v11::Migration<Runtime>);
 		/// ```
 		type Migrations: MigrateSequence;
 	}
