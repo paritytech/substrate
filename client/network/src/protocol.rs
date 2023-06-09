@@ -77,10 +77,6 @@ type PendingSyncSubstreamValidation =
 pub struct Protocol<B: BlockT> {
 	/// Used to report reputation changes.
 	peer_store_handle: PeerStoreHandle,
-	/// Used to modify reserved peers.
-	protocol_controller_handles: Vec<protocol_controller::ProtocolHandle>,
-	/// Shortcut for sync protocol controller handle.
-	sync_protocol_controller_handle: protocol_controller::ProtocolHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: Notifications,
 	/// List of notifications protocols that have been registered.
@@ -132,13 +128,8 @@ impl<B: BlockT> Protocol<B> {
 			)
 		};
 
-		let sync_protocol_controller_handle =
-			protocol_controller_handles[usize::from(HARDCODED_PEERSETS_SYNC)].clone();
-
 		let protocol = Self {
 			peer_store_handle,
-			protocol_controller_handles,
-			sync_protocol_controller_handle,
 			behaviour,
 			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
 				.chain(notification_protocols.iter().map(|s| s.notifications_protocol.clone()))
@@ -182,70 +173,6 @@ impl<B: BlockT> Protocol<B> {
 			error!(
 				target: "sub-libp2p",
 				"set_notification_handshake with unknown protocol: {}",
-				protocol
-			);
-		}
-	}
-
-	/// Set whether the syncing peers set is in reserved-only mode.
-	pub fn set_reserved_only(&self, reserved_only: bool) {
-		self.sync_protocol_controller_handle.set_reserved_only(reserved_only);
-	}
-
-	/// Removes a `PeerId` from the list of reserved peers for syncing purposes.
-	pub fn remove_reserved_peer(&self, peer: PeerId) {
-		self.sync_protocol_controller_handle.remove_reserved_peer(peer);
-	}
-
-	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
-		self.sync_protocol_controller_handle.reserved_peers(pending_response);
-	}
-
-	/// Adds a `PeerId` to the list of reserved peers for syncing purposes.
-	pub fn add_reserved_peer(&self, peer: PeerId) {
-		self.sync_protocol_controller_handle.add_reserved_peer(peer);
-	}
-
-	/// Sets the list of reserved peers for syncing purposes.
-	pub fn set_reserved_peers(&self, peers: HashSet<PeerId>) {
-		self.sync_protocol_controller_handle.set_reserved_peers(peers);
-	}
-
-	/// Sets the list of reserved peers for the given protocol/peerset.
-	pub fn set_reserved_peerset_peers(&self, protocol: ProtocolName, peers: HashSet<PeerId>) {
-		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.protocol_controller_handles[index].set_reserved_peers(peers);
-		} else {
-			error!(
-				target: "sub-libp2p",
-				"set_reserved_peerset_peers with unknown protocol: {}",
-				protocol
-			);
-		}
-	}
-
-	/// Removes a `PeerId` from the list of reserved peers.
-	pub fn remove_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
-		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.protocol_controller_handles[index].remove_reserved_peer(peer);
-		} else {
-			error!(
-				target: "sub-libp2p",
-				"remove_set_reserved_peer with unknown protocol: {}",
-				protocol
-			);
-		}
-	}
-
-	/// Adds a `PeerId` to the list of reserved peers.
-	pub fn add_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
-		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.protocol_controller_handles[index].add_reserved_peer(peer);
-		} else {
-			error!(
-				target: "sub-libp2p",
-				"add_set_reserved_peer with unknown protocol: {}",
 				protocol
 			);
 		}
