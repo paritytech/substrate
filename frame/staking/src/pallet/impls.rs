@@ -31,7 +31,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
+use frame_system::{pallet_prelude::BlockNumberOf, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
 	traits::{Bounded, Convert, One, SaturatedConversion, Saturating, StaticLookup, Zero},

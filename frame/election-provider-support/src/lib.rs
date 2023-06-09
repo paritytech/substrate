@@ -323,7 +323,7 @@ pub trait ElectionDataProvider {
 	/// [`ElectionProvider::elect`].
 	///
 	/// This is only useful for stateful election providers.
-	fn next_election_prediction(now: frame_system::BlockNumberOf<Self>) -> frame_system::BlockNumberOf<Self>;
+	fn next_election_prediction(now: Self::BlockNumber) -> Self::BlockNumber;
 
 	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
 	/// else a noop.
@@ -383,7 +383,7 @@ pub trait ElectionProviderBase {
 	/// The data provider of the election.
 	type DataProvider: ElectionDataProvider<
 		AccountId = Self::AccountId,
-		BlockNumber = frame_system::BlockNumberOf<Self>,
+		BlockNumber = Self::BlockNumber,
 	>;
 
 	/// checked call to `Self::DataProvider::desired_targets()` ensuring the value never exceeds
