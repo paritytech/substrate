@@ -166,7 +166,7 @@ pub trait NetworkPeers {
 
 	/// Adds a `PeerId` and its `Multiaddr` as reserved for a sync protocol (default peer set).
 	///
-	/// Returns an `Err` if the given string is not a valid multiaddress,
+	/// Returns an `Err` if the given string is not a valid multiaddress
 	/// or contains an invalid peer ID (which includes the local peer ID).
 	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String>;
 
