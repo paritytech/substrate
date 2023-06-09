@@ -45,10 +45,10 @@
 //! ## Low Level / Implementation Details
 //!
 //! When a migration starts and [`OnRuntimeUpgrade::on_runtime_upgrade`] is called, instead of
-//! performing the actual migration, we set a custom storage item `MigrationInProgress`. This
-//! storage item defines a [`Cursor`] for the current migration step.
+//! performing the actual migration, we set a custom storage item [`MigrationInProgress`].
+//! This storage item defines a [`Cursor`] for the current migration step.
 //!
-//! If the `MigrationInProgress` storage item exists, it means a migration is in progress, and its
+//! If the [`MigrationInProgress`] storage item exists, it means a migration is in progress, and its
 //! value holds a cursor for the current migration step. These migration steps are executed during
 //! [`Hooks<BlockNumber>::on_idle`] or when the [`Pallet::migrate`] dispatchable is
 //! called.
