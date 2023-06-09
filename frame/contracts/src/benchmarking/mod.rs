@@ -237,7 +237,7 @@ benchmarks! {
 	// This benchmarks the v9 migration step. (update codeStorage)
 	#[pov_mode = Measured]
 	v9_migration_step {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let c in 0 .. T::MaxCodeLen::get();
 		v9::store_old_dummy_code::<T>(c as usize);
 		let mut m = v9::Migration::<T>::default();
 	}: {
