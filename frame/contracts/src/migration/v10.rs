@@ -187,7 +187,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 			});
 
 			// Calculate the new base_deposit to store in the contract:
-			// Ideally: it should be the same as the old one
+			// Ideally, it should be the same as the old one
 			// Ideally, it should be at least 2xED (for the contract and deposit accounts).
 			// It can't be more than the `new_deposit`.
 			let new_base_deposit = min(
