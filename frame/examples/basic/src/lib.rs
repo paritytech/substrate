@@ -618,18 +618,11 @@ pub mod pallet {
 
 	// The genesis config type.
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub dummy: T::Balance,
 		pub bar: Vec<(T::AccountId, T::Balance)>,
 		pub foo: T::Balance,
-	}
-
-	// The default value for the genesis config type.
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { dummy: Default::default(), bar: Default::default(), foo: Default::default() }
-		}
 	}
 
 	// The build of genesis for the pallet.

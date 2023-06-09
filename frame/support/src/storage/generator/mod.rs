@@ -148,7 +148,7 @@ mod tests {
 
 	#[test]
 	fn value_translate_works() {
-		let t = GenesisConfig::default().build_storage().unwrap();
+		let t = RuntimeGenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			type Value = self::frame_system::Value<Runtime>;
 
@@ -170,7 +170,7 @@ mod tests {
 
 	#[test]
 	fn map_translate_works() {
-		let t = GenesisConfig::default().build_storage().unwrap();
+		let t = RuntimeGenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			type NumberMap = self::frame_system::NumberMap<Runtime>;
 
@@ -201,7 +201,7 @@ mod tests {
 
 	#[test]
 	fn try_mutate_works() {
-		let t = GenesisConfig::default().build_storage().unwrap();
+		let t = RuntimeGenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			type Value = self::frame_system::Value<Runtime>;
 			type NumberMap = self::frame_system::NumberMap<Runtime>;

@@ -718,7 +718,6 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, S, SC, VR>(
 	grandpa_params: GrandpaParams<Block, C, N, S, SC, VR>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
-	Block::Hash: Ord,
 	BE: Backend<Block> + 'static,
 	N: NetworkT<Block> + Sync + 'static,
 	S: SyncingT<Block> + Sync + 'static,
