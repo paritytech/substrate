@@ -297,6 +297,7 @@ pub mod migrations;
 pub mod slashing;
 pub mod weights;
 
+#[allow(hidden_glob_reexports)]
 mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
