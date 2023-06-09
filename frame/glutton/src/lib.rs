@@ -32,10 +32,10 @@ mod tests;
 pub mod weights;
 
 use blake2::{Blake2b512, Digest};
-use frame_support::{pallet_prelude::*, weights::WeightMeter};
+use frame_support::{pallet_prelude::*, weights::WeightMeter, DefaultNoBound};
 use frame_system::pallet_prelude::*;
 use sp_io::hashing::twox_256;
-use sp_runtime::{traits::Zero, Perbill};
+use sp_runtime::{traits::Zero, FixedPointNumber, FixedU64};
 use sp_std::{vec, vec::Vec};
 
 pub use pallet::*;
@@ -52,6 +52,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// The overarching event type.
 		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The admin origin that can set computational limits and initialize the pallet.
@@ -70,9 +71,9 @@ pub mod pallet {
 		/// The pallet has been (re)initialized.
 		PalletInitialized { reinit: bool },
 		/// The computation limit has been updated.
-		ComputationLimitSet { compute: Perbill },
+		ComputationLimitSet { compute: FixedU64 },
 		/// The storage limit has been updated.
-		StorageLimitSet { storage: Perbill },
+		StorageLimitSet { storage: FixedU64 },
 	}
 
 	#[pallet::error]
@@ -81,17 +82,19 @@ pub mod pallet {
 		///
 		/// Set `witness_count` to `Some` to bypass this error.
 		AlreadyInitialized,
+		/// The limit was over 10,000%.
+		InsaneLimit,
 	}
 
 	/// Storage value used to specify what percentage of the left over `ref_time`
 	/// to consume during `on_idle`.
 	#[pallet::storage]
-	pub(crate) type Compute<T: Config> = StorageValue<_, Perbill, ValueQuery>;
+	pub(crate) type Compute<T: Config> = StorageValue<_, FixedU64, ValueQuery>;
 
 	/// Storage value used the specify what percentage of left over `proof_size`
 	/// to consume during `on_idle`.
 	#[pallet::storage]
-	pub(crate) type Storage<T: Config> = StorageValue<_, Perbill, ValueQuery>;
+	pub(crate) type Storage<T: Config> = StorageValue<_, FixedU64, ValueQuery>;
 
 	/// Storage map used for wasting proof size.
 	///
@@ -115,20 +118,11 @@ pub mod pallet {
 	pub(crate) type TrashDataCount<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig {
-		pub compute: Perbill,
-		pub storage: Perbill,
+		pub compute: FixedU64,
+		pub storage: FixedU64,
 		pub trash_data_count: u32,
-	}
-
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self {
-				compute: Default::default(),
-				storage: Default::default(),
-				trash_data_count: Default::default(),
-			}
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -169,9 +163,10 @@ pub mod pallet {
 				return T::WeightInfo::empty_on_idle()
 			}
 
-			let proof_size_limit = Storage::<T>::get().mul_floor(meter.remaining().proof_size());
+			let proof_size_limit =
+				Storage::<T>::get().saturating_mul_int(meter.remaining().proof_size());
 			let computation_weight_limit =
-				Compute::<T>::get().mul_floor(meter.remaining().ref_time());
+				Compute::<T>::get().saturating_mul_int(meter.remaining().ref_time());
 			let mut meter = WeightMeter::from_limit(Weight::from_parts(
 				computation_weight_limit,
 				proof_size_limit,
@@ -228,8 +223,10 @@ pub mod pallet {
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::set_compute())]
-		pub fn set_compute(origin: OriginFor<T>, compute: Perbill) -> DispatchResult {
+		pub fn set_compute(origin: OriginFor<T>, compute: FixedU64) -> DispatchResult {
 			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
+			// Ensure that it is <= 10,000%.
+			ensure!(compute <= FixedU64::from_u32(100), Error::<T>::InsaneLimit);
 
 			Compute::<T>::set(compute);
 
@@ -247,8 +244,10 @@ pub mod pallet {
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::set_storage())]
-		pub fn set_storage(origin: OriginFor<T>, storage: Perbill) -> DispatchResult {
+		pub fn set_storage(origin: OriginFor<T>, storage: FixedU64) -> DispatchResult {
 			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
+			// Ensure that it is <= 10,000%.
+			ensure!(storage <= FixedU64::from_u32(100), Error::<T>::InsaneLimit);
 
 			Storage::<T>::set(storage);
 

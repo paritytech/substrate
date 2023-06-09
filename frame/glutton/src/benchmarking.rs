@@ -25,6 +25,7 @@ use super::*;
 use frame_benchmarking::benchmarks;
 use frame_support::{pallet_prelude::*, weights::constants::*};
 use frame_system::RawOrigin as SystemOrigin;
+use sp_runtime::{traits::One, Perbill};
 
 use crate::Pallet as Glutton;
 use frame_system::Pallet as System;
@@ -67,8 +68,8 @@ benchmarks! {
 	// For manual verification only.
 	on_idle_high_proof_waste {
 		(0..5000).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
-		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
-		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
+		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), One::one());
+		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), One::one());
 	}: {
 		let weight = Glutton::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 100, WEIGHT_PROOF_SIZE_PER_MB * 5));
 	}
@@ -76,8 +77,8 @@ benchmarks! {
 	// For manual verification only.
 	on_idle_low_proof_waste {
 		(0..5000).for_each(|i| TrashData::<T>::insert(i, [i as u8; 1024]));
-		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), Perbill::from_percent(100));
-		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), Perbill::from_percent(100));
+		let _ = Glutton::<T>::set_compute(SystemOrigin::Root.into(), One::one());
+		let _ = Glutton::<T>::set_storage(SystemOrigin::Root.into(), One::one());
 	}: {
 		let weight = Glutton::<T>::on_idle(System::<T>::block_number(), Weight::from_parts(WEIGHT_REF_TIME_PER_MILLIS * 100, WEIGHT_PROOF_SIZE_PER_KB * 20));
 	}
@@ -89,10 +90,10 @@ benchmarks! {
 	}
 
 	set_compute {
-	}: _(SystemOrigin::Root, Perbill::from_percent(50))
+	}: _(SystemOrigin::Root, FixedU64::from_perbill(Perbill::from_percent(50)))
 
 	set_storage {
-	}: _(SystemOrigin::Root, Perbill::from_percent(50))
+	}: _(SystemOrigin::Root, FixedU64::from_perbill(Perbill::from_percent(50)))
 
 	impl_benchmark_test_suite!(Glutton, crate::mock::new_test_ext(), crate::mock::Test);
 }

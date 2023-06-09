@@ -21,6 +21,7 @@ use super::*;
 use mock::{new_test_ext, Glutton, RuntimeOrigin, System, Test};
 
 use frame_support::{assert_err, assert_noop, assert_ok, weights::constants::*};
+use sp_runtime::{traits::One, Perbill};
 
 #[test]
 fn initialize_pallet_works() {
@@ -86,20 +87,20 @@ fn expand_and_shrink_trash_data_works() {
 #[test]
 fn setting_compute_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(0));
+		assert_eq!(Compute::<Test>::get(), Zero::zero());
 
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(70)));
-		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(70));
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), FixedU64::from_float(0.3)));
+		assert_eq!(Compute::<Test>::get(), FixedU64::from_float(0.3));
 		System::assert_last_event(
-			Event::ComputationLimitSet { compute: Perbill::from_percent(70) }.into(),
+			Event::ComputationLimitSet { compute: FixedU64::from_float(0.3) }.into(),
 		);
 
 		assert_noop!(
-			Glutton::set_compute(RuntimeOrigin::signed(1), Perbill::from_percent(30)),
+			Glutton::set_compute(RuntimeOrigin::signed(1), FixedU64::from_float(0.3)),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			Glutton::set_compute(RuntimeOrigin::none(), Perbill::from_percent(30)),
+			Glutton::set_compute(RuntimeOrigin::none(), FixedU64::from_float(0.3)),
 			DispatchError::BadOrigin
 		);
 	});
@@ -108,20 +109,20 @@ fn setting_compute_works() {
 #[test]
 fn setting_storage_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(0));
+		assert!(Storage::<Test>::get().is_zero());
 
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(30)));
-		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(30));
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), FixedU64::from_float(0.3)));
+		assert_eq!(Storage::<Test>::get(), FixedU64::from_float(0.3));
 		System::assert_last_event(
-			Event::StorageLimitSet { storage: Perbill::from_percent(30) }.into(),
+			Event::StorageLimitSet { storage: FixedU64::from_float(0.3) }.into(),
 		);
 
 		assert_noop!(
-			Glutton::set_storage(RuntimeOrigin::signed(1), Perbill::from_percent(90)),
+			Glutton::set_storage(RuntimeOrigin::signed(1), FixedU64::from_float(0.3)),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			Glutton::set_storage(RuntimeOrigin::none(), Perbill::from_percent(90)),
+			Glutton::set_storage(RuntimeOrigin::none(), FixedU64::from_float(0.3)),
 			DispatchError::BadOrigin
 		);
 	});
@@ -130,8 +131,8 @@ fn setting_storage_works() {
 #[test]
 fn on_idle_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), One::one()));
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), One::one()));
 
 		Glutton::on_idle(1, Weight::from_parts(20_000_000, 0));
 	});
@@ -141,8 +142,8 @@ fn on_idle_works() {
 #[test]
 fn on_idle_weight_high_proof_is_close_enough_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), One::one()));
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), One::one()));
 
 		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, WEIGHT_PROOF_SIZE_PER_MB * 5);
 		let got = Glutton::on_idle(1, should);
@@ -167,8 +168,8 @@ fn on_idle_weight_high_proof_is_close_enough_works() {
 #[test]
 fn on_idle_weight_low_proof_is_close_enough_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), FixedU64::one()));
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), FixedU64::one()));
 
 		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, WEIGHT_PROOF_SIZE_PER_KB * 20);
 		let got = Glutton::on_idle(1, should);
