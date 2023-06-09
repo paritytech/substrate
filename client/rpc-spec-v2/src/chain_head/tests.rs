@@ -128,7 +128,7 @@ async fn follow_subscription_produces_blocks() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -142,7 +142,7 @@ async fn follow_subscription_produces_blocks() {
 		block_hash: format!("{:?}", best_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -184,12 +184,13 @@ async fn follow_with_runtime() {
 	// Initialized must always be reported first.
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
 
+	// it is basically json-encoded substrate_test_runtime_client::runtime::VERSION
 	let runtime_str = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
 		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",4],\
 		[\"0x37e397fc7c91f5e4\",2],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",6],\
-		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
-		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
-		\"transactionVersion\":1,\"stateVersion\":1}";
+		[\"0xbc9d89904f5b923f\",1],[\"0xc6e9a76309f39b09\",2],[\"0xdd718d5cc53262d4\",1],\
+		[\"0xcbca25e39f142387\",2],[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],\
+		[\"0xed99c5acb25eedf5\",3]],\"transactionVersion\":1,\"stateVersion\":1}";
 	let runtime: RuntimeVersion = serde_json::from_str(runtime_str).unwrap();
 
 	let finalized_block_runtime =
@@ -198,7 +199,7 @@ async fn follow_with_runtime() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -213,7 +214,7 @@ async fn follow_with_runtime() {
 		block_hash: format!("{:?}", best_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -263,7 +264,7 @@ async fn follow_with_runtime() {
 		block_hash: format!("{:?}", best_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 }
@@ -491,7 +492,7 @@ async fn call_runtime_without_flag() {
 		FollowEvent::BestBlockChanged(_)
 	);
 
-	// Valid runtime call on a subscription started with `runtime_updates` false.
+	// Valid runtime call on a subscription started with `with_runtime` false.
 	let alice_id = AccountKeyring::Alice.to_account_id();
 	let call_parameters = format!("0x{:?}", HexDisplay::from(&alice_id.encode()));
 	let err = api
@@ -680,7 +681,7 @@ async fn follow_generates_initial_blocks() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -690,7 +691,7 @@ async fn follow_generates_initial_blocks() {
 		block_hash: format!("{:?}", block_1_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -700,7 +701,7 @@ async fn follow_generates_initial_blocks() {
 		block_hash: format!("{:?}", block_2_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	// Check block 3.
@@ -709,7 +710,7 @@ async fn follow_generates_initial_blocks() {
 		block_hash: format!("{:?}", block_3_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -729,7 +730,7 @@ async fn follow_generates_initial_blocks() {
 		block_hash: format!("{:?}", block_4_hash),
 		parent_block_hash: format!("{:?}", block_2_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -912,7 +913,7 @@ async fn follow_prune_best_block() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -962,7 +963,7 @@ async fn follow_prune_best_block() {
 		block_hash: format!("{:?}", block_1_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -977,7 +978,7 @@ async fn follow_prune_best_block() {
 		block_hash: format!("{:?}", block_3_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -992,7 +993,7 @@ async fn follow_prune_best_block() {
 		block_hash: format!("{:?}", block_4_hash),
 		parent_block_hash: format!("{:?}", block_3_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1007,7 +1008,7 @@ async fn follow_prune_best_block() {
 		block_hash: format!("{:?}", block_2_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1117,7 +1118,7 @@ async fn follow_forks_pruned_block() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", block_3_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1141,7 +1142,7 @@ async fn follow_forks_pruned_block() {
 		block_hash: format!("{:?}", block_6_hash),
 		parent_block_hash: format!("{:?}", block_3_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1232,7 +1233,7 @@ async fn follow_report_multiple_pruned_block() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1241,7 +1242,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_1_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1250,7 +1251,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_2_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1259,7 +1260,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_3_hash),
 		parent_block_hash: format!("{:?}", block_2_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1269,7 +1270,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_4_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1278,7 +1279,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_5_hash),
 		parent_block_hash: format!("{:?}", block_4_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1324,7 +1325,7 @@ async fn follow_report_multiple_pruned_block() {
 		block_hash: format!("{:?}", block_6_hash),
 		parent_block_hash: format!("{:?}", block_3_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
@@ -1510,7 +1511,7 @@ async fn follow_finalized_before_new_block() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1520,7 +1521,7 @@ async fn follow_finalized_before_new_block() {
 		block_hash: format!("{:?}", block_1_hash),
 		parent_block_hash: format!("{:?}", finalized_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 
@@ -1555,7 +1556,7 @@ async fn follow_finalized_before_new_block() {
 		block_hash: format!("{:?}", block_2_hash),
 		parent_block_hash: format!("{:?}", block_1_hash),
 		new_runtime: None,
-		runtime_updates: false,
+		with_runtime: false,
 	});
 	assert_eq!(event, expected);
 

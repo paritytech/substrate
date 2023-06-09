@@ -87,12 +87,12 @@ mod address;
 mod benchmarking;
 mod exec;
 mod gas;
-mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -107,7 +107,10 @@ use crate::{
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
 use frame_support::{
-	dispatch::{DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin},
+	dispatch::{
+		DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin,
+		WithPostDispatchInfo,
+	},
 	ensure,
 	error::BadOrigin,
 	traits::{
@@ -117,21 +120,21 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, RuntimeDebugNoBound,
 };
-use frame_system::{ensure_signed, pallet_prelude::OriginFor, Pallet as System};
+use frame_system::{ensure_signed, pallet_prelude::OriginFor, EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
-	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
-	StorageDeposit,
+	ContractInstantiateResult, ContractResult, ExecReturnValue, GetStorageResult,
+	InstantiateReturnValue, StorageDeposit,
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
 	exec::Frame,
-	migration::Migration,
+	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 	wasm::Determinism,
@@ -147,6 +150,8 @@ type BalanceOf<T> =
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
+type EventRecordOf<T> =
+	EventRecord<<T as frame_system::Config>::RuntimeEvent, <T as frame_system::Config>::Hash>;
 
 /// The old weight type.
 ///
@@ -176,7 +181,12 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(9);
+	#[cfg(not(any(test, feature = "runtime-benchmarks")))]
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(11);
+
+	/// Hard coded storage version for running tests that depend on the current storage version.
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -306,16 +316,37 @@ pub mod pallet {
 		/// The maximum length of the debug buffer in bytes.
 		#[pallet::constant]
 		type MaxDebugBufferLen: Get<u32>;
+
+		/// The sequence of migration steps that will be applied during a migration.
+		///
+		/// # Examples
+		/// ```
+		/// use pallet_contracts::migration::{v9, v10, v11};
+		/// # struct Runtime {};
+		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// ```
+		type Migrations: MigrateSequence;
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
+			use migration::MigrateResult::*;
+
+			let (result, weight) = Migration::<T>::migrate(remaining_weight);
+			let remaining_weight = remaining_weight.saturating_sub(weight);
+
+			if !matches!(result, Completed | NoMigrationInProgress) {
+				return weight
+			}
+
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 		}
 
 		fn integrity_test() {
+			Migration::<T>::integrity_test();
+
 			// Total runtime memory limit
 			let max_runtime_mem: u32 = T::Schedule::get().limits.runtime_memory;
 			// Memory limits for a single contract:
@@ -494,6 +525,7 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			determinism: Determinism,
 		) -> DispatchResult {
+			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into), determinism)
 				.map(|_| ())
@@ -509,6 +541,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			code_hash: CodeHash<T>,
 		) -> DispatchResultWithPostInfo {
+			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			<WasmBlob<T>>::remove(&origin, code_hash)?;
 			// we waive the fee because removing unused code is beneficial
@@ -532,6 +565,7 @@ pub mod pallet {
 			dest: AccountIdLookupOf<T>,
 			code_hash: CodeHash<T>,
 		) -> DispatchResult {
+			Migration::<T>::ensure_migrated()?;
 			ensure_root(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<ContractInfoOf<T>>::try_mutate(&dest, |contract| {
@@ -581,6 +615,7 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
+			Migration::<T>::ensure_migrated()?;
 			let common = CommonInput {
 				origin: Origin::from_runtime_origin(origin)?,
 				value,
@@ -639,6 +674,7 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
+			Migration::<T>::ensure_migrated()?;
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
@@ -681,6 +717,7 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
+			Migration::<T>::ensure_migrated()?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
@@ -702,6 +739,33 @@ pub mod pallet {
 				output.result.map(|(_address, output)| output),
 				T::WeightInfo::instantiate(data_len, salt_len),
 			)
+		}
+
+		/// When a migration is in progress, this dispatchable can be used to run migration steps.
+		/// Calls that contribute to advancing the migration have their fees waived, as it's helpful
+		/// for the chain. Note that while the migration is in progress, the pallet will also
+		/// leverage the `on_idle` hooks to run migration steps.
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::migrate().saturating_add(*weight_limit))]
+		pub fn migrate(origin: OriginFor<T>, weight_limit: Weight) -> DispatchResultWithPostInfo {
+			use migration::MigrateResult::*;
+			ensure_signed(origin)?;
+
+			let weight_limit = weight_limit.saturating_add(T::WeightInfo::migrate());
+			let (result, weight) = Migration::<T>::migrate(weight_limit);
+
+			match result {
+				Completed =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
+				InProgress { steps_done, .. } if steps_done > 0 =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
+				InProgress { .. } =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::Yes }),
+				NoMigrationInProgress | NoMigrationPerformed => {
+					let err: DispatchError = <Error<T>>::NoMigrationPerformed.into();
+					Err(err.with_weight(T::WeightInfo::migrate()))
+				},
+			}
 		}
 	}
 
@@ -855,6 +919,10 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
+		/// A pending migration needs to complete before the extrinsic can be called.
+		MigrationInProgress,
+		/// Migrate dispatch call was attempted but no migration was performed.
+		NoMigrationPerformed,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -915,6 +983,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type DeletionQueueCounter<T: Config> =
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
+
+	#[pallet::storage]
+	pub(crate) type MigrationInProgress<T: Config> =
+		StorageValue<_, migration::Cursor, OptionQuery>;
 }
 
 /// The type of origins supported by the contracts pallet.
@@ -966,6 +1038,35 @@ struct CallInput<T: Config> {
 struct InstantiateInput<T: Config> {
 	code: Code<CodeHash<T>>,
 	salt: Vec<u8>,
+}
+
+/// Determines whether events should be collected during execution.
+#[derive(PartialEq)]
+pub enum CollectEvents {
+	/// Collect events.
+	///
+	/// # Note
+	///
+	/// Events should only be collected when called off-chain, as this would otherwise
+	/// collect all the Events emitted in the block so far and put them into the PoV.
+	///
+	/// **Never** use this mode for on-chain execution.
+	UnsafeCollect,
+	/// Skip event collection.
+	Skip,
+}
+
+/// Determines whether debug messages will be collected.
+#[derive(PartialEq)]
+pub enum DebugInfo {
+	/// Collect debug messages.
+	/// # Note
+	///
+	/// This should only ever be set to `UnsafeDebug` when executing as an RPC because
+	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
+	UnsafeDebug,
+	/// Skip collection of debug messages.
+	Skip,
 }
 
 /// Return type of private helper functions.
@@ -1174,6 +1275,21 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 	}
 }
 
+macro_rules! ensure_no_migration_in_progress {
+	() => {
+		if Migration::<T>::in_progress() {
+			return ContractResult {
+				gas_consumed: Zero::zero(),
+				gas_required: Zero::zero(),
+				storage_deposit: Default::default(),
+				debug_message: Vec::new(),
+				result: Err(Error::<T>::MigrationInProgress.into()),
+				events: None,
+			}
+		}
+	};
+}
+
 impl<T: Config> Pallet<T> {
 	/// Perform a call to a specified contract.
 	///
@@ -1182,11 +1298,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// # Note
 	///
-	/// `debug` should only ever be set to `true` when executing as an RPC because
-	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
-	/// If set to `true` it returns additional human readable debugging information.
+	/// If `debug` is set to `DebugInfo::UnsafeDebug` it returns additional human readable debugging
+	/// information.
 	///
-	/// It returns the execution result and the amount of used weight.
+	/// If `collect_events` is set to `CollectEvents::UnsafeCollect` it collects all the Events
+	/// emitted in the block so far and the ones emitted during the execution of this contract.
 	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
@@ -1194,10 +1310,17 @@ impl<T: Config> Pallet<T> {
 		gas_limit: Weight,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
-		debug: bool,
+		debug: DebugInfo,
+		collect_events: CollectEvents,
 		determinism: Determinism,
-	) -> ContractExecResult<BalanceOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
+		ensure_no_migration_in_progress!();
+
+		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
+			Some(DebugBufferVec::<T>::default())
+		} else {
+			None
+		};
 		let origin = Origin::from_account_id(origin);
 		let common = CommonInput {
 			origin,
@@ -1208,12 +1331,19 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
+		let events = if matches!(collect_events, CollectEvents::UnsafeCollect) {
+			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+		} else {
+			None
+		};
+
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
+			events,
 		}
 	}
 
@@ -1226,9 +1356,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// # Note
 	///
-	/// `debug` should only ever be set to `true` when executing as an RPC because
-	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
-	/// If set to `true` it returns additional human readable debugging information.
+	/// If `debug` is set to `DebugInfo::UnsafeDebug` it returns additional human readable debugging
+	/// information.
+	///
+	/// If `collect_events` is set to `CollectEvents::UnsafeCollect` it collects all the Events
+	/// emitted in the block so far.
 	pub fn bare_instantiate(
 		origin: T::AccountId,
 		value: BalanceOf<T>,
@@ -1237,9 +1369,16 @@ impl<T: Config> Pallet<T> {
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		debug: bool,
-	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+		debug: DebugInfo,
+		collect_events: CollectEvents,
+	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
+		ensure_no_migration_in_progress!();
+
+		let mut debug_message = if debug == DebugInfo::UnsafeDebug {
+			Some(DebugBufferVec::<T>::default())
+		} else {
+			None
+		};
 		let common = CommonInput {
 			origin: Origin::from_account_id(origin),
 			value,
@@ -1249,6 +1388,12 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
+		// collect events if CollectEvents is UnsafeCollect
+		let events = if collect_events == CollectEvents::UnsafeCollect {
+			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+		} else {
+			None
+		};
 		ContractInstantiateResult {
 			result: output
 				.result
@@ -1258,6 +1403,7 @@ impl<T: Config> Pallet<T> {
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
+			events,
 		}
 	}
 
@@ -1271,6 +1417,7 @@ impl<T: Config> Pallet<T> {
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
+		Migration::<T>::ensure_migrated()?;
 		let schedule = T::Schedule::get();
 		let module =
 			WasmBlob::from_code(code, &schedule, origin, determinism, TryInstantiate::Instantiate)
@@ -1286,6 +1433,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Query storage of a specified contract under a specified key.
 	pub fn get_storage(address: T::AccountId, key: Vec<u8>) -> GetStorageResult {
+		if Migration::<T>::in_progress() {
+			return Err(ContractAccessError::MigrationInProgress)
+		}
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
@@ -1351,11 +1501,12 @@ impl<T: Config> Pallet<T> {
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
 	#[api_version(2)]
-	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash, EventRecord> where
 		AccountId: Codec,
 		Balance: Codec,
 		BlockNumber: Codec,
 		Hash: Codec,
+		EventRecord: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
@@ -1367,7 +1518,7 @@ sp_api::decl_runtime_apis! {
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResult<Balance>;
+		) -> ContractExecResult<Balance, EventRecord>;
 
 		/// Instantiate a new contract.
 		///
@@ -1380,8 +1531,7 @@ sp_api::decl_runtime_apis! {
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId, Balance>;
-
+		) -> ContractInstantiateResult<AccountId, Balance, EventRecord>;
 
 		/// Upload new code without instantiating a contract from it.
 		///

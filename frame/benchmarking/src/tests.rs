@@ -45,28 +45,21 @@ mod pallet_test {
 	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn value)]
 	pub(crate) type Value<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
 		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
 			Value::<T>::put(n);
 			Ok(())
 		}
 
-		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
 		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
 			let _sender = ensure_none(origin)?;
 			Ok(())
 		}
 
-		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
 		pub fn always_error(_origin: OriginFor<T>) -> DispatchResult {
 			return Err("I always fail".into())
 		}
@@ -125,7 +118,7 @@ impl pallet_test::Config for Test {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
+	RuntimeGenesisConfig::default().build_storage().unwrap().into()
 }
 
 thread_local! {

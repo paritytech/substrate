@@ -17,11 +17,8 @@
 //! Helper for handling (i.e. answering) BEEFY justifications requests from a remote peer.
 
 use codec::Decode;
-use futures::{
-	channel::{mpsc, oneshot},
-	StreamExt,
-};
-use log::{debug, trace};
+use futures::{channel::oneshot, StreamExt};
+use log::{debug, error, trace};
 use sc_client_api::BlockBackend;
 use sc_network::{
 	config as netconfig, config::RequestResponseConfig, types::ProtocolName, PeerId,
@@ -102,11 +99,11 @@ impl<B: Block> IncomingRequest<B> {
 ///
 /// Takes care of decoding and handling of invalid encoded requests.
 pub(crate) struct IncomingRequestReceiver {
-	raw: mpsc::Receiver<netconfig::IncomingRequest>,
+	raw: async_channel::Receiver<netconfig::IncomingRequest>,
 }
 
 impl IncomingRequestReceiver {
-	pub fn new(inner: mpsc::Receiver<netconfig::IncomingRequest>) -> Self {
+	pub fn new(inner: async_channel::Receiver<netconfig::IncomingRequest>) -> Self {
 		Self { raw: inner }
 	}
 
@@ -218,5 +215,9 @@ where
 				},
 			}
 		}
+		error!(
+			target: crate::LOG_TARGET,
+			"🥩 On-demand requests receiver stream terminated, closing worker."
+		);
 	}
 }
