@@ -38,7 +38,7 @@ use crate::{
 	},
 	peer_store::{PeerStore, PeerStoreHandle, PeerStoreProvider},
 	protocol::{self, NotifsHandlerError, Protocol, Ready},
-	protocol_controller::{ProtoSetConfig, ProtocolController, SetId},
+	protocol_controller::{self, ProtoSetConfig, ProtocolController, SetId},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		signature::{Signature, SigningError},
@@ -124,6 +124,14 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
 	notifications_sizes_metric: Option<HistogramVec>,
+	/// Protocol name -> set id mapping for notification protocols. The map never changes after
+	/// initialization.
+	notification_protocol_ids: HashMap<ProtocolName, SetId>,
+	/// Handles to manage peer connections on notification protocols. The vector never changes
+	/// after initialization.
+	protocol_handles: Vec<protocol_controller::ProtocolHandle>,
+	/// Shortcut to sync protocol handle (`protocol_handles[0]`).
+	sync_protocol_handle: protocol_controller::ProtocolHandle,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -298,17 +306,31 @@ where
 			})
 			.unzip();
 
+		// Shortcut to default peer set protocol handle.
+		let sync_protocol_handle = protocol_handles[0].clone();
+
 		// Spawn `ProtocolController` runners.
 		protocol_controllers
 			.into_iter()
 			.for_each(|controller| (params.executor)(controller.run().boxed()));
+
+		// Protocol name to protocol id mapping. The first protocol is always block announce (sync)
+		// protocol, aka default (hardcoded) peer set.
+		let notification_protocol_ids: HashMap<ProtocolName, SetId> =
+			iter::once(&params.block_announce_config)
+				.chain(notification_protocols.iter())
+				.enumerate()
+				.map(|(index, protocol)| {
+					(protocol.notifications_protocol.clone(), SetId::from(index))
+				})
+				.collect();
 
 		let protocol = Protocol::new(
 			From::from(&params.role),
 			notification_protocols.clone(),
 			params.block_announce_config,
 			peer_store_handle.clone(),
-			protocol_handles,
+			protocol_handles.clone(),
 			from_protocol_controllers,
 			params.tx,
 		)?;
@@ -521,6 +543,9 @@ where
 			notifications_sizes_metric: metrics
 				.as_ref()
 				.map(|metrics| metrics.notifications_sizes.clone()),
+			notification_protocol_ids,
+			protocol_handles,
+			sync_protocol_handle,
 			_marker: PhantomData,
 			_block: Default::default(),
 		});
@@ -711,14 +736,6 @@ where
 	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
-
-	/// Returns the list of reserved peers.
-	fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
-		self.network_service
-			.behaviour()
-			.user_protocol()
-			.reserved_peers(pending_response);
-	}
 }
 
 impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
@@ -748,11 +765,9 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	pub async fn reserved_peers(&self) -> Result<Vec<PeerId>, ()> {
 		let (tx, rx) = oneshot::channel();
 
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::ReservedPeers { pending_response: tx });
+		self.sync_protocol_handle.reserved_peers(tx);
 
-		// The channel can only be closed if the network worker no longer exists.
+		// The channel can only be closed if `ProtocolController` no longer exists.
 		rx.await.map_err(|_| ())
 	}
 
@@ -865,13 +880,11 @@ where
 	H: ExHashT,
 {
 	fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReserved(peers));
+		self.sync_protocol_handle.set_reserved_peers(peers);
 	}
 
 	fn set_authorized_only(&self, reserved_only: bool) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(reserved_only));
+		self.sync_protocol_handle.set_reserved_only(reserved_only);
 	}
 
 	fn add_known_address(&self, peer_id: PeerId, addr: Multiaddr) {
@@ -889,15 +902,15 @@ where
 	}
 
 	fn accept_unreserved_peers(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(false));
+		self.sync_protocol_handle.set_reserved_only(false);
 	}
 
 	fn deny_unreserved_peers(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(true));
+		self.sync_protocol_handle.set_reserved_only(true);
 	}
 
 	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
-		// Make sure the local peer ID is never added to the PSM.
+		// Make sure the local peer ID is never added as a reserved peer.
 		if peer.peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
@@ -905,12 +918,12 @@ where
 		let _ = self
 			.to_worker
 			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer.peer_id, peer.multiaddr));
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer.peer_id));
+		self.sync_protocol_handle.add_reserved_peer(peer.peer_id);
 		Ok(())
 	}
 
 	fn remove_reserved_peer(&self, peer_id: PeerId) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::RemoveReserved(peer_id));
+		self.sync_protocol_handle.remove_reserved_peer(peer_id);
 	}
 
 	fn set_reserved_peers(
@@ -918,6 +931,10 @@ where
 		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
+		let Some(set_id) = self.notification_protocol_ids.get(&protocol) else {
+			return Err(format!("Cannot set reserved peers for unknown protocol: {}", protocol))
+		};
+
 		let peers_addrs = self.split_multiaddr_and_peer_id(peers)?;
 
 		let mut peers: HashSet<PeerId> = HashSet::with_capacity(peers_addrs.len());
@@ -937,9 +954,7 @@ where
 			}
 		}
 
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::SetPeersetReserved(protocol, peers));
+		self.protocol_handles[usize::from(*set_id)].set_reserved_peers(peers);
 
 		Ok(())
 	}
@@ -949,6 +964,12 @@ where
 		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
+		let Some(set_id) = self.notification_protocol_ids.get(&protocol) else {
+			return Err(
+				format!("Cannot add peers to reserved set of unknown protocol: {}", protocol)
+			)
+		};
+
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
 
 		for (peer_id, addr) in peers.into_iter() {
@@ -962,20 +983,29 @@ where
 					.to_worker
 					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
 			}
-			let _ = self
-				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::AddSetReserved(protocol.clone(), peer_id));
+
+			self.protocol_handles[usize::from(*set_id)].add_reserved_peer(peer_id);
 		}
 
 		Ok(())
 	}
 
-	fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
+	fn remove_peers_from_reserved_set(
+		&self,
+		protocol: ProtocolName,
+		peers: Vec<PeerId>,
+	) -> Result<(), String> {
+		let Some(set_id) = self.notification_protocol_ids.get(&protocol) else {
+			return Err(
+				format!("Cannot remove peers from reserved set of unknown protocol: {}", protocol)
+			)
+		};
+
 		for peer_id in peers.into_iter() {
-			let _ = self
-				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::RemoveSetReserved(protocol.clone(), peer_id));
+			self.protocol_handles[usize::from(*set_id)].remove_reserved_peer(peer_id);
 		}
+
+		Ok(())
 	}
 
 	fn sync_num_connected(&self) -> usize {
@@ -1184,13 +1214,6 @@ enum ServiceToWorkerMsg {
 	PutValue(KademliaKey, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
 	ReportPeer(PeerId, ReputationChange),
-	SetReservedOnly(bool),
-	AddReserved(PeerId),
-	RemoveReserved(PeerId),
-	SetReserved(HashSet<PeerId>),
-	SetPeersetReserved(ProtocolName, HashSet<PeerId>),
-	AddSetReserved(ProtocolName, PeerId),
-	RemoveSetReserved(ProtocolName, PeerId),
 	EventStream(out_events::Sender),
 	Request {
 		target: PeerId,
@@ -1207,9 +1230,6 @@ enum ServiceToWorkerMsg {
 	},
 	DisconnectPeer(PeerId, ProtocolName),
 	SetNotificationHandshake(ProtocolName, Vec<u8>),
-	ReservedPeers {
-		pending_response: oneshot::Sender<Vec<PeerId>>,
-	},
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1333,41 +1353,6 @@ where
 				self.network_service.behaviour_mut().get_value(key),
 			ServiceToWorkerMsg::PutValue(key, value) =>
 				self.network_service.behaviour_mut().put_value(key, value),
-			ServiceToWorkerMsg::SetReservedOnly(reserved_only) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.set_reserved_only(reserved_only),
-			ServiceToWorkerMsg::SetReserved(peers) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.set_reserved_peers(peers),
-			ServiceToWorkerMsg::SetPeersetReserved(protocol, peers) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.set_reserved_peerset_peers(protocol, peers),
-			ServiceToWorkerMsg::AddReserved(peer_id) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.add_reserved_peer(peer_id),
-			ServiceToWorkerMsg::RemoveReserved(peer_id) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.remove_reserved_peer(peer_id),
-			ServiceToWorkerMsg::AddSetReserved(protocol, peer_id) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.add_set_reserved_peer(protocol, peer_id),
-			ServiceToWorkerMsg::RemoveSetReserved(protocol, peer_id) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.remove_set_reserved_peer(protocol, peer_id),
 			ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 				self.network_service.behaviour_mut().add_known_address(peer_id, addr),
 			ServiceToWorkerMsg::ReportPeer(peer_id, reputation_change) =>
@@ -1404,9 +1389,6 @@ where
 				.behaviour_mut()
 				.user_protocol_mut()
 				.set_notification_handshake(protocol, handshake),
-			ServiceToWorkerMsg::ReservedPeers { pending_response } => {
-				self.reserved_peers(pending_response);
-			},
 		}
 	}
 
