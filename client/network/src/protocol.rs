@@ -108,7 +108,7 @@ impl<B: BlockT> Protocol<B> {
 	) -> error::Result<Self> {
 		let behaviour = {
 			Notifications::new(
-				protocol_controller_handles.clone(),
+				protocol_controller_handles,
 				from_protocol_controllers,
 				// NOTE: Block announcement protocol is still very much hardcoded into `Protocol`.
 				// 	This protocol must be the first notification protocol given to
