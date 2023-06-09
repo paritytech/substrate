@@ -87,8 +87,6 @@ impl From<SetId> for usize {
 }
 
 /// Configuration for a set of nodes for a specific protocol.
-//
-// TODO: merge this with [`crate::config::SetConfig`].
 #[derive(Debug)]
 pub struct ProtoSetConfig {
 	/// Maximum number of ingoing links to peers.
