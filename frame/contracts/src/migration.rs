@@ -175,9 +175,9 @@ mod private {
 pub trait MigrateSequence: private::Sealed {
 	/// Returns the range of versions that this migration can handle.
 	/// Migrations must be ordered by their versions with no gaps.
-	/// The following code will fail to compile:
 	///
 	/// The following code will fail to compile:
+	///
 	/// ```compile_fail
 	///     # use pallet_contracts::{NoopMigration, MigrateSequence};
 	/// 	let _ = <(NoopMigration<1>, NoopMigration<3>)>::VERSION_RANGE;
