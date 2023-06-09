@@ -541,36 +541,9 @@ mod test {
 	#[test]
 	fn is_upgrade_supported_works() {
 		type Migrations = (MockMigration<9>, MockMigration<10>, MockMigration<11>);
-<<<<<<< HEAD
 		assert!(Migrations::is_upgrade_supported(StorageVersion::new(8), StorageVersion::new(11)));
 		assert!(!Migrations::is_upgrade_supported(StorageVersion::new(9), StorageVersion::new(11)));
 		assert!(!Migrations::is_upgrade_supported(StorageVersion::new(8), StorageVersion::new(12)));
-=======
-
-		[(1, 1), (8, 11), (9, 11)].into_iter().for_each(|(from, to)| {
-			assert!(
-				Migrations::is_upgrade_supported(
-					StorageVersion::new(from),
-					StorageVersion::new(to)
-				),
-				"{} -> {} is supported",
-				from,
-				to
-			)
-		});
-
-		[(1, 0), (0, 3), (7, 11), (8, 10)].into_iter().for_each(|(from, to)| {
-			assert!(
-				!Migrations::is_upgrade_supported(
-					StorageVersion::new(from),
-					StorageVersion::new(to)
-				),
-				"{} -> {} is not supported",
-				from,
-				to
-			)
-		});
->>>>>>> master
 	}
 
 	#[test]
