@@ -140,8 +140,6 @@ impl<T: Config> MigrationStep for Migration<T> {
 			ensure!(module.initial == old.initial, "invalid initial");
 			ensure!(module.maximum == old.maximum, "invalid maximum");
 			ensure!(module.code == old.code, "invalid code");
-			ensure!(module.maximum == old.maximum, "invalid maximum");
-			ensure!(module.code == old.code, "invalid code");
 		}
 
 		Ok(())
