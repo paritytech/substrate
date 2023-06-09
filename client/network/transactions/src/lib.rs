@@ -338,10 +338,13 @@ where
 				}
 			},
 			SyncEvent::PeerDisconnected(remote) => {
-				self.network.remove_peers_from_reserved_set(
+				let result = self.network.remove_peers_from_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(remote).collect(),
 				);
+				if let Err(err) = result {
+					log::error!(target: "sync", "Remove reserved peer failed: {}", err);
+				}
 			},
 		}
 	}

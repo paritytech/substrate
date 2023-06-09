@@ -306,7 +306,7 @@ where
 			})
 			.unzip();
 
-		// Shortcut to default peer set protocol handle.
+		// Shortcut to default (sync) peer set protocol handle.
 		let sync_protocol_handle = protocol_handles[0].clone();
 
 		// Spawn `ProtocolController` runners.
