@@ -345,14 +345,13 @@ where
 				.chain(
 					notification_protocols
 						.iter()
-						.map(|protocol| {
+						.flat_map(|protocol| {
 							protocol
 								.set_config
 								.reserved_nodes
 								.iter()
 								.map(|reserved| (reserved.peer_id, reserved.multiaddr.clone()))
 						})
-						.flatten(),
 				)
 				.chain(
 					network_config
