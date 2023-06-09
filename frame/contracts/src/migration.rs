@@ -334,7 +334,8 @@ pub enum StepResult {
 }
 
 impl<T: Config> Migration<T> {
-	/// Verify that each migration's step of the [`T::Migrations`] sequence fits into `Cursor`.
+	/// Verify that each migration's step of the [`Config::Migrations`] sequence fits into
+	/// `Cursor`.
 	pub(crate) fn integrity_test() {
 		let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
 		T::Migrations::integrity_test(max_weight)
