@@ -226,13 +226,13 @@ fn close_works() {
 
 		System::set_block_number(3);
 		assert_noop!(
-			Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len),
+			Collective::close(RuntimeOrigin::signed(1), hash, 0, proposal_weight, proposal_len),
 			Error::<Test, Instance1>::TooEarly
 		);
 
 		System::set_block_number(4);
 		assert_ok!(Collective::close(
-			RuntimeOrigin::signed(4),
+			RuntimeOrigin::signed(1),
 			hash,
 			0,
 			proposal_weight,
@@ -294,7 +294,7 @@ fn proposal_close_delay_avoided_by_foundation_account_works() {
 
 		System::set_block_number(2);
 		assert_noop!(
-			Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len),
+			Collective::close(RuntimeOrigin::signed(1), hash, 0, proposal_weight, proposal_len),
 			Error::<Test, Instance1>::TooEarlyToCloseByNonFoundationAccount
 		);
 
@@ -364,13 +364,13 @@ fn proposal_close_delay_works() {
 
 		System::set_block_number(2);
 		assert_noop!(
-			Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len),
+			Collective::close(RuntimeOrigin::signed(1), hash, 0, proposal_weight, proposal_len),
 			Error::<Test, Instance1>::TooEarlyToCloseByNonFoundationAccount
 		);
 
 		System::set_block_number(3);
 		assert_ok!(Collective::close(
-			RuntimeOrigin::signed(4),
+			RuntimeOrigin::signed(1),
 			hash,
 			0,
 			proposal_weight,
@@ -439,7 +439,7 @@ fn proposal_weight_limit_works_on_approve() {
 		System::set_block_number(4);
 		assert_noop!(
 			Collective::close(
-				RuntimeOrigin::signed(4),
+				RuntimeOrigin::signed(1),
 				hash,
 				0,
 				proposal_weight - Weight::from_parts(100, 0),
@@ -448,7 +448,7 @@ fn proposal_weight_limit_works_on_approve() {
 			Error::<Test, Instance1>::WrongProposalWeight
 		);
 		assert_ok!(Collective::close(
-			RuntimeOrigin::signed(4),
+			RuntimeOrigin::signed(1),
 			hash,
 			0,
 			proposal_weight,
@@ -478,7 +478,7 @@ fn proposal_weight_limit_ignored_on_disapprove() {
 		// No votes, this proposal wont pass
 		System::set_block_number(4);
 		assert_ok!(Collective::close(
-			RuntimeOrigin::signed(4),
+			RuntimeOrigin::signed(1),
 			hash,
 			0,
 			proposal_weight - Weight::from_parts(100, 0),
@@ -512,7 +512,7 @@ fn close_with_prime_works() {
 
 		System::set_block_number(4);
 		assert_ok!(Collective::close(
-			RuntimeOrigin::signed(4),
+			RuntimeOrigin::signed(1),
 			hash,
 			0,
 			proposal_weight,
@@ -584,7 +584,7 @@ fn close_with_voting_prime_works() {
 
 		System::set_block_number(4);
 		assert_ok!(Collective::close(
-			RuntimeOrigin::signed(4),
+			RuntimeOrigin::signed(1),
 			hash,
 			0,
 			proposal_weight,
@@ -1659,5 +1659,30 @@ fn migration_v4() {
 		crate::migrations::v4::pre_migrate::<DefaultCollective, _>(old_pallet);
 		crate::migrations::v4::migrate::<Test, DefaultCollective, _>(old_pallet);
 		crate::migrations::v4::post_migrate::<DefaultCollective, _>(old_pallet);
+	});
+}
+
+#[test]
+fn close_does_not_work_for_non_council_members() {
+	new_test_ext().execute_with(|| {
+		let proposal = make_proposal(42);
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		let hash = BlakeTwo256::hash_of(&proposal);
+
+		assert_ok!(Collective::propose(
+			RuntimeOrigin::signed(1),
+			3,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+		assert_ok!(Collective::vote(RuntimeOrigin::signed(1), hash, 0, true));
+		assert_ok!(Collective::vote(RuntimeOrigin::signed(2), hash, 0, true));
+		System::set_block_number(4);
+
+		assert_noop!(
+			Collective::close(RuntimeOrigin::signed(4), hash, 0, proposal_weight, proposal_len),
+			Error::<Test, Instance1>::NotMember
+		);
 	});
 }

@@ -681,6 +681,12 @@ pub mod pallet {
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let caller = ensure_signed(origin)?;
+			let members = Self::members();
+
+			ensure!(
+				members.contains(&caller) || T::FoundationAccountsProvider::get().contains(&caller),
+				Error::<T, I>::NotMember
+			);
 
 			Self::do_close(caller, proposal_hash, index, proposal_weight_bound, length_bound)
 		}
