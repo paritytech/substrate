@@ -34,7 +34,7 @@ use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
 use sp_runtime::{
 	traits::{Convert, Saturating, Zero},
-	FixedPointNumber, FixedU128, Percent, RuntimeDebug,
+	FixedPointNumber, FixedU128, RuntimeDebug,
 };
 use sp_std::{
 	cmp::Ordering,
@@ -367,12 +367,11 @@ impl<T: Config> Convert<usize, BalanceOf<T>> for GeometricDepositBase<T> {
 	// 5, with initial deposit of 1000 and 10% of increase factor is 1000 * (1 + 0.1)^5.
 	fn convert(queue_len: usize) -> BalanceOf<T> {
 		let increase_factor: FixedU128 =
-			<Percent as Into<FixedU128>>::into(T::SignedDepositBaseIncreaseFactor::get()) +
-				sp_runtime::traits::One::one();
+			FixedU128::from_u32(1) + T::SignedDepositIncreaseFactor::get().into();
 
 		increase_factor
 			.saturating_pow(queue_len)
-			.saturating_mul_int(T::SignedFixedDepositBase::get())
+			.saturating_mul_int(T::SignedFixedDeposit::get())
 	}
 }
 

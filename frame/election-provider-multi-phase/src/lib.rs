@@ -650,14 +650,14 @@ pub mod pallet {
 
 		/// Fixed base deposit for a signed solution.
 		#[pallet::constant]
-		type SignedFixedDepositBase: Get<BalanceOf<Self>>;
+		type SignedFixedDeposit: Get<BalanceOf<Self>>;
 
 		/// Increase factor of the geometric series for the base deposit computation.
 		///
 		/// If 0, then signed base deposit remains constant regardless of the submissions queue size
-		/// (and equal to `SignedFixedDepositBase`).
+		/// (and equal to `SignedFixedDeposit`).
 		#[pallet::constant]
-		type SignedDepositBaseIncreaseFactor: Get<Percent>;
+		type SignedDepositIncreaseFactor: Get<Percent>;
 
 		/// Per-byte deposit for a signed solution.
 		#[pallet::constant]

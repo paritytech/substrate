@@ -192,8 +192,8 @@ parameter_types! {
 	pub static MaxWinners: u32 = 100;
 	pub static MaxVotesPerVoter: u32 = 16;
 	pub static MaxNominations: u32  = 16;
-	pub static SignedFixedDepositBase: Balance = 1;
-	pub static SignedDepositBaseIncreaseFactor: Percent = Percent::from_percent(10);
+	pub static SignedFixedDeposit: Balance = 1;
+	pub static SignedDepositIncreaseFactor: Percent = Percent::from_percent(10);
 }
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
@@ -210,8 +210,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type SignedMaxSubmissions = ConstU32<10>;
 	type SignedRewardBase = ();
 	type SignedDepositBase = GeometricDepositBase<Runtime>;
-	type SignedFixedDepositBase = SignedFixedDepositBase;
-	type SignedDepositBaseIncreaseFactor = SignedDepositBaseIncreaseFactor;
+	type SignedFixedDeposit = SignedFixedDeposit;
+	type SignedDepositIncreaseFactor = SignedDepositIncreaseFactor;
 	type SignedDepositByte = ();
 	type SignedMaxRefunds = ConstU32<3>;
 	type SignedDepositWeight = ();

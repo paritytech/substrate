@@ -615,8 +615,8 @@ parameter_types! {
 
 	// signed config
 	pub const SignedRewardBase: Balance = 1 * DOLLARS;
-	pub const SignedFixedDepositBase: Balance = 1 * DOLLARS;
-	pub const SignedDepositBaseIncreaseFactor: Percent = Percent::from_percent(10);
+	pub const SignedFixedDeposit: Balance = 1 * DOLLARS;
+	pub const SignedDepositIncreaseFactor: Percent = Percent::from_percent(10);
 	pub const SignedDepositByte: Balance = 1 * CENTS;
 
 	pub BetterUnsignedThreshold: Perbill = Perbill::from_rational(1u32, 10_000);
@@ -743,8 +743,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type SignedMaxSubmissions = ConstU32<10>;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedDepositBase = GeometricDepositBase<Runtime>;
-	type SignedFixedDepositBase = SignedFixedDepositBase;
-	type SignedDepositBaseIncreaseFactor = SignedDepositBaseIncreaseFactor;
+	type SignedFixedDeposit = SignedFixedDeposit;
+	type SignedDepositIncreaseFactor = SignedDepositIncreaseFactor;
 	type SignedDepositByte = SignedDepositByte;
 	type SignedMaxRefunds = ConstU32<3>;
 	type SignedDepositWeight = ();

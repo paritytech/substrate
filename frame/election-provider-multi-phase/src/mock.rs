@@ -288,10 +288,10 @@ parameter_types! {
 	pub static SignedMaxSubmissions: u32 = 5;
 	pub static SignedMaxRefunds: u32 = 1;
 	// for tests only. if `EnableVariableDepositBase` is true, the deposit base will be calculated
-	// by `Multiphase::DepositBase`. Otherwise the deposit base is `SignedFixedDepositBase`.
+	// by `Multiphase::DepositBase`. Otherwise the deposit base is `SignedFixedDeposit`.
 	pub static EnableVariableDepositBase: bool = false;
-	pub static SignedFixedDepositBase: Balance = 5;
-	pub static SignedDepositBaseIncreaseFactor: Percent = Percent::from_percent(10);
+	pub static SignedFixedDeposit: Balance = 5;
+	pub static SignedDepositIncreaseFactor: Percent = Percent::from_percent(10);
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
@@ -398,8 +398,8 @@ impl crate::Config for Runtime {
 	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedDepositBase = Self;
-	type SignedFixedDepositBase = SignedFixedDepositBase;
-	type SignedDepositBaseIncreaseFactor = SignedDepositBaseIncreaseFactor;
+	type SignedFixedDeposit = SignedFixedDeposit;
+	type SignedDepositIncreaseFactor = SignedDepositIncreaseFactor;
 	type SignedDepositByte = ();
 	type SignedDepositWeight = ();
 	type SignedMaxWeight = SignedMaxWeight;
@@ -423,10 +423,10 @@ impl crate::Config for Runtime {
 
 impl Convert<usize, BalanceOf<Runtime>> for Runtime {
 	/// returns the geometric increase deposit fee if `EnableVariableDepositBase` is set, otherwise
-	/// the fee is `SignedFixedDepositBase`.
+	/// the fee is `SignedFixedDeposit`.
 	fn convert(queue_len: usize) -> Balance {
 		if !EnableVariableDepositBase::get() {
-			SignedFixedDepositBase::get()
+			SignedFixedDeposit::get()
 		} else {
 			GeometricDepositBase::<Runtime>::convert(queue_len)
 		}
@@ -581,12 +581,12 @@ impl ExtBuilder {
 	}
 	pub fn signed_base_deposit(self, base: u64, variable: bool, increase: Percent) -> Self {
 		<EnableVariableDepositBase>::set(variable);
-		<SignedFixedDepositBase>::set(base);
-		<SignedDepositBaseIncreaseFactor>::set(increase);
+		<SignedFixedDeposit>::set(base);
+		<SignedDepositIncreaseFactor>::set(increase);
 		self
 	}
 	pub fn signed_deposit(self, base: u64, byte: u64, weight: u64) -> Self {
-		<SignedFixedDepositBase>::set(base);
+		<SignedFixedDeposit>::set(base);
 		<SignedDepositByte>::set(byte);
 		<SignedDepositWeight>::set(weight);
 		self
