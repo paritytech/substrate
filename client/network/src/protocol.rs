@@ -21,7 +21,6 @@ use crate::{
 	peer_store::{PeerStoreHandle, PeerStoreProvider},
 	protocol_controller::{self, SetId},
 	types::ProtocolName,
-	ReputationChange,
 };
 
 use bytes::Bytes;
@@ -160,11 +159,6 @@ impl<B: BlockT> Protocol<B> {
 		self.behaviour.open_peers()
 	}
 
-	/// Returns the number of discovered nodes that we keep in memory.
-	pub fn num_discovered_peers(&self) -> usize {
-		self.peer_store_handle.num_known_peers()
-	}
-
 	/// Disconnects the given peer if we are connected to it.
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: ProtocolName) {
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name)
@@ -175,19 +169,9 @@ impl<B: BlockT> Protocol<B> {
 		}
 	}
 
-	/// Returns the state of the peerset manager, for debugging purposes.
-	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
-		self.behaviour.peerset_debug_info()
-	}
-
 	/// Returns the number of peers we're connected to on sync protocol.
 	pub fn num_connected_peers(&self) -> usize {
 		self.peers.len()
-	}
-
-	/// Adjusts the reputation of a node.
-	pub fn report_peer(&mut self, who: PeerId, reputation: ReputationChange) {
-		self.peer_store_handle.report_peer(who, reputation)
 	}
 
 	/// Set handshake for the notification protocol.
@@ -265,15 +249,6 @@ impl<B: BlockT> Protocol<B> {
 				protocol
 			);
 		}
-	}
-
-	/// Notify the protocol that we have learned about the existence of some peer.
-	///
-	/// Can be called multiple times with the same `PeerId`.
-	pub fn add_known_peer(&mut self, peer_id: PeerId) {
-		// TODO: get rid of this function and call `Peerset`/`PeerStore` directly
-		// from `NetworkWorker`.
-		self.peer_store_handle.add_known_peer(peer_id);
 	}
 }
 
