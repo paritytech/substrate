@@ -266,7 +266,7 @@ pub mod pallet {
 		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
-			+ OriginTrait<Call = Self::RuntimeCall>;
+			+ OriginTrait<Call = Self::RuntimeCall, AccountId = Self::AccountId>;
 
 		/// The aggregated `RuntimeCall` type.
 		#[pallet::no_default]
@@ -824,7 +824,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O: .., AccountId: Decode, T } >
 		EnsureOriginWithArg<O, T> for EnsureRoot<AccountId>
 	{}
@@ -854,7 +854,7 @@ impl<
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O: .., AccountId: Decode, Success: TypedGet, T } >
 		EnsureOriginWithArg<O, T> for EnsureRootWithSuccess<AccountId, Success>
 	{}
@@ -905,7 +905,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O: .., AccountId: Decode, T } >
 		EnsureOriginWithArg<O, T> for EnsureSigned<AccountId>
 	{}
@@ -937,7 +937,7 @@ impl<
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O: .., Who: SortedMembers<AccountId>, AccountId: PartialEq + Clone + Ord + Decode, T } >
 		EnsureOriginWithArg<O, T> for EnsureSignedBy<Who, AccountId>
 	{}
@@ -962,7 +962,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O: .., AccountId, T } >
 		EnsureOriginWithArg<O, T> for EnsureNone<AccountId>
 	{}
@@ -982,7 +982,7 @@ impl<O, Success> EnsureOrigin<O> for EnsureNever<Success> {
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O, Success, T } >
 		EnsureOriginWithArg<O, T> for EnsureNever<Success>
 	{}

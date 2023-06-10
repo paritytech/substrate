@@ -276,10 +276,35 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl<{ T: Config<I>, I: 'static, const MIN_RANK: u16, A }>
 		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureRanked<T, I, MIN_RANK>
 	{}
+}
+
+/// Guard to ensure that the given origin is a member of the collective. The rank of the member is
+/// the `Success` value.
+pub struct EnsureOfRank<T, I>(PhantomData<(T, I)>);
+impl<T: Config<I>, I: 'static> EnsureOriginWithArg<T::RuntimeOrigin, Rank>
+	for EnsureOfRank<T, I>
+{
+	type Success = (T::AccountId, Rank);
+
+	fn try_origin(o: T::RuntimeOrigin, min_rank: &Rank) -> Result<Self::Success, T::RuntimeOrigin> {
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
+		match Members::<T, I>::get(&who) {
+			Some(MemberRecord { rank, .. }) if rank >= *min_rank => Ok((who, rank)),
+			_ => Err(frame_system::RawOrigin::Signed(who).into()),
+		}
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(min_rank: &Rank) -> Result<T::RuntimeOrigin, ()> {
+		let who = frame_benchmarking::account::<T::AccountId>("successful_origin", 0, 0);
+		crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), *min_rank)
+			.expect("Could not add members for benchmarks");
+		Ok(frame_system::RawOrigin::Signed(who).into())
+	}
 }
 
 /// Guard to ensure that the given origin is a member of the collective. The account ID of the
@@ -304,7 +329,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl<{ T: Config<I>, I: 'static, const MIN_RANK: u16, A }>
 		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureMember<T, I, MIN_RANK>
 	{}
@@ -335,7 +360,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl<{ T: Config<I>, I: 'static, const MIN_RANK: u16, A }>
 		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureRankedMember<T, I, MIN_RANK>
 	{}
@@ -725,6 +750,13 @@ pub mod pallet {
 				Self::do_promote_member(who.clone(), None)?;
 			}
 			Ok(())
+		}
+
+		/// Determine the rank of the account behind the `Signed` origin `o`, `None` if the account
+		/// is unknown to this collective or `o` is not `Signed`.
+		pub fn as_rank(o: &<T::RuntimeOrigin as frame_support::traits::OriginTrait>::PalletsOrigin) -> Option<u16> {
+			use frame_support::traits::CallerTrait;
+			o.as_signed().and_then(Self::rank_of)
 		}
 	}
 

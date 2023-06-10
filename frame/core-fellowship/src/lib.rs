@@ -594,7 +594,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { T: Config<I>, I: 'static, const MIN_RANK: u16, A } >
 		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureInducted<T, I, MIN_RANK>
 	{}

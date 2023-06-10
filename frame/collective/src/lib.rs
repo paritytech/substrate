@@ -1155,7 +1155,7 @@ impl<
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O: .., I: 'static, AccountId: Decode, T } >
 		EnsureOriginWithArg<O, T> for EnsureMember<AccountId, I>
 	{}
@@ -1183,7 +1183,7 @@ impl<
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O: .., I: 'static, const N: u32, AccountId, T } >
 		EnsureOriginWithArg<O, T> for EnsureMembers<AccountId, I, N>
 	{}
@@ -1214,7 +1214,7 @@ impl<
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O: .., I: 'static, const N: u32, const D: u32, AccountId, T } >
 		EnsureOriginWithArg<O, T> for EnsureProportionMoreThan<AccountId, I, N, D>
 	{}
@@ -1245,7 +1245,7 @@ impl<
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl< { O: .., I: 'static, const N: u32, const D: u32, AccountId, T } >
 		EnsureOriginWithArg<O, T> for EnsureProportionAtLeast<AccountId, I, N, D>
 	{}

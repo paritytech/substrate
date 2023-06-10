@@ -1182,7 +1182,7 @@ impl<T: Config> EnsureOrigin<T::RuntimeOrigin> for EnsureFounder<T> {
 	}
 }
 
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl<{ T: Config, A }>
 		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureFounder<T>
 	{}

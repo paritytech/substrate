@@ -470,7 +470,7 @@ fn ensure_ranked_works() {
 		assert_eq!(
 			<Rank2 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(1))
 				.unwrap_err()
-				.as_signed()
+				.into_signer()
 				.unwrap(),
 			1
 		);
@@ -479,14 +479,14 @@ fn ensure_ranked_works() {
 		assert_eq!(
 			<Rank3 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(1))
 				.unwrap_err()
-				.as_signed()
+				.into_signer()
 				.unwrap(),
 			1
 		);
 		assert_eq!(
 			<Rank3 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(2))
 				.unwrap_err()
-				.as_signed()
+				.into_signer()
 				.unwrap(),
 			2
 		);
@@ -494,21 +494,21 @@ fn ensure_ranked_works() {
 		assert_eq!(
 			<Rank4 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(1))
 				.unwrap_err()
-				.as_signed()
+				.into_signer()
 				.unwrap(),
 			1
 		);
 		assert_eq!(
 			<Rank4 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(2))
 				.unwrap_err()
-				.as_signed()
+				.into_signer()
 				.unwrap(),
 			2
 		);
 		assert_eq!(
 			<Rank4 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(3))
 				.unwrap_err()
-				.as_signed()
+				.into_signer()
 				.unwrap(),
 			3
 		);

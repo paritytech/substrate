@@ -159,9 +159,9 @@ pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 ///
 /// The argument is ignored, much like in [AsEnsureOriginWithArg].
 #[macro_export]
-macro_rules! ignoring_arg {
+macro_rules! impl_ensure_origin_with_arg_ignoring_arg {
 	( impl < { O: .., I: 'static, $( $bound:tt )* }> EnsureOriginWithArg<O, $t_param:ty> for $name:ty {} ) => {
-		ignoring_arg! {
+		impl_ensure_origin_with_arg_ignoring_arg! {
 			impl <{
 				O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
 				I: 'static,
@@ -170,7 +170,7 @@ macro_rules! ignoring_arg {
 		}
 	};
 	( impl < { O: .. , $( $bound:tt )* }> EnsureOriginWithArg<O, $t_param:ty> for $name:ty {} ) => {
-		ignoring_arg! {
+		impl_ensure_origin_with_arg_ignoring_arg! {
 			impl <{
 				O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
 				$( $bound )*
@@ -203,7 +203,7 @@ impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
 		Err(())
 	}
 }
-ignoring_arg! {
+impl_ensure_origin_with_arg_ignoring_arg! {
 	impl<{ OO, Success, A }>
 		EnsureOriginWithArg<OO, A> for NeverEnsureOrigin<Success>
 	{}
@@ -297,6 +297,24 @@ impl<O: Clone, Original: EnsureOriginWithArg<O, A>, Mutator: TryMorph<Original::
 	}
 }
 
+pub struct TryWithMorphedArg<O, A, Morph, Inner, Success>(PhantomData<(O, A, Morph, Inner, Success)>);
+impl<
+	O,
+	A,
+	Morph: for<'a> TryMorph<&'a A>,
+	Inner: for<'a> EnsureOriginWithArg<O, <Morph as TryMorph::<&'a A>>::Outcome, Success = Success>,
+	Success,
+> EnsureOriginWithArg<O, A> for TryWithMorphedArg<O, A, Morph, Inner, Success> {
+	type Success = Success;
+	fn try_origin(o: O, a: &A) -> Result<Success, O> {
+		match Morph::try_morph(a) { Ok(x) => Inner::try_origin(o, &x), _ => return Err(o) }
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(a: &A) -> Result<O, ()> {
+		Inner::try_successful_origin(Morph::try_morph(a).map_err(|_| ())?)
+	}
+}
+
 /// "OR gate" implementation of `EnsureOrigin` allowing for different `Success` types for `L`
 /// and `R`, with them combined using an `Either` type.
 ///
@@ -321,7 +339,7 @@ impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
 impl<
 		OuterOrigin,
 		L: EnsureOriginWithArg<OuterOrigin, Argument>,
-		R: EnsureOriginWithArg<OuterOrigin, Argument, Success = L::Success>,
+		R: EnsureOriginWithArg<OuterOrigin, Argument>,
 		Argument,
 	> EnsureOriginWithArg<OuterOrigin, Argument> for EitherOfDiverse<L, R>
 {
@@ -409,6 +427,21 @@ pub trait CallerTrait<AccountId>: Parameter + Member + From<RawOrigin<AccountId>
 
 	/// Extract a reference to the system-level `RawOrigin` if it is that.
 	fn as_system_ref(&self) -> Option<&RawOrigin<AccountId>>;
+
+	/// Extract the signer from it if a system `Signed` origin, `None` otherwise.
+	fn as_signed(&self) -> Option<&AccountId> {
+		self.as_system_ref().and_then(RawOrigin::as_signed)
+	}
+
+	/// Returns `true` if `self` is a system `Root` origin, `None` otherwise.
+	fn is_root(&self) -> bool {
+		self.as_system_ref().map_or(false, RawOrigin::is_root)
+	}
+
+	/// Returns `true` if `self` is a system `None` origin, `None` otherwise.
+	fn is_none(&self) -> bool {
+		self.as_system_ref().map_or(false, RawOrigin::is_none)
+	}
 }
 
 /// Methods available on `frame_system::Config::RuntimeOrigin`.
@@ -459,7 +492,13 @@ pub trait OriginTrait: Sized {
 	fn signed(by: Self::AccountId) -> Self;
 
 	/// Extract the signer from the message if it is a `Signed` origin.
+	#[deprecated = "Use `into_signer` instead"]
 	fn as_signed(self) -> Option<Self::AccountId> {
+		self.into_signer()
+	}
+
+	/// Extract the signer from the message if it is a `Signed` origin.
+	fn into_signer(self) -> Option<Self::AccountId> {
 		self.into_caller().into_system().and_then(|s| {
 			if let RawOrigin::Signed(who) = s {
 				Some(who)
