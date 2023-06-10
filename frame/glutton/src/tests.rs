@@ -23,6 +23,8 @@ use mock::{new_test_ext, Glutton, RuntimeOrigin, System, Test};
 use frame_support::{assert_err, assert_noop, assert_ok, weights::constants::*};
 use sp_runtime::{traits::One, Perbill};
 
+const CALIBRATION_ERROR: &'static str = "Weight calibration failed. Please re-run the benchmarks on the same hardware.";
+
 #[test]
 fn initialize_pallet_works() {
 	new_test_ext().execute_with(|| {
@@ -182,14 +184,14 @@ fn on_idle_weight_high_proof_is_close_enough_works() {
 		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
 		assert!(
 			ratio >= Perbill::from_percent(99),
-			"Too few proof size consumed, was only {:?} of expected",
+			"{CALIBRATION_ERROR}\nToo few proof size consumed, was only {:?} of expected",
 			ratio
 		);
-
+		
 		let ratio = Perbill::from_rational(got.ref_time(), should.ref_time());
 		assert!(
 			ratio >= Perbill::from_percent(99),
-			"Too few ref time consumed, was only {:?} of expected",
+			"{CALIBRATION_ERROR}\nToo few ref time consumed, was only {:?} of expected",
 			ratio
 		);
 	});
@@ -206,7 +208,7 @@ fn on_idle_weight_low_proof_is_close_enough_works() {
 		assert!(got.all_lte(should), "Consumed too much weight");
 
 		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
-		// Just a sanity check here.
+		// Just a sanity check here for > 0
 		assert!(
 			ratio >= Perbill::from_percent(50),
 			"Too few proof size consumed, was only {:?} of expected",
@@ -216,7 +218,7 @@ fn on_idle_weight_low_proof_is_close_enough_works() {
 		let ratio = Perbill::from_rational(got.ref_time(), should.ref_time());
 		assert!(
 			ratio >= Perbill::from_percent(99),
-			"Too few ref time consumed, was only {:?} of expected",
+			"{CALIBRATION_ERROR}\nToo few ref time consumed, was only {:?} of expected",
 			ratio
 		);
 	});
@@ -233,7 +235,7 @@ fn waste_at_most_ref_time_weight_close_enough() {
 		// We require it to be under-spend by at most 1%.
 		assert!(
 			meter.consumed_ratio() >= Perbill::from_percent(99),
-			"Consumed too few: {:?}",
+			"{CALIBRATION_ERROR}\nConsumed too few: {:?}",
 			meter.consumed_ratio()
 		);
 	});
@@ -250,7 +252,7 @@ fn waste_at_most_proof_size_weight_close_enough() {
 		// We require it to be under-spend by at most 1%.
 		assert!(
 			meter.consumed_ratio() >= Perbill::from_percent(99),
-			"Consumed too few: {:?}",
+			"{CALIBRATION_ERROR}\nConsumed too few: {:?}",
 			meter.consumed_ratio()
 		);
 	});
