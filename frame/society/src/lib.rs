@@ -252,7 +252,7 @@ mod mock;
 mod tests;
 
 use frame_support::{
-	ignoring_arg,
+	impl_ensure_origin_with_arg_ignoring_arg,
 	pallet_prelude::*,
 	traits::{
 		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, EnsureOriginWithArg,

@@ -53,7 +53,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
-	ensure, ignoring_arg,
+	ensure, impl_ensure_origin_with_arg_ignoring_arg,
 	traits::{EnsureOrigin, EnsureOriginWithArg, PollStatus, Polling, RankedMembers, VoteTally},
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -285,9 +285,7 @@ impl_ensure_origin_with_arg_ignoring_arg! {
 /// Guard to ensure that the given origin is a member of the collective. The rank of the member is
 /// the `Success` value.
 pub struct EnsureOfRank<T, I>(PhantomData<(T, I)>);
-impl<T: Config<I>, I: 'static> EnsureOriginWithArg<T::RuntimeOrigin, Rank>
-	for EnsureOfRank<T, I>
-{
+impl<T: Config<I>, I: 'static> EnsureOriginWithArg<T::RuntimeOrigin, Rank> for EnsureOfRank<T, I> {
 	type Success = (T::AccountId, Rank);
 
 	fn try_origin(o: T::RuntimeOrigin, min_rank: &Rank) -> Result<Self::Success, T::RuntimeOrigin> {
@@ -754,7 +752,9 @@ pub mod pallet {
 
 		/// Determine the rank of the account behind the `Signed` origin `o`, `None` if the account
 		/// is unknown to this collective or `o` is not `Signed`.
-		pub fn as_rank(o: &<T::RuntimeOrigin as frame_support::traits::OriginTrait>::PalletsOrigin) -> Option<u16> {
+		pub fn as_rank(
+			o: &<T::RuntimeOrigin as frame_support::traits::OriginTrait>::PalletsOrigin,
+		) -> Option<u16> {
 			use frame_support::traits::CallerTrait;
 			o.as_signed().and_then(Self::rank_of)
 		}

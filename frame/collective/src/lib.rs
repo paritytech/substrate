@@ -53,7 +53,7 @@ use frame_support::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo,
 		Pays, PostDispatchInfo,
 	},
-	ensure, ignoring_arg,
+	ensure, impl_ensure_origin_with_arg_ignoring_arg,
 	traits::{
 		Backing, ChangeMembers, EnsureOrigin, EnsureOriginWithArg, Get, GetBacking,
 		InitializeMembers, StorageVersion,

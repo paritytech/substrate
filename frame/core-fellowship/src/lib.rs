@@ -65,7 +65,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
-	ensure, ignoring_arg,
+	ensure, impl_ensure_origin_with_arg_ignoring_arg,
 	traits::{
 		tokens::Balance as BalanceTrait, EnsureOrigin, EnsureOriginWithArg, Get, RankedMembers,
 	},

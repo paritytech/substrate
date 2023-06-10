@@ -297,17 +297,23 @@ impl<O: Clone, Original: EnsureOriginWithArg<O, A>, Mutator: TryMorph<Original::
 	}
 }
 
-pub struct TryWithMorphedArg<O, A, Morph, Inner, Success>(PhantomData<(O, A, Morph, Inner, Success)>);
+pub struct TryWithMorphedArg<O, A, Morph, Inner, Success>(
+	PhantomData<(O, A, Morph, Inner, Success)>,
+);
 impl<
-	O,
-	A,
-	Morph: for<'a> TryMorph<&'a A>,
-	Inner: for<'a> EnsureOriginWithArg<O, <Morph as TryMorph::<&'a A>>::Outcome, Success = Success>,
-	Success,
-> EnsureOriginWithArg<O, A> for TryWithMorphedArg<O, A, Morph, Inner, Success> {
+		O,
+		A,
+		Morph: for<'a> TryMorph<&'a A>,
+		Inner: for<'a> EnsureOriginWithArg<O, <Morph as TryMorph<&'a A>>::Outcome, Success = Success>,
+		Success,
+	> EnsureOriginWithArg<O, A> for TryWithMorphedArg<O, A, Morph, Inner, Success>
+{
 	type Success = Success;
 	fn try_origin(o: O, a: &A) -> Result<Success, O> {
-		match Morph::try_morph(a) { Ok(x) => Inner::try_origin(o, &x), _ => return Err(o) }
+		match Morph::try_morph(a) {
+			Ok(x) => Inner::try_origin(o, &x),
+			_ => return Err(o),
+		}
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin(a: &A) -> Result<O, ()> {

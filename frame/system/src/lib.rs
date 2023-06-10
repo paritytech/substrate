@@ -89,7 +89,7 @@ use frame_support::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
 		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
 	},
-	ignoring_arg,
+	impl_ensure_origin_with_arg_ignoring_arg,
 	storage::{self, StorageStreamIter},
 	traits::{
 		ConstU32, Contains, EnsureOrigin, EnsureOriginWithArg, Get, HandleLifetime,
