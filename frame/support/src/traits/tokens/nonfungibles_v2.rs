@@ -180,6 +180,16 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 	) -> Self::OwnedInCollectionIterator;
 }
 
+/// Trait for providing an interface to read-only the role of NFT-like.
+pub trait InspectRole<AccountId>: Inspect<AccountId> {
+	// Return `true` if collection issuer.
+	fn is_issuer(collection: &Self::CollectionId, who: &AccountId) -> bool;
+	// Return `true` if collection admin.
+	fn is_admin(collection: &Self::CollectionId, who: &AccountId) -> bool;
+	// Return `true` if collection freezer.
+	fn is_freezer(collection: &Self::CollectionId, who: &AccountId) -> bool;
+}
+
 /// Trait for providing the ability to create collections of nonfungible items.
 pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
