@@ -410,7 +410,7 @@ where
 /// - all imported functions from the external environment matches defined by `env` module.
 ///
 /// TODO: re-phrase
-/// Also constructs contract owner_info (metadata?) by calculating the deposit.
+/// Also constructs contract owner_info (metadata?) by calculating the storage deposit.
 pub fn prepare<E, T>(
 	code: CodeVec<T>,
 	schedule: &Schedule<T>,

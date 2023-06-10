@@ -89,9 +89,12 @@ macro_rules! assert_refcount {
 }
 
 pub mod test_utils {
-	use super::{Balances, Hash, SysConfig, Test};
-	use crate::{exec::AccountIdOf, CodeHash, Config, ContractInfo, ContractInfoOf, Nonce};
-	use codec::Encode;
+	use super::{Balances, DepositPerByte, DepositPerItem, Hash, SysConfig, Test};
+	use crate::{
+		exec::AccountIdOf, CodeHash, Config, ContractInfo, ContractInfoOf, Nonce, OwnerInfo,
+		OwnerInfoOf, PristineCode,
+	};
+	use codec::{Encode, MaxEncodedLen};
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
@@ -118,6 +121,17 @@ pub mod test_utils {
 	}
 	pub fn hash<S: Encode>(s: &S) -> <<Test as SysConfig>::Hashing as Hash>::Output {
 		<<Test as SysConfig>::Hashing as Hash>::hash_of(s)
+	}
+	pub fn ensure_stored_and_calc_deposit(code_hash: CodeHash<Test>) -> u64 {
+		// Assert that contract code and owner_info are stored, and get their sizes.
+		let code_bytes = PristineCode::<Test>::try_get(&code_hash).unwrap().len() as u64;
+		assert!(OwnerInfoOf::<Test>::contains_key(&code_hash));
+		// For onwer info, the deposit for max_encoded_len is taken.
+		let owner_info_bytes = OwnerInfo::<Test>::max_encoded_len() as u64;
+		// Calculate deposit to be reserved.
+		// We add 2 storage items: one for code, other for owner_info
+		DepositPerByte::get().saturating_mul(code_bytes + owner_info_bytes) +
+			DepositPerItem::get().saturating_mul(2)
 	}
 }
 
@@ -3300,7 +3314,7 @@ fn upload_code_works() {
 			Some(codec::Compact(1_000)),
 			Determinism::Enforced,
 		));
-		assert!(PristineCode::<Test>::contains_key(&code_hash));
+		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(code_hash);
 
 		assert_eq!(
 			System::events(),
@@ -3309,7 +3323,7 @@ fn upload_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_expected,
 					}),
 					topics: vec![],
 				},
@@ -3388,11 +3402,9 @@ fn remove_code_works() {
 			Determinism::Enforced,
 		));
 
-		assert!(PristineCode::<Test>::contains_key(&code_hash));
+		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(code_hash);
 
 		assert_ok!(Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash));
-		assert!(!PristineCode::<Test>::contains_key(&code_hash));
-
 		assert_eq!(
 			System::events(),
 			vec![
@@ -3400,7 +3412,7 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_expected,
 					}),
 					topics: vec![],
 				},
@@ -3413,7 +3425,7 @@ fn remove_code_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Unreserved {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_expected,
 					}),
 					topics: vec![],
 				},
@@ -3444,6 +3456,8 @@ fn remove_code_wrong_origin() {
 			Determinism::Enforced,
 		));
 
+		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(code_hash);
+
 		assert_noop!(
 			Contracts::remove_code(RuntimeOrigin::signed(BOB), code_hash),
 			sp_runtime::traits::BadOrigin,
@@ -3456,7 +3470,7 @@ fn remove_code_wrong_origin() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_expected,
 					}),
 					topics: vec![],
 				},
@@ -3547,6 +3561,7 @@ fn instantiate_with_zero_balance_works() {
 		// Check that the BOB contract has been instantiated.
 		let contract = get_contract(&addr);
 		let deposit_account = contract.deposit_account().deref();
+		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(contract.code_hash);
 
 		// Make sure the account exists even though no free balance was send
 		assert_eq!(<Test as Config>::Currency::free_balance(&addr), min_balance);
@@ -3607,7 +3622,7 @@ fn instantiate_with_zero_balance_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_expected,
 					}),
 					topics: vec![],
 				},
@@ -3658,6 +3673,7 @@ fn instantiate_with_below_existential_deposit_works() {
 		// Check that the BOB contract has been instantiated.
 		let contract = get_contract(&addr);
 		let deposit_account = contract.deposit_account().deref();
+		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(code_hash);
 
 		// Make sure the account exists even though not enough free balance was send
 		assert_eq!(<Test as Config>::Currency::free_balance(&addr), min_balance + 50);
@@ -3727,7 +3743,7 @@ fn instantiate_with_below_existential_deposit_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
-						amount: 173,
+						amount: deposit_expected,
 					}),
 					topics: vec![],
 				},
