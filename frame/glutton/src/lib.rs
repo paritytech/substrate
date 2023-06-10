@@ -45,6 +45,8 @@ pub use weights::WeightInfo;
 pub const VALUE_SIZE: usize = 1024;
 /// Max number of entries for `TrashData` storage item
 pub const MAX_TRASH_DATA_ENTRIES: u32 = 65_000;
+/// Hard limit for any other resource limit (in units).
+pub const RESOURCE_HARD_LIMIT: FixedU64 = FixedU64::from_u32(10);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -82,7 +84,7 @@ pub mod pallet {
 		///
 		/// Set `witness_count` to `Some` to bypass this error.
 		AlreadyInitialized,
-		/// The limit was over 10,000%.
+		/// The limit was over [`crate::RESOURCE_HARD_LIMIT`].
 		InsaneLimit,
 	}
 
@@ -139,7 +141,10 @@ pub mod pallet {
 
 			TrashDataCount::<T>::set(self.trash_data_count);
 
+			assert!(self.compute <= RESOURCE_HARD_LIMIT, "Compute limit is insane");
 			<Compute<T>>::put(self.compute);
+
+			assert!(self.storage <= RESOURCE_HARD_LIMIT, "Storage limit is insane");
 			<Storage<T>>::put(self.storage);
 		}
 	}
@@ -225,8 +230,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_compute())]
 		pub fn set_compute(origin: OriginFor<T>, compute: FixedU64) -> DispatchResult {
 			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
-			// Ensure that it is <= 10,000%.
-			ensure!(compute <= FixedU64::from_u32(100), Error::<T>::InsaneLimit);
+			ensure!(compute <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 
 			Compute::<T>::set(compute);
 
@@ -246,8 +250,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_storage())]
 		pub fn set_storage(origin: OriginFor<T>, storage: FixedU64) -> DispatchResult {
 			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
-			// Ensure that it is <= 10,000%.
-			ensure!(storage <= FixedU64::from_u32(100), Error::<T>::InsaneLimit);
+			ensure!(storage <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 
 			Storage::<T>::set(storage);
 

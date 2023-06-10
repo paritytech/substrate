@@ -107,6 +107,21 @@ fn setting_compute_works() {
 }
 
 #[test]
+fn setting_compute_respects_limit() {
+	new_test_ext().execute_with(|| {
+		// < 1000% is fine
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), FixedU64::from_float(9.99)),);
+		// == 1000% is fine
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), FixedU64::from_u32(10)),);
+		// > 1000% is not
+		assert_noop!(
+			Glutton::set_compute(RuntimeOrigin::root(), FixedU64::from_float(10.01)),
+			Error::<Test>::InsaneLimit
+		);
+	});
+}
+
+#[test]
 fn setting_storage_works() {
 	new_test_ext().execute_with(|| {
 		assert!(Storage::<Test>::get().is_zero());
@@ -124,6 +139,21 @@ fn setting_storage_works() {
 		assert_noop!(
 			Glutton::set_storage(RuntimeOrigin::none(), FixedU64::from_float(0.3)),
 			DispatchError::BadOrigin
+		);
+	});
+}
+
+#[test]
+fn setting_storage_respects_limit() {
+	new_test_ext().execute_with(|| {
+		// < 1000% is fine
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), FixedU64::from_float(9.99)),);
+		// == 1000% is fine
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), FixedU64::from_u32(10)),);
+		// > 1000% is not
+		assert_noop!(
+			Glutton::set_storage(RuntimeOrigin::root(), FixedU64::from_float(10.01)),
+			Error::<Test>::InsaneLimit
 		);
 	});
 }
