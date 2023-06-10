@@ -17,7 +17,7 @@
 
 //! # NFTs Royalty Pallet
 //!
-//! A pallet for dealing with NFT royalties.
+//! A pallet for dealing with non-fungible token royalties.
 //!
 //! ## Related Modules
 //!
@@ -446,7 +446,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Allows to buy an NFT item if it's up for sale and pays the royalty associated to it.
+		/// Buy an NFT item if it's up for sale and pays the royalty associated to it.
 		///
 		/// Origin must be Signed and must not be the owner of the NFT `item`.
 		///
@@ -549,7 +549,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Remove the royalty associated to an item only if the item no longer exists.
+		/// Remove the royalty associated to an NFT item only if the item no longer exists.
 		///
 		/// This will also redeem the deposit initially paid for creating the item royalty.
 		/// If the royalty was set with `ForceOrigin` then no deposit will be redeemed.
