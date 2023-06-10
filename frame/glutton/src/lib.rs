@@ -43,7 +43,7 @@ pub use weights::WeightInfo;
 
 /// The size of each value in the `TrashData` storage in bytes.
 pub const VALUE_SIZE: usize = 1024;
-/// Max number of entries for `TrashData` storage item
+/// Max number of entries for the `TrashData` map.
 pub const MAX_TRASH_DATA_ENTRIES: u32 = 65_000;
 /// Hard limit for any other resource limit (in units).
 pub const RESOURCE_HARD_LIMIT: FixedU64 = FixedU64::from_u32(10);
@@ -88,13 +88,15 @@ pub mod pallet {
 		InsaneLimit,
 	}
 
-	/// Storage value used to specify what percentage of the left over `ref_time`
-	/// to consume during `on_idle`.
+	/// What ratio of the remaining `ref_time` to consume during `on_idle`.
+	///
+	/// `1.0` is mapped to `100%`. Must be at most [`crate::RESOURCE_HARD_LIMIT`].
 	#[pallet::storage]
 	pub(crate) type Compute<T: Config> = StorageValue<_, FixedU64, ValueQuery>;
 
-	/// Storage value used the specify what percentage of left over `proof_size`
-	/// to consume during `on_idle`.
+	/// What ratio of the remaining `proof_size` to consume during `on_idle`.
+	///
+	/// `1.0` is mapped to `100%`. Must be at most [`crate::RESOURCE_HARD_LIMIT`].
 	#[pallet::storage]
 	pub(crate) type Storage<T: Config> = StorageValue<_, FixedU64, ValueQuery>;
 
@@ -184,7 +186,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight = T::WeightInfo)]
 	impl<T: Config> Pallet<T> {
 		/// Initializes the pallet by writing into `TrashData`.
 		///
@@ -227,11 +229,10 @@ pub mod pallet {
 		///
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::set_compute())]
 		pub fn set_compute(origin: OriginFor<T>, compute: FixedU64) -> DispatchResult {
 			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
-			ensure!(compute <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 
+			ensure!(compute <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 			Compute::<T>::set(compute);
 
 			Self::deposit_event(Event::ComputationLimitSet { compute });
@@ -247,11 +248,10 @@ pub mod pallet {
 		///
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::set_storage())]
 		pub fn set_storage(origin: OriginFor<T>, storage: FixedU64) -> DispatchResult {
 			T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(|o| ensure_root(o))?;
-			ensure!(storage <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 
+			ensure!(storage <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 			Storage::<T>::set(storage);
 
 			Self::deposit_event(Event::StorageLimitSet { storage });

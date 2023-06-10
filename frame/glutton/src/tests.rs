@@ -17,13 +17,13 @@
 
 //! Tests for the glutton pallet.
 
-use super::*;
-use mock::{new_test_ext, Glutton, RuntimeOrigin, System, Test};
+use super::{mock::*, *};
 
 use frame_support::{assert_err, assert_noop, assert_ok, weights::constants::*};
 use sp_runtime::{traits::One, Perbill};
 
-const CALIBRATION_ERROR: &'static str = "Weight calibration failed. Please re-run the benchmarks on the same hardware.";
+const CALIBRATION_ERROR: &'static str =
+	"Weight calibration failed. Please re-run the benchmarks on the same hardware.";
 
 #[test]
 fn initialize_pallet_works() {
@@ -163,8 +163,7 @@ fn setting_storage_respects_limit() {
 #[test]
 fn on_idle_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), One::one()));
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), One::one()));
+		set_limits(One::one(), One::one());
 
 		Glutton::on_idle(1, Weight::from_parts(20_000_000, 0));
 	});
@@ -174,8 +173,7 @@ fn on_idle_works() {
 #[test]
 fn on_idle_weight_high_proof_is_close_enough_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), One::one()));
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), One::one()));
+		set_limits(One::one(), One::one());
 
 		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, WEIGHT_PROOF_SIZE_PER_MB * 5);
 		let got = Glutton::on_idle(1, should);
@@ -184,15 +182,13 @@ fn on_idle_weight_high_proof_is_close_enough_works() {
 		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
 		assert!(
 			ratio >= Perbill::from_percent(99),
-			"{CALIBRATION_ERROR}\nToo few proof size consumed, was only {:?} of expected",
-			ratio
+			"Too few proof size consumed, was only {ratio:?} of expected",
 		);
-		
+
 		let ratio = Perbill::from_rational(got.ref_time(), should.ref_time());
 		assert!(
 			ratio >= Perbill::from_percent(99),
-			"{CALIBRATION_ERROR}\nToo few ref time consumed, was only {:?} of expected",
-			ratio
+			"Too few ref time consumed, was only {ratio:?} of expected",
 		);
 	});
 }
@@ -200,8 +196,7 @@ fn on_idle_weight_high_proof_is_close_enough_works() {
 #[test]
 fn on_idle_weight_low_proof_is_close_enough_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), FixedU64::one()));
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), FixedU64::one()));
+		set_limits(One::one(), One::one());
 
 		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, WEIGHT_PROOF_SIZE_PER_KB * 20);
 		let got = Glutton::on_idle(1, should);
@@ -211,15 +206,44 @@ fn on_idle_weight_low_proof_is_close_enough_works() {
 		// Just a sanity check here for > 0
 		assert!(
 			ratio >= Perbill::from_percent(50),
-			"Too few proof size consumed, was only {:?} of expected",
-			ratio
+			"Too few proof size consumed, was only {ratio:?} of expected",
 		);
 
 		let ratio = Perbill::from_rational(got.ref_time(), should.ref_time());
 		assert!(
 			ratio >= Perbill::from_percent(99),
-			"{CALIBRATION_ERROR}\nToo few ref time consumed, was only {:?} of expected",
-			ratio
+			"Too few ref time consumed, was only {ratio:?} of expected",
+		);
+	});
+}
+
+#[test]
+fn on_idle_weight_over_unity_is_close_enough_works() {
+	new_test_ext().execute_with(|| {
+		// Para blocks get ~500ms compute and ~5MB proof size.
+		let max_block =
+			Weight::from_parts(500 * WEIGHT_REF_TIME_PER_MILLIS, 5 * WEIGHT_PROOF_SIZE_PER_MB);
+		// But now we tell it to consume more than that.
+		set_limits(1.75, 1.5);
+		let want = Weight::from_parts(
+			(1.75 * max_block.ref_time() as f64) as u64,
+			(1.5 * max_block.proof_size() as f64) as u64,
+		);
+
+		let consumed = Glutton::on_idle(1, max_block);
+		assert!(consumed.all_gt(max_block), "Must consume more than the block limit");
+		assert!(consumed.all_lte(want), "Consumed more than the requested weight");
+
+		let ratio = Perbill::from_rational(consumed.proof_size(), want.proof_size());
+		assert!(
+			ratio >= Perbill::from_percent(99),
+			"Too few proof size consumed, was only {ratio:?} of expected",
+		);
+
+		let ratio = Perbill::from_rational(consumed.ref_time(), want.ref_time());
+		assert!(
+			ratio >= Perbill::from_percent(99),
+			"Too few ref time consumed, was only {ratio:?} of expected",
 		);
 	});
 }
