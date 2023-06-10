@@ -88,19 +88,22 @@ pub mod pallet {
 		///
 		/// Set `witness_count` to `Some` to bypass this error.
 		AlreadyInitialized,
+
 		/// The limit was over [`crate::RESOURCE_HARD_LIMIT`].
 		InsaneLimit,
 	}
 
-	/// What ratio of the remaining `ref_time` to consume during `on_idle`.
+	/// The proportion of the remaining `ref_time` to consume during `on_idle`.
 	///
-	/// `1.0` is mapped to `100%`. Must be at most [`crate::RESOURCE_HARD_LIMIT`].
+	/// `1.0` is mapped to `100%`. Must be at most [`crate::RESOURCE_HARD_LIMIT`]. Setting this to
+	/// over `1.0` could stall the chain.
 	#[pallet::storage]
 	pub(crate) type Compute<T: Config> = StorageValue<_, FixedU64, ValueQuery>;
 
-	/// What ratio of the remaining `proof_size` to consume during `on_idle`.
+	/// The proportion of the remaining `proof_size` to consume during `on_idle`.
 	///
-	/// `1.0` is mapped to `100%`. Must be at most [`crate::RESOURCE_HARD_LIMIT`].
+	/// `1.0` is mapped to `100%`. Must be at most [`crate::RESOURCE_HARD_LIMIT`]. Setting this to
+	/// over `1.0` could stall the chain.
 	#[pallet::storage]
 	pub(crate) type Storage<T: Config> = StorageValue<_, FixedU64, ValueQuery>;
 
@@ -192,13 +195,12 @@ pub mod pallet {
 
 	#[pallet::call(weight = T::WeightInfo)]
 	impl<T: Config> Pallet<T> {
-		/// Initializes the pallet by writing into `TrashData`.
+		/// Initialize the pallet. Should be called once, if no genesis state was provided.
 		///
 		/// `current_count` is the current number of elements in `TrashData`. This can be set to
 		/// `None` when the pallet is first initialized.
 		///
-		/// Only callable by Root or `AdminOrigin`. A good default for `new_count` is
-		/// `5_000`.
+		/// Only callable by Root or `AdminOrigin`. A good default for `new_count` is `5_000`.
 		#[pallet::call_index(0)]
 		#[pallet::weight(
 			T::WeightInfo::initialize_pallet_grow(witness_count.unwrap_or_default())
@@ -245,10 +247,9 @@ pub mod pallet {
 
 		/// Set how much of the remaining `proof_size` weight should be consumed by `on_idle`.
 		//
-		/// 100% means that all remaining `proof_size` will be consumed. The PoV benchmarking
+		/// `1.0` means that all remaining `proof_size` will be consumed. The PoV benchmarking
 		/// results that are used here are likely an over-estimation. 100% intended consumption will
-		/// therefore translate to less than 100% actual consumption. In the future, this could be
-		/// counter-acted by allowing the glutton to specify over-unity consumption ratios.
+		/// therefore translate to less than 100% actual consumption.
 		///
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(2)]
