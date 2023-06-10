@@ -680,8 +680,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 			quote! {
 				let __gas_before__ = {
 					let engine_consumed = __caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
-					let reftime_consumed = engine_consumed.saturating_mul(__caller__.data_mut().ext().schedule().instruction_weights.base as u64);
-				   __caller__.data_mut().ext().gas_meter_mut().charge_fuel(reftime_consumed).map_err(#into_trap).map_err(#into_host)?.ref_time()
+				   __caller__.data_mut().ext().gas_meter_mut().charge_fuel(engine_consumed).map_err(#into_trap).map_err(#into_host)?.ref_time()
 				};
 			}
 		} else {

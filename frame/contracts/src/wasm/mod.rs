@@ -400,7 +400,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 	) -> Result<Self, DispatchError> {
 		let code = Self::load_code(code_hash, gas_meter)?;
 		let code_hash = T::Hashing::hash(&code);
-		// We store owner info at the same time as contract code,
+		// We store owner_info at the same time as contract code,
 		// therefore this query shouldn't really fail.
 		// We consider its failure equal to CodeNotFound, as contract code without
 		// owner_info is unusable in this pallet.
@@ -475,11 +475,8 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 
 		let result = exported_func.call(&mut store, &[], &mut []);
 		let engine_consumed = store.fuel_consumed().expect("Fuel metering is enabled; qed");
-		// Scale the value back to ref_time` weight.
-		let reftime_consumed =
-			engine_consumed.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
 		// Sync this frame's gas meter with the engine's one.
-		store.data_mut().ext().gas_meter_mut().charge_fuel(reftime_consumed)?;
+		store.data_mut().ext().gas_meter_mut().charge_fuel(engine_consumed)?;
 		store.into_data().to_execution_result(result)
 	}
 
@@ -492,12 +489,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 	}
 
 	fn is_deterministic(&self) -> bool {
-		// There should not be a stored code vec without an owner_info.
-		// If we cant find owner_info for the contract code, we consider it unsafe to use on-chain,
-		// just as any non deterministic code.
-		// TODO: would we make this method fallible?
-		<OwnerInfoOf<T>>::try_get(self.code_hash())
-			.map_or(false, |owner_info| matches!(owner_info.determinism, Determinism::Enforced))
+		matches!(self.owner_info.determinism, Determinism::Enforced)
 	}
 }
 

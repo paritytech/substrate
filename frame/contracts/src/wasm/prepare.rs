@@ -358,7 +358,7 @@ where
 		(Error::<T>::CodeRejected.into(), "validation of new code failed")
 	})?;
 
-	let code = (|| {
+	let (code, memory_limits) = (|| {
 		let contract_module = ContractModule::new(code)?;
 		contract_module.scan_exports()?;
 		contract_module.ensure_no_internal_memory()?;
@@ -368,11 +368,11 @@ where
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 		// We do it here just to check that module imported memory satisfies the Schedule limits
-		let _memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+		let memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 
 		let code = contract_module.into_wasm_code()?;
 
-		Ok(code)
+		Ok((code, memory_limits))
 	})()
 	.map_err(|msg: &str| {
 		log::debug!(target: LOG_TARGET, "new code rejected: {}", msg);
@@ -390,7 +390,7 @@ where
 		WasmBlob::<T>::instantiate::<E, _>(
 			&code,
 			(),
-			Default::default(),
+			memory_limits,
 			stack_limits,
 			AllowDeprecatedInterface::No,
 		)
