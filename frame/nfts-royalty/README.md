@@ -2,6 +2,8 @@
 
 A pallet for dealing with NFT royalties
 
+> NOTE: This pallet can be loosely coupled with the [NFTs pallet](https://paritytech.github.io/substrate/master/pallet_nfts).
+
 ## Overview
 
 The NFTs Royalty pallet provides royalties for non-fungible tokens. Features include:
@@ -13,7 +15,7 @@ The NFTs Royalty pallet provides royalties for non-fungible tokens. Features inc
 * Buying NFTs and thus paying royalties to recipient(s)
 * Deleting royalties only if the collection or item no longer exists
 
-This pallet is coupled with the [NFTs pallet](https://paritytech.github.io/substrate/master/pallet_nfts), therefore to use this pallet in your runtime you will also need the [NFTs pallet](https://paritytech.github.io/substrate/master/pallet_nfts) for NFT-related functions.
+This pallet can be loosely coupled with the [NFTs pallet](https://paritytech.github.io/substrate/master/pallet_nfts), therefore to use this pallet in your runtime you may also want to look at the [NFTs pallet](https://paritytech.github.io/substrate/master/pallet_nfts) for NFT-related functions.
 ### Permissionless dispatchables
 
 * `set_collection_royalty`: Set the royalty for an existing NFT collection by placing a deposit.
