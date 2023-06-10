@@ -102,7 +102,7 @@ fn set_collection_royalty_should_work() {
 		// Check the event was emitted
 		assert_eq!(
 			last_event(),
-			NftsRoyaltyEvent::RoyaltyForCollectionSet {
+			NftsRoyaltyEvent::CollectionRoyaltySet {
 				nft_collection: 0,
 				royalty_percentage: Permill::from_percent(5),
 				royalty_admin: account(1),
@@ -284,7 +284,7 @@ fn set_item_royalty_should_work() {
 		// Check the event was emitted
 		assert_eq!(
 			last_event(),
-			NftsRoyaltyEvent::RoyaltyForItemSet {
+			NftsRoyaltyEvent::ItemRoyaltySet {
 				nft_collection: 0,
 				nft: mint_id,
 				royalty_percentage: Permill::from_percent(5),
@@ -479,7 +479,7 @@ fn transfer_collection_royalty_should_work() {
 		// Check if the event has been emitted.
 		assert_eq!(
 			last_event(),
-			NftsRoyaltyEvent::RecipientCollectionRoyaltyChanged {
+			NftsRoyaltyEvent::CollectionRoyaltyRecipientChanged {
 				nft_collection: 0,
 				new_royalty_recipient: account(2),
 			}
@@ -567,7 +567,7 @@ fn transfer_item_royalty_should_work() {
 		// Check if the event has been emitted.
 		assert_eq!(
 			last_event(),
-			NftsRoyaltyEvent::RecipientItemRoyaltyChanged {
+			NftsRoyaltyEvent::ItemRoyaltyRecipientChanged {
 				nft_collection: 0,
 				nft: 42,
 				new_royalty_recipient: account(2),
