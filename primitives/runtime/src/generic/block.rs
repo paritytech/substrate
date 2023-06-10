@@ -20,6 +20,7 @@
 #[cfg(feature = "std")]
 use std::fmt;
 
+use scale_info::TypeInfo;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -79,21 +80,27 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
-pub struct Block<Header, Extrinsic: MaybeSerialize> {
+pub struct Block<Header, Extrinsic> {
 	/// The block header.
 	pub header: Header,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<Extrinsic>,
 }
 
+impl<Header, Extrinsic> traits::HeaderProvider for Block<Header, Extrinsic>
+where
+	Header: HeaderT,
+{
+	type Header = Header;
+	type Hash = <Self::Header as traits::Header>::Hash;
+}
+
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
-	Extrinsic: Member + Codec + traits::Extrinsic,
+	Extrinsic: TypeInfo + Member + Codec + traits::Extrinsic,
 {
 	type Extrinsic = Extrinsic;
-	type Header = Header;
-	type Hash = <Self::Header as traits::Header>::Hash;
 
 	fn header(&self) -> &Self::Header {
 		&self.header

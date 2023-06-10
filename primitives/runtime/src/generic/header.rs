@@ -87,8 +87,9 @@ where
 		+ Codec
 		+ Copy
 		+ Into<U256>
-		+ TryFrom<U256>,
-	Hash: HashT,
+		+ TryFrom<U256>
+		+ TypeInfo,
+	Hash: HashT + TypeInfo,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;

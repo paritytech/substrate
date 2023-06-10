@@ -214,6 +214,19 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight((
+			T::WeightInfo::set(),
+			DispatchClass::Mandatory
+		))]
+		pub fn set2(
+			origin: OriginFor<T>,
+			header: frame_system::HeaderOf<T>
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			Ok(().into())
+		}
 	}
 
 	#[pallet::inherent]

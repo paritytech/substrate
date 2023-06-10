@@ -196,6 +196,8 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 	}
 }
 
+pub type HeaderOf<T> = <<T as Config>::Block as traits::HeaderProvider>::Header;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
@@ -218,6 +220,7 @@ pub mod pallet {
 			type Index = u32;
 			type BlockNumber = u32;
 			type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
+			type Block = sp_runtime::generic::Block<Self::Header, sp_runtime::OpaqueExtrinsic>;
 			type Hash = sp_core::hash::H256;
 			type Hashing = sp_runtime::traits::BlakeTwo256;
 			type AccountId = u64;
@@ -339,6 +342,8 @@ pub mod pallet {
 
 		/// The block header.
 		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
+
+		type Block: Parameter + traits::Block<Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]

@@ -88,6 +88,7 @@ pub use sp_metadata_ir::{self as metadata_ir, frame_metadata as metadata};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
+use sp_runtime::traits::HeaderProvider;
 #[doc(hidden)]
 pub use sp_runtime::{
 	generic::BlockId,
@@ -723,7 +724,7 @@ decl_runtime_apis! {
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
 		#[renamed("initialise_block", 2)]
-		fn initialize_block(header: &<Block as BlockT>::Header);
+		fn initialize_block(header: &<Block as HeaderProvider>::Header);
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

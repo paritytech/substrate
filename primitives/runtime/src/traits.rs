@@ -1127,7 +1127,7 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + TypeInfo + 'static {
 	/// Header number.
 	type Number: Member
 		+ MaybeSerializeDeserialize
@@ -1183,18 +1183,24 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	}
 }
 
-/// Something which fulfills the abstract idea of a Substrate block. It has types for
-/// `Extrinsic` pieces of information as well as a `Header`.
-///
-/// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
-	/// Type for extrinsics.
-	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
+pub trait HeaderProvider {
 	/// Header type.
 	type Header: Header<Hash = Self::Hash>;
 	/// Block hash type.
 	type Hash: HashOutput;
+}
 
+/// Something which fulfills the abstract idea of a Substrate block. It has types for
+/// `Extrinsic` pieces of information as well as a `Header`.
+///
+/// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
+pub trait Block: HeaderProvider + Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + TypeInfo + 'static {
+	/// Type for extrinsics.
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
+	// /// Header type.
+	// type Header: Header<Hash = Self::Hash>;
+	// /// Block hash type.
+	// type Hash: HashOutput;
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
 	/// Returns a reference to the list of extrinsics.
@@ -1204,8 +1210,8 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 	/// Creates new block from header and extrinsics.
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
 	/// Returns the hash of the block.
-	fn hash(&self) -> Self::Hash {
-		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
+	fn hash(&self) -> <Self as HeaderProvider>::Hash {
+		<<<Self as HeaderProvider>::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
 	/// Creates an encoded block from the given `header` and `extrinsics` without requiring the
 	/// creation of an instance.
@@ -1253,9 +1259,9 @@ pub trait ExtrinsicMetadata {
 }
 
 /// Extract the hashing type for a block.
-pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
+pub type HashFor<B> = <<B as HeaderProvider>::Header as Header>::Hashing;
 /// Extract the number type for a block.
-pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
+pub type NumberFor<B> = <<B as HeaderProvider>::Header as Header>::Number;
 /// Extract the digest type for a block.
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to

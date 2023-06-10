@@ -235,7 +235,7 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 }
 
 /// Testing block
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, TypeInfo)]
 pub struct Block<Xt> {
 	/// Block header
 	pub header: Header,
@@ -244,12 +244,18 @@ pub struct Block<Xt> {
 }
 
 impl<
-		Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic,
+		Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic + TypeInfo,
+	> traits::HeaderProvider for Block<Xt>
+{
+	type Header = Header;
+	type Hash = <Header as traits::Header>::Hash;
+}
+
+impl<
+		Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic + TypeInfo,
 	> traits::Block for Block<Xt>
 {
 	type Extrinsic = Xt;
-	type Header = Header;
-	type Hash = <Header as traits::Header>::Hash;
 
 	fn header(&self) -> &Self::Header {
 		&self.header
