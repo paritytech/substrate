@@ -81,6 +81,8 @@ pub struct GasMeter<T: Config> {
 	gas_left: Weight,
 	/// Due to `adjust_gas` and `nested` the `gas_left` can temporarily dip below its final value.
 	gas_left_lowest: Weight,
+	/// Amount of fuel consumed by the engine from the last host function call.
+	engine_consumed: u64,
 	_phantom: PhantomData<T>,
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
@@ -92,6 +94,7 @@ impl<T: Config> GasMeter<T> {
 			gas_limit,
 			gas_left: gas_limit,
 			gas_left_lowest: gas_limit,
+			engine_consumed: Default::default(),
 			_phantom: PhantomData,
 			#[cfg(test)]
 			tokens: Vec::new(),
@@ -154,6 +157,8 @@ impl<T: Config> GasMeter<T> {
 	/// Returns `OutOfGas` if there is not enough gas or addition of the specified
 	/// amount of gas has lead to overflow. On success returns `Proceed`.
 	///
+	/// Any charged amount less than base instruction weight is rounded up to it.
+	///
 	/// NOTE that amount isn't consumed if there is not enough gas. This is considered
 	/// safe because we always charge gas before performing any resource-spending action.
 	#[inline]
@@ -182,24 +187,28 @@ impl<T: Config> GasMeter<T> {
 		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
 	}
 
-	/// Charge self with the `ref_time` Weight corresponding to `wasmi_fuel` consumed on the engine
+	/// This method is used for gas syncs with the engine in every host function.
+	///
+	/// Updates internal `engine_comsumed` tracker of engine fuel consumption.
+	///
+	/// Charges self with the `ref_time` Weight corresponding to `wasmi_fuel` consumed on the engine
 	/// side. Passed value is scaled by multiplying it by the weight of a basic operation, as such
 	/// an operation in wasmi engine costs 1.
 	///
-	/// This is used for gas syncs with the engine in every host function.
-	///
-	/// Returns the updated gas_left Weight value from the meter.
+	/// Returns the updated `gas_left` Weight value from the meter.
 	/// Normally this would never fail, as engine should fail first when out of gas.
-	pub fn charge_fuel(&mut self, wasmi_fuel: u64) -> Result<Weight, DispatchError> {
-		let ref_time = self.gas_left.ref_time_mut();
+	pub fn sync_fuel(&mut self, wasmi_fuel: u64) -> Result<Weight, DispatchError> {
 		if !wasmi_fuel.is_zero() {
+			self.engine_consumed += wasmi_fuel;
 			let reftime_consumed =
 				wasmi_fuel.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
-			*ref_time = self
-				.gas_limit
+			let ref_time_left = self
+				.gas_left
 				.ref_time()
 				.checked_sub(reftime_consumed)
 				.ok_or_else(|| Error::<T>::OutOfGas)?;
+
+			*(self.gas_left.ref_time_mut()) = ref_time_left;
 		}
 		Ok(self.gas_left)
 	}
@@ -220,6 +229,11 @@ impl<T: Config> GasMeter<T> {
 	/// Returns how much gas left from the initial budget.
 	pub fn gas_left(&self) -> Weight {
 		self.gas_left
+	}
+
+	/// Returns current tracked engine fuel consumption.
+	pub fn engine_consumed(&self) -> u64 {
+		self.engine_consumed
 	}
 
 	/// Turn this GasMeter into a DispatchResult that contains the actually used gas.

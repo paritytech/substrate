@@ -49,7 +49,6 @@ use sp_std::marker::PhantomData;
 /// 		        .. Default::default()
 /// 	        },
 ///         instruction_weights: InstructionWeights {
-/// 	            version: 5,
 ///             .. Default::default()
 ///         },
 /// 	        .. Default::default()
@@ -164,6 +163,9 @@ impl Limits {
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct InstructionWeights<T: Config> {
+	/// Base instruction ref_time weight.
+	/// Used to gas units scaling between host and engine.
+	/// Should match to wasmi's 1 fuel (see <https://github.com/paritytech/wasmi/issues/701>).
 	pub base: u32,
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]

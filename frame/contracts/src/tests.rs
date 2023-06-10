@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use self::test_utils::hash;
+use self::test_utils::{ensure_stored, expected_deposit, hash};
 use crate as pallet_contracts;
 use crate::{
 	chain_extension::{
@@ -122,16 +122,19 @@ pub mod test_utils {
 	pub fn hash<S: Encode>(s: &S) -> <<Test as SysConfig>::Hashing as Hash>::Output {
 		<<Test as SysConfig>::Hashing as Hash>::hash_of(s)
 	}
-	pub fn ensure_stored_and_calc_deposit(code_hash: CodeHash<Test>) -> u64 {
-		// Assert that contract code and owner_info are stored, and get their sizes.
-		let code_bytes = PristineCode::<Test>::try_get(&code_hash).unwrap().len() as u64;
-		assert!(OwnerInfoOf::<Test>::contains_key(&code_hash));
+	pub fn expected_deposit(code_len: usize) -> u64 {
 		// For onwer info, the deposit for max_encoded_len is taken.
-		let owner_info_bytes = OwnerInfo::<Test>::max_encoded_len() as u64;
+		let owner_info_len = OwnerInfo::<Test>::max_encoded_len() as u64;
 		// Calculate deposit to be reserved.
 		// We add 2 storage items: one for code, other for owner_info
-		DepositPerByte::get().saturating_mul(code_bytes + owner_info_bytes) +
+		DepositPerByte::get().saturating_mul(code_len as u64 + owner_info_len) +
 			DepositPerItem::get().saturating_mul(2)
+	}
+	pub fn ensure_stored(code_hash: CodeHash<Test>) -> usize {
+		// Assert that owner_info is stored
+		assert!(OwnerInfoOf::<Test>::contains_key(&code_hash));
+		// Assert that contract code is stored, and get its size.
+		PristineCode::<Test>::try_get(&code_hash).unwrap().len()
 	}
 }
 
@@ -188,6 +191,8 @@ impl ChainExtension<Test> for TestExtension {
 	where
 		E: Ext<T = Test>,
 	{
+		use codec::Decode;
+
 		let func_id = env.func_id();
 		let id = env.ext_id() as u32 | func_id as u32;
 		match func_id {
@@ -207,7 +212,12 @@ impl ChainExtension<Test> for TestExtension {
 			},
 			2 => {
 				let mut env = env.buf_in_buf_out();
-				let weight = Weight::from_parts(env.read(5)?[4].into(), 0);
+				let mut enc = &env.read(9)?[4..8];
+				let weight = Weight::from_parts(
+					u32::decode(&mut enc).map_err(|_| Error::<Test>::ContractTrapped)?.into(),
+					0,
+				);
+				println!("Charging from extension: {:?}", &weight);
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(id))
 			},
@@ -797,8 +807,9 @@ fn deposit_event_max_value_limit() {
 	});
 }
 
+// Fail out of fuel (ref_time weight) in the engine.
 #[test]
-fn run_out_of_gas() {
+fn run_out_of_fuel_engine() {
 	let (wasm, _code_hash) = compile_module::<Test>("run_out_of_gas").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
 		let min_balance = <Test as Config>::Currency::minimum_balance();
@@ -832,6 +843,155 @@ fn run_out_of_gas() {
 			),
 			Error::<Test>::OutOfGas,
 		);
+	});
+}
+
+// Fail out of fuel (ref_time weight) in the host.
+#[test]
+fn run_out_of_fuel_host() {
+	let (code, _hash) = compile_module::<Test>("chain_extension").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+
+		let addr = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(code),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let gas_limit = Weight::from_parts(u32::MAX as u64, GAS_LIMIT.proof_size());
+
+		// Use chain extension to charge more ref_time than it is available.
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			gas_limit,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 2, extra: &u32::MAX.encode() }.into(),
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+			Determinism::Enforced,
+		)
+		.result;
+		assert_err!(result, <Error<Test>>::OutOfGas);
+	});
+}
+
+#[test]
+fn gas_syncs_work() {
+	let (wasm0, _code_hash) = compile_module::<Test>("seal_input_noop").unwrap();
+	let (wasm1, _code_hash) = compile_module::<Test>("seal_input_once").unwrap();
+	let (wasm2, _code_hash) = compile_module::<Test>("seal_input_twice").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		// Instantiate noop contract.
+		let addr0 = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm0),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Instantiate 1st contract.
+		let addr1 = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm1),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Instantiate 2nd contract.
+		let addr2 = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm2),
+			vec![],
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let result = Contracts::bare_call(
+			ALICE,
+			addr0,
+			0,
+			GAS_LIMIT,
+			None,
+			1u8.to_le_bytes().to_vec(),
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+			Determinism::Enforced,
+		);
+		assert_ok!(result.result);
+		let engine_consumed_noop = result.gas_consumed.ref_time();
+
+		let result = Contracts::bare_call(
+			ALICE,
+			addr1,
+			0,
+			GAS_LIMIT,
+			None,
+			1u8.to_le_bytes().to_vec(),
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+			Determinism::Enforced,
+		);
+		assert_ok!(result.result);
+		let gas_consumed_once = result.gas_consumed.ref_time();
+		let host_consumed_once = <Test as Config>::Schedule::get().host_fn_weights.input.ref_time();
+		let engine_consumed_once = gas_consumed_once - host_consumed_once - engine_consumed_noop;
+
+		let result = Contracts::bare_call(
+			ALICE,
+			addr2,
+			0,
+			GAS_LIMIT,
+			None,
+			1u8.to_le_bytes().to_vec(),
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+			Determinism::Enforced,
+		);
+		assert_ok!(result.result);
+		let gas_consumed_twice = result.gas_consumed.ref_time();
+		let host_consumed_twice = host_consumed_once * 2;
+		let engine_consumed_twice = gas_consumed_twice - host_consumed_twice - engine_consumed_noop;
+
+		// Second contract just repeats first contract's instructions twice.
+		// If runtime syncs gas with the engine properly, this should pass.
+		assert_eq!(engine_consumed_twice, engine_consumed_once * 2);
 	});
 }
 
@@ -1878,7 +2038,7 @@ fn disabled_chain_extension_errors_on_call() {
 		TestExtension::disable();
 		assert_err_ignore_postinfo!(
 			Contracts::call(RuntimeOrigin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, None, vec![],),
-			Error::<Test>::NoChainExtension,
+			"module uses chain extensions but chain extensions are disabled",
 		);
 	});
 }
@@ -1944,7 +2104,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			ExtensionInput { extension_id: 0, func_id: 2, extra: &[0] }.into(),
+			ExtensionInput { extension_id: 0, func_id: 2, extra: &0u32.encode() }.into(),
 			DebugInfo::Skip,
 			CollectEvents::Skip,
 			Determinism::Enforced,
@@ -1957,7 +2117,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			ExtensionInput { extension_id: 0, func_id: 2, extra: &[42] }.into(),
+			ExtensionInput { extension_id: 0, func_id: 2, extra: &42u32.encode() }.into(),
 			DebugInfo::Skip,
 			CollectEvents::Skip,
 			Determinism::Enforced,
@@ -1970,7 +2130,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			ExtensionInput { extension_id: 0, func_id: 2, extra: &[95] }.into(),
+			ExtensionInput { extension_id: 0, func_id: 2, extra: &95u32.encode() }.into(),
 			DebugInfo::Skip,
 			CollectEvents::Skip,
 			Determinism::Enforced,
@@ -2785,7 +2945,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 			.result
 		);
 
-		// Make the same call using proof_size a but less than estimated. Should fail with OutOfGas.
+		// Make the same call using proof_size but less than estimated. Should fail with OutOfGas.
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_caller,
@@ -3314,7 +3474,8 @@ fn upload_code_works() {
 			Some(codec::Compact(1_000)),
 			Determinism::Enforced,
 		));
-		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(code_hash);
+		// Ensure the contract was stored and get expected deposit amount to be reserved.
+		let deposit_expected = expected_deposit(ensure_stored(code_hash));
 
 		assert_eq!(
 			System::events(),
@@ -3340,6 +3501,8 @@ fn upload_code_works() {
 #[test]
 fn upload_code_limit_too_low() {
 	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
+	let deposit_expected = expected_deposit(wasm.len());
+	let deposit_insufficient = deposit_expected.saturating_sub(1);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -3351,7 +3514,7 @@ fn upload_code_limit_too_low() {
 			Contracts::upload_code(
 				RuntimeOrigin::signed(ALICE),
 				wasm,
-				Some(codec::Compact(100)),
+				Some(codec::Compact(deposit_insufficient)),
 				Determinism::Enforced
 			),
 			<Error<Test>>::StorageDepositLimitExhausted,
@@ -3364,9 +3527,11 @@ fn upload_code_limit_too_low() {
 #[test]
 fn upload_code_not_enough_balance() {
 	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
+	let deposit_expected = expected_deposit(wasm.len());
+	let deposit_insufficient = deposit_expected.saturating_sub(1);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 150);
+		let _ = Balances::deposit_creating(&ALICE, deposit_insufficient);
 
 		// Drop previous events
 		initialize_block(2);
@@ -3401,8 +3566,8 @@ fn remove_code_works() {
 			Some(codec::Compact(1_000)),
 			Determinism::Enforced,
 		));
-
-		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(code_hash);
+		// Ensure the contract was stored and get expected deposit amount to be reserved.
+		let deposit_expected = expected_deposit(ensure_stored(code_hash));
 
 		assert_ok!(Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash));
 		assert_eq!(
@@ -3455,8 +3620,8 @@ fn remove_code_wrong_origin() {
 			Some(codec::Compact(1_000)),
 			Determinism::Enforced,
 		));
-
-		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(code_hash);
+		// Ensure the contract was stored and get expected deposit amount to be reserved.
+		let deposit_expected = expected_deposit(ensure_stored(code_hash));
 
 		assert_noop!(
 			Contracts::remove_code(RuntimeOrigin::signed(BOB), code_hash),
@@ -3561,7 +3726,8 @@ fn instantiate_with_zero_balance_works() {
 		// Check that the BOB contract has been instantiated.
 		let contract = get_contract(&addr);
 		let deposit_account = contract.deposit_account().deref();
-		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(contract.code_hash);
+		// Ensure the contract was stored and get expected deposit amount to be reserved.
+		let deposit_expected = expected_deposit(ensure_stored(code_hash));
 
 		// Make sure the account exists even though no free balance was send
 		assert_eq!(<Test as Config>::Currency::free_balance(&addr), min_balance);
@@ -3673,8 +3839,8 @@ fn instantiate_with_below_existential_deposit_works() {
 		// Check that the BOB contract has been instantiated.
 		let contract = get_contract(&addr);
 		let deposit_account = contract.deposit_account().deref();
-		let deposit_expected = test_utils::ensure_stored_and_calc_deposit(code_hash);
-
+		// Ensure the contract was stored and get expected deposit amount to be reserved.
+		let deposit_expected = expected_deposit(ensure_stored(code_hash));
 		// Make sure the account exists even though not enough free balance was send
 		assert_eq!(<Test as Config>::Currency::free_balance(&addr), min_balance + 50);
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance + 50);
