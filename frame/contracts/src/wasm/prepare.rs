@@ -725,19 +725,6 @@ mod tests {
 		);
 
 		prepare_test!(
-			no_maximum,
-			r#"
-			(module
-				(import "env" "memory" (memory 1))
-
-				(func (export "call"))
-				(func (export "deploy"))
-			)
-			"#,
-			Err("Maximum number of pages should be always declared.")
-		);
-
-		prepare_test!(
 			requested_maximum_valid,
 			r#"
 			(module
@@ -760,7 +747,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Maximum number of pages should not exceed the configured maximum.")
+			Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.")
 		);
 
 		prepare_test!(
@@ -901,21 +888,6 @@ mod tests {
 			Ok(_)
 		);
 
-		// even though gas is defined the contract can't import it since
-		// it is an implementation defined.
-		prepare_test!(
-			can_not_import_gas_function,
-			r#"
-			(module
-				(import "seal0" "gas" (func (param i32)))
-
-				(func (export "call"))
-				(func (export "deploy"))
-			)
-			"#,
-			Err("module imports a banned function")
-		);
-
 		// memory is in "env" and not in "seal0"
 		prepare_test!(
 			memory_not_in_seal0,
@@ -957,20 +929,6 @@ mod tests {
 			Ok(_)
 		);
 
-		// wrong signature
-		prepare_test!(
-			wrong_signature,
-			r#"
-			(module
-				(import "seal0" "gas" (func (param i64)))
-
-				(func (export "call"))
-				(func (export "deploy"))
-			)
-			"#,
-			Err("module imports a banned function")
-		);
-
 		prepare_test!(
 			unknown_func_name,
 			r#"
@@ -981,7 +939,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("new code rejected after instrumentation")
+			Err("new code rejected on wasmi instantiation")
 		);
 	}
 
