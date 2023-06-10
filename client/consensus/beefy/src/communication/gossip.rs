@@ -41,7 +41,7 @@ use crate::{
 	LOG_TARGET,
 };
 use sp_consensus_beefy::{
-	crypto::{AuthorityId, Signature},
+	ecdsa_crypto::{AuthorityId, Signature},
 	ValidatorSet, ValidatorSetId, VoteMessage,
 };
 

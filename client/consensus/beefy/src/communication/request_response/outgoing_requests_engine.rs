@@ -26,7 +26,7 @@ use sc_network::{
 	request_responses::{IfDisconnected, RequestFailure},
 	NetworkRequest, PeerId, ProtocolName,
 };
-use sp_consensus_beefy::{crypto::AuthorityId, ValidatorSet};
+use sp_consensus_beefy::{ecdsa_crypto::AuthorityId, ValidatorSet};
 use sp_runtime::traits::{Block, NumberFor};
 use std::{collections::VecDeque, result::Result, sync::Arc};
 

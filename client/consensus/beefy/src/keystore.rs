@@ -23,7 +23,7 @@ use sp_keystore::KeystorePtr;
 use log::warn;
 
 use sp_consensus_beefy::{
-	crypto::{Public, Signature},
+	ecdsa_crypto::{Public, Signature},
 	BeefyAuthorityId, KEY_TYPE,
 };
 

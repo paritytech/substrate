@@ -41,7 +41,7 @@ use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
 use sp_consensus_beefy::{
 	check_equivocation_proof,
-	crypto::{AuthorityId, Signature},
+	ecdsa_crypto::{AuthorityId, Signature},
 	BeefyApi, Commitment, ConsensusLog, EquivocationProof, PayloadProvider, ValidatorSet,
 	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
@@ -348,7 +348,7 @@ where
 	P: PayloadProvider<B>,
 	S: SyncOracle,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	R::Api: BeefyApi<B, AuthorityId>,
 {
 	fn best_grandpa_block(&self) -> NumberFor<B> {
 		*self.persisted_state.voting_oracle.best_grandpa_block_header.number()
