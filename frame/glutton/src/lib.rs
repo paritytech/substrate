@@ -15,6 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # WARNING
+//!
+//! **DO NOT USE ON VALUE-BEARING CHAINS. THIS PALLET IS ONLY INTENDED FOR TESTING USAGE.**
+//!
 //! # Glutton Pallet
 //!
 //! Pallet that consumes `ref_time` and `proof_size` of a block. Based on the
