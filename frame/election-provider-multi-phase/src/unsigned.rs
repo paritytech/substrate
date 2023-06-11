@@ -298,12 +298,12 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(())` if offchain worker limit is respected, `Err(reason)` otherwise. If `Ok()`
 	/// is returned, `now` is written in storage and will be used in further calls as the baseline.
-	pub fn ensure_offchain_repeat_frequency(now: T::BlockNumber) -> Result<(), MinerError> {
+	pub fn ensure_offchain_repeat_frequency(now: frame_system::BlockNumberOf<T>) -> Result<(), MinerError> {
 		let threshold = T::OffchainRepeat::get();
 		let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 
 		let mutate_stat = last_block.mutate::<_, &'static str, _>(
-			|maybe_head: Result<Option<T::BlockNumber>, _>| {
+			|maybe_head: Result<Option<frame_system::BlockNumberOf<T>>, _>| {
 				match maybe_head {
 					Ok(Some(head)) if now < head => Err("fork."),
 					Ok(Some(head)) if now >= head && now <= head + threshold =>

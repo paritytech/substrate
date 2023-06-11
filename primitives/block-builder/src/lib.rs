@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_inherents::{CheckInherentsResult, InherentData};
-use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
+use sp_runtime::{traits::{Block as BlockT, HeaderProvider}, ApplyExtrinsicResult};
 
 sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
@@ -39,7 +39,7 @@ sp_api::decl_runtime_apis! {
 
 		/// Finish the current block.
 		#[renamed("finalise_block", 3)]
-		fn finalize_block() -> <Block as BlockT>::Header;
+		fn finalize_block() -> <Block as HeaderProvider>::Header;
 
 		/// Generate inherent extrinsics. The inherent data will vary from chain to chain.
 		fn inherent_extrinsics(

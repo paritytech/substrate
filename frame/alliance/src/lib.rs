@@ -309,7 +309,7 @@ pub mod pallet {
 
 		/// The number of blocks a member must wait between giving a retirement notice and retiring.
 		/// Supposed to be greater than time required to `kick_member`.
-		type RetirementPeriod: Get<Self::BlockNumber>;
+		type RetirementPeriod: Get<frame_system::BlockNumberOf<Self>>;
 	}
 
 	#[pallet::error]
@@ -476,7 +476,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn retiring_members)]
 	pub type RetiringMembers<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::AccountId, frame_system::BlockNumberOf<T>, OptionQuery>;
 
 	/// The current list of accounts deemed unscrupulous. These accounts non grata cannot submit
 	/// candidacy.

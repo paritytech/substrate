@@ -201,7 +201,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(_n: T::BlockNumber) -> Weight {
+		fn on_initialize(_n: frame_system::BlockNumberOf<T>) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = sp_mmr_primitives::utils::NodesUtils::new(leaves).number_of_peaks();
@@ -298,7 +298,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Convert a block number into a leaf index.
-	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, Error>
+	fn block_num_to_leaf_index(block_num: frame_system::BlockNumberOf<T>) -> Result<LeafIndex, Error>
 	where
 		T: frame_system::Config,
 	{
@@ -320,8 +320,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(
-		block_numbers: Vec<T::BlockNumber>,
-		best_known_block_number: Option<T::BlockNumber>,
+		block_numbers: Vec<frame_system::BlockNumberOf<T>>,
+		best_known_block_number: Option<frame_system::BlockNumberOf<T>>,
 	) -> Result<(Vec<LeafOf<T, I>>, primitives::Proof<HashOf<T, I>>), primitives::Error> {
 		// check whether best_known_block_number provided, else use current best block
 		let best_known_block_number =

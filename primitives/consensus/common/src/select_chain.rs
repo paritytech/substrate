@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::error::Error;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, HeaderProvider, NumberFor};
 
 /// The SelectChain trait defines the strategy upon which the head is chosen
 /// if multiple forks are present for an opaque definition of "best" in the
@@ -36,21 +36,21 @@ use sp_runtime::traits::{Block as BlockT, NumberFor};
 pub trait SelectChain<Block: BlockT>: Sync + Send + Clone {
 	/// Get all leaves of the chain, i.e. block hashes that have no children currently.
 	/// Leaves that can never be finalized will not be returned.
-	async fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, Error>;
+	async fn leaves(&self) -> Result<Vec<<Block as HeaderProvider>::Hash>, Error>;
 
 	/// Among those `leaves` deterministically pick one chain as the generally
 	/// best chain to author new blocks upon and probably (but not necessarily)
 	/// finalize.
-	async fn best_chain(&self) -> Result<<Block as BlockT>::Header, Error>;
+	async fn best_chain(&self) -> Result<<Block as HeaderProvider>::Header, Error>;
 
 	/// Get the best descendent of `base_hash` that we should attempt to
 	/// finalize next, if any. It is valid to return the given `base_hash`
 	/// itself if no better descendent exists.
 	async fn finality_target(
 		&self,
-		base_hash: <Block as BlockT>::Hash,
+		base_hash: <Block as HeaderProvider>::Hash,
 		_maybe_max_number: Option<NumberFor<Block>>,
-	) -> Result<<Block as BlockT>::Hash, Error> {
+	) -> Result<<Block as HeaderProvider>::Hash, Error> {
 		Ok(base_hash)
 	}
 }

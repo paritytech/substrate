@@ -88,7 +88,7 @@ pub use sp_metadata_ir::{self as metadata_ir, frame_metadata as metadata};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
-use sp_runtime::traits::HeaderProvider;
+pub use sp_runtime::traits::HeaderProvider;
 #[doc(hidden)]
 pub use sp_runtime::{
 	generic::BlockId,
@@ -428,13 +428,13 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// sp_api::mock_impl_runtime_apis! {
 ///     impl Balance<Block> for MockApi {
 ///         #[advanced]
-///         fn get_balance(&self, at: <Block as BlockT>::Hash) -> Result<u64, sp_api::ApiError> {
+///         fn get_balance(&self, at: <Block as HeaderProvider>::Hash) -> Result<u64, sp_api::ApiError> {
 ///             println!("Being called at: {}", at);
 ///
 ///             Ok(self.balance.into())
 ///         }
 ///         #[advanced]
-///         fn set_balance(at: <Block as BlockT>::Hash, val: u64) -> Result<(), sp_api::ApiError> {
+///         fn set_balance(at: <Block as HeaderProvider>::Hash, val: u64) -> Result<(), sp_api::ApiError> {
 ///             println!("Being called at: {}", at);
 ///
 ///             Ok(().into())
@@ -536,14 +536,14 @@ pub trait ApiExt<Block: BlockT> {
 		Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
-	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, at_hash: Block::Hash) -> Result<bool, ApiError>
+	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, at_hash: <Block as HeaderProvider>::Hash) -> Result<bool, ApiError>
 	where
 		Self: Sized;
 
 	/// Check if the given api is implemented and the version passes a predicate.
 	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 		&self,
-		at_hash: Block::Hash,
+		at_hash: <Block as HeaderProvider>::Hash,
 		pred: P,
 	) -> Result<bool, ApiError>
 	where
@@ -552,7 +552,7 @@ pub trait ApiExt<Block: BlockT> {
 	/// Returns the version of the given api.
 	fn api_version<A: RuntimeApiInfo + ?Sized>(
 		&self,
-		at_hash: Block::Hash,
+		at_hash: <Block as HeaderProvider>::Hash,
 	) -> Result<Option<u32>, ApiError>
 	where
 		Self: Sized;
@@ -577,7 +577,7 @@ pub trait ApiExt<Block: BlockT> {
 	fn into_storage_changes(
 		&self,
 		backend: &Self::StateBackend,
-		parent_hash: Block::Hash,
+		parent_hash: <Block as HeaderProvider>::Hash,
 	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
 	where
 		Self: Sized;
@@ -587,7 +587,7 @@ pub trait ApiExt<Block: BlockT> {
 #[cfg(feature = "std")]
 pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Block>>> {
 	/// The block id that determines the state that should be setup when calling the function.
-	pub at: Block::Hash,
+	pub at: <Block as HeaderProvider>::Hash,
 	/// The name of the function that should be called.
 	pub function: &'static str,
 	/// The encoded arguments of the function.
@@ -616,10 +616,10 @@ pub trait CallApiAt<Block: BlockT> {
 	) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
-	fn runtime_version_at(&self, at_hash: Block::Hash) -> Result<RuntimeVersion, ApiError>;
+	fn runtime_version_at(&self, at_hash: <Block as HeaderProvider>::Hash) -> Result<RuntimeVersion, ApiError>;
 
 	/// Get the state `at` the given block.
-	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, ApiError>;
+	fn state_at(&self, at: <Block as HeaderProvider>::Hash) -> Result<Self::StateBackend, ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

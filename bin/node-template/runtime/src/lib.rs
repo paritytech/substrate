@@ -13,7 +13,7 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
-		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
+		AccountIdLookup, BlakeTwo256, Block as BlockT, HeaderProvider, IdentifyAccount, NumberFor, One, Verify,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
@@ -169,14 +169,10 @@ impl frame_system::Config for Runtime {
 	type Lookup = AccountIdLookup<AccountId, ()>;
 	/// The index type for storing how many extrinsics an account has signed.
 	type Index = Index;
-	/// The index type for blocks.
-	type BlockNumber = BlockNumber;
 	/// The type for hashing blocks and tries.
 	type Hash = Hash;
 	/// The hashing algorithm used.
 	type Hashing = BlakeTwo256;
-	/// The header type.
-	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	/// The ubiquitous event type.
 	type RuntimeEvent = RuntimeEvent;
 	/// The ubiquitous origin type.
@@ -352,7 +348,7 @@ impl_runtime_apis! {
 			Executive::execute_block(block);
 		}
 
-		fn initialize_block(header: &<Block as BlockT>::Header) {
+		fn initialize_block(header: &<Block as HeaderProvider>::Header) {
 			Executive::initialize_block(header)
 		}
 	}
@@ -376,7 +372,7 @@ impl_runtime_apis! {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
-		fn finalize_block() -> <Block as BlockT>::Header {
+		fn finalize_block() -> <Block as HeaderProvider>::Header {
 			Executive::finalize_block()
 		}
 
@@ -396,14 +392,14 @@ impl_runtime_apis! {
 		fn validate_transaction(
 			source: TransactionSource,
 			tx: <Block as BlockT>::Extrinsic,
-			block_hash: <Block as BlockT>::Hash,
+			block_hash: <Block as HeaderProvider>::Hash,
 		) -> TransactionValidity {
 			Executive::validate_transaction(source, tx, block_hash)
 		}
 	}
 
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-		fn offchain_worker(header: &<Block as BlockT>::Header) {
+		fn offchain_worker(header: &<Block as HeaderProvider>::Header) {
 			Executive::offchain_worker(header)
 		}
 	}
@@ -441,7 +437,7 @@ impl_runtime_apis! {
 
 		fn submit_report_equivocation_unsigned_extrinsic(
 			_equivocation_proof: sp_consensus_grandpa::EquivocationProof<
-				<Block as BlockT>::Hash,
+				<Block as HeaderProvider>::Hash,
 				NumberFor<Block>,
 			>,
 			_key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,

@@ -126,14 +126,14 @@ pub mod pallet {
 		/// The number of blocks between sequential payout cycles is the sum of this and
 		/// `PayoutPeriod`.
 		#[pallet::constant]
-		type RegistrationPeriod: Get<Self::BlockNumber>;
+		type RegistrationPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The number of blocks within a cycle which accounts have to claim the payout.
 		///
 		/// The number of blocks between sequential payout cycles is the sum of this and
 		/// `RegistrationPeriod`.
 		#[pallet::constant]
-		type PayoutPeriod: Get<Self::BlockNumber>;
+		type PayoutPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The total budget per cycle.
 		///
@@ -389,7 +389,7 @@ pub mod pallet {
 		pub fn last_active(who: &T::AccountId) -> Result<CycleIndexOf<T>, DispatchError> {
 			Ok(Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?.last_active)
 		}
-		pub fn cycle_period() -> T::BlockNumber {
+		pub fn cycle_period() -> frame_system::BlockNumberOf<T> {
 			T::RegistrationPeriod::get() + T::PayoutPeriod::get()
 		}
 		fn do_payout(who: T::AccountId, beneficiary: T::AccountId) -> DispatchResult {

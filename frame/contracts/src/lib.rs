@@ -206,7 +206,7 @@ pub mod pallet {
 		/// be instantiated from existing codes that use this deprecated functionality. It will
 		/// be removed eventually. Hence for new `pallet-contracts` deployments it is okay
 		/// to supply a dummy implementation for this type (because it is never used).
-		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
+		type Randomness: Randomness<Self::Hash, frame_system::BlockNumberOf<Self>>;
 
 		/// The currency in which fees are paid and contract balances are held.
 		type Currency: ReservableCurrency<Self::AccountId> // TODO: Move to fungible traits
@@ -333,7 +333,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
+		fn on_idle(_block: frame_system::BlockNumberOf<T>, remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
 
 			let (result, weight) = Migration::<T>::migrate(remaining_weight);

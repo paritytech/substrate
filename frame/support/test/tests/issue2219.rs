@@ -46,35 +46,35 @@ mod module {
 		pub max_actors: u32,
 
 		// payouts are made at this block interval
-		pub reward_period: T::BlockNumber,
+		pub reward_period: frame_system::BlockNumberOf<T>,
 
 		// minimum amount of time before being able to unstake
-		pub bonding_period: T::BlockNumber,
+		pub bonding_period: frame_system::BlockNumberOf<T>,
 
 		// how long tokens remain locked for after unstaking
-		pub unbonding_period: T::BlockNumber,
+		pub unbonding_period: frame_system::BlockNumberOf<T>,
 
 		// minimum period required to be in service. unbonding before this time is highly penalized
-		pub min_service_period: T::BlockNumber,
+		pub min_service_period: frame_system::BlockNumberOf<T>,
 
 		// "startup" time allowed for roles that need to sync their infrastructure
 		// with other providers before they are considered in service and punishable for
 		// not delivering required level of service.
-		pub startup_grace_period: T::BlockNumber,
+		pub startup_grace_period: frame_system::BlockNumberOf<T>,
 	}
 
 	impl<T: Config> Default for RoleParameters<T> {
 		fn default() -> Self {
 			Self {
 				max_actors: 10,
-				reward_period: T::BlockNumber::default(),
-				unbonding_period: T::BlockNumber::default(),
+				reward_period: frame_system::BlockNumberOf<T>::default(),
+				unbonding_period: frame_system::BlockNumberOf<T>::default(),
 
 				// not currently used
 				min_actors: 5,
-				bonding_period: T::BlockNumber::default(),
-				min_service_period: T::BlockNumber::default(),
-				startup_grace_period: T::BlockNumber::default(),
+				bonding_period: frame_system::BlockNumberOf<T>::default(),
+				min_service_period: frame_system::BlockNumberOf<T>::default(),
+				startup_grace_period: frame_system::BlockNumberOf<T>::default(),
 			}
 		}
 	}
@@ -115,7 +115,7 @@ mod module {
 	/// tokens locked until given block number
 	#[pallet::storage]
 	#[pallet::getter(fn bondage)]
-	pub type Bondage<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber>;
+	pub type Bondage<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, frame_system::BlockNumberOf<T>>;
 
 	/// First step before enter a role is registering intent with a new account/key.
 	/// This is done by sending a role_entry_request() from the new account.

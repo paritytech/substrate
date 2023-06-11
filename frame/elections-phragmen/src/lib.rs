@@ -203,7 +203,7 @@ pub mod pallet {
 		type PalletId: Get<LockIdentifier>;
 
 		/// The currency that people are electing with.
-		type Currency: LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+		type Currency: LockableCurrency<Self::AccountId, Moment = frame_system::BlockNumberOf<Self>>
 			+ ReservableCurrency<Self::AccountId>;
 
 		/// What to do when the members change.
@@ -249,7 +249,7 @@ pub mod pallet {
 		/// round will happen. If set to zero, no elections are ever triggered and the module will
 		/// be in passive mode.
 		#[pallet::constant]
-		type TermDuration: Get<Self::BlockNumber>;
+		type TermDuration: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The maximum number of candidates in a phragmen election.
 		///
@@ -285,7 +285,7 @@ pub mod pallet {
 		/// What to do at the end of each block.
 		///
 		/// Checks if an election needs to happen or not.
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: frame_system::BlockNumberOf<T>) -> Weight {
 			let term_duration = T::TermDuration::get();
 			if !term_duration.is_zero() && (n % term_duration).is_zero() {
 				Self::do_phragmen()
@@ -330,7 +330,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
+		fn try_state(_n: frame_system::BlockNumberOf<T>) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}

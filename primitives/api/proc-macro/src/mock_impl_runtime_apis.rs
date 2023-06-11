@@ -77,14 +77,14 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
-				_: <Block as #crate_::BlockT>::Hash,
+				_: <Block as #crate_::HeaderProvider>::Hash,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				Ok(true)
 			}
 
 			fn has_api_with<A: #crate_::RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 				&self,
-				_: <Block as #crate_::BlockT>::Hash,
+				_: <Block as #crate_::HeaderProvider>::Hash,
 				pred: P,
 			) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 				Ok(pred(A::VERSION))
@@ -92,7 +92,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn api_version<A: #crate_::RuntimeApiInfo + ?Sized>(
 				&self,
-				_: <Block as #crate_::BlockT>::Hash,
+				_: <Block as #crate_::HeaderProvider>::Hash,
 			) -> std::result::Result<Option<u32>, #crate_::ApiError> where Self: Sized {
 				Ok(Some(A::VERSION))
 			}
@@ -114,7 +114,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 			fn into_storage_changes(
 				&self,
 				_: &Self::StateBackend,
-				_: <#block_type as #crate_::BlockT>::Hash,
+				_: <#block_type as #crate_::HeaderProvider>::Hash,
 			) -> std::result::Result<
 				#crate_::StorageChanges<Self::StateBackend, #block_type>,
 				String
@@ -126,7 +126,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 		impl #crate_::Core<#block_type> for #self_ty {
 			fn __runtime_api_internal_call_api_at(
 				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
+				_: <#block_type as #crate_::HeaderProvider>::Hash,
 				_: #crate_::ExecutionContext,
 				_: std::vec::Vec<u8>,
 				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
@@ -136,14 +136,14 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn version(
 				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
+				_: <#block_type as #crate_::HeaderProvider>::Hash,
 			) -> std::result::Result<#crate_::RuntimeVersion, #crate_::ApiError> {
 				unimplemented!("`Core::version` not implemented for runtime api mocks")
 			}
 
 			fn version_with_context(
 				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
+				_: <#block_type as #crate_::HeaderProvider>::Hash,
 				_: #crate_::ExecutionContext,
 			) -> std::result::Result<#crate_::RuntimeVersion, #crate_::ApiError> {
 				unimplemented!("`Core::version` not implemented for runtime api mocks")
@@ -151,7 +151,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn execute_block(
 				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
+				_: <#block_type as #crate_::HeaderProvider>::Hash,
 				_: #block_type,
 			) -> std::result::Result<(), #crate_::ApiError> {
 				unimplemented!("`Core::execute_block` not implemented for runtime api mocks")
@@ -159,7 +159,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn execute_block_with_context(
 				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
+				_: <#block_type as #crate_::HeaderProvider>::Hash,
 				_: #crate_::ExecutionContext,
 				_: #block_type,
 			) -> std::result::Result<(), #crate_::ApiError> {
@@ -168,7 +168,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn initialize_block(
 				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
+				_: <#block_type as #crate_::HeaderProvider>::Hash,
 				_: &<#block_type as #crate_::BlockT>::Header,
 			) -> std::result::Result<(), #crate_::ApiError> {
 				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
@@ -176,7 +176,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn initialize_block_with_context(
 				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
+				_: <#block_type as #crate_::HeaderProvider>::Hash,
 				_: #crate_::ExecutionContext,
 				_: &<#block_type as #crate_::BlockT>::Header,
 			) -> std::result::Result<(), #crate_::ApiError> {
@@ -273,7 +273,7 @@ impl<'a> FoldRuntimeApiImpl<'a> {
 		impl_item.items.push(parse_quote! {
 			fn __runtime_api_internal_call_api_at(
 				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
+				_: <#block_type as #crate_::HeaderProvider>::Hash,
 				_: #crate_::ExecutionContext,
 				_: std::vec::Vec<u8>,
 				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
@@ -319,7 +319,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				};
 
 			let block_type = &self.block_type;
-			let hash_type = quote!( <#block_type as #crate_::BlockT>::Hash );
+			let hash_type = quote!( <#block_type as #crate_::HeaderProvider>::Hash );
 
 			let (at_param_name, hash_type) = match get_at_param_name(
 				is_advanced,

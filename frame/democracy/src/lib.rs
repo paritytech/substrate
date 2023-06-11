@@ -233,7 +233,7 @@ pub mod pallet {
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
+			+ LockableCurrency<Self::AccountId, Moment = frame_system::BlockNumberOf<Self>>;
 
 		/// The period between a proposal being approved and enacted.
 		///
@@ -241,22 +241,22 @@ pub mod pallet {
 		/// voting stakers have an opportunity to remove themselves from the system in the case
 		/// where they are on the losing side of a vote.
 		#[pallet::constant]
-		type EnactmentPeriod: Get<Self::BlockNumber>;
+		type EnactmentPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// How often (in blocks) new public referenda are launched.
 		#[pallet::constant]
-		type LaunchPeriod: Get<Self::BlockNumber>;
+		type LaunchPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// How often (in blocks) to check for new votes.
 		#[pallet::constant]
-		type VotingPeriod: Get<Self::BlockNumber>;
+		type VotingPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The minimum period of vote locking.
 		///
 		/// It should be no shorter than enactment period to ensure that in the case of an approval,
 		/// those successful voters are locked into the consequences that their votes entail.
 		#[pallet::constant]
-		type VoteLockingPeriod: Get<Self::BlockNumber>;
+		type VoteLockingPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
 		#[pallet::constant]
@@ -270,11 +270,11 @@ pub mod pallet {
 
 		/// Minimum voting period allowed for a fast-track referendum.
 		#[pallet::constant]
-		type FastTrackVotingPeriod: Get<Self::BlockNumber>;
+		type FastTrackVotingPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 		#[pallet::constant]
-		type CooloffPeriod: Get<Self::BlockNumber>;
+		type CooloffPeriod: Get<frame_system::BlockNumberOf<Self>>;
 
 		/// The maximum number of votes for an account.
 		///
@@ -387,7 +387,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		ReferendumIndex,
-		ReferendumInfo<T::BlockNumber, BoundedCallOf<T>, BalanceOf<T>>,
+		ReferendumInfo<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>,
 	>;
 
 	/// All votes for a particular voter. We store the balance for the number of votes that we
@@ -399,7 +399,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Voting<BalanceOf<T>, T::AccountId, T::BlockNumber, T::MaxVotes>,
+		Voting<BalanceOf<T>, T::AccountId, frame_system::BlockNumberOf<T>, T::MaxVotes>,
 		ValueQuery,
 	>;
 
@@ -422,7 +422,7 @@ pub mod pallet {
 		_,
 		Identity,
 		H256,
-		(T::BlockNumber, BoundedVec<T::AccountId, T::MaxBlacklisted>),
+		(frame_system::BlockNumberOf<T>, BoundedVec<T::AccountId, T::MaxBlacklisted>),
 	>;
 
 	/// Record of all proposals that have been subject to emergency cancellation.
@@ -475,7 +475,7 @@ pub mod pallet {
 		/// An account has cancelled a previous delegation operation.
 		Undelegated { account: T::AccountId },
 		/// An external proposal has been vetoed.
-		Vetoed { who: T::AccountId, proposal_hash: H256, until: T::BlockNumber },
+		Vetoed { who: T::AccountId, proposal_hash: H256, until: frame_system::BlockNumberOf<T> },
 		/// A proposal_hash has been blacklisted permanently.
 		Blacklisted { proposal_hash: H256 },
 		/// An account has voted in a referendum
@@ -565,7 +565,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Weight: see `begin_block`
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: frame_system::BlockNumberOf<T>) -> Weight {
 			Self::begin_block(n)
 		}
 	}
@@ -775,8 +775,8 @@ pub mod pallet {
 		pub fn fast_track(
 			origin: OriginFor<T>,
 			proposal_hash: H256,
-			voting_period: T::BlockNumber,
-			delay: T::BlockNumber,
+			voting_period: frame_system::BlockNumberOf<T>,
+			delay: frame_system::BlockNumberOf<T>,
 		) -> DispatchResult {
 			// Rather complicated bit of code to ensure that either:
 			// - `voting_period` is at least `FastTrackVotingPeriod` and `origin` is
@@ -794,7 +794,7 @@ pub mod pallet {
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
 
-			ensure!(voting_period > T::BlockNumber::zero(), Error::<T>::VotingPeriodLow);
+			ensure!(voting_period > frame_system::BlockNumberOf<T>::zero(), Error::<T>::VotingPeriodLow);
 			let (ext_proposal, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
@@ -1047,7 +1047,7 @@ pub mod pallet {
 			T::BlacklistOrigin::ensure_origin(origin)?;
 
 			// Insert the proposal into the blacklist.
-			let permanent = (T::BlockNumber::max_value(), BoundedVec::<T::AccountId, _>::default());
+			let permanent = (frame_system::BlockNumberOf<T>::max_value(), BoundedVec::<T::AccountId, _>::default());
 			Blacklist::<T>::insert(&proposal_hash, permanent);
 
 			// Remove the queued proposal, if it's there.
@@ -1200,17 +1200,17 @@ impl<T: Config> Pallet<T> {
 
 	/// Get all referenda ready for tally at block `n`.
 	pub fn maturing_referenda_at(
-		n: T::BlockNumber,
-	) -> Vec<(ReferendumIndex, ReferendumStatus<T::BlockNumber, BoundedCallOf<T>, BalanceOf<T>>)> {
+		n: frame_system::BlockNumberOf<T>,
+	) -> Vec<(ReferendumIndex, ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>)> {
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
 		Self::maturing_referenda_at_inner(n, next..last)
 	}
 
 	fn maturing_referenda_at_inner(
-		n: T::BlockNumber,
+		n: frame_system::BlockNumberOf<T>,
 		range: core::ops::Range<PropIndex>,
-	) -> Vec<(ReferendumIndex, ReferendumStatus<T::BlockNumber, BoundedCallOf<T>, BalanceOf<T>>)> {
+	) -> Vec<(ReferendumIndex, ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>)> {
 		range
 			.into_iter()
 			.map(|i| (i, Self::referendum_info(i)))
@@ -1228,7 +1228,7 @@ impl<T: Config> Pallet<T> {
 	pub fn internal_start_referendum(
 		proposal: BoundedCallOf<T>,
 		threshold: VoteThreshold,
-		delay: T::BlockNumber,
+		delay: frame_system::BlockNumberOf<T>,
 	) -> ReferendumIndex {
 		<Pallet<T>>::inject_referendum(
 			<frame_system::Pallet<T>>::block_number().saturating_add(T::VotingPeriod::get()),
@@ -1249,8 +1249,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Ok if the given referendum is active, Err otherwise
 	fn ensure_ongoing(
-		r: ReferendumInfo<T::BlockNumber, BoundedCallOf<T>, BalanceOf<T>>,
-	) -> Result<ReferendumStatus<T::BlockNumber, BoundedCallOf<T>, BalanceOf<T>>, DispatchError> {
+		r: ReferendumInfo<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>,
+	) -> Result<ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>, DispatchError> {
 		match r {
 			ReferendumInfo::Ongoing(s) => Ok(s),
 			_ => Err(Error::<T>::ReferendumInvalid.into()),
@@ -1259,7 +1259,7 @@ impl<T: Config> Pallet<T> {
 
 	fn referendum_status(
 		ref_index: ReferendumIndex,
-	) -> Result<ReferendumStatus<T::BlockNumber, BoundedCallOf<T>, BalanceOf<T>>, DispatchError> {
+	) -> Result<ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>, DispatchError> {
 		let info = ReferendumInfoOf::<T>::get(ref_index).ok_or(Error::<T>::ReferendumInvalid)?;
 		Self::ensure_ongoing(info)
 	}
@@ -1514,10 +1514,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Start a referendum
 	fn inject_referendum(
-		end: T::BlockNumber,
+		end: frame_system::BlockNumberOf<T>,
 		proposal: BoundedCallOf<T>,
 		threshold: VoteThreshold,
-		delay: T::BlockNumber,
+		delay: frame_system::BlockNumberOf<T>,
 	) -> ReferendumIndex {
 		let ref_index = Self::referendum_count();
 		ReferendumCount::<T>::put(ref_index + 1);
@@ -1530,7 +1530,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Table the next waiting proposal for a vote.
-	fn launch_next(now: T::BlockNumber) -> DispatchResult {
+	fn launch_next(now: frame_system::BlockNumberOf<T>) -> DispatchResult {
 		if LastTabledWasExternal::<T>::take() {
 			Self::launch_public(now).or_else(|_| Self::launch_external(now))
 		} else {
@@ -1540,7 +1540,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Table the waiting external proposal for a vote, if there is one.
-	fn launch_external(now: T::BlockNumber) -> DispatchResult {
+	fn launch_external(now: frame_system::BlockNumberOf<T>) -> DispatchResult {
 		if let Some((proposal, threshold)) = <NextExternal<T>>::take() {
 			LastTabledWasExternal::<T>::put(true);
 			Self::deposit_event(Event::<T>::ExternalTabled);
@@ -1558,7 +1558,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Table the waiting public proposal with the highest backing for a vote.
-	fn launch_public(now: T::BlockNumber) -> DispatchResult {
+	fn launch_public(now: frame_system::BlockNumberOf<T>) -> DispatchResult {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter().enumerate().max_by_key(
 			// defensive only: All current public proposals have an amount locked
@@ -1591,9 +1591,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn bake_referendum(
-		now: T::BlockNumber,
+		now: frame_system::BlockNumberOf<T>,
 		index: ReferendumIndex,
-		status: ReferendumStatus<T::BlockNumber, BoundedCallOf<T>, BalanceOf<T>>,
+		status: ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>,
 	) -> bool {
 		let total_issuance = T::Currency::total_issuance();
 		let approved = status.threshold.approved(status.tally, total_issuance);
@@ -1628,7 +1628,7 @@ impl<T: Config> Pallet<T> {
 	/// ## Complexity:
 	/// If a referendum is launched or maturing, this will take full block weight if queue is not
 	/// empty. Otherwise, `O(R)` where `R` is the number of unbaked referenda.
-	fn begin_block(now: T::BlockNumber) -> Weight {
+	fn begin_block(now: frame_system::BlockNumberOf<T>) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = Weight::zero();
 

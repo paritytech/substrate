@@ -39,7 +39,7 @@ pub fn create_heartbeat<T: Config>(
 	k: u32,
 	e: u32,
 ) -> Result<
-	(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature),
+	(crate::Heartbeat<frame_system::BlockNumberOf<T>>, <T::AuthorityId as RuntimeAppPublic>::Signature),
 	&'static str,
 > {
 	let mut keys = Vec::new();
@@ -55,7 +55,7 @@ pub fn create_heartbeat<T: Config>(
 		external_addresses: vec![OpaqueMultiaddr::new(vec![0; 32]); e as usize],
 	};
 	let input_heartbeat = Heartbeat {
-		block_number: T::BlockNumber::zero(),
+		block_number: frame_system::BlockNumberOf<T>::zero(),
 		network_state,
 		session_index: 0,
 		authority_index: k - 1,

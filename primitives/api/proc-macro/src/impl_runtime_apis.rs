@@ -259,7 +259,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 				fn has_api<A: #crate_::RuntimeApiInfo + ?Sized>(
 					&self,
-					at: <Block as #crate_::BlockT>::Hash,
+					at: <Block as #crate_::HeaderProvider>::Hash,
 				) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 					#crate_::CallApiAt::<Block>::runtime_version_at(self.call, at)
 					.map(|v| #crate_::RuntimeVersion::has_api_with(&v, &A::ID, |v| v == A::VERSION))
@@ -267,7 +267,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 				fn has_api_with<A: #crate_::RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
 					&self,
-					at: <Block as #crate_::BlockT>::Hash,
+					at: <Block as #crate_::HeaderProvider>::Hash,
 					pred: P,
 				) -> std::result::Result<bool, #crate_::ApiError> where Self: Sized {
 					#crate_::CallApiAt::<Block>::runtime_version_at(self.call, at)
@@ -276,7 +276,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 				fn api_version<A: #crate_::RuntimeApiInfo + ?Sized>(
 					&self,
-					at: <Block as #crate_::BlockT>::Hash,
+					at: <Block as #crate_::HeaderProvider>::Hash,
 				) -> std::result::Result<Option<u32>, #crate_::ApiError> where Self: Sized {
 					#crate_::CallApiAt::<Block>::runtime_version_at(self.call, at)
 					.map(|v| #crate_::RuntimeVersion::api_version(&v, &A::ID))
@@ -302,7 +302,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				fn into_storage_changes(
 					&self,
 					backend: &Self::StateBackend,
-					parent_hash: Block::Hash,
+					parent_hash: <Block as HeaderProvider>::Hash,
 				) -> core::result::Result<
 					#crate_::StorageChanges<C::StateBackend, Block>,
 				String
@@ -481,7 +481,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 		input.items.push(parse_quote! {
 			fn __runtime_api_internal_call_api_at(
 				&self,
-				at: <__SrApiBlock__ as #crate_::BlockT>::Hash,
+				at: <__SrApiBlock__ as #crate_::HeaderProvider>::Hash,
 				context: #crate_::ExecutionContext,
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
