@@ -72,7 +72,7 @@ use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
 	generic,
 	traits::{
-		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
+		self, AtLeast32Bit, BadOrigin, BlockNumberProvider, Bounded,
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
@@ -196,6 +196,11 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 	}
 }
 
+/// The Header type used by the runtime.
+pub type HeaderOf<T> = <<T as Config>::Block as traits::HeaderProvider>::Header;
+/// The block number type used by the runtime.
+pub type BlockNumberOf<T> = <HeaderOf<T> as traits::Header>::Number;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
@@ -216,9 +221,7 @@ pub mod pallet {
 		#[frame_support::register_default_impl(TestDefaultConfig)]
 		impl DefaultConfig for TestDefaultConfig {
 			type Index = u32;
-			type BlockNumber = u32;
-			type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
-			type Block = sp_runtime::generic::Block<Self::Header, sp_runtime::OpaqueExtrinsic>;
+			type Block = sp_runtime::generic::Block<sp_runtime::generic::Header<u32, Self::Hashing>, sp_runtime::OpaqueExtrinsic>;
 			type Hash = sp_core::hash::H256;
 			type Hashing = sp_runtime::traits::BlakeTwo256;
 			type AccountId = u64;
@@ -287,21 +290,6 @@ pub mod pallet {
 			+ Copy
 			+ MaxEncodedLen;
 
-		/// The block number type used by the runtime.
-		type BlockNumber: Parameter
-			+ Member
-			+ MaybeSerializeDeserialize
-			+ Debug
-			+ MaybeDisplay
-			+ AtLeast32BitUnsigned
-			+ Default
-			+ Bounded
-			+ Copy
-			+ sp_std::hash::Hash
-			+ sp_std::str::FromStr
-			+ MaxEncodedLen
-			+ TypeInfo;
-
 		/// The output of the `Hashing` function.
 		type Hash: Parameter
 			+ Member
@@ -338,16 +326,12 @@ pub mod pallet {
 		/// functional/efficient alternatives.
 		type Lookup: StaticLookup<Target = Self::AccountId>;
 
-		/// The block header.
-		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
-
-		/// The Block type used by the runtime. This is used by `construct_runtime` to retrieve the
-		/// extrinsics or other block specific data as needed.
-		type Block: Parameter + traits::Block<Header = Self::Header, Hash = Self::Hash>;
+		/// The block type.
+		type Block: Parameter + traits::Block<Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
-		type BlockHashCount: Get<Self::BlockNumber>;
+		type BlockHashCount: Get<<<Self::Block as traits::HeaderProvider>::Header as traits::Header>::Number>;
 
 		/// The weight of runtime database operations the runtime can invoke.
 		#[pallet::constant]
@@ -406,7 +390,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberOf<T>> for Pallet<T> {
 		#[cfg(feature = "std")]
 		fn integrity_test() {
 			sp_io::TestExternalities::default().execute_with(|| {
@@ -594,7 +578,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn block_hash)]
 	pub type BlockHash<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, T::Hash, ValueQuery>;
+		StorageMap<_, Twox64Concat, BlockNumberOf<T>, T::Hash, ValueQuery>;
 
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
@@ -607,7 +591,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_number)]
-	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type Number<T: Config> = StorageValue<_, BlockNumberOf<T>, ValueQuery>;
 
 	/// Hash of the previous block.
 	#[pallet::storage]
@@ -646,14 +630,14 @@ pub mod pallet {
 	/// allows light-clients to leverage the changes trie storage tracking mechanism and
 	/// in case of changes fetch the list of events of interest.
 	///
-	/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
+	/// The value has the type `(BlockNumberOf<T>, EventIndex)` because if we used only just
 	/// the `EventIndex` then in case if the topic has the same contents on the next block
 	/// no notification will be triggered thus the event might be lost.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	#[pallet::getter(fn event_topics)]
 	pub(super) type EventTopics<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(BlockNumberOf<T>, EventIndex)>, ValueQuery>;
 
 	/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 	#[pallet::storage]
@@ -684,7 +668,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
+			<BlockHash<T>>::insert::<_, T::Hash>(BlockNumberOf::<T>::zero(), hash69());
 			<ParentHash<T>>::put::<T::Hash>(hash69());
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
@@ -1356,7 +1340,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, digest: &generic::Digest) {
+	pub fn initialize(number: &BlockNumberOf<T>, parent_hash: &T::Hash, digest: &generic::Digest) {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -1373,7 +1357,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
 	/// resulting header for this block.
-	pub fn finalize() -> T::Header {
+	pub fn finalize() -> HeaderOf<T> {
 		log::debug!(
 			target: LOG_TARGET,
 			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
@@ -1445,7 +1429,7 @@ impl<T: Config> Pallet<T> {
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
 			.expect("Node is configured to use the same hash; qed");
 
-		<T::Header as traits::Header>::new(
+		<HeaderOf<T> as traits::Header>::new(
 			number,
 			extrinsics_root,
 			storage_root,
@@ -1464,8 +1448,8 @@ impl<T: Config> Pallet<T> {
 	pub fn externalities() -> TestExternalities {
 		TestExternalities::new(sp_core::storage::Storage {
 			top: map![
-				<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
-				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
+				<BlockHash<T>>::hashed_key_for(BlockNumberOf::<T>::zero()) => [69u8; 32].encode(),
+				<Number<T>>::hashed_key().to_vec() => BlockNumberOf::<T>::one().encode(),
 				<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 			],
 			children_default: map![],
@@ -1510,7 +1494,7 @@ impl<T: Config> Pallet<T> {
 	/// Set the block number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn set_block_number(n: T::BlockNumber) {
+	pub fn set_block_number(n: BlockNumberOf<T>) {
 		<Number<T>>::put(n);
 	}
 
@@ -1728,7 +1712,7 @@ impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
 }
 
 impl<T: Config> BlockNumberProvider for Pallet<T> {
-	type BlockNumber = <T as Config>::BlockNumber;
+	type BlockNumber = BlockNumberOf<T>;
 
 	fn current_block_number() -> Self::BlockNumber {
 		Pallet::<T>::block_number()
@@ -1794,11 +1778,11 @@ impl<T: Config> Lookup for ChainContext<T> {
 
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root};
+	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root, HeaderOf, BlockNumberOf};
 
 	/// Type alias for the `Origin` associated type of system config.
 	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
 	/// Type alias for the `BlockNumber` associated type of system config.
-	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
+	pub type BlockNumberFor<T> = BlockNumberOf<T>;
 }

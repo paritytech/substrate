@@ -87,12 +87,12 @@ mod address;
 mod benchmarking;
 mod exec;
 mod gas;
-mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -319,6 +319,16 @@ pub mod pallet {
 		/// The maximum length of the debug buffer in bytes.
 		#[pallet::constant]
 		type MaxDebugBufferLen: Get<u32>;
+
+		/// The sequence of migration steps that will be applied during a migration.
+		///
+		/// # Examples
+		/// ```
+		/// use pallet_contracts::migration::{v9, v10, v11};
+		/// # struct Runtime {};
+		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// ```
+		type Migrations: MigrateSequence;
 	}
 
 	#[pallet::hooks]

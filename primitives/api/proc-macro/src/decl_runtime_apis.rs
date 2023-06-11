@@ -591,7 +591,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 		let decl = decl.clone();
 
 		let crate_ = generate_crate_access();
-		let block_hash = quote!( <Block as #crate_::BlockT>::Hash );
+		let block_hash = quote!( <Block as #crate_::HeaderProvider>::Hash );
 		let mut found_attributes = HashMap::new();
 		let mut errors = Vec::new();
 		let trait_ = decl.ident.clone();

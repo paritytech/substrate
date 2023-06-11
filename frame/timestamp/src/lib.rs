@@ -130,7 +130,7 @@ pub mod pallet {
 		type Moment: Parameter
 			+ Default
 			+ AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment>
+			+ Scale<BlockNumberOf<Self>, Output = Self::Moment>
 			+ Copy
 			+ MaxEncodedLen
 			+ scale_info::StaticTypeInfo;

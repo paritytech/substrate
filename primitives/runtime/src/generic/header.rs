@@ -18,12 +18,12 @@
 //! Generic implementation of a block header.
 
 use crate::{
-	codec::{Codec, Decode, Encode},
+	codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen},
 	generic::Digest,
 	scale_info::TypeInfo,
 	traits::{
-		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeSerialize,
-		MaybeSerializeDeserialize, Member, SimpleBitOps,
+		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeFromStr,
+		MaybeSerializeDeserialize, Member,
 	},
 };
 #[cfg(feature = "serde")]
@@ -79,6 +79,7 @@ impl<Number, Hash> traits::Header for Header<Number, Hash>
 where
 	Number: Member
 		+ MaybeSerializeDeserialize
+		+ MaybeFromStr
 		+ Debug
 		+ sp_std::hash::Hash
 		+ MaybeDisplay
@@ -87,47 +88,50 @@ where
 		+ Copy
 		+ Into<U256>
 		+ TryFrom<U256>
-		+ sp_std::str::FromStr,
-	Hash: HashT,
-	Hash::Output: Default
-		+ sp_std::hash::Hash
-		+ Copy
-		+ Member
-		+ Ord
-		+ MaybeSerialize
-		+ Debug
-		+ MaybeDisplay
-		+ SimpleBitOps
-		+ Codec,
+		+ TypeInfo
+		+ Default
+		+ EncodeLike
+		+ MaxEncodedLen,
+	Hash: HashT + TypeInfo,
 {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;
 	type Hashing = Hash;
 
+	fn new(
+		number: Self::Number,
+		extrinsics_root: Self::Hash,
+		state_root: Self::Hash,
+		parent_hash: Self::Hash,
+		digest: Digest,
+	) -> Self {
+		Self { number, extrinsics_root, state_root, parent_hash, digest }
+	}
 	fn number(&self) -> &Self::Number {
 		&self.number
 	}
+
 	fn set_number(&mut self, num: Self::Number) {
 		self.number = num
 	}
-
 	fn extrinsics_root(&self) -> &Self::Hash {
 		&self.extrinsics_root
 	}
+
 	fn set_extrinsics_root(&mut self, root: Self::Hash) {
 		self.extrinsics_root = root
 	}
-
 	fn state_root(&self) -> &Self::Hash {
 		&self.state_root
 	}
+
 	fn set_state_root(&mut self, root: Self::Hash) {
 		self.state_root = root
 	}
-
 	fn parent_hash(&self) -> &Self::Hash {
 		&self.parent_hash
 	}
+
 	fn set_parent_hash(&mut self, hash: Self::Hash) {
 		self.parent_hash = hash
 	}
@@ -140,16 +144,6 @@ where
 		#[cfg(feature = "std")]
 		log::debug!(target: "header", "Retrieving mutable reference to digest");
 		&mut self.digest
-	}
-
-	fn new(
-		number: Self::Number,
-		extrinsics_root: Self::Hash,
-		state_root: Self::Hash,
-		parent_hash: Self::Hash,
-		digest: Digest,
-	) -> Self {
-		Self { number, extrinsics_root, state_root, parent_hash, digest }
 	}
 }
 
@@ -164,8 +158,6 @@ where
 		+ Into<U256>
 		+ TryFrom<U256>,
 	Hash: HashT,
-	Hash::Output:
-		Default + sp_std::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
 {
 	/// Convenience helper for computing the hash of the header without having
 	/// to import the trait.

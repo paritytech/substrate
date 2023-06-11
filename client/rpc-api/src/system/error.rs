@@ -39,7 +39,7 @@ pub enum Error {
 }
 
 // Base code for all system errors.
-const BASE_ERROR: i32 = 2000;
+const BASE_ERROR: i32 = crate::error::base::SYSTEM;
 // Provided block range couldn't be resolved to a list of blocks.
 const NOT_HEALTHY_ERROR: i32 = BASE_ERROR + 1;
 // Peer argument is malformatted.
