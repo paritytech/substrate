@@ -42,7 +42,7 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	fn number(
 		&self,
 		hash: Block::Hash,
-	) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>>;
+	) -> Result<Option<<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number>>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
 
@@ -265,15 +265,15 @@ pub struct Info<Block: BlockT> {
 	/// Best block hash.
 	pub best_hash: Block::Hash,
 	/// Best block number.
-	pub best_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	pub best_number: <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 	/// Genesis block hash.
 	pub genesis_hash: Block::Hash,
 	/// The head of the finalized chain.
 	pub finalized_hash: Block::Hash,
 	/// Last finalized block number.
-	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	pub finalized_number: <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 	/// Last finalized state.
-	pub finalized_state: Option<(Block::Hash, <<Block as BlockT>::Header as HeaderT>::Number)>,
+	pub finalized_state: Option<(Block::Hash, <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number)>,
 	/// Number of concurrent leave forks.
 	pub number_leaves: usize,
 	/// Missing blocks after warp sync. (start, end).

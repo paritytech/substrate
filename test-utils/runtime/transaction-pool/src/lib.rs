@@ -316,7 +316,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<<Self::Block as BlockT>::Hash>, Error> {
+	) -> Result<Option<<Self::Block as sp_runtime::traits::HeaderProvider>::Hash>, Error> {
 		Ok(match at {
 			generic::BlockId::Hash(x) => Some(*x),
 			generic::BlockId::Number(num) =>
@@ -330,7 +330,7 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		Self::hash_and_length_inner(ex)
 	}
 
-	fn block_body(&self, hash: <Self::Block as BlockT>::Hash) -> Self::BodyFuture {
+	fn block_body(&self, hash: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash) -> Self::BodyFuture {
 		futures::future::ready(Ok(self
 			.chain
 			.read()
@@ -341,15 +341,15 @@ impl sc_transaction_pool::ChainApi for TestApi {
 
 	fn block_header(
 		&self,
-		hash: <Self::Block as BlockT>::Hash,
-	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
+		hash: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+	) -> Result<Option<<Self::Block as sp_runtime::traits::HeaderProvider>::Header>, Self::Error> {
 		Ok(self.chain.read().block_by_hash.get(&hash).map(|b| b.header().clone()))
 	}
 
 	fn tree_route(
 		&self,
-		from: <Self::Block as BlockT>::Hash,
-		to: <Self::Block as BlockT>::Hash,
+		from: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+		to: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
 	) -> Result<TreeRoute<Self::Block>, Self::Error> {
 		sp_blockchain::tree_route::<Block, TestApi>(self, from, to).map_err(Into::into)
 	}

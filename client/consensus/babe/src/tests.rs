@@ -84,7 +84,7 @@ impl Environment<TestBlock> for DummyFactory {
 	type Proposer = DummyProposer;
 	type Error = Error;
 
-	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header) -> Self::CreateProposer {
+	fn init(&mut self, parent_header: &<TestBlock as sp_runtime::traits::HeaderProvider>::Header) -> Self::CreateProposer {
 		future::ready(Ok(DummyProposer {
 			factory: self.clone(),
 			parent_hash: parent_header.hash(),
@@ -178,7 +178,7 @@ pub struct BabeTestNet {
 	peers: Vec<BabePeer>,
 }
 
-type TestHeader = <TestBlock as BlockT>::Header;
+type TestHeader = <TestBlock as sp_runtime::traits::HeaderProvider>::Header;
 
 type TestSelectChain =
 	substrate_test_runtime_client::LongestChain<substrate_test_runtime_client::Backend, TestBlock>;

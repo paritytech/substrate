@@ -146,7 +146,7 @@ impl PalletCmd {
 	pub fn run<BB, ExecDispatch>(&self, config: Configuration) -> Result<()>
 	where
 		BB: BlockT + Debug,
-		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
+		<<<BB as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		if let Some(output_path) = &self.output {

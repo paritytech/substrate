@@ -159,7 +159,7 @@ mod tests;
 /// exposed publicly, used internally to simplify types in the communication
 /// layer.
 type CommunicationIn<Block> = voter::CommunicationIn<
-	<Block as HeaderProvider>::Hash,
+	<Block as sp_runtime::traits::HeaderProvider>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
 	AuthorityId,

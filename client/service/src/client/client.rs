@@ -69,7 +69,7 @@ use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
-		Block as BlockT, BlockIdTo, HashFor, Header as HeaderT, NumberFor, One,
+		Block as BlockT, BlockIdTo, HashFor, Header as HeaderT, HeaderProvider, NumberFor, One,
 		SaturatedConversion, Zero,
 	},
 	Digest, Justification, Justifications, StateVersion,
@@ -1165,7 +1165,7 @@ where
 	pub fn header(
 		&self,
 		hash: Block::Hash,
-	) -> sp_blockchain::Result<Option<<Block as BlockT>::Header>> {
+	) -> sp_blockchain::Result<Option<<Block as sp_runtime::traits::HeaderProvider>::Header>> {
 		self.backend.blockchain().header(hash)
 	}
 
@@ -1631,7 +1631,7 @@ where
 	fn number(
 		&self,
 		hash: Block::Hash,
-	) -> sp_blockchain::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+	) -> sp_blockchain::Result<Option<<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number>> {
 		self.backend.blockchain().number(hash)
 	}
 
@@ -1683,7 +1683,7 @@ where
 	fn number(
 		&self,
 		hash: Block::Hash,
-	) -> sp_blockchain::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+	) -> sp_blockchain::Result<Option<<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number>> {
 		(**self).number(hash)
 	}
 

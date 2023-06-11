@@ -175,7 +175,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, TP, SC, CS, CIDP, P>(
 	CB: ClientBackend<B> + 'static,
 	E: Environment<B> + 'static,
 	E::Proposer: Proposer<B, Proof = P, Transaction = TransactionFor<C, B>>,
-	CS: Stream<Item = EngineCommand<<B as BlockT>::Hash>> + Unpin + 'static,
+	CS: Stream<Item = EngineCommand<<B as sp_runtime::traits::HeaderProvider>::Hash>> + Unpin + 'static,
 	SC: SelectChain<B> + 'static,
 	TransactionFor<C, B>: 'static,
 	TP: TransactionPool<Block = B>,

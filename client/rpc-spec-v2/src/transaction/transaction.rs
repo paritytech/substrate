@@ -46,7 +46,7 @@ use std::sync::Arc;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_runtime::{generic, traits::Block as BlockT};
+use sp_runtime::generic;
 
 use codec::Decode;
 use futures::{FutureExt, StreamExt, TryFutureExt};
@@ -87,7 +87,7 @@ impl<Pool, Client> TransactionApiServer<BlockHash<Pool>> for Transaction<Pool, C
 where
 	Pool: TransactionPool + Sync + Send + 'static,
 	Pool::Hash: Unpin,
-	<Pool::Block as BlockT>::Hash: Unpin,
+	<Pool::Block as sp_runtime::traits::HeaderProvider>::Hash: Unpin,
 	Client: HeaderBackend<Pool::Block> + ProvideRuntimeApi<Pool::Block> + Send + Sync + 'static,
 {
 	fn submit_and_watch(&self, mut sink: SubscriptionSink, xt: Bytes) -> SubscriptionResult {
@@ -132,7 +132,7 @@ where
 				Err(err) => {
 					// We have not created an `Watcher` for the tx. Make sure the
 					// error is still propagated as an event.
-					let event: TransactionEvent<<Pool::Block as BlockT>::Hash> = err.into();
+					let event: TransactionEvent<<Pool::Block as sp_runtime::traits::HeaderProvider>::Hash> = err.into();
 					sink.pipe_from_stream(futures::stream::once(async { event }).boxed()).await;
 				},
 			};

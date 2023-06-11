@@ -41,7 +41,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_keystore::KeystorePtr;
-use sp_runtime::{generic, traits::Block as BlockT};
+use sp_runtime::generic;
 use sp_session::SessionKeys;
 
 use self::error::{Error, Result};
@@ -89,7 +89,7 @@ where
 	Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
 	Client::Api: SessionKeys<P::Block>,
 	P::Hash: Unpin,
-	<P::Block as BlockT>::Hash: Unpin,
+	<P::Block as sp_runtime::traits::HeaderProvider>::Hash: Unpin,
 {
 	async fn submit_extrinsic(&self, ext: Bytes) -> RpcResult<TxHash<P>> {
 		let xt = match Decode::decode(&mut &ext[..]) {

@@ -21,7 +21,7 @@
 use sc_client_api::backend;
 use sp_blockchain::{Backend, HeaderBackend};
 use sp_consensus::{Error as ConsensusError, SelectChain};
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header, HeaderProvider, NumberFor};
 use std::{marker::PhantomData, sync::Arc};
 
 /// Implement Longest Chain Select implementation
@@ -59,7 +59,7 @@ where
 		Ok(best_hash)
 	}
 
-	fn best_header(&self) -> sp_blockchain::Result<<Block as BlockT>::Header> {
+	fn best_header(&self) -> sp_blockchain::Result<<Block as sp_runtime::traits::HeaderProvider>::Header> {
 		let best_hash = self.best_hash()?;
 		Ok(self
 			.backend
@@ -142,7 +142,7 @@ where
 		LongestChain::leaves(self).map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 
-	async fn best_chain(&self) -> Result<<Block as BlockT>::Header, ConsensusError> {
+	async fn best_chain(&self) -> Result<<Block as sp_runtime::traits::HeaderProvider>::Header, ConsensusError> {
 		LongestChain::best_header(self).map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 

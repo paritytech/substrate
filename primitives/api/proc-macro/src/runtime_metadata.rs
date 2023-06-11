@@ -80,8 +80,8 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream2 {
 	// also has `TypeInfo + 'static` bounds (required by `scale_info::meta_type`).
 	//
 	// For example, if a runtime API defines a method that has an input:
-	// `fn func(input: <Block as BlockT>::Header)`
-	// then the runtime metadata will imply `<Block as BlockT>::Header: TypeInfo + 'static`.
+	// `fn func(input: <Block as sp_runtime::traits::HeaderProvider>::Header)`
+	// then the runtime metadata will imply `<Block as sp_runtime::traits::HeaderProvider>::Header: TypeInfo + 'static`.
 	//
 	// This restricts the bounds at the metadata level, without needing to modify the `BlockT`
 	// itself, since the concrete implementations are already satisfying `TypeInfo`.

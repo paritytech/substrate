@@ -30,9 +30,9 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 /// Type alias for using the message type using block type parameters.
 pub type Message<B> = generic::Message<
-	<B as BlockT>::Header,
-	<B as BlockT>::Hash,
-	<<B as BlockT>::Header as HeaderT>::Number,
+	<B as sp_runtime::traits::HeaderProvider>::Header,
+	<B as sp_runtime::traits::HeaderProvider>::Hash,
+	<<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 	<B as BlockT>::Extrinsic,
 >;
 

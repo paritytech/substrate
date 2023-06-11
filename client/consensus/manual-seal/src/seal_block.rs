@@ -40,9 +40,9 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, TP
 	/// instantly finalize this block?
 	pub finalize: bool,
 	/// specify the parent hash of the about-to-created block
-	pub parent_hash: Option<<B as BlockT>::Hash>,
+	pub parent_hash: Option<<B as sp_runtime::traits::HeaderProvider>::Hash>,
 	/// sender to report errors/success to the rpc.
-	pub sender: rpc::Sender<CreatedBlock<<B as BlockT>::Hash>>,
+	pub sender: rpc::Sender<CreatedBlock<<B as sp_runtime::traits::HeaderProvider>::Hash>>,
 	/// transaction pool
 	pub pool: Arc<TP>,
 	/// header backend
@@ -155,7 +155,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 
 		match block_import.import_block(params).await? {
 			ImportResult::Imported(aux) =>
-				Ok(CreatedBlock { hash: <B as BlockT>::Header::hash(&post_header), aux }),
+				Ok(CreatedBlock { hash: <B as sp_runtime::traits::HeaderProvider>::Header::hash(&post_header), aux }),
 			other => Err(other.into()),
 		}
 	};

@@ -25,7 +25,7 @@ use parking_lot::RwLock;
 use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor, NumberFor},
+	traits::{Block as BlockT, HashFor, HeaderProvider, NumberFor},
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{

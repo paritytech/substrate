@@ -32,7 +32,7 @@ use std::{
 const EXTRA_RETRY_WAIT: Duration = Duration::from_secs(10);
 
 /// Pending extra data request for the given block (hash and number).
-type ExtraRequest<B> = (<B as BlockT>::Hash, NumberFor<B>);
+type ExtraRequest<B> = (<B as sp_runtime::traits::HeaderProvider>::Hash, NumberFor<B>);
 
 /// Manages pending block extra data (e.g. justification) requests.
 ///

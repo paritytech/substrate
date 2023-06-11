@@ -148,7 +148,7 @@ pub type ImportNotificationStream<H> = futures::channel::mpsc::Receiver<H>;
 /// Transaction hash type for a pool.
 pub type TxHash<P> = <P as TransactionPool>::Hash;
 /// Block hash type for a pool.
-pub type BlockHash<P> = <<P as TransactionPool>::Block as BlockT>::Hash;
+pub type BlockHash<P> = <<P as TransactionPool>::Block as sp_runtime::traits::HeaderProvider>::Hash;
 /// Transaction type for a pool.
 pub type TransactionFor<P> = <<P as TransactionPool>::Block as BlockT>::Extrinsic;
 /// Type of transactions event stream for a pool.
@@ -349,7 +349,7 @@ pub trait LocalTransactionPool: Send + Sync {
 	/// `TransactionSource::Local`.
 	fn submit_local(
 		&self,
-		at: <Self::Block as BlockT>::Hash,
+		at: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
 		xt: LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error>;
 }
@@ -369,7 +369,7 @@ trait OffchainSubmitTransaction<Block: BlockT>: Send + Sync {
 impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TPool {
 	fn submit_at(
 		&self,
-		at: <TPool::Block as BlockT>::Hash,
+		at: <TPool::Block as sp_runtime::traits::HeaderProvider>::Hash,
 		extrinsic: <TPool::Block as BlockT>::Extrinsic,
 	) -> Result<(), ()> {
 		log::debug!(

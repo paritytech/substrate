@@ -61,7 +61,7 @@ use crate::{
 };
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
-	<Block as HeaderProvider>::Hash,
+	<Block as sp_runtime::traits::HeaderProvider>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
 	AuthorityId,
@@ -167,7 +167,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 
 /// A map with voter status information for currently live rounds,
 /// which votes have we cast and what are they.
-pub type CurrentRounds<Block> = BTreeMap<RoundNumber, HasVoted<<Block as BlockT>::Header>>;
+pub type CurrentRounds<Block> = BTreeMap<RoundNumber, HasVoted<<Block as sp_runtime::traits::HeaderProvider>::Header>>;
 
 /// The state of the current voter set, whether it is currently active or not
 /// and information related to the previously completed rounds. Current round

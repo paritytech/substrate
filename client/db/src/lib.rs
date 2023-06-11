@@ -79,7 +79,7 @@ use sp_database::Transaction;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{
-		Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion,
+		Block as BlockT, Hash, HashFor, Header as HeaderT, HeaderProvider, NumberFor, One, SaturatedConversion,
 		Zero,
 	},
 	Justification, Justifications, StateVersion, Storage,

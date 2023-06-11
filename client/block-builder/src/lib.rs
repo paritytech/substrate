@@ -162,7 +162,7 @@ where
 		inherent_digests: Digest,
 		backend: &'a B,
 	) -> Result<Self, Error> {
-		let header = <<Block as BlockT>::Header as HeaderT>::new(
+		let header = <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::new(
 			parent_number + One::one(),
 			Default::default(),
 			Default::default(),

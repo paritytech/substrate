@@ -153,7 +153,7 @@ impl GenesisStorageBuilder {
 pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 	let child_roots = storage.children_default.iter().map(|(sk, child_content)| {
 		let state_root =
-			<<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+			<<<crate::Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				child_content.data.clone().into_iter().collect(),
 				sp_runtime::StateVersion::V1,
 			);
@@ -161,7 +161,7 @@ pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
 	});
 	// add child roots to storage
 	storage.top.extend(child_roots);
-	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+	let state_root = <<<crate::Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Hashing as HashT>::trie_root(
 		storage.top.clone().into_iter().collect(),
 		sp_runtime::StateVersion::V1,
 	);

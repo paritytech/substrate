@@ -72,9 +72,9 @@ pub type RuntimeOrigin = libp2p_identity::PeerId;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct IncomingBlock<B: BlockT> {
 	/// Block header hash.
-	pub hash: <B as BlockT>::Hash,
+	pub hash: <B as sp_runtime::traits::HeaderProvider>::Hash,
 	/// Block header if requested.
-	pub header: Option<<B as BlockT>::Header>,
+	pub header: Option<<B as sp_runtime::traits::HeaderProvider>::Header>,
 	/// Block body if requested.
 	pub body: Option<Vec<<B as BlockT>::Extrinsic>>,
 	/// Indexed block body if requested.

@@ -394,7 +394,7 @@ pub(crate) type UntilVoteTargetImported<Block, BlockStatus, BlockSyncRequester, 
 	BlockStatus,
 	BlockSyncRequester,
 	I,
-	SignedMessage<<Block as BlockT>::Header>,
+	SignedMessage<<Block as sp_runtime::traits::HeaderProvider>::Header>,
 >;
 
 /// This blocks a global message import, i.e. a commit or catch up messages,

@@ -191,15 +191,15 @@ where
 
 	fn block_header(
 		&self,
-		hash: <Self::Block as BlockT>::Hash,
-	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
+		hash: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+	) -> Result<Option<<Self::Block as sp_runtime::traits::HeaderProvider>::Header>, Self::Error> {
 		self.client.header(hash).map_err(Into::into)
 	}
 
 	fn tree_route(
 		&self,
-		from: <Self::Block as BlockT>::Hash,
-		to: <Self::Block as BlockT>::Hash,
+		from: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+		to: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
 	) -> Result<TreeRoute<Self::Block>, Self::Error> {
 		sp_blockchain::tree_route::<Block, Client>(&*self.client, from, to).map_err(Into::into)
 	}

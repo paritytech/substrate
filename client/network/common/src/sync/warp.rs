@@ -37,7 +37,7 @@ pub enum WarpSyncParams<Block: BlockT> {
 	/// Skip downloading proofs and wait for a header of the state that should be downloaded.
 	///
 	/// It is expected that the header provider ensures that the header is trusted.
-	WaitForTarget(oneshot::Receiver<<Block as BlockT>::Header>),
+	WaitForTarget(oneshot::Receiver<<Block as sp_runtime::traits::HeaderProvider>::Header>),
 }
 
 /// Proof verification result.

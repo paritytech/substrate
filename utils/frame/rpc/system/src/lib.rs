@@ -86,7 +86,7 @@ impl<P: TransactionPool, C, B> System<P, C, B> {
 
 #[async_trait]
 impl<P, C, Block, AccountId, Index>
-	SystemApiServer<<Block as traits::Block>::Hash, AccountId, Index> for System<P, C, Block>
+	SystemApiServer<<Block as traits::HeaderProvider>::Hash, AccountId, Index> for System<P, C, Block>
 where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
@@ -115,7 +115,7 @@ where
 	async fn dry_run(
 		&self,
 		extrinsic: Bytes,
-		at: Option<<Block as traits::Block>::Hash>,
+		at: Option<<Block as traits::HeaderProvider>::Hash>,
 	) -> RpcResult<Bytes> {
 		self.deny_unsafe.check_if_safe()?;
 		let api = self.client.runtime_api();

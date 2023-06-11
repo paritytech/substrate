@@ -1861,10 +1861,7 @@ impl pallet_statement::Config for Runtime {
 }
 
 construct_runtime!(
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = node_primitives::Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
 		System: frame_system,
 		Utility: pallet_utility,

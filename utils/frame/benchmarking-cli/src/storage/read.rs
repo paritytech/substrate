@@ -34,7 +34,7 @@ impl StorageCmd {
 		C: UsageProvider<B> + StorageProvider<B, BA>,
 		B: BlockT + Debug,
 		BA: ClientBackend<B>,
-		<<B as BlockT>::Header as HeaderT>::Number: From<u32>,
+		<<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number: From<u32>,
 	{
 		let mut record = BenchRecord::default();
 		let best_hash = client.usage_info().chain.best_hash;

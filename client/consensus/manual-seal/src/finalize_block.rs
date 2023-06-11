@@ -26,7 +26,7 @@ use std::{marker::PhantomData, sync::Arc};
 /// params for block finalization.
 pub struct FinalizeBlockParams<B: BlockT, F, CB> {
 	/// hash of the block
-	pub hash: <B as BlockT>::Hash,
+	pub hash: <B as sp_runtime::traits::HeaderProvider>::Hash,
 	/// sender to report errors/success to the rpc.
 	pub sender: rpc::Sender<()>,
 	/// finalization justification

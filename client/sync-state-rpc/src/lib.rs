@@ -55,7 +55,7 @@ use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 type SharedAuthoritySet<TBl> =
-	sc_consensus_grandpa::SharedAuthoritySet<<TBl as BlockT>::Hash, NumberFor<TBl>>;
+	sc_consensus_grandpa::SharedAuthoritySet<<TBl as sp_runtime::traits::HeaderProvider>::Hash, NumberFor<TBl>>;
 
 /// Error type used by this crate.
 #[derive(Debug, thiserror::Error)]
@@ -112,7 +112,7 @@ pub type LightSyncStateExtension = Option<serde_json::Value>;
 pub struct LightSyncState<Block: BlockT> {
 	/// The header of the best finalized block.
 	#[serde(serialize_with = "serialize_encoded")]
-	pub finalized_block_header: <Block as BlockT>::Header,
+	pub finalized_block_header: <Block as sp_runtime::traits::HeaderProvider>::Header,
 	/// The epoch changes tree for babe.
 	#[serde(serialize_with = "serialize_encoded")]
 	pub babe_epoch_changes: sc_consensus_epochs::EpochChangesFor<Block, sc_consensus_babe::Epoch>,

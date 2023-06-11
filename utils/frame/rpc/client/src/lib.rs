@@ -145,7 +145,7 @@ pub struct FinalizedHeaders<
 impl<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
 	FinalizedHeaders<'a, Block, HP, HS>
 where
-	<Block as BlockT>::Header: DeserializeOwned,
+	<Block as sp_runtime::traits::HeaderProvider>::Header: DeserializeOwned,
 {
 	pub fn new(header_provider: &'a HP, subscription: HS) -> Self {
 		Self {

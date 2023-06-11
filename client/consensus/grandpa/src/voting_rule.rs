@@ -27,11 +27,11 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use dyn_clone::DynClone;
 
 use sc_client_api::blockchain::HeaderBackend;
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One, Zero};
+use sp_runtime::traits::{Block as BlockT, Header, HeaderProvider, NumberFor, One, Zero};
 
 /// A future returned by a `VotingRule` to restrict a given vote, if any restriction is necessary.
 pub type VotingRuleResult<Block> =
-	Pin<Box<dyn Future<Output = Option<(<Block as HeaderProvider>::Hash, NumberFor<Block>)>> + Send>>;
+	Pin<Box<dyn Future<Output = Option<(<Block as sp_runtime::traits::HeaderProvider>::Hash, NumberFor<Block>)>> + Send>>;
 
 /// A trait for custom voting rules in GRANDPA.
 pub trait VotingRule<Block, B>: DynClone + Send + Sync
@@ -54,9 +54,9 @@ where
 	fn restrict_vote(
 		&self,
 		backend: Arc<B>,
-		base: &Block::Header,
-		best_target: &Block::Header,
-		current_target: &Block::Header,
+		base: &<Block as HeaderProvider>::Header,
+		best_target: &<Block as HeaderProvider>::Header,
+		current_target: &<Block as HeaderProvider>::Header,
 	) -> VotingRuleResult<Block>;
 }
 
@@ -68,9 +68,9 @@ where
 	fn restrict_vote(
 		&self,
 		_backend: Arc<B>,
-		_base: &Block::Header,
-		_best_target: &Block::Header,
-		_current_target: &Block::Header,
+		_base: &<Block as HeaderProvider>::Header,
+		_best_target: &<Block as HeaderProvider>::Header,
+		_current_target: &<Block as HeaderProvider>::Header,
 	) -> VotingRuleResult<Block> {
 		Box::pin(async { None })
 	}
@@ -95,9 +95,9 @@ where
 	fn restrict_vote(
 		&self,
 		backend: Arc<B>,
-		base: &Block::Header,
-		best_target: &Block::Header,
-		current_target: &Block::Header,
+		base: &<Block as HeaderProvider>::Header,
+		best_target: &<Block as HeaderProvider>::Header,
+		current_target: &<Block as HeaderProvider>::Header,
 	) -> VotingRuleResult<Block> {
 		use sp_arithmetic::traits::Saturating;
 
@@ -140,9 +140,9 @@ where
 	fn restrict_vote(
 		&self,
 		backend: Arc<B>,
-		base: &Block::Header,
-		best_target: &Block::Header,
-		current_target: &Block::Header,
+		base: &<Block as HeaderProvider>::Header,
+		best_target: &<Block as HeaderProvider>::Header,
+		current_target: &<Block as HeaderProvider>::Header,
 	) -> VotingRuleResult<Block> {
 		// target a vote towards 3/4 of the unfinalized chain (rounding up)
 		let target_number = {
@@ -170,7 +170,7 @@ where
 fn find_target<Block, B>(
 	backend: &B,
 	target_number: NumberFor<Block>,
-	current_header: &Block::Header,
+	current_header: &<Block as HeaderProvider>::Header,
 ) -> Option<(Block::Hash, NumberFor<Block>)>
 where
 	Block: BlockT,
@@ -218,9 +218,9 @@ where
 	fn restrict_vote(
 		&self,
 		backend: Arc<B>,
-		base: &Block::Header,
-		best_target: &Block::Header,
-		current_target: &Block::Header,
+		base: &<Block as HeaderProvider>::Header,
+		best_target: &<Block as HeaderProvider>::Header,
+		current_target: &<Block as HeaderProvider>::Header,
 	) -> VotingRuleResult<Block> {
 		let rules = self.rules.clone();
 		let base = base.clone();
@@ -319,9 +319,9 @@ where
 	fn restrict_vote(
 		&self,
 		backend: Arc<B>,
-		base: &Block::Header,
-		best_target: &Block::Header,
-		current_target: &Block::Header,
+		base: &<Block as HeaderProvider>::Header,
+		best_target: &<Block as HeaderProvider>::Header,
+		current_target: &<Block as HeaderProvider>::Header,
 	) -> VotingRuleResult<Block> {
 		(**self).restrict_vote(backend, base, best_target, current_target)
 	}

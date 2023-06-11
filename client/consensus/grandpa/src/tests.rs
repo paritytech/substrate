@@ -212,12 +212,12 @@ impl GenesisAuthoritySetProvider<Block> for TestApi {
 #[derive(Clone, Default)]
 struct MockSelectChain {
 	leaves: Arc<Mutex<Option<Vec<Hash>>>>,
-	best_chain: Arc<Mutex<Option<<Block as BlockT>::Header>>>,
+	best_chain: Arc<Mutex<Option<<Block as sp_runtime::traits::HeaderProvider>::Header>>>,
 	finality_target: Arc<Mutex<Option<Hash>>>,
 }
 
 impl MockSelectChain {
-	fn set_best_chain(&self, best: <Block as BlockT>::Header) {
+	fn set_best_chain(&self, best: <Block as sp_runtime::traits::HeaderProvider>::Header) {
 		*self.best_chain.lock() = Some(best);
 	}
 
@@ -232,7 +232,7 @@ impl SelectChain<Block> for MockSelectChain {
 		Ok(self.leaves.lock().take().unwrap())
 	}
 
-	async fn best_chain(&self) -> Result<<Block as BlockT>::Header, ConsensusError> {
+	async fn best_chain(&self) -> Result<<Block as sp_runtime::traits::HeaderProvider>::Header, ConsensusError> {
 		Ok(self.best_chain.lock().take().unwrap())
 	}
 
@@ -256,9 +256,9 @@ where
 	fn restrict_vote(
 		&self,
 		_backend: Arc<B>,
-		_base: &<Block as BlockT>::Header,
-		best_target: &<Block as BlockT>::Header,
-		_current_target: &<Block as BlockT>::Header,
+		_base: &<Block as sp_runtime::traits::HeaderProvider>::Header,
+		best_target: &<Block as sp_runtime::traits::HeaderProvider>::Header,
+		_current_target: &<Block as sp_runtime::traits::HeaderProvider>::Header,
 	) -> VotingRuleResult<Block> {
 		if let Some(expected) = *self.0.lock() {
 			assert_eq!(best_target.hash(), expected);

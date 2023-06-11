@@ -45,13 +45,13 @@ struct ChainInfo<B: BlockT> {
 	/// Best block hash.
 	best_hash: B::Hash,
 	/// Best block number.
-	best_number: <<B as BlockT>::Header as HeaderT>::Number,
+	best_number: <<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 	/// Genesis block hash.
 	genesis_hash: B::Hash,
 	/// The head of the finalized chain.
 	finalized_hash: B::Hash,
 	/// Last finalized block number.
-	finalized_number: <<B as BlockT>::Header as HeaderT>::Number,
+	finalized_number: <<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 }
 
 impl<B: BlockT> From<Info<B>> for ChainInfo<B> {

@@ -65,13 +65,13 @@ pub fn construct_genesis_block<Block: BlockT>(
 	state_root: Block::Hash,
 	state_version: StateVersion,
 ) -> Block {
-	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
+	let extrinsics_root = <<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Hashing as HashT>::trie_root(
 		Vec::new(),
 		state_version,
 	);
 
 	Block::new(
-		<<Block as BlockT>::Header as HeaderT>::new(
+		<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::new(
 			Zero::zero(),
 			extrinsics_root,
 			state_root,

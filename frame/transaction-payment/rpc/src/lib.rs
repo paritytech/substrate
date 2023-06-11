@@ -30,7 +30,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_rpc::number::NumberOrHex;
-use sp_runtime::traits::{Block as BlockT, MaybeDisplay};
+use sp_runtime::traits::{Block as BlockT, HeaderProvider, MaybeDisplay};
 
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 

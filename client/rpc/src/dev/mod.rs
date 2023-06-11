@@ -38,7 +38,7 @@ use std::{
 
 pub use sc_rpc_api::dev::{BlockStats, DevApiServer};
 
-type HasherOf<Block> = <<Block as BlockT>::Header as Header>::Hashing;
+type HasherOf<Block> = <<Block as sp_runtime::traits::HeaderProvider>::Header as Header>::Hashing;
 
 /// The Dev API. All methods are unsafe.
 pub struct Dev<Block: BlockT, Client> {

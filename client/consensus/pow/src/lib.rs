@@ -217,7 +217,7 @@ pub struct PowBlockImport<B: BlockT, I, C, S, Algorithm, CIDP> {
 	select_chain: S,
 	client: Arc<C>,
 	create_inherent_data_providers: Arc<CIDP>,
-	check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
+	check_inherents_after: <<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 }
 
 impl<B: BlockT, I: Clone, C, S: Clone, Algorithm: Clone, CIDP> Clone
@@ -250,7 +250,7 @@ where
 		inner: I,
 		client: Arc<C>,
 		algorithm: Algorithm,
-		check_inherents_after: <<B as BlockT>::Header as HeaderT>::Number,
+		check_inherents_after: <<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 		select_chain: S,
 		create_inherent_data_providers: CIDP,
 	) -> Self {

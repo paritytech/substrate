@@ -469,7 +469,7 @@ pub fn read_header<Block: BlockT>(
 pub fn read_meta<Block>(
 	db: &dyn Database<DbHash>,
 	col_header: u32,
-) -> Result<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>, sp_blockchain::Error>
+) -> Result<Meta<<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number, Block::Hash>, sp_blockchain::Error>
 where
 	Block: BlockT,
 {

@@ -22,7 +22,7 @@ use sp_consensus::BlockOrigin;
 use sp_core::storage::StorageKey;
 use sp_runtime::{
 	generic::SignedBlock,
-	traits::{Block as BlockT, NumberFor},
+	traits::{Block as BlockT, HeaderProvider, NumberFor},
 	Justifications,
 };
 use std::{collections::HashSet, fmt, sync::Arc};

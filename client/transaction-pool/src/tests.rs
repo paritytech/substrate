@@ -161,7 +161,7 @@ impl ChainApi for TestApi {
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<<Self::Block as BlockT>::Hash>, Self::Error> {
+	) -> Result<Option<<Self::Block as sp_runtime::traits::HeaderProvider>::Hash>, Self::Error> {
 		Ok(match at {
 			BlockId::Number(num) => Some(H256::from_low_u64_be(*num)).into(),
 			BlockId::Hash(_) => None,
@@ -175,21 +175,21 @@ impl ChainApi for TestApi {
 		(Hashing::hash(&encoded), len)
 	}
 
-	fn block_body(&self, _id: <Self::Block as BlockT>::Hash) -> Self::BodyFuture {
+	fn block_body(&self, _id: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash) -> Self::BodyFuture {
 		futures::future::ready(Ok(None))
 	}
 
 	fn block_header(
 		&self,
-		_: <Self::Block as BlockT>::Hash,
-	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
+		_: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+	) -> Result<Option<<Self::Block as sp_runtime::traits::HeaderProvider>::Header>, Self::Error> {
 		Ok(None)
 	}
 
 	fn tree_route(
 		&self,
-		_from: <Self::Block as BlockT>::Hash,
-		_to: <Self::Block as BlockT>::Hash,
+		_from: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+		_to: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
 	) -> Result<TreeRoute<Self::Block>, Self::Error> {
 		unimplemented!()
 	}

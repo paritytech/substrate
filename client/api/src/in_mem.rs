@@ -25,7 +25,7 @@ use sp_core::{
 };
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, HashFor, Header as HeaderT, HeaderProvider, NumberFor, Zero},
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
@@ -155,7 +155,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn insert(
 		&self,
 		hash: Block::Hash,
-		header: <Block as BlockT>::Header,
+		header: <Block as sp_runtime::traits::HeaderProvider>::Header,
 		justifications: Option<Justifications>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
@@ -225,7 +225,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		self.apply_head(&header)
 	}
 
-	fn apply_head(&self, header: &<Block as BlockT>::Header) -> sp_blockchain::Result<()> {
+	fn apply_head(&self, header: &<Block as sp_runtime::traits::HeaderProvider>::Header) -> sp_blockchain::Result<()> {
 		let hash = header.hash();
 		let number = header.number();
 
@@ -331,7 +331,7 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	fn header(
 		&self,
 		hash: Block::Hash,
-	) -> sp_blockchain::Result<Option<<Block as BlockT>::Header>> {
+	) -> sp_blockchain::Result<Option<<Block as sp_runtime::traits::HeaderProvider>::Header>> {
 		Ok(self.storage.read().blocks.get(&hash).map(|b| b.header().clone()))
 	}
 
@@ -366,7 +366,7 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 
 	fn hash(
 		&self,
-		number: <<Block as BlockT>::Header as HeaderT>::Number,
+		number: <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		Ok(self.id(BlockId::Number(number)))
 	}
@@ -525,7 +525,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 
 	fn set_block_data(
 		&mut self,
-		header: <Block as BlockT>::Header,
+		header: <Block as sp_runtime::traits::HeaderProvider>::Header,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		_indexed_body: Option<Vec<Vec<u8>>>,
 		justifications: Option<Justifications>,

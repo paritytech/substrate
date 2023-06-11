@@ -38,7 +38,7 @@ use sp_consensus::{DisableProofRecording, EnableProofRecording, ProofRecording, 
 use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
-	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
+	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT, HeaderProvider},
 	Digest, Percent, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
@@ -190,7 +190,7 @@ where
 {
 	fn init_with_now(
 		&mut self,
-		parent_header: &<Block as BlockT>::Header,
+		parent_header: &<Block as sp_runtime::traits::HeaderProvider>::Header,
 		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	) -> Proposer<B, Block, C, A, PR> {
 		let parent_hash = parent_header.hash();
@@ -235,7 +235,7 @@ where
 	type Proposer = Proposer<B, Block, C, A, PR>;
 	type Error = sp_blockchain::Error;
 
-	fn init(&mut self, parent_header: &<Block as BlockT>::Header) -> Self::CreateProposer {
+	fn init(&mut self, parent_header: &<Block as sp_runtime::traits::HeaderProvider>::Header) -> Self::CreateProposer {
 		future::ready(Ok(self.init_with_now(parent_header, Box::new(time::Instant::now))))
 	}
 }
@@ -245,7 +245,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
 	parent_hash: Block::Hash,
-	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	parent_number: <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,

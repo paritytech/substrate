@@ -41,9 +41,9 @@ use super::{
 pub type EventStream<H> = Receiver<H>;
 
 /// Block hash type for a pool.
-pub type BlockHash<A> = <<A as ChainApi>::Block as traits::Block>::Hash;
+pub type BlockHash<A> = <<A as ChainApi>::Block as traits::HeaderProvider>::Hash;
 /// Extrinsic hash type for a pool.
-pub type ExtrinsicHash<A> = <<A as ChainApi>::Block as traits::Block>::Hash;
+pub type ExtrinsicHash<A> = <<A as ChainApi>::Block as traits::HeaderProvider>::Hash;
 /// Extrinsic type for a pool.
 pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
 /// Block number type for the ChainApi
@@ -86,25 +86,25 @@ pub trait ChainApi: Send + Sync {
 	fn block_id_to_hash(
 		&self,
 		at: &BlockId<Self::Block>,
-	) -> Result<Option<<Self::Block as BlockT>::Hash>, Self::Error>;
+	) -> Result<Option<<Self::Block as sp_runtime::traits::HeaderProvider>::Hash>, Self::Error>;
 
 	/// Returns hash and encoding length of the extrinsic.
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (ExtrinsicHash<Self>, usize);
 
 	/// Returns a block body given the block.
-	fn block_body(&self, at: <Self::Block as BlockT>::Hash) -> Self::BodyFuture;
+	fn block_body(&self, at: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash) -> Self::BodyFuture;
 
 	/// Returns a block header given the block id.
 	fn block_header(
 		&self,
-		at: <Self::Block as BlockT>::Hash,
-	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
+		at: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+	) -> Result<Option<<Self::Block as sp_runtime::traits::HeaderProvider>::Header>, Self::Error>;
 
 	/// Compute a tree-route between two blocks. See [`TreeRoute`] for more details.
 	fn tree_route(
 		&self,
-		from: <Self::Block as BlockT>::Hash,
-		to: <Self::Block as BlockT>::Hash,
+		from: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+		to: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
 	) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 

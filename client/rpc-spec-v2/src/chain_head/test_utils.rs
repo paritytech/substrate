@@ -292,7 +292,7 @@ impl<Block: BlockT, Client: HeaderBackend<Block> + Send + Sync> HeaderBackend<Bl
 	fn header(
 		&self,
 		hash: Block::Hash,
-	) -> sp_blockchain::Result<Option<<Block as BlockT>::Header>> {
+	) -> sp_blockchain::Result<Option<<Block as sp_runtime::traits::HeaderProvider>::Header>> {
 		self.client.header(hash)
 	}
 
@@ -307,13 +307,13 @@ impl<Block: BlockT, Client: HeaderBackend<Block> + Send + Sync> HeaderBackend<Bl
 	fn number(
 		&self,
 		hash: Block::Hash,
-	) -> sc_client_api::blockchain::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+	) -> sc_client_api::blockchain::Result<Option<<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number>> {
 		self.client.number(hash)
 	}
 
 	fn hash(
 		&self,
-		number: <<Block as BlockT>::Header as HeaderT>::Number,
+		number: <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.client.hash(number)
 	}

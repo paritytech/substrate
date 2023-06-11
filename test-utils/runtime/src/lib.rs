@@ -479,7 +479,7 @@ impl_runtime_apis! {
 			Executive::execute_block(block);
 		}
 
-		fn initialize_block(header: &<Block as BlockT>::Header) {
+		fn initialize_block(header: &<Block as sp_runtime::traits::HeaderProvider>::Header) {
 			log::trace!(target: LOG_TARGET, "initialize_block: {header:#?}");
 			Executive::initialize_block(header);
 		}
@@ -515,7 +515,7 @@ impl_runtime_apis! {
 			Executive::apply_extrinsic(extrinsic)
 		}
 
-		fn finalize_block() -> <Block as BlockT>::Header {
+		fn finalize_block() -> <Block as sp_runtime::traits::HeaderProvider>::Header {
 			log::trace!(target: LOG_TARGET, "finalize_block");
 			Executive::finalize_block()
 		}
@@ -646,7 +646,7 @@ impl_runtime_apis! {
 
 		fn submit_report_equivocation_unsigned_extrinsic(
 			_equivocation_proof: sp_consensus_babe::EquivocationProof<
-			<Block as BlockT>::Header,
+			<Block as sp_runtime::traits::HeaderProvider>::Header,
 			>,
 			_key_owner_proof: sp_consensus_babe::OpaqueKeyOwnershipProof,
 		) -> Option<()> {
@@ -662,7 +662,7 @@ impl_runtime_apis! {
 	}
 
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
-		fn offchain_worker(header: &<Block as BlockT>::Header) {
+		fn offchain_worker(header: &<Block as sp_runtime::traits::HeaderProvider>::Header) {
 			let ext = Extrinsic::new_unsigned(
 				substrate_test_pallet::pallet::Call::storage_change{
 					key:b"some_key".encode(),

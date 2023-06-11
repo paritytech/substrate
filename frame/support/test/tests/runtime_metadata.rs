@@ -107,7 +107,7 @@ sp_api::impl_runtime_apis! {
 		fn execute_block(_: Block) {
 			unimplemented!()
 		}
-		fn initialize_block(_: &<Block as BlockT>::Header) {
+		fn initialize_block(_: &<Block as sp_runtime::traits::HeaderProvider>::Header) {
 			unimplemented!()
 		}
 	}
@@ -204,7 +204,7 @@ fn runtime_metadata() {
 					name: "initialize_block",
 					inputs: vec![RuntimeApiMethodParamMetadataIR::<MetaForm> {
 						name: "header",
-						ty: meta_type::<&<Block as BlockT>::Header>(),
+						ty: meta_type::<&<Block as sp_runtime::traits::HeaderProvider>::Header>(),
 					}],
 					output: meta_type::<()>(),
 					docs: maybe_docs(vec![" Initialize a block with the given header."]),
