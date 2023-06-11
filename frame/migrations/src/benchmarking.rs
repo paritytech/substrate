@@ -49,7 +49,7 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn on_init_base() {
+	fn on_init_base() { // FAIL-CI
 		Cursor::<T>::set(Some(cursor::<T>()));
 		System::<T>::set_block_number(1u32.into());
 
