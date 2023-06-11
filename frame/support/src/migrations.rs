@@ -36,13 +36,11 @@ use sp_std::vec::Vec;
 /// takes care of version handling using best practices.
 ///
 /// It takes 4 type parameters:
-/// - `Version`: The version being upgraded *from*.
+/// - `From`: The version being upgraded from.
+/// - `To`: The version being upgraded to.
 /// - `Inner`: An implementation of `OnRuntimeUpgrade`.
 /// - `Pallet`: The Pallet being upgraded.
 /// - `Weight`: The runtime's RuntimeDbWeight implementation.
-///
-/// `Version` is used to check if the migration should be run. If it is run, the pallets on-chain
-/// version is incremented.
 ///
 /// Example:
 /// ```ignore
@@ -50,13 +48,15 @@ use sp_std::vec::Vec;
 /// pub type Migrations = (
 /// 	// ...other migrations
 /// 	VersionedRuntimeUpgrade<
-/// 		Const16<4>, // V4ToV5
+/// 		Const16<4>, // From on-chain version 4
+/// 		Const16<5>, // To on-chain version 5
 /// 		parachains_configuration::migration::v5::MigrateToV5<Runtime>,
 /// 		Configuration,
 /// 		RocksDbWeight,
 /// 	>,
 /// 	VersionedRuntimeUpgrade<
-/// 		Const16<5>, // V5ToV6
+/// 		Const16<5>, // From on-chain version 5
+/// 		Const16<7>, // To on-chain version 7
 /// 		parachains_configuration::migration::v6::MigrateToV6<Runtime>,
 /// 		Configuration,
 /// 		RocksDbWeight,
@@ -64,8 +64,8 @@ use sp_std::vec::Vec;
 /// 	// ...other migrations
 /// );
 /// ```
-pub struct VersionedRuntimeUpgrade<Version, Inner, Pallet, Weight> {
-	_marker: PhantomData<(Version, Inner, Pallet, Weight)>,
+pub struct VersionedRuntimeUpgrade<From, To, Inner, Pallet, Weight> {
+	_marker: PhantomData<(From, To, Inner, Pallet, Weight)>,
 }
 
 /// Implementation of the `OnRuntimeUpgrade` trait for `VersionedRuntimeUpgrade`.
@@ -75,14 +75,15 @@ pub struct VersionedRuntimeUpgrade<Version, Inner, Pallet, Weight> {
 /// misconfigured before returning `Inner::pre_upgrade`.
 ///
 /// 2. Performs the actual runtime upgrade in `on_runtime_upgrade` only if the on-chain version of
-/// the pallets storage matches `Version`. If the versions do not match, it writes a log notifying
-/// the developer that the migration is a noop.
+/// the pallets storage matches `From`, and after the upgrade sets the on-chian storage to `To`. If
+/// the versions do not match, it writes a log notifying the developer that the migration is a noop.
 impl<
-		Version: Get<u16>,
+		From: Get<u16>,
+		To: Get<u16>,
 		Inner: OnRuntimeUpgrade,
 		Pallet: GetStorageVersion<CurrentStorageVersion = StorageVersion> + PalletInfoAccess,
 		DbWeight: Get<RuntimeDbWeight>,
-	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<Version, Inner, Pallet, DbWeight>
+	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<From, To, Inner, Pallet, DbWeight>
 {
 	/// VersionedRuntimeUpgrade pre-upgrade checks.
 	///
@@ -91,10 +92,12 @@ impl<
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		let current_version = Pallet::current_storage_version();
-		if current_version < Version::get() + 1 {
+		if current_version < To::get() {
 			log::warn!(
-				"Pallet '{}' appears to be misconfigured: its version is less than the on-chain version that will be set by this VersionedRuntimeUpgrade. Please ensure the pallet version is set correctly.",
-				Pallet::name()
+				"Pallet '{}' appears to be misconfigured: its version ({:?}) is less than the on-chain version that will be set by this VersionedRuntimeUpgrade ({}). Please ensure the pallet version is set correctly.",
+				Pallet::name(),
+				current_version,
+				To::get(),
 			);
 		}
 
@@ -109,20 +112,19 @@ impl<
 	/// migration is a noop.
 	fn on_runtime_upgrade() -> Weight {
 		let on_chain_version = Pallet::on_chain_storage_version();
-		if on_chain_version == Version::get() {
+		if on_chain_version == From::get() {
 			// Execute the migration
 			let weight = Inner::on_runtime_upgrade();
 
 			// Update the on-chain version
-			let next = StorageVersion::new(Version::get() + 1);
-			next.put::<Pallet>();
+			StorageVersion::new(To::get()).put::<Pallet>();
 
 			weight.saturating_add(DbWeight::get().reads_writes(1, 1))
 		} else {
 			log::warn!(
 				"{} VersionedOnRuntimeUpgrade {:?} skipped because current on-chain version is {:?}.",
 				Pallet::name(),
-				Version::get(),
+				From::get(),
 				on_chain_version
 			);
 			DbWeight::get().reads(1)
