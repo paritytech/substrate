@@ -29,8 +29,8 @@
 //!
 //! ### Example
 //!
-//! This example demonstrates a simple mocked walk through of a basic success scenario. The pallet is
-//! configured with two migrations: one succeeding after just one step, and the second one
+//! This example demonstrates a simple mocked walk through of a basic success scenario. The pallet
+//! is configured with two migrations: one succeeding after just one step, and the second one
 //! succeeding after two steps. A runtime upgrade is then enacted and the block number is advanced
 //! until all migrations finish executing. Afterwards, the recorded historic migrations are
 //! checked and events are asserted.
@@ -50,8 +50,8 @@
 //! 1. Must automatically execute migrations over multiple blocks.
 //! 2. Must prevent other (non-mandatory) transactions to execute in the meantime.
 //! 3. Must respect pessimistic weight bounds of migrations.
-//! 4. Must execute migrations in order. Skipping is not allowed; migrations are run on an all-or-nothing basis.
-//! 5. Must prevent re-execution of migrations.
+//! 4. Must execute migrations in order. Skipping is not allowed; migrations are run on an
+//! all-or-nothing basis. 5. Must prevent re-execution of migrations.
 //! 6. Must provide transactional storage semantics for migrations.
 //! 7. Must guarantee progress.
 //!
@@ -84,12 +84,12 @@
 //! the error case (Goal 6).  
 //! Weight limits must be checked by the migration itself. The pallet provides a [`WeightMeter`] for
 //! that purpose. The pallet may return [`SteppedMigrationError::InsufficientWeight`] at any point.
-//! In that scenario, the one of two things will happen: if that migration was exclusively executed in
-//! this block, and therefore required more than the maximum amount of weight possible, the pallet becomes `Stuck`.
-//! Otherwise one re-attempt is attempted with the same logic in the next block (Goal 3).  
-//! Progress through the migrations is guaranteed by providing a timeout for each migration via
-//! [`SteppedMigration::max_steps`]. The pallet **ONLY** guarantees progress if this is set to
-//! sensible limits (Goal 7).
+//! In that scenario, the one of two things will happen: if that migration was exclusively executed
+//! in this block, and therefore required more than the maximum amount of weight possible, the
+//! pallet becomes `Stuck`. Otherwise one re-attempt is attempted with the same logic in the next
+//! block (Goal 3). Progress through the migrations is guaranteed by providing a timeout for each
+//! migration via [`SteppedMigration::max_steps`]. The pallet **ONLY** guarantees progress if this
+//! is set to sensible limits (Goal 7).
 //!
 //! ### Scenario: Governance cleanup
 //!
@@ -104,18 +104,19 @@
 //! error tolerance, check their weight bounds and have a unique identifier.  
 //! 2. The runtime upgrade is enacted. `UpgradeStarted` events are followed by lots of
 //! `MigrationAdvanced` events. Finally `UpgradeCompleted` is emitted.  
-//! 3. Cleanup as described in the governance scenario be executed at any time after the migration completes.
+//! 3. Cleanup as described in the governance scenario be executed at any time after the migration
+//! completes.
 //!
 //! ### Advice: Failed upgrades
 //!
 //! Failed upgrades cannot recovered from automatically and require governance intervention. Set up
-//! monitoring for `UpgradeFailed` events to be made aware of any failures. The hook [`UpgradeStatusHandler::failed`]
-//! should be setup in a way that it allows governance to act, but still prevent other transactions
-//! from interacting with the inconsistent storage state. Note that this is paramount, since the
-//! inconsistent state might contain a faulty balance amount or similar that could cause great harm if
-//! user transactions don't remain suspended. One way to implement this would be to use the
-//! `SafeMode` or `TxPause` pallets that can prevent most user interactions but still allow a
-//! whitelisted set of governance calls.
+//! monitoring for `UpgradeFailed` events to be made aware of any failures. The hook
+//! [`UpgradeStatusHandler::failed`] should be setup in a way that it allows governance to act, but
+//! still prevent other transactions from interacting with the inconsistent storage state. Note that
+//! this is paramount, since the inconsistent state might contain a faulty balance amount or similar
+//! that could cause great harm if user transactions don't remain suspended. One way to implement
+//! this would be to use the `SafeMode` or `TxPause` pallets that can prevent most user interactions
+//! but still allow a whitelisted set of governance calls.
 //!
 //! ### Remark: Failed migrations
 //!
@@ -126,8 +127,8 @@
 //! ### Remark: Transactional processing
 //!
 //! You can see the transactional semantics for migrational steps as mostly useless, since in the
-//! stuck case the state is already messed up. This just prevents it from becoming even more messed up
-//! , but doesn't prevent it in the first place.
+//! stuck case the state is already messed up. This just prevents it from becoming even more messed
+//! up , but doesn't prevent it in the first place.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -223,8 +224,8 @@ pub mod pallet {
 
 		/// All the multi-block migrations to run.
 		///
-		/// Should only be updated in a runtime-upgrade once all the old migrations have completed. (Check
-		/// that `Cursor` is `None`).
+		/// Should only be updated in a runtime-upgrade once all the old migrations have completed.
+		/// (Check that `Cursor` is `None`).
 		type Migrations: Get<MigrationsOf<Self>>;
 
 		/// The cursor type that is shared across all migrations.

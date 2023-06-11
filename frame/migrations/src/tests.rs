@@ -36,7 +36,14 @@ fn simple_works() {
 		run_to_block(10);
 
 		// Check that the executed migrations are recorded in `Historical`.
-		assert_eq!(historic(), vec![mocked_id(SucceedAfter, 0), mocked_id(SucceedAfter, 1), mocked_id(SucceedAfter, 2),]);
+		assert_eq!(
+			historic(),
+			vec![
+				mocked_id(SucceedAfter, 0),
+				mocked_id(SucceedAfter, 1),
+				mocked_id(SucceedAfter, 2),
+			]
+		);
 		// Check that we got all events.
 		assert_events(vec![
 			UpgradeStarted { migrations: 3 },
