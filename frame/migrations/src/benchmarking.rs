@@ -91,7 +91,7 @@ mod benches {
 
 	fn cursor<T: Config>() -> MigrationCursor<T::Cursor, T::BlockNumber> {
 		// Note: The weight of a function can depend on the weight of reading the `inner_cursor`.
-		// `Cursor` is a user provided type. Now instead of requeuing something like `Cursor:
+		// `Cursor` is a user provided type. Now instead of requiring something like `Cursor:
 		// From<u32>`, we instead rely on the fact that it is MEL and the PoV benchmarking will
 		// therefore already take the MEL bound, even when the cursor in storage is `None`.
 		MigrationCursor::Active(ActiveCursor {

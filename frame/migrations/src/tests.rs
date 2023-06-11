@@ -28,14 +28,14 @@ use frame_support::traits::OnRuntimeUpgrade;
 fn simple_works() {
 	use Event::*;
 	test_closure(|| {
-		// Add three migrations. Each taking one block longer.
-		MigrationsStorage::set(vec![(SucceedAfter, 1), (SucceedAfter, 2)]);
+		// Add three migrations, each taking one block longer than the last.
+		MigrationsStorage::set(vec![(SucceedAfter, 0), (SucceedAfter, 1), (SucceedAfter, 2)]);
 
 		System::set_block_number(1);
 		Migrations::on_runtime_upgrade();
 		run_to_block(10);
 
-		// Check that the executed migrations are recorded into `Historical`.
+		// Check that the executed migrations are recorded in `Historical`.
 		assert_eq!(historic(), vec![mocked_id(SucceedAfter, 1), mocked_id(SucceedAfter, 2),]);
 		// Check that we got all events.
 		assert_events(vec![

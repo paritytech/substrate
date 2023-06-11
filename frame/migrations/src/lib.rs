@@ -23,17 +23,17 @@
 //!
 //! ## Overview
 //!
-//! The pallet takes care of execution a batch of multi-step migrations over multiple blocks. The
-//! process starts on each runtime upgrade. Normal and operational transactions are pause while this
-//! is on-going.
+//! The pallet takes care of executing a batch of multi-step migrations over multiple blocks. The
+//! process starts on each runtime upgrade. Normal and operational transactions are paused while
+//! migrations are on-going.
 //!
 //! ### Example
 //!
-//! This example demonstrates a simple mocked walk through the basis success path. The pallet is
+//! This example demonstrates a simple mocked walk through of a basic success scenario. The pallet is
 //! configured with two migrations: one succeeding after just one step, and the second one
 //! succeeding after two steps. A runtime upgrade is then enacted and the block number is advanced
-//! until all migrations had time to execute. Afterwards the recorded historic migrations are
-//! checked and the events are asserted.
+//! until all migrations finish executing. Afterwards, the recorded historic migrations are
+//! checked and events are asserted.
 #![doc = docify::embed!("frame/migrations/src/tests.rs", simple_works)]
 //!
 //! ## Pallet API
@@ -50,7 +50,7 @@
 //! 1. Must automatically execute migrations over multiple blocks.
 //! 2. Must prevent other (non-mandatory) transactions to execute in the meantime.
 //! 3. Must respect pessimistic weight bounds of migrations.
-//! 4. Must execute migrations in order. Skipping is not allowed; rather an all-or-nothing.
+//! 4. Must execute migrations in order. Skipping is not allowed; migrations are run on an all-or-nothing basis.
 //! 5. Must prevent re-execution of migrations.
 //! 6. Must provide transactional storage semantics for migrations.
 //! 7. Must guarantee progress.
@@ -67,27 +67,27 @@
 //! store its inner state and advance. Each time when the migration returns `Some(cursor)`, it
 //! signals the pallet that it is not done yet.   
 //! The cursor is re-set on each runtime upgrade. This ensures that it starts to execute at the
-//! first migration of the vector. The pallets cursor is only ever incremented and put into `Stuck`
+//! first migration in the vector. The pallets cursor is only ever incremented or put into `Stuck`
 //! once it encounters an error (Goal 4). Once in the stuck state, the pallet will stay stuck until
-//! it is resolved through manual intervention.  
-//! As soon as the cursor of the pallet becomes `Some(_)`; the transaction processing will be paused
-//! by returning `true` from [`ExtrinsicSuspenderQuery::is_suspended`]. This ensures that no other
-//! transactions are processed until the pallet is done (Goal 2).  
+//! it is fixed through manual governance intervention.  
+//! As soon as the cursor of the pallet becomes `Some(_)`; chain transaction processing is paused
+//! by [`ExtrinsicSuspenderQuery::is_suspended`] returning `true`. This ensures that no other
+//! transactions are processed until all migrations are complete (Goal 2).  
 //! `on_initialize` the pallet will load the current migration and check whether it was already
 //! executed in the past by checking for membership of its ID in the `Historic` set. Historic
-//! migrations are ignored without causing an error. Each successfully executed migration is added
+//! migrations are skipped without causing an error. Each successfully executed migration is added
 //! to this set (Goal 5).  
-//! This proceeds until no more migrations can be loaded. This causes event `UpgradeCompleted` to be
+//! This proceeds until no more migrations remain. At that point, the event `UpgradeCompleted` is
 //! emitted (Goal 1).  
-//! The execution of each migrations happens by calling [`SteppedMigration::transactional_step`].
+//! The execution of each migration happens by calling [`SteppedMigration::transactional_step`].
 //! This function wraps the inner `step` function into a transactional layer to allow rollback in
 //! the error case (Goal 6).  
 //! Weight limits must be checked by the migration itself. The pallet provides a [`WeightMeter`] for
-//! that cause. The pallet may return [`SteppedMigrationError::InsufficientWeight`] at any point.
-//! The pallet will react to this with a case decision: if that migration was exclusively execute in
-//! this block, and therefore got the maximal amount of weight possible, the pallet becomes `Stuck`.
-//! Otherwise one re-attempt is done with the same logic in the next block (Goal 3).  
-//! Progress of the pallet is guaranteed by providing once: a timeout for each migration via
+//! that purpose. The pallet may return [`SteppedMigrationError::InsufficientWeight`] at any point.
+//! In that scenario, the one of two things will happen: if that migration was exclusively executed in
+//! this block, and therefore required more than the maximum amount of weight possible, the pallet becomes `Stuck`.
+//! Otherwise one re-attempt is attempted with the same logic in the next block (Goal 3).  
+//! Progress through the migrations is guaranteed by providing a timeout for each migration via
 //! [`SteppedMigration::max_steps`]. The pallet **ONLY** guarantees progress if this is set to
 //! sensible limits (Goal 7).
 //!
@@ -102,32 +102,32 @@
 //! The standard procedure for a successful runtime upgrade can look like this:
 //! 1. Migrations are configured in the `Migrations` config item. All migrations expose `max_steps`,
 //! error tolerance, check their weight bounds and have a unique identifier.  
-//! 2. The runtime upgrade is enacted. Events `UpgradeStarted` is followed by lots of
-//! `MigrationAdvanced`. Finally an `UpgradeCompleted` is emitted.  
-//! 3. Cleanup as described on the governance scenario can happen at any time.
+//! 2. The runtime upgrade is enacted. `UpgradeStarted` events are followed by lots of
+//! `MigrationAdvanced` events. Finally `UpgradeCompleted` is emitted.  
+//! 3. Cleanup as described in the governance scenario be executed at any time after the migration completes.
 //!
 //! ### Advice: Failed upgrades
 //!
-//! Failed upgrade cannot automatically be handled but requires governance intervention. Set up
-//! monitoring for event `UpgradeFailed` to act in this case. Hook [`UpgradeStatusHandler::failed`]
+//! Failed upgrades cannot recovered from automatically and require governance intervention. Set up
+//! monitoring for `UpgradeFailed` events to be made aware of any failures. The hook [`UpgradeStatusHandler::failed`]
 //! should be setup in a way that it allows governance to act, but still prevent other transactions
 //! from interacting with the inconsistent storage state. Note that this is paramount, since the
-//! inconsistent state might contain faulty balance amount or similar that could cause great harm if
+//! inconsistent state might contain a faulty balance amount or similar that could cause great harm if
 //! user transactions don't remain suspended. One way to implement this would be to use the
 //! `SafeMode` or `TxPause` pallets that can prevent most user interactions but still allow a
 //! whitelisted set of governance calls.
 //!
 //! ### Remark: Failed migrations
 //!
-//! Failed migrations are not added to the `Historic` blacklist. This means that an erroneous
-//! migration must be removed of fixed manually. This already applies - even before taking the
-//! historic set into account.
+//! Failed migrations are not added to the `Historic` set. This means that an erroneous
+//! migration must be removed and fixed manually. This already applies, even before considering the
+//! historic set.
 //!
 //! ### Remark: Transactional processing
 //!
 //! You can see the transactional semantics for migrational steps as mostly useless, since in the
-//! stuck case the state is already messed up. This just prevents it from getting messed up even
-//! more, but does not prevent it in the first place.
+//! stuck case the state is already messed up. This just prevents it from becoming even more messed up
+//! , but doesn't prevent it in the first place.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -223,8 +223,8 @@ pub mod pallet {
 
 		/// All the multi-block migrations to run.
 		///
-		/// Should only be updated in a runtime-upgrade once all the old ones have completed. (Check
-		/// `Cursor` for `None`).
+		/// Should only be updated in a runtime-upgrade once all the old migrations have completed. (Check
+		/// that `Cursor` is `None`).
 		type Migrations: Get<MigrationsOf<Self>>;
 
 		/// The cursor type that is shared across all migrations.
@@ -247,7 +247,7 @@ pub mod pallet {
 
 	/// The currently active migration to run and its cursor.
 	///
-	/// `None` indicates that no migration process is running.
+	/// `None` indicates that no migration is running.
 	#[pallet::storage]
 	pub type Cursor<T: Config> = StorageValue<_, CursorOf<T>, OptionQuery>;
 
@@ -374,11 +374,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Clear the entries of the `Historic` set.
+		/// Clears the `Historic` set.
 		///
-		/// the `map_cursor` must be set to the last value that was returned by the
+		/// `map_cursor` must be set to the last value that was returned by the
 		/// `HistoricCleared` event. The first time `None` can be used. `limit` must be chosen in a
-		/// way to result in a sensible weight.
+		/// way that will result in a sensible weight.
 		#[pallet::call_index(1)]
 		#[pallet::weight({0})] // FAIL-CI
 		pub fn clear_historic(
@@ -425,14 +425,14 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::MigrationAdvanced { index: cursor.index, blocks });
 				cursor.inner_cursor = Some(next_cursor);
 
-				// We only do one step per block.
+				// We only progress one step per block.
 				if migration.max_steps().map_or(false, |max| blocks > max.into()) {
 					Self::deposit_event(Event::MigrationFailed { index: cursor.index, blocks });
 					Self::deposit_event(Event::UpgradeFailed);
 					Cursor::<T>::set(Some(MigrationCursor::Stuck));
 					None
 				} else {
-					// A migration has to make maximal progress per step, we therefore break.
+					// A migration cannot progress more than one step per block, we therefore break.
 					Some(ControlFlow::Break(cursor))
 				}
 			},
