@@ -35,7 +35,7 @@ use sp_std::vec::Vec;
 /// and setting storage versions. Instead, the developer wraps their migration in this struct which
 /// takes care of version handling using best practices.
 ///
-/// It takes 4 type parameters:
+/// It takes 5 type parameters:
 /// - `From`: The version being upgraded from.
 /// - `To`: The version being upgraded to.
 /// - `Inner`: An implementation of `OnRuntimeUpgrade`.
