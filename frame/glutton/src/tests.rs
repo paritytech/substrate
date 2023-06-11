@@ -98,11 +98,11 @@ fn setting_compute_works() {
 		);
 
 		assert_noop!(
-			Glutton::set_compute(RuntimeOrigin::signed(1), FixedU64::from_float(0.3)),
+			Glutton::set_compute(RuntimeOrigin::signed(1), FixedU64::from_float(0.5)),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			Glutton::set_compute(RuntimeOrigin::none(), FixedU64::from_float(0.3)),
+			Glutton::set_compute(RuntimeOrigin::none(), FixedU64::from_float(0.5)),
 			DispatchError::BadOrigin
 		);
 	});
@@ -135,11 +135,11 @@ fn setting_storage_works() {
 		);
 
 		assert_noop!(
-			Glutton::set_storage(RuntimeOrigin::signed(1), FixedU64::from_float(0.3)),
+			Glutton::set_storage(RuntimeOrigin::signed(1), FixedU64::from_float(0.5)),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			Glutton::set_storage(RuntimeOrigin::none(), FixedU64::from_float(0.3)),
+			Glutton::set_storage(RuntimeOrigin::none(), FixedU64::from_float(0.5)),
 			DispatchError::BadOrigin
 		);
 	});
