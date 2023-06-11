@@ -159,6 +159,7 @@ where
 {
 	let mut stdio_reader = tokio::io::BufReader::new(stream).lines();
 	while let Ok(Some(line)) = stdio_reader.next_line().await {
+		println!("{:?}", line.as_str());
 		match re.find(line.as_str()) {
 			Some(_) => return Ok(()),
 			None => (),
@@ -177,7 +178,8 @@ pub async fn wait_n_finalized_blocks(n: usize, url: &str) {
 	use substrate_rpc_client::{ws_client, ChainApi};
 
 	let mut built_blocks = std::collections::HashSet::new();
-	let mut interval = tokio::time::interval(Duration::from_secs(2));
+	let block_duration = Duration::from_secs(2);
+	let mut interval = tokio::time::interval(block_duration);
 	let rpc = ws_client(url).await.unwrap();
 
 	loop {
