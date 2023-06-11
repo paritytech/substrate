@@ -36,7 +36,7 @@ pub struct RoyaltyDetails<AccountId> {
 	/// Royalty percentage for item.
 	pub royalty_recipient_percentage: Permill,
 
-	/// Admin of the royalty.
+	/// Account beneficiary of the royalty.
 	pub royalty_recipient: AccountId,
 }
 /// Stores the details of an item with royalty.
@@ -49,7 +49,8 @@ pub struct RoyaltyConfig<AccountId, BalanceOf, MaxRecipients: Get<u32>> {
 	/// Admin of the royalty.
 	pub royalty_admin: AccountId,
 
-	/// List of account that the royalty will go to.
+	/// List of accounts that the royalty will go to and its correspondent 
+	/// percentage of the royalties.
 	pub recipients: BoundedVec<RoyaltyDetails<AccountId>, MaxRecipients>,
 
 	/// The amount held in reserve of the `depositor`,
