@@ -317,7 +317,7 @@ impl<
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin(a: &A) -> Result<O, ()> {
-		Inner::try_successful_origin(Morph::try_morph(a).map_err(|_| ())?)
+		Inner::try_successful_origin(&Morph::try_morph(a).map_err(|_| ())?)
 	}
 }
 
