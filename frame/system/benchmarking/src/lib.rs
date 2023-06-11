@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_benchmarking::v1::{benchmarks, whitelisted_caller};
 use frame_support::{dispatch::DispatchClass, storage, traits::Get};
 use frame_system::{Call, Pallet as System, RawOrigin};
 use sp_core::storage::well_known_keys;
@@ -48,9 +48,12 @@ benchmarks! {
 	set_heap_pages {
 	}: _(RawOrigin::Root, Default::default())
 
-	// `set_code` was not benchmarked because it is pretty hard to come up with a real
-	// Wasm runtime to test the upgrade with. But this is okay because we will make
-	// `set_code` take a full block anyway.
+	set_code {
+		let runtime_blob = include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec();
+	}: _(RawOrigin::Root, runtime_blob)
+	verify {
+		System::<T>::assert_last_event(frame_system::Event::<T>::CodeUpdated.into());
+	}
 
 	#[extra]
 	set_code_without_checks {

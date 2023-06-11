@@ -1,4 +1,4 @@
-// Copyright 2020 Parity Technologies (UK) Ltd.
+// Copyright Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,21 +18,21 @@
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::schema::v1::{KeyValueStateEntry, StateEntry, StateRequest, StateResponse};
+
 use codec::{Decode, Encode};
-use futures::{
-	channel::{mpsc, oneshot},
-	stream::StreamExt,
-};
+use futures::{channel::oneshot, stream::StreamExt};
 use libp2p::PeerId;
 use log::{debug, trace};
 use lru::LruCache;
 use prost::Message;
+
 use sc_client_api::{BlockBackend, ProofProvider};
-use sc_network_common::{
+use sc_network::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 };
 use sp_runtime::traits::Block as BlockT;
+
 use std::{
 	hash::{Hash, Hasher},
 	num::NonZeroUsize,
@@ -45,7 +45,7 @@ const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024; // Actual reponse may be bigg
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new(i32::MIN, "Same state request multiple times");
@@ -91,7 +91,7 @@ struct SeenRequestsKey<B: BlockT> {
 	start: Vec<Vec<u8>>,
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl<B: BlockT> Hash for SeenRequestsKey<B> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.peer.hash(state);
@@ -111,7 +111,7 @@ enum SeenRequestsValue {
 /// Handler for incoming block requests from a remote peer.
 pub struct StateRequestHandler<B: BlockT, Client> {
 	client: Arc<Client>,
-	request_receiver: mpsc::Receiver<IncomingRequest>,
+	request_receiver: async_channel::Receiver<IncomingRequest>,
 	/// Maps from request to number of times we have seen this request.
 	///
 	/// This is used to check if a peer is spamming us with the same request.
@@ -132,7 +132,7 @@ where
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
 		// number of peers.
-		let (tx, request_receiver) = mpsc::channel(num_peer_hint);
+		let (tx, request_receiver) = async_channel::bounded(num_peer_hint);
 
 		let mut protocol_config = generate_protocol_config(
 			protocol_id,

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -46,7 +46,6 @@ pub struct OffchainWorkerCmd {
 impl OffchainWorkerCmd {
 	fn header_ws_uri<Block: BlockT>(&self) -> String
 	where
-		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		match (&self.header_ws_uri, &self.state) {
@@ -70,7 +69,6 @@ pub(crate) async fn offchain_worker<Block, HostFns>(
 where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Header: serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
@@ -78,7 +76,7 @@ where
 {
 	let executor = build_executor(&shared);
 	// we first build the externalities with the remote code.
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None).await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
 	let header_ws_uri = command.header_ws_uri::<Block>();
 
@@ -97,7 +95,7 @@ where
 		&executor,
 		"OffchainWorkerApi_offchain_worker",
 		&payload,
-		full_extensions(),
+		full_extensions(executor.clone()),
 	)?;
 
 	Ok(())

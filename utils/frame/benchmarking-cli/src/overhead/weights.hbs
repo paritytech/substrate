@@ -35,7 +35,7 @@ parameter_types! {
 	///   95th: {{underscore stats.p95}}
 	///   75th: {{underscore stats.p75}}
 	pub const {{long_name}}Weight: Weight =
-		Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul({{underscore weight}}));
+		Weight::from_parts(WEIGHT_REF_TIME_PER_NANOS.saturating_mul({{underscore weight}}), 0);
 }
 
 #[cfg(test)]

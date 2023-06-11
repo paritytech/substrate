@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -326,12 +326,10 @@ mod tests {
 	use super::*;
 	use libp2p::PeerId;
 	use sc_client_db::offchain::LocalStorage;
-	use sc_network_common::{
-		config::MultiaddrWithPeerId,
-		protocol::ProtocolName,
-		service::{NetworkPeers, NetworkStateInfo},
+	use sc_network::{
+		config::MultiaddrWithPeerId, types::ProtocolName, NetworkPeers, NetworkStateInfo,
+		ReputationChange,
 	};
-	use sc_peerset::ReputationChange;
 	use sp_core::offchain::{DbExternalities, Externalities};
 	use std::time::SystemTime;
 
@@ -394,18 +392,6 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_to_peers_set(
-			&self,
-			_protocol: ProtocolName,
-			_peers: HashSet<Multiaddr>,
-		) -> Result<(), String> {
-			unimplemented!();
-		}
-
-		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
-			unimplemented!();
-		}
-
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
 		}
@@ -418,6 +404,10 @@ mod tests {
 
 		fn local_peer_id(&self) -> PeerId {
 			PeerId::random()
+		}
+
+		fn listen_addresses(&self) -> Vec<Multiaddr> {
+			Vec::new()
 		}
 	}
 

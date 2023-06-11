@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,7 +39,6 @@ pub mod logger {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::call]
@@ -149,6 +148,7 @@ impl logger::Config for Test {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
+	type WeightInfo = ();
 }
 
 // New types for dispatchable functions.
@@ -162,4 +162,9 @@ pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 		.assimilate_storage(&mut t)
 		.unwrap();
 	t.into()
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub fn new_bench_ext() -> sp_io::TestExternalities {
+	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }

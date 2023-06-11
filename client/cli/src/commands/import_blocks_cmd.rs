@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -41,7 +41,6 @@ pub struct ImportBlocksCmd {
 	pub input: Option<PathBuf>,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
-	///
 	/// Don't alter this unless you know what you're doing.
 	#[arg(long, value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,

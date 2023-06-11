@@ -5,7 +5,7 @@ error: `Pallet` does not have #[pallet::call] defined, perhaps you should remove
    |   ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
 49 | / construct_runtime! {
-50 | |     pub enum Runtime where
+50 | |     pub struct Runtime where
 51 | |         Block = Block,
 52 | |         NodeBlock = Block,
 ...  |

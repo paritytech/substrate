@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 use crate::Config;
 use codec::{Decode, Encode};
-use frame_support::dispatch::DispatchInfo;
+use frame_support::{dispatch::DispatchInfo, DefaultNoBound};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, SignedExtension},
@@ -28,9 +28,9 @@ use sp_runtime::{
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// Check to ensure that the sender is not the zero address.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, DefaultNoBound, Clone, Eq, PartialEq, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct CheckNonZeroSender<T: Config + Send + Sync>(PhantomData<T>);
+pub struct CheckNonZeroSender<T>(PhantomData<T>);
 
 impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckNonZeroSender<T> {
 	#[cfg(feature = "std")]

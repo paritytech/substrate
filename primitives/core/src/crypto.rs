@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,31 +19,29 @@
 //! Cryptographic utilities.
 // end::description[]
 
-#[cfg(feature = "std")]
-use crate::hexdisplay::HexDisplay;
 use crate::{ed25519, sr25519};
 #[cfg(feature = "std")]
-use base58::{FromBase58, ToBase58};
+use bip39::{Language, Mnemonic, MnemonicType};
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use rand::{rngs::OsRng, RngCore};
 #[cfg(feature = "std")]
 use regex::Regex;
 use scale_info::TypeInfo;
-/// Trait for accessing reference to `SecretString`.
-pub use secrecy::ExposeSecret;
-/// A store for sensitive data.
 #[cfg(feature = "std")]
-pub use secrecy::SecretString;
+pub use secrecy::{ExposeSecret, SecretString};
 use sp_runtime_interface::pass_by::PassByInner;
 #[doc(hidden)]
 pub use sp_std::ops::Deref;
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+use sp_std::{
+	alloc::{format, string::String},
+	vec,
+};
 use sp_std::{hash::Hash, str, vec::Vec};
+pub use ss58_registry::{from_known_address_format, Ss58AddressFormat, Ss58AddressFormatRegistry};
 /// Trait to zeroize a memory buffer.
 pub use zeroize::Zeroize;
-
-#[cfg(feature = "full_crypto")]
-pub use ss58_registry::{from_known_address_format, Ss58AddressFormat, Ss58AddressFormatRegistry};
 
 /// The root phrase for our publicly known keys.
 pub const DEV_PHRASE: &str =
@@ -52,13 +50,8 @@ pub const DEV_PHRASE: &str =
 /// The address of the associated root phrase for our publicly known keys.
 pub const DEV_ADDRESS: &str = "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV";
 
-/// The infallible type.
-#[derive(crate::RuntimeDebug)]
-pub enum Infallible {}
-
 /// The length of the junction identifier. Note that this is also referred to as the
 /// `CHAIN_CODE_LENGTH` in the context of Schnorrkel.
-#[cfg(feature = "full_crypto")]
 pub const JUNCTION_ID_LEN: usize = 32;
 
 /// Similar to `From`, except that the onus is on the part of the caller to ensure
@@ -108,11 +101,21 @@ pub enum SecretStringError {
 	InvalidPath,
 }
 
+/// An error when deriving a key.
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "full_crypto")]
+pub enum DeriveError {
+	/// A soft key was found in the path (and is unsupported).
+	#[cfg_attr(feature = "std", error("Soft key in path"))]
+	SoftKeyInPath,
+}
+
 /// A since derivation junction description. It is the single parameter used when creating
 /// a new secret key from an existing secret key and, in the case of `SoftRaw` and `SoftIndex`
 /// a new public key from an existing public key.
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Encode, Decode)]
-#[cfg(feature = "full_crypto")]
+#[cfg(any(feature = "full_crypto", feature = "serde"))]
 pub enum DeriveJunction {
 	/// Soft (vanilla) derivation. Public keys have a correspondent derivation.
 	Soft([u8; JUNCTION_ID_LEN]),
@@ -120,7 +123,7 @@ pub enum DeriveJunction {
 	Hard([u8; JUNCTION_ID_LEN]),
 }
 
-#[cfg(feature = "full_crypto")]
+#[cfg(any(feature = "full_crypto", feature = "serde"))]
 impl DeriveJunction {
 	/// Consume self to return a soft derive junction with the same chain code.
 	pub fn soften(self) -> Self {
@@ -179,7 +182,7 @@ impl DeriveJunction {
 	}
 }
 
-#[cfg(feature = "full_crypto")]
+#[cfg(any(feature = "full_crypto", feature = "serde"))]
 impl<T: AsRef<str>> From<T> for DeriveJunction {
 	fn from(j: T) -> DeriveJunction {
 		let j = j.as_ref();
@@ -207,7 +210,7 @@ impl<T: AsRef<str>> From<T> for DeriveJunction {
 #[cfg_attr(not(feature = "std"), derive(Debug))]
 #[derive(Clone, Copy, Eq, PartialEq)]
 #[allow(missing_docs)]
-#[cfg(feature = "full_crypto")]
+#[cfg(any(feature = "full_crypto", feature = "serde"))]
 pub enum PublicError {
 	#[cfg_attr(feature = "std", error("Base 58 requirement is violated"))]
 	BadBase58,
@@ -246,7 +249,6 @@ impl sp_std::fmt::Debug for PublicError {
 ///
 /// See <https://docs.substrate.io/v3/advanced/ss58/>
 /// for information on the codec.
-#[cfg(feature = "full_crypto")]
 pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 	/// A format filterer, can be used to ensure that `from_ss58check` family only decode for
 	/// allowed identifiers. By default just refuses the two reserved identifiers.
@@ -255,7 +257,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 	}
 
 	/// Some if the string is a properly encoded SS58Check address.
-	#[cfg(feature = "std")]
+	#[cfg(feature = "serde")]
 	fn from_ss58check(s: &str) -> Result<Self, PublicError> {
 		Self::from_ss58check_with_version(s).and_then(|(r, v)| match v {
 			v if !v.is_custom() => Ok(r),
@@ -265,12 +267,12 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 	}
 
 	/// Some if the string is a properly encoded SS58Check address.
-	#[cfg(feature = "std")]
+	#[cfg(feature = "serde")]
 	fn from_ss58check_with_version(s: &str) -> Result<(Self, Ss58AddressFormat), PublicError> {
 		const CHECKSUM_LEN: usize = 2;
 		let body_len = Self::LEN;
 
-		let data = s.from_base58().map_err(|_| PublicError::BadBase58)?;
+		let data = bs58::decode(s).into_vec().map_err(|_| PublicError::BadBase58)?;
 		if data.len() < 2 {
 			return Err(PublicError::BadLength)
 		}
@@ -320,7 +322,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 	}
 
 	/// Return the ss58-check string for this key.
-	#[cfg(feature = "std")]
+	#[cfg(feature = "serde")]
 	fn to_ss58check_with_version(&self, version: Ss58AddressFormat) -> String {
 		// We mask out the upper two bits of the ident - SS58 Prefix currently only supports 14-bits
 		let ident: u16 = u16::from(version) & 0b0011_1111_1111_1111;
@@ -339,11 +341,11 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
 		v.extend(&r[0..2]);
-		v.to_base58()
+		bs58::encode(v).into_string()
 	}
 
 	/// Return the ss58-check string for this key.
-	#[cfg(feature = "std")]
+	#[cfg(feature = "serde")]
 	fn to_ss58check(&self) -> String {
 		self.to_ss58check_with_version(default_ss58_version())
 	}
@@ -361,16 +363,16 @@ pub trait Derive: Sized {
 	/// Derive a child key from a series of given junctions.
 	///
 	/// Will be `None` for public keys if there are any hard junctions in there.
-	#[cfg(feature = "std")]
+	#[cfg(feature = "serde")]
 	fn derive<Iter: Iterator<Item = DeriveJunction>>(&self, _path: Iter) -> Option<Self> {
 		None
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 const PREFIX: &[u8] = b"SS58PRE";
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 fn ss58hash(data: &[u8]) -> Vec<u8> {
 	use blake2::{Blake2b512, Digest};
 
@@ -381,19 +383,19 @@ fn ss58hash(data: &[u8]) -> Vec<u8> {
 }
 
 /// Default prefix number
-#[cfg(feature = "std")]
-static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(
+#[cfg(feature = "serde")]
+static DEFAULT_VERSION: core::sync::atomic::AtomicU16 = core::sync::atomic::AtomicU16::new(
 	from_known_address_format(Ss58AddressFormatRegistry::SubstrateAccount),
 );
 
 /// Returns default SS58 format used by the current active process.
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub fn default_ss58_version() -> Ss58AddressFormat {
-	DEFAULT_VERSION.load(std::sync::atomic::Ordering::Relaxed).into()
+	DEFAULT_VERSION.load(core::sync::atomic::Ordering::Relaxed).into()
 }
 
 /// Returns either the input address format or the default.
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub fn unwrap_or_default_ss58_version(network: Option<Ss58AddressFormat>) -> Ss58AddressFormat {
 	network.unwrap_or_else(default_ss58_version)
 }
@@ -407,9 +409,9 @@ pub fn unwrap_or_default_ss58_version(network: Option<Ss58AddressFormat>) -> Ss5
 /// This will enable the node to decode ss58 addresses with this prefix.
 ///
 /// This SS58 version/format is also only used by the node and not by the runtime.
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 pub fn set_default_ss58_version(new_default: Ss58AddressFormat) {
-	DEFAULT_VERSION.store(new_default.into(), std::sync::atomic::Ordering::Relaxed);
+	DEFAULT_VERSION.store(new_default.into(), core::sync::atomic::Ordering::Relaxed);
 }
 
 #[cfg(feature = "std")]
@@ -457,6 +459,11 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Public + Derive> Ss58Codec for T {
 	}
 }
 
+// Use the default implementations of the trait in serde feature.
+// The std implementation is not available because of std only crate Regex.
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Public + Derive> Ss58Codec for T {}
+
 /// Trait used for types that are really just a fixed-length array.
 pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error = ()> {
 	/// The "length" of the values of this type, which is always the same.
@@ -478,11 +485,8 @@ pub trait ByteArray: AsRef<[u8]> + AsMut<[u8]> + for<'a> TryFrom<&'a [u8], Error
 	}
 }
 
-/// Trait suitable for typical cryptographic PKI key public type.
-pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {
-	/// Return `CryptoTypePublicPair` from public key.
-	fn to_public_crypto_pair(&self) -> CryptoTypePublicPair;
-}
+/// Trait suitable for typical cryptographic key public type.
+pub trait Public: ByteArray + Derive + CryptoType + PartialEq + Eq + Clone + Send + Sync {}
 
 /// An opaque 32-byte cryptographic identifier.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -509,7 +513,7 @@ impl ByteArray for AccountId32 {
 	const LEN: usize = 32;
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl Ss58Codec for AccountId32 {}
 
 impl AsRef<[u8]> for AccountId32 {
@@ -593,7 +597,7 @@ impl sp_std::fmt::Debug for AccountId32 {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl serde::Serialize for AccountId32 {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -603,7 +607,7 @@ impl serde::Serialize for AccountId32 {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for AccountId32 {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
@@ -681,50 +685,47 @@ mod dummy {
 			b""
 		}
 	}
-	impl Public for Dummy {
-		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), <Self as ByteArray>::to_raw_vec(self))
-		}
-	}
+	impl Public for Dummy {}
 
 	impl Pair for Dummy {
 		type Public = Dummy;
 		type Seed = Dummy;
 		type Signature = Dummy;
-		type DeriveError = ();
+
 		#[cfg(feature = "std")]
 		fn generate_with_phrase(_: Option<&str>) -> (Self, String, Self::Seed) {
 			Default::default()
 		}
+
 		#[cfg(feature = "std")]
 		fn from_phrase(_: &str, _: Option<&str>) -> Result<(Self, Self::Seed), SecretStringError> {
 			Ok(Default::default())
 		}
+
 		fn derive<Iter: Iterator<Item = DeriveJunction>>(
 			&self,
 			_: Iter,
 			_: Option<Dummy>,
-		) -> Result<(Self, Option<Dummy>), Self::DeriveError> {
+		) -> Result<(Self, Option<Dummy>), DeriveError> {
 			Ok((Self, None))
 		}
-		fn from_seed(_: &Self::Seed) -> Self {
-			Self
-		}
+
 		fn from_seed_slice(_: &[u8]) -> Result<Self, SecretStringError> {
 			Ok(Self)
 		}
+
 		fn sign(&self, _: &[u8]) -> Self::Signature {
 			Self
 		}
+
 		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool {
 			true
 		}
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(_: &[u8], _: M, _: P) -> bool {
-			true
-		}
+
 		fn public(&self) -> Self::Public {
 			Self
 		}
+
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}
@@ -845,9 +846,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// and verified with the message and a public key.
 	type Signature: AsRef<[u8]>;
 
-	/// Error returned from the `derive` function.
-	type DeriveError;
-
 	/// Generate new secure (random) key pair.
 	///
 	/// This is only for ephemeral keys really, since you won't have access to the secret key
@@ -866,27 +864,47 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// This is generally slower than `generate()`, so prefer that unless you need to persist
 	/// the key from the current session.
 	#[cfg(feature = "std")]
-	fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed);
+	fn generate_with_phrase(password: Option<&str>) -> (Self, String, Self::Seed) {
+		let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+		let phrase = mnemonic.phrase();
+		let (pair, seed) = Self::from_phrase(phrase, password)
+			.expect("All phrases generated by Mnemonic are valid; qed");
+		(pair, phrase.to_owned(), seed)
+	}
 
 	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
 	#[cfg(feature = "std")]
 	fn from_phrase(
 		phrase: &str,
 		password: Option<&str>,
-	) -> Result<(Self, Self::Seed), SecretStringError>;
+	) -> Result<(Self, Self::Seed), SecretStringError> {
+		let mnemonic = Mnemonic::from_phrase(phrase, Language::English)
+			.map_err(|_| SecretStringError::InvalidPhrase)?;
+		let big_seed =
+			substrate_bip39::seed_from_entropy(mnemonic.entropy(), password.unwrap_or(""))
+				.map_err(|_| SecretStringError::InvalidSeed)?;
+		let mut seed = Self::Seed::default();
+		let seed_slice = seed.as_mut();
+		let seed_len = seed_slice.len();
+		debug_assert!(seed_len <= big_seed.len());
+		seed_slice[..seed_len].copy_from_slice(&big_seed[..seed_len]);
+		Self::from_seed_slice(seed_slice).map(|x| (x, seed))
+	}
 
 	/// Derive a child key from a series of given junctions.
 	fn derive<Iter: Iterator<Item = DeriveJunction>>(
 		&self,
 		path: Iter,
 		seed: Option<Self::Seed>,
-	) -> Result<(Self, Option<Self::Seed>), Self::DeriveError>;
+	) -> Result<(Self, Option<Self::Seed>), DeriveError>;
 
 	/// Generate new key pair from the provided `seed`.
 	///
 	/// @WARNING: THIS WILL ONLY BE SECURE IF THE `seed` IS SECURE. If it can be guessed
 	/// by an attacker then they can also derive your key.
-	fn from_seed(seed: &Self::Seed) -> Self;
+	fn from_seed(seed: &Self::Seed) -> Self {
+		Self::from_seed_slice(seed.as_ref()).expect("seed has valid length; qed")
+	}
 
 	/// Make a new key pair from secret seed material. The slice must be the correct size or
 	/// it will return `None`.
@@ -900,9 +918,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 
 	/// Verify a signature on a message. Returns true if the signature is good.
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool;
-
-	/// Verify a signature on a message. Returns true if the signature is good.
-	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool;
 
 	/// Get the public key.
 	fn public(&self) -> Self::Public;
@@ -1054,7 +1069,7 @@ pub trait CryptoType {
 	crate::RuntimeDebug,
 	TypeInfo,
 )]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);
 
 impl From<u32> for KeyTypeId {
@@ -1083,28 +1098,37 @@ impl<'a> TryFrom<&'a str> for KeyTypeId {
 	}
 }
 
+/// Trait grouping types shared by a VRF signer and verifiers.
+pub trait VrfCrypto {
+	/// VRF input.
+	type VrfInput;
+	/// VRF output.
+	type VrfOutput;
+	/// VRF signing data.
+	type VrfSignData;
+	/// VRF signature.
+	type VrfSignature;
+}
+
+/// VRF Secret Key.
+pub trait VrfSecret: VrfCrypto {
+	/// Get VRF-specific output .
+	fn vrf_output(&self, data: &Self::VrfInput) -> Self::VrfOutput;
+
+	/// Sign VRF-specific data.
+	fn vrf_sign(&self, input: &Self::VrfSignData) -> Self::VrfSignature;
+}
+
+/// VRF Public Key.
+pub trait VrfPublic: VrfCrypto {
+	/// Verify input data signature.
+	fn vrf_verify(&self, data: &Self::VrfSignData, signature: &Self::VrfSignature) -> bool;
+}
+
 /// An identifier for a specific cryptographic algorithm used by a key pair
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CryptoTypeId(pub [u8; 4]);
-
-/// A type alias of CryptoTypeId & a public key
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);
-
-#[cfg(feature = "std")]
-impl sp_std::fmt::Display for CryptoTypePublicPair {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		let id = match str::from_utf8(&(self.0).0[..]) {
-			Ok(id) => id.to_string(),
-			Err(_) => {
-				format!("{:#?}", self.0)
-			},
-		};
-		write!(f, "{}-{}", id, HexDisplay::from(&self.1))
-	}
-}
 
 /// Known key types; this also functions as a global registry of key types for projects wishing to
 /// avoid collisions with each other.
@@ -1128,6 +1152,8 @@ pub mod key_types {
 	pub const AUTHORITY_DISCOVERY: KeyTypeId = KeyTypeId(*b"audi");
 	/// Key type for staking, built-in. Identified as `stak`.
 	pub const STAKING: KeyTypeId = KeyTypeId(*b"stak");
+	/// A key type for signing statements
+	pub const STATEMENT: KeyTypeId = KeyTypeId(*b"stmt");
 	/// A key type ID useful for tests.
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
@@ -1239,23 +1265,20 @@ mod tests {
 			vec![]
 		}
 	}
-	impl Public for TestPublic {
-		fn to_public_crypto_pair(&self) -> CryptoTypePublicPair {
-			CryptoTypePublicPair(CryptoTypeId(*b"dumm"), self.to_raw_vec())
-		}
-	}
+	impl Public for TestPublic {}
 	impl Pair for TestPair {
 		type Public = TestPublic;
 		type Seed = [u8; 8];
 		type Signature = [u8; 0];
-		type DeriveError = ();
 
 		fn generate() -> (Self, <Self as Pair>::Seed) {
 			(TestPair::Generated, [0u8; 8])
 		}
+
 		fn generate_with_phrase(_password: Option<&str>) -> (Self, String, <Self as Pair>::Seed) {
 			(TestPair::GeneratedWithPhrase, "".into(), [0u8; 8])
 		}
+
 		fn from_phrase(
 			phrase: &str,
 			password: Option<&str>,
@@ -1268,11 +1291,12 @@ mod tests {
 				[0u8; 8],
 			))
 		}
+
 		fn derive<Iter: Iterator<Item = DeriveJunction>>(
 			&self,
 			path_iter: Iter,
 			_: Option<[u8; 8]>,
-		) -> Result<(Self, Option<[u8; 8]>), Self::DeriveError> {
+		) -> Result<(Self, Option<[u8; 8]>), DeriveError> {
 			Ok((
 				match self.clone() {
 					TestPair::Standard { phrase, password, path } => TestPair::Standard {
@@ -1286,34 +1310,29 @@ mod tests {
 						if path_iter.count() == 0 {
 							x
 						} else {
-							return Err(())
+							return Err(DeriveError::SoftKeyInPath)
 						},
 				},
 				None,
 			))
 		}
-		fn from_seed(_seed: &<TestPair as Pair>::Seed) -> Self {
-			TestPair::Seed(_seed.as_ref().to_owned())
-		}
+
 		fn sign(&self, _message: &[u8]) -> Self::Signature {
 			[]
 		}
+
 		fn verify<M: AsRef<[u8]>>(_: &Self::Signature, _: M, _: &Self::Public) -> bool {
 			true
 		}
-		fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(
-			_sig: &[u8],
-			_message: M,
-			_pubkey: P,
-		) -> bool {
-			true
-		}
+
 		fn public(&self) -> Self::Public {
 			TestPublic
 		}
+
 		fn from_seed_slice(seed: &[u8]) -> Result<Self, SecretStringError> {
 			Ok(TestPair::Seed(seed.to_owned()))
 		}
+
 		fn to_raw_vec(&self) -> Vec<u8> {
 			vec![]
 		}

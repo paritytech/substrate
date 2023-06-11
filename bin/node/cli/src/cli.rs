@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -36,6 +36,10 @@ pub struct Cli {
 	/// telemetry, if telemetry is enabled.
 	#[arg(long)]
 	pub no_hardware_benchmarks: bool,
+
+	#[allow(missing_docs)]
+	#[clap(flatten)]
+	pub storage_monitor: sc_storage_monitor::StorageMonitorParams,
 }
 
 /// Possible subcommands of the main binary.

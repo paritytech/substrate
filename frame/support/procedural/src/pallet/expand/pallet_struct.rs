@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,8 +62,8 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	if get_doc_literals(&pallet_item.attrs).is_empty() {
 		pallet_item.attrs.push(syn::parse_quote!(
 			#[doc = r"
-			The [pallet](https://docs.substrate.io/reference/frame-pallets/#pallets) implementing
-			the on-chain logic.
+				The `Pallet` struct, the main type that implements traits and standalone
+				functions within the pallet.
 			"]
 		));
 	}
@@ -82,8 +82,8 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
 			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
 				#[doc(hidden)]
-				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
-					Some(#frame_support::metadata::PalletErrorMetadata {
+				pub fn error_metadata() -> Option<#frame_support::metadata_ir::PalletErrorMetadataIR> {
+					Some(#frame_support::metadata_ir::PalletErrorMetadataIR {
 						ty: #frame_support::scale_info::meta_type::<#error_ident<#type_use_gen>>()
 					})
 				}
@@ -93,7 +93,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
 			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
 				#[doc(hidden)]
-				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
+				pub fn error_metadata() -> Option<#frame_support::metadata_ir::PalletErrorMetadataIR> {
 					None
 				}
 			}
@@ -160,11 +160,15 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	);
 
-	let storage_version = if let Some(v) = def.pallet_struct.storage_version.as_ref() {
-		quote::quote! { #v }
-	} else {
-		quote::quote! { #frame_support::traits::StorageVersion::default() }
-	};
+	let (storage_version, current_storage_version_ty) =
+		if let Some(v) = def.pallet_struct.storage_version.as_ref() {
+			(quote::quote! { #v }, quote::quote! { #frame_support::traits::StorageVersion })
+		} else {
+			(
+				quote::quote! { core::default::Default::default() },
+				quote::quote! { #frame_support::traits::NoStorageVersionSet },
+			)
+		};
 
 	let whitelisted_storage_idents: Vec<syn::Ident> = def
 		.storages
@@ -199,7 +203,9 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen>
 			#config_where_clause
 		{
-			fn current_storage_version() -> #frame_support::traits::StorageVersion {
+			type CurrentStorageVersion = #current_storage_version_ty;
+
+			fn current_storage_version() -> Self::CurrentStorageVersion {
 				#storage_version
 			}
 
@@ -214,7 +220,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn on_genesis() {
-				let storage_version = #storage_version;
+				let storage_version: #frame_support::traits::StorageVersion = #storage_version;
 				storage_version.put::<Self>();
 			}
 		}

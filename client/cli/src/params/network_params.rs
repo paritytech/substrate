@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,11 @@
 use crate::{arg_enums::SyncMode, params::node_key_params::NodeKeyParams};
 use clap::Args;
 use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig},
+	config::{
+		NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig,
+	},
 	multiaddr::Protocol,
 };
-use sc_network_common::config::{NonReservedPeerMode, SetConfig, TransportConfig};
 use sc_service::{
 	config::{Multiaddr, MultiaddrWithPeerId},
 	ChainSpec, ChainType,
@@ -41,9 +42,7 @@ pub struct NetworkParams {
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Whether to only synchronize the chain with reserved nodes.
-	///
 	/// Also disables automatic peer discovery.
-	///
 	/// TCP connections might still be established with non-reserved nodes.
 	/// In particular, if you are a validator your node might still connect to other
 	/// validator nodes and collator nodes regardless of whether they are defined as
@@ -68,25 +67,25 @@ pub struct NetworkParams {
 	#[arg(long, value_name = "PORT", conflicts_with_all = &[ "listen_addr" ])]
 	pub port: Option<u16>,
 
-	/// Always forbid connecting to private IPv4 addresses (as specified in
+	/// Always forbid connecting to private IPv4/IPv6 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`. Enabled by default for chains marked as "live" in
 	/// their chain specifications.
-	#[arg(long, conflicts_with_all = &["allow_private_ipv4"])]
-	pub no_private_ipv4: bool,
+	#[arg(long, alias = "no-private-ipv4", conflicts_with_all = &["allow_private_ip"])]
+	pub no_private_ip: bool,
 
-	/// Always accept connecting to private IPv4 addresses (as specified in
+	/// Always accept connecting to private IPv4/IPv6 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Enabled by default for chains marked as
 	/// "local" in their chain specifications, or when `--dev` is passed.
-	#[arg(long, conflicts_with_all = &["no_private_ipv4"])]
-	pub allow_private_ipv4: bool,
+	#[arg(long, alias = "allow-private-ipv4", conflicts_with_all = &["no_private_ip"])]
+	pub allow_private_ip: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
-	#[arg(long, value_name = "COUNT", default_value_t = 15)]
+	#[arg(long, value_name = "COUNT", default_value_t = 8)]
 	pub out_peers: u32,
 
 	/// Maximum number of inbound full nodes peers.
-	#[arg(long, value_name = "COUNT", default_value_t = 25)]
+	#[arg(long, value_name = "COUNT", default_value_t = 32)]
 	pub in_peers: u32,
 
 	/// Maximum number of inbound light nodes peers.
@@ -94,14 +93,12 @@ pub struct NetworkParams {
 	pub in_peers_light: u32,
 
 	/// Disable mDNS discovery.
-	///
 	/// By default, the network will use mDNS to discover other nodes on the
 	/// local network. This disables it. Automatically implied when using --dev.
 	#[arg(long)]
 	pub no_mdns: bool,
 
 	/// Maximum number of peers from which to ask for the same blocks in parallel.
-	///
 	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
 	#[arg(long, value_name = "COUNT", default_value_t = 5)]
@@ -112,7 +109,6 @@ pub struct NetworkParams {
 	pub node_key_params: NodeKeyParams,
 
 	/// Enable peer discovery on local networks.
-	///
 	/// By default this option is `true` for `--dev` or when the chain type is
 	/// `Local`/`Development` and false otherwise.
 	#[arg(long)]
@@ -120,7 +116,6 @@ pub struct NetworkParams {
 
 	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
 	/// the presence of potentially adversarial nodes.
-	///
 	/// See the S/Kademlia paper for more information on the high level design as well as its
 	/// security improvements.
 	#[arg(long)]
@@ -131,11 +126,6 @@ pub struct NetworkParams {
 	pub ipfs_server: bool,
 
 	/// Blockchain syncing mode.
-	///
-	/// - `full`: Download and validate full blockchain history.
-	/// - `fast`: Download blocks and the latest state only.
-	/// - `fast-unsafe`: Same as `fast`, but skip downloading state proofs.
-	/// - `warp`: Download the latest state and proof.
 	#[arg(
 		long,
 		value_enum,
@@ -145,6 +135,13 @@ pub struct NetworkParams {
 		verbatim_doc_comment
 	)]
 	pub sync: SyncMode,
+
+	/// Maximum number of blocks per request.
+	///
+	/// Try reducing this number from the default value if you have a slow network connection
+	/// and observe block requests timing out.
+	#[arg(long, value_name = "COUNT", default_value_t = 64)]
+	pub max_blocks_per_request: u32,
 }
 
 impl NetworkParams {
@@ -200,8 +197,8 @@ impl NetworkParams {
 			self.discover_local ||
 				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development);
 
-		let allow_private_ipv4 = match (self.allow_private_ipv4, self.no_private_ipv4) {
-			(true, true) => unreachable!("`*_private_ipv4` flags are mutually exclusive; qed"),
+		let allow_private_ip = match (self.allow_private_ip, self.no_private_ip) {
+			(true, true) => unreachable!("`*_private_ip` flags are mutually exclusive; qed"),
 			(true, false) => true,
 			(false, true) => false,
 			(false, false) =>
@@ -224,16 +221,15 @@ impl NetworkParams {
 			default_peers_set_num_full: self.in_peers + self.out_peers,
 			listen_addresses,
 			public_addresses,
-			extra_sets: Vec::new(),
-			request_response_protocols: Vec::new(),
 			node_key,
 			node_name: node_name.to_string(),
 			client_version: client_id.to_string(),
 			transport: TransportConfig::Normal {
 				enable_mdns: !is_dev && !self.no_mdns,
-				allow_private_ipv4,
+				allow_private_ip,
 			},
 			max_parallel_downloads: self.max_parallel_downloads,
+			max_blocks_per_request: self.max_blocks_per_request,
 			enable_dht_random_walk: !self.reserved_only,
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,

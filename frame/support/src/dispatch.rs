@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,8 @@ pub use crate::{
 		result,
 	},
 	traits::{
-		CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, UnfilteredDispatchable,
+		CallMetadata, GetCallIndex, GetCallMetadata, GetCallName, GetStorageVersion,
+		UnfilteredDispatchable,
 	},
 };
 #[cfg(feature = "std")]
@@ -314,7 +315,7 @@ pub trait WithPostDispatchInfo {
 	/// # Example
 	///
 	/// ```ignore
-	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100)))?;
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_parts(100, 0)))?;
 	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
 	/// ```
 	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
@@ -365,7 +366,7 @@ impl<Call: Encode + GetDispatchInfo, Extra: Encode> GetDispatchInfo
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
-			weight: Weight::from_ref_time(self.encode().len() as _),
+			weight: Weight::from_parts(self.encode().len() as _, 0),
 			pays_fee: Pays::Yes,
 			class: self.call.get_dispatch_info().class,
 		}
@@ -423,33 +424,35 @@ impl<T: Clone> PerDispatchClass<T> {
 
 impl PerDispatchClass<Weight> {
 	/// Returns the total weight consumed by all extrinsics in the block.
+	///
+	/// Saturates on overflow.
 	pub fn total(&self) -> Weight {
 		let mut sum = Weight::zero();
 		for class in DispatchClass::all() {
-			sum = sum.saturating_add(*self.get(*class));
+			sum.saturating_accrue(*self.get(*class));
 		}
 		sum
 	}
 
-	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
-	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_add(weight);
+	/// Add some weight to the given class. Saturates at the numeric bounds.
+	pub fn add(mut self, weight: Weight, class: DispatchClass) -> Self {
+		self.accrue(weight, class);
+		self
 	}
 
-	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
-	/// occur.
-	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
-		let value = self.get_mut(class);
-		*value = value.checked_add(&weight).ok_or(())?;
-		Ok(())
+	/// Increase the weight of the given class. Saturates at the numeric bounds.
+	pub fn accrue(&mut self, weight: Weight, class: DispatchClass) {
+		self.get_mut(class).saturating_accrue(weight);
 	}
 
-	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
-	/// `Weight`.
-	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
-		let value = self.get_mut(class);
-		*value = value.saturating_sub(weight);
+	/// Try to increase the weight of the given class. Saturates at the numeric bounds.
+	pub fn checked_accrue(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
+		self.get_mut(class).checked_accrue(weight).ok_or(())
+	}
+
+	/// Reduce the weight of the given class. Saturates at the numeric bounds.
+	pub fn reduce(&mut self, weight: Weight, class: DispatchClass) {
+		self.get_mut(class).saturating_reduce(weight);
 	}
 }
 
@@ -547,27 +550,6 @@ impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
 
 // TODO: Eventually remove these
 
-impl From<Option<u64>> for PostDispatchInfo {
-	fn from(maybe_actual_computation: Option<u64>) -> Self {
-		let actual_weight = match maybe_actual_computation {
-			Some(actual_computation) => Some(Weight::zero().set_ref_time(actual_computation)),
-			None => None,
-		};
-		Self { actual_weight, pays_fee: Default::default() }
-	}
-}
-
-impl From<(Option<u64>, Pays)> for PostDispatchInfo {
-	fn from(post_weight_info: (Option<u64>, Pays)) -> Self {
-		let (maybe_actual_time, pays_fee) = post_weight_info;
-		let actual_weight = match maybe_actual_time {
-			Some(actual_time) => Some(Weight::zero().set_ref_time(actual_time)),
-			None => None,
-		};
-		Self { actual_weight, pays_fee }
-	}
-}
-
 impl<T> ClassifyDispatch<T> for u64 {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
@@ -582,7 +564,7 @@ impl<T> PaysFee<T> for u64 {
 
 impl<T> WeighData<T> for u64 {
 	fn weigh_data(&self, _: T) -> Weight {
-		return Weight::zero().set_ref_time(*self)
+		return Weight::from_parts(*self, 0)
 	}
 }
 
@@ -727,13 +709,13 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::{weights::Weight, dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo}};
+/// # use frame_support::{weights::Weight, dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo, PostDispatchInfo}};
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 1_000_000]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100_000)))?;
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_parts(100_000, 0)))?;
 /// 			if do_expensive_calc {
 /// 				// do the expensive calculation
 /// 				// ...
@@ -741,7 +723,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// 				return Ok(None::<Weight>.into());
 /// 			}
 /// 			// expensive calculation not executed: use only a portion of the weight
-/// 			Ok(Some(100_000).into())
+/// 			Ok(PostDispatchInfo { actual_weight: Some(Weight::from_parts(100_000, 0)), ..Default::default() })
 /// 		}
 /// 	}
 /// }
@@ -897,6 +879,8 @@ impl<T> PaysFee<T> for (u64, Pays) {
 ///   in an externalities-provided environment. Implement
 ///   [`IntegrityTest`](./trait.IntegrityTest.html) trait.
 #[macro_export]
+#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
+	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 macro_rules! decl_module {
 	// Entry point #1.
 	(
@@ -2113,7 +2097,7 @@ macro_rules! decl_module {
 			fn try_state(
 				_: <$trait_instance as $system::Config>::BlockNumber,
 				_: $crate::traits::TryStateSelect,
-			) -> Result<(), &'static str> {
+			) -> Result<(), $crate::sp_runtime::TryRuntimeError> {
 				let pallet_name = <<
 					$trait_instance
 					as
@@ -2160,12 +2144,12 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, $crate::sp_runtime::TryRuntimeError> {
 				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), $crate::sp_runtime::TryRuntimeError> {
 				Ok(())
 			}
 		}
@@ -2198,12 +2182,12 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, $crate::sp_runtime::TryRuntimeError> {
 				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), $crate::sp_runtime::TryRuntimeError> {
 				Ok(())
 			}
 		}
@@ -2518,12 +2502,24 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetStorageVersion
 			for $module<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn current_storage_version() -> $crate::traits::StorageVersion {
+			type CurrentStorageVersion = $crate::traits::StorageVersion;
+
+			fn current_storage_version() -> Self::CurrentStorageVersion {
 				$( $storage_version )*
 			}
 
 			fn on_chain_storage_version() -> $crate::traits::StorageVersion {
 				$crate::traits::StorageVersion::get::<Self>()
+			}
+		}
+
+		// Implement `OnGenesis` for `Module`
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::OnGenesis
+			for $module<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn on_genesis() {
+				let storage_version = <Self as $crate::traits::GetStorageVersion>::current_storage_version();
+				storage_version.put::<Self>();
 			}
 		}
 	};
@@ -2537,12 +2533,24 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::GetStorageVersion
 			for $module<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn current_storage_version() -> $crate::traits::StorageVersion {
+			type CurrentStorageVersion = $crate::traits::NoStorageVersionSet;
+
+			fn current_storage_version() -> Self::CurrentStorageVersion {
 				Default::default()
 			}
 
 			fn on_chain_storage_version() -> $crate::traits::StorageVersion {
 				$crate::traits::StorageVersion::get::<Self>()
+			}
+		}
+
+		// Implement `OnGenesis` for `Module`
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::OnGenesis
+			for $module<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn on_genesis() {
+				let storage_version = $crate::traits::StorageVersion::default();
+				storage_version.put::<Self>();
 			}
 		}
 	};
@@ -2832,16 +2840,6 @@ macro_rules! decl_module {
 			}
 		}
 
-		// Implement `OnGenesis` for `Module`
-		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::OnGenesis
-			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
-		{
-			fn on_genesis() {
-				let storage_version = <Self as $crate::traits::GetStorageVersion>::current_storage_version();
-				storage_version.put::<Self>();
-			}
-		}
-
 		// manual implementation of clone/eq/partialeq because using derive erroneously requires
 		// clone/eq/partialeq from T.
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Clone
@@ -2946,6 +2944,10 @@ macro_rules! decl_module {
 			{ $( $other_where_bounds )* }
 			$( $error_type )*
 		}
+		$crate::__impl_docs_metadata! {
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
+			{ $( $other_where_bounds )* }
+		}
 		$crate::__impl_module_constants_metadata ! {
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>
 			{ $( $other_where_bounds )* }
@@ -2971,7 +2973,7 @@ macro_rules! __dispatch_impl_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn call_functions() -> $crate::metadata::PalletCallMetadata {
+			pub fn call_functions() -> $crate::metadata_ir::PalletCallMetadataIR {
 				$crate::scale_info::meta_type::<$call_type<$trait_instance $(, $instance)?>>().into()
 			}
 		}
@@ -2992,7 +2994,7 @@ macro_rules! __impl_error_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
+			pub fn error_metadata() -> Option<$crate::metadata_ir::PalletErrorMetadataIR> {
 				None
 			}
 		}
@@ -3007,10 +3009,30 @@ macro_rules! __impl_error_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn error_metadata() -> Option<$crate::metadata::PalletErrorMetadata> {
-				Some($crate::metadata::PalletErrorMetadata {
+			pub fn error_metadata() -> Option<$crate::metadata_ir::PalletErrorMetadataIR> {
+				Some($crate::metadata_ir::PalletErrorMetadataIR {
 					ty: $crate::scale_info::meta_type::<$( $error_type )*>()
 				})
+			}
+		}
+	};
+}
+
+/// Implement metadata for pallet documentation.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_docs_metadata {
+	(
+		$mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>
+		{ $( $other_where_bounds:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $mod_type<$trait_instance $(, $instance)?>
+			where $( $other_where_bounds )*
+		{
+			#[doc(hidden)]
+			#[allow(dead_code)]
+			pub fn pallet_documentation_metadata() -> $crate::sp_std::vec::Vec<&'static str> {
+				$crate::sp_std::vec![]
 			}
 		}
 	};
@@ -3083,7 +3105,7 @@ macro_rules! __impl_module_constants_metadata {
 		{
 			#[doc(hidden)]
 			#[allow(dead_code)]
-			pub fn pallet_constants_metadata() -> $crate::sp_std::vec::Vec<$crate::metadata::PalletConstantMetadata> {
+			pub fn pallet_constants_metadata() -> $crate::sp_std::vec::Vec<$crate::metadata_ir::PalletConstantMetadataIR> {
 				// Create the `ByteGetter`s
 				$(
 					#[allow(non_upper_case_types)]
@@ -3107,7 +3129,7 @@ macro_rules! __impl_module_constants_metadata {
 				)*
 				$crate::sp_std::vec![
 					$(
-						$crate::metadata::PalletConstantMetadata {
+						$crate::metadata_ir::PalletConstantMetadataIR {
 							name: stringify!($name),
 							ty: $crate::scale_info::meta_type::<$type>(),
 							value: $default_byte_name::<$const_trait_instance $(, $const_instance)?>(
@@ -3177,17 +3199,18 @@ macro_rules! __check_reserved_fn_name {
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod tests {
 	use super::*;
 	use crate::{
 		dispatch::{DispatchClass, DispatchInfo, Pays},
-		metadata::*,
+		metadata_ir::*,
 		traits::{
 			CallerTrait, CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle,
 			OnInitialize, OnRuntimeUpgrade, PalletInfo,
 		},
 	};
-	use sp_weights::RuntimeDbWeight;
+	use sp_weights::{RuntimeDbWeight, Weight};
 
 	pub trait Config: system::Config + Sized
 	where
@@ -3237,13 +3260,13 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_ref_time(7) }
+			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_parts(7, 0) }
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
-				if n.into() == 42 || remaining_weight == Weight::from_ref_time(42)  { panic!("on_idle") }
-				Weight::from_ref_time(7)
+				if n.into() == 42 || remaining_weight == Weight::from_parts(42, 0)  { panic!("on_idle") }
+				Weight::from_parts(7, 0)
 			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
-			fn on_runtime_upgrade() -> Weight { Weight::from_ref_time(10) }
+			fn on_runtime_upgrade() -> Weight { Weight::from_parts(10, 0) }
 			fn offchain_worker() {}
 			/// Some doc
 			fn integrity_test() { panic!("integrity_test") }
@@ -3379,7 +3402,7 @@ mod tests {
 	fn module_json_metadata() {
 		let metadata = Module::<TraitImpl>::call_functions();
 		let expected_metadata =
-			PalletCallMetadata { ty: scale_info::meta_type::<Call<TraitImpl>>() };
+			PalletCallMetadataIR { ty: scale_info::meta_type::<Call<TraitImpl>>() };
 		assert_eq!(expected_metadata, metadata);
 	}
 
@@ -3421,27 +3444,27 @@ mod tests {
 	fn on_initialize_should_work_2() {
 		assert_eq!(
 			<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10),
-			Weight::from_ref_time(7)
+			Weight::from_parts(7, 0)
 		);
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_1() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::from_ref_time(9));
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::from_parts(9, 0));
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_2() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::from_ref_time(42));
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::from_parts(42, 0));
 	}
 
 	#[test]
 	fn on_idle_should_work_3() {
 		assert_eq!(
-			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::from_ref_time(11)),
-			Weight::from_ref_time(7)
+			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::from_parts(11, 0)),
+			Weight::from_parts(7, 0)
 		);
 	}
 
@@ -3456,7 +3479,7 @@ mod tests {
 		sp_io::TestExternalities::default().execute_with(|| {
 			assert_eq!(
 				<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(),
-				Weight::from_ref_time(10)
+				Weight::from_parts(10, 0)
 			)
 		});
 	}
@@ -3467,7 +3490,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: Weight::from_ref_time(5),
+				weight: Weight::from_parts(5, 0),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes
 			},
@@ -3476,7 +3499,7 @@ mod tests {
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
 			DispatchInfo {
-				weight: Weight::from_ref_time(3),
+				weight: Weight::from_parts(3, 0),
 				class: DispatchClass::Normal,
 				pays_fee: Pays::Yes
 			},
@@ -3508,25 +3531,128 @@ mod tests {
 	fn test_new_call_variant() {
 		Call::<TraitImpl>::new_call_variant_aux_0();
 	}
+
+	pub fn from_actual_ref_time(ref_time: Option<u64>) -> PostDispatchInfo {
+		PostDispatchInfo {
+			actual_weight: ref_time.map(|t| Weight::from_all(t)),
+			pays_fee: Default::default(),
+		}
+	}
+
+	pub fn from_post_weight_info(ref_time: Option<u64>, pays_fee: Pays) -> PostDispatchInfo {
+		PostDispatchInfo { actual_weight: ref_time.map(|t| Weight::from_all(t)), pays_fee }
+	}
 }
 
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod weight_tests {
-	use super::*;
-	use sp_core::{parameter_types, Get};
+	use super::{tests::*, *};
+	use sp_core::parameter_types;
+	use sp_runtime::{generic, traits::BlakeTwo256};
 	use sp_weights::RuntimeDbWeight;
 
-	pub trait Config: 'static {
-		type RuntimeOrigin;
-		type Balance;
-		type BlockNumber;
-		type DbWeight: Get<RuntimeDbWeight>;
-		type PalletInfo: crate::traits::PalletInfo;
+	pub use self::frame_system::{Call, Config, Pallet};
+
+	#[crate::pallet(dev_mode)]
+	pub mod frame_system {
+		use super::{frame_system, frame_system::pallet_prelude::*};
+		pub use crate::dispatch::RawOrigin;
+		use crate::pallet_prelude::*;
+
+		#[pallet::pallet]
+		pub struct Pallet<T>(PhantomData<T>);
+
+		#[pallet::config]
+		#[pallet::disable_frame_system_supertrait_check]
+		pub trait Config: 'static {
+			type BlockNumber: Parameter + Default + MaxEncodedLen;
+			type AccountId;
+			type Balance;
+			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
+			type RuntimeOrigin;
+			type RuntimeCall;
+			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: Get<crate::weights::RuntimeDbWeight>;
+		}
+
+		#[pallet::error]
+		pub enum Error<T> {
+			/// Required by construct_runtime
+			CallFiltered,
+		}
+
+		#[pallet::origin]
+		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+
+		#[pallet::call]
+		impl<T: Config> Pallet<T> {
+			// no arguments, fixed weight
+			#[pallet::weight(1000)]
+			pub fn f00(_origin: OriginFor<T>) -> DispatchResult {
+				unimplemented!();
+			}
+
+			#[pallet::weight((1000, DispatchClass::Mandatory))]
+			pub fn f01(_origin: OriginFor<T>) -> DispatchResult {
+				unimplemented!();
+			}
+
+			#[pallet::weight((1000, Pays::No))]
+			pub fn f02(_origin: OriginFor<T>) -> DispatchResult {
+				unimplemented!();
+			}
+
+			#[pallet::weight((1000, DispatchClass::Operational, Pays::No))]
+			pub fn f03(_origin: OriginFor<T>) -> DispatchResult {
+				unimplemented!();
+			}
+
+			// weight = a x 10 + b
+			#[pallet::weight(((_a * 10 + _eb * 1) as u64, DispatchClass::Normal, Pays::Yes))]
+			pub fn f11(_origin: OriginFor<T>, _a: u32, _eb: u32) -> DispatchResult {
+				unimplemented!();
+			}
+
+			#[pallet::weight((0, DispatchClass::Operational, Pays::Yes))]
+			pub fn f12(_origin: OriginFor<T>, _a: u32, _eb: u32) -> DispatchResult {
+				unimplemented!();
+			}
+
+			#[pallet::weight(T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_all(10_000))]
+			pub fn f20(_origin: OriginFor<T>) -> DispatchResult {
+				unimplemented!();
+			}
+
+			#[pallet::weight(T::DbWeight::get().reads_writes(6, 5) + Weight::from_all(40_000))]
+			pub fn f21(_origin: OriginFor<T>) -> DispatchResult {
+				unimplemented!();
+			}
+		}
+
+		pub mod pallet_prelude {
+			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
+		}
 	}
 
-	pub struct TraitImpl {}
+	type BlockNumber = u32;
+	type AccountId = u32;
+	type Balance = u32;
+	type Header = generic::Header<BlockNumber, BlakeTwo256>;
+	type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+	type Block = generic::Block<Header, UncheckedExtrinsic>;
+
+	crate::construct_runtime!(
+		pub enum Runtime
+		where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: self::frame_system,
+		}
+	);
 
 	parameter_types! {
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
@@ -3535,139 +3661,124 @@ mod weight_tests {
 		};
 	}
 
-	impl Config for TraitImpl {
-		type RuntimeOrigin = u32;
-		type BlockNumber = u32;
-		type Balance = u32;
+	impl Config for Runtime {
+		type BlockNumber = BlockNumber;
+		type AccountId = AccountId;
+		type Balance = Balance;
+		type BaseCallFilter = crate::traits::Everything;
+		type RuntimeOrigin = RuntimeOrigin;
+		type RuntimeCall = RuntimeCall;
 		type DbWeight = DbWeight;
-		type PalletInfo = crate::tests::PanicPalletInfo;
-	}
-
-	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {
-			// no arguments, fixed weight
-			#[weight = 1000]
-			fn f00(_origin) { unimplemented!(); }
-
-			#[weight = (1000, DispatchClass::Mandatory)]
-			fn f01(_origin) { unimplemented!(); }
-
-			#[weight = (1000, Pays::No)]
-			fn f02(_origin) { unimplemented!(); }
-
-			#[weight = (1000, DispatchClass::Operational, Pays::No)]
-			fn f03(_origin) { unimplemented!(); }
-
-			// weight = a x 10 + b
-			#[weight = ((_a * 10 + _eb * 1) as u64, DispatchClass::Normal, Pays::Yes)]
-			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
-
-			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
-			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
-
-			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_ref_time(10_000)]
-			fn f20(_origin) { unimplemented!(); }
-
-			#[weight = T::DbWeight::get().reads_writes(6, 5) + Weight::from_ref_time(40_000)]
-			fn f21(_origin) { unimplemented!(); }
-
-		}
+		type PalletInfo = PalletInfo;
 	}
 
 	#[test]
 	fn weights_are_correct() {
-		// #[weight = 1000]
-		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		// #[pallet::weight(1000)]
+		let info = Call::<Runtime>::f00 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
-		// #[weight = (1000, DispatchClass::Mandatory)]
-		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		// #[pallet::weight((1000, DispatchClass::Mandatory))]
+		let info = Call::<Runtime>::f01 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Mandatory);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
-		// #[weight = (1000, Pays::No)]
-		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		// #[pallet::weight((1000, Pays::No))]
+		let info = Call::<Runtime>::f02 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::No);
 
-		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
-		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		// #[pallet::weight((1000, DispatchClass::Operational, Pays::No))]
+		let info = Call::<Runtime>::f03 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_parts(1000, 0));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
-		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
-		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(150)); // 13*10 + 20
+		// #[pallet::weight(((_a * 10 + _eb * 1) as u64, DispatchClass::Normal, Pays::Yes))]
+		let info = Call::<Runtime>::f11 { a: 13, eb: 20 }.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_parts(150, 0)); // 13*10 + 20
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
-		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
-		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(0));
+		// #[pallet::weight((0, DispatchClass::Operational, Pays::Yes))]
+		let info = Call::<Runtime>::f12 { a: 10, eb: 20 }.get_dispatch_info();
+		assert_eq!(info.weight, Weight::zero());
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
-		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
-		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(12300)); // 100*3 + 1000*2 + 10_1000
+		// #[pallet::weight(T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) +
+		// Weight::from_all(10_000))]
+		let info = Call::<Runtime>::f20 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_parts(12300, 10000)); // 100*3 + 1000*2 + 10_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
-		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
-		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
-		assert_eq!(info.weight, Weight::from_ref_time(45600)); // 100*6 + 1000*5 + 40_1000
+		// #[pallet::weight(T::DbWeight::get().reads_writes(6, 5) + Weight::from_all(40_000))]
+		let info = Call::<Runtime>::f21 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_parts(45600, 40000)); // 100*6 + 1000*5 + 40_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 	}
 
 	#[test]
 	fn extract_actual_weight_works() {
-		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
-		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::from_ref_time(7));
+		let pre = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
 		assert_eq!(
-			extract_actual_weight(&Ok(Some(1000).into()), &pre),
-			Weight::from_ref_time(1000)
+			extract_actual_weight(&Ok(from_actual_ref_time(Some(7))), &pre),
+			Weight::from_parts(7, 0)
+		);
+		assert_eq!(
+			extract_actual_weight(&Ok(from_actual_ref_time(Some(1000))), &pre),
+			Weight::from_parts(1000, 0)
 		);
 		assert_eq!(
 			extract_actual_weight(
-				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(9, 0))),
 				&pre
 			),
-			Weight::from_ref_time(9)
+			Weight::from_parts(9, 0)
 		);
 	}
 
 	#[test]
 	fn extract_actual_weight_caps_at_pre_weight() {
-		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		let pre = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
 		assert_eq!(
-			extract_actual_weight(&Ok(Some(1250).into()), &pre),
-			Weight::from_ref_time(1000)
+			extract_actual_weight(&Ok(from_actual_ref_time(Some(1250))), &pre),
+			Weight::from_parts(1000, 0)
 		);
 		assert_eq!(
 			extract_actual_weight(
-				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(1300))),
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(1300, 0))),
 				&pre
 			),
-			Weight::from_ref_time(1000),
+			Weight::from_parts(1000, 0),
 		);
 	}
 
 	#[test]
 	fn extract_actual_pays_fee_works() {
-		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
-		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::Yes);
-		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::Yes);
-		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::Yes);
-		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::No).into()), &pre), Pays::No);
+		let pre = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
+		assert_eq!(extract_actual_pays_fee(&Ok(from_actual_ref_time(Some(7))), &pre), Pays::Yes);
+		assert_eq!(
+			extract_actual_pays_fee(&Ok(from_actual_ref_time(Some(1000)).into()), &pre),
+			Pays::Yes
+		);
+		assert_eq!(
+			extract_actual_pays_fee(&Ok(from_post_weight_info(Some(1000), Pays::Yes)), &pre),
+			Pays::Yes
+		);
+		assert_eq!(
+			extract_actual_pays_fee(&Ok(from_post_weight_info(Some(1000), Pays::No)), &pre),
+			Pays::No
+		);
 		assert_eq!(
 			extract_actual_pays_fee(
-				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(9, 0))),
 				&pre
 			),
 			Pays::Yes
@@ -3684,12 +3795,190 @@ mod weight_tests {
 		);
 
 		let pre = DispatchInfo {
-			weight: Weight::from_ref_time(1000),
+			weight: Weight::from_parts(1000, 0),
 			pays_fee: Pays::No,
 			..Default::default()
 		};
-		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::No);
-		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::No);
-		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok(from_actual_ref_time(Some(7))), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok(from_actual_ref_time(Some(1000))), &pre), Pays::No);
+		assert_eq!(
+			extract_actual_pays_fee(&Ok(from_post_weight_info(Some(1000), Pays::Yes)), &pre),
+			Pays::No
+		);
+	}
+}
+
+#[cfg(test)]
+mod per_dispatch_class_tests {
+	use super::*;
+	use sp_runtime::traits::Zero;
+	use DispatchClass::*;
+
+	#[test]
+	fn add_works() {
+		let a = PerDispatchClass {
+			normal: (5, 10).into(),
+			operational: (20, 30).into(),
+			mandatory: Weight::MAX,
+		};
+		assert_eq!(
+			a.clone()
+				.add((20, 5).into(), Normal)
+				.add((10, 10).into(), Operational)
+				.add((u64::MAX, 3).into(), Mandatory),
+			PerDispatchClass {
+				normal: (25, 15).into(),
+				operational: (30, 40).into(),
+				mandatory: Weight::MAX
+			}
+		);
+		let b = a
+			.add(Weight::MAX, Normal)
+			.add(Weight::MAX, Operational)
+			.add(Weight::MAX, Mandatory);
+		assert_eq!(
+			b,
+			PerDispatchClass {
+				normal: Weight::MAX,
+				operational: Weight::MAX,
+				mandatory: Weight::MAX
+			}
+		);
+		assert_eq!(b.total(), Weight::MAX);
+	}
+
+	#[test]
+	fn accrue_works() {
+		let mut a = PerDispatchClass::default();
+
+		a.accrue((10, 15).into(), Normal);
+		assert_eq!(a.normal, (10, 15).into());
+		assert_eq!(a.total(), (10, 15).into());
+
+		a.accrue((20, 25).into(), Operational);
+		assert_eq!(a.operational, (20, 25).into());
+		assert_eq!(a.total(), (30, 40).into());
+
+		a.accrue((30, 35).into(), Mandatory);
+		assert_eq!(a.mandatory, (30, 35).into());
+		assert_eq!(a.total(), (60, 75).into());
+
+		a.accrue((u64::MAX, 10).into(), Operational);
+		assert_eq!(a.operational, (u64::MAX, 35).into());
+		assert_eq!(a.total(), (u64::MAX, 85).into());
+
+		a.accrue((10, u64::MAX).into(), Normal);
+		assert_eq!(a.normal, (20, u64::MAX).into());
+		assert_eq!(a.total(), Weight::MAX);
+	}
+
+	#[test]
+	fn reduce_works() {
+		let mut a = PerDispatchClass {
+			normal: (10, u64::MAX).into(),
+			mandatory: (u64::MAX, 10).into(),
+			operational: (20, 20).into(),
+		};
+
+		a.reduce((5, 100).into(), Normal);
+		assert_eq!(a.normal, (5, u64::MAX - 100).into());
+		assert_eq!(a.total(), (u64::MAX, u64::MAX - 70).into());
+
+		a.reduce((15, 5).into(), Operational);
+		assert_eq!(a.operational, (5, 15).into());
+		assert_eq!(a.total(), (u64::MAX, u64::MAX - 75).into());
+
+		a.reduce((50, 0).into(), Mandatory);
+		assert_eq!(a.mandatory, (u64::MAX - 50, 10).into());
+		assert_eq!(a.total(), (u64::MAX - 40, u64::MAX - 75).into());
+
+		a.reduce((u64::MAX, 100).into(), Operational);
+		assert!(a.operational.is_zero());
+		assert_eq!(a.total(), (u64::MAX - 45, u64::MAX - 90).into());
+
+		a.reduce((5, u64::MAX).into(), Normal);
+		assert!(a.normal.is_zero());
+		assert_eq!(a.total(), (u64::MAX - 50, 10).into());
+	}
+
+	#[test]
+	fn checked_accrue_works() {
+		let mut a = PerDispatchClass::default();
+
+		a.checked_accrue((1, 2).into(), Normal).unwrap();
+		a.checked_accrue((3, 4).into(), Operational).unwrap();
+		a.checked_accrue((5, 6).into(), Mandatory).unwrap();
+		a.checked_accrue((7, 8).into(), Operational).unwrap();
+		a.checked_accrue((9, 0).into(), Normal).unwrap();
+
+		assert_eq!(
+			a,
+			PerDispatchClass {
+				normal: (10, 2).into(),
+				operational: (10, 12).into(),
+				mandatory: (5, 6).into(),
+			}
+		);
+
+		a.checked_accrue((u64::MAX - 10, u64::MAX - 2).into(), Normal).unwrap();
+		a.checked_accrue((0, 0).into(), Normal).unwrap();
+		a.checked_accrue((1, 0).into(), Normal).unwrap_err();
+		a.checked_accrue((0, 1).into(), Normal).unwrap_err();
+
+		assert_eq!(
+			a,
+			PerDispatchClass {
+				normal: Weight::MAX,
+				operational: (10, 12).into(),
+				mandatory: (5, 6).into(),
+			}
+		);
+	}
+
+	#[test]
+	fn checked_accrue_does_not_modify_on_error() {
+		let mut a = PerDispatchClass {
+			normal: 0.into(),
+			operational: Weight::MAX / 2 + 2.into(),
+			mandatory: 10.into(),
+		};
+
+		a.checked_accrue(Weight::MAX / 2, Operational).unwrap_err();
+		a.checked_accrue(Weight::MAX - 9.into(), Mandatory).unwrap_err();
+		a.checked_accrue(Weight::MAX, Normal).unwrap(); // This one works
+
+		assert_eq!(
+			a,
+			PerDispatchClass {
+				normal: Weight::MAX,
+				operational: Weight::MAX / 2 + 2.into(),
+				mandatory: 10.into(),
+			}
+		);
+	}
+
+	#[test]
+	fn total_works() {
+		assert!(PerDispatchClass::default().total().is_zero());
+
+		assert_eq!(
+			PerDispatchClass {
+				normal: 0.into(),
+				operational: (10, 20).into(),
+				mandatory: (20, u64::MAX).into(),
+			}
+			.total(),
+			(30, u64::MAX).into()
+		);
+
+		assert_eq!(
+			PerDispatchClass {
+				normal: (u64::MAX - 10, 10).into(),
+				operational: (3, u64::MAX).into(),
+				mandatory: (4, u64::MAX).into(),
+			}
+			.total(),
+			(u64::MAX - 3, u64::MAX).into()
+		);
 	}
 }

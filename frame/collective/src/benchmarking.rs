@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ use crate::Pallet as Collective;
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
-use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_system::{Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin};
 
 const SEED: u32 = 0;
@@ -131,7 +131,7 @@ benchmarks_instance_pallet! {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
 		assert_last_event::<T, I>(
-			Event::MemberExecuted { proposal_hash, result: Err(DispatchError::BadOrigin) }.into()
+			Event::MemberExecuted { proposal_hash, result: Ok(()) }.into()
 		);
 	}
 
@@ -162,7 +162,7 @@ benchmarks_instance_pallet! {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
 		assert_last_event::<T, I>(
-			Event::Executed { proposal_hash, result: Err(DispatchError::BadOrigin) }.into()
+			Event::Executed { proposal_hash, result: Ok(()) }.into()
 		);
 	}
 
@@ -441,7 +441,7 @@ benchmarks_instance_pallet! {
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Err(DispatchError::BadOrigin) }.into());
+		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Ok(()) }.into());
 	}
 
 	close_disapproved {
@@ -595,7 +595,7 @@ benchmarks_instance_pallet! {
 	}: close(SystemOrigin::Signed(caller), last_hash, p - 1, Weight::MAX, bytes_in_storage)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Err(DispatchError::BadOrigin) }.into());
+		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Ok(()) }.into());
 	}
 
 	disapprove_proposal {
@@ -646,5 +646,5 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
 	}
 
-	impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Collective, crate::tests::ExtBuilder::default().build(), crate::tests::Test);
 }

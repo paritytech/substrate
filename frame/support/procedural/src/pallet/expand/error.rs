@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -110,10 +110,7 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 
 	if get_doc_literals(&error_item.attrs).is_empty() {
 		error_item.attrs.push(syn::parse_quote!(
-			#[doc = r"
-			Custom [dispatch errors](https://docs.substrate.io/main-docs/build/events-errors/)
-			of this pallet.
-			"]
+			#[doc = "The `Error` enum of this pallet."]
 		));
 	}
 

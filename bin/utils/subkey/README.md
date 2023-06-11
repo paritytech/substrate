@@ -6,11 +6,11 @@ Subkey is a commandline utility included with Substrate. It allows generating an
 
 You can see the full list of commands with `subkey --help`. Most commands have additional help available with for instance `subkey generate --help` for the `generate` command.
 
-## Satefy first
+## Safety first
 
 `subkey` does not need an internet connection to work. Indeed, for the best security, you should be using `subkey` on a machine that is **not connected** to the internet.
 
-`subkey` deals with **seeds** and **private keys**. Make sure to use `subkey` in a safe environment (ie. no one looking over your shoulder) and on a safe computer (ie. no one able to check you commands history).
+`subkey` deals with **seeds** and **private keys**. Make sure to use `subkey` in a safe environment (ie. no one looking over your shoulder) and on a safe computer (ie. no one able to check your command history).
 
 If you save any output of `subkey` into a file, make sure to apply proper permissions and/or delete the file as soon as possible.
 
@@ -255,7 +255,7 @@ Secret Key URI `0x8c9a73097f235b84021a446bc2826a00c690ea0be3e0d81a84931cb4146d66
   SS58 Address:     1bobYxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE
 ```
 
-`Bob` now got a nice address starting with his name: 1**bob**YxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE.
+`Bob` now got a nice address starting with their name: 1**bob**YxBPjZWRPbVo35aSwci1u5Zmq8P6J2jpa4kkudBZMqE.
 
 **Note**: While `Bob`, having a short name (3 chars), got a result rather quickly, it will take much longer for `Alice` who has a much longer name, thus the chances to generate a random address that contains the chain `alice` will be much smaller.
 
