@@ -129,8 +129,6 @@ parameter_types! {
 /// It sets SomeStorage to S, and returns a weight derived from UpgradeReads and UpgradeWrites.
 impl<T: dummy_pallet::Config, S: Get<u32>> OnRuntimeUpgrade for SomeUnversionedMigration<T, S> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		// This is a dummy migration that just sets the storage version to 4.
-		// It is used to test the `VersionedRuntimeUpgrade` trait.
 		dummy_pallet::SomeStorage::<T>::put(S::get());
 		RocksDbWeight::get().reads_writes(UpgradeReads::get(), UpgradeWrites::get())
 	}
