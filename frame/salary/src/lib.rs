@@ -142,11 +142,11 @@ pub mod pallet {
 		type Budget: Get<BalanceOf<Self, I>>;
 	}
 
-	pub type CycleIndexOf<T> = <T as frame_system::Config>::BlockNumber;
+	pub type CycleIndexOf<T> = frame_system::BlockNumberOf<T>;
 	pub type BalanceOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Balance;
 	pub type IdOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Id;
 	pub type StatusOf<T, I> =
-		StatusType<CycleIndexOf<T>, <T as frame_system::Config>::BlockNumber, BalanceOf<T, I>>;
+		StatusType<CycleIndexOf<T>, frame_system::BlockNumberOf<T>, BalanceOf<T, I>>;
 	pub type ClaimantStatusOf<T, I> = ClaimantStatus<CycleIndexOf<T>, BalanceOf<T, I>, IdOf<T, I>>;
 
 	/// The overall status of the system.

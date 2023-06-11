@@ -2473,7 +2473,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		)
 	}
 
-	fn pin_block(&self, hash: <Block as BlockT>::Hash) -> sp_blockchain::Result<()> {
+	fn pin_block(&self, hash: <Block as HeaderProvider>::Hash) -> sp_blockchain::Result<()> {
 		let hint = || {
 			let header_metadata = self.blockchain.header_metadata(hash);
 			header_metadata
@@ -2508,7 +2508,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(())
 	}
 
-	fn unpin_block(&self, hash: <Block as BlockT>::Hash) {
+	fn unpin_block(&self, hash: <Block as HeaderProvider>::Hash) {
 		self.storage.state_db.unpin(&hash);
 
 		if self.blocks_pruning != BlocksPruning::KeepAll {

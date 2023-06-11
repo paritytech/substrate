@@ -419,9 +419,9 @@ impl<T: Config> Pallet<T> {
 				let transaction_type = block_number % 4u32.into();
 				if transaction_type == Zero::zero() {
 					TransactionType::Signed
-				} else if transaction_type == frame_system::BlockNumberOf<T>::from(1u32) {
+				} else if transaction_type == frame_system::BlockNumberOf::<T>::from(1u32) {
 					TransactionType::UnsignedForAny
-				} else if transaction_type == frame_system::BlockNumberOf<T>::from(2u32) {
+				} else if transaction_type == frame_system::BlockNumberOf::<T>::from(2u32) {
 					TransactionType::UnsignedForAll
 				} else {
 					TransactionType::Raw

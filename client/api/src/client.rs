@@ -44,12 +44,12 @@ pub type FinalityNotifications<Block> = TracingUnboundedReceiver<FinalityNotific
 /// This may be used as chain spec extension to set trusted checkpoints, i.e.
 /// the client will refuse to import a block with a different hash at the given
 /// height.
-pub type ForkBlocks<Block> = Option<Vec<(NumberFor<Block>, <Block as BlockT>::Hash)>>;
+pub type ForkBlocks<Block> = Option<Vec<(NumberFor<Block>, <Block as HeaderProvider>::Hash)>>;
 
 /// Known bad block hashes.
 ///
 /// This may be used as chain spec extension to filter out known, unwanted forks.
-pub type BadBlocks<Block> = Option<HashSet<<Block as BlockT>::Hash>>;
+pub type BadBlocks<Block> = Option<HashSet<<Block as HeaderProvider>::Hash>>;
 
 /// Figure out the block type for a given type (for now, just a `Client`).
 pub trait BlockOf {

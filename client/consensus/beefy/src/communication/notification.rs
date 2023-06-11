@@ -23,12 +23,12 @@ use crate::justification::BeefyVersionedFinalityProof;
 
 /// The sending half of the notifications channel(s) used to send
 /// notifications about best BEEFY block from the gadget side.
-pub type BeefyBestBlockSender<Block> = NotificationSender<<Block as BlockT>::Hash>;
+pub type BeefyBestBlockSender<Block> = NotificationSender<<Block as HeaderProvider>::Hash>;
 
 /// The receiving half of a notifications channel used to receive
 /// notifications about best BEEFY blocks determined on the gadget side.
 pub type BeefyBestBlockStream<Block> =
-	NotificationStream<<Block as BlockT>::Hash, BeefyBestBlockTracingKey>;
+	NotificationStream<<Block as HeaderProvider>::Hash, BeefyBestBlockTracingKey>;
 
 /// The sending half of the notifications channel(s) used to send notifications
 /// about versioned finality proof generated at the end of a BEEFY round.

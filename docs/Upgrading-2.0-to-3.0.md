@@ -811,7 +811,7 @@ Altogether this accumulates to the following diff for `node/cli/src/service.rs`.
 -	TaskManager, RpcHandlers, Arc<LightClient>,
 +pub fn new_light_base(mut config: Configuration) -> Result<(
 +	TaskManager, RpcHandlers, Option<TelemetryConnectionNotifier>, Arc<LightClient>,
- 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
+ 	Arc<NetworkService<Block, <Block as HeaderProvider>::Hash>>,
  	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
  ), ServiceError> {
 -	let (client, backend, keystore, mut task_manager, on_demand) =

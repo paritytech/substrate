@@ -87,7 +87,7 @@ pub mod pallet {
 		/// The staking balance.
 		type Currency: LockableCurrency<
 			Self::AccountId,
-			Moment = Self::BlockNumber,
+			Moment = frame_system::BlockNumberOf<Self>,
 			Balance = Self::CurrencyBalance,
 		>;
 		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
@@ -118,14 +118,14 @@ pub mod pallet {
 		/// Something that provides the election functionality.
 		type ElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = frame_system::BlockNumberOf<Self>,
 			// we only accept an election provider that has staking as data provider.
 			DataProvider = Pallet<Self>,
 		>;
 		/// Something that provides the election functionality at genesis.
 		type GenesisElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = frame_system::BlockNumberOf<Self>,
 			DataProvider = Pallet<Self>,
 		>;
 

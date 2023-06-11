@@ -732,7 +732,7 @@ mod tests {
 			}
 
 			fn offchain_worker(n: frame_system::BlockNumberOf<T>) {
-				assert_eq!(frame_system::BlockNumberOf<T>::from(1u32), n);
+				assert_eq!(frame_system::BlockNumberOf::<T>::from(1u32), n);
 			}
 		}
 

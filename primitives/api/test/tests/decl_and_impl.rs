@@ -114,12 +114,12 @@ mock_impl_runtime_apis! {
 		}
 
 		#[advanced]
-		fn same_name(_: <Block as BlockT>::Hash) -> Result<(), ApiError> {
+		fn same_name(_: <Block as HeaderProvider>::Hash) -> Result<(), ApiError> {
 			Ok(().into())
 		}
 
 		#[advanced]
-		fn wild_card(at: <Block as BlockT>::Hash, _: u32) -> Result<(), ApiError> {
+		fn wild_card(at: <Block as HeaderProvider>::Hash, _: u32) -> Result<(), ApiError> {
 			if Hash::repeat_byte(0x0f) == at {
 				// yeah
 				Ok(().into())
@@ -145,19 +145,19 @@ type TestClient = substrate_test_runtime_client::client::Client<
 fn test_client_side_function_signature() {
 	let _test: fn(
 		&RuntimeApiImpl<Block, TestClient>,
-		<Block as BlockT>::Hash,
+		<Block as HeaderProvider>::Hash,
 		u64,
 	) -> Result<(), ApiError> = RuntimeApiImpl::<Block, TestClient>::test;
 	let _something_with_block: fn(
 		&RuntimeApiImpl<Block, TestClient>,
-		<Block as BlockT>::Hash,
+		<Block as HeaderProvider>::Hash,
 		Block,
 	) -> Result<Block, ApiError> = RuntimeApiImpl::<Block, TestClient>::something_with_block;
 
 	#[allow(deprecated)]
 	let _same_name_before_version_2: fn(
 		&RuntimeApiImpl<Block, TestClient>,
-		<Block as BlockT>::Hash,
+		<Block as HeaderProvider>::Hash,
 	) -> Result<String, ApiError> = RuntimeApiImpl::<Block, TestClient>::same_name_before_version_2;
 }
 

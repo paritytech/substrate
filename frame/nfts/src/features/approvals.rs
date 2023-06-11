@@ -24,7 +24,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		item: T::ItemId,
 		delegate: T::AccountId,
-		maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
+		maybe_deadline: Option<frame_system::BlockNumberOf<T>>,
 	) -> DispatchResult {
 		ensure!(
 			Self::is_pallet_feature_enabled(PalletFeature::Approvals),

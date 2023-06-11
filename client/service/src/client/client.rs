@@ -1488,7 +1488,7 @@ where
 {
 	fn storage_keys(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeysIter<B::State, Block>> {
@@ -1499,7 +1499,7 @@ where
 
 	fn child_storage_keys(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		child_info: ChildInfo,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
@@ -1511,7 +1511,7 @@ where
 
 	fn storage_pairs(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<PairsIter<B::State, Block>> {
@@ -1534,7 +1534,7 @@ where
 
 	fn storage_hash(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.state_at(hash)?
@@ -1544,7 +1544,7 @@ where
 
 	fn child_storage(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>> {
@@ -1557,7 +1557,7 @@ where
 
 	fn child_storage_hash(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {

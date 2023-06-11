@@ -54,7 +54,7 @@ impl<Block: BlockT> WasmSubstitute<Block> {
 	/// Returns `true` when the substitute matches for the given `hash`.
 	fn matches(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		backend: &impl backend::Backend<Block>,
 	) -> bool {
 		let requested_block_number = backend.blockchain().number(hash).ok().flatten();

@@ -80,7 +80,7 @@ impl From<Error> for i32 {
 
 impl<C, Block, Balance>
 	TransactionPaymentApiServer<
-		<Block as BlockT>::Hash,
+		<Block as HeaderProvider>::Hash,
 		RuntimeDispatchInfo<Balance, sp_weights::Weight>,
 	> for TransactionPayment<C, Block>
 where

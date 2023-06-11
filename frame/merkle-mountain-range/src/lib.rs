@@ -91,7 +91,7 @@ pub struct ParentNumberAndHash<T: frame_system::Config> {
 }
 
 impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
-	type LeafData = (<T as frame_system::Config>::BlockNumber, <T as frame_system::Config>::Hash);
+	type LeafData = (frame_system::BlockNumberOf<T>, <T as frame_system::Config>::Hash);
 
 	fn leaf_data() -> Self::LeafData {
 		(
@@ -266,7 +266,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		pos: NodeIndex,
 		parent_hash: <T as frame_system::Config>::Hash,
 	) -> sp_std::prelude::Vec<u8> {
-		NodesUtils::node_temp_offchain_key::<<T as frame_system::Config>::Header>(
+		NodesUtils::node_temp_offchain_key::<frame_system::HeaderOf<T>>(
 			&T::INDEXING_PREFIX,
 			pos,
 			parent_hash,
@@ -286,7 +286,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn leaf_index_to_parent_block_num(
 		leaf_index: LeafIndex,
 		leaves_count: LeafIndex,
-	) -> <T as frame_system::Config>::BlockNumber {
+	) -> frame_system::BlockNumberOf<T> {
 		// leaves are zero-indexed and were added one per block since pallet activation,
 		// while block numbers are one-indexed, so block number that added `leaf_idx` is:
 		// `block_num = block_num_when_pallet_activated + leaf_idx + 1`
@@ -302,12 +302,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	where
 		T: frame_system::Config,
 	{
-		let first_mmr_block = utils::first_mmr_block_num::<T::Header>(
+		let first_mmr_block = utils::first_mmr_block_num::<frame_system::HeaderOf<T>>(
 			<frame_system::Pallet<T>>::block_number(),
 			Self::mmr_leaves(),
 		)?;
 
-		utils::block_num_to_leaf_index::<T::Header>(block_num, first_mmr_block)
+		utils::block_num_to_leaf_index::<frame_system::HeaderOf<T>>(block_num, first_mmr_block)
 	}
 
 	/// Generate an MMR proof for the given `block_numbers`.

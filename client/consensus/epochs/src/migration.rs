@@ -39,10 +39,10 @@ pub struct EpochChangesV1<Hash, Number, E: Epoch> {
 
 /// Type alias for v0 definition of epoch changes.
 pub type EpochChangesV0For<Block, Epoch> =
-	EpochChangesV0<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+	EpochChangesV0<<Block as HeaderProvider>::Hash, NumberFor<Block>, Epoch>;
 /// Type alias for v1 and v2 definition of epoch changes.
 pub type EpochChangesV1For<Block, Epoch> =
-	EpochChangesV1<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+	EpochChangesV1<<Block as HeaderProvider>::Hash, NumberFor<Block>, Epoch>;
 
 impl<Hash, Number, E: Epoch> EpochChangesV0<Hash, Number, E>
 where

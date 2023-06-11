@@ -444,7 +444,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	/// values in that block.
 	fn storage_pairs(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<PairsIter<B::State, Block>>;

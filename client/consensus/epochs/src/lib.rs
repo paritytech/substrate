@@ -692,7 +692,7 @@ where
 
 /// Type alias to produce the epoch-changes tree from a block type.
 pub type EpochChangesFor<Block, Epoch> =
-	EpochChanges<<Block as BlockT>::Hash, NumberFor<Block>, Epoch>;
+	EpochChanges<<Block as HeaderProvider>::Hash, NumberFor<Block>, Epoch>;
 
 /// A shared epoch changes tree.
 pub type SharedEpochChanges<Block, Epoch> =

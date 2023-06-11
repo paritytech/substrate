@@ -447,14 +447,14 @@ mod tests {
 		}
 	}
 
-	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>> for TestNetwork {
-		fn announce_block(&self, _hash: <Block as BlockT>::Hash, _data: Option<Vec<u8>>) {
+	impl NetworkBlock<<Block as HeaderProvider>::Hash, NumberFor<Block>> for TestNetwork {
+		fn announce_block(&self, _hash: <Block as HeaderProvider>::Hash, _data: Option<Vec<u8>>) {
 			unimplemented!();
 		}
 
 		fn new_best_block_imported(
 			&self,
-			_hash: <Block as BlockT>::Hash,
+			_hash: <Block as HeaderProvider>::Hash,
 			_number: NumberFor<Block>,
 		) {
 			unimplemented!();
@@ -483,14 +483,14 @@ mod tests {
 		}
 	}
 
-	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>> for TestSync {
-		fn announce_block(&self, _hash: <Block as BlockT>::Hash, _data: Option<Vec<u8>>) {
+	impl NetworkBlock<<Block as HeaderProvider>::Hash, NumberFor<Block>> for TestSync {
+		fn announce_block(&self, _hash: <Block as HeaderProvider>::Hash, _data: Option<Vec<u8>>) {
 			unimplemented!();
 		}
 
 		fn new_best_block_imported(
 			&self,
-			_hash: <Block as BlockT>::Hash,
+			_hash: <Block as HeaderProvider>::Hash,
 			_number: NumberFor<Block>,
 		) {
 			unimplemented!();

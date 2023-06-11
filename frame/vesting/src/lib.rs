@@ -162,7 +162,7 @@ pub mod pallet {
 		type Currency: LockableCurrency<Self::AccountId>;
 
 		/// Convert the block number into a balance.
-		type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
+		type BlockNumberToBalance: Convert<frame_system::BlockNumberOf<Self>, BalanceOf<Self>>;
 
 		/// The minimum amount transferred to call `vested_transfer`.
 		#[pallet::constant]
@@ -237,7 +237,7 @@ pub mod pallet {
 				assert!(!balance.is_zero(), "Currencies must be init'd before vesting");
 				// Total genesis `balance` minus `liquid` equals funds locked for vesting
 				let locked = balance.saturating_sub(liquid);
-				let length_as_balance = frame_system::BlockNumberOf<T>ToBalance::convert(length);
+				let length_as_balance = T::BlockNumberToBalance::convert(length);
 				let per_block = locked / length_as_balance.max(sp_runtime::traits::One::one());
 				let vesting_info = VestingInfo::new(locked, per_block, begin);
 				if !vesting_info.is_valid() {
@@ -437,9 +437,9 @@ impl<T: Config> Pallet<T> {
 		schedule1: VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>,
 		schedule2: VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>,
 	) -> Option<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>> {
-		let schedule1_ending_block = schedule1.ending_block_as_balance::<frame_system::BlockNumberOf<T>ToBalance>();
-		let schedule2_ending_block = schedule2.ending_block_as_balance::<frame_system::BlockNumberOf<T>ToBalance>();
-		let now_as_balance = frame_system::BlockNumberOf<T>ToBalance::convert(now);
+		let schedule1_ending_block = schedule1.ending_block_as_balance::<T::BlockNumberToBalance>();
+		let schedule2_ending_block = schedule2.ending_block_as_balance::<T::BlockNumberToBalance>();
+		let now_as_balance = T::BlockNumberToBalance::convert(now);
 
 		// Check if one or both schedules have ended.
 		match (schedule1_ending_block <= now_as_balance, schedule2_ending_block <= now_as_balance) {
@@ -454,8 +454,8 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let locked = schedule1
-			.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now)
-			.saturating_add(schedule2.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now));
+			.locked_at::<T::BlockNumberToBalance>(now)
+			.saturating_add(schedule2.locked_at::<T::BlockNumberToBalance>(now));
 		// This shouldn't happen because we know at least one ending block is greater than now,
 		// thus at least a schedule a some locked balance.
 		debug_assert!(
@@ -468,7 +468,7 @@ impl<T: Config> Pallet<T> {
 
 		let per_block = {
 			let duration = ending_block
-				.saturating_sub(frame_system::BlockNumberOf<T>ToBalance::convert(starting_block))
+				.saturating_sub(T::BlockNumberToBalance::convert(starting_block))
 				.max(One::one());
 			(locked / duration).max(One::one())
 		};
@@ -540,7 +540,7 @@ impl<T: Config> Pallet<T> {
 		let filtered_schedules = action
 			.pick_schedules::<T>(schedules)
 			.filter(|schedule| {
-				let locked_now = schedule.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now);
+				let locked_now = schedule.locked_at::<T::BlockNumberToBalance>(now);
 				let keep = !locked_now.is_zero();
 				if keep {
 					total_locked_now = total_locked_now.saturating_add(locked_now);
@@ -625,7 +625,7 @@ impl<T: Config> Pallet<T> {
 					schedules.push(new_schedule);
 					// (we use `locked_at` in case this is a schedule that started in the past)
 					let new_schedule_locked =
-						new_schedule.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now);
+						new_schedule.locked_at::<T::BlockNumberToBalance>(now);
 					// and 2) update the locked amount to reflect the schedule we just added.
 					locked_now = locked_now.saturating_add(new_schedule_locked);
 				} // In the None case there was no new schedule to account for.
@@ -656,7 +656,7 @@ where
 		if let Some(v) = Self::vesting(who) {
 			let now = <frame_system::Pallet<T>>::block_number();
 			let total_locked_now = v.iter().fold(Zero::zero(), |total, schedule| {
-				schedule.locked_at::<frame_system::BlockNumberOf<T>ToBalance>(now).saturating_add(total)
+				schedule.locked_at::<T::BlockNumberToBalance>(now).saturating_add(total)
 			});
 			Some(T::Currency::free_balance(who).min(total_locked_now))
 		} else {

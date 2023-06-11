@@ -55,7 +55,7 @@ pub fn create_heartbeat<T: Config>(
 		external_addresses: vec![OpaqueMultiaddr::new(vec![0; 32]); e as usize],
 	};
 	let input_heartbeat = Heartbeat {
-		block_number: frame_system::BlockNumberOf<T>::zero(),
+		block_number: frame_system::BlockNumberOf::<T>::zero(),
 		network_state,
 		session_index: 0,
 		authority_index: k - 1,

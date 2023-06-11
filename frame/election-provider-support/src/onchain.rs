@@ -73,7 +73,7 @@ pub trait Config {
 	/// Something that provides the data for election.
 	type DataProvider: ElectionDataProvider<
 		AccountId = <Self::System as frame_system::Config>::AccountId,
-		BlockNumber = <Self::System as frame_system::Config>::BlockNumber,
+		BlockNumber = frame_system::BlockNumberOf<Self::System>,
 	>;
 
 	/// Weight information for extrinsics in this pallet.
@@ -151,7 +151,7 @@ fn elect_with_input_bounds<T: Config>(
 
 impl<T: Config> ElectionProviderBase for OnChainExecution<T> {
 	type AccountId = <T::System as frame_system::Config>::AccountId;
-	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
+	type BlockNumber = frame_system::BlockNumberOf<T::System>;
 	type Error = Error;
 	type MaxWinners = T::MaxWinners;
 	type DataProvider = T::DataProvider;

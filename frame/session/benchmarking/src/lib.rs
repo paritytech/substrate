@@ -156,7 +156,7 @@ fn check_membership_proof_setup<T: Config>(
 		Session::<T>::set_keys(RawOrigin::Signed(controller).into(), keys, proof).unwrap();
 	}
 
-	Pallet::<T>::on_initialize(frame_system::BlockNumberOf<T>::one());
+	Pallet::<T>::on_initialize(frame_system::BlockNumberOf::<T>::one());
 
 	// skip sessions until the new validator set is enacted
 	while Session::<T>::validators().len() < n as usize {

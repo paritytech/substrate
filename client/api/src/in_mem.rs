@@ -632,7 +632,7 @@ impl<Block: BlockT> Backend<Block> {
 	/// # Warning
 	///
 	/// For testing purposes only!
-	pub fn pin_refs(&self, hash: &<Block as BlockT>::Hash) -> Option<i64> {
+	pub fn pin_refs(&self, hash: &<Block as HeaderProvider>::Hash) -> Option<i64> {
 		let blocks = self.pinned_blocks.read();
 		blocks.get(hash).map(|value| *value)
 	}
@@ -779,13 +779,13 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> {
 		false
 	}
 
-	fn pin_block(&self, hash: <Block as BlockT>::Hash) -> blockchain::Result<()> {
+	fn pin_block(&self, hash: <Block as HeaderProvider>::Hash) -> blockchain::Result<()> {
 		let mut blocks = self.pinned_blocks.write();
 		*blocks.entry(hash).or_default() += 1;
 		Ok(())
 	}
 
-	fn unpin_block(&self, hash: <Block as BlockT>::Hash) {
+	fn unpin_block(&self, hash: <Block as HeaderProvider>::Hash) {
 		let mut blocks = self.pinned_blocks.write();
 		blocks.entry(hash).and_modify(|counter| *counter -= 1).or_insert(-1);
 	}

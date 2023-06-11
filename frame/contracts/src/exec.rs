@@ -48,7 +48,7 @@ use sp_std::{marker::PhantomData, mem, prelude::*, vec::Vec};
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type MomentOf<T> = <<T as Config>::Time as Time>::Moment;
 pub type SeedOf<T> = <T as frame_system::Config>::Hash;
-pub type BlockNumberOf<T> = <T as frame_system::Config>::BlockNumber;
+pub type BlockNumberOf<T> = frame_system::BlockNumberOf<T>;
 pub type ExecResult = Result<ExecReturnValue, ExecError>;
 
 /// A type that represents a topic of an event. At the moment a hash is used.

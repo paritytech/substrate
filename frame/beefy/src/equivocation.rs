@@ -126,7 +126,7 @@ pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, 
 /// Equivocation evidence convenience alias.
 pub type EquivocationEvidenceFor<T> = (
 	EquivocationProof<
-		<T as frame_system::Config>::BlockNumber,
+		frame_system::BlockNumberOf<T>,
 		<T as Config>::BeefyId,
 		<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
 	>,

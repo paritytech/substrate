@@ -504,7 +504,7 @@ where
 			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
 			block_timer.elapsed().as_millis(),
-			<Block as BlockT>::Hash::from(block.header().hash()),
+			<Block as HeaderProvider>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
 			block.extrinsics().len(),
 			block.extrinsics()
@@ -518,7 +518,7 @@ where
 			CONSENSUS_INFO;
 			"prepared_block_for_proposing";
 			"number" => ?block.header().number(),
-			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
+			"hash" => ?<Block as HeaderProvider>::Hash::from(block.header().hash()),
 		);
 
 		let proof =

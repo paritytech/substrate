@@ -77,7 +77,7 @@ mod module1 {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub value: <T as Config<I>>::GenericType,
-		pub test: <T as frame_system::Config>::BlockNumber,
+		pub test: frame_system::BlockNumberOf<T>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {

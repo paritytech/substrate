@@ -164,7 +164,7 @@ impl<
 
 	fn storage_pairs(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		prefix: Option<&StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<PairsIter<BE::State, Block>> {

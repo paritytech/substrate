@@ -33,7 +33,7 @@ pub trait ClientExt<Block: BlockT>: Sized {
 	) -> sp_blockchain::Result<()>;
 
 	/// Returns hash of the genesis block.
-	fn genesis_hash(&self) -> <Block as BlockT>::Hash;
+	fn genesis_hash(&self) -> <Block as HeaderProvider>::Hash;
 }
 
 /// Extension trait for a test client around block importing.
@@ -80,7 +80,7 @@ where
 		Finalizer::finalize_block(self, hash, justification, true)
 	}
 
-	fn genesis_hash(&self) -> <Block as BlockT>::Hash {
+	fn genesis_hash(&self) -> <Block as HeaderProvider>::Hash {
 		self.block_hash(0u32.into()).unwrap().unwrap()
 	}
 }

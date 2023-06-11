@@ -160,7 +160,7 @@ impl PeersClient {
 
 	pub fn header(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 	) -> ClientResult<Option<<Block as BlockT>::Header>> {
 		self.client.header(hash)
 	}
@@ -181,7 +181,7 @@ impl PeersClient {
 
 	pub fn justifications(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 	) -> ClientResult<Option<Justifications>> {
 		self.client.justifications(hash)
 	}
@@ -196,7 +196,7 @@ impl PeersClient {
 
 	pub fn finalize_block(
 		&self,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> ClientResult<()> {
@@ -235,7 +235,7 @@ pub struct Peer<D, BlockImport> {
 	block_import: BlockImportAdapter<BlockImport>,
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
-	network: NetworkWorker<Block, <Block as BlockT>::Hash>,
+	network: NetworkWorker<Block, <Block as HeaderProvider>::Hash>,
 	sync_service: Arc<SyncingService<Block>>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
@@ -280,12 +280,12 @@ where
 	}
 
 	/// Request a justification for the given block.
-	pub fn request_justification(&self, hash: &<Block as BlockT>::Hash, number: NumberFor<Block>) {
+	pub fn request_justification(&self, hash: &<Block as HeaderProvider>::Hash, number: NumberFor<Block>) {
 		self.sync_service.request_justification(hash, number);
 	}
 
 	/// Announces an important block on the network.
-	pub fn announce_block(&self, hash: <Block as BlockT>::Hash, data: Option<Vec<u8>>) {
+	pub fn announce_block(&self, hash: <Block as HeaderProvider>::Hash, data: Option<Vec<u8>>) {
 		self.sync_service.announce_block(hash, data);
 	}
 
@@ -293,7 +293,7 @@ where
 	pub fn set_sync_fork_request(
 		&self,
 		peers: Vec<PeerId>,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 		number: NumberFor<Block>,
 	) {
 		self.sync_service.set_sync_fork_request(peers, hash, number);
@@ -501,7 +501,7 @@ where
 	}
 
 	/// Get a reference to the network service.
-	pub fn network_service(&self) -> &Arc<NetworkService<Block, <Block as BlockT>::Hash>> {
+	pub fn network_service(&self) -> &Arc<NetworkService<Block, <Block as HeaderProvider>::Hash>> {
 		self.network.service()
 	}
 
@@ -510,7 +510,7 @@ where
 	}
 
 	/// Get a reference to the network worker.
-	pub fn network(&self) -> &NetworkWorker<Block, <Block as BlockT>::Hash> {
+	pub fn network(&self) -> &NetworkWorker<Block, <Block as HeaderProvider>::Hash> {
 		&self.network
 	}
 
@@ -533,7 +533,7 @@ where
 	}
 
 	/// Return a collection of block hashes that failed verification
-	pub fn failed_verifications(&self) -> HashMap<<Block as BlockT>::Hash, String> {
+	pub fn failed_verifications(&self) -> HashMap<<Block as HeaderProvider>::Hash, String> {
 		self.verifier.failed_verifications.lock().clone()
 	}
 

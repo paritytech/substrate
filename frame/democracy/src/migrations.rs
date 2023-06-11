@@ -46,7 +46,7 @@ mod v0 {
 		frame_support::Twox64Concat,
 		ReferendumIndex,
 		ReferendumInfo<
-			<T as frame_system::Config>::BlockNumber,
+			frame_system::BlockNumberOf<T>,
 			<T as frame_system::Config>::Hash,
 			BalanceOf<T>,
 		>,

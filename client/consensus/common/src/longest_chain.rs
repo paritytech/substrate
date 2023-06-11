@@ -48,7 +48,7 @@ where
 		LongestChain { backend, _phantom: Default::default() }
 	}
 
-	fn best_hash(&self) -> sp_blockchain::Result<<Block as BlockT>::Hash> {
+	fn best_hash(&self) -> sp_blockchain::Result<<Block as HeaderProvider>::Hash> {
 		let info = self.backend.blockchain().info();
 		let import_lock = self.backend.get_import_lock();
 		let best_hash = self
@@ -127,7 +127,7 @@ where
 		Ok(best_hash)
 	}
 
-	fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, sp_blockchain::Error> {
+	fn leaves(&self) -> Result<Vec<<Block as HeaderProvider>::Hash>, sp_blockchain::Error> {
 		self.backend.blockchain().leaves()
 	}
 }
@@ -138,7 +138,7 @@ where
 	B: backend::Backend<Block>,
 	Block: BlockT,
 {
-	async fn leaves(&self) -> Result<Vec<<Block as BlockT>::Hash>, ConsensusError> {
+	async fn leaves(&self) -> Result<Vec<<Block as HeaderProvider>::Hash>, ConsensusError> {
 		LongestChain::leaves(self).map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 

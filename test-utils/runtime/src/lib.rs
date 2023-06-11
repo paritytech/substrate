@@ -502,7 +502,7 @@ impl_runtime_apis! {
 		fn validate_transaction(
 			source: TransactionSource,
 			utx: <Block as BlockT>::Extrinsic,
-			block_hash: <Block as BlockT>::Hash,
+			block_hash: <Block as HeaderProvider>::Hash,
 		) -> TransactionValidity {
 			let validity = Executive::validate_transaction(source, utx.clone(), block_hash);
 			log::trace!(target: LOG_TARGET, "validate_transaction {:?} {:?}", utx, validity);
@@ -696,7 +696,7 @@ impl_runtime_apis! {
 
 		fn submit_report_equivocation_unsigned_extrinsic(
 			_equivocation_proof: sp_consensus_grandpa::EquivocationProof<
-			<Block as BlockT>::Hash,
+			<Block as HeaderProvider>::Hash,
 			NumberFor<Block>,
 			>,
 			_key_owner_proof: sp_consensus_grandpa::OpaqueKeyOwnershipProof,

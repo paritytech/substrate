@@ -685,13 +685,13 @@ pub mod pallet {
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = frame_system::BlockNumberOf<Self>,
 		>;
 
 		/// Configuration for the fallback.
 		type Fallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = frame_system::BlockNumberOf<Self>,
 			DataProvider = Self::DataProvider,
 			MaxWinners = Self::MaxWinners,
 		>;
@@ -702,7 +702,7 @@ pub mod pallet {
 		/// BoundedExecution<_>` if the test-net is not expected to have thousands of nominators.
 		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = frame_system::BlockNumberOf<Self>,
 			DataProvider = Self::DataProvider,
 			MaxWinners = Self::MaxWinners,
 		>;

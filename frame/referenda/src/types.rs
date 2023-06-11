@@ -42,7 +42,7 @@ pub type PalletsOriginOf<T> =
 pub type ReferendumInfoOf<T, I> = ReferendumInfo<
 	TrackIdOf<T, I>,
 	PalletsOriginOf<T>,
-	<T as frame_system::Config>::BlockNumber,
+	frame_system::BlockNumberOf<T>,
 	BoundedCallOf<T, I>,
 	BalanceOf<T, I>,
 	TallyOf<T, I>,
@@ -52,22 +52,22 @@ pub type ReferendumInfoOf<T, I> = ReferendumInfo<
 pub type ReferendumStatusOf<T, I> = ReferendumStatus<
 	TrackIdOf<T, I>,
 	PalletsOriginOf<T>,
-	<T as frame_system::Config>::BlockNumber,
+	frame_system::BlockNumberOf<T>,
 	BoundedCallOf<T, I>,
 	BalanceOf<T, I>,
 	TallyOf<T, I>,
 	<T as frame_system::Config>::AccountId,
 	ScheduleAddressOf<T, I>,
 >;
-pub type DecidingStatusOf<T> = DecidingStatus<<T as frame_system::Config>::BlockNumber>;
+pub type DecidingStatusOf<T> = DecidingStatus<frame_system::BlockNumberOf<T>>;
 pub type TrackInfoOf<T, I = ()> =
-	TrackInfo<BalanceOf<T, I>, <T as frame_system::Config>::BlockNumber>;
+	TrackInfo<BalanceOf<T, I>, frame_system::BlockNumberOf<T>>;
 pub type TrackIdOf<T, I> = <<T as Config<I>>::Tracks as TracksInfo<
 	BalanceOf<T, I>,
-	<T as frame_system::Config>::BlockNumber,
+	frame_system::BlockNumberOf<T>,
 >>::Id;
 pub type ScheduleAddressOf<T, I> = <<T as Config<I>>::Scheduler as Anon<
-	<T as frame_system::Config>::BlockNumber,
+	frame_system::BlockNumberOf<T>,
 	CallOf<T, I>,
 	PalletsOriginOf<T>,
 >>::Address;

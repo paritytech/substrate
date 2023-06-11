@@ -162,7 +162,7 @@ pub mod pallet {
 		/// (from an offchain context).
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
-			(EquivocationProof<Self::Header>, Self::KeyOwnerProof),
+			(EquivocationProof<frame_system::HeaderOf<Self>>, Self::KeyOwnerProof),
 		>;
 	}
 
@@ -407,7 +407,7 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<EquivocationProof<T::Header>>,
+			equivocation_proof: Box<EquivocationProof<frame_system::HeaderOf<T>>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
@@ -433,7 +433,7 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<EquivocationProof<T::Header>>,
+			equivocation_proof: Box<EquivocationProof<frame_system::HeaderOf<T>>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -811,7 +811,7 @@ impl<T: Config> Pallet<T> {
 
 			// how many slots were skipped between current and last block
 			let lateness = current_slot.saturating_sub(CurrentSlot::<T>::get() + 1);
-			let lateness = frame_system::BlockNumberOf<T>::from(*lateness as u32);
+			let lateness = frame_system::BlockNumberOf::<T>::from(*lateness as u32);
 
 			Lateness::<T>::put(lateness);
 			CurrentSlot::<T>::put(current_slot);
@@ -877,7 +877,7 @@ impl<T: Config> Pallet<T> {
 	/// will push the transaction to the pool. Only useful in an offchain
 	/// context.
 	pub fn submit_unsigned_equivocation_report(
-		equivocation_proof: EquivocationProof<T::Header>,
+		equivocation_proof: EquivocationProof<frame_system::HeaderOf<T>>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
 		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()

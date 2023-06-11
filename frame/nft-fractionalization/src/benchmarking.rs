@@ -41,7 +41,7 @@ type BalanceOf<T> =
 
 type CollectionConfigOf<T> = CollectionConfig<
 	BalanceOf<T>,
-	<T as SystemConfig>::BlockNumber,
+	frame_system::BlockNumberOf<T>,
 	<T as Config>::NftCollectionId,
 >;
 

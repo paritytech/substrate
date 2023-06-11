@@ -552,12 +552,12 @@ where
 async fn transaction_notifications<Block, ExPool>(
 	transaction_pool: Arc<ExPool>,
 	tx_handler_controller: sc_network_transactions::TransactionsHandlerController<
-		<Block as BlockT>::Hash,
+		<Block as HeaderProvider>::Hash,
 	>,
 	telemetry: Option<TelemetryHandle>,
 ) where
 	Block: BlockT,
-	ExPool: MaintainedTransactionPool<Block = Block, Hash = <Block as BlockT>::Hash>,
+	ExPool: MaintainedTransactionPool<Block = Block, Hash = <Block as HeaderProvider>::Hash>,
 {
 	// transaction notifications
 	transaction_pool

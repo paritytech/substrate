@@ -89,7 +89,7 @@ where
 		&self,
 		encoded: &EncodedJustification,
 		number: NumberFor<Block>,
-		hash: <Block as BlockT>::Hash,
+		hash: <Block as HeaderProvider>::Hash,
 	) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
 		use ConsensusError::ClientImport as ImportError;
 		let beefy_genesis = self

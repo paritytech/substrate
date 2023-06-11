@@ -140,7 +140,7 @@ impl<C, B> Mmr<C, B> {
 }
 
 #[async_trait]
-impl<Client, Block, MmrHash> MmrApiServer<<Block as BlockT>::Hash, NumberFor<Block>, MmrHash>
+impl<Client, Block, MmrHash> MmrApiServer<<Block as HeaderProvider>::Hash, NumberFor<Block>, MmrHash>
 	for Mmr<Client, (Block, MmrHash)>
 where
 	Block: BlockT,
@@ -148,7 +148,7 @@ where
 	Client::Api: MmrRuntimeApi<Block, MmrHash, NumberFor<Block>>,
 	MmrHash: Codec + Send + Sync + 'static,
 {
-	fn mmr_root(&self, at: Option<<Block as BlockT>::Hash>) -> RpcResult<MmrHash> {
+	fn mmr_root(&self, at: Option<<Block as HeaderProvider>::Hash>) -> RpcResult<MmrHash> {
 		let block_hash = at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash);
@@ -164,8 +164,8 @@ where
 		&self,
 		block_numbers: Vec<NumberFor<Block>>,
 		best_known_block_number: Option<NumberFor<Block>>,
-		at: Option<<Block as BlockT>::Hash>,
-	) -> RpcResult<LeavesProof<<Block as BlockT>::Hash>> {
+		at: Option<<Block as HeaderProvider>::Hash>,
+	) -> RpcResult<LeavesProof<<Block as HeaderProvider>::Hash>> {
 		let api = self.client.runtime_api();
 		let block_hash = at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -184,7 +184,7 @@ where
 		Ok(LeavesProof::new(block_hash, leaves, proof))
 	}
 
-	fn verify_proof(&self, proof: LeavesProof<<Block as BlockT>::Hash>) -> RpcResult<bool> {
+	fn verify_proof(&self, proof: LeavesProof<<Block as HeaderProvider>::Hash>) -> RpcResult<bool> {
 		let api = self.client.runtime_api();
 
 		let leaves = Decode::decode(&mut &proof.leaves.0[..])
@@ -208,7 +208,7 @@ where
 	fn verify_proof_stateless(
 		&self,
 		mmr_root: MmrHash,
-		proof: LeavesProof<<Block as BlockT>::Hash>,
+		proof: LeavesProof<<Block as HeaderProvider>::Hash>,
 	) -> RpcResult<bool> {
 		let api = self.client.runtime_api();
 

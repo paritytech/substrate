@@ -68,7 +68,7 @@ type BalanceOf<T, I = ()> =
 type VotingOf<T, I = ()> = Voting<
 	BalanceOf<T, I>,
 	<T as frame_system::Config>::AccountId,
-	<T as frame_system::Config>::BlockNumber,
+	frame_system::BlockNumberOf<T>,
 	PollIndexOf<T, I>,
 	<T as Config<I>>::MaxVotes,
 >;
@@ -76,7 +76,7 @@ type VotingOf<T, I = ()> = Voting<
 type DelegatingOf<T, I = ()> = Delegating<
 	BalanceOf<T, I>,
 	<T as frame_system::Config>::AccountId,
-	<T as frame_system::Config>::BlockNumber,
+	frame_system::BlockNumberOf<T>,
 >;
 pub type TallyOf<T, I = ()> = Tally<BalanceOf<T, I>, <T as Config<I>>::MaxTurnout>;
 pub type VotesOf<T, I = ()> = BalanceOf<T, I>;
@@ -110,7 +110,7 @@ pub mod pallet {
 		type Polls: Polling<
 			TallyOf<Self, I>,
 			Votes = BalanceOf<Self, I>,
-			Moment = Self::BlockNumber,
+			Moment = frame_system::BlockNumberOf<Self>,
 		>;
 
 		/// The maximum amount of tokens which may be used for voting. May just be

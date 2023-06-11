@@ -61,7 +61,7 @@ use crate::{
 };
 
 type HistoricalVotes<Block> = finality_grandpa::HistoricalVotes<
-	<Block as BlockT>::Hash,
+	<Block as HeaderProvider>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
 	AuthorityId,

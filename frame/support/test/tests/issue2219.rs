@@ -28,7 +28,7 @@ mod module {
 	use frame_support_test as frame_system;
 
 	pub type Request<T> =
-		(<T as frame_system::Config>::AccountId, Role, <T as frame_system::Config>::BlockNumber);
+		(<T as frame_system::Config>::AccountId, Role, frame_system::BlockNumberOf<T>);
 	pub type Requests<T> = Vec<Request<T>>;
 
 	#[derive(Copy, Clone, Eq, PartialEq, Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -67,14 +67,14 @@ mod module {
 		fn default() -> Self {
 			Self {
 				max_actors: 10,
-				reward_period: frame_system::BlockNumberOf<T>::default(),
-				unbonding_period: frame_system::BlockNumberOf<T>::default(),
+				reward_period: frame_system::BlockNumberOf::<T>::default(),
+				unbonding_period: frame_system::BlockNumberOf::<T>::default(),
 
 				// not currently used
 				min_actors: 5,
-				bonding_period: frame_system::BlockNumberOf<T>::default(),
-				min_service_period: frame_system::BlockNumberOf<T>::default(),
-				startup_grace_period: frame_system::BlockNumberOf<T>::default(),
+				bonding_period: frame_system::BlockNumberOf::<T>::default(),
+				min_service_period: frame_system::BlockNumberOf::<T>::default(),
+				startup_grace_period: frame_system::BlockNumberOf::<T>::default(),
 			}
 		}
 	}

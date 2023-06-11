@@ -275,7 +275,7 @@ impl OnQueueChanged<MessageOrigin> for RecordingQueueChangeHandler {
 /// Is generic since it is used by the unit test, integration tests and benchmarks.
 pub fn new_test_ext<T: Config>() -> sp_io::TestExternalities
 where
-	<T as frame_system::Config>::BlockNumber: From<u32>,
+	frame_system::BlockNumberOf<T>: From<u32>,
 {
 	sp_tracing::try_init_simple();
 	WeightForCall::take();

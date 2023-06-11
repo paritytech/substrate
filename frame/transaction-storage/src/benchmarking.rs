@@ -144,7 +144,7 @@ benchmarks! {
 			vec![0u8; T::MaxTransactionSize::get() as usize],
 		)?;
 		run_to_block::<T>(1u32.into());
-	}: _(RawOrigin::Signed(caller.clone()), frame_system::BlockNumberOf<T>::zero(), 0)
+	}: _(RawOrigin::Signed(caller.clone()), frame_system::BlockNumberOf::<T>::zero(), 0)
 	verify {
 		assert_last_event::<T>(Event::Renewed { index: 0 }.into());
 	}
@@ -159,7 +159,7 @@ benchmarks! {
 				vec![0u8; T::MaxTransactionSize::get() as usize],
 			)?;
 		}
-		run_to_block::<T>(StoragePeriod::<T>::get() + frame_system::BlockNumberOf<T>::one());
+		run_to_block::<T>(StoragePeriod::<T>::get() + frame_system::BlockNumberOf::<T>::one());
 		let encoded_proof = proof();
 		let proof = TransactionStorageProof::decode(&mut &*encoded_proof).unwrap();
 	}: check_proof(RawOrigin::None, proof)

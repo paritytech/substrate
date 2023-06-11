@@ -188,11 +188,11 @@ pub mod pallet {
 		fungible::Debt<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
 	type ReceiptRecordOf<T> = ReceiptRecord<
 		<T as frame_system::Config>::AccountId,
-		<T as frame_system::Config>::BlockNumber,
+		frame_system::BlockNumberOf<T>,
 		BalanceOf<T>,
 	>;
 	type IssuanceInfoOf<T> = IssuanceInfo<BalanceOf<T>>;
-	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber, BalanceOf<T>>;
+	type SummaryRecordOf<T> = SummaryRecord<frame_system::BlockNumberOf<T>, BalanceOf<T>>;
 	type BidOf<T> = Bid<BalanceOf<T>, <T as frame_system::Config>::AccountId>;
 	type QueueTotalsTypeOf<T> = BoundedVec<(u32, BalanceOf<T>), <T as Config>::QueueCount>;
 
@@ -306,7 +306,7 @@ pub mod pallet {
 
 		/// The maximum proportion which may be thawed and the period over which it is reset.
 		#[pallet::constant]
-		type ThawThrottle: Get<(Perquintill, Self::BlockNumber)>;
+		type ThawThrottle: Get<(Perquintill, frame_system::BlockNumberOf<Self>)>;
 	}
 
 	#[pallet::pallet]

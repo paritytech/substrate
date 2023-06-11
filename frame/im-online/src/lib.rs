@@ -304,7 +304,7 @@ pub type IdentificationTuple<T> = (
 	>>::Identification,
 );
 
-type OffchainResult<T, A> = Result<A, OffchainErr<<T as frame_system::Config>::BlockNumber>>;
+type OffchainResult<T, A> = Result<A, OffchainErr<frame_system::BlockNumberOf<T>>>;
 
 #[frame_support::pallet]
 pub mod pallet {

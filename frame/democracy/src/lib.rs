@@ -226,7 +226,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The Scheduler.
-		type Scheduler: ScheduleNamed<Self::BlockNumber, CallOf<Self>, Self::PalletsOrigin>;
+		type Scheduler: ScheduleNamed<frame_system::BlockNumberOf<Self>, CallOf<Self>, Self::PalletsOrigin>;
 
 		/// The Preimage provider.
 		type Preimages: QueryPreimage + StorePreimage;
@@ -794,7 +794,7 @@ pub mod pallet {
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
 
-			ensure!(voting_period > frame_system::BlockNumberOf<T>::zero(), Error::<T>::VotingPeriodLow);
+			ensure!(voting_period > frame_system::BlockNumberOf::<T>::zero(), Error::<T>::VotingPeriodLow);
 			let (ext_proposal, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
@@ -1047,7 +1047,7 @@ pub mod pallet {
 			T::BlacklistOrigin::ensure_origin(origin)?;
 
 			// Insert the proposal into the blacklist.
-			let permanent = (frame_system::BlockNumberOf<T>::max_value(), BoundedVec::<T::AccountId, _>::default());
+			let permanent = (frame_system::BlockNumberOf::<T>::max_value(), BoundedVec::<T::AccountId, _>::default());
 			Blacklist::<T>::insert(&proposal_hash, permanent);
 
 			// Remove the queued proposal, if it's there.

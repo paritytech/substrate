@@ -125,7 +125,7 @@ fn make_origin<T: Config>(signed: bool) -> <T as Config>::PalletsOrigin {
 benchmarks! {
 	// `service_agendas` when no work is done.
 	service_agendas_base {
-		let now = frame_system::BlockNumberOf<T>::from(BLOCK_NUMBER);
+		let now = frame_system::BlockNumberOf::<T>::from(BLOCK_NUMBER);
 		IncompleteSince::<T>::put(now - One::one());
 	}: {
 		Scheduler::<T>::service_agendas(&mut WeightMeter::max_limit(), now, 0);
@@ -224,7 +224,7 @@ benchmarks! {
 	schedule {
 		let s in 0 .. (T::MaxScheduledPerBlock::get() - 1);
 		let when = BLOCK_NUMBER.into();
-		let periodic = Some((frame_system::BlockNumberOf<T>::one(), 100));
+		let periodic = Some((frame_system::BlockNumberOf::<T>::one(), 100));
 		let priority = 0;
 		// Essentially a no-op call.
 		let call = Box::new(SystemCall::set_storage { items: vec![] }.into());
@@ -267,7 +267,7 @@ benchmarks! {
 		let s in 0 .. (T::MaxScheduledPerBlock::get() - 1);
 		let id = u32_to_name(s);
 		let when = BLOCK_NUMBER.into();
-		let periodic = Some((frame_system::BlockNumberOf<T>::one(), 100));
+		let periodic = Some((frame_system::BlockNumberOf::<T>::one(), 100));
 		let priority = 0;
 		// Essentially a no-op call.
 		let call = Box::new(SystemCall::set_storage { items: vec![] }.into());
