@@ -207,6 +207,13 @@ pub fn witness() -> SolutionOrSnapshotSize {
 		.unwrap_or_default()
 }
 
+pub fn queue_solution_and_elect(
+	solution: ReadySolution<AccountId, MaxWinners>,
+) -> Result<(), ElectionError<Runtime>> {
+	<QueuedSolution<Runtime>>::put(solution);
+	MultiPhase::do_elect().map(|_| ())
+}
+
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -573,6 +580,14 @@ impl ExtBuilder {
 	}
 	pub fn signed_weight(self, weight: Weight) -> Self {
 		<SignedMaxWeight>::set(weight);
+		self
+	}
+	pub fn untrusted_score_interval(self, interval: Option<u32>) -> Self {
+		MinimumUntrustedScoreUpdateInterval::set(interval);
+		self
+	}
+	pub fn untrusted_score_margin(self, margin: Percent) -> Self {
+		MinimumUntrustedScoreMargin::set(margin);
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {

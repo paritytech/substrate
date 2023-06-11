@@ -792,7 +792,7 @@ mod assignment_convert_normalize {
 mod score {
 	use super::*;
 	use crate::ElectionScore;
-	use sp_arithmetic::PerThing;
+	use sp_arithmetic::{traits::CheckedAdd, PerThing};
 
 	/// NOTE: in tests, we still use the legacy [u128; 3] since it is more compact. Each `u128`
 	/// corresponds to element at the respective field index of `ElectionScore`.
@@ -904,28 +904,33 @@ mod score {
 	}
 
 	#[test]
-	fn average_works() {
+	fn checked_add_works() {
 		assert_eq!(
-			ElectionScore::from([10, 10, 10]).average(ElectionScore::from([20, 20, 20])),
-			ElectionScore::from([15, 15, 15])
+			ElectionScore::from([10, 10, 10]).checked_add(&ElectionScore::from([20, 20, 20])),
+			Some(ElectionScore::from([30, 30, 30])),
 		);
-		// rounds down.
+
 		assert_eq!(
-			ElectionScore::from([1, 1, 1]).average(ElectionScore::from([2, 2, 2])),
-			ElectionScore::from([1, 1, 1])
-		);
-		assert_eq!(
-			ElectionScore::default().average(ElectionScore::from([20, 20, 20])),
-			ElectionScore::from([10, 10, 10])
+			ElectionScore::from([u128::MAX, 10, 10]).checked_add(&ElectionScore::from([1, 1, 1])),
+			None,
 		);
 		assert_eq!(
-			ElectionScore::from([50, 50, 50]).average(ElectionScore::default()),
-			ElectionScore::from([25, 25, 25])
+			ElectionScore::from([10, u128::MAX, 10]).checked_add(&ElectionScore::from([1, 1, 1])),
+			None,
 		);
 		assert_eq!(
-			ElectionScore::default().average(ElectionScore::default()),
-			ElectionScore::default()
+			ElectionScore::from([10, 10, u128::MAX]).checked_add(&ElectionScore::from([1, 1, 1])),
+			None,
 		);
+	}
+
+	#[test]
+	fn checked_div_works() {
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).checked_div(10),
+			Some(ElectionScore::from([1, 1, 1])),
+		);
+		assert_eq!(ElectionScore::from([10, 10, 10]).checked_div(0), None,);
 	}
 
 	#[test]

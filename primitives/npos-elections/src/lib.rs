@@ -75,11 +75,16 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::ops::{Add, Div};
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Percent, Rational128, ThresholdOrd};
+use sp_arithmetic::{
+	traits::{CheckedAdd, Zero},
+	Normalizable, PerThing, Percent, Rational128, ThresholdOrd,
+};
 use sp_core::{bounded::BoundedVec, RuntimeDebug};
 use sp_std::{
 	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc, vec,
@@ -198,21 +203,72 @@ impl ElectionScore {
 		}
 	}
 
-	/// Calculates the average score betweel self and another election score.
-	pub fn average(self, other: Self) -> Self {
-		Self {
-			minimal_stake: self.minimal_stake.saturating_add(other.minimal_stake) / 2,
-			sum_stake: (self.sum_stake.saturating_add(other.sum_stake)) / 2,
-			sum_stake_squared: (self.sum_stake_squared.saturating_add(other.sum_stake_squared)) / 2,
-		}
-	}
-
 	/// Calculates the fraction of an election score.
 	pub fn fraction_of(self, fraction: Percent) -> Self {
 		Self {
 			minimal_stake: fraction * self.minimal_stake,
 			sum_stake: fraction * self.sum_stake,
 			sum_stake_squared: fraction * self.sum_stake_squared,
+		}
+	}
+
+	/// Performs a checked division of the election score by a number.
+	/// Note: we can not use `sp_arithmetic::traits::CheckedDiv` since it is not parameterizable.
+	pub fn checked_div(self, rhs: u128) -> Option<Self> {
+		let minimal_stake = match self.minimal_stake.checked_div(rhs) {
+			Some(m) => m,
+			None => return None,
+		};
+		let sum_stake = match self.sum_stake.checked_div(rhs) {
+			Some(s) => s,
+			None => return None,
+		};
+		let sum_stake_squared = match self.sum_stake_squared.checked_div(rhs) {
+			Some(sss) => sss,
+			None => return None,
+		};
+		Some(Self { minimal_stake, sum_stake, sum_stake_squared })
+	}
+}
+
+impl Add for ElectionScore {
+	type Output = Self;
+
+	fn add(self, rhs: Self) -> Self::Output {
+		ElectionScore {
+			minimal_stake: self.minimal_stake + rhs.minimal_stake,
+			sum_stake: self.sum_stake + rhs.sum_stake,
+			sum_stake_squared: self.sum_stake_squared + rhs.sum_stake_squared,
+		}
+	}
+}
+
+impl CheckedAdd for ElectionScore {
+	fn checked_add(&self, v: &Self) -> Option<Self> {
+		let minimal_stake = match self.minimal_stake.checked_add(v.minimal_stake) {
+			Some(m) => m,
+			None => return None,
+		};
+		let sum_stake = match self.sum_stake.checked_add(v.sum_stake) {
+			Some(s) => s,
+			None => return None,
+		};
+		let sum_stake_squared = match self.sum_stake_squared.checked_add(v.sum_stake_squared) {
+			Some(sss) => sss,
+			None => return None,
+		};
+		Some(Self { minimal_stake, sum_stake, sum_stake_squared })
+	}
+}
+
+impl Div<u128> for ElectionScore {
+	type Output = Self;
+
+	fn div(self, rhs: u128) -> Self::Output {
+		Self {
+			minimal_stake: self.minimal_stake / rhs,
+			sum_stake: self.sum_stake / rhs,
+			sum_stake_squared: self.sum_stake_squared / rhs,
 		}
 	}
 }
