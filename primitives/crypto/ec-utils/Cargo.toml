@@ -1,0 +1,61 @@
+[package]
+name = "sp-crypto-ec-utils"
+version = "0.4.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+ark-serialize = { version = "0.4.2", default-features = false }
+ark-ff = { version = "0.4.2", default-features = false }
+ark-ec = { version = "0.4.2", default-features = false }
+ark-std = { version = "0.4.0", default-features = false }
+ark-bls12-377 = { version = "0.4.0", features = ["curve"], default-features = false }
+ark-bls12-381 = { version = "0.4.0", features = ["curve"], default-features = false }
+ark-bw6-761 = { version = "0.4.0", default-features = false }
+ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0", default-features = false }
+ark-ed-on-bls12-377 = { version = "0.4.0", default-features = false }
+sp-std = { version = "8.0.0", path = "../../std", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.5.0", default-features = false }
+ark-scale = { version = "0.0.3", features = ["hazmat"], default-features = false }
+sp-runtime-interface = { version = "17.0.0", default-features = false, path = "../../runtime-interface" }
+
+[dev-dependencies]
+sp-io = { path = "../../io", default-features = false }
+ark-algebra-test-templates = { version = "0.4.2", default-features = false }
+sp-ark-models = { version = "0.4.0-beta", default-features = false }
+sp-ark-bls12-377 = { version = "0.4.0-beta", default-features = false }
+sp-ark-bls12-381 = { version = "0.4.0-beta", default-features = false }
+sp-ark-bw6-761 = { version = "0.4.0-beta", default-features = false }
+sp-ark-ed-on-bls12-377 = { version = "0.4.0-beta", default-features = false }
+sp-ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0-beta", default-features = false }
+
+[features]
+default = [ "std" ]
+std = [
+	"ark-serialize/std",
+	"ark-ff/std",
+	"ark-ec/std",
+	"ark-std/std",
+	"ark-bls12-377/std",
+	"ark-bls12-381/std",
+	"ark-bw6-761/std",
+	"ark-ed-on-bls12-381-bandersnatch/std",
+	"ark-ed-on-bls12-377/std",
+	"sp-std/std",
+	"codec/std",
+	"ark-scale/std",
+	"sp-runtime-interface/std",
+	"sp-io/std",
+	"ark-algebra-test-templates/std",
+	"sp-ark-bls12-377/std",
+	"sp-ark-bls12-381/std",
+    "sp-ark-bw6-761/std",
+    "sp-ark-ed-on-bls12-377/std",
+    "sp-ark-ed-on-bls12-381-bandersnatch/std",
+]

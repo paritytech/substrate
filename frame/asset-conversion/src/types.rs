@@ -20,11 +20,8 @@ use core::marker::PhantomData;
 use sp_std::cmp::Ordering;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::traits::fungibles::Inspect;
 use scale_info::TypeInfo;
 
-pub(super) type AssetBalanceOf<T> =
-	<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 pub(super) type PoolIdOf<T> = (<T as Config>::MultiAssetId, <T as Config>::MultiAssetId);
 
 /// Stores the lp_token asset id a particular pool has been assigned.
@@ -50,13 +47,13 @@ pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 }
 
 /// Benchmark Helper
-#[cfg(any(test, feature = "runtime-benchmarks"))]
+#[cfg(feature = "runtime-benchmarks")]
 pub trait BenchmarkHelper<AssetId> {
 	/// Returns an asset id from a given integer.
 	fn asset_id(asset_id: u32) -> AssetId;
 }
 
-#[cfg(any(test, feature = "runtime-benchmarks"))]
+#[cfg(feature = "runtime-benchmarks")]
 impl<AssetId> BenchmarkHelper<AssetId> for ()
 where
 	AssetId: From<u32>,
