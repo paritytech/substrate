@@ -302,27 +302,15 @@ mod runtime {
 	pub struct Runtime2;
 
 	#[frame::pallets]
-	pub struct AllPallets {
-		System: frame_system,
-		Timestamp: pallet_timestamp,
-		Aura: pallet_aura,
-		Grandpa: pallet_grandpa,
-		Balances: pallet_balances,
-		TransactionPayment: pallet_transaction_payment,
-		Sudo: pallet_sudo,
-		TemplateModule: pallet_template,
-	}
-
-	#[frame::indices]
-	pub enum AllPalletIndices {
-		System = 0,
-		Timestamp = 1,
-		Aura = 2,
-		Grandpa = 3,
-		Balances = 4,
-		TransactionPayment = 5,
-		Sudo = 6,
-		TemplateModule = 7,
+	pub enum Pallets {
+		System = (0, frame_system),
+		Timestamp = (1, pallet_timestamp),
+		Aura = (2, pallet_aura),
+		Grandpa = (3, pallet_grandpa),
+		Balances = (4, pallet_balances),
+		TransactionPayment = (5, pallet_transaction_payment),
+		Sudo =  (6, pallet_sudo),
+		TemplateModule = (7, pallet_template),
 	}
 }
 

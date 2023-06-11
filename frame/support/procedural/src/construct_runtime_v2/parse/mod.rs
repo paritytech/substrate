@@ -23,7 +23,7 @@ use syn::spanned::Spanned;
 pub struct Def {
     pub item: syn::ItemMod,
     pub runtime_struct: runtime_struct::RuntimeStructDef,
-	pub pallets: pallets::AllPalletsDef,
+	pub pallets: pallets::PalletsDef,
 }
 
 impl Def {
@@ -50,10 +50,8 @@ impl Def {
 					runtime_struct = Some(p);
 				},
 				Some(RuntimeAttr::Pallets(span)) if pallets.is_none() => {
-					let p = pallets::AllPalletsDef::try_from(span, index, item)?;
+					let p = pallets::PalletsDef::try_from(span, index, item)?;
 					pallets = Some(p);
-				},
-				Some(RuntimeAttr::Indices(span)) => {
 				},
                 Some(attr) => {
 					let msg = "Invalid duplicated attribute";
@@ -79,13 +77,11 @@ mod keyword {
     syn::custom_keyword!(frame);
     syn::custom_keyword!(runtime);
 	syn::custom_keyword!(pallets);
-	syn::custom_keyword!(indices);
 }
 
 enum RuntimeAttr {
     Runtime(proc_macro2::Span),
 	Pallets(proc_macro2::Span),
-	Indices(proc_macro2::Span),
 }
 
 impl RuntimeAttr {
@@ -93,7 +89,6 @@ impl RuntimeAttr {
 		match self {
 			Self::Runtime(span) => *span,
 			Self::Pallets(span) => *span,
-			Self::Indices(span) => *span,
 		}
 	}
 }
@@ -111,8 +106,6 @@ impl syn::parse::Parse for RuntimeAttr {
 			Ok(RuntimeAttr::Runtime(content.parse::<keyword::runtime>()?.span()))
         } else if lookahead.peek(keyword::pallets) {
 			Ok(RuntimeAttr::Pallets(content.parse::<keyword::pallets>()?.span()))
-        } else if lookahead.peek(keyword::indices) {
-			Ok(RuntimeAttr::Indices(content.parse::<keyword::indices>()?.span()))
         } else {
 			Err(lookahead.error())
 		}

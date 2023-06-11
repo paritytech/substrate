@@ -15,142 +15,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, Attribute, Ident};
 
 pub struct PalletDef {
 	/// The name of the pallet, e.g.`System` in `System: frame_system`.
-	pub name: syn::Ident,
+	pub name: Ident,
 	/// Optional attributes tagged right above a pallet declaration.
-	pub attrs: Vec<syn::Attribute>,
+	pub attrs: Vec<Attribute>,
 	/// Optional fixed index, e.g. `MyPallet ...  = 3,`.
 	pub index: Option<u8>,
 	/// The path of the pallet, e.g. `frame_system` in `System: frame_system`.
-	pub path: PalletPath,
+	pub path: syn::Path,
 	/// The instance of the pallet, e.g. `Instance1` in `Council: pallet_collective::<Instance1>`.
-	pub instance: Option<syn::Ident>,
+	pub instance: Option<Ident>,
 }
 
-/// A struct representing a path to a pallet. `PalletPath` is almost identical to the standard
-/// Rust path with a few restrictions:
-/// - No leading colons allowed
-/// - Path segments can only consist of identifers separated by colons
-#[derive(Debug, Clone)]
-pub struct PalletPath {
-	pub inner: syn::Path,
-}
-
-// /// The possible declaration of pallet parts to use.
-// #[derive(Debug, Clone)]
-// pub enum SpecifiedParts {
-// 	/// Use all the pallet parts except those specified.
-// 	Exclude(Vec<PalletPartNoGeneric>),
-// 	/// Use only the specified pallet parts.
-// 	Use(Vec<PalletPartNoGeneric>),
-// 	/// Use the all the pallet parts.
-// 	All,
-// }
-
-// impl PalletDef {
-// 	pub fn try_from(
-// 		attr_span: proc_macro2::Span,
-// 		index: usize,
-// 		item: &mut syn::Item,
-// 	) -> syn::Result<Self> {
-// 		let attrs = input.call(Attribute::parse_outer)?;
-
-// 		let name = input.parse()?;
-// 		let _: Token![:] = input.parse()?;
-// 		let path = input.parse()?;
-
-// 		// Parse for instance.
-// 		let instance = if input.peek(Token![::]) && input.peek3(Token![<]) {
-// 			let _: Token![::] = input.parse()?;
-// 			let _: Token![<] = input.parse()?;
-// 			let res = Some(input.parse()?);
-// 			let _: Token![>] = input.parse()?;
-// 			res
-// 		} else if !(input.peek(Token![::]) && input.peek3(token::Brace)) &&
-// 			!input.peek(keyword::exclude_parts) &&
-// 			!input.peek(keyword::use_parts) &&
-// 			!input.peek(Token![=]) &&
-// 			!input.peek(Token![,]) &&
-// 			!input.is_empty()
-// 		{
-// 			return Err(input.error(
-// 				"Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
-// 			));
-// 		} else {
-// 			None
-// 		};
-
-// 		// Parse for explicit parts
-// 		let pallet_parts = if input.peek(Token![::]) && input.peek3(token::Brace) {
-// 			let _: Token![::] = input.parse()?;
-// 			// Some(parse_pallet_parts(input)?)
-// 		} else if !input.peek(keyword::exclude_parts) &&
-// 			!input.peek(keyword::use_parts) &&
-// 			!input.peek(Token![=]) &&
-// 			!input.peek(Token![,]) &&
-// 			!input.is_empty()
-// 		{
-// 			return Err(input.error(
-// 				"Unexpected tokens, expected one of `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
-// 			))
-// 		} else {
-// 			None
-// 		};
-
-// 		// Parse for specified parts
-// 		let specified_parts = if input.peek(keyword::exclude_parts) {
-// 			let _: keyword::exclude_parts = input.parse()?;
-// 			// SpecifiedParts::Exclude(parse_pallet_parts_no_generic(input)?)
-// 		} else if input.peek(keyword::use_parts) {
-// 			let _: keyword::use_parts = input.parse()?;
-// 			// SpecifiedParts::Use(parse_pallet_parts_no_generic(input)?)
-// 		} else if !input.peek(Token![=]) && !input.peek(Token![,]) && !input.is_empty() {
-// 			return Err(input.error("Unexpected tokens, expected one of `exclude_parts`, `=`, `,`"))
-// 		} else {
-// 			SpecifiedParts::All
-// 		};
-
-// 		// Parse for pallet index
-// 		let index = if input.peek(Token![=]) {
-// 			input.parse::<Token![=]>()?;
-// 			let index = input.parse::<syn::LitInt>()?;
-// 			let index = index.base10_parse::<u8>()?;
-// 			Some(index)
-// 		} else if !input.peek(Token![,]) && !input.is_empty() {
-// 			return Err(input.error("Unexpected tokens, expected one of `=`, `,`"))
-// 		} else {
-// 			None
-// 		};
-
-// 		Ok(Self { attrs, name, path, instance, pallet_parts, specified_parts, index })
-// 	}
-// }
-
-pub struct AllPalletsDef {
+pub struct PalletsDef {
 	pub ident: syn::Ident,
 	pub pallets: Vec<PalletDef>,
 }
 
-impl AllPalletsDef {
+impl PalletsDef {
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
 	) -> syn::Result<Self> {
-		let item = if let syn::Item::Struct(item) = item {
+		let item = if let syn::Item::Enum(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid frame::pallets, expect item struct."))
+			return Err(syn::Error::new(item.span(), "Invalid frame::pallets, expect item enum."))
 		};
 
-		println!("item: {:?}", item);
+		let mut pallets: Vec<PalletDef> = vec![]; 
+		for variant in &item.variants {
+			let (index, path) = match &variant.discriminant {
+				Some((_, expr)) => {
+					match expr {
+						syn::Expr::Tuple(expr) => {
+							if expr.elems.len() != 2 {
+								return Err(
+									syn::Error::new(item.span(), "Invalid pallet variant, expect tuple of size 2."));
+							}
+							match expr.elems[0] {
+								syn::Expr::Lit(ref lit) => {
+									match lit.lit {
+										syn::Lit::Int(ref int) => {
+											let index = int.base10_parse::<u8>().unwrap();
+											match expr.elems[1] {
+												syn::Expr::Path(ref path) => (Some(index), path.path.clone()),
+												_ => return Err(
+													syn::Error::new(item.span(), "Invalid pallet variant, expect tuple of size 2."))
+											}
+										},
+										_ => return Err(
+											syn::Error::new(item.span(), "Invalid pallet variant, expect tuple of size 2."))
+									}
+								},
+								_ => return Err(
+									syn::Error::new(item.span(), "Invalid pallet variant, expect tuple of size 2."))
+							}
+						},
+						syn::Expr::Path(ref path) => (None, path.path.clone()),
+						_ => unreachable!()
+					}
+				},
+				None => unreachable!()
+			};
+
+			pallets.push(PalletDef {
+				name: variant.ident.clone(),
+				attrs: vec![],
+				index,
+				path,
+				instance: None
+			});
+		};
 
 		Ok(Self {
 			ident: item.ident.clone(),
-			pallets: vec![]
+			pallets: pallets
 		})
 	}
 }
