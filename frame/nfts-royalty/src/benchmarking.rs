@@ -26,8 +26,9 @@ type CollectionConfigOf<T> = CollectionConfig<
 #[benchmarks(where
     T::NftCollectionId: From<u32>,
     T::NftItemId: From<u32>,
-    T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
-    + Mutate<T::AccountId, ItemConfig>,)]
+    T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>> 
+		+ Mutate<T::AccountId, ItemConfig>,
+	)]
 mod benchmarks {
 	use super::*;
 
@@ -43,11 +44,11 @@ mod benchmarks {
 	where
 		T::NftCollectionId: From<u32>,
 		T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
-			+ Mutate<T::AccountId, ItemConfig>,
+		+ Mutate<T::AccountId, ItemConfig>,
 	{
 		let caller: T::AccountId = whitelisted_caller();
 		//assert_ok!(T::Currency::set_balance(&caller, BalanceOf::<T>::max_value()));
-		T::Currency::make_free_balance_be(&caller, 1_000_000u32.into());
+		//T::Currency::make_free_balance_be(&caller, 1_000_000u32.into());
 		assert_ok!(T::Nfts::create_collection(&caller, &caller, &default_collection_config::<T>()));
 		assert_ok!(T::Nfts::mint_into(
 			&collection_id,
@@ -62,12 +63,11 @@ mod benchmarks {
 	fn create_nft_collection<T: Config>() -> (T::AccountId, T::NftCollectionId)
 	where
 		T::NftCollectionId: From<u32>,
-		T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
-			+ Mutate<T::AccountId, ItemConfig>,
+		T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>,
 	{
 		let caller: T::AccountId = whitelisted_caller();
-		//assert_ok!(T::Currency::set_balance(&caller, BalanceOf::<T>::max_value()));
-		// T::Currency::make_free_balance_be(&caller, 1_000_000u32);
+		let deposit = T::CollectionRoyaltyDeposit::get();
+		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance() * 1000u32.into() + deposit);
 		assert_ok!(T::Nfts::create_collection(&caller, &caller, &default_collection_config::<T>()));
 		(caller, 0.into())
 	}
@@ -78,19 +78,29 @@ mod benchmarks {
 
 		let (collection_owner, collection_id) = create_nft_collection::<T>();
 
+		let list_recipients = vec![
+			RoyaltyDetails {
+				royalty_recipient: caller.clone(),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},
+		];
+
 		#[extrinsic_call]
 		set_collection_royalty(
 			RawOrigin::Signed(caller),
 			collection_id,
 			Permill::from_percent(10),
 			collection_owner.clone(),
+			list_recipients.clone(),
 		);
-		let royaltiy_details = RoyaltyDetails {
-			royalty_recipient: collection_owner,
-			royalty_percentage: Permill::from_percent(10),
-		};
 
-		assert_eq!(CollectionRoyalty::<T>::get(collection_id), Some(royaltiy_details));
+		let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
+		let collection_royalty_from_storage = CollectionRoyalty::<T>::get(collection_id).unwrap();
+
+		assert_eq!(collection_royalty_from_storage.royalty_admin, collection_owner);
+		assert_eq!(collection_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
+		assert_eq!(collection_royalty_from_storage.recipients, bounded_vec);
+		assert_eq!(collection_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	}
 
 	#[benchmark]
@@ -101,6 +111,13 @@ mod benchmarks {
 		let item_id = 0.into();
 		let item_owner = mint_nft::<T>(collection_id, item_id);
 
+		let list_recipients = vec![
+			RoyaltyDetails {
+				royalty_recipient: caller.clone(),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},
+		];
+
 		#[extrinsic_call]
 		set_item_royalty(
 			RawOrigin::Signed(caller),
@@ -108,71 +125,15 @@ mod benchmarks {
 			item_id,
 			Permill::from_percent(10),
 			item_owner.clone(),
+			list_recipients.clone()
 		);
-		let royaltiy_details = RoyaltyDetails {
-			royalty_recipient: item_owner,
-			royalty_percentage: Permill::from_percent(10),
-		};
+		let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
+		let item_royalty_from_storage = ItemRoyalty::<T>::get((collection_id, item_id)).unwrap();
 
-		assert_eq!(ItemRoyalty::<T>::get((collection_id, item_id)), Some(royaltiy_details));
-	}
-
-	#[benchmark]
-	fn set_collection_royalty_recipients() {
-		let caller: T::AccountId = whitelisted_caller();
-
-		let (_collection_owner, collection_id) = create_nft_collection::<T>();
-		let recipients = vec![
-			RoyaltyDetails {
-				royalty_recipient: account::<T::AccountId>("member A", 2, 2),
-				royalty_percentage: Permill::from_percent(50),
-			},
-			RoyaltyDetails {
-				royalty_recipient: account::<T::AccountId>("member B", 1, 1),
-				royalty_percentage: Permill::from_percent(25),
-			},
-		];
-
-		#[extrinsic_call]
-		set_collection_royalty_recipients(
-			RawOrigin::Signed(caller),
-			collection_id,
-			recipients.clone(),
-		);
-		let bounded_vec: BoundedVec<_, T::MaxRecipients> = recipients.try_into().unwrap();
-
-		assert_eq!(CollectionRoyaltyRecipients::<T>::get(collection_id), Some(bounded_vec));
-	}
-
-	#[benchmark]
-	fn set_item_royalty_recipients() {
-		let caller: T::AccountId = whitelisted_caller();
-
-		let (_collection_owner, collection_id) = create_nft_collection::<T>();
-		let item_id = 0.into();
-		mint_nft::<T>(collection_id, item_id);
-
-		let recipients = vec![
-			RoyaltyDetails {
-				royalty_recipient: account::<T::AccountId>("member A", 2, 2),
-				royalty_percentage: Permill::from_percent(50),
-			},
-			RoyaltyDetails {
-				royalty_recipient: account::<T::AccountId>("member B", 1, 1),
-				royalty_percentage: Permill::from_percent(25),
-			},
-		];
-
-		#[extrinsic_call]
-		set_item_royalty_recipients(
-			RawOrigin::Signed(caller),
-			collection_id,
-			item_id,
-			recipients.clone(),
-		);
-		let bounded_vec: BoundedVec<_, T::MaxRecipients> = recipients.try_into().unwrap();
-
-		assert_eq!(ItemRoyaltyRecipients::<T>::get((collection_id, item_id)), Some(bounded_vec));
+		assert_eq!(item_royalty_from_storage.royalty_admin, item_owner);
+		assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
+		assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
+		assert_eq!(item_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	}
 
 	#[benchmark]
@@ -180,11 +141,19 @@ mod benchmarks {
 		let caller: T::AccountId = whitelisted_caller();
 
 		let (collection_owner, collection_id) = create_nft_collection::<T>();
+		let list_recipients = vec![
+			RoyaltyDetails {
+				royalty_recipient: caller.clone(),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},
+		];
+
 		assert_ok!(NftsRoyalty::<T>::set_collection_royalty(
 			RawOrigin::Signed(caller.clone()).into(),
 			collection_id,
 			Permill::from_percent(10),
-			collection_owner.clone()
+			collection_owner.clone(),
+			list_recipients.clone(),
 		));
 
 		let new_recipient = account::<T::AccountId>("member A", 2, 2);
@@ -194,13 +163,13 @@ mod benchmarks {
 			collection_id,
 			new_recipient.clone(),
 		);
+		let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
+		let collection_royalty_from_storage = CollectionRoyalty::<T>::get(collection_id).unwrap();
 
-		let royaltiy_details = RoyaltyDetails {
-			royalty_recipient: new_recipient,
-			royalty_percentage: Permill::from_percent(10),
-		};
-
-		assert_eq!(CollectionRoyalty::<T>::get(collection_id), Some(royaltiy_details));
+		assert_eq!(collection_royalty_from_storage.royalty_admin, new_recipient);
+		assert_eq!(collection_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
+		assert_eq!(collection_royalty_from_storage.recipients, bounded_vec);
+		assert_eq!(collection_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	}
 
 	#[benchmark]
@@ -211,12 +180,20 @@ mod benchmarks {
 		let item_id = 0.into();
 		let item_owner = mint_nft::<T>(collection_id, item_id);
 
+		let list_recipients = vec![
+			RoyaltyDetails {
+				royalty_recipient: caller.clone(),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},
+		];
+
 		assert_ok!(NftsRoyalty::<T>::set_item_royalty(
 			RawOrigin::Signed(caller.clone()).into(),
 			collection_id,
 			item_id,
 			Permill::from_percent(10),
-			item_owner.clone()
+			item_owner.clone(),
+			list_recipients.clone()
 		));
 
 		let new_recipient = account::<T::AccountId>("member A", 2, 2);
@@ -228,12 +205,13 @@ mod benchmarks {
 			new_recipient.clone(),
 		);
 
-		let royaltiy_details = RoyaltyDetails {
-			royalty_recipient: new_recipient,
-			royalty_percentage: Permill::from_percent(10),
-		};
+		let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
+		let item_royalty_from_storage = ItemRoyalty::<T>::get((collection_id, item_id)).unwrap();
 
-		assert_eq!(ItemRoyalty::<T>::get((collection_id, item_id)), Some(royaltiy_details));
+		assert_eq!(item_royalty_from_storage.royalty_admin, new_recipient);
+		assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
+		assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
+		assert_eq!(item_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	}
 
 	impl_benchmark_test_suite!(NftsRoyalty, crate::mock::new_test_ext(), crate::mock::Test);
