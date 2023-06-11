@@ -147,7 +147,6 @@ pub struct ReturnData {
 /// as a quick way to terminate the application (all other variants).
 #[derive(RuntimeDebug)]
 pub enum TrapReason {
-	//	InstructionTrap(DispatchError),
 	/// The supervisor trapped the contract because of an error condition occurred during
 	/// execution in privileged code.
 	SupervisorError(DispatchError),
@@ -488,7 +487,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		match sandbox_result {
 			// Contract returned from main function -> no data was returned.
 			Ok(_) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
-			// OutOfGas when host asks engine to consume more than left in the _store_.
+			// `OutOfGas` when host asks engine to consume more than left in the _store_.
 			// We should never get this case, as gas meter is being charged (and hence raises error)
 			// first.
 			Err(wasmi::Error::Store(_)) => Err(Error::<E::T>::OutOfGas.into()),
@@ -496,7 +495,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 			Err(wasmi::Error::Trap(trap)) => {
 				if let Some(code) = trap.trap_code() {
 					match code {
-						// OutOfGas during engine execution.
+						// `OutOfGas` during engine execution.
 						OutOfFuel => return Err(Error::<E::T>::OutOfGas.into()),
 						_ => (),
 					}

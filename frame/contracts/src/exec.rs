@@ -870,7 +870,6 @@ where
 			self.initial_transfer()?;
 
 			// Call into the Wasm blob.
-			// We pass `reftime_left` into the execution engine to initialize its gas metering.
 			let output = executable
 				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;

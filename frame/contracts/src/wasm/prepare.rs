@@ -314,8 +314,7 @@ pub fn get_memory_limits<T: Config>(
 
 /// Check that given `code` satisfies constraints required for the contract Wasm module.
 ///
-/// On success it returns back the code together with its `(initial, maximum)`
-/// memory limits. The memory requirement was also validated against the `schedule`.
+/// On success it returns back the code.
 fn validate<E, T>(
 	code: &[u8],
 	schedule: &Schedule<T>,
@@ -367,7 +366,8 @@ where
 		contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
 		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
-		// We do it here just to check that module imported memory satisfies the Schedule limits
+		// Extract memory limits from the module.
+		// This also checks that module's memory import satisfies the schedule.
 		let memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 
 		let code = contract_module.into_wasm_code()?;
@@ -381,8 +381,8 @@ where
 
 	// This will make sure that the module can be actually run within wasmi:
 	//
-	// - Doesn't use any unknown imports.
-	// - Doesn't explode the wasmi bytecode generation.
+	// - It doesn't use any unknown imports.
+	// - It doesn't explode the wasmi bytecode generation.
 	if matches!(try_instantiate, TryInstantiate::Instantiate) {
 		// We don't actually ever run any code so we can get away with a minimal stack which
 		// reduces the amount of memory that needs to be zeroed.
@@ -405,12 +405,11 @@ where
 
 /// Validates the given binary `code` is a valid Wasm module satisfying following constraints:
 ///
-/// - the module doesn't define an internal memory instance;
-/// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`;
-/// - all imported functions from the external environment matches defined by `env` module.
+/// - The module doesn't define an internal memory instance.
+/// - Imported memory (if any) doesn't reserve more memory than permitted by the `schedule`.
+/// - All imported functions from the external environment match defined by `env` module.
 ///
-/// TODO: re-phrase
-/// Also constructs contract owner_info (metadata?) by calculating the storage deposit.
+/// Also constructs contract `owner_info` by calculating the storage deposit.
 pub fn prepare<E, T>(
 	code: CodeVec<T>,
 	schedule: &Schedule<T>,
@@ -433,7 +432,7 @@ where
 		(<Error<T>>::CodeTooLarge.into(), "preparation altered the code")
 	);
 
-	// Calculate deposit for storing contract code and owner info in two different storage items.
+	// Calculate deposit for storing contract code and `owner_info` in two different storage items.
 	let bytes_added = code.len().saturating_add(<OwnerInfo<T>>::max_encoded_len()) as u32;
 	let deposit = Diff { bytes_added, items_added: 2, ..Default::default() }
 		.update_contract::<T>(None)
@@ -447,14 +446,13 @@ where
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
 ///
 /// For benchmarking we need to construct special contracts that might not pass our
-/// sanity checks. We hide functions
-/// allowing this behind a feature that is only set during benchmarking or testing to
-/// prevent usage in production code.
+/// sanity checks. We hide functions allowing this behind a feature that is only set during
+/// benchmarking or testing to prevent usage in production code.
 #[cfg(any(test, feature = "runtime-benchmarks"))]
 pub mod benchmarking {
 	use super::*;
 
-	/// Prepare function that does not check the passed in code.
+	/// Prepare function that does not perform most checks on the passed in code.
 	pub fn prepare<T: Config>(
 		code: Vec<u8>,
 		schedule: &Schedule<T>,

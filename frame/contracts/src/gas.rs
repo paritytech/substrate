@@ -155,9 +155,7 @@ impl<T: Config> GasMeter<T> {
 	/// Amount is calculated by the given `token`.
 	///
 	/// Returns `OutOfGas` if there is not enough gas or addition of the specified
-	/// amount of gas has lead to overflow. On success returns `Proceed`.
-	///
-	/// Any charged amount less than base instruction weight is rounded up to it.
+	/// amount of gas has lead to overflow.
 	///
 	/// NOTE that amount isn't consumed if there is not enough gas. This is considered
 	/// safe because we always charge gas before performing any resource-spending action.
@@ -187,7 +185,7 @@ impl<T: Config> GasMeter<T> {
 		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
 	}
 
-	/// This method is used for gas syncs with the engine in every host function.
+	/// This method is used for gas syncs with the engine at start of every host function call.
 	///
 	/// Updates internal `engine_comsumed` tracker of engine fuel consumption.
 	///
@@ -195,7 +193,7 @@ impl<T: Config> GasMeter<T> {
 	/// side. Passed value is scaled by multiplying it by the weight of a basic operation, as such
 	/// an operation in wasmi engine costs 1.
 	///
-	/// Returns the updated `gas_left` Weight value from the meter.
+	/// Returns the updated `gas_left` `Weight` value from the meter.
 	/// Normally this would never fail, as engine should fail first when out of gas.
 	pub fn sync_fuel(&mut self, wasmi_fuel: u64) -> Result<Weight, DispatchError> {
 		if !wasmi_fuel.is_zero() {
