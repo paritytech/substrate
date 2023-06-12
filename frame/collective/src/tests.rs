@@ -177,20 +177,20 @@ impl ExtBuilder {
 	}
 
 	pub fn build(self) -> sp_io::TestExternalities {
-		let mut ext: sp_io::TestExternalities =
-			BuildStorage::build_storage(&RuntimeGenesisConfig {
-				collective: pallet_collective::GenesisConfig {
-					members: self.collective_members,
-					phantom: Default::default(),
-				},
-				collective_majority: pallet_collective::GenesisConfig {
-					members: vec![1, 2, 3, 4, 5],
-					phantom: Default::default(),
-				},
-				default_collective: Default::default(),
-			})
-			.unwrap()
-			.into();
+		let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
+			collective: pallet_collective::GenesisConfig {
+				members: self.collective_members,
+				phantom: Default::default(),
+			},
+			collective_majority: pallet_collective::GenesisConfig {
+				members: vec![1, 2, 3, 4, 5],
+				phantom: Default::default(),
+			},
+			default_collective: Default::default(),
+		}
+		.build_storage()
+		.unwrap()
+		.into();
 		ext.execute_with(|| System::set_block_number(1));
 		ext
 	}
