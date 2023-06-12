@@ -399,7 +399,7 @@ dependencies = [
 [[package]]
 name = "ark-secret-scalar"
 version = "0.0.2"
-source = "git+https://github.com/w3f/ring-vrf#4957177a717c7555c8df2869012201017b62e66b"
+source = "git+https://github.com/w3f/ring-vrf#9dfb20539d15ca754c2d66916e356a95e5eba68e"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -447,7 +447,7 @@ dependencies = [
 [[package]]
 name = "ark-transcript"
 version = "0.0.2"
-source = "git+https://github.com/w3f/ring-vrf#4957177a717c7555c8df2869012201017b62e66b"
+source = "git+https://github.com/w3f/ring-vrf#9dfb20539d15ca754c2d66916e356a95e5eba68e"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -713,7 +713,7 @@ dependencies = [
 [[package]]
 name = "bandersnatch_vrfs"
 version = "0.0.1"
-source = "git+https://github.com/w3f/ring-vrf#4957177a717c7555c8df2869012201017b62e66b"
+source = "git+https://github.com/w3f/ring-vrf#9dfb20539d15ca754c2d66916e356a95e5eba68e"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -1361,7 +1361,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/w3f/ring-proof#1e42bb632263f4dff86b400ec9a13af21db72360"
+source = "git+https://github.com/w3f/ring-proof#16fe0cd54ef92134528e8c1418a77ba493746274"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -2109,7 +2109,7 @@ checksum = "210ec60ae7d710bed8683e333e9d2855a8a56a3e9892b38bad3bb0d4d29b0d5e"
 [[package]]
 name = "dleq_vrf"
 version = "0.0.2"
-source = "git+https://github.com/w3f/ring-vrf#4957177a717c7555c8df2869012201017b62e66b"
+source = "git+https://github.com/w3f/ring-vrf#9dfb20539d15ca754c2d66916e356a95e5eba68e"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -2455,7 +2455,7 @@ dependencies = [
 [[package]]
 name = "fflonk"
 version = "0.1.0"
-source = "git+https://github.com/w3f/fflonk#f60bc946e2a4340b1c2d00d30c654e82a5887983"
+source = "git+https://github.com/w3f/fflonk#afe712a7d2edf1aa7a2e34a416e3f513f97a2cf9"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -8644,7 +8644,7 @@ dependencies = [
 [[package]]
 name = "ring"
 version = "0.1.0"
-source = "git+https://github.com/w3f/ring-proof#1e42bb632263f4dff86b400ec9a13af21db72360"
+source = "git+https://github.com/w3f/ring-proof#16fe0cd54ef92134528e8c1418a77ba493746274"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -12904,7 +12904,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.6",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
