@@ -29,7 +29,7 @@ use sp_npos_elections::{ElectionScore, VoteWeight};
 use sp_runtime::{
 	testing,
 	traits::{IdentityLookup, Zero},
-	transaction_validity, PerU16, Perbill,
+	transaction_validity, PerU16, Perbill, Percent,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -191,6 +191,8 @@ parameter_types! {
 	pub static MaxWinners: u32 = 100;
 	pub static MaxVotesPerVoter: u32 = 16;
 	pub static MaxNominations: u32 = 16;
+	pub static MinimumUntrustedScoreUpdateInterval: Option<u32> = Some(3);
+	pub static MinimumUntrustedScoreMargin: Percent = Percent::from_percent(50);
 }
 
 impl pallet_election_provider_multi_phase::Config for Runtime {
@@ -222,6 +224,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxElectableTargets = MaxElectableTargets;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxWinners = MaxWinners;
+	type MinimumUntrustedScoreUpdateInterval = MinimumUntrustedScoreUpdateInterval;
+	type MinimumUntrustedScoreMargin = MinimumUntrustedScoreMargin;
 	type BenchmarkingConfig = NoopElectionProviderBenchmarkConfig;
 	type WeightInfo = ();
 }
@@ -417,6 +421,11 @@ impl Default for EpmExtBuilder {
 impl EpmExtBuilder {
 	pub fn disable_emergency_throttling(self) -> Self {
 		<MinBlocksBeforeEmergency>::set(0);
+		self
+	}
+
+	pub fn untrusted_score_interval(self, interval: Option<u32>) -> Self {
+		MinimumUntrustedScoreUpdateInterval::set(interval);
 		self
 	}
 

@@ -167,7 +167,9 @@ fn enters_emergency_phase_after_forcing_before_elect() {
 /// fail and enter in emenergency mode.
 fn continous_slashes_below_offending_threshold() {
 	let staking_builder = StakingExtBuilder::default().validator_count(10);
-	let epm_builder = EpmExtBuilder::default().disable_emergency_throttling();
+	let epm_builder = EpmExtBuilder::default()
+		.untrusted_score_interval(None)
+		.disable_emergency_throttling();
 
 	ExtBuilder::default()
 		.staking(staking_builder)
