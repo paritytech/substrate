@@ -85,7 +85,6 @@ pub(crate) async fn follow_chain<Block, HostFns>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT<Hash = H256> + DeserializeOwned,
-	Block::Hash: FromStr,
 	Block::Header: DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,

@@ -21,9 +21,8 @@ use crate::{
 	Network, Syncing, Validator,
 };
 
-use sc_network::{event::Event, types::ProtocolName};
+use sc_network::{event::Event, types::ProtocolName, ReputationChange};
 use sc_network_common::sync::SyncEvent;
-use sc_peerset::ReputationChange;
 
 use futures::{
 	channel::mpsc::{channel, Receiver, Sender},

@@ -53,9 +53,10 @@ use frame_support::{
 		DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo,
 		Pays, PostDispatchInfo,
 	},
-	ensure,
+	ensure, impl_ensure_origin_with_arg_ignoring_arg,
 	traits::{
-		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
+		Backing, ChangeMembers, EnsureOrigin, EnsureOriginWithArg, Get, GetBacking,
+		InitializeMembers, StorageVersion,
 	},
 	weights::Weight,
 };
@@ -1157,6 +1158,12 @@ impl<
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., I: 'static, AccountId: Decode, T } >
+		EnsureOriginWithArg<O, T> for EnsureMember<AccountId, I>
+	{}
+}
+
 pub struct EnsureMembers<AccountId, I: 'static, const N: u32>(PhantomData<(AccountId, I)>);
 impl<
 		O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
@@ -1177,6 +1184,12 @@ impl<
 	fn try_successful_origin() -> Result<O, ()> {
 		Ok(O::from(RawOrigin::Members(N, N)))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., I: 'static, const N: u32, AccountId, T } >
+		EnsureOriginWithArg<O, T> for EnsureMembers<AccountId, I, N>
+	{}
 }
 
 pub struct EnsureProportionMoreThan<AccountId, I: 'static, const N: u32, const D: u32>(
@@ -1204,6 +1217,12 @@ impl<
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., I: 'static, const N: u32, const D: u32, AccountId, T } >
+		EnsureOriginWithArg<O, T> for EnsureProportionMoreThan<AccountId, I, N, D>
+	{}
+}
+
 pub struct EnsureProportionAtLeast<AccountId, I: 'static, const N: u32, const D: u32>(
 	PhantomData<(AccountId, I)>,
 );
@@ -1227,4 +1246,10 @@ impl<
 	fn try_successful_origin() -> Result<O, ()> {
 		Ok(O::from(RawOrigin::Members(0u32, 0u32)))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., I: 'static, const N: u32, const D: u32, AccountId, T } >
+		EnsureOriginWithArg<O, T> for EnsureProportionAtLeast<AccountId, I, N, D>
+	{}
 }
