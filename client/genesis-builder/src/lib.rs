@@ -26,7 +26,7 @@ pub struct GenesisBuilderHelper<GC>(sp_std::marker::PhantomData<GC>);
 
 impl<GC> GenesisBuilderHelper<GC>
 where
-	GC: Default + RuntimeGenesisBuild,
+	GC: RuntimeGenesisBuild,
 {
 	/// Get the default `GenesisConfig` as a JSON blob.
 	pub fn get_default_as_json() -> sp_std::vec::Vec<u8> {
