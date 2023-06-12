@@ -258,11 +258,17 @@ pub mod weights;
 pub mod migrations;
 
 use frame_support::{
+	impl_ensure_origin_with_arg_ignoring_arg,
 	pallet_prelude::*,
 	storage::KeyLenOf,
 	traits::{
+<<<<<<< HEAD
 		BalanceStatus, Currency, EnsureOrigin, ExistenceRequirement::AllowDeath, Imbalance,
 		OnUnbalanced, Randomness, ReservableCurrency,
+=======
+		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, EnsureOriginWithArg,
+		ExistenceRequirement::AllowDeath, Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
+>>>>>>> origin/master
 	},
 	PalletId,
 };
@@ -1417,6 +1423,12 @@ impl<T: Config> EnsureOrigin<<T as frame_system::Config>::RuntimeOrigin> for Ens
 		let founder = Founder::<T>::get().ok_or(())?;
 		Ok(T::RuntimeOrigin::from(frame_system::RawOrigin::Signed(founder)))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl<{ T: Config, A }>
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureFounder<T>
+	{}
 }
 
 struct InputFromRng<'a, T>(&'a mut T);
