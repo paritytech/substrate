@@ -22,7 +22,6 @@ use frame_benchmarking::{
 	BenchmarkResult, BenchmarkSelector,
 };
 use frame_support::traits::StorageInfo;
-use itertools::Itertools;
 use linked_hash_map::LinkedHashMap;
 use sc_cli::{
 	execution_method_from_cli, CliConfiguration, ExecutionStrategy, Result, SharedParams,
@@ -509,10 +508,9 @@ impl PalletCmd {
 			self.print_summary(&batches, &storage_info, pov_modes.clone())
 		}
 
-		// Write all weight files and possibly error afterwards.
-		let mut soft_errors = Vec::new();
+		// Create the weights.rs file.
 		if let Some(output_path) = &self.output {
-			if let Err(err) = writer::write_results(
+			writer::write_results(
 				&batches,
 				&storage_info,
 				&component_ranges,
@@ -520,20 +518,10 @@ impl PalletCmd {
 				self.default_pov_mode,
 				output_path,
 				self,
-			)? {
-				soft_errors.push(err);
-			}
+			)?;
 		}
 
-		if !soft_errors.is_empty() {
-			Err(soft_errors
-				.into_iter()
-				.map(|e| format!("Error writing benchmark results: {}", e))
-				.join("\n")
-				.into())
-		} else {
-			Ok(())
-		}
+		Ok(())
 	}
 
 	/// Re-analyze a batch historic benchmark timing data. Will not take the PoV into account.

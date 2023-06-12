@@ -376,9 +376,6 @@ fn get_benchmark_data(
 }
 
 /// Create weight file from benchmark data and Handlebars template.
-///
-/// The outer error is a hard error and must be treated as an immediate failure. An inner error case
-/// can be seen as success, since all results have been written in this case.
 pub(crate) fn write_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
@@ -387,7 +384,7 @@ pub(crate) fn write_results(
 	default_pov_mode: PovEstimationMode,
 	path: &PathBuf,
 	cmd: &PalletCmd,
-) -> Result<Result<(), String>, std::io::Error> {
+) -> Result<(), sc_cli::Error> {
 	// Use custom template if provided.
 	let template: String = match &cmd.template {
 		Some(template_file) => fs::read_to_string(template_file)?,
@@ -508,10 +505,10 @@ pub(crate) fn write_results(
 		if cmd.unsafe_overwrite_results {
 			println!("{msg}");
 		} else {
-			return Ok(Err(msg))
+			return Err(msg.into())
 		}
 	}
-	Ok(Ok(()))
+	Ok(())
 }
 
 /// This function looks at the keys touched during the benchmark, and the storage info we collected
