@@ -125,7 +125,6 @@ benchmarks_instance_pallet! {
 	}
 
 	unbid {
-		println!("MD: {:?}", mock_balance_deposit::<T, I>());
 		let founder = setup_society::<T, I>()?;
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T, I>::max_value());
