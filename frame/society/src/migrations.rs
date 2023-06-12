@@ -18,7 +18,41 @@
 //! # Migrations for Society Pallet
 
 use super::*;
-use frame_support::traits::Instance;
+use frame_support::traits::{Instance, OnRuntimeUpgrade};
+
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
+/// The log target.
+const TARGET: &'static str = "runtime::society::migration";
+
+/// This migration moves all the state to v2 of Society.
+pub struct MigrateToV2<T: Config<I>, I: 'static, PastPayouts>(sp_std::marker::PhantomData<(T, I, PastPayouts)>);
+
+impl<
+	T: Config<I>,
+	I: Instance + 'static,
+	PastPayouts: Get<Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)>>
+> OnRuntimeUpgrade for MigrateToV2<T, I, PastPayouts> {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+		assert!(
+			can_migrate(),
+			"Invalid (perhaps already-migrated) state detected prior to migration"
+		);
+		Ok(Vec::new())
+	}
+
+	fn on_runtime_upgrade() -> Weight {
+		from_original::<T, I>(&mut PastPayouts::get())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
+		assert_internal_consistency::<T, I>();
+		Ok(())
+	}
+}
 
 pub(crate) mod old {
 	use super::*;
@@ -160,12 +194,13 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 
 pub fn from_original<T: Config<I>, I: Instance + 'static>(
 	past_payouts: &mut [(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)],
-) {
+) -> Weight {
 	// First check that this is the original state layout. This is easy since the original layout
 	// contained the Members value, and this value no longer exists in the new layout.
 	if !old::Members::<T, I>::exists() {
+		log::warn!(target: TARGET, "Skipping MigrateToV2 migration since it appears unapplicable");
 		// Already migrated or no data to migrate: Bail.
-		return
+		return T::DbWeight::get().reads(1)
 	}
 
 	// Migrate Bids from old::Bids (just a trunctation).
@@ -240,6 +275,8 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 	// We give the current defender the benefit of the doubt.
 	old::Defender::<T, I>::kill();
 	let _ = old::DefenderVotes::<T, I>::clear(u32::MAX, None);
+
+	T::BlockWeights::get().max_block
 }
 
 pub fn from_raw_past_payouts<T: Config<I>, I: Instance + 'static>(

@@ -7289,6 +7289,7 @@ dependencies = [
  "frame-support-test",
  "frame-system",
  "hex-literal",
+ "log",
  "pallet-balances",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
