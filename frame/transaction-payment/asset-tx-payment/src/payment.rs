@@ -130,7 +130,7 @@ where
 		//
 		// NOTE: We do not automatically convert the native token back to the asset,
 		// otherwise the fee could go back and forth between the two currencies each time incurring
-		// dex charges over the course of several transactions. It's better for the user
+		// conversion charges over the course of several transactions. It's better for the user
 		// that it stays in native. Smart wallets should realise if there's enough native currency
 		// built up to pay the transaction with.
 		<T::OnChargeTransaction>::correct_and_deposit_fee(
