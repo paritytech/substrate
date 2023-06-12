@@ -45,7 +45,7 @@ use sp_npos_elections::{
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, Convert, IdentityLookup},
-	PerU16,
+	PerU16, Percent,
 };
 use std::sync::Arc;
 
@@ -398,8 +398,6 @@ impl crate::Config for Runtime {
 	type MinerTxPriority = MinerTxPriority;
 	type SignedRewardBase = SignedRewardBase;
 	type SignedDepositBase = Self;
-	type SignedFixedDeposit = SignedFixedDeposit;
-	type SignedDepositIncreaseFactor = SignedDepositIncreaseFactor;
 	type SignedDepositByte = ();
 	type SignedDepositWeight = ();
 	type SignedMaxWeight = SignedMaxWeight;
@@ -428,7 +426,7 @@ impl Convert<usize, BalanceOf<Runtime>> for Runtime {
 		if !EnableVariableDepositBase::get() {
 			SignedFixedDeposit::get()
 		} else {
-			GeometricDepositBase::<Runtime>::convert(queue_len)
+			GeometricDepositBase::<Balance, SignedFixedDeposit, SignedDepositIncreaseFactor>::convert(queue_len)
 		}
 	}
 }

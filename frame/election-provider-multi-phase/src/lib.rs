@@ -253,7 +253,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, ModuleError, PerThing, Perbill, Percent, RuntimeDebug, SaturatedConversion,
+	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
 
@@ -647,17 +647,6 @@ pub mod pallet {
 		/// Base reward for a signed solution
 		#[pallet::constant]
 		type SignedRewardBase: Get<BalanceOf<Self>>;
-
-		/// Fixed base deposit for a signed solution.
-		#[pallet::constant]
-		type SignedFixedDeposit: Get<BalanceOf<Self>>;
-
-		/// Increase factor of the geometric series for the base deposit computation.
-		///
-		/// If 0, then signed base deposit remains constant regardless of the submissions queue size
-		/// (and equal to `SignedFixedDeposit`).
-		#[pallet::constant]
-		type SignedDepositIncreaseFactor: Get<Percent>;
 
 		/// Per-byte deposit for a signed solution.
 		#[pallet::constant]

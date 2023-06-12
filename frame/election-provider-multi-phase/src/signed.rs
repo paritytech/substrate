@@ -34,7 +34,7 @@ use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
 use sp_runtime::{
 	traits::{Convert, Saturating, Zero},
-	FixedPointNumber, FixedU128, RuntimeDebug,
+	FixedPointNumber, FixedPointOperand, FixedU128, Percent, RuntimeDebug,
 };
 use sp_std::{
 	cmp::Ordering,
@@ -355,23 +355,25 @@ impl<T: Config> SignedSubmissions<T> {
 ///
 /// The deposit base is calculated as a geometric progression based on the number of signed
 /// submissions in the queue. The size of the queue represents the progression term.
-pub struct GeometricDepositBase<T> {
-	_marker: PhantomData<T>,
+pub struct GeometricDepositBase<Balance, Fixed, Inc> {
+	_marker: (PhantomData<Balance>, PhantomData<Fixed>, PhantomData<Inc>),
 }
 
-impl<T: Config> Convert<usize, BalanceOf<T>> for GeometricDepositBase<T> {
+impl<Balance, Fixed, Inc> Convert<usize, Balance> for GeometricDepositBase<Balance, Fixed, Inc>
+where
+	Balance: FixedPointOperand,
+	Fixed: Get<Balance>,
+	Inc: Get<Percent>,
+{
 	// Calculates the base deposit as a geometric progression based on the number of signed
 	// submissions.
 	//
 	// The nth term is obtained by calculating `base * (1 + increase_factor)^nth`. Example: factor
 	// 5, with initial deposit of 1000 and 10% of increase factor is 1000 * (1 + 0.1)^5.
-	fn convert(queue_len: usize) -> BalanceOf<T> {
-		let increase_factor: FixedU128 =
-			FixedU128::from_u32(1) + T::SignedDepositIncreaseFactor::get().into();
+	fn convert(queue_len: usize) -> Balance {
+		let increase_factor: FixedU128 = FixedU128::from_u32(1) + Inc::get().into();
 
-		increase_factor
-			.saturating_pow(queue_len)
-			.saturating_mul_int(T::SignedFixedDeposit::get())
+		increase_factor.saturating_pow(queue_len).saturating_mul_int(Fixed::get())
 	}
 }
 
