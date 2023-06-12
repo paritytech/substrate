@@ -235,7 +235,7 @@ pub mod pallet {
 		StorageMap<_, Identity, u32, BoundedVec<TicketId, T::MaxTickets>, ValueQuery>;
 
 	/// Genesis configuration for Sassafras protocol.
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		/// Genesis authorities.

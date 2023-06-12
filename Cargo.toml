@@ -343,5 +343,12 @@ lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
 
-#[patch."https://github.com/w3f/ring-vrf"]
-# bandersnatch_vrfs = { path = "/mnt/ssd/users/develop/w3f/ring-vrf/bandersnatch_vrfs" }
+[patch."https://github.com/w3f/ring-vrf"]
+bandersnatch_vrfs = { path = "/mnt/ssd/develop/w3f/ring-vrf/bandersnatch_vrfs" }
+
+[patch."https://github.com/w3f/fflonk"]
+fflonk = { path = "/mnt/ssd/develop/w3f/fflonk" }
+
+[patch."https://github.com/w3f/ring-proof"]
+common = { path = "/mnt/ssd/develop/w3f/ring-proof/common" }
+ring = { path = "/mnt/ssd/develop/w3f/ring-proof/ring" }

@@ -507,7 +507,7 @@ pub mod vrf {
 			data: &VrfSignData,
 			signature: &VrfSignature,
 		) -> bool {
-			let Ok(public) = PublicKey::deserialize_compressed(self.as_ref()) else {
+			let Ok(public) = PublicKey::deserialize_compressed(&self.0[..]) else {
 				return false
 			};
 
