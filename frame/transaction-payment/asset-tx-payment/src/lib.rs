@@ -291,13 +291,13 @@ where
 						already_withdrawn.into(),
 					)?;
 
-					/*Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
+					Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
 						who,
 						actual_fee,
-						asset_paid: already_withdrawn,
+						asset_paid: already_withdrawn.into(),
 						tip,
 						asset_id,
-					});*/
+					});
 				},
 				InitialPayment::Nothing => {
 					// `actual_fee` should be zero here for any signed extrinsic. It would be
