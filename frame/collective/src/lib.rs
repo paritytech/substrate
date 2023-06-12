@@ -59,6 +59,7 @@ use frame_support::{
 		InitializeMembers, StorageVersion,
 	},
 	weights::Weight,
+	BoundedVec, CloneNoBound, EqNoBound, Parameter, PartialEqNoBound,
 };
 
 #[cfg(any(feature = "try-runtime", test))]
@@ -155,16 +156,24 @@ impl<AccountId, I> GetBacking for RawOrigin<AccountId, I> {
 }
 
 /// Info for keeping track of a motion being voted on.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct Votes<AccountId, BlockNumber> {
+#[derive(
+	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
+#[scale_info(skip_type_params(MaxMembers))]
+pub struct Votes<AccountId, BlockNumber, MaxMembers>
+where
+	AccountId: PartialEq + Clone,
+	BlockNumber: PartialEq + Clone,
+	MaxMembers: Get<u32>,
+{
 	/// The proposal's unique index.
 	index: ProposalIndex,
 	/// The number of approval votes that are needed to pass the motion.
 	threshold: MemberCount,
 	/// The current set of voters that approved it.
-	ayes: Vec<AccountId>,
+	ayes: BoundedVec<AccountId, MaxMembers>,
 	/// The current set of voters that rejected it.
-	nays: Vec<AccountId>,
+	nays: BoundedVec<AccountId, MaxMembers>,
 	/// The hard end time of this vote.
 	end: BlockNumber,
 }
@@ -273,8 +282,13 @@ pub mod pallet {
 	/// Votes on a given proposal, if it is ongoing.
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
-	pub type Voting<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, BlockNumberFor<T>>, OptionQuery>;
+	pub type Voting<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Identity,
+		T::Hash,
+		Votes<T::AccountId, BlockNumberFor<T>, T::MaxMembers>,
+		OptionQuery,
+	>;
 
 	/// Proposals so far.
 	#[pallet::storage]
@@ -725,7 +739,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		<ProposalOf<T, I>>::insert(proposal_hash, proposal);
 		let votes = {
 			let end = frame_system::Pallet::<T>::block_number() + T::MotionDuration::get();
-			Votes { index, threshold, ayes: vec![], nays: vec![], end }
+			Votes {
+				index,
+				threshold,
+				ayes: sp_core::bounded_vec![],
+				nays: sp_core::bounded_vec![],
+				end,
+			}
 		};
 		<Voting<T, I>>::insert(proposal_hash, votes);
 
@@ -757,7 +777,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if approve {
 			if position_yes.is_none() {
-				voting.ayes.push(who.clone());
+				voting
+					.ayes
+					.try_push(who.clone())
+					.expect("Proposal voting ayes can't overflow; qed");
 			} else {
 				return Err(Error::<T, I>::DuplicateVote.into())
 			}
@@ -766,7 +789,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		} else {
 			if position_no.is_none() {
-				voting.nays.push(who.clone());
+				voting
+					.nays
+					.try_push(who.clone())
+					.expect("Proposal voting nays can't overflow; qed");
 			} else {
 				return Err(Error::<T, I>::DuplicateVote.into())
 			}
@@ -1088,12 +1114,17 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 						.ayes
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
-						.collect();
+						.collect::<Vec<T::AccountId>>()
+						.try_into()
+						.expect("The filtered elements should be at most equal to the original length; qed");
 					votes.nays = votes
 						.nays
 						.into_iter()
 						.filter(|i| outgoing.binary_search(i).is_err())
-						.collect();
+						.collect::<Vec<T::AccountId>>()
+						.try_into()
+						.expect("The filtered elements should be at most equal to the original length; qed");
+
 					*v = Some(votes);
 				}
 			});
