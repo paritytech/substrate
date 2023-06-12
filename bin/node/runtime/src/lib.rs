@@ -653,6 +653,8 @@ parameter_types! {
 	// The maximum winners that can be elected by the Election pallet which is equivalent to the
 	// maximum active validators the staking pallet can have.
 	pub MaxActiveValidators: u32 = 1000;
+	pub MinimumUntrustedScoreUpdateInterval: Option<u32> = Some(10);
+	pub MinimumUntrustedScoreMargin: Percent = Percent::from_percent(50);
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
@@ -757,6 +759,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxWinners = MaxActiveValidators;
 	type MaxElectingVoters = MaxElectingVoters;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
+	type MinimumUntrustedScoreMargin = MinimumUntrustedScoreMargin;
+	type MinimumUntrustedScoreUpdateInterval = MinimumUntrustedScoreUpdateInterval;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 }
 
