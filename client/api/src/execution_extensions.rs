@@ -22,20 +22,16 @@
 //! strategy for the runtime calls and provide the right `Externalities`
 //! extensions to support APIs for particular execution context & capabilities.
 
-use codec::Decode;
 use parking_lot::RwLock;
-use sc_transaction_pool_api::OffchainSubmitTransaction;
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sp_core::{
-	offchain::{self, OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
+	offchain::{self, OffchainDbExt, OffchainWorkerExt},
 	traits::{ReadRuntimeVersion, ReadRuntimeVersionExt},
 	ExecutionContext,
 };
 use sp_externalities::{Extension, Extensions};
 use sp_keystore::{KeystoreExt, KeystorePtr};
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, NumberFor},
-};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 pub use sp_state_machine::ExecutionStrategy;
 use sp_state_machine::{DefaultHandler, ExecutionManager};
 use std::{
@@ -168,11 +164,7 @@ pub struct ExecutionExtensions<Block: BlockT> {
 	offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
 	// FIXME: these three are only RwLock because of https://github.com/paritytech/substrate/issues/4587
 	//        remove when fixed.
-	// To break retain cycle between `Client` and `TransactionPool` we require this
-	// extension to be a `Weak` reference.
-	// That's also the reason why it's being registered lazily instead of
-	// during initialization.
-	transaction_pool: RwLock<Option<Weak<dyn OffchainSubmitTransaction<Block>>>>,
+	transaction_pool_factory: RwLock<Option<OffchainTransactionPoolFactory<Block>>>,
 	extensions_factory: RwLock<Box<dyn ExtensionsFactory<Block>>>,
 	statement_store: RwLock<Option<Weak<dyn sp_statement_store::StatementStore>>>,
 	read_runtime_version: Arc<dyn ReadRuntimeVersion>,
@@ -194,7 +186,7 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 			keystore,
 			offchain_db,
 			extensions_factory: RwLock::new(extensions_factory),
-			transaction_pool,
+			transaction_pool_factory: transaction_pool,
 			statement_store,
 			read_runtime_version,
 		}
@@ -211,11 +203,11 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 	}
 
 	/// Register transaction pool extension.
-	pub fn register_transaction_pool<T>(&self, pool: &Arc<T>)
-	where
-		T: OffchainSubmitTransaction<Block> + 'static,
-	{
-		*self.transaction_pool.write() = Some(Arc::downgrade(pool) as _);
+	pub fn register_transaction_pool_factory(
+		&self,
+		factory: OffchainTransactionPoolFactory<Block>,
+	) {
+		*self.transaction_pool_factory.write() = Some(factory);
 	}
 
 	/// Register statement store extension.
@@ -245,11 +237,8 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 		}
 
 		if capabilities.contains(offchain::Capabilities::TRANSACTION_POOL) {
-			if let Some(pool) = self.transaction_pool.read().as_ref().and_then(|x| x.upgrade()) {
-				extensions.register(TransactionPoolExt(Box::new(TransactionPoolAdapter {
-					at: BlockId::Hash(block_hash),
-					pool,
-				}) as _));
+			if let Some(pool) = self.transaction_pool_factory.read().as_ref() {
+				extensions.register(pool.offchain_transaction_pool(block_hash));
 			}
 		}
 
@@ -301,25 +290,5 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 		};
 
 		(manager, self.extensions(block_hash, block_number, context))
-	}
-}
-
-/// A wrapper type to pass `BlockId` to the actual transaction pool.
-struct TransactionPoolAdapter<Block: BlockT> {
-	at: BlockId<Block>,
-	pool: Arc<dyn OffchainSubmitTransaction<Block>>,
-}
-
-impl<Block: BlockT> offchain::TransactionPool for TransactionPoolAdapter<Block> {
-	fn submit_transaction(&mut self, data: Vec<u8>) -> Result<(), ()> {
-		let xt = match Block::Extrinsic::decode(&mut &*data) {
-			Ok(xt) => xt,
-			Err(e) => {
-				log::warn!("Unable to decode extrinsic: {:?}: {}", data, e);
-				return Err(())
-			},
-		};
-
-		self.pool.submit_at(&self.at, xt)
 	}
 }

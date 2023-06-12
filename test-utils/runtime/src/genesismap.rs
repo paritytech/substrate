@@ -18,7 +18,7 @@
 //! Tool for creating the genesis block.
 
 use super::{
-	currency, substrate_test_pallet, wasm_binary_unwrap, AccountId, Balance, GenesisConfig,
+	currency, substrate_test_pallet, wasm_binary_unwrap, AccountId, Balance, RuntimeGenesisConfig,
 };
 use codec::Encode;
 use sc_service::construct_genesis_block;
@@ -123,7 +123,7 @@ impl GenesisStorageBuilder {
 			})
 			.collect();
 
-		let genesis_config = GenesisConfig {
+		let genesis_config = RuntimeGenesisConfig {
 			system: frame_system::GenesisConfig {
 				code: self.wasm_code.clone().unwrap_or(wasm_binary_unwrap().to_vec()),
 			},

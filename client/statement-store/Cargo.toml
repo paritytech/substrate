@@ -19,15 +19,15 @@ futures = "0.3.21"
 futures-timer = "3.0.2"
 log = "0.4.17"
 parking_lot = "0.12.1"
-parity-db = "0.4.7"
+parity-db = "0.4.8"
 tokio = { version = "1.22.0", features = ["time"] }
 sp-statement-store = { version = "4.0.0-dev", path = "../../primitives/statement-store" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
+sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 
 [dev-dependencies]

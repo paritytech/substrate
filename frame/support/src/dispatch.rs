@@ -89,6 +89,26 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 	}
 }
 
+impl<AccountId> RawOrigin<AccountId> {
+	/// Returns `Some` with a reference to the `AccountId` if `self` is `Signed`, `None` otherwise.
+	pub fn as_signed(&self) -> Option<&AccountId> {
+		match &self {
+			Self::Signed(x) => Some(x),
+			_ => None,
+		}
+	}
+
+	/// Returns `true` if `self` is `Root`, `None` otherwise.
+	pub fn is_root(&self) -> bool {
+		matches!(&self, Self::Root)
+	}
+
+	/// Returns `true` if `self` is `None`, `None` otherwise.
+	pub fn is_none(&self) -> bool {
+		matches!(&self, Self::None)
+	}
+}
+
 /// A type that can be used as a parameter in a dispatchable function.
 ///
 /// When using `decl_module` all arguments for call functions must implement this trait.
@@ -2097,7 +2117,7 @@ macro_rules! decl_module {
 			fn try_state(
 				_: <$trait_instance as $system::Config>::BlockNumber,
 				_: $crate::traits::TryStateSelect,
-			) -> Result<(), &'static str> {
+			) -> Result<(), $crate::sp_runtime::TryRuntimeError> {
 				let pallet_name = <<
 					$trait_instance
 					as
@@ -2144,12 +2164,12 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, $crate::sp_runtime::TryRuntimeError> {
 				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), $crate::sp_runtime::TryRuntimeError> {
 				Ok(())
 			}
 		}
@@ -2182,12 +2202,12 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, $crate::sp_runtime::TryRuntimeError> {
 				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), $crate::sp_runtime::TryRuntimeError> {
 				Ok(())
 			}
 		}

@@ -236,7 +236,7 @@ impl Index {
 		let priority = Priority(statement.priority().unwrap_or(0));
 		self.entries.insert(hash, (account, priority, statement.data_len()));
 		self.total_size += statement.data_len();
-		let mut account_info = self.accounts.entry(account).or_default();
+		let account_info = self.accounts.entry(account).or_default();
 		account_info.data_size += statement.data_len();
 		if let Some(channel) = statement.channel() {
 			account_info.channels.insert(channel, ChannelEntry { hash, priority });
@@ -530,7 +530,7 @@ impl Store {
 
 		let mut config = parity_db::Options::with_columns(&path, col::COUNT);
 
-		let mut statement_col = &mut config.columns[col::STATEMENTS as usize];
+		let statement_col = &mut config.columns[col::STATEMENTS as usize];
 		statement_col.ref_counted = false;
 		statement_col.preimage = true;
 		statement_col.uniform = true;
