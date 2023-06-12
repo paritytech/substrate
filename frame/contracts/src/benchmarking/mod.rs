@@ -159,12 +159,12 @@ where
 
 	/// Returns `true` iff all storage entries related to code storage exist.
 	fn code_exists(hash: &CodeHash<T>) -> bool {
-		<PristineCode<T>>::contains_key(hash) && <OwnerInfoOf<T>>::contains_key(&hash)
+		<PristineCode<T>>::contains_key(hash) && <CodeInfoOf<T>>::contains_key(&hash)
 	}
 
 	/// Returns `true` iff no storage entry related to code storage exist.
 	fn code_removed(hash: &CodeHash<T>) -> bool {
-		!<PristineCode<T>>::contains_key(hash) && !<OwnerInfoOf<T>>::contains_key(&hash)
+		!<PristineCode<T>>::contains_key(hash) && !<CodeInfoOf<T>>::contains_key(&hash)
 	}
 }
 
@@ -434,7 +434,7 @@ benchmarks! {
 
 	// Removing code does not depend on the size of the contract because all the information
 	// needed to verify the removal claim (refcount, owner) is stored in a separate storage
-	// item (`OwnerInfoOf`).
+	// item (`CodeInfoOf`).
 	#[pov_mode = Measured]
 	remove_code {
 		let caller = whitelisted_caller();

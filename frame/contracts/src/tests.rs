@@ -83,7 +83,7 @@ macro_rules! assert_return_code {
 
 macro_rules! assert_refcount {
 	( $code_hash:expr , $should:expr $(,)? ) => {{
-		let is = crate::OwnerInfoOf::<Test>::get($code_hash).map(|m| m.refcount()).unwrap();
+		let is = crate::CodeInfoOf::<Test>::get($code_hash).map(|m| m.refcount()).unwrap();
 		assert_eq!(is, $should);
 	}};
 }
@@ -91,8 +91,8 @@ macro_rules! assert_refcount {
 pub mod test_utils {
 	use super::{Balances, DepositPerByte, DepositPerItem, Hash, SysConfig, Test};
 	use crate::{
-		exec::AccountIdOf, CodeHash, Config, ContractInfo, ContractInfoOf, Nonce, OwnerInfo,
-		OwnerInfoOf, PristineCode,
+		exec::AccountIdOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
+		Nonce, PristineCode,
 	};
 	use codec::{Encode, MaxEncodedLen};
 	use frame_support::traits::Currency;
@@ -124,15 +124,15 @@ pub mod test_utils {
 	}
 	pub fn expected_deposit(code_len: usize) -> u64 {
 		// For onwer info, the deposit for max_encoded_len is taken.
-		let owner_info_len = OwnerInfo::<Test>::max_encoded_len() as u64;
+		let code_info_len = CodeInfo::<Test>::max_encoded_len() as u64;
 		// Calculate deposit to be reserved.
-		// We add 2 storage items: one for code, other for owner_info
-		DepositPerByte::get().saturating_mul(code_len as u64 + owner_info_len) +
+		// We add 2 storage items: one for code, other for code_info
+		DepositPerByte::get().saturating_mul(code_len as u64 + code_info_len) +
 			DepositPerItem::get().saturating_mul(2)
 	}
 	pub fn ensure_stored(code_hash: CodeHash<Test>) -> usize {
-		// Assert that owner_info is stored
-		assert!(OwnerInfoOf::<Test>::contains_key(&code_hash));
+		// Assert that code_info is stored
+		assert!(CodeInfoOf::<Test>::contains_key(&code_hash));
 		// Assert that contract code is stored, and get its size.
 		PristineCode::<Test>::try_get(&code_hash).unwrap().len()
 	}

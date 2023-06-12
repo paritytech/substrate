@@ -23,7 +23,7 @@ use crate::{
 	chain_extension::ChainExtension,
 	ensure,
 	storage::meter::Diff,
-	wasm::{runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, WasmBlob},
+	wasm::{runtime::AllowDeprecatedInterface, CodeInfo, Determinism, Environment, WasmBlob},
 	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
 use codec::MaxEncodedLen;
@@ -409,7 +409,7 @@ where
 /// - Imported memory (if any) doesn't reserve more memory than permitted by the `schedule`.
 /// - All imported functions from the external environment match defined by `env` module.
 ///
-/// Also constructs contract `owner_info` by calculating the storage deposit.
+/// Also constructs contract `code_info` by calculating the storage deposit.
 pub fn prepare<E, T>(
 	code: CodeVec<T>,
 	schedule: &Schedule<T>,
@@ -432,15 +432,15 @@ where
 		(<Error<T>>::CodeTooLarge.into(), "preparation altered the code")
 	);
 
-	// Calculate deposit for storing contract code and `owner_info` in two different storage items.
-	let bytes_added = code.len().saturating_add(<OwnerInfo<T>>::max_encoded_len()) as u32;
+	// Calculate deposit for storing contract code and `code_info` in two different storage items.
+	let bytes_added = code.len().saturating_add(<CodeInfo<T>>::max_encoded_len()) as u32;
 	let deposit = Diff { bytes_added, items_added: 2, ..Default::default() }
 		.update_contract::<T>(None)
 		.charge_or_zero();
 
-	let owner_info = OwnerInfo { owner, deposit, determinism, refcount: 0 };
+	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0 };
 
-	Ok(WasmBlob { code, owner_info })
+	Ok(WasmBlob { code, code_info })
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
@@ -463,7 +463,7 @@ pub mod benchmarking {
 		let _memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 
 		let code = code.try_into().map_err(|_| "Code too large!")?;
-		let owner_info = OwnerInfo {
+		let code_info = CodeInfo {
 			owner,
 			// this is a helper function for benchmarking which skips deposit collection
 			deposit: Default::default(),
@@ -471,7 +471,7 @@ pub mod benchmarking {
 			determinism: Determinism::Enforced,
 		};
 
-		Ok(WasmBlob { code, owner_info })
+		Ok(WasmBlob { code, code_info })
 	}
 }
 

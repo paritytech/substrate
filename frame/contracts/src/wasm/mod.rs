@@ -39,8 +39,8 @@ use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::{GasMeter, Token},
 	weights::WeightInfo,
-	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeVec, Config, Error, Event, OwnerInfoOf,
-	Pallet, PristineCode, Schedule, Weight, LOG_TARGET,
+	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeInfoOf, CodeVec, Config, Error, Event, Pallet,
+	PristineCode, Schedule, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -65,21 +65,21 @@ pub struct WasmBlob<T: Config> {
 	code: CodeVec<T>,
 	// This isn't needed for contract execution and is not stored alongside it.
 	#[codec(skip)]
-	pub owner_info: OwnerInfo<T>,
+	pub code_info: CodeInfo<T>,
 }
 
 /// Contract code related data, such as:
+///
 /// - owner of the contract, i.e. account uploaded its code,
 /// - storage deposit amount,
 /// - reference count,
 /// - determinism marker.
-/// TODO: rename this struct to `CodeInfo`?
 ///
 /// It is stored in a separate storage entry to avoid loading the code when not necessary.
 #[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 #[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
-pub struct OwnerInfo<T: Config> {
+pub struct CodeInfo<T: Config> {
 	/// The account that has uploaded the contract code and hence is allowed to remove it.
 	owner: AccountIdOf<T>,
 	/// The amount of balance that was deposited by the owner in order to store it on-chain.
@@ -188,8 +188,8 @@ impl<T: Config> WasmBlob<T> {
 	///
 	/// Returns `0` if the module is already in storage and hence no deposit will
 	/// be charged when storing it.
-	pub fn open_deposit(&self, owner_info: OwnerInfo<T>) -> BalanceOf<T> {
-		<OwnerInfoOf<T>>::try_get(self.code_hash()).map_or(owner_info.deposit, |_| 0u32.into())
+	pub fn open_deposit(&self, code_info: CodeInfo<T>) -> BalanceOf<T> {
+		<CodeInfoOf<T>>::try_get(self.code_hash()).map_or(code_info.deposit, |_| 0u32.into())
 	}
 
 	/// Creates and returns an instance of the supplied code.
@@ -255,11 +255,11 @@ impl<T: Config> WasmBlob<T> {
 	/// storage.
 	fn store_code(mut module: Self, instantiated: bool) -> DispatchResult {
 		let code_hash = &module.code_hash();
-		<OwnerInfoOf<T>>::mutate(code_hash, |stored_owner_info| {
-			match stored_owner_info {
+		<CodeInfoOf<T>>::mutate(code_hash, |stored_code_info| {
+			match stored_code_info {
 				// Instantiate existing contract.
-				Some(stored_owner_info) if instantiated => {
-					stored_owner_info.refcount = stored_owner_info.refcount.checked_add(1).expect(
+				Some(stored_code_info) if instantiated => {
+					stored_code_info.refcount = stored_code_info.refcount.checked_add(1).expect(
 						"
 					 refcount is 64bit. Generating this overflow would require to store
 					 _at least_ 18 exabyte of data assuming that a contract consumes only
@@ -274,15 +274,15 @@ impl<T: Config> WasmBlob<T> {
 				Some(_) => Ok(()),
 				// Upload a new contract code.
 				//
-				// We need to store the code and its owner_info, and collect the deposit.
+				// We need to store the code and its code_info, and collect the deposit.
 				None => {
 					// This `None` case happens only in freshly uploaded modules. This means that
 					// the `owner` is always the origin of the current transaction.
-					T::Currency::reserve(&module.owner_info.owner, module.owner_info.deposit)
+					T::Currency::reserve(&module.code_info.owner, module.code_info.deposit)
 						.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
-					module.owner_info.refcount = if instantiated { 1 } else { 0 };
+					module.code_info.refcount = if instantiated { 1 } else { 0 };
 					<PristineCode<T>>::insert(code_hash, module.code);
-					*stored_owner_info = Some(module.owner_info);
+					*stored_code_info = Some(module.code_info);
 					<Pallet<T>>::deposit_event(
 						vec![*code_hash],
 						Event::CodeStored { code_hash: *code_hash },
@@ -295,11 +295,11 @@ impl<T: Config> WasmBlob<T> {
 
 	/// Try to remove code together with all associated information.
 	fn try_remove_code(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
-		<OwnerInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
-			if let Some(owner_info) = existing {
-				ensure!(owner_info.refcount == 0, <Error<T>>::CodeInUse);
-				ensure!(&owner_info.owner == origin, BadOrigin); // TODO: what if origin is root?
-				T::Currency::unreserve(&owner_info.owner, owner_info.deposit);
+		<CodeInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
+			if let Some(code_info) = existing {
+				ensure!(code_info.refcount == 0, <Error<T>>::CodeInUse);
+				ensure!(&code_info.owner == origin, BadOrigin); // TODO: what if origin is root?
+				T::Currency::unreserve(&code_info.owner, code_info.deposit);
 				*existing = None;
 				<PristineCode<T>>::remove(&code_hash);
 				<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeRemoved { code_hash });
@@ -332,7 +332,7 @@ impl<T: Config> WasmBlob<T> {
 	/// A contract whose reference count dropped to zero isn't automatically removed. A
 	/// `remove_code` transaction must be submitted by the original uploader to do so.
 	fn decrement_refcount(code_hash: CodeHash<T>) {
-		<OwnerInfoOf<T>>::mutate(code_hash, |existing| {
+		<CodeInfoOf<T>>::mutate(code_hash, |existing| {
 			if let Some(info) = existing {
 				info.refcount = info.refcount.saturating_sub(1);
 			}
@@ -346,7 +346,7 @@ impl<T: Config> WasmBlob<T> {
 	/// [`Error::CodeNotFound`] is returned if no stored code found having the specified
 	/// `code_hash`.
 	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
-		<OwnerInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
+		<CodeInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
 			if let Some(info) = existing {
 				info.refcount = info.refcount.saturating_add(1);
 				Ok(())
@@ -384,7 +384,7 @@ impl<T: Config> WasmBlob<T> {
 	}
 }
 
-impl<T: Config> OwnerInfo<T> {
+impl<T: Config> CodeInfo<T> {
 	/// Return the refcount of the module.
 	#[cfg(test)]
 	pub fn refcount(&self) -> u64 {
@@ -400,13 +400,13 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 	) -> Result<Self, DispatchError> {
 		let code = Self::load_code(code_hash, gas_meter)?;
 		let code_hash = T::Hashing::hash(&code);
-		// We store `owner_info` at the same time as contract code,
+		// We store `code_info` at the same time as contract code,
 		// therefore this query shouldn't really fail.
 		// We consider its failure equal to `CodeNotFound`, as contract code without
-		// `owner_info` is unusable in this pallet.
-		let owner_info = <OwnerInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
+		// `code_info` is unusable in this pallet.
+		let code_info = <CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
 
-		Ok(Self { code, owner_info })
+		Ok(Self { code, code_info })
 	}
 
 	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
@@ -492,7 +492,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 	}
 
 	fn is_deterministic(&self) -> bool {
-		matches!(self.owner_info.determinism, Determinism::Enforced)
+		matches!(self.code_info.determinism, Determinism::Enforced)
 	}
 }
 
