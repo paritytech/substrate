@@ -362,8 +362,8 @@ impl<T: Config> WasmBlob<T> {
 		schedule: &Schedule<T>,
 		owner: T::AccountId,
 	) -> DispatchResult {
-		let (executable, owner_info) = Self::from_code_unchecked(code, schedule, owner)?;
-		store_code(executable, false)
+		let executable = Self::from_code_unchecked(code, schedule, owner)?;
+		Self::store_code(executable, false)
 	}
 
 	/// Create the module without checking the passed code.

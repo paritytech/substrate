@@ -40,10 +40,9 @@ use frame_support::{pallet_prelude::StorageVersion, weights::Weight};
 use frame_system::RawOrigin;
 use sp_runtime::{
 	traits::{Bounded, Hash},
-	Perbill,
 };
 use sp_std::prelude::*;
-use wasm_instrument::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
+use wasm_instrument::parity_wasm::elements::{BlockType, Instruction, ValueType};
 
 /// How many runs we do per API benchmark.
 ///
@@ -218,7 +217,7 @@ benchmarks! {
 	// This benchmarks the v9 migration step. (update codeStorage)
 	#[pov_mode = Measured]
 	v9_migration_step {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let c in 0 .. T::MaxCodeLen::get();
 		v9::store_old_dummy_code::<T>(c as usize);
 		let mut m = v9::Migration::<T>::default();
 	}: {
@@ -329,14 +328,9 @@ benchmarks! {
 	// `c`: Size of the code in bytes.
 	// `i`: Size of the input in bytes.
 	// `s`: Size of the salt in bytes.
-	//
-	// # Note
-	//
-	// We cannot let `c` grow to the maximum code size because the code is not allowed
-	// to be larger than the maximum size **after instrumentation**.
 	#[pov_mode = Measured]
 	instantiate_with_code {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let c in 0 .. T::MaxCodeLen::get();
 		let i in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let input = vec![42u8; i as usize];
@@ -426,14 +420,9 @@ benchmarks! {
 	// This constructs a contract that is maximal expensive to instrument.
 	// It creates a maximum number of metering blocks per byte.
 	// `c`: Size of the code in bytes.
-	//
-	// # Note
-	//
-	// We cannot let `c` grow to the maximum code size because the code is not allowed
-	// to be larger than the maximum size **after instrumentation**.
 	#[pov_mode = Measured]
 	upload_code {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let c in 0 .. T::MaxCodeLen::get();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
@@ -715,27 +704,6 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
-
-	#[pov_mode = Measured]
-	seal_gas {
-		let r in 0 .. API_BENCHMARK_RUNS;
-		let code = WasmModule::<T>::from(ModuleDefinition {
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "gas",
-				params: vec![ValueType::I64],
-				return_type: None,
-			}],
-			call_body: Some(body::repeated(r, &[
-				Instruction::I64Const(42),
-				Instruction::Call(0),
-			])),
-			.. Default::default()
-		});
-		let instance = Contract::<T>::new(code, vec![])?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[pov_mode = Measured]
@@ -1032,7 +1000,7 @@ benchmarks! {
 		// or maximum allowed debug buffer size, whichever is less.
 		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64 * 1024).min(T::MaxDebugBufferLen::get());
 		// We benchmark versus messages containing printable ASCII codes.
-		// About 1Kb goes to the instrumented contract code instructions,
+		// About 1Kb goes to the contract code instructions,
 		// whereas all the space left we use for the initialization of the debug messages data.
 		let message = (0 .. T::MaxCodeLen::get() - 1024).zip((32..127).cycle()).map(|i| i.1).collect::<Vec<_>>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -2467,21 +2435,16 @@ benchmarks! {
 	}: {}
 
 	// Execute one erc20 transfer using the ink! erc20 example contract.
-	//
-	// `g` is used to enable gas instrumentation to compare the performance impact of
-	// that instrumentation at runtime.
 	#[extra]
 	#[pov_mode = Measured]
 	ink_erc20_transfer {
-		let g in 0 .. 1;
-		let gas_metering = g != 0;
 		let code = load_benchmark!("ink_erc20");
 		let data = {
 			let new: ([u8; 4], BalanceOf<T>) = ([0x9b, 0xae, 0x9d, 0x5e], 1000u32.into());
 			new.encode()
 		};
 		let instance = Contract::<T>::new(
-			WasmModule::instrumented(code, gas_metering), data,
+			WasmModule::from_code(code), data,
 		)?;
 		let data = {
 			let transfer: ([u8; 4], AccountIdOf<T>, BalanceOf<T>) = (
@@ -2507,14 +2470,9 @@ benchmarks! {
 	}
 
 	// Execute one erc20 transfer using the open zeppelin erc20 contract compiled with solang.
-	//
-	// `g` is used to enable gas instrumentation to compare the performance impact of
-	// that instrumentation at runtime.
 	#[extra]
 	#[pov_mode = Measured]
 	solang_erc20_transfer {
-		let g in 0 .. 1;
-		let gas_metering = g != 0;
 		let code = include_bytes!("../../benchmarks/solang_erc20.wasm");
 		let caller = account::<T::AccountId>("instantiator", 0, 0);
 		let mut balance = [0u8; 32];
@@ -2530,7 +2488,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::with_caller(
-			caller, WasmModule::instrumented(code, gas_metering), data,
+			caller, WasmModule::from_code(code), data,
 		)?;
 		balance[0] = 1;
 		let data = {

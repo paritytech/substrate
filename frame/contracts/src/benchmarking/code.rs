@@ -24,18 +24,15 @@
 //! we define this simple definition of a contract that can be passed to `create_code` that
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
-use crate::{Config, Determinism};
+use crate::Config;
 use frame_support::traits::Get;
 use sp_runtime::traits::Hash;
 use sp_std::{borrow::ToOwned, prelude::*};
-use wasm_instrument::{
-	gas_metering,
-	parity_wasm::{
-		builder,
-		elements::{
-			self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
-			Section, ValueType,
-		},
+use wasm_instrument::parity_wasm::{
+	builder,
+	elements::{
+		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
+		Section, ValueType,
 	},
 };
 
@@ -240,15 +237,9 @@ impl<T: Config> From<ModuleDefinition> for WasmModule<T> {
 }
 
 impl<T: Config> WasmModule<T> {
-	/// Uses the supplied wasm module and instruments it when requested.
-	pub fn instrumented(code: &[u8], inject_gas: bool) -> Self {
-		let module = {
-			let mut module = Module::from_bytes(code).unwrap();
-			if inject_gas {
-				module = inject_gas_metering::<T>(module);
-			}
-			module
-		};
+	/// Uses the supplied wasm module.
+	pub fn from_code(code: &[u8]) -> Self {
+		let module = Module::from_bytes(code).unwrap();
 		let limits = *module
 			.import_section()
 			.unwrap()
@@ -367,6 +358,7 @@ impl<T: Config> WasmModule<T> {
 		.into()
 	}
 
+	#[allow(dead_code)]
 	pub fn unary_instr(instr: Instruction, repeat: u32) -> Self {
 		use body::DynInstr::{RandomI64Repeated, Regular};
 		ModuleDefinition {
@@ -379,6 +371,7 @@ impl<T: Config> WasmModule<T> {
 		.into()
 	}
 
+	#[allow(dead_code)]
 	pub fn binary_instr(instr: Instruction, repeat: u32) -> Self {
 		use body::DynInstr::{RandomI64Repeated, Regular};
 		ModuleDefinition {
@@ -399,6 +392,7 @@ pub mod body {
 	/// When generating contract code by repeating a wasm sequence, it's sometimes necessary
 	/// to change those instructions on each repetition. The variants of this enum describe
 	/// various ways in which this can happen.
+	#[allow(dead_code)]
 	pub enum DynInstr {
 		/// Insert the associated instruction.
 		Regular(Instruction),
@@ -499,6 +493,7 @@ pub mod body {
 	}
 
 	/// Replace the locals of the supplied `body` with `num` i64 locals.
+	#[allow(dead_code)]
 	pub fn inject_locals(body: &mut FuncBody, num: u32) {
 		use self::elements::Local;
 		*body.locals_mut() = vec![Local::new(num, ValueType::I64)];
@@ -508,11 +503,4 @@ pub mod body {
 /// The maximum amount of pages any contract is allowed to have according to the current `Schedule`.
 pub fn max_pages<T: Config>() -> u32 {
 	T::Schedule::get().limits.memory_pages
-}
-
-fn inject_gas_metering<T: Config>(module: Module) -> Module {
-	let schedule = T::Schedule::get();
-	let gas_rules = schedule.rules(Determinism::Enforced);
-	let backend = gas_metering::host_function::Injector::new("seal0", "gas");
-	gas_metering::inject(module, backend, &gas_rules).unwrap()
 }
