@@ -76,12 +76,6 @@ pub struct Schedule<T: Config> {
 }
 
 /// Describes the upper limits on various metrics.
-///
-/// # Note
-///
-/// The values in this struct should never be decreased. The reason is that decreasing those
-/// values will break existing contracts which are above the new limits when a
-/// re-instrumentation is triggered.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug, TypeInfo)]
 pub struct Limits {

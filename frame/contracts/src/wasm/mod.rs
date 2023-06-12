@@ -475,11 +475,10 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		}
 
 		let result = exported_func.call(&mut store, &[], &mut []);
-		let engine_consumed = store.fuel_consumed().expect("Fuel metering is enabled; qed");
+		let engine_consumed_total = store.fuel_consumed().expect("Fuel metering is enabled; qed");
 		// Sync this frame's gas meter with the engine's one.
 		let gas_meter = store.data_mut().ext().gas_meter_mut();
-		let fuel_to_charge = engine_consumed.saturating_sub(gas_meter.engine_consumed());
-		gas_meter.sync_fuel(fuel_to_charge)?;
+		gas_meter.sync_fuel(engine_consumed_total)?;
 
 		store.into_data().to_execution_result(result)
 	}

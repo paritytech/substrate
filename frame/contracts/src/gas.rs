@@ -185,17 +185,18 @@ impl<T: Config> GasMeter<T> {
 		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
 	}
 
-	/// This method is used for gas syncs with the engine at start of every host function call.
+	/// This method is used for gas syncs with the engine.
 	///
 	/// Updates internal `engine_comsumed` tracker of engine fuel consumption.
 	///
-	/// Charges self with the `ref_time` Weight corresponding to `wasmi_fuel` consumed on the engine
-	/// side. Passed value is scaled by multiplying it by the weight of a basic operation, as such
-	/// an operation in wasmi engine costs 1.
+	/// Charges self with the `ref_time` Weight corresponding to wasmi fuel consumed on the engine
+	/// side since last sync. Passed value is scaled by multiplying it by the weight of a basic
+	/// operation, as such an operation in wasmi engine costs 1.
 	///
 	/// Returns the updated `gas_left` `Weight` value from the meter.
 	/// Normally this would never fail, as engine should fail first when out of gas.
 	pub fn sync_fuel(&mut self, wasmi_fuel: u64) -> Result<Weight, DispatchError> {
+		let wasmi_fuel = wasmi_fuel.saturating_sub(self.engine_consumed);
 		if !wasmi_fuel.is_zero() {
 			self.engine_consumed += wasmi_fuel;
 			let reftime_consumed =

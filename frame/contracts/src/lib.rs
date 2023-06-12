@@ -925,7 +925,7 @@ pub mod pallet {
 		NoMigrationPerformed,
 	}
 
-	/// A mapping from an original code hash to the original code, untouched by instrumentation.
+	/// A mapping from an original code hash to the original code.
 	#[pallet::storage]
 	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeVec<T>>;
 

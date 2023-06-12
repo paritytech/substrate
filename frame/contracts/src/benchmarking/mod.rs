@@ -38,9 +38,7 @@ use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::{pallet_prelude::StorageVersion, weights::Weight};
 use frame_system::RawOrigin;
-use sp_runtime::{
-	traits::{Bounded, Hash},
-};
+use sp_runtime::traits::{Bounded, Hash};
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{BlockType, Instruction, ValueType};
 

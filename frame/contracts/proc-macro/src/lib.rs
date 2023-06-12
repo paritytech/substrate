@@ -679,10 +679,9 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		let sync_gas_before = if expand_blocks {
 			quote! {
 				let __gas_before__ = {
-					let engine_consumed = __caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
+					let engine_consumed_total = __caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
 					let gas_meter = __caller__.data_mut().ext().gas_meter_mut();
-					let fuel_to_charge = engine_consumed.saturating_sub(gas_meter.engine_consumed());
-					gas_meter.sync_fuel(fuel_to_charge).map_err(#into_trap).map_err(#into_host)?.ref_time()
+					gas_meter.sync_fuel(engine_consumed_total).map_err(#into_trap).map_err(#into_host)?.ref_time()
 				};
 			}
 		} else {
