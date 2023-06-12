@@ -237,6 +237,25 @@ fn initialize_members_sorts_members() {
 }
 
 #[test]
+fn set_members_with_prime_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		let members = vec![1, 2, 3];
+		assert_ok!(Collective::set_members(
+			RuntimeOrigin::root(),
+			members.clone(),
+			Some(3),
+			MaxMembers::get()
+		));
+		assert_eq!(Collective::members(), members.clone());
+		assert_eq!(Collective::prime(), Some(3));
+		assert_noop!(
+			Collective::set_members(RuntimeOrigin::root(), members, Some(4), MaxMembers::get()),
+			Error::<Test, Instance1>::PrimeAccountNotMember
+		);
+	});
+}
+
+#[test]
 fn proposal_weight_limit_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
