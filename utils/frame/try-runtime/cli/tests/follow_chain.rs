@@ -20,7 +20,6 @@
 
 #[cfg(feature = "try-runtime")]
 mod tests {
-	/*
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
 	use std::{
@@ -63,5 +62,4 @@ mod tests {
 		})
 		.await;
 	}
-	*/
 }
