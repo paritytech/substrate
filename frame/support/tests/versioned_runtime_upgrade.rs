@@ -45,15 +45,10 @@ mod dummy_pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-	}
+	pub trait Config: frame_system::Config {}
 
 	#[pallet::storage]
 	pub type SomeStorage<T: Config> = StorageValue<_, u32, ValueQuery>;
-
-	#[pallet::event]
-	pub enum Event<T: Config> {}
 
 	#[pallet::genesis_config]
 	#[derive(Default)]
@@ -65,9 +60,7 @@ mod dummy_pallet {
 	}
 }
 
-impl dummy_pallet::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-}
+impl dummy_pallet::Config for Test {}
 
 construct_runtime!(
 	pub enum Test where
@@ -76,7 +69,7 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>} = 0,
-		DummyPallet: dummy_pallet::{Pallet, Config, Storage, Event<T>} = 1,
+		DummyPallet: dummy_pallet::{Pallet, Config, Storage} = 1,
 	}
 );
 
