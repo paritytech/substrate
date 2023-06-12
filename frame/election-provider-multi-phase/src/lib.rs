@@ -170,7 +170,8 @@
 //!
 //! Every time an election is finalized, a rolling-window untrusted minimum score stored in
 //! `[MinimumUntrustedScoreAvg]` is updated. If the untrusted score has been updated
-//! [`MinimumUntrustedScoreUpdateInterval`] times, the minimum untrusted score is updated.
+//! [`MinimumUntrustedScoreUpdateInterval`] times, the minimum untrusted score is set with the
+//! calculated average (minus a safety margin defined by [`MinimumUntrustedScoreMargin`]).
 //!
 //! The final minimum untrusted score set is the max score of the rolling window average and
 //! [`MinimumUntrustedScoreBackstop`], which sets a lower bound on the value that the minimum
