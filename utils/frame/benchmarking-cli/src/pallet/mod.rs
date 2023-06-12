@@ -195,4 +195,10 @@ pub struct PalletCmd {
 	/// the analysis is read from this file.
 	#[arg(long)]
 	pub json_input: Option<PathBuf>,
+
+	/// Allow overwriting a single file with multiple results.
+	///
+	/// This exists only to restore legacy behaviour. It should never actually be needed.
+	#[arg(long)]
+	pub unsafe_overwrite_results: bool,
 }
