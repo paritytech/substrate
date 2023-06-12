@@ -35,7 +35,7 @@ mod pallet_test {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -61,7 +61,7 @@ mod pallet_test {
 		}
 
 		pub fn always_error(_origin: OriginFor<T>) -> DispatchResult {
-			return Err("I always fail".into())
+			return Err("I always fail".into());
 		}
 	}
 }

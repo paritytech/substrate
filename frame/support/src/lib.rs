@@ -695,7 +695,7 @@ pub use frame_support_procedural::crate_to_crate_version;
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
-		return Err($y.into())
+		return Err($y.into());
 	}};
 }
 
@@ -848,7 +848,7 @@ pub mod tests {
 		use crate::pallet_prelude::*;
 
 		#[pallet::pallet]
-		pub struct Pallet<T>(PhantomData<T>);
+		pub struct Pallet<T>(_);
 
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]

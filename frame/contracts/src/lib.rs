@@ -191,7 +191,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -340,7 +340,7 @@ pub mod pallet {
 			let remaining_weight = remaining_weight.saturating_sub(weight);
 
 			if !matches!(result, Completed | NoMigrationInProgress) {
-				return weight
+				return weight;
 			}
 
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
@@ -575,7 +575,7 @@ pub mod pallet {
 				let contract = if let Some(contract) = contract {
 					contract
 				} else {
-					return Err(<Error<T>>::ContractNotFound.into())
+					return Err(<Error<T>>::ContractNotFound.into());
 				};
 				<PrefabWasmModule<T>>::add_user(code_hash)?;
 				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
@@ -759,12 +759,15 @@ pub mod pallet {
 			let (result, weight) = Migration::<T>::migrate(weight_limit);
 
 			match result {
-				Completed =>
-					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
-				InProgress { steps_done, .. } if steps_done > 0 =>
-					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
-				InProgress { .. } =>
-					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::Yes }),
+				Completed => {
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No })
+				},
+				InProgress { steps_done, .. } if steps_done > 0 => {
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No })
+				},
+				InProgress { .. } => {
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::Yes })
+				},
 				NoMigrationInProgress | NoMigrationPerformed => {
 					let err: DispatchError = <Error<T>>::NoMigrationPerformed.into();
 					Err(err.with_weight(T::WeightInfo::migrate()))
@@ -1111,7 +1114,7 @@ trait Invokable<T: Config> {
 				gas_meter: GasMeter::new(gas_limit),
 				storage_deposit: Default::default(),
 				result: Err(ExecError { error: e.into(), origin: ErrorOrigin::Caller }),
-			}
+			};
 		}
 
 		executing_contract::using_once(&mut false, || {
@@ -1169,12 +1172,13 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		let mut storage_meter =
 			match StorageMeter::new(&origin, common.storage_deposit_limit, common.value) {
 				Ok(meter) => meter,
-				Err(err) =>
+				Err(err) => {
 					return InternalOutput {
 						result: Err(err.into()),
 						gas_meter,
 						storage_deposit: Default::default(),
-					},
+					}
+				},
 			};
 		let schedule = T::Schedule::get();
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
@@ -1290,7 +1294,7 @@ macro_rules! ensure_no_migration_in_progress {
 				debug_message: Vec::new(),
 				result: Err(Error::<T>::MigrationInProgress.into()),
 				events: None,
-			}
+			};
 		}
 	};
 }
@@ -1444,7 +1448,7 @@ impl<T: Config> Pallet<T> {
 	/// Query storage of a specified contract under a specified key.
 	pub fn get_storage(address: T::AccountId, key: Vec<u8>) -> GetStorageResult {
 		if Migration::<T>::in_progress() {
-			return Err(ContractAccessError::MigrationInProgress)
+			return Err(ContractAccessError::MigrationInProgress);
 		}
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;

@@ -112,7 +112,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	/// The current authorities set
 	#[pallet::storage]
@@ -323,11 +323,11 @@ impl<T: Config> Pallet<T> {
 
 	fn initialize(authorities: &Vec<T::BeefyId>) -> Result<(), ()> {
 		if authorities.is_empty() {
-			return Ok(())
+			return Ok(());
 		}
 
 		if !<Authorities<T>>::get().is_empty() {
-			return Err(())
+			return Err(());
 		}
 
 		let bounded_authorities =

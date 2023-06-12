@@ -192,7 +192,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -304,8 +304,8 @@ pub mod pallet {
 			);
 
 			let to_seconds = |w: &Weight| {
-				w.ref_time() as f32 /
-					frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND as f32
+				w.ref_time() as f32
+					/ frame_support::weights::constants::WEIGHT_REF_TIME_PER_SECOND as f32
 			};
 
 			frame_support::log::debug!(
@@ -953,7 +953,7 @@ impl<T: Config> Pallet<T> {
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
-			return T::DbWeight::get().reads(3)
+			return T::DbWeight::get().reads(3);
 		}
 
 		// All of the new winners that come out of phragmen will thus have a deposit recorded.
@@ -985,7 +985,7 @@ impl<T: Config> Pallet<T> {
 					"Failed to run election. Number of voters exceeded",
 				);
 				Self::deposit_event(Event::ElectionError);
-				return T::DbWeight::get().reads(3 + max_voters as u64)
+				return T::DbWeight::get().reads(3 + max_voters as u64);
 			},
 		}
 
@@ -1092,8 +1092,8 @@ impl<T: Config> Pallet<T> {
 					// All candidates/members/runners-up who are no longer retaining a position as a
 					// seat holder will lose their bond.
 					candidates_and_deposit.iter().for_each(|(c, d)| {
-						if new_members_ids_sorted.binary_search(c).is_err() &&
-							new_runners_up_ids_sorted.binary_search(c).is_err()
+						if new_members_ids_sorted.binary_search(c).is_err()
+							&& new_runners_up_ids_sorted.binary_search(c).is_err()
 						{
 							let (imbalance, _) = T::Currency::slash_reserved(c, *d);
 							T::LoserCandidate::on_unbalanced(imbalance);
@@ -1261,11 +1261,12 @@ impl<T: Config> Pallet<T> {
 	//  - Members and candidates sets are disjoint;
 	//  - Members and runners-ups sets are disjoint.
 	fn try_state_members_disjoint() -> Result<(), TryRuntimeError> {
-		match Self::intersects(&Pallet::<T>::members_ids(), &Self::candidates_ids()) &&
-			Self::intersects(&Pallet::<T>::members_ids(), &Self::runners_up_ids())
+		match Self::intersects(&Pallet::<T>::members_ids(), &Self::candidates_ids())
+			&& Self::intersects(&Pallet::<T>::members_ids(), &Self::runners_up_ids())
 		{
-			true =>
-				Err("Members set should be disjoint from candidates and runners-up sets".into()),
+			true => {
+				Err("Members set should be disjoint from candidates and runners-up sets".into())
+			},
 			false => Ok(()),
 		}
 	}
