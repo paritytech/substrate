@@ -82,6 +82,7 @@ impl pallet_timestamp::Config for Test {
 
 parameter_types! {
 	static DisabledValidatorTestValue: Vec<AuthorityIndex> = Default::default();
+	pub static AllowMultipleBlocksPerSlot: bool = false;
 }
 
 pub struct MockDisabledValidators;
@@ -106,6 +107,7 @@ impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
 	type DisabledValidators = MockDisabledValidators;
 	type MaxAuthorities = ConstU32<10>;
+	type AllowMultipleBlocksPerSlot = AllowMultipleBlocksPerSlot;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
