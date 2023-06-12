@@ -75,13 +75,10 @@ pub struct VersionedRuntimeUpgrade<From, To, Inner, Pallet, Weight> {
 
 /// Implementation of the `OnRuntimeUpgrade` trait for `VersionedRuntimeUpgrade`.
 ///
-/// Primarily, it
-/// 1. Logs a warning in `pre_upgrade` if the storage version specified in the pallet appears to be
-/// misconfigured before returning `Inner::pre_upgrade`.
-///
-/// 2. Performs the actual runtime upgrade in `on_runtime_upgrade` only if the on-chain version of
-/// the pallets storage matches `From`, and after the upgrade sets the on-chian storage to `To`. If
-/// the versions do not match, it writes a log notifying the developer that the migration is a noop.
+/// Its main function is to perform the runtime upgrade in `on_runtime_upgrade` only if the on-chain
+/// version of the pallets storage matches `From`, and after the upgrade set the on-chian storage to
+/// `To`. If the versions do not match, it writes a log notifying the developer that the migration
+/// is a noop.
 impl<
 		From: Get<u16>,
 		To: Get<u16>,
@@ -90,31 +87,12 @@ impl<
 		DbWeight: Get<RuntimeDbWeight>,
 	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<From, To, Inner, Pallet, DbWeight>
 {
-	/// VersionedRuntimeUpgrade pre-upgrade checks.
+	/// Executes the versioned runtime upgrade.
 	///
-	/// Logs a warning if the storage version specified in the pallet appears to be misconfigured,
-	/// before returning `Inner::pre_upgrade`.
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
-		let current_version = Pallet::current_storage_version();
-		if current_version < To::get() {
-			log::warn!(
-				"Pallet '{}' appears to be misconfigured: its version ({:?}) is less than the on-chain version that will be set by this VersionedRuntimeUpgrade ({}). Please ensure the pallet version is set correctly.",
-				Pallet::name(),
-				current_version,
-				To::get(),
-			);
-		}
-
-		Inner::pre_upgrade()
-	}
-
-	/// Actually executes the versioned runtime upgrade.
-	///
-	/// First checks if the pallet's on-chain storage version matches the version of this upgrade.
-	/// If it matches, it calls `Inner::on_runtime_upgrade`, increments the on-chain version, and
-	/// returns the weight. If it does not match, it writes a log notifying the developer that the
-	/// migration is a noop.
+	/// First checks if the pallets on-chain storage version matches the version of this upgrade. If
+	/// it matches, it calls `Inner::on_runtime_upgrade`, updates the on-chain version, and returns
+	/// the weight. If it does not match, it writes a log notifying the developer that the migration
+	/// is a noop.
 	fn on_runtime_upgrade() -> Weight {
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == From::get() {
