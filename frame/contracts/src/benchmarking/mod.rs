@@ -251,7 +251,7 @@ benchmarks! {
 			whitelisted_caller(), WasmModule::dummy(), vec![],
 		)?;
 
-		v10::store_old_contrat_info::<T>(contract.account_id.clone(), contract.info()?);
+		v10::store_old_contract_info::<T>(contract.account_id.clone(), contract.info()?);
 		let mut m = v10::Migration::<T>::default();
 	}: {
 		m.step();
