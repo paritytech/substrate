@@ -129,7 +129,7 @@ use pallet_contracts_primitives::{
 use scale_info::TypeInfo;
 use smallvec::Array;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{fmt::Debug, prelude::*};
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
