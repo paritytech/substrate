@@ -17,16 +17,16 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::GenesisBuild;
+use frame_support::traits::RuntimeGenesisBuild;
 use serde_json::Value;
 
 /// Helper for implementing [`sp_genesis_builder::GenesisBuilder`] for runtimes. Provides common
 /// logic. For more info refer to [`sp_genesis_builder::GenesisBuilder`].
-pub struct GenesisBuilderHelper<R, GC>(sp_std::marker::PhantomData<(R, GC)>);
+pub struct GenesisBuilderHelper<GC>(sp_std::marker::PhantomData<GC>);
 
-impl<R, GC> GenesisBuilderHelper<R, GC>
+impl<GC> GenesisBuilderHelper<GC>
 where
-	GC: Default + GenesisBuild<R>,
+	GC: Default + RuntimeGenesisBuild,
 {
 	/// Get the default `GenesisConfig` as a JSON blob.
 	pub fn get_default_as_json() -> sp_std::vec::Vec<u8> {
@@ -48,7 +48,7 @@ where
 		let gc = serde_json::from_value::<GC>(json)
 			.expect("patched default config json is expected to be valid. qed.");
 
-		<GC as GenesisBuild<R>>::build(&gc);
+		<GC as RuntimeGenesisBuild>::build(&gc);
 	}
 }
 
