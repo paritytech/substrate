@@ -203,7 +203,8 @@ mod tests {
 	use tokio::sync::Mutex;
 
 	type Block = TBlock<ExtrinsicWrapper<()>>;
-		type Hash = H256;
+	type BlockNumber = u64;
+	type Hash = H256;
 
 	struct MockHeaderProvider(pub Arc<Mutex<VecDeque<BlockNumber>>>);
 

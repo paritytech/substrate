@@ -273,7 +273,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 			let signature_valid =
 				<PricePayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					frame_system::BlockNumberOf<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
 
 			assert!(signature_valid);
@@ -327,7 +327,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 			let signature_valid =
 				<PricePayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					frame_system::BlockNumberOf<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
 
 			assert!(signature_valid);

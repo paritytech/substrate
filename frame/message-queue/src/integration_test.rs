@@ -38,7 +38,6 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::Pareto;
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use std::collections::{BTreeMap, BTreeSet};

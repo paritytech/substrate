@@ -845,7 +845,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// in your runtime. To use the default behavior, add `fn deposit_event() = default;` to your
 /// `Module`.
 ///
-/// The following reserved functions also take the block number (with type `frame_system::BlockNumberOf<T>`) as an
+/// The following reserved functions also take the block number (with type `BlockNumberOf<T>`) as an
 /// optional input:
 ///
 /// * `on_runtime_upgrade`: Executes at the beginning of a block prior to on_initialize when there
@@ -3260,12 +3260,12 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: frame_system::BlockNumberOf<T>,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_parts(7, 0) }
-			fn on_idle(n: frame_system::BlockNumberOf<T>, remaining_weight: Weight,) -> Weight {
+			fn on_initialize(n: BlockNumberOf<T>,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_parts(7, 0) }
+			fn on_idle(n: BlockNumberOf<T>, remaining_weight: Weight,) -> Weight {
 				if n.into() == 42 || remaining_weight == Weight::from_parts(42, 0)  { panic!("on_idle") }
 				Weight::from_parts(7, 0)
 			}
-			fn on_finalize(n: frame_system::BlockNumberOf<T>,) { if n.into() == 42 { panic!("on_finalize") } }
+			fn on_finalize(n: BlockNumberOf<T>,) { if n.into() == 42 { panic!("on_finalize") } }
 			fn on_runtime_upgrade() -> Weight { Weight::from_parts(10, 0) }
 			fn offchain_worker() {}
 			/// Some doc
@@ -3555,6 +3555,9 @@ mod weight_tests {
 
 	pub use self::frame_system::{Call, Config, Pallet};
 
+	type HeaderOf<T> = <<T as Config>::Block as traits::HeaderProvider>::Header;
+	type BlockNumberOf<T> = <HeaderOf<T> as traits::Header>::Number;
+
 	#[crate::pallet(dev_mode)]
 	pub mod frame_system {
 		use super::{frame_system, frame_system::pallet_prelude::*};
@@ -3567,7 +3570,7 @@ mod weight_tests {
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
 		pub trait Config: 'static {
-			type BlockNumber: Parameter + Default + MaxEncodedLen;
+			type Block: Parameter + sp_runtime::traits::Block;
 			type AccountId;
 			type Balance;
 			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;

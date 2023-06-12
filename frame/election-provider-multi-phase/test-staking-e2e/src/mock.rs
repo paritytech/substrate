@@ -72,7 +72,8 @@ frame_support::construct_runtime!(
 
 pub(crate) type AccountId = u128;
 pub(crate) type AccountIndex = u32;
-pub(crate) pub(crate) type Balance = u64;
+pub(crate) type BlockNumber = u64;
+pub(crate) type Balance = u64;
 pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
 pub(crate) type Moment = u64;

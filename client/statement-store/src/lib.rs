@@ -891,7 +891,8 @@ mod tests {
 	type Extrinsic = sp_runtime::OpaqueExtrinsic;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
-		type Header = sp_runtime::generic::Header<BlockNumber, Hashing>;
+	type BlockNumber = u64;
+	type Header = sp_runtime::generic::Header<BlockNumber, Hashing>;
 	type Block = sp_runtime::generic::Block<Header, Extrinsic>;
 
 	const CORRECT_BLOCK_HASH: [u8; 32] = [1u8; 32];

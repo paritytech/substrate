@@ -101,7 +101,7 @@ impl pallet_session::Config for Test {
 }
 
 pub type MmrLeaf = sp_consensus_beefy::mmr::MmrLeaf<
-	<Test as frame_system::Config>::BlockNumber,
+	frame_system::BlockNumberOf<Test>,
 	<Test as frame_system::Config>::Hash,
 	crate::MerkleRootOf<Test>,
 	Vec<u8>,

@@ -840,6 +840,9 @@ pub mod tests {
 
 	pub use self::frame_system::{Config, Pallet};
 
+	type HeaderOf<T> = <<T as Config>::Block as traits::HeaderProvider>::Header;
+	type BlockNumberOf<T> = <HeaderOf<T> as traits::Header>::Number;
+
 	#[pallet]
 	pub mod frame_system {
 		#[allow(unused)]
@@ -853,7 +856,7 @@ pub mod tests {
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
 		pub trait Config: 'static {
-			type BlockNumber: Parameter + Default + MaxEncodedLen;
+			type Block: Parameter + sp_runtime::traits::Block;
 			type AccountId;
 			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
 			type RuntimeOrigin;
@@ -883,12 +886,12 @@ pub mod tests {
 		#[pallet::storage]
 		#[pallet::getter(fn generic_data)]
 		pub type GenericData<T: Config> =
-			StorageMap<_, Identity, frame_system::BlockNumberOf<T>, frame_system::BlockNumberOf<T>, ValueQuery>;
+			StorageMap<_, Identity, BlockNumberOf<T>, BlockNumberOf<T>, ValueQuery>;
 
 		#[pallet::storage]
 		#[pallet::getter(fn generic_data2)]
 		pub type GenericData2<T: Config> =
-			StorageMap<_, Blake2_128Concat, frame_system::BlockNumberOf<T>, frame_system::BlockNumberOf<T>, OptionQuery>;
+			StorageMap<_, Blake2_128Concat, BlockNumberOf<T>, BlockNumberOf<T>, OptionQuery>;
 
 		#[pallet::storage]
 		pub type DataDM<T> =
@@ -898,10 +901,10 @@ pub mod tests {
 		pub type GenericDataDM<T: Config> = StorageDoubleMap<
 			_,
 			Blake2_128Concat,
-			frame_system::BlockNumberOf<T>,
+			BlockNumberOf<T>,
 			Identity,
-			frame_system::BlockNumberOf<T>,
-			frame_system::BlockNumberOf<T>,
+			BlockNumberOf<T>,
+			BlockNumberOf<T>,
 			ValueQuery,
 		>;
 
@@ -909,10 +912,10 @@ pub mod tests {
 		pub type GenericData2DM<T: Config> = StorageDoubleMap<
 			_,
 			Blake2_128Concat,
-			frame_system::BlockNumberOf<T>,
+			BlockNumberOf<T>,
 			Twox64Concat,
-			frame_system::BlockNumberOf<T>,
-			frame_system::BlockNumberOf<T>,
+			BlockNumberOf<T>,
+			BlockNumberOf<T>,
 			OptionQuery,
 		>;
 
@@ -923,7 +926,7 @@ pub mod tests {
 			Blake2_128Concat,
 			u32,
 			Blake2_128Concat,
-			frame_system::BlockNumberOf<T>,
+			BlockNumberOf<T>,
 			Vec<u32>,
 			ValueQuery,
 		>;

@@ -199,7 +199,7 @@ impl Header {
 }
 
 /// An opaque extrinsic wrapper type.
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, TypeInfo)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
 impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
