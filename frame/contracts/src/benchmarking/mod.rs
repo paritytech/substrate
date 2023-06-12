@@ -277,15 +277,15 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 	}
 
-	// This benchmarks the weight of executing 1 `NoopMigraton`
+	// This benchmarks the weight of dispatching migrate to executing 1 `NoopMigraton`
 	#[pov_mode = Measured]
 	migrate {
 		StorageVersion::new(0).put::<Pallet<T>>();
 		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
-		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
-	}: {
-		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap()
-	} verify {
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
+	}: _(origin, Weight::MAX)
+	verify {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 	}
 
