@@ -17,6 +17,43 @@
 
 use syn::{spanned::Spanned, Attribute, Ident};
 
+mod keyword {
+	syn::custom_keyword!(Pallet);
+	syn::custom_keyword!(Call);
+	syn::custom_keyword!(Storage);
+	syn::custom_keyword!(Event);
+	syn::custom_keyword!(Config);
+	syn::custom_keyword!(Origin);
+	syn::custom_keyword!(Inherent);
+	syn::custom_keyword!(ValidateUnsigned);
+	syn::custom_keyword!(FreezeReason);
+	syn::custom_keyword!(HoldReason);
+	syn::custom_keyword!(LockId);
+	syn::custom_keyword!(SlashReason);
+}
+
+#[derive(Debug, Clone)]
+pub enum PalletPartKeyword {
+	Pallet(keyword::Pallet),
+	Call(keyword::Call),
+	Storage(keyword::Storage),
+	Event(keyword::Event),
+	Config(keyword::Config),
+	Origin(keyword::Origin),
+	Inherent(keyword::Inherent),
+	ValidateUnsigned(keyword::ValidateUnsigned),
+	FreezeReason(keyword::FreezeReason),
+	HoldReason(keyword::HoldReason),
+	LockId(keyword::LockId),
+	SlashReason(keyword::SlashReason),
+}
+
+#[derive(Debug, Clone)]
+pub struct PalletPart {
+	pub keyword: PalletPartKeyword,
+	pub generics: syn::Generics,
+}
+
 pub struct PalletDef {
 	/// The name of the pallet, e.g.`System` in `System: frame_system`.
 	pub name: Ident,
@@ -28,6 +65,10 @@ pub struct PalletDef {
 	pub path: syn::Path,
 	/// The instance of the pallet, e.g. `Instance1` in `Council: pallet_collective::<Instance1>`.
 	pub instance: Option<Ident>,
+	/// The declared pallet parts,
+	/// e.g. `Some([Pallet, Call])` for `System: system::{Pallet, Call}`
+	/// or `None` for `System: system`.
+	pub pallet_parts: Option<Vec<PalletPart>>,
 }
 
 pub struct PalletsDef {
@@ -46,6 +87,8 @@ impl PalletsDef {
 		} else {
 			return Err(syn::Error::new(item.span(), "Invalid frame::pallets, expect item enum."))
 		};
+
+		// println!("item: {:?}", item);
 
 		let mut pallets: Vec<PalletDef> = vec![]; 
 		for variant in &item.variants {
@@ -88,7 +131,8 @@ impl PalletsDef {
 				attrs: vec![],
 				index,
 				path,
-				instance: None
+				instance: None,
+				pallet_parts: None
 			});
 		};
 
