@@ -56,6 +56,7 @@ pub trait WeightInfo {
 	fn v9_migration_step(c: u32, ) -> Weight;
 	fn v10_migration_step() -> Weight;
 	fn v11_migration_step(k: u32, ) -> Weight;
+	fn v12_migration_step(k: u32, ) -> Weight;
 	fn migration_noop() -> Weight;
 	fn migrate() -> Weight;
 	fn on_runtime_upgrade_noop() -> Weight;
@@ -272,6 +273,22 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(k.into())))
 			.saturating_add(Weight::from_parts(0, 1).saturating_mul(k.into()))
 	}
+
+	/// Placeholder, should be replaced with new benchmarked weight
+	fn v12_migration_step(k: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `138 + k * (1 ±0)`
+		//  Estimated: `3602 + k * (1 ±0)`
+		// Minimum execution time: 3_952_000 picoseconds.
+		Weight::from_parts(4_129_000, 3602)
+			// Standard Error: 1_521
+			.saturating_add(Weight::from_parts(1_013_657, 0).saturating_mul(k.into()))
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
+			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(k.into())))
+			.saturating_add(Weight::from_parts(0, 1).saturating_mul(k.into()))
+	}
+
 	/// Storage: Contracts MigrationInProgress (r:1 w:1)
 	/// Proof: Contracts MigrationInProgress (max_values: Some(1), max_size: Some(1026), added: 1521, mode: Measured)
 	fn migration_noop() -> Weight {
@@ -2494,6 +2511,22 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(k.into())))
 			.saturating_add(Weight::from_parts(0, 1).saturating_mul(k.into()))
 	}
+
+	/// Placeholder, should be replaced with new benchmarked weight
+	fn v12_migration_step(k: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `138 + k * (1 ±0)`
+		//  Estimated: `3602 + k * (1 ±0)`
+		// Minimum execution time: 3_952_000 picoseconds.
+		Weight::from_parts(4_129_000, 3602)
+			// Standard Error: 1_521
+			.saturating_add(Weight::from_parts(1_013_657, 0).saturating_mul(k.into()))
+			.saturating_add(RocksDbWeight::get().reads(1_u64))
+			.saturating_add(RocksDbWeight::get().writes(2_u64))
+			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(k.into())))
+			.saturating_add(Weight::from_parts(0, 1).saturating_mul(k.into()))
+	}
+
 	/// Storage: Contracts MigrationInProgress (r:1 w:1)
 	/// Proof: Contracts MigrationInProgress (max_values: Some(1), max_size: Some(1026), added: 1521, mode: Measured)
 	fn migration_noop() -> Weight {
