@@ -262,13 +262,8 @@ use frame_support::{
 	pallet_prelude::*,
 	storage::KeyLenOf,
 	traits::{
-<<<<<<< HEAD
-		BalanceStatus, Currency, EnsureOrigin, ExistenceRequirement::AllowDeath, Imbalance,
-		OnUnbalanced, Randomness, ReservableCurrency,
-=======
-		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, EnsureOriginWithArg,
+		BalanceStatus, Currency, EnsureOrigin, EnsureOriginWithArg,
 		ExistenceRequirement::AllowDeath, Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
->>>>>>> origin/master
 	},
 	PalletId,
 };
