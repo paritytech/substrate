@@ -17,13 +17,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![cfg(unix)]
-
 #[cfg(feature = "try-runtime")]
 mod tests {
-	/*
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
 	use std::{
+		fs,
 		process::{self},
 		time::Duration,
 	};
@@ -31,17 +30,17 @@ mod tests {
 	use tokio::process::{Child, Command};
 
 	#[tokio::test]
-	async fn follow_chain_works() {
+	async fn create_snapshot_works() {
 		// Build substrate so binaries used in the test use the latest code.
 		common::build_substrate(&["--features=try-runtime"]);
 
 		common::run_with_timeout(Duration::from_secs(60), async move {
-			fn start_follow(ws_url: &str) -> Child {
+			fn create_snapshot(ws_url: &str) -> Child {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
 					.stderr(process::Stdio::piped())
 					.args(&["try-runtime", "--runtime=existing"])
-					.args(&["follow-chain", format!("--uri={}", ws_url).as_str()])
+					.args(&["create-snapshot", format!("--uri={}", ws_url).as_str()])
 					.kill_on_drop(true)
 					.spawn()
 					.unwrap()
@@ -52,16 +51,26 @@ mod tests {
 			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
 			common::wait_n_finalized_blocks(1, &ws_url).await;
 
-			// Kick off the follow-chain process and wait for it to process at least 3 blocks.
-			let mut follow = start_follow(&ws_url);
-			let re = Regex::new(r#".*executed block ([3-9]|[1-9]\d+).*"#).unwrap();
+			// Try to create a snapshot.
+			let mut snapshot_creation = create_snapshot(&ws_url);
+			let re = Regex::new(r#".*writing snapshot of (\d+) bytes to .*"#).unwrap();
 			let matched =
-				common::wait_for_stream_pattern_match(follow.stderr.take().unwrap(), re).await;
+				common::wait_for_stream_pattern_match(snapshot_creation.stderr.take().unwrap(), re)
+					.await;
 
-			// Assert that the follow-chain process has followed at least 3 blocks.
+			// Assert that the snapshot creation succeded.
 			assert!(matched.is_ok());
+
+			let snapshot = fs::read_dir(".")
+				.expect("Failed to read the current directory")
+				.filter_map(Result::ok)
+				.find(|entry| {
+					entry.path().is_file() &&
+						entry.path().extension().map(|ext| ext == "snap").unwrap_or(false)
+				});
+
+			assert!(snapshot.is_some());
 		})
 		.await;
 	}
-	*/
 }
