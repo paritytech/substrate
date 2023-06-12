@@ -65,7 +65,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
 		already_withdrawn: Self::LiquidityInfo,
-	) -> Result<(Option<AssetBalanceOf<T>>, Option<AssetBalanceOf<T>>), TransactionValidityError>;
+	) -> Result<(), TransactionValidityError>;
 }
 
 /// Implements the asset transaction for a balance to asset converter (implementing
@@ -89,7 +89,7 @@ where
 {
 	type Balance = BalanceOf<T>;
 	type AssetId = AssetIdOf<T>;
-	type LiquidityInfo = LiquidityInfoOf<T>;
+	type LiquidityInfo = (AssetBalanceOf<T>, LiquidityInfoOf<T>);
 
 	/// Withdraw the predicted fee from the transaction origin.
 	///
@@ -111,6 +111,7 @@ where
 
 		// charge the fee in native currency
 		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)
+			.map(|i| (asset_consumed, i))
 	}
 
 	/// Delegate to the OnChargeTransaction functionality.
@@ -123,7 +124,7 @@ where
 		corrected_fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
 		paid: Self::LiquidityInfo,
-	) -> Result<(Option<AssetBalanceOf<T>>, Option<AssetBalanceOf<T>>), TransactionValidityError> {
+	) -> Result<(), TransactionValidityError> {
 		// Refund to the account that paid the fees. If this fails, the account might have
 		// dropped below the existential balance. In that case we don't refund anything.
 		//
@@ -138,8 +139,7 @@ where
 			post_info,
 			corrected_fee,
 			tip,
-			paid,
-		)?;
-		Ok((None, None))
+			paid.1,
+		)
 	}
 }

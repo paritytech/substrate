@@ -101,7 +101,7 @@ pub enum InitialPayment<T: Config> {
 	/// The initial fee was payed in the native currency.
 	Native(LiquidityInfoOf<T>),
 	/// The initial fee was payed in an asset.
-	Asset(LiquidityInfoOf<T>),
+	Asset(ChargeAssetLiquidityOf<T>),
 }
 
 pub use pallet::*;
@@ -130,8 +130,9 @@ pub mod pallet {
 		/// has been paid by `who` in an asset `asset_id`.
 		AssetTxFeePaid {
 			who: T::AccountId,
-			actual_fee: AssetBalanceOf<T>,
-			tip: AssetBalanceOf<T>,
+			actual_fee: BalanceOf<T>,
+			asset_paid: AssetBalanceOf<T>,
+			tip: BalanceOf<T>,
 			asset_id: Option<ChargeAssetIdOf<T>>,
 		},
 	}
@@ -281,24 +282,22 @@ where
 						len as u32, info, post_info, tip,
 					);
 
-					match T::OnChargeAssetTransaction::correct_and_deposit_fee(
+					T::OnChargeAssetTransaction::correct_and_deposit_fee(
 						&who,
 						info,
 						post_info,
 						actual_fee.into(),
 						tip.into(),
 						already_withdrawn.into(),
-					)? {
-						(Some(converted_fee), Some(converted_tip)) => {
-							Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
-								who,
-								actual_fee: converted_fee,
-								tip: converted_tip,
-								asset_id,
-							});
-						},
-						_ => {},
-					}
+					)?;
+
+					/*Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
+						who,
+						actual_fee,
+						asset_paid: already_withdrawn,
+						tip,
+						asset_id,
+					});*/
 				},
 				InitialPayment::Nothing => {
 					// `actual_fee` should be zero here for any signed extrinsic. It would be
