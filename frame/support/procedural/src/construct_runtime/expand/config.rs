@@ -100,7 +100,7 @@ pub fn expand_outer_config(
 			}
 		}
 
-		impl<T> #scrate::traits::GenesisBuild<T> for RuntimeGenesisConfig {
+		impl #scrate::traits::RuntimeGenesisBuild for RuntimeGenesisConfig {
 			fn build(&self) {
 				#genesis_build_calls
 			}

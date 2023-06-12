@@ -359,6 +359,13 @@ pub trait Hooks<BlockNumber> {
 	fn integrity_test() {}
 }
 
+/// A trait to define the build function of a runtime genesis config.
+pub trait RuntimeGenesisBuild: Default + sp_runtime::traits::MaybeSerializeDeserialize {
+	/// Build function allows to put all genesis config keys for each runtime pallet into the
+	/// storage.
+	fn build(&self);
+}
+
 /// A trait to define the build function of a genesis config, T and I are placeholder for pallet
 /// trait and pallet instance.
 pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeDeserialize {
