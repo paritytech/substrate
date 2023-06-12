@@ -983,7 +983,7 @@ pub mod pallet {
 			let reserve_out = T::HigherPrecisionBalance::from(*reserve_out);
 
 			if reserve_in.is_zero() || reserve_out.is_zero() {
-				return Err(Error::<T>::ZeroLiquidity.into());
+				return Err(Error::<T>::ZeroLiquidity.into())
 			}
 
 			let amount_in_with_fee = amount_in
@@ -1076,7 +1076,7 @@ pub mod pallet {
 					let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 					let new_element = pools.try_insert(pool_id).expect("can't get here");
 					if !new_element {
-						return Err(Error::<T>::NonUniquePath.into());
+						return Err(Error::<T>::NonUniquePath.into())
 					}
 				}
 			}
