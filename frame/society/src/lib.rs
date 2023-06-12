@@ -1380,6 +1380,7 @@ pub mod pallet {
 		/// Remove up to `max` stale votes for the defender in the given `challenge_round`.
 		///
 		/// May be called by any Signed origin, but only after the challenge round is ended.
+		#[pallet::call_index(19)]
 		#[pallet::weight(T::WeightInfo::cleanup_challenge())]
 		pub fn cleanup_challenge(
 			origin: OriginFor<T>,

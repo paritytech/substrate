@@ -37,7 +37,10 @@ use schnorrkel::{
 use sp_std::vec::Vec;
 
 use crate::{
-	crypto::{ByteArray, CryptoType, CryptoTypeId, Derive, FromEntropy, Public as TraitPublic, UncheckedFrom},
+	crypto::{
+		ByteArray, CryptoType, CryptoTypeId, Derive, FromEntropy, Public as TraitPublic,
+		UncheckedFrom,
+	},
 	hash::{H256, H512},
 };
 use codec::{Decode, Encode, MaxEncodedLen};

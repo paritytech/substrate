@@ -31,7 +31,9 @@ use scale_info::TypeInfo;
 
 #[cfg(feature = "serde")]
 use crate::crypto::Ss58Codec;
-use crate::crypto::{CryptoType, CryptoTypeId, Derive, FromEntropy, Public as TraitPublic, UncheckedFrom};
+use crate::crypto::{
+	CryptoType, CryptoTypeId, Derive, FromEntropy, Public as TraitPublic, UncheckedFrom,
+};
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "full_crypto")]
