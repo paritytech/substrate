@@ -719,11 +719,11 @@ impl_runtime_apis! {
 	#[cfg(feature = "genesis-builder")]
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
 		fn get_default_as_json() -> Vec<u8> {
-			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::get_default_as_json()
+			GenesisBuilderHelper::<RuntimeGenesisConfig>::get_default_as_json()
 		}
 
-		fn build_config(patch_json: sp_application_crypto::Vec<u8>) {
-			GenesisBuilderHelper::<Runtime, RuntimeGenesisConfig>::build_config(patch_json);
+		fn build_config(patch_json: Vec<u8>) {
+			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config(patch_json);
 		}
 
 	}
