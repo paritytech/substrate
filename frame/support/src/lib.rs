@@ -848,7 +848,7 @@ pub mod tests {
 		use crate::pallet_prelude::*;
 
 		#[pallet::pallet]
-		pub struct Pallet<T>(PhantomData<T>);
+		pub struct Pallet<T>(_);
 
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
