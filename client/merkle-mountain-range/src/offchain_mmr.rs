@@ -30,7 +30,7 @@ use sp_consensus_beefy::MmrRootHash;
 use sp_core::offchain::{DbExternalities, StorageKind};
 use sp_mmr_primitives::{utils, utils::NodesUtils, MmrApi, NodeIndex};
 use sp_runtime::{
-	traits::{Block, Header, NumberFor, One},
+	traits::{Block, Header, HeaderProvider, NumberFor, One},
 	Saturating,
 };
 use std::{collections::VecDeque, sync::Arc};
@@ -223,7 +223,7 @@ where
 	pub fn canonicalize_catch_up(&mut self, notification: &FinalityNotification<B>) {
 		let first = notification.tree_route.first().unwrap_or(&notification.hash);
 		if let Some(mut header) = self.header_metadata_or_log(*first, "canonicalize") {
-			let mut to_canon = VecDeque::<<B as Block>::Hash>::new();
+			let mut to_canon = VecDeque::<<B as HeaderProvider>::Hash>::new();
 			// Walk up the chain adding all blocks newer than `self.best_canonicalized`.
 			loop {
 				header = match self.header_metadata_or_log(header.parent, "canonicalize") {

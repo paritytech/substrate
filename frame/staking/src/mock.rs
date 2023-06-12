@@ -43,8 +43,7 @@ pub const BLOCK_TIME: u64 = 1000;
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
-pub(crate) type BlockNumber = u64;
-pub(crate) type Balance = u128;
+pub(crate) pub(crate) type Balance = u128;
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
@@ -128,13 +127,12 @@ impl frame_system::Config for Test {
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();

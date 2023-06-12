@@ -123,7 +123,7 @@ mod tests {
 	);
 
 	impl self::frame_system::Config for Runtime {
-		type BlockNumber = BlockNumber;
+		type Block = Block;
 		type AccountId = AccountId;
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;

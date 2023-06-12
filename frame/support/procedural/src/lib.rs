@@ -853,7 +853,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type RuntimeOrigin = RuntimeOrigin;
 ///     type OnSetCode = ();
 ///     type PalletInfo = PalletInfo;
-///     type Header = Header;
+///     type Block = Block;
 ///     // We decide to override this one.
 ///     type AccountData = pallet_balances::AccountData<u64>;
 /// }
@@ -871,8 +871,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type BlockLength = ();
 ///     type DbWeight = ();
 ///     type Index = u64;
-///     type BlockNumber = u64;
-///     type Hash = sp_core::hash::H256;
+///     ///     type Hash = sp_core::hash::H256;
 ///     type Hashing = sp_runtime::traits::BlakeTwo256;
 ///     type AccountId = AccountId;
 ///     type Lookup = IdentityLookup<AccountId>;
@@ -899,7 +898,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type RuntimeOrigin = RuntimeOrigin;
 ///     type OnSetCode = ();
 ///     type PalletInfo = PalletInfo;
-///     type Header = Header;
+///     type Block = Block;
 ///     type AccountData = pallet_balances::AccountData<u64>;
 ///     type Version = <TestDefaultConfig as DefaultConfig>::Version;
 ///     type BlockWeights = <TestDefaultConfig as DefaultConfig>::BlockWeights;

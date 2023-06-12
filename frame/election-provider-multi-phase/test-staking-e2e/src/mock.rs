@@ -72,8 +72,7 @@ frame_support::construct_runtime!(
 
 pub(crate) type AccountId = u128;
 pub(crate) type AccountIndex = u32;
-pub(crate) type BlockNumber = u64;
-pub(crate) type Balance = u64;
+pub(crate) pub(crate) type Balance = u64;
 pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
 pub(crate) type Moment = u64;
@@ -84,14 +83,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Index = AccountIndex;	
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();

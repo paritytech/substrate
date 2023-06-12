@@ -166,7 +166,7 @@ frame_support::construct_runtime!(
 );
 
 impl frame_support_test::Config for RuntimeOriginTest {
-	type BlockNumber = BlockNumber;
+	type Block = Block;
 	type AccountId = AccountId;
 	type BaseCallFilter = BaseCallFilter;
 	type RuntimeOrigin = RuntimeOrigin;

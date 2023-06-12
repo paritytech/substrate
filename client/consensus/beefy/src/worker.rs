@@ -47,7 +47,7 @@ use sp_consensus_beefy::{
 };
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor, Zero},
+	traits::{Block, Header, HeaderProvider, NumberFor, Zero},
 	SaturatedConversion,
 };
 use std::{
@@ -87,7 +87,7 @@ pub(crate) struct VoterOracle<B: Block> {
 	/// Min delta in block numbers between two blocks, BEEFY should vote on.
 	min_block_delta: u32,
 	/// Best block we received a GRANDPA finality for.
-	best_grandpa_block_header: <B as Block>::Header,
+	best_grandpa_block_header: <B as HeaderProvider>::Header,
 	/// Best block a BEEFY voting round has been concluded for.
 	best_beefy_block: NumberFor<B>,
 }
@@ -97,7 +97,7 @@ impl<B: Block> VoterOracle<B> {
 	pub fn checked_new(
 		sessions: VecDeque<Rounds<B>>,
 		min_block_delta: u32,
-		grandpa_header: <B as Block>::Header,
+		grandpa_header: <B as HeaderProvider>::Header,
 		best_beefy: NumberFor<B>,
 	) -> Option<Self> {
 		let mut prev_start = Zero::zero();
@@ -275,7 +275,7 @@ pub(crate) struct PersistedState<B: Block> {
 
 impl<B: Block> PersistedState<B> {
 	pub fn checked_new(
-		grandpa_header: <B as Block>::Header,
+		grandpa_header: <B as HeaderProvider>::Header,
 		best_beefy: NumberFor<B>,
 		sessions: VecDeque<Rounds<B>>,
 		min_block_delta: u32,
@@ -302,7 +302,7 @@ impl<B: Block> PersistedState<B> {
 		self.voting_oracle.best_beefy_block = best_beefy;
 	}
 
-	pub(crate) fn set_best_grandpa(&mut self, best_grandpa: <B as Block>::Header) {
+	pub(crate) fn set_best_grandpa(&mut self, best_grandpa: <B as HeaderProvider>::Header) {
 		self.voting_oracle.best_grandpa_block_header = best_grandpa;
 	}
 

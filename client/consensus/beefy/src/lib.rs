@@ -50,7 +50,7 @@ use sp_consensus_beefy::{
 };
 use sp_keystore::KeystorePtr;
 use sp_mmr_primitives::MmrApi;
-use sp_runtime::traits::{Block, Zero};
+use sp_runtime::traits::{Block, HeaderProvider, Zero};
 use std::{
 	collections::{BTreeMap, VecDeque},
 	marker::PhantomData,
@@ -332,7 +332,7 @@ fn load_or_init_voter_state<B, BE, R>(
 	backend: &BE,
 	runtime: &R,
 	beefy_genesis: NumberFor<B>,
-	best_grandpa: <B as Block>::Header,
+	best_grandpa: <B as HeaderProvider>::Header,
 	min_block_delta: u32,
 ) -> ClientResult<PersistedState<B>>
 where
@@ -367,7 +367,7 @@ fn initialize_voter_state<B, BE, R>(
 	backend: &BE,
 	runtime: &R,
 	beefy_genesis: NumberFor<B>,
-	best_grandpa: <B as Block>::Header,
+	best_grandpa: <B as HeaderProvider>::Header,
 	min_block_delta: u32,
 ) -> ClientResult<PersistedState<B>>
 where
@@ -474,7 +474,7 @@ async fn wait_for_runtime_pallet<B, R>(
 	runtime: &R,
 	mut gossip_engine: &mut GossipEngine<B>,
 	finality: &mut Fuse<FinalityNotifications<B>>,
-) -> ClientResult<(NumberFor<B>, <B as Block>::Header)>
+) -> ClientResult<(NumberFor<B>, <B as HeaderProvider>::Header)>
 where
 	B: Block,
 	R: ProvideRuntimeApi<B>,

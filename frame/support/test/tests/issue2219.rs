@@ -152,7 +152,6 @@ mod module {
 	}
 }
 
-pub type BlockNumber = u64;
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
@@ -160,7 +159,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Sign
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 impl frame_support_test::Config for Runtime {
-	type BlockNumber = BlockNumber;
+	type Block = Block;
 	type AccountId = AccountId;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;

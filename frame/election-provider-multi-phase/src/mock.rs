@@ -67,8 +67,7 @@ frame_support::construct_runtime!(
 
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
-pub(crate) type BlockNumber = u64;
-pub(crate) type VoterIndex = u32;
+pub(crate) pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
 
 frame_election_provider_support::generate_solution_type!(
@@ -212,13 +211,12 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
-	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type DbWeight = ();
@@ -323,8 +321,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 pub struct MockFallback;
 impl ElectionProviderBase for MockFallback {
 	type AccountId = AccountId;
-	type BlockNumber = u64;
-	type Error = &'static str;
+		type Error = &'static str;
 	type DataProvider = StakingMock;
 	type MaxWinners = MaxWinners;
 }
@@ -437,8 +434,7 @@ pub struct ExtBuilder {}
 pub struct StakingMock;
 impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
-	type BlockNumber = u64;
-	type MaxVotesPerVoter = MaxNominations;
+		type MaxVotesPerVoter = MaxNominations;
 
 	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();

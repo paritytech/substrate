@@ -190,8 +190,7 @@ mod tests {
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 	type AccountId = u64;
-	type BlockNumber = u64;
-
+	
 	pub type Header = sp_runtime::generic::Header<BlockNumber, sp_runtime::traits::BlakeTwo256>;
 	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, (), (), ()>;
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -211,13 +210,12 @@ mod tests {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type Index = AccountId;
-		type BlockNumber = BlockNumber;
 		type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::testing::Header;
+		type Block = Block;
 		type RuntimeEvent = ();
 		type BlockHashCount = ();
 		type DbWeight = ();

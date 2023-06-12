@@ -234,13 +234,12 @@ mod tests {
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
-		type BlockNumber = BlockNumber;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();

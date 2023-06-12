@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use sc_utils::notification::{NotificationSender, NotificationStream, TracingKeyStr};
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::HeaderProvider;
 
 use crate::justification::BeefyVersionedFinalityProof;
 

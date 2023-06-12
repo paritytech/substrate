@@ -25,6 +25,9 @@ pub use frame_support::dispatch::RawOrigin;
 
 pub use self::pallet::*;
 
+type HeaderOf<T> = <<T as Config>::Block as sp_runtime::traits::HeaderProvider>::Header;
+type BlockNumberOf<T> = <HeaderOf<T> as sp_runtime::traits::Header>::Number;
+
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
@@ -39,7 +42,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
 		/// The block number type.
-		type BlockNumber: Parameter + Member + Default + MaybeSerializeDeserialize + MaxEncodedLen;
+		type Block: Parameter + sp_runtime::traits::Block;
 		/// The account type.
 		type AccountId: Parameter + Member + MaxEncodedLen;
 		/// The basic call filter to use in Origin.
@@ -97,7 +100,7 @@ pub mod pallet {
 		/// The extrinsic is failed
 		ExtrinsicFailed,
 		/// The ignored error
-		Ignore(<T as Config>::BlockNumber),
+		Ignore(BlockNumberOf<T>),
 	}
 }
 
@@ -119,7 +122,7 @@ pub mod pallet_prelude {
 	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
 	/// Type alias for the `BlockNumber` associated type of system config.
-	pub type BlockNumberFor<T> = <T as super::Config>::BlockNumber;
+	pub type BlockNumberFor<T> = crate::BlockNumberOf<T>;
 }
 
 /// Provides an implementation of [`frame_support::traits::Randomness`] that should only be used in

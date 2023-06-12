@@ -83,7 +83,7 @@ use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, Header as HeaderT, HeaderProvider, NumberFor, Zero},
 	Justification, Justifications,
 };
 use substrate_test_runtime_client::AccountKeyring;

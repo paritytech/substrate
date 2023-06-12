@@ -49,14 +49,13 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockHashCount = ConstU64<250>;
 	type BlockLength = ();
-	type BlockNumber = u64;
-	type BlockWeights = ();
+		type BlockWeights = ();
 	type RuntimeCall = RuntimeCall;
 	type DbWeight = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type Header = Header;
+	type Block = Block;
 	type Index = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type OnKilledAccount = ();

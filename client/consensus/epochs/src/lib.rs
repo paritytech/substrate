@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use fork_tree::{FilterAction, ForkTree};
 use sc_client_api::utils::is_descendent_of;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
-use sp_runtime::traits::{Block as BlockT, NumberFor, One, Zero};
+use sp_runtime::traits::{Block as BlockT, HeaderProvider, NumberFor, One, Zero};
 use std::{
 	borrow::{Borrow, BorrowMut},
 	collections::BTreeMap,

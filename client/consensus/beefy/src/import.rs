@@ -24,7 +24,7 @@ use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_consensus::Error as ConsensusError;
 use sp_consensus_beefy::{BeefyApi, BEEFY_ENGINE_ID};
 use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, HeaderProvider, NumberFor},
 	EncodedJustification,
 };
 

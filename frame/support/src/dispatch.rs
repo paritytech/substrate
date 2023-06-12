@@ -3662,7 +3662,7 @@ mod weight_tests {
 	}
 
 	impl Config for Runtime {
-		type BlockNumber = BlockNumber;
+		type Block = Block;
 		type AccountId = AccountId;
 		type Balance = Balance;
 		type BaseCallFilter = crate::traits::Everything;

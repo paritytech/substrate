@@ -854,12 +854,11 @@ mod tests {
 		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type RuntimeCall = RuntimeCall;
-		type BlockNumber = u64;
-		type Hash = sp_core::H256;
+				type Hash = sp_core::H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = RuntimeVersion;

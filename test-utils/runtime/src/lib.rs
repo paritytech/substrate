@@ -56,7 +56,7 @@ pub use sp_core::hash::H256;
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str, impl_opaque_keys,
-	traits::{BlakeTwo256, Block as BlockT, DispatchInfoOf, NumberFor, Verify},
+	traits::{BlakeTwo256, Block as BlockT, DispatchInfoOf, HeaderProvider, NumberFor, Verify},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
 	ApplyExtrinsicResult, Perbill,
 };
@@ -347,12 +347,10 @@ impl frame_system::pallet::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = Index;
-	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = Hashing;
 	type AccountId = AccountId;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-	type Header = Header;
 	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<2400>;

@@ -39,7 +39,7 @@ use sc_statement_store::Store as StatementStore;
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
-use sp_runtime::{generic, traits::Block as BlockT, SaturatedConversion};
+use sp_runtime::{generic, traits::{Block as BlockT, HeaderProvider}, SaturatedConversion};
 use std::sync::Arc;
 
 /// The full client type definition.

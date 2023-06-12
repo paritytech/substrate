@@ -243,7 +243,6 @@ pub mod module3 {
 	}
 }
 
-pub type BlockNumber = u64;
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
@@ -275,7 +274,7 @@ frame_support::construct_runtime!(
 );
 
 impl frame_support_test::Config for Runtime {
-	type BlockNumber = BlockNumber;
+	type Block = Block;
 	type AccountId = AccountId;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;

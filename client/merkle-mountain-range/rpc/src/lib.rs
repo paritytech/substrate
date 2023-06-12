@@ -34,7 +34,7 @@ use sp_api::{NumberFor, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_mmr_primitives::{Error as MmrError, Proof};
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, HeaderProvider};
 
 pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
 

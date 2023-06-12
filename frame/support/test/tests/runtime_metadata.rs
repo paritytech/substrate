@@ -24,7 +24,6 @@ use frame_support::{
 use scale_info::{form::MetaForm, meta_type};
 use sp_runtime::traits::Block as BlockT;
 
-pub type BlockNumber = u64;
 pub type Index = u64;
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -43,7 +42,7 @@ impl frame_system::Config for Runtime {
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type Version = ();
