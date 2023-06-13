@@ -17,21 +17,10 @@
 
 //! Migration framework for pallets.
 
-/// Macro to include all migration modules.
-/// We only want to make these modules public when `runtime-benchmarks` is
-/// enabled, so we can access migration code in benchmarks.
-macro_rules! use_modules {
-    ($($module:ident),*) => {
-        $(
-            #[cfg(feature = "runtime-benchmarks")]
-            pub mod $module;
-            #[cfg(not(feature = "runtime-benchmarks"))]
-            mod $module;
-        )*
-    };
-}
+pub mod v10;
+pub mod v11;
+pub mod v9;
 
-use_modules!(v9, v10, v11);
 use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
 use codec::{Codec, Decode};
 use frame_support::{
@@ -57,10 +46,6 @@ fn invalid_version(version: StorageVersion) -> ! {
 
 /// The cursor used to store the state of the current migration step.
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
-
-// In benchmark and tests we use noop migrations, to test and bench the migration framework itself.
-#[cfg(not(any(feature = "runtime-benchmarks", test)))]
-type Migrations<T> = (v9::Migration<T>, v10::Migration<T>, v11::Migration<T>);
 
 /// IsFinished describes whether a migration is finished or not.
 pub enum IsFinished {
@@ -206,23 +191,16 @@ pub trait MigrateSequence: private::Sealed {
 }
 
 /// Performs all necessary migrations based on `StorageVersion`.
-#[cfg(not(any(feature = "runtime-benchmarks", test)))]
-pub struct Migration<T: Config, M: MigrateSequence = Migrations<T>>(PhantomData<(T, M)>);
-
-/// Custom migration for running runtime-benchmarks and tests.
-#[cfg(any(feature = "runtime-benchmarks", test))]
-pub struct Migration<T: Config, M: MigrateSequence = (NoopMigration<1>, NoopMigration<2>)>(
-	PhantomData<(T, M)>,
-);
+pub struct Migration<T: Config>(PhantomData<T>);
 
 #[cfg(feature = "try-runtime")]
-impl<T: Config, M: MigrateSequence> Migration<T, M> {
+impl<T: Config> Migration<T> {
 	fn run_all_steps() -> Result<(), TryRuntimeError> {
 		let mut weight = Weight::zero();
 		let name = <Pallet<T>>::name();
 		loop {
 			let in_progress_version = <Pallet<T>>::on_chain_storage_version() + 1;
-			let state = M::pre_upgrade_step(in_progress_version)?;
+			let state = T::Migrations::pre_upgrade_step(in_progress_version)?;
 			let (status, w) = Self::migrate(Weight::MAX);
 			weight.saturating_accrue(w);
 			log::info!(
@@ -231,7 +209,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 				in_progress_version,
 				weight
 			);
-			M::post_upgrade_step(in_progress_version, state)?;
+			T::Migrations::post_upgrade_step(in_progress_version, state)?;
 			if matches!(status, MigrateResult::Completed) {
 				break
 			}
@@ -243,7 +221,7 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 	}
 }
 
-impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
+impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		let name = <Pallet<T>>::name();
 		let latest_version = <Pallet<T>>::current_storage_version();
@@ -274,7 +252,7 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 			"{name}: Upgrading storage from {storage_version:?} to {latest_version:?}.",
 		);
 
-		let cursor = M::new(storage_version + 1);
+		let cursor = T::Migrations::new(storage_version + 1);
 		MigrationInProgress::<T>::set(Some(cursor));
 
 		#[cfg(feature = "try-runtime")]
@@ -295,11 +273,14 @@ impl<T: Config, M: MigrateSequence> OnRuntimeUpgrade for Migration<T, M> {
 			target: LOG_TARGET,
 			"{}: Range supported {:?}, range requested {:?}",
 			<Pallet<T>>::name(),
-			M::VERSION_RANGE,
+			T::Migrations::VERSION_RANGE,
 			(storage_version, target_version)
 		);
 
-		ensure!(M::is_upgrade_supported(storage_version, target_version), "Unsupported upgrade");
+		ensure!(
+			T::Migrations::is_upgrade_supported(storage_version, target_version),
+			"Unsupported upgrade"
+		);
 		Ok(Default::default())
 	}
 }
@@ -324,11 +305,11 @@ pub enum StepResult {
 	Completed { steps_done: u32 },
 }
 
-impl<T: Config, M: MigrateSequence> Migration<T, M> {
-	/// Verify that each migration's step of the MigrateSequence fits into `Cursor`.
+impl<T: Config> Migration<T> {
+	/// Verify that each migration's step of the [`T::Migrations`] sequence fits into `Cursor`.
 	pub(crate) fn integrity_test() {
 		let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
-		M::integrity_test(max_weight)
+		T::Migrations::integrity_test(max_weight)
 	}
 
 	/// Migrate
@@ -357,33 +338,36 @@ impl<T: Config, M: MigrateSequence> Migration<T, M> {
 				in_progress_version,
 			);
 
-			let result =
-				match M::steps(in_progress_version, cursor_before.as_ref(), &mut weight_left) {
-					StepResult::InProgress { cursor, steps_done } => {
-						*progress = Some(cursor);
+			let result = match T::Migrations::steps(
+				in_progress_version,
+				cursor_before.as_ref(),
+				&mut weight_left,
+			) {
+				StepResult::InProgress { cursor, steps_done } => {
+					*progress = Some(cursor);
+					MigrateResult::InProgress { steps_done }
+				},
+				StepResult::Completed { steps_done } => {
+					in_progress_version.put::<Pallet<T>>();
+					if <Pallet<T>>::current_storage_version() != in_progress_version {
+						log::info!(
+							target: LOG_TARGET,
+							"{name}: Next migration is {:?},",
+							in_progress_version + 1
+						);
+						*progress = Some(T::Migrations::new(in_progress_version + 1));
 						MigrateResult::InProgress { steps_done }
-					},
-					StepResult::Completed { steps_done } => {
-						in_progress_version.put::<Pallet<T>>();
-						if <Pallet<T>>::current_storage_version() != in_progress_version {
-							log::info!(
-								target: LOG_TARGET,
-								"{name}: Next migration is {:?},",
-								in_progress_version + 1
-							);
-							*progress = Some(M::new(in_progress_version + 1));
-							MigrateResult::InProgress { steps_done }
-						} else {
-							log::info!(
-								target: LOG_TARGET,
-								"{name}: All migrations done. At version {:?},",
-								in_progress_version
-							);
-							*progress = None;
-							MigrateResult::Completed
-						}
-					},
-				};
+					} else {
+						log::info!(
+							target: LOG_TARGET,
+							"{name}: All migrations done. At version {:?},",
+							in_progress_version
+						);
+						*progress = None;
+						MigrateResult::Completed
+					}
+				},
+			};
 
 			(result, weight_limit.saturating_sub(weight_left))
 		})
@@ -527,11 +511,14 @@ mod test {
 
 	#[test]
 	fn is_upgrade_supported_works() {
-		type M = (MockMigration<9>, MockMigration<10>, MockMigration<11>);
+		type Migrations = (MockMigration<9>, MockMigration<10>, MockMigration<11>);
 
 		[(1, 1), (8, 11), (9, 11)].into_iter().for_each(|(from, to)| {
 			assert!(
-				M::is_upgrade_supported(StorageVersion::new(from), StorageVersion::new(to)),
+				Migrations::is_upgrade_supported(
+					StorageVersion::new(from),
+					StorageVersion::new(to)
+				),
 				"{} -> {} is supported",
 				from,
 				to
@@ -540,7 +527,10 @@ mod test {
 
 		[(1, 0), (0, 3), (7, 11), (8, 10)].into_iter().for_each(|(from, to)| {
 			assert!(
-				!M::is_upgrade_supported(StorageVersion::new(from), StorageVersion::new(to)),
+				!Migrations::is_upgrade_supported(
+					StorageVersion::new(from),
+					StorageVersion::new(to)
+				),
 				"{} -> {} is not supported",
 				from,
 				to
@@ -550,27 +540,26 @@ mod test {
 
 	#[test]
 	fn steps_works() {
-		type M = (MockMigration<2>, MockMigration<3>);
+		type Migrations = (MockMigration<2>, MockMigration<3>);
 		let version = StorageVersion::new(2);
-		let mut cursor = M::new(version);
+		let mut cursor = Migrations::new(version);
 
 		let mut weight = Weight::from_all(2);
-		let result = M::steps(version, &cursor, &mut weight);
+		let result = Migrations::steps(version, &cursor, &mut weight);
 		cursor = vec![1u8, 0].try_into().unwrap();
 		assert_eq!(result, StepResult::InProgress { cursor: cursor.clone(), steps_done: 1 });
 		assert_eq!(weight, Weight::from_all(1));
 
 		let mut weight = Weight::from_all(2);
 		assert_eq!(
-			M::steps(version, &cursor, &mut weight),
+			Migrations::steps(version, &cursor, &mut weight),
 			StepResult::Completed { steps_done: 1 }
 		);
 	}
 
 	#[test]
 	fn no_migration_in_progress_works() {
-		type M = (MockMigration<1>, MockMigration<2>);
-		type TestMigration = Migration<Test, M>;
+		type TestMigration = Migration<Test>;
 
 		ExtBuilder::default().build().execute_with(|| {
 			assert_eq!(StorageVersion::get::<Pallet<Test>>(), 2);
@@ -580,8 +569,7 @@ mod test {
 
 	#[test]
 	fn migration_works() {
-		type M = (MockMigration<1>, MockMigration<2>);
-		type TestMigration = Migration<Test, M>;
+		type TestMigration = Migration<Test>;
 
 		ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
 			assert_eq!(StorageVersion::get::<Pallet<Test>>(), 0);

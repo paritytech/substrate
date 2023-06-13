@@ -39,7 +39,7 @@ environmental = { version = "1.1.4", default-features = false }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-pallet-contracts-primitives = { version = "7.0.0", default-features = false, path = "primitives" }
+pallet-contracts-primitives = { version = "24.0.0", default-features = false, path = "primitives" }
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
