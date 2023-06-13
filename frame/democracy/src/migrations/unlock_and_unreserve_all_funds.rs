@@ -184,7 +184,7 @@ where
 		T::DbWeight::get().reads_writes(
 			account_stakes.len().saturating_add(account_deposits.len()) as u64,
 			account_stakes.len().saturating_add(account_deposits.len()) as u64,
-		) + initial_reads
+		).saturating_add(initial_reads)
 	}
 
 	/// Performs post-upgrade sanity checks:
