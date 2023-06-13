@@ -4,21 +4,22 @@ This document is only focused on documenting parts of substrate that relates to 
 
 These are crates that are often used by external developers and need more thorough documentation. These are the crates most concerned with FRAME development.
 
-- [General/Non-Pallet Crates](#generalnon-pallet-crates)
-  - [What to Document?](#what-to-document)
-    - [Rust Docs vs. Code Comments](#rust-docs-vs-code-comments)
-  - [How to Document?](#how-to-document)
-    - [TLDR](#tldr)
-    - [Proc-Macros](#proc-macros)
-  - [Other Guidelines](#other-guidelines)
-    - [Document Through Code](#document-through-code)
-    - [Formatting Matters](#formatting-matters)
-- [Pallet Crates](#pallet-crates)
-  - [Top Level Pallet Docs (`lib.rs`)](#top-level-pallet-docs-librs)
-    - [Polkadot and Substrate](#polkadot-and-substrate)
-  - [Dispatchable](#dispatchable)
-  - [Storage Items](#storage-items)
-  - 
+- [Substrate Documentation Guidelines](#substrate-documentation-guidelines)
+  - [General/Non-Pallet Crates](#generalnon-pallet-crates)
+    - [What to Document?](#what-to-document)
+      - [Rust Docs vs. Code Comments](#rust-docs-vs-code-comments)
+    - [How to Document?](#how-to-document)
+      - [TLDR](#tldr)
+      - [Proc-Macros](#proc-macros)
+    - [Other Guidelines](#other-guidelines)
+      - [Document Through Code](#document-through-code)
+      - [Formatting Matters](#formatting-matters)
+  - [Pallet Crates](#pallet-crates)
+    - [Top Level Pallet Docs (`lib.rs`)](#top-level-pallet-docs-librs)
+      - [Polkadot and Substrate](#polkadot-and-substrate)
+    - [`#[pallet::call]`](#palletcall)
+    - [`#[pallet::storage]`](#palletstorage)
+    - [`[pallet::error]` and `#[pallet::event]`](#palleterror-and-palletevent)
 
 
 ## General/Non-Pallet Crates
@@ -248,7 +249,7 @@ For each dispatchable (`fn` item inside `#[pallet::call]`), consider the followi
 pub fn name_of_dispatchable(origin: OriginFor<T>, ...) -> DispatchResult {}
 ```
 
-Consider the fact that these docs will be part of the metadata of the associated dispatchable, and might be used by wallets and explorers. 
+Consider the fact that these docs will be part of the metadata of the associated dispatchable, and might be used by wallets and explorers.
 
 ### `#[pallet::storage]`
 
@@ -258,6 +259,6 @@ Consider the fact that these docs will be part of the metadata of the associated
 
 ### `[pallet::error]` and `#[pallet::event]`
 
-Consider the fact that, similar to dispatchables, these docs will be part of the metadata of the associated event/error, and might be used by wallets and explorers. 
+Consider the fact that, similar to dispatchables, these docs will be part of the metadata of the associated event/error, and might be used by wallets and explorers.
 
-Specifically for `error`, explain why the errorr has happened, and what can be done in order to avoid it. 
+Specifically for `error`, explain why the errorr has happened, and what can be done in order to avoid it.
