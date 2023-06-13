@@ -17,8 +17,6 @@
 
 //! Trie-based state machine backend.
 
-use core::borrow::Borrow;
-
 #[cfg(feature = "std")]
 use crate::backend::AsTrieBackend;
 use crate::{
@@ -26,33 +24,82 @@ use crate::{
 	trie_backend_essence::{RawIter, TrieBackendEssence, TrieBackendStorage},
 	Backend, StorageKey, StorageValue,
 };
+
 use codec::Codec;
 #[cfg(feature = "std")]
 use hash_db::HashDB;
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, StateVersion};
-use sp_trie::cache::TrieCache;
 #[cfg(feature = "std")]
-use sp_trie::{cache::LocalTrieCache, recorder::Recorder};
+use sp_trie::{
+	cache::{LocalTrieCache, TrieCache},
+	recorder::Recorder,
+};
 #[cfg(feature = "std")]
 use sp_trie::{MemoryDB, StorageProof};
-
-pub trait AsTrieDbCache<H: Hasher> {
-	fn bla(&self, storage_root: H::Out) -> TrieCache<'_, H>;
-}
-
-#[cfg(feature = "std")]
-impl<H: Hasher> AsTrieDbCache<H> for sp_trie::cache::LocalTrieCache<H> {
-	fn bla(&self, storage_root: <H as Hasher>::Out) -> TrieCache<'_, H> {
-		self.as_trie_db_cache(storage_root)
-	}
-}
+use trie_db::TrieCache as TrieCacheT;
 
 /// Dummy type to be used in `no_std`.
 ///
 /// This is required to have the type available for [`TrieBackendBuilder`] and [`TrieBackend`].
 #[cfg(not(feature = "std"))]
 pub struct LocalTrieCache<H>(sp_std::marker::PhantomData<H>);
+
+pub trait AsTrieDbCache<H: Hasher> {
+	#[cfg(feature = "std")]
+	type Result<'a>: TrieCacheT<sp_trie::NodeCodec<H>> + 'a
+	where
+		Self: 'a;
+
+	#[cfg(feature = "std")]
+	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Result<'_>;
+
+	#[cfg(feature = "std")]
+	fn as_trie_db_mut_cache(&self) -> Self::Result<'_>;
+
+	#[cfg(feature = "std")]
+	fn merge<'a>(&'a self, other: Self::Result<'a>, new_root: H::Out);
+}
+
+#[cfg(feature = "std")]
+impl<H: Hasher> AsTrieDbCache<H> for LocalTrieCache<H> {
+	type Result<'a> = TrieCache<'a, H> where H: 'a;
+
+	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Result<'_> {
+		self.as_trie_db_cache(storage_root)
+	}
+
+	fn as_trie_db_mut_cache(&self) -> Self::Result<'_> {
+		self.as_trie_db_mut_cache()
+	}
+
+	fn merge<'a>(&'a self, other: Self::Result<'a>, new_root: H::Out) {
+		other.merge_into(self, new_root)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<H: Hasher> AsTrieDbCache<H> for &LocalTrieCache<H> {
+	type Result<'a> = TrieCache<'a, H> where Self: 'a;
+
+	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Result<'_> {
+		(*self).as_trie_db_cache(storage_root)
+	}
+
+	fn as_trie_db_mut_cache(&self) -> Self::Result<'_> {
+		(*self).as_trie_db_mut_cache()
+	}
+
+	fn merge<'a>(&'a self, other: Self::Result<'a>, new_root: H::Out) {
+		other.merge_into(self, new_root)
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl<H: Hasher> AsTrieDbCache<H> for LocalTrieCache<H> {}
+
+#[cfg(not(feature = "std"))]
+impl<H: Hasher> AsTrieDbCache<H> for &LocalTrieCache<H> {}
 
 /// Builder for creating a [`TrieBackend`].
 pub struct TrieBackendBuilder<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H>> {
@@ -205,8 +252,7 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H
 	next_storage_key_cache: CacheCell<Option<CachedIter<S, H, C>>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: Borrow<LocalTrieCache<H>> + Send + Sync>
-	TrieBackend<S, H, C>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsTrieDbCache<H> + Send + Sync> TrieBackend<S, H, C>
 where
 	H::Out: Codec,
 {
@@ -254,7 +300,7 @@ where
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: Borrow<LocalTrieCache<H>>> sp_std::fmt::Debug
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsTrieDbCache<H>> sp_std::fmt::Debug
 	for TrieBackend<S, H, C>
 {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
@@ -262,7 +308,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: Borrow<LocalTrieCache<H>>> sp_std::
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: Borrow<LocalTrieCache<H>> + Send + Sync> Backend<H>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: AsTrieDbCache<H> + Send + Sync> Backend<H>
 	for TrieBackend<S, H, C>
 where
 	H::Out: Ord + Codec,
