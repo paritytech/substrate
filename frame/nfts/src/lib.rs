@@ -67,7 +67,10 @@ type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Sourc
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{ExistenceRequirement, Incrementable},
+	};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
