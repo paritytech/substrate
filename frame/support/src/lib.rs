@@ -846,7 +846,7 @@ pub mod tests {
 	#[pallet]
 	pub mod frame_system {
 		#[allow(unused)]
-		use super::{frame_system, frame_system::pallet_prelude::*};
+		use super::{frame_system, frame_system::pallet_prelude::*, BlockNumerOf};
 		pub use crate::dispatch::RawOrigin;
 		use crate::pallet_prelude::*;
 
