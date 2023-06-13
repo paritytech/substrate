@@ -41,10 +41,6 @@ type AccountId = u64;
 
 frame_support::construct_runtime!(
 	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: system,
 		Balances: pallet_balances,
