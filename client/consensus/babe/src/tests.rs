@@ -32,7 +32,6 @@ use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_vrf_sign_data, AllowedSlots, AuthorityId, AuthorityPair,
 	Slot,
 };
-use sp_consensus_slots::SlotDuration;
 use sp_core::crypto::Pair;
 use sp_keyring::Sr25519Keyring;
 use sp_keystore::{testing::MemoryKeystore, Keystore};

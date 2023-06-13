@@ -750,7 +750,7 @@ impl<T: Config> Pallet<T> {
 		Epoch { epoch_idx, start_slot, config }
 	}
 
-	/// Fetch expected ticket for the given slot according to an "outside-in" sorting strategy.
+	/// Fetch expected ticket-id for the given slot according to an "outside-in" sorting strategy.
 	///
 	/// Given an ordered sequence of tickets [t0, t1, t2, ..., tk] to be assigned to n slots,
 	/// with n >= k, then the tickets are assigned to the slots according to the following
@@ -761,13 +761,13 @@ impl<T: Config> Pallet<T> {
 	///
 	/// With slot-index computed as `epoch_start() - slot`.
 	///
-	/// If `slot` value falls within the current epoch then we fetch tickets from the `Tickets`
-	/// list.
+	/// If `slot` value falls within the current epoch then we fetch tickets from the current epoch
+	/// tickets list.
 	///
-	/// If `slot` value falls within the next epoch then we fetch tickets from the `NextTickets`
-	/// list. Note that in this case we may have not finished receiving all the tickets for that
-	/// epoch yet. The next epoch tickets should be considered "stable" only after the current
-	/// epoch first half (see the [`submit_tickets_unsigned_extrinsic`]).
+	/// If `slot` value falls within the next epoch then we fetch tickets from the next epoch
+	/// tickets ids list. Note that in this case we may have not finished receiving all the tickets
+	/// for that epoch yet. The next epoch tickets should be considered "stable" only after the
+	/// current epoch first half slots were elapsed (see `submit_tickets_unsigned_extrinsic`).
 	///
 	/// Returns `None` if, according to the sorting strategy, there is no ticket associated to the
 	/// specified slot-index (happend if a ticket falls in the middle of an epoch and n > k),
@@ -883,8 +883,8 @@ impl<T: Config> Pallet<T> {
 	/// Submit next epoch validator tickets via an unsigned extrinsic constructed with a call to
 	/// `submit_unsigned_transaction`.
 	///
-	/// The submitted tickets are added to the `NextTickets` list as long as the extrinsic has
-	/// is called within the first half of the epoch. That is, tickets received within the
+	/// The submitted tickets are added to the next epoch outstanding tickets as long as the
+	/// extrinsic is called within the first half of the epoch. Tickets received during the
 	/// second half are dropped.
 	///
 	/// TODO-SASS-P3: use pass a bounded vector???
