@@ -461,14 +461,14 @@ fn already_charged(_: u32) -> Option<RuntimeCosts> {
 }
 
 /// Can only be used for one call.
-pub struct Runtime<'a, E: Ext + 'a> {
+pub struct Runtime<'a, E: Ext + 'a> where BalanceOf<E::T>: FixedPointOperand {
 	ext: &'a mut E,
 	input_data: Option<Vec<u8>>,
 	memory: Option<Memory>,
 	chain_extension: Option<Box<<E::T as Config>::ChainExtension>>,
 }
 
-impl<'a, E: Ext + 'a> Runtime<'a, E> {
+impl<'a, E: Ext + 'a> Runtime<'a, E> where BalanceOf<E::T>: FixedPointOperand {
 	pub fn new(ext: &'a mut E, input_data: Vec<u8>) -> Self {
 		Runtime {
 			ext,
@@ -1012,7 +1012,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 // data passed to the supervisor will lead to a trap. This is not documented explicitly
 // for every function.
 #[define_env(doc)]
-pub mod env {
+pub mod env{
 	/// Account for used gas. Traps if gas used is greater than gas limit.
 	///
 	/// NOTE: This is a implementation defined call and is NOT a part of the public API.

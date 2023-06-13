@@ -316,7 +316,7 @@ impl<T: Config> Executable<T> for PrefabWasmModule<T> {
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
-	) -> ExecResult {
+	) -> ExecResult where BalanceOf<T>: FixedPointOperand{
 		let runtime = Runtime::new(ext, input_data);
 		let (mut store, memory, instance) = Self::instantiate::<crate::wasm::runtime::Env, _>(
 			self.code.as_slice(),

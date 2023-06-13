@@ -368,7 +368,7 @@ pub trait Executable<T: Config>: Sized {
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
-	) -> ExecResult;
+	) -> ExecResult where BalanceOf<T>: FixedPointOperand;
 
 	/// The code hash of the executable.
 	fn code_hash(&self) -> &CodeHash<T>;
