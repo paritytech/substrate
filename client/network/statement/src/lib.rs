@@ -302,7 +302,7 @@ where
 					iter::once(remote).collect(),
 				);
 				if let Err(err) = result {
-					log::error!(target: LOG_TARGET, "Remove reserved peer failed: {}", err);
+					log::error!(target: LOG_TARGET, "Failed to remove reserved peer: {err}");
 				}
 			},
 		}

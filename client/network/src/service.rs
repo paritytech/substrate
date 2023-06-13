@@ -124,7 +124,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
 	notifications_sizes_metric: Option<HistogramVec>,
-	/// Protocol name -> set id mapping for notification protocols. The map never changes after
+	/// Protocol name -> `SetId` mapping for notification protocols. The map never changes after
 	/// initialization.
 	notification_protocol_ids: HashMap<ProtocolName, SetId>,
 	/// Handles to manage peer connections on notification protocols. The vector never changes
