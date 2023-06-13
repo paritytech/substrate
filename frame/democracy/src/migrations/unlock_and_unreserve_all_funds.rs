@@ -36,8 +36,6 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: crate::Config> UnlockAndUnreserveAllFunds<T>
-where
-	BalanceOf<T>: Sum,
 {
 	/// Calculates and returns the total amounts reserved by each account by this pallet, and all
 	/// accounts with locks in the context of this pallet.
