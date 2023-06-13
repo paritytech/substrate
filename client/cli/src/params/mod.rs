@@ -113,7 +113,6 @@ impl BlockNumberOrHash {
 	/// Parse the inner value as `BlockId`.
 	pub fn parse<B: BlockT>(&self) -> Result<BlockId<B>, String>
 	where
-		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: std::fmt::Debug,
 		NumberFor<B>: FromStr,
 		<NumberFor<B> as FromStr>::Err: std::fmt::Debug,
