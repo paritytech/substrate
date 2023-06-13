@@ -444,12 +444,15 @@ where
 			.flatten()
 			.ok_or("`:code` hash not found")?
 			.encode();
-		let heap_pages = self
+
+		let chain_heap_pages = self
 			.backend
 			.storage(sp_core::storage::well_known_keys::HEAP_PAGES)
 			.ok()
 			.flatten()
 			.and_then(|d| codec::Decode::decode(&mut &d[..]).ok());
+
+		let heap_pages = std::cmp::min(chain_heap_pages, Some(super::MAX_HEAP_PAGES));
 
 		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
 	}

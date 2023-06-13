@@ -46,6 +46,8 @@ pub use log::{debug, error as log_error, warn};
 #[cfg(feature = "std")]
 pub use tracing::trace;
 
+const MAX_HEAP_PAGES: u64 = 2048u64;
+
 /// In no_std we skip logs for state_machine, this macro
 /// is a noops.
 #[cfg(not(feature = "std"))]
