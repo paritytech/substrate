@@ -668,17 +668,13 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								// The `tx` created above can be dropped if we are not capable of
 								// processing this request, which is reflected as a
 								// `InboundFailure::Omission` event.
-								if let Ok(response) = rx.await {
-									Some(RequestProcessingOutcome {
-										peer,
-										request_id,
-										protocol,
-										inner_channel: channel,
-										response,
-									})
-								} else {
-									None
-								}
+								rx.await.map_or(None, |response| Some(RequestProcessingOutcome {
+									peer,
+									request_id,
+									protocol,
+									inner_channel: channel,
+									response,
+								}))
 							}));
 
 							// This `continue` makes sure that `pending_responses` gets polled

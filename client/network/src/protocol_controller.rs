@@ -87,7 +87,7 @@ impl From<SetId> for usize {
 /// Configuration for a set of nodes for a specific protocol.
 #[derive(Debug)]
 pub struct ProtoSetConfig {
-	/// Maximum number of ingoing links to peers.
+	/// Maximum number of incoming links to peers.
 	pub in_peers: u32,
 
 	/// Maximum number of outgoing links to peers.
@@ -106,7 +106,7 @@ pub struct ProtoSetConfig {
 /// Message that is sent by [`ProtocolController`] to `Notifications`.
 #[derive(Debug, PartialEq)]
 pub enum Message {
-	/// Request to open a connection to the given peer. From the point of view of the PSM, we are
+	/// Request to open a connection to the given peer. From the point of view of the `ProtocolController`, we are
 	/// immediately connected.
 	Connect {
 		/// Set id to connect on.
