@@ -299,15 +299,13 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		log::debug!(
 			target: LOG_TARGET,
-			"{}: Range supported {:?}, range requested {:?}",
-			<Pallet<T>>::name(),
-			T::Migrations::VERSION_RANGE,
-			(storage_version, target_version)
+			"Requested migration of {} from {:?}(on-chain storage version) to {:?}(current storage version)",
+			<Pallet<T>>::name(), storage_version, target_version
 		);
 
 		ensure!(
 			T::Migrations::is_upgrade_supported(storage_version, target_version),
-			"Unsupported upgrade"
+			"Unsupported upgrade: VERSION_RANGE should be (on-chain storage version + 1, current storage version)"
 		);
 		Ok(Default::default())
 	}
