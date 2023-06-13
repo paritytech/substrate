@@ -19,7 +19,7 @@ These are crates that are often used by external developers and need more thorou
       - [Polkadot and Substrate](#polkadot-and-substrate)
     - [`#[pallet::call]`](#palletcall)
     - [`#[pallet::storage]`](#palletstorage)
-    - [`[pallet::error]` and `#[pallet::event]`](#palleterror-and-palletevent)
+    - [`#[pallet::error]` and `#[pallet::event]`](#palleterror-and-palletevent)
 
 
 ## General/Non-Pallet Crates
