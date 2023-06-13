@@ -38,8 +38,7 @@ const LOG_TARGET: &str = "runtime::democracy::migrations::unlock_and_unreserve_a
 /// (See also [`RemovePallet`][frame_support::migrations::RemovePallet])
 pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
 
-impl<T: crate::Config> UnlockAndUnreserveAllFunds<T>
-{
+impl<T: crate::Config> UnlockAndUnreserveAllFunds<T> {
 	/// Calculates and returns the total amounts reserved by each account by this pallet, and all
 	/// accounts with locks in the context of this pallet.
 	///
@@ -172,6 +171,7 @@ where
 		// Deposited funds need to be unreserved.
 		for (account, unreserve_amount) in account_deposits.iter() {
 			if unreserve_amount.is_zero() {
+				log::warn!("Unexpected zero amount to unreserve!");
 				continue
 			}
 			T::Currency::unreserve(&account, *unreserve_amount);
