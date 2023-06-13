@@ -442,7 +442,6 @@ impl OverlayedChangeSet {
 				count += 1;
 			}
 			val.set(None, insert_dirty(&mut self.dirty_keys, key.clone()), at_extrinsic);
-			count += 1;
 		}
 		count
 	}
