@@ -329,6 +329,13 @@ pub mod pallet {
 		/// # struct Runtime {};
 		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
 		/// ```
+		///
+		/// If you have a single migration step, you can use a tuple with a single element:
+		/// ```
+		/// use pallet_contracts::migration::v9;
+		/// # struct Runtime {};
+		/// type Migrations = (v9::Migration<Runtime>,);
+		/// ```
 		type Migrations: MigrateSequence;
 	}
 
