@@ -30,7 +30,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 ///
 /// Useful to prevent funds from being locked up when the pallet is being deprecated.
 ///
-/// The pallet should be made inoperable before or immediately after this migration is run.
+/// The pallet should be made inoperable before this migration is run.
 ///
 /// (See also the `RemovePallet` migration in `frame/support/src/migrations.rs`)
 pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
