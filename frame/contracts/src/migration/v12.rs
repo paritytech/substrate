@@ -174,7 +174,7 @@ impl<T: Config> Migrate for Migration<T> {
 					target: LOG_TARGET,
 					"Storage deposit unlocked: {:?} Balance, to: {:?}",
 					&amount,
-					&info.owner
+					info.owner
 				);
 			} else {
 				log::warn!(
@@ -259,15 +259,23 @@ impl<T: Config> Migrate for Migration<T> {
 		}
 
 		let mut deposit: BalanceOf<T> = Default::default();
-		let mut bytes = 0u32;
+		let mut items = 0u32;
 		CodeInfoOf::<T>::iter().for_each(|(_k, v)| {
 			deposit += v.deposit;
-			bytes += 1;
+			items += 1;
 		});
 		let old_deposit = state.1;
 		let storage = state.2;
-
-		log::info!(target: LOG_TARGET, "Storage freed, bytes: {}", storage.saturating_sub(bytes));
+		// CodeInfoOf::max_encoded_len == OwnerInfoOf::max_encoded_len + 1
+		let bytes_removed = items.clone();
+		// We removed 1 storage item (PrefabWasmMod) for every stored contract code.
+		let items_removed = items;
+		log::info!(
+			target: LOG_TARGET,
+			"Storage freed, bytes: {}, items: {}",
+			storage.saturating_sub(bytes_removed),
+			items_removed
+		);
 		log::info!(
 			target: LOG_TARGET,
 			"Deposits returned, total: {:?} Balance",
