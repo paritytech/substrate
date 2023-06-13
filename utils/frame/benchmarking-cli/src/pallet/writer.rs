@@ -497,7 +497,7 @@ pub(crate) fn write_results(
 		let msg = format!(
 			"Multiple results were written to the same file. This can happen when \
 		there are multiple instances of a pallet deployed and `--output` forces the output of all \
-		instances into the same file. Use `--unsafe_overwrite_results` to ignore this error. The \
+		instances into the same file. Use `--unsafe-overwrite-results` to ignore this error. The \
 		affected files are: {:?}",
 			overwritten_files
 		);
