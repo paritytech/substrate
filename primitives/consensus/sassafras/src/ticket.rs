@@ -98,6 +98,15 @@ pub fn slot_claim_sign_data(randomness: &Randomness, slot: Slot, epoch: u64) -> 
 		.expect("can't fail; qed")
 }
 
+pub fn ticket_body_sign_data(ticket_body: &TicketData) -> VrfSignData {
+	VrfSignData::from_iter(
+		&SASSAFRAS_ENGINE_ID,
+		&[b"ticket-body-transcript", ticket_body.encode().as_slice()],
+		[],
+	)
+	.expect("can't fail; qed")
+}
+
 /// VRF input to generate the ticket id.
 ///
 /// Input randomness is current epoch randomness.

@@ -39,8 +39,9 @@ pub mod inherents;
 pub mod ticket;
 
 pub use ticket::{
-	slot_claim_sign_data, slot_claim_vrf_input, ticket_id, ticket_id_threshold,
-	ticket_id_vrf_input, TicketClaim, TicketData, TicketEnvelope, TicketId, TicketSecret,
+	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id,
+	ticket_id_threshold, ticket_id_vrf_input, TicketClaim, TicketData, TicketEnvelope, TicketId,
+	TicketSecret,
 };
 
 mod app {

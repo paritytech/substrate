@@ -298,7 +298,8 @@ pub mod vrf {
 	/// Max number of VRF inputs/outputs
 	pub const MAX_VRF_IOS: u32 = 3;
 
-	pub(super) type VrfIosVec<T> = BoundedVec<T, ConstU32<MAX_VRF_IOS>>;
+	/// Bounded vector used for VRF inputs and outputs.
+	pub type VrfIosVec<T> = BoundedVec<T, ConstU32<MAX_VRF_IOS>>;
 
 	/// Input to be used for VRF sign and verify operations.
 	#[derive(Clone)]

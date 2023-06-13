@@ -145,8 +145,7 @@ fn generate_epoch_tickets(
 			let data = TicketData { attempt_idx, erased_public, revealed_public };
 
 			debug!(target: LOG_TARGET, ">>> Creating ring proof for attempt {}", attempt_idx);
-			use sp_core::bandersnatch::vrf::VrfSignData;
-			let sign_data = VrfSignData::from_iter(b"TicketProof", &[b"tdata"], []).unwrap();
+			let sign_data = ticket_body_sign_data(&data);
 			let _ring_signature = keystore
 				.bandersnatch_ring_vrf_sign(
 					AuthorityId::ID,
