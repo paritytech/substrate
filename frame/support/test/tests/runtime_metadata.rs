@@ -22,7 +22,7 @@ use frame_support::{
 	traits::ConstU32,
 };
 use scale_info::{form::MetaForm, meta_type};
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, HeaderProvider};
 
 pub type Index = u64;
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
@@ -36,7 +36,6 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
-	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;

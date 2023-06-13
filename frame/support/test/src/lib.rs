@@ -25,8 +25,10 @@ pub use frame_support::dispatch::RawOrigin;
 
 pub use self::pallet::*;
 
-type HeaderOf<T> = <<T as Config>::Block as sp_runtime::traits::HeaderProvider>::Header;
-type BlockNumberOf<T> = <HeaderOf<T> as sp_runtime::traits::Header>::Number;
+/// The Header type used by the runtime.
+pub type HeaderOf<T> = <<T as Config>::Block as sp_runtime::traits::HeaderProvider>::Header;
+/// The block number type used by the runtime.
+pub type BlockNumberOf<T> = <HeaderOf<T> as sp_runtime::traits::Header>::Number;
 
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
