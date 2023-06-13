@@ -137,8 +137,6 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 
 impl<T: Config<I>, I: 'static> InspectRole<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	/// Returns `true` if `who` is the issuer of the `collection`.
-	///
-	/// Default implementation is `false`, issuer is only added by `set_team`.
 	fn is_issuer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
 		Self::has_role(collection, who, CollectionRole::Issuer)
 	}
@@ -146,10 +144,7 @@ impl<T: Config<I>, I: 'static> InspectRole<<T as SystemConfig>::AccountId> for P
 	fn is_admin(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
 		Self::has_role(collection, who, CollectionRole::Admin)
 	}
-
 	/// Returns `true` if `who` is the freezer of the `collection`.
-	///
-	/// Default implementation is `false`, freezer is only added by `set_team`.
 	fn is_freezer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
 		Self::has_role(collection, who, CollectionRole::Freezer)
 	}

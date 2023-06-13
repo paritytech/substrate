@@ -182,11 +182,11 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 
 /// Trait for providing an interface to check the account's role within the collection.
 pub trait InspectRole<AccountId>: Inspect<AccountId> {
-	// Return `true` if collection issuer.
+	/// Returns `true` if `who` is the issuer of the `collection`.
 	fn is_issuer(collection: &Self::CollectionId, who: &AccountId) -> bool;
-	// Return `true` if collection admin.
+	/// Returns `true` if `who` is the admin of the `collection`.
 	fn is_admin(collection: &Self::CollectionId, who: &AccountId) -> bool;
-	// Return `true` if collection freezer.
+	/// Returns `true` if `who` is the freezer of the `collection`.
 	fn is_freezer(collection: &Self::CollectionId, who: &AccountId) -> bool;
 }
 
