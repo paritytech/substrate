@@ -420,7 +420,7 @@ fn error_expand() {
 }
 
 #[test]
-fn runtime_error_outer_enum_expand() {
+fn module_error_outer_enum_expand() {
 	// assert that all variants of the Example pallet are included into the
 	// ModuleErrorType definition.
 	match ModuleErrorType::Example(pallet::Error::InsufficientProposersBalance) {
@@ -432,6 +432,24 @@ fn runtime_error_outer_enum_expand() {
 		},
 		_ => (),
 	};
+}
+
+#[test]
+fn module_error_from_dispatch_error() {
+	let dispatch_err = DispatchError::Module(ModuleError {
+		index: 1,
+		error: [0; 4],
+		message: Some("InsufficientProposersBalance"),
+	});
+	let err = ModuleErrorType::from_dispatch_error(dispatch_err).unwrap();
+
+	match err {
+		ModuleErrorType::Example(pallet::Error::InsufficientProposersBalance) => (),
+		_ => panic!("Module error constructed incorrectly"),
+	};
+
+	// Only `ModuleError` is converted.
+	assert!(ModuleErrorType::from_dispatch_error(DispatchError::BadOrigin).is_none());
 }
 
 #[test]
