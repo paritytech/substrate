@@ -261,4 +261,4 @@ Consider the fact that these docs will be part of the metadata of the associated
 
 Consider the fact that, similar to dispatchables, these docs will be part of the metadata of the associated event/error, and might be used by wallets and explorers.
 
-Specifically for `error`, explain why the errorr has happened, and what can be done in order to avoid it.
+Specifically for `error`, explain why the error has happened, and what can be done in order to avoid it.
