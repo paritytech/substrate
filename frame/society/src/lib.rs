@@ -1700,7 +1700,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			BidKind::Deposit(deposit) => {
 				let pot = Self::account_id();
 				let free = BalanceStatus::Free;
-				debug_assert!(T::Currency::repatriate_reserved(&who, &pot, *deposit, free).is_ok());
+				let r = T::Currency::repatriate_reserved(&who, &pot, *deposit, free);
+				debug_assert!(r.is_ok());
 			},
 			BidKind::Vouch(voucher, _) => {
 				Members::<T, I>::mutate_extant(voucher, |record| {

@@ -77,10 +77,7 @@ fn setup_society<T: Config<I>, I: 'static>() -> Result<T::AccountId, &'static st
 		&Society::<T, I>::account_id(),
 		T::Currency::minimum_balance(),
 	);
-	T::Currency::make_free_balance_be(
-		&Society::<T, I>::payouts(),
-		T::Currency::minimum_balance(),
-	);
+	T::Currency::make_free_balance_be(&Society::<T, I>::payouts(), T::Currency::minimum_balance());
 	Ok(founder)
 }
 

@@ -27,13 +27,16 @@ use sp_runtime::TryRuntimeError;
 const TARGET: &'static str = "runtime::society::migration";
 
 /// This migration moves all the state to v2 of Society.
-pub struct MigrateToV2<T: Config<I>, I: 'static, PastPayouts>(sp_std::marker::PhantomData<(T, I, PastPayouts)>);
+pub struct MigrateToV2<T: Config<I>, I: 'static, PastPayouts>(
+	sp_std::marker::PhantomData<(T, I, PastPayouts)>,
+);
 
 impl<
-	T: Config<I>,
-	I: Instance + 'static,
-	PastPayouts: Get<Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)>>
-> OnRuntimeUpgrade for MigrateToV2<T, I, PastPayouts> {
+		T: Config<I>,
+		I: Instance + 'static,
+		PastPayouts: Get<Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)>>,
+	> OnRuntimeUpgrade for MigrateToV2<T, I, PastPayouts>
+{
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		assert!(
@@ -280,11 +283,10 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 }
 
 pub fn from_raw_past_payouts<T: Config<I>, I: Instance + 'static>(
-	past_payouts_raw: &[(&[u8], u128)],
+	past_payouts_raw: impl Iterator<Item = ([u8; 32], u128)>,
 ) -> Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)> {
 	past_payouts_raw
-		.iter()
-		.filter_map(|(x, y)| Some((Decode::decode(&mut x.as_ref()).ok()?, (*y).try_into().ok()?)))
+		.filter_map(|(x, y)| Some((Decode::decode(&mut &x[..]).ok()?, y.try_into().ok()?)))
 		.collect()
 }
 

@@ -566,6 +566,9 @@ fn suspended_candidate_rejected_works() {
 		assert_eq!(Balances::reserved_balance(50), 0);
 		assert_eq!(Balances::free_balance(Society::account_id()), 9980);
 
+		assert_eq!(Balances::free_balance(70), 25);
+		assert_eq!(Balances::reserved_balance(70), 25);
+
 		assert_ok!(Society::kick_candidate(Origin::signed(10), 70));
 		assert_eq!(members(), vec![10, 20, 30, 40, 50]);
 		assert_eq!(candidates(), vec![60]);
