@@ -33,6 +33,7 @@
 // --execution=wasm
 // --wasm-execution=compiled
 // --template=./.maintain/frame-weight-template.hbs
+// --header=./HEADER-APACHE2
 // --output=./frame/society/src/weights.rs
 
 #![cfg_attr(rustfmt, rustfmt_skip)]
