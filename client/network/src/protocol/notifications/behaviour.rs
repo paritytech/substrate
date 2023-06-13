@@ -2099,10 +2099,9 @@ impl NetworkBehaviour for Notifications {
 mod tests {
 	use super::*;
 	use crate::{
-		peer_store::PeerStoreProvider,
+		mock::MockPeerStore,
 		protocol::notifications::handler::tests::*,
-		protocol_controller::{IncomingIndex, ProtoSetConfig, ProtocolController, ProtocolHandle},
-		ReputationChange,
+		protocol_controller::{IncomingIndex, ProtoSetConfig, ProtocolController},
 	};
 	use libp2p::swarm::AddressRecord;
 	use sc_utils::mpsc::tracing_unbounded;
@@ -2148,35 +2147,6 @@ mod tests {
 
 		fn local_peer_id(&self) -> &PeerId {
 			&self.peer_id
-		}
-	}
-
-	#[derive(Debug)]
-	struct MockPeerStore {}
-
-	impl PeerStoreProvider for MockPeerStore {
-		fn is_banned(&self, _peer_id: &PeerId) -> bool {
-			unimplemented!()
-		}
-
-		fn register_protocol(&self, _protocol_handle: ProtocolHandle) {
-			// Not a real peer store, do nothing.
-		}
-
-		fn report_disconnect(&mut self, _peer_id: PeerId) {
-			unimplemented!()
-		}
-
-		fn report_peer(&mut self, _peer_id: PeerId, _change: ReputationChange) {
-			unimplemented!()
-		}
-
-		fn peer_reputation(&self, _peer_id: &PeerId) -> i32 {
-			unimplemented!()
-		}
-
-		fn outgoing_candidates(&self, _count: usize, _ignored: HashSet<&PeerId>) -> Vec<PeerId> {
-			unimplemented!()
 		}
 	}
 
