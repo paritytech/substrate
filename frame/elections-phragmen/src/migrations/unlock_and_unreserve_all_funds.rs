@@ -38,7 +38,7 @@ const LOG_TARGET: &str = "elections_phragmen::migrations::unlock_and_unreserve_a
 ///
 /// The pallet should be made inoperable before this migration is run.
 ///
-/// (See also the `RemovePallet` migration in `frame/support/src/migrations.rs`)
+/// (See also [`RemovePallet`][frame_support::migrations::RemovePallet])
 pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: crate::Config> UnlockAndUnreserveAllFunds<T> {
