@@ -106,8 +106,8 @@ pub struct ProtoSetConfig {
 /// Message that is sent by [`ProtocolController`] to `Notifications`.
 #[derive(Debug, PartialEq)]
 pub enum Message {
-	/// Request to open a connection to the given peer. From the point of view of the `ProtocolController`, we are
-	/// immediately connected.
+	/// Request to open a connection to the given peer. From the point of view of the
+	/// `ProtocolController`, we are immediately connected.
 	Connect {
 		/// Set id to connect on.
 		set_id: SetId,

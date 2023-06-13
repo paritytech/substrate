@@ -668,13 +668,15 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								// The `tx` created above can be dropped if we are not capable of
 								// processing this request, which is reflected as a
 								// `InboundFailure::Omission` event.
-								rx.await.map_or(None, |response| Some(RequestProcessingOutcome {
-									peer,
-									request_id,
-									protocol,
-									inner_channel: channel,
-									response,
-								}))
+								rx.await.map_or(None, |response| {
+									Some(RequestProcessingOutcome {
+										peer,
+										request_id,
+										protocol,
+										inner_channel: channel,
+										response,
+									})
+								})
 							}));
 
 							// This `continue` makes sure that `pending_responses` gets polled
@@ -963,7 +965,7 @@ impl Codec for GenericCodec {
 mod tests {
 	use super::*;
 
-	use crate::{peer_store::PeerStoreProvider, protocol_controller::ProtocolHandle};
+	use crate::mock::MockPeerStore;
 	use futures::{channel::oneshot, executor::LocalPool, task::Spawn};
 	use libp2p::{
 		core::{
@@ -975,42 +977,12 @@ mod tests {
 		swarm::{Executor, Swarm, SwarmBuilder, SwarmEvent},
 		Multiaddr,
 	};
-	use std::{collections::HashSet, iter, time::Duration};
+	use std::{iter, time::Duration};
 
 	struct TokioExecutor(tokio::runtime::Runtime);
 	impl Executor for TokioExecutor {
 		fn exec(&self, f: Pin<Box<dyn Future<Output = ()> + Send>>) {
 			let _ = self.0.spawn(f);
-		}
-	}
-
-	#[derive(Debug)]
-	struct MockPeerStore {}
-
-	impl PeerStoreProvider for MockPeerStore {
-		fn is_banned(&self, _peer_id: &PeerId) -> bool {
-			unimplemented!()
-		}
-
-		fn register_protocol(&self, _protocol_handle: ProtocolHandle) {
-			unimplemented!()
-		}
-
-		fn report_disconnect(&mut self, _peer_id: PeerId) {
-			unimplemented!()
-		}
-
-		fn report_peer(&mut self, _peer_id: PeerId, _change: ReputationChange) {
-			unimplemented!()
-		}
-
-		fn peer_reputation(&self, _peer_id: &PeerId) -> i32 {
-			// We just need to make sure that the peer is not banned.
-			0
-		}
-
-		fn outgoing_candidates(&self, _count: usize, _ignored: HashSet<&PeerId>) -> Vec<PeerId> {
-			unimplemented!()
 		}
 	}
 

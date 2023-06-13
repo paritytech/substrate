@@ -246,6 +246,9 @@ mod behaviour;
 mod protocol;
 mod service;
 
+#[cfg(test)]
+mod mock;
+
 pub mod config;
 pub mod discovery;
 pub mod error;
