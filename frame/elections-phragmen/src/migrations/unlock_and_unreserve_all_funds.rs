@@ -28,6 +28,8 @@ use sp_std::collections::btree_map::BTreeMap;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+const LOG_TARGET: &str = "elections_phragmen::migrations::unlock_and_unreserve_all_funds";
+
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
 /// pallet.
 ///
@@ -38,10 +40,7 @@ use sp_std::vec::Vec;
 /// (See also the `RemovePallet` migration in `frame/support/src/migrations.rs`)
 pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
 
-impl<T: crate::Config> UnlockAndUnreserveAllFunds<T>
-where
-	BalanceOf<T>: Sum,
-{
+impl<T: crate::Config> UnlockAndUnreserveAllFunds<T> {
 	/// Calculates and returns the total amounts deposited and staked by each account in the context
 	/// of this pallet.
 	///
@@ -166,10 +165,12 @@ where
 		let total_stake_to_unlock = account_staked_sums.clone().into_values().sum::<BalanceOf<T>>();
 		let total_deposits_to_unreserve =
 			account_deposited_sums.clone().into_values().sum::<BalanceOf<T>>();
-		log::info!("Total accounts: {:?}", all_accounts.len());
-		log::info!("Total stake to unlock: {:?}", total_stake_to_unlock);
-		log::info!("Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
-		log::info!("Bugged deposits: {}/{}", bugged_deposits, all_accounts.len());
+		log::info!(target: LOG_TARGET,  "Total accounts: {:?}", all_accounts.len());
+		log::info!(target: LOG_TARGET, "Total stake to unlock: {:?}", total_stake_to_unlock);
+		log::info!(target: LOG_TARGET, "Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
+		if bugged_deposits > 0 {
+			log::warn!(target: LOG_TARGET, "Bugged deposits: {}/{}", bugged_deposits, all_accounts.len());
+		}
 
 		Ok(account_reserved_before.encode())
 	}
