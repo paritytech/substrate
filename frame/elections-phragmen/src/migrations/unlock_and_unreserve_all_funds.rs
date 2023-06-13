@@ -28,6 +28,7 @@ use sp_std::collections::btree_map::BTreeMap;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
+#[cfg(feature = "try-runtime")]
 const LOG_TARGET: &str = "elections_phragmen::migrations::unlock_and_unreserve_all_funds";
 
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
