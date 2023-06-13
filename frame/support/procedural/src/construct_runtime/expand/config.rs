@@ -100,9 +100,10 @@ pub fn expand_outer_config(
 			}
 		}
 
-		impl<T> #scrate::traits::GenesisBuild<T> for RuntimeGenesisConfig {
+		impl #scrate::traits::GenesisBuild<()> for RuntimeGenesisConfig {
 			fn build(&self) {
 				#genesis_build_calls
+				<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
 			}
 		}
 	}
