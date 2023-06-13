@@ -29,7 +29,7 @@ use sp_blockchain::{BlockStatus, CachedHeaderMetadata, HeaderBackend, HeaderMeta
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::SignedBlock,
-	traits::{Block as BlockT, Header as HeaderT},
+	traits::{Block as BlockT, Header as HeaderT, HeaderProvider},
 	Justifications,
 };
 use std::sync::Arc;

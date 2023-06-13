@@ -221,12 +221,10 @@ pub mod pallet {
 		#[frame_support::register_default_impl(TestDefaultConfig)]
 		impl DefaultConfig for TestDefaultConfig {
 			type Index = u32;
-			type Block = sp_runtime::generic::Block<sp_runtime::generic::Header<u32, Self::Hashing>, sp_runtime::OpaqueExtrinsic>;
 			type Hash = sp_core::hash::H256;
 			type Hashing = sp_runtime::traits::BlakeTwo256;
 			type AccountId = u64;
 			type Lookup = sp_runtime::traits::IdentityLookup<u64>;
-			type BlockHashCount = frame_support::traits::ConstU32<10>;
 			type MaxConsumers = frame_support::traits::ConstU32<16>;
 			type AccountData = ();
 			type OnNewAccount = ();
@@ -327,10 +325,12 @@ pub mod pallet {
 		type Lookup: StaticLookup<Target = Self::AccountId>;
 
 		/// The block type.
+		#[pallet::no_default]
 		type Block: Parameter + traits::Block<Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
+		#[pallet::no_default]
 		type BlockHashCount: Get<<<Self::Block as traits::HeaderProvider>::Header as traits::Header>::Number>;
 
 		/// The weight of runtime database operations the runtime can invoke.

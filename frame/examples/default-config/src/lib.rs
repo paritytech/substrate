@@ -113,6 +113,7 @@ pub mod tests {
 	// statement that brings it into scope.
 	#[use_attr]
 	use frame_support::derive_impl;
+use sp_runtime::traits::ConstU64;
 
 	use super::pallet as pallet_default_config_example;
 
@@ -141,17 +142,16 @@ pub mod tests {
 		type RuntimeEvent = RuntimeEvent;
 		type PalletInfo = PalletInfo;
 		type OnSetCode = ();
+		type Block = Block;
+		type BlockHashCount = ConstU64<10>;
 
 		// all of this is coming from `frame_system::config_preludes::TestDefaultConfig`.
 
 		// type Index = u32;
-		// type BlockNumber = u32;
-		// type Header = sp_runtime::generic::Header<frame_system::BlockNumberOf<Self>, Self::Hashing>;
 		// type Hash = sp_core::hash::H256;
 		// type Hashing = sp_runtime::traits::BlakeTwo256;
 		// type AccountId = u64;
 		// type Lookup = sp_runtime::traits::IdentityLookup<u64>;
-		// type BlockHashCount = frame_support::traits::ConstU32<10>;
 		// type MaxConsumers = frame_support::traits::ConstU32<16>;
 		// type AccountData = ();
 		// type OnNewAccount = ();

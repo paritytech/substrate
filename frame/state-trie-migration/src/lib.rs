@@ -1092,14 +1092,13 @@ mod mock {
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
 		type Index = u64;
-		type BlockNumber = u32;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::generic::Header<frame_system::BlockNumberOf<Self>, BlakeTwo256>;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
-		type BlockHashCount = ConstU32<250>;
+		type BlockHashCount = ConstU64<250>;
 		type DbWeight = ();
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -1257,7 +1256,7 @@ mod mock {
 		let mut root = Default::default();
 		let mut weight_sum = Weight::zero();
 		log::trace!(target: LOG_TARGET, "running from {:?} to {:?}", System::block_number(), n);
-		while System::block_number() < n {
+		while System::block_number() < n.into() {
 			System::set_block_number(System::block_number() + 1);
 			System::on_initialize(System::block_number());
 

@@ -112,7 +112,7 @@ pub use self::{
 	},
 };
 pub use sp_runtime::{
-	self, print, traits::Printable, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
+	self, print, traits::{Printable, HeaderProvider}, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
 };
 
 use codec::{Decode, Encode};
@@ -840,13 +840,13 @@ pub mod tests {
 
 	pub use self::frame_system::{Config, Pallet};
 
-	type HeaderOf<T> = <<T as Config>::Block as traits::HeaderProvider>::Header;
-	type BlockNumberOf<T> = <HeaderOf<T> as traits::Header>::Number;
+	type HeaderOf<T> = <<T as Config>::Block as sp_runtime::traits::HeaderProvider>::Header;
+	type BlockNumberOf<T> = <HeaderOf<T> as sp_runtime::traits::Header>::Number;
 
 	#[pallet]
 	pub mod frame_system {
 		#[allow(unused)]
-		use super::{frame_system, frame_system::pallet_prelude::*, BlockNumerOf};
+		use super::{frame_system, frame_system::pallet_prelude::*, BlockNumberOf};
 		pub use crate::dispatch::RawOrigin;
 		use crate::pallet_prelude::*;
 
@@ -1009,8 +1009,8 @@ pub mod tests {
 			type GenericData2<T> = StorageMap<
 				System,
 				Blake2_128Concat,
-				<T as Config>::BlockNumber,
-				<T as Config>::BlockNumber,
+				BlockNumberOf<T>,
+				BlockNumberOf<T>,
 			>;
 
 			assert_eq!(Pallet::<Runtime>::generic_data2(5), None);
@@ -1022,8 +1022,8 @@ pub mod tests {
 			pub type GenericData<T> = StorageMap<
 				Test2,
 				Blake2_128Concat,
-				<T as Config>::BlockNumber,
-				<T as Config>::BlockNumber,
+				BlockNumberOf<T>,
+				BlockNumberOf<T>,
 			>;
 		});
 	}

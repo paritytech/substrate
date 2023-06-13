@@ -24,7 +24,7 @@ use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::types::ProtocolName;
 use sc_network_common::role::ObservedRole;
-use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
+use sp_runtime::traits::{Block as BlockT, Hash, HashFor, HeaderProvider};
 use std::{collections::HashMap, iter, num::NonZeroUsize, sync::Arc, time, time::Instant};
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115

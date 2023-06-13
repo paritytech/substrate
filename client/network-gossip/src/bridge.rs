@@ -31,7 +31,7 @@ use futures::{
 use libp2p::PeerId;
 use log::trace;
 use prometheus_endpoint::Registry;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, HeaderProvider};
 use std::{
 	collections::{HashMap, VecDeque},
 	pin::Pin,

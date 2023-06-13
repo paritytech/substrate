@@ -50,8 +50,9 @@ impl frame_system::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
+	type Block = Block;
+	type BlockHashCount = ConstU64<10>;
 	type OnSetCode = ();
-
 	type AccountData = pallet_balances::AccountData<u64>;
 }
 

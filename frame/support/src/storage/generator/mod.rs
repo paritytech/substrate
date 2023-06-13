@@ -45,10 +45,19 @@ mod tests {
 		storage::{generator::StorageValue, unhashed},
 	};
 
+
+	type BlockNumber = u32;
+	type AccountId = u32;
+	type Header = generic::Header<BlockNumber, BlakeTwo256>;
+	type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+	type Block = generic::Block<Header, UncheckedExtrinsic>;
+	type HeaderOf<T> = <<T as frame_system::Config>::Block as sp_runtime::traits::HeaderProvider>::Header;
+	type BlockNumberOf<T> = <HeaderOf<T> as sp_runtime::traits::Header>::Number;
+
 	#[crate::pallet]
 	pub mod frame_system {
 		#[allow(unused)]
-		use super::{frame_system, frame_system::pallet_prelude::*};
+		use super::{frame_system, frame_system::pallet_prelude::*, BlockNumberOf};
 		pub use crate::dispatch::RawOrigin;
 		use crate::pallet_prelude::*;
 
@@ -58,7 +67,7 @@ mod tests {
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
 		pub trait Config: 'static {
-			type BlockNumber;
+			type Block: sp_runtime::traits::Block;
 			type AccountId;
 			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
 			type RuntimeOrigin;
@@ -104,12 +113,6 @@ mod tests {
 			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
 		}
 	}
-
-	type BlockNumber = u32;
-	type AccountId = u32;
-	type Header = generic::Header<BlockNumber, BlakeTwo256>;
-	type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
-	type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 	crate::construct_runtime!(
 		pub enum Runtime
