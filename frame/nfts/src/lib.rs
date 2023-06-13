@@ -46,7 +46,8 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, Incrementable,
+	ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -67,10 +68,7 @@ type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Sourc
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{
-		pallet_prelude::*,
-		traits::{ExistenceRequirement, Incrementable},
-	};
+	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
