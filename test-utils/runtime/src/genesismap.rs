@@ -29,7 +29,7 @@ use sp_core::{
 };
 use sp_keyring::{AccountKeyring, Sr25519Keyring};
 use sp_runtime::{
-	traits::{Block as BlockT, Hash as HashT, Header as HeaderT},
+	traits::{Hash as HashT, Header as HeaderT},
 	BuildStorage,
 };
 

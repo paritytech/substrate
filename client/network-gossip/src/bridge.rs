@@ -344,7 +344,7 @@ mod tests {
 	use sc_network_common::{role::ObservedRole, sync::SyncEventStream};
 	use sp_runtime::{
 		testing::H256,
-		traits::{Block as BlockT, HeaderProvider, NumberFor},
+		traits::{HeaderProvider, NumberFor},
 	};
 	use std::{
 		collections::HashSet,

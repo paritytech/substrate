@@ -36,10 +36,7 @@ use sp_consensus_slots::SlotDuration;
 use sp_core::crypto::Pair;
 use sp_keyring::Sr25519Keyring;
 use sp_keystore::{testing::MemoryKeystore, Keystore};
-use sp_runtime::{
-	generic::{Digest, DigestItem},
-	traits::Block as BlockT,
-};
+use sp_runtime::generic::{Digest, DigestItem};
 use sp_timestamp::Timestamp;
 use std::{cell::RefCell, task::Poll, time::Duration};
 

@@ -25,7 +25,7 @@ use sc_transaction_pool_api::error;
 use sp_blockchain::TreeRoute;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Hash},
+	traits::Hash,
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
 	},
