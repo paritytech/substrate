@@ -180,7 +180,7 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 	) -> Self::OwnedInCollectionIterator;
 }
 
-/// Trait for providing an interface to read-only the role of NFT-like.
+/// Trait for providing an interface to check the account's role within the collection.
 pub trait InspectRole<AccountId>: Inspect<AccountId> {
 	// Return `true` if collection issuer.
 	fn is_issuer(collection: &Self::CollectionId, who: &AccountId) -> bool;
