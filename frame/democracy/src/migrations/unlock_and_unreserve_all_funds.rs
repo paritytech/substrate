@@ -25,6 +25,9 @@ use sp_core::Get;
 use sp_runtime::{traits::Zero, Saturating};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
+#[cfg(feature = "try-runtime")]
+const LOG_TARGET: &str = "runtime::democracy::migrations::unlock_and_unreserve_all_funds";
+
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
 /// pallet.
 ///
@@ -149,10 +152,10 @@ where
 			account_deposits.clone().into_values().sum::<BalanceOf<T>>();
 		let total_stake_to_unlock = account_locks.clone().into_values().sum::<BalanceOf<T>>();
 
-		log::info!("Total accounts: {:?}", all_accounts.len());
-		log::info!("Total stake to unlock: {:?}", total_stake_to_unlock);
-		log::info!("Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
-		log::info!("Bugged deposits: {}/{}", bugged_deposits, account_deposits.len());
+		log::info!(target: LOG_TARGET, "Total accounts: {:?}", all_accounts.len());
+		log::info!(target: LOG_TARGET, "Total stake to unlock: {:?}", total_stake_to_unlock);
+		log::info!(target: LOG_TARGET, "Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
+		log::info!(target: LOG_TARGET, "Bugged deposits: {}/{}", bugged_deposits, account_deposits.len());
 
 		Ok(account_reserved_before.encode())
 	}
