@@ -43,7 +43,7 @@ const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_millis(750);
 pub(crate) const PERIODIC_MAINTENANCE_INTERVAL: time::Duration = time::Duration::from_millis(1100);
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sends us a gossip message that we didn't know about.
 	pub const GOSSIP_SUCCESS: Rep = Rep::new(1 << 4, "Successful gossip");
 	/// Reputation change when a peer sends us a gossip message that we already knew about.
@@ -529,9 +529,8 @@ mod tests {
 	use sc_network::{
 		config::MultiaddrWithPeerId, event::Event, NetworkBlock, NetworkEventStream,
 		NetworkNotification, NetworkPeers, NotificationSenderError,
-		NotificationSenderT as NotificationSender,
+		NotificationSenderT as NotificationSender, ReputationChange,
 	};
-	use sc_peerset::ReputationChange;
 	use sp_runtime::{
 		testing::{Block as RawBlock, ExtrinsicWrapper, H256},
 		traits::NumberFor,
