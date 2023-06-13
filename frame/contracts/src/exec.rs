@@ -43,7 +43,10 @@ use sp_core::{
 	sr25519::{Public as SR25519Public, Signature as SR25519Signature},
 };
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
-use sp_runtime::traits::{Convert, Hash, Zero};
+use sp_runtime::{
+	traits::{Convert, Hash, Zero},
+	FixedPointOperand,
+};
 use sp_std::{marker::PhantomData, mem, prelude::*, vec::Vec};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -145,7 +148,9 @@ pub trait Ext: sealing::Sealed {
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
 		allows_reentry: bool,
-	) -> Result<ExecReturnValue, ExecError>;
+	) -> Result<ExecReturnValue, ExecError>
+	where
+		BalanceOf<Self::T>: FixedPointOperand;
 
 	/// Execute code in the current frame.
 	///
@@ -154,7 +159,9 @@ pub trait Ext: sealing::Sealed {
 		&mut self,
 		code: CodeHash<Self::T>,
 		input_data: Vec<u8>,
-	) -> Result<ExecReturnValue, ExecError>;
+	) -> Result<ExecReturnValue, ExecError>
+	where
+		BalanceOf<Self::T>: FixedPointOperand;
 
 	/// Instantiate a contract from the given code.
 	///
@@ -169,7 +176,9 @@ pub trait Ext: sealing::Sealed {
 		value: BalanceOf<Self::T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>;
+	) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>
+	where
+		BalanceOf<Self::T>: FixedPointOperand;
 
 	/// Transfer all funds to `beneficiary` and delete the contract.
 	///
@@ -631,7 +640,10 @@ where
 		input_data: Vec<u8>,
 		debug_message: Option<&'a mut DebugBufferVec<T>>,
 		determinism: Determinism,
-	) -> Result<ExecReturnValue, ExecError> {
+	) -> Result<ExecReturnValue, ExecError>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		let (mut stack, executable) = Self::new(
 			FrameArgs::Call { dest, cached_info: None, delegated_call: None },
 			origin,
@@ -665,7 +677,10 @@ where
 		input_data: Vec<u8>,
 		salt: &[u8],
 		debug_message: Option<&'a mut DebugBufferVec<T>>,
-	) -> Result<(T::AccountId, ExecReturnValue), ExecError> {
+	) -> Result<(T::AccountId, ExecReturnValue), ExecError>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		let (mut stack, executable) = Self::new(
 			FrameArgs::Instantiate {
 				sender: origin.clone(),
@@ -842,7 +857,10 @@ where
 	/// Run the current (top) frame.
 	///
 	/// This can be either a call or an instantiate.
-	fn run(&mut self, executable: E, input_data: Vec<u8>) -> Result<ExecReturnValue, ExecError> {
+	fn run(&mut self, executable: E, input_data: Vec<u8>) -> Result<ExecReturnValue, ExecError>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		let frame = self.top_frame();
 		let entry_point = frame.entry_point;
 		let delegated_code_hash =
@@ -966,7 +984,10 @@ where
 	///
 	/// This is called after running the current frame. It commits cached values to storage
 	/// and invalidates all stale references to it that might exist further down the call stack.
-	fn pop_frame(&mut self, persist: bool) {
+	fn pop_frame(&mut self, persist: bool)
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		// Revert changes to the nonce in case of a failed instantiation.
 		if !persist && self.top_frame().entry_point == ExportedFunction::Constructor {
 			self.nonce.as_mut().map(|c| *c = c.wrapping_sub(1));
@@ -1153,7 +1174,10 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 		allows_reentry: bool,
-	) -> Result<ExecReturnValue, ExecError> {
+	) -> Result<ExecReturnValue, ExecError>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		// Before pushing the new frame: Protect the caller contract against reentrancy attacks.
 		// It is important to do this before calling `allows_reentry` so that a direct recursion
 		// is caught by it.
@@ -1195,7 +1219,10 @@ where
 		&mut self,
 		code_hash: CodeHash<Self::T>,
 		input_data: Vec<u8>,
-	) -> Result<ExecReturnValue, ExecError> {
+	) -> Result<ExecReturnValue, ExecError>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
 		let top_frame = self.top_frame_mut();
 		let contract_info = top_frame.contract_info().clone();
@@ -1222,7 +1249,10 @@ where
 		value: BalanceOf<T>,
 		input_data: Vec<u8>,
 		salt: &[u8],
-	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
+	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
 		let nonce = self.next_nonce();
 		let executable = self.push_frame(

@@ -25,10 +25,10 @@ use crate::{
 	wasm::{
 		runtime::AllowDeprecatedInterface, Determinism, Environment, OwnerInfo, PrefabWasmModule,
 	},
-	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
+	AccountIdOf, BalanceOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
 use codec::{Encode, MaxEncodedLen};
-use sp_runtime::{traits::Hash, DispatchError};
+use sp_runtime::{traits::Hash, DispatchError, FixedPointOperand};
 use sp_std::prelude::*;
 use wasm_instrument::{
 	gas_metering,
@@ -455,6 +455,7 @@ pub fn prepare<E, T>(
 where
 	E: Environment<()>,
 	T: Config,
+	BalanceOf<T>: FixedPointOperand,
 {
 	let (code, (initial, maximum)) = instrument::<E, T>(
 		original_code.as_ref(),

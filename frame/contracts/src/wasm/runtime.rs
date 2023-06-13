@@ -30,7 +30,10 @@ use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weigh
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pallet_contracts_proc_macro::define_env;
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
-use sp_runtime::traits::{Bounded, Zero};
+use sp_runtime::{
+	traits::{Bounded, Zero},
+	FixedPointOperand,
+};
 use sp_std::{fmt, prelude::*};
 use wasmi::{core::HostError, errors::LinkerError, Linker, Memory, Store};
 
@@ -862,7 +865,10 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		input_data_len: u32,
 		output_ptr: u32,
 		output_len_ptr: u32,
-	) -> Result<ReturnCode, TrapReason> {
+	) -> Result<ReturnCode, TrapReason>
+	where
+		BalanceOf<<E as Ext>::T>: FixedPointOperand,
+	{
 		self.charge_gas(call_type.cost())?;
 		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
 			let input = self.input_data.as_ref().ok_or(Error::<E::T>::InputForwarded)?;
@@ -946,7 +952,10 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 		output_len_ptr: u32,
 		salt_ptr: u32,
 		salt_len: u32,
-	) -> Result<ReturnCode, TrapReason> {
+	) -> Result<ReturnCode, TrapReason>
+	where
+		BalanceOf<<E as Ext>::T>: FixedPointOperand,
+	{
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
 		let deposit_limit: BalanceOf<<E as Ext>::T> = if deposit_ptr == SENTINEL {
 			BalanceOf::<<E as Ext>::T>::zero()

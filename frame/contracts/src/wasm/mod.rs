@@ -48,7 +48,7 @@ use crate::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::Get;
-use sp_runtime::RuntimeDebug;
+use sp_runtime::{FixedPointOperand, RuntimeDebug};
 use sp_std::prelude::*;
 use wasmi::{
 	Config as WasmiConfig, Engine, Instance, Linker, Memory, MemoryType, Module, StackLimits, Store,
@@ -160,7 +160,10 @@ impl<T: Config> PrefabWasmModule<T> {
 		owner: AccountIdOf<T>,
 		determinism: Determinism,
 		try_instantiate: TryInstantiate,
-	) -> Result<Self, (DispatchError, &'static str)> {
+	) -> Result<Self, (DispatchError, &'static str)>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		let module = prepare::prepare::<runtime::Env, T>(
 			original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 			schedule,
@@ -477,7 +480,10 @@ mod tests {
 			value: u64,
 			data: Vec<u8>,
 			allows_reentry: bool,
-		) -> Result<ExecReturnValue, ExecError> {
+		) -> Result<ExecReturnValue, ExecError>
+		where
+			BalanceOf<Self::T>: FixedPointOperand,
+		{
 			self.calls.push(CallEntry { to, value, data, allows_reentry });
 			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: call_return_data() })
 		}
@@ -497,7 +503,10 @@ mod tests {
 			value: u64,
 			data: Vec<u8>,
 			salt: &[u8],
-		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>
+		where
+			BalanceOf<Self::T>: FixedPointOperand,
+		{
 			self.instantiates.push(InstantiateEntry {
 				code_hash,
 				value,

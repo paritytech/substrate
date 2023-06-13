@@ -123,7 +123,6 @@ use frame_support::{
 	error::BadOrigin,
 	traits::{
 		fungible::{Inspect, InspectHold, Mutate, MutateHold},
-		tokens::Balance,
 		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
@@ -137,7 +136,10 @@ use pallet_contracts_primitives::{
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
+use sp_runtime::{
+	traits::{Convert, Hash, Saturating, StaticLookup, Zero},
+	FixedPointOperand,
+};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 #[cfg(doc)]
@@ -425,6 +427,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T>
 	where
 		<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
+		BalanceOf<T>: FixedPointOperand,
 	{
 		/// Deprecated version if [`Self::call`] for use in an in-storage `Call`.
 		#[pallet::call_index(0)]
@@ -533,7 +536,10 @@ pub mod pallet {
 			code: Vec<u8>,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			determinism: Determinism,
-		) -> DispatchResult {
+		) -> DispatchResult
+		where
+			BalanceOf<T>: FixedPointOperand,
+		{
 			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into), determinism)
@@ -1116,7 +1122,10 @@ trait Invokable<T: Config> {
 	///
 	/// We enforce a re-entrancy guard here by initializing and checking a boolean flag through a
 	/// global reference.
-	fn run_guarded(&self, common: CommonInput<T>) -> InternalOutput<T, Self::Output> {
+	fn run_guarded(&self, common: CommonInput<T>) -> InternalOutput<T, Self::Output>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		// Set up a global reference to the boolean flag used for the re-entrancy guard.
 		environmental!(executing_contract: bool);
 
@@ -1168,7 +1177,9 @@ trait Invokable<T: Config> {
 		&self,
 		common: CommonInput<T>,
 		gas_meter: GasMeter<T>,
-	) -> InternalOutput<T, Self::Output>;
+	) -> InternalOutput<T, Self::Output>
+	where
+		BalanceOf<T>: FixedPointOperand;
 
 	/// This method ensures that the given `origin` is allowed to invoke the current `Invokable`.
 	///
@@ -1183,7 +1194,10 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		&self,
 		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
-	) -> InternalOutput<T, Self::Output> {
+	) -> InternalOutput<T, Self::Output>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		let CallInput { dest, determinism } = self;
 		let CommonInput { origin, value, data, debug_message, .. } = common;
 		let mut storage_meter =
@@ -1231,7 +1245,10 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 		&self,
 		mut common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
-	) -> InternalOutput<T, Self::Output> {
+	) -> InternalOutput<T, Self::Output>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		let mut storage_deposit = Default::default();
 		let try_exec = || {
 			let schedule = T::Schedule::get();
@@ -1338,7 +1355,10 @@ impl<T: Config> Pallet<T> {
 		debug: DebugInfo,
 		collect_events: CollectEvents,
 		determinism: Determinism,
-	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
+	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		ensure_no_migration_in_progress!();
 
 		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
@@ -1396,7 +1416,10 @@ impl<T: Config> Pallet<T> {
 		salt: Vec<u8>,
 		debug: DebugInfo,
 		collect_events: CollectEvents,
-	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
+	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		ensure_no_migration_in_progress!();
 
 		let mut debug_message = if debug == DebugInfo::UnsafeDebug {
@@ -1441,7 +1464,10 @@ impl<T: Config> Pallet<T> {
 		code: Vec<u8>,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		determinism: Determinism,
-	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
+	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>>
+	where
+		BalanceOf<T>: FixedPointOperand,
+	{
 		Migration::<T>::ensure_migrated()?;
 		let schedule = T::Schedule::get();
 		let module = PrefabWasmModule::from_code(
