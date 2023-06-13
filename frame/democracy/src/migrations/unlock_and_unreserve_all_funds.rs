@@ -32,7 +32,7 @@ use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 ///
 /// The pallet should be made inoperable before this migration is run.
 ///
-/// (See also the `RemovePallet` migration in `frame/support/src/migrations.rs`)
+/// (See also [`RemovePallet`][frame_support::migrations::RemovePallet])
 pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: crate::Config> UnlockAndUnreserveAllFunds<T>
@@ -181,10 +181,12 @@ where
 			T::Currency::remove_lock(DEMOCRACY_ID, account);
 		}
 
-		T::DbWeight::get().reads_writes(
-			account_stakes.len().saturating_add(account_deposits.len()) as u64,
-			account_stakes.len().saturating_add(account_deposits.len()) as u64,
-		).saturating_add(initial_reads)
+		T::DbWeight::get()
+			.reads_writes(
+				account_stakes.len().saturating_add(account_deposits.len()) as u64,
+				account_stakes.len().saturating_add(account_deposits.len()) as u64,
+			)
+			.saturating_add(initial_reads)
 	}
 
 	/// Performs post-upgrade sanity checks:
