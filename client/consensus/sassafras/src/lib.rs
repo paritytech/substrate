@@ -78,9 +78,9 @@ pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
 	inherents::SassafrasInherentData,
 	slot_claim_sign_data, slot_claim_vrf_input, ticket_id_vrf_input, AuthorityId, AuthorityIndex,
-	AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
-	SassafrasConfiguration, SassafrasEpochConfiguration, TicketClaim, TicketData, TicketEnvelope,
-	TicketId, TicketSecret, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
+	AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasConfiguration,
+	SassafrasEpochConfiguration, TicketClaim, TicketData, TicketEnvelope, TicketId, TicketSecret,
+	RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
 };
 
 mod authorship;

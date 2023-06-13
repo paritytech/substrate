@@ -78,7 +78,7 @@ pub(crate) fn claim_slot(
 		},
 	};
 
-	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
+	let authority_id = config.authorities.get(authority_idx as usize)?;
 
 	let vrf_signature = keystore
 		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_sign_data)
@@ -114,10 +114,10 @@ fn generate_epoch_tickets(
 	log::debug!(target: LOG_TARGET, "Generating tickets for epoch {} @ slot {}", epoch.epoch_idx, epoch.start_slot);
 	log::debug!(target: LOG_TARGET, "    threshold: {threshold:016x}");
 
-	let pks: Vec<_> = config.authorities.iter().map(|a| *a.0.as_ref()).collect();
+	// We need a list of raw unwrapped keys
+	let pks: Vec<_> = config.authorities.iter().map(|a| *a.as_ref()).collect();
 
-	let authorities = config.authorities.iter().map(|a| &a.0).enumerate();
-	for (authority_idx, authority_id) in authorities {
+	for (authority_idx, authority_id) in config.authorities.iter().enumerate() {
 		if !keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
 			continue
 		}

@@ -127,7 +127,7 @@ pub fn new_test_ext_with_pairs(
 		.map(|i| AuthorityPair::from_seed(&U256::from(i).into()))
 		.collect::<Vec<_>>();
 
-	let authorities = pairs.iter().map(|p| (p.public(), 1)).collect();
+	let authorities = pairs.iter().map(|p| p.public()).collect();
 
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
@@ -159,7 +159,7 @@ fn make_ticket(slot: Slot, attempt: u32, pair: &AuthorityPair) -> TicketEnvelope
 	// TODO DAVXY: use some well known valid test keys...
 	let data =
 		TicketData { attempt_idx: attempt, erased_public: [0; 32], revealed_public: [0; 32] };
-	TicketEnvelope { data, vrf_preout, ring_proof: () }
+	TicketEnvelope { data, vrf_preout, ring_signature: () }
 }
 
 /// Construct at most `attempts` tickets for the given `slot`.

@@ -76,9 +76,8 @@ fn check_header<B: BlockT + Sized>(
 		return Ok(CheckedHeader::Deferred(header, pre_digest.slot))
 	}
 
-	let authority_id = match config.authorities.get(pre_digest.authority_idx as usize) {
-		Some(authority_id) => authority_id.0.clone(),
-		None => return Err(sassafras_err(Error::SlotAuthorNotFound)),
+	let Some(authority_id) = config.authorities.get(pre_digest.authority_idx as usize) else {
+		return Err(sassafras_err(Error::SlotAuthorNotFound));
 	};
 
 	// Check header signature (aka the Seal)
@@ -88,7 +87,7 @@ fn check_header<B: BlockT + Sized>(
 		.ok_or_else(|| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
 
 	let pre_hash = header.hash();
-	if !AuthorityPair::verify(&signature, &pre_hash, &authority_id) {
+	if !AuthorityPair::verify(&signature, &pre_hash, authority_id) {
 		return Err(sassafras_err(Error::BadSignature(pre_hash)))
 	}
 
@@ -139,7 +138,7 @@ fn check_header<B: BlockT + Sized>(
 		return Err(sassafras_err(Error::VrfVerificationFailed))
 	}
 
-	let info = VerifiedHeaderInfo { authority_id, seal };
+	let info = VerifiedHeaderInfo { authority_id: authority_id.clone(), seal };
 
 	Ok(CheckedHeader::Checked(header, info))
 }

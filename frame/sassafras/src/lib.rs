@@ -54,9 +54,9 @@ use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, Epoch, EquivocationProof, Randomness, SassafrasAuthorityWeight,
-	SassafrasConfiguration, SassafrasEpochConfiguration, Slot, TicketData, TicketEnvelope,
-	TicketId, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
+	AuthorityId, Epoch, EquivocationProof, Randomness, SassafrasConfiguration,
+	SassafrasEpochConfiguration, Slot, TicketData, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
+	SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
 use sp_runtime::{
@@ -147,20 +147,14 @@ pub mod pallet {
 	/// Current epoch authorities.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub type Authorities<T: Config> = StorageValue<
-		_,
-		WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
-		ValueQuery,
-	>;
+	pub type Authorities<T: Config> =
+		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// Next epoch authorities.
 	#[pallet::storage]
 	#[pallet::getter(fn next_authorities)]
-	pub type NextAuthorities<T: Config> = StorageValue<
-		_,
-		WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
-		ValueQuery,
-	>;
+	pub type NextAuthorities<T: Config> =
+		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The slot at which the first epoch started.
 	/// This is `None` until the first block is imported on chain.
@@ -239,7 +233,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		/// Genesis authorities.
-		pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+		pub authorities: Vec<AuthorityId>,
 		/// Genesis epoch configuration.
 		pub epoch_config: SassafrasEpochConfiguration,
 	}
@@ -577,11 +571,8 @@ impl<T: Config> Pallet<T> {
 	/// If we detect one or more skipped epochs the policy is to use the authorities and values
 	/// from the first skipped epoch. The tickets are invalidated.
 	pub(crate) fn enact_epoch_change(
-		authorities: WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
-		next_authorities: WeakBoundedVec<
-			(AuthorityId, SassafrasAuthorityWeight),
-			T::MaxAuthorities,
-		>,
+		authorities: WeakBoundedVec<AuthorityId, T::MaxAuthorities>,
+		next_authorities: WeakBoundedVec<AuthorityId, T::MaxAuthorities>,
 	) {
 		// PRECONDITION: caller has done initialization.
 		// If using the internal trigger or the session pallet then this is guaranteed.
@@ -687,7 +678,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Initialize authorities on genesis phase.
-	fn initialize_genesis_authorities(authorities: &[(AuthorityId, SassafrasAuthorityWeight)]) {
+	fn initialize_genesis_authorities(authorities: &[AuthorityId]) {
 		// Genesis authorities may have been initialized via other means (e.g. via session pallet).
 		// If this function has already been called with some authorities, then the new list
 		// should be match the previously set one.

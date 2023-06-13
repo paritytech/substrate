@@ -40,7 +40,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	where
 		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
 	{
-		let authorities = validators.map(|(_, k)| (k, 1)).collect::<Vec<_>>();
+		let authorities: Vec<_> = validators.map(|(_, k)| k).collect();
 		Self::initialize_genesis_authorities(&authorities);
 	}
 
@@ -48,7 +48,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	where
 		I: Iterator<Item = (&'a T::AccountId, AuthorityId)>,
 	{
-		let authorities = validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
+		let authorities = validators.map(|(_account, k)| k).collect();
 		let bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
 			authorities,
 			Some(
@@ -57,7 +57,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			),
 		);
 
-		let next_authorities = queued_validators.map(|(_account, k)| (k, 1)).collect::<Vec<_>>();
+		let next_authorities = queued_validators.map(|(_account, k)| k).collect();
 		let next_bounded_authorities = WeakBoundedVec::<_, T::MaxAuthorities>::force_from(
 			next_authorities,
 			Some(

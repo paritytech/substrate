@@ -72,11 +72,6 @@ pub type AuthoritySignature = app::Signature;
 /// the main Sassafras module. If that ever changes, then this must, too.
 pub type AuthorityId = app::Public;
 
-/// The weight of an authority.
-// NOTE: we use a unique name for the weight to avoid conflicts with other
-// `Weight` types, since the metadata isn't able to disambiguate.
-pub type SassafrasAuthorityWeight = u64;
-
 /// Weight of a Sassafras block.
 /// Primary blocks have a weight of 1 whereas secondary blocks have a weight of 0.
 pub type SassafrasBlockWeight = u32;
@@ -95,7 +90,7 @@ pub struct SassafrasConfiguration {
 	/// The duration of epoch in slots.
 	pub epoch_duration: u64,
 	/// The authorities for the epoch.
-	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	pub authorities: Vec<AuthorityId>,
 	/// The randomness for the epoch.
 	pub randomness: Randomness,
 	/// Tickets threshold parameters.

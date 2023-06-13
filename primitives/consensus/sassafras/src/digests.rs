@@ -19,7 +19,7 @@
 
 use super::{
 	ticket::TicketClaim, AuthorityId, AuthorityIndex, AuthoritySignature, Randomness,
-	SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, VrfSignature, SASSAFRAS_ENGINE_ID,
+	SassafrasEpochConfiguration, Slot, VrfSignature, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
@@ -47,7 +47,7 @@ pub struct PreDigest {
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct NextEpochDescriptor {
 	/// The authorities.
-	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	pub authorities: Vec<AuthorityId>,
 	/// The value of randomness to use for the slot-assignment.
 	pub randomness: Randomness,
 	/// Algorithm parameters. If not present, previous epoch parameters are used.
