@@ -182,7 +182,7 @@ pub mod pallet {
 
 	/// The current storage version.
 	#[cfg(not(any(test, feature = "runtime-benchmarks")))]
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(11);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(12);
 
 	/// Hard coded storage version for running tests that depend on the current storage version.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
