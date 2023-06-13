@@ -39,8 +39,6 @@ use sp_std::vec::Vec;
 pub struct UnlockAndUnreserveAllFunds<T: crate::Config>(sp_std::marker::PhantomData<T>);
 
 impl<T: crate::Config> UnlockAndUnreserveAllFunds<T>
-where
-	BalanceOf<T>: Sum,
 {
 	/// Calculates and returns the total amounts deposited and staked by each account in the context
 	/// of this pallet.
