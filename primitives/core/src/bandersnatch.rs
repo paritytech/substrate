@@ -42,8 +42,14 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bs38");
 const SIGNING_CTX: &[u8] = b"SigningContext";
 #[cfg(feature = "full_crypto")]
 const SEED_SERIALIZED_LEN: usize = 32;
-const PUBLIC_SERIALIZED_LEN: usize = 32;
-const SIGNATURE_SERIALIZED_LEN: usize = 64;
+
+// Edwards form sizes (TODO davxy: propably in the end we'll use this form)
+// const PUBLIC_SERIALIZED_LEN: usize = 32;
+// const SIGNATURE_SERIALIZED_LEN: usize = 64;
+
+// Short-Weierstrass form sizes
+const PUBLIC_SERIALIZED_LEN: usize = 33;
+const SIGNATURE_SERIALIZED_LEN: usize = 65;
 
 /// XXX.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
@@ -116,7 +122,7 @@ impl sp_std::fmt::Debug for Public {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+		write!(f, "{} ({}...)", crate::hexdisplay::HexDisplay::from(&self.as_ref()), &s[0..8])
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -282,7 +288,11 @@ pub mod vrf {
 		ThinVrfSignature, Transcript,
 	};
 
-	const PREOUT_SERIALIZED_LEN: usize = 32;
+	// Edwards form sizes (TODO davxy: probably in the end we'll use this form)
+	// const PREOUT_SERIALIZED_LEN: usize = 32;
+
+	// Short-Weierstrass form sizes
+	const PREOUT_SERIALIZED_LEN: usize = 33;
 
 	/// Max number of VRF inputs/outputs
 	pub const MAX_VRF_IOS: u32 = 3;

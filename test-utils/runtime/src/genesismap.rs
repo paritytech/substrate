@@ -116,10 +116,9 @@ impl GenesisStorageBuilder {
 			.authorities
 			.iter()
 			.map(|id| {
-				use sp_keyring::bandersnatch::Keyring as BandersnatchKeyring;
 				use std::str::FromStr;
 				let seed: &'static str = AccountKeyring::from_public(id).unwrap().into();
-				BandersnatchKeyring::from_str(&seed).unwrap().into()
+				sp_keyring::BandersnatchKeyring::from_str(&seed).unwrap().into()
 			})
 			.collect();
 

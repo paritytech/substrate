@@ -15,15 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Support code for the runtime. A set of test accounts.
+//! A set of well-known keys used for testing.
 
 pub use sp_core::bandersnatch;
 use sp_core::{
 	bandersnatch::{Pair, Public, Signature},
 	crypto::UncheckedFrom,
-	ByteArray, Pair as PairT, H256,
+	ByteArray, Pair as PairT,
 };
-use sp_runtime::AccountId32;
 
 use lazy_static::lazy_static;
 use std::{collections::HashMap, ops::Deref, sync::Mutex};
@@ -41,37 +40,23 @@ pub enum Keyring {
 	Two,
 }
 
+const PUBLIC_RAW_LEN: usize = <Public as ByteArray>::LEN;
+
 impl Keyring {
 	pub fn from_public(who: &Public) -> Option<Keyring> {
 		Self::iter().find(|&k| &Public::from(k) == who)
 	}
 
-	pub fn from_account_id(who: &AccountId32) -> Option<Keyring> {
-		Self::iter().find(|&k| &k.to_account_id() == who)
-	}
-
-	pub fn from_raw_public(who: [u8; 32]) -> Option<Keyring> {
+	pub fn from_raw_public(who: [u8; PUBLIC_RAW_LEN]) -> Option<Keyring> {
 		Self::from_public(&Public::unchecked_from(who))
 	}
 
-	pub fn to_raw_public(self) -> [u8; 32] {
+	pub fn to_raw_public(self) -> [u8; PUBLIC_RAW_LEN] {
 		*Public::from(self).as_ref()
-	}
-
-	pub fn from_h256_public(who: H256) -> Option<Keyring> {
-		Self::from_public(&Public::unchecked_from(who.into()))
-	}
-
-	pub fn to_h256_public(self) -> H256 {
-		AsRef::<[u8; 32]>::as_ref(&Public::from(self)).into()
 	}
 
 	pub fn to_raw_public_vec(self) -> Vec<u8> {
 		Public::from(self).to_raw_vec()
-	}
-
-	pub fn to_account_id(self) -> AccountId32 {
-		self.to_raw_public().into()
 	}
 
 	pub fn sign(self, msg: &[u8]) -> Signature {
@@ -99,11 +84,6 @@ impl Keyring {
 	/// Create a crypto `Pair` from a numeric value.
 	pub fn numeric(idx: usize) -> Pair {
 		Pair::from_string(&format!("//{}", idx), None).expect("numeric values are known good; qed")
-	}
-
-	/// Get account id of a `numeric` account.
-	pub fn numeric_id(idx: usize) -> AccountId32 {
-		(*AsRef::<[u8; 32]>::as_ref(&Self::numeric(idx).public())).into()
 	}
 }
 
@@ -160,12 +140,6 @@ lazy_static! {
 		.collect();
 }
 
-impl From<Keyring> for AccountId32 {
-	fn from(k: Keyring) -> Self {
-		k.to_account_id()
-	}
-}
-
 impl From<Keyring> for Public {
 	fn from(k: Keyring) -> Self {
 		*(*PUBLIC_KEYS).get(&k).unwrap()
@@ -178,26 +152,20 @@ impl From<Keyring> for Pair {
 	}
 }
 
-impl From<Keyring> for [u8; 32] {
+impl From<Keyring> for [u8; PUBLIC_RAW_LEN] {
 	fn from(k: Keyring) -> Self {
 		*(*PUBLIC_KEYS).get(&k).unwrap().as_ref()
 	}
 }
 
-impl From<Keyring> for H256 {
-	fn from(k: Keyring) -> Self {
-		AsRef::<[u8; 32]>::as_ref(PUBLIC_KEYS.get(&k).unwrap()).into()
-	}
-}
-
-impl From<Keyring> for &'static [u8; 32] {
+impl From<Keyring> for &'static [u8; PUBLIC_RAW_LEN] {
 	fn from(k: Keyring) -> Self {
 		PUBLIC_KEYS.get(&k).unwrap().as_ref()
 	}
 }
 
-impl AsRef<[u8; 32]> for Keyring {
-	fn as_ref(&self) -> &[u8; 32] {
+impl AsRef<[u8; PUBLIC_RAW_LEN]> for Keyring {
+	fn as_ref(&self) -> &[u8; PUBLIC_RAW_LEN] {
 		PUBLIC_KEYS.get(self).unwrap().as_ref()
 	}
 }
@@ -209,8 +177,8 @@ impl AsRef<Public> for Keyring {
 }
 
 impl Deref for Keyring {
-	type Target = [u8; 32];
-	fn deref(&self) -> &[u8; 32] {
+	type Target = [u8; PUBLIC_RAW_LEN];
+	fn deref(&self) -> &[u8; PUBLIC_RAW_LEN] {
 		PUBLIC_KEYS.get(self).unwrap().as_ref()
 	}
 }
