@@ -29,6 +29,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate core;
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 

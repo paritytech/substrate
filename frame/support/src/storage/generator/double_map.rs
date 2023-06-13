@@ -245,13 +245,9 @@ where
 		KArg1: ?Sized + EncodeLike<K1>,
 	{
 		let prefix = Self::storage_double_map_final_key1(k1);
-		storage::PrefixIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: |_raw_key, mut raw_value| V::decode(&mut raw_value),
-			phantom: Default::default(),
-		}
+		storage::PrefixIterator::new(prefix.clone(), prefix, |_raw_key, mut raw_value| {
+			V::decode(&mut raw_value)
+		})
 	}
 
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
@@ -369,16 +365,14 @@ where
 
 	fn iter_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator {
 		let prefix = G::storage_double_map_final_key1(k1);
-		Self::PrefixIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: |raw_key_without_prefix, mut raw_value| {
+		Self::PrefixIterator::new(
+			prefix.clone(),
+			prefix,
+			|raw_key_without_prefix, mut raw_value| {
 				let mut key_material = G::Hasher2::reverse(raw_key_without_prefix);
 				Ok((K2::decode(&mut key_material)?, V::decode(&mut raw_value)?))
 			},
-			phantom: Default::default(),
-		}
+		)
 	}
 
 	fn iter_prefix_from(
@@ -409,25 +403,18 @@ where
 
 	fn drain_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator {
 		let mut iterator = Self::iter_prefix(k1);
-		iterator.drain = true;
-		iterator
+		iterator.drain()
 	}
 
 	fn iter() -> Self::Iterator {
 		let prefix = G::prefix_hash();
-		Self::Iterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: |raw_key_without_prefix, mut raw_value| {
-				let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
-				let k1 = K1::decode(&mut k1_k2_material)?;
-				let mut k2_material = G::Hasher2::reverse(k1_k2_material);
-				let k2 = K2::decode(&mut k2_material)?;
-				Ok((k1, k2, V::decode(&mut raw_value)?))
-			},
-			phantom: Default::default(),
-		}
+		Self::Iterator::new(prefix.clone(), prefix, |raw_key_without_prefix, mut raw_value| {
+			let mut k1_k2_material = G::Hasher1::reverse(raw_key_without_prefix);
+			let k1 = K1::decode(&mut k1_k2_material)?;
+			let mut k2_material = G::Hasher2::reverse(k1_k2_material);
+			let k2 = K2::decode(&mut k2_material)?;
+			Ok((k1, k2, V::decode(&mut raw_value)?))
+		})
 	}
 
 	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
@@ -455,8 +442,7 @@ where
 
 	fn drain() -> Self::Iterator {
 		let mut iterator = Self::iter();
-		iterator.drain = true;
-		iterator
+		iterator.drain()
 	}
 
 	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(mut f: F) {

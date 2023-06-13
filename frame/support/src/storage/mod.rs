@@ -23,8 +23,10 @@ use crate::{
 		EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
 		ReversibleKeyGenerator, TupleToEncodedIter,
 	},
+	RuntimeDebug,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
+use core::fmt;
 use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
 use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
@@ -841,10 +843,8 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 
 /// Iterate or drain over a prefix and decode raw_key and raw_value into `T`.
 ///
-/// If any decoding fails it skips it and continues to the next key.
-///
 /// If draining, then the hook `OnRemoval::on_removal` is called after each removal.
-pub struct PrefixIterator<T, OnRemoval = ()> {
+pub struct TryPrefixIterator<T, OnRemoval = ()> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
 	/// If true then value are removed while iterating
@@ -855,15 +855,35 @@ pub struct PrefixIterator<T, OnRemoval = ()> {
 	phantom: core::marker::PhantomData<OnRemoval>,
 }
 
-impl<T, OnRemoval1> PrefixIterator<T, OnRemoval1> {
+impl<T, OnRemoval1> TryPrefixIterator<T, OnRemoval1> {
 	/// Converts to the same iterator but with the different 'OnRemoval' type
-	pub fn convert_on_removal<OnRemoval2>(self) -> PrefixIterator<T, OnRemoval2> {
-		PrefixIterator::<T, OnRemoval2> {
+	pub fn convert_on_removal<OnRemoval2>(self) -> TryPrefixIterator<T, OnRemoval2> {
+		TryPrefixIterator::<T, OnRemoval2> {
 			prefix: self.prefix,
 			previous_key: self.previous_key,
 			drain: self.drain,
 			closure: self.closure,
 			phantom: Default::default(),
+		}
+	}
+}
+
+/// Error returned by `TryPrefixIterator`.
+#[derive(RuntimeDebug, Clone, Eq, PartialEq)]
+pub enum TryPrefixIteratorError {
+	KeyWithoutValue { previous_key: Vec<u8> },
+	Decode { previous_key: Vec<u8>, err: codec::Error },
+}
+
+impl fmt::Display for TryPrefixIteratorError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			TryPrefixIteratorError::KeyWithoutValue { previous_key } => {
+				write!(f, "next_key returned a key with no value at {:?}", previous_key)
+			},
+			TryPrefixIteratorError::Decode { previous_key, err } => {
+				write!(f, "(key, value) failed to decode at {:?}: {:?}", previous_key, err)
+			},
 		}
 	}
 }
@@ -879,7 +899,7 @@ impl PrefixIteratorOnRemoval for () {
 	fn on_removal(_key: &[u8], _value: &[u8]) {}
 }
 
-impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
+impl<T, OnRemoval> TryPrefixIterator<T, OnRemoval> {
 	/// Creates a new `PrefixIterator`, iterating after `previous_key` and filtering out keys that
 	/// are not prefixed with `prefix`.
 	///
@@ -893,7 +913,7 @@ impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
 		previous_key: Vec<u8>,
 		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 	) -> Self {
-		PrefixIterator {
+		TryPrefixIterator {
 			prefix,
 			previous_key,
 			drain: false,
@@ -924,46 +944,109 @@ impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
 	}
 }
 
+impl<T, OnRemoval: PrefixIteratorOnRemoval> Iterator for TryPrefixIterator<T, OnRemoval> {
+	type Item = Result<T, TryPrefixIteratorError>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let maybe_next =
+			sp_io::storage::next_key(&self.previous_key).filter(|n| n.starts_with(&self.prefix));
+		match maybe_next {
+			Some(next) => {
+				self.previous_key = next;
+				let raw_value = match unhashed::get_raw(&self.previous_key) {
+					Some(raw_value) => raw_value,
+					None =>
+						return Some(Err(TryPrefixIteratorError::KeyWithoutValue {
+							previous_key: self.previous_key.clone(),
+						})),
+				};
+				if self.drain {
+					unhashed::kill(&self.previous_key);
+					OnRemoval::on_removal(&self.previous_key, &raw_value);
+				}
+				let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+				let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
+					Ok(item) => item,
+					Err(e) =>
+						return Some(Err(TryPrefixIteratorError::Decode {
+							previous_key: self.previous_key.clone(),
+							err: e,
+						})),
+				};
+
+				Some(Ok(item))
+			},
+			None => None,
+		}
+	}
+}
+
+/// Iterate or drain over a prefix and decode raw_key and raw_value into `T`.
+///
+/// If any decoding fails it skips it and continues to the next key.
+///
+/// If draining, then the hook `OnRemoval::on_removal` is called after each removal.
+pub struct PrefixIterator<T, OnRemoval = ()> {
+	iter: TryPrefixIterator<T, OnRemoval>,
+}
+
+impl<T, OnRemoval1> PrefixIterator<T, OnRemoval1> {
+	/// Converts to the same iterator but with the different 'OnRemoval' type
+	pub fn convert_on_removal<OnRemoval2>(self) -> PrefixIterator<T, OnRemoval2> {
+		PrefixIterator { iter: self.iter.convert_on_removal() }
+	}
+}
+
+impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
+	/// Creates a new `PrefixIterator`, iterating after `previous_key` and filtering out keys that
+	/// are not prefixed with `prefix`.
+	///
+	/// A `decode_fn` function must also be supplied, and it takes in two `&[u8]` parameters,
+	/// returning a `Result` containing the decoded type `T` if successful, and a `codec::Error` on
+	/// failure. The first `&[u8]` argument represents the raw, undecoded key without the prefix of
+	/// the current item, while the second `&[u8]` argument denotes the corresponding raw,
+	/// undecoded value.
+	pub fn new(
+		prefix: Vec<u8>,
+		previous_key: Vec<u8>,
+		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
+	) -> Self {
+		Self { iter: TryPrefixIterator::new(prefix, previous_key, decode_fn) }
+	}
+
+	/// Get the last key that has been iterated upon and return it.
+	pub fn last_raw_key(&self) -> &[u8] {
+		self.iter.last_raw_key()
+	}
+
+	/// Get the prefix that is being iterated upon for this iterator and return it.
+	pub fn prefix(&self) -> &[u8] {
+		self.iter.prefix()
+	}
+
+	/// Set the key that the iterator should start iterating after.
+	pub fn set_last_raw_key(&mut self, previous_key: Vec<u8>) {
+		self.iter.set_last_raw_key(previous_key);
+	}
+
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(mut self) -> Self {
+		Self { iter: self.iter.drain() }
+	}
+}
+
 impl<T, OnRemoval: PrefixIteratorOnRemoval> Iterator for PrefixIterator<T, OnRemoval> {
 	type Item = T;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		loop {
-			let maybe_next = sp_io::storage::next_key(&self.previous_key)
-				.filter(|n| n.starts_with(&self.prefix));
-			break match maybe_next {
-				Some(next) => {
-					self.previous_key = next;
-					let raw_value = match unhashed::get_raw(&self.previous_key) {
-						Some(raw_value) => raw_value,
-						None => {
-							log::error!(
-								"next_key returned a key with no value at {:?}",
-								self.previous_key,
-							);
-							continue
-						},
-					};
-					if self.drain {
-						unhashed::kill(&self.previous_key);
-						OnRemoval::on_removal(&self.previous_key, &raw_value);
-					}
-					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
-					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
-						Ok(item) => item,
-						Err(e) => {
-							log::error!(
-								"(key, value) failed to decode at {:?}: {:?}",
-								self.previous_key,
-								e,
-							);
-							continue
-						},
-					};
-
-					Some(item)
+			let item = self.iter.next()?;
+			match item {
+				Ok(item) => return Some(item),
+				Err(e) => {
+					log::error!("{}", e);
+					continue
 				},
-				None => None,
 			}
 		}
 	}
@@ -1298,13 +1381,9 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	fn iter_values() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
-		PrefixIterator {
-			prefix: prefix.to_vec(),
-			previous_key: prefix.to_vec(),
-			drain: false,
-			closure: |_raw_key, mut raw_value| Value::decode(&mut raw_value),
-			phantom: Default::default(),
-		}
+		PrefixIterator::new(prefix.to_vec(), prefix.to_vec(), |_raw_key, mut raw_value| {
+			Value::decode(&mut raw_value)
+		})
 	}
 
 	/// Translate the values of all elements by a function `f`, in the map in no particular order.

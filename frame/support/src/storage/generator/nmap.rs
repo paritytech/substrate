@@ -220,13 +220,9 @@ where
 		K: HasKeyPrefix<KP>,
 	{
 		let prefix = Self::storage_n_map_partial_key(partial_key);
-		PrefixIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: |_raw_key, mut raw_value| V::decode(&mut raw_value),
-			phantom: Default::default(),
-		}
+		PrefixIterator::new(prefix.clone(), prefix, |_raw_key, mut raw_value| {
+			V::decode(&mut raw_value)
+		})
 	}
 
 	fn mutate<KArg, R, F>(key: KArg, f: F) -> R
@@ -327,16 +323,10 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		K: HasReversibleKeyPrefix<KP>,
 	{
 		let prefix = G::storage_n_map_partial_key(kp);
-		PrefixIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: |raw_key_without_prefix, mut raw_value| {
-				let partial_key = K::decode_partial_key(raw_key_without_prefix)?;
-				Ok((partial_key, V::decode(&mut raw_value)?))
-			},
-			phantom: Default::default(),
-		}
+		PrefixIterator::new(prefix.clone(), prefix, |raw_key_without_prefix, mut raw_value| {
+			let partial_key = K::decode_partial_key(raw_key_without_prefix)?;
+			Ok((partial_key, V::decode(&mut raw_value)?))
+		})
 	}
 
 	fn iter_prefix_from<KP>(
@@ -376,8 +366,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 		K: HasReversibleKeyPrefix<KP>,
 	{
 		let mut iter = Self::iter_prefix(kp);
-		iter.drain = true;
-		iter
+		iter.drain()
 	}
 
 	fn iter() -> Self::Iterator {
@@ -386,16 +375,10 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 
 	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator {
 		let prefix = G::prefix_hash();
-		Self::Iterator {
-			prefix,
-			previous_key: starting_raw_key,
-			drain: false,
-			closure: |raw_key_without_prefix, mut raw_value| {
-				let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
-				Ok((final_key, V::decode(&mut raw_value)?))
-			},
-			phantom: Default::default(),
-		}
+		Self::Iterator::new(prefix, starting_raw_key, |raw_key_without_prefix, mut raw_value| {
+			let (final_key, _) = K::decode_final_key(raw_key_without_prefix)?;
+			Ok((final_key, V::decode(&mut raw_value)?))
+		})
 	}
 
 	fn iter_keys() -> Self::KeyIterator {
@@ -412,8 +395,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 
 	fn drain() -> Self::Iterator {
 		let mut iterator = Self::iter();
-		iterator.drain = true;
-		iterator
+		iterator.drain()
 	}
 
 	fn translate<O: Decode, F: FnMut(K::Key, O) -> Option<V>>(mut f: F) {

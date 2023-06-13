@@ -130,16 +130,10 @@ where
 	/// Enumerate all elements in the map.
 	fn iter() -> Self::Iterator {
 		let prefix = G::prefix_hash();
-		PrefixIterator {
-			prefix: prefix.clone(),
-			previous_key: prefix,
-			drain: false,
-			closure: |raw_key_without_prefix, mut raw_value| {
-				let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
-				Ok((K::decode(&mut key_material)?, V::decode(&mut raw_value)?))
-			},
-			phantom: Default::default(),
-		}
+		PrefixIterator::new(prefix.clone(), prefix, |raw_key_without_prefix, mut raw_value| {
+			let mut key_material = G::Hasher::reverse(raw_key_without_prefix);
+			Ok((K::decode(&mut key_material)?, V::decode(&mut raw_value)?))
+		})
 	}
 
 	/// Enumerate all elements in the map after a given key.
@@ -168,8 +162,7 @@ where
 	/// Enumerate all elements in the map.
 	fn drain() -> Self::Iterator {
 		let mut iterator = Self::iter();
-		iterator.drain = true;
-		iterator
+		iterator.drain()
 	}
 
 	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(mut f: F) {
