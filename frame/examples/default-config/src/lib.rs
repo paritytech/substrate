@@ -106,12 +106,6 @@ pub mod pallet {
 #[cfg(any(test, doc))]
 pub mod tests {
 	use super::*;
-
-	use frame_support::macro_magic::use_attr;
-	// Because `derive_impl` is a [macro_magic](https://crates.io/crates/macro_magic) attribute
-	// macro, [`#[use_attr]`](`frame_support::macro_magic::use_attr`) must be attached to any use
-	// statement that brings it into scope.
-	#[use_attr]
 	use frame_support::derive_impl;
 
 	use super::pallet as pallet_default_config_example;
