@@ -850,29 +850,22 @@ pub mod storage_key_generator {
 		sp_core::hashing::twox_64(x).iter().chain(x.iter()).cloned().collect::<Vec<_>>()
 	}
 
-	pub fn get_storage_version_hashed_keys() -> Vec<String> {
-		let keys: Vec<Vec<&[u8]>> = vec![
-			vec![b"Babe", b":__STORAGE_VERSION__:"],
-			vec![b"Balances", b":__STORAGE_VERSION__:"],
-			vec![b"SubstrateTest", b":__STORAGE_VERSION__:"],
-			vec![b"System", b":__STORAGE_VERSION__:"],
-		];
-
-		keys.iter().map(concat_hashes).collect::<Vec<String>>()
-	}
-
 	/// Generate the hashed storage keys from the raw literals. These keys are expected to be be in
 	/// storage with given substrate-test runtime.
 	pub fn generate_expected_storage_hashed_keys() -> Vec<String> {
 		let literals: Vec<&[u8]> = vec![b":code", b":extrinsic_index", b":heappages"];
 
 		let keys: Vec<Vec<&[u8]>> = vec![
+			vec![b"Babe", b":__STORAGE_VERSION__:"],
 			vec![b"Babe", b"Authorities"],
 			vec![b"Babe", b"EpochConfig"],
 			vec![b"Babe", b"NextAuthorities"],
 			vec![b"Babe", b"SegmentIndex"],
+			vec![b"Balances", b":__STORAGE_VERSION__:"],
 			vec![b"Balances", b"TotalIssuance"],
+			vec![b"SubstrateTest", b":__STORAGE_VERSION__:"],
 			vec![b"SubstrateTest", b"Authorities"],
+			vec![b"System", b":__STORAGE_VERSION__:"],
 			vec![b"System", b"LastRuntimeUpgrade"],
 			vec![b"System", b"ParentHash"],
 			vec![b"System", b"UpgradedToTripleRefCount"],
@@ -880,8 +873,6 @@ pub mod storage_key_generator {
 		];
 
 		let mut expected_keys = keys.iter().map(concat_hashes).collect::<Vec<String>>();
-
-		expected_keys.extend(get_storage_version_hashed_keys());
 		expected_keys.extend(literals.into_iter().map(hex));
 
 		let balances_map_keys = (0..16_usize)
@@ -1263,7 +1254,7 @@ mod tests {
 			let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
 			keys.sort();
 
-			let expected = [
+			let mut expected = [
 				//SubstrateTest|Authorities
 				"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
 				//Babe|SegmentIndex
@@ -1287,7 +1278,18 @@ mod tests {
 				"3a65787472696e7369635f696e646578",
 				// Balances|TotalIssuance
 				"c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80",
+
+				// added by on_genesis:
+				// Balances|:__STORAGE_VERSION__:
+				"c2261276cc9d1f8598ea4b6a74b15c2f4e7b9012096b41c4eb3aaf947f6ea429",
+				//System|:__STORAGE_VERSION__:
+				"26aa394eea5630e07c48ae0c9558cef74e7b9012096b41c4eb3aaf947f6ea429",
+				//Babe|:__STORAGE_VERSION__:
+				"1cb6f36e027abb2091cfb5110ab5087f4e7b9012096b41c4eb3aaf947f6ea429",
+				//SubstrateTest|:__STORAGE_VERSION__:
+				"00771836bebdd29870ff246d305c578c4e7b9012096b41c4eb3aaf947f6ea429",
 				].into_iter().map(String::from).collect::<Vec<_>>();
+			expected.sort();
 
 			assert_eq!(keys, expected);
 		}
@@ -1316,7 +1318,6 @@ mod tests {
 
 			// following keys are not placed during `<RuntimeGenesisConfig as GenesisBuild>::build`
 			// process, add them `keys` to assert against known keys.
-			keys.extend(storage_key_generator::get_storage_version_hashed_keys());
 			keys.push(hex(b":heappages"));
 			keys.sort();
 
