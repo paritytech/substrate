@@ -20,7 +20,6 @@
 
 use crate::{
 	migration::{IsFinished, Migrate},
-	storage::meter::Diff,
 	weights::WeightInfo,
 	AccountIdOf, BalanceOf, CodeHash, Config, Determinism, Pallet, Weight, LOG_TARGET,
 };
@@ -32,13 +31,13 @@ use frame_support::{
 use scale_info::prelude::format;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
-use sp_runtime::{traits::Zero, Saturating};
+use sp_runtime::{traits::Zero, FixedPointNumber, FixedU128, Saturating};
 use sp_std::{marker::PhantomData, prelude::*};
 
 mod old {
 	use super::*;
 
-	#[derive(Encode, Decode, scale_info::TypeInfo)]
+	#[derive(Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 	#[codec(mel_bound())]
 	#[scale_info(skip_type_params(T))]
 	pub struct OwnerInfo<T: Config> {
@@ -71,7 +70,9 @@ mod old {
 		StorageMap<Pallet<T>, Identity, CodeHash<T>, PrefabWasmModule>;
 }
 
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound())]
+#[scale_info(skip_type_params(T))]
 pub struct CodeInfo<T: Config> {
 	owner: AccountIdOf<T>,
 	#[codec(compact)]
@@ -127,10 +128,37 @@ impl<T: Config> Migrate for Migration<T> {
 				module.encoded_size().saturating_sub(Determinism::max_encoded_len())
 			);
 
-			let deposit =
-				Diff { bytes_added: code.len() as u32, items_added: 2, ..Default::default() }
-					.update_contract::<T>(None)
-					.charge_or_zero();
+			// Storage usage prices could change over time, and accounts who uploaded their
+			// conctracts code before the storage deposits where introduced, had not been ever
+			// charged with any deposit for that (see migration v6).
+			//
+			// This is why deposit to be refunded here is calculated as follows:
+			//
+			// 1. Calculate the deposit amount for storage before the migration, given current
+			// prices.
+			// 2. Given current deposit amount reserved, calculate the correction factor.
+			// 3. Calculate the deposit amount for storage after the migration, given current
+			// prices.
+			// 4. Calculate real deposit amount to be reserved after the migration.
+			let price_per_byte = T::DepositPerByte::get();
+			let price_per_item = T::DepositPerItem::get();
+			let bytes_before = module
+				.encoded_size()
+				.saturating_add(code.len())
+				.saturating_add(old::OwnerInfo::<T>::max_encoded_len()) as u32;
+			let items_before = 3u32;
+			let deposit_expected_before = price_per_byte
+				.saturating_mul(bytes_before.into())
+				.saturating_add(price_per_item.saturating_mul(items_before.into()));
+			let ratio = FixedU128::checked_from_rational(old.deposit, deposit_expected_before)
+				.unwrap_or_default()
+				.min(FixedU128::from_u32(1));
+			let bytes_after = code.len().saturating_add(CodeInfo::<T>::max_encoded_len()) as u32;
+			let items_after = 2u32;
+			let deposit_expected_after = price_per_byte
+				.saturating_mul(bytes_after.into())
+				.saturating_add(price_per_item.saturating_mul(items_after.into()));
+			let deposit = ratio.saturating_mul_int(deposit_expected_after);
 
 			let info = CodeInfo {
 				determinism: module.determinism,
@@ -151,7 +179,7 @@ impl<T: Config> Migrate for Migration<T> {
 			} else {
 				log::warn!(
 					target: LOG_TARGET,
-					"new deposit: {:?}, old deposit: {:?}",
+					"new deposit: {:?} is more than old deposit: {:?}",
 					&info.deposit,
 					&old.deposit
 				);
@@ -187,7 +215,8 @@ impl<T: Config> Migrate for Migration<T> {
 			})
 			.collect();
 
-		let storage: u32 = old::CodeStorage::<T>::iter().map(|(_k, v)| v.encoded_size() as u32).sum();
+		let storage: u32 =
+			old::CodeStorage::<T>::iter().map(|(_k, v)| v.encoded_size() as u32).sum();
 		let mut deposit: BalanceOf<T> = Default::default();
 		old::OwnerInfoOf::<T>::iter().for_each(|(_k, v)| deposit += v.deposit);
 
@@ -207,7 +236,6 @@ impl<T: Config> Migrate for Migration<T> {
 				.expect(format!("CodeInfo for code_hash {:?} not found!", hash).as_str());
 			ensure!(info.determinism == old.determinism, "invalid determinism");
 			ensure!(info.owner == old.owner, "invalid owner");
-//			ensure!(info.deposit == old.deposit, "invalid deposit");
 			ensure!(info.refcount == old.refcount, "invalid refcount");
 		}
 
