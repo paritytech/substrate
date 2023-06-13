@@ -35,7 +35,8 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If the reserve balance of `who`
-	/// is less than `value`, then the second item will be equal to the value not able to be slashed.
+	/// is less than `value`, then the second item will be equal to the value not able to be
+	/// slashed.
 	fn slash_reserved(
 		who: &AccountId,
 		value: Self::Balance,
