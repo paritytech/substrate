@@ -575,7 +575,10 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		(
-			BoundedVec<ProxyDefinition<T::AccountId, T::ProxyType, frame_system::BlockNumberOf<T>>, T::MaxProxies>,
+			BoundedVec<
+				ProxyDefinition<T::AccountId, T::ProxyType, frame_system::BlockNumberOf<T>>,
+				T::MaxProxies,
+			>,
 			BalanceOf<T>,
 		),
 		ValueQuery,
@@ -589,7 +592,10 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		(
-			BoundedVec<Announcement<T::AccountId, CallHashOf<T>, frame_system::BlockNumberOf<T>>, T::MaxPending>,
+			BoundedVec<
+				Announcement<T::AccountId, CallHashOf<T>, frame_system::BlockNumberOf<T>>,
+				T::MaxPending,
+			>,
 			BalanceOf<T>,
 		),
 		ValueQuery,
@@ -760,8 +766,16 @@ impl<T: Config> Pallet<T> {
 		real: &T::AccountId,
 		delegate: &T::AccountId,
 		force_proxy_type: Option<T::ProxyType>,
-	) -> Result<ProxyDefinition<T::AccountId, T::ProxyType, frame_system::BlockNumberOf<T>>, DispatchError> {
-		let f = |x: &ProxyDefinition<T::AccountId, T::ProxyType, frame_system::BlockNumberOf<T>>| -> bool {
+	) -> Result<
+		ProxyDefinition<T::AccountId, T::ProxyType, frame_system::BlockNumberOf<T>>,
+		DispatchError,
+	> {
+		let f = |x: &ProxyDefinition<
+			T::AccountId,
+			T::ProxyType,
+			frame_system::BlockNumberOf<T>,
+		>|
+		 -> bool {
 			&x.delegate == delegate &&
 				force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
 		};

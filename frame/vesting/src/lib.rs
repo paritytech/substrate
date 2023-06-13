@@ -201,7 +201,10 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>, MaxVestingSchedulesGet<T>>,
+		BoundedVec<
+			VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>,
+			MaxVestingSchedulesGet<T>,
+		>,
 	>;
 
 	/// Storage version of the pallet.
@@ -216,7 +219,12 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		pub vesting: Vec<(T::AccountId, frame_system::BlockNumberOf<T>, frame_system::BlockNumberOf<T>, BalanceOf<T>)>,
+		pub vesting: Vec<(
+			T::AccountId,
+			frame_system::BlockNumberOf<T>,
+			frame_system::BlockNumberOf<T>,
+			BalanceOf<T>,
+		)>,
 	}
 
 	#[pallet::genesis_build]
@@ -604,7 +612,10 @@ impl<T: Config> Pallet<T> {
 	fn exec_action(
 		schedules: Vec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>>,
 		action: VestingAction,
-	) -> Result<(Vec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>>, BalanceOf<T>), DispatchError> {
+	) -> Result<
+		(Vec<VestingInfo<BalanceOf<T>, frame_system::BlockNumberOf<T>>>, BalanceOf<T>),
+		DispatchError,
+	> {
 		let (schedules, locked_now) = match action {
 			VestingAction::Merge { index1: idx1, index2: idx2 } => {
 				// The schedule index is based off of the schedule ordering prior to filtering out

@@ -132,7 +132,9 @@ where
 				Err(err) => {
 					// We have not created an `Watcher` for the tx. Make sure the
 					// error is still propagated as an event.
-					let event: TransactionEvent<<Pool::Block as sp_runtime::traits::HeaderProvider>::Hash> = err.into();
+					let event: TransactionEvent<
+						<Pool::Block as sp_runtime::traits::HeaderProvider>::Hash,
+					> = err.into();
 					sink.pipe_from_stream(futures::stream::once(async { event }).boxed()).await;
 				},
 			};

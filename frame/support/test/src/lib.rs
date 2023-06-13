@@ -129,8 +129,8 @@ pub mod pallet_prelude {
 /// tests!
 pub struct TestRandomness<T>(sp_std::marker::PhantomData<T>);
 
-impl<Output: codec::Decode + Default, T> frame_support::traits::Randomness<Output, frame_system::BlockNumberOf<T>>
-	for TestRandomness<T>
+impl<Output: codec::Decode + Default, T>
+	frame_support::traits::Randomness<Output, frame_system::BlockNumberOf<T>> for TestRandomness<T>
 where
 	T: frame_system::Config,
 {

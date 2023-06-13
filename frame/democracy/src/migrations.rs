@@ -87,7 +87,8 @@ pub mod v1 {
 			}
 
 			ReferendumInfoOf::<T>::translate(
-				|index, old: ReferendumInfo<frame_system::BlockNumberOf<T>, T::Hash, BalanceOf<T>>| {
+				|index,
+				 old: ReferendumInfo<frame_system::BlockNumberOf<T>, T::Hash, BalanceOf<T>>| {
 					weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					log::info!(target: TARGET, "migrating referendum #{:?}", &index);
 					Some(match old {

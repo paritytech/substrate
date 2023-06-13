@@ -54,8 +54,10 @@ use sc_consensus_babe::{BabeWorkerHandle, Error as BabeError};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, HeaderProvider, NumberFor};
 
-type SharedAuthoritySet<TBl> =
-	sc_consensus_grandpa::SharedAuthoritySet<<TBl as sp_runtime::traits::HeaderProvider>::Hash, NumberFor<TBl>>;
+type SharedAuthoritySet<TBl> = sc_consensus_grandpa::SharedAuthoritySet<
+	<TBl as sp_runtime::traits::HeaderProvider>::Hash,
+	NumberFor<TBl>,
+>;
 
 /// Error type used by this crate.
 #[derive(Debug, thiserror::Error)]

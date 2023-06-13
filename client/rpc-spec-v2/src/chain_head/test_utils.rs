@@ -307,7 +307,9 @@ impl<Block: BlockT, Client: HeaderBackend<Block> + Send + Sync> HeaderBackend<Bl
 	fn number(
 		&self,
 		hash: Block::Hash,
-	) -> sc_client_api::blockchain::Result<Option<<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number>> {
+	) -> sc_client_api::blockchain::Result<
+		Option<<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number>,
+	> {
 		self.client.number(hash)
 	}
 

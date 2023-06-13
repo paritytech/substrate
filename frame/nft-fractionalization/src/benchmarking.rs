@@ -39,11 +39,8 @@ use crate::Pallet as NftFractionalization;
 type BalanceOf<T> =
 	<<T as Config>::Currency as InspectFungible<<T as SystemConfig>::AccountId>>::Balance;
 
-type CollectionConfigOf<T> = CollectionConfig<
-	BalanceOf<T>,
-	frame_system::BlockNumberOf<T>,
-	<T as Config>::NftCollectionId,
->;
+type CollectionConfigOf<T> =
+	CollectionConfig<BalanceOf<T>, frame_system::BlockNumberOf<T>, <T as Config>::NftCollectionId>;
 
 fn default_collection_config<T: Config>() -> CollectionConfigOf<T>
 where
@@ -58,8 +55,10 @@ where
 
 fn mint_nft<T: Config>(nft_id: T::NftId) -> (T::AccountId, AccountIdLookupOf<T>)
 where
-	T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, frame_system::BlockNumberOf<T>, T::NftCollectionId>>
-		+ Mutate<T::AccountId, ItemConfig>,
+	T::Nfts: Create<
+			T::AccountId,
+			CollectionConfig<BalanceOf<T>, frame_system::BlockNumberOf<T>, T::NftCollectionId>,
+		> + Mutate<T::AccountId, ItemConfig>,
 {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());

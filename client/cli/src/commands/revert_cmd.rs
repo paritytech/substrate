@@ -63,7 +63,8 @@ impl RevertCmd {
 		B: BlockT,
 		BA: Backend<B>,
 		C: UsageProvider<B>,
-		<<<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number as FromStr>::Err: Debug,
+		<<<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number as FromStr>::Err:
+			Debug,
 	{
 		let blocks = self.num.parse()?;
 		if let Some(aux_revert) = aux_revert {

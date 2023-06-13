@@ -270,7 +270,10 @@ pub mod pallet {
 		/// The given task was unable to be renewed since the agenda is full at that block.
 		PeriodicFailed { task: TaskAddress<frame_system::BlockNumberOf<T>>, id: Option<TaskName> },
 		/// The given task can never be executed since it is overweight.
-		PermanentlyOverweight { task: TaskAddress<frame_system::BlockNumberOf<T>>, id: Option<TaskName> },
+		PermanentlyOverweight {
+			task: TaskAddress<frame_system::BlockNumberOf<T>>,
+			id: Option<TaskName>,
+		},
 	}
 
 	#[pallet::error]
@@ -324,7 +327,11 @@ pub mod pallet {
 		/// Cancel an anonymously scheduled task.
 		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::cancel(T::MaxScheduledPerBlock::get()))]
-		pub fn cancel(origin: OriginFor<T>, when: frame_system::BlockNumberOf<T>, index: u32) -> DispatchResult {
+		pub fn cancel(
+			origin: OriginFor<T>,
+			when: frame_system::BlockNumberOf<T>,
+			index: u32,
+		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::RuntimeOrigin::from(origin);
 			Self::do_cancel(Some(origin.caller().clone()), (when, index))?;
@@ -695,7 +702,9 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	fn resolve_time(when: DispatchTime<frame_system::BlockNumberOf<T>>) -> Result<frame_system::BlockNumberOf<T>, DispatchError> {
+	fn resolve_time(
+		when: DispatchTime<frame_system::BlockNumberOf<T>>,
+	) -> Result<frame_system::BlockNumberOf<T>, DispatchError> {
 		let now = frame_system::Pallet::<T>::block_number();
 
 		let when = match when {
@@ -1161,7 +1170,8 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config<Hash = PreimageHash>>
-	schedule::v2::Anon<frame_system::BlockNumberOf<T>, <T as Config>::RuntimeCall, T::PalletsOrigin> for Pallet<T>
+	schedule::v2::Anon<frame_system::BlockNumberOf<T>, <T as Config>::RuntimeCall, T::PalletsOrigin>
+	for Pallet<T>
 {
 	type Address = TaskAddress<frame_system::BlockNumberOf<T>>;
 	type Hash = T::Hash;
@@ -1189,13 +1199,19 @@ impl<T: Config<Hash = PreimageHash>>
 		Self::do_reschedule(address, when)
 	}
 
-	fn next_dispatch_time((when, index): Self::Address) -> Result<frame_system::BlockNumberOf<T>, ()> {
+	fn next_dispatch_time(
+		(when, index): Self::Address,
+	) -> Result<frame_system::BlockNumberOf<T>, ()> {
 		Agenda::<T>::get(when).get(index as usize).ok_or(()).map(|_| when)
 	}
 }
 
 impl<T: Config<Hash = PreimageHash>>
-	schedule::v2::Named<frame_system::BlockNumberOf<T>, <T as Config>::RuntimeCall, T::PalletsOrigin> for Pallet<T>
+	schedule::v2::Named<
+		frame_system::BlockNumberOf<T>,
+		<T as Config>::RuntimeCall,
+		T::PalletsOrigin,
+	> for Pallet<T>
 {
 	type Address = TaskAddress<frame_system::BlockNumberOf<T>>;
 	type Hash = T::Hash;
@@ -1235,7 +1251,8 @@ impl<T: Config<Hash = PreimageHash>>
 	}
 }
 
-impl<T: Config> schedule::v3::Anon<frame_system::BlockNumberOf<T>, <T as Config>::RuntimeCall, T::PalletsOrigin>
+impl<T: Config>
+	schedule::v3::Anon<frame_system::BlockNumberOf<T>, <T as Config>::RuntimeCall, T::PalletsOrigin>
 	for Pallet<T>
 {
 	type Address = TaskAddress<frame_system::BlockNumberOf<T>>;
@@ -1261,7 +1278,9 @@ impl<T: Config> schedule::v3::Anon<frame_system::BlockNumberOf<T>, <T as Config>
 		Self::do_reschedule(address, when).map_err(map_err_to_v3_err::<T>)
 	}
 
-	fn next_dispatch_time((when, index): Self::Address) -> Result<frame_system::BlockNumberOf<T>, DispatchError> {
+	fn next_dispatch_time(
+		(when, index): Self::Address,
+	) -> Result<frame_system::BlockNumberOf<T>, DispatchError> {
 		Agenda::<T>::get(when)
 			.get(index as usize)
 			.ok_or(DispatchError::Unavailable)
@@ -1271,8 +1290,12 @@ impl<T: Config> schedule::v3::Anon<frame_system::BlockNumberOf<T>, <T as Config>
 
 use schedule::v3::TaskName;
 
-impl<T: Config> schedule::v3::Named<frame_system::BlockNumberOf<T>, <T as Config>::RuntimeCall, T::PalletsOrigin>
-	for Pallet<T>
+impl<T: Config>
+	schedule::v3::Named<
+		frame_system::BlockNumberOf<T>,
+		<T as Config>::RuntimeCall,
+		T::PalletsOrigin,
+	> for Pallet<T>
 {
 	type Address = TaskAddress<frame_system::BlockNumberOf<T>>;
 

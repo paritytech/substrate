@@ -27,16 +27,24 @@ pub use generic::{BlockAnnounce, FromBlock};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Type alias for using the block request type using block type parameters.
-pub type BlockRequest<B> =
-	generic::BlockRequest<<B as sp_runtime::traits::HeaderProvider>::Hash, <<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number>;
+pub type BlockRequest<B> = generic::BlockRequest<
+	<B as sp_runtime::traits::HeaderProvider>::Hash,
+	<<B as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
+>;
 
 /// Type alias for using the BlockData type using block type parameters.
-pub type BlockData<B> =
-	generic::BlockData<<B as sp_runtime::traits::HeaderProvider>::Header, <B as sp_runtime::traits::HeaderProvider>::Hash, <B as BlockT>::Extrinsic>;
+pub type BlockData<B> = generic::BlockData<
+	<B as sp_runtime::traits::HeaderProvider>::Header,
+	<B as sp_runtime::traits::HeaderProvider>::Hash,
+	<B as BlockT>::Extrinsic,
+>;
 
 /// Type alias for using the BlockResponse type using block type parameters.
-pub type BlockResponse<B> =
-	generic::BlockResponse<<B as sp_runtime::traits::HeaderProvider>::Header, <B as sp_runtime::traits::HeaderProvider>::Hash, <B as BlockT>::Extrinsic>;
+pub type BlockResponse<B> = generic::BlockResponse<
+	<B as sp_runtime::traits::HeaderProvider>::Header,
+	<B as sp_runtime::traits::HeaderProvider>::Hash,
+	<B as BlockT>::Extrinsic,
+>;
 
 // Bits of block data and associated artifacts to request.
 bitflags! {

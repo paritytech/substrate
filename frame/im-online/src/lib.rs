@@ -400,7 +400,8 @@ pub mod pallet {
 	/// more accurate then the value we calculate for `HeartbeatAfter`.
 	#[pallet::storage]
 	#[pallet::getter(fn heartbeat_after)]
-	pub(crate) type HeartbeatAfter<T: Config> = StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
+	pub(crate) type HeartbeatAfter<T: Config> =
+		StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
 
 	/// The current set of keys that may issue a heartbeat.
 	#[pallet::storage]
@@ -780,7 +781,10 @@ impl<T: Config> Pallet<T> {
 		};
 		let storage = StorageValueRef::persistent(&key);
 		let res = storage.mutate(
-			|status: Result<Option<HeartbeatStatus<frame_system::BlockNumberOf<T>>>, StorageRetrievalError>| {
+			|status: Result<
+				Option<HeartbeatStatus<frame_system::BlockNumberOf<T>>>,
+				StorageRetrievalError,
+			>| {
 				// Check if there is already a lock for that particular block.
 				// This means that the heartbeat has already been sent, and we are just waiting
 				// for it to be included. However if it doesn't get included for INCLUDE_THRESHOLD

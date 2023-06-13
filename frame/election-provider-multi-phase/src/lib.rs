@@ -1155,7 +1155,11 @@ pub mod pallet {
 		/// An account has been slashed for submitting an invalid signed submission.
 		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// There was a phase transition in a given round.
-		PhaseTransitioned { from: Phase<frame_system::BlockNumberOf<T>>, to: Phase<frame_system::BlockNumberOf<T>>, round: u32 },
+		PhaseTransitioned {
+			from: Phase<frame_system::BlockNumberOf<T>>,
+			to: Phase<frame_system::BlockNumberOf<T>>,
+			round: u32,
+		},
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1257,7 +1261,8 @@ pub mod pallet {
 	/// Current phase.
 	#[pallet::storage]
 	#[pallet::getter(fn current_phase)]
-	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<frame_system::BlockNumberOf<T>>, ValueQuery>;
+	pub type CurrentPhase<T: Config> =
+		StorageValue<_, Phase<frame_system::BlockNumberOf<T>>, ValueQuery>;
 
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	///

@@ -232,7 +232,9 @@ impl SelectChain<Block> for MockSelectChain {
 		Ok(self.leaves.lock().take().unwrap())
 	}
 
-	async fn best_chain(&self) -> Result<<Block as sp_runtime::traits::HeaderProvider>::Header, ConsensusError> {
+	async fn best_chain(
+		&self,
+	) -> Result<<Block as sp_runtime::traits::HeaderProvider>::Header, ConsensusError> {
 		Ok(self.best_chain.lock().take().unwrap())
 	}
 

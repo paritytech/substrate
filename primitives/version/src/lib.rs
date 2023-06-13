@@ -42,8 +42,8 @@ use std::fmt;
 
 use codec::{Decode, Encode, Input};
 use scale_info::TypeInfo;
-use sp_runtime::{RuntimeString, traits::HeaderProvider};
 pub use sp_runtime::{create_runtime_str, StateVersion};
+use sp_runtime::{traits::HeaderProvider, RuntimeString};
 #[doc(hidden)]
 pub use sp_std;
 
@@ -370,14 +370,20 @@ pub trait GetNativeVersion {
 #[cfg(feature = "std")]
 pub trait GetRuntimeVersionAt<Block: BlockT> {
 	/// Returns the version of runtime at the given block.
-	fn runtime_version(&self, at: <Block as HeaderProvider>::Hash) -> Result<RuntimeVersion, String>;
+	fn runtime_version(
+		&self,
+		at: <Block as HeaderProvider>::Hash,
+	) -> Result<RuntimeVersion, String>;
 }
 
 #[cfg(feature = "std")]
 impl<T: GetRuntimeVersionAt<Block>, Block: BlockT> GetRuntimeVersionAt<Block>
 	for std::sync::Arc<T>
 {
-	fn runtime_version(&self, at: <Block as HeaderProvider>::Hash) -> Result<RuntimeVersion, String> {
+	fn runtime_version(
+		&self,
+		at: <Block as HeaderProvider>::Hash,
+	) -> Result<RuntimeVersion, String> {
 		(&**self).runtime_version(at)
 	}
 }

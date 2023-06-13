@@ -175,7 +175,10 @@ impl ChainApi for TestApi {
 		(Hashing::hash(&encoded), len)
 	}
 
-	fn block_body(&self, _id: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash) -> Self::BodyFuture {
+	fn block_body(
+		&self,
+		_id: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+	) -> Self::BodyFuture {
 		futures::future::ready(Ok(None))
 	}
 

@@ -590,7 +590,10 @@ mod tests {
 		type CreateProposer = futures::future::Ready<Result<DummyProposer, Error>>;
 		type Error = Error;
 
-		fn init(&mut self, parent_header: &<TestBlock as sp_runtime::traits::HeaderProvider>::Header) -> Self::CreateProposer {
+		fn init(
+			&mut self,
+			parent_header: &<TestBlock as sp_runtime::traits::HeaderProvider>::Header,
+		) -> Self::CreateProposer {
 			futures::future::ready(Ok(DummyProposer(parent_header.number + 1, self.0.clone())))
 		}
 	}

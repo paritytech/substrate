@@ -153,13 +153,17 @@ impl<C, B, BA> StateMigration<C, B, BA> {
 	}
 }
 
-impl<C, B, BA> StateMigrationApiServer<<B as sp_runtime::traits::HeaderProvider>::Hash> for StateMigration<C, B, BA>
+impl<C, B, BA> StateMigrationApiServer<<B as sp_runtime::traits::HeaderProvider>::Hash>
+	for StateMigration<C, B, BA>
 where
 	B: BlockT,
 	C: Send + Sync + 'static + sc_client_api::HeaderBackend<B>,
 	BA: 'static + sc_client_api::backend::Backend<B>,
 {
-	fn call(&self, at: Option<<B as sp_runtime::traits::HeaderProvider>::Hash>) -> RpcResult<MigrationStatusResult> {
+	fn call(
+		&self,
+		at: Option<<B as sp_runtime::traits::HeaderProvider>::Hash>,
+	) -> RpcResult<MigrationStatusResult> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let hash = at.unwrap_or_else(|| self.client.info().best_hash);

@@ -330,7 +330,10 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		Self::hash_and_length_inner(ex)
 	}
 
-	fn block_body(&self, hash: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash) -> Self::BodyFuture {
+	fn block_body(
+		&self,
+		hash: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+	) -> Self::BodyFuture {
 		futures::future::ready(Ok(self
 			.chain
 			.read()

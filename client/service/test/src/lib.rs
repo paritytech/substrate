@@ -76,7 +76,12 @@ pub trait TestNetNode: Clone + Future<Output = Result<(), Error>> + Send + 'stat
 	fn transaction_pool(&self) -> Arc<Self::TransactionPool>;
 	fn network(
 		&self,
-	) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as sp_runtime::traits::HeaderProvider>::Hash>>;
+	) -> Arc<
+		sc_network::NetworkService<
+			Self::Block,
+			<Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+		>,
+	>;
 	fn sync(&self) -> &Arc<SyncingService<Self::Block>>;
 	fn spawn_handle(&self) -> SpawnTaskHandle;
 }
@@ -85,7 +90,8 @@ pub struct TestNetComponents<TBl: BlockT, TBackend, TExec, TRtApi, TExPool> {
 	task_manager: Arc<Mutex<TaskManager>>,
 	client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
 	transaction_pool: Arc<TExPool>,
-	network: Arc<sc_network::NetworkService<TBl, <TBl as sp_runtime::traits::HeaderProvider>::Hash>>,
+	network:
+		Arc<sc_network::NetworkService<TBl, <TBl as sp_runtime::traits::HeaderProvider>::Hash>>,
 	sync: Arc<SyncingService<TBl>>,
 }
 
@@ -95,7 +101,9 @@ impl<TBl: BlockT, TBackend, TExec, TRtApi, TExPool>
 	pub fn new(
 		task_manager: TaskManager,
 		client: Arc<Client<TBackend, TExec, TBl, TRtApi>>,
-		network: Arc<sc_network::NetworkService<TBl, <TBl as sp_runtime::traits::HeaderProvider>::Hash>>,
+		network: Arc<
+			sc_network::NetworkService<TBl, <TBl as sp_runtime::traits::HeaderProvider>::Hash>,
+		>,
 		sync: Arc<SyncingService<TBl>>,
 		transaction_pool: Arc<TExPool>,
 	) -> Self {
@@ -156,7 +164,12 @@ where
 	}
 	fn network(
 		&self,
-	) -> Arc<sc_network::NetworkService<Self::Block, <Self::Block as sp_runtime::traits::HeaderProvider>::Hash>> {
+	) -> Arc<
+		sc_network::NetworkService<
+			Self::Block,
+			<Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+		>,
+	> {
 		self.network.clone()
 	}
 	fn sync(&self) -> &Arc<SyncingService<Self::Block>> {

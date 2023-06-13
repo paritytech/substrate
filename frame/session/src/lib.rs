@@ -908,7 +908,9 @@ impl<T: Config> EstimateNextNewSession<frame_system::BlockNumberOf<T>> for Palle
 
 	/// This session pallet always calls new_session and next_session at the same time, hence we
 	/// do a simple proxy and pass the function to next rotation.
-	fn estimate_next_new_session(now: frame_system::BlockNumberOf<T>) -> (Option<frame_system::BlockNumberOf<T>>, Weight) {
+	fn estimate_next_new_session(
+		now: frame_system::BlockNumberOf<T>,
+	) -> (Option<frame_system::BlockNumberOf<T>>, Weight) {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
 	}
 }

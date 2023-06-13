@@ -59,7 +59,8 @@ mod no_instance {
 
 	#[pallet::storage]
 	#[pallet::getter(fn test_generic_value)]
-	pub type TestGenericValue<T: Config> = StorageValue<_, frame_system::BlockNumberOf<T>, OptionQuery>;
+	pub type TestGenericValue<T: Config> =
+		StorageValue<_, frame_system::BlockNumberOf<T>, OptionQuery>;
 	#[pallet::storage]
 	#[pallet::getter(fn foo2)]
 	pub type TestGenericDoubleMap<T: Config> = StorageDoubleMap<

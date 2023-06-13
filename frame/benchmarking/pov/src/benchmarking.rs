@@ -343,7 +343,7 @@ mod mock {
 
 	type AccountId = u64;
 	type AccountIndex = u32;
-	
+
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 

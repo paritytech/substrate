@@ -271,9 +271,13 @@ pub struct Info<Block: BlockT> {
 	/// The head of the finalized chain.
 	pub finalized_hash: Block::Hash,
 	/// Last finalized block number.
-	pub finalized_number: <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
+	pub finalized_number:
+		<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
 	/// Last finalized state.
-	pub finalized_state: Option<(Block::Hash, <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number)>,
+	pub finalized_state: Option<(
+		Block::Hash,
+		<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
+	)>,
 	/// Number of concurrent leave forks.
 	pub number_leaves: usize,
 	/// Missing blocks after warp sync. (start, end).

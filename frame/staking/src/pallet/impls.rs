@@ -1021,7 +1021,9 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(Self::get_npos_targets(None))
 	}
 
-	fn next_election_prediction(now: frame_system::BlockNumberOf<T>) -> frame_system::BlockNumberOf<T> {
+	fn next_election_prediction(
+		now: frame_system::BlockNumberOf<T>,
+	) -> frame_system::BlockNumberOf<T> {
 		let current_era = Self::current_era().unwrap_or(0);
 		let current_session = Self::current_planned_session();
 		let current_era_start_session_index =

@@ -298,7 +298,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Convert a block number into a leaf index.
-	fn block_num_to_leaf_index(block_num: frame_system::BlockNumberOf<T>) -> Result<LeafIndex, Error>
+	fn block_num_to_leaf_index(
+		block_num: frame_system::BlockNumberOf<T>,
+	) -> Result<LeafIndex, Error>
 	where
 		T: frame_system::Config,
 	{

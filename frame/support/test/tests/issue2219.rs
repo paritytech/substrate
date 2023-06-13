@@ -115,7 +115,8 @@ mod module {
 	/// tokens locked until given block number
 	#[pallet::storage]
 	#[pallet::getter(fn bondage)]
-	pub type Bondage<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, frame_system::BlockNumberOf<T>>;
+	pub type Bondage<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, frame_system::BlockNumberOf<T>>;
 
 	/// First step before enter a role is registering intent with a new account/key.
 	/// This is done by sending a role_entry_request() from the new account.

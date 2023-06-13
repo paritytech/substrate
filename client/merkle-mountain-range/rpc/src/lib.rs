@@ -140,7 +140,8 @@ impl<C, B> Mmr<C, B> {
 }
 
 #[async_trait]
-impl<Client, Block, MmrHash> MmrApiServer<<Block as HeaderProvider>::Hash, NumberFor<Block>, MmrHash>
+impl<Client, Block, MmrHash>
+	MmrApiServer<<Block as HeaderProvider>::Hash, NumberFor<Block>, MmrHash>
 	for Mmr<Client, (Block, MmrHash)>
 where
 	Block: BlockT,

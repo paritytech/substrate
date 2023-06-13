@@ -154,8 +154,10 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 		post_header.digest_mut().logs.extend(params.post_digests.iter().cloned());
 
 		match block_import.import_block(params).await? {
-			ImportResult::Imported(aux) =>
-				Ok(CreatedBlock { hash: <B as sp_runtime::traits::HeaderProvider>::Header::hash(&post_header), aux }),
+			ImportResult::Imported(aux) => Ok(CreatedBlock {
+				hash: <B as sp_runtime::traits::HeaderProvider>::Header::hash(&post_header),
+				aux,
+			}),
 			other => Err(other.into()),
 		}
 	};

@@ -113,7 +113,7 @@ pub mod tests {
 	// statement that brings it into scope.
 	#[use_attr]
 	use frame_support::derive_impl;
-use sp_runtime::traits::ConstU64;
+	use sp_runtime::traits::ConstU64;
 
 	use super::pallet as pallet_default_config_example;
 

@@ -1529,7 +1529,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Bump the payout amount of `who`, to be unlocked at the given block number.
-	fn bump_payout(who: &T::AccountId, when: frame_system::BlockNumberOf<T>, value: BalanceOf<T, I>) {
+	fn bump_payout(
+		who: &T::AccountId,
+		when: frame_system::BlockNumberOf<T>,
+		value: BalanceOf<T, I>,
+	) {
 		if !value.is_zero() {
 			<Payouts<T, I>>::mutate(who, |payouts| {
 				match payouts.binary_search_by_key(&when, |x| x.0) {

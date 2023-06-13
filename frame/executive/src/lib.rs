@@ -297,10 +297,9 @@ where
 
 		// run the try-state checks of all pallets, ensuring they don't alter any state.
 		let _guard = frame_support::StorageNoopGuard::default();
-		<AllPalletsWithSystem as frame_support::traits::TryState<frame_system::BlockNumberOf<System>>>::try_state(
-			*header.number(),
-			select,
-		)
+		<AllPalletsWithSystem as frame_support::traits::TryState<
+			frame_system::BlockNumberOf<System>,
+		>>::try_state(*header.number(), select)
 		.map_err(|e| {
 			frame_support::log::error!(target: LOG_TARGET, "failure: {:?}", e);
 			e
@@ -344,7 +343,9 @@ where
 	) -> Result<Weight, TryRuntimeError> {
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
-			<AllPalletsWithSystem as frame_support::traits::TryState<frame_system::BlockNumberOf<System>>>::try_state(
+			<AllPalletsWithSystem as frame_support::traits::TryState<
+				frame_system::BlockNumberOf<System>,
+			>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
 				frame_try_runtime::TryStateSelect::All,
 			)?;
@@ -357,7 +358,9 @@ where
 
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
-			<AllPalletsWithSystem as frame_support::traits::TryState<frame_system::BlockNumberOf<System>>>::try_state(
+			<AllPalletsWithSystem as frame_support::traits::TryState<
+				frame_system::BlockNumberOf<System>,
+			>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
 				frame_try_runtime::TryStateSelect::All,
 			)?;
@@ -462,8 +465,9 @@ where
 		let n = *header.number();
 		assert!(
 			n > frame_system::BlockNumberOf::<System>::zero() &&
-				<frame_system::Pallet<System>>::block_hash(n - frame_system::BlockNumberOf::<System>::one()) ==
-					*header.parent_hash(),
+				<frame_system::Pallet<System>>::block_hash(
+					n - frame_system::BlockNumberOf::<System>::one()
+				) == *header.parent_hash(),
 			"Parent hash should be valid.",
 		);
 
@@ -529,17 +533,18 @@ where
 		let remaining_weight = max_weight.saturating_sub(weight.total());
 
 		if remaining_weight.all_gt(Weight::zero()) {
-			let used_weight = <AllPalletsWithSystem as OnIdle<frame_system::BlockNumberOf<System>>>::on_idle(
-				block_number,
-				remaining_weight,
-			);
+			let used_weight = <AllPalletsWithSystem as OnIdle<
+				frame_system::BlockNumberOf<System>,
+			>>::on_idle(block_number, remaining_weight);
 			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
 				used_weight,
 				DispatchClass::Mandatory,
 			);
 		}
 
-		<AllPalletsWithSystem as OnFinalize<frame_system::BlockNumberOf<System>>>::on_finalize(block_number);
+		<AllPalletsWithSystem as OnFinalize<frame_system::BlockNumberOf<System>>>::on_finalize(
+			block_number,
+		);
 	}
 
 	/// Apply extrinsic outside of the block execution function.

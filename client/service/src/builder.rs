@@ -360,8 +360,9 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Controller for transactions handlers
-	pub tx_handler_controller:
-		sc_network_transactions::TransactionsHandlerController<<TBl as sp_runtime::traits::HeaderProvider>::Hash>,
+	pub tx_handler_controller: sc_network_transactions::TransactionsHandlerController<
+		<TBl as sp_runtime::traits::HeaderProvider>::Hash,
+	>,
 	/// Syncing service.
 	pub sync_service: Arc<SyncingService<TBl>>,
 	/// Telemetry instance for this node.
@@ -428,7 +429,10 @@ where
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 	TBackend: 'static + sc_client_api::backend::Backend<TBl> + Send,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as sp_runtime::traits::HeaderProvider>::Hash> + 'static,
+	TExPool: MaintainedTransactionPool<
+			Block = TBl,
+			Hash = <TBl as sp_runtime::traits::HeaderProvider>::Hash,
+		> + 'static,
 {
 	let SpawnTasksParams {
 		mut config,
@@ -642,7 +646,10 @@ where
 		+ 'static,
 	TBackend: sc_client_api::backend::Backend<TBl> + 'static,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_session::SessionKeys<TBl> + sp_api::Metadata<TBl>,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as sp_runtime::traits::HeaderProvider>::Hash> + 'static,
+	TExPool: MaintainedTransactionPool<
+			Block = TBl,
+			Hash = <TBl as sp_runtime::traits::HeaderProvider>::Hash,
+		> + 'static,
 	TBl::Hash: Unpin,
 	TBl::Header: Unpin,
 {
@@ -757,7 +764,9 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	(
 		Arc<NetworkService<TBl, <TBl as sp_runtime::traits::HeaderProvider>::Hash>>,
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
-		sc_network_transactions::TransactionsHandlerController<<TBl as sp_runtime::traits::HeaderProvider>::Hash>,
+		sc_network_transactions::TransactionsHandlerController<
+			<TBl as sp_runtime::traits::HeaderProvider>::Hash,
+		>,
 		NetworkStarter,
 		Arc<SyncingService<TBl>>,
 	),
@@ -774,7 +783,8 @@ where
 		+ HeaderBackend<TBl>
 		+ BlockchainEvents<TBl>
 		+ 'static,
-	TExPool: TransactionPool<Block = TBl, Hash = <TBl as sp_runtime::traits::HeaderProvider>::Hash> + 'static,
+	TExPool: TransactionPool<Block = TBl, Hash = <TBl as sp_runtime::traits::HeaderProvider>::Hash>
+		+ 'static,
 	TImpQu: ImportQueue<TBl> + 'static,
 {
 	let BuildNetworkParams {

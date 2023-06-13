@@ -365,7 +365,8 @@ pub mod pallet {
 	/// Storage period for data in blocks. Should match `sp_storage_proof::DEFAULT_STORAGE_PERIOD`
 	/// for block authoring.
 	#[pallet::storage]
-	pub(super) type StoragePeriod<T: Config> = StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
+	pub(super) type StoragePeriod<T: Config> =
+		StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
 
 	// Intermediates
 	#[pallet::storage]

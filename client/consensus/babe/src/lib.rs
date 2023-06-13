@@ -698,7 +698,18 @@ impl<B: BlockT> Future for BabeWorker<B> {
 
 /// Slot notification sinks.
 type SlotNotificationSinks<B> = Arc<
-	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as sp_runtime::traits::HeaderProvider>::Hash, NumberFor<B>, Epoch>)>>>,
+	Mutex<
+		Vec<
+			Sender<(
+				Slot,
+				ViableEpochDescriptor<
+					<B as sp_runtime::traits::HeaderProvider>::Hash,
+					NumberFor<B>,
+					Epoch,
+				>,
+			)>,
+		>,
+	>,
 >;
 
 struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {

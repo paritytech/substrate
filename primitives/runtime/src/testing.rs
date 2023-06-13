@@ -244,7 +244,17 @@ pub struct Block<Xt> {
 }
 
 impl<
-		Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic + TypeInfo,
+		Xt: 'static
+			+ Codec
+			+ Sized
+			+ Send
+			+ Sync
+			+ Serialize
+			+ Clone
+			+ Eq
+			+ Debug
+			+ traits::Extrinsic
+			+ TypeInfo,
 	> traits::HeaderProvider for Block<Xt>
 {
 	type Header = Header;
@@ -252,7 +262,17 @@ impl<
 }
 
 impl<
-		Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic + TypeInfo,
+		Xt: 'static
+			+ Codec
+			+ Sized
+			+ Send
+			+ Sync
+			+ Serialize
+			+ Clone
+			+ Eq
+			+ Debug
+			+ traits::Extrinsic
+			+ TypeInfo,
 	> traits::Block for Block<Xt>
 {
 	type Extrinsic = Xt;

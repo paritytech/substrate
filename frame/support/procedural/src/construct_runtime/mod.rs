@@ -149,9 +149,7 @@ use frame_support_procedural_tools::{
 	generate_crate_access, generate_crate_access_2018, generate_hidden_includes,
 };
 use itertools::Itertools;
-use parse::{
-	ExplicitRuntimeDeclaration, ImplicitRuntimeDeclaration, Pallet, RuntimeDeclaration,
-};
+use parse::{ExplicitRuntimeDeclaration, ImplicitRuntimeDeclaration, Pallet, RuntimeDeclaration};
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -213,12 +211,7 @@ fn construct_runtime_intermediary_expansion(
 fn construct_runtime_final_expansion(
 	definition: ExplicitRuntimeDeclaration,
 ) -> Result<TokenStream2> {
-	let ExplicitRuntimeDeclaration {
-		name,
-		pallets,
-		pallets_token,
-		where_section,
-	} = definition;
+	let ExplicitRuntimeDeclaration { name, pallets, pallets_token, where_section } = definition;
 
 	let system_pallet =
 		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
@@ -279,14 +272,14 @@ fn construct_runtime_final_expansion(
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
 	let warning = if let Some(where_section) = where_section {
-		Some(proc_macro_warning::Warning::new_deprecated("WhereSection") 
-		.old("use where section") 
-		.new("use `frame_system::Config` to set the `Block` type and remove this section") 
-		.help_links(&[ 
-			"https://github.com/paritytech/substrate/pull/14193" 
-		]) 
-		.span(where_section.span) 
-		.build())
+		Some(
+			proc_macro_warning::Warning::new_deprecated("WhereSection")
+				.old("use where section")
+				.new("use `frame_system::Config` to set the `Block` type and remove this section")
+				.help_links(&["https://github.com/paritytech/substrate/pull/14193"])
+				.span(where_section.span)
+				.build(),
+		)
 	} else {
 		None
 	};

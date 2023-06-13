@@ -112,7 +112,9 @@ pub use self::{
 	},
 };
 pub use sp_runtime::{
-	self, print, traits::{Printable, HeaderProvider}, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
+	self, print,
+	traits::{HeaderProvider, Printable},
+	ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
 };
 
 use codec::{Decode, Encode};
@@ -1006,12 +1008,8 @@ pub mod tests {
 	fn storage_alias_works() {
 		new_test_ext().execute_with(|| {
 			#[crate::storage_alias]
-			type GenericData2<T> = StorageMap<
-				System,
-				Blake2_128Concat,
-				BlockNumberOf<T>,
-				BlockNumberOf<T>,
-			>;
+			type GenericData2<T> =
+				StorageMap<System, Blake2_128Concat, BlockNumberOf<T>, BlockNumberOf<T>>;
 
 			assert_eq!(Pallet::<Runtime>::generic_data2(5), None);
 			GenericData2::<Runtime>::insert(5, 5);
@@ -1019,12 +1017,8 @@ pub mod tests {
 
 			/// Some random docs that ensure that docs are accepted
 			#[crate::storage_alias]
-			pub type GenericData<T> = StorageMap<
-				Test2,
-				Blake2_128Concat,
-				BlockNumberOf<T>,
-				BlockNumberOf<T>,
-			>;
+			pub type GenericData<T> =
+				StorageMap<Test2, Blake2_128Concat, BlockNumberOf<T>, BlockNumberOf<T>>;
 		});
 	}
 

@@ -113,7 +113,10 @@ impl ChainApi for TestApi {
 		(blake2_256(&encoded).into(), encoded.len())
 	}
 
-	fn block_body(&self, _id: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash) -> Self::BodyFuture {
+	fn block_body(
+		&self,
+		_id: <Self::Block as sp_runtime::traits::HeaderProvider>::Hash,
+	) -> Self::BodyFuture {
 		ready(Ok(None))
 	}
 

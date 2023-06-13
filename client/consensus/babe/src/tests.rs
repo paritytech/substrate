@@ -84,7 +84,10 @@ impl Environment<TestBlock> for DummyFactory {
 	type Proposer = DummyProposer;
 	type Error = Error;
 
-	fn init(&mut self, parent_header: &<TestBlock as sp_runtime::traits::HeaderProvider>::Header) -> Self::CreateProposer {
+	fn init(
+		&mut self,
+		parent_header: &<TestBlock as sp_runtime::traits::HeaderProvider>::Header,
+	) -> Self::CreateProposer {
 		future::ready(Ok(DummyProposer {
 			factory: self.clone(),
 			parent_hash: parent_header.hash(),

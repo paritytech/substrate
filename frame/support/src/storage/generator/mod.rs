@@ -45,13 +45,13 @@ mod tests {
 		storage::{generator::StorageValue, unhashed},
 	};
 
-
 	type BlockNumber = u32;
 	type AccountId = u32;
 	type Header = generic::Header<BlockNumber, BlakeTwo256>;
 	type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 	type Block = generic::Block<Header, UncheckedExtrinsic>;
-	type HeaderOf<T> = <<T as frame_system::Config>::Block as sp_runtime::traits::HeaderProvider>::Header;
+	type HeaderOf<T> =
+		<<T as frame_system::Config>::Block as sp_runtime::traits::HeaderProvider>::Header;
 	type BlockNumberOf<T> = <HeaderOf<T> as sp_runtime::traits::Header>::Number;
 
 	#[crate::pallet]

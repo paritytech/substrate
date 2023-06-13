@@ -107,7 +107,11 @@ where
 		+ Send
 		+ 'static,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<Block, AccountId, Index>,
-	C::Api: mmr_rpc::MmrRuntimeApi<Block, <Block as sp_runtime::traits::HeaderProvider>::Hash, BlockNumber>,
+	C::Api: mmr_rpc::MmrRuntimeApi<
+		Block,
+		<Block as sp_runtime::traits::HeaderProvider>::Hash,
+		BlockNumber,
+	>,
 	C::Api: pallet_transaction_payment_rpc::TransactionPaymentRuntimeApi<Block, Balance>,
 	C::Api: BabeApi<Block>,
 	C::Api: BlockBuilder<Block>,

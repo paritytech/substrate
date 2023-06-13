@@ -226,7 +226,11 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The Scheduler.
-		type Scheduler: ScheduleNamed<frame_system::BlockNumberOf<Self>, CallOf<Self>, Self::PalletsOrigin>;
+		type Scheduler: ScheduleNamed<
+			frame_system::BlockNumberOf<Self>,
+			CallOf<Self>,
+			Self::PalletsOrigin,
+		>;
 
 		/// The Preimage provider.
 		type Preimages: QueryPreimage + StorePreimage;
@@ -794,7 +798,10 @@ pub mod pallet {
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
 
-			ensure!(voting_period > frame_system::BlockNumberOf::<T>::zero(), Error::<T>::VotingPeriodLow);
+			ensure!(
+				voting_period > frame_system::BlockNumberOf::<T>::zero(),
+				Error::<T>::VotingPeriodLow
+			);
 			let (ext_proposal, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
@@ -1047,7 +1054,10 @@ pub mod pallet {
 			T::BlacklistOrigin::ensure_origin(origin)?;
 
 			// Insert the proposal into the blacklist.
-			let permanent = (frame_system::BlockNumberOf::<T>::max_value(), BoundedVec::<T::AccountId, _>::default());
+			let permanent = (
+				frame_system::BlockNumberOf::<T>::max_value(),
+				BoundedVec::<T::AccountId, _>::default(),
+			);
 			Blacklist::<T>::insert(&proposal_hash, permanent);
 
 			// Remove the queued proposal, if it's there.
@@ -1201,7 +1211,10 @@ impl<T: Config> Pallet<T> {
 	/// Get all referenda ready for tally at block `n`.
 	pub fn maturing_referenda_at(
 		n: frame_system::BlockNumberOf<T>,
-	) -> Vec<(ReferendumIndex, ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>)> {
+	) -> Vec<(
+		ReferendumIndex,
+		ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>,
+	)> {
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
 		Self::maturing_referenda_at_inner(n, next..last)
@@ -1210,7 +1223,10 @@ impl<T: Config> Pallet<T> {
 	fn maturing_referenda_at_inner(
 		n: frame_system::BlockNumberOf<T>,
 		range: core::ops::Range<PropIndex>,
-	) -> Vec<(ReferendumIndex, ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>)> {
+	) -> Vec<(
+		ReferendumIndex,
+		ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>,
+	)> {
 		range
 			.into_iter()
 			.map(|i| (i, Self::referendum_info(i)))
@@ -1250,7 +1266,10 @@ impl<T: Config> Pallet<T> {
 	/// Ok if the given referendum is active, Err otherwise
 	fn ensure_ongoing(
 		r: ReferendumInfo<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>,
-	) -> Result<ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>, DispatchError> {
+	) -> Result<
+		ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>,
+		DispatchError,
+	> {
 		match r {
 			ReferendumInfo::Ongoing(s) => Ok(s),
 			_ => Err(Error::<T>::ReferendumInvalid.into()),
@@ -1259,7 +1278,10 @@ impl<T: Config> Pallet<T> {
 
 	fn referendum_status(
 		ref_index: ReferendumIndex,
-	) -> Result<ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>, DispatchError> {
+	) -> Result<
+		ReferendumStatus<frame_system::BlockNumberOf<T>, BoundedCallOf<T>, BalanceOf<T>>,
+		DispatchError,
+	> {
 		let info = ReferendumInfoOf::<T>::get(ref_index).ok_or(Error::<T>::ReferendumInvalid)?;
 		Self::ensure_ongoing(info)
 	}

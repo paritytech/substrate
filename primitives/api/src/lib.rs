@@ -85,10 +85,10 @@ use sp_core::OpaqueMetadata;
 pub use sp_core::{offchain, ExecutionContext};
 #[doc(hidden)]
 pub use sp_metadata_ir::{self as metadata_ir, frame_metadata as metadata};
+pub use sp_runtime::traits::HeaderProvider;
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
-pub use sp_runtime::traits::HeaderProvider;
 #[doc(hidden)]
 pub use sp_runtime::{
 	generic::BlockId,
@@ -536,7 +536,10 @@ pub trait ApiExt<Block: BlockT> {
 		Self: Sized;
 
 	/// Checks if the given api is implemented and versions match.
-	fn has_api<A: RuntimeApiInfo + ?Sized>(&self, at_hash: <Block as HeaderProvider>::Hash) -> Result<bool, ApiError>
+	fn has_api<A: RuntimeApiInfo + ?Sized>(
+		&self,
+		at_hash: <Block as HeaderProvider>::Hash,
+	) -> Result<bool, ApiError>
 	where
 		Self: Sized;
 
@@ -616,10 +619,14 @@ pub trait CallApiAt<Block: BlockT> {
 	) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
-	fn runtime_version_at(&self, at_hash: <Block as HeaderProvider>::Hash) -> Result<RuntimeVersion, ApiError>;
+	fn runtime_version_at(
+		&self,
+		at_hash: <Block as HeaderProvider>::Hash,
+	) -> Result<RuntimeVersion, ApiError>;
 
 	/// Get the state `at` the given block.
-	fn state_at(&self, at: <Block as HeaderProvider>::Hash) -> Result<Self::StateBackend, ApiError>;
+	fn state_at(&self, at: <Block as HeaderProvider>::Hash)
+		-> Result<Self::StateBackend, ApiError>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.

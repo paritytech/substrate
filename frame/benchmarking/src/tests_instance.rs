@@ -22,7 +22,7 @@
 use super::*;
 use frame_support::traits::ConstU32;
 use sp_runtime::{
-	testing::{H256},
+	testing::H256,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
@@ -97,7 +97,7 @@ impl frame_system::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
-		type Hash = H256;
+	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;

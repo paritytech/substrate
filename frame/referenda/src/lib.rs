@@ -210,7 +210,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type Tracks: Get<
 				Vec<(
-					<Self::Tracks as TracksInfo<BalanceOf<Self, I>, frame_system::BlockNumberOf<Self>>>::Id,
+					<Self::Tracks as TracksInfo<
+						BalanceOf<Self, I>,
+						frame_system::BlockNumberOf<Self>,
+					>>::Id,
 					TrackInfo<BalanceOf<Self, I>, frame_system::BlockNumberOf<Self>>,
 				)>,
 			> + TracksInfo<

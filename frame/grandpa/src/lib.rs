@@ -294,8 +294,12 @@ pub mod pallet {
 	/// State of the current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn state)]
-	pub(super) type State<T: Config> =
-		StorageValue<_, StoredState<frame_system::BlockNumberOf<T>>, ValueQuery, DefaultForState<T>>;
+	pub(super) type State<T: Config> = StorageValue<
+		_,
+		StoredState<frame_system::BlockNumberOf<T>>,
+		ValueQuery,
+		DefaultForState<T>,
+	>;
 
 	/// Pending change: (signaled at, scheduled change).
 	#[pallet::storage]
@@ -311,7 +315,8 @@ pub mod pallet {
 	/// `true` if we are currently stalled.
 	#[pallet::storage]
 	#[pallet::getter(fn stalled)]
-	pub(super) type Stalled<T: Config> = StorageValue<_, (frame_system::BlockNumberOf<T>, frame_system::BlockNumberOf<T>)>;
+	pub(super) type Stalled<T: Config> =
+		StorageValue<_, (frame_system::BlockNumberOf<T>, frame_system::BlockNumberOf<T>)>;
 
 	/// The number of changes (both in terms of keys and underlying economic responsibilities)
 	/// in the "set" of Grandpa validators from genesis.
@@ -534,7 +539,10 @@ impl<T: Config> Pallet<T> {
 		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 
-	fn on_stalled(further_wait: frame_system::BlockNumberOf<T>, median: frame_system::BlockNumberOf<T>) {
+	fn on_stalled(
+		further_wait: frame_system::BlockNumberOf<T>,
+		median: frame_system::BlockNumberOf<T>,
+	) {
 		// when we record old authority sets we could try to figure out _who_
 		// failed. until then, we can't meaningfully guard against
 		// `next == last` the way that normal session changes do.

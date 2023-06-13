@@ -35,21 +35,13 @@ pub mod v1 {
 		Pallet<T>,
 		Twox64Concat,
 		frame_system::BlockNumberOf<T>,
-		Vec<
-			Option<
-				ScheduledV1<<T as Config>::RuntimeCall, frame_system::BlockNumberOf<T>>,
-			>,
-		>,
+		Vec<Option<ScheduledV1<<T as Config>::RuntimeCall, frame_system::BlockNumberOf<T>>>>,
 		ValueQuery,
 	>;
 
 	#[frame_support::storage_alias]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<frame_system::BlockNumberOf<T>>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<frame_system::BlockNumberOf<T>>>;
 }
 
 pub mod v2 {
@@ -66,12 +58,8 @@ pub mod v2 {
 	>;
 
 	#[frame_support::storage_alias]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<frame_system::BlockNumberOf<T>>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<frame_system::BlockNumberOf<T>>>;
 }
 
 pub mod v3 {
@@ -88,12 +76,8 @@ pub mod v3 {
 	>;
 
 	#[frame_support::storage_alias]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<frame_system::BlockNumberOf<T>>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<frame_system::BlockNumberOf<T>>>;
 
 	/// Migrate the scheduler pallet from V3 to V4.
 	pub struct MigrateToV4<T>(sp_std::marker::PhantomData<T>);

@@ -271,8 +271,13 @@ pub mod pallet {
 	/// Votes on a given proposal, if it is ongoing.
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
-	pub type Voting<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, frame_system::BlockNumberOf<T>>, OptionQuery>;
+	pub type Voting<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Identity,
+		T::Hash,
+		Votes<T::AccountId, frame_system::BlockNumberOf<T>>,
+		OptionQuery,
+	>;
 
 	/// Proposals so far.
 	#[pallet::storage]

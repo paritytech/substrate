@@ -72,9 +72,9 @@ use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
 	generic,
 	traits::{
-		self, AtLeast32Bit, BadOrigin, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+		self, AtLeast32Bit, BadOrigin, BlockNumberProvider, Bounded, CheckEqual, Dispatchable,
+		Hash, Lookup, LookupError, MaybeDisplay, MaybeSerializeDeserialize, Member, One,
+		Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
 	DispatchError, RuntimeDebug,
 };
@@ -331,7 +331,9 @@ pub mod pallet {
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
 		#[pallet::no_default]
-		type BlockHashCount: Get<<<Self::Block as traits::HeaderProvider>::Header as traits::Header>::Number>;
+		type BlockHashCount: Get<
+			<<Self::Block as traits::HeaderProvider>::Header as traits::Header>::Number,
+		>;
 
 		/// The weight of runtime database operations the runtime can invoke.
 		#[pallet::constant]
@@ -1778,7 +1780,9 @@ impl<T: Config> Lookup for ChainContext<T> {
 
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root, HeaderOf, BlockNumberOf};
+	pub use crate::{
+		ensure_none, ensure_root, ensure_signed, ensure_signed_or_root, BlockNumberOf, HeaderOf,
+	};
 
 	/// Type alias for the `Origin` associated type of system config.
 	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;

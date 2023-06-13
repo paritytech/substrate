@@ -278,8 +278,11 @@ pub mod pallet {
 	/// entropy was fixed (i.e. it was known to chain observers). Since epochs are defined in
 	/// slots, which may be skipped, the block numbers may not line up with the slot numbers.
 	#[pallet::storage]
-	pub(super) type EpochStart<T: Config> =
-		StorageValue<_, (frame_system::BlockNumberOf<T>, frame_system::BlockNumberOf<T>), ValueQuery>;
+	pub(super) type EpochStart<T: Config> = StorageValue<
+		_,
+		(frame_system::BlockNumberOf<T>, frame_system::BlockNumberOf<T>),
+		ValueQuery,
+	>;
 
 	/// How late the current block is compared to its parent.
 	///
@@ -288,7 +291,8 @@ pub mod pallet {
 	/// execution context should always yield zero.
 	#[pallet::storage]
 	#[pallet::getter(fn lateness)]
-	pub(super) type Lateness<T: Config> = StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
+	pub(super) type Lateness<T: Config> =
+		StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
 
 	/// The configuration for the current epoch. Should never be `None` as it is initialized in
 	/// genesis.
@@ -554,7 +558,9 @@ impl<T: Config> Pallet<T> {
 	//
 	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you
 	// update this function, you must also update the corresponding weight.
-	pub fn next_expected_epoch_change(now: frame_system::BlockNumberOf<T>) -> Option<frame_system::BlockNumberOf<T>> {
+	pub fn next_expected_epoch_change(
+		now: frame_system::BlockNumberOf<T>,
+	) -> Option<frame_system::BlockNumberOf<T>> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot.checked_sub(*CurrentSlot::<T>::get()).map(|slots_remaining| {
 			// This is a best effort guess. Drifts in the slot/block ratio will cause errors here.
@@ -899,12 +905,16 @@ impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
 	}
 }
 
-impl<T: Config> frame_support::traits::EstimateNextSessionRotation<frame_system::BlockNumberOf<T>> for Pallet<T> {
+impl<T: Config> frame_support::traits::EstimateNextSessionRotation<frame_system::BlockNumberOf<T>>
+	for Pallet<T>
+{
 	fn average_session_length() -> frame_system::BlockNumberOf<T> {
 		T::EpochDuration::get().saturated_into()
 	}
 
-	fn estimate_current_session_progress(_now: frame_system::BlockNumberOf<T>) -> (Option<Permill>, Weight) {
+	fn estimate_current_session_progress(
+		_now: frame_system::BlockNumberOf<T>,
+	) -> (Option<Permill>, Weight) {
 		let elapsed = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start()) + 1;
 
 		(
@@ -914,7 +924,9 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<frame_system:
 		)
 	}
 
-	fn estimate_next_session_rotation(now: frame_system::BlockNumberOf<T>) -> (Option<frame_system::BlockNumberOf<T>>, Weight) {
+	fn estimate_next_session_rotation(
+		now: frame_system::BlockNumberOf<T>,
+	) -> (Option<frame_system::BlockNumberOf<T>>, Weight) {
 		(
 			Self::next_expected_epoch_change(now),
 			// Read: Current Slot, Epoch Index, Genesis Slot

@@ -341,7 +341,8 @@ pub mod pallet {
 	/// This storage entry defines when new transaction is going to be accepted.
 	#[pallet::storage]
 	#[pallet::getter(fn next_unsigned_at)]
-	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
+	pub(super) type NextUnsignedAt<T: Config> =
+		StorageValue<_, frame_system::BlockNumberOf<T>, ValueQuery>;
 }
 
 /// Payload used by this example crate to hold price
@@ -389,16 +390,18 @@ impl<T: Config> Pallet<T> {
 		// low-level method of local storage API, which means that only one worker
 		// will be able to "acquire a lock" and send a transaction if multiple workers
 		// happen to be executed concurrently.
-		let res = val.mutate(|last_send: Result<Option<frame_system::BlockNumberOf<T>>, StorageRetrievalError>| {
-			match last_send {
-				// If we already have a value in storage and the block number is recent enough
-				// we avoid sending another transaction at this time.
-				Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
-					Err(RECENTLY_SENT),
-				// In every other case we attempt to acquire the lock and send a transaction.
-				_ => Ok(block_number),
-			}
-		});
+		let res = val.mutate(
+			|last_send: Result<Option<frame_system::BlockNumberOf<T>>, StorageRetrievalError>| {
+				match last_send {
+					// If we already have a value in storage and the block number is recent enough
+					// we avoid sending another transaction at this time.
+					Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
+						Err(RECENTLY_SENT),
+					// In every other case we attempt to acquire the lock and send a transaction.
+					_ => Ok(block_number),
+				}
+			},
+		);
 
 		// The result of `mutate` call will give us a nested `Result` type.
 		// The first one matches the return of the closure passed to `mutate`, i.e.
@@ -472,7 +475,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A helper function to fetch the price and send a raw unsigned transaction.
-	fn fetch_price_and_send_raw_unsigned(block_number: frame_system::BlockNumberOf<T>) -> Result<(), &'static str> {
+	fn fetch_price_and_send_raw_unsigned(
+		block_number: frame_system::BlockNumberOf<T>,
+	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
