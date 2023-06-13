@@ -126,7 +126,7 @@ pub const CALL: &<Test as Config>::RuntimeCall =
 /// Create new externalities for `System` module tests.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
-		RuntimeGenesisConfig::default().build_storage().unwrap().into();
+		BuildStorage::build_storage(&RuntimeGenesisConfig::default()).unwrap().into();
 	// Add to each test the initial weight of a block
 	ext.execute_with(|| {
 		System::register_extra_weight_unchecked(
