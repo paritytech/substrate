@@ -113,7 +113,7 @@
 //!
 //! Failed upgrades cannot recovered from automatically and require governance intervention. Set up
 //! monitoring for `UpgradeFailed` events to be made aware of any failures. The hook
-//! [`UpgradeStatusNotify::failed`] should be setup in a way that it allows governance to act, but
+//! [`OnMigrationUpdate::failed`] should be setup in a way that it allows governance to act, but
 //! still prevent other transactions from interacting with the inconsistent storage state. Note that
 //! this is paramount, since the inconsistent state might contain a faulty balance amount or similar
 //! that could cause great harm if user transactions don't remain suspended. One way to implement
@@ -247,7 +247,7 @@ pub mod pallet {
 		/// Notifications for status updates of a runtime upgrade.
 		///
 		/// Can be used to pause XCM etc.
-		type UpgradeStatusNotify: UpgradeStatusNotify;
+		type OnMigrationUpdate: OnMigrationUpdate;
 
 		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
@@ -399,7 +399,7 @@ impl<T: Config> Pallet<T> {
 				.into(),
 			));
 			Self::deposit_event(Event::UpgradeStarted { migrations });
-			T::UpgradeStatusNotify::started();
+			T::OnMigrationUpdate::started();
 		}
 
 		T::WeightInfo::on_runtime_upgrade()
@@ -455,7 +455,7 @@ impl<T: Config> Pallet<T> {
 		let Some(migration) = migrations.get(cursor.index as usize) else {
 			Self::deposit_event(Event::UpgradeCompleted);
 			Cursor::<T>::kill();
-			T::UpgradeStatusNotify::completed();
+			T::OnMigrationUpdate::completed();
 			return None;
 		};
 		if Historic::<T>::contains_key(&migration.id()) {
@@ -505,7 +505,7 @@ impl<T: Config> Pallet<T> {
 		use FailedUpgradeHandling::*;
 		Self::deposit_event(Event::UpgradeFailed);
 
-		match T::UpgradeStatusNotify::failed(migration) {
+		match T::OnMigrationUpdate::failed(migration) {
 			KeepStuck => Cursor::<T>::set(Some(MigrationCursor::Stuck)),
 			ForceUnstuck => Cursor::<T>::kill(),
 		}

@@ -158,7 +158,7 @@ impl crate::Config for Test {
 	type Migrations = MigrationsStorage;
 	type Cursor = MockedCursor;
 	type Identifier = MockedIdentifier;
-	type UpgradeStatusNotify = MockedUpgradeStatusNotify;
+	type OnMigrationUpdate = MockedOnMigrationUpdate;
 	type ServiceWeight = ServiceWeight;
 	type WeightInfo = ();
 }
@@ -225,29 +225,32 @@ pub fn assert_events<E: IntoRecord>(events: Vec<E>) {
 }
 
 frame_support::parameter_types! {
+	/// The number of started upgrades.
 	pub static UpgradesStarted: u32 = 0;
+	/// The number of completed upgrades.
 	pub static UpgradesCompleted: u32 = 0;
+	/// The migrations that failed.
 	pub static UpgradesFailed: Vec<Option<u32>> = vec![];
-
+	/// Return value of `MockedOnMigrationUpdate::failed`.
 	pub static FailedUpgradeResponse: FailedUpgradeHandling = FailedUpgradeHandling::KeepStuck;
 }
 
-pub struct MockedUpgradeStatusNotify;
-impl UpgradeStatusNotify for MockedUpgradeStatusNotify {
+pub struct MockedOnMigrationUpdate;
+impl OnMigrationUpdate for MockedOnMigrationUpdate {
 	fn started() {
-		log::info!("UpgradeStatusNotify started");
+		log::info!("OnMigrationUpdate started");
 		UpgradesStarted::mutate(|v| *v += 1);
 	}
 
 	fn completed() {
-		log::info!("UpgradeStatusNotify completed");
+		log::info!("OnMigrationUpdate completed");
 		UpgradesCompleted::mutate(|v| *v += 1);
 	}
 
 	fn failed(migration: Option<u32>) -> FailedUpgradeHandling {
 		UpgradesFailed::mutate(|v| v.push(migration));
 		let res = FailedUpgradeResponse::get();
-		log::error!("UpgradeStatusNotify failed at: {migration:?}, handling as {res:?}");
+		log::error!("OnMigrationUpdate failed at: {migration:?}, handling as {res:?}");
 		res
 	}
 }
