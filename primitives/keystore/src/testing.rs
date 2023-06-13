@@ -245,6 +245,19 @@ impl Keystore for MemoryKeystore {
 		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
 	}
 
+	fn bandersnatch_ring_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		data: &bandersnatch::vrf::VrfSignData,
+		prover: &bandersnatch::ring_vrf::RingProver,
+	) -> Result<Option<bandersnatch::ring_vrf::RingVrfSignature>, Error> {
+		let sig = self
+			.pair::<bandersnatch::Pair>(key_type, public)
+			.map(|pair| pair.ring_vrf_sign(data, prover));
+		Ok(sig)
+	}
+
 	fn bandersnatch_vrf_output(
 		&self,
 		key_type: KeyTypeId,
@@ -370,7 +383,7 @@ mod tests {
 	}
 
 	#[test]
-	fn vrf_sign() {
+	fn sr25519_vrf_sign() {
 		let store = MemoryKeystore::new();
 
 		let secret_uri = "//Alice";
@@ -399,7 +412,7 @@ mod tests {
 	}
 
 	#[test]
-	fn vrf_output() {
+	fn sr25519_vrf_output() {
 		let store = MemoryKeystore::new();
 
 		let secret_uri = "//Alice";
@@ -445,5 +458,10 @@ mod tests {
 
 		let res = store.ecdsa_sign_prehashed(ECDSA, &pair.public(), &msg).unwrap();
 		assert!(res.is_some());
+	}
+
+	#[test]
+	fn bandersnatch_vrf_sign() {
+		panic!("TODO")
 	}
 }

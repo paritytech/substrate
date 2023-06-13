@@ -277,6 +277,21 @@ impl Keystore for LocalKeystore {
 		self.vrf_output::<bandersnatch::Pair>(key_type, public, input)
 	}
 
+	fn bandersnatch_ring_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		data: &bandersnatch::vrf::VrfSignData,
+		prover: &bandersnatch::ring_vrf::RingProver,
+	) -> std::result::Result<Option<bandersnatch::ring_vrf::RingVrfSignature>, TraitError> {
+		let sig = self
+			.0
+			.read()
+			.key_pair_by_type::<bandersnatch::Pair>(public, key_type)?
+			.map(|pair| pair.ring_vrf_sign(data, prover));
+		Ok(sig)
+	}
+
 	#[cfg(feature = "bls-experimental")]
 	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
 		self.public_keys::<bls381::Pair>(key_type)
