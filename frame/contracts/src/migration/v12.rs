@@ -30,6 +30,8 @@ use frame_support::{
 };
 use scale_info::prelude::format;
 #[cfg(feature = "try-runtime")]
+use sp_core::hexdisplay::HexDisplay;
+#[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, FixedPointNumber, FixedU128, Saturating};
 use sp_std::{marker::PhantomData, prelude::*};
@@ -121,7 +123,7 @@ impl<T: Config> Migrate for Migration<T> {
 			// We print this to measure the impact of the migration.
 			// Storage removed: deleted PrefabWasmModule's encoded len.
 			// Storage added: determinism field encoded len (as all other CodeInfo fields are the
-			// same as in the deleted OwnerInfo)
+			// same as in the deleted OwnerInfo).
 			log::debug!(
 				target: LOG_TARGET,
 				"Storage removed: 1 item, {} bytes",
@@ -160,7 +162,7 @@ impl<T: Config> Migrate for Migration<T> {
 				.saturating_add(price_per_item.saturating_mul(items_after.into()));
 			let deposit = ratio.saturating_mul_int(deposit_expected_after);
 
-			let info = CodeInfo {
+			let info = CodeInfo::<T> {
 				determinism: module.determinism,
 				owner: old.owner,
 				deposit,
@@ -172,9 +174,9 @@ impl<T: Config> Migrate for Migration<T> {
 				T::Currency::unreserve(&info.owner, amount);
 				log::debug!(
 					target: LOG_TARGET,
-					"Storage deposit unlocked: {:?} Balance, to: {:?}",
+					"Deposit refunded: {:?} Balance, to: {:?}",
 					&amount,
-					info.owner
+					HexDisplay::from(&info.owner.encode())
 				);
 			} else {
 				log::warn!(
@@ -260,26 +262,44 @@ impl<T: Config> Migrate for Migration<T> {
 
 		let mut deposit: BalanceOf<T> = Default::default();
 		let mut items = 0u32;
+		let mut storage_info = 0u32;
 		CodeInfoOf::<T>::iter().for_each(|(_k, v)| {
 			deposit += v.deposit;
 			items += 1;
+			storage_info += v.encoded_size() as u32;
+		});
+		let mut storage_code = 0u32;
+		PristineCode::<T>::iter().for_each(|(_k, v)| {
+			storage_code += v.len() as u32;
 		});
 		let old_deposit = state.1;
-		let storage = state.2;
+		let storage_module = state.2;
 		// CodeInfoOf::max_encoded_len == OwnerInfoOf::max_encoded_len + 1
-		let bytes_removed = items.clone();
-		// We removed 1 storage item (PrefabWasmMod) for every stored contract code.
+		// I.e. code info adds up 1 byte per record.
+		let info_bytes_added = items.clone();
+		// We removed 1 PrefabWasmModule, and added 1 byte of determinism flag, per contract code.
+		let storage_removed = storage_module.saturating_sub(info_bytes_added);
+		// module+code+info - bytes
+		let storage_was = storage_module
+			.saturating_add(storage_code)
+			.saturating_add(storage_info)
+			.saturating_sub(info_bytes_added);
+		// We removed 1 storage item (PrefabWasmMod) for every stored contract code (was stored 3
+		// items per code).
 		let items_removed = items;
 		log::info!(
 			target: LOG_TARGET,
-			"Storage freed, bytes: {}, items: {}",
-			storage.saturating_sub(bytes_removed),
-			items_removed
+			"Storage freed, bytes: {} (of {}), items: {} (of {})",
+			storage_removed,
+			storage_was,
+			items_removed,
+			items_removed * 3,
 		);
 		log::info!(
 			target: LOG_TARGET,
-			"Deposits returned, total: {:?} Balance",
-			old_deposit.saturating_sub(deposit)
+			"Deposits returned, total: {:?} Balance (of {:?} Balance)",
+			old_deposit.saturating_sub(deposit),
+			old_deposit,
 		);
 
 		Ok(())
