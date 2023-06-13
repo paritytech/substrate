@@ -344,11 +344,15 @@ lto = "fat"
 codegen-units = 1
 
 [patch."https://github.com/w3f/ring-vrf"]
-bandersnatch_vrfs = { path = "/mnt/ssd/develop/w3f/ring-vrf/bandersnatch_vrfs" }
+bandersnatch_vrfs = { git = "https://github.com/davxy/ring-vrf", branch = "refactory-and-tests" }
+# bandersnatch_vrfs = { path = "/mnt/ssd/develop/w3f/ring-vrf/bandersnatch_vrfs" }
 
 [patch."https://github.com/w3f/fflonk"]
-fflonk = { path = "/mnt/ssd/develop/w3f/fflonk" }
+fflonk = { git = "https://github.com/davxy/fflonk", branch = "no-std" }
+# fflonk = { path = "/mnt/ssd/develop/w3f/fflonk" }
 
 [patch."https://github.com/w3f/ring-proof"]
-common = { path = "/mnt/ssd/develop/w3f/ring-proof/common" }
-ring = { path = "/mnt/ssd/develop/w3f/ring-proof/ring" }
+common = { git = "https://github.com/davxy/ring-proof", branch = "no-std" }
+ring = { git = "https://github.com/davxy/ring-proof", branch = "no-std" }
+# common = { path = "/mnt/ssd/develop/w3f/ring-proof/common" }
+# ring = { path = "/mnt/ssd/develop/w3f/ring-proof/ring" }
