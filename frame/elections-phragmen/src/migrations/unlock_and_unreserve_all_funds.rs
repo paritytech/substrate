@@ -193,7 +193,7 @@ where
 		}
 
 		// Staked funds need to be unlocked.
-		for (account, amount) in account_staked_sums.iter() {
+		for (account, _amount) in account_staked_sums.iter() {
 			T::Currency::remove_lock(T::PalletId::get(), account);
 		}
 
