@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 
 //! # `pallet-migrations`
@@ -271,28 +272,53 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Runtime upgrade started with `migrations` in the queue.
+		/// A Runtime upgrade started.
 		///
-		/// This can be used to design a progress indicator in combination with counting the
-		/// `MigrationCompleted` and `MigrationSkippedHistoric` events.
-		UpgradeStarted { migrations: u32 },
-		/// Runtime upgrade completed with `migrations`.
+		/// Its end is indicated by `UpgradeCompleted` or `UpgradeFailed`.
+		UpgradeStarted {
+			/// The number of migrations that this upgrade contains.
+			///
+			/// This can be used to design a progress indicator in combination with counting the
+			/// `MigrationCompleted` and `MigrationSkippedHistoric` events.
+			migrations: u32,
+		},
+		/// The current runtime upgrade completed.
+		///
+		/// This implies that all of its migrations completed successfully as well.
 		UpgradeCompleted,
 		/// Runtime upgrade failed.
 		///
 		/// This is very bad and will require governance intervention.
 		UpgradeFailed,
-		/// Migration `index` was skipped, since it already executed in the past.
-		MigrationSkippedHistoric { index: u32 },
-		/// Migration `index` made progress.
-		MigrationAdvanced { index: u32, blocks: T::BlockNumber },
-		/// Migration `index` completed.
-		MigrationCompleted { index: u32, blocks: T::BlockNumber },
-		/// Migration `index` failed.
+		/// A migration was skipped since it was already executed in the past.
+		MigrationSkippedHistoric {
+			/// The index of the skipped migration within the [`Config::Migrations`] list.
+			index: u32,
+		},
+		/// A migration progressed.
+		MigrationAdvanced {
+			/// The index of the migration within the [`Config::Migrations`] list.
+			index: u32,
+			/// The number of blocks that elapsed since the migration started.
+			blocks: T::BlockNumber,
+		},
+		/// A Migration completed.
+		MigrationCompleted {
+			/// The index of the migration within the [`Config::Migrations`] list.
+			index: u32,
+			/// The number of blocks that elapsed since the migration started.
+			blocks: T::BlockNumber,
+		},
+		/// A Migration failed.
 		///
 		/// This implies that the whole upgrade failed and governance intervention is required.
-		MigrationFailed { index: u32, blocks: T::BlockNumber },
-		/// The list of historical migrations has been cleared.
+		MigrationFailed {
+			/// The index of the migration within the [`Config::Migrations`] list.
+			index: u32,
+			/// The number of blocks that elapsed since the migration started.
+			blocks: T::BlockNumber,
+		},
+		/// The set of historical migrations has been cleared.
 		HistoricCleared {
 			/// Should be passed to `clear_historic` in a successive call.
 			next_cursor: Option<Vec<u8>>,
@@ -302,11 +328,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			Self::start_mbm()
+			Self::onboard_new_mbms()
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			Self::progress_mbm(n)
+			Self::progress_mbms(n)
 		}
 	}
 
@@ -350,21 +376,15 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Starts the process of multi block migrations.
+	/// Onboard all new Multi-Block-Migrations and start the process of executing them.
 	///
-	/// Should only be called once all migrations completed.
-	fn start_mbm() -> Weight {
-		use FailedUpgradeHandling::*;
-
+	/// Should only be called once all previous migrations completed.
+	fn onboard_new_mbms() -> Weight {
 		if let Some(cursor) = Cursor::<T>::get() {
 			log::error!(target: LOG, "Ongoing migrations interrupted - chain stuck");
-			Self::deposit_event(Event::UpgradeFailed);
 
 			let maybe_index = cursor.as_active().map(|c| c.index);
-			match T::UpgradeStatusNotify::failed(maybe_index) {
-				KeepStuck => Cursor::<T>::set(Some(MigrationCursor::Stuck)),
-				ForceUnstuck => Cursor::<T>::kill(),
-			}
+			Self::upgrade_failed(maybe_index);
 			return T::WeightInfo::on_runtime_upgrade()
 		}
 
@@ -385,14 +405,14 @@ impl<T: Config> Pallet<T> {
 		T::WeightInfo::on_runtime_upgrade()
 	}
 
-	/// Tries to make progress on the multi block migrations.
-	fn progress_mbm(n: T::BlockNumber) -> Weight {
+	/// Tries to make progress on the Multi-Block-Migrations process.
+	fn progress_mbms(n: T::BlockNumber) -> Weight {
 		let mut meter = WeightMeter::from_limit(T::ServiceWeight::get());
 		meter.defensive_saturating_accrue(T::WeightInfo::on_init_base());
 
 		let mut cursor = match Cursor::<T>::get() {
 			None => {
-				log::debug!(target: LOG, "[Block {n:?}] Waiting for cursor to become `Some`.");
+				log::trace!(target: LOG, "[Block {n:?}] Waiting for cursor to become `Some`.");
 				return meter.consumed
 			},
 			Some(MigrationCursor::Active(cursor)) => cursor,
@@ -453,8 +473,7 @@ impl<T: Config> Pallet<T> {
 				// We only progress one step per block.
 				if migration.max_steps().map_or(false, |max| blocks > max.into()) {
 					Self::deposit_event(Event::MigrationFailed { index: cursor.index, blocks });
-					Self::deposit_event(Event::UpgradeFailed);
-					Cursor::<T>::set(Some(MigrationCursor::Stuck));
+					Self::upgrade_failed(Some(cursor.index));
 					None
 				} else {
 					// A migration cannot progress more than one step per block, we therefore break.
@@ -469,17 +488,26 @@ impl<T: Config> Pallet<T> {
 			},
 			Err(SteppedMigrationError::InsufficientWeight { required }) => {
 				if is_first || required.any_gt(meter.limit) {
-					Cursor::<T>::set(Some(MigrationCursor::Stuck));
-					Self::deposit_event(Event::UpgradeFailed);
+					// Note: No `MigrationFailed` event since the migration did not fail.
+					Self::upgrade_failed(Some(cursor.index));
 				} // else: Hope that it gets better in the next block.
 				return None
 			},
 			Err(SteppedMigrationError::InvalidCursor | SteppedMigrationError::Failed) => {
 				Self::deposit_event(Event::MigrationFailed { index: cursor.index, blocks });
-				Self::deposit_event(Event::UpgradeFailed);
-				Cursor::<T>::set(Some(MigrationCursor::Stuck));
+				Self::upgrade_failed(Some(cursor.index));
 				return None
 			},
+		}
+	}
+
+	fn upgrade_failed(migration: Option<u32>) {
+		use FailedUpgradeHandling::*;
+		Self::deposit_event(Event::UpgradeFailed);
+
+		match T::UpgradeStatusNotify::failed(migration) {
+			KeepStuck => Cursor::<T>::set(Some(MigrationCursor::Stuck)),
+			ForceUnstuck => Cursor::<T>::kill(),
 		}
 	}
 }

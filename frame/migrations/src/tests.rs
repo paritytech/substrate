@@ -19,7 +19,7 @@
 
 use crate::{
 	mock::{MockedMigrationKind::*, Test as T, *},
-	Cursor, Event, MigrationCursor,
+	Cursor, Event, FailedUpgradeHandling, MigrationCursor,
 };
 use frame_support::traits::OnRuntimeUpgrade;
 
@@ -92,6 +92,68 @@ fn basic_works() {
 }
 
 #[test]
+fn failing_migration_keep_stuck_the_chain() {
+	test_closure(|| {
+		FailedUpgradeResponse::set(FailedUpgradeHandling::KeepStuck);
+		// Add three migrations. Each taking one block longer.
+		MigrationsStorage::set(vec![(FailAfter, 2)]);
+
+		System::set_block_number(1);
+		Migrations::on_runtime_upgrade();
+		run_to_block(10);
+
+		// Failed migrations are not recorded in `Historical`.
+		assert!(historic().is_empty());
+		// Check that we got all events.
+		assert_events(vec![
+			Event::UpgradeStarted { migrations: 1 },
+			Event::MigrationAdvanced { index: 0, blocks: 1 },
+			Event::MigrationAdvanced { index: 0, blocks: 2 },
+			Event::MigrationFailed { index: 0, blocks: 3 },
+			Event::UpgradeFailed,
+		]);
+
+		// Check that the handler was called correctly.
+		assert_eq!(UpgradesStarted::take(), 1);
+		assert_eq!(UpgradesCompleted::take(), 0);
+		assert_eq!(UpgradesFailed::take(), vec![Some(0)]);
+
+		assert_eq!(Cursor::<T>::get(), Some(MigrationCursor::Stuck), "Must stuck the chain");
+	});
+}
+
+#[test]
+fn failing_migration_force_unstuck_the_chain() {
+	test_closure(|| {
+		FailedUpgradeResponse::set(FailedUpgradeHandling::ForceUnstuck);
+		// Add three migrations. Each taking one block longer.
+		MigrationsStorage::set(vec![(FailAfter, 2)]);
+
+		System::set_block_number(1);
+		Migrations::on_runtime_upgrade();
+		run_to_block(10);
+
+		// Failed migrations are not recorded in `Historical`.
+		assert!(historic().is_empty());
+		// Check that we got all events.
+		assert_events(vec![
+			Event::UpgradeStarted { migrations: 1 },
+			Event::MigrationAdvanced { index: 0, blocks: 1 },
+			Event::MigrationAdvanced { index: 0, blocks: 2 },
+			Event::MigrationFailed { index: 0, blocks: 3 },
+			Event::UpgradeFailed,
+		]);
+
+		// Check that the handler was called correctly.
+		assert_eq!(UpgradesStarted::take(), 1);
+		assert_eq!(UpgradesCompleted::take(), 0);
+		assert_eq!(UpgradesFailed::take(), vec![Some(0)]);
+
+		assert!(Cursor::<T>::get().is_none(), "Must unstuck the chain");
+	});
+}
+
+#[test]
 fn historic_skipping_works() {
 	test_closure(|| {
 		MigrationsStorage::set(vec![
@@ -128,6 +190,7 @@ fn historic_skipping_works() {
 			Event::MigrationSkippedHistoric { index: 4 },
 			Event::UpgradeCompleted,
 		]);
+		assert_eq!(upgrades_started_completed_failed(), (1, 1, 0));
 
 		// Now go for another upgrade; just to make sure that it wont execute again.
 		System::reset_events();
@@ -154,6 +217,7 @@ fn historic_skipping_works() {
 			Event::MigrationSkippedHistoric { index: 4 },
 			Event::UpgradeCompleted,
 		]);
+		assert_eq!(upgrades_started_completed_failed(), (1, 1, 0));
 	});
 }
 
@@ -178,11 +242,14 @@ fn upgrade_fails_when_migration_active() {
 			Event::MigrationAdvanced { index: 0, blocks: 1 },
 			Event::MigrationAdvanced { index: 0, blocks: 2 },
 		]);
+		assert_eq!(upgrades_started_completed_failed(), (1, 0, 0));
+
 		// Upgrade again.
 		Migrations::on_runtime_upgrade();
 		// -- Defensive path --
 		assert_eq!(Cursor::<T>::get(), Some(MigrationCursor::Stuck));
 		assert_events(vec![Event::UpgradeFailed]);
+		assert_eq!(upgrades_started_completed_failed(), (0, 0, 1));
 	});
 }
 
@@ -205,6 +272,7 @@ fn migration_timeout_errors() {
 			Event::MigrationFailed { index: 0, blocks: 4 },
 			Event::UpgradeFailed,
 		]);
+		assert_eq!(upgrades_started_completed_failed(), (1, 0, 1));
 
 		// Failed migrations are not black-listed.
 		assert!(historic().is_empty());
@@ -215,5 +283,6 @@ fn migration_timeout_errors() {
 
 		assert_events(vec![Event::UpgradeFailed]);
 		assert_eq!(Cursor::<T>::get(), Some(MigrationCursor::Stuck));
+		assert_eq!(upgrades_started_completed_failed(), (0, 0, 1));
 	});
 }

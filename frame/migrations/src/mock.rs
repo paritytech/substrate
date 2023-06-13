@@ -158,7 +158,7 @@ impl crate::Config for Test {
 	type Migrations = MigrationsStorage;
 	type Cursor = MockedCursor;
 	type Identifier = MockedIdentifier;
-	type UpgradeStatusNotify = LoggingUpgradeStatusNotify<()>;
+	type UpgradeStatusNotify = MockedUpgradeStatusNotify;
 	type ServiceWeight = ServiceWeight;
 	type WeightInfo = ();
 }
@@ -224,24 +224,37 @@ pub fn assert_events<E: IntoRecord>(events: Vec<E>) {
 	System::reset_events();
 }
 
-/// Wraps an [`UpgradeStatusNotify`] and adds logging.
-pub struct LoggingUpgradeStatusNotify<T>(core::marker::PhantomData<T>);
-impl<T: UpgradeStatusNotify> UpgradeStatusNotify for LoggingUpgradeStatusNotify<T> {
+frame_support::parameter_types! {
+	pub static UpgradesStarted: u32 = 0;
+	pub static UpgradesCompleted: u32 = 0;
+	pub static UpgradesFailed: Vec<Option<u32>> = vec![];
+
+	pub static FailedUpgradeResponse: FailedUpgradeHandling = FailedUpgradeHandling::KeepStuck;
+}
+
+pub struct MockedUpgradeStatusNotify;
+impl UpgradeStatusNotify for MockedUpgradeStatusNotify {
 	fn started() {
 		log::info!("UpgradeStatusNotify started");
-		T::started();
+		UpgradesStarted::mutate(|v| *v += 1);
 	}
 
 	fn completed() {
 		log::info!("UpgradeStatusNotify completed");
-		T::completed();
+		UpgradesCompleted::mutate(|v| *v += 1);
 	}
 
 	fn failed(migration: Option<u32>) -> FailedUpgradeHandling {
-		let res = T::failed(migration);
+		UpgradesFailed::mutate(|v| v.push(migration));
+		let res = FailedUpgradeResponse::get();
 		log::error!("UpgradeStatusNotify failed at: {migration:?}, handling as {res:?}");
 		res
 	}
+}
+
+/// Returns the number of `(started, completed, failed)` upgrades and resets their numbers.
+pub fn upgrades_started_completed_failed() -> (u32, u32, u32) {
+	(UpgradesStarted::take(), UpgradesCompleted::take(), UpgradesFailed::take().len() as u32)
 }
 
 pub fn mocked_id(kind: MockedMigrationKind, steps: u32) -> MockedIdentifier {
