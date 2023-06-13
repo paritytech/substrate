@@ -117,7 +117,7 @@ impl From<Option<KeystorePtr>> for BeefyKeystore {
 
 #[cfg(test)]
 pub mod tests {
-	use sp_consensus_beefy::{crypto, Keyring};
+	use sp_consensus_beefy::{ecdsa_crypto, Keyring};
 	use sp_core::{ecdsa, Pair};
 	use sp_keystore::testing::MemoryKeystore;
 
@@ -156,35 +156,51 @@ pub mod tests {
 
 	#[test]
 	fn pair_works() {
-		let want = crypto::Pair::from_string("//Alice", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Alice", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Alice.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Bob", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Bob", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Bob.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Charlie", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Charlie", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Charlie.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Dave", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Dave", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Dave.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Eve", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Eve", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Eve.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Ferdie", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Ferdie", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Ferdie.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//One", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//One", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::One.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Two", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Two", None)
+			.expect("Pair failed")
+			.to_raw_vec();
 		let got = Keyring::Two.pair().to_raw_vec();
 		assert_eq!(want, got);
 	}
@@ -193,7 +209,7 @@ pub mod tests {
 	fn authority_id_works() {
 		let store = keystore();
 
-		let alice: crypto::Public = store
+		let alice: ecdsa_crypto::Public = store
 			.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 			.ok()
 			.unwrap()
@@ -219,7 +235,7 @@ pub mod tests {
 	fn sign_works() {
 		let store = keystore();
 
-		let alice: crypto::Public = store
+		let alice: ecdsa_crypto::Public = store
 			.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 			.ok()
 			.unwrap()
@@ -268,7 +284,7 @@ pub mod tests {
 	fn verify_works() {
 		let store = keystore();
 
-		let alice: crypto::Public = store
+		let alice: ecdsa_crypto::Public = store
 			.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 			.ok()
 			.unwrap()
@@ -308,8 +324,8 @@ pub mod tests {
 		let _ = add_key(KEY_TYPE, Some(Keyring::Dave.to_seed().as_str()));
 		let _ = add_key(KEY_TYPE, Some(Keyring::Eve.to_seed().as_str()));
 
-		let key1: crypto::Public = add_key(KEY_TYPE, None).into();
-		let key2: crypto::Public = add_key(KEY_TYPE, None).into();
+		let key1: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
+		let key2: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
 
 		let store: BeefyKeystore = Some(store).into();
 

@@ -477,7 +477,7 @@ pub(crate) mod tests {
 	use crate::keystore::BeefyKeystore;
 	use sc_network_test::Block;
 	use sp_consensus_beefy::{
-		crypto::Signature, known_payloads, Commitment, Keyring, MmrRootHash, Payload,
+		ecdsa_crypto::Signature, known_payloads, Commitment, Keyring, MmrRootHash, Payload,
 		SignedCommitment, VoteMessage, KEY_TYPE,
 	};
 	use sp_keystore::{testing::MemoryKeystore, Keystore};

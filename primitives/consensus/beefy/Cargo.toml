@@ -24,8 +24,8 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../runti
 sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 strum = { version = "0.24.1", features = ["derive"], default-features = false }
 lazy_static = "1.4.0"
-w3f-bls = { version = "0.1.3", default-features = false, optional = true}                                                                                                                    
-apk-proofs = {git = "https://github.com/w3f/apk-proofs", default-features = false}
+w3f-bls = { version = "0.1.3", default-features = false, optional = true}
+
 ark-serialize = { version = "0.4.0", default-features = false, features = [ "derive" ] }
 
 [dev-dependencies]

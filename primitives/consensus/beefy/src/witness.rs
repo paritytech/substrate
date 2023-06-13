@@ -91,7 +91,7 @@ mod tests {
 	#[cfg(feature = "bls-experimental")]
 	use w3f_bls::{
 		single_pop_aggregator::SignatureAggregatorAssumingPoP, Message, SerializableToBytes,
-		Signed, BLS377,
+		Signed, TinyBLS377,
 	};
 
 	type TestCommitment = Commitment<u128>;
@@ -202,27 +202,32 @@ mod tests {
 
 		// when
 		let (witness, _signatures) =
+		        //from signed take a function as the aggregator 
 			TestBLSSignedCommitmentWitness::from_signed::<_, _>(signed, |sigs| {
-				//we are going to aggregate the signatures here
+			    //we are going to aggregate the signatures here
+			    let mut aggregatedsigs: SignatureAggregatorAssumingPoP<TinyBLS377> =
+				SignatureAggregatorAssumingPoP::new(Message::new(b"", b"mock payload"));
 
-				let mut aggregatedsigs: SignatureAggregatorAssumingPoP<BLS377> =
-					SignatureAggregatorAssumingPoP::new(Message::new(b"", b"mock payload"));
-				let _ = sigs.iter().filter_map(|sig| {
-					sig.clone().map(|sig| {
-						aggregatedsigs.add_signature(
-							&(w3f_bls::Signature::from_bytes(
-								<BLSSignature as AsRef<[u8]>>::as_ref(&sig.1.clone())
-									.try_into()
-									.unwrap(),
-							))
-							.unwrap(),
-						)
-					})
-				});
-				(&aggregatedsigs).signature().to_bytes()
+			    for sig in sigs {
+				match sig {
+				    Some(sig) =>
+				    {
+					let serialized_sig : Vec<u8> = (*sig.1).to_vec();
+					aggregatedsigs.add_signature(
+					    &w3f_bls::Signature::<TinyBLS377>::from_bytes(
+						serialized_sig.as_slice()
+					     ).unwrap());
+					    },
+				    None => (),
+				}
+			    }
+			    (&aggregatedsigs).signature().to_bytes()
 			});
 
-		BLSSignature::try_from(witness.signature_accumulator.as_slice()).unwrap();
+		//We can't use BLSSignature::try_from because it expected 112Bytes (CP (64) + BLS 48)
+		// single signature while we are having a BLS aggregated signature corresponding to no CP.
+		w3f_bls::Signature::<TinyBLS377>::from_bytes(witness.signature_accumulator.as_slice())
+			.unwrap();
 	}
 
 	#[test]
