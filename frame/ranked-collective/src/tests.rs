@@ -464,34 +464,52 @@ fn ensure_ranked_works() {
 		type Rank2 = EnsureRanked<Test, (), 2>;
 		type Rank3 = EnsureRanked<Test, (), 3>;
 		type Rank4 = EnsureRanked<Test, (), 4>;
-		assert_eq!(Rank1::try_origin(RuntimeOrigin::signed(1)).unwrap(), 1);
-		assert_eq!(Rank1::try_origin(RuntimeOrigin::signed(2)).unwrap(), 2);
-		assert_eq!(Rank1::try_origin(RuntimeOrigin::signed(3)).unwrap(), 3);
+		assert_eq!(<Rank1 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(1)).unwrap(), 1);
+		assert_eq!(<Rank1 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(2)).unwrap(), 2);
+		assert_eq!(<Rank1 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(3)).unwrap(), 3);
 		assert_eq!(
-			Rank2::try_origin(RuntimeOrigin::signed(1)).unwrap_err().as_signed().unwrap(),
+			<Rank2 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(1))
+				.unwrap_err()
+				.into_signer()
+				.unwrap(),
 			1
 		);
-		assert_eq!(Rank2::try_origin(RuntimeOrigin::signed(2)).unwrap(), 2);
-		assert_eq!(Rank2::try_origin(RuntimeOrigin::signed(3)).unwrap(), 3);
+		assert_eq!(<Rank2 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(2)).unwrap(), 2);
+		assert_eq!(<Rank2 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(3)).unwrap(), 3);
 		assert_eq!(
-			Rank3::try_origin(RuntimeOrigin::signed(1)).unwrap_err().as_signed().unwrap(),
+			<Rank3 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(1))
+				.unwrap_err()
+				.into_signer()
+				.unwrap(),
 			1
 		);
 		assert_eq!(
-			Rank3::try_origin(RuntimeOrigin::signed(2)).unwrap_err().as_signed().unwrap(),
+			<Rank3 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(2))
+				.unwrap_err()
+				.into_signer()
+				.unwrap(),
 			2
 		);
-		assert_eq!(Rank3::try_origin(RuntimeOrigin::signed(3)).unwrap(), 3);
+		assert_eq!(<Rank3 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(3)).unwrap(), 3);
 		assert_eq!(
-			Rank4::try_origin(RuntimeOrigin::signed(1)).unwrap_err().as_signed().unwrap(),
+			<Rank4 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(1))
+				.unwrap_err()
+				.into_signer()
+				.unwrap(),
 			1
 		);
 		assert_eq!(
-			Rank4::try_origin(RuntimeOrigin::signed(2)).unwrap_err().as_signed().unwrap(),
+			<Rank4 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(2))
+				.unwrap_err()
+				.into_signer()
+				.unwrap(),
 			2
 		);
 		assert_eq!(
-			Rank4::try_origin(RuntimeOrigin::signed(3)).unwrap_err().as_signed().unwrap(),
+			<Rank4 as EnsureOrigin<_>>::try_origin(RuntimeOrigin::signed(3))
+				.unwrap_err()
+				.into_signer()
+				.unwrap(),
 			3
 		);
 	});
