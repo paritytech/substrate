@@ -17,6 +17,8 @@
 
 //! Trie-based state machine backend.
 
+use core::borrow::Borrow;
+
 #[cfg(feature = "std")]
 use crate::backend::AsTrieBackend;
 use crate::{
@@ -39,43 +41,6 @@ use sp_trie::{MemoryDB, StorageProof};
 /// This is required to have the type available for [`TrieBackendBuilder`] and [`TrieBackend`].
 #[cfg(not(feature = "std"))]
 pub struct LocalTrieCache<H>(sp_std::marker::PhantomData<H>);
-
-/// Special trait to support taking the [`LocalTrieCache`] by value or by reference.
-///
-/// This trait is internal use only and to emphasize this, the trait is sealed.
-pub trait AsLocalTrieCache<H: Hasher>: sealed::Sealed {
-	/// Returns `self` as [`LocalTrieCache`].
-	#[cfg(feature = "std")]
-	fn as_local_trie_cache(&self) -> &LocalTrieCache<H>;
-}
-
-impl<H: Hasher> AsLocalTrieCache<H> for LocalTrieCache<H> {
-	#[cfg(feature = "std")]
-	#[inline]
-	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
-		self
-	}
-}
-
-#[cfg(feature = "std")]
-impl<H: Hasher> AsLocalTrieCache<H> for &LocalTrieCache<H> {
-	#[inline]
-	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
-		self
-	}
-}
-
-/// Special module that contains the `Sealed` trait.
-mod sealed {
-	use super::*;
-
-	/// A special trait which prevents externals to implement the [`AsLocalTrieCache`] outside
-	/// of this crate.
-	pub trait Sealed {}
-
-	impl<H: Hasher> Sealed for LocalTrieCache<H> {}
-	impl<H: Hasher> Sealed for &LocalTrieCache<H> {}
-}
 
 /// Builder for creating a [`TrieBackend`].
 pub struct TrieBackendBuilder<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H>> {
@@ -228,7 +193,8 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = LocalTrieCache<H
 	next_storage_key_cache: CacheCell<Option<CachedIter<S, H, C>>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> TrieBackend<S, H, C>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: Borrow<LocalTrieCache<H>> + Send + Sync>
+	TrieBackend<S, H, C>
 where
 	H::Out: Codec,
 {
@@ -276,7 +242,7 @@ where
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> sp_std::fmt::Debug
+impl<S: TrieBackendStorage<H>, H: Hasher, C: Borrow<LocalTrieCache<H>>> sp_std::fmt::Debug
 	for TrieBackend<S, H, C>
 {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
@@ -284,7 +250,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> sp_std::fmt::D
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> Backend<H>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: Borrow<LocalTrieCache<H>> + Send + Sync> Backend<H>
 	for TrieBackend<S, H, C>
 where
 	H::Out: Ord + Codec,
