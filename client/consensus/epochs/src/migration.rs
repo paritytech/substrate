@@ -21,7 +21,7 @@
 use crate::{Epoch, EpochChanges, PersistedEpoch, PersistedEpochHeader};
 use codec::{Decode, Encode};
 use fork_tree::ForkTree;
-use sp_runtime::traits::{Block as BlockT, HeaderProvider, NumberFor};
+use sp_runtime::traits::{HeaderProvider, NumberFor};
 use std::collections::BTreeMap;
 
 /// Legacy definition of epoch changes.
