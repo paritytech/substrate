@@ -50,7 +50,7 @@ mod fungible_conformance_tests;
 mod fungible_tests;
 mod reentrancy_tests;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 #[derive(
@@ -73,10 +73,7 @@ pub enum TestId {
 }
 
 frame_support::construct_runtime!(
-	pub struct Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub struct Test
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},

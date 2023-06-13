@@ -31,7 +31,7 @@ use futures::{
 use libp2p::PeerId;
 use log::trace;
 use prometheus_endpoint::Registry;
-use sp_runtime::traits::{Block as BlockT, HeaderProvider};
+use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{HashMap, VecDeque},
 	pin::Pin,
@@ -344,7 +344,7 @@ mod tests {
 	use sc_network_common::{role::ObservedRole, sync::SyncEventStream};
 	use sp_runtime::{
 		testing::H256,
-		traits::{Block as BlockT, NumberFor},
+		traits::{Block as BlockT, HeaderProvider, NumberFor},
 	};
 	use std::{
 		collections::HashSet,

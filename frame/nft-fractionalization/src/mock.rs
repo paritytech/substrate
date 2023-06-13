@@ -34,7 +34,7 @@ use sp_runtime::{
 	MultiSignature,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 type Signature = MultiSignature;
 type AccountPublic = <Signature as Verify>::Signer;
@@ -42,10 +42,7 @@ type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
 
 // Configure a mock runtime to test the pallet.
 construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		NftFractionalization: pallet_nft_fractionalization,

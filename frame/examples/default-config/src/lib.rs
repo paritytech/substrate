@@ -117,7 +117,7 @@ pub mod tests {
 
 	use super::pallet as pallet_default_config_example;
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
