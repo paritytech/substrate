@@ -541,7 +541,6 @@ where
 			.rpc_get_keys_paged(prefix.clone(), at)
 			.await?
 			.into_iter()
-			.filter(|k| !is_default_child_storage_key(&k.0))
 			.collect::<Vec<_>>();
 		sp.stop_with_message(format!(
 			"✅ Found {} keys ({:.2}s)",
@@ -609,7 +608,14 @@ where
 
 		let mut sp = Spinner::with_timer(Spinners::Dots, "Inserting keys into DB...".into());
 		let start = Instant::now();
-		pending_ext.batch_insert(key_values.clone().into_iter().map(|(k, v)| (k.0, v.0)));
+		pending_ext.batch_insert(key_values.clone().into_iter().filter_map(|(k, v)| {
+			// Don't insert the child keys here, they need to be inserted seperately with all their
+			// data in the load_child_remote function.
+			match is_default_child_storage_key(&k.0) {
+				true => None,
+				false => Some((k.0, v.0)),
+			}
+		}));
 		sp.stop_with_message(format!(
 			"✅ Inserted keys into DB ({:.2}s)",
 			start.elapsed().as_secs_f32()
@@ -727,6 +733,10 @@ where
 			.collect::<Vec<_>>();
 
 		if child_roots.is_empty() {
+			info!(
+				target: LOG_TARGET,
+				"👩‍👦 no child roots found to scrape",
+			);
 			return Ok(Default::default())
 		}
 
