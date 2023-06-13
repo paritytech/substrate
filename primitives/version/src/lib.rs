@@ -43,12 +43,12 @@ use std::fmt;
 use codec::{Decode, Encode, Input};
 use scale_info::TypeInfo;
 pub use sp_runtime::{create_runtime_str, StateVersion};
-use sp_runtime::{traits::HeaderProvider, RuntimeString};
+use sp_runtime::RuntimeString;
 #[doc(hidden)]
 pub use sp_std;
 
 #[cfg(feature = "std")]
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, HeaderProvider};
 
 #[cfg(feature = "std")]
 pub mod embed;
