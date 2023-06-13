@@ -35,7 +35,9 @@ use sp_std::{marker::PhantomData, prelude::*};
 mod old {
 	use super::*;
 
-	#[derive(Encode, Decode)]
+	#[derive(Encode, Decode, scale_info::TypeInfo)]
+	#[codec(mel_bound())]
+	#[scale_info(skip_type_params(T))]
 	pub struct OwnerInfo<T: Config> {
 		pub owner: AccountIdOf<T>,
 		#[codec(compact)]
@@ -44,7 +46,9 @@ mod old {
 		pub refcount: u64,
 	}
 
-	#[derive(Encode, Decode)]
+	#[derive(Encode, Decode, scale_info::TypeInfo)]
+	#[codec(mel_bound())]
+	#[scale_info(skip_type_params(T))]
 	pub struct PrefabWasmModule {
 		#[codec(compact)]
 		pub instruction_weights_version: u32,
@@ -104,12 +108,13 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
+			log::debug!(target: LOG_TARGET, "In THE STEP!");
 		let mut iter = if let Some(last_key) = self.last_key.take() {
 			old::OwnerInfoOf::<T>::iter_from(last_key.to_vec())
 		} else {
 			old::OwnerInfoOf::<T>::iter()
 		};
-
+		log::debug!(target: LOG_TARGET, "BEFORE start iterating!");
 		if let Some((key, old)) = iter.next() {
 			log::debug!(target: LOG_TARGET, "Migrating OwnerInfo for code_hash {:?}", key);
 			let module = old::CodeStorage::<T>::take(key).unwrap_or_else(|| {
@@ -159,8 +164,10 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
+		let len = 5;
+		log::debug!(target: LOG_TARGET, "Taking sample of {} owner infos", len);
 		let sample: Vec<_> = old::OwnerInfoOf::<T>::iter()
-			.take(100)
+			.take(len)
 			.map(|(k, v)| {
 				let module = old::CodeStorage::<T>::get(k)
 					.expect("No PrefabWasmModule found for code_hash: {:?}");
@@ -174,7 +181,6 @@ impl<T: Config> Migrate for Migration<T> {
 			})
 			.collect();
 
-		log::debug!(target: LOG_TARGET, "Taking sample of {} owner infos", sample.len());
 		Ok(sample.encode())
 	}
 
