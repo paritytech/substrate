@@ -501,7 +501,6 @@ fn test_instances_without_reuse_are_not_leaked() {
 #[test]
 fn test_rustix_version_matches_with_wasmtime() {
 	let metadata = cargo_metadata::MetadataCommand::new()
-		.manifest_path("../../../Cargo.toml")
 		.exec()
 		.unwrap();
 
