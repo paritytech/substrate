@@ -38,10 +38,7 @@ impl frame_system::Config for Runtime {
 }
 
 construct_runtime! {
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
 		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
 		Pallet: test_pallet::{Pallet, Config},

@@ -154,10 +154,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), 
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 frame_support::construct_runtime!(
-	pub enum RuntimeOriginTest where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub enum RuntimeOriginTest
 	{
 		System: frame_support_test,
 		NestedModule: nested::module,
