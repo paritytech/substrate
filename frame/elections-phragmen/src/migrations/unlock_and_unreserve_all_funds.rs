@@ -188,17 +188,11 @@ where
 
 		// Deposited funds need to be unreserved.
 		for (account, unreserve_amount) in account_deposited_sums.iter() {
-			if unreserve_amount.is_zero() {
-				continue
-			}
 			T::Currency::unreserve(&account, *unreserve_amount);
 		}
 
 		// Staked funds need to be unlocked.
 		for (account, amount) in account_staked_sums.iter() {
-			if amount.is_zero() {
-				continue
-			}
 			T::Currency::remove_lock(T::PalletId::get(), account);
 		}
 
