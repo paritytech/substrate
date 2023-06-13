@@ -127,9 +127,9 @@ fn testnet_genesis(
 		},
 		sassafras: SassafrasConfig {
 			#[cfg(feature = "use-session-pallet")]
-			authorities: vec![],
+			authorities: Vec::new(),
 			#[cfg(not(feature = "use-session-pallet"))]
-			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 0)).collect(),
+			authorities: initial_authorities.iter().map(|x| x.1.clone()).collect(),
 			epoch_config: SassafrasEpochConfiguration {
 				attempts_number: SASSAFRAS_TICKETS_MAX_ATTEMPTS_NUMBER,
 				redundancy_factor: SASSAFRAS_TICKETS_REDUNDANCY_FACTOR,
