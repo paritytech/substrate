@@ -52,7 +52,7 @@ use sp_api::{
 };
 use sp_blockchain::{
 	self as blockchain, Backend as ChainBackend, CachedHeaderMetadata, Error,
-	HeaderBackend as ChainHeaderBackend, HeaderMetadata,
+	HeaderBackend as ChainHeaderBackend, HeaderMetadata, Info as BlockchainInfo,
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
@@ -717,7 +717,7 @@ where
 				operation,
 				parent_hash,
 				None,
-				info.best_hash,
+				&info,
 				make_notifications,
 			)?;
 		}
@@ -907,52 +907,56 @@ where
 	fn apply_finality_with_block_hash(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		block: Block::Hash,
+		hash: Block::Hash,
 		justification: Option<Justification>,
-		best_block: Block::Hash,
+		info: &BlockchainInfo<Block>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
-		// find tree route from last finalized to given block.
-		let last_finalized = self.backend.blockchain().last_finalized()?;
-
-		if block == last_finalized {
+		if hash == info.finalized_hash {
 			warn!(
 				"Possible safety violation: attempted to re-finalize last finalized block {:?} ",
-				last_finalized
+				hash,
 			);
 			return Ok(())
 		}
 
+		// Find tree route from last finalized to given block.
 		let route_from_finalized =
-			sp_blockchain::tree_route(self.backend.blockchain(), last_finalized, block)?;
+			sp_blockchain::tree_route(self.backend.blockchain(), info.finalized_hash, hash)?;
 
 		if let Some(retracted) = route_from_finalized.retracted().get(0) {
 			warn!(
 				"Safety violation: attempted to revert finalized block {:?} which is not in the \
 				same chain as last finalized {:?}",
-				retracted, last_finalized
+				retracted, info.finalized_hash
 			);
 
 			return Err(sp_blockchain::Error::NotInFinalizedChain)
 		}
 
-		// If there is only one leaf, best block is guaranteed to be
-		// a descendant of the new finalized block. If not,
-		// we need to check.
-		if self.backend.blockchain().leaves()?.len() > 1 {
+		// We may need to coercively update the best block if there is more than one
+		// leaf or if the finalized block number is greater than last best number recorded
+		// by the backend. This last condition may apply in case of consensus implementations
+		// not always checking this condition.
+		let block_number = self
+			.backend
+			.blockchain()
+			.number(hash)?
+			.ok_or(Error::MissingHeader(format!("{hash:?}")))?;
+		if self.backend.blockchain().leaves()?.len() > 1 || info.best_number < block_number {
 			let route_from_best =
-				sp_blockchain::tree_route(self.backend.blockchain(), best_block, block)?;
+				sp_blockchain::tree_route(self.backend.blockchain(), info.best_hash, hash)?;
 
-			// if the block is not a direct ancestor of the current best chain,
+			// If the block is not a direct ancestor of the current best chain,
 			// then some other block is the common ancestor.
-			if route_from_best.common_block().hash != block {
+			if route_from_best.common_block().hash != hash {
 				// NOTE: we're setting the finalized block as best block, this might
 				// be slightly inaccurate since we might have a "better" block
 				// further along this chain, but since best chain selection logic is
 				// plugable we cannot make a better choice here. usages that need
 				// an accurate "best" block need to go through `SelectChain`
 				// instead.
-				operation.op.mark_head(block)?;
+				operation.op.mark_head(hash)?;
 			}
 		}
 
@@ -962,8 +966,8 @@ where
 			operation.op.mark_finalized(finalize_new.hash, None)?;
 		}
 
-		assert_eq!(enacted.last().map(|e| e.hash), Some(block));
-		operation.op.mark_finalized(block, justification)?;
+		assert_eq!(enacted.last().map(|e| e.hash), Some(hash));
+		operation.op.mark_finalized(hash, justification)?;
 
 		if notify {
 			let finalized =
@@ -985,7 +989,7 @@ where
 			let header = self
 				.backend
 				.blockchain()
-				.header(block)?
+				.header(hash)?
 				.expect("Block to finalize expected to be onchain; qed");
 
 			operation.notify_finalized = Some(FinalizeSummary { header, finalized, stale_heads });
@@ -1129,7 +1133,7 @@ where
 	}
 
 	/// Get blockchain info.
-	pub fn chain_info(&self) -> blockchain::Info<Block> {
+	pub fn chain_info(&self) -> BlockchainInfo<Block> {
 		self.backend.blockchain().info()
 	}
 
@@ -1896,8 +1900,8 @@ where
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
-		let last_best = self.backend.blockchain().info().best_hash;
-		self.apply_finality_with_block_hash(operation, hash, justification, last_best, notify)
+		let info = self.backend.blockchain().info();
+		self.apply_finality_with_block_hash(operation, hash, justification, &info, notify)
 	}
 
 	fn finalize_block(

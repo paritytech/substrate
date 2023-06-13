@@ -194,12 +194,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			}
 
-			let is_provider = false;
-			let is_required = is_provider && !frame_system::Pallet::<T>::can_dec_provider(who);
-			let must_keep_alive = keep_alive || is_required;
-
 			if rest < details.min_balance {
-				if must_keep_alive {
+				if keep_alive {
 					WouldDie
 				} else {
 					ReducedToZero(rest)
@@ -231,9 +227,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				frozen.checked_add(&details.min_balance).ok_or(ArithmeticError::Overflow)?;
 			account.balance.saturating_sub(required)
 		} else {
-			let is_provider = false;
-			let is_required = is_provider && !frame_system::Pallet::<T>::can_dec_provider(who);
-			if keep_alive || is_required {
+			if keep_alive {
 				// We want to keep the account around.
 				account.balance.saturating_sub(details.min_balance)
 			} else {
