@@ -802,7 +802,7 @@ impl<T: Config> Pallet<T> {
 			slot_idx -= duration;
 			if tickets_meta.segments_count != 0 {
 				Self::sort_tickets(tickets_meta.segments_count, epoch_tag, &mut tickets_meta);
-				TicketsMeta::<T>::set(tickets_meta.clone());
+				TicketsMeta::<T>::set(tickets_meta);
 			}
 		} else if slot_idx >= 2 * duration {
 			return None
