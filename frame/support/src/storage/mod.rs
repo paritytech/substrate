@@ -1184,9 +1184,7 @@ impl<T> Iterator for KeyPrefixIterator<T> {
 }
 
 /// Iterate over a prefix of a child trie and decode raw_key and raw_value into `T`.
-///
-/// If any decoding fails it skips the key and continues to the next one.
-pub struct ChildTriePrefixIterator<T> {
+pub struct TryChildTriePrefixIterator<T> {
 	/// The prefix iterated on
 	prefix: Vec<u8>,
 	/// child info for child trie
@@ -1202,7 +1200,7 @@ pub struct ChildTriePrefixIterator<T> {
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
 }
 
-impl<T> ChildTriePrefixIterator<T> {
+impl<T> TryChildTriePrefixIterator<T> {
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
 	pub fn drain(mut self) -> Self {
 		self.drain = true;
@@ -1210,11 +1208,29 @@ impl<T> ChildTriePrefixIterator<T> {
 	}
 }
 
-impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
+/// Error returned by `TryPrefixIterator`.
+#[derive(RuntimeDebug, Clone, Eq, PartialEq)]
+pub enum TryChildTriePrefixIteratorError {
+	KeyWithoutValue { previous_key: Vec<u8> },
+	Decode { previous_key: Vec<u8>, err: codec::Error },
+}
+
+impl fmt::Display for TryChildTriePrefixIteratorError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			TryChildTriePrefixIteratorError::KeyWithoutValue { previous_key } => {
+				write!(f, "next_key returned a key with no value at {:?}", previous_key)
+			},
+			TryChildTriePrefixIteratorError::Decode { previous_key, err } => {
+				write!(f, "(key, value) failed to decode at {:?}: {:?}", previous_key, err)
+			},
+		}
+	}
+}
+
+impl<T: Decode + Sized> TryChildTriePrefixIterator<(Vec<u8>, T)> {
 	/// Construct iterator to iterate over child trie items in `child_info` with the prefix
 	/// `prefix`.
-	///
-	/// NOTE: Iterator with [`Self::drain`] will remove any value who failed to decode
 	pub fn with_prefix(child_info: &ChildInfo, prefix: &[u8]) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
@@ -1234,11 +1250,9 @@ impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 	}
 }
 
-impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
+impl<K: Decode + Sized, T: Decode + Sized> TryChildTriePrefixIterator<(K, T)> {
 	/// Construct iterator to iterate over child trie items in `child_info` with the prefix
 	/// `prefix`.
-	///
-	/// NOTE: Iterator with [`Self::drain`] will remove any key or value who failed to decode
 	pub fn with_prefix_over_key<H: ReversibleStorageHasher>(
 		child_info: &ChildInfo,
 		prefix: &[u8],
@@ -1263,53 +1277,99 @@ impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
 	}
 }
 
+impl<T> Iterator for TryChildTriePrefixIterator<T> {
+	type Item = Result<T, TryChildTriePrefixIteratorError>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let maybe_next = if self.fetch_previous_key {
+			self.fetch_previous_key = false;
+			Some(self.previous_key.clone())
+		} else {
+			sp_io::default_child_storage::next_key(
+				self.child_info.storage_key(),
+				&self.previous_key,
+			)
+			.filter(|n| n.starts_with(&self.prefix))
+		};
+		match maybe_next {
+			Some(next) => {
+				self.previous_key = next;
+				let raw_value = match child::get_raw(&self.child_info, &self.previous_key) {
+					Some(raw_value) => raw_value,
+					None =>
+						return Some(Err(TryChildTriePrefixIteratorError::KeyWithoutValue {
+							previous_key: self.previous_key.clone(),
+						})),
+				};
+				if self.drain {
+					child::kill(&self.child_info, &self.previous_key)
+				}
+				let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+				let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
+					Ok(item) => item,
+					Err(e) =>
+						return Some(Err(TryChildTriePrefixIteratorError::Decode {
+							previous_key: self.previous_key.clone(),
+							err: e,
+						})),
+				};
+
+				Some(Ok(item))
+			},
+			None => None,
+		}
+	}
+}
+
+/// Iterate over a prefix of a child trie and decode raw_key and raw_value into `T`.
+///
+/// If any decoding fails it skips the key and continues to the next one.
+pub struct ChildTriePrefixIterator<T> {
+	iter: TryChildTriePrefixIterator<T>,
+}
+
+impl<T> ChildTriePrefixIterator<T> {
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(mut self) -> Self {
+		Self { iter: self.iter.drain() }
+	}
+}
+
+impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
+	/// Construct iterator to iterate over child trie items in `child_info` with the prefix
+	/// `prefix`.
+	///
+	/// NOTE: Iterator with [`Self::drain`] will remove any value who failed to decode
+	pub fn with_prefix(child_info: &ChildInfo, prefix: &[u8]) -> Self {
+		Self { iter: TryChildTriePrefixIterator::with_prefix(child_info, prefix) }
+	}
+}
+
+impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
+	/// Construct iterator to iterate over child trie items in `child_info` with the prefix
+	/// `prefix`.
+	///
+	/// NOTE: Iterator with [`Self::drain`] will remove any key or value who failed to decode
+	pub fn with_prefix_over_key<H: ReversibleStorageHasher>(
+		child_info: &ChildInfo,
+		prefix: &[u8],
+	) -> Self {
+		Self { iter: TryChildTriePrefixIterator::with_prefix_over_key::<H>(child_info, prefix) }
+	}
+}
+
 impl<T> Iterator for ChildTriePrefixIterator<T> {
 	type Item = T;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		loop {
-			let maybe_next = if self.fetch_previous_key {
-				self.fetch_previous_key = false;
-				Some(self.previous_key.clone())
-			} else {
-				sp_io::default_child_storage::next_key(
-					self.child_info.storage_key(),
-					&self.previous_key,
-				)
-				.filter(|n| n.starts_with(&self.prefix))
-			};
-			break match maybe_next {
-				Some(next) => {
-					self.previous_key = next;
-					let raw_value = match child::get_raw(&self.child_info, &self.previous_key) {
-						Some(raw_value) => raw_value,
-						None => {
-							log::error!(
-								"next_key returned a key with no value at {:?}",
-								self.previous_key,
-							);
-							continue
-						},
-					};
-					if self.drain {
-						child::kill(&self.child_info, &self.previous_key)
-					}
-					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
-					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
-						Ok(item) => item,
-						Err(e) => {
-							log::error!(
-								"(key, value) failed to decode at {:?}: {:?}",
-								self.previous_key,
-								e,
-							);
-							continue
-						},
-					};
-
-					Some(item)
+			let item = self.iter.next()?;
+			match item {
+				Ok(item) => return Some(item),
+				Err(e) => {
+					log::error!("{}", e);
+					continue
 				},
-				None => None,
 			}
 		}
 	}
