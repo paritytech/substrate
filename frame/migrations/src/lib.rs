@@ -111,7 +111,7 @@
 //!
 //! Failed upgrades cannot recovered from automatically and require governance intervention. Set up
 //! monitoring for `UpgradeFailed` events to be made aware of any failures. The hook
-//! [`UpgradeStatusHandler::failed`] should be setup in a way that it allows governance to act, but
+//! [`UpgradeStatusNotify::failed`] should be setup in a way that it allows governance to act, but
 //! still prevent other transactions from interacting with the inconsistent storage state. Note that
 //! this is paramount, since the inconsistent state might contain a faulty balance amount or similar
 //! that could cause great harm if user transactions don't remain suspended. One way to implement
@@ -163,14 +163,6 @@ pub enum MigrationCursor<Cursor, BlockNumber> {
 	Stuck,
 }
 
-/// Points to the currently active migration and its inner cursor.
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
-pub struct ActiveCursor<Cursor, BlockNumber> {
-	index: u32,
-	inner_cursor: Option<Cursor>,
-	started_at: BlockNumber,
-}
-
 impl<Cursor, BlockNumber> MigrationCursor<Cursor, BlockNumber> {
 	/// Maybe return self as an `ActiveCursor`.
 	pub fn as_active(&self) -> Option<&ActiveCursor<Cursor, BlockNumber>> {
@@ -179,6 +171,20 @@ impl<Cursor, BlockNumber> MigrationCursor<Cursor, BlockNumber> {
 			MigrationCursor::Stuck => None,
 		}
 	}
+}
+
+impl<Cursor, BlockNumber> From<ActiveCursor<Cursor, BlockNumber>> for MigrationCursor<Cursor, BlockNumber> {
+	fn from(active: ActiveCursor<Cursor, BlockNumber>) -> Self {
+		MigrationCursor::Active(active)
+	}
+}
+
+/// Points to the currently active migration and its inner cursor.
+#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+pub struct ActiveCursor<Cursor, BlockNumber> {
+	index: u32,
+	inner_cursor: Option<Cursor>,
+	started_at: BlockNumber,
 }
 
 impl<Cursor, BlockNumber> ActiveCursor<Cursor, BlockNumber> {
@@ -200,11 +206,11 @@ pub type MigrationsOf<T> = Vec<
 	>,
 >;
 
-/// Convenience wrapper for [`MigrationCursor`].
+/// Convenience alias for [`MigrationCursor`].
 pub type CursorOf<T> =
 	MigrationCursor<<T as Config>::Cursor, <T as frame_system::Config>::BlockNumber>;
 
-/// Convenience wrapper for [`ActiveCursor`].
+/// Convenience alias for [`ActiveCursor`].
 pub type ActiveCursorOf<T> =
 	ActiveCursor<<T as Config>::Cursor, <T as frame_system::Config>::BlockNumber>;
 
@@ -234,10 +240,10 @@ pub mod pallet {
 		/// The identifier type that is shared across all migrations.
 		type Identifier: FullCodec + MaxEncodedLen + TypeInfo;
 
-		/// Notification handler for status updates regarding runtime upgrades.
+		/// Notifications for status updates of a runtime upgrade.
 		///
 		/// Can be used to pause XCM etc.
-		type UpgradeStatusHandler: UpgradeStatusHandler;
+		type UpgradeStatusNotify: UpgradeStatusNotify;
 
 		/// The weight to spend each block to execute migrations.
 		type ServiceWeight: Get<Weight>;
@@ -293,68 +299,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			use FailedUpgradeHandling::*;
-
-			if let Some(cursor) = Cursor::<T>::get() {
-				log::error!(target: LOG, "Ongoing migrations interrupted - chain stuck");
-				Self::deposit_event(Event::UpgradeFailed);
-
-				let maybe_index = cursor.as_active().map(|c| c.index);
-				match T::UpgradeStatusHandler::failed(maybe_index) {
-					KeepStuck => Cursor::<T>::set(Some(MigrationCursor::Stuck)),
-					ForceUnstuck => Cursor::<T>::kill(),
-				}
-				return T::WeightInfo::on_runtime_upgrade()
-			}
-
-			let migrations = T::Migrations::get().len() as u32;
-			if migrations > 0 {
-				Cursor::<T>::set(Some(MigrationCursor::Active(ActiveCursor {
-					index: 0,
-					inner_cursor: None,
-					started_at: System::<T>::block_number(),
-				})));
-				Self::deposit_event(Event::UpgradeStarted { migrations });
-				T::UpgradeStatusHandler::started();
-			}
-
-			T::WeightInfo::on_runtime_upgrade()
+			Self::start_mbm()
 		}
 
 		fn on_initialize(n: T::BlockNumber) -> Weight {
-			let mut meter = WeightMeter::from_limit(T::ServiceWeight::get());
-			meter.defensive_saturating_accrue(T::WeightInfo::on_init_base());
-
-			let mut cursor = match Cursor::<T>::get() {
-				None => {
-					log::debug!(target: LOG, "[Block {n:?}] Waiting for cursor to become `Some`.");
-					return meter.consumed
-				},
-				Some(MigrationCursor::Active(cursor)) => cursor,
-				Some(MigrationCursor::Stuck) => {
-					log::error!(target: LOG, "Migration stuck. Governance intervention required.");
-					return meter.consumed
-				},
-			};
-			debug_assert!(<Self as ExtrinsicSuspenderQuery>::is_suspended(DispatchClass::Normal));
-
-			let migrations = T::Migrations::get();
-			for i in 0.. {
-				match Self::exec_migration(&mut meter, &migrations, cursor, i == 0) {
-					None => return meter.consumed,
-					Some(ControlFlow::Break(last_cursor)) => {
-						cursor = last_cursor;
-						break
-					},
-					Some(ControlFlow::Continue(next_cursor)) => {
-						cursor = next_cursor;
-					},
-				}
-			}
-
-			Cursor::<T>::set(Some(MigrationCursor::Active(cursor)));
-
-			meter.consumed
+			Self::progress_mbm(n)
 		}
 	}
 
@@ -398,6 +347,75 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Starts the process of multi block migrations.
+	///
+	/// Should only be called once all migrations completed.
+	fn start_mbm() -> Weight {
+		use FailedUpgradeHandling::*;
+
+		if let Some(cursor) = Cursor::<T>::get() {
+			log::error!(target: LOG, "Ongoing migrations interrupted - chain stuck");
+			Self::deposit_event(Event::UpgradeFailed);
+
+			let maybe_index = cursor.as_active().map(|c| c.index);
+			match T::UpgradeStatusNotify::failed(maybe_index) {
+				KeepStuck => Cursor::<T>::set(Some(MigrationCursor::Stuck)),
+				ForceUnstuck => Cursor::<T>::kill(),
+			}
+			return T::WeightInfo::on_runtime_upgrade()
+		}
+
+		let migrations = T::Migrations::get().len() as u32;
+		if migrations > 0 {
+			Cursor::<T>::set(Some(ActiveCursor {
+				index: 0,
+				inner_cursor: None,
+				started_at: System::<T>::block_number(),
+			}.into()));
+			Self::deposit_event(Event::UpgradeStarted { migrations });
+			T::UpgradeStatusNotify::started();
+		}
+
+		T::WeightInfo::on_runtime_upgrade()
+	}
+
+	/// Tries to make progress on the multi block migrations.
+	fn progress_mbm(n: T::BlockNumber) -> Weight {
+		let mut meter = WeightMeter::from_limit(T::ServiceWeight::get());
+		meter.defensive_saturating_accrue(T::WeightInfo::on_init_base());
+
+		let mut cursor = match Cursor::<T>::get() {
+			None => {
+				log::debug!(target: LOG, "[Block {n:?}] Waiting for cursor to become `Some`.");
+				return meter.consumed
+			},
+			Some(MigrationCursor::Active(cursor)) => cursor,
+			Some(MigrationCursor::Stuck) => {
+				log::error!(target: LOG, "Migration stuck. Governance intervention required.");
+				return meter.consumed
+			},
+		};
+		debug_assert!(<Self as ExtrinsicSuspenderQuery>::is_suspended(DispatchClass::Normal));
+
+		let migrations = T::Migrations::get();
+		for i in 0.. {
+			match Self::exec_migration(&mut meter, &migrations, cursor, i == 0) {
+				None => return meter.consumed,
+				Some(ControlFlow::Break(last_cursor)) => {
+					cursor = last_cursor;
+					break
+				},
+				Some(ControlFlow::Continue(next_cursor)) => {
+					cursor = next_cursor;
+				},
+			}
+		}
+
+		Cursor::<T>::set(Some(cursor.into()));
+
+		meter.consumed
+	}
+
 	/// Try to make progress on the current migration.
 	///
 	/// Returns whether processing should continue or break for this block. The `meter` contains the
@@ -411,7 +429,7 @@ impl<T: Config> Pallet<T> {
 		let Some(migration) = migrations.get(cursor.index as usize) else {
 			Self::deposit_event(Event::UpgradeCompleted);
 			Cursor::<T>::kill();
-			T::UpgradeStatusHandler::completed();
+			T::UpgradeStatusNotify::completed();
 			return None;
 		};
 		if Historic::<T>::contains_key(&migration.id()) {

@@ -158,7 +158,7 @@ impl crate::Config for Test {
 	type Migrations = MigrationsStorage;
 	type Cursor = MockedCursor;
 	type Identifier = MockedIdentifier;
-	type UpgradeStatusHandler = LoggingUpgradeStatusHandler<()>;
+	type UpgradeStatusNotify = LoggingUpgradeStatusNotify<()>;
 	type ServiceWeight = ServiceWeight;
 	type WeightInfo = ();
 }
@@ -224,22 +224,22 @@ pub fn assert_events<E: IntoRecord>(events: Vec<E>) {
 	System::reset_events();
 }
 
-/// Wraps an [`UpgradeStatusHandler`] and adds logging.
-pub struct LoggingUpgradeStatusHandler<T>(core::marker::PhantomData<T>);
-impl<T: UpgradeStatusHandler> UpgradeStatusHandler for LoggingUpgradeStatusHandler<T> {
+/// Wraps an [`UpgradeStatusNotify`] and adds logging.
+pub struct LoggingUpgradeStatusNotify<T>(core::marker::PhantomData<T>);
+impl<T: UpgradeStatusNotify> UpgradeStatusNotify for LoggingUpgradeStatusNotify<T> {
 	fn started() {
-		log::info!("UpgradeStatusHandler started");
+		log::info!("UpgradeStatusNotify started");
 		T::started();
 	}
 
 	fn completed() {
-		log::info!("UpgradeStatusHandler completed");
+		log::info!("UpgradeStatusNotify completed");
 		T::completed();
 	}
 
 	fn failed(migration: Option<u32>) -> FailedUpgradeHandling {
 		let res = T::failed(migration);
-		log::error!("UpgradeStatusHandler failed at: {migration:?}, handling as {res:?}");
+		log::error!("UpgradeStatusNotify failed at: {migration:?}, handling as {res:?}");
 		res
 	}
 }

@@ -295,7 +295,7 @@ impl ExtrinsicSuspenderQuery for () {
 }
 
 /// Notification handler for status updates regarding runtime upgrades.
-pub trait UpgradeStatusHandler {
+pub trait UpgradeStatusNotify {
 	/// Notifies of the start of a runtime upgrade.
 	fn started() {}
 
@@ -320,7 +320,7 @@ pub enum FailedUpgradeHandling {
 	KeepStuck,
 }
 
-impl UpgradeStatusHandler for () {
+impl UpgradeStatusNotify for () {
 	fn failed(_migration: Option<u32>) -> FailedUpgradeHandling {
 		FailedUpgradeHandling::KeepStuck
 	}
