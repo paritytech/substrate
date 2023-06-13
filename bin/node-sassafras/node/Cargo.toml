@@ -59,9 +59,6 @@ frame-benchmarking-cli = { version = "4.0.0-dev", path = "../../../utils/frame/b
 # Local Dependencies
 node-sassafras-runtime = { version = "0.3.2-dev", path = "../runtime" }
 
-# CLI-specific dependencies
-try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
-
 [build-dependencies]
 substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }
 
@@ -69,12 +66,6 @@ substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build
 default = []
 runtime-benchmarks = [
     "node-sassafras-runtime/runtime-benchmarks"
-]
-# Enable features that allow the runtime to be tried and debugged. Name might be subject to change
-# in the near future.
-try-runtime = [
-    "node-sassafras-runtime/try-runtime",
-    "try-runtime-cli"
 ]
 use-session-pallet = [
     "node-sassafras-runtime/use-session-pallet"
