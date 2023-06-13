@@ -67,7 +67,7 @@ where
 		let account_deposits: BTreeMap<T::AccountId, BalanceOf<T>> = crate::DepositOf::<T>::iter()
 			.flat_map(|(_prop_index, (accounts, balance))| {
 				// Count the number of deposits
-				deposit_of_len.saturating_accrue(1);
+				deposit_of_len.saturating_inc();
 
 				// Track the total number of vec entries to calculate the weight of the reads.
 				total_voting_vec_entries.saturating_accrue(accounts.len() as u64);
