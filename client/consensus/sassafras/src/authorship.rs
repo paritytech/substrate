@@ -24,8 +24,7 @@ use sp_consensus_sassafras::{
 	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
 	TicketClaim, TicketData, TicketEnvelope, TicketId,
 };
-use sp_core::{ed25519, twox_64, ByteArray};
-
+use sp_core::{bandersnatch::ring_vrf::RingVrfContext, ed25519, twox_64, ByteArray};
 use std::pin::Pin;
 
 /// Get secondary authority index for the given epoch and slot.
@@ -92,9 +91,14 @@ pub(crate) fn claim_slot(
 }
 
 /// Generate the tickets for the given epoch.
+///
 /// Tickets additional information will be stored within the `Epoch` structure.
-/// The additional information will be used later during session to claim slots.
-fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<TicketEnvelope> {
+/// The additional information will be used later during the epoch to claim slots.
+fn generate_epoch_tickets(
+	epoch: &mut Epoch,
+	keystore: &KeystorePtr,
+	ring_ctx: &RingVrfContext,
+) -> Vec<TicketEnvelope> {
 	let config = &epoch.config;
 	let max_attempts = config.threshold_params.attempts_number;
 	let redundancy_factor = config.threshold_params.redundancy_factor;
@@ -110,11 +114,17 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 	log::debug!(target: LOG_TARGET, "Generating tickets for epoch {} @ slot {}", epoch.epoch_idx, epoch.start_slot);
 	log::debug!(target: LOG_TARGET, "    threshold: {threshold:016x}");
 
-	let authorities = config.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
+	let pks: Vec<_> = config.authorities.iter().map(|a| *a.0.as_ref()).collect();
+
+	let authorities = config.authorities.iter().map(|a| &a.0).enumerate();
 	for (authority_idx, authority_id) in authorities {
 		if !keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
 			continue
 		}
+
+		debug!(target: LOG_TARGET, ">>> Generating new ring prover key...");
+		let prover = ring_ctx.prover(&pks, authority_idx).unwrap();
+		debug!(target: LOG_TARGET, ">>> ...done");
 
 		let make_ticket = |attempt_idx| {
 			let vrf_input = ticket_id_vrf_input(&config.randomness, attempt_idx, epoch.epoch_idx);
@@ -134,9 +144,20 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 			let revealed_public = [0; 32];
 			let data = TicketData { attempt_idx, erased_public, revealed_public };
 
-			// TODO DAVXY: placeholder
-			let ring_proof = ();
-			let ticket_envelope = TicketEnvelope { data, vrf_preout, ring_proof };
+			debug!(target: LOG_TARGET, ">>> Creating ring proof for attempt {}", attempt_idx);
+			use sp_core::bandersnatch::vrf::VrfSignData;
+			let sign_data = VrfSignData::from_iter(b"TicketProof", &[b"tdata"], []).unwrap();
+			let _ring_signature = keystore
+				.bandersnatch_ring_vrf_sign(
+					AuthorityId::ID,
+					authority_id.as_ref(),
+					&sign_data,
+					&prover,
+				)
+				.ok()??;
+			debug!(target: LOG_TARGET, ">>> ...done");
+
+			let ticket_envelope = TicketEnvelope { data, vrf_preout, ring_signature: () };
 
 			let ticket_secret = TicketSecret { attempt_idx, erased_secret: erased_seed };
 
@@ -382,6 +403,10 @@ async fn start_tickets_worker<B, C, SC>(
 	C::Api: SassafrasApi<B>,
 	SC: SelectChain<B> + 'static,
 {
+	log::debug!(target: LOG_TARGET, ">>> Creating testing ring-vrf context...");
+	let ring_ctx = RingVrfContext::new_testing();
+	log::debug!(target: LOG_TARGET, ">>> ...done");
+
 	let mut notifications = client.import_notification_stream();
 
 	while let Some(notification) = notifications.next().await {
@@ -415,7 +440,7 @@ async fn start_tickets_worker<B, C, SC>(
 			},
 		};
 
-		let tickets = generate_epoch_tickets(&mut epoch, &keystore);
+		let tickets = generate_epoch_tickets(&mut epoch, &keystore, &ring_ctx);
 		if tickets.is_empty() {
 			continue
 		}

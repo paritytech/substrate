@@ -21,7 +21,10 @@ use super::{Randomness, SASSAFRAS_ENGINE_ID};
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_consensus_slots::Slot;
-use sp_core::bandersnatch::vrf::{VrfInput, VrfOutput, VrfSignData};
+use sp_core::bandersnatch::{
+	ring_vrf::RingVrfSignature,
+	vrf::{VrfInput, VrfOutput, VrfSignData},
+};
 
 /// Ticket identifier.
 ///
@@ -51,10 +54,8 @@ pub struct TicketEnvelope {
 	pub data: TicketData,
 	/// VRF pre-output used to generate the ticket id.
 	pub vrf_preout: VrfOutput,
-	// /// Pedersen VRF signature
-	// pub ped_signature: (),
-	/// Ring VRF proof.
-	pub ring_proof: TicketRingProof,
+	/// Ring signature.
+	pub ring_signature: TicketRingProof,
 }
 
 /// Ticket auxiliary information used to claim the ticket ownership.

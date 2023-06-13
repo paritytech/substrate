@@ -27,6 +27,7 @@ use crate::crypto::{
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError, VrfSecret};
 
+use bandersnatch_vrfs::CanonicalSerialize;
 #[cfg(feature = "full_crypto")]
 use bandersnatch_vrfs::SecretKey;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -243,7 +244,9 @@ impl TraitPair for Pair {
 	fn public(&self) -> Public {
 		let public = self.0.to_public();
 		let mut raw = [0; PUBLIC_SERIALIZED_LEN];
-		public.0.serialize(raw.as_mut_slice()).expect("key buffer length is good; qed");
+		public
+			.serialize_compressed(raw.as_mut_slice())
+			.expect("key buffer length is good; qed");
 		Public::unchecked_from(raw)
 	}
 
@@ -515,7 +518,7 @@ pub mod vrf {
 			data: &VrfSignData,
 			signature: &VrfSignature,
 		) -> bool {
-			let Ok(public) = PublicKey::deserialize_compressed(&self.0[..]) else {
+			let Ok(public) = PublicKey::deserialize_compressed(self.as_slice()) else {
 				return false
 			};
 
@@ -561,19 +564,7 @@ pub mod vrf {
 pub mod ring_vrf {
 	use super::{vrf::*, *};
 	pub use bandersnatch_vrfs::ring::{RingProof, RingProver, RingVerifier, KZG};
-	use bandersnatch_vrfs::{
-		CanonicalDeserialize, CanonicalSerialize, PedersenVrfSignature, PublicKey,
-	};
-
-	/// Ring VRF signature.
-	pub struct RingVrfSignature {
-		/// VRF signature
-		signature: PedersenVrfSignature,
-		/// VRF pre-outputs
-		vrf_outputs: VrfIosVec<VrfOutput>,
-		/// TODO davxy
-		ring_proof: RingProof,
-	}
+	use bandersnatch_vrfs::{CanonicalDeserialize, PedersenVrfSignature, PublicKey};
 
 	/// TODO davxy
 	pub struct RingVrfContext(KZG);
@@ -600,7 +591,7 @@ pub mod ring_vrf {
 		pub fn prover(&self, public_keys: &[Public], public_idx: usize) -> Option<RingProver> {
 			let mut pks = Vec::with_capacity(public_keys.len());
 			if !public_keys.iter().all(|public_key| {
-				match PublicKey::deserialize_compressed(public_key.as_ref()) {
+				match PublicKey::deserialize_compressed(public_key.as_slice()) {
 					Ok(pk) => {
 						let sw_affine = pk.0 .0.into();
 						pks.push(sw_affine);
@@ -621,7 +612,7 @@ pub mod ring_vrf {
 		pub fn verifier(&self, public_keys: &[Public]) -> Option<RingVerifier> {
 			let mut pks = Vec::with_capacity(public_keys.len());
 			if !public_keys.iter().all(|public_key| {
-				match PublicKey::deserialize_compressed(public_key.as_ref()) {
+				match PublicKey::deserialize_compressed(public_key.as_slice()) {
 					Ok(pk) => {
 						let sw_affine = pk.0 .0.into();
 						pks.push(sw_affine);
@@ -680,40 +671,36 @@ pub mod ring_vrf {
 		}
 	}
 
-	impl Public {
+	/// Ring VRF signature.
+	pub struct RingVrfSignature {
+		/// VRF signature
+		signature: PedersenVrfSignature,
+		/// VRF pre-outputs
+		vrf_outputs: VrfIosVec<VrfOutput>,
 		/// TODO davxy
-		pub fn ring_vrf_verify(
-			&self,
-			data: &VrfSignData,
-			signature: &RingVrfSignature,
-			verifier: &RingVerifier,
-		) -> bool {
-			let preouts_len = signature.vrf_outputs.len();
+		ring_proof: RingProof,
+	}
+
+	impl RingVrfSignature {
+		/// TODO davxy
+		pub fn verify(&self, data: &VrfSignData, verifier: &RingVerifier) -> bool {
+			let preouts_len = self.vrf_outputs.len();
 			if preouts_len != data.vrf_inputs.len() {
 				return false
 			}
 			// Hack used because backend signature type is generic over the number of ios
 			// @burdges can we provide a vec or boxed version?
 			match preouts_len {
-				0 => self.ring_vrf_verify_gen::<0>(data, signature, verifier),
-				1 => self.ring_vrf_verify_gen::<1>(data, signature, verifier),
-				2 => self.ring_vrf_verify_gen::<2>(data, signature, verifier),
-				3 => self.ring_vrf_verify_gen::<3>(data, signature, verifier),
+				0 => self.verify_gen::<0>(data, verifier),
+				1 => self.verify_gen::<1>(data, verifier),
+				2 => self.verify_gen::<2>(data, verifier),
+				3 => self.verify_gen::<3>(data, verifier),
 				_ => panic!("Max VRF input messages is set to: {}", MAX_VRF_IOS),
 			}
 		}
 
-		fn ring_vrf_verify_gen<const N: usize>(
-			&self,
-			data: &VrfSignData,
-			signature: &RingVrfSignature,
-			verifier: &RingVerifier,
-		) -> bool {
-			let Ok(public) = PublicKey::deserialize_compressed(self.as_ref()) else {
-				return false
-			};
-
-			let Ok(preouts) = signature
+		fn verify_gen<const N: usize>(&self, data: &VrfSignData, verifier: &RingVerifier) -> bool {
+			let Ok(preouts) = self
 				.vrf_outputs
 				.iter()
 				.map(|o| o.0.clone())
@@ -723,9 +710,9 @@ pub mod ring_vrf {
 				};
 
 			let signature = bandersnatch_vrfs::RingVrfSignature {
-				signature: signature.signature.clone(),
+				signature: self.signature.clone(),
 				preoutputs: preouts,
-				ring_proof: signature.ring_proof.clone(),
+				ring_proof: self.ring_proof.clone(),
 			};
 
 			let inputs = data.vrf_inputs.iter().map(|i| i.0.clone());
@@ -896,6 +883,6 @@ mod tests {
 		let signature = pair.ring_vrf_sign(&data, &prover);
 
 		let verifier = ring_ctx.verifier(&pks).unwrap();
-		assert!(public.ring_vrf_verify(&data, &signature, &verifier));
+		assert!(signature.verify(&data, &verifier));
 	}
 }
