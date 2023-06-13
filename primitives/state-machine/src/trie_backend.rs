@@ -31,10 +31,22 @@ use codec::Codec;
 use hash_db::HashDB;
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, StateVersion};
+use sp_trie::cache::TrieCache;
 #[cfg(feature = "std")]
 use sp_trie::{cache::LocalTrieCache, recorder::Recorder};
 #[cfg(feature = "std")]
 use sp_trie::{MemoryDB, StorageProof};
+
+pub trait AsTrieDbCache<H: Hasher> {
+	fn bla(&self, storage_root: H::Out) -> TrieCache<'_, H>;
+}
+
+#[cfg(feature = "std")]
+impl<H: Hasher> AsTrieDbCache<H> for sp_trie::cache::LocalTrieCache<H> {
+	fn bla(&self, storage_root: <H as Hasher>::Out) -> TrieCache<'_, H> {
+		self.as_trie_db_cache(storage_root)
+	}
+}
 
 /// Dummy type to be used in `no_std`.
 ///
