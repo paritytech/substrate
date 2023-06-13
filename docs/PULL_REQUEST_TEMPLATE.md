@@ -2,34 +2,34 @@
 
 ✄ -----------------------------------------------------------------------------
 
-Thank you for your Pull Request! 🙏
+Thank you for your Pull Request! 🙏 Please make sure it follows the contribution guidelines outlined in [this document](./CONTRIBUTING.adoc) and fill out the sections below. Once you're ready to submit your PR for review, please delete this section and leave only the text under the "Description" heading.
 
-Before you submit, please check that:
+# Description
 
-- [ ] **Description:** You added a brief description of the PR, e.g.:
-  - What does it do?
-  - What important points should reviewers know?
-  - Is there something left for follow-up PRs?
-- [ ] **Labels:** You labeled the PR appropriately if you have permissions to do so:
-  - [ ] `A*` for PR status (**one required**)
-  - [ ] `B*` for changelog (**one required**)
-  - [ ] `C*` for release notes (**exactly one required**)
-  - [ ] `D*` for various implications/requirements
-  - [ ] Github project assignment
-- [ ] **Related Issues:** You mentioned a related issue if this PR is related to it, e.g. `Fixes #228` or `Related #1337`.
-- [ ] **2 Reviewers:** You asked at least two reviewers to review. If you aren't sure, start with GH suggestions.
-- [ ] **Style Guide:** Your PR adheres to [the style guide](https://github.com/paritytech/substrate/blob/master/docs/STYLE_GUIDE.md).
-  - In particular, mind the maximal line length of 100 (120 in exceptional circumstances).
-  - There is no commented code checked in unless necessary.
-  - Any panickers in the runtime have a proof or were removed.
-- [ ] **Docs:** You updated any rustdocs which may need to change, as described [here](https://github.com/paritytech/substrate/blob/master/docs/DOCUMENTATION_GUIDELINES.md).
-- [ ] **Polkadot Companion:** Has the PR altered the external API or interfaces used by Polkadot?
-  - [ ] If so, do you have the corresponding Polkadot PR ready?
-  - [ ] Optionally: Do you have a corresponding Cumulus PR?
+*Please include a summary of the changes and the related issue. Please also include relevant motivation and context, including:*
 
-Refer to [the contributing guide](https://github.com/paritytech/substrate/blob/master/docs/CONTRIBUTING.adoc) for details.
+- What does this PR do?
+- Why are these changes needed?
+- How were these changes implemented and what do they affect?
 
-After you've read this notice feel free to remove it.
-Thank you!
+*Use [Github semantic linking](https://docs.github.com/en/issues/tracking-your-work-with-issues/linking-a-pull-request-to-an-issue#linking-a-pull-request-to-an-issue-using-a-keyword) to address any open issues this PR relates to or closes.*
+
+Fixes # (issue number, *if applicable*) 
+
+Closes # (issue number, *if applicable*) 
+
+Polkadot companion: (*if applicable*)
+
+Cumulus companion: (*if applicable*)
+
+# Checklist
+
+- [ ] My PR includes a detailed description as outlined in the "Description" section above
+- [ ] My PR follows the [labeling requirements](./CONTRIBUTING.adoc#merge-process) of this project (at minimum one label for each `A`, `B`, `C` and `D` required)
+- [ ] I have made corresponding changes to the documentation (if applicable)
+- [ ] I have added tests that prove my fix is effective or that my feature works (if applicable)
+- [ ] If this PR alters any external APIs or interfaces used by Polkadot, the corresponding Polkadot PR is ready as well as the corresponding Cumulus PR (optional)
+
+You can remove the "Checklist" section once all have been checked. Thank you for your contribution!
 
 ✄ -----------------------------------------------------------------------------

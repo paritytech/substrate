@@ -211,7 +211,6 @@ pub(crate) async fn fast_forward<Block, HostFns, BBIP>(
 ) -> Result<()>
 where
 	Block: BlockT<Hash = H256> + DeserializeOwned,
-	Block::Hash: FromStr,
 	Block::Header: DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
