@@ -41,7 +41,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_runtime::{
 	generic,
-	traits::{Block as BlockT, HeaderProvider},
+	traits::HeaderProvider,
 	SaturatedConversion,
 };
 use std::sync::Arc;
