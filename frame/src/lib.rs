@@ -133,6 +133,8 @@ pub mod runtime {
 	#[cfg(feature = "std")]
 	pub mod testing_prelude {
 		pub use frame_support::construct_runtime;
+		pub use sp_core::storage::Storage;
+		pub use sp_runtime::BuildStorage;
 	}
 
 	/// A set of opinionated types aliases commonly used in runtimes.
@@ -245,6 +247,9 @@ pub mod runtime {
 /// Access to all of the dependencies of this crate. In case the re-exports are not enough, this
 /// module can be used.
 pub mod deps {
+	// TODO: It would be great to somehow instruct RA to prefer *not* suggesting auto-imports from
+	// these. For example, we prefer `frame::derive::CloneNoBound` rather than
+	// `frame::deps::CloneNoBound`.
 	pub use frame_support;
 	pub use frame_system;
 	pub use sp_arithmetic;
