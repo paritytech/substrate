@@ -57,11 +57,11 @@
 //!
 //! ### Design
 //!
-//! Migrations are provided to the pallet through the storage item `Migrations` of type
+//! Migrations are provided to the pallet through the associated type [`Config::Migrations`] of type
 //! `Get<Vec<Box<dyn SteppedMigration<…`. This was done to have the most flexibility when it comes
 //! to iterating and inspecting the migrations. It also simplifies the trait bounds since all
 //! associated types of the trait must be provided by the pallet.  
-//! The actual progress of the pallet is stored in its `Cursor` storage item. This can either be
+//! The actual progress of the pallet is stored in its [`Cursor`] storage item. This can either be
 //! [`MigrationCursor::Active`] or `Stuck`. In the active case it points to the currently active
 //! migration and stores its inner cursor. The inner cursor can then be used by the migration to
 //! store its inner state and advance. Each time when the migration returns `Some(cursor)`, it
@@ -93,17 +93,18 @@
 //!
 //! ### Scenario: Governance cleanup
 //!
-//! Every now and then, governance can make use of the `clear_historic` call. This ensures that no
-//! old migrations pile up in the `Historic` set. This can probably be done very rarely, since the
-//! storage should not grow quickly and the lookup weight does not suffer much.
+//! Every now and then, governance can make use of the [`clear_historic`][Pallet::clear_historic]
+//! call. This ensures that no old migrations pile up in the [`Historic`] set. This can probably be
+//! done very rarely, since the storage should not grow quickly and the lookup weight does not
+//! suffer much.
 //!
 //! ### Scenario: Successful upgrade
 //!
 //! The standard procedure for a successful runtime upgrade can look like this:
-//! 1. Migrations are configured in the `Migrations` config item. All migrations expose `max_steps`,
-//! error tolerance, check their weight bounds and have a unique identifier.  
-//! 2. The runtime upgrade is enacted. `UpgradeStarted` events are followed by lots of
-//! `MigrationAdvanced` events. Finally `UpgradeCompleted` is emitted.  
+//! 1. Migrations are configured in the `Migrations` config item. All migrations expose
+//! [`max_steps`][SteppedMigration::max_steps], are error tolerant, check their weight bounds and
+//! have a unique identifier. 2. The runtime upgrade is enacted. `UpgradeStarted` events are
+//! followed by lots of `MigrationAdvanced` events. Finally `UpgradeCompleted` is emitted.  
 //! 3. Cleanup as described in the governance scenario be executed at any time after the migration
 //! completes.
 //!
@@ -173,7 +174,9 @@ impl<Cursor, BlockNumber> MigrationCursor<Cursor, BlockNumber> {
 	}
 }
 
-impl<Cursor, BlockNumber> From<ActiveCursor<Cursor, BlockNumber>> for MigrationCursor<Cursor, BlockNumber> {
+impl<Cursor, BlockNumber> From<ActiveCursor<Cursor, BlockNumber>>
+	for MigrationCursor<Cursor, BlockNumber>
+{
 	fn from(active: ActiveCursor<Cursor, BlockNumber>) -> Self {
 		MigrationCursor::Active(active)
 	}
@@ -367,11 +370,14 @@ impl<T: Config> Pallet<T> {
 
 		let migrations = T::Migrations::get().len() as u32;
 		if migrations > 0 {
-			Cursor::<T>::set(Some(ActiveCursor {
-				index: 0,
-				inner_cursor: None,
-				started_at: System::<T>::block_number(),
-			}.into()));
+			Cursor::<T>::set(Some(
+				ActiveCursor {
+					index: 0,
+					inner_cursor: None,
+					started_at: System::<T>::block_number(),
+				}
+				.into(),
+			));
 			Self::deposit_event(Event::UpgradeStarted { migrations });
 			T::UpgradeStatusNotify::started();
 		}
