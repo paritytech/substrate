@@ -28,7 +28,6 @@ use sp_std::collections::btree_map::BTreeMap;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
-#[cfg(feature = "try-runtime")]
 const LOG_TARGET: &str = "elections_phragmen::migrations::unlock_and_unreserve_all_funds";
 
 /// A migration that unreserves all deposit and unlocks all stake held in the context of this
@@ -189,11 +188,19 @@ where
 
 		// Deposited funds need to be unreserved.
 		for (account, unreserve_amount) in account_deposited_sums.iter() {
+			if unreserve_amount.is_zero() {
+				log::warn!(target: LOG_TARGET, "Unexpected zero amount to unreserve");
+				continue
+			}
 			T::Currency::unreserve(&account, *unreserve_amount);
 		}
 
 		// Staked funds need to be unlocked.
-		for (account, _amount) in account_staked_sums.iter() {
+		for (account, amount) in account_staked_sums.iter() {
+			if amount.is_zero() {
+				log::warn!(target: LOG_TARGET, "Unexpected zero amount to unlock");
+				continue
+			}
 			T::Currency::remove_lock(T::PalletId::get(), account);
 		}
 
