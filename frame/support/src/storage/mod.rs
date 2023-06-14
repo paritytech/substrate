@@ -1030,7 +1030,7 @@ impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
 	}
 
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
-	pub fn drain(mut self) -> Self {
+	pub fn drain(self) -> Self {
 		Self { iter: self.iter.drain() }
 	}
 }
@@ -1330,7 +1330,7 @@ pub struct ChildTriePrefixIterator<T> {
 
 impl<T> ChildTriePrefixIterator<T> {
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
-	pub fn drain(mut self) -> Self {
+	pub fn drain(self) -> Self {
 		Self { iter: self.iter.drain() }
 	}
 }

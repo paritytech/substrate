@@ -365,7 +365,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 	where
 		K: HasReversibleKeyPrefix<KP>,
 	{
-		let mut iter = Self::iter_prefix(kp);
+		let iter = Self::iter_prefix(kp);
 		iter.drain()
 	}
 
@@ -394,7 +394,7 @@ impl<K: ReversibleKeyGenerator, V: FullCodec, G: StorageNMap<K, V>>
 	}
 
 	fn drain() -> Self::Iterator {
-		let mut iterator = Self::iter();
+		let iterator = Self::iter();
 		iterator.drain()
 	}
 

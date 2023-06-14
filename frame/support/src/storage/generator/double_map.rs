@@ -402,7 +402,7 @@ where
 	}
 
 	fn drain_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator {
-		let mut iterator = Self::iter_prefix(k1);
+		let iterator = Self::iter_prefix(k1);
 		iterator.drain()
 	}
 
@@ -441,7 +441,7 @@ where
 	}
 
 	fn drain() -> Self::Iterator {
-		let mut iterator = Self::iter();
+		let iterator = Self::iter();
 		iterator.drain()
 	}
 

@@ -161,7 +161,7 @@ where
 
 	/// Enumerate all elements in the map.
 	fn drain() -> Self::Iterator {
-		let mut iterator = Self::iter();
+		let iterator = Self::iter();
 		iterator.drain()
 	}
 
