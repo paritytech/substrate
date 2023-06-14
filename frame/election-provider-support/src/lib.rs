@@ -192,7 +192,6 @@ pub use traits::NposSolution;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 
-
 // re-export for the solution macro, with the dependencies of the macro.
 #[doc(hidden)]
 pub mod private {
