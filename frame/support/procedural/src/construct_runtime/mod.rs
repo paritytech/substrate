@@ -181,7 +181,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let res = res.unwrap_or_else(|e| e.to_compile_error());
 
 	let res = expander::Expander::new("construct_runtime")
-		.dry(std::env::var("SP_API_EXPAND").is_err())
+		.dry(std::env::var("FRAME_EXPAND").is_err())
 		.verbose(true)
 		.write_to_out_dir(res)
 		.expect("Does not fail because of IO in OUT_DIR; qed");
