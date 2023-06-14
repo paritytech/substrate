@@ -84,6 +84,8 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+#[cfg(feature = "std")]
+use frame_support::traits::BuildGenesisConfig;
 use frame_support::{
 	dispatch::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
@@ -101,10 +103,10 @@ use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
 use sp_weights::{RuntimeDbWeight, Weight};
 
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
+#[cfg(feature = "std")]
+use sp_runtime::BuildStorage;
 
 pub mod limits;
 #[cfg(test)]
@@ -670,15 +672,17 @@ pub mod pallet {
 	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
-	#[derive(Default)]
+	#[derive(frame_support::DefaultNoBound)]
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
+		#[serde(skip)]
+		pub _phantom: sp_std::marker::PhantomData<T>,
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
 			<ParentHash<T>>::put::<T::Hash>(hash69());
@@ -693,22 +697,19 @@ pub mod pallet {
 }
 
 #[cfg(feature = "std")]
-impl GenesisConfig {
+impl<T: Config> GenesisConfig<T> {
 	/// Direct implementation of `GenesisBuild::build_storage`.
 	///
 	/// Kept in order not to break dependency.
-	pub fn build_storage<T: Config>(&self) -> Result<sp_runtime::Storage, String> {
-		<Self as GenesisBuild<T>>::build_storage(self)
+	pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
+		BuildStorage::build_storage(self as &dyn BuildGenesisConfig)
 	}
 
 	/// Direct implementation of `GenesisBuild::assimilate_storage`.
 	///
 	/// Kept in order not to break dependency.
-	pub fn assimilate_storage<T: Config>(
-		&self,
-		storage: &mut sp_runtime::Storage,
-	) -> Result<(), String> {
-		<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
+	pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
+		BuildStorage::assimilate_storage(self as &dyn BuildGenesisConfig, storage)
 	}
 }
 
