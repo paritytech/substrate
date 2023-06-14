@@ -236,7 +236,9 @@ mod tests {
 			spawner: &task_executor,
 			registry: None,
 			telemetry: None,
-			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(RejectAllTxPool::default()),
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		})
 		.unwrap();
 

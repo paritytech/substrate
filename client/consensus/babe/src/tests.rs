@@ -284,7 +284,9 @@ impl TestNetFactory for BabeTestNet {
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
 				telemetry: None,
-				offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(RejectAllTxPool::default()),
+				offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+					RejectAllTxPool::default(),
+				),
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
 		}

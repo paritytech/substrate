@@ -575,8 +575,9 @@ where
 
 		let mut runtime_api = self.client.runtime_api();
 
-		runtime_api
-			.register_extension(self.offchain_tx_pool_factory.offchain_transaction_pool(best_block_hash));
+		runtime_api.register_extension(
+			self.offchain_tx_pool_factory.offchain_transaction_pool(best_block_hash),
+		);
 
 		runtime_api
 			.submit_report_equivocation_unsigned_extrinsic(
