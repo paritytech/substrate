@@ -64,7 +64,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
-		already_withdrawn: Self::LiquidityInfo,
+		already_withdrawn: Self::Balance,
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError>;
 }
@@ -130,7 +130,7 @@ where
 		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: BalanceOf<T>, // 0.00005 DOT
 		_tip: BalanceOf<T>,
-		paid: Self::LiquidityInfo, // 0.1001 DOT ?
+		paid: Self::Balance, // 0.1001 DOT ?
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError> {
 		// Refund to the account that paid the fees. If this fails, the account might have

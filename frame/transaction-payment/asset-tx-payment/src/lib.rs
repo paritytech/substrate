@@ -101,7 +101,7 @@ pub enum InitialPayment<T: Config> {
 	/// The initial fee was payed in the native currency.
 	Native(LiquidityInfoOf<T>),
 	/// The initial fee was payed in an asset.
-	Asset(ChargeAssetLiquidityOf<T>),
+	Asset(BalanceOf<T>),
 }
 
 pub use pallet::*;
@@ -157,7 +157,7 @@ where
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	LiquidityInfoOf<T>: IsType<ChargeAssetLiquidityOf<T>>,
+	ChargeAssetLiquidityOf<T>: IsType<BalanceOf<T>>,
 {
 	/// Utility constructor. Used only in client/factory code.
 	pub fn from(tip: BalanceOf<T>, asset_id: Option<ChargeAssetIdOf<T>>) -> Self {
@@ -214,7 +214,7 @@ where
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	LiquidityInfoOf<T>: IsType<ChargeAssetLiquidityOf<T>>,
+	ChargeAssetLiquidityOf<T>: IsType<BalanceOf<T>>,
 {
 	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
 	type AccountId = T::AccountId;
