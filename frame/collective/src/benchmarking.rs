@@ -20,20 +20,20 @@
 use super::*;
 use crate::Pallet as Collective;
 
-use sp_runtime::traits::Bounded;
-use sp_std::mem::size_of;
-
 use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
+use frame_support::bounded_vec;
 use frame_system::{
 	pallet_prelude::BlockNumberFor, Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin,
 };
+use sp_runtime::traits::Bounded;
+use sp_std::mem::size_of;
 
 const SEED: u32 = 0;
 
 const MAX_BYTES: u32 = 1_024;
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
-	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
+fn assert_has_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
+	frame_system::Pallet::<T>::assert_has_event(generic_event.into());
 }
 
 fn id_to_remark_data(id: u32, length: usize) -> Vec<u8> {
@@ -69,7 +69,7 @@ benchmarks_instance_pallet! {
 			// Length of the proposals should be irrelevant to `set_members`.
 			let length = 100;
 			for i in 0 .. p {
-				// Proposals should be different so that different proposal hashes are generated
+				// Proposals should be different
 				let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, length) }.into();
 				Collective::<T, I>::propose(
 					SystemOrigin::Signed(old_members.last().unwrap().clone()).into(),
@@ -77,7 +77,7 @@ benchmarks_instance_pallet! {
 					Box::new(proposal.clone()),
 					MAX_BYTES,
 				)?;
-				let hash = T::Hashing::hash_of(&proposal);
+				let proposal_bounded = T::Preimages::bound(proposal).unwrap();
 				// Vote on the proposal to increase state relevant for `set_members`.
 				// Not voting for last old member because they proposed and not voting for the first member
 				// to keep the proposal from passing.
@@ -86,7 +86,7 @@ benchmarks_instance_pallet! {
 					let approve = true;
 					Collective::<T, I>::vote(
 						SystemOrigin::Signed(voter.clone()).into(),
-						hash,
+						proposal_bounded.clone(),
 						i,
 						approve,
 					)?;
@@ -130,10 +130,10 @@ benchmarks_instance_pallet! {
 
 	}: _(SystemOrigin::Signed(caller), Box::new(proposal.clone()), bytes_in_storage)
 	verify {
-		let proposal_hash = T::Hashing::hash_of(&proposal);
+		let proposal_bounded = T::Preimages::bound(proposal).unwrap();
 		// Note that execution fails due to mis-matched origin
-		assert_last_event::<T, I>(
-			Event::MemberExecuted { proposal_hash, result: Ok(()) }.into()
+		assert_has_event::<T, I>(
+			Event::MemberExecuted { proposal_bounded, result: Ok(()) }.into()
 		);
 	}
 
@@ -161,10 +161,10 @@ benchmarks_instance_pallet! {
 
 	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()), bytes_in_storage)
 	verify {
-		let proposal_hash = T::Hashing::hash_of(&proposal);
+		let proposal_bounded = T::Preimages::bound(proposal).unwrap();
 		// Note that execution fails due to mis-matched origin
-		assert_last_event::<T, I>(
-			Event::Executed { proposal_hash, result: Ok(()) }.into()
+		assert_has_event::<T, I>(
+			Event::Executed { proposal_bounded, result: Ok(()) }.into()
 		);
 	}
 
@@ -189,7 +189,7 @@ benchmarks_instance_pallet! {
 		let threshold = m;
 		// Add previous proposals.
 		for i in 0 .. p - 1 {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
@@ -207,8 +207,10 @@ benchmarks_instance_pallet! {
 	verify {
 		// New proposal is recorded
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
-		let proposal_hash = T::Hashing::hash_of(&proposal);
-		assert_last_event::<T, I>(Event::Proposed { account: caller, proposal_index: p - 1, proposal_hash, threshold }.into());
+		let proposal_bounded = T::Preimages::bound(proposal).unwrap();
+		assert_has_event::<T, I>(
+			Event::Proposed { account: caller, proposal_index: p - 1, proposal_bounded, threshold }.into()
+		);
 	}
 
 	vote {
@@ -235,9 +237,9 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add previous proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
@@ -245,7 +247,7 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
+			last_bound = T::Preimages::bound(proposal).unwrap();
 		}
 
 		let index = p - 1;
@@ -255,7 +257,7 @@ benchmarks_instance_pallet! {
 			let approve = true;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash,
+				last_bound.clone(),
 				index,
 				approve,
 			)?;
@@ -264,7 +266,7 @@ benchmarks_instance_pallet! {
 		let approve = true;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash,
+			last_bound.clone(),
 			index,
 			approve,
 		)?;
@@ -277,11 +279,11 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: _(SystemOrigin::Signed(voter), last_hash, index, approve)
+	}: _(SystemOrigin::Signed(voter), last_bound.clone(), index, approve)
 	verify {
 		// All proposals exist and the last proposal has just been updated.
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
-		let voting = Collective::<T, I>::voting(&last_hash).ok_or("Proposal Missing")?;
+		let voting = Collective::<T, I>::voting(&last_bound).ok_or("Proposal Missing")?;
 		assert_eq!(voting.ayes.len(), (m - 3) as usize);
 		assert_eq!(voting.nays.len(), 1);
 	}
@@ -310,9 +312,9 @@ benchmarks_instance_pallet! {
 		let threshold = m;
 
 		// Add previous proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, bytes as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
@@ -320,7 +322,7 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
+			last_bound = T::Preimages::bound(proposal).unwrap();
 		}
 
 		let index = p - 1;
@@ -330,7 +332,7 @@ benchmarks_instance_pallet! {
 			let approve = true;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash,
+				last_bound.clone(),
 				index,
 				approve,
 			)?;
@@ -339,7 +341,7 @@ benchmarks_instance_pallet! {
 		let approve = true;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash,
+			last_bound.clone(),
 			index,
 			approve,
 		)?;
@@ -350,7 +352,7 @@ benchmarks_instance_pallet! {
 		let approve = false;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash,
+			last_bound.clone(),
 			index,
 			approve,
 		)?;
@@ -358,11 +360,11 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: close(SystemOrigin::Signed(voter), last_hash, index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_bound.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
+		assert_has_event::<T, I>(Event::Disapproved { proposal_bounded: last_bound }.into());
 	}
 
 	close_early_approved {
@@ -387,9 +389,9 @@ benchmarks_instance_pallet! {
 		let threshold = 2;
 
 		// Add previous proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
@@ -397,13 +399,13 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
+			last_bound = T::Preimages::bound(proposal).unwrap();
 		}
 
 		// Caller switches vote to nay on their own proposal, allowing them to be the deciding approval vote
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash,
+			last_bound.clone(),
 			p - 1,
 			false,
 		)?;
@@ -414,7 +416,7 @@ benchmarks_instance_pallet! {
 			let approve = false;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash,
+				last_bound.clone(),
 				p - 1,
 				approve,
 			)?;
@@ -423,7 +425,7 @@ benchmarks_instance_pallet! {
 		// Member zero is the first aye
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(members[0].clone()).into(),
-			last_hash,
+			last_bound.clone(),
 			p - 1,
 			true,
 		)?;
@@ -435,15 +437,15 @@ benchmarks_instance_pallet! {
 		let approve = true;
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash,
+			last_bound.clone(),
 			index, approve,
 		)?;
 
-	}: close(SystemOrigin::Signed(caller), last_hash, index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(caller), last_bound.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Ok(()) }.into());
+		assert_has_event::<T, I>(Event::Executed { proposal_bounded: last_bound, result: Ok(()) }.into());
 	}
 
 	close_disapproved {
@@ -473,9 +475,9 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, bytes as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
@@ -483,7 +485,7 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
+			last_bound = T::Preimages::bound(proposal).unwrap();
 		}
 
 		let index = p - 1;
@@ -504,7 +506,7 @@ benchmarks_instance_pallet! {
 			}
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash,
+				last_bound.clone(),
 				index,
 				approve,
 			)?;
@@ -513,7 +515,7 @@ benchmarks_instance_pallet! {
 		// caller is prime, prime votes nay
 		Collective::<T, I>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash,
+			last_bound.clone(),
 			index,
 			false,
 		)?;
@@ -522,10 +524,10 @@ benchmarks_instance_pallet! {
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 
 		// Prime nay will close it as disapproved
-	}: close(SystemOrigin::Signed(caller), last_hash, index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(caller), last_bound.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
+		assert_has_event::<T, I>(Event::Disapproved { proposal_bounded: last_bound }.into());
 	}
 
 	close_approved {
@@ -555,9 +557,9 @@ benchmarks_instance_pallet! {
 		let threshold = 2;
 
 		// Add proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
@@ -565,13 +567,13 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
+			last_bound = T::Preimages::bound(proposal).unwrap();
 		}
 
 		// The prime member votes aye, so abstentions default to aye.
 		Collective::<T, _>::vote(
 			SystemOrigin::Signed(caller.clone()).into(),
-			last_hash,
+			last_bound.clone(),
 			p - 1,
 			true // Vote aye.
 		)?;
@@ -583,7 +585,7 @@ benchmarks_instance_pallet! {
 			let approve = false;
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash,
+				last_bound.clone(),
 				p - 1,
 				approve
 			)?;
@@ -594,10 +596,10 @@ benchmarks_instance_pallet! {
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 
 		// Prime aye will close it as approved
-	}: close(SystemOrigin::Signed(caller), last_hash, p - 1, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(caller), last_bound.clone(), p - 1, Weight::MAX, bytes_in_storage)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Ok(()) }.into());
+		assert_has_event::<T, I>(Event::Executed { proposal_bounded: last_bound, result: Ok(()) }.into());
 	}
 
 	disapprove_proposal {
@@ -626,9 +628,9 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
@@ -636,16 +638,16 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
+			last_bound = T::Preimages::bound(proposal).unwrap();
 		}
 
 		System::<T>::set_block_number(BlockNumberFor::<T>::max_value());
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 
-	}: _(SystemOrigin::Root, last_hash)
+	}: _(SystemOrigin::Root, last_bound.clone())
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Disapproved { proposal_hash: last_hash }.into());
+		assert_has_event::<T, I>(Event::Disapproved { proposal_bounded: last_bound }.into());
 	}
 
 	impl_benchmark_test_suite!(Collective, crate::tests::ExtBuilder::default().build(), crate::tests::Test);

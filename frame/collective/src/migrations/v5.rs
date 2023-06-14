@@ -20,7 +20,7 @@ use codec::{Decode, Encode};
 use frame_support::{
 	pallet_prelude::{OptionQuery, StorageVersion, TypeInfo, ValueQuery},
 	sp_runtime::Saturating,
-	traits::Get,
+	traits::{Get, StorePreimage},
 	weights::Weight,
 	BoundedVec, Identity, RuntimeDebug,
 };
@@ -67,40 +67,6 @@ pub struct OldVotes<AccountId, BlockNumber> {
 	pub end: BlockNumber,
 }
 
-pub fn migrate_proposals<T: Config<I>, I: 'static>() -> Weight {
-	// TODO: implement
-	Weight::zero()
-}
-
-pub fn migrate_votes<T: Config<I>, I: 'static>() -> Weight {
-	let mut count = 0u64;
-
-	crate::Voting::<T, I>::translate::<OldVotes<T::AccountId, BlockNumberFor<T>>, _>(|_, vote| {
-		count.saturating_inc();
-		Some(crate::Votes::<T::AccountId, BlockNumberFor<T>, <T as Config<I>>::MaxMembers> {
-			index: vote.index,
-			threshold: vote.threshold,
-			ayes: vote.ayes.try_into().expect(
-				format!(
-					"runtime::collective migration failed, ayes for vote {:?} should not overflow",
-					vote.index
-				)
-				.as_str(),
-			),
-			nays: vote.nays.try_into().expect(
-				format!(
-					"runtime::collective migration failed, nays for vote {:?} should not overflow",
-					vote.index,
-				)
-				.as_str(),
-			),
-			end: vote.end,
-		})
-	});
-
-	T::DbWeight::get().reads_writes(count, count)
-}
-
 pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
 	let storage_version = StorageVersion::get::<Pallet<T, I>>();
 	log::info!(
@@ -110,14 +76,43 @@ pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
 	);
 
 	if storage_version <= 4 {
-		let weight = Weight::zero();
+		let mut count = 0u64;
 
-		weight.saturating_add(migrate_votes::<T, I>());
-		weight.saturating_add(migrate_proposals::<T, I>());
+		Proposals::<T, I>::kill();
+
+		Voting::<T, I>::drain().for_each(|(hash, vote)| {
+			count.saturating_inc();
+
+			let proposal = ProposalOf::<T, I>::take(hash).expect("proposal should exist");
+			let proposal_bounded = <T as Config<I>>::Preimages::bound(proposal)
+				.expect("preimage bound failed, the call is too big");
+			let vote =
+				crate::Votes::<T::AccountId, BlockNumberFor<T>, <T as Config<I>>::MaxMembers> {
+					index: vote.index,
+					threshold: vote.threshold,
+					ayes: vote.ayes.try_into().expect(
+						format!(
+						"runtime::collective migration failed, ayes for vote {:?} should not overflow",
+						vote.index
+					)
+						.as_str(),
+					),
+					nays: vote.nays.try_into().expect(
+						format!(
+						"runtime::collective migration failed, nays for vote {:?} should not overflow",
+						vote.index,
+					)
+						.as_str(),
+					),
+					end: vote.end,
+				};
+
+			crate::Voting::<T, I>::insert(proposal_bounded, vote);
+		});
 
 		StorageVersion::new(5).put::<Pallet<T, I>>();
 
-		weight
+		T::DbWeight::get().reads_writes(count, count)
 	} else {
 		log::warn!(
 			target: "runtime::collective",
