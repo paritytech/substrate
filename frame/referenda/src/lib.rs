@@ -138,7 +138,7 @@ const ASSEMBLY_ID: LockIdentifier = *b"assembly";
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::EnsureOriginWithArg};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
@@ -167,7 +167,11 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
 		/// Origin from which proposals may be submitted.
-		type SubmitOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
+		type SubmitOrigin: EnsureOriginWithArg<
+			Self::RuntimeOrigin,
+			PalletsOriginOf<Self>,
+			Success = Self::AccountId,
+		>;
 		/// Origin from which any vote may be cancelled.
 		type CancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Origin from which any vote may be killed.
@@ -430,7 +434,8 @@ pub mod pallet {
 			proposal: BoundedCallOf<T, I>,
 			enactment_moment: DispatchTime<T::BlockNumber>,
 		) -> DispatchResult {
-			let who = T::SubmitOrigin::ensure_origin(origin)?;
+			let proposal_origin = *proposal_origin;
+			let who = T::SubmitOrigin::ensure_origin(origin, &proposal_origin)?;
 
 			let track =
 				T::Tracks::track_for(&proposal_origin).map_err(|_| Error::<T, I>::NoTrack)?;
@@ -445,7 +450,7 @@ pub mod pallet {
 				T::Preimages::bound(CallOf::<T, I>::from(Call::nudge_referendum { index }))?;
 			let status = ReferendumStatus {
 				track,
-				origin: *proposal_origin,
+				origin: proposal_origin,
 				proposal: proposal.clone(),
 				enactment: enactment_moment,
 				submitted: now,
