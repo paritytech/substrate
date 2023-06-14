@@ -175,7 +175,7 @@ mod tests {
 	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
 	use sp_runtime::{
-		testing::{Header, UintAuthorityId},
+		UintAuthorityId,
 		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		KeyTypeId, Perbill,
 	};

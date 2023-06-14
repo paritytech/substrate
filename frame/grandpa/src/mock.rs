@@ -36,7 +36,7 @@ use sp_keyring::Ed25519Keyring;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
-	testing::{Header, TestXt, UintAuthorityId},
+	testing::{TestXt, UintAuthorityId},
 	traits::{IdentityLookup, OpaqueKeys},
 	DigestItem, Perbill,
 };
