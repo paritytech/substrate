@@ -259,7 +259,7 @@ fn imports() -> Result<TokenStream2> {
 		Ok(FoundCrate::Name(frame_election_provider_support)) => {
 			let ident = syn::Ident::new(&frame_election_provider_support, Span::call_site());
 			Ok(quote!(
-					extern crate #ident as _feps;
+					use #ident as _feps;
 					use _feps::private as _fepsp;
 			))
 		},
