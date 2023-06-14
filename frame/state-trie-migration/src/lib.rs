@@ -1625,7 +1625,7 @@ pub(crate) mod remote_tests {
 
 	#[allow(dead_code)]
 	fn run_to_block<Runtime: crate::Config<Hash = H256>>(
-		n: <Runtime as frame_system::Config>::BlockNumber,
+		n: frame_system::BlockNumberOf<Runtime>,
 	) -> (H256, Weight) {
 		let mut root = Default::default();
 		let mut weight_sum = Weight::zero();
@@ -1665,7 +1665,7 @@ pub(crate) mod remote_tests {
 			frame_system::Pallet::<Runtime>::block_number()
 		});
 
-		let mut duration: <Runtime as frame_system::Config>::BlockNumber = Zero::zero();
+		let mut duration: frame_system::BlockNumberOf<Runtime> = Zero::zero();
 		// set the version to 1, as if the upgrade happened.
 		ext.state_version = sp_core::storage::StateVersion::V1;
 

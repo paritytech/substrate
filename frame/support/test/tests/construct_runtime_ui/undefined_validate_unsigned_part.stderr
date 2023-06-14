@@ -5,31 +5,35 @@ error: `Pallet` does not have #[pallet::validate_unsigned] defined, perhaps you 
    |   ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
 49 | / construct_runtime! {
-50 | |     pub struct Runtime where
-51 | |         Block = Block,
-52 | |         NodeBlock = Block,
-...  |
-57 | |     }
-58 | | }
+50 | |     pub struct Runtime
+51 | |     {
+52 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+53 | |         Pallet: pallet::{Pallet, ValidateUnsigned},
+54 | |     }
+55 | | }
    | |_- in this macro invocation
    |
    = note: this error originates in the macro `pallet::__substrate_validate_unsigned_check::is_validate_unsigned_part_defined` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
+error[E0437]: type `BlockNumber` is not a member of trait `frame_system::Config`
+  --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:26:2
+   |
+26 |     type BlockNumber = u32;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ not a member of trait `frame_system::Config`
+
 error[E0599]: no variant or associated item named `Pallet` found for enum `RuntimeCall` in the current scope
-  --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:56:3
+  --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:53:3
    |
 49 | // construct_runtime! {
-50 | ||     pub struct Runtime where
-51 | ||         Block = Block,
-52 | ||         NodeBlock = Block,
-...  ||
-55 | ||         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-56 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
+50 | ||     pub struct Runtime
+51 | ||     {
+52 | ||         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+53 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
    | ||        -^^^^^^ variant or associated item not found in `RuntimeCall`
    | ||________|
    | |
-57 | |      }
-58 | |  }
+54 | |      }
+55 | |  }
    | |__- variant or associated item `Pallet` not found for this enum
 
 error[E0599]: no function or associated item named `pre_dispatch` found for struct `pallet::Pallet` in the current scope
@@ -40,12 +44,12 @@ error[E0599]: no function or associated item named `pre_dispatch` found for stru
 ...
 49 |   construct_runtime! {
    |  _^
-50 | |     pub struct Runtime where
-51 | |         Block = Block,
-52 | |         NodeBlock = Block,
-...  |
-57 | |     }
-58 | | }
+50 | |     pub struct Runtime
+51 | |     {
+52 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+53 | |         Pallet: pallet::{Pallet, ValidateUnsigned},
+54 | |     }
+55 | | }
    | |_^ function or associated item not found in `Pallet<Runtime>`
    |
    = help: items from traits can only be used if the trait is implemented and in scope
@@ -62,12 +66,12 @@ error[E0599]: no function or associated item named `validate_unsigned` found for
 ...
 49 |   construct_runtime! {
    |  _^
-50 | |     pub struct Runtime where
-51 | |         Block = Block,
-52 | |         NodeBlock = Block,
-...  |
-57 | |     }
-58 | | }
+50 | |     pub struct Runtime
+51 | |     {
+52 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+53 | |         Pallet: pallet::{Pallet, ValidateUnsigned},
+54 | |     }
+55 | | }
    | |_^ function or associated item not found in `Pallet<Runtime>`
    |
    = help: items from traits can only be used if the trait is implemented and in scope

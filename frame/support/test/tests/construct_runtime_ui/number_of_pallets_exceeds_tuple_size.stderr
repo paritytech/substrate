@@ -1,8 +1,20 @@
 error: The number of pallets exceeds the maximum number of tuple elements. To increase this limit, enable the tuples-96 feature of [frame_support].
-  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:50:2
+   --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:50:2
+    |
+50  | /     pub struct Runtime
+51  | |     {
+52  | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+53  | |         Pallet1: pallet::{Pallet},
+...   |
+162 | |         Pallet110: pallet::{Pallet},
+163 | |     }
+    | |_____^
+
+error[E0437]: type `BlockNumber` is not a member of trait `frame_system::Config`
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:26:2
    |
-50 |     pub struct Runtime where
-   |     ^^^
+26 |     type BlockNumber = u32;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^ not a member of trait `frame_system::Config`
 
 error[E0412]: cannot find type `RuntimeCall` in this scope
   --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:18:64
@@ -57,5 +69,5 @@ help: you might have meant to use the associated type
    |                       ~~~~~~~~~~~~~~~~
 help: consider importing this trait
    |
-1  | use frame_support::traits::PalletInfo;
+1  + use frame_support::traits::PalletInfo;
    |
