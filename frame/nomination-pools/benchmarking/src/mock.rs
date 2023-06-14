@@ -25,6 +25,7 @@ use sp_runtime::{
 
 type AccountId = u128;
 type AccountIndex = u32;
+type BlockNumber = u64;
 type Balance = u128;
 
 impl frame_system::Config for Runtime {
