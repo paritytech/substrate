@@ -3,4 +3,4 @@ error: feature = 1
  --> tests/construct_runtime_ui/invalid_meta_literal.rs:7:3
   |
 7 |         #[cfg(feature = 1)]
-  |         ^^^^^^^^^^^^^^^^^^^
+  |         ^

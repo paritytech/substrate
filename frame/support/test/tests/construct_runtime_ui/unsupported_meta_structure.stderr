@@ -3,4 +3,4 @@ error: feature(test)
  --> tests/construct_runtime_ui/unsupported_meta_structure.rs:7:3
   |
 7 |         #[cfg(feature(test))]
-  |         ^^^^^^^^^^^^^^^^^^^^^
+  |         ^
