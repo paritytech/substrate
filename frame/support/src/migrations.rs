@@ -18,7 +18,6 @@
 #[cfg(feature = "try-runtime")]
 use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
-	dispatch::DispatchClass,
 	storage::transactional::with_transaction_opaque_err,
 	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
 	weights::{RuntimeDbWeight, Weight, WeightMeter},

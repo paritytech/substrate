@@ -145,7 +145,6 @@ pub use weights::WeightInfo;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use core::ops::ControlFlow;
 use frame_support::{
-	dispatch::DispatchClass,
 	migrations::*,
 	traits::Get,
 	weights::{Weight, WeightMeter},

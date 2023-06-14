@@ -23,7 +23,6 @@ use core::cell::RefCell;
 #[use_attr]
 use frame_support::derive_impl;
 use frame_support::{
-	dispatch::DispatchClass,
 	macro_magic::use_attr,
 	migrations::*,
 	traits::{OnFinalize, OnInitialize},
@@ -180,11 +179,11 @@ pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
 	ext.execute_with(f)
 }
 
-pub struct LoggingSuspender<Inner>(core::marker::PhantomData<Inner>);
-impl<Inner: UpgradeStatusQuery> UpgradeStatusQuery for LoggingSuspender<Inner> {
-	fn is_suspended(class: DispatchClass) -> bool {
-		let res = Inner::is_suspended(class);
-		log::debug!("Is {class:?} suspended: {res}");
+pub struct LoggingQuery<Inner>(core::marker::PhantomData<Inner>);
+impl<Inner: UpgradeStatusQuery> UpgradeStatusQuery for LoggingQuery<Inner> {
+	fn is_upgrading() -> bool {
+		let res = Inner::is_upgrading();
+		log::debug!("Is upgrading: {res}");
 		res
 	}
 }

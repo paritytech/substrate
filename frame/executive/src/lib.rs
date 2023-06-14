@@ -118,9 +118,7 @@
 
 use codec::{Codec, Encode};
 use frame_support::{
-	dispatch::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, WithPostDispatchInfo,
-	},
+	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
 	pallet_prelude::InvalidTransaction,
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
@@ -135,7 +133,7 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, DispatchError,
+	ApplyExtrinsicResult,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
