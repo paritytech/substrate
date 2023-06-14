@@ -29,7 +29,6 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let frame_support = &def.frame_support;
 	let type_impl_gen = &def.type_impl_generics(genesis_build.attr_span);
-	let type_use_gen = &def.type_use_generics(genesis_build.attr_span);
 	let trait_use_gen = if def.config.has_instance {
 		quote::quote_spanned!(genesis_build.attr_span => T, I)
 	} else {
@@ -52,7 +51,7 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 				storage: &mut #frame_support::sp_runtime::Storage,
 			) -> std::result::Result<(), std::string::String> {
 				#frame_support::BasicExternalities::execute_with_storage(storage, || {
-					<Self as #frame_support::traits::GenesisBuild<#type_use_gen>>::build(self);
+					<Self as #frame_support::traits::BuildGenesisConfig>::build(self);
 					Ok(())
 				})
 			}
