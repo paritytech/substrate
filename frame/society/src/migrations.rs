@@ -40,7 +40,7 @@ impl<
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		assert!(
-			can_migrate(),
+			can_migrate::<T, I>(),
 			"Invalid (perhaps already-migrated) state detected prior to migration"
 		);
 		Ok(Vec::new())
