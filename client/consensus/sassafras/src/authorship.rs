@@ -146,7 +146,7 @@ fn generate_epoch_tickets(
 
 			debug!(target: LOG_TARGET, ">>> Creating ring proof for attempt {}", attempt_idx);
 			let sign_data = ticket_body_sign_data(&data);
-			let _ring_signature = keystore
+			let ring_signature = keystore
 				.bandersnatch_ring_vrf_sign(
 					AuthorityId::ID,
 					authority_id.as_ref(),
@@ -156,20 +156,20 @@ fn generate_epoch_tickets(
 				.ok()??;
 			debug!(target: LOG_TARGET, ">>> ...done");
 
-			let ticket_envelope = TicketEnvelope { data, vrf_preout, ring_signature: () };
+			let ticket_envelope = TicketEnvelope { data, vrf_preout, ring_signature };
 
 			let ticket_secret = TicketSecret { attempt_idx, erased_secret: erased_seed };
 
-			Some((ticket_envelope, ticket_id, ticket_secret))
+			Some((ticket_id, ticket_envelope, ticket_secret))
 		};
 
 		for attempt in 0..max_attempts {
-			if let Some((envelope, ticket_id, ticket_secret)) = make_ticket(attempt) {
+			if let Some((ticket_id, ticket_envelope, ticket_secret)) = make_ticket(attempt) {
 				log::debug!(target: LOG_TARGET, "    → {ticket_id:016x}");
 				epoch
 					.tickets_aux
 					.insert(ticket_id, (authority_idx as AuthorityIndex, ticket_secret));
-				tickets.push(envelope);
+				tickets.push(ticket_envelope);
 			}
 		}
 	}

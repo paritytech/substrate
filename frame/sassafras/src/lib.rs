@@ -366,7 +366,7 @@ pub mod pallet {
 			let epoch_idx = EpochIndex::<T>::get() + 1;
 
 			let mut segment = BoundedVec::with_max_capacity();
-			for ticket in tickets.iter() {
+			for ticket in tickets {
 				let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(
 					&randomness,
 					ticket.data.attempt_idx,
@@ -379,6 +379,9 @@ pub mod pallet {
 						.try_push(ticket_id)
 						.expect("has same length as bounded input vector; qed");
 				}
+
+				// TODO davxy TEST RING PROOF
+				log::debug!(target: LOG_TARGET, "Checking ring proof for {:16x}", ticket_id);
 			}
 
 			if !segment.is_empty() {

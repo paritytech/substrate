@@ -11,7 +11,7 @@ use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
 // Genesis constants for Sassafras parameters configuration.
-const SASSAFRAS_TICKETS_MAX_ATTEMPTS_NUMBER: u32 = 16;
+const SASSAFRAS_TICKETS_MAX_ATTEMPTS_NUMBER: u32 = 8;
 const SASSAFRAS_TICKETS_REDUNDANCY_FACTOR: u32 = 1;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.

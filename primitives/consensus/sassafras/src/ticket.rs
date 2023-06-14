@@ -43,9 +43,8 @@ pub struct TicketData {
 	pub revealed_public: [u8; 32],
 }
 
-/// Ticket ring proof.
-/// TODO-SASS-P3: this is a placeholder.
-pub type TicketRingProof = ();
+/// Ticket ring vrf signature.
+pub type TicketRingSignature = RingVrfSignature;
 
 /// Ticket envelope used on during submission.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -55,7 +54,7 @@ pub struct TicketEnvelope {
 	/// VRF pre-output used to generate the ticket id.
 	pub vrf_preout: VrfOutput,
 	/// Ring signature.
-	pub ring_signature: TicketRingProof,
+	pub ring_signature: TicketRingSignature,
 }
 
 /// Ticket auxiliary information used to claim the ticket ownership.
