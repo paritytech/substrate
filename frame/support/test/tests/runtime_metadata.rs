@@ -108,9 +108,7 @@ sp_api::impl_runtime_apis! {
 }
 
 #[test]
-fn runtime_metadata() {
-	use sp_runtime::traits::HeaderProvider;
-	
+fn runtime_metadata() {	
 	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
 		if cfg!(feature = "no-metadata-docs") {
 			vec![]
