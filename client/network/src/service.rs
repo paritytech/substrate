@@ -36,7 +36,7 @@ use crate::{
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	peer_store::{PeerStore, PeerStoreHandle, PeerStoreProvider},
+	peer_store::{PeerStoreHandle, PeerStoreProvider},
 	protocol::{self, NotifsHandlerError, Protocol, Ready},
 	protocol_controller::{self, ProtoSetConfig, ProtocolController, SetId},
 	request_responses::{IfDisconnected, RequestFailure},
