@@ -178,6 +178,9 @@
 //! untrusted score may take. If `MinimumUntrustedScoreUpdateInterval` is set to 0 or None, the
 //! on-chain update mechanims is effectively disabled.
 //!
+//! If the untrusted minimum score interval changes in a runtime upgrade, the average state resets
+//! and it will start being calculated again in the next era.
+//!
 //! ## Accuracy
 //!
 //! The accuracy of the election is configured via [`SolutionAccuracyOf`] which is the accuracy that
@@ -251,10 +254,9 @@ use frame_election_provider_support::{
 	InstantElectionProvider, NposSolution,
 };
 use frame_support::{
-	defensive,
 	dispatch::DispatchClass,
 	ensure,
-	traits::{Currency, DefensiveResult, Get, OnUnbalanced, ReservableCurrency},
+	traits::{Currency, Defensive, DefensiveResult, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
 	DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
@@ -999,6 +1001,7 @@ pub mod pallet {
 			// reset minimum untrusted score average.
 			<MinimumUntrustedScoreAvg<T>>::put((
 				0,
+				T::MinimumUntrustedScoreUpdateInterval::get().unwrap_or(0),
 				maybe_next_score.unwrap_or(ElectionScore::default()),
 			));
 
@@ -1390,10 +1393,14 @@ pub mod pallet {
 	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
 
 	/// Rolling average of the [`MinimumUntrustedScore`] up to the previous
-	/// `MinimumUntrustedScoreUpdateInterval` elections. The index refers to how many successful
-	/// elections have passed since the current rolling average calculation started.
+	/// `MinimumUntrustedScoreUpdateInterval` elections.
+	///
+	/// The first index refers to how many successful elections have passed since the current
+	/// rolling average calculation started. The second item keeps track of the interval that the
+	/// current average has been calculated with, so that we can detect if the interval value has
+	/// changed and reset the average.
 	#[pallet::storage]
-	pub type MinimumUntrustedScoreAvg<T: Config> = StorageValue<_, (u32, ElectionScore)>;
+	pub type MinimumUntrustedScoreAvg<T: Config> = StorageValue<_, (u32, u32, ElectionScore)>;
 
 	/// Lower bound of the value that the [`MinimumUntrustedScore`] may be updated to through the
 	/// on-chain mechanism.
@@ -1625,12 +1632,7 @@ impl<T: Config> Pallet<T> {
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
-				match Self::try_update_minimum_untrusted_score(score) {
-					Ok(_) => (),
-					Err(e) => {
-						defensive!("minimum score update: {:?}", e);
-					},
-				};
+				let _ = Self::try_update_minimum_untrusted_score(score).defensive();
 
 				supports
 			})
@@ -1650,6 +1652,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// If the untrusted minimum score is updated, the new value is a percentage (defined by
 	/// `MinimumUntrustedScoreMargin`) of the rolling average of the previous election scores.
+	///
+	/// The new rolling average value is calculated by adding the weight of the new score (i.e.
+	/// score/interval) to the current rolling average. Once the rolling average includes `interval`
+	/// score weights, the new minimum untrusted score is set and the average state reset for next
+	/// era.
 	fn try_update_minimum_untrusted_score(score: ElectionScore) -> Result<(), &'static str> {
 		let update_interval = T::MinimumUntrustedScoreUpdateInterval::get().unwrap_or(0);
 		if update_interval == 0 {
@@ -1658,8 +1665,20 @@ impl<T: Config> Pallet<T> {
 			return Ok(())
 		}
 
-		let (sliding_window_counter, rolling_average_score) =
-			<MinimumUntrustedScoreAvg<T>>::get().unwrap_or((0, ElectionScore::default()));
+		let (sliding_window_counter, stored_interval, rolling_avg_score) =
+			<MinimumUntrustedScoreAvg<T>>::get().unwrap_or((
+				0,
+				update_interval,
+				ElectionScore::default(),
+			));
+
+		// if the interval used to calculate the rolling average so far is different from what is
+		// set in `MinimumUntrustedScoreUpdateInterval`, reset the average and return early. This
+		// may happen when the update interval has been changed in a runtime upgrade.
+		if stored_interval != update_interval {
+			<MinimumUntrustedScoreAvg<T>>::put((0, update_interval, ElectionScore::default()));
+			return Ok(())
+		}
 
 		// update the rolling average score.
 		let score_weight = match score.checked_div(update_interval.into()) {
@@ -1669,26 +1688,25 @@ impl<T: Config> Pallet<T> {
 			// the on-chain untrusted score update is disabled.
 			None => return Err("tried to divide score by zero, return early."),
 		};
-		let average_score = rolling_average_score.checked_add(&score_weight).unwrap_or(score);
+		let new_rolling_avg_score = rolling_avg_score.checked_add(&score_weight).unwrap_or(score);
 
 		// not yet time to update the minimum untrusted score. Update the score _average_ in
 		// storage and return.
 		if (sliding_window_counter + 1) < update_interval {
-			<MinimumUntrustedScoreAvg<T>>::put((sliding_window_counter + 1, average_score));
+			<MinimumUntrustedScoreAvg<T>>::put((
+				sliding_window_counter + 1,
+				update_interval,
+				new_rolling_avg_score,
+			));
 			return Ok(())
 		}
 
-		let minimum_untrusted_score =
-			if let Some(backstop_election_score) = <MinimumUntrustedScoreBackstop<T>>::get() {
-				average_score
-					.fraction_of(Percent::from_percent(100) - T::MinimumUntrustedScoreMargin::get())
-					.max(backstop_election_score)
-			} else {
-				average_score
-					.fraction_of(Percent::from_percent(100) - T::MinimumUntrustedScoreMargin::get())
-			};
+		let minimum_untrusted_score = new_rolling_avg_score
+			.fraction_of(Percent::from_percent(100) - T::MinimumUntrustedScoreMargin::get())
+			.max(<MinimumUntrustedScoreBackstop<T>>::get().unwrap_or_default());
 
-		<MinimumUntrustedScoreAvg<T>>::put((0, ElectionScore::default()));
+		// reset average state and sets the new minimum untrusted score.
+		<MinimumUntrustedScoreAvg<T>>::put((0, update_interval, ElectionScore::default()));
 		<MinimumUntrustedScore<T>>::put(minimum_untrusted_score);
 
 		Self::deposit_event(Event::NewMinimumUntrustedScore { score: minimum_untrusted_score });
@@ -2796,6 +2814,7 @@ mod tests {
 				<MinimumUntrustedScoreAvg<Runtime>>::get(),
 				Some((
 					1,
+					3,
 					ElectionScore { minimal_stake: 33, sum_stake: 33, sum_stake_squared: 33 }
 				))
 			);
@@ -2811,6 +2830,7 @@ mod tests {
 				<MinimumUntrustedScoreAvg<Runtime>>::get(),
 				Some((
 					2,
+					3,
 					ElectionScore { minimal_stake: 99, sum_stake: 99, sum_stake_squared: 99 }
 				))
 			);
@@ -2826,7 +2846,7 @@ mod tests {
 			// score average is reset.
 			assert_eq!(
 				<MinimumUntrustedScoreAvg<Runtime>>::get(),
-				Some((0, ElectionScore::default()))
+				Some((0, 3, ElectionScore::default()))
 			);
 
 			// the average score after election with score [100, 200, 300] should be ~200 (+/-
@@ -2873,6 +2893,30 @@ mod tests {
 						}
 					},
 				]
+			);
+		})
+	}
+
+	#[test]
+	fn untrusted_score_interval_update_works() {
+		ExtBuilder::default().untrusted_score_interval(Some(5)).build_and_execute(|| {
+			assert_eq!(<MinimumUntrustedScoreUpdateInterval>::get(), Some(5));
+
+			assert_ok!(queue_solution_and_elect(ReadySolution { ..Default::default() }));
+			assert_ok!(queue_solution_and_elect(ReadySolution { ..Default::default() }));
+			assert_eq!(
+				<MinimumUntrustedScoreAvg<Runtime>>::get(),
+				Some((2, 5, ElectionScore::default())),
+			);
+
+			<MinimumUntrustedScoreUpdateInterval>::set(Some(10));
+
+			// after an interval update, the average score state reset. the new average will
+			// start being computed in the next election.
+			assert_ok!(queue_solution_and_elect(ReadySolution { ..Default::default() }));
+			assert_eq!(
+				<MinimumUntrustedScoreAvg<Runtime>>::get(),
+				Some((0, 10, ElectionScore::default())),
 			);
 		})
 	}
