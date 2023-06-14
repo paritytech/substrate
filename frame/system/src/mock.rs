@@ -26,7 +26,6 @@ use sp_runtime::{
 	BuildStorage, Perbill,
 };
 
-type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
