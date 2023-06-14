@@ -36,7 +36,6 @@ use sp_std::cell::RefCell;
 use super::*;
 use crate as pallet_salary;
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

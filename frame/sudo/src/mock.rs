@@ -90,7 +90,6 @@ pub mod logger {
 	pub(super) type I32Log<T> = StorageValue<_, BoundedVec<i32, ConstU32<1_000>>, ValueQuery>;
 }
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

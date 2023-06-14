@@ -32,7 +32,6 @@ use sp_runtime::{
 	AccountId32,
 };
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub const MIN_ALLOWED_STATEMENTS: u32 = 4;

@@ -237,7 +237,6 @@ impl Config for Test {
 	type RetirementPeriod = RetirementPeriod;
 }
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

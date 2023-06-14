@@ -21,17 +21,17 @@
 
 use frame_support::traits::{Contains, OriginTrait};
 use sp_core::ConstU32;
-use sp_runtime::{generic, RuntimeDebug, traits::BlakeTwo256};
+use sp_runtime::{generic, traits::BlakeTwo256, RuntimeDebug};
 
-use frame_support::macro_magic::use_attr;
 #[use_attr]
 use frame_support::derive_impl;
+use frame_support::macro_magic::use_attr;
 
 mod nested {
 	#[frame_support::pallet(dev_mode)]
 	pub mod module {
-		use frame_system::pallet_prelude::*;
 		use frame_support::pallet_prelude::*;
+		use frame_system::pallet_prelude::*;
 
 		#[pallet::pallet]
 		pub struct Pallet<T>(_);
@@ -77,8 +77,8 @@ mod nested {
 #[frame_support::pallet(dev_mode)]
 pub mod module {
 	use super::*;
-	use frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);

@@ -42,8 +42,8 @@ use std::fmt;
 
 use codec::{Decode, Encode, Input};
 use scale_info::TypeInfo;
-pub use sp_runtime::{create_runtime_str, StateVersion};
 use sp_runtime::RuntimeString;
+pub use sp_runtime::{create_runtime_str, StateVersion};
 #[doc(hidden)]
 pub use sp_std;
 

@@ -174,7 +174,6 @@ mod tests {
 	};
 	use frame_system::limits;
 
-	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(

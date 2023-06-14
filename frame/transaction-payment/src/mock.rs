@@ -33,7 +33,6 @@ use frame_support::{
 use frame_system as system;
 use pallet_balances::Call as BalancesCall;
 
-
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(

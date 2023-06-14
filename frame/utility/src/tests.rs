@@ -125,7 +125,6 @@ mod mock_democracy {
 	}
 }
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

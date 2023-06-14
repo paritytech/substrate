@@ -16,7 +16,9 @@
 // limitations under the License.
 
 use codec::Encode;
-use frame_support::{storage::unhashed, StoragePrefixedMap};
+#[use_attr]
+use frame_support::derive_impl;
+use frame_support::{macro_magic::use_attr, storage::unhashed, StoragePrefixedMap};
 use sp_core::{sr25519, ConstU32};
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
@@ -26,9 +28,6 @@ use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
 };
-use frame_support::macro_magic::use_attr;
-#[use_attr]
-use frame_support::derive_impl;
 
 #[frame_support::pallet]
 mod no_instance {

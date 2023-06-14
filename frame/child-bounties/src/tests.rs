@@ -40,7 +40,6 @@ use sp_runtime::{
 
 use super::Event as ChildBountiesEvent;
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 type BountiesError = pallet_bounties::Error<Test>;
 

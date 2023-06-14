@@ -39,7 +39,6 @@ use frame_support::{
 use super::*;
 use crate::{self as pallet_tips, Event as TipEvent};
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

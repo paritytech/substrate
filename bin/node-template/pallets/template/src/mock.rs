@@ -6,7 +6,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.

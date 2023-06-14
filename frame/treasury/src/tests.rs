@@ -36,7 +36,6 @@ use frame_support::{
 use super::*;
 use crate as treasury;
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 type UtilityCall = pallet_utility::Call<Test>;
 type TreasuryCall = crate::Call<Test>;

@@ -66,7 +66,6 @@ pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> 
 	OnOffencePerbill::mutate(|fractions| f(fractions))
 }
 
-
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(

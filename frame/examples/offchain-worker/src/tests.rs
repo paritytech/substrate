@@ -30,11 +30,10 @@ use sp_core::{
 
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use sp_runtime::{
-	testing::{TestXt},
+	testing::TestXt,
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	RuntimeAppPublic,
 };
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

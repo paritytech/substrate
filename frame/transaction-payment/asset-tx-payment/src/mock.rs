@@ -34,14 +34,12 @@ use sp_runtime::{
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup, SaturatedConversion},
 };
 
-
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type Balance = u64;
 type AccountId = u64;
 
 frame_support::construct_runtime!(
-	pub struct Runtime
-	{
+	pub struct Runtime {
 		System: system,
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,

@@ -180,7 +180,6 @@ mod tests {
 		KeyTypeId, Perbill,
 	};
 
-	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(

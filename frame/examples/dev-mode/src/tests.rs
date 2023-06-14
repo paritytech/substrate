@@ -28,7 +28,6 @@ use sp_runtime::{
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_dev_mode;
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // For testing the pallet, we construct a mock runtime.

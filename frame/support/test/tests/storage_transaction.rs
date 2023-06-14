@@ -18,9 +18,13 @@
 // Disable warnings for #\[transactional\] being deprecated.
 #![allow(deprecated)]
 
+pub use self::pallet::*;
+#[use_attr]
+use frame_support::derive_impl;
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop,
 	dispatch::DispatchResult,
+	macro_magic::use_attr,
 	storage::{with_transaction, TransactionOutcome::*},
 	transactional,
 };
@@ -31,16 +35,12 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Verify},
 	TransactionOutcome,
 };
-use frame_support::macro_magic::use_attr;
-#[use_attr]
-use frame_support::derive_impl;
-pub use self::pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_system::pallet_prelude::*;
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]

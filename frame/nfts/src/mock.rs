@@ -32,7 +32,6 @@ use sp_runtime::{
 	MultiSignature,
 };
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(

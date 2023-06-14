@@ -34,7 +34,6 @@ use sp_runtime::{
 	MultiSignature,
 };
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 type Signature = MultiSignature;
 type AccountPublic = <Signature as Verify>::Signer;

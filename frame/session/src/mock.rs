@@ -75,7 +75,6 @@ impl OpaqueKeys for PreUpgradeMockSessionKeys {
 	}
 }
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 #[cfg(feature = "historical")]

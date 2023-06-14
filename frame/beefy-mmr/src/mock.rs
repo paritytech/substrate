@@ -45,7 +45,6 @@ impl_opaque_keys! {
 	}
 }
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(

@@ -22,8 +22,12 @@
 #![recursion_limit = "128"]
 
 use codec::MaxEncodedLen;
-use frame_support::{parameter_types, traits::PalletInfo as _};
-use frame_system::limits::{BlockWeights, BlockLength};
+#[use_attr]
+use frame_support::derive_impl;
+use frame_support::{
+	macro_magic::use_attr, parameter_types, traits::PalletInfo as _, weights::RuntimeDbWeight,
+};
+use frame_system::limits::{BlockLength, BlockWeights};
 use scale_info::TypeInfo;
 use sp_core::{sr25519, ConstU32};
 use sp_runtime::{
@@ -31,10 +35,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Verify},
 	DispatchError, ModuleError,
 };
-use frame_support::macro_magic::use_attr;
-#[use_attr]
-use frame_support::derive_impl;
-use frame_support::weights::RuntimeDbWeight;
 use sp_version::RuntimeVersion;
 
 parameter_types! {
@@ -43,8 +43,8 @@ parameter_types! {
 
 #[frame_support::pallet(dev_mode)]
 mod module1 {
-	use frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);
@@ -80,9 +80,9 @@ mod module1 {
 
 #[frame_support::pallet(dev_mode)]
 mod module2 {
-	use frame_system::pallet_prelude::*;
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -126,9 +126,9 @@ mod nested {
 
 	#[frame_support::pallet(dev_mode)]
 	pub mod module3 {
-		use frame_system::pallet_prelude::*;
 		use super::*;
 		use frame_support::pallet_prelude::*;
+		use frame_system::pallet_prelude::*;
 
 		#[pallet::pallet]
 		pub struct Pallet<T>(_);
@@ -180,9 +180,9 @@ mod nested {
 
 #[frame_support::pallet(dev_mode)]
 pub mod module3 {
-	use frame_system::pallet_prelude::*;
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -464,7 +464,8 @@ fn origin_codec() {
 fn event_codec() {
 	use codec::Encode;
 
-	let event = frame_system::Event::<Runtime>::ExtrinsicSuccess { dispatch_info: Default::default() };
+	let event =
+		frame_system::Event::<Runtime>::ExtrinsicSuccess { dispatch_info: Default::default() };
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 30);
 
 	let event = module1::Event::<Runtime, module1::Instance1>::A(test_pub());

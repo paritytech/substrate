@@ -34,7 +34,6 @@ use sp_runtime::{
 use super::*;
 use crate as pallet_ranked_collective;
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 type Class = Rank;
 

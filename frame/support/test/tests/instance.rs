@@ -17,8 +17,11 @@
 
 #![recursion_limit = "128"]
 
+#[use_attr]
+use frame_support::derive_impl;
 use frame_support::{
 	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
+	macro_magic::use_attr,
 	metadata_ir::{
 		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
 		StorageEntryTypeIR, StorageHasherIR,
@@ -31,9 +34,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Verify},
 	BuildStorage,
 };
-use frame_support::macro_magic::use_attr;
-#[use_attr]
-use frame_support::derive_impl;
 
 pub trait Currency {}
 
@@ -42,9 +42,9 @@ pub trait Currency {}
 // * Origin, Inherent, Event
 #[frame_support::pallet(dev_mode)]
 mod module1 {
-	use frame_system::pallet_prelude::*;
-	use frame_support::pallet_prelude::*;
 	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);

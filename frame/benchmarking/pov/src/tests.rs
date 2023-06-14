@@ -164,7 +164,6 @@ fn noop_is_free() {
 mod mock {
 	use sp_runtime::testing::H256;
 
-	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(

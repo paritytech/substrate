@@ -28,7 +28,6 @@ use sp_runtime::{
 use super::*;
 use crate as pallet_vesting;
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

@@ -33,7 +33,6 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(

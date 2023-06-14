@@ -25,10 +25,7 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_mmr_primitives::{Compact, LeafDataProvider};
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup, Keccak256},
-};
-
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup, Keccak256};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

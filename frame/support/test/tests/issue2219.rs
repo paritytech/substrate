@@ -15,20 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[use_attr]
+use frame_support::derive_impl;
+use frame_support::macro_magic::use_attr;
 use sp_core::{sr25519, ConstU32};
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
 };
-use frame_support::macro_magic::use_attr;
-#[use_attr]
-use frame_support::derive_impl;
 
 #[frame_support::pallet]
 mod module {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-use sp_core::ConstU64;
+	use sp_core::ConstU64;
 
 	pub type Request<T> =
 		(<T as frame_system::Config>::AccountId, Role, frame_system::BlockNumberOf<T>);
@@ -177,8 +177,7 @@ impl frame_system::Config for Runtime {
 impl module::Config for Runtime {}
 
 frame_support::construct_runtime!(
-	pub struct Runtime
-	{
+	pub struct Runtime {
 		System: frame_system,
 		Module: module,
 	}
