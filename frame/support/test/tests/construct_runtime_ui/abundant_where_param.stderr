@@ -1,5 +1,0 @@
-error: `Block` was declared above. Please use exactly one declaration for `Block`.
- --> $DIR/abundant_where_param.rs:7:3
-  |
-7 |         Block = Block1,
-  |         ^^^^^

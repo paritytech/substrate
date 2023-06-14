@@ -1,5 +1,0 @@
-error: Missing associated type for `UncheckedExtrinsic`. Add `UncheckedExtrinsic` = ... to where section.
- --> tests/construct_runtime_ui/missing_where_param.rs:7:2
-  |
-7 |     {}
-  |     ^
