@@ -233,8 +233,17 @@ impl<
 			+ OffchainWorker<System::BlockNumber>
 			+ frame_support::traits::TryState<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
+		MultiStepMigrator: frame_support::migrations::MultiStepMigrator,
+	>
+	Executive<
+		System,
+		Block,
+		Context,
+		UnsignedValidator,
+		AllPalletsWithSystem,
+		COnRuntimeUpgrade,
+		MultiStepMigrator,
+	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -304,7 +313,12 @@ where
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
-		Self::idle_and_finalize_hook(*header.number());
+		let is_upgrading = MultiStepMigrator::is_upgrading(); // FAIL-CI fix this properly
+		if !is_upgrading {
+			Self::on_idle_hook(*header.number());
+		}
+
+		Self::on_finalize_hook(*header.number());
 
 		// run the try-state checks of all pallets, ensuring they don't alter any state.
 		let _guard = frame_support::StorageNoopGuard::default();
