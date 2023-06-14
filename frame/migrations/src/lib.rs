@@ -487,11 +487,14 @@ impl<T: Config> Pallet<T> {
 				return Some(ControlFlow::Continue(cursor))
 			},
 			Err(SteppedMigrationError::InsufficientWeight { required }) => {
-				if is_first || required.any_gt(meter.limit) {
-					// Note: No `MigrationFailed` event since the migration did not fail.
+				if !is_first || required.any_gt(meter.limit) {
+					Self::deposit_event(Event::MigrationFailed { index: cursor.index, blocks });
 					Self::upgrade_failed(Some(cursor.index));
-				} // else: Hope that it gets better in the next block.
-				return None
+					None
+				} else {
+					// else: Hope that it gets better in the next block.
+					Some(ControlFlow::Continue(cursor))
+				}
 			},
 			Err(SteppedMigrationError::InvalidCursor | SteppedMigrationError::Failed) => {
 				Self::deposit_event(Event::MigrationFailed { index: cursor.index, blocks });
@@ -501,6 +504,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Fail the current runtime upgrade.
 	fn upgrade_failed(migration: Option<u32>) {
 		use FailedUpgradeHandling::*;
 		Self::deposit_event(Event::UpgradeFailed);

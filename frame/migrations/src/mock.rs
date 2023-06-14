@@ -64,10 +64,11 @@ pub enum MockedMigrationKind {
 	SucceedAfter,
 	FailAfter,
 	TimeoutAfter,
+	HightWeightAfter,
 }
 use MockedMigrationKind::*; // C style
 
-/// A migration that succeeds or fails after a certain number of steps.
+/// A migration that does something after a certain number of steps.
 pub struct MockedMigration(MockedMigrationKind, u32);
 
 impl SteppedMigration for MockedMigration {
@@ -100,6 +101,10 @@ impl SteppedMigration for MockedMigration {
 				log::debug!("MockedMigration: Succeeded after {} steps", count);
 				Ok(None)
 			},
+			HightWeightAfter => {
+				log::debug!("MockedMigration: Not enough weight after {} steps", count);
+				Err(SteppedMigrationError::InsufficientWeight { required: Weight::from_all(100) })
+			},
 			FailAfter => {
 				log::debug!("MockedMigration: Failed after {} steps", count);
 				Err(SteppedMigrationError::Failed)
@@ -113,7 +118,7 @@ type MockedCursor = BoundedVec<u8, ConstU32<1024>>;
 type MockedIdentifier = BoundedVec<u8, ConstU32<256>>;
 
 frame_support::parameter_types! {
-	pub const ServiceWeight: Weight = Weight::MAX;
+	pub const ServiceWeight: Weight = Weight::MAX.div(10);
 }
 
 thread_local! {
