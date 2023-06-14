@@ -158,8 +158,8 @@ where
 	BalanceOf<T>: Send
 		+ Sync
 		+ FixedPointOperand
-		+ IsType<ChargeAssetBalanceOf<T>>
-		+ IsType<ChargeAssetLiquidityOf<T>>,
+		+ Into<ChargeAssetBalanceOf<T>>
+		+ From<ChargeAssetLiquidityOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
 {
 	/// Utility constructor. Used only in client/factory code.
@@ -219,8 +219,9 @@ where
 		+ Sync
 		+ From<u64>
 		+ FixedPointOperand
-		+ IsType<ChargeAssetBalanceOf<T>>
-		+ IsType<ChargeAssetLiquidityOf<T>>,
+		+ Into<ChargeAssetBalanceOf<T>>
+		+ Into<ChargeAssetLiquidityOf<T>>
+		+ From<ChargeAssetLiquidityOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
 {
 	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
