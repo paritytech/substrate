@@ -30,7 +30,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{v10, v11, v9, Migrate},
+	migration::{v10, v11, v12, v9, Migrate},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -212,7 +212,7 @@ benchmarks! {
 		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
-	// This benchmarks the v9 migration step. (update codeStorage)
+	// This benchmarks the v9 migration step (update codeStorage).
 	#[pov_mode = Measured]
 	v9_migration_step {
 		let c in 0 .. T::MaxCodeLen::get();
@@ -222,25 +222,37 @@ benchmarks! {
 		m.step();
 	}
 
-	// This benchmarks the v10 migration step. (use dedicated deposit_account)
+	// This benchmarks the v10 migration step (use dedicated deposit_account).
 	#[pov_mode = Measured]
 	v10_migration_step {
 		let contract = <Contract<T>>::with_caller(
 			whitelisted_caller(), WasmModule::dummy(), vec![],
 		)?;
 
-		v10::store_old_contrat_info::<T>(contract.account_id.clone(), contract.info()?);
+		v10::store_old_contract_info::<T>(contract.account_id.clone(), contract.info()?);
 		let mut m = v10::Migration::<T>::default();
 	}: {
 		m.step();
 	}
 
-	// This benchmarks the v11 migration step.
+	// This benchmarks the v11 migration step (Don't rely on reserved balances keeping an account alive).
 	#[pov_mode = Measured]
 	v11_migration_step {
 		let k in 0 .. 1024;
 		v11::fill_old_queue::<T>(k as usize);
 		let mut m = v11::Migration::<T>::default();
+	}: {
+		m.step();
+	}
+
+	// This benchmarks the v12 migration step (Move `OwnerInfo` to `CodeInfo`,
+	// add `determinism` field to the latter, clear `CodeStorage`
+	// and repay deposits).
+	#[pov_mode = Measured]
+	v12_migration_step {
+		let c in 0 .. T::MaxCodeLen::get();
+		v12::store_old_dummy_code::<T>(c as usize, account::<T::AccountId>("account", 0, 0));
+		let mut m = v12::Migration::<T>::default();
 	}: {
 		m.step();
 	}

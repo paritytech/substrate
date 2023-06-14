@@ -29,7 +29,6 @@ use frame_support::{
 	DefaultNoBound, Identity,
 };
 use scale_info::prelude::format;
-#[cfg(feature = "try-runtime")]
 use sp_core::hexdisplay::HexDisplay;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
@@ -84,13 +83,32 @@ pub struct CodeInfo<T: Config> {
 	determinism: Determinism,
 }
 
-type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
-
 #[storage_alias]
 pub type CodeInfoOf<T: Config> = StorageMap<Pallet<T>, Twox64Concat, CodeHash<T>, CodeInfo<T>>;
 
 #[storage_alias]
-pub type PristineCode<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, CodeVec<T>>;
+pub type PristineCode<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, Vec<u8>>;
+
+#[cfg(feature = "runtime-benchmarks")]
+pub fn store_old_dummy_code<T: Config>(len: usize, account: T::AccountId) {
+	use sp_runtime::traits::Hash;
+
+	let code = vec![42u8; len];
+	let hash = T::Hashing::hash(&code);
+	PristineCode::<T>::insert(hash, code.clone());
+
+	let module = old::PrefabWasmModule {
+		instruction_weights_version: Default::default(),
+		initial: Default::default(),
+		maximum: Default::default(),
+		code,
+		determinism: Determinism::Enforced,
+	};
+	old::CodeStorage::<T>::insert(hash, module);
+
+	let info = old::OwnerInfo { owner: account, deposit: u32::MAX.into(), refcount: u64::MAX };
+	old::OwnerInfoOf::<T>::insert(hash, info);
+}
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
@@ -138,7 +156,7 @@ impl<T: Config> Migrate for Migration<T> {
 			//
 			// 1. Calculate the deposit amount for storage before the migration, given current
 			// prices.
-			// 2. Given current deposit amount reserved, calculate the correction factor.
+			// 2. Given current reserved deposit amount, calculate the correction factor.
 			// 3. Calculate the deposit amount for storage after the migration, given current
 			// prices.
 			// 4. Calculate real deposit amount to be reserved after the migration.
@@ -190,8 +208,7 @@ impl<T: Config> Migrate for Migration<T> {
 
 			self.last_key = Some(iter.last_raw_key().to_vec().try_into().unwrap());
 
-			// TODO: write benchmark and pass corrent len instead of freed_bytes
-			(IsFinished::No, T::WeightInfo::v12_migration_step(42))
+			(IsFinished::No, T::WeightInfo::v12_migration_step(code.len() as u32))
 		} else {
 			log::debug!(target: LOG_TARGET, "No more OwnerInfo to migrate");
 			(IsFinished::Yes, T::WeightInfo::v12_migration_step(0))
