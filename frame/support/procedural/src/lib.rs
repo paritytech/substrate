@@ -1038,7 +1038,7 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 ///
 /// ```ignore
 /// use my_crate::submodule::MyItem;
-/// #[derive_impl!(MyItem as Whatever)]
+/// #[derive_impl(MyItem as Whatever)]
 /// ```
 ///
 /// This will fail with a mysterious message about `__export_tokens_tt_my_item_0` not being
@@ -1048,16 +1048,16 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ```ignore
 /// // partial path works
 /// use my_crate::submodule;
-/// #[derive_impl!(submodule::MyItem as Whatever)]
+/// #[derive_impl(submodule::MyItem as Whatever)]
 /// ```
 /// ```ignore
 /// // full path works
-/// #[derive_impl!(my_crate::submodule::MyItem as Whatever)]
+/// #[derive_impl(my_crate::submodule::MyItem as Whatever)]
 /// ```
 /// ```ignore
 /// // wild-cards work
 /// use my_crate::submodule::*;
-/// #[derive_impl!(MyItem as Whatever)]
+/// #[derive_impl(MyItem as Whatever)]
 /// ```
 #[proc_macro_attribute]
 pub fn register_default_impl(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
