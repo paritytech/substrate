@@ -70,7 +70,7 @@ given account is unused.
 ### Dispatchable Functions
 
 - `transfer` - Transfer some liquid free balance to another account.
-- `set_balance` - Set the balances of a given account. The origin of this call must be root.
+- `force_set_balance` - Set the balances of a given account. The origin of this call must be root.
 
 ## Usage
 

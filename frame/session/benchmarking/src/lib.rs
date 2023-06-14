@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,6 +59,7 @@ benchmarks! {
 			n,
 			<T as pallet_staking::Config>::MaxNominations::get(),
 			false,
+			true,
 			RewardDestination::Staked,
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
@@ -76,7 +77,8 @@ benchmarks! {
 			n,
 			<T as pallet_staking::Config>::MaxNominations::get(),
 			false,
-			RewardDestination::Staked
+			true,
+			RewardDestination::Staked,
 		)?;
 		let v_controller = pallet_staking::Pallet::<T>::bonded(&v_stash).ok_or("not stash")?;
 		let keys = T::Keys::decode(&mut TrailingZeroInput::zeroes()).unwrap();

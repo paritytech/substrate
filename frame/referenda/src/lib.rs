@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -72,14 +72,14 @@ use frame_support::{
 			v3::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime,
 		},
-		Currency, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling, QueryPreimage,
-		ReservableCurrency, StorePreimage, VoteTally,
+		Currency, Hash as PreimageHash, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus,
+		Polling, QueryPreimage, ReservableCurrency, StorePreimage, VoteTally,
 	},
 	BoundedVec,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating, Zero},
+	traits::{AtLeast32BitUnsigned, Bounded, Dispatchable, One, Saturating, Zero},
 	DispatchError, Perbill,
 };
 use sp_std::{fmt::Debug, prelude::*};
@@ -138,14 +138,13 @@ const ASSEMBLY_ID: LockIdentifier = *b"assembly";
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::EnsureOriginWithArg};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(_);
 
@@ -168,7 +167,11 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
 		/// Origin from which proposals may be submitted.
-		type SubmitOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
+		type SubmitOrigin: EnsureOriginWithArg<
+			Self::RuntimeOrigin,
+			PalletsOriginOf<Self>,
+			Success = Self::AccountId,
+		>;
 		/// Origin from which any vote may be cancelled.
 		type CancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Origin from which any vote may be killed.
@@ -250,6 +253,16 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type DecidingCount<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TrackIdOf<T, I>, u32, ValueQuery>;
+
+	/// The metadata is a general information concerning the referendum.
+	/// The `PreimageHash` refers to the preimage of the `Preimages` provider which can be a JSON
+	/// dump or IPFS hash of a JSON file.
+	///
+	/// Consider a garbage collection for a metadata of finished referendums to `unrequest` (remove)
+	/// large preimages.
+	#[pallet::storage]
+	pub type MetadataOf<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, ReferendumIndex, PreimageHash>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -356,6 +369,20 @@ pub mod pallet {
 			/// The amount placed by the account.
 			amount: BalanceOf<T, I>,
 		},
+		/// Metadata for a referendum has been set.
+		MetadataSet {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
+		/// Metadata for a referendum has been cleared.
+		MetadataCleared {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
 	}
 
 	#[pallet::error]
@@ -384,6 +411,8 @@ pub mod pallet {
 		NoDeposit,
 		/// The referendum status is invalid for this operation.
 		BadStatus,
+		/// The preimage does not exist.
+		PreimageNotExist,
 	}
 
 	#[pallet::call]
@@ -405,7 +434,8 @@ pub mod pallet {
 			proposal: BoundedCallOf<T, I>,
 			enactment_moment: DispatchTime<T::BlockNumber>,
 		) -> DispatchResult {
-			let who = T::SubmitOrigin::ensure_origin(origin)?;
+			let proposal_origin = *proposal_origin;
+			let who = T::SubmitOrigin::ensure_origin(origin, &proposal_origin)?;
 
 			let track =
 				T::Tracks::track_for(&proposal_origin).map_err(|_| Error::<T, I>::NoTrack)?;
@@ -420,7 +450,7 @@ pub mod pallet {
 				T::Preimages::bound(CallOf::<T, I>::from(Call::nudge_referendum { index }))?;
 			let status = ReferendumStatus {
 				track,
-				origin: *proposal_origin,
+				origin: proposal_origin,
 				proposal: proposal.clone(),
 				enactment: enactment_moment,
 				submitted: now,
@@ -540,6 +570,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::Killed { index, tally: status.tally });
 			Self::slash_deposit(Some(status.submission_deposit.clone()));
 			Self::slash_deposit(status.decision_deposit.clone());
+			Self::do_clear_metadata(index);
 			let info = ReferendumInfo::Killed(frame_system::Pallet::<T>::block_number());
 			ReferendumInfoFor::<T, I>::insert(index, info);
 			Ok(())
@@ -632,6 +663,40 @@ pub mod pallet {
 			};
 			Self::deposit_event(e);
 			Ok(())
+		}
+
+		/// Set or clear metadata of a referendum.
+		///
+		/// Parameters:
+		/// - `origin`: Must be `Signed` by a creator of a referendum or by anyone to clear a
+		///   metadata of a finished referendum.
+		/// - `index`:  The index of a referendum to set or clear metadata for.
+		/// - `maybe_hash`: The hash of an on-chain stored preimage. `None` to clear a metadata.
+		#[pallet::call_index(8)]
+		#[pallet::weight(
+			maybe_hash.map_or(
+				T::WeightInfo::clear_metadata(), |_| T::WeightInfo::set_some_metadata())
+			)]
+		pub fn set_metadata(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+			maybe_hash: Option<PreimageHash>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			if let Some(hash) = maybe_hash {
+				let status = Self::ensure_ongoing(index)?;
+				ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
+				ensure!(T::Preimages::len(&hash).is_some(), Error::<T, I>::PreimageNotExist);
+				MetadataOf::<T, I>::insert(index, hash);
+				Self::deposit_event(Event::<T, I>::MetadataSet { index, hash });
+				Ok(())
+			} else {
+				if let Some(status) = Self::ensure_ongoing(index).ok() {
+					ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
+				}
+				Self::do_clear_metadata(index);
+				Ok(())
+			}
 		}
 	}
 }
@@ -814,22 +879,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let when = (when.saturating_add(alarm_interval.saturating_sub(One::one())) /
 			alarm_interval)
 			.saturating_mul(alarm_interval);
-		let maybe_result = T::Scheduler::schedule(
+		let result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
 			128u8,
 			frame_system::RawOrigin::Root.into(),
 			call,
-		)
-		.ok()
-		.map(|x| (when, x));
-		debug_assert!(
-			maybe_result.is_some(),
-			"Unable to schedule a new alarm at #{:?} (now: #{:?})?!",
-			when,
-			frame_system::Pallet::<T>::block_number()
 		);
-		maybe_result
+		debug_assert!(
+			result.is_ok(),
+			"Unable to schedule a new alarm at #{:?} (now: #{:?}), scheduler error: `{:?}`",
+			when,
+			frame_system::Pallet::<T>::block_number(),
+			result.unwrap_err(),
+		);
+		result.ok().map(|x| (when, x))
 	}
 
 	/// Mutate a referendum's `status` into the correct deciding state.
@@ -995,9 +1059,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Some(x) => x,
 			None => return (ReferendumInfo::Ongoing(status), false, ServiceBranch::Fail),
 		};
+		// Default the alarm to the end of the world.
 		let timeout = status.submitted + T::UndecidingTimeout::get();
-		// Default the alarm to the submission timeout.
-		let mut alarm = timeout;
+		let mut alarm = T::BlockNumber::max_value();
 		let branch;
 		match &mut status.deciding {
 			None => {
@@ -1038,11 +1102,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							ServiceBranch::Preparing
 						}
 					} else {
+						alarm = timeout;
 						ServiceBranch::NoDeposit
 					}
 				}
 				// If we didn't move into being decided, then check the timeout.
-				if status.deciding.is_none() && now >= timeout {
+				if status.deciding.is_none() && now >= timeout && !status.in_queue {
 					// Too long without being decided - end it.
 					Self::ensure_no_alarm(&mut status);
 					Self::deposit_event(Event::<T, I>::TimedOut { index, tally: status.tally });
@@ -1127,7 +1192,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		}
 
-		let dirty_alarm = Self::ensure_alarm_at(&mut status, index, alarm);
+		let dirty_alarm = if alarm < T::BlockNumber::max_value() {
+			Self::ensure_alarm_at(&mut status, index, alarm)
+		} else {
+			Self::ensure_no_alarm(&mut status)
+		};
 		(ReferendumInfo::Ongoing(status), dirty_alarm || dirty, branch)
 	}
 
@@ -1146,15 +1215,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let until_approval = track.min_approval.delay(approval);
 			let until_support = track.min_support.delay(support);
 			let offset = until_support.max(until_approval);
-			deciding.since.saturating_add(offset * track.decision_period)
+			deciding.since.saturating_add(offset.mul_ceil(track.decision_period))
 		})
 	}
 
 	/// Cancel the alarm in `status`, if one exists.
-	fn ensure_no_alarm(status: &mut ReferendumStatusOf<T, I>) {
+	fn ensure_no_alarm(status: &mut ReferendumStatusOf<T, I>) -> bool {
 		if let Some((_, last_alarm)) = status.alarm.take() {
 			// Incorrect alarm - cancel it.
 			let _ = T::Scheduler::cancel(last_alarm);
+			true
+		} else {
+			false
 		}
 	}
 
@@ -1203,5 +1275,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let x = Perbill::from_rational(elapsed.min(period), period);
 		support_needed.passing(x, tally.support(id)) &&
 			approval_needed.passing(x, tally.approval(id))
+	}
+
+	/// Clear metadata if exist for a given referendum index.
+	fn do_clear_metadata(index: ReferendumIndex) {
+		if let Some(hash) = MetadataOf::<T, I>::take(index) {
+			Self::deposit_event(Event::<T, I>::MetadataCleared { index, hash });
+		}
 	}
 }

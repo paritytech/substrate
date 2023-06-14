@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@ use sp_std::{
 	prelude::*,
 };
 
-use frame_benchmarking::v1::{account, benchmarks_instance_pallet};
+use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError};
 use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin as SystemOrigin};
 
@@ -40,11 +40,8 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 }
 
 fn cid(input: impl AsRef<[u8]>) -> Cid {
-	use sha2::{Digest, Sha256};
-	let mut hasher = Sha256::new();
-	hasher.update(input);
-	let result = hasher.finalize();
-	Cid::new_v0(&*result)
+	let result = sp_core_hashing::sha2_256(input.as_ref());
+	Cid::new_v0(result)
 }
 
 fn rule(input: impl AsRef<[u8]>) -> Cid {
@@ -581,7 +578,8 @@ benchmarks_instance_pallet! {
 		let rule = rule(b"hello world");
 
 		let call = Call::<T, I>::set_rule { rule: rule.clone() };
-		let origin = T::AdminOrigin::successful_origin();
+		let origin =
+			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(Alliance::<T, I>::rule(), Some(rule.clone()));
@@ -594,7 +592,8 @@ benchmarks_instance_pallet! {
 		let announcement = announcement(b"hello world");
 
 		let call = Call::<T, I>::announce { announcement: announcement.clone() };
-		let origin = T::AnnouncementOrigin::successful_origin();
+		let origin =
+			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().contains(&announcement));
@@ -609,7 +608,8 @@ benchmarks_instance_pallet! {
 		Announcements::<T, I>::put(announcements);
 
 		let call = Call::<T, I>::remove_announcement { announcement: announcement.clone() };
-		let origin = T::AnnouncementOrigin::successful_origin();
+		let origin =
+			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().is_empty());
@@ -665,7 +665,8 @@ benchmarks_instance_pallet! {
 
 		let ally1_lookup = T::Lookup::unlookup(ally1.clone());
 		let call = Call::<T, I>::elevate_ally { ally: ally1_lookup };
-		let origin = T::MembershipManager::successful_origin();
+		let origin =
+			T::MembershipManager::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!Alliance::<T, I>::is_ally(&ally1));
@@ -725,7 +726,8 @@ benchmarks_instance_pallet! {
 
 		let fellow2_lookup = T::Lookup::unlookup(fellow2.clone());
 		let call = Call::<T, I>::kick_member { who: fellow2_lookup };
-		let origin = T::MembershipManager::successful_origin();
+		let origin =
+			T::MembershipManager::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
@@ -754,7 +756,8 @@ benchmarks_instance_pallet! {
 		unscrupulous_list.extend(websites.into_iter().map(UnscrupulousItem::Website));
 
 		let call = Call::<T, I>::add_unscrupulous_items { items: unscrupulous_list.clone() };
-		let origin = T::AnnouncementOrigin::successful_origin();
+		let origin =
+			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::UnscrupulousItemAdded { items: unscrupulous_list }.into());
@@ -784,7 +787,8 @@ benchmarks_instance_pallet! {
 		unscrupulous_list.extend(websites.into_iter().map(UnscrupulousItem::Website));
 
 		let call = Call::<T, I>::remove_unscrupulous_items { items: unscrupulous_list.clone() };
-		let origin = T::AnnouncementOrigin::successful_origin();
+		let origin =
+			T::AnnouncementOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::UnscrupulousItemRemoved { items: unscrupulous_list }.into());

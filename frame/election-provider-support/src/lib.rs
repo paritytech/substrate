@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -188,6 +188,9 @@ pub use sp_npos_elections::{
 	IdentifierT, PerThing128, Support, Supports, VoteWeight,
 };
 pub use traits::NposSolution;
+
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 // re-export for the solution macro, with the dependencies of the macro.
 #[doc(hidden)]
@@ -562,8 +565,9 @@ pub trait SortedListProvider<AccountId> {
 	/// unbounded amount of storage accesses.
 	fn unsafe_clear();
 
-	/// Check internal state of list. Only meant for debugging.
-	fn try_state() -> Result<(), &'static str>;
+	/// Check internal state of the list. Only meant for debugging.
+	#[cfg(feature = "try-runtime")]
+	fn try_state() -> Result<(), TryRuntimeError>;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
@@ -581,7 +585,7 @@ pub trait ScoreProvider<AccountId> {
 	fn score(who: &AccountId) -> Self::Score;
 
 	/// For tests, benchmarks and fuzzing, set the `score`.
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", feature = "std"))]
 	fn set_score_of(_: &AccountId, _: Self::Score) {}
 }
 
@@ -672,5 +676,14 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 	<E as ElectionProviderBase>::MaxWinners,
 >;
 
-sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
-sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
+sp_core::generate_feature_enabled_macro!(
+	runtime_benchmarks_enabled,
+	feature = "runtime-benchmarks",
+	$
+);
+
+sp_core::generate_feature_enabled_macro!(
+	runtime_benchmarks_fuzz_or_std_enabled,
+	any(feature = "runtime-benchmarks", feature = "fuzzing", feature = "std"),
+	$
+);

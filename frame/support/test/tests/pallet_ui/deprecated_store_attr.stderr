@@ -1,0 +1,9 @@
+error: use of deprecated struct `pallet::_::Store`:
+               Use of `#[pallet::generate_store(pub(super) trait Store)]` will be removed soon.
+               Check https://github.com/paritytech/substrate/pull/13535 for more details.
+ --> tests/pallet_ui/deprecated_store_attr.rs:7:3
+  |
+7 |     #[pallet::generate_store(trait Store)]
+  |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `-D deprecated` implied by `-D warnings`

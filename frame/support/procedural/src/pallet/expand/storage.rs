@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,10 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{
-	parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
-	Def,
+use crate::{
+	counter_prefix,
+	pallet::{
+		parse::storage::{Metadata, QueryKind, StorageDef, StorageGenerics},
+		Def,
+	},
 };
+use itertools::Itertools;
 use quote::ToTokens;
 use std::{collections::HashMap, ops::IndexMut};
 use syn::spanned::Spanned;
@@ -37,12 +41,6 @@ fn counter_prefix_ident(storage_ident: &syn::Ident) -> syn::Ident {
 		&format!("_GeneratedCounterPrefixForStorage{}", storage_ident),
 		storage_ident.span(),
 	)
-}
-
-/// Generate the counter_prefix related to the storage.
-/// counter_prefix is used by counted storage map.
-fn counter_prefix(prefix: &str) -> String {
-	format!("CounterFor{}", prefix)
 }
 
 /// Check for duplicated storage prefixes. This step is necessary since users can specify an
@@ -272,6 +270,19 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 				Metadata::DoubleMap { .. } => (5, 6, 7),
 			};
 
+			if storage_def.use_default_hasher {
+				let hasher_indices: Vec<usize> = match storage_def.metadata {
+					Metadata::Map { .. } | Metadata::CountedMap { .. } => vec![1],
+					Metadata::DoubleMap { .. } => vec![1, 3],
+					_ => vec![],
+				};
+				for hasher_idx in hasher_indices {
+					args.args[hasher_idx] = syn::GenericArgument::Type(
+						syn::parse_quote!(#frame_support::Blake2_128Concat),
+					);
+				}
+			}
+
 			if query_idx < args.args.len() {
 				if let syn::GenericArgument::Type(query_kind) = args.args.index_mut(query_idx) {
 					set_result_query_type_parameter(query_kind)?;
@@ -300,6 +311,65 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 	Ok(on_empty_struct_metadata)
 }
 
+fn augment_final_docs(def: &mut Def) {
+	// expand the docs with a new line showing the storage type (value, map, double map, etc), and
+	// the key/value type(s).
+	let mut push_string_literal = |doc_line: &str, storage: &mut StorageDef| {
+		let item = &mut def.item.content.as_mut().expect("Checked by def").1[storage.index];
+		let typ_item = match item {
+			syn::Item::Type(t) => t,
+			_ => unreachable!("Checked by def"),
+		};
+		typ_item.attrs.push(syn::parse_quote!(#[doc = ""]));
+		typ_item.attrs.push(syn::parse_quote!(#[doc = #doc_line]));
+	};
+	def.storages.iter_mut().for_each(|storage| match &storage.metadata {
+		Metadata::Value { value } => {
+			let doc_line = format!(
+				"Storage type is [`StorageValue`] with value type `{}`.",
+				value.to_token_stream()
+			);
+			push_string_literal(&doc_line, storage);
+		},
+		Metadata::Map { key, value } => {
+			let doc_line = format!(
+				"Storage type is [`StorageMap`] with key type `{}` and value type `{}`.",
+				key.to_token_stream(),
+				value.to_token_stream()
+			);
+			push_string_literal(&doc_line, storage);
+		},
+		Metadata::DoubleMap { key1, key2, value } => {
+			let doc_line = format!(
+				"Storage type is [`StorageDoubleMap`] with key1 type {}, key2 type {} and value type {}.",
+				key1.to_token_stream(),
+				key2.to_token_stream(),
+				value.to_token_stream()
+			);
+			push_string_literal(&doc_line, storage);
+		},
+		Metadata::NMap { keys, value, .. } => {
+			let doc_line = format!(
+				"Storage type is [`StorageNMap`] with keys type ({}) and value type {}.",
+				keys.iter()
+					.map(|k| k.to_token_stream().to_string())
+					.collect::<Vec<_>>()
+					.join(", "),
+				value.to_token_stream()
+			);
+			push_string_literal(&doc_line, storage);
+		},
+		Metadata::CountedMap { key, value } => {
+			let doc_line = format!(
+				"Storage type is [`CountedStorageMap`] with key type {} and value type {}.",
+				key.to_token_stream(),
+				value.to_token_stream()
+			);
+			push_string_literal(&doc_line, storage);
+		},
+	});
+}
+
 ///
 /// * generate StoragePrefix structs (e.g. for a storage `MyStorage` a struct with the name
 ///   `_GeneratedPrefixForStorage$NameOfStorage` is generated) and implements StorageInstance trait.
@@ -312,6 +382,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		Ok(idents) => idents,
 		Err(e) => return e.into_compile_error(),
 	};
+
+	augment_final_docs(def);
 
 	// Check for duplicate prefixes
 	let mut prefix_set = HashMap::new();
@@ -355,10 +427,6 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		if let Some(getter) = &storage.getter {
 			let completed_where_clause =
 				super::merge_where_clauses(&[&storage.where_clause, &def.config.where_clause]);
-			let docs = storage
-				.docs
-				.iter()
-				.map(|d| quote::quote_spanned!(storage.attr_span => #[doc = #d]));
 
 			let ident = &storage.ident;
 			let gen = &def.type_use_generics(storage.attr_span);
@@ -368,22 +436,30 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 			let cfg_attrs = &storage.cfg_attrs;
 
+			// If the storage item is public, just link to it rather than copy-pasting the docs.
+			let getter_doc_line = if matches!(storage.vis, syn::Visibility::Public(_)) {
+				format!("An auto-generated getter for [`{}`].", storage.ident)
+			} else {
+				storage.docs.iter().map(|d| d.into_token_stream().to_string()).join("\n")
+			};
+
 			match &storage.metadata {
 				Metadata::Value { value } => {
 					let query = match storage.query_kind.as_ref().expect("Checked by def") {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
 						#(#cfg_attrs)*
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
-							#( #docs )*
+							#[doc = #getter_doc_line]
 							pub fn #getter() -> #query {
 								<
 									#full_ident as #frame_support::storage::StorageValue<#value>
@@ -397,16 +473,17 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
 						#(#cfg_attrs)*
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
-							#( #docs )*
+							#[doc = #getter_doc_line]
 							pub fn #getter<KArg>(k: KArg) -> #query where
 								KArg: #frame_support::codec::EncodeLike<#key>,
 							{
@@ -422,16 +499,17 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
 						#(#cfg_attrs)*
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
-							#( #docs )*
+							#[doc = #getter_doc_line]
 							pub fn #getter<KArg>(k: KArg) -> #query where
 								KArg: #frame_support::codec::EncodeLike<#key>,
 							{
@@ -447,16 +525,17 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
 						#(#cfg_attrs)*
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
-							#( #docs )*
+							#[doc = #getter_doc_line]
 							pub fn #getter<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> #query where
 								KArg1: #frame_support::codec::EncodeLike<#key1>,
 								KArg2: #frame_support::codec::EncodeLike<#key2>,
@@ -474,16 +553,17 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
 							Option<#value>
 						),
-						QueryKind::ResultQuery(error_path, _) =>
+						QueryKind::ResultQuery(error_path, _) => {
 							quote::quote_spanned!(storage.attr_span =>
 								Result<#value, #error_path>
-							),
+							)
+						},
 						QueryKind::ValueQuery => quote::quote!(#value),
 					};
 					quote::quote_spanned!(storage.attr_span =>
 						#(#cfg_attrs)*
 						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
-							#( #docs )*
+							#[doc = #getter_doc_line]
 							pub fn #getter<KArg>(key: KArg) -> #query
 							where
 								KArg: #frame_support::storage::types::EncodeLikeTuple<
@@ -642,8 +722,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#completed_where_clause
 		{
 			#[doc(hidden)]
-			pub fn storage_metadata() -> #frame_support::metadata::PalletStorageMetadata {
-				#frame_support::metadata::PalletStorageMetadata {
+			pub fn storage_metadata() -> #frame_support::metadata_ir::PalletStorageMetadataIR {
+				#frame_support::metadata_ir::PalletStorageMetadataIR {
 					prefix: <
 						<T as #frame_system::Config>::PalletInfo as
 						#frame_support::traits::PalletInfo

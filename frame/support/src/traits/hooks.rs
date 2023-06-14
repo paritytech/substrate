@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,9 @@ use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
+
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 /// The block initialization trait.
 ///
@@ -136,7 +139,7 @@ pub trait OnRuntimeUpgrade {
 	/// Same as `on_runtime_upgrade`, but perform the optional `pre_upgrade` and `post_upgrade` as
 	/// well.
 	#[cfg(feature = "try-runtime")]
-	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let maybe_state = if checks {
 			let _guard = frame_support::StorageNoopGuard::default();
 			let state = Self::pre_upgrade()?;
@@ -167,7 +170,7 @@ pub trait OnRuntimeUpgrade {
 	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
 	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
@@ -182,7 +185,7 @@ pub trait OnRuntimeUpgrade {
 	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
 	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 }
@@ -197,13 +200,41 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
-	#[cfg(feature = "try-runtime")]
 	/// We are executing pre- and post-checks sequentially in order to be able to test several
 	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
 	/// hooks for tuples are a noop.
-	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
+	#[cfg(feature = "try-runtime")]
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let mut weight = Weight::zero();
-		for_tuples!( #( weight = weight.saturating_add(Tuple::try_on_runtime_upgrade(checks)?); )* );
+
+		let mut errors = Vec::new();
+
+		for_tuples!(#(
+			match Tuple::try_on_runtime_upgrade(checks) {
+				Ok(weight) => { weight.saturating_add(weight); },
+				Err(err) => { errors.push(err); },
+			}
+		)*);
+
+		if errors.len() == 1 {
+			return Err(errors[0])
+		} else if !errors.is_empty() {
+			log::error!(
+				target: "try-runtime",
+				"Detected multiple errors while executing `try_on_runtime_upgrade`:",
+			);
+
+			errors.iter().for_each(|err| {
+				log::error!(
+					target: "try-runtime",
+					"{:?}",
+					err
+				);
+			});
+
+			return Err("Detected multiple errors while executing `try_on_runtime_upgrade`, check the logs!".into())
+		}
+
 		Ok(weight)
 	}
 }
@@ -227,10 +258,15 @@ pub trait Hooks<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 
 	/// This will be run when the block is being finalized (before `on_finalize`).
-	/// Implement to have something happen using the remaining weight.
-	/// Will not fire if the remaining weight is 0.
-	/// Return the weight used, the hook will subtract it from current weight used
-	/// and pass the result to the next `on_idle` hook if it exists.
+	///
+	/// Implement to have something happen using the remaining weight. Will not fire if the
+	/// remaining weight is 0.
+	///
+	/// Each pallet's `on_idle` is chosen to be the first to execute in a round-robin fashion
+	/// indexed by the block number.
+	///
+	/// Return the weight used, the caller will use this to calculate the remaining weight and then
+	/// call the next pallet `on_idle` hook if there is still weight left.
 	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
 		Weight::zero()
 	}
@@ -272,7 +308,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook should not alter any storage.
 	#[cfg(feature = "try-runtime")]
-	fn try_state(_n: BlockNumber) -> Result<(), &'static str> {
+	fn try_state(_n: BlockNumber) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -284,7 +320,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
@@ -296,7 +332,7 @@ pub trait Hooks<BlockNumber> {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -325,13 +361,13 @@ pub trait Hooks<BlockNumber> {
 
 /// A trait to define the build function of a genesis config, T and I are placeholder for pallet
 /// trait and pallet instance.
-#[cfg(feature = "std")]
 pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeDeserialize {
 	/// The build function is called within an externalities allowing storage APIs.
 	/// Thus one can write to storage using regular pallet storages.
 	fn build(&self);
 
 	/// Build the storage using `build` inside default storage.
+	#[cfg(feature = "std")]
 	fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
 		let mut storage = Default::default();
 		self.assimilate_storage(&mut storage)?;
@@ -339,6 +375,7 @@ pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeD
 	}
 
 	/// Assimilate the storage for this module into pre-existing overlays.
+	#[cfg(feature = "std")]
 	fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
 		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
 			self.build();
@@ -359,26 +396,80 @@ pub trait OnTimestampSet<Moment> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_io::TestExternalities;
+
+	#[cfg(feature = "try-runtime")]
+	#[test]
+	fn on_runtime_upgrade_pre_post_executed_tuple() {
+		crate::parameter_types! {
+			pub static Pre: Vec<&'static str> = Default::default();
+			pub static Post: Vec<&'static str> = Default::default();
+		}
+
+		macro_rules! impl_test_type {
+			($name:ident) => {
+				struct $name;
+				impl OnRuntimeUpgrade for $name {
+					fn on_runtime_upgrade() -> Weight {
+						Default::default()
+					}
+
+					#[cfg(feature = "try-runtime")]
+					fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+						Pre::mutate(|s| s.push(stringify!($name)));
+						Ok(Vec::new())
+					}
+
+					#[cfg(feature = "try-runtime")]
+					fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
+						Post::mutate(|s| s.push(stringify!($name)));
+						Ok(())
+					}
+				}
+			};
+		}
+
+		impl_test_type!(Foo);
+		impl_test_type!(Bar);
+		impl_test_type!(Baz);
+
+		TestExternalities::default().execute_with(|| {
+			Foo::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo"]);
+			assert_eq!(Post::take(), vec!["Foo"]);
+
+			<(Foo, Bar, Baz)>::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
+			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+
+			<((Foo, Bar), Baz)>::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
+			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+
+			<(Foo, (Bar, Baz))>::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
+			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+		});
+	}
 
 	#[test]
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
-		use sp_io::TestExternalities;
 		struct Test;
 
 		impl OnInitialize<u8> for Test {
 			fn on_initialize(_n: u8) -> Weight {
-				Weight::from_ref_time(10)
+				Weight::from_parts(10, 0)
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
 			fn on_runtime_upgrade() -> Weight {
-				Weight::from_ref_time(20)
+				Weight::from_parts(20, 0)
 			}
 		}
 
 		TestExternalities::default().execute_with(|| {
-			assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_ref_time(20));
-			assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_ref_time(40));
+			assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_parts(20, 0));
+			assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_parts(40, 0));
 		});
 	}
 

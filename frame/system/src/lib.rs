@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -66,6 +66,7 @@
 
 #[cfg(feature = "std")]
 use serde::Serialize;
+use sp_io::hashing::blake2_256;
 #[cfg(feature = "runtime-benchmarks")]
 use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
@@ -88,10 +89,11 @@ use frame_support::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
 		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
 	},
+	impl_ensure_origin_with_arg_ignoring_arg,
 	storage::{self, StorageStreamIter},
 	traits::{
-		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
-		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
+		ConstU32, Contains, EnsureOrigin, EnsureOriginWithArg, Get, HandleLifetime,
+		OnKilledAccount, OnNewAccount, OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	Parameter,
 };
@@ -200,12 +202,55 @@ pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
 
+	/// Contains default types suitable for various environments
+	pub mod config_preludes {
+		use super::DefaultConfig;
+
+		/// Provides a viable default config that can be used with
+		/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
+		/// based on this one.
+		///
+		/// See `Test` in the `default-config` example pallet's `test.rs` for an example of
+		/// a downstream user of this particular `TestDefaultConfig`
+		pub struct TestDefaultConfig;
+
+		#[frame_support::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type Index = u32;
+			type BlockNumber = u32;
+			type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
+			type Hash = sp_core::hash::H256;
+			type Hashing = sp_runtime::traits::BlakeTwo256;
+			type AccountId = u64;
+			type Lookup = sp_runtime::traits::IdentityLookup<u64>;
+			type BlockHashCount = frame_support::traits::ConstU32<10>;
+			type MaxConsumers = frame_support::traits::ConstU32<16>;
+			type AccountData = ();
+			type OnNewAccount = ();
+			type OnKilledAccount = ();
+			type SystemWeightInfo = ();
+			type SS58Prefix = ();
+			type Version = ();
+			type BlockWeights = ();
+			type BlockLength = ();
+			type DbWeight = ();
+		}
+	}
+
 	/// System configuration trait. Implemented by runtime.
-	#[pallet::config]
+	#[pallet::config(with_default)]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
+		/// The aggregated event type of the runtime.
+		type RuntimeEvent: Parameter
+			+ Member
+			+ From<Event<Self>>
+			+ Debug
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
+		#[pallet::no_default]
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
@@ -217,12 +262,14 @@ pub mod pallet {
 		type BlockLength: Get<limits::BlockLength>;
 
 		/// The `RuntimeOrigin` type used by dispatchable calls.
+		#[pallet::no_default]
 		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
-			+ OriginTrait<Call = Self::RuntimeCall>;
+			+ OriginTrait<Call = Self::RuntimeCall, AccountId = Self::AccountId>;
 
 		/// The aggregated `RuntimeCall` type.
+		#[pallet::no_default]
 		type RuntimeCall: Parameter
 			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ Debug
@@ -294,13 +341,6 @@ pub mod pallet {
 		/// The block header.
 		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
 
-		/// The aggregated event type of the runtime.
-		type RuntimeEvent: Parameter
-			+ Member
-			+ From<Event<Self>>
-			+ Debug
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
 		type BlockHashCount: Get<Self::BlockNumber>;
@@ -319,6 +359,7 @@ pub mod pallet {
 		/// runtime.
 		///
 		/// For tests it is okay to use `()` as type, however it will provide "useless" data.
+		#[pallet::no_default]
 		type PalletInfo: PalletInfo;
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
@@ -350,6 +391,7 @@ pub mod pallet {
 		/// [`Pallet::update_code_in_storage`]).
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
+		#[pallet::no_default]
 		type OnSetCode: SetCode<Self>;
 
 		/// The maximum number of consumers allowed on a single account.
@@ -357,7 +399,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -374,13 +415,10 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Make some on-chain remark.
 		///
-		/// # <weight>
-		/// - `O(1)`
-		/// # </weight>
+		/// Can be executed by every `origin`.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
-		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
-			ensure_signed_or_root(origin)?;
+		pub fn remark(_origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			Ok(().into())
 		}
 
@@ -395,44 +433,26 @@ pub mod pallet {
 		}
 
 		/// Set the new runtime code.
-		///
-		/// # <weight>
-		/// - `O(C + S)` where `C` length of `code` and `S` complexity of `can_set_code`
-		/// - 1 call to `can_set_code`: `O(S)` (calls `sp_io::misc::runtime_version` which is
-		///   expensive).
-		/// - 1 storage write (codec `O(C)`).
-		/// - 1 digest item.
-		/// - 1 event.
-		/// The weight of this function is dependent on the runtime, but generally this is very
-		/// expensive. We will treat this as a full block.
-		/// # </weight>
 		#[pallet::call_index(2)]
-		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code(origin: OriginFor<T>, code: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
 			T::OnSetCode::set_code(code)?;
-			Ok(().into())
+			// consume the rest of the block to prevent further transactions
+			Ok(Some(T::BlockWeights::get().max_block).into())
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
-		///
-		/// # <weight>
-		/// - `O(C)` where `C` length of `code`
-		/// - 1 storage write (codec `O(C)`).
-		/// - 1 digest item.
-		/// - 1 event.
-		/// The weight of this function is dependent on the runtime. We will treat this as a full
-		/// block. # </weight>
 		#[pallet::call_index(3)]
-		#[pallet::weight((T::BlockWeights::get().max_block, DispatchClass::Operational))]
+		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code_without_checks(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
 			T::OnSetCode::set_code(code)?;
-			Ok(().into())
+			Ok(Some(T::BlockWeights::get().max_block).into())
 		}
 
 		/// Set some items of storage.
@@ -650,7 +670,7 @@ pub mod pallet {
 	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		#[serde(with = "sp_core::bytes")]
@@ -727,7 +747,6 @@ pub struct EventRecord<E: Parameter + Member, T> {
 
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
-#[cfg(feature = "std")]
 fn hash69<T: AsMut<[u8]> + Default>() -> T {
 	let mut h = T::default();
 	h.as_mut().iter_mut().for_each(|byte| *byte = 69);
@@ -805,6 +824,12 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., AccountId: Decode, T } >
+		EnsureOriginWithArg<O, T> for EnsureRoot<AccountId>
+	{}
+}
+
 /// Ensure the origin is Root and return the provided `Success` value.
 pub struct EnsureRootWithSuccess<AccountId, Success>(
 	sp_std::marker::PhantomData<(AccountId, Success)>,
@@ -827,6 +852,12 @@ impl<
 	fn try_successful_origin() -> Result<O, ()> {
 		Ok(O::from(RawOrigin::Root))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., AccountId: Decode, Success: TypedGet, T } >
+		EnsureOriginWithArg<O, T> for EnsureRootWithSuccess<AccountId, Success>
+	{}
 }
 
 /// Ensure the origin is provided `Ensure` origin and return the provided `Success` value.
@@ -874,6 +905,12 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., AccountId: Decode, T } >
+		EnsureOriginWithArg<O, T> for EnsureSigned<AccountId>
+	{}
+}
+
 /// Ensure the origin is `Signed` origin from the given `AccountId`.
 pub struct EnsureSignedBy<Who, AccountId>(sp_std::marker::PhantomData<(Who, AccountId)>);
 impl<
@@ -892,15 +929,18 @@ impl<
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
-		let zero_account_id =
-			AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?;
-		let members = Who::sorted_members();
-		let first_member = match members.get(0) {
+		let first_member = match Who::sorted_members().first() {
 			Some(account) => account.clone(),
-			None => zero_account_id,
+			None => AccountId::decode(&mut TrailingZeroInput::zeroes()).map_err(|_| ())?,
 		};
 		Ok(O::from(RawOrigin::Signed(first_member)))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., Who: SortedMembers<AccountId>, AccountId: PartialEq + Clone + Ord + Decode, T } >
+		EnsureOriginWithArg<O, T> for EnsureSignedBy<Who, AccountId>
+	{}
 }
 
 /// Ensure the origin is `None`. i.e. unsigned transaction.
@@ -922,10 +962,16 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>, Acco
 	}
 }
 
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O: .., AccountId, T } >
+		EnsureOriginWithArg<O, T> for EnsureNone<AccountId>
+	{}
+}
+
 /// Always fail.
-pub struct EnsureNever<T>(sp_std::marker::PhantomData<T>);
-impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
-	type Success = T;
+pub struct EnsureNever<Success>(sp_std::marker::PhantomData<Success>);
+impl<O, Success> EnsureOrigin<O> for EnsureNever<Success> {
+	type Success = Success;
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		Err(o)
 	}
@@ -934,6 +980,12 @@ impl<O, T> EnsureOrigin<O> for EnsureNever<T> {
 	fn try_successful_origin() -> Result<O, ()> {
 		Err(())
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { O, Success, T } >
+		EnsureOriginWithArg<O, T> for EnsureNever<Success>
+	{}
 }
 
 /// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
@@ -1240,10 +1292,20 @@ impl<T: Config> Pallet<T> {
 		a.consumers == 0 || a.providers > 1
 	}
 
-	/// True if the account has at least one provider reference.
-	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+	/// True if the account has at least one provider reference and adding `amount` consumer
+	/// references would not take it above the the maximum.
+	pub fn can_accrue_consumers(who: &T::AccountId, amount: u32) -> bool {
 		let a = Account::<T>::get(who);
-		a.providers > 0 && a.consumers < T::MaxConsumers::max_consumers()
+		match a.consumers.checked_add(amount) {
+			Some(c) => a.providers > 0 && c <= T::MaxConsumers::max_consumers(),
+			None => false,
+		}
+	}
+
+	/// True if the account has at least one provider reference and fewer consumer references than
+	/// the maximum.
+	pub fn can_inc_consumer(who: &T::AccountId) -> bool {
+		Self::can_accrue_consumers(who, 1)
 	}
 
 	/// Deposits an event into this block's event record.
@@ -1330,6 +1392,8 @@ impl<T: Config> Pallet<T> {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
+		let entropy = (b"frame_system::initialize", parent_hash).using_encoded(blake2_256);
+		storage::unhashed::put_raw(well_known_keys::INTRABLOCK_ENTROPY, &entropy[..]);
 		<Number<T>>::put(number);
 		<Digest<T>>::put(digest);
 		<ParentHash<T>>::put(parent_hash);
@@ -1379,6 +1443,7 @@ impl<T: Config> Pallet<T> {
 		);
 		ExecutionPhase::<T>::kill();
 		AllExtrinsicsLen::<T>::kill();
+		storage::unhashed::kill(well_known_keys::INTRABLOCK_ENTROPY);
 
 		// The following fields
 		//
@@ -1422,11 +1487,6 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
-	///
-	/// # <weight>
-	/// - `O(1)`
-	/// - 1 storage write (codec `O(1)`)
-	/// # </weight>
 	pub fn deposit_log(item: generic::DigestItem) {
 		<Digest<T>>::append(item);
 	}
@@ -1460,6 +1520,14 @@ impl<T: Config> Pallet<T> {
 		// Dereferencing the events here is fine since we are not in the
 		// memory-restricted runtime.
 		Self::read_events_no_consensus().map(|e| *e).collect()
+	}
+
+	/// Get a single event at specified index.
+	///
+	/// Should only be called if you know what you are doing and outside of the runtime block
+	/// execution else it can have a large impact on the PoV size of a block.
+	pub fn event_no_consensus(index: usize) -> Option<T::RuntimeEvent> {
+		Self::read_events_no_consensus().nth(index).map(|e| e.event.clone())
 	}
 
 	/// Get the current events deposited by the runtime.
@@ -1624,16 +1692,34 @@ impl<T: Config> Pallet<T> {
 			.and_then(|v| RuntimeVersion::decode(&mut &v[..]).ok())
 			.ok_or(Error::<T>::FailedToExtractRuntimeVersion)?;
 
-		if new_version.spec_name != current_version.spec_name {
-			return Err(Error::<T>::InvalidSpecName.into())
-		}
+		cfg_if::cfg_if! {
+			if #[cfg(all(feature = "runtime-benchmarks", not(test)))] {
+					// Let's ensure the compiler doesn't optimize our fetching of the runtime version away.
+					core::hint::black_box((new_version, current_version));
+					Ok(())
+			} else {
+				if new_version.spec_name != current_version.spec_name {
+					return Err(Error::<T>::InvalidSpecName.into())
+				}
 
-		if new_version.spec_version <= current_version.spec_version {
-			return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
-		}
+				if new_version.spec_version <= current_version.spec_version {
+					return Err(Error::<T>::SpecVersionNeedsToIncrease.into())
+				}
 
-		Ok(())
+				Ok(())
+			}
+		}
 	}
+}
+
+/// Returns a 32 byte datum which is guaranteed to be universally unique. `entropy` is provided
+/// as a facility to reduce the potential for precalculating results.
+pub fn unique(entropy: impl Encode) -> [u8; 32] {
+	let mut last = [0u8; 32];
+	sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut last[..], 0);
+	let next = (b"frame_system::unique", entropy, last).using_encoded(blake2_256);
+	sp_io::storage::set(well_known_keys::INTRABLOCK_ENTROPY, &next);
+	next
 }
 
 /// Event handler which registers a provider when created.
@@ -1681,10 +1767,6 @@ impl<T: Config> BlockNumberProvider for Pallet<T> {
 	}
 }
 
-fn is_providing<T: Default + Eq>(d: &T) -> bool {
-	d != &T::default()
-}
-
 /// Implement StoredMap for a simple single-item, provide-when-not-default system. This works fine
 /// for storing a single item which allows the account to continue existing as long as it's not
 /// empty/default.
@@ -1700,23 +1782,14 @@ impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Pallet<T> {
 		f: impl FnOnce(&mut Option<T::AccountData>) -> Result<R, E>,
 	) -> Result<R, E> {
 		let account = Account::<T>::get(k);
-		let was_providing = is_providing(&account.data);
-		let mut some_data = if was_providing { Some(account.data) } else { None };
+		let is_default = account.data == T::AccountData::default();
+		let mut some_data = if is_default { None } else { Some(account.data) };
 		let result = f(&mut some_data)?;
-		let is_providing = some_data.is_some();
-		if !was_providing && is_providing {
-			Self::inc_providers(k);
-		} else if was_providing && !is_providing {
-			match Self::dec_providers(k)? {
-				DecRefStatus::Reaped => return Ok(result),
-				DecRefStatus::Exists => {
-					// Update value as normal...
-				},
-			}
-		} else if !was_providing && !is_providing {
-			return Ok(result)
+		if Self::providers(k) > 0 || Self::sufficients(k) > 0 {
+			Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
+		} else {
+			Account::<T>::remove(k)
 		}
-		Account::<T>::mutate(k, |a| a.data = some_data.unwrap_or_default());
 		Ok(result)
 	}
 }

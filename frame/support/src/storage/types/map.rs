@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 //! methods directly.
 
 use crate::{
-	metadata::{StorageEntryMetadata, StorageEntryType},
+	metadata_ir::{StorageEntryMetadataIR, StorageEntryTypeIR},
 	storage::{
 		types::{OptionQuery, QueryKindTrait, StorageEntryMetadataBuilder},
 		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
@@ -409,13 +409,13 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadataIR>) {
 		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
 
-		let entry = StorageEntryMetadata {
+		let entry = StorageEntryMetadataIR {
 			name: Prefix::STORAGE_PREFIX,
 			modifier: QueryKind::METADATA,
-			ty: StorageEntryType::Map {
+			ty: StorageEntryTypeIR::Map {
 				hashers: vec![Hasher::METADATA],
 				key: scale_info::meta_type::<Key>(),
 				value: scale_info::meta_type::<Value>(),
@@ -483,8 +483,8 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::*,
-		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
-		storage::types::ValueQuery,
+		metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR},
+		storage::{types::ValueQuery, IterableStorageMap},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
@@ -700,28 +700,37 @@ mod test {
 			A::translate::<u8, _>(|k, v| Some((k * v as u16).into()));
 			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40), (3, 30)]);
 
+			let translate_next = |k: u16, v: u8| Some((v as u16 / k).into());
+			let k = A::translate_next::<u8, _>(None, translate_next);
+			let k = A::translate_next::<u8, _>(k, translate_next);
+			assert_eq!(None, A::translate_next::<u8, _>(k, translate_next));
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 10), (3, 10)]);
+
+			let _ = A::translate_next::<u8, _>(None, |_, _| None);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(3, 10)]);
+
 			let mut entries = vec![];
 			A::build_metadata(vec![], &mut entries);
 			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
 			assert_eq!(
 				entries,
 				vec![
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "foo",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							hashers: vec![StorageHasher::Blake2_128Concat],
+						modifier: StorageEntryModifierIR::Optional,
+						ty: StorageEntryTypeIR::Map {
+							hashers: vec![StorageHasherIR::Blake2_128Concat],
 							key: scale_info::meta_type::<u16>(),
 							value: scale_info::meta_type::<u32>(),
 						},
 						default: Option::<u32>::None.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Map {
-							hashers: vec![StorageHasher::Blake2_128Concat],
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Map {
+							hashers: vec![StorageHasherIR::Blake2_128Concat],
 							key: scale_info::meta_type::<u16>(),
 							value: scale_info::meta_type::<u32>(),
 						},

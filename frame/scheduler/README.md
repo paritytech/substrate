@@ -31,4 +31,4 @@ then those filter will not be used when dispatching the schedule call.
   `Vec<u8>` parameter that can be used for identification.
 * `cancel_named` - the named complement to the cancel function.
 
-License: Unlicense
+License: Apache 2.0

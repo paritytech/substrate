@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,23 +26,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		namespace: AttributeNamespace<T::AccountId>,
 		key: BoundedVec<u8, T::KeyLimit>,
 		value: BoundedVec<u8, T::ValueLimit>,
+		depositor: T::AccountId,
 	) -> DispatchResult {
 		ensure!(
 			Self::is_pallet_feature_enabled(PalletFeature::Attributes),
 			Error::<T, I>::MethodDisabled
 		);
 
-		let mut collection_details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
 		ensure!(
-			Self::is_valid_namespace(
-				&origin,
-				&namespace,
-				&collection,
-				&collection_details.owner,
-				&maybe_item,
-			)?,
+			Self::is_valid_namespace(&origin, &namespace, &collection, &maybe_item)?,
 			Error::<T, I>::NoPermission
 		);
 
@@ -65,8 +57,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			_ => (),
 		}
 
+		let mut collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+
 		let attribute = Attribute::<T, I>::get((collection, maybe_item, &namespace, &key));
-		if attribute.is_none() {
+		let attribute_exists = attribute.is_some();
+		if !attribute_exists {
 			collection_details.attributes.saturating_inc();
 		}
 
@@ -74,6 +70,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			attribute.map_or(AttributeDeposit { account: None, amount: Zero::zero() }, |m| m.1);
 
 		let mut deposit = Zero::zero();
+		// disabled DepositRequired setting only affects the CollectionOwner namespace
 		if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) ||
 			namespace != AttributeNamespace::CollectionOwner
 		{
@@ -82,33 +79,50 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.saturating_add(T::AttributeDepositBase::get());
 		}
 
+		let is_collection_owner_namespace = namespace == AttributeNamespace::CollectionOwner;
+		let is_depositor_collection_owner =
+			is_collection_owner_namespace && collection_details.owner == depositor;
+
+		// NOTE: in the CollectionOwner namespace if the depositor is `None` that means the deposit
+		// was paid by the collection's owner.
+		let old_depositor =
+			if is_collection_owner_namespace && old_deposit.account.is_none() && attribute_exists {
+				Some(collection_details.owner.clone())
+			} else {
+				old_deposit.account
+			};
+		let depositor_has_changed = old_depositor != Some(depositor.clone());
+
 		// NOTE: when we transfer an item, we don't move attributes in the ItemOwner namespace.
 		// When the new owner updates the same attribute, we will update the depositor record
 		// and return the deposit to the previous owner.
-		if old_deposit.account.is_some() && old_deposit.account != Some(origin.clone()) {
-			T::Currency::unreserve(&old_deposit.account.unwrap(), old_deposit.amount);
-			T::Currency::reserve(&origin, deposit)?;
+		if depositor_has_changed {
+			if let Some(old_depositor) = old_depositor {
+				T::Currency::unreserve(&old_depositor, old_deposit.amount);
+			}
+			T::Currency::reserve(&depositor, deposit)?;
 		} else if deposit > old_deposit.amount {
-			T::Currency::reserve(&origin, deposit - old_deposit.amount)?;
+			T::Currency::reserve(&depositor, deposit - old_deposit.amount)?;
 		} else if deposit < old_deposit.amount {
-			T::Currency::unreserve(&origin, old_deposit.amount - deposit);
+			T::Currency::unreserve(&depositor, old_deposit.amount - deposit);
 		}
 
-		// NOTE: we don't track the depositor in the CollectionOwner namespace as it's always a
-		// collection's owner. This simplifies the collection's transfer to another owner.
-		let deposit_owner = match namespace {
-			AttributeNamespace::CollectionOwner => {
-				collection_details.owner_deposit.saturating_accrue(deposit);
+		if is_depositor_collection_owner {
+			if !depositor_has_changed {
 				collection_details.owner_deposit.saturating_reduce(old_deposit.amount);
-				None
-			},
-			_ => Some(origin),
-		};
+			}
+			collection_details.owner_deposit.saturating_accrue(deposit);
+		}
 
+		let new_deposit_owner = match is_depositor_collection_owner {
+			true => None,
+			false => Some(depositor),
+		};
 		Attribute::<T, I>::insert(
 			(&collection, maybe_item, &namespace, &key),
-			(&value, AttributeDeposit { account: deposit_owner, amount: deposit }),
+			(&value, AttributeDeposit { account: new_deposit_owner, amount: deposit }),
 		);
+
 		Collection::<T, I>::insert(collection, &collection_details);
 		Self::deposit_event(Event::AttributeSet { collection, maybe_item, key, value, namespace });
 		Ok(())
@@ -145,8 +159,61 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	pub(crate) fn do_set_attributes_pre_signed(
+		origin: T::AccountId,
+		data: PreSignedAttributesOf<T, I>,
+		signer: T::AccountId,
+	) -> DispatchResult {
+		let PreSignedAttributes { collection, item, attributes, namespace, deadline } = data;
+
+		ensure!(
+			attributes.len() <= T::MaxAttributesPerCall::get() as usize,
+			Error::<T, I>::MaxAttributesLimitReached
+		);
+
+		let now = frame_system::Pallet::<T>::block_number();
+		ensure!(deadline >= now, Error::<T, I>::DeadlineExpired);
+
+		let item_details =
+			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
+		ensure!(item_details.owner == origin, Error::<T, I>::NoPermission);
+
+		// Only the CollectionOwner and Account() namespaces could be updated in this way.
+		// For the Account() namespace we check and set the approval if it wasn't set before.
+		match &namespace {
+			AttributeNamespace::CollectionOwner => {},
+			AttributeNamespace::Account(account) => {
+				ensure!(account == &signer, Error::<T, I>::NoPermission);
+				let approvals = ItemAttributesApprovalsOf::<T, I>::get(&collection, &item);
+				if !approvals.contains(account) {
+					Self::do_approve_item_attributes(
+						origin.clone(),
+						collection,
+						item,
+						account.clone(),
+					)?;
+				}
+			},
+			_ => return Err(Error::<T, I>::WrongNamespace.into()),
+		}
+
+		for (key, value) in attributes {
+			Self::do_set_attribute(
+				signer.clone(),
+				collection,
+				Some(item),
+				namespace.clone(),
+				Self::construct_attribute_key(key)?,
+				Self::construct_attribute_value(value)?,
+				origin.clone(),
+			)?;
+		}
+		Self::deposit_event(Event::PreSignedAttributesSet { collection, item, namespace });
+		Ok(())
+	}
+
 	pub(crate) fn do_clear_attribute(
-		maybe_check_owner: Option<T::AccountId>,
+		maybe_check_origin: Option<T::AccountId>,
 		collection: T::CollectionId,
 		maybe_item: Option<T::ItemId>,
 		namespace: AttributeNamespace<T::AccountId>,
@@ -154,21 +221,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let (_, deposit) = Attribute::<T, I>::take((collection, maybe_item, &namespace, &key))
 			.ok_or(Error::<T, I>::AttributeNotFound)?;
-		let mut collection_details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-		if let Some(check_owner) = &maybe_check_owner {
+		if let Some(check_origin) = &maybe_check_origin {
 			// validate the provided namespace when it's not a root call and the caller is not
 			// the same as the `deposit.account` (e.g. the deposit was paid by different account)
-			if deposit.account != maybe_check_owner {
+			if deposit.account != maybe_check_origin {
 				ensure!(
-					Self::is_valid_namespace(
-						&check_owner,
-						&namespace,
-						&collection,
-						&collection_details.owner,
-						&maybe_item,
-					)?,
+					Self::is_valid_namespace(&check_origin, &namespace, &collection, &maybe_item)?,
 					Error::<T, I>::NoPermission
 				);
 			}
@@ -188,27 +247,39 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// NOTE: if the item was previously burned, the ItemConfigOf record
 						// might not exist. In that case, we allow to clear the attribute.
 						let maybe_is_locked = Self::get_item_config(&collection, &item)
-							.map_or(false, |c| {
-								c.has_disabled_setting(ItemSetting::UnlockedAttributes)
+							.map_or(None, |c| {
+								Some(c.has_disabled_setting(ItemSetting::UnlockedAttributes))
 							});
-						ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
+						if let Some(is_locked) = maybe_is_locked {
+							ensure!(!is_locked, Error::<T, I>::LockedItemAttributes);
+							// Only the collection's admin can clear attributes in that namespace.
+							// e.g. in off-chain mints, the attribute's depositor will be the item's
+							// owner, that's why we need to do this extra check.
+							ensure!(
+								Self::has_role(&collection, &check_origin, CollectionRole::Admin),
+								Error::<T, I>::NoPermission
+							);
+						}
 					},
 				},
 				_ => (),
 			};
 		}
 
+		let mut collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+
 		collection_details.attributes.saturating_dec();
-		match namespace {
-			AttributeNamespace::CollectionOwner => {
+
+		match deposit.account {
+			Some(deposit_account) => {
+				T::Currency::unreserve(&deposit_account, deposit.amount);
+			},
+			None if namespace == AttributeNamespace::CollectionOwner => {
 				collection_details.owner_deposit.saturating_reduce(deposit.amount);
 				T::Currency::unreserve(&collection_details.owner, deposit.amount);
 			},
 			_ => (),
-		};
-
-		if let Some(deposit_account) = deposit.account {
-			T::Currency::unreserve(&deposit_account, deposit.amount);
 		}
 
 		Collection::<T, I>::insert(collection, &collection_details);
@@ -288,12 +359,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		origin: &T::AccountId,
 		namespace: &AttributeNamespace<T::AccountId>,
 		collection: &T::CollectionId,
-		collection_owner: &T::AccountId,
 		maybe_item: &Option<T::ItemId>,
 	) -> Result<bool, DispatchError> {
 		let mut result = false;
 		match namespace {
-			AttributeNamespace::CollectionOwner => result = origin == collection_owner,
+			AttributeNamespace::CollectionOwner =>
+				result = Self::has_role(&collection, &origin, CollectionRole::Admin),
 			AttributeNamespace::ItemOwner =>
 				if let Some(item) = maybe_item {
 					let item_details =
@@ -322,5 +393,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		value: Vec<u8>,
 	) -> Result<BoundedVec<u8, T::ValueLimit>, DispatchError> {
 		Ok(BoundedVec::try_from(value).map_err(|_| Error::<T, I>::IncorrectData)?)
+	}
+
+	/// A helper method to check whether a system attribute is set for a given item.
+	pub fn has_system_attribute(
+		collection: &T::CollectionId,
+		item: &T::ItemId,
+		attribute_key: PalletAttributes<T::CollectionId>,
+	) -> Result<bool, DispatchError> {
+		let attribute = (
+			&collection,
+			Some(item),
+			AttributeNamespace::Pallet,
+			&Self::construct_attribute_key(attribute_key.encode())?,
+		);
+		Ok(Attribute::<T, I>::contains_key(attribute))
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,8 +32,7 @@ pub mod pallet {
 	use sp_std::prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -107,6 +106,11 @@ pub mod pallet {
 	pub(crate) type UnboundedMap2<T: Config> =
 		StorageMap<Hasher = Blake2_256, Key = u32, Value = Vec<u32>, QueryKind = OptionQuery>;
 
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub(crate) type UnboundedMapTwox<T: Config> =
+		StorageMap<Hasher = Twox64Concat, Key = u32, Value = Vec<u32>, QueryKind = OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -116,14 +120,14 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn emit_event(_origin: OriginFor<T>) -> DispatchResult {
 			Self::deposit_event(Event::TestEvent);
 			Ok(())
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn noop(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}

@@ -3,9 +3,8 @@ set -e
 
 pushd .
 
-# The following line ensure we run from the project root
-PROJECT_ROOT=`git rev-parse --show-toplevel`
-cd $PROJECT_ROOT
+# Change to the project root and supports calls from symlinks
+cd $(dirname "$(dirname "$(realpath "${BASH_SOURCE[0]}")")")
 
 # Find the current version from Cargo.toml
 VERSION=`grep "^version" ./bin/node/cli/Cargo.toml | egrep -o "([0-9\.]+)"`
@@ -14,7 +13,7 @@ GITREPO=substrate
 
 # Build the image
 echo "Building ${GITUSER}/${GITREPO}:latest docker image, hang on!"
-time docker build -f ./docker/substrate_builder.Dockerfile -t ${GITUSER}/${GITREPO}:latest .
+time DOCKER_BUILDKIT=1 docker build -f ./docker/substrate_builder.Dockerfile -t ${GITUSER}/${GITREPO}:latest .
 docker tag ${GITUSER}/${GITREPO}:latest ${GITUSER}/${GITREPO}:v${VERSION}
 
 # Show the list of available images for this repo
