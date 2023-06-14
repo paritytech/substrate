@@ -32,7 +32,7 @@ use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
-	TestXt,
+	testing::TestXt,
 	traits::{BlakeTwo256, IdentityLookup, OpaqueKeys},
 	Perbill,
 };

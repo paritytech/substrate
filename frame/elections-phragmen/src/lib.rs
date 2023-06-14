@@ -1445,10 +1445,7 @@ mod tests {
 		sp_runtime::generic::UncheckedExtrinsic<u32, u64, RuntimeCall, ()>;
 
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic
+		pub enum Test
 		{
 			System: frame_system::{Pallet, Call, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},

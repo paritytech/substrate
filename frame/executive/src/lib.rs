@@ -827,10 +827,7 @@ mod tests {
 	}
 
 	frame_support::construct_runtime!(
-		pub struct Runtime where
-			Block = TestBlock,
-			NodeBlock = TestBlock,
-			UncheckedExtrinsic = TestUncheckedExtrinsic
+		pub struct Runtime
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
@@ -927,7 +924,6 @@ mod tests {
 	);
 	type TestXt = sp_runtime::testing::TestXt<RuntimeCall, SignedExtra>;
 	type TestBlock = Block<TestXt>;
-	type TestUncheckedExtrinsic = TestXt;
 
 	// Will contain `true` when the custom runtime logic was called.
 	const CUSTOM_ON_RUNTIME_KEY: &[u8] = b":custom:on_runtime";
