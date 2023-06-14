@@ -125,26 +125,20 @@ impl ExportedFunction {
 	}
 }
 
-/// Costs for operations that are related to code handling.
+/// Cost of code loading from storage.
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Clone, Copy)]
-enum CodeToken {
-	/// Weight for loading a contract per byte.
-	Load(u32),
-}
+struct CodeLoadToken(u32);
 
-impl<T: Config> Token<T> for CodeToken {
+impl<T: Config> Token<T> for CodeLoadToken {
 	fn weight(&self) -> Weight {
-		use self::CodeToken::*;
-		// In case of `Load` we already covered the general costs of
+		// When loading the contract, we already covered the general costs of
 		// calling the storage but still need to account for the actual size of the
 		// contract code. This is why we subtract `T::*::(0)`. We need to do this at this
 		// point because when charging the general weight for calling the contract we don't know the
 		// size of the contract.
-		match *self {
-			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
-				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0)),
-		}
+		T::WeightInfo::call_with_code_per_byte(self.0)
+			.saturating_sub(T::WeightInfo::call_with_code_per_byte(0))
 	}
 }
 
@@ -316,11 +310,11 @@ impl<T: Config> WasmBlob<T> {
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<CodeVec<T>, DispatchError> {
 		let max_code_len = T::MaxCodeLen::get();
-		let charged = gas_meter.charge(CodeToken::Load(max_code_len))?;
+		let charged = gas_meter.charge(CodeLoadToken(max_code_len))?;
 
 		let code = <PristineCode<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
 		let code_len = code.len() as u32;
-		gas_meter.adjust_gas(charged, CodeToken::Load(code_len));
+		gas_meter.adjust_gas(charged, CodeLoadToken(code_len));
 
 		Ok(code)
 	}
@@ -395,7 +389,6 @@ impl<T: Config> CodeInfo<T> {
 impl<T: Config> Executable<T> for WasmBlob<T> {
 	fn from_storage(
 		code_hash: CodeHash<T>,
-		_schedule: &Schedule<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
 		let code = Self::load_code(code_hash, gas_meter)?;

@@ -199,7 +199,7 @@ impl<T: Config> Migrate for Migration<T> {
 			} else {
 				log::warn!(
 					target: LOG_TARGET,
-					"new deposit: {:?} is more than old deposit: {:?}",
+					"new deposit: {:?} >= old deposit: {:?}",
 					&info.deposit,
 					&old.deposit
 				);
@@ -289,8 +289,7 @@ impl<T: Config> Migrate for Migration<T> {
 		PristineCode::<T>::iter().for_each(|(_k, v)| {
 			storage_code += v.len() as u32;
 		});
-		let old_deposit = state.1;
-		let storage_module = state.2;
+		let (_, old_deposit, storage_module) = state;
 		// CodeInfoOf::max_encoded_len == OwnerInfoOf::max_encoded_len + 1
 		// I.e. code info adds up 1 byte per record.
 		let info_bytes_added = items.clone();

@@ -230,11 +230,6 @@ impl<T: Config> GasMeter<T> {
 		self.gas_left
 	}
 
-	/// Returns current tracked engine fuel consumption.
-	pub fn engine_consumed(&self) -> u64 {
-		self.engine_consumed
-	}
-
 	/// Turn this GasMeter into a DispatchResult that contains the actually used gas.
 	pub fn into_dispatch_result<R, E>(
 		self,

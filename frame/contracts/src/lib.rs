@@ -360,17 +360,17 @@ pub mod pallet {
 
 			// Check that given configured `MaxCodeLen`, runtime heap memory limit can't be broken.
 			//
-			// In worst case, the decoded wasm contract code would be `x16` times larger than the
+			// In worst case, the decoded Wasm contract code would be `x16` times larger than the
 			// encoded one. This is because even a single-byte wasm instruction has 16-byte size in
 			// wasmi. This gives us `MaxCodeLen*16` safety margin.
 			//
 			// Next, the pallet keeps the Wasm blob for each
-			// contract, hence we add up one `MaxCodeLen` more to the safety margin.
+			// contract, hence we add up `MaxCodeLen` to the safety margin.
 			//
 			// Finally, the inefficiencies of the freeing-bump allocator
 			// being used in the client for the runtime memory allocations, could lead to possible
 			// memory allocations for contract code grow up to `x4` times in some extreme cases,
-			// which gives us total multiplier of `18*4` for `MaxCodeLen`.
+			// which gives us total multiplier of `17*4` for `MaxCodeLen`.
 			//
 			// That being said, for every contract executed in runtime, at least `MaxCodeLen*17*4`
 			// memory should be available. Note that maximum allowed heap memory and stack size per
@@ -1233,7 +1233,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 					(executable.open_deposit(code_info), executable)
 				},
 				Code::Existing(hash) =>
-					(Default::default(), WasmBlob::from_storage(*hash, &schedule, &mut gas_meter)?),
+					(Default::default(), WasmBlob::from_storage(*hash, &mut gas_meter)?),
 			};
 			let contract_origin = Origin::from_account_id(origin.clone());
 			let mut storage_meter = StorageMeter::new(

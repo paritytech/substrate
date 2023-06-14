@@ -358,31 +358,6 @@ impl<T: Config> WasmModule<T> {
 		.into()
 	}
 
-	#[allow(dead_code)]
-	pub fn unary_instr(instr: Instruction, repeat: u32) -> Self {
-		use body::DynInstr::{RandomI64Repeated, Regular};
-		ModuleDefinition {
-			call_body: Some(body::repeated_dyn(
-				repeat,
-				vec![RandomI64Repeated(1), Regular(instr), Regular(Instruction::Drop)],
-			)),
-			..Default::default()
-		}
-		.into()
-	}
-
-	#[allow(dead_code)]
-	pub fn binary_instr(instr: Instruction, repeat: u32) -> Self {
-		use body::DynInstr::{RandomI64Repeated, Regular};
-		ModuleDefinition {
-			call_body: Some(body::repeated_dyn(
-				repeat,
-				vec![RandomI64Repeated(2), Regular(instr), Regular(Instruction::Drop)],
-			)),
-			..Default::default()
-		}
-		.into()
-	}
 }
 
 /// Mechanisms to generate a function body that can be used inside a `ModuleDefinition`.
@@ -392,7 +367,6 @@ pub mod body {
 	/// When generating contract code by repeating a wasm sequence, it's sometimes necessary
 	/// to change those instructions on each repetition. The variants of this enum describe
 	/// various ways in which this can happen.
-	#[allow(dead_code)]
 	pub enum DynInstr {
 		/// Insert the associated instruction.
 		Regular(Instruction),

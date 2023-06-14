@@ -123,7 +123,7 @@ pub mod test_utils {
 		<<Test as SysConfig>::Hashing as Hash>::hash_of(s)
 	}
 	pub fn expected_deposit(code_len: usize) -> u64 {
-		// For onwer info, the deposit for max_encoded_len is taken.
+		// For code_info, the deposit for max_encoded_len is taken.
 		let code_info_len = CodeInfo::<Test>::max_encoded_len() as u64;
 		// Calculate deposit to be reserved.
 		// We add 2 storage items: one for code, other for code_info

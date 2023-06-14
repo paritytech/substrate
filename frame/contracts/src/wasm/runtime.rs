@@ -67,7 +67,6 @@ pub trait Environment<HostState> {
 }
 
 /// Type of a storage key.
-#[allow(dead_code)]
 enum KeyType {
 	/// Legacy fix sized key `[u8;32]`.
 	Fix,
