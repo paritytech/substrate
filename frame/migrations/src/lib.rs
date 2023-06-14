@@ -487,13 +487,13 @@ impl<T: Config> Pallet<T> {
 				return Some(ControlFlow::Continue(cursor))
 			},
 			Err(SteppedMigrationError::InsufficientWeight { required }) => {
-				if !is_first || required.any_gt(meter.limit) {
+				if is_first || required.any_gt(meter.limit) {
 					Self::deposit_event(Event::MigrationFailed { index: cursor.index, blocks });
 					Self::upgrade_failed(Some(cursor.index));
 					None
 				} else {
-					// else: Hope that it gets better in the next block.
-					Some(ControlFlow::Continue(cursor))
+					// Hope that it gets better in the next block.
+					Some(ControlFlow::Break(cursor))
 				}
 			},
 			Err(SteppedMigrationError::InvalidCursor | SteppedMigrationError::Failed) => {

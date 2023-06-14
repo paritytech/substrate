@@ -64,7 +64,7 @@ pub enum MockedMigrationKind {
 	SucceedAfter,
 	FailAfter,
 	TimeoutAfter,
-	HightWeightAfter,
+	HightWeightAfter(Weight),
 }
 use MockedMigrationKind::*; // C style
 
@@ -101,9 +101,9 @@ impl SteppedMigration for MockedMigration {
 				log::debug!("MockedMigration: Succeeded after {} steps", count);
 				Ok(None)
 			},
-			HightWeightAfter => {
+			HightWeightAfter(required) => {
 				log::debug!("MockedMigration: Not enough weight after {} steps", count);
-				Err(SteppedMigrationError::InsufficientWeight { required: Weight::from_all(100) })
+				Err(SteppedMigrationError::InsufficientWeight { required })
 			},
 			FailAfter => {
 				log::debug!("MockedMigration: Failed after {} steps", count);

@@ -22,6 +22,7 @@ use crate::{
 	Cursor, Event, FailedUpgradeHandling, MigrationCursor,
 };
 use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::pallet_prelude::Weight;
 
 #[test]
 #[docify::export]
@@ -61,7 +62,6 @@ fn simple_works() {
 #[test]
 fn basic_works() {
 	test_closure(|| {
-		// Add three migrations. Each taking one block longer.
 		MigrationsStorage::set(vec![(SucceedAfter, 0), (SucceedAfter, 1), (SucceedAfter, 2)]);
 
 		System::set_block_number(1);
@@ -95,7 +95,6 @@ fn basic_works() {
 fn failing_migration_keep_stuck_the_chain() {
 	test_closure(|| {
 		FailedUpgradeResponse::set(FailedUpgradeHandling::KeepStuck);
-		// Add three migrations. Each taking one block longer.
 		MigrationsStorage::set(vec![(FailAfter, 2)]);
 
 		System::set_block_number(1);
@@ -126,7 +125,6 @@ fn failing_migration_keep_stuck_the_chain() {
 fn failing_migration_force_unstuck_the_chain() {
 	test_closure(|| {
 		FailedUpgradeResponse::set(FailedUpgradeHandling::ForceUnstuck);
-		// Add three migrations. Each taking one block longer.
 		MigrationsStorage::set(vec![(FailAfter, 2)]);
 
 		System::set_block_number(1);
@@ -153,40 +151,12 @@ fn failing_migration_force_unstuck_the_chain() {
 	});
 }
 
-/// A migration that reports of not getting enough weight is retried once, if it is not the first
-/// one to run in a block.
-#[test]
-fn high_weight_migration_retries_once() {
-	test_closure(|| {
-		// Add three migrations. Each taking one block longer.
-		MigrationsStorage::set(vec![(SucceedAfter, 0), (HightWeightAfter, 0)]);
-
-		System::set_block_number(1);
-		Migrations::on_runtime_upgrade();
-		run_to_block(10);
-
-		assert_eq!(historic(), vec![mocked_id(SucceedAfter, 0)]);
-		// Check that we got all events.
-		assert_events::<Event<T>>(vec![
-			Event::UpgradeStarted { migrations: 2 },
-			Event::MigrationCompleted { index: 0, blocks: 1 },
-			Event::MigrationFailed { index: 1, blocks: 0 },
-			Event::UpgradeFailed,
-		]);
-
-		// Check that the handler was called correctly.
-		assert_eq!(upgrades_started_completed_failed(), (1, 0, 1));
-		assert_eq!(Cursor::<T>::get(), Some(MigrationCursor::Stuck));
-	});
-}
-
 /// A migration that reports not getting enough weight errors if it is the first one to run in that
 /// block.
 #[test]
 fn high_weight_migration_singular_fails() {
 	test_closure(|| {
-		// Add three migrations. Each taking one block longer.
-		MigrationsStorage::set(vec![(HightWeightAfter, 2)]);
+		MigrationsStorage::set(vec![(HightWeightAfter(Weight::zero()), 2)]);
 
 		System::set_block_number(1);
 		Migrations::on_runtime_upgrade();
@@ -200,6 +170,62 @@ fn high_weight_migration_singular_fails() {
 			Event::MigrationAdvanced { index: 0, blocks: 1 },
 			Event::MigrationAdvanced { index: 0, blocks: 2 },
 			Event::MigrationFailed { index: 0, blocks: 3 },
+			Event::UpgradeFailed,
+		]);
+
+		// Check that the handler was called correctly.
+		assert_eq!(upgrades_started_completed_failed(), (1, 0, 1));
+		assert_eq!(Cursor::<T>::get(), Some(MigrationCursor::Stuck));
+	});
+}
+
+/// A migration that reports of not getting enough weight is retried once, if it is not the first
+/// one to run in a block.
+#[test]
+fn high_weight_migration_retries_once() {
+	test_closure(|| {
+		MigrationsStorage::set(vec![(SucceedAfter, 0), (HightWeightAfter(Weight::zero()), 0)]);
+
+		System::set_block_number(1);
+		Migrations::on_runtime_upgrade();
+		run_to_block(10);
+
+		assert_eq!(historic(), vec![mocked_id(SucceedAfter, 0)]);
+		// Check that we got all events.
+		assert_events::<Event<T>>(vec![
+			Event::UpgradeStarted { migrations: 2 },
+			Event::MigrationCompleted { index: 0, blocks: 1 },
+			// `blocks=1` means that it was retried once.
+			Event::MigrationFailed { index: 1, blocks: 1 },
+			Event::UpgradeFailed,
+		]);
+
+		// Check that the handler was called correctly.
+		assert_eq!(upgrades_started_completed_failed(), (1, 0, 1));
+		assert_eq!(Cursor::<T>::get(), Some(MigrationCursor::Stuck));
+	});
+}
+
+/// If a migration uses more weight than the limit, then it will not retry but fail even when it is
+/// not the first one in the block.
+// Note: Same as `high_weight_migration_retries_once` but with different required weight for the
+// migration.
+#[test]
+fn high_weight_migration_permanently_overweight_fails() {
+	test_closure(|| {
+		MigrationsStorage::set(vec![(SucceedAfter, 0), (HightWeightAfter(Weight::MAX), 0)]);
+
+		System::set_block_number(1);
+		Migrations::on_runtime_upgrade();
+		run_to_block(10);
+
+		assert_eq!(historic(), vec![mocked_id(SucceedAfter, 0)]);
+		// Check that we got all events.
+		assert_events::<Event<T>>(vec![
+			Event::UpgradeStarted { migrations: 2 },
+			Event::MigrationCompleted { index: 0, blocks: 1 },
+			// `blocks=0` means that it was not retried.
+			Event::MigrationFailed { index: 1, blocks: 0 },
 			Event::UpgradeFailed,
 		]);
 
