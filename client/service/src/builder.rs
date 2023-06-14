@@ -320,19 +320,14 @@ where
 
 /// Shared network instance implementing a set of mandatory traits.
 pub trait SpawnTaskNetwork<Block: BlockT>:
-	sc_offchain::NetworkProvider + NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static
+	NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static
 {
 }
 
 impl<T, Block> SpawnTaskNetwork<Block> for T
 where
 	Block: BlockT,
-	T: sc_offchain::NetworkProvider
-		+ NetworkStateInfo
-		+ NetworkStatusProvider
-		+ Send
-		+ Sync
-		+ 'static,
+	T: NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static,
 {
 }
 
@@ -386,7 +381,6 @@ where
 		+ Send
 		+ 'static,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_api::Metadata<TBl>
-		+ sc_offchain::OffchainWorkerApi<TBl>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl>
 		+ sp_session::SessionKeys<TBl>
 		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
