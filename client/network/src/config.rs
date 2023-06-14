@@ -48,9 +48,10 @@ use std::{
 	io::{self, Write},
 	iter,
 	net::Ipv4Addr,
+	num::NonZeroUsize,
 	path::{Path, PathBuf},
 	pin::Pin,
-	str::{self, FromStr}, num::NonZeroUsize,
+	str::{self, FromStr},
 };
 
 pub use libp2p::{

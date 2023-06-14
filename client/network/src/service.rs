@@ -287,7 +287,9 @@ where
 					params.network_config.kademlia_disjoint_query_paths,
 				);
 
-				if let Some(kademlia_replication_factor) = params.network_config.kademlia_replication_factor {
+				if let Some(kademlia_replication_factor) =
+					params.network_config.kademlia_replication_factor
+				{
 					config.with_kademlia_replication_factor(kademlia_replication_factor);
 				}
 

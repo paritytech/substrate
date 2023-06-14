@@ -28,7 +28,7 @@ use sc_service::{
 	config::{Multiaddr, MultiaddrWithPeerId},
 	ChainSpec, ChainType,
 };
-use std::{borrow::Cow, path::PathBuf, num::NonZeroUsize};
+use std::{borrow::Cow, num::NonZeroUsize, path::PathBuf};
 
 /// Parameters used to create the network configuration.
 #[derive(Debug, Clone, Args)]
