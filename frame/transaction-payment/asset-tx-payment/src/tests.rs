@@ -341,6 +341,15 @@ fn transaction_payment_without_fee() {
 			// check that fee was charged in the given asset
 			assert_eq!(Assets::balance(asset_id, caller), balance - fee_in_asset);
 
+			let refund = AssetConversion::quote_price_exact_tokens_for_tokens(
+				NativeOrAssetId::Native,
+				NativeOrAssetId::Asset(asset_id),
+				fee_in_native,
+				true,
+			)
+			.unwrap();
+			assert_eq!(refund, 1);
+
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
 				&info_from_weight(WEIGHT_5),
@@ -349,8 +358,8 @@ fn transaction_payment_without_fee() {
 				&Ok(())
 			));
 
-			// caller should be refunded but only in native.
-			assert_eq!(Assets::balance(asset_id, caller), balance - fee_in_asset);
+			// caller should get refunded
+			assert_eq!(Assets::balance(asset_id, caller), balance - fee_in_asset + refund);
 			assert_eq!(Balances::free_balance(caller), 10 * balance_factor + fee_in_native);
 		});
 }

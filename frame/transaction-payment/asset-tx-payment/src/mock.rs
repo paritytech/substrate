@@ -268,5 +268,5 @@ impl pallet_asset_conversion::Config for Runtime {
 impl Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Fungibles = Assets;
-	type OnChargeAssetTransaction = AssetConversionAdapter<AssetConversion>;
+	type OnChargeAssetTransaction = AssetConversionAdapter<Balances, AssetConversion>;
 }

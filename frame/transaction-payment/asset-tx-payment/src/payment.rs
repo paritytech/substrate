@@ -20,13 +20,14 @@ use crate::Config;
 use codec::FullCodec;
 use frame_support::{
 	ensure,
-	traits::{fungibles::SwapNative, tokens::Balance},
+	traits::{fungibles::SwapNative, tokens::Balance, Currency, Imbalance},
 	unsigned::TransactionValidityError,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf},
 	transaction_validity::InvalidTransaction,
+	Saturating,
 };
 use sp_std::{fmt::Debug, marker::PhantomData};
 
@@ -73,14 +74,24 @@ pub trait OnChargeAssetTransaction<T: Config> {
 /// [`SwapNative`]).
 ///
 /// The converter is given the complete fee in terms of the asset used for the transaction.
-pub struct AssetConversionAdapter<CON>(PhantomData<CON>);
+pub struct AssetConversionAdapter<C, CON>(PhantomData<(C, CON)>);
 
 /// Default implementation for a runtime instantiating this pallet, an asset to native swapper.
-impl<T, CON> OnChargeAssetTransaction<T> for AssetConversionAdapter<CON>
+impl<T, C, CON> OnChargeAssetTransaction<T> for AssetConversionAdapter<C, CON>
 where
 	T: Config,
+	C: Currency<<T as frame_system::Config>::AccountId>,
+	C::PositiveImbalance: Imbalance<
+		<C as Currency<<T as frame_system::Config>::AccountId>>::Balance,
+		Opposite = C::NegativeImbalance,
+	>,
+	C::NegativeImbalance: Imbalance<
+		<C as Currency<<T as frame_system::Config>::AccountId>>::Balance,
+		Opposite = C::PositiveImbalance,
+	>,
 	CON: SwapNative<T::RuntimeOrigin, T::AccountId, BalanceOf<T>, AssetBalanceOf<T>, AssetIdOf<T>>,
 	AssetIdOf<T>: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo,
+	BalanceOf<T>: IsType<<C as Currency<<T as frame_system::Config>::AccountId>>::Balance>,
 {
 	type Balance = BalanceOf<T>;
 	type AssetId = AssetIdOf<T>;
@@ -98,10 +109,12 @@ where
 		tip: BalanceOf<T>,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError> {
 		// convert the asset into native currency
-		// TODO: add ED if needed to the `fee`
-
-		// 0.1001 DOT
-		let swap_amount = fee;
+		let ed = C::minimum_balance();
+		let swap_amount = if C::free_balance(&who) >= ed.saturating_add(fee.into()) {
+			fee
+		} else {
+			fee + ed.into()
+		};
 		let asset_consumed = CON::swap_tokens_for_exact_native(
 			who.clone(),
 			asset_id,
@@ -117,7 +130,6 @@ where
 		// charge the fee in native currency
 		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)?;
 
-		// 0.1 DOT should be left
 		Ok(swap_amount)
 	}
 
@@ -130,23 +142,28 @@ where
 		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: BalanceOf<T>, // 0.00005 DOT
 		_tip: BalanceOf<T>,
-		already_paid: Self::LiquidityInfo, // 0.1001 DOT ?
+		already_paid: Self::LiquidityInfo, // 0.1001 DOT
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError> {
-		// Refund to the account that paid the fees. If this fails, the account might have
-		// dropped below the existential balance. In that case we don't refund anything.
+		// Calculate how much refund we should return
+		let refund_amount = already_paid.saturating_sub(corrected_fee);
 
-		// swap the difference of `already_paid` - `corrected_fee`
-		let swap_amount = already_paid - corrected_fee;
-		let _asset_received = CON::swap_exact_native_for_tokens(
-			who.clone(),
-			asset_id,
-			swap_amount,
-			None,
-			who.clone(),
-			true, // todo: false?
-		)
-		.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
+		if !refund_amount.is_zero() {
+			// Refund to the account that paid the fees. If this fails, the account might have
+			// dropped below the existential balance. In that case we don't refund anything.
+			let refund_imbalance = C::deposit_into_existing(who, refund_amount.into())
+				.unwrap_or_else(|_| C::PositiveImbalance::zero());
+
+			let _refund_received = CON::swap_exact_native_for_tokens(
+				who.clone(),
+				asset_id,
+				refund_imbalance.peek().into(),
+				None,
+				who.clone(),
+				false,
+			)
+			.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
+		}
 
 		Ok(())
 	}
