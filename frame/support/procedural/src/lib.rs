@@ -1024,8 +1024,41 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 /// 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 /// }
 /// ```
+///
+/// ## Advanced Usage
+///
 /// This macro acts as a thin wrapper around macro_magic's `#[export_tokens]`. See the docs
-/// [here](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) for more info.
+/// [here](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) for more
+/// info.
+///
+/// There are some caveats when applying a `use` statement to bring a
+/// `#[register_default_impl]` item into scope. If you have a `#[register_default_impl]`
+/// defined in `my_crate::submodule::MyItem`, it is currently not sufficient to do something
+/// like:
+///
+/// ```ignore
+/// use my_crate::submodule::MyItem;
+/// #[derive_impl!(MyItem as Whatever)]
+/// ```
+///
+/// This will fail with a mysterious message about `__export_tokens_tt_my_item_0` not being
+/// defined.
+///
+/// You can, however, do any of the following:
+/// ```ignore
+/// // partial path works
+/// use my_crate::submodule;
+/// #[derive_impl!(submodule::MyItem as Whatever)]
+/// ```
+/// ```ignore
+/// // full path works
+/// #[derive_impl!(my_crate::submodule::MyItem as Whatever)]
+/// ```
+/// ```ignore
+/// // wild-cards work
+/// use my_crate::submodule::*;
+/// #[derive_impl!(MyItem as Whatever)]
+/// ```
 #[proc_macro_attribute]
 pub fn register_default_impl(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	// ensure this is a impl statement
