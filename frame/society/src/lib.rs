@@ -1004,7 +1004,6 @@ pub mod pallet {
 		///
 		/// Key: M (len of members)
 		/// Total Complexity: O(M + logM)
-		/// # </weight>
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::defender_vote())]
 		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResultWithPostInfo {
