@@ -1041,7 +1041,7 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 /// #[derive_impl(MyItem as Whatever)]
 /// ```
 ///
-/// This will fail with a mysterious message about `__export_tokens_tt_my_item_0` not being
+/// This will fail with a mysterious message about `__export_tokens_tt_my_item` not being
 /// defined.
 ///
 /// You can, however, do any of the following:
