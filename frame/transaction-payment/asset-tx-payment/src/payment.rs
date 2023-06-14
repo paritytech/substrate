@@ -131,8 +131,6 @@ where
 		// charge the fee in native currency
 		// 0.001 DOT
 		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)?;
-		// TODO: we can store the fee in Asset((paid, swapped))
-		// just change the sign on a top level
 
 		// 0.101 DOT
 		Ok(swap_amount)
