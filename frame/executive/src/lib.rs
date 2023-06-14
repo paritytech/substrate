@@ -191,7 +191,7 @@ impl<
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-		ExtrinsicSuspender: frame_support::migrations::ExtrinsicSuspenderQuery,
+		ExtrinsicSuspender: frame_support::migrations::UpgradeStatusQuery,
 	> ExecuteBlock<Block>
 	for Executive<
 		System,
@@ -391,7 +391,7 @@ impl<
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-		ExtrinsicSuspender: frame_support::migrations::ExtrinsicSuspenderQuery,
+		ExtrinsicSuspender: frame_support::migrations::UpgradeStatusQuery,
 	>
 	Executive<
 		System,
@@ -587,12 +587,7 @@ impl<
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
 		// Check whether we need to error because extrinsics are paused.
-		let r = if ExtrinsicSuspender::is_suspended(dispatch_info.class) {
-			// no refunds
-			Err(DispatchError::Suspended.with_weight(dispatch_info.weight))
-		} else {
-			Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?
-		};
+		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
 		// Mandatory(inherents) are not allowed to fail.
 		//

@@ -282,14 +282,12 @@ pub enum SteppedMigrationError {
 	Failed,
 }
 
-/// Provides a way of checking whether transaction processing is suspended on the runtime level.
-pub trait ExtrinsicSuspenderQuery {
-	/// Check whether transactions with this dispatch class are suspended.
-	fn is_suspended(class: DispatchClass) -> bool;
+pub trait UpgradeStatusQuery {
+	fn is_upgrading() -> bool;
 }
 
-impl ExtrinsicSuspenderQuery for () {
-	fn is_suspended(_class: DispatchClass) -> bool {
+impl UpgradeStatusQuery for () {
+	fn is_upgrading() -> bool {
 		false
 	}
 }
@@ -324,4 +322,10 @@ impl OnMigrationUpdate for () {
 	fn failed(_migration: Option<u32>) -> FailedUpgradeHandling {
 		FailedUpgradeHandling::KeepStuck
 	}
+}
+
+/// Something that can do multi step migrations.
+pub trait MultiStepMigrator {
+	/// Do the next step in the MBM process.
+	fn step() -> Weight;
 }

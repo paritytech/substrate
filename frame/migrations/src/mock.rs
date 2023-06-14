@@ -181,7 +181,7 @@ pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
 }
 
 pub struct LoggingSuspender<Inner>(core::marker::PhantomData<Inner>);
-impl<Inner: ExtrinsicSuspenderQuery> ExtrinsicSuspenderQuery for LoggingSuspender<Inner> {
+impl<Inner: UpgradeStatusQuery> UpgradeStatusQuery for LoggingSuspender<Inner> {
 	fn is_suspended(class: DispatchClass) -> bool {
 		let res = Inner::is_suspended(class);
 		log::debug!("Is {class:?} suspended: {res}");

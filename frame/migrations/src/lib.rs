@@ -43,7 +43,7 @@
 //! including its configuration trait, dispatchables, storage items, events and errors.
 //!
 //! Otherwise noteworthy API of this pallet include its implementation of the
-//! [`ExtrinsicSuspenderQuery`] trait. This can be plugged into `frame-executive` to check for
+//! [`UpgradeStatusQuery`] trait. This can be plugged into `frame-executive` to check for
 //! transaction suspension.
 //!
 //! ### Design Goals
@@ -72,7 +72,7 @@
 //! once it encounters an error (Goal 4). Once in the stuck state, the pallet will stay stuck until
 //! it is fixed through manual governance intervention.  
 //! As soon as the cursor of the pallet becomes `Some(_)`; chain transaction processing is paused
-//! by [`ExtrinsicSuspenderQuery::is_suspended`] returning `true`. This ensures that no other
+//! by [`UpgradeStatusQuery::is_suspended`] returning `true`. This ensures that no other
 //! transactions are processed until all migrations are complete (Goal 2).  
 //! `on_initialize` the pallet will load the current migration and check whether it was already
 //! executed in the past by checking for membership of its ID in the `Historic` set. Historic
@@ -421,7 +421,7 @@ impl<T: Config> Pallet<T> {
 				return meter.consumed
 			},
 		};
-		debug_assert!(<Self as ExtrinsicSuspenderQuery>::is_suspended(DispatchClass::Normal));
+		debug_assert!(<Self as UpgradeStatusQuery>::is_upgrading());
 
 		let migrations = T::Migrations::get();
 		for i in 0.. {
@@ -516,11 +516,14 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ExtrinsicSuspenderQuery for Pallet<T> {
-	fn is_suspended(class: DispatchClass) -> bool {
-		match class {
-			DispatchClass::Mandatory => false,
-			DispatchClass::Normal | DispatchClass::Operational => Cursor::<T>::exists(),
-		}
+impl<T: Config> UpgradeStatusQuery for Pallet<T> {
+	fn is_upgrading() -> bool {
+		Cursor::<T>::exists()
+	}
+}
+
+impl<T: Config> MultiStepMigrator for Pallet<T> {
+	fn step() -> Weight {
+		Self::progress_mbms(System::<T>::block_number())
 	}
 }
