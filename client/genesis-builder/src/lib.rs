@@ -17,7 +17,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::GenesisBuild;
+use frame_support::traits::BuildGenesisConfig;
 use serde_json::Value;
 
 /// Helper for implementing [`sp_genesis_builder::GenesisBuilder`] for runtimes. Provides common
@@ -26,7 +26,7 @@ pub struct GenesisBuilderHelper<GC>(sp_std::marker::PhantomData<GC>);
 
 impl<GC> GenesisBuilderHelper<GC>
 where
-	GC: GenesisBuild<()>,
+	GC: BuildGenesisConfig + sp_runtime::traits::MaybeSerializeDeserialize + Default,
 {
 	/// Get the default `GenesisConfig` as a JSON blob.
 	pub fn get_default_as_json() -> sp_std::vec::Vec<u8> {
@@ -48,7 +48,7 @@ where
 		let gc = serde_json::from_value::<GC>(json)
 			.expect("patched default config json is expected to be valid. qed.");
 
-		<GC as GenesisBuild<()>>::build(&gc);
+		<GC as BuildGenesisConfig>::build(&gc);
 	}
 }
 
