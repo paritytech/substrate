@@ -131,9 +131,8 @@ pub mod pallet {
 		AssetTxFeePaid {
 			who: T::AccountId,
 			actual_fee: BalanceOf<T>,
-			asset_paid: AssetBalanceOf<T>,
 			tip: BalanceOf<T>,
-			asset_id: Option<ChargeAssetIdOf<T>>,
+			asset_id: ChargeAssetIdOf<T>,
 		},
 	}
 }
@@ -301,13 +300,12 @@ where
 							asset_id,
 						)?;
 
-						/*Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
+						Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
 							who,
 							actual_fee,
-							asset_paid: already_withdrawn.into(),
 							tip,
 							asset_id,
-						});*/
+						});
 					}
 				},
 				InitialPayment::Nothing => {
