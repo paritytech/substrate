@@ -970,10 +970,6 @@ pub mod tests {
 
 	crate::construct_runtime!(
 		pub enum Runtime
-		where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: self::frame_system,
 		}
