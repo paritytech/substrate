@@ -349,7 +349,6 @@ where
 					warn!(target: "sub-libp2p", "Failed to decode transactions list");
 				}
 			},
-			NotificationEvent::NotificationSinkReplaced { .. } => {},
 		}
 	}
 

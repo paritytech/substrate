@@ -21,6 +21,8 @@ use crate::protocol::notifications::handler::{
 	NotificationsSinkMessage, ASYNC_NOTIFICATIONS_BUFFER_SIZE,
 };
 
+use std::future::Future;
+
 #[tokio::test]
 async fn validate_and_accept_substream() {
 	let (proto, mut notif) = notification_service("/proto/1".into(), None);
@@ -620,12 +622,11 @@ async fn sending_notifications_using_notifications_sink_works() {
 	}
 
 	// get a copy of the notification sink and send a synchronous notification using.
-	let sink = notif.notification_sink(&peer_id).unwrap();
+	let sink = notif.message_sink(&peer_id).unwrap();
 	sink.send_sync_notification(vec![1, 3, 3, 6]);
 
 	// send an asynchronous notification using the acquired notifications sink.
-	let sender = sink.reserve_notification().await.unwrap();
-	sender.send(vec![1, 3, 3, 7]).unwrap();
+	let sender = sink.send_async_notification(vec![1, 3, 3, 7]).await.unwrap();
 
 	assert_eq!(
 		sync_rx.next().await,
@@ -653,7 +654,7 @@ async fn sending_notifications_using_notifications_sink_works() {
 #[test]
 fn try_to_get_notifications_sink_for_non_existent_peer() {
 	let (_proto, notif) = notification_service("/proto/1".into(), None);
-	assert!(notif.notification_sink(&PeerId::random()).is_none());
+	assert!(notif.message_sink(&PeerId::random()).is_none());
 }
 
 #[tokio::test]
@@ -698,12 +699,11 @@ async fn notification_sink_replaced() {
 	}
 
 	// get a copy of the notification sink and send a synchronous notification using.
-	let sink = notif.notification_sink(&peer_id).unwrap();
+	let sink = notif.message_sink(&peer_id).unwrap();
 	sink.send_sync_notification(vec![1, 3, 3, 6]);
 
 	// send an asynchronous notification using the acquired notifications sink.
-	let sender = sink.reserve_notification().await.unwrap();
-	sender.send(vec![1, 3, 3, 7]).unwrap();
+	let sender = sink.send_async_notification(vec![1, 3, 3, 7]).await.unwrap();
 
 	assert_eq!(
 		sync_rx.next().await,
@@ -733,16 +733,15 @@ async fn notification_sink_replaced() {
 	let (new_sink, mut new_async_rx, mut new_sync_rx) = NotificationsSink::new(PeerId::random());
 	handle.report_notification_sink_replaced(peer_id, new_sink).unwrap();
 
-	let new_received_sink =
-		if let Some(NotificationEvent::NotificationSinkReplaced { peer: _, sink }) =
-			notif.next_event().await
-		{
-			drop(sync_rx);
-			drop(async_rx);
-			sink
-		} else {
-			panic!("invalid event received");
-		};
+	// drop the old sinks and poll `notif` once to register the sink replacement
+	drop(sync_rx);
+	drop(async_rx);
+
+	futures::future::poll_fn(|cx| {
+		let _ = std::pin::Pin::new(&mut notif.next_event()).poll(cx);
+		std::task::Poll::Ready(())
+	})
+	.await;
 
 	// verify that using the `NotificationService` API automatically results in using the correct
 	// sink
@@ -758,21 +757,12 @@ async fn notification_sink_replaced() {
 		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 9] }),
 	);
 
-	// try to use the old sink to send a synchronous notification but nothing is obviously received
-	// and no error is reported as defined in the documentation
+	// now send two notifications using the acquired message sink and verify that
+	// it also upated t
 	sink.send_sync_notification(vec![1, 3, 3, 6]);
-	assert!(new_sync_rx.try_next().is_err());
-
-	// try to use the old sink to send an asynchronous notification but this time an error is
-	// returned as the connection has closed.
-	assert!(sink.reserve_notification().await.is_err());
-
-	// now send two notifications using the new sink
-	new_received_sink.send_sync_notification(vec![1, 3, 3, 6]);
 
 	// send an asynchronous notification using the acquired notifications sink.
-	let sender = new_received_sink.reserve_notification().await.unwrap();
-	sender.send(vec![1, 3, 3, 7]).unwrap();
+	let sender = sink.send_async_notification(vec![1, 3, 3, 7]).await.unwrap();
 
 	assert_eq!(
 		new_sync_rx.next().await,

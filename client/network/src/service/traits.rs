@@ -27,7 +27,7 @@ use crate::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::signature::Signature,
 	types::ProtocolName,
-	NotificationsSink, ReputationChange,
+	ReputationChange,
 };
 
 use futures::{channel::oneshot, Stream};
@@ -644,6 +644,8 @@ pub enum NotificationEvent {
 
 		/// Negotiated fallback.
 		negotiated_fallback: Option<ProtocolName>,
+		// /// Message service associated with the peer.
+		// message_service: Box<dyn MessageServce
 	},
 
 	/// Substream was closed.
@@ -659,15 +661,6 @@ pub enum NotificationEvent {
 
 		/// Received notification.
 		notification: Vec<u8>,
-	},
-
-	/// Notification sink was replaced.
-	NotificationSinkReplaced {
-		/// Peer ID.
-		peer: PeerId,
-
-		/// Notification sink.
-		sink: NotificationsSink,
 	},
 }
 
@@ -748,6 +741,28 @@ pub trait NotificationService: Debug + Send {
 	/// Get protocol name of the `NotificationService`.
 	fn protocol(&self) -> &ProtocolName;
 
-	/// Get notification sink of the peer.
-	fn notification_sink(&self, peer: &PeerId) -> Option<NotificationsSink>;
+	/// Get message sink of the peer.
+	fn message_sink(&self, peer: &PeerId) -> Option<Box<dyn MessageSink>>;
+}
+
+/// Message sink for peers.
+///
+/// If protocol cannot use [`NotificationService`] to send notifications to peer and requires,
+/// e.g., notifications to be sent in another task. the protocol may acquire a [`MessageSink`]
+/// object for each peer by calling [`NotificationService::notification_sink()`]. Calling this
+/// function returns an object which allows the protocol to send notifications to the remote peer.
+///
+/// Use of this API is discouraged as it's not as performant as sending notifications through
+/// [`NotificationService`] due to synchronization required to keep the underlying notification
+/// sink up to date with possible sink replacement events.
+#[async_trait::async_trait]
+pub trait MessageSink: Send {
+	/// Send synchronous `notification` to the peer associated with this [`MessageService`].
+	fn send_sync_notification(&self, notification: Vec<u8>);
+
+	/// Send an asynchronous `notification` to to the peer associated with this [`MessageService`],
+	/// allowing sender to exercise backpressure.
+	///
+	/// Returns an error if the peer does not exist.
+	async fn send_async_notification(&self, notification: Vec<u8>) -> Result<(), error::Error>;
 }

@@ -21,7 +21,7 @@
 use crate::{
 	error,
 	protocol::notifications::handler::NotificationsSink,
-	service::traits::{NotificationEvent, NotificationService, ValidationResult},
+	service::traits::{MessageSink, NotificationEvent, NotificationService, ValidationResult},
 	types::ProtocolName,
 };
 
@@ -30,6 +30,7 @@ use futures::{
 	StreamExt,
 };
 use libp2p::PeerId;
+use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
@@ -37,11 +38,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use sc_network_common::role::ObservedRole;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
-use std::{
-	collections::HashMap,
-	fmt::Debug,
-	sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 mod metrics;
 #[cfg(test)]
@@ -52,6 +49,32 @@ const LOG_TARGET: &str = "notification-service";
 
 /// Type representing subscribers of a notification protocol.
 type Subscribers = Arc<Mutex<Vec<TracingUnboundedSender<InnerNotificationEvent>>>>;
+
+/// Type represending a distributable message sink.
+///
+/// See documentation for [`PeerContext`] for more details.
+type NotificationSink = Arc<Mutex<NotificationsSink>>;
+
+#[async_trait::async_trait]
+impl MessageSink for NotificationSink {
+	/// Send synchronous `notification` to the peer associated with this [`MessageService`].
+	fn send_sync_notification(&self, notification: Vec<u8>) {
+		self.lock().send_sync_notification(notification);
+	}
+
+	/// Send an asynchronous `notification` to to the peer associated with this [`MessageService`],
+	/// allowing sender to exercise backpressure.
+	///
+	/// Returns an error if the peer does not exist.
+	async fn send_async_notification(&self, notification: Vec<u8>) -> Result<(), error::Error> {
+		// notification sink must be cloned because the lock cannot be held across `.await`
+		// this makes the implementation less efficient but not prohibitively so as the same
+		// method is also used by `NetworkService` when sending notifications.
+		let sink = self.lock().clone();
+		let sink = sink.reserve_notification().await.map_err(|_| error::Error::ConnectionClosed)?;
+		sink.send(notification).map_err(|_| error::Error::ChannelClosed)
+	}
+}
 
 /// Inner notification event to deal with `NotificationsSinks` without exposing that
 /// implementation detail to [`NotificationService`] consumers.
@@ -126,6 +149,23 @@ pub enum NotificationCommand {
 	SetHandshake(Vec<u8>),
 }
 
+/// Context assigned to each peer.
+///
+/// Contains `NotificationsSink` used by [`NotificationService`] to send notifications
+/// and an additional, distributable `NotificationsSink` which the protocol may acquire
+/// if it wishes to send notifications through `NotificationsSink` directly.
+///
+/// The distributable `NoticationsSink` is wrapped in an `Arc<Mutex<>>` to allow
+/// `NotificationsService` to swap underlying sink in case the sink is replaced.
+#[derive(Debug, Clone)]
+struct PeerContext {
+	/// Sink for sending notificaitons.
+	sink: NotificationsSink,
+
+	/// Distributable notification sink.
+	shared_sink: NotificationSink,
+}
+
 /// Handle that is passed on to the notifications protocol.
 #[derive(Debug)]
 pub struct NotificationHandle {
@@ -142,7 +182,7 @@ pub struct NotificationHandle {
 	subscribers: Subscribers,
 
 	/// Connected peers.
-	peers: HashMap<PeerId, NotificationsSink>,
+	peers: HashMap<PeerId, PeerContext>,
 
 	/// Prometheus metrics.
 	metrics: Option<metrics::Metrics>,
@@ -185,6 +225,7 @@ impl NotificationService for NotificationHandle {
 			.get(&peer)
 			// TODO(aaro): check what the current implementation does in case the peer doesn't exist
 			.ok_or_else(|| error::Error::PeerDoesntExist(*peer))?
+			.sink
 			.send_sync_notification(notification);
 		Ok(())
 	}
@@ -201,6 +242,7 @@ impl NotificationService for NotificationHandle {
 			.get(&peer)
 			// TODO(aaro): check what the current implementation does in case the peer doesn't exist
 			.ok_or_else(|| error::Error::PeerDoesntExist(*peer))?
+			.sink
 			.reserve_notification()
 			.await
 			.map_err(|_| error::Error::ConnectionClosed)?
@@ -217,40 +259,60 @@ impl NotificationService for NotificationHandle {
 
 	/// Get next event from the `Notifications` event stream.
 	async fn next_event(&mut self) -> Option<NotificationEvent> {
-		match self.rx.next().await? {
-			InnerNotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx } =>
-				Some(NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx }),
-			InnerNotificationEvent::NotificationStreamOpened {
-				peer,
-				handshake,
-				role,
-				negotiated_fallback,
-				sink,
-			} => {
-				self.peers.insert(peer, sink);
-				Some(NotificationEvent::NotificationStreamOpened {
+		loop {
+			match self.rx.next().await? {
+				InnerNotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx } =>
+					return Some(NotificationEvent::ValidateInboundSubstream {
+						peer,
+						handshake,
+						result_tx,
+					}),
+				InnerNotificationEvent::NotificationStreamOpened {
 					peer,
 					handshake,
 					role,
 					negotiated_fallback,
-				})
-			},
-			InnerNotificationEvent::NotificationStreamClosed { peer } => {
-				self.peers.remove(&peer);
-				Some(NotificationEvent::NotificationStreamClosed { peer })
-			},
-			InnerNotificationEvent::NotificationReceived { peer, notification } =>
-				Some(NotificationEvent::NotificationReceived { peer, notification }),
-			InnerNotificationEvent::NotificationSinkReplaced { peer, sink } => {
-				self.peers.insert(peer, sink.clone());
-				Some(NotificationEvent::NotificationSinkReplaced { peer, sink })
-			},
+					sink,
+				} => {
+					self.peers.insert(
+						peer,
+						PeerContext { sink: sink.clone(), shared_sink: Arc::new(Mutex::new(sink)) },
+					);
+					return Some(NotificationEvent::NotificationStreamOpened {
+						peer,
+						handshake,
+						role,
+						negotiated_fallback,
+					})
+				},
+				InnerNotificationEvent::NotificationStreamClosed { peer } => {
+					self.peers.remove(&peer);
+					return Some(NotificationEvent::NotificationStreamClosed { peer })
+				},
+				InnerNotificationEvent::NotificationReceived { peer, notification } =>
+					return Some(NotificationEvent::NotificationReceived { peer, notification }),
+				InnerNotificationEvent::NotificationSinkReplaced { peer, sink } => {
+					println!("replace sink");
+
+					match self.peers.get_mut(&peer) {
+						None => log::error!(
+							"{}: notification sink replaced for {peer} but peer does not exist",
+							self.protocol
+						),
+						Some(context) => {
+							println!("done");
+							context.sink = sink.clone();
+							*context.shared_sink.lock() = sink.clone();
+						},
+					}
+				},
+			}
 		}
 	}
 
 	// Clone [`NotificationService`]
 	fn clone(&mut self) -> Result<Box<dyn NotificationService>, ()> {
-		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+		let mut subscribers = self.subscribers.lock();
 		let (event_tx, event_rx) = tracing_unbounded("mpsc-notification-to-protocol", 100_000);
 		subscribers.push(event_tx);
 
@@ -269,9 +331,12 @@ impl NotificationService for NotificationHandle {
 		&self.protocol
 	}
 
-	/// Get notification sink of the peer.
-	fn notification_sink(&self, peer: &PeerId) -> Option<NotificationsSink> {
-		self.peers.get(peer).map(|sink| sink.clone())
+	/// Get message sink of the peer.
+	fn message_sink(&self, peer: &PeerId) -> Option<Box<dyn MessageSink>> {
+		match self.peers.get(peer) {
+			Some(context) => Some(Box::new(context.shared_sink.clone())),
+			None => None,
+		}
 	}
 }
 
@@ -350,7 +415,7 @@ impl ProtocolHandle {
 		peer: PeerId,
 		handshake: Vec<u8>,
 	) -> Result<oneshot::Receiver<ValidationResult>, ()> {
-		let subscribers = self.subscribers.lock().map_err(|_| ())?;
+		let subscribers = self.subscribers.lock();
 
 		log::trace!(
 			target: LOG_TARGET,
@@ -418,7 +483,7 @@ impl ProtocolHandle {
 	) -> Result<(), ()> {
 		metrics::register_substream_opened(&self.metrics, &self.protocol);
 
-		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+		let mut subscribers = self.subscribers.lock();
 		log::trace!(target: LOG_TARGET, "{}: substream opened for {peer:?}", self.protocol);
 
 		subscribers.retain(|subscriber| {
@@ -441,7 +506,7 @@ impl ProtocolHandle {
 	pub fn report_substream_closed(&mut self, peer: PeerId) -> Result<(), ()> {
 		metrics::register_substream_closed(&self.metrics, &self.protocol);
 
-		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+		let mut subscribers = self.subscribers.lock();
 		log::trace!(target: LOG_TARGET, "{}: substream closed for {peer:?}", self.protocol);
 
 		subscribers.retain(|subscriber| {
@@ -462,7 +527,7 @@ impl ProtocolHandle {
 	) -> Result<(), ()> {
 		metrics::register_notification_received(&self.metrics, &self.protocol, notification.len());
 
-		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+		let mut subscribers = self.subscribers.lock();
 		log::trace!(target: LOG_TARGET, "{}: notification received from {peer:?}", self.protocol);
 
 		subscribers.retain(|subscriber| {
@@ -483,7 +548,7 @@ impl ProtocolHandle {
 		peer: PeerId,
 		sink: NotificationsSink,
 	) -> Result<(), ()> {
-		let mut subscribers = self.subscribers.lock().map_err(|_| ())?;
+		let mut subscribers = self.subscribers.lock();
 
 		log::trace!(
 			target: LOG_TARGET,
