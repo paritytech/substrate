@@ -56,7 +56,6 @@ use sp_std::{
 	collections::btree_map::{BTreeMap, Entry::*},
 	prelude::*,
 };
-use sp_std::vec;
 
 /// Map type used for reduce_4. Can be easily swapped with HashMap.
 type Map<A> = BTreeMap<(A, A), A>;
