@@ -115,6 +115,7 @@ where
 		} else {
 			fee + ed.into()
 		};
+		// 0.101 DOT
 		let asset_consumed = CON::swap_tokens_for_exact_native(
 			who.clone(),
 			asset_id,
@@ -128,8 +129,10 @@ where
 		ensure!(asset_consumed > Zero::zero(), InvalidTransaction::Payment);
 
 		// charge the fee in native currency
+		// 0.001 DOT
 		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)?;
 
+		// 0.101 DOT
 		Ok(swap_amount)
 	}
 
@@ -140,9 +143,9 @@ where
 		who: &T::AccountId,
 		_dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
-		corrected_fee: BalanceOf<T>, // 0.00005 DOT
+		corrected_fee: BalanceOf<T>, // 0.0005 DOT
 		_tip: BalanceOf<T>,
-		already_paid: Self::LiquidityInfo, // 0.1001 DOT
+		already_paid: Self::LiquidityInfo, // 0.101 DOT
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError> {
 		// Calculate how much refund we should return
