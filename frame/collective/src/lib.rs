@@ -418,8 +418,8 @@ pub mod pallet {
 					old.len(),
 				);
 			}
-			if let Some(p) = prime.clone() {
-				ensure!(new_members.contains(&p), Error::<T, I>::PrimeAccountNotMember);
+			if let Some(p) = &prime {
+				ensure!(new_members.contains(p), Error::<T, I>::PrimeAccountNotMember);
 			}
 			let mut new_members = new_members;
 			new_members.sort();
