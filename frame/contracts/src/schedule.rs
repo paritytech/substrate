@@ -55,11 +55,6 @@ use sp_std::marker::PhantomData;
 ///     }
 /// }
 /// ```
-///
-/// # Note
-///
-/// Please make sure to bump the [`InstructionWeights::version`] whenever substantial
-/// changes are made to its values.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, DefaultNoBound, TypeInfo)]
