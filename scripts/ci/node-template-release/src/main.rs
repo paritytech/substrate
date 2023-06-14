@@ -8,7 +8,6 @@ use std::{
 use clap::Parser;
 use flate2::{write::GzEncoder, Compression};
 use fs_extra::dir::{self, CopyOptions};
-use git2;
 use glob;
 use itertools::Itertools;
 use tar;
@@ -79,17 +78,20 @@ fn write_cargo_toml(path: &Path, cargo_toml: CargoToml) {
 
 /// Gets the latest commit id of the repository given by `path`.
 fn get_git_commit_id(path: &Path) -> String {
-	let repo = git2::Repository::discover(path)
-		.expect(&format!("Node template ({}) should be in a git repository.", path.display()));
+	let mut dir = path;
+	while !dir.join(".git").exists() {
+		dir = dir
+			.parent()
+			.expect(&format!("Node template ({}) should be in a git repository.", path.display()));
+	}
 
-	let commit_id = repo
-		.head()
-		.expect("Repository should have a head")
-		.peel_to_commit()
-		.expect("Head references a commit")
-		.id();
-
-	format!("{}", commit_id)
+	let git = dir.join(".git");
+	let head = git.join("HEAD");
+	let head_contents = fs::read_to_string(head).expect("Repository should have a HEAD");
+	let branch = head_contents.strip_prefix("ref: ").expect(".git/HEAD to start 'ref: '").trim();
+	let mut commit = fs::read_to_string(git.join(branch)).expect("Head references a commit");
+	commit.truncate(commit.trim_end().len());
+	commit
 }
 
 /// Rewrites git dependencies:

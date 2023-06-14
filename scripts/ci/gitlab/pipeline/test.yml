@@ -456,6 +456,13 @@ cargo-hfuzz:
       --exit_code_upon_crash 1
       --timeout 10
       --run_time 60
+    # use git version of honggfuzz-rs until v0.5.56 is out, we need a few recent changes:
+    # https://github.com/rust-fuzz/honggfuzz-rs/pull/75 to avoid breakage on debian
+    # https://github.com/rust-fuzz/honggfuzz-rs/pull/81 fix to the above pr
+    # https://github.com/rust-fuzz/honggfuzz-rs/pull/82 fix for handling rusty-cachier's absolute CARGO_TARGET_DIR
+    HFUZZ_BUILD_ARGS: >
+      --config=patch.crates-io.honggfuzz.git="https://github.com/altaua/honggfuzz-rs"
+      --config=patch.crates-io.honggfuzz.rev="205f7c8c059a0d98fe1cb912cdac84f324cb6981"
   artifacts:
     name: "hfuzz-$CI_COMMIT_SHORT_SHA"
     expire_in: 7 days
@@ -463,15 +470,6 @@ cargo-hfuzz:
     paths:
       - primitives/arithmetic/fuzzer/hfuzz_workspace/
   script:
-    # use git version of honggfuzz-rs until v0.5.56 is out, we need a few recent changes:
-    # https://github.com/rust-fuzz/honggfuzz-rs/pull/75 to avoid breakage on debian
-    # https://github.com/rust-fuzz/honggfuzz-rs/pull/81 fix to the above pr
-    # https://github.com/rust-fuzz/honggfuzz-rs/pull/82 fix for handling rusty-cachier's absolute CARGO_TARGET_DIR
-    - |
-      cat >>Cargo.toml <<EOF
-      [patch.crates-io]
-      honggfuzz = { git = 'https://github.com/altaua/honggfuzz-rs', rev = '205f7c8c059a0d98fe1cb912cdac84f324cb6981' }
-      EOF
     - cd ./primitives/arithmetic/fuzzer
     - rusty-cachier snapshot create
     - cargo hfuzz build

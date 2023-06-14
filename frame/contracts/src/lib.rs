@@ -87,12 +87,12 @@ mod address;
 mod benchmarking;
 mod exec;
 mod gas;
-mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -102,7 +102,6 @@ use crate::{
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
-	weights::WeightInfo,
 };
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
@@ -129,7 +128,8 @@ use pallet_contracts_primitives::{
 use scale_info::TypeInfo;
 use smallvec::Array;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{fmt::Debug, prelude::*};
+pub use weights::WeightInfo;
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
@@ -191,7 +191,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -319,6 +319,16 @@ pub mod pallet {
 		/// The maximum length of the debug buffer in bytes.
 		#[pallet::constant]
 		type MaxDebugBufferLen: Get<u32>;
+
+		/// The sequence of migration steps that will be applied during a migration.
+		///
+		/// # Examples
+		/// ```
+		/// use pallet_contracts::migration::{v9, v10, v11};
+		/// # struct Runtime {};
+		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// ```
+		type Migrations: MigrateSequence;
 	}
 
 	#[pallet::hooks]
