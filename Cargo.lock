@@ -11079,6 +11079,8 @@ name = "sp-consensus-beefy"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes 4.2.0",
+ "hex",
+ "hex-literal",
  "lazy_static",
  "parity-scale-codec",
  "scale-info",
@@ -11092,6 +11094,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "strum",
+ "w3f-bls",
 ]
 
 [[package]]
