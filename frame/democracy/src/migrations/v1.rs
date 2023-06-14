@@ -17,7 +17,7 @@
 
 //! Storage migrations for the preimage pallet.
 
-use super::*;
+use crate::*;
 use frame_support::{pallet_prelude::*, storage_alias, traits::OnRuntimeUpgrade, BoundedVec};
 use sp_core::H256;
 

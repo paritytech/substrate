@@ -339,6 +339,33 @@ impl<T, A: TryInto<T>> TryMorph<A> for TryMorphInto<T> {
 	}
 }
 
+/// Implementation of `Morph` to retrieve just the first element of a tuple.
+pub struct TakeFirst;
+impl<T1> Morph<(T1,)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1,)) -> T1 {
+		a.0
+	}
+}
+impl<T1, T2> Morph<(T1, T2)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1, T2)) -> T1 {
+		a.0
+	}
+}
+impl<T1, T2, T3> Morph<(T1, T2, T3)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1, T2, T3)) -> T1 {
+		a.0
+	}
+}
+impl<T1, T2, T3, T4> Morph<(T1, T2, T3, T4)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1, T2, T3, T4)) -> T1 {
+		a.0
+	}
+}
+
 /// Create a `Morph` and/or `TryMorph` impls with a simple closure-like expression.
 ///
 /// # Examples

@@ -93,7 +93,7 @@ use sp_storage::{StorageData, StorageKey};
 /// 	use frame_support::pallet_prelude::*;
 ///
 /// 	#[pallet::pallet]
-/// 	pub struct Pallet<T>(PhantomData<T>);
+/// 	pub struct Pallet<T>(_);
 ///
 /// 	#[pallet::config]
 /// 	pub trait Config: frame_system::Config {}
