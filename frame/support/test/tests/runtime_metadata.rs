@@ -22,7 +22,6 @@ use frame_support::{
 	traits::ConstU32,
 };
 use scale_info::{form::MetaForm, meta_type};
-use sp_runtime::traits::HeaderProvider;
 
 pub type Index = u64;
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
@@ -110,6 +109,8 @@ sp_api::impl_runtime_apis! {
 
 #[test]
 fn runtime_metadata() {
+	use sp_runtime::traits::HeaderProvider;
+	
 	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
 		if cfg!(feature = "no-metadata-docs") {
 			vec![]
