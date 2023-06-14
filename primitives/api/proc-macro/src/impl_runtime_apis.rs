@@ -302,7 +302,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				fn into_storage_changes(
 					&self,
 					backend: &Self::StateBackend,
-					parent_hash: <Block as HeaderProvider>::Hash,
+					parent_hash: <Block as sp_runtime::traits::HeaderProvider>::Hash,
 				) -> core::result::Result<
 					#crate_::StorageChanges<C::StateBackend, Block>,
 				String
