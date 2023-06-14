@@ -281,16 +281,6 @@ pub enum SteppedMigrationError {
 	Failed,
 }
 
-pub trait UpgradeStatusQuery {
-	fn is_upgrading() -> bool;
-}
-
-impl UpgradeStatusQuery for () {
-	fn is_upgrading() -> bool {
-		false
-	}
-}
-
 /// Notification handler for status updates regarding runtime upgrades.
 pub trait OnMigrationUpdate {
 	/// Notifies of the start of a runtime upgrade.
@@ -325,6 +315,17 @@ impl OnMigrationUpdate for () {
 
 /// Something that can do multi step migrations.
 pub trait MultiStepMigrator {
+	fn is_upgrading() -> bool;
 	/// Do the next step in the MBM process.
 	fn step() -> Weight;
+}
+
+impl MultiStepMigrator for () {
+	fn is_upgrading() -> bool {
+		false
+	}
+
+	fn step() -> Weight {
+		Weight::zero()
+	}
 }

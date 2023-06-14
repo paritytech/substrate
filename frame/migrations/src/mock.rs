@@ -179,15 +179,6 @@ pub fn test_closure<R>(f: impl FnOnce() -> R) -> R {
 	ext.execute_with(f)
 }
 
-pub struct LoggingQuery<Inner>(core::marker::PhantomData<Inner>);
-impl<Inner: UpgradeStatusQuery> UpgradeStatusQuery for LoggingQuery<Inner> {
-	fn is_upgrading() -> bool {
-		let res = Inner::is_upgrading();
-		log::debug!("Is upgrading: {res}");
-		res
-	}
-}
-
 pub fn run_to_block(n: u32) {
 	while System::block_number() < n {
 		if System::block_number() > 1 {

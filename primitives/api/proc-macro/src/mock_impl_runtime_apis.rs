@@ -170,7 +170,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
 				_: &<#block_type as #crate_::BlockT>::Header,
-			) -> std::result::Result<(), #crate_::ApiError> {
+			) -> std::result::Result<#crate_::bool, #crate_::ApiError> {
 				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
 			}
 
@@ -179,7 +179,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				_: <#block_type as #crate_::BlockT>::Hash,
 				_: #crate_::ExecutionContext,
 				_: &<#block_type as #crate_::BlockT>::Header,
-			) -> std::result::Result<(), #crate_::ApiError> {
+			) -> std::result::Result<#crate_::bool, #crate_::ApiError> {
 				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
 			}
 		}
