@@ -815,12 +815,12 @@ fn instance_expand() {
 #[test]
 fn inherent_expand() {
 	use frame_support::{
-		inherent::{BlockT, InherentData},
+		inherent::InherentData,
 		traits::EnsureInherentsAreFirst,
 	};
 	use sp_core::Hasher;
 	use sp_runtime::{
-		traits::{BlakeTwo256, Header},
+		traits::{BlakeTwo256, Header, Block as _},
 		Digest,
 	};
 
