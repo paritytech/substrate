@@ -1955,8 +1955,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(input_data_ch, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(input_data_ch, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 10_000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
@@ -2369,8 +2368,7 @@ mod tests {
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(dummy_ch, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(dummy_ch, &mut gas_meter).unwrap();
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
 				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
@@ -2402,8 +2400,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(dummy_ch, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(dummy_ch, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
@@ -2448,8 +2445,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(dummy_ch, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(dummy_ch, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
@@ -2617,8 +2613,7 @@ mod tests {
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(terminate_ch, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(terminate_ch, &mut gas_meter).unwrap();
 			set_balance(&ALICE, 10_000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
@@ -3144,8 +3139,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let fail_executable =
-				MockExecutable::from_storage(fail_code, &mut gas_meter).unwrap();
+			let fail_executable = MockExecutable::from_storage(fail_code, &mut gas_meter).unwrap();
 			let success_executable =
 				MockExecutable::from_storage(success_code, &mut gas_meter).unwrap();
 			let succ_fail_executable =

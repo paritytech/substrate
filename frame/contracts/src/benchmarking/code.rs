@@ -357,16 +357,18 @@ impl<T: Config> WasmModule<T> {
 		}
 		.into()
 	}
-
 }
 
 /// Mechanisms to generate a function body that can be used inside a `ModuleDefinition`.
 pub mod body {
 	use super::*;
 
-	/// When generating contract code by repeating a wasm sequence, it's sometimes necessary
+	/// When generating contract code by repeating a Wasm sequence, it's sometimes necessary
 	/// to change those instructions on each repetition. The variants of this enum describe
 	/// various ways in which this can happen.
+	// Not all variants are used in the current benchmarks,
+	// but they could be used in future benchmarks. Hence keeping them with the attribute.
+	#[allow(dead_code)]
 	pub enum DynInstr {
 		/// Insert the associated instruction.
 		Regular(Instruction),
