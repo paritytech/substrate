@@ -102,7 +102,6 @@ use crate::{
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{CodeInfo, TryInstantiate, WasmBlob},
-	weights::WeightInfo,
 };
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
