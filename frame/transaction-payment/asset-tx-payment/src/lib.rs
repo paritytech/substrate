@@ -155,9 +155,12 @@ impl<T: Config> ChargeAssetTxPayment<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
-	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
+	BalanceOf<T>: Send
+		+ Sync
+		+ FixedPointOperand
+		+ IsType<ChargeAssetBalanceOf<T>>
+		+ IsType<ChargeAssetLiquidityOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	ChargeAssetLiquidityOf<T>: IsType<BalanceOf<T>>,
 {
 	/// Utility constructor. Used only in client/factory code.
 	pub fn from(tip: BalanceOf<T>, asset_id: Option<ChargeAssetIdOf<T>>) -> Self {
@@ -212,9 +215,13 @@ impl<T: Config> SignedExtension for ChargeAssetTxPayment<T>
 where
 	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
-	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
+	BalanceOf<T>: Send
+		+ Sync
+		+ From<u64>
+		+ FixedPointOperand
+		+ IsType<ChargeAssetBalanceOf<T>>
+		+ IsType<ChargeAssetLiquidityOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	ChargeAssetLiquidityOf<T>: IsType<BalanceOf<T>>,
 {
 	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
 	type AccountId = T::AccountId;

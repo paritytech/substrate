@@ -64,7 +64,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
-		already_withdrawn: Self::Balance,
+		already_paid: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError>;
 }
@@ -130,14 +130,14 @@ where
 		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: BalanceOf<T>, // 0.00005 DOT
 		_tip: BalanceOf<T>,
-		paid: Self::Balance, // 0.1001 DOT ?
+		already_paid: Self::LiquidityInfo, // 0.1001 DOT ?
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError> {
 		// Refund to the account that paid the fees. If this fails, the account might have
 		// dropped below the existential balance. In that case we don't refund anything.
 
-		// swap the difference of `paid` - `corrected_fee`
-		let swap_amount = paid - corrected_fee;
+		// swap the difference of `already_paid` - `corrected_fee`
+		let swap_amount = already_paid - corrected_fee;
 		let _asset_received = CON::swap_exact_native_for_tokens(
 			who.clone(),
 			asset_id,
