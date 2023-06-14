@@ -840,7 +840,7 @@ pub mod pallet {
 			let deposit = params.candidate_deposit;
 			// NOTE: Reserve must happen before `insert_bid` since that could end up unreserving.
 			T::Currency::reserve(&who, deposit)?;
-			Self::insert_bid(&mut bids, &who, value.clone(), BidKind::Deposit(deposit));
+			Self::insert_bid(&mut bids, &who, value, BidKind::Deposit(deposit));
 
 			Bids::<T, I>::put(bids);
 			Self::deposit_event(Event::<T, I>::Bid { candidate_id: who, offer: value });
@@ -917,7 +917,7 @@ pub mod pallet {
 			// Update voucher record.
 			record.vouching = Some(VouchingStatus::Vouching);
 			// Update bids
-			Self::insert_bid(&mut bids, &who, value.clone(), BidKind::Vouch(voucher.clone(), tip));
+			Self::insert_bid(&mut bids, &who, value, BidKind::Vouch(voucher.clone(), tip));
 
 			// Write new state.
 			Members::<T, I>::insert(&voucher, &record);
@@ -1450,7 +1450,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let voting_period = T::VotingPeriod::get();
 		let rotation_period = voting_period + claim_period;
 		let now = frame_system::Pallet::<T>::block_number();
-		let phase = now % rotation_period.clone();
+		let phase = now % rotation_period;
 		if phase < voting_period {
 			Period::Voting { elapsed: phase, more: voting_period - phase }
 		} else {
