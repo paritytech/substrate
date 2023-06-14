@@ -7611,6 +7611,7 @@ dependencies = [
  "frame-system",
  "pallet-balances",
  "pallet-collective",
+ "pallet-preimage",
  "pallet-root-testing",
  "pallet-timestamp",
  "parity-scale-codec",

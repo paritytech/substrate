@@ -27,13 +27,14 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable, Pays},
 	error::BadOrigin,
 	parameter_types, storage,
-	traits::{ConstU32, ConstU64, Contains},
+	traits::{ConstU32, ConstU64, Contains, GenesisBuild, StorePreimage},
 	weights::Weight,
 };
 use pallet_collective::{EnsureProportionAtLeast, Instance1};
 use sp_core::H256;
 use sp_runtime::{
-	traits::{BlakeTwo256, Hash, IdentityLookup},
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage, TokenError,
 };
 
@@ -137,6 +138,7 @@ frame_support::construct_runtime!(
 		Utility: utility::{Pallet, Call, Event},
 		Example: example::{Pallet, Call},
 		Democracy: mock_democracy::{Pallet, Call, Event<T>},
+		Preimage: pallet_preimage,
 	}
 );
 
@@ -218,9 +220,19 @@ impl pallet_collective::Config<CouncilCollective> for Test {
 	type WeightInfo = ();
 	type SetMembersOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type MaxProposalWeight = MaxProposalWeight;
+	type Preimages = Preimage;
 }
 
 impl example::Config for Test {}
+
+impl pallet_preimage::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	type Currency = ();
+	type ManagerOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type BaseDeposit = ();
+	type ByteDeposit = ();
+}
 
 pub struct TestBaseCallFilter;
 impl Contains<RuntimeCall> for TestBaseCallFilter {
@@ -831,7 +843,6 @@ fn batch_works_with_council_origin() {
 		});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
-		let hash = BlakeTwo256::hash_of(&proposal);
 
 		assert_ok!(Council::propose(
 			RuntimeOrigin::signed(1),
@@ -840,21 +851,22 @@ fn batch_works_with_council_origin() {
 			proposal_len
 		));
 
-		assert_ok!(Council::vote(RuntimeOrigin::signed(1), hash, 0, true));
-		assert_ok!(Council::vote(RuntimeOrigin::signed(2), hash, 0, true));
-		assert_ok!(Council::vote(RuntimeOrigin::signed(3), hash, 0, true));
+		let proposal_bounded = Preimage::bound(proposal).unwrap();
+		assert_ok!(Council::vote(RuntimeOrigin::signed(1), proposal_bounded.clone(), 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(2), proposal_bounded.clone(), 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(3), proposal_bounded.clone(), 0, true));
 
 		System::set_block_number(4);
 		assert_ok!(Council::close(
 			RuntimeOrigin::signed(4),
-			hash,
+			proposal_bounded.clone(),
 			0,
 			proposal_weight,
 			proposal_len
 		));
 
-		System::assert_last_event(RuntimeEvent::Council(pallet_collective::Event::Executed {
-			proposal_hash: hash,
+		System::assert_has_event(RuntimeEvent::Council(pallet_collective::Event::Executed {
+			proposal_bounded,
 			result: Ok(()),
 		}));
 	})
@@ -868,7 +880,6 @@ fn force_batch_works_with_council_origin() {
 		});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
-		let hash = BlakeTwo256::hash_of(&proposal);
 
 		assert_ok!(Council::propose(
 			RuntimeOrigin::signed(1),
@@ -877,21 +888,22 @@ fn force_batch_works_with_council_origin() {
 			proposal_len
 		));
 
-		assert_ok!(Council::vote(RuntimeOrigin::signed(1), hash, 0, true));
-		assert_ok!(Council::vote(RuntimeOrigin::signed(2), hash, 0, true));
-		assert_ok!(Council::vote(RuntimeOrigin::signed(3), hash, 0, true));
+		let proposal_bounded = Preimage::bound(proposal).unwrap();
+		assert_ok!(Council::vote(RuntimeOrigin::signed(1), proposal_bounded.clone(), 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(2), proposal_bounded.clone(), 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(3), proposal_bounded.clone(), 0, true));
 
 		System::set_block_number(4);
 		assert_ok!(Council::close(
 			RuntimeOrigin::signed(4),
-			hash,
+			proposal_bounded.clone(),
 			0,
 			proposal_weight,
 			proposal_len
 		));
 
-		System::assert_last_event(RuntimeEvent::Council(pallet_collective::Event::Executed {
-			proposal_hash: hash,
+		System::assert_has_event(RuntimeEvent::Council(pallet_collective::Event::Executed {
+			proposal_bounded,
 			result: Ok(()),
 		}));
 	})

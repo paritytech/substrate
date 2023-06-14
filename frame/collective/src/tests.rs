@@ -22,7 +22,6 @@ use frame_support::{
 	dispatch::Pays,
 	parameter_types,
 	traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
-	Hashable,
 };
 use frame_system::{EnsureRoot, EventRecord, Phase};
 use sp_core::{bounded_vec, H256};
