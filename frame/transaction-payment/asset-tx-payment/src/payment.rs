@@ -65,7 +65,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
-		already_paid: Self::LiquidityInfo,
+		already_paid: (Self::Balance, Self::LiquidityInfo),
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError>;
 }
@@ -131,6 +131,8 @@ where
 		// charge the fee in native currency
 		// 0.001 DOT
 		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)?;
+		// TODO: we can store the fee in Asset((paid, swapped))
+		// just change the sign on a top level
 
 		// 0.101 DOT
 		Ok(swap_amount)
@@ -145,22 +147,25 @@ where
 		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: BalanceOf<T>, // 0.0005 DOT
 		_tip: BalanceOf<T>,
-		already_paid: Self::LiquidityInfo, // 0.101 DOT
+		already_paid: (Self::Balance, Self::LiquidityInfo), // 0.101 DOT
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError> {
 		// Calculate how much refund we should return
-		let refund_amount = already_paid.saturating_sub(corrected_fee);
+		let refund_amount = already_paid.0.saturating_sub(corrected_fee);
 
 		if !refund_amount.is_zero() {
 			// Refund to the account that paid the fees. If this fails, the account might have
 			// dropped below the existential balance. In that case we don't refund anything.
-			let refund_imbalance = C::deposit_into_existing(who, refund_amount.into())
+			// refund: 0.0005 DOT
+			let _refund_imbalance = C::deposit_into_existing(who, refund_amount.into())
 				.unwrap_or_else(|_| C::PositiveImbalance::zero());
 
+			// current balance: 0.1005 DOT
+			let swap_back = already_paid.1.saturating_sub(corrected_fee);
 			let _refund_received = CON::swap_exact_native_for_tokens(
 				who.clone(),
 				asset_id,
-				refund_imbalance.peek().into(),
+				swap_back,
 				None,
 				who.clone(),
 				false,
