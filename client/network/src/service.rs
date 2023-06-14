@@ -268,14 +268,6 @@ where
 			)
 		};
 
-		let peer_store = PeerStore::new(
-			network_config.boot_nodes.iter().map(|bootnode| bootnode.peer_id).collect(),
-		);
-		let peer_store_handle = peer_store.handle();
-
-		// Spawn `PeerStore` runner.
-		(params.executor)(peer_store.run().boxed());
-
 		let (to_notifications, from_protocol_controllers) =
 			tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
 
@@ -301,7 +293,7 @@ where
 					SetId::from(set_id),
 					proto_set_config,
 					to_notifications.clone(),
-					Box::new(peer_store_handle.clone()),
+					Box::new(params.peer_store.clone()),
 				)
 			})
 			.unzip();
@@ -329,7 +321,7 @@ where
 			From::from(&params.role),
 			notification_protocols.clone(),
 			params.block_announce_config,
-			peer_store_handle.clone(),
+			params.peer_store.clone(),
 			protocol_handles.clone(),
 			from_protocol_controllers,
 			params.tx,
@@ -451,7 +443,7 @@ where
 					local_public,
 					discovery_config,
 					request_response_protocols,
-					peer_store_handle.clone(),
+					params.peer_store.clone(),
 				);
 
 				match result {
@@ -557,7 +549,7 @@ where
 			metrics,
 			boot_node_ids,
 			reported_invalid_boot_nodes: Default::default(),
-			peer_store_handle,
+			peer_store_handle: params.peer_store,
 			_marker: Default::default(),
 			_block: Default::default(),
 		})

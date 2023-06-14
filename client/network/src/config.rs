@@ -32,6 +32,7 @@ pub use crate::{
 
 pub use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
 
+use crate::peer_store::PeerStoreHandle;
 use codec::Encode;
 use prometheus_endpoint::Registry;
 use zeroize::Zeroize;
@@ -683,6 +684,9 @@ pub struct Params<Block: BlockT> {
 
 	/// Network layer configuration.
 	pub network_config: FullNetworkConfiguration,
+
+	/// Peer store with known nodes, peer reputations, etc.
+	pub peer_store: PeerStoreHandle,
 
 	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
