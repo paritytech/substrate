@@ -127,7 +127,9 @@ pub struct NetworkParams {
 	#[arg(long)]
 	pub kademlia_disjoint_query_paths: bool,
 
-	/// Kademlia replication factor.
+	/// Kademlia replication factor determines to how many closest peers a record is replicated to.
+	/// Default value is 20. Discovery mechanism requires successful replication to all
+	/// `kademlia_replication_factor` peers to consider record successfully put.
 	#[arg(long)]
 	pub kademlia_replication_factor: Option<NonZeroUsize>,
 
