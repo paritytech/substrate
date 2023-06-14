@@ -183,7 +183,6 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let res = expander::Expander::new("construct_runtime")
 		.dry(std::env::var("FRAME_EXPAND").is_err())
 		.verbose(true)
-		.fmt(expander::Edition::_2021)
 		.write_to_out_dir(res)
 		.expect("Does not fail because of IO in OUT_DIR; qed");
 
