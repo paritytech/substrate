@@ -24,22 +24,23 @@ use frame_support::{
 	storage::{with_transaction, TransactionOutcome::*},
 	transactional,
 };
-use sp_core::sr25519;
+use sp_core::{sr25519, ConstU32};
 use sp_io::TestExternalities;
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
 	TransactionOutcome,
 };
-
+use frame_support::macro_magic::use_attr;
+#[use_attr]
+use frame_support::derive_impl;
 pub use self::pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use self::frame_system::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
@@ -83,20 +84,21 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 frame_support::construct_runtime!(
 	pub enum Runtime
 	{
-		System: frame_support_test,
+		System: frame_system,
 		MyPallet: pallet,
 	}
 );
 
-impl frame_support_test::Config for Runtime {
-	type Block = Block;
-	type AccountId = AccountId;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
 }
 
 impl Config for Runtime {}

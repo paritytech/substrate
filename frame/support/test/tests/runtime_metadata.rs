@@ -22,7 +22,7 @@ use frame_support::{
 	traits::ConstU32,
 };
 use scale_info::{form::MetaForm, meta_type};
-use sp_runtime::traits::{Block as BlockT, HeaderProvider};
+use sp_runtime::traits::HeaderProvider;
 
 pub type Index = u64;
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;

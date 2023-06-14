@@ -17,7 +17,7 @@
 
 use codec::Encode;
 use frame_support::{storage::unhashed, StoragePrefixedMap};
-use sp_core::sr25519;
+use sp_core::{sr25519, ConstU32};
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
@@ -26,12 +26,14 @@ use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
 };
+use frame_support::macro_magic::use_attr;
+#[use_attr]
+use frame_support::derive_impl;
 
 #[frame_support::pallet]
 mod no_instance {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -106,7 +108,6 @@ mod no_instance {
 mod instance {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -203,22 +204,23 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 frame_support::construct_runtime!(
 	pub enum Runtime
 	{
-		System: frame_support_test,
+		System: frame_system,
 		FinalKeysNone: no_instance,
 		FinalKeysSome: instance,
 		Instance2FinalKeysSome: instance::<Instance2>,
 	}
 );
 
-impl frame_support_test::Config for Runtime {
-	type Block = Block;
-	type AccountId = AccountId;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
 }
 
 impl no_instance::Config for Runtime {}

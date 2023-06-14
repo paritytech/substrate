@@ -31,6 +31,9 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Verify},
 	BuildStorage,
 };
+use frame_support::macro_magic::use_attr;
+#[use_attr]
+use frame_support::derive_impl;
 
 pub trait Currency {}
 
@@ -39,10 +42,9 @@ pub trait Currency {}
 // * Origin, Inherent, Event
 #[frame_support::pallet(dev_mode)]
 mod module1 {
-	use self::frame_system::pallet_prelude::*;
-	use super::*;
+	use frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
+	use super::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);
@@ -150,7 +152,6 @@ mod module1 {
 mod module2 {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -252,7 +253,6 @@ mod module2 {
 mod module3 {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -279,7 +279,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 frame_support::construct_runtime!(
 	pub enum Runtime
 	{
-		System: frame_support_test::{Pallet, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Event<T>},
 		Module1_1: module1::<Instance1>::{
 			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
@@ -300,15 +300,16 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl frame_support_test::Config for Runtime {
-	type Block = Block;
-	type AccountId = AccountId;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
 }
 
 impl module1::Config<module1::Instance1> for Runtime {

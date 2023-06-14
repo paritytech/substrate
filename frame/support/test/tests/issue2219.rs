@@ -15,17 +15,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_core::{sr25519, ConstU64};
+use sp_core::{sr25519, ConstU32};
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
 };
+use frame_support::macro_magic::use_attr;
+#[use_attr]
+use frame_support::derive_impl;
 
 #[frame_support::pallet]
 mod module {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
+use sp_core::ConstU64;
 
 	pub type Request<T> =
 		(<T as frame_system::Config>::AccountId, Role, frame_system::BlockNumberOf<T>);
@@ -159,15 +162,16 @@ pub type Header = generic::Header<u32, BlakeTwo256>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-impl frame_support_test::Config for Runtime {
-	type Block = Block;
-	type AccountId = AccountId;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
 }
 
 impl module::Config for Runtime {}
@@ -175,7 +179,7 @@ impl module::Config for Runtime {}
 frame_support::construct_runtime!(
 	pub struct Runtime
 	{
-		System: frame_support_test,
+		System: frame_system,
 		Module: module,
 	}
 );
@@ -183,6 +187,7 @@ frame_support::construct_runtime!(
 #[test]
 fn create_genesis_config() {
 	let config = RuntimeGenesisConfig {
+		system: Default::default(),
 		module: module::GenesisConfig { request_life_time: 0, enable_storage_role: true },
 	};
 	assert_eq!(config.module.request_life_time, 0);

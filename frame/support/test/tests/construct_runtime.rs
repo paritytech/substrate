@@ -23,13 +23,19 @@
 
 use codec::MaxEncodedLen;
 use frame_support::{parameter_types, traits::PalletInfo as _};
+use frame_system::limits::{BlockWeights, BlockLength};
 use scale_info::TypeInfo;
-use sp_core::sr25519;
+use sp_core::{sr25519, ConstU32};
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
 	DispatchError, ModuleError,
 };
+use frame_support::macro_magic::use_attr;
+#[use_attr]
+use frame_support::derive_impl;
+use frame_support::weights::RuntimeDbWeight;
+use sp_version::RuntimeVersion;
 
 parameter_types! {
 	pub static IntegrityTestExec: u32 = 0;
@@ -37,9 +43,8 @@ parameter_types! {
 
 #[frame_support::pallet(dev_mode)]
 mod module1 {
-	use self::frame_system::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);
@@ -75,10 +80,9 @@ mod module1 {
 
 #[frame_support::pallet(dev_mode)]
 mod module2 {
-	use self::frame_system::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -122,10 +126,9 @@ mod nested {
 
 	#[frame_support::pallet(dev_mode)]
 	pub mod module3 {
-		use self::frame_system::pallet_prelude::*;
+		use frame_system::pallet_prelude::*;
 		use super::*;
 		use frame_support::pallet_prelude::*;
-		use frame_support_test as frame_system;
 
 		#[pallet::pallet]
 		pub struct Pallet<T>(_);
@@ -177,10 +180,9 @@ mod nested {
 
 #[frame_support::pallet(dev_mode)]
 pub mod module3 {
-	use self::frame_system::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -249,12 +251,10 @@ pub type Header = generic::Header<u32, BlakeTwo256>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-use frame_support_test as system;
-
 frame_support::construct_runtime!(
 	pub struct Runtime
 	{
-		System: system::{Pallet, Call, Event<T>, Origin<T>} = 30,
+		System: frame_system::{Pallet, Call, Event<T>, Origin<T>} = 30,
 		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
 		Module2: module2::{Pallet, Call, Storage, Event<T>, Origin},
 		Module1_2: module1::<Instance2>::{Pallet, Call, Storage, Event<T>, Origin<T>},
@@ -270,15 +270,18 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl frame_support_test::Config for Runtime {
-	type Block = Block;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
 	type AccountId = AccountId;
+	type Lookup = sp_runtime::traits::IdentityLookup<AccountId>;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
 }
 
 impl module1::Config<module1::Instance1> for Runtime {
@@ -326,7 +329,7 @@ fn test_pub() -> AccountId {
 fn check_modules_error_type() {
 	sp_io::TestExternalities::default().execute_with(|| {
 		assert_eq!(
-			Module1_1::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_1::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 31,
 				error: [0; 4],
@@ -334,7 +337,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module2::fail(system::Origin::<Runtime>::Root.into()),
+			Module2::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 32,
 				error: [0; 4],
@@ -342,7 +345,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_2::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_2::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 33,
 				error: [0; 4],
@@ -350,7 +353,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			NestedModule3::fail(system::Origin::<Runtime>::Root.into()),
+			NestedModule3::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 34,
 				error: [0; 4],
@@ -358,7 +361,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_3::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_3::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 6,
 				error: [0; 4],
@@ -366,7 +369,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_4::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_4::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 3,
 				error: [0; 4],
@@ -374,7 +377,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_5::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_5::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 4,
 				error: [0; 4],
@@ -382,7 +385,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_6::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_6::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 1,
 				error: [0; 4],
@@ -390,7 +393,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_7::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_7::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 2,
 				error: [0; 4],
@@ -398,7 +401,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_8::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_8::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 12,
 				error: [0; 4],
@@ -406,7 +409,7 @@ fn check_modules_error_type() {
 			})),
 		);
 		assert_eq!(
-			Module1_9::fail(system::Origin::<Runtime>::Root.into()),
+			Module1_9::fail(frame_system::Origin::<Runtime>::Root.into()),
 			Err(DispatchError::Module(ModuleError {
 				index: 13,
 				error: [0; 4],
@@ -426,7 +429,7 @@ fn integrity_test_works() {
 fn origin_codec() {
 	use codec::Encode;
 
-	let origin = OriginCaller::system(system::RawOrigin::None);
+	let origin = OriginCaller::system(frame_system::RawOrigin::None);
 	assert_eq!(origin.encode()[0], 30);
 
 	let origin = OriginCaller::Module1_1(module1::Origin(Default::default()));
@@ -461,7 +464,7 @@ fn origin_codec() {
 fn event_codec() {
 	use codec::Encode;
 
-	let event = system::Event::<Runtime>::ExtrinsicSuccess;
+	let event = frame_system::Event::<Runtime>::ExtrinsicSuccess { dispatch_info: Default::default() };
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 30);
 
 	let event = module1::Event::<Runtime, module1::Instance1>::A(test_pub());
@@ -498,7 +501,7 @@ fn event_codec() {
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(RuntimeCall::System(system::Call::noop {}).encode()[0], 30);
+	assert_eq!(RuntimeCall::System(frame_system::Call::remark { remark: vec![1] }).encode()[0], 30);
 	assert_eq!(RuntimeCall::Module1_1(module1::Call::fail {}).encode()[0], 31);
 	assert_eq!(RuntimeCall::Module2(module2::Call::fail {}).encode()[0], 32);
 	assert_eq!(RuntimeCall::Module1_2(module1::Call::fail {}).encode()[0], 33);
@@ -629,15 +632,67 @@ fn call_subtype_conversion() {
 fn test_metadata() {
 	use frame_support::metadata::*;
 	use scale_info::meta_type;
+	use sp_core::Encode;
+
+	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
+		if cfg!(feature = "no-metadata-docs") {
+			vec![]
+		} else {
+			doc
+		}
+	}
 
 	let pallets = vec![
 		PalletMetadata {
 			name: "System",
 			storage: None,
-			calls: Some(meta_type::<system::Call<Runtime>>().into()),
-			event: Some(meta_type::<system::Event<Runtime>>().into()),
-			constants: vec![],
-			error: Some(meta_type::<system::Error<Runtime>>().into()),
+			calls: Some(meta_type::<frame_system::Call<Runtime>>().into()),
+			event: Some(meta_type::<frame_system::Event<Runtime>>().into()),
+			constants: vec![
+				PalletConstantMetadata {
+					name: "BlockWeights",
+					ty: meta_type::<BlockWeights>(),
+					value: BlockWeights::default().encode(),
+					docs: maybe_docs(vec![" Block & extrinsics weights: base values and limits."]),
+				},
+				PalletConstantMetadata {
+					name: "BlockLength",
+					ty: meta_type::<BlockLength>(),
+					value: BlockLength::default().encode(),
+					docs: maybe_docs(vec![" The maximum length of a block (in bytes)."]),
+				},
+				PalletConstantMetadata {
+					name: "BlockHashCount",
+					ty: meta_type::<u32>(),
+					value: 10u32.encode(),
+					docs: maybe_docs(vec![" Maximum number of block number to block hash mappings to keep (oldest pruned first)."]),
+				},
+				PalletConstantMetadata {
+					name: "DbWeight",
+					ty: meta_type::<RuntimeDbWeight>(),
+					value: RuntimeDbWeight::default().encode(),
+					docs: maybe_docs(vec![" The weight of runtime database operations the runtime can invoke.",]),
+				},
+				PalletConstantMetadata {
+					name: "Version",
+					ty: meta_type::<RuntimeVersion>(),
+					value: RuntimeVersion::default().encode(),
+					docs: maybe_docs(vec![ " Get the chain's current version."]),
+				},
+				PalletConstantMetadata {
+					name: "SS58Prefix",
+					ty: meta_type::<u16>(),
+					value: 0u16.encode(),
+					docs: maybe_docs(vec![
+						" The designated SS58 prefix of this chain.",
+						"",
+						" This replaces the \"ss58Format\" property declared in the chain spec. Reason is",
+						" that the runtime should know about the prefix in order to make use of it as",
+						" an identifier of the chain.",
+					]),
+				},
+			],
+			error: Some(meta_type::<frame_system::Error<Runtime>>().into()),
 			index: 30,
 		},
 		PalletMetadata {
@@ -771,7 +826,7 @@ fn test_metadata() {
 fn pallet_in_runtime_is_correct() {
 	assert_eq!(PalletInfo::index::<System>().unwrap(), 30);
 	assert_eq!(PalletInfo::name::<System>().unwrap(), "System");
-	assert_eq!(PalletInfo::module_name::<System>().unwrap(), "system");
+	assert_eq!(PalletInfo::module_name::<System>().unwrap(), "frame_system");
 	assert!(PalletInfo::crate_version::<System>().is_some());
 
 	assert_eq!(PalletInfo::index::<Module1_1>().unwrap(), 31);
