@@ -21,7 +21,6 @@ use crate::*;
 use frame_support::{assert_ok, traits::ConstU64};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };

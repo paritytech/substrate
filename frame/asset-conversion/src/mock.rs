@@ -30,10 +30,7 @@ use frame_support::{
 use frame_system::{EnsureSigned, EnsureSignedBy};
 use sp_arithmetic::Permill;
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{AccountIdConversion, BlakeTwo256, IdentityLookup};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

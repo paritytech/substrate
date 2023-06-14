@@ -1,10 +1,7 @@
 use crate as pallet_template;
 use frame_support::traits::{ConstU16, ConstU64};
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

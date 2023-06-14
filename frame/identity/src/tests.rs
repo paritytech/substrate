@@ -29,7 +29,6 @@ use frame_support::{
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 };
 

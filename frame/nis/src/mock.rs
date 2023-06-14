@@ -31,7 +31,6 @@ use frame_support::{
 use pallet_balances::{Instance1, Instance2};
 use sp_core::{ConstU128, H256};
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 

@@ -27,7 +27,6 @@ use frame_support::{
 };
 use sp_core::{Pair, H256};
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	AccountId32,
 };

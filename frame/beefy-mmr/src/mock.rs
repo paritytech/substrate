@@ -29,7 +29,6 @@ use sp_core::H256;
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
-	testing::Header,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup, Keccak256, OpaqueKeys},
 };
 

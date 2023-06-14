@@ -31,7 +31,6 @@ use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, Hash, IdentityLookup},
 	Perbill,
 };

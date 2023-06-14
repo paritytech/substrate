@@ -20,7 +20,6 @@ use crate as pallet_transaction_payment;
 
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 

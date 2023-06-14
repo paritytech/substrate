@@ -22,7 +22,6 @@
 use crate::{self as pallet_indices, Config};
 use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
-use sp_runtime::testing::Header;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

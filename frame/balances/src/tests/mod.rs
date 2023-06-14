@@ -38,7 +38,6 @@ use scale_info::TypeInfo;
 use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_io;
 use sp_runtime::{
-	testing::Header,
 	traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
 	ArithmeticError, DispatchError, DispatchResult, FixedPointNumber, TokenError,
 };

@@ -29,7 +29,6 @@ use frame_system::EnsureSigned;
 use pallet_nfts::PalletFeatures;
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentifyAccount, IdentityLookup, Verify},
 	MultiSignature,
 };
