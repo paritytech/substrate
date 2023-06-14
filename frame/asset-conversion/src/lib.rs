@@ -1092,7 +1092,7 @@ pub mod pallet {
 }
 
 impl<T: Config>
-	frame_support::traits::tokens::fungibles::SwapForNative<
+	frame_support::traits::tokens::fungibles::SwapNative<
 		T::RuntimeOrigin,
 		T::AccountId,
 		T::Balance,
@@ -1140,6 +1140,45 @@ where
 		});
 
 		Ok(amount_in)
+	}
+
+	// If successful returns the amount out.
+	fn swap_exact_native_for_tokens(
+		sender: T::AccountId,
+		asset_id: T::AssetId,
+		amount_in: T::Balance,
+		amount_out_min: Option<T::AssetBalance>,
+		send_to: T::AccountId,
+		keep_alive: bool,
+	) -> Result<T::AssetBalance, DispatchError> {
+		ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
+		if let Some(amount_out_min) = amount_out_min {
+			ensure!(amount_out_min > Zero::zero(), Error::<T>::ZeroAmount);
+		}
+		let mut path = sp_std::vec::Vec::new();
+		path.push(T::MultiAssetIdConverter::get_native());
+		path.push(T::MultiAssetIdConverter::into_multiasset_id(&asset_id));
+		let path = path.try_into().unwrap();
+
+		let amount_in = Self::native_to_asset(amount_in)?;
+
+		let amounts = Self::get_amounts_out(&amount_in, &path)?;
+		let amount_out = *amounts.last().expect("Always has more than one element");
+		if let Some(amount_out_min) = amount_out_min {
+			ensure!(amount_out >= amount_out_min, Error::<T>::ProvidedMaximumNotSufficientForSwap);
+		}
+
+		Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
+
+		Self::deposit_event(Event::SwapExecuted {
+			who: sender,
+			send_to,
+			path,
+			amount_in,
+			amount_out,
+		});
+
+		Ok(amount_out)
 	}
 }
 

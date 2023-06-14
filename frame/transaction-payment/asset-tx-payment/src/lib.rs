@@ -282,22 +282,25 @@ where
 						len as u32, info, post_info, tip,
 					);
 
-					T::OnChargeAssetTransaction::correct_and_deposit_fee(
-						&who,
-						info,
-						post_info,
-						actual_fee.into(),
-						tip.into(),
-						already_withdrawn.into(),
-					)?;
+					if let Some(asset_id) = asset_id {
+						T::OnChargeAssetTransaction::correct_and_deposit_fee(
+							&who,
+							info,
+							post_info,
+							actual_fee.into(),
+							tip.into(),
+							already_withdrawn.into(),
+							asset_id,
+						)?;
 
-					Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
-						who,
-						actual_fee,
-						asset_paid: already_withdrawn.into(),
-						tip,
-						asset_id,
-					});
+						/*Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
+							who,
+							actual_fee,
+							asset_paid: already_withdrawn.into(),
+							tip,
+							asset_id,
+						});*/
+					}
 				},
 				InitialPayment::Nothing => {
 					// `actual_fee` should be zero here for any signed extrinsic. It would be

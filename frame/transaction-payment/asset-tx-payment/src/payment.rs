@@ -20,7 +20,7 @@ use crate::Config;
 use codec::FullCodec;
 use frame_support::{
 	ensure,
-	traits::{fungibles::SwapForNative, tokens::Balance},
+	traits::{fungibles::SwapNative, tokens::Balance},
 	unsigned::TransactionValidityError,
 };
 use scale_info::TypeInfo;
@@ -65,11 +65,12 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
 		already_withdrawn: Self::LiquidityInfo,
+		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError>;
 }
 
 /// Implements the asset transaction for a balance to asset converter (implementing
-/// [`SwapForNative`]).
+/// [`SwapNative`]).
 ///
 /// The converter is given the complete fee in terms of the asset used for the transaction.
 pub struct AssetConversionAdapter<CON>(PhantomData<CON>);
@@ -78,18 +79,12 @@ pub struct AssetConversionAdapter<CON>(PhantomData<CON>);
 impl<T, CON> OnChargeAssetTransaction<T> for AssetConversionAdapter<CON>
 where
 	T: Config,
-	CON: SwapForNative<
-		T::RuntimeOrigin,
-		T::AccountId,
-		BalanceOf<T>,
-		AssetBalanceOf<T>,
-		AssetIdOf<T>,
-	>,
+	CON: SwapNative<T::RuntimeOrigin, T::AccountId, BalanceOf<T>, AssetBalanceOf<T>, AssetIdOf<T>>,
 	AssetIdOf<T>: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo,
 {
 	type Balance = BalanceOf<T>;
 	type AssetId = AssetIdOf<T>;
-	type LiquidityInfo = (AssetBalanceOf<T>, LiquidityInfoOf<T>);
+	type LiquidityInfo = BalanceOf<T>;
 
 	/// Withdraw the predicted fee from the transaction origin.
 	///
@@ -103,15 +98,27 @@ where
 		tip: BalanceOf<T>,
 	) -> Result<Self::LiquidityInfo, TransactionValidityError> {
 		// convert the asset into native currency
-		let asset_consumed =
-			CON::swap_tokens_for_exact_native(who.clone(), asset_id, fee, None, who.clone(), true)
-				.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
+		// TODO: add ED if needed to the `fee`
+
+		// 0.1001 DOT
+		let swap_amount = fee;
+		let asset_consumed = CON::swap_tokens_for_exact_native(
+			who.clone(),
+			asset_id,
+			swap_amount,
+			None,
+			who.clone(),
+			true,
+		)
+		.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
 
 		ensure!(asset_consumed > Zero::zero(), InvalidTransaction::Payment);
 
 		// charge the fee in native currency
-		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)
-			.map(|i| (asset_consumed, i))
+		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)?;
+
+		// 0.1 DOT should be left
+		Ok(swap_amount)
 	}
 
 	/// Delegate to the OnChargeTransaction functionality.
@@ -119,27 +126,28 @@ where
 	/// Note: The `corrected_fee` already includes the `tip`.
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
-		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
-		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
-		corrected_fee: BalanceOf<T>,
-		tip: BalanceOf<T>,
-		paid: Self::LiquidityInfo,
+		_dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
+		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
+		corrected_fee: BalanceOf<T>, // 0.00005 DOT
+		_tip: BalanceOf<T>,
+		paid: Self::LiquidityInfo, // 0.1001 DOT ?
+		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError> {
 		// Refund to the account that paid the fees. If this fails, the account might have
 		// dropped below the existential balance. In that case we don't refund anything.
-		//
-		// NOTE: We do not automatically convert the native token back to the asset,
-		// otherwise the fee could go back and forth between the two currencies each time incurring
-		// conversion charges over the course of several transactions. It's better for the user
-		// that it stays in native. Smart wallets should realise if there's enough native currency
-		// built up to pay the transaction with.
-		<T::OnChargeTransaction>::correct_and_deposit_fee(
-			who,
-			dispatch_info,
-			post_info,
-			corrected_fee,
-			tip,
-			paid.1,
+
+		// swap the difference of `paid` - `corrected_fee`
+		let swap_amount = paid - corrected_fee;
+		let _asset_received = CON::swap_exact_native_for_tokens(
+			who.clone(),
+			asset_id,
+			swap_amount,
+			None,
+			who.clone(),
+			true, // todo: false?
 		)
+		.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
+
+		Ok(())
 	}
 }
