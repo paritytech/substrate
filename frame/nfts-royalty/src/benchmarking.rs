@@ -262,5 +262,72 @@ mod benchmarks {
 	// 	assert_eq!(item_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	// }
 
+	#[benchmark]
+	fn remove_collection_royalty() {
+		let caller: T::AccountId = whitelisted_caller();
+
+		let (collection_owner, collection_id) = create_nft_collection::<T>();
+		let list_recipients = vec![
+			RoyaltyDetails {
+				royalty_recipient: caller.clone(),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},
+		];
+
+		assert_ok!(NftsRoyalty::<T>::set_collection_royalty(
+			RawOrigin::Signed(caller.clone()).into(),
+			collection_id,
+			Permill::from_percent(10),
+			collection_owner.clone(),
+			list_recipients.clone(),
+		));
+
+		#[extrinsic_call]
+		remove_collection_royalty(
+			RawOrigin::Signed(caller),
+			collection_id,
+		);
+
+		let collection_royalty_from_storage = CollectionRoyalty::<T>::get(collection_id);
+
+		assert_eq!(collection_royalty_from_storage, None);
+	}
+
+	#[benchmark]
+	fn remove_item_royalty() {
+		let caller: T::AccountId = whitelisted_caller();
+
+		let (_collection_owner, collection_id) = create_nft_collection::<T>();
+		let item_id = 0.into();
+		let item_owner = mint_nft::<T>(collection_id, item_id);
+
+		let list_recipients = vec![
+			RoyaltyDetails {
+				royalty_recipient: caller.clone(),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},
+		];
+
+		assert_ok!(NftsRoyalty::<T>::set_item_royalty(
+			RawOrigin::Signed(caller.clone()).into(),
+			collection_id,
+			item_id,
+			Permill::from_percent(10),
+			item_owner.clone(),
+			list_recipients.clone()
+		));
+
+		#[extrinsic_call]
+		remove_item_royalty(
+			RawOrigin::Signed(caller),
+			collection_id,
+			item_id,
+		);
+
+		let item_royalty_from_storage = ItemRoyalty::<T>::get((collection_id, item_id));
+
+		assert_eq!(item_royalty_from_storage, None);
+	}
+
 	impl_benchmark_test_suite!(NftsRoyalty, crate::mock::new_test_ext(), crate::mock::Test);
 }
