@@ -192,13 +192,13 @@ pub trait MigrateSequence: private::Sealed {
 
 /// Performs all necessary migrations based on `StorageVersion`.
 ///
-/// If `RUN_ALL_STEPS == true` and `try-runtime` is enabled, this will run all the migrations inside
-/// `on_runtime_upgrade`. This should be set to false in tests that want to ensure the step by step
-/// migration works.
-pub struct Migration<T: Config, const RUN_ALL_STEPS: bool = true>(PhantomData<T>);
+/// If `TEST_ALL_STEPS == true` and `try-runtime` is enabled, this will run all the migrations
+/// inside `on_runtime_upgrade`. This should be set to false in tests that want to ensure the step
+/// by step migration works.
+pub struct Migration<T: Config, const TEST_ALL_STEPS: bool = true>(PhantomData<T>);
 
 #[cfg(feature = "try-runtime")]
-impl<T: Config, const RUN_ALL_STEPS: bool> Migration<T, RUN_ALL_STEPS> {
+impl<T: Config, const TEST_ALL_STEPS: bool> Migration<T, TEST_ALL_STEPS> {
 	fn run_all_steps() -> Result<(), TryRuntimeError> {
 		let mut weight = Weight::zero();
 		let name = <Pallet<T>>::name();
@@ -225,7 +225,7 @@ impl<T: Config, const RUN_ALL_STEPS: bool> Migration<T, RUN_ALL_STEPS> {
 	}
 }
 
-impl<T: Config, const RUN_ALL_STEPS: bool> OnRuntimeUpgrade for Migration<T, RUN_ALL_STEPS> {
+impl<T: Config, const TEST_ALL_STEPS: bool> OnRuntimeUpgrade for Migration<T, TEST_ALL_STEPS> {
 	fn on_runtime_upgrade() -> Weight {
 		let name = <Pallet<T>>::name();
 		let latest_version = <Pallet<T>>::current_storage_version();
@@ -261,7 +261,7 @@ impl<T: Config, const RUN_ALL_STEPS: bool> OnRuntimeUpgrade for Migration<T, RUN
 		MigrationInProgress::<T>::set(Some(cursor));
 
 		#[cfg(feature = "try-runtime")]
-		if RUN_ALL_STEPS {
+		if TEST_ALL_STEPS {
 			Self::run_all_steps().unwrap();
 		}
 
@@ -312,7 +312,7 @@ pub enum StepResult {
 	Completed { steps_done: u32 },
 }
 
-impl<T: Config, const RUN_ALL_STEPS: bool> Migration<T, RUN_ALL_STEPS> {
+impl<T: Config, const TEST_ALL_STEPS: bool> Migration<T, TEST_ALL_STEPS> {
 	/// Verify that each migration's step of the [`T::Migrations`] sequence fits into `Cursor`.
 	pub(crate) fn integrity_test() {
 		let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
