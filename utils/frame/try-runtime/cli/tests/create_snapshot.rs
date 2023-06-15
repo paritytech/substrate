@@ -27,7 +27,6 @@ mod tests {
 		time::Duration,
 	};
 	use substrate_cli_test_utils as common;
-	use tempfile::tempdir;
 	use tokio::process::{Child, Command};
 
 	#[tokio::test]
@@ -35,7 +34,10 @@ mod tests {
 		// Build substrate so binaries used in the test use the latest code.
 		common::build_substrate(&["--features=try-runtime"]);
 
-		let temp_dir = tempdir().expect("Failed to create a tempdir");
+		let temp_dir = tempfile::Builder::new()
+			.prefix("try-runtime-cli-test-dir")
+			.tempdir()
+			.expect("Failed to create a tempdir");
 		let snap_file_path = temp_dir.path().join("snapshot.snap");
 
 		common::run_with_timeout(Duration::from_secs(60), async move {
