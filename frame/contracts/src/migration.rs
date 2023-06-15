@@ -173,7 +173,7 @@ mod private {
 /// The sequence must be defined by a tuple of migrations, each of which must implement the
 /// `Migrate` trait. Migrations must be ordered by their versions with no gaps.
 pub trait MigrateSequence: private::Sealed {
-	/// Returns the range of versions that this migration can handle.
+	/// Returns the range of versions that this migrations sequence can handle.
 	/// Migrations must be ordered by their versions with no gaps.
 	///
 	/// The following code will fail to compile:
