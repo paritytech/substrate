@@ -277,7 +277,7 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 	}
 
-	// This benchmarks the weight of dispatching migrate to executing 1 `NoopMigraton`
+	// This benchmarks the weight of dispatching migrate to execute 1 `NoopMigraton`
 	#[pov_mode = Measured]
 	migrate {
 		StorageVersion::new(0).put::<Pallet<T>>();
