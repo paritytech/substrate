@@ -84,7 +84,8 @@ fn invalid_version(version: StorageVersion) -> ! {
 	panic!("Required migration {version:?} not supported by this runtime. This is a bug.");
 }
 
-/// The cursor used to store the state of the current migration step.
+/// The cursor used to encode the position (usually the last iterated key) of the current migration
+/// step.
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
 
 /// IsFinished describes whether a migration is finished or not.
