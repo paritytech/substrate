@@ -50,4 +50,4 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeDecode` is
 17 |     #[pallet::call]
    |               ^^^^ the trait `WrapperTypeDecode` is not implemented for `<T as pallet::Config>::Bar`
    |
-   = note: required for `<T as pallet::Config>::Bar` to implement `Decode`
+   = note: required for `<T as pallet::Config>::Bar` to implement `parity_scale_codec::Decode`

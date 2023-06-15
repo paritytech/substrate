@@ -9,7 +9,7 @@ error[E0277]: the trait bound `Bar: WrapperTypeDecode` is not satisfied
              Box<T>
              Rc<T>
              frame_support::sp_runtime::sp_application_crypto::sp_core::Bytes
-   = note: required for `Bar` to implement `Decode`
+   = note: required for `Bar` to implement `parity_scale_codec::Decode`
    = note: required for `Bar` to implement `FullCodec`
    = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>` to implement `PartialStorageInfoTrait`
 
@@ -84,7 +84,7 @@ error[E0277]: the trait bound `Bar: WrapperTypeDecode` is not satisfied
              Box<T>
              Rc<T>
              frame_support::sp_runtime::sp_application_crypto::sp_core::Bytes
-   = note: required for `Bar` to implement `Decode`
+   = note: required for `Bar` to implement `parity_scale_codec::Decode`
    = note: required for `Bar` to implement `FullCodec`
    = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>` to implement `StorageEntryMetadataBuilder`
 
