@@ -38,6 +38,9 @@ mod trie_backend_essence;
 
 pub use trie_backend::AsTrieDbCache;
 
+#[cfg(not(feature = "std"))]
+pub use trie_backend::UnimplementedCache;
+
 #[cfg(feature = "std")]
 pub use std_reexport::*;
 

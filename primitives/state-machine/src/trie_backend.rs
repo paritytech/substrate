@@ -16,9 +16,6 @@
 // limitations under the License.
 
 //! Trie-based state machine backend.
-
-use core::marker::PhantomData;
-
 #[cfg(feature = "std")]
 use crate::backend::AsTrieBackend;
 use crate::{
@@ -26,6 +23,9 @@ use crate::{
 	trie_backend_essence::{RawIter, TrieBackendEssence, TrieBackendStorage},
 	Backend, StorageKey, StorageValue,
 };
+
+#[cfg(not(feature = "std"))]
+use core::marker::PhantomData;
 
 use codec::Codec;
 #[cfg(feature = "std")]
@@ -44,52 +44,53 @@ use trie_db::TrieCache as TrieCacheT;
 
 /// A provider of trie caches that are compatible with `TrieDB`.
 pub trait AsTrieDbCache<H: Hasher> {
-	type Result<'a>: TrieCacheT<sp_trie::NodeCodec<H>> + 'a
+	/// `TrieDB` compatible cache type
+	type Cache<'a>: TrieCacheT<sp_trie::NodeCodec<H>> + 'a
 	where
 		Self: 'a;
 
 	/// Return a `TrieDB` compatible cache. The `storage_root`
 	/// parameter should be the storage root of the used trie.
-	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Result<'_>;
+	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_>;
 
 	/// Return a `TrieDBMut` compatible cache. The `storage_root`
 	/// parameter should be the storage root of the used trie.
-	fn as_trie_db_mut_cache(&self) -> Self::Result<'_>;
+	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_>;
 
 	/// Merge a `TrieDB` compatible cache back into this cache provider.
-	fn merge<'a>(&'a self, other: Self::Result<'a>, new_root: H::Out);
+	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out);
 }
 
 #[cfg(feature = "std")]
 impl<H: Hasher> AsTrieDbCache<H> for LocalTrieCache<H> {
-	type Result<'a> = TrieCache<'a, H> where H: 'a;
+	type Cache<'a> = TrieCache<'a, H> where H: 'a;
 
-	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Result<'_> {
+	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_> {
 		self.as_trie_db_cache(storage_root)
 	}
 
-	fn as_trie_db_mut_cache(&self) -> Self::Result<'_> {
+	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_> {
 		self.as_trie_db_mut_cache()
 	}
 
-	fn merge<'a>(&'a self, other: Self::Result<'a>, new_root: H::Out) {
+	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out) {
 		other.merge_into(self, new_root)
 	}
 }
 
 #[cfg(feature = "std")]
 impl<H: Hasher> AsTrieDbCache<H> for &LocalTrieCache<H> {
-	type Result<'a> = TrieCache<'a, H> where Self: 'a;
+	type Cache<'a> = TrieCache<'a, H> where Self: 'a;
 
-	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Result<'_> {
+	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_> {
 		(*self).as_trie_db_cache(storage_root)
 	}
 
-	fn as_trie_db_mut_cache(&self) -> Self::Result<'_> {
+	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_> {
 		(*self).as_trie_db_mut_cache()
 	}
 
-	fn merge<'a>(&'a self, other: Self::Result<'a>, new_root: H::Out) {
+	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out) {
 		other.merge_into(self, new_root)
 	}
 }
@@ -136,22 +137,30 @@ impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for NoOpcache {
 	}
 }
 
-pub struct NoOpLocalCache<H: Hasher> {
+/// Fake cache that allows construction of a
+/// `TrieBackend` and satisfies the requirements,
+/// but can never be construted.
+#[cfg(not(feature = "std"))]
+pub struct UnimplementedCache<H> {
+	// Not strictly necessary, but the private field prevents construction
+	// and the H generics allow to use this as drop-in replacement for the
+	// `LocalTrieCache` variant that is available in "std" environments.
 	_phantom: PhantomData<H>,
 }
 
-impl<H: Hasher> AsTrieDbCache<H> for NoOpLocalCache<H> {
-	type Result<'a> = NoOpcache where H: 'a;
+#[cfg(not(feature = "std"))]
+impl<H: Hasher> AsTrieDbCache<H> for UnimplementedCache<H> {
+	type Cache<'a> = NoOpcache where H: 'a;
 
-	fn as_trie_db_cache(&self, _storage_root: <H as Hasher>::Out) -> Self::Result<'_> {
+	fn as_trie_db_cache(&self, _storage_root: <H as Hasher>::Out) -> Self::Cache<'_> {
 		unimplemented!()
 	}
 
-	fn as_trie_db_mut_cache(&self) -> Self::Result<'_> {
+	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_> {
 		unimplemented!()
 	}
 
-	fn merge<'a>(&'a self, _other: Self::Result<'a>, _new_root: <H as Hasher>::Out) {
+	fn merge<'a>(&'a self, _other: Self::Cache<'a>, _new_root: <H as Hasher>::Out) {
 		unimplemented!()
 	}
 }
@@ -160,7 +169,7 @@ impl<H: Hasher> AsTrieDbCache<H> for NoOpLocalCache<H> {
 type DefaultCache<H> = LocalTrieCache<H>;
 
 #[cfg(not(feature = "std"))]
-type DefaultCache<H> = NoOpLocalCache<H>;
+type DefaultCache<H> = UnimplementedCache<H>;
 
 /// Builder for creating a [`TrieBackend`].
 pub struct TrieBackendBuilder<S: TrieBackendStorage<H>, H: Hasher, C = DefaultCache<H>> {
@@ -193,6 +202,16 @@ where
 	S: TrieBackendStorage<H>,
 	H: Hasher,
 {
+	/// Create a new builder instance.
+	pub fn new_with_cache(storage: S, root: H::Out, cache: C) -> Self {
+		Self {
+			storage,
+			root,
+			#[cfg(feature = "std")]
+			recorder: None,
+			cache: Some(cache),
+		}
+	}
 	/// Wrap the given [`TrieBackend`].
 	///
 	/// This can be used for example if all accesses to the trie should
@@ -206,10 +225,7 @@ where
 			root: *other.essence.root(),
 			#[cfg(feature = "std")]
 			recorder: None,
-			#[cfg(feature = "std")]
 			cache: other.essence.trie_node_cache.as_ref(),
-			#[cfg(not(feature = "std"))]
-			cache: None,
 		}
 	}
 
@@ -237,12 +253,12 @@ where
 	}
 
 	/// Use the given `cache` for the to be configured [`TrieBackend`].
-	#[cfg(feature = "std")]
 	pub fn with_cache<LC>(self, cache: LC) -> TrieBackendBuilder<S, H, LC> {
 		TrieBackendBuilder {
 			cache: Some(cache),
 			root: self.root,
 			storage: self.storage,
+			#[cfg(feature = "std")]
 			recorder: self.recorder,
 		}
 	}
@@ -264,10 +280,8 @@ where
 	/// Build the configured [`TrieBackend`].
 	#[cfg(not(feature = "std"))]
 	pub fn build(self) -> TrieBackend<S, H, C> {
-		let _ = self.cache;
-
 		TrieBackend {
-			essence: TrieBackendEssence::new(self.storage, self.root),
+			essence: TrieBackendEssence::new_with_cache(self.storage, self.root, self.cache),
 			next_storage_key_cache: Default::default(),
 		}
 	}

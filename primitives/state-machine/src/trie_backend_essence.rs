@@ -229,6 +229,20 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
 	}
 
 	/// Create new trie-based backend.
+	pub fn new_with_cache(storage: S, root: H::Out, cache: Option<C>) -> Self {
+		TrieBackendEssence {
+			storage,
+			root,
+			empty: H::hash(&[0u8]),
+			#[cfg(feature = "std")]
+			cache: Arc::new(RwLock::new(Cache::new())),
+			trie_node_cache: cache,
+			#[cfg(feature = "std")]
+			recorder: None,
+		}
+	}
+
+	/// Create new trie-based backend.
 	#[cfg(feature = "std")]
 	pub fn new_with_cache_and_recorder(
 		storage: S,
@@ -313,13 +327,18 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsTrieDbCache<H>> TrieBackendEssenc
 	#[inline]
 	fn with_recorder_and_cache<R>(
 		&self,
-		_: Option<H::Out>,
+		storage_root: Option<H::Out>,
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
 		) -> R,
 	) -> R {
-		callback(None, None)
+		let storage_root = storage_root.unwrap_or_else(|| self.root);
+
+		let mut cache = self.trie_node_cache.as_ref().map(|c| c.as_trie_db_cache(storage_root));
+		let cache = cache.as_mut().map(|c| c as _);
+
+		callback(None, cache)
 	}
 
 	/// Call the given closure passing it the recorder and the cache.
@@ -365,13 +384,29 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsTrieDbCache<H>> TrieBackendEssenc
 	#[cfg(not(feature = "std"))]
 	fn with_recorder_and_cache_for_storage_root<R>(
 		&self,
-		_: Option<H::Out>,
+		storage_root: Option<H::Out>,
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
 		) -> (Option<H::Out>, R),
 	) -> R {
-		callback(None, None).1
+		let storage_root = storage_root.unwrap_or_else(|| self.root);
+
+		let result = if let Some(local_cache) = self.trie_node_cache.as_ref() {
+			let mut cache = local_cache.as_trie_db_mut_cache();
+
+			let (new_root, r) = callback(None, Some(&mut cache));
+
+			if let Some(new_root) = new_root {
+				local_cache.merge(cache, new_root);
+			}
+
+			r
+		} else {
+			callback(None, None).1
+		};
+
+		result
 	}
 }
 
