@@ -354,7 +354,7 @@ where
 	.validate_all(code)
 	.map_err(|err| {
 		log::debug!(target: LOG_TARGET, "{}", err);
-		(Error::<T>::CodeRejected.into(), "validation of new code failed")
+		(Error::<T>::CodeRejected.into(), "Validation of new code failed!")
 	})?;
 
 	let (code, memory_limits) = (|| {
@@ -453,12 +453,11 @@ pub mod benchmarking {
 		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
-	) -> Result<WasmBlob<T>, &'static str> {
+	) -> Result<WasmBlob<T>, DispatchError> {
 		let contract_module = ContractModule::new(&code)?;
 		// We do this here just to check that module's memory import satisfies the schedule
 		let _memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
-
-		let code = code.try_into().map_err(|_| "Code too large!")?;
+		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
 			owner,
 			// this is a helper function for benchmarking which skips deposit collection
@@ -562,7 +561,7 @@ mod tests {
 			)
 			(func (export "deploy"))
 		)"#,
-		Err("validation of new code failed")
+		Err("Validation of new code failed!")
 	);
 
 	mod functions {
@@ -715,7 +714,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("validation of new code failed")
+			Err("Validation of new code failed!")
 		);
 
 		prepare_test!(
@@ -768,7 +767,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("validation of new code failed")
+			Err("Validation of new code failed!")
 		);
 
 		prepare_test!(
@@ -933,7 +932,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("new code rejected on wasmi instantiation")
+			Err("New code rejected on wasmi instantiation!")
 		);
 	}
 
@@ -1030,7 +1029,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("validation of new code failed")
+			Err("Validation of new code failed!")
 		);
 
 		prepare_test!(
@@ -1042,7 +1041,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("validation of new code failed")
+			Err("Validation of new code failed!")
 		);
 
 		prepare_test!(
@@ -1054,7 +1053,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("validation of new code failed")
+			Err("Validation of new code failed!")
 		);
 
 		prepare_test!(
@@ -1066,7 +1065,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("validation of new code failed")
+			Err("Validation of new code failed!")
 		);
 	}
 }

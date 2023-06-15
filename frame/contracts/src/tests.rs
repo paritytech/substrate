@@ -4402,7 +4402,7 @@ fn code_rejected_error_works() {
 		assert_err!(result.result, <Error<Test>>::CodeRejected);
 		assert_eq!(
 			std::str::from_utf8(&result.debug_message).unwrap(),
-			"validation of new code failed"
+			"Validation of new code failed!"
 		);
 
 		let (wasm, _) = compile_module::<Test>("invalid_contract").unwrap();

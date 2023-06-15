@@ -374,7 +374,6 @@ impl<T: Config> WasmBlob<T> {
 		owner: T::AccountId,
 	) -> Result<Self, DispatchError> {
 		prepare::benchmarking::prepare(code, schedule, owner)
-			.map_err::<DispatchError, _>(Into::into)
 	}
 }
 
