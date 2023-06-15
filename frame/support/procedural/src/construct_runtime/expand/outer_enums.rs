@@ -100,15 +100,21 @@ pub fn expand_outer_enum(
 	let enum_name_ident = Ident::new(enum_ty.struct_name(), Span::call_site());
 
 	for pallet_decl in pallet_decls {
-		let Some(pallet_entry) = pallet_decl.find_part(enum_name_str) else {
-			continue
+		let generics = if enum_ty == OuterEnumType::Event {
+			// Events must have their parts defined.
+			let Some(pallet_entry) = pallet_decl.find_part(enum_name_str) else {
+				continue
+			};
+			pallet_entry.generics.clone()
+		} else {
+			syn::parse_quote! { <T> }
 		};
 
 		let path = &pallet_decl.path;
 		let pallet_name = &pallet_decl.name;
 		let index = pallet_decl.index;
 		let instance = pallet_decl.instance.as_ref();
-		let generics = &pallet_entry.generics;
+		// let generics = &pallet_entry.generics;
 
 		if instance.is_some() && generics.params.is_empty() {
 			let msg = format!(
@@ -132,7 +138,7 @@ pub fn expand_outer_enum(
 			pallet_decl,
 			index,
 			instance,
-			generics,
+			&generics,
 			enum_ty,
 		));
 		enum_conversions.extend(expand_enum_conversion(
