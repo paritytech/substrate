@@ -32,3 +32,4 @@ assert_matches = "1.3.0"
 default = ["std"]
 std = []
 no-metadata-docs = []
+frame-metadata = []
