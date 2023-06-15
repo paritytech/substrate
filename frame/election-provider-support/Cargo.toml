@@ -17,15 +17,15 @@ scale-info = { version = "2.5.0", default-features = false, features = ["derive"
 frame-election-provider-solution-type = { version = "4.0.0-dev", path = "solution-type" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-arithmetic = { version = "7.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-arithmetic = { version = "16.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "8.0.0", default-features = false, path = "../../primitives/core" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 
 [dev-dependencies]
 rand = { version = "0.8.5", features = ["small_rng"] }
-sp-io = { version = "8.0.0", path = "../../primitives/io" }
+sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 
 [features]

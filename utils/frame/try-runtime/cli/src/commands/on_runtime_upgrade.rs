@@ -54,7 +54,6 @@ pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 	Block::Header: serde::de::DeserializeOwned,
 	NumberFor<Block>: FromStr,

@@ -75,12 +75,6 @@ pub(super) type PreSignedAttributesOf<T, I = ()> = PreSignedAttributes<
 	<T as SystemConfig>::BlockNumber,
 >;
 
-pub trait Incrementable {
-	fn increment(&self) -> Self;
-	fn initial_value() -> Self;
-}
-impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
-
 /// Information about a collection.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
@@ -124,10 +118,12 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 }
 
 /// Witness data for items mint transactions.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct MintWitness<ItemId> {
+#[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+pub struct MintWitness<ItemId, Balance> {
 	/// Provide the id of the item in a required collection.
 	pub owned_item: ItemId,
+	/// The price specified in mint settings.
+	pub mint_price: Option<Balance>,
 }
 
 /// Information concerning the ownership of a single unique item.

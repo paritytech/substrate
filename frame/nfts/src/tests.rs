@@ -369,7 +369,37 @@ fn mint_should_work() {
 			MintSettings { mint_type: MintType::Public, price: Some(1), ..Default::default() }
 		));
 		Balances::make_free_balance_be(&account(2), 100);
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 43, account(2), None));
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 43, account(2), None,),
+			Error::<Test>::WitnessRequired
+		);
+		assert_noop!(
+			Nfts::mint(
+				RuntimeOrigin::signed(account(2)),
+				0,
+				43,
+				account(2),
+				Some(MintWitness { ..Default::default() })
+			),
+			Error::<Test>::BadWitness
+		);
+		assert_noop!(
+			Nfts::mint(
+				RuntimeOrigin::signed(account(2)),
+				0,
+				43,
+				account(2),
+				Some(MintWitness { mint_price: Some(0), ..Default::default() })
+			),
+			Error::<Test>::BadWitness
+		);
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(account(2)),
+			0,
+			43,
+			account(2),
+			Some(MintWitness { mint_price: Some(1), ..Default::default() })
+		));
 		assert_eq!(Balances::total_balance(&account(2)), 99);
 
 		// validate types
@@ -385,11 +415,11 @@ fn mint_should_work() {
 		));
 		assert_noop!(
 			Nfts::mint(RuntimeOrigin::signed(account(3)), 1, 42, account(3), None),
-			Error::<Test>::BadWitness
+			Error::<Test>::WitnessRequired
 		);
 		assert_noop!(
 			Nfts::mint(RuntimeOrigin::signed(account(2)), 1, 42, account(2), None),
-			Error::<Test>::BadWitness
+			Error::<Test>::WitnessRequired
 		);
 		assert_noop!(
 			Nfts::mint(
@@ -397,7 +427,7 @@ fn mint_should_work() {
 				1,
 				42,
 				account(2),
-				Some(MintWitness { owned_item: 42 })
+				Some(MintWitness { owned_item: 42, ..Default::default() })
 			),
 			Error::<Test>::BadWitness
 		);
@@ -406,7 +436,7 @@ fn mint_should_work() {
 			1,
 			42,
 			account(2),
-			Some(MintWitness { owned_item: 43 })
+			Some(MintWitness { owned_item: 43, ..Default::default() })
 		));
 
 		// can't mint twice
@@ -416,7 +446,7 @@ fn mint_should_work() {
 				1,
 				46,
 				account(2),
-				Some(MintWitness { owned_item: 43 })
+				Some(MintWitness { owned_item: 43, ..Default::default() })
 			),
 			Error::<Test>::AlreadyClaimed
 		);
