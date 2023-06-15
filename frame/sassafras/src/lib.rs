@@ -249,6 +249,10 @@ pub mod pallet {
 		fn build(&self) {
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
 			EpochConfig::<T>::put(self.epoch_config.clone());
+			log::debug!(target: LOG_TARGET, "Building new testing ring context");
+			let ctx = RingVrfContext::new_testing();
+			RingContext::<T>::set(Some(ctx.clone()));
+			log::debug!(target: LOG_TARGET, "... Building Done");
 		}
 	}
 
@@ -357,7 +361,6 @@ pub mod pallet {
 
 			log::debug!(target: LOG_TARGET, "LOADING RING CTX");
 			let Some(ring_ctx) = RingContext::<T>::get() else {
-				log::info!(target: LOG_TARGET, "Ring context not initialized yet");
 				return Err("Ring context not initialized".into())
 			};
 			log::debug!(target: LOG_TARGET, "... Loaded");

@@ -586,11 +586,10 @@ pub mod ring_vrf {
 		///
 		/// Initialization cerimony should be performed via some other means
 		/// For now we call this once here.
-		#[cfg(feature = "std")]
 		pub fn new_testing() -> Self {
 			let kzg_seed = [0; 32];
 			let domain_size = 2usize.pow(10);
-			let kzg = KZG::insecure_kzg_setup(kzg_seed, domain_size);
+			let kzg = KZG::testing_kzg_setup(kzg_seed, domain_size);
 			Self(kzg)
 		}
 

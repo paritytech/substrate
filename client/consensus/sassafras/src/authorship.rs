@@ -404,10 +404,6 @@ async fn start_tickets_worker<B, C, SC>(
 	C::Api: SassafrasApi<B>,
 	SC: SelectChain<B> + 'static,
 {
-	log::debug!(target: LOG_TARGET, ">>> Creating testing ring-vrf context...");
-	let ring_ctx = RingVrfContext::new_testing();
-	log::debug!(target: LOG_TARGET, ">>> ...done");
-
 	let mut notifications = client.import_notification_stream();
 
 	while let Some(notification) = notifications.next().await {
@@ -441,11 +437,6 @@ async fn start_tickets_worker<B, C, SC>(
 			},
 		};
 
-		let tickets = generate_epoch_tickets(&mut epoch, &keystore, &ring_ctx);
-		if tickets.is_empty() {
-			continue
-		}
-
 		// Get the best block on which we will publish the tickets.
 		let best_hash = match select_chain.best_chain().await {
 			Ok(header) => header.hash(),
@@ -454,6 +445,23 @@ async fn start_tickets_worker<B, C, SC>(
 				continue
 			},
 		};
+
+		let ring_ctx = match client.runtime_api().ring_context(best_hash) {
+			Ok(Some(ctx)) => ctx,
+			Ok(None) => {
+				info!(target: LOG_TARGET, "Ring context not initialized yet");
+				continue
+			},
+			Err(err) => {
+				error!(target: LOG_TARGET, "Unable to read ring context: {}", err);
+				continue
+			},
+		};
+
+		let tickets = generate_epoch_tickets(&mut epoch, &keystore, &ring_ctx);
+		if tickets.is_empty() {
+			continue
+		}
 
 		let err = match client.runtime_api().submit_tickets_unsigned_extrinsic(best_hash, tickets) {
 			Err(err) => Some(err.to_string()),
