@@ -40,15 +40,28 @@ impl<
 {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-		assert!(
-			can_migrate::<T, I>(),
-			"Invalid (perhaps already-migrated) state detected prior to migration"
-		);
+		ensure!(can_migrate::<T, I>(), "pallet_society: already upgraded");
+
+		let current = Pallet::<T, I>::current_storage_version();
+		let onchain = Pallet::<T, I>::on_chain_storage_version();
+		ensure!(onchain == 0 && current == 2, "pallet_society: invalid version");
+
 		Ok((old::Candidates::<T, I>::get(), old::Members::<T, I>::get()).encode())
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		from_original::<T, I>(&mut PastPayouts::get())
+		let current = Pallet::<T, I>::current_storage_version();
+		let onchain = Pallet::<T, I>::on_chain_storage_version();
+		if current == 2 && onchain == 0 {
+			from_original::<T, I>(&mut PastPayouts::get())
+		} else {
+			log::info!(
+				"Running migration with current storage version {:?} / onchain {:?}",
+				current,
+				onchain
+			);
+			T::DbWeight::get().reads(1)
+		}
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -71,6 +84,11 @@ impl<
 		members.sort();
 		old_members.sort();
 		assert_eq!(members, old_members);
+
+		ensure!(
+			Pallet::<T, I>::on_chain_storage_version() == 2,
+			"The onchain version must be updated after the migration."
+		);
 
 		assert_internal_consistency::<T, I>();
 		Ok(())

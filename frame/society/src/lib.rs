@@ -264,6 +264,7 @@ use frame_support::{
 	traits::{
 		BalanceStatus, Currency, EnsureOrigin, EnsureOriginWithArg,
 		ExistenceRequirement::AllowDeath, Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
+		StorageVersion,
 	},
 	PalletId,
 };
@@ -469,7 +470,10 @@ pub type GroupParamsFor<T, I> = GroupParams<BalanceOf<T, I>>;
 pub mod pallet {
 	use super::*;
 
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
