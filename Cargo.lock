@@ -2926,6 +2926,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-runtime",
 ]
 
 [[package]]
