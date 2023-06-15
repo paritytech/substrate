@@ -111,7 +111,7 @@ use frame_support::{
 	ensure,
 	scale_info::TypeInfo,
 	traits::{
-		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
+		Bounded, ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
 		ReservableCurrency,
 	},
 	weights::Weight,
@@ -166,7 +166,7 @@ impl<AccountId> IdentityVerifier<AccountId> for () {
 }
 
 /// The provider of a collective action interface, for example an instance of `pallet-collective`.
-pub trait ProposalProvider<AccountId, Hash, Proposal> {
+pub trait ProposalProvider<AccountId, Proposal> {
 	/// Add a new proposal.
 	/// Returns a proposal length and active proposals count if successful.
 	fn propose_proposal(
@@ -180,21 +180,24 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	/// Returns true if the sender votes first time if successful.
 	fn vote_proposal(
 		who: AccountId,
-		proposal: Hash,
+		proposal_bounded: Bounded<Proposal>,
 		index: ProposalIndex,
 		approve: bool,
 	) -> Result<bool, DispatchError>;
 
 	/// Close a proposal that is either approved, disapproved, or whose voting period has ended.
 	fn close_proposal(
-		proposal_hash: Hash,
+		proposal_bounded: Bounded<Proposal>,
 		index: ProposalIndex,
 		proposal_weight_bound: Weight,
 		length_bound: u32,
 	) -> DispatchResultWithPostInfo;
 
-	/// Return a proposal of the given hash.
-	fn proposal_of(proposal_hash: Hash) -> Option<Proposal>;
+	/// Return an active proposal by its Bounded counterpart.
+	fn proposal_of(proposal_bounded: Bounded<Proposal>) -> Option<Proposal>;
+
+	/// Return the Bounded counterpart of a proposal.
+	fn bound_proposal(proposal: Proposal) -> Result<Bounded<Proposal>, DispatchError>;
 }
 
 /// The various roles that a member can hold.
@@ -265,7 +268,7 @@ pub mod pallet {
 		type IdentityVerifier: IdentityVerifier<Self::AccountId>;
 
 		/// The provider of the proposal operation.
-		type ProposalProvider: ProposalProvider<Self::AccountId, Self::Hash, Self::Proposal>;
+		type ProposalProvider: ProposalProvider<Self::AccountId, Self::Proposal>;
 
 		/// Maximum number of proposals allowed to be active in parallel.
 		type MaxProposals: Get<ProposalIndex>;
@@ -523,14 +526,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vote(T::MaxFellows::get()))]
 		pub fn vote(
 			origin: OriginFor<T>,
-			proposal: T::Hash,
+			proposal_bounded: Bounded<<T as Config<I>>::Proposal>,
 			#[pallet::compact] index: ProposalIndex,
 			approve: bool,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
 
-			T::ProposalProvider::vote_proposal(who, proposal, index, approve)?;
+			T::ProposalProvider::vote_proposal(who, proposal_bounded, index, approve)?;
 			Ok(())
 		}
 
@@ -893,7 +896,7 @@ pub mod pallet {
 		})]
 		pub fn close(
 			origin: OriginFor<T>,
-			proposal_hash: T::Hash,
+			proposal_bounded: Bounded<<T as Config<I>>::Proposal>,
 			#[pallet::compact] index: ProposalIndex,
 			proposal_weight_bound: Weight,
 			#[pallet::compact] length_bound: u32,
@@ -901,7 +904,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
 
-			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
+			Self::do_close(proposal_bounded, index, proposal_weight_bound, length_bound)
 		}
 
 		/// Abdicate one's position as a voting member and just be an Ally. May be used by Fellows
@@ -1110,13 +1113,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn do_close(
-		proposal_hash: T::Hash,
+		proposal_bounded: Bounded<<T as Config<I>>::Proposal>,
 		index: ProposalIndex,
 		proposal_weight_bound: Weight,
 		length_bound: u32,
 	) -> DispatchResultWithPostInfo {
 		let info = T::ProposalProvider::close_proposal(
-			proposal_hash,
+			proposal_bounded,
 			index,
 			proposal_weight_bound,
 			length_bound,

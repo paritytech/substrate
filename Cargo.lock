@@ -5946,6 +5946,7 @@ dependencies = [
  "pallet-balances",
  "pallet-collective",
  "pallet-identity",
+ "pallet-preimage",
  "parity-scale-codec",
  "scale-info",
  "sp-core",

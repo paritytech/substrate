@@ -17,8 +17,7 @@
 
 //! Tests for the alliance pallet.
 
-use frame_support::{assert_noop, assert_ok, error::BadOrigin};
-use frame_system::{EventRecord, Phase};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::StorePreimage};
 
 use super::*;
 use crate::mock::*;
@@ -28,7 +27,7 @@ type AllianceMotionEvent = pallet_collective::Event<Test, pallet_collective::Ins
 fn assert_powerless(user: RuntimeOrigin, user_is_member: bool) {
 	//vote / veto with a valid propsal
 	let cid = test_cid();
-	let (proposal, _, _) = make_kick_member_proposal(42);
+	let (proposal, _) = make_kick_member_proposal(42);
 
 	assert_noop!(Alliance::init_members(user.clone(), vec![], vec![],), BadOrigin);
 
@@ -165,7 +164,7 @@ fn disband_works() {
 #[test]
 fn propose_works() {
 	new_test_ext().execute_with(|| {
-		let (proposal, proposal_len, hash) = make_remark_proposal(42);
+		let (proposal, proposal_len) = make_remark_proposal(42);
 
 		// only voting member can propose proposal, 4 is ally not have vote rights
 		assert_noop!(
@@ -184,62 +183,56 @@ fn propose_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_eq!(*AllianceMotion::proposals(), vec![hash]);
-		assert_eq!(AllianceMotion::proposal_of(&hash), Some(proposal));
-		assert_eq!(
-			System::events(),
-			vec![EventRecord {
-				phase: Phase::Initialization,
-				event: mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
-					account: 1,
-					proposal_index: 0,
-					proposal_hash: hash,
-					threshold: 3,
-				}),
-				topics: vec![],
-			}]
-		);
+
+		let proposal_bounded = Preimage::bound(proposal).unwrap();
+		assert_eq!(*AllianceMotion::proposals(), vec![proposal_bounded.clone()]);
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(
+			AllianceMotionEvent::Proposed {
+				account: 1,
+				proposal_index: 0,
+				proposal_bounded,
+				threshold: 3,
+			},
+		));
 	});
 }
 
 #[test]
 fn vote_works() {
 	new_test_ext().execute_with(|| {
-		let (proposal, proposal_len, hash) = make_remark_proposal(42);
+		let (proposal, proposal_len) = make_remark_proposal(42);
 		assert_ok!(Alliance::propose(
 			RuntimeOrigin::signed(1),
 			3,
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Alliance::vote(RuntimeOrigin::signed(2), hash, 0, true));
 
-		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
-		assert_eq!(
-			System::events(),
-			vec![
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
-					account: 1,
-					proposal_index: 0,
-					proposal_hash: hash,
-					threshold: 3
-				})),
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
-					account: 2,
-					proposal_hash: hash,
-					voted: true,
-					yes: 1,
-					no: 0,
-				})),
-			]
-		);
+		let proposal_bounded = Preimage::bound(proposal).unwrap();
+		assert_ok!(Alliance::vote(RuntimeOrigin::signed(2), proposal_bounded.clone(), 0, true));
+
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(
+			AllianceMotionEvent::Proposed {
+				account: 1,
+				proposal_index: 0,
+				proposal_bounded: proposal_bounded.clone(),
+				threshold: 3,
+			},
+		));
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
+			account: 2,
+			proposal_bounded,
+			voted: true,
+			yes: 1,
+			no: 0,
+		}));
 	});
 }
 
 #[test]
 fn close_works() {
 	new_test_ext().execute_with(|| {
-		let (proposal, proposal_len, hash) = make_remark_proposal(42);
+		let (proposal, proposal_len) = make_remark_proposal(42);
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		assert_ok!(Alliance::propose(
 			RuntimeOrigin::signed(1),
@@ -247,62 +240,64 @@ fn close_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Alliance::vote(RuntimeOrigin::signed(1), hash, 0, true));
-		assert_ok!(Alliance::vote(RuntimeOrigin::signed(2), hash, 0, true));
-		assert_ok!(Alliance::vote(RuntimeOrigin::signed(3), hash, 0, true));
+		let proposal_bounded = Preimage::bound(proposal).unwrap();
+		assert_ok!(Alliance::vote(RuntimeOrigin::signed(1), proposal_bounded.clone(), 0, true));
+		assert_ok!(Alliance::vote(RuntimeOrigin::signed(2), proposal_bounded.clone(), 0, true));
+		assert_ok!(Alliance::vote(RuntimeOrigin::signed(3), proposal_bounded.clone(), 0, true));
 		assert_ok!(Alliance::close(
 			RuntimeOrigin::signed(1),
-			hash,
+			proposal_bounded.clone(),
 			0,
 			proposal_weight,
 			proposal_len
 		));
 
-		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
-		assert_eq!(
-			System::events(),
-			vec![
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
-					account: 1,
-					proposal_index: 0,
-					proposal_hash: hash,
-					threshold: 3
-				})),
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
-					account: 1,
-					proposal_hash: hash,
-					voted: true,
-					yes: 1,
-					no: 0,
-				})),
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
-					account: 2,
-					proposal_hash: hash,
-					voted: true,
-					yes: 2,
-					no: 0,
-				})),
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
-					account: 3,
-					proposal_hash: hash,
-					voted: true,
-					yes: 3,
-					no: 0,
-				})),
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Closed {
-					proposal_hash: hash,
-					yes: 3,
-					no: 0,
-				})),
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Approved {
-					proposal_hash: hash
-				})),
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Executed {
-					proposal_hash: hash,
-					result: Ok(()),
-				}))
-			]
-		);
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(
+			AllianceMotionEvent::Proposed {
+				account: 1,
+				proposal_index: 0,
+				proposal_bounded: proposal_bounded.clone(),
+				threshold: 3,
+			},
+		));
+
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
+			account: 1,
+			proposal_bounded: proposal_bounded.clone(),
+			voted: true,
+			yes: 1,
+			no: 0,
+		}));
+
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
+			account: 2,
+			proposal_bounded: proposal_bounded.clone(),
+			voted: true,
+			yes: 2,
+			no: 0,
+		}));
+
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
+			account: 3,
+			proposal_bounded: proposal_bounded.clone(),
+			voted: true,
+			yes: 3,
+			no: 0,
+		}));
+
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Closed {
+			proposal_bounded: proposal_bounded.clone(),
+			yes: 3,
+			no: 0,
+		}));
+
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(
+			AllianceMotionEvent::Approved { proposal_bounded: proposal_bounded.clone() },
+		));
+
+		System::assert_has_event(mock::RuntimeEvent::AllianceMotion(
+			AllianceMotionEvent::Executed { proposal_bounded, result: Ok(()) },
+		));
 	});
 }
 

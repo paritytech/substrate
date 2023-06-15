@@ -27,7 +27,7 @@ use sp_std::convert::{TryFrom, TryInto};
 
 pub use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{EitherOfDiverse, SortedMembers},
+	traits::{EitherOfDiverse, GenesisBuild, QueryPreimage, SortedMembers, StorePreimage},
 	BoundedVec,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -91,6 +91,15 @@ impl pallet_balances::Config for Test {
 	type MaxHolds = ();
 }
 
+impl pallet_preimage::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	type Currency = ();
+	type ManagerOrigin = EnsureRoot<Self::AccountId>;
+	type BaseDeposit = ();
+	type ByteDeposit = ();
+}
+
 const MOTION_DURATION_IN_BLOCKS: BlockNumber = 3;
 
 parameter_types! {
@@ -111,6 +120,7 @@ impl pallet_collective::Config<AllianceCollective> for Test {
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
 	type MaxProposalWeight = MaxProposalWeight;
+	type Preimages = Preimage;
 }
 
 parameter_types! {
@@ -170,7 +180,7 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 }
 
 pub struct AllianceProposalProvider;
-impl ProposalProvider<AccountId, H256, RuntimeCall> for AllianceProposalProvider {
+impl ProposalProvider<AccountId, RuntimeCall> for AllianceProposalProvider {
 	fn propose_proposal(
 		who: AccountId,
 		threshold: u32,
@@ -182,24 +192,33 @@ impl ProposalProvider<AccountId, H256, RuntimeCall> for AllianceProposalProvider
 
 	fn vote_proposal(
 		who: AccountId,
-		proposal: H256,
+		proposal_bounded: Bounded<RuntimeCall>,
 		index: ProposalIndex,
 		approve: bool,
 	) -> Result<bool, DispatchError> {
-		AllianceMotion::do_vote(who, proposal, index, approve)
+		AllianceMotion::do_vote(who, proposal_bounded, index, approve)
 	}
 
 	fn close_proposal(
-		proposal_hash: H256,
+		proposal_bounded: Bounded<RuntimeCall>,
 		proposal_index: ProposalIndex,
 		proposal_weight_bound: Weight,
 		length_bound: u32,
 	) -> DispatchResultWithPostInfo {
-		AllianceMotion::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
+		AllianceMotion::do_close(
+			proposal_bounded,
+			proposal_index,
+			proposal_weight_bound,
+			length_bound,
+		)
 	}
 
-	fn proposal_of(proposal_hash: H256) -> Option<RuntimeCall> {
-		AllianceMotion::proposal_of(proposal_hash)
+	fn proposal_of(proposal_bounded: Bounded<RuntimeCall>) -> Option<RuntimeCall> {
+		AllianceMotion::proposal_of(proposal_bounded)
+	}
+
+	fn bound_proposal(proposal: RuntimeCall) -> Result<Bounded<RuntimeCall>, DispatchError> {
+		Preimage::bound(proposal)
 	}
 }
 
@@ -246,6 +265,7 @@ frame_support::construct_runtime!(
 		Identity: pallet_identity,
 		AllianceMotion: pallet_collective::<Instance1>,
 		Alliance: pallet_alliance,
+		Preimage: pallet_preimage
 	}
 );
 
@@ -372,18 +392,17 @@ pub fn test_cid() -> Cid {
 	Cid::new_v0(result)
 }
 
-pub fn make_remark_proposal(value: u64) -> (RuntimeCall, u32, H256) {
+pub fn make_remark_proposal(value: u64) -> (RuntimeCall, u32) {
 	make_proposal(RuntimeCall::System(frame_system::Call::remark { remark: value.encode() }))
 }
 
-pub fn make_kick_member_proposal(who: AccountId) -> (RuntimeCall, u32, H256) {
+pub fn make_kick_member_proposal(who: AccountId) -> (RuntimeCall, u32) {
 	make_proposal(RuntimeCall::Alliance(pallet_alliance::Call::kick_member { who }))
 }
 
-pub fn make_proposal(proposal: RuntimeCall) -> (RuntimeCall, u32, H256) {
+pub fn make_proposal(proposal: RuntimeCall) -> (RuntimeCall, u32) {
 	let len: u32 = proposal.using_encoded(|p| p.len() as u32);
-	let hash = BlakeTwo256::hash_of(&proposal);
-	(proposal, len, hash)
+	(proposal, len)
 }
 
 pub fn is_fellow(who: &AccountId) -> bool {

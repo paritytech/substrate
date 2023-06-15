@@ -677,6 +677,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.expect("proposals should always be less than MaxProposals; qed")
 	}
 
+	/// The bounded counterpart of an active proposal.
+	pub fn proposal_of(
+		proposal_bounded: Bounded<<T as Config<I>>::Proposal>,
+	) -> Option<<T as Config<I>>::Proposal> {
+		match Voting::<T, I>::contains_key(&proposal_bounded) {
+			false => None,
+			true => T::Preimages::peek(&proposal_bounded).ok().map(|x| x.0),
+		}
+	}
+
 	/// Check whether `who` is a member of the collective.
 	pub fn is_member(who: &T::AccountId) -> bool {
 		// Note: The dispatchables *do not* use this to check membership so make sure
@@ -979,6 +989,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn remove_proposal(proposal_bounded: &Bounded<<T as Config<I>>::Proposal>) -> u32 {
 		let num_proposals = Voting::<T, I>::count();
 		Voting::<T, I>::remove(&proposal_bounded);
+		T::Preimages::drop(&proposal_bounded);
 		num_proposals as u32
 	}
 

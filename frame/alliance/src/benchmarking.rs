@@ -17,7 +17,7 @@
 
 //! Alliance pallet benchmarking.
 
-use sp_runtime::traits::{Bounded, Hash, StaticLookup};
+use sp_runtime::traits::{Bounded, StaticLookup};
 use sp_std::{
 	cmp,
 	convert::{TryFrom, TryInto},
@@ -26,7 +26,10 @@ use sp_std::{
 };
 
 use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError};
-use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
+use frame_support::{
+	bounded_vec,
+	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
+};
 use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System, RawOrigin as SystemOrigin};
 
 use super::{Call as AllianceCall, Pallet as Alliance, *};
@@ -116,7 +119,7 @@ benchmarks_instance_pallet! {
 		let threshold = m;
 		// Add previous proposals.
 		for i in 0 .. p - 1 {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
 				rule: rule(vec![i as u8; b as usize])
 			}.into();
@@ -133,8 +136,8 @@ benchmarks_instance_pallet! {
 	}: propose(SystemOrigin::Signed(proposer.clone()), threshold, Box::new(proposal.clone()), bytes_in_storage)
 	verify {
 		// New proposal is recorded
-		let proposal_hash = T::Hashing::hash_of(&proposal);
-		assert_eq!(T::ProposalProvider::proposal_of(proposal_hash), Some(proposal));
+		let proposal_bounded = T::ProposalProvider::bound_proposal(proposal.clone()).unwrap();
+		assert_eq!(T::ProposalProvider::proposal_of(proposal_bounded), Some(proposal));
 	}
 
 	vote {
@@ -161,9 +164,9 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add previous proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
 				rule: rule(vec![i as u8; b as usize])
 			}.into();
@@ -173,7 +176,7 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				b,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
+			last_bound = T::ProposalProvider::bound_proposal(proposal).unwrap();
 		}
 
 		let index = p - 1;
@@ -182,7 +185,7 @@ benchmarks_instance_pallet! {
 			let voter = &members[j as usize];
 			Alliance::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_bound.clone(),
 				index,
 				true,
 			)?;
@@ -192,7 +195,7 @@ benchmarks_instance_pallet! {
 		// Voter votes aye without resolving the vote.
 		Alliance::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_bound.clone(),
 			index,
 			true,
 		)?;
@@ -203,7 +206,7 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: _(SystemOrigin::Signed(voter), last_hash.clone(), index, approve)
+	}: _(SystemOrigin::Signed(voter), last_bound.clone(), index, approve)
 	verify {
 	}
 
@@ -233,9 +236,9 @@ benchmarks_instance_pallet! {
 		let threshold = m;
 
 		// Add previous proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
 				rule: rule(vec![i as u8; bytes as usize])
 			}.into();
@@ -245,8 +248,7 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
-			assert_eq!(T::ProposalProvider::proposal_of(last_hash), Some(proposal));
+			last_bound = T::ProposalProvider::bound_proposal(proposal).unwrap();
 		}
 
 		let index = p - 1;
@@ -255,7 +257,7 @@ benchmarks_instance_pallet! {
 			let voter = &members[j as usize];
 			Alliance::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_bound.clone(),
 				index,
 				true,
 			)?;
@@ -264,7 +266,7 @@ benchmarks_instance_pallet! {
 		// Voter votes aye without resolving the vote.
 		Alliance::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_bound.clone(),
 			index,
 			true,
 		)?;
@@ -272,7 +274,7 @@ benchmarks_instance_pallet! {
 		// Voter switches vote to nay, which kills the vote
 		Alliance::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_bound.clone(),
 			index,
 			false,
 		)?;
@@ -280,10 +282,10 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_bound.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
-		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
+		assert_eq!(T::ProposalProvider::proposal_of(last_bound), None);
 	}
 
 	close_early_approved {
@@ -312,9 +314,9 @@ benchmarks_instance_pallet! {
 		let threshold = 2;
 
 		// Add previous proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
 				rule: rule(vec![i as u8; b as usize])
 			}.into();
@@ -324,15 +326,14 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
-			assert_eq!(T::ProposalProvider::proposal_of(last_hash), Some(proposal));
+			last_bound = T::ProposalProvider::bound_proposal(proposal).unwrap();
 		}
 
 		let index = p - 1;
 		// Caller switches vote to nay on their own proposal, allowing them to be the deciding approval vote
 		Alliance::<T, I>::vote(
 			SystemOrigin::Signed(proposer.clone()).into(),
-			last_hash.clone(),
+			last_bound.clone(),
 			index,
 			false,
 		)?;
@@ -342,7 +343,7 @@ benchmarks_instance_pallet! {
 			let voter = &members[j as usize];
 			Alliance::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_bound.clone(),
 				index,
 				false,
 			)?;
@@ -351,7 +352,7 @@ benchmarks_instance_pallet! {
 		// Member zero is the first aye
 		Alliance::<T, I>::vote(
 			SystemOrigin::Signed(members[0].clone()).into(),
-			last_hash.clone(),
+			last_bound.clone(),
 			index,
 			true,
 		)?;
@@ -360,14 +361,14 @@ benchmarks_instance_pallet! {
 		// Caller switches vote to aye, which passes the vote
 		Alliance::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_bound.clone(),
 			index,
 			true,
 		)?;
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_bound.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
-		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
+		assert_eq!(T::ProposalProvider::proposal_of(last_bound), None);
 	}
 
 	close_disapproved {
@@ -396,9 +397,9 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
 				rule: rule(vec![i as u8; bytes as usize])
 			}.into();
@@ -408,8 +409,7 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
-			assert_eq!(T::ProposalProvider::proposal_of(last_hash), Some(proposal));
+			last_bound = T::ProposalProvider::bound_proposal(proposal).unwrap();
 		}
 
 		let index = p - 1;
@@ -419,7 +419,7 @@ benchmarks_instance_pallet! {
 			let voter = &members[j as usize];
 			Alliance::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_bound.clone(),
 				index,
 				true,
 			)?;
@@ -427,17 +427,17 @@ benchmarks_instance_pallet! {
 
 		Alliance::<T, I>::vote(
 			SystemOrigin::Signed(voter.clone()).into(),
-			last_hash.clone(),
+			last_bound.clone(),
 			index,
 			false,
 		)?;
 
 		System::<T>::set_block_number(BlockNumberFor::<T>::max_value());
 
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_bound.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
-		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
+		assert_eq!(T::ProposalProvider::proposal_of(last_bound), None);
 	}
 
 	close_approved {
@@ -466,9 +466,9 @@ benchmarks_instance_pallet! {
 		let threshold = 2;
 
 		// Add proposals
-		let mut last_hash = T::Hash::default();
+		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
 		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
+			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
 				rule: rule(vec![i as u8; b as usize])
 			}.into();
@@ -478,14 +478,13 @@ benchmarks_instance_pallet! {
 				Box::new(proposal.clone()),
 				bytes_in_storage,
 			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
-			assert_eq!(T::ProposalProvider::proposal_of(last_hash), Some(proposal));
+			last_bound = T::ProposalProvider::bound_proposal(proposal).unwrap();
 		}
 
 		// The prime member votes aye, so abstentions default to aye.
 		Alliance::<T, I>::vote(
 			SystemOrigin::Signed(proposer.clone()).into(),
-			last_hash.clone(),
+			last_bound.clone(),
 			p - 1,
 			true // Vote aye.
 		)?;
@@ -497,7 +496,7 @@ benchmarks_instance_pallet! {
 			let voter = &members[j as usize];
 			Alliance::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
-				last_hash.clone(),
+				last_bound.clone(),
 				index,
 				false
 			)?;
@@ -506,10 +505,10 @@ benchmarks_instance_pallet! {
 		// caller is prime, prime already votes aye by creating the proposal
 		System::<T>::set_block_number(BlockNumberFor::<T>::max_value());
 
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_bound.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
-		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
+		assert_eq!(T::ProposalProvider::proposal_of(last_bound), None);
 	}
 
 	init_members {
