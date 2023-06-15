@@ -26,11 +26,11 @@ use super::types::{
 };
 
 use frame_metadata::v15::{
-	ExtrinsicMetadata, PalletCallMetadata, PalletConstantMetadata, PalletErrorMetadata,
-	PalletEventMetadata, PalletMetadata, PalletStorageMetadata, RuntimeApiMetadata,
-	RuntimeApiMethodMetadata, RuntimeApiMethodParamMetadata, RuntimeMetadataV15,
-	SignedExtensionMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
-	StorageHasher,
+	CustomMetadata, ExtrinsicMetadata, OuterEnums, PalletCallMetadata, PalletConstantMetadata,
+	PalletErrorMetadata, PalletEventMetadata, PalletMetadata, PalletStorageMetadata,
+	RuntimeApiMetadata, RuntimeApiMethodMetadata, RuntimeApiMethodParamMetadata,
+	RuntimeMetadataV15, SignedExtensionMetadata, StorageEntryMetadata, StorageEntryModifier,
+	StorageEntryType, StorageHasher,
 };
 
 impl From<MetadataIR> for RuntimeMetadataV15 {
@@ -40,9 +40,8 @@ impl From<MetadataIR> for RuntimeMetadataV15 {
 			ir.extrinsic.into(),
 			ir.ty,
 			ir.apis.into_iter().map(Into::into).collect(),
-			ir.call_enum_ty,
-			ir.event_enum_ty,
-			ir.module_error_enum_ty,
+			OuterEnums { call_enum_ty: ir.call_enum_ty, event_enum_ty: ir.event_enum_ty },
+			CustomMetadata { map: Default::default() },
 		)
 	}
 }
@@ -183,9 +182,14 @@ impl From<SignedExtensionMetadataIR> for SignedExtensionMetadata {
 impl From<ExtrinsicMetadataIR> for ExtrinsicMetadata {
 	fn from(ir: ExtrinsicMetadataIR) -> Self {
 		ExtrinsicMetadata {
-			ty: ir.ty,
 			version: ir.version,
 			signed_extensions: ir.signed_extensions.into_iter().map(Into::into).collect(),
+			// TODO: This is propagated properly by https://github.com/paritytech/substrate/pull/14123
+			// that awaits a frame-metadata release.
+			address_ty: ir.ty,
+			call_ty: ir.ty,
+			signature_ty: ir.ty,
+			extra_ty: ir.ty,
 		}
 	}
 }
