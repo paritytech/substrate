@@ -929,19 +929,25 @@ pub mod tests {
 		>;
 
 		#[pallet::genesis_config]
-		pub struct GenesisConfig {
+		pub struct GenesisConfig<T: Config> {
+			#[serde(skip)]
+			pub _config: sp_std::marker::PhantomData<T>,
 			pub data: Vec<(u32, u64)>,
 			pub test_config: Vec<(u32, u32, u64)>,
 		}
 
-		impl Default for GenesisConfig {
+		impl<T: Config> Default for GenesisConfig<T> {
 			fn default() -> Self {
-				Self { data: vec![(15u32, 42u64)], test_config: vec![(15u32, 16u32, 42u64)] }
+				Self {
+					_config: Default::default(),
+					data: vec![(15u32, 42u64)],
+					test_config: vec![(15u32, 16u32, 42u64)],
+				}
 			}
 		}
 
 		#[pallet::genesis_build]
-		impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 			fn build(&self) {
 				for (k, v) in &self.data {
 					<Data<T>>::insert(k, v);
@@ -2512,13 +2518,14 @@ pub mod pallet_prelude {
 /// 	// Type must implement the `Default` trait.
 /// 	#[pallet::genesis_config]
 /// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	pub struct GenesisConfig<T: Config> {
+/// 	    _config: sp_std::marker::PhantomData<T>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	// Declare genesis builder. (This is need only if GenesisConfig is declared)
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+/// 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 /// 		fn build(&self) {}
 /// 	}
 ///
@@ -2649,12 +2656,14 @@ pub mod pallet_prelude {
 ///
 /// 	#[pallet::genesis_config]
 /// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+/// 	    _config: sp_std::marker::PhantomData<T>,
+/// 	    _instance: sp_std::marker::PhantomData<I>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+/// 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 /// 		fn build(&self) {}
 /// 	}
 ///

@@ -20,8 +20,6 @@
 use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::traits::AtLeast32BitUnsigned;
-#[cfg(feature = "std")]
-use sp_runtime::BuildStorage;
 use sp_std::prelude::*;
 
 #[cfg(feature = "try-runtime")]
@@ -373,24 +371,6 @@ impl<T, I> BuildGenesisConfig for dyn GenesisBuild<T, I> {
 	fn build(&self) {
 		#[allow(deprecated)]
 		<Self as GenesisBuild<T, I>>::build(self);
-	}
-}
-
-#[cfg(feature = "std")]
-impl BuildStorage for dyn BuildGenesisConfig {
-	/// Build the storage using `build` inside default storage.
-	fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
-		let mut storage = Default::default();
-		self.assimilate_storage(&mut storage)?;
-		Ok(storage)
-	}
-
-	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
-			self.build();
-			Ok(())
-		})
 	}
 }
 

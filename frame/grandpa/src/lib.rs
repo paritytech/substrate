@@ -333,14 +333,16 @@ pub mod pallet {
 	#[pallet::getter(fn session_for_set)]
 	pub(super) type SetIdSession<T: Config> = StorageMap<_, Twox64Concat, SetId, SessionIndex>;
 
-	#[derive(Default)]
+	#[derive(frame_support::DefaultNoBound)]
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 		pub authorities: AuthorityList,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			CurrentSetId::<T>::put(SetId::default());
 			Pallet::<T>::initialize(&self.authorities)

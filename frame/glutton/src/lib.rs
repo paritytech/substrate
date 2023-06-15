@@ -115,24 +115,17 @@ pub mod pallet {
 	pub(crate) type TrashDataCount<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config> {
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 		pub compute: Perbill,
 		pub storage: Perbill,
 		pub trash_data_count: u32,
 	}
 
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self {
-				compute: Default::default(),
-				storage: Default::default(),
-				trash_data_count: Default::default(),
-			}
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			assert!(
 				self.trash_data_count <= MAX_TRASH_DATA_ENTRIES,

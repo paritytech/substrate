@@ -21,9 +21,8 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
+	BuildStorage, Perbill,
 };
-
 #[frame_support::pallet]
 mod module {
 	use frame_support::pallet_prelude::*;

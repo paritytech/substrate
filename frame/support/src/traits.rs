@@ -81,8 +81,8 @@ pub use metadata::{
 
 mod hooks;
 pub use hooks::{
-	BuildGenesisConfig, GenesisBuild, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle,
-	OnInitialize, OnRuntimeUpgrade, OnTimestampSet,
+	BuildGenesisConfig, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize,
+	OnRuntimeUpgrade, OnTimestampSet,
 };
 
 pub mod schedule;

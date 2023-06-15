@@ -105,8 +105,6 @@ use sp_weights::{RuntimeDbWeight, Weight};
 
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
-#[cfg(feature = "std")]
-use sp_runtime::BuildStorage;
 
 pub mod limits;
 #[cfg(test)]
@@ -676,7 +674,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		#[serde(skip)]
-		pub _phantom: sp_std::marker::PhantomData<T>,
+		pub _config: sp_std::marker::PhantomData<T>,
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
 	}
@@ -693,23 +691,6 @@ pub mod pallet {
 			sp_io::storage::set(well_known_keys::CODE, &self.code);
 			sp_io::storage::set(well_known_keys::EXTRINSIC_INDEX, &0u32.encode());
 		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T: Config> GenesisConfig<T> {
-	/// Direct implementation of `GenesisBuild::build_storage`.
-	///
-	/// Kept in order not to break dependency.
-	pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
-		BuildStorage::build_storage(self as &dyn BuildGenesisConfig)
-	}
-
-	/// Direct implementation of `GenesisBuild::assimilate_storage`.
-	///
-	/// Kept in order not to break dependency.
-	pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-		BuildStorage::assimilate_storage(self as &dyn BuildGenesisConfig, storage)
 	}
 }
 

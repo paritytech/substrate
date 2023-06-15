@@ -185,13 +185,17 @@ pub mod pallet {
 	>;
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		#[serde(skip)]
+		_config: sp_std::marker::PhantomData<T>,
+		#[serde(skip)]
+		_instnace: sp_std::marker::PhantomData<I>,
 		_myfield: u32,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {}
 	}
 
@@ -281,7 +285,7 @@ pub mod pallet2 {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {}
 	}
 }
