@@ -48,7 +48,6 @@ pub use once_cell;
 pub use paste;
 #[doc(hidden)]
 pub use scale_info;
-#[cfg(feature = "std")]
 pub use serde;
 pub use sp_api::metadata_ir;
 pub use sp_core::{OpaqueMetadata, Void};
@@ -821,7 +820,6 @@ macro_rules! assert_error_encoded_size {
 	} => {};
 }
 
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde::{Deserialize, Serialize};
 
@@ -850,7 +848,7 @@ pub mod tests {
 		use crate::pallet_prelude::*;
 
 		#[pallet::pallet]
-		pub struct Pallet<T>(PhantomData<T>);
+		pub struct Pallet<T>(_);
 
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
@@ -1566,6 +1564,7 @@ pub mod pallet_prelude {
 	pub use frame_support::pallet_macros::*;
 	pub use frame_support_procedural::register_default_impl;
 	pub use scale_info::TypeInfo;
+	pub use sp_inherents::MakeFatalError;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{

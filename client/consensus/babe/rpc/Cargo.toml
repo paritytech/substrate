@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
 futures = "0.3.21"
-serde = { version = "1.0.136", features = ["derive"] }
+serde = { version = "1.0.163", features = ["derive"] }
 thiserror = "1.0"
 sc-consensus-babe = { version = "0.10.0-dev", path = "../" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }
