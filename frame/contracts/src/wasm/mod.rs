@@ -292,7 +292,7 @@ impl<T: Config> WasmBlob<T> {
 		<CodeInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
 			if let Some(code_info) = existing {
 				ensure!(code_info.refcount == 0, <Error<T>>::CodeInUse);
-				ensure!(&code_info.owner == origin, BadOrigin); // TODO: what if origin is root?
+				ensure!(&code_info.owner == origin, BadOrigin);
 				T::Currency::unreserve(&code_info.owner, code_info.deposit);
 				*existing = None;
 				<PristineCode<T>>::remove(&code_hash);

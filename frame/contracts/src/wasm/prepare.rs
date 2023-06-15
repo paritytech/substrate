@@ -369,13 +369,12 @@ where
 		// Extract memory limits from the module.
 		// This also checks that module's memory import satisfies the schedule.
 		let memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
-
 		let code = contract_module.into_wasm_code()?;
 
 		Ok((code, memory_limits))
 	})()
 	.map_err(|msg: &str| {
-		log::debug!(target: LOG_TARGET, "new code rejected: {}", msg);
+		log::debug!(target: LOG_TARGET, "New code rejected: {}", msg);
 		(Error::<T>::CodeRejected.into(), msg)
 	})?;
 
@@ -396,7 +395,7 @@ where
 		)
 		.map_err(|err| {
 			log::debug!(target: LOG_TARGET, "{}", err);
-			(Error::<T>::CodeRejected.into(), "new code rejected on wasmi instantiation")
+			(Error::<T>::CodeRejected.into(), "New code rejected on wasmi instantiation!")
 		})?;
 	}
 
@@ -422,14 +421,11 @@ where
 	T: Config,
 {
 	let checked_code = validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
-
-	let err = |_| (<Error<T>>::CodeTooLarge.into(), "preparation enlarged the code excessively");
-
-	let changed_code: CodeVec<T> = checked_code.try_into().map_err(err)?;
-	// TODO: either remove this, or if the code really changes, explain in the docs, why
+	let err = |_| (<Error<T>>::CodeTooLarge.into(), "Validation enlarged the code size!");
+	let checked_code: CodeVec<T> = checked_code.try_into().map_err(err)?;
 	ensure!(
-		code == changed_code,
-		(<Error<T>>::CodeTooLarge.into(), "preparation altered the code")
+		code == checked_code,
+		(<Error<T>>::CodeRejected.into(), "Validation altered the code!")
 	);
 
 	// Calculate deposit for storing contract code and `code_info` in two different storage items.

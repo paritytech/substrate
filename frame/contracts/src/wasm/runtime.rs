@@ -507,7 +507,6 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 								.ok_or(Error::<E::T>::InvalidCallFlags)?;
 							return Ok(ExecReturnValue { flags, data: data.to_vec() })
 						},
-						// TODO check sanity
 						Termination =>
 							return Ok(ExecReturnValue {
 								flags: ReturnFlags::empty(),
