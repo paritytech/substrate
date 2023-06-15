@@ -69,7 +69,7 @@ mod tests {
 						entry.path().extension().map(|ext| ext == "snap").unwrap_or(false)
 				});
 
-			assert!(snapshot.is_some());
+			assert!(snapshot_is_on_disk.is_some(), "Snapshot was not written to disk");
 		})
 		.await;
 	}
