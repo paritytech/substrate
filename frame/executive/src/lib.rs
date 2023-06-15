@@ -118,6 +118,7 @@
 
 use codec::{Codec, Encode};
 use frame_support::{
+	defensive_assert,
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
 	pallet_prelude::InvalidTransaction,
 	traits::{
@@ -133,7 +134,7 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	ApplyExtrinsicResult, RuntimeMbmMode,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -427,11 +428,17 @@ impl<
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize_block(header: &System::Header) {
+	pub fn initialize_block(header: &System::Header) -> RuntimeMbmMode {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(header);
 		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
+
+		if MultiStepMigrator::is_upgrading() {
+			RuntimeMbmMode::Migrating
+		} else {
+			RuntimeMbmMode::NotMigrating
+		}
 	}
 
 	fn extract_pre_digest(header: &System::Header) -> Digest {
@@ -530,11 +537,7 @@ impl<
 					panic!("Extrinsics are not allowed during Multi-Block-Migrations");
 				}
 
-				let used_weight = MultiStepMigrator::step();
-				<frame_system::Pallet<System>>::register_extra_weight_unchecked(
-					used_weight,
-					DispatchClass::Mandatory,
-				);
+				Self::progress_mbms();
 			} else {
 				// TODO `poll` hook <https://github.com/paritytech/substrate/pull/14279>
 
@@ -553,6 +556,21 @@ impl<
 			// any final checks
 			Self::final_checks(&header);
 		}
+	}
+
+	/// Progress ongoing MBM migrations.
+	// Used by the block builder and Executive.
+	pub fn progress_mbms() {
+		defensive_assert!(
+			MultiStepMigrator::is_upgrading(),
+			"Tried to progress MBMs although \
+		none were ongoing. Not a hard error but unexpected."
+		);
+		let used_weight = MultiStepMigrator::step();
+		<frame_system::Pallet<System>>::register_extra_weight_unchecked(
+			used_weight,
+			DispatchClass::Mandatory,
+		);
 	}
 
 	/// Execute given extrinsics.

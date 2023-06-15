@@ -315,8 +315,11 @@ impl OnMigrationUpdate for () {
 
 /// Something that can do multi step migrations.
 pub trait MultiStepMigrator {
+	/// Hint for whether [`step`] should be called.
 	fn is_upgrading() -> bool;
 	/// Do the next step in the MBM process.
+	///
+	/// Must gracefully handle the case that it is currently not upgrading.
 	fn step() -> Weight;
 }
 

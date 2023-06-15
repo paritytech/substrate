@@ -19,6 +19,7 @@
 
 use super::*;
 
+use codec::Encode;
 use sp_core::ConstU32;
 use sp_runtime::BoundedVec;
 
@@ -28,7 +29,7 @@ pub type MockedCursor = BoundedVec<u8, ConstU32<1024>>;
 pub type MockedIdentifier = BoundedVec<u8, ConstU32<256>>;
 
 /// How a [`MockedMigration`] should behave.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Encode)]
 #[allow(dead_code)]
 pub enum MockedMigrationKind {
 	/// Succeed after its number of steps elapsed.
@@ -90,9 +91,5 @@ impl SteppedMigration for MockedMigration {
 
 /// Calculate the identifier of a mocked migration.
 pub fn mocked_id(kind: MockedMigrationKind, steps: u32) -> MockedIdentifier {
-	format!("MockedMigration({:?}, {})", kind, steps)
-		.as_bytes()
-		.to_vec()
-		.try_into()
-		.unwrap()
+	(b"MockedMigration", kind, steps).encode().try_into().unwrap()
 }

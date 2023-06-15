@@ -331,9 +331,10 @@ pub mod pallet {
 			Self::onboard_new_mbms()
 		}
 
-		fn on_initialize(n: T::BlockNumber) -> Weight {
-			Self::progress_mbms(n)
-		}
+		// This is done by frame-executive.
+		//fn on_initialize(n: T::BlockNumber) -> Weight {
+		//	Self::progress_mbms(n)
+		//}
 	}
 
 	#[pallet::call(weight = T::WeightInfo)]
@@ -389,6 +390,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let migrations = T::Migrations::get().len() as u32;
+		log::info!(target: LOG, "Onboarding {migrations} MBM migrations");
 		if migrations > 0 {
 			Cursor::<T>::set(Some(
 				ActiveCursor {
@@ -415,7 +417,10 @@ impl<T: Config> Pallet<T> {
 				log::trace!(target: LOG, "[Block {n:?}] Waiting for cursor to become `Some`.");
 				return meter.consumed
 			},
-			Some(MigrationCursor::Active(cursor)) => cursor,
+			Some(MigrationCursor::Active(cursor)) => {
+				log::info!(target: LOG, "Progressing MBM migration #{}", cursor.index);
+				cursor
+			},
 			Some(MigrationCursor::Stuck) => {
 				log::error!(target: LOG, "Migration stuck. Governance intervention required.");
 				return meter.consumed

@@ -444,6 +444,9 @@ pub mod pallet {
 		}
 
 		/// Set the new runtime code without doing any checks of the given `code`.
+		///
+		/// Note that runtime upgrades will not run if this is called with a not-increasing spec
+		/// version!
 		#[pallet::call_index(3)]
 		#[pallet::weight((T::SystemWeightInfo::set_code(), DispatchClass::Operational))]
 		pub fn set_code_without_checks(

@@ -938,6 +938,13 @@ impl<R> TransactionOutcome<R> {
 	}
 }
 
+// FAIL-CI find a good spot for this
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, scale_info::TypeInfo)]
+pub enum RuntimeMbmMode {
+	NotMigrating,
+	Migrating,
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::traits::BlakeTwo256;

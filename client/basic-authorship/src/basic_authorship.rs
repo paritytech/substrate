@@ -375,6 +375,8 @@ where
 			}
 		}
 
+		// Try to progress any ongoing MBMs. No-OP if there are none.
+		block_builder.progress_mbms()?;
 		// TODO `poll` hook <https://github.com/paritytech/substrate/pull/14279>
 
 		// proceed with transactions

@@ -36,7 +36,7 @@ use sp_core::ExecutionContext;
 use sp_runtime::{
 	legacy,
 	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
-	Digest,
+	Digest, RuntimeMbmMode,
 };
 
 use sc_client_api::backend;
@@ -139,6 +139,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	backend: &'a B,
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
+	mbm_mode: RuntimeMbmMode,
 }
 
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
@@ -178,7 +179,7 @@ where
 			api.record_proof();
 		}
 
-		api.initialize_block_with_context(
+		let mbm_mode = api.initialize_block_with_context(
 			parent_hash,
 			ExecutionContext::BlockConstruction,
 			&header,
@@ -195,7 +196,23 @@ where
 			version,
 			backend,
 			estimated_header_size,
+			mbm_mode,
 		})
+	}
+
+	pub fn progress_mbms(&self) -> Result<(), Error> {
+		match self.mbm_mode {
+			RuntimeMbmMode::NotMigrating => Ok(()),
+			RuntimeMbmMode::Migrating => {
+				// FAIL-CI why 'with_context'?!
+				self.api
+					.progress_mbms_with_context(
+						self.parent_hash,
+						ExecutionContext::BlockConstruction,
+					)
+					.map_err(Into::into)
+			},
+		}
 	}
 
 	/// Push onto the block's list of extrinsics.

@@ -24,7 +24,7 @@ use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
 
 sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
-	#[api_version(6)]
+	#[api_version(7)]
 	pub trait BlockBuilder {
 		/// Apply the given extrinsic.
 		///
@@ -48,5 +48,12 @@ sp_api::decl_runtime_apis! {
 
 		/// Check that the inherents are valid. The inherent data will vary from chain to chain.
 		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult;
+
+		/// Progress Multi-Block-Migrations.
+		///
+		/// This is safe to call even when `initialize_block` returned
+		/// `RuntimeMbmMode::NotMigrating`. In this case it will just waste some time so the block
+		/// builder is advised not to do that.
+		fn progress_mbms();
 	}
 }
