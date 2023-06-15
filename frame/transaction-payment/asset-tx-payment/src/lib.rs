@@ -297,7 +297,8 @@ where
 							post_info,
 							actual_fee.into(),
 							tip.into(),
-							(paid_fee.into(), swapped.into()),
+							paid_fee.into(),
+							swapped.into(),
 							asset_id,
 						)?;
 
