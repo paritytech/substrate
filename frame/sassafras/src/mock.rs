@@ -22,8 +22,8 @@ use crate::{self as pallet_sassafras, SameAuthoritiesForever};
 use frame_support::traits::{ConstU32, ConstU64, GenesisBuild, OnFinalize, OnInitialize};
 use scale_codec::Encode;
 use sp_consensus_sassafras::{
-	digests::PreDigest, AuthorityIndex, AuthorityPair, SassafrasEpochConfiguration, Slot,
-	TicketData, TicketEnvelope, VrfSignature,
+	digests::PreDigest, AuthorityIndex, AuthorityPair, RingProver, RingVrfContext,
+	SassafrasEpochConfiguration, Slot, TicketData, TicketEnvelope, VrfSignature,
 };
 use sp_core::{
 	crypto::{Pair, VrfSecret},
@@ -142,7 +142,13 @@ pub fn new_test_ext_with_pairs(
 	(pairs, storage.into())
 }
 
-fn make_ticket(slot: Slot, attempt: u32, pair: &AuthorityPair) -> TicketEnvelope {
+fn make_ticket_with_prover(
+	slot: Slot,
+	attempt: u32,
+	pair: &AuthorityPair,
+	prover: &RingProver,
+) -> TicketEnvelope {
+	println!("ATTEMPT: {}", attempt);
 	let mut epoch = Sassafras::epoch_index();
 	let mut randomness = Sassafras::randomness();
 
@@ -156,19 +162,56 @@ fn make_ticket(slot: Slot, attempt: u32, pair: &AuthorityPair) -> TicketEnvelope
 	let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(&randomness, attempt, epoch);
 	let vrf_preout = pair.as_ref().vrf_output(&vrf_input.into());
 
-	// TODO DAVXY: use some well known valid test keys...
+	// Ticket-id can be generated via vrf-preout.
+	// We don't care that much about the value here.
+
 	let data =
 		TicketData { attempt_idx: attempt, erased_public: [0; 32], revealed_public: [0; 32] };
-	TicketEnvelope { data, vrf_preout, ring_signature: () }
+
+	let sign_data = sp_consensus_sassafras::ticket_body_sign_data(&data);
+	let ring_signature = pair.as_ref().ring_vrf_sign(&sign_data, prover);
+
+	TicketEnvelope { data, vrf_preout, ring_signature }
 }
 
-/// Construct at most `attempts` tickets for the given `slot`.
+pub fn make_prover(_pair: &AuthorityPair, ring_ctx: &RingVrfContext) -> RingProver {
+	let authorities = Sassafras::authorities();
+	let pks: Vec<sp_core::bandersnatch::Public> =
+		authorities.iter().map(|auth| *auth.as_ref()).collect();
+
+	// TODO davxy: search into pks for pair.public
+	let prover_idx = 0;
+
+	println!("Make prover");
+	let prover = ring_ctx.prover(&pks, prover_idx).unwrap();
+	println!("Done");
+
+	prover
+}
+
+// pub fn make_ticket(
+// 	slot: Slot,
+// 	attempt: u32,
+// 	pair: &AuthorityPair,
+// 	ring_ctx: &RingVrfContext,
+// ) -> TicketEnvelope {
+// 	let prover = make_prover(pair, ring_ctx);
+// 	make_ticket_with_prover(slot, attempt, pair, &prover)
+// }
+
+/// Construct at most `attempts` tickets envelopes for the given `slot`.
 /// TODO-SASS-P3: filter out invalid tickets according to test threshold.
 /// E.g. by passing an optional threshold
-pub fn make_tickets(slot: Slot, attempts: u32, pair: &AuthorityPair) -> Vec<TicketEnvelope> {
+pub fn make_tickets(
+	slot: Slot,
+	attempts: u32,
+	pair: &AuthorityPair,
+	ring_ctx: &RingVrfContext,
+) -> Vec<TicketEnvelope> {
+	let prover = make_prover(pair, ring_ctx);
 	(0..attempts)
 		.into_iter()
-		.map(|attempt| make_ticket(slot, attempt, pair))
+		.map(|attempt| make_ticket_with_prover(slot, attempt, pair, &prover))
 		.collect()
 }
 

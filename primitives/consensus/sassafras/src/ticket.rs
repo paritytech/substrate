@@ -52,6 +52,7 @@ pub struct TicketEnvelope {
 	/// VRF output.
 	pub data: TicketData,
 	/// VRF pre-output used to generate the ticket id.
+	/// TODO davxy: this should be taken from ring signature
 	pub vrf_preout: VrfOutput,
 	/// Ring signature.
 	pub ring_signature: TicketRingSignature,
@@ -97,15 +98,6 @@ pub fn slot_claim_sign_data(randomness: &Randomness, slot: Slot, epoch: u64) -> 
 		.expect("can't fail; qed")
 }
 
-pub fn ticket_body_sign_data(ticket_body: &TicketData) -> VrfSignData {
-	VrfSignData::from_iter(
-		&SASSAFRAS_ENGINE_ID,
-		&[b"ticket-body-transcript", ticket_body.encode().as_slice()],
-		[],
-	)
-	.expect("can't fail; qed")
-}
-
 /// VRF input to generate the ticket id.
 ///
 /// Input randomness is current epoch randomness.
@@ -119,6 +111,16 @@ pub fn ticket_id_vrf_input(randomness: &Randomness, attempt: u32, epoch: u64) ->
 			(b"epoch", &epoch.to_le_bytes()),
 		],
 	)
+}
+
+/// Data to be signed via ring-vrf.
+pub fn ticket_body_sign_data(ticket_body: &TicketData) -> VrfSignData {
+	VrfSignData::from_iter(
+		&SASSAFRAS_ENGINE_ID,
+		&[b"ticket-body-transcript", ticket_body.encode().as_slice()],
+		[],
+	)
+	.expect("can't fail; qed")
 }
 
 /// Get ticket-id for a given vrf input and output.

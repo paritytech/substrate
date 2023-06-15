@@ -481,7 +481,6 @@ dependencies = [
 [[package]]
 name = "ark-secret-scalar"
 version = "0.0.2"
-source = "git+https://github.com/davxy/ring-vrf?branch=refactory-and-tests#6c474aaa6a9eb29a0c4e4975e1d87d664c8c5853"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -529,7 +528,6 @@ dependencies = [
 [[package]]
 name = "ark-transcript"
 version = "0.0.2"
-source = "git+https://github.com/davxy/ring-vrf?branch=refactory-and-tests#6c474aaa6a9eb29a0c4e4975e1d87d664c8c5853"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -795,7 +793,6 @@ dependencies = [
 [[package]]
 name = "bandersnatch_vrfs"
 version = "0.0.1"
-source = "git+https://github.com/davxy/ring-vrf?branch=refactory-and-tests#6c474aaa6a9eb29a0c4e4975e1d87d664c8c5853"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -1444,7 +1441,6 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
-source = "git+https://github.com/davxy/ring-proof?branch=working-fork#5bdca95a9d0434c722a98b3310db6e46e8fbd981"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -2197,7 +2193,6 @@ checksum = "210ec60ae7d710bed8683e333e9d2855a8a56a3e9892b38bad3bb0d4d29b0d5e"
 [[package]]
 name = "dleq_vrf"
 version = "0.0.2"
-source = "git+https://github.com/davxy/ring-vrf?branch=refactory-and-tests#6c474aaa6a9eb29a0c4e4975e1d87d664c8c5853"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -2570,7 +2565,6 @@ dependencies = [
 [[package]]
 name = "fflonk"
 version = "0.1.0"
-source = "git+https://github.com/davxy/fflonk?branch=working-fork#a2664567b88d96e1dc2f82f8799b2ca60171c81d"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -7396,7 +7390,6 @@ dependencies = [
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "sp-application-crypto",
  "sp-consensus-sassafras",
  "sp-core",
  "sp-io",
@@ -7841,9 +7834,8 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "3.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ddb756ca205bd108aee3c62c6d3c994e1df84a59b9d6d4a5ea42ee1fd5a9a28"
+version = "3.6.0"
+source = "git+https://github.com/koute/parity-scale-codec?branch=master_fix_stack_overflow#b47acfd9bbf2659e5f3d05357d7cbc93afe6bb14"
 dependencies = [
  "arrayvec 0.7.2",
  "bitvec",
@@ -7856,9 +7848,8 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "3.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86b26a931f824dd4eca30b3e43bb4f31cd5f0d3a403c5f5ff27106b805bfde7b"
+version = "3.6.0"
+source = "git+https://github.com/koute/parity-scale-codec?branch=master_fix_stack_overflow#b47acfd9bbf2659e5f3d05357d7cbc93afe6bb14"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -8800,7 +8791,6 @@ dependencies = [
 [[package]]
 name = "ring"
 version = "0.1.0"
-source = "git+https://github.com/davxy/ring-proof?branch=working-fork#5bdca95a9d0434c722a98b3310db6e46e8fbd981"
 dependencies = [
  "ark-ec",
  "ark-ff",

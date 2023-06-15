@@ -54,7 +54,7 @@ use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, Epoch, EquivocationProof, Randomness, SassafrasConfiguration,
+	AuthorityId, Epoch, EquivocationProof, Randomness, RingVrfContext, SassafrasConfiguration,
 	SassafrasEpochConfiguration, Slot, TicketData, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
 	SASSAFRAS_ENGINE_ID,
 };
@@ -228,6 +228,12 @@ pub mod pallet {
 	pub type NextTicketsSegments<T: Config> =
 		StorageMap<_, Identity, u32, BoundedVec<TicketId, T::MaxTickets>, ValueQuery>;
 
+	/// Parameters used to verify tickets validity via ring-proof
+	/// In practice: Updatable Universal Reference String and the seed.
+	#[pallet::storage]
+	#[pallet::getter(fn ring_context)]
+	pub type RingContext<T: Config> = StorageValue<_, RingVrfContext>;
+
 	/// Genesis configuration for Sassafras protocol.
 	#[derive(Default)]
 	#[pallet::genesis_config]
@@ -349,6 +355,19 @@ pub mod pallet {
 
 			log::debug!(target: LOG_TARGET, "Received {} tickets", tickets.len());
 
+			log::debug!(target: LOG_TARGET, "LOADING RING CTX");
+			let Some(ring_ctx) = RingContext::<T>::get() else {
+				log::info!(target: LOG_TARGET, "Ring context not initialized yet");
+				return Err("Ring context not initialized".into())
+			};
+			log::debug!(target: LOG_TARGET, "... Loaded");
+
+			// TODO Probably is better to cache the epoch prover in the storage
+			log::debug!(target: LOG_TARGET, "Building prover");
+			let pks: Vec<_> = Self::authorities().iter().map(|auth| *auth.as_ref()).collect();
+			let verifier = ring_ctx.verifier(pks.as_slice()).unwrap();
+			log::debug!(target: LOG_TARGET, "... Built");
+
 			// Check tickets score
 			let next_auth = NextAuthorities::<T>::get();
 			let epoch_config = EpochConfig::<T>::get();
@@ -367,21 +386,31 @@ pub mod pallet {
 
 			let mut segment = BoundedVec::with_max_capacity();
 			for ticket in tickets {
+				log::debug!(target: LOG_TARGET, "Checking ring proof");
+
 				let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(
 					&randomness,
 					ticket.data.attempt_idx,
 					epoch_idx,
 				);
+
 				let ticket_id = sp_consensus_sassafras::ticket_id(&vrf_input, &ticket.vrf_preout);
-				if ticket_id < ticket_threshold {
+				if ticket_id >= ticket_threshold {
+					log::debug!(target: LOG_TARGET, "Over threshold");
+					continue
+				}
+
+				let mut sign_data = sp_consensus_sassafras::ticket_body_sign_data(&ticket.data);
+				sign_data.push_vrf_input(vrf_input).expect("Can't fail");
+
+				if ticket.ring_signature.verify(&sign_data, &verifier) {
 					TicketsData::<T>::set(ticket_id, ticket.data.clone());
 					segment
 						.try_push(ticket_id)
 						.expect("has same length as bounded input vector; qed");
+				} else {
+					log::debug!(target: LOG_TARGET, "Proof verification failure");
 				}
-
-				// TODO davxy TEST RING PROOF
-				log::debug!(target: LOG_TARGET, "Checking ring proof for {:16x}", ticket_id);
 			}
 
 			if !segment.is_empty() {

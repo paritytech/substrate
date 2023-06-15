@@ -32,7 +32,10 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
-pub use sp_core::bandersnatch::vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature};
+pub use sp_core::bandersnatch::{
+	ring_vrf::{RingProver, RingVerifier, RingVrfContext},
+	vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature},
+};
 
 pub mod digests;
 pub mod inherents;
@@ -139,6 +142,9 @@ pub struct OpaqueKeyOwnershipProof(Vec<u8>);
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with Sassafras.
 	pub trait SassafrasApi {
+		/// Get ring context to be used for ticket construction and verification.
+		fn ring_context() -> Option<RingVrfContext>;
+
 		/// Submit next epoch validator tickets via an unsigned extrinsic.
 		/// This method returns `false` when creation of the extrinsics fails.
 		fn submit_tickets_unsigned_extrinsic(tickets: Vec<TicketEnvelope>) -> bool;

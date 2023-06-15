@@ -387,6 +387,10 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
+		fn ring_context() -> Option<sp_consensus_sassafras::RingVrfContext> {
+			Sassafras::ring_context()
+		}
+
 		fn submit_tickets_unsigned_extrinsic(
 			tickets: Vec<sp_consensus_sassafras::TicketEnvelope>
 		) -> bool {

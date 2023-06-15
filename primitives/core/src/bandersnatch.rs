@@ -32,7 +32,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use sp_runtime_interface::pass_by::PassByInner;
-use sp_std::vec::Vec;
+use sp_std::{boxed::Box, vec::Vec};
 
 /// Identifier used to match public keys against bandersnatch-vrf keys.
 pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bs38");
@@ -64,6 +64,9 @@ const PEDERSEN_SIGNATURE_SERIALIZED_LEN: usize = 163;
 // Size of serialized ring-proof
 // Short-Weierstrass form sizes
 const RING_PROOF_SERIALIZED_LEN: usize = 592;
+
+// Sise of serialized ring-vrf context params
+const RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN: usize = 147744;
 
 /// XXX.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
@@ -309,7 +312,7 @@ pub mod vrf {
 	pub type VrfIosVec<T> = BoundedVec<T, ConstU32<MAX_VRF_IOS>>;
 
 	/// Input to be used for VRF sign and verify operations.
-	#[derive(Clone)]
+	#[derive(Clone, Debug)]
 	pub struct VrfInput(pub(super) bandersnatch_vrfs::VrfInput);
 
 	impl VrfInput {
@@ -575,7 +578,8 @@ pub mod ring_vrf {
 	use bandersnatch_vrfs::{CanonicalDeserialize, PedersenVrfSignature, PublicKey};
 
 	/// TODO davxy
-	pub struct RingVrfContext(KZG);
+	#[derive(Clone)]
+	pub struct RingVrfContext(pub KZG);
 
 	impl RingVrfContext {
 		/// TODO davxy: This is a temporary function with temporary parameters.
@@ -639,8 +643,43 @@ pub mod ring_vrf {
 		}
 	}
 
+	// TODO davxy: why this isn't implemented automagically, is there some other required bound???
+	impl codec::EncodeLike for RingVrfContext {}
+
+	impl Encode for RingVrfContext {
+		fn encode(&self) -> Vec<u8> {
+			let mut buf = Box::new([0; RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN]);
+			self.0
+				.serialize_compressed(buf.as_mut_slice())
+				.expect("preout serialization can't fail");
+			buf.encode()
+		}
+	}
+
+	impl Decode for RingVrfContext {
+		fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
+			let buf = <Box<[u8; RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN]>>::decode(i)?;
+			let kzg =
+				KZG::deserialize_compressed(buf.as_slice()).map_err(|_| "KZG decode error")?;
+			Ok(RingVrfContext(kzg))
+		}
+	}
+
+	impl MaxEncodedLen for RingVrfContext {
+		fn max_encoded_len() -> usize {
+			<[u8; RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN]>::max_encoded_len()
+		}
+	}
+
+	impl TypeInfo for RingVrfContext {
+		type Identity = [u8; RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN];
+
+		fn type_info() -> scale_info::Type {
+			Self::Identity::type_info()
+		}
+	}
+
 	/// Ring VRF signature.
-	// #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub struct RingVrfSignature {
 		/// VRF (pre)outputs.
@@ -948,5 +987,19 @@ mod tests {
 
 		let decoded = RingVrfSignature::decode(&mut &bytes[..]).unwrap();
 		assert_eq!(expected, decoded);
+	}
+
+	#[test]
+	fn encode_decode_ring_vrf_context() {
+		let ring_ctx = RingVrfContext::new_testing();
+
+		let encoded = ring_ctx.encode();
+		println!("SIZE: {}", encoded.len());
+
+		assert_eq!(encoded.len(), RingVrfContext::max_encoded_len());
+
+		let _decoded = RingVrfContext::decode(&mut &encoded[..]).unwrap();
+
+		// TODO davxy... just use unsafe pointers comparison
 	}
 }
