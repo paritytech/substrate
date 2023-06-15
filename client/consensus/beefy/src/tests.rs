@@ -1272,18 +1272,17 @@ async fn beefy_reports_equivocations() {
 	// run for up to 5 seconds waiting for Alice's report of Bob/Bob_Prime equivocation.
 	for wait_ms in [250, 500, 1250, 3000] {
 		run_for(Duration::from_millis(wait_ms), &net).await;
-		let alice_reported_equivocations =
-			api_alice.reported_equivocations.as_ref().unwrap().lock();
-		if alice_reported_equivocations.is_empty() {
-			continue
+		if !api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty() {
+			break
 		}
-		// Verify expected equivocation
-		assert_eq!(alice_reported_equivocations.len(), 1);
-		let equivocation_proof = alice_reported_equivocations.get(0).unwrap();
-		assert_eq!(equivocation_proof.first.id, BeefyKeyring::Bob.public());
-		assert_eq!(equivocation_proof.first.commitment.block_number, 1);
-		break
 	}
+
+	// Verify expected equivocation
+	let alice_reported_equivocations = api_alice.reported_equivocations.as_ref().unwrap().lock();
+	assert_eq!(alice_reported_equivocations.len(), 1);
+	let equivocation_proof = alice_reported_equivocations.get(0).unwrap();
+	assert_eq!(equivocation_proof.first.id, BeefyKeyring::Bob.public());
+	assert_eq!(equivocation_proof.first.commitment.block_number, 1);
 
 	// Verify neither Bob or Bob_Prime report themselves as equivocating.
 	assert!(api_bob.reported_equivocations.as_ref().unwrap().lock().is_empty());
