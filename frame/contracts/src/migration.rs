@@ -191,6 +191,10 @@ pub trait MigrateSequence: private::Sealed {
 }
 
 /// Performs all necessary migrations based on `StorageVersion`.
+///
+/// If `RUN_ALL_STEPS == true` and `try-runtime` is enabled, this will run all the migrations inside
+/// `on_runtime_upgrade`. This should be set to false in tests that want to ensure the step by step
+/// migration works.
 pub struct Migration<T: Config, const RUN_ALL_STEPS: bool = true>(PhantomData<T>);
 
 #[cfg(feature = "try-runtime")]
