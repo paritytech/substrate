@@ -67,6 +67,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{ConstU32, OnRuntimeUpgrade},
 };
+use sp_runtime::Saturating;
 use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
@@ -481,7 +482,7 @@ impl MigrateSequence for Tuple {
 					let mut steps_done = 0;
 					while weight_left.all_gt(max_weight) {
 						let (finished, weight) = migration.step();
-						steps_done += 1;
+						steps_done.saturating_accrue(1);
 						weight_left.saturating_reduce(weight);
 						if matches!(finished, IsFinished::Yes) {
 							return StepResult::Completed{ steps_done }
