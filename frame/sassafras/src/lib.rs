@@ -55,7 +55,7 @@ use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
 	AuthorityId, Epoch, EquivocationProof, Randomness, RingVrfContext, SassafrasConfiguration,
-	SassafrasEpochConfiguration, Slot, TicketData, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
+	SassafrasEpochConfiguration, Slot, TicketBody, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
 	SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
@@ -218,7 +218,7 @@ pub mod pallet {
 
 	/// Tickets to be used for current and next epoch.
 	#[pallet::storage]
-	pub type TicketsData<T> = StorageMap<_, Identity, TicketId, TicketData, ValueQuery>;
+	pub type TicketsData<T> = StorageMap<_, Identity, TicketId, TicketBody, ValueQuery>;
 
 	/// Next epoch tickets accumulator.
 	/// Special `u32::MAX` key is reserved for a partially sorted segment.
@@ -249,10 +249,11 @@ pub mod pallet {
 		fn build(&self) {
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
 			EpochConfig::<T>::put(self.epoch_config.clone());
+
+			// TODO davxy : temporary code to generate a testing ring context
 			log::debug!(target: LOG_TARGET, "Building new testing ring context");
-			let ctx = RingVrfContext::new_testing();
-			RingContext::<T>::set(Some(ctx.clone()));
-			log::debug!(target: LOG_TARGET, "... Building Done");
+			let ring_ctx = RingVrfContext::new_testing();
+			RingContext::<T>::set(Some(ring_ctx));
 		}
 	}
 
@@ -393,21 +394,25 @@ pub mod pallet {
 
 				let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(
 					&randomness,
-					ticket.data.attempt_idx,
+					ticket.body.attempt_idx,
 					epoch_idx,
 				);
 
-				let ticket_id = sp_consensus_sassafras::ticket_id(&vrf_input, &ticket.vrf_preout);
+				let Some(vrf_preout) = ticket.ring_signature.outputs.get(0) else {
+					log::debug!(target: LOG_TARGET, "Missing ticket pre-output from ring signature");
+					continue;
+				};
+				let ticket_id = sp_consensus_sassafras::ticket_id(&vrf_input, &vrf_preout);
 				if ticket_id >= ticket_threshold {
 					log::debug!(target: LOG_TARGET, "Over threshold");
 					continue
 				}
 
-				let mut sign_data = sp_consensus_sassafras::ticket_body_sign_data(&ticket.data);
+				let mut sign_data = sp_consensus_sassafras::ticket_body_sign_data(&ticket.body);
 				sign_data.push_vrf_input(vrf_input).expect("Can't fail");
 
 				if ticket.ring_signature.verify(&sign_data, &verifier) {
-					TicketsData::<T>::set(ticket_id, ticket.data.clone());
+					TicketsData::<T>::set(ticket_id, ticket.body.clone());
 					segment
 						.try_push(ticket_id)
 						.expect("has same length as bounded input vector; qed");
@@ -846,7 +851,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Refer to the `slot_ticket_id` documentation for the slot-ticket association
 	/// criteria.
-	pub fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketData)> {
+	pub fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketBody)> {
 		Self::slot_ticket_id(slot).map(|id| (id, TicketsData::<T>::get(id)))
 	}
 

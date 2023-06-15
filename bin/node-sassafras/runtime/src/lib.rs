@@ -401,7 +401,7 @@ impl_runtime_apis! {
 			Sassafras::slot_ticket_id(slot)
 		}
 
-		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketData)> {
+		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketBody)> {
 			Sassafras::slot_ticket(slot)
 		}
 

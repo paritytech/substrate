@@ -34,7 +34,7 @@ pub type TicketId = u128;
 
 /// Ticket data persisted on-chain.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TicketData {
+pub struct TicketBody {
 	/// Attempt index.
 	pub attempt_idx: u32,
 	/// Ed25519 public key which gets erased when claiming the ticket.
@@ -49,11 +49,8 @@ pub type TicketRingSignature = RingVrfSignature;
 /// Ticket envelope used on during submission.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketEnvelope {
-	/// VRF output.
-	pub data: TicketData,
-	/// VRF pre-output used to generate the ticket id.
-	/// TODO davxy: this should be taken from ring signature
-	pub vrf_preout: VrfOutput,
+	/// Ticket body.
+	pub body: TicketBody,
 	/// Ring signature.
 	pub ring_signature: TicketRingSignature,
 }
@@ -114,7 +111,7 @@ pub fn ticket_id_vrf_input(randomness: &Randomness, attempt: u32, epoch: u64) ->
 }
 
 /// Data to be signed via ring-vrf.
-pub fn ticket_body_sign_data(ticket_body: &TicketData) -> VrfSignData {
+pub fn ticket_body_sign_data(ticket_body: &TicketBody) -> VrfSignData {
 	VrfSignData::from_iter(
 		&SASSAFRAS_ENGINE_ID,
 		&[b"ticket-body-transcript", ticket_body.encode().as_slice()],

@@ -38,7 +38,7 @@ struct VerificationParams<'a, B: 'a + BlockT> {
 	/// Origin
 	origin: BlockOrigin,
 	/// Expected ticket for this block.
-	maybe_ticket: Option<(TicketId, TicketData)>,
+	maybe_ticket: Option<(TicketId, TicketBody)>,
 }
 
 /// Verified information

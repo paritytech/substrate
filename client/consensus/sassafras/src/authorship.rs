@@ -22,7 +22,7 @@ use super::*;
 
 use sp_consensus_sassafras::{
 	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
-	TicketClaim, TicketData, TicketEnvelope, TicketId,
+	TicketBody, TicketClaim, TicketEnvelope, TicketId,
 };
 use sp_core::{bandersnatch::ring_vrf::RingVrfContext, ed25519, twox_64, ByteArray};
 use std::pin::Pin;
@@ -41,7 +41,7 @@ pub(crate) fn secondary_authority_index(
 pub(crate) fn claim_slot(
 	slot: Slot,
 	epoch: &mut Epoch,
-	maybe_ticket: Option<(TicketId, TicketData)>,
+	maybe_ticket: Option<(TicketId, TicketBody)>,
 	keystore: &KeystorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let config = &epoch.config;
@@ -142,10 +142,10 @@ fn generate_epoch_tickets(
 
 			let erased_public: [u8; 32] = *erased_pair.public().as_ref();
 			let revealed_public = [0; 32];
-			let data = TicketData { attempt_idx, erased_public, revealed_public };
+			let ticket_body = TicketBody { attempt_idx, erased_public, revealed_public };
 
 			debug!(target: LOG_TARGET, ">>> Creating ring proof for attempt {}", attempt_idx);
-			let mut sign_data = ticket_body_sign_data(&data);
+			let mut sign_data = ticket_body_sign_data(&ticket_body);
 			sign_data.push_vrf_input(vrf_input).expect("Can't fail");
 
 			let ring_signature = keystore
@@ -158,7 +158,7 @@ fn generate_epoch_tickets(
 				.ok()??;
 			debug!(target: LOG_TARGET, ">>> ...done");
 
-			let ticket_envelope = TicketEnvelope { data, vrf_preout, ring_signature };
+			let ticket_envelope = TicketEnvelope { body: ticket_body, ring_signature };
 
 			let ticket_secret = TicketSecret { attempt_idx, erased_secret: erased_seed };
 

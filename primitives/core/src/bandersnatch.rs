@@ -682,7 +682,7 @@ pub mod ring_vrf {
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub struct RingVrfSignature {
 		/// VRF (pre)outputs.
-		outputs: VrfIosVec<VrfOutput>,
+		pub outputs: VrfIosVec<VrfOutput>,
 		/// Pedersen VRF signature.
 		signature: [u8; PEDERSEN_SIGNATURE_SERIALIZED_LEN],
 		/// Ring proof.

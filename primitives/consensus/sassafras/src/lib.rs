@@ -43,7 +43,7 @@ pub mod ticket;
 
 pub use ticket::{
 	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id,
-	ticket_id_threshold, ticket_id_vrf_input, TicketClaim, TicketData, TicketEnvelope, TicketId,
+	ticket_id_threshold, ticket_id_vrf_input, TicketBody, TicketClaim, TicketEnvelope, TicketId,
 	TicketSecret,
 };
 
@@ -153,7 +153,7 @@ sp_api::decl_runtime_apis! {
 		fn slot_ticket_id(slot: Slot) -> Option<TicketId>;
 
 		/// Get ticket id and data associated to the given slot.
-		fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketData)>;
+		fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketBody)>;
 
 		/// Current epoch information.
 		fn current_epoch() -> Epoch;
