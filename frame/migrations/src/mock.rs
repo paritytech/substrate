@@ -17,8 +17,8 @@
 
 #![cfg(test)]
 
-use crate::{Event, Historic};
-use codec::{Decode, Encode};
+use crate::{mock_helpers::*, Event, Historic};
+
 use core::cell::RefCell;
 #[use_attr]
 use frame_support::derive_impl;
@@ -26,11 +26,10 @@ use frame_support::{
 	macro_magic::use_attr,
 	migrations::*,
 	traits::{OnFinalize, OnInitialize},
-	weights::{Weight, WeightMeter},
+	weights::Weight,
 };
 use frame_system::EventRecord;
-use sp_core::{ConstU32, Get, H256};
-use sp_runtime::BoundedVec;
+use sp_core::{Get, H256};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -56,65 +55,6 @@ impl frame_system::Config for Test {
 	type PalletInfo = PalletInfo;
 	type OnSetCode = ();
 }
-
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-pub enum MockedMigrationKind {
-	SucceedAfter,
-	FailAfter,
-	TimeoutAfter,
-	HightWeightAfter(Weight),
-}
-use MockedMigrationKind::*; // C style
-
-/// A migration that does something after a certain number of steps.
-pub struct MockedMigration(MockedMigrationKind, u32);
-
-impl SteppedMigration for MockedMigration {
-	type Cursor = MockedCursor;
-	type Identifier = MockedIdentifier;
-
-	fn id(&self) -> Self::Identifier {
-		mocked_id(self.0, self.1)
-	}
-
-	fn max_steps(&self) -> Option<u32> {
-		matches!(self.0, TimeoutAfter).then(|| self.1)
-	}
-
-	fn step(
-		&self,
-		cursor: &Option<Self::Cursor>,
-		_meter: &mut WeightMeter,
-	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
-		let mut count: u32 =
-			cursor.as_ref().and_then(|c| Decode::decode(&mut &c[..]).ok()).unwrap_or(0);
-		log::debug!("MockedMigration: Step {}", count);
-		if count != self.1 || matches!(self.0, TimeoutAfter) {
-			count += 1;
-			return Ok(Some(count.encode().try_into().unwrap()))
-		}
-
-		match self.0 {
-			SucceedAfter => {
-				log::debug!("MockedMigration: Succeeded after {} steps", count);
-				Ok(None)
-			},
-			HightWeightAfter(required) => {
-				log::debug!("MockedMigration: Not enough weight after {} steps", count);
-				Err(SteppedMigrationError::InsufficientWeight { required })
-			},
-			FailAfter => {
-				log::debug!("MockedMigration: Failed after {} steps", count);
-				Err(SteppedMigrationError::Failed)
-			},
-			TimeoutAfter => unreachable!(),
-		}
-	}
-}
-
-type MockedCursor = BoundedVec<u8, ConstU32<1024>>;
-type MockedIdentifier = BoundedVec<u8, ConstU32<256>>;
 
 frame_support::parameter_types! {
 	pub const ServiceWeight: Weight = Weight::MAX.div(10);
@@ -253,14 +193,6 @@ impl OnMigrationUpdate for MockedOnMigrationUpdate {
 /// Returns the number of `(started, completed, failed)` upgrades and resets their numbers.
 pub fn upgrades_started_completed_failed() -> (u32, u32, u32) {
 	(UpgradesStarted::take(), UpgradesCompleted::take(), UpgradesFailed::take().len() as u32)
-}
-
-pub fn mocked_id(kind: MockedMigrationKind, steps: u32) -> MockedIdentifier {
-	format!("MockedMigration({:?}, {})", kind, steps)
-		.as_bytes()
-		.to_vec()
-		.try_into()
-		.unwrap()
 }
 
 pub fn historic() -> Vec<MockedIdentifier> {

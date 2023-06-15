@@ -21,6 +21,7 @@ scale-info = { version = "2.0.0", default-features = false, features = ["derive"
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-core = { version = "21.0.0", path = "../../primitives/core", default-features = false }
 sp-std = { version = "8.0.0", path = "../../primitives/std", default-features = false }
 sp-runtime = { version = "24.0.0", path = "../../primitives/runtime", default-features = false }
 
@@ -28,7 +29,6 @@ sp-runtime = { version = "24.0.0", path = "../../primitives/runtime", default-fe
 frame-executive = { version = "4.0.0-dev", path = "../executive" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api", features = [ "std" ] }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder", features = [ "std" ] }
-sp-core = { version = "21.0.0", path = "../../primitives/core", features = [ "std" ] }
 sp-io = { version = "23.0.0", path = "../../primitives/io", features = [ "std" ] }
 sp-tracing = { version = "10.0.0", path = "../../primitives/tracing", features = [ "std" ] }
 sp-version = { version = "22.0.0", path = "../../primitives/version", features = [ "std" ] }
@@ -45,6 +45,7 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",
+	"sp-core/std",
 	"sp-std/std",
 	"sp-runtime/std"
 ]

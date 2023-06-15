@@ -136,6 +136,7 @@
 
 mod benchmarking;
 mod mock;
+pub mod mock_helpers;
 mod tests;
 pub mod weights;
 
