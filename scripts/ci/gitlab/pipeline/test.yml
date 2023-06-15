@@ -115,8 +115,8 @@ cargo-check-benches:
       rusty-cachier cache upload
       ;;
       2)
-      cargo run --locked --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
-      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
+      cargo run --locked --release -p node-bench -- ::node::import::sr25519::transfer_keep_alive::paritydb::small --json
+      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::sr25519::transfer_keep_alive::paritydb::small.json
       ;;
       esac
 
