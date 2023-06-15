@@ -101,7 +101,7 @@ pub enum InitialPayment<T: Config> {
 	/// The initial fee was payed in the native currency.
 	Native(LiquidityInfoOf<T>),
 	/// The initial fee was payed in an asset.
-	Asset((BalanceOf<T>, BalanceOf<T>)),
+	Asset((LiquidityInfoOf<T>, BalanceOf<T>)),
 }
 
 pub use pallet::*;
@@ -188,7 +188,7 @@ where
 				fee.into(),
 				self.tip.into(),
 			)
-			.map(|i| (fee, InitialPayment::Asset((fee, i.into()))))
+			.map(|(paid, swapped)| (fee, InitialPayment::Asset((paid.into(), swapped.into()))))
 		} else {
 			<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::withdraw_fee(
 				who, call, info, fee, self.tip,

@@ -600,8 +600,8 @@ pub trait SwapNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
 	fn swap_exact_native_for_tokens(
 		sender: AccountId,
 		asset_id: AssetId,
-		amount_out: Balance,
-		amount_in_max: Option<AssetBalance>,
+		amount_in: Balance,
+		amount_out_min: Option<AssetBalance>,
 		send_to: AccountId,
 		keep_alive: bool,
 	) -> Result<AssetBalance, DispatchError>;

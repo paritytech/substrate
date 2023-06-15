@@ -50,7 +50,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		asset_id: Self::AssetId,
 		fee: Self::Balance,
 		tip: Self::Balance,
-	) -> Result<Self::LiquidityInfo, TransactionValidityError>;
+	) -> Result<(LiquidityInfoOf<T>, Self::LiquidityInfo), TransactionValidityError>;
 
 	/// After the transaction was executed the actual fee can be calculated.
 	/// This function should refund any overpaid fees and optionally deposit
@@ -65,7 +65,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
-		already_paid: Self::Balance,
+		already_paid: LiquidityInfoOf<T>,
 		total_swapped: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError>;
@@ -108,9 +108,10 @@ where
 		asset_id: Self::AssetId,
 		fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
-	) -> Result<Self::LiquidityInfo, TransactionValidityError> {
+	) -> Result<(LiquidityInfoOf<T>, Self::LiquidityInfo), TransactionValidityError> {
 		// convert the asset into native currency
 		let ed = C::minimum_balance();
+		// 0.101 DOT
 		let swap_amount = if C::free_balance(&who) >= ed.saturating_add(fee.into()) {
 			fee
 		} else {
@@ -131,10 +132,7 @@ where
 
 		// charge the fee in native currency
 		// 0.001 DOT
-		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)?;
-
-		// 0.101 DOT
-		Ok(swap_amount)
+		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip).map(|r| (r, swap_amount))
 	}
 
 	/// Delegate to the OnChargeTransaction functionality.
@@ -142,24 +140,23 @@ where
 	/// Note: The `corrected_fee` already includes the `tip`.
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
-		_dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
-		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
+		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
+		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: BalanceOf<T>, // 0.0004 DOT
-		_tip: BalanceOf<T>,
-		already_paid: Self::Balance,        // 0.001 DOT
+		tip: BalanceOf<T>,
+		already_paid: LiquidityInfoOf<T>,   // 0.001 DOT
 		total_swapped: Self::LiquidityInfo, // 0.101 DOT
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError> {
-		// Calculate how much refund we should return
-		let refund_amount = already_paid.saturating_sub(corrected_fee);
-
-		if !refund_amount.is_zero() {
-			// Refund to the account that paid the fees. If this fails, the account might have
-			// dropped below the existential balance. In that case we don't refund anything.
-			// refund: 0.0006 DOT
-			let _refund_imbalance = C::deposit_into_existing(who, refund_amount.into())
-				.unwrap_or_else(|_| C::PositiveImbalance::zero());
-		}
+		// Refund to the account that paid the fees.
+		<T::OnChargeTransaction>::correct_and_deposit_fee(
+			who,
+			dispatch_info,
+			post_info,
+			corrected_fee,
+			tip,
+			already_paid,
+		)?;
 
 		// current balance: 0.1006 DOT
 		let swap_back = total_swapped.saturating_sub(corrected_fee);
