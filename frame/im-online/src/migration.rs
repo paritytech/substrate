@@ -135,18 +135,12 @@ mod test {
 			v0::ReceivedHeartbeats::<T>::insert(
 				&current_session,
 				0,
-				WrapperOpaque(v0::BoundedOpaqueNetworkState {
-					peer_id: Default::default(),
-					external_addresses: Default::default(),
-				}),
+				WrapperOpaque(v0::BoundedOpaqueNetworkState::default()),
 			);
 			v0::ReceivedHeartbeats::<T>::insert(
 				&current_session,
 				1,
-				WrapperOpaque(v0::BoundedOpaqueNetworkState {
-					peer_id: Default::default(),
-					external_addresses: Default::default(),
-				}),
+				WrapperOpaque(v0::BoundedOpaqueNetworkState::default()),
 			);
 
 			// Check that the v0 storage is populated
