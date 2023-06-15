@@ -42,15 +42,21 @@ use sp_trie::{
 use sp_trie::{MemoryDB, StorageProof};
 use trie_db::TrieCache as TrieCacheT;
 
+/// A provider of trie caches that are compatible with `TrieDB`.
 pub trait AsTrieDbCache<H: Hasher> {
 	type Result<'a>: TrieCacheT<sp_trie::NodeCodec<H>> + 'a
 	where
 		Self: 'a;
 
+	/// Return a `TrieDB` compatible cache. The `storage_root`
+	/// parameter should be the storage root of the used trie.
 	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Result<'_>;
 
+	/// Return a `TrieDBMut` compatible cache. The `storage_root`
+	/// parameter should be the storage root of the used trie.
 	fn as_trie_db_mut_cache(&self) -> Self::Result<'_>;
 
+	/// Merge a `TrieDB` compatible cache back into this cache provider.
 	fn merge<'a>(&'a self, other: Self::Result<'a>, new_root: H::Out);
 }
 
