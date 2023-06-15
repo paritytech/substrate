@@ -110,7 +110,6 @@ use crate::{
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
-	weights::WeightInfo,
 };
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
@@ -140,7 +139,8 @@ use sp_runtime::{
 	traits::{Convert, Hash, Saturating, StaticLookup, Zero},
 	FixedPointOperand,
 };
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{fmt::Debug, prelude::*};
+pub use weights::WeightInfo;
 
 #[cfg(doc)]
 pub use crate::wasm::api_doc;
@@ -193,7 +193,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {

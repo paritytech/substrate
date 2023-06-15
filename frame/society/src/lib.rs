@@ -252,10 +252,11 @@ mod mock;
 mod tests;
 
 use frame_support::{
+	impl_ensure_origin_with_arg_ignoring_arg,
 	pallet_prelude::*,
 	traits::{
-		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, ExistenceRequirement::AllowDeath,
-		Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
+		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, EnsureOriginWithArg,
+		ExistenceRequirement::AllowDeath, Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
 	},
 	PalletId,
 };
@@ -1179,6 +1180,12 @@ impl<T: Config> EnsureOrigin<T::RuntimeOrigin> for EnsureFounder<T> {
 		let founder = Founder::<T>::get().ok_or(())?;
 		Ok(T::RuntimeOrigin::from(frame_system::RawOrigin::Signed(founder)))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl<{ T: Config, A }>
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureFounder<T>
+	{}
 }
 
 /// Pick an item at pseudo-random from the slice, given the `rng`. `None` iff the slice is empty.
