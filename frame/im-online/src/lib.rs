@@ -389,7 +389,7 @@ pub mod pallet {
 		// import block with such an extrinsic.
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::validate_unsigned_and_then_heartbeat(
-			heartbeat.validators_len as u32,
+			heartbeat.validators_len,
 		))]
 		pub fn heartbeat(
 			origin: OriginFor<T>,
@@ -402,13 +402,13 @@ pub mod pallet {
 
 			let current_session = T::ValidatorSet::session_index();
 			let exists =
-				ReceivedHeartbeats::<T>::contains_key(&current_session, &heartbeat.authority_index);
+				ReceivedHeartbeats::<T>::contains_key(current_session, heartbeat.authority_index);
 			let keys = Keys::<T>::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (false, Some(public)) = (exists, public) {
 				Self::deposit_event(Event::<T>::HeartbeatReceived { authority_id: public.clone() });
 
-				ReceivedHeartbeats::<T>::insert(&current_session, &heartbeat.authority_index, true);
+				ReceivedHeartbeats::<T>::insert(current_session, heartbeat.authority_index, true);
 
 				Ok(())
 			} else if exists {
@@ -532,22 +532,22 @@ impl<T: Config> Pallet<T> {
 	fn is_online_aux(authority_index: AuthIndex, authority: &ValidatorId<T>) -> bool {
 		let current_session = T::ValidatorSet::session_index();
 
-		ReceivedHeartbeats::<T>::contains_key(&current_session, &authority_index) ||
-			AuthoredBlocks::<T>::get(&current_session, authority) != 0
+		ReceivedHeartbeats::<T>::contains_key(current_session, authority_index) ||
+			AuthoredBlocks::<T>::get(current_session, authority) != 0
 	}
 
 	/// Returns `true` if a heartbeat has been received for the authority at `authority_index` in
 	/// the authorities series, during the current session. Otherwise `false`.
 	pub fn received_heartbeat_in_current_session(authority_index: AuthIndex) -> bool {
 		let current_session = T::ValidatorSet::session_index();
-		ReceivedHeartbeats::<T>::contains_key(&current_session, &authority_index)
+		ReceivedHeartbeats::<T>::contains_key(current_session, authority_index)
 	}
 
 	/// Note that the given authority has authored a block in the current session.
 	fn note_authorship(author: ValidatorId<T>) {
 		let current_session = T::ValidatorSet::session_index();
 
-		AuthoredBlocks::<T>::mutate(&current_session, author, |authored| *authored += 1);
+		AuthoredBlocks::<T>::mutate(current_session, author, |authored| *authored += 1);
 	}
 
 	pub(crate) fn send_heartbeats(
@@ -794,9 +794,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// current session, they have already been processed and won't be needed
 		// anymore.
 		#[allow(deprecated)]
-		ReceivedHeartbeats::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
+		ReceivedHeartbeats::<T>::remove_prefix(T::ValidatorSet::session_index(), None);
 		#[allow(deprecated)]
-		AuthoredBlocks::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
+		AuthoredBlocks::<T>::remove_prefix(T::ValidatorSet::session_index(), None);
 
 		if offenders.is_empty() {
 			Self::deposit_event(Event::<T>::AllGood);

@@ -18,10 +18,7 @@
 //! Storage migrations for the im-online pallet.
 
 use super::*;
-use frame_support::{
-	storage_alias,
-	traits::{ConstU32, OnRuntimeUpgrade},
-};
+use frame_support::{storage_alias, traits::OnRuntimeUpgrade};
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
@@ -29,49 +26,29 @@ use frame_support::ensure;
 use sp_runtime::TryRuntimeError;
 
 /// The log target.
-const TARGET: &'static str = "runtime::im-online::migration::v1";
+const TARGET: &str = "runtime::im-online::migration::v1";
 
 /// The original data layout of the im-online pallet (`ReceivedHeartbeats` storage item).
 mod v0 {
 	use super::*;
 	use frame_support::traits::WrapperOpaque;
 
-	/// A type that is the same as `OpaqueNetworkState` but with [`Vec`] replaced with
-	/// [`WeakBoundedVec<Limit>`] where Limit is the respective size limit
-	/// `PeerIdEncodingLimit` represents the size limit of the encoding of `PeerId`
-	/// `MultiAddrEncodingLimit` represents the size limit of the encoding of `MultiAddr`
-	/// `AddressesLimit` represents the size limit of the vector of peers connected
-	#[derive(Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-	pub struct BoundedOpaqueNetworkState<
-		PeerIdEncodingLimit,
-		MultiAddrEncodingLimit,
-		AddressesLimit,
-	> where
-		PeerIdEncodingLimit: Get<u32>,
-		MultiAddrEncodingLimit: Get<u32>,
-		AddressesLimit: Get<u32>,
-	{
+	#[derive(Encode, Decode)]
+	pub(super) struct BoundedOpaqueNetworkState {
 		/// PeerId of the local node in SCALE encoded.
-		pub peer_id: WeakBoundedVec<u8, PeerIdEncodingLimit>,
+		pub peer_id: Vec<u8>,
 		/// List of addresses the node knows it can be reached as.
-		pub external_addresses:
-			WeakBoundedVec<WeakBoundedVec<u8, MultiAddrEncodingLimit>, AddressesLimit>,
+		pub external_addresses: Vec<Vec<u8>>,
 	}
 
 	#[storage_alias]
-	pub(crate) type ReceivedHeartbeats<T: Config> = StorageDoubleMap<
+	pub(super) type ReceivedHeartbeats<T: Config> = StorageDoubleMap<
 		Pallet<T>,
 		Twox64Concat,
 		SessionIndex,
 		Twox64Concat,
 		AuthIndex,
-		WrapperOpaque<
-			BoundedOpaqueNetworkState<
-				ConstU32<1_000>,
-				ConstU32<1_000>,
-				<T as Config>::MaxPeerInHeartbeats,
-			>,
-		>,
+		WrapperOpaque<BoundedOpaqueNetworkState>,
 	>;
 }
 
@@ -102,11 +79,11 @@ pub mod v1 {
 				return weight
 			}
 
-			let count = v0::ReceivedHeartbeats::<T>::iter().count();
-			weight.saturating_accrue(T::DbWeight::get().reads(count as u64));
-			weight.saturating_accrue(T::DbWeight::get().writes(count as u64));
-
 			let heartbeats = v0::ReceivedHeartbeats::<T>::drain().collect::<Vec<_>>();
+
+			weight.saturating_accrue(T::DbWeight::get().reads(heartbeats.len() as u64));
+			weight.saturating_accrue(T::DbWeight::get().writes(heartbeats.len() as u64));
+
 			for (session_index, auth_index, _) in heartbeats {
 				log::trace!(
 					target: TARGET,
@@ -159,7 +136,7 @@ mod test {
 				&current_session,
 				0,
 				WrapperOpaque(v0::BoundedOpaqueNetworkState {
-					peer_id: WeakBoundedVec::force_from(Default::default(), None),
+					peer_id: Default::default(),
 					external_addresses: Default::default(),
 				}),
 			);
@@ -167,7 +144,7 @@ mod test {
 				&current_session,
 				1,
 				WrapperOpaque(v0::BoundedOpaqueNetworkState {
-					peer_id: WeakBoundedVec::force_from(Default::default(), None),
+					peer_id: Default::default(),
 					external_addresses: Default::default(),
 				}),
 			);
