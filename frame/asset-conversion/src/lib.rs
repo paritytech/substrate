@@ -348,7 +348,7 @@ pub mod pallet {
 		/// The provided path must consists of unique assets.
 		NonUniquePath,
 		/// It was not possible to get and increment the pool asset id.
-		IncorrectPoolAssetId
+		IncorrectPoolAssetId,
 	}
 
 	/// Pallet's callable functions.
@@ -399,7 +399,9 @@ pub mod pallet {
 				}
 			}
 
-			let lp_token = NextPoolAssetId::<T>::get().or(T::PoolAssetId::initial_value()).ok_or(Error::<T>::IncorrectPoolAssetId)?;
+			let lp_token = NextPoolAssetId::<T>::get()
+				.or(T::PoolAssetId::initial_value())
+				.ok_or(Error::<T>::IncorrectPoolAssetId)?;
 			let next_lp_token_id = lp_token.increment().ok_or(Error::<T>::IncorrectPoolAssetId)?;
 			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 

@@ -193,7 +193,7 @@ pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 		collection: Self::CollectionId,
 		who: &AccountId,
 		admin: &AccountId,
-		config: &CollectionConfig
+		config: &CollectionConfig,
 	) -> Result<(), DispatchError>;
 }
 

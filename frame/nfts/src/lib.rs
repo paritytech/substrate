@@ -665,8 +665,9 @@ pub mod pallet {
 			admin: AccountIdLookupOf<T>,
 			config: CollectionConfigFor<T, I>,
 		) -> DispatchResult {
-			
-			let collection = NextCollectionId::<T, I>::get().or(T::CollectionId::initial_value()).ok_or(Error::<T, I>::UnknownCollection)?;
+			let collection = NextCollectionId::<T, I>::get()
+				.or(T::CollectionId::initial_value())
+				.ok_or(Error::<T, I>::UnknownCollection)?;
 
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -715,7 +716,9 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			let collection = NextCollectionId::<T, I>::get().or(T::CollectionId::initial_value()).ok_or(Error::<T, I>::UnknownCollection)?;
+			let collection = NextCollectionId::<T, I>::get()
+				.or(T::CollectionId::initial_value())
+				.ok_or(Error::<T, I>::UnknownCollection)?;
 
 			Self::do_create_collection(
 				collection,

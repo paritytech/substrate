@@ -141,8 +141,9 @@ macro_rules! impl_incrementable {
 }
 
 /// For example: allows new identifiers to be created in a linear fashion.
-pub trait Incrementable 
-where Self: Sized 
+pub trait Incrementable
+where
+	Self: Sized,
 {
 	fn increment(&self) -> Option<Self>;
 	fn initial_value() -> Option<Self>;
