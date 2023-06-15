@@ -42,6 +42,7 @@ log = "0.4.17"
 parity-scale-codec = "3.2.2"
 serde = "1.0.163"
 serde_json = "1.0.85"
+tempfile = "3.1.0"
 zstd = { version = "0.12.3", default-features = false }
 
 [dev-dependencies]

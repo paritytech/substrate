@@ -22,11 +22,12 @@ mod tests {
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
 	use std::{
-		fs,
+		path::{Path, PathBuf},
 		process::{self},
 		time::Duration,
 	};
 	use substrate_cli_test_utils as common;
+	use tempfile::tempdir;
 	use tokio::process::{Child, Command};
 
 	#[tokio::test]
@@ -34,13 +35,17 @@ mod tests {
 		// Build substrate so binaries used in the test use the latest code.
 		common::build_substrate(&["--features=try-runtime"]);
 
+		let temp_dir = tempdir().expect("Failed to create a tempdir");
+		let snap_file_path = temp_dir.path().join("snapshot.snap");
+
 		common::run_with_timeout(Duration::from_secs(60), async move {
-			fn create_snapshot(ws_url: &str) -> Child {
+			fn create_snapshot(ws_url: &str, snap_file: &PathBuf) -> Child {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
 					.stderr(process::Stdio::piped())
 					.args(&["try-runtime", "--runtime=existing"])
 					.args(&["create-snapshot", format!("--uri={}", ws_url).as_str()])
+					.arg(snap_file)
 					.kill_on_drop(true)
 					.spawn()
 					.unwrap()
@@ -52,7 +57,7 @@ mod tests {
 			common::wait_n_finalized_blocks(1, &ws_url).await;
 
 			// Try to create a snapshot.
-			let mut snapshot_creation = create_snapshot(&ws_url);
+			let mut snapshot_creation = create_snapshot(&ws_url, &snap_file_path);
 			let re = Regex::new(r#".*writing snapshot of (\d+) bytes to .*"#).unwrap();
 			let matched =
 				common::wait_for_stream_pattern_match(snapshot_creation.stderr.take().unwrap(), re)
@@ -61,15 +66,8 @@ mod tests {
 			// Assert that the snapshot creation succeded.
 			assert!(matched.is_ok(), "Failed to create snapshot");
 
-			let snapshot_is_on_disk = fs::read_dir(".")
-				.expect("Failed to read the current directory")
-				.filter_map(Result::ok)
-				.find(|entry| {
-					entry.path().is_file() &&
-						entry.path().extension().map(|ext| ext == "snap").unwrap_or(false)
-				});
-
-			assert!(snapshot_is_on_disk.is_some(), "Snapshot was not written to disk");
+			let snapshot_is_on_disk = Path::new(&snap_file_path).exists();
+			assert!(snapshot_is_on_disk, "Snapshot was not written to disk");
 		})
 		.await;
 	}

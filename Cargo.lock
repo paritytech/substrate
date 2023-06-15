@@ -12834,6 +12834,7 @@ dependencies = [
  "sp-weights",
  "substrate-cli-test-utils",
  "substrate-rpc-client",
+ "tempfile",
  "tokio",
  "zstd 0.12.3+zstd.1.5.2",
 ]
