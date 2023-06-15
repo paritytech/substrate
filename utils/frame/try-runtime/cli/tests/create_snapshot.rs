@@ -61,7 +61,7 @@ mod tests {
 			// Assert that the snapshot creation succeded.
 			assert!(matched.is_ok(), "Failed to create snapshot");
 
-			let snapshot = fs::read_dir(".")
+			let snapshot_is_on_disk = fs::read_dir(".")
 				.expect("Failed to read the current directory")
 				.filter_map(Result::ok)
 				.find(|entry| {
