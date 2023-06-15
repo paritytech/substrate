@@ -126,14 +126,14 @@ macro_rules! impl_incrementable {
 	($($type:ty),+) => {
 		$(
 			impl Incrementable for $type {
-				fn increment(&self) -> Self {
+				fn increment(&self) -> Option<Self> {
 					let mut val = self.clone();
 					val.saturating_inc();
-					val
+					Some(val)
 				}
 
-				fn initial_value() -> Self {
-					0
+				fn initial_value() -> Option<Self> {
+					Some(0)
 				}
 			}
 		)+
@@ -141,9 +141,11 @@ macro_rules! impl_incrementable {
 }
 
 /// For example: allows new identifiers to be created in a linear fashion.
-pub trait Incrementable {
-	fn increment(&self) -> Self;
-	fn initial_value() -> Self;
+pub trait Incrementable 
+where Self: Sized 
+{
+	fn increment(&self) -> Option<Self>;
+	fn initial_value() -> Option<Self>;
 }
 
 impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
