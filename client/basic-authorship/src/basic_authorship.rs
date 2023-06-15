@@ -57,6 +57,8 @@ pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
 const DEFAULT_SOFT_DEADLINE_PERCENT: Percent = Percent::from_percent(50);
 
+const LOG_TARGET: &'static str = "basic-authorship";
+
 /// [`Proposer`] factory.
 pub struct ProposerFactory<A, B, C, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -302,7 +304,7 @@ where
 					.propose_with(inherent_data, inherent_digests, deadline, block_size_limit)
 					.await;
 				if tx.send(res).is_err() {
-					trace!("Could not send block production result to proposer!");
+					trace!(target: LOG_TARGET, "Could not send block production result to proposer!");
 				}
 			}),
 		);
@@ -358,7 +360,7 @@ where
 		for inherent in inherents {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
-					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
+					warn!(target: LOG_TARGET, "⚠️  Dropping non-mandatory inherent from overweight block.")
 				},
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
 					error!(
@@ -367,11 +369,13 @@ where
 					return Err(ApplyExtrinsicFailed(Validity(e)))
 				},
 				Err(e) => {
-					warn!("❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
+					warn!(target: LOG_TARGET, "❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
 				},
 				Ok(_) => {},
 			}
 		}
+
+		// TODO `poll` hook <https://github.com/paritytech/substrate/pull/14279>
 
 		// proceed with transactions
 		// We calculate soft deadline used only in case we start skipping transactions.
@@ -391,7 +395,7 @@ where
 		let mut pending_iterator = select! {
 			res = t1 => res,
 			_ = t2 => {
-				log::warn!(
+				log::warn!(target: LOG_TARGET,
 					"Timeout fired waiting for transaction pool at block #{}. \
 					Proceeding with production.",
 					self.parent_number,
@@ -402,8 +406,8 @@ where
 
 		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit);
 
-		debug!("Attempting to push transactions from the pool.");
-		debug!("Pool status: {:?}", self.transaction_pool.status());
+		debug!(target: LOG_TARGET, "Attempting to push transactions from the pool.");
+		debug!(target: LOG_TARGET, "Pool status: {:?}", self.transaction_pool.status());
 		let mut transaction_pushed = false;
 
 		let end_reason = loop {
@@ -415,7 +419,7 @@ where
 
 			let now = (self.now)();
 			if now > deadline {
-				debug!(
+				debug!(target: LOG_TARGET,
 					"Consensus deadline reached when pushing block transactions, \
 					proceeding with proposing."
 				);
@@ -431,59 +435,59 @@ where
 				pending_iterator.report_invalid(&pending_tx);
 				if skipped < MAX_SKIPPED_TRANSACTIONS {
 					skipped += 1;
-					debug!(
+					debug!(target: LOG_TARGET,
 						"Transaction would overflow the block size limit, \
 						 but will try {} more transactions before quitting.",
 						MAX_SKIPPED_TRANSACTIONS - skipped,
 					);
 					continue
 				} else if now < soft_deadline {
-					debug!(
+					debug!(target: LOG_TARGET,
 						"Transaction would overflow the block size limit, \
 						 but we still have time before the soft deadline, so \
 						 we will try a bit more."
 					);
 					continue
 				} else {
-					debug!("Reached block size limit, proceeding with proposing.");
+					debug!(target: LOG_TARGET, "Reached block size limit, proceeding with proposing.");
 					break EndProposingReason::HitBlockSizeLimit
 				}
 			}
 
-			trace!("[{:?}] Pushing to the block.", pending_tx_hash);
+			trace!(target: LOG_TARGET, "[{:?}] Pushing to the block.", pending_tx_hash);
 			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
 				Ok(()) => {
 					transaction_pushed = true;
-					debug!("[{:?}] Pushed to the block.", pending_tx_hash);
+					debug!(target: LOG_TARGET, "[{:?}] Pushed to the block.", pending_tx_hash);
 				},
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					pending_iterator.report_invalid(&pending_tx);
 					if skipped < MAX_SKIPPED_TRANSACTIONS {
 						skipped += 1;
-						debug!(
+						debug!(target: LOG_TARGET,
 							"Block seems full, but will try {} more transactions before quitting.",
 							MAX_SKIPPED_TRANSACTIONS - skipped,
 						);
 					} else if (self.now)() < soft_deadline {
-						debug!(
+						debug!(target: LOG_TARGET,
 							"Block seems full, but we still have time before the soft deadline, \
 							 so we will try a bit more before quitting."
 						);
 					} else {
-						debug!("Reached block weight limit, proceeding with proposing.");
+						debug!(target: LOG_TARGET, "Reached block weight limit, proceeding with proposing.");
 						break EndProposingReason::HitBlockWeightLimit
 					}
 				},
 				Err(e) => {
 					pending_iterator.report_invalid(&pending_tx);
-					debug!("[{:?}] Invalid transaction: {}", pending_tx_hash, e);
+					debug!(target: LOG_TARGET, "[{:?}] Invalid transaction: {}", pending_tx_hash, e);
 					unqueue_invalid.push(pending_tx_hash);
 				},
 			}
 		};
 
 		if matches!(end_reason, EndProposingReason::HitBlockSizeLimit) && !transaction_pushed {
-			warn!(
+			warn!(target: LOG_TARGET,
 				"Hit block size limit of `{}` without including any transaction!",
 				block_size_limit,
 			);
