@@ -53,7 +53,7 @@ mod tests {
 
 			// Try to execute a block.
 			let mut block_execution = execute_block(&ws_url);
-			let re = Regex::new(r#".*executing block #(\d+)"#).unwrap();
+			let re = Regex::new(r#".*Block #(\d+) successfully executed"#).unwrap();
 			let matched =
 				common::wait_for_stream_pattern_match(block_execution.stderr.take().unwrap(), re)
 					.await;
