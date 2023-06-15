@@ -102,7 +102,6 @@ use crate::{
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
-	weights::WeightInfo,
 };
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
@@ -130,6 +129,7 @@ use scale_info::TypeInfo;
 use smallvec::Array;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
 use sp_std::{fmt::Debug, prelude::*};
+pub use weights::WeightInfo;
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},

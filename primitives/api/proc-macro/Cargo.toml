@@ -21,7 +21,7 @@ syn = { version = "2.0.16", features = ["full", "fold", "extra-traits", "visit"]
 proc-macro2 = "1.0.56"
 blake2 = { version = "0.10.4", default-features = false }
 proc-macro-crate = "1.1.3"
-expander = "1.0.0"
+expander = "2.0.0"
 Inflector = "0.11.4"
 
 [dev-dependencies]

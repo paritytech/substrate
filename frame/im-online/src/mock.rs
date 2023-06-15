@@ -217,7 +217,6 @@ impl Config for Runtime {
 	type WeightInfo = ();
 	type MaxKeys = ConstU32<10_000>;
 	type MaxPeerInHeartbeats = ConstU32<10_000>;
-	type MaxPeerDataEncodingSize = ConstU32<1_000>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
