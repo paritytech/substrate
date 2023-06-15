@@ -20,7 +20,7 @@ use crate::Config;
 use codec::FullCodec;
 use frame_support::{
 	ensure,
-	traits::{fungibles::SwapNative, tokens::Balance, Currency, Imbalance},
+	traits::{fungible::Inspect, fungibles::SwapNative, tokens::Balance},
 	unsigned::TransactionValidityError,
 };
 use scale_info::TypeInfo;
@@ -81,18 +81,10 @@ pub struct AssetConversionAdapter<C, CON>(PhantomData<(C, CON)>);
 impl<T, C, CON> OnChargeAssetTransaction<T> for AssetConversionAdapter<C, CON>
 where
 	T: Config,
-	C: Currency<<T as frame_system::Config>::AccountId>,
-	C::PositiveImbalance: Imbalance<
-		<C as Currency<<T as frame_system::Config>::AccountId>>::Balance,
-		Opposite = C::NegativeImbalance,
-	>,
-	C::NegativeImbalance: Imbalance<
-		<C as Currency<<T as frame_system::Config>::AccountId>>::Balance,
-		Opposite = C::PositiveImbalance,
-	>,
+	C: Inspect<<T as frame_system::Config>::AccountId>,
 	CON: SwapNative<T::RuntimeOrigin, T::AccountId, BalanceOf<T>, AssetBalanceOf<T>, AssetIdOf<T>>,
 	AssetIdOf<T>: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo,
-	BalanceOf<T>: IsType<<C as Currency<<T as frame_system::Config>::AccountId>>::Balance>,
+	BalanceOf<T>: IsType<<C as Inspect<<T as frame_system::Config>::AccountId>>::Balance>,
 {
 	type Balance = BalanceOf<T>;
 	type AssetId = AssetIdOf<T>;
@@ -112,11 +104,8 @@ where
 		// convert the asset into native currency
 		let ed = C::minimum_balance();
 		// 0.101 DOT
-		let swap_amount = if C::free_balance(&who) >= ed.saturating_add(fee.into()) {
-			fee
-		} else {
-			fee + ed.into()
-		};
+		let swap_amount =
+			if C::balance(&who) >= ed.saturating_add(fee.into()) { fee } else { fee + ed.into() };
 		// 0.101 DOT
 		let asset_consumed = CON::swap_tokens_for_exact_native(
 			who.clone(),

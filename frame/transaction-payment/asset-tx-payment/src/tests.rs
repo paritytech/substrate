@@ -19,7 +19,7 @@ use frame_support::{
 	assert_ok,
 	dispatch::{DispatchInfo, PostDispatchInfo},
 	pallet_prelude::*,
-	traits::fungibles::Mutate,
+	traits::{fungible::Inspect, fungibles::Mutate},
 	weights::Weight,
 };
 use frame_system as system;
