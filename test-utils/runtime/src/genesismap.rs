@@ -119,6 +119,7 @@ impl GenesisStorageBuilder {
 		let genesis_config = RuntimeGenesisConfig {
 			system: frame_system::GenesisConfig {
 				code: self.wasm_code.clone().unwrap_or(wasm_binary_unwrap().to_vec()),
+				..Default::default()
 			},
 			babe: pallet_babe::GenesisConfig {
 				authorities: authorities_sr25519
@@ -127,9 +128,11 @@ impl GenesisStorageBuilder {
 					.map(|x| (x.into(), 1))
 					.collect(),
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
+				..Default::default()
 			},
 			substrate_test: substrate_test_pallet::GenesisConfig {
 				authorities: authorities_sr25519.clone(),
+				..Default::default()
 			},
 			balances: pallet_balances::GenesisConfig { balances: self.balances.clone() },
 		};
