@@ -858,7 +858,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
-	extensions: Extensions,
+	mut extensions: Extensions,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	let mut changes = Default::default();
 	let encoded_results = StateMachine::new(
@@ -867,7 +867,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		extensions,
+		&mut extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
 		CallContext::Offchain,
 	)
@@ -887,7 +887,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
-	extensions: Extensions,
+	mut extensions: Extensions,
 	maybe_export_proof: Option<PathBuf>,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	use parity_scale_codec::Encode;
@@ -906,7 +906,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		executor,
 		method,
 		data,
-		extensions,
+		&mut extensions,
 		&runtime_code,
 		CallContext::Offchain,
 	)
