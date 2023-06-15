@@ -18,6 +18,7 @@
 //! # Migrations for Society Pallet
 
 use super::*;
+use codec::{Decode, Encode};
 use frame_support::traits::{Instance, OnRuntimeUpgrade};
 
 #[cfg(feature = "try-runtime")]
@@ -43,7 +44,7 @@ impl<
 			can_migrate::<T, I>(),
 			"Invalid (perhaps already-migrated) state detected prior to migration"
 		);
-		Ok(Vec::new())
+		Ok((old::Candidates::<T, I>::get(), old::Members::<T, I>::get()).encode())
 	}
 
 	fn on_runtime_upgrade() -> Weight {
@@ -51,7 +52,26 @@ impl<
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
+	fn post_upgrade(data: Vec<u8>) -> Result<(), TryRuntimeError> {
+		let old: (
+			Vec<Bid<<T as frame_system::Config>::AccountId, BalanceOf<T, I>>>,
+			Vec<<T as frame_system::Config>::AccountId>,
+		) = Decode::decode(&mut &data[..]).expect("Bad data");
+		let mut old_candidates =
+			old.0.into_iter().map(|x| (x.who, x.kind, x.value)).collect::<Vec<_>>();
+		let mut old_members = old.1;
+		let mut candidates =
+			Candidates::<T, I>::iter().map(|(k, v)| (k, v.kind, v.bid)).collect::<Vec<_>>();
+		let mut members = Members::<T, I>::iter_keys().collect::<Vec<_>>();
+
+		old_candidates.sort_by_key(|x| x.0.clone());
+		candidates.sort_by_key(|x| x.0.clone());
+		assert_eq!(candidates, old_candidates);
+
+		members.sort();
+		old_members.sort();
+		assert_eq!(members, old_members);
+
 		assert_internal_consistency::<T, I>();
 		Ok(())
 	}
@@ -289,8 +309,3 @@ pub fn from_raw_past_payouts<T: Config<I>, I: Instance + 'static>(
 		.filter_map(|(x, y)| Some((Decode::decode(&mut &x[..]).ok()?, y.try_into().ok()?)))
 		.collect()
 }
-
-//	use hex_literal::hex;
-//	let mut past_payouts_raw = vec![
-//		(hex!["1234567890123456789012345678901234567890123456789012345678901234"], 0u128),
-//	];

@@ -465,17 +465,6 @@ pub struct GroupParams<Balance> {
 
 pub type GroupParamsFor<T, I> = GroupParams<BalanceOf<T, I>>;
 
-/// A vote by a member on a candidate application.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub enum OldVote {
-	/// The member has been chosen to be skeptic and has not yet taken any action.
-	Skeptic,
-	/// The member has rejected the candidate's application.
-	Reject,
-	/// The member approves of the candidate's application.
-	Approve,
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -822,9 +811,6 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `value`: A one time payment the bid would like to receive when joining the society.
-		///
-		/// Key: B (len of bids), C (len of candidates), M (len of members), X (balance reserve)
-		/// Total Complexity: O(M + B + C + logM + logB + X)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::bid())]
 		pub fn bid(origin: OriginFor<T>, value: BalanceOf<T, I>) -> DispatchResult {
@@ -854,9 +840,6 @@ pub mod pallet {
 		/// Payment: The bid deposit is unreserved if the user made a bid.
 		///
 		/// The dispatch origin for this call must be _Signed_ and a bidder.
-		///
-		/// Key: B (len of bids), X (balance unreserve)
-		/// Total Complexity: O(B + X)
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::unbid())]
 		pub fn unbid(origin: OriginFor<T>) -> DispatchResult {
@@ -887,9 +870,6 @@ pub mod pallet {
 		/// a member in the society.
 		/// - `tip`: Your cut of the total `value` payout when the candidate is inducted into
 		/// the society. Tips larger than `value` will be saturated upon payout.
-		///
-		/// Key: B (len of bids), C (len of candidates), M (len of members)
-		/// Total Complexity: O(M + B + C + logM + logB + X)
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::vouch())]
 		pub fn vouch(
@@ -937,9 +917,6 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `pos`: Position in the `Bids` vector of the bid who should be unvouched.
-		///
-		/// Key: B (len of bids)
-		/// Total Complexity: O(B)
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::unvouch())]
 		pub fn unvouch(origin: OriginFor<T>) -> DispatchResult {
@@ -966,9 +943,6 @@ pub mod pallet {
 		/// - `candidate`: The candidate that the member would like to bid on.
 		/// - `approve`: A boolean which says if the candidate should be approved (`true`) or
 		///   rejected (`false`).
-		///
-		/// Key: C (len of candidates), M (len of members)
-		/// Total Complexity: O(M + logM + C)
 		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::vote())]
 		pub fn vote(
@@ -1001,9 +975,6 @@ pub mod pallet {
 		/// Parameters:
 		/// - `approve`: A boolean which says if the candidate should be
 		/// approved (`true`) or rejected (`false`).
-		///
-		/// Key: M (len of members)
-		/// Total Complexity: O(M + logM)
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::defender_vote())]
 		pub fn defender_vote(origin: OriginFor<T>, approve: bool) -> DispatchResultWithPostInfo {
@@ -1034,9 +1005,6 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_ and a member with
 		/// payouts remaining.
-		///
-		/// Key: M (len of members), P (number of payouts for a particular member)
-		/// Total Complexity: O(M + logM + P + X)
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::payout())]
 		pub fn payout(origin: OriginFor<T>) -> DispatchResult {
@@ -1129,8 +1097,6 @@ pub mod pallet {
 		/// The dispatch origin for this call must be Signed, and the signing account must be both
 		/// the `Founder` and the `Head`. This implies that it may only be done when there is one
 		/// member.
-		///
-		/// Total Complexity: O(1)
 		#[pallet::call_index(9)]
 		#[pallet::weight(T::WeightInfo::dissolve())]
 		pub fn dissolve(origin: OriginFor<T>) -> DispatchResult {
@@ -1176,9 +1142,6 @@ pub mod pallet {
 		/// - `who` - The suspended member to be judged.
 		/// - `forgive` - A boolean representing whether the suspension judgement origin forgives
 		///   (`true`) or rejects (`false`) a suspended member.
-		///
-		/// Key: B (len of bids), M (len of members)
-		/// Total Complexity: O(M + logM + B)
 		#[pallet::call_index(10)]
 		#[pallet::weight(T::WeightInfo::judge_suspended_member())]
 		pub fn judge_suspended_member(
@@ -1221,8 +1184,6 @@ pub mod pallet {
 		/// - `max_strikes`: The maximum number of strikes a member may get before they become
 		///   suspended and may only be reinstated by the founder.
 		/// - `candidate_deposit`: The deposit required to make a bid for membership of the group.
-		///
-		/// Total Complexity: O(1)
 		#[pallet::call_index(11)]
 		#[pallet::weight(T::WeightInfo::set_parameters())]
 		pub fn set_parameters(
