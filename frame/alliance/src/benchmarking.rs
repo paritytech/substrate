@@ -26,10 +26,7 @@ use sp_std::{
 };
 
 use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError};
-use frame_support::{
-	bounded_vec,
-	traits::{EnsureOrigin, Get, UnfilteredDispatchable},
-};
+use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
 use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System, RawOrigin as SystemOrigin};
 
 use super::{Call as AllianceCall, Pallet as Alliance, *};
@@ -164,7 +161,7 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add previous proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
@@ -236,7 +233,7 @@ benchmarks_instance_pallet! {
 		let threshold = m;
 
 		// Add previous proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
@@ -314,7 +311,7 @@ benchmarks_instance_pallet! {
 		let threshold = 2;
 
 		// Add previous proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
@@ -397,7 +394,7 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
@@ -466,7 +463,7 @@ benchmarks_instance_pallet! {
 		let threshold = 2;
 
 		// Add proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {

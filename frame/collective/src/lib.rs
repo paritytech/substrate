@@ -747,8 +747,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Votes {
 				index,
 				threshold,
-				ayes: frame_support::bounded_vec![],
-				nays: frame_support::bounded_vec![],
+				ayes: vec![].try_into().expect("empty vec is always bounded; qed"),
+				nays: vec![].try_into().expect("empty vec is always bounded; qed"),
 				end,
 			}
 		};

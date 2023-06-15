@@ -21,7 +21,6 @@ use super::*;
 use crate::Pallet as Collective;
 
 use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
-use frame_support::bounded_vec;
 use frame_system::{
 	pallet_prelude::BlockNumberFor, Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin,
 };
@@ -237,7 +236,7 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add previous proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
@@ -312,7 +311,7 @@ benchmarks_instance_pallet! {
 		let threshold = m;
 
 		// Add previous proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, bytes as usize) }.into();
@@ -389,7 +388,7 @@ benchmarks_instance_pallet! {
 		let threshold = 2;
 
 		// Add previous proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
@@ -475,7 +474,7 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, bytes as usize) }.into();
@@ -557,7 +556,7 @@ benchmarks_instance_pallet! {
 		let threshold = 2;
 
 		// Add proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
@@ -628,7 +627,7 @@ benchmarks_instance_pallet! {
 		let threshold = m - 1;
 
 		// Add proposals
-		let mut last_bound = frame_support::traits::Bounded::Inline(bounded_vec![]);
+		let mut last_bound = frame_support::traits::Bounded::Inline(vec![].try_into().unwrap());
 		for i in 0 .. p {
 			// Proposals should be different
 			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();

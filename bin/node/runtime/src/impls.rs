@@ -21,7 +21,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		fungibles::{Balanced, Credit},
-		Currency, OnUnbalanced,
+		Bounded, Currency, OnUnbalanced, StorePreimage,
 	},
 };
 use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
@@ -29,7 +29,7 @@ use pallet_asset_tx_payment::HandleCredit;
 use sp_std::prelude::*;
 
 use crate::{
-	AccountId, AllianceMotion, Assets, Authorship, Balances, Hash, NegativeImbalance, Runtime,
+	AccountId, AllianceMotion, Assets, Authorship, Balances, NegativeImbalance, Preimage, Runtime,
 	RuntimeCall,
 };
 
@@ -77,7 +77,7 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 }
 
 pub struct AllianceProposalProvider;
-impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider {
+impl ProposalProvider<AccountId, RuntimeCall> for AllianceProposalProvider {
 	fn propose_proposal(
 		who: AccountId,
 		threshold: u32,
@@ -89,24 +89,33 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 
 	fn vote_proposal(
 		who: AccountId,
-		proposal: Hash,
+		proposal_bounded: Bounded<RuntimeCall>,
 		index: ProposalIndex,
 		approve: bool,
 	) -> Result<bool, DispatchError> {
-		AllianceMotion::do_vote(who, proposal, index, approve)
+		AllianceMotion::do_vote(who, proposal_bounded, index, approve)
 	}
 
 	fn close_proposal(
-		proposal_hash: Hash,
+		proposal_bounded: Bounded<RuntimeCall>,
 		proposal_index: ProposalIndex,
 		proposal_weight_bound: Weight,
 		length_bound: u32,
 	) -> DispatchResultWithPostInfo {
-		AllianceMotion::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
+		AllianceMotion::do_close(
+			proposal_bounded,
+			proposal_index,
+			proposal_weight_bound,
+			length_bound,
+		)
 	}
 
-	fn proposal_of(proposal_hash: Hash) -> Option<RuntimeCall> {
-		AllianceMotion::proposal_of(proposal_hash)
+	fn proposal_of(proposal_bounded: Bounded<RuntimeCall>) -> Option<RuntimeCall> {
+		AllianceMotion::proposal_of(proposal_bounded)
+	}
+
+	fn bound_proposal(proposal: RuntimeCall) -> Result<Bounded<RuntimeCall>, DispatchError> {
+		Preimage::bound(proposal)
 	}
 }
 

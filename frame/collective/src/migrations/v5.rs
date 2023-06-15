@@ -90,20 +90,14 @@ pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
 				crate::Votes::<T::AccountId, BlockNumberFor<T>, <T as Config<I>>::MaxMembers> {
 					index: vote.index,
 					threshold: vote.threshold,
-					ayes: vote.ayes.try_into().expect(
-						format!(
-						"runtime::collective migration failed, ayes for vote {:?} should not overflow",
-						vote.index
-					)
-						.as_str(),
-					),
-					nays: vote.nays.try_into().expect(
-						format!(
-						"runtime::collective migration failed, nays for vote {:?} should not overflow",
-						vote.index,
-					)
-						.as_str(),
-					),
+					ayes: vote
+						.ayes
+						.try_into()
+						.expect("runtime::collective migration failed, ayes overflow"),
+					nays: vote
+						.nays
+						.try_into()
+						.expect("runtime::collective migration failed, nays overflow"),
 					end: vote.end,
 				};
 
