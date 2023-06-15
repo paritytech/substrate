@@ -240,7 +240,7 @@ impl NetworkParams {
 			enable_dht_random_walk: !self.reserved_only,
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
-			kademlia_replication_factor: self.kademlia_replication_factor,
+			kademlia_replication_factor: Some(self.kademlia_replication_factor),
 			yamux_window_size: None,
 			ipfs_server: self.ipfs_server,
 			sync_mode: self.sync.into(),
