@@ -288,9 +288,7 @@ mod benchmarks {
 			collection_id,
 		);
 
-		let collection_royalty_from_storage = CollectionRoyalty::<T>::get(collection_id);
-
-		assert_eq!(collection_royalty_from_storage, None);
+		assert!(!<CollectionRoyalty<T>>::contains_key(collection_id));
 	}
 
 	#[benchmark]
@@ -324,9 +322,8 @@ mod benchmarks {
 			item_id,
 		);
 
-		let item_royalty_from_storage = ItemRoyalty::<T>::get((collection_id, item_id));
+		assert!(!<ItemRoyalty<T>>::contains_key((collection_id, item_id)));
 
-		assert_eq!(item_royalty_from_storage, None);
 	}
 
 	impl_benchmark_test_suite!(NftsRoyalty, crate::mock::new_test_ext(), crate::mock::Test);
