@@ -567,7 +567,7 @@ impl<
 
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
-	// Note: This is only used by the block builder - not Executive itself.
+	// Note: Only used by the block builder - not Executive itself.
 	pub fn finalize_block() -> System::Header {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "finalize_block");
