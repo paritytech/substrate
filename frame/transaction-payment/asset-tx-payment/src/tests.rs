@@ -369,7 +369,7 @@ fn asset_transaction_payment_with_tip_and_refund() {
 	let base_weight = 5;
 	let balance_factor = 100;
 	ExtBuilder::default()
-		.balance_factor(100)
+		.balance_factor(balance_factor)
 		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
@@ -433,15 +433,12 @@ fn asset_transaction_payment_with_tip_and_refund() {
 			assert_eq!(TipUnbalancedAmount::get(), tip);
 			assert_eq!(FeeUnbalancedAmount::get(), expected_fee);
 
+			// caller should get refunded
 			assert_eq!(
 				Assets::balance(asset_id, caller),
 				balance - fee_in_asset + expected_token_refund
 			);
-
-			// TODO: finish this
-			// let refund = fee_in_native - expected_fee - tip;
-			// let native_balance_for_2 = 20 * 100;
-			// assert_eq!(Balances::free_balance(caller), native_balance_for_2 + refund);
+			assert_eq!(Balances::free_balance(caller), 20 * balance_factor);
 		});
 }
 
