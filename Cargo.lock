@@ -4032,8 +4032,8 @@ dependencies = [
  "node-primitives",
  "pallet-alliance",
  "pallet-asset-conversion",
+ "pallet-asset-conversion-tx-payment",
  "pallet-asset-rate",
- "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-authority-discovery",
  "pallet-authorship",
@@ -5382,7 +5382,7 @@ dependencies = [
  "node-primitives",
  "node-rpc",
  "pallet-asset-conversion",
- "pallet-asset-tx-payment",
+ "pallet-asset-conversion-tx-payment",
  "pallet-assets",
  "pallet-balances",
  "pallet-im-online",
@@ -5664,7 +5664,7 @@ dependencies = [
  "node-executor",
  "node-primitives",
  "pallet-asset-conversion",
- "pallet-asset-tx-payment",
+ "pallet-asset-conversion-tx-payment",
  "pallet-assets",
  "pallet-transaction-payment",
  "parity-scale-codec",
@@ -5978,23 +5978,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-asset-rate"
-version = "4.0.0-dev"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-balances",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "pallet-asset-tx-payment"
+name = "pallet-asset-conversion-tx-payment"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
@@ -6013,6 +5997,22 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-storage",
+]
+
+[[package]]
+name = "pallet-asset-rate"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

@@ -1,12 +1,12 @@
 [package]
-name = "pallet-asset-tx-payment"
+name = "pallet-asset-conversion-tx-payment"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "pallet to manage transaction payments in assets"
+description = "Pallet to manage transaction payments in assets by utilising the assets conversion pallet"
 readme = "README.md"
 
 [package.metadata.docs.rs]
