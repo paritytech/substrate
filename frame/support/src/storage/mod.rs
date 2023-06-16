@@ -868,7 +868,7 @@ impl<T, OnRemoval1> TryPrefixIterator<T, OnRemoval1> {
 	}
 }
 
-/// Error returned by `TryPrefixIterator`.
+/// Error returned by [`TryPrefixIterator`].
 #[derive(RuntimeDebug, Clone, Eq, PartialEq)]
 pub enum TryPrefixIteratorError {
 	KeyWithoutValue { previous_key: Vec<u8> },
