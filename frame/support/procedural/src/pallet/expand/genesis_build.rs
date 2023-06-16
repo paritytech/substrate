@@ -56,16 +56,54 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 				})
 			}
 		}
-		#[cfg(feature = "std")]
-		impl<#type_impl_gen> #frame_support::sp_runtime::BuildStorage
-			for #gen_cfg_ident<#gen_cfg_use_gen> #where_clause
-		{
-			fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> std::result::Result<(), std::string::String> {
-				#frame_support::BasicExternalities::execute_with_storage(storage, || {
-					self.build();
-					Ok(())
-				})
-			}
-		}
 	)
+}
+
+///
+/// * implement the trait `sp_runtime::BuildStorage`
+pub fn expand_genesis_build_build_storage(def: &mut Def) -> proc_macro2::TokenStream {
+	let genesis_config = if let Some(genesis_config) = &def.genesis_config {
+		genesis_config
+	} else {
+		return Default::default()
+	};
+	let genesis_build = def.genesis_build.as_ref().expect("Checked by def parser");
+
+	let frame_support = &def.frame_support;
+	let type_impl_gen = &def.type_impl_generics(genesis_build.attr_span);
+	let gen_cfg_ident = &genesis_config.genesis_config;
+
+	let gen_cfg_use_gen = genesis_config.gen_kind.type_use_gen(genesis_build.attr_span);
+
+	let where_clause = &genesis_build.where_clause;
+
+	if genesis_config.gen_kind.is_generic() {
+		quote::quote_spanned!(genesis_build.attr_span =>
+			#[cfg(feature = "std")]
+			impl<#type_impl_gen> #frame_support::sp_runtime::BuildStorage
+				for #gen_cfg_ident<#gen_cfg_use_gen> #where_clause
+			{
+				fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> std::result::Result<(), std::string::String> {
+					#frame_support::BasicExternalities::execute_with_storage(storage, || {
+						self.build();
+						Ok(())
+					})
+				}
+			}
+		)
+	} else {
+		quote::quote_spanned!(genesis_build.attr_span =>
+			#[cfg(feature = "std")]
+			impl #frame_support::sp_runtime::BuildStorage
+				for #gen_cfg_ident
+			{
+				fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> std::result::Result<(), std::string::String> {
+					#frame_support::BasicExternalities::execute_with_storage(storage, || {
+						self.build();
+						Ok(())
+					})
+				}
+			}
+		)
+	}
 }

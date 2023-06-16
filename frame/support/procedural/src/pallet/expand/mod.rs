@@ -67,6 +67,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let store_trait = store_trait::expand_store_trait(&mut def);
 	let hooks = hooks::expand_hooks(&mut def);
 	let genesis_build = genesis_build::expand_genesis_build(&mut def);
+	let build_storage = genesis_build::expand_genesis_build_build_storage(&mut def);
 	let genesis_config = genesis_config::expand_genesis_config(&mut def);
 	let type_values = type_value::expand_type_values(&mut def);
 	let origins = origin::expand_origins(&mut def);
@@ -107,6 +108,7 @@ storage item. Otherwise, all storage items are listed among [*Type Definitions*]
 		#store_trait
 		#hooks
 		#genesis_build
+		#build_storage
 		#genesis_config
 		#type_values
 		#origins
