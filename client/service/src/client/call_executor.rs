@@ -233,7 +233,7 @@ where
 					&self.executor,
 					method,
 					call_data,
-					&mut *extensions,
+					&mut extensions,
 					&runtime_code,
 					call_context,
 				)
@@ -248,7 +248,7 @@ where
 					&self.executor,
 					method,
 					call_data,
-					&mut *extensions,
+					&mut extensions,
 					&runtime_code,
 					call_context,
 				)
