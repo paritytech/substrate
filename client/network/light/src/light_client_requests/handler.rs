@@ -32,8 +32,8 @@ use sc_client_api::{BlockBackend, ProofProvider};
 use sc_network::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	ReputationChange,
 };
-use sc_peerset::ReputationChange;
 use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{ChildInfo, ChildType, PrefixedStorageKey},

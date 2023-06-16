@@ -1,0 +1,38 @@
+[package]
+name = "pallet-default-config-example"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "MIT-0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME example pallet demonstrating derive_impl / default_config in action"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
+log = { version = "0.4.17", default-features = false }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+frame-support = { default-features = false, path = "../../support" }
+frame-system = { default-features = false, path = "../../system" }
+
+sp-io = { default-features = false, path = "../../../primitives/io" }
+sp-runtime = { default-features = false, path = "../../../primitives/runtime" }
+sp-std = { default-features = false, path = "../../../primitives/std" }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame-support/std",
+	"frame-system/std",
+	"log/std",
+	"scale-info/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std",
+]
+try-runtime = ["frame-support/try-runtime"]
