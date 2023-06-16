@@ -77,18 +77,22 @@ pub fn expand_genesis_build_build_storage(def: &mut Def) -> proc_macro2::TokenSt
 
 	let where_clause = &genesis_build.where_clause;
 
-	if genesis_config.gen_kind.is_generic() {
-		quote::quote_spanned!(genesis_build.attr_span =>
-			#[cfg(feature = "std")]
-			impl<#type_impl_gen> #frame_support::sp_runtime::BuildStorage
-				for #gen_cfg_ident<#gen_cfg_use_gen> #where_clause
-			{
+	let assimilate_storage_fn = quote::quote!(
 				fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> std::result::Result<(), std::string::String> {
 					#frame_support::BasicExternalities::execute_with_storage(storage, || {
 						self.build();
 						Ok(())
 					})
 				}
+	);
+
+	if genesis_config.gen_kind.is_generic() {
+		quote::quote_spanned!(genesis_build.attr_span =>
+			#[cfg(feature = "std")]
+			impl<#type_impl_gen> #frame_support::sp_runtime::BuildStorage
+				for #gen_cfg_ident<#gen_cfg_use_gen> #where_clause
+			{
+				#assimilate_storage_fn
 			}
 		)
 	} else {
@@ -97,12 +101,7 @@ pub fn expand_genesis_build_build_storage(def: &mut Def) -> proc_macro2::TokenSt
 			impl #frame_support::sp_runtime::BuildStorage
 				for #gen_cfg_ident
 			{
-				fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> std::result::Result<(), std::string::String> {
-					#frame_support::BasicExternalities::execute_with_storage(storage, || {
-						self.build();
-						Ok(())
-					})
-				}
+				#assimilate_storage_fn
 			}
 		)
 	}
