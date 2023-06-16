@@ -98,7 +98,7 @@ pub fn create_extrinsic(
 		)),
 		frame_system::CheckNonce::<kitchensink_runtime::Runtime>::from(nonce),
 		frame_system::CheckWeight::<kitchensink_runtime::Runtime>::new(),
-		pallet_asset_tx_payment::ChargeAssetTxPayment::<kitchensink_runtime::Runtime>::from(
+		pallet_asset_conversion_tx_payment::ChargeAssetTxPayment::<kitchensink_runtime::Runtime>::from(
 			tip, None,
 		),
 	);
