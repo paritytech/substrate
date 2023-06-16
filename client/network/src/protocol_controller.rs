@@ -513,7 +513,7 @@ impl ProtocolController {
 	fn on_disconnect_peer(&mut self, peer_id: PeerId) {
 		// Don't do anything if the node is reserved.
 		if self.reserved_nodes.contains_key(&peer_id) {
-			warn!(
+			debug!(
 				target: LOG_TARGET,
 				"Ignoring request to disconnect reserved peer {} from {:?}.", peer_id, self.set_id,
 			);
