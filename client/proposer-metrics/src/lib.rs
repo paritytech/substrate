@@ -115,7 +115,7 @@ impl Metrics {
 			EndProposingReason::NoMoreTransactions => "no_more_transactions",
 			EndProposingReason::HitBlockSizeLimit => "hit_block_size_limit",
 			EndProposingReason::HitBlockWeightLimit => "hit_block_weight_limit",
-			EndProposingReason::ExtrinsicsForbidden => "no_extrinsics_allowed",
+			EndProposingReason::ExtrinsicsForbidden => "extrinsics_forbidden",
 		};
 
 		self.end_proposing_reason.with_label_values(&[reason]).inc();

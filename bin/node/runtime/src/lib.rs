@@ -143,7 +143,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	// and set impl_version to 0. If only runtime
 	// implementation changes and behavior does not, then leave spec_version as
 	// is and increment impl_version.
-	spec_version: 268,
+	spec_version: 269,
 	impl_version: 0,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 2,
@@ -1862,13 +1862,27 @@ impl pallet_statement::Config for Runtime {
 
 parameter_types! {
 	pub MbmServiceWeight: Weight = Perbill::from_percent(80) * RuntimeBlockWeights::get().max_block;
+	pub Mbms: pallet_migrations::MigrationsOf<Runtime> = vec![
+		Box::new(pallet_migrations::mock_helpers::MockedMigration(
+			pallet_migrations::mock_helpers::MockedMigrationKind::SucceedAfter, 0
+		)),
+		Box::new(pallet_migrations::mock_helpers::MockedMigration(
+			pallet_migrations::mock_helpers::MockedMigrationKind::SucceedAfter, 2
+		)),
+		Box::new(pallet_migrations::mock_helpers::MockedMigration(
+			pallet_migrations::mock_helpers::MockedMigrationKind::SucceedAfter, 3
+		)),
+		Box::new(pallet_migrations::mock_helpers::MockedMigration(
+			pallet_migrations::mock_helpers::MockedMigrationKind::SucceedAfter, 20
+		))
+	];
 }
 
 impl pallet_migrations::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Migrations = ();
-	type Cursor = ();
-	type Identifier = ();
+	type Migrations = Mbms;
+	type Cursor = pallet_migrations::mock_helpers::MockedCursor;
+	type Identifier = pallet_migrations::mock_helpers::MockedIdentifier;
 	type OnMigrationUpdate = ();
 	type ServiceWeight = MbmServiceWeight;
 	type WeightInfo = pallet_migrations::weights::SubstrateWeight<Runtime>;
@@ -2127,6 +2141,10 @@ impl_runtime_apis! {
 
 		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult {
 			data.check_extrinsics(&block)
+		}
+
+		fn after_inherents() -> sp_runtime::BlockAfterInherentsMode {
+			Executive::after_inherents()
 		}
 	}
 

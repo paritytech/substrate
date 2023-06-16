@@ -551,15 +551,18 @@ impl<
 	/// Progress ongoing MBM migrations.
 	// Used by the block builder and Executive.
 	pub fn after_inherents() -> BlockAfterInherentsMode {
-		let used_weight = MultiStepMigrator::step();
-		<frame_system::Pallet<System>>::register_extra_weight_unchecked(
-			used_weight,
-			DispatchClass::Mandatory,
-		);
+		let is_upgrading = MultiStepMigrator::is_upgrading();
+		if is_upgrading {
+			let used_weight = MultiStepMigrator::step();
+			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
+				used_weight,
+				DispatchClass::Mandatory,
+			);
+		}
 
 		// TODO `poll` hook goes here. <https://github.com/paritytech/substrate/pull/14279>
 
-		if MultiStepMigrator::is_upgrading() {
+		if is_upgrading {
 			BlockAfterInherentsMode::ExtrinsicsForbidden
 		} else {
 			BlockAfterInherentsMode::ExtrinsicsAllowed
