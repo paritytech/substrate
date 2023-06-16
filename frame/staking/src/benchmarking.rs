@@ -559,7 +559,7 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
-			RewardDestination::Account(n),
+			RewardDestination::Account(n.into()),
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
