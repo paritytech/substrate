@@ -41,14 +41,14 @@
 //! Finally, when an account is reaped, its associated code and storage of the smart-contract
 //! account will also be deleted.
 //!
-//! ### Gas
+//! ### Weight
 //!
-//! Senders must specify a gas limit with every call, as all instructions invoked by the
-//! smart-contract require gas. Unused gas is refunded after the call, regardless of the execution
-//! outcome.
+//! Senders must specify a [`Weight`] limit with every call, as all instructions invoked by the
+//! smart-contract require weight. Unused weight is refunded after the call, regardless of the
+//! execution outcome.
 //!
-//! If the gas limit is reached, then all calls and state changes (including balance transfers) are
-//! only reverted at the current call's contract level. For example, if contract A calls B and B
+//! If the weight limit is reached, then all calls and state changes (including balance transfers)
+//! are only reverted at the current call's contract level. For example, if contract A calls B and B
 //! runs out of gas mid-call, then all of B's calls are reverted. Assuming correct error handling by
 //! contract A, A's other calls and state changes still persist.
 //!
@@ -63,22 +63,25 @@
 //!
 //! ### Dispatchable functions
 //!
-//! * [`Pallet::instantiate_with_code`] - Deploys a new contract from the supplied wasm binary,
+//! * [`Pallet::instantiate_with_code`] - Deploys a new contract from the supplied Wasm binary,
 //! optionally transferring
 //! some balance. This instantiates a new smart contract account with the supplied code and
 //! calls its constructor to initialize the contract.
 //! * [`Pallet::instantiate`] - The same as `instantiate_with_code` but instead of uploading new
 //! code an existing `code_hash` is supplied.
 //! * [`Pallet::call`] - Makes a call to an account, optionally transferring some balance.
+//! * [`Pallet::upload_code`] - Uploads new code without instantiating a contract from it.
+//! * [`Pallet::remove_code`] - Removes the stored code and refunds the deposit to its owner. Only
+//!   allowed to code owner.
+//! * [`Pallet::set_code`] - Changes the code of an existing contract. Only allowed to `Root`
+//!   origin.
+//! * [`Pallet::migrate`] - Runs migration steps of curent multi-block migration in priority, before
+//!   [`Hooks::on_idle`][frame_support::traits::Hooks::on_idle] activates.
 //!
 //! ## Usage
 //!
-//! The Contracts module is a work in progress. The following examples show how this module
-//! can be used to instantiate and call contracts.
-//!
-//! * [`ink!`](https://use.ink) is
-//! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
-//! WebAssembly based smart contracts in the Rust programming language.
+//! * [`ink!`](https://use.ink) is language that enables writing Wasm-based smart contracts in plain
+//!   Rust.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "1024")]
