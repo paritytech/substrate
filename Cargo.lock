@@ -481,6 +481,7 @@ dependencies = [
 [[package]]
 name = "ark-secret-scalar"
 version = "0.0.2"
+source = "git+https://github.com/davxy/ring-vrf?branch=refactory-and-tests#b391e66f73656b123bcd103c3e81de18e253236d"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -528,6 +529,7 @@ dependencies = [
 [[package]]
 name = "ark-transcript"
 version = "0.0.2"
+source = "git+https://github.com/davxy/ring-vrf?branch=refactory-and-tests#b391e66f73656b123bcd103c3e81de18e253236d"
 dependencies = [
  "ark-ff",
  "ark-serialize",
@@ -793,6 +795,7 @@ dependencies = [
 [[package]]
 name = "bandersnatch_vrfs"
 version = "0.0.1"
+source = "git+https://github.com/davxy/ring-vrf?branch=refactory-and-tests#b391e66f73656b123bcd103c3e81de18e253236d"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -1441,6 +1444,7 @@ dependencies = [
 [[package]]
 name = "common"
 version = "0.1.0"
+source = "git+https://github.com/davxy/ring-proof?branch=working-fork#5bdca95a9d0434c722a98b3310db6e46e8fbd981"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -2193,6 +2197,7 @@ checksum = "210ec60ae7d710bed8683e333e9d2855a8a56a3e9892b38bad3bb0d4d29b0d5e"
 [[package]]
 name = "dleq_vrf"
 version = "0.0.2"
+source = "git+https://github.com/davxy/ring-vrf?branch=refactory-and-tests#b391e66f73656b123bcd103c3e81de18e253236d"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -2565,6 +2570,7 @@ dependencies = [
 [[package]]
 name = "fflonk"
 version = "0.1.0"
+source = "git+https://github.com/davxy/fflonk?branch=working-fork#a2664567b88d96e1dc2f82f8799b2ca60171c81d"
 dependencies = [
  "ark-ec",
  "ark-ff",
@@ -8791,6 +8797,7 @@ dependencies = [
 [[package]]
 name = "ring"
 version = "0.1.0"
+source = "git+https://github.com/davxy/ring-proof?branch=working-fork#5bdca95a9d0434c722a98b3310db6e46e8fbd981"
 dependencies = [
  "ark-ec",
  "ark-ff",

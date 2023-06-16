@@ -366,7 +366,6 @@ pub mod pallet {
 			};
 			log::debug!(target: LOG_TARGET, "... Loaded");
 
-			// TODO Probably is better to cache the epoch prover in the storage
 			log::debug!(target: LOG_TARGET, "Building prover");
 			let pks: Vec<_> = Self::authorities().iter().map(|auth| *auth.as_ref()).collect();
 			let verifier = ring_ctx.verifier(pks.as_slice()).unwrap();
