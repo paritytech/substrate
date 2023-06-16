@@ -141,8 +141,7 @@ fn generate_epoch_tickets(
 			let (erased_pair, erased_seed) = ed25519::Pair::generate();
 
 			let erased_public: [u8; 32] = *erased_pair.public().as_ref();
-			let revealed_public = [0; 32];
-			let ticket_body = TicketBody { attempt_idx, erased_public, revealed_public };
+			let ticket_body = TicketBody { attempt_idx, erased_public };
 
 			debug!(target: LOG_TARGET, ">>> Creating ring proof for attempt {}", attempt_idx);
 			let mut sign_data = ticket_body_sign_data(&ticket_body);

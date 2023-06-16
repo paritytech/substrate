@@ -165,8 +165,7 @@ fn make_ticket_with_prover(
 	// Ticket-id can be generated via vrf-preout.
 	// We don't care that much about the value here.
 
-	let data =
-		TicketData { attempt_idx: attempt, erased_public: [0; 32], revealed_public: [0; 32] };
+	let data = TicketData { attempt_idx: attempt, erased_public: [0; 32] };
 
 	let sign_data = sp_consensus_sassafras::ticket_body_sign_data(&data);
 	let ring_signature = pair.as_ref().ring_vrf_sign(&sign_data, prover);

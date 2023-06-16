@@ -426,8 +426,7 @@ fn claim_primary_slots_works() {
 	let alice_authority_idx = 0_u32;
 
 	let ticket_id = 123;
-	let ticket_data =
-		TicketData { attempt_idx: 0, erased_public: [0; 32], revealed_public: [0; 32] };
+	let ticket_data = TicketData { attempt_idx: 0, erased_public: [0; 32] };
 	let ticket_secret = TicketSecret { attempt_idx: 0, erased_secret: [0; 32] };
 
 	// Fail if we have authority key in our keystore but not ticket aux data

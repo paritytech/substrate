@@ -39,8 +39,6 @@ pub struct TicketBody {
 	pub attempt_idx: u32,
 	/// Ed25519 public key which gets erased when claiming the ticket.
 	pub erased_public: [u8; 32],
-	/// Ed25519 public key which gets exposed when claiming the ticket.
-	pub revealed_public: [u8; 32],
 }
 
 /// Ticket ring vrf signature.
