@@ -45,6 +45,7 @@ enum ObsoleteReleases {
 	V10_0_0, // remove `EarliestUnappliedSlash`.
 	V11_0_0, // Move pallet storage prefix, e.g. BagsList -> VoterBagsList
 	V12_0_0, // remove `HistoryDepth`.
+	V13_0_0, // remove `RewardDestination::Controller`.
 }
 
 impl Default for ObsoleteReleases {
@@ -59,6 +60,15 @@ type StorageVersion<T: Config> = StorageValue<Pallet<T>, ObsoleteReleases, Value
 
 pub mod v13 {
 	use super::*;
+
+	#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	pub enum OldRewardDestination<AccountId> {
+		Staked,
+		Stash,
+		Controller,
+		Account(AccountId),
+		None,
+	}
 
 	pub struct MigrateToV13<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV13<T> {
@@ -77,11 +87,32 @@ pub mod v13 {
 			let onchain = StorageVersion::<T>::get();
 
 			if current == 13 && onchain == ObsoleteReleases::V12_0_0 {
-				StorageVersion::<T>::kill();
-				current.put::<Pallet<T>>();
+				StorageVersion::<T>::put(ObsoleteReleases::V13_0_0);
+				let mut reads = 1u64;
+				let mut writes = 1u64;
+
+				// this is safe to execute on any runtime that has a bounded number of payees.
+				Payee::<T>::translate::<OldRewardDestination<T::AccountId>, _>(|key, old_value| {
+					reads.saturating_inc();
+					writes.saturating_inc();
+					let new_value: RewardDestination<T::AccountId> = match old_value {
+						OldRewardDestination::Staked => RewardDestination::Staked,
+						OldRewardDestination::Stash => RewardDestination::Stash,
+						OldRewardDestination::Controller => {
+							reads.saturating_inc();
+							Bonded::<T>::get(&key)
+								.map_or(RewardDestination::None, |x| RewardDestination::Account(x))
+						},
+						OldRewardDestination::Account(account) =>
+							RewardDestination::Account(account),
+						OldRewardDestination::None => RewardDestination::None,
+					};
+					Some(new_value)
+				});
 
 				log!(info, "v13 applied successfully");
-				T::DbWeight::get().reads_writes(1, 2)
+
+				T::DbWeight::get().reads_writes(reads, writes)
 			} else {
 				log!(warn, "Skipping v13, should be removed");
 				T::DbWeight::get().reads(1)
@@ -93,6 +124,12 @@ pub mod v13 {
 			frame_support::ensure!(
 				Pallet::<T>::on_chain_storage_version() == 13,
 				"v13 not applied"
+			);
+
+			// no payee records were skipped.
+			ensure!(
+				Payee::<T>::iter().count() as u32 == Payee::<T>::count(),
+				"The count of payees must remain the same after the migration."
 			);
 
 			frame_support::ensure!(
