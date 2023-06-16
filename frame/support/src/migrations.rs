@@ -123,7 +123,7 @@ pub fn migrate_from_pallet_version_to_storage_version<
 /// 		NodeBlock = primitives::Block,
 /// 		UncheckedExtrinsic = UncheckedExtrinsic
 /// 	{
-/// 		System: frame_system::{Pallet, Call, Storage, Config, Event<T>} = 0,
+/// 		System: frame_system = 0,
 ///
 /// 		SomePalletToRemove: pallet_something::{Pallet, Call, Storage, Event<T>} = 1,
 /// 		AnotherPalletToRemove: pallet_something_else::{Pallet, Call, Storage, Event<T>} = 2,
@@ -202,7 +202,7 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 		match contains_prefixed_key(&hashed_prefix) {
 			true => {
 				log::error!("{} has keys remaining post-removal ❗", P::get());
-				return Err("Keys remaining post-removal, this should never happen 🚨".into())
+				return Err("Keys remaining post-removal, this should never happen 🚨".into());
 			},
 			false => log::info!("No {} keys found post-removal 🎉", P::get()),
 		};

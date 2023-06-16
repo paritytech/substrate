@@ -48,12 +48,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
-		Bounties1: pallet_bounties::<Instance1>::{Pallet, Call, Storage, Event<T>},
-		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
-		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config, Event<T>},
+		System: frame_system,
+		Balances: pallet_balances,
+		Bounties: pallet_bounties,
+		Bounties1: pallet_bounties,
+		Treasury: pallet_treasury,
+		Treasury1: pallet_treasury,
 	}
 );
 

@@ -248,14 +248,15 @@ impl pools::Config for Runtime {
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 frame_support::construct_runtime!(
-	pub struct Runtime where
+	pub struct Runtime
+	where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Storage, Event<T>, Config},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Pools: pools::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		Balances: pallet_balances,
+		Pools: pools,
 	}
 );
 

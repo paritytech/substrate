@@ -111,8 +111,8 @@
 //! construct_runtime!(
 //! 	//...
 //! 	{
-//! 		System: frame_system::{Pallet, Call},
-//! 		Balances: pallet_balances::{Pallet, Call},
+//! 		System: frame_system,
+//! 		Balances: pallet_balances,
 //! 	}
 //! )
 //! ```
@@ -169,13 +169,15 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDeclaration);
 
 	let res = match definition {
-		RuntimeDeclaration::Implicit(implicit_def) =>
+		RuntimeDeclaration::Implicit(implicit_def) => {
 			check_pallet_number(input_copy.clone().into(), implicit_def.pallets.len()).and_then(
 				|_| construct_runtime_intermediary_expansion(input_copy.into(), implicit_def),
-			),
-		RuntimeDeclaration::Explicit(explicit_decl) =>
+			)
+		},
+		RuntimeDeclaration::Explicit(explicit_decl) => {
 			check_pallet_number(input_copy.into(), explicit_decl.pallets.len())
-				.and_then(|_| construct_runtime_final_expansion(explicit_decl)),
+				.and_then(|_| construct_runtime_final_expansion(explicit_decl))
+		},
 	};
 
 	let res = res.unwrap_or_else(|e| e.to_compile_error());
@@ -234,14 +236,14 @@ fn construct_runtime_final_expansion(
 			syn::Error::new(
 				pallets_token.span.join(),
 				"`System` pallet declaration is missing. \
-			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
+			 Please add this line: `System: frame_system,`",
 			)
 		})?;
 	if !system_pallet.cfg_pattern.is_empty() {
 		return Err(syn::Error::new(
 			system_pallet.name.span(),
 			"`System` pallet declaration is feature gated, please remove any `#[cfg]` attributes",
-		))
+		));
 	}
 
 	let features = pallets
@@ -690,7 +692,7 @@ fn check_pallet_number(input: TokenStream2, pallet_num: usize) -> Result<()> {
 					""
 				},
 			),
-		))
+		));
 	}
 
 	Ok(())

@@ -321,8 +321,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         NodeBlock = node::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
-///         System: frame_system::{Pallet, Call, Event<T>, Config<T>} = 0,
-///         Test: path::to::test::{Pallet, Call} = 1,
+///         System: frame_system = 0,
+///         Test: path::to::test = 1,
 ///
 ///         // Pallets with instances.
 ///         Test2_Instance1: test2::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},

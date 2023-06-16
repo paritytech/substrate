@@ -40,10 +40,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		NodeAuthorization: pallet_node_authorization::{
-			Pallet, Call, Storage, Config<T>, Event<T>,
-		},
+		System: frame_system,
+		NodeAuthorization: pallet_node_authorization,
 	}
 );
 

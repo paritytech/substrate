@@ -37,8 +37,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Glutton: pallet_glutton::{Pallet, Event},
+		System: frame_system,
+		Glutton: pallet_glutton,
 	}
 );
 

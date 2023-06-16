@@ -39,8 +39,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		MMR: pallet_mmr::{Pallet, Storage},
+		System: frame_system,
+		MMR: pallet_mmr,
 	}
 );
 

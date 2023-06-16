@@ -190,17 +190,18 @@ type Block = frame_system::mocking::MockBlock<Runtime>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
+	pub struct Runtime
+	where
 		Block = Block,
 		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
-		VoterList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
-		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		Timestamp: pallet_timestamp,
+		Balances: pallet_balances,
+		Staking: pallet_staking,
+		VoterList: pallet_bags_list,
+		Pools: pallet_nomination_pools,
 	}
 );
 

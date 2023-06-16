@@ -102,10 +102,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Logger: logger::{Pallet, Call, Event<T>},
-		Scheduler: scheduler::{Pallet, Call, Storage, Event<T>},
-		Preimage: pallet_preimage::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		Logger: logger,
+		Scheduler: scheduler,
+		Preimage: pallet_preimage,
 	}
 );
 

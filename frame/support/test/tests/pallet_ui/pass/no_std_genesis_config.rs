@@ -1,6 +1,6 @@
 use frame_support::construct_runtime;
-use sp_runtime::{generic, traits::BlakeTwo256};
 use sp_core::sr25519;
+use sp_runtime::{generic, traits::BlakeTwo256};
 
 pub type Signature = sr25519::Signature;
 pub type BlockNumber = u32;
@@ -43,8 +43,8 @@ construct_runtime! {
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-		Pallet: test_pallet::{Pallet, Config},
+		System: frame_system,
+		Pallet: test_pallet,
 	}
 }
 

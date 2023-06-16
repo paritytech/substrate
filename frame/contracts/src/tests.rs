@@ -65,13 +65,13 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
-		Utility: pallet_utility::{Pallet, Call, Storage, Event},
-		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
-		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		Balances: pallet_balances,
+		Timestamp: pallet_timestamp,
+		Randomness: pallet_insecure_randomness_collective_flip,
+		Utility: pallet_utility,
+		Contracts: pallet_contracts,
+		Proxy: pallet_proxy,
 	}
 );
 
@@ -2660,8 +2660,8 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed.ref_time() > result1.gas_consumed.ref_time());
 		assert_eq!(
 			result2.gas_consumed.ref_time(),
-			result1.gas_consumed.ref_time() +
-				<Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
+			result1.gas_consumed.ref_time()
+				+ <Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
 		);
 	});
 }

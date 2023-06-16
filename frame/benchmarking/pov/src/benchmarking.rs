@@ -354,8 +354,8 @@ mod mock {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-			Baseline: crate::{Pallet, Call, Storage, Event<T>},
+			System: frame_system,
+			Baseline: crate,
 		}
 	);
 

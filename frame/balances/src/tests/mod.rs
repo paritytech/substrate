@@ -73,14 +73,15 @@ pub enum TestId {
 }
 
 frame_support::construct_runtime!(
-	pub struct Test where
+	pub struct Test
+	where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
+		System: frame_system,
+		Balances: pallet_balances,
+		TransactionPayment: pallet_transaction_payment,
 	}
 );
 

@@ -61,7 +61,7 @@ mod pallet_test {
 		}
 
 		pub fn always_error(_origin: OriginFor<T>) -> DispatchResult {
-			return Err("I always fail".into())
+			return Err("I always fail".into());
 		}
 	}
 }
@@ -75,8 +75,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		TestPallet: pallet_test::{Pallet, Call, Storage},
+		System: frame_system,
+		TestPallet: pallet_test,
 	}
 );
 

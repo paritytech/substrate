@@ -19,9 +19,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		AtomicSwap: pallet_atomic_swap::{Pallet, Call, Event<T>},
+		System: frame_system,
+		Balances: pallet_balances,
+		AtomicSwap: pallet_atomic_swap,
 	}
 );
 

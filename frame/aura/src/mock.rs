@@ -40,9 +40,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Aura: pallet_aura::{Pallet, Storage, Config<T>},
+		System: frame_system,
+		Timestamp: pallet_timestamp,
+		Aura: pallet_aura,
 	}
 );
 

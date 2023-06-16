@@ -41,11 +41,11 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
-		Collective: pallet_collective::<Instance1>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
-		CollectiveMajority: pallet_collective::<Instance2>::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
-		DefaultCollective: pallet_collective::{Pallet, Call, Event<T>, Origin<T>, Config<T>},
-		Democracy: mock_democracy::{Pallet, Call, Event<T>},
+		System: frame_system,
+		Collective: pallet_collective::<Instance1>,
+		CollectiveMajority: pallet_collective::<Instance2>,
+		DefaultCollective: pallet_collective,
+		Democracy: mock_democracy,
 	}
 );
 

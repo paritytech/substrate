@@ -41,9 +41,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Voting: pallet_conviction_voting::{Pallet, Call, Storage, Event<T>},
+		System: frame_system,
+		Balances: pallet_balances,
+		Voting: pallet_conviction_voting,
 	}
 );
 
@@ -138,8 +138,9 @@ impl Polling<TallyOf<Test>> for TestPolls {
 		let mut polls = Polls::get();
 		let entry = polls.get_mut(&index);
 		let r = match entry {
-			Some(Ongoing(ref mut tally_mut_ref, class)) =>
-				f(PollStatus::Ongoing(tally_mut_ref, *class)),
+			Some(Ongoing(ref mut tally_mut_ref, class)) => {
+				f(PollStatus::Ongoing(tally_mut_ref, *class))
+			},
 			Some(Completed(when, succeeded)) => f(PollStatus::Completed(*when, *succeeded)),
 			None => f(PollStatus::None),
 		};
@@ -153,8 +154,9 @@ impl Polling<TallyOf<Test>> for TestPolls {
 		let mut polls = Polls::get();
 		let entry = polls.get_mut(&index);
 		let r = match entry {
-			Some(Ongoing(ref mut tally_mut_ref, class)) =>
-				f(PollStatus::Ongoing(tally_mut_ref, *class)),
+			Some(Ongoing(ref mut tally_mut_ref, class)) => {
+				f(PollStatus::Ongoing(tally_mut_ref, *class))
+			},
 			Some(Completed(when, succeeded)) => f(PollStatus::Completed(*when, *succeeded)),
 			None => f(PollStatus::None),
 		}?;

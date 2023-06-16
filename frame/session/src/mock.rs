@@ -85,9 +85,9 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-		Historical: pallet_session_historical::{Pallet},
+		System: frame_system,
+		Session: pallet_session,
+		Historical: pallet_session_historical,
 	}
 );
 
@@ -98,8 +98,8 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		System: frame_system,
+		Session: pallet_session,
 	}
 );
 
@@ -122,8 +122,8 @@ pub struct TestShouldEndSession;
 impl ShouldEndSession<u64> for TestShouldEndSession {
 	fn should_end_session(now: u64) -> bool {
 		let l = SessionLength::get();
-		now % l == 0 ||
-			ForceSessionEnd::mutate(|l| {
+		now % l == 0
+			|| ForceSessionEnd::mutate(|l| {
 				let r = *l;
 				*l = false;
 				r

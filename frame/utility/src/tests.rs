@@ -134,14 +134,14 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Timestamp: pallet_timestamp::{Call, Inherent},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		RootTesting: pallet_root_testing::{Pallet, Call, Storage},
-		Council: pallet_collective::<Instance1>,
-		Utility: utility::{Pallet, Call, Event},
-		Example: example::{Pallet, Call},
-		Democracy: mock_democracy::{Pallet, Call, Event<T>},
+		System: frame_system,
+		Timestamp: pallet_timestamp,
+		Balances: pallet_balances,
+		RootTesting: pallet_root_testing,
+		Council: pallet_collective,
+		Utility: utility,
+		Example: example,
+		Democracy: mock_democracy,
 	}
 );
 

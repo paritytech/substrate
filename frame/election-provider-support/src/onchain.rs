@@ -111,7 +111,7 @@ fn elect_with_input_bounds<T: Config>(
 
 	if desired_targets > T::MaxWinners::get() {
 		// early exit
-		return Err(Error::TooManyWinners)
+		return Err(Error::TooManyWinners);
 	}
 
 	let voters_len = voters.len() as u32;
@@ -197,12 +197,13 @@ mod tests {
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 
 	frame_support::construct_runtime!(
-		pub struct Runtime where
+		pub struct Runtime
+		where
 			Block = Block,
 			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic
+			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Event<T>},
+			System: frame_system,
 		}
 	);
 
