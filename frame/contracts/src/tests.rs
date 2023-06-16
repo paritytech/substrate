@@ -28,11 +28,11 @@ use crate::{
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
-	DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, NoopMigration,
-	Origin, Pallet, Schedule,
+	DefaultAddressGenerator, DeletionQueueCounter, Error, HoldReason, MigrationInProgress,
+	NoopMigration, Origin, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::Encode;
 use frame_support::{
 	assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
@@ -47,7 +47,6 @@ use frame_support::{
 };
 use frame_system::{EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
-use scale_info::TypeInfo;
 use sp_core::ByteArray;
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
@@ -72,7 +71,7 @@ frame_support::construct_runtime!(
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 		Utility: pallet_utility::{Pallet, Call, Storage, Event},
-		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
+		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>, HoldReason},
 		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -325,7 +324,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type RuntimeHoldReason = HoldIdentifier;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type MaxHolds = ConstU32<1>;
 }
 
@@ -389,13 +388,6 @@ impl Default for Filters {
 	}
 }
 
-#[derive(
-	Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, Debug, TypeInfo,
-)]
-pub enum HoldIdentifier {
-	StorageDepositReserve,
-}
-
 parameter_types! {
 	static CallFilter: Filters = Default::default();
 }
@@ -414,7 +406,6 @@ impl Contains<RuntimeCall> for TestFilter {
 
 parameter_types! {
 	pub static UnstableInterface: bool = true;
-	pub const HoldReason: HoldIdentifier = HoldIdentifier::StorageDepositReserve;
 }
 
 impl Config for Test {
@@ -438,7 +429,7 @@ impl Config for Test {
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = UnstableInterface;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
-	type HoldReason = HoldReason;
+	type RuntimeHoldReason = RuntimeHoldReason;
 	type Migrations = (NoopMigration<1>, NoopMigration<2>);
 }
 
@@ -4164,9 +4155,9 @@ fn slash_cannot_kill_account() {
 		initialize_block(2);
 
 		// We need to hold some balances in order to have something to slash. As slashing can only
-		// affect balances held under certain HoldIdentifier.
+		// affect balances held under certain HoldReason.
 		<Test as Config>::Fungible::hold(
-			&HoldIdentifier::StorageDepositReserve,
+			&HoldReason::StorageDepositReserve.into(),
 			&addr,
 			balance_held,
 		)
@@ -4178,7 +4169,7 @@ fn slash_cannot_kill_account() {
 		// The account does not get destroyed because of the consumer reference.
 		// Slashing can for example happen if the contract takes part in staking.
 		let _ = <Test as Config>::Fungible::slash(
-			&HoldIdentifier::StorageDepositReserve,
+			&HoldReason::StorageDepositReserve.into(),
 			&addr,
 			<Test as Config>::Fungible::total_balance(&addr),
 		);
@@ -4875,7 +4866,7 @@ fn deposit_limit_honors_liquidity_restrictions() {
 
 		// check that the hold is honored
 		<Test as Config>::Fungible::hold(
-			&HoldIdentifier::StorageDepositReserve,
+			&HoldReason::StorageDepositReserve.into(),
 			&BOB,
 			bobs_balance - ED,
 		)

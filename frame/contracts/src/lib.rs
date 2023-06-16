@@ -121,7 +121,7 @@ use frame_support::{
 	ensure,
 	error::BadOrigin,
 	traits::{
-		fungible::{Inspect, InspectHold, Mutate, MutateHold},
+		fungible::{Inspect, Mutate, MutateHold},
 		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
@@ -213,7 +213,7 @@ pub mod pallet {
 		/// The fungible in which fees are paid and contract balances are held.
 		type Fungible: Inspect<Self::AccountId>
 			+ Mutate<Self::AccountId>
-			+ MutateHold<Self::AccountId>;
+			+ MutateHold<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -323,9 +323,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxDebugBufferLen: Get<u32>;
 
-		/// The identifier of the hold reason.
-		#[pallet::constant]
-		type HoldReason: Get<<Self::Fungible as InspectHold<Self::AccountId>>::Reason>;
+		/// Overarching hold reason.
+		type RuntimeHoldReason: From<HoldReason>;
 
 		/// The sequence of migration steps that will be applied during a migration.
 		///
@@ -951,7 +950,6 @@ pub mod pallet {
 	#[pallet::composite_enum]
 	pub enum HoldReason {
 		/// The Pallet has reserved it for storage deposit.
-		#[codec(index = 0)]
 		StorageDepositReserve,
 	}
 

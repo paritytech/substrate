@@ -32,8 +32,8 @@ use crate::{
 	gas::{GasMeter, Token},
 	wasm::{prepare, PrefabWasmModule},
 	weights::WeightInfo,
-	CodeHash, CodeStorage, Config, Error, Event, OwnerInfoOf, Pallet, PristineCode, Schedule,
-	Weight,
+	CodeHash, CodeStorage, Config, Error, Event, HoldReason, OwnerInfoOf, Pallet, PristineCode,
+	Schedule, Weight,
 };
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
@@ -97,7 +97,7 @@ pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> 
 				// This `None` case happens only in freshly uploaded modules. This means that
 				// the `owner` is always the origin of the current transaction.
 				T::Fungible::hold(
-					&T::HoldReason::get(),
+					&HoldReason::StorageDepositReserve.into(),
 					&new_owner_info.owner,
 					new_owner_info.deposit,
 				)
@@ -164,7 +164,7 @@ pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> D
 			ensure!(owner_info.refcount == 0, <Error<T>>::CodeInUse);
 			ensure!(&owner_info.owner == origin, BadOrigin);
 			T::Fungible::release(
-				&T::HoldReason::get(),
+				&HoldReason::StorageDepositReserve.into(),
 				&owner_info.owner,
 				owner_info.deposit,
 				BestEffort,
