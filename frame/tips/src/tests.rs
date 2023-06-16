@@ -194,12 +194,13 @@ impl Config<Instance1> for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = BuildStorage::build_storage(&RuntimeGenesisConfig {
+	let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 		system: frame_system::GenesisConfig::default(),
 		balances: pallet_balances::GenesisConfig { balances: vec![(0, 100), (1, 98), (2, 1)] },
 		treasury: Default::default(),
 		treasury_1: Default::default(),
-	})
+	}
+	.build_storage()
 	.unwrap()
 	.into();
 	ext.execute_with(|| System::set_block_number(1));
