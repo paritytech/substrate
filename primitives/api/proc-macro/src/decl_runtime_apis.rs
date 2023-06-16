@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "frame-metadata")]
+use crate::runtime_metadata::generate_decl_runtime_metadata;
 use crate::{
 	common::{
 		API_VERSION_ATTRIBUTE, BLOCK_GENERIC_IDENT, CHANGED_IN_ATTRIBUTE, CORE_TRAIT_ATTRIBUTE,
@@ -27,8 +29,6 @@ use crate::{
 		versioned_trait_name, AllowSelfRefInParameters,
 	},
 };
-#[cfg(feature = "frame-metadata")]
-use crate::runtime_metadata::generate_decl_runtime_metadata;
 
 use proc_macro2::{Span, TokenStream};
 
