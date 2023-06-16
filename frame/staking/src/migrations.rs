@@ -126,10 +126,9 @@ pub mod v13 {
 				"v13 not applied"
 			);
 
-			// no payee records were skipped.
 			ensure!(
-				Payee::<T>::iter().count() as u32 == Payee::<T>::count(),
-				"The count of payees must remain the same after the migration."
+				Payee::<T>::iter_keys().count() == Payee::<T>::iter_values().count(),
+				"There are undecodable payees in storage."
 			);
 
 			frame_support::ensure!(
