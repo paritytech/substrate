@@ -23,7 +23,7 @@ error[E0599]: no variant or associated item named `Pallet` found for enum `Runti
 51 | ||         Block = Block,
 52 | ||         NodeBlock = Block,
 ...  ||
-55 | ||         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+55 | ||         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
 56 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
    | ||        -^^^^^^ variant or associated item not found in `RuntimeCall`
    | ||________|
