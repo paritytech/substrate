@@ -29,7 +29,6 @@ pub fn expand_outer_config(
 ) -> TokenStream {
 	let mut types = TokenStream::new();
 	let mut fields = TokenStream::new();
-	let mut build_storage_calls = TokenStream::new();
 	let mut genesis_build_calls = TokenStream::new();
 	let mut query_genesis_config_part_macros = Vec::new();
 
@@ -53,10 +52,8 @@ pub fn expand_outer_config(
 
 			types.extend(expand_config_types(attr, runtime, decl, &config, part_is_generic));
 			fields.extend(quote!(#attr pub #field_name: #config,));
-			build_storage_calls
-				.extend(expand_config_build_storage_call(scrate, attr, runtime, decl, field_name));
 			genesis_build_calls
-				.extend(expand_config_genesis_build_call(scrate, &config, attr, field_name));
+				.extend(expand_config_build_storage_call(scrate, &config, attr, field_name));
 			query_genesis_config_part_macros.push(quote! {
 				#path::__substrate_genesis_config_check::is_genesis_config_defined!(#pallet_name);
 				#[cfg(feature = "std")]
@@ -89,13 +86,10 @@ pub fn expand_outer_config(
 				&self,
 				storage: &mut #scrate::sp_runtime::Storage,
 			) -> std::result::Result<(), String> {
-				#build_storage_calls
-
 				#scrate::BasicExternalities::execute_with_storage(storage, || {
-					<AllPalletsWithSystem as #scrate::traits::OnGenesis>::on_genesis();
-				});
-
-				Ok(())
+					<Self as #scrate::traits::BuildGenesisConfig>::build(&self);
+					Ok(())
+				})
 			}
 		}
 
@@ -134,27 +128,6 @@ fn expand_config_types(
 }
 
 fn expand_config_build_storage_call(
-	scrate: &TokenStream,
-	attr: &TokenStream,
-	runtime: &Ident,
-	decl: &Pallet,
-	field_name: &Ident,
-) -> TokenStream {
-	let path = &decl.path;
-	let instance = if let Some(inst) = decl.instance.as_ref() {
-		quote!(#path::#inst)
-	} else {
-		quote!(#path::__InherentHiddenInstance)
-	};
-
-	quote! {
-		#attr
-		#scrate::sp_runtime::BuildModuleGenesisStorage::
-			<#runtime, #instance>::build_module_genesis_storage(&self.#field_name, storage)?;
-	}
-}
-
-fn expand_config_genesis_build_call(
 	scrate: &TokenStream,
 	pallet_genesis_config: &Ident,
 	attr: &TokenStream,

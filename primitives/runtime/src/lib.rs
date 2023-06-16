@@ -199,6 +199,9 @@ pub trait BuildStorage {
 
 /// Something that can build the genesis storage of a module.
 #[cfg(feature = "std")]
+#[deprecated(
+	note = "`BuildModuleGenesisStorage` is planned to be removed in December 2023. Use `BuildStorage` instead of it."
+)]
 pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
