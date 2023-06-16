@@ -19,8 +19,8 @@ use codec::{Decode, Encode};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use frame_support::Hashable;
 use kitchensink_runtime::{
-	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, RuntimeGenesisConfig, Header,
-	RuntimeCall, UncheckedExtrinsic,
+	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, Header, RuntimeCall,
+	RuntimeGenesisConfig, UncheckedExtrinsic,
 };
 use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
