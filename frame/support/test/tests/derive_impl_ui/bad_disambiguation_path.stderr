@@ -1,16 +1,5 @@
 error[E0433]: failed to resolve: use of undeclared type `Insect`
-  --> tests/derive_impl_ui/bad_disambiguation_path.rs:24:1
+  --> tests/derive_impl_ui/bad_disambiguation_path.rs:38:35
    |
-24 | / #[register_default_impl(FourLeggedAnimal)]
-25 | | impl Animal for FourLeggedAnimal {
-26 | |     type Locomotion = RunsOnFourLegs;
-27 | |     type Diet = Omnivore;
-...  |
-37 | |
-38 | | #[derive_impl(FourLeggedAnimal as Insect)]
-   | | -----------------------------------------^
-   | |_|________________________________________|
-   |   |                                        use of undeclared type `Insect`
-   |   in this procedural macro expansion
-   |
-   = note: this error originates in the macro `__import_tokens_attr_derive_impl_inner` which comes from the expansion of the attribute macro `derive_impl` (in Nightly builds, run with -Z macro-backtrace for more info)
+38 | #[derive_impl(FourLeggedAnimal as Insect)]
+   |                                   ^^^^^^ use of undeclared type `Insect`

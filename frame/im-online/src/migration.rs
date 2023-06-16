@@ -33,7 +33,7 @@ mod v0 {
 	use super::*;
 	use frame_support::traits::WrapperOpaque;
 
-	#[derive(Encode, Decode)]
+	#[derive(Encode, Decode, Default)]
 	pub(super) struct BoundedOpaqueNetworkState {
 		/// PeerId of the local node in SCALE encoded.
 		pub peer_id: Vec<u8>,
@@ -61,8 +61,6 @@ pub mod v1 {
 	impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-			ensure!(StorageVersion::get::<Pallet<T>>() == 0, "can only upgrade from version 0");
-
 			let count = v0::ReceivedHeartbeats::<T>::iter().count();
 			log::info!(target: TARGET, "Migrating {} received heartbeats", count);
 
@@ -111,15 +109,14 @@ pub mod v1 {
 					old_received_heartbeats
 				);
 			}
-			ensure!(StorageVersion::get::<Pallet<T>>() == 1, "must upgrade");
+			ensure!(StorageVersion::get::<Pallet<T>>() >= 1, "must upgrade");
 
 			Ok(())
 		}
 	}
 }
 
-#[cfg(test)]
-#[cfg(feature = "try-runtime")]
+#[cfg(all(feature = "try-runtime", test))]
 mod test {
 	use super::*;
 	use crate::mock::{new_test_ext, Runtime as T};
