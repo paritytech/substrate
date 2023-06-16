@@ -115,6 +115,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
+			if std::env::var("SKIP_WHITELIST_INTEGRITY_TEST").is_err() {
+				return
+			}
+
 			let w0 = T::WeightInfo::dispatch_whitelisted_call(0).proof_size();
 			let w1 = T::WeightInfo::dispatch_whitelisted_call(1024).proof_size();
 

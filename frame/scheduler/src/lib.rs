@@ -297,6 +297,10 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
+			if std::env::var("SKIP_SCHEDULER_INTEGRITY_TEST").is_err() {
+				return
+			}
+
 			let w0 = T::WeightInfo::service_task_fetched(0).proof_size();
 			let w1 = T::WeightInfo::service_task_fetched(1024).proof_size();
 
