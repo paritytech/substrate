@@ -345,35 +345,7 @@ where
 		let mut block_builder =
 			self.client.new_block_at(self.parent_hash, inherent_digests, PR::ENABLED)?;
 
-		let create_inherents_start = time::Instant::now();
-		let inherents = block_builder.create_inherents(inherent_data)?;
-		let create_inherents_end = time::Instant::now();
-
-		self.metrics.report(|metrics| {
-			metrics.create_inherents_time.observe(
-				create_inherents_end
-					.saturating_duration_since(create_inherents_start)
-					.as_secs_f64(),
-			);
-		});
-
-		for inherent in inherents {
-			match block_builder.push(inherent) {
-				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
-					warn!(target: LOG_TARGET, "⚠️  Dropping non-mandatory inherent from overweight block.")
-				},
-				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
-					error!(
-						"❌️ Mandatory inherent extrinsic returned error. Block cannot be produced."
-					);
-					return Err(ApplyExtrinsicFailed(Validity(e)))
-				},
-				Err(e) => {
-					warn!(target: LOG_TARGET, "❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
-				},
-				Ok(_) => {},
-			}
-		}
+		self.apply_inherents(&mut block_builder, inherent_data)?;
 
 		// proceed with transactions
 		// We calculate soft deadline used only in case we start skipping transactions.
@@ -534,6 +506,44 @@ where
 		});
 
 		Ok(Proposal { block, proof, storage_changes })
+	}
+
+	/// Apply all inherents to the block.
+	fn apply_inherents(
+		&self,
+		block_builder: &mut sc_block_builder::BlockBuilder<'_, Block, C, B>,
+		inherent_data: InherentData,
+	) -> Result<(), sp_blockchain::Error> {
+		let create_inherents_start = time::Instant::now();
+		let inherents = block_builder.create_inherents(inherent_data)?;
+		let create_inherents_end = time::Instant::now();
+
+		self.metrics.report(|metrics| {
+			metrics.create_inherents_time.observe(
+				create_inherents_end
+					.saturating_duration_since(create_inherents_start)
+					.as_secs_f64(),
+			);
+		});
+
+		for inherent in inherents {
+			match block_builder.push(inherent) {
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
+					warn!(target: LOG_TARGET, "⚠️  Dropping non-mandatory inherent from overweight block.")
+				},
+				Err(ApplyExtrinsicFailed(Validity(e))) if e.was_mandatory() => {
+					error!(
+						"❌️ Mandatory inherent extrinsic returned error. Block cannot be produced."
+					);
+					return Err(ApplyExtrinsicFailed(Validity(e)))
+				},
+				Err(e) => {
+					warn!(target: LOG_TARGET, "❗️ Inherent extrinsic returned unexpected error: {}. Dropping.", e);
+				},
+				Ok(_) => {},
+			}
+		}
+		Ok(())
 	}
 }
 
