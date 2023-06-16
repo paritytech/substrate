@@ -2,7 +2,7 @@
 
 ✄ -----------------------------------------------------------------------------
 
-Thank you for your Pull Request! 🙏 Please make sure it follows the contribution guidelines outlined in [this document](./CONTRIBUTING.adoc) and fill out the sections below. Once you're ready to submit your PR for review, please delete this section and leave only the text under the "Description" heading.
+Thank you for your Pull Request! 🙏 Please make sure it follows the contribution guidelines outlined in [this document](https://github.com/paritytech/substrate/blob/master/docs/CONTRIBUTING.adoc) and fill out the sections below. Once you're ready to submit your PR for review, please delete this section and leave only the text under the "Description" heading.
 
 # Description
 
@@ -25,7 +25,7 @@ Cumulus companion: (*if applicable*)
 # Checklist
 
 - [ ] My PR includes a detailed description as outlined in the "Description" section above
-- [ ] My PR follows the [labeling requirements](./CONTRIBUTING.adoc#merge-process) of this project (at minimum one label for each `A`, `B`, `C` and `D` required)
+- [ ] My PR follows the [labeling requirements](https://github.com/paritytech/substrate/blob/master/docs/CONTRIBUTING.adoc#merge-process) of this project (at minimum one label for each `A`, `B`, `C` and `D` required)
 - [ ] I have made corresponding changes to the documentation (if applicable)
 - [ ] I have added tests that prove my fix is effective or that my feature works (if applicable)
 - [ ] If this PR alters any external APIs or interfaces used by Polkadot, the corresponding Polkadot PR is ready as well as the corresponding Cumulus PR (optional)
