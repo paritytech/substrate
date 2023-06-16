@@ -341,30 +341,25 @@ where
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
-		let propose_with_start = time::Instant::now();
+		let propose_with_timer = time::Instant::now();
 		let mut block_builder =
 			self.client.new_block_at(self.parent_hash, inherent_digests, PR::ENABLED)?;
 
 		self.apply_inherents(&mut block_builder, inherent_data)?;
 
+		// TODO call `after_inherents` and check if we should apply extrinsincs here
+		// <https://github.com/paritytech/substrate/pull/14275/>
+
 		let block_timer = time::Instant::now();
 		let end_reason =
 			self.apply_extrinsics(&mut block_builder, deadline, block_size_limit).await?;
-
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
-
-		self.print_summary(&block, end_reason, block_timer.elapsed());
+		let block_took = block_timer.elapsed();
 
 		let proof =
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
 
-		let propose_with_end = time::Instant::now();
-		self.metrics.report(|metrics| {
-			metrics.create_block_proposal_time.observe(
-				propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64(),
-			);
-		});
-
+		self.print_summary(&block, end_reason, block_took, propose_with_timer.elapsed());
 		Ok(Proposal { block, proof, storage_changes })
 	}
 
@@ -429,7 +424,7 @@ where
 		let mut pending_iterator = select! {
 			res = t1 => res,
 			_ = t2 => {
-				log::warn!(target: LOG_TARGET,
+				warn!(target: LOG_TARGET,
 					"Timeout fired waiting for transaction pool at block #{}. \
 					Proceeding with production.",
 					self.parent_number,
@@ -531,19 +526,20 @@ where
 		Ok(end_reason)
 	}
 
-	/// Prints a summary and reports telemetry.
+	/// Prints a summary and does telemetry + metrics.
 	fn print_summary(
 		&self,
 		block: &Block,
 		end_reason: EndProposingReason,
 		block_took: time::Duration,
+		propose_with_took: time::Duration,
 	) {
 		let extrinsics = block.extrinsics();
 		self.metrics.report(|metrics| {
 			metrics.number_of_transactions.set(extrinsics.len() as u64);
 			metrics.block_constructed.observe(block_took.as_secs_f64());
-
 			metrics.report_end_proposing_reason(end_reason);
+			metrics.create_block_proposal_time.observe(propose_with_took.as_secs_f64());
 		});
 
 		let extrinsics_summary = if extrinsics.is_empty() {
