@@ -964,6 +964,9 @@ fn remove_collection_royalty_should_work() {
 			0,
 		));
 
+		// Check that `CollectionRoyalty` does not contain collection 0.
+		assert_eq!(CollectionRoyalty::<Test>::contains_key(0), false);
+
 		// Check the balance of royalty owner -> initial balance + deposit.
 		assert_eq!(Balances::free_balance(&account(1)), initial_balance);
 		
@@ -1009,6 +1012,9 @@ fn remove_item_royalty_should_work() {
 			0,
 			mint_id,
 		));
+
+		// Check that `ItemRoyalty` does not contain Item (0, 42).
+		assert_eq!(ItemRoyalty::<Test>::contains_key((0, 42)), false);
 
 		// Check the balance of royalty owner -> initial balance + deposit.
 		assert_eq!(Balances::free_balance(&account(1)), initial_balance);
