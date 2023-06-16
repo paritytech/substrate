@@ -19,13 +19,13 @@
 
 use super::Event as NftsRoyaltyEvent;
 use crate::{
-	mock::*, CollectionRoyalty, Error, ItemRoyalty, RoyaltyDetails,
+	mock::*, CollectionRoyalty, Error, ItemRoyalty, RoyaltyDetails, *
 };
 use frame_support::{assert_noop, assert_ok, traits::Currency};
 
 use pallet_nfts::{
 	Account, CollectionAccount, CollectionConfig, CollectionSetting, CollectionSettings,
-	ItemConfig, ItemSettings, MintSettings,
+	ItemConfig, ItemSettings, MintSettings
 };
 
 pub use sp_runtime::{DispatchError, ModuleError, Permill};
@@ -939,25 +939,26 @@ fn error_if_buy_item_not_on_sale() {
 #[test]
 fn remove_collection_royalty_should_work() {
 	new_test_ext().execute_with(|| {
-		create_collection();
 		let initial_balance = 100;
 		set_up_balances(initial_balance);
 
-		assert_ok!(NftsRoyalty::set_collection_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			Permill::from_percent(5),
-			account(1),
-			vec![
-				RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				},
-			],
-		));
-
-		// Check that the deposit was taken
+		assert_ok!(Balances::reserve(&account(1), 1));
 		assert_eq!(Balances::free_balance(&account(1)), initial_balance - 1);
+		
+		CollectionRoyalty::<Test>::insert(
+			0,
+			RoyaltyConfig {
+				royalty_percentage: Permill::from_percent(5),
+				royalty_admin: account(1),
+				deposit: 1,
+				recipients: BoundedVec::try_from(vec![
+					RoyaltyDetails {
+						royalty_recipient: account(1),
+						royalty_recipient_percentage: Permill::from_percent(100),
+					},
+				]).unwrap(),
+			},
+		);
 
 		assert_ok!(NftsRoyalty::remove_collection_royalty(
 			RuntimeOrigin::signed(account(1)),
@@ -983,34 +984,33 @@ fn remove_collection_royalty_should_work() {
 #[test]
 fn remove_item_royalty_should_work() {
 	new_test_ext().execute_with(|| {
-		create_collection();
 		let initial_balance = 100;
 		set_up_balances(initial_balance);
 
-		// Create an item
-		let mint_id = mint_item();
-
-		assert_ok!(NftsRoyalty::set_item_royalty(
-			RuntimeOrigin::signed(account(1)),
-			0,
-			mint_id,
-			Permill::from_percent(5),
-			account(1),
-			vec![
-				RoyaltyDetails {
-					royalty_recipient: account(1),
-					royalty_recipient_percentage: Permill::from_percent(100),
-				},
-			],
-		));
-
-		// Check that the deposit was taken
+		assert_ok!(Balances::reserve(&account(1), 1));
 		assert_eq!(Balances::free_balance(&account(1)), initial_balance - 1);
+
+
+		// Insert an item royalty into storage.
+		ItemRoyalty::<Test>::insert(
+			(0, 42),
+			RoyaltyConfig {
+				royalty_percentage: Permill::from_percent(5),
+				royalty_admin: account(1),
+				deposit: 1,
+				recipients: BoundedVec::try_from(vec![
+					RoyaltyDetails {
+						royalty_recipient: account(1),
+						royalty_recipient_percentage: Permill::from_percent(100),
+					},
+				]).unwrap(),
+			},
+		);
 
 		assert_ok!(NftsRoyalty::remove_item_royalty(
 			RuntimeOrigin::signed(account(1)),
 			0,
-			mint_id,
+			42,
 		));
 
 		// Check that `ItemRoyalty` does not contain Item (0, 42).

@@ -513,7 +513,7 @@ pub mod pallet {
 		/// This will also redeem the deposit initially paid for creating the NFT collection royalty.
 		/// If the royalty was set with `ForceOrigin` then no deposit will be redeemed.
 		///
-		/// Origin must be Signed and must be the owner of `CollectionRoyalty` or `ForceOrigin`.
+		/// Origin must be Signed.
 		///
 		/// - `collection`: The NFT `collection` that no longer exists and has an associated royalty.
 		///
@@ -524,12 +524,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
-				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+			let who = ensure_signed(origin)?;
 
+			// Check whether the collection still exists, if so do not allow to remove the royalty
 			ensure!(
-				T::Nfts::collections().any(|id| id == collection_id),
+				!T::Nfts::collections().any(|id| id == collection_id),
 				Error::<T>::CollectionStillExists
 			);
 
@@ -537,14 +536,7 @@ pub mod pallet {
 			let collection_royalty =
 				<CollectionRoyalty<T>>::take(collection_id).ok_or(Error::<T>::NoRoyaltyExists)?;
 
-			if let Some(check_owner) = maybe_check_owner {
-				ensure!(
-					T::Nfts::collection_owner(&collection_id) == Some(check_owner.clone()),
-					Error::<T>::NoPermission
-				);
-				let owner = &check_owner;
-				T::Currency::unreserve(owner, collection_royalty.deposit);
-			}
+			T::Currency::unreserve(&who, collection_royalty.deposit);
 
 			Self::deposit_event(Event::CollectionRoyaltyRemoved { nft_collection: collection_id });
 
@@ -569,12 +561,10 @@ pub mod pallet {
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
 		) -> DispatchResult {
-			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
-				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+			let who = ensure_signed(origin)?;
 
 			ensure!(
-				T::Nfts::items(&collection_id).any(|id| id == item_id),
+				!T::Nfts::items(&collection_id).any(|id| id == item_id),
 				Error::<T>::NftStillExists
 			);
 
@@ -582,15 +572,7 @@ pub mod pallet {
 			let item_royalty = <ItemRoyalty<T>>::take((collection_id, item_id))
 				.ok_or(Error::<T>::NoRoyaltyExists)?;
 
-			if let Some(check_owner) = maybe_check_owner {
-				ensure!(
-					T::Nfts::owner(&collection_id, &item_id) == Some(check_owner.clone()),
-					Error::<T>::NoPermission
-				);
-				let owner = &check_owner;
-				T::Currency::unreserve(owner, item_royalty.deposit);
-			}
-
+			T::Currency::unreserve(&who, item_royalty.deposit);
 
 			Self::deposit_event(Event::ItemRoyaltyRemoved {
 				nft_collection: collection_id,
