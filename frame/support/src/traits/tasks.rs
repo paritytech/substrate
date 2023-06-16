@@ -24,9 +24,11 @@ use sp_std::slice::Iter;
 /// A general-purpose trait which defines a type of service work (i.e., work to performed by an
 /// off-chain worker) including methods for enumerating, validating, indexing, and running
 /// tasks of this type.
-pub trait Task<'a>: Sized {
+pub trait Task: Sized {
+	type Enumeration: sp_std::iter::Iterator<Item = Self>;
+
 	/// Inspects the pallet's state and enumerates tasks of this type.
-	fn enumerate() -> Iter<'a, Self>;
+	fn enumerate() -> Self::Enumeration;
 
 	/// Checks if a particular instance of this `Task` variant is a valid piece of work.
 	fn is_valid(&self) -> bool;
