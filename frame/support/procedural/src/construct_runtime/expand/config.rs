@@ -79,7 +79,7 @@ pub fn expand_outer_config(
 		}
 
 		#[cfg(any(feature = "std", test))]
-		#[deprecated(note = "Use `RuntimeGenesisConfig` instead.")]
+		#[deprecated(note = "GenesisConfig is planned to be removed in December 2023. Use `RuntimeGenesisConfig` instead.")]
 		pub type GenesisConfig = RuntimeGenesisConfig;
 
 		#[cfg(any(feature = "std", test))]
