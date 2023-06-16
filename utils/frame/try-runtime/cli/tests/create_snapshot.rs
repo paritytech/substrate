@@ -23,7 +23,7 @@ mod tests {
 	use regex::Regex;
 	use std::{
 		path::{Path, PathBuf},
-		process::{self},
+		process,
 		time::Duration,
 	};
 	use substrate_cli_test_utils as common;
