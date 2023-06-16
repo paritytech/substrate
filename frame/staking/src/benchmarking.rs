@@ -468,9 +468,9 @@ benchmarks! {
 		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
 		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Staked);
 		whitelist_account!(controller);
-	}: _(RawOrigin::Signed(controller), RewardDestination::Controller)
+	}: _(RawOrigin::Signed(controller), RewardDestination::Stash)
 	verify {
-		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Controller);
+		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Stash);
 	}
 
 	set_controller {
@@ -559,7 +559,7 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
-			RewardDestination::Controller,
+			RewardDestination::Account(n),
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();

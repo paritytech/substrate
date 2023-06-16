@@ -389,8 +389,6 @@ pub enum RewardDestination<AccountId> {
 	Staked,
 	/// Pay into the stash account, not increasing the amount at stake.
 	Stash,
-	/// Pay into the controller account.
-	Controller,
 	/// Pay into a specified account.
 	Account(AccountId),
 	/// Receive no reward.

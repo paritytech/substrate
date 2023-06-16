@@ -293,8 +293,6 @@ impl<T: Config> Pallet<T> {
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
 		let dest = Self::payee(stash);
 		match dest {
-			RewardDestination::Controller => Self::bonded(stash)
-				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
 			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
 			RewardDestination::Staked => Self::bonded(stash)
 				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
