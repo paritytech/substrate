@@ -942,9 +942,9 @@ impl<R> TransactionOutcome<R> {
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
 pub enum BlockAfterInherentsMode {
 	/// No extrinsics should be pushed to the block.
-	NoExtrinsics,
+	ExtrinsicsForbidden,
 	/// Can push extrinsics to the block.
-	CanPushExtrinsics,
+	ExtrinsicsAllowed,
 }
 
 #[cfg(test)]

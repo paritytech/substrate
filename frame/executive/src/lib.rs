@@ -525,19 +525,19 @@ impl<
 			Self::execute_dispatchables(dispatchables.iter().take(num_inherents));
 
 			match Self::after_inherents() {
-				BlockAfterInherentsMode::NoExtrinsics => {
+				BlockAfterInherentsMode::ExtrinsicsForbidden => {
 					if num_inherents < dispatchables.len() {
 						panic!("Extrinsics are not allowed");
 					}
 				},
-				BlockAfterInherentsMode::CanPushExtrinsics => {
+				BlockAfterInherentsMode::ExtrinsicsAllowed => {
 					Self::execute_dispatchables(dispatchables.iter().skip(num_inherents));
 				},
 			}
 
 			// Dispatchable processing is done now.
 			<frame_system::Pallet<System>>::note_finished_extrinsics();
-			// TODO this could be optimized to be oneless storage read.
+			// TODO this could be optimized to be one less storage read.
 			if !MultiStepMigrator::is_upgrading() {
 				Self::on_idle_hook(*header.number());
 			}
@@ -556,11 +556,13 @@ impl<
 			used_weight,
 			DispatchClass::Mandatory,
 		);
-		// TODO `poll` hook goes here <https://github.com/paritytech/substrate/pull/14279>.
+
+		// TODO `poll` hook goes here. <https://github.com/paritytech/substrate/pull/14279>
+
 		if MultiStepMigrator::is_upgrading() {
-			BlockAfterInherentsMode::NoExtrinsics
+			BlockAfterInherentsMode::ExtrinsicsForbidden
 		} else {
-			BlockAfterInherentsMode::CanPushExtrinsics
+			BlockAfterInherentsMode::ExtrinsicsAllowed
 		}
 	}
 

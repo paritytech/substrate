@@ -330,11 +330,6 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			Self::onboard_new_mbms()
 		}
-
-		// This is done by frame-executive.
-		//fn on_initialize(n: T::BlockNumber) -> Weight {
-		//	Self::progress_mbms(n)
-		//}
 	}
 
 	#[pallet::call(weight = T::WeightInfo)]

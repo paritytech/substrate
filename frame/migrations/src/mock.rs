@@ -129,6 +129,8 @@ pub fn run_to_block(n: u32) {
 		System::set_block_number(System::block_number() + 1);
 		System::on_initialize(System::block_number());
 		Migrations::on_initialize(System::block_number());
+		// Executive calls this:
+		<Migrations as MultiStepMigrator>::step();
 	}
 }
 
