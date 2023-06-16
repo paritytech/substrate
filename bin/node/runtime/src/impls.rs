@@ -18,15 +18,11 @@
 //! Some configurable implementations as associated type for the substrate runtime.
 
 use crate::{
-	AccountId, AllianceMotion, Assets, Authorship, Balances, Hash, NegativeImbalance, Runtime,
-	RuntimeCall,
+	AccountId, AllianceMotion, Authorship, Balances, Hash, NegativeImbalance, RuntimeCall,
 };
 use frame_support::{
 	pallet_prelude::*,
-	traits::{
-		fungibles::{Balanced, Credit},
-		Currency, OnUnbalanced,
-	},
+	traits::{Currency, OnUnbalanced},
 };
 use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
 use sp_std::prelude::*;
