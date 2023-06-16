@@ -2235,7 +2235,7 @@ pub mod pallet_prelude {
 /// for the pallet.
 ///
 /// Item is defined as either an enum or a struct. It needs to be public and implement the
-/// trait [`GenesisBuild`](`traits::GenesisBuild`) with
+/// trait [`BuildGenesisConfig`](`traits::BuildGenesisConfig`) with
 /// [`#[pallet::genesis_build]`](#genesis-build-palletgenesis_build-optional). The type
 /// generics are constrained to be either none, or `T` or `T: Config`.
 ///
