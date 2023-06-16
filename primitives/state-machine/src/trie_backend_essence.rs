@@ -20,7 +20,7 @@
 
 use crate::{
 	backend::{Consolidate, IterArgs, StorageIterator},
-	trie_backend::MergeableTrieCacheProvider,
+	trie_backend::TrieCacheProvider,
 	warn, StorageKey, StorageValue,
 };
 use codec::Codec;
@@ -99,7 +99,7 @@ where
 	H: Hasher,
 	S: TrieBackendStorage<H>,
 	H::Out: Codec + Ord,
-	C: MergeableTrieCacheProvider<H> + Send + Sync,
+	C: TrieCacheProvider<H> + Send + Sync,
 {
 	#[inline]
 	fn prepare<R>(
@@ -159,7 +159,7 @@ where
 	H: Hasher,
 	S: TrieBackendStorage<H>,
 	H::Out: Codec + Ord,
-	C: MergeableTrieCacheProvider<H> + Send + Sync,
+	C: TrieCacheProvider<H> + Send + Sync,
 {
 	type Backend = crate::TrieBackend<S, H, C>;
 	type Error = crate::DefaultError;
@@ -296,9 +296,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H>>
-	TrieBackendEssence<S, H, C>
-{
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEssence<S, H, C> {
 	/// Call the given closure passing it the recorder and the cache.
 	///
 	/// If the given `storage_root` is `None`, `self.root` will be used.
@@ -409,7 +407,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H>>
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Send + Sync>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
 	TrieBackendEssence<S, H, C>
 where
 	H::Out: Codec + Ord,
@@ -829,7 +827,7 @@ where
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Send + Sync>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
 	AsHashDB<H, DBValue> for TrieBackendEssence<S, H, C>
 {
 	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
@@ -840,8 +838,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Sen
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Send + Sync>
-	HashDB<H, DBValue> for TrieBackendEssence<S, H, C>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync> HashDB<H, DBValue>
+	for TrieBackendEssence<S, H, C>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		if *key == self.empty {
@@ -873,7 +871,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Sen
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Send + Sync>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
 	HashDBRef<H, DBValue> for TrieBackendEssence<S, H, C>
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {

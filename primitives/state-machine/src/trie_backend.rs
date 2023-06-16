@@ -46,7 +46,7 @@ use trie_db::TrieCache as TrieCacheT;
 use trie_db::{node::NodeOwned, CachedValue};
 
 /// A provider of trie caches that are compatible with [`trie_db::TrieDB`].
-pub trait MergeableTrieCacheProvider<H: Hasher> {
+pub trait TrieCacheProvider<H: Hasher> {
 	/// Cache type that implements [`trie_db::TrieCache`].
 	type Cache<'a>: TrieCacheT<sp_trie::NodeCodec<H>> + 'a
 	where
@@ -58,17 +58,19 @@ pub trait MergeableTrieCacheProvider<H: Hasher> {
 
 	/// Returns a cache that can be used with a [`trie_db::TrieDBMut`].
 	///
-	/// When finished with the operation on the trie, it is required to call [`Self::merge`] to merge the cached items for the correct `storage_root`.
+	/// When finished with the operation on the trie, it is required to call [`Self::merge`] to
+	/// merge the cached items for the correct `storage_root`.
 	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_>;
 
 	/// Merge a the cached data in `other` into the provider using the given `new_root`.
 	///
-	/// This must be used for the cache returned by [`Self::as_trie_db_mut`] as otherwise the cached data is just thrown away.
+	/// This must be used for the cache returned by [`Self::as_trie_db_mut`] as otherwise the cached
+	/// data is just thrown away.
 	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out);
 }
 
 #[cfg(feature = "std")]
-impl<H: Hasher> MergeableTrieCacheProvider<H> for LocalTrieCache<H> {
+impl<H: Hasher> TrieCacheProvider<H> for LocalTrieCache<H> {
 	type Cache<'a> = TrieCache<'a, H> where H: 'a;
 
 	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_> {
@@ -85,7 +87,7 @@ impl<H: Hasher> MergeableTrieCacheProvider<H> for LocalTrieCache<H> {
 }
 
 #[cfg(feature = "std")]
-impl<H: Hasher> MergeableTrieCacheProvider<H> for &LocalTrieCache<H> {
+impl<H: Hasher> TrieCacheProvider<H> for &LocalTrieCache<H> {
 	type Cache<'a> = TrieCache<'a, H> where Self: 'a;
 
 	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_> {
@@ -101,16 +103,8 @@ impl<H: Hasher> MergeableTrieCacheProvider<H> for &LocalTrieCache<H> {
 	}
 }
 
-/// Placeholder cache that allows
-/// [`TrieBackend`] construction without specifying
-/// a cache implementation. Can not be constructed.
 #[cfg(not(feature = "std"))]
-pub struct UnimplementedCache {
-	_private: (),
-}
-
-#[cfg(not(feature = "std"))]
-impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCache {
+impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCacheProvider<H> {
 	fn lookup_value_for_key(&mut self, _key: &[u8]) -> Option<&CachedValue<H::Out>> {
 		unimplemented!()
 	}
@@ -132,9 +126,8 @@ impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCache {
 	}
 }
 
-/// Cache provider that allows construction of a
-/// [`TrieBackend`] and satisfies the requirements,
-/// but can never be instantiated.
+/// Cache provider that allows construction of a [`TrieBackend`] and satisfies the requirements, but
+/// can never be instantiated.
 #[cfg(not(feature = "std"))]
 pub struct UnimplementedCacheProvider<H> {
 	// Not strictly necessary, but the private field prevents construction
@@ -144,8 +137,8 @@ pub struct UnimplementedCacheProvider<H> {
 }
 
 #[cfg(not(feature = "std"))]
-impl<H: Hasher> MergeableTrieCacheProvider<H> for UnimplementedCacheProvider<H> {
-	type Cache<'a> = UnimplementedCache where H: 'a;
+impl<H: Hasher> TrieCacheProvider<H> for UnimplementedCacheProvider<H> {
+	type Cache<'a> = UnimplementedCacheProvider<H> where H: 'a;
 
 	fn as_trie_db_cache(&self, _storage_root: <H as Hasher>::Out) -> Self::Cache<'_> {
 		unimplemented!()
@@ -322,7 +315,7 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = DefaultCache<H>>
 	next_storage_key_cache: CacheCell<Option<CachedIter<S, H, C>>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Send + Sync>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
 	TrieBackend<S, H, C>
 where
 	H::Out: Codec,
@@ -371,7 +364,7 @@ where
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H>> sp_std::fmt::Debug
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> sp_std::fmt::Debug
 	for TrieBackend<S, H, C>
 {
 	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
@@ -379,7 +372,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H>> sp_s
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Send + Sync> Backend<H>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync> Backend<H>
 	for TrieBackend<S, H, C>
 where
 	H::Out: Ord + Codec,
