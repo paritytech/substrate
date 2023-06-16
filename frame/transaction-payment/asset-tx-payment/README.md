@@ -9,7 +9,7 @@ native token of the chain.
 It does this by extending transactions to include an optional `AssetId` that specifies the asset
 to be used for payment (defaulting to the native token on `None`). It expects an
 [`OnChargeAssetTransaction`] implementation analogously to [`pallet-transaction-payment`]. The
-included [`AssetConversionAdapter`] (implementing [`OnChargeAssetTransaction`]) determines the fee
+included [`FungiblesAdapter`] (implementing [`OnChargeAssetTransaction`]) determines the fee
 amount by converting the fee calculated by [`pallet-transaction-payment`] into the desired
 asset.
 
