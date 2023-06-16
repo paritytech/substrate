@@ -227,7 +227,7 @@ pub mod pallet {
 			collection_id: T::NftCollectionId,
 			royalty_percentage: Permill,
 			royalty_recipient_admin: T::AccountId,
-			recipients: Vec<RoyaltyDetails<T::AccountId>>,
+			recipients: BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -306,7 +306,7 @@ pub mod pallet {
 			item_id: T::NftItemId,
 			royalty_percentage: Permill,
 			royalty_recipient_admin: T::AccountId,
-			recipients: Vec<RoyaltyDetails<T::AccountId>>,
+			recipients: BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
