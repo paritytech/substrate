@@ -1601,6 +1601,18 @@ impl pallet_core_fellowship::Config for Runtime {
 	type EvidenceSize = ConstU32<16_384>;
 }
 
+impl pallet_nfts_royalty::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftItemId = <Self as pallet_nfts::Config>::ItemId;
+	type Nfts = Nfts;
+	type MaxRecipients = ConstU32<5>;
+	type CollectionRoyaltyDeposit = ConstU128<1>;
+	type ItemRoyaltyDeposit = ConstU128<1>;
+}
+
 parameter_types! {
 	pub const NftFractionalizationPalletId: PalletId = PalletId(*b"fraction");
 	pub NewAssetSymbol: BoundedVec<u8, StringLimit> = (*b"FRAC").to_vec().try_into().unwrap();
@@ -1845,6 +1857,7 @@ construct_runtime!(
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
 		NftFractionalization: pallet_nft_fractionalization,
+		NftsRoyalty: pallet_nfts_royalty,
 		Salary: pallet_salary,
 		CoreFellowship: pallet_core_fellowship,
 		TransactionStorage: pallet_transaction_storage,
@@ -1992,6 +2005,7 @@ mod benches {
 		[pallet_utility, Utility]
 		[pallet_vesting, Vesting]
 		[pallet_whitelist, Whitelist]
+		[pallet_nfts_royalty, NftsRoyalty]
 	);
 }
 
