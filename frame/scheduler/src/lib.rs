@@ -295,6 +295,17 @@ pub mod pallet {
 			Self::service_agendas(&mut weight_counter, now, u32::max_value());
 			weight_counter.consumed
 		}
+
+		fn integrity_test() {
+			let w0 = T::WeightInfo::service_task_fetched(0).proof_size();
+			let w1 = T::WeightInfo::service_task_fetched(1024).proof_size();
+
+			assert!(
+				w1 > w0,
+				"The PoV weight of `service_task_fetched` MUST depend on the \
+				component. See <https://github.com/paritytech/substrate/pull/14408> for more info."
+			);
+		}
 	}
 
 	#[pallet::call]
