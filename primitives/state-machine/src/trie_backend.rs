@@ -56,11 +56,14 @@ pub trait MergeableTrieCacheProvider<H: Hasher> {
 	/// parameter should be the storage root of the used trie.
 	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_>;
 
-	/// Return a [`trie_db::TrieDBMut`] compatible cache. The `storage_root`
-	/// parameter should be the storage root of the used trie.
+	/// Returns a cache that can be used with a [`trie_db::TrieDBMut`].
+	///
+	/// When finished with the operation on the trie, it is required to call [`Self::merge`] to merge the cached items for the correct `storage_root`.
 	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_>;
 
-	/// Merge a cache back into this cache provider.
+	/// Merge a the cached data in `other` into the provider using the given `new_root`.
+	///
+	/// This must be used for the cache returned by [`Self::as_trie_db_mut`] as otherwise the cached data is just thrown away.
 	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out);
 }
 
