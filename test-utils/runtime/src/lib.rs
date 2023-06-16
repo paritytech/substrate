@@ -478,7 +478,7 @@ impl_runtime_apis! {
 			Executive::execute_block(block);
 		}
 
-		fn initialize_block(header: &<Block as BlockT>::Header) -> sp_runtime::RuntimeMbmMode {
+		fn initialize_block(header: &<Block as BlockT>::Header) {
 			log::trace!(target: LOG_TARGET, "initialize_block: {header:#?}");
 			Executive::initialize_block(header)
 		}
@@ -525,6 +525,10 @@ impl_runtime_apis! {
 
 		fn check_inherents(_block: Block, _data: InherentData) -> CheckInherentsResult {
 			CheckInherentsResult::new()
+		}
+
+		fn after_inherents() -> sp_runtime::BlockAfterInherentsMode {
+			Executive::after_inherents()
 		}
 	}
 

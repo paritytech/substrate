@@ -376,8 +376,7 @@ where
 		}
 
 		// Try to progress any ongoing MBMs. No-OP if there are none.
-		block_builder.progress_mbms()?;
-		// TODO `poll` hook <https://github.com/paritytech/substrate/pull/14279>
+		let mode = block_builder.after_inherents()?;
 
 		// proceed with transactions
 		// We calculate soft deadline used only in case we start skipping transactions.

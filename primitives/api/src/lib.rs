@@ -93,7 +93,7 @@ pub use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, NumberFor},
 	transaction_validity::TransactionValidity,
-	RuntimeMbmMode, RuntimeString, TransactionOutcome,
+	RuntimeString, TransactionOutcome,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -723,7 +723,7 @@ decl_runtime_apis! {
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
 		#[renamed("initialise_block", 2)]
-		fn initialize_block(header: &<Block as BlockT>::Header) -> RuntimeMbmMode;
+		fn initialize_block(header: &<Block as BlockT>::Header);
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

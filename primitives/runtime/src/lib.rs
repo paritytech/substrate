@@ -938,11 +938,13 @@ impl<R> TransactionOutcome<R> {
 	}
 }
 
-// FAIL-CI find a good spot for this
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, scale_info::TypeInfo)]
-pub enum RuntimeMbmMode {
-	NotMigrating,
-	Migrating,
+/// The mode of a block after inherents were applied.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
+pub enum BlockAfterInherentsMode {
+	/// No extrinsics should be pushed to the block.
+	NoExtrinsics,
+	/// Can push extrinsics to the block.
+	CanPushExtrinsics,
 }
 
 #[cfg(test)]

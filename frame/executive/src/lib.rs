@@ -118,7 +118,6 @@
 
 use codec::{Codec, Encode};
 use frame_support::{
-	defensive_assert,
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
 	pallet_prelude::InvalidTransaction,
 	traits::{
@@ -134,7 +133,7 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, RuntimeMbmMode,
+	ApplyExtrinsicResult, BlockAfterInherentsMode,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -428,17 +427,11 @@ impl<
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize_block(header: &System::Header) -> RuntimeMbmMode {
+	pub fn initialize_block(header: &System::Header) {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(header);
 		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
-
-		if MultiStepMigrator::is_upgrading() {
-			RuntimeMbmMode::Migrating
-		} else {
-			RuntimeMbmMode::NotMigrating
-		}
 	}
 
 	fn extract_pre_digest(header: &System::Header) -> Digest {
@@ -531,24 +524,21 @@ impl<
 			let num_inherents = first_extrinsic_index as usize;
 			Self::execute_dispatchables(dispatchables.iter().take(num_inherents));
 
-			let is_upgrading = MultiStepMigrator::is_upgrading();
-			if is_upgrading {
-				if num_inherents < dispatchables.len() {
-					panic!("Extrinsics are not allowed during Multi-Block-Migrations");
-				}
-
-				Self::progress_mbms();
-			} else {
-				// TODO `poll` hook <https://github.com/paritytech/substrate/pull/14279>
-
-				// Process extrinsics.
-				Self::execute_dispatchables(dispatchables.iter().skip(num_inherents));
+			match Self::after_inherents() {
+				BlockAfterInherentsMode::NoExtrinsics => {
+					if num_inherents < dispatchables.len() {
+						panic!("Extrinsics are not allowed");
+					}
+				},
+				BlockAfterInherentsMode::CanPushExtrinsics => {
+					Self::execute_dispatchables(dispatchables.iter().skip(num_inherents));
+				},
 			}
 
 			// Dispatchable processing is done now.
 			<frame_system::Pallet<System>>::note_finished_extrinsics();
-
-			if !is_upgrading {
+			// TODO this could be optimized to be oneless storage read.
+			if !MultiStepMigrator::is_upgrading() {
 				Self::on_idle_hook(*header.number());
 			}
 
@@ -560,17 +550,18 @@ impl<
 
 	/// Progress ongoing MBM migrations.
 	// Used by the block builder and Executive.
-	pub fn progress_mbms() {
-		defensive_assert!(
-			MultiStepMigrator::is_upgrading(),
-			"Tried to progress MBMs although \
-		none were ongoing. Not a hard error but unexpected."
-		);
+	pub fn after_inherents() -> BlockAfterInherentsMode {
 		let used_weight = MultiStepMigrator::step();
 		<frame_system::Pallet<System>>::register_extra_weight_unchecked(
 			used_weight,
 			DispatchClass::Mandatory,
 		);
+		// TODO `poll` hook goes here <https://github.com/paritytech/substrate/pull/14279>.
+		if MultiStepMigrator::is_upgrading() {
+			BlockAfterInherentsMode::NoExtrinsics
+		} else {
+			BlockAfterInherentsMode::CanPushExtrinsics
+		}
 	}
 
 	/// Execute given extrinsics.
@@ -644,7 +635,7 @@ impl<
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
 		if dispatch_info.class != DispatchClass::Mandatory && MultiStepMigrator::is_upgrading() {
-			// This function is also used by the block builder. So it should respect this check.
+			// The block builder respects this by using the mode returned by `after_inherents`.
 			panic!("Only Mandatory extrinsics are allowed during Multi-Block-Migrations");
 		}
 		// Check whether we need to error because extrinsics are paused.
