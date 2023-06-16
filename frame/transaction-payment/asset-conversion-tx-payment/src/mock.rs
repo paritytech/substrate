@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use crate as pallet_asset_tx_payment;
+use crate as pallet_asset_conversion_tx_payment;
 
 use codec;
 use frame_support::{
@@ -55,7 +55,7 @@ frame_support::construct_runtime!(
 		Assets: pallet_assets,
 		PoolAssets: pallet_assets::<Instance2>,
 		AssetConversion: pallet_asset_conversion,
-		AssetTxPayment: pallet_asset_tx_payment,
+		AssetTxPayment: pallet_asset_conversion_tx_payment,
 	}
 );
 
