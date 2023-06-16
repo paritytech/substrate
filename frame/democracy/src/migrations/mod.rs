@@ -1,8 +1,6 @@
 // This file is part of Substrate.
-
 // Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
-
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,11 +15,8 @@
 
 //! All migrations of this pallet.
 
-/// Migration to unreserve all pallet funds.
+/// Migration to unlock and unreserve all pallet funds.
 pub mod unlock_and_unreserve_all_funds;
-/// Version 3.
-pub mod v3;
-/// Version 4.
-pub mod v4;
-/// Version 5.
-pub mod v5;
+
+/// V1 storage migrations for the preimage pallet.
+pub mod v1;

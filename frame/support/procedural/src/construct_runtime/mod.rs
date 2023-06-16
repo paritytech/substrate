@@ -178,7 +178,15 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 				.and_then(|_| construct_runtime_final_expansion(explicit_decl)),
 	};
 
-	res.unwrap_or_else(|e| e.to_compile_error()).into()
+	let res = res.unwrap_or_else(|e| e.to_compile_error());
+
+	let res = expander::Expander::new("construct_runtime")
+		.dry(std::env::var("FRAME_EXPAND").is_err())
+		.verbose(true)
+		.write_to_out_dir(res)
+		.expect("Does not fail because of IO in OUT_DIR; qed");
+
+	res.into()
 }
 
 /// When some pallet have implicit parts definition then the macro will expand into a macro call to

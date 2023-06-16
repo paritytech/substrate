@@ -54,3 +54,64 @@ fn disabled_validators_cannot_author_blocks() {
 		Aura::on_initialize(42);
 	});
 }
+
+#[test]
+#[should_panic(expected = "Slot must increase")]
+fn pallet_requires_slot_to_increase_unless_allowed() {
+	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+		crate::mock::AllowMultipleBlocksPerSlot::set(false);
+
+		let slot = Slot::from(1);
+		let pre_digest =
+			Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())] };
+
+		System::reset_events();
+		System::initialize(&42, &System::parent_hash(), &pre_digest);
+
+		// and we should not be able to initialize the block with the same slot a second time.
+		Aura::on_initialize(42);
+		Aura::on_initialize(42);
+	});
+}
+
+#[test]
+fn pallet_can_allow_unchanged_slot() {
+	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+		let slot = Slot::from(1);
+		let pre_digest =
+			Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())] };
+
+		System::reset_events();
+		System::initialize(&42, &System::parent_hash(), &pre_digest);
+
+		crate::mock::AllowMultipleBlocksPerSlot::set(true);
+
+		// and we should be able to initialize the block with the same slot a second time.
+		Aura::on_initialize(42);
+		Aura::on_initialize(42);
+	});
+}
+
+#[test]
+#[should_panic(expected = "Slot must not decrease")]
+fn pallet_always_rejects_decreasing_slot() {
+	new_test_ext(vec![0, 1, 2, 3]).execute_with(|| {
+		let slot = Slot::from(2);
+		let pre_digest =
+			Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, slot.encode())] };
+
+		System::reset_events();
+		System::initialize(&42, &System::parent_hash(), &pre_digest);
+
+		crate::mock::AllowMultipleBlocksPerSlot::set(true);
+
+		Aura::on_initialize(42);
+		System::finalize();
+
+		let earlier_slot = Slot::from(1);
+		let pre_digest =
+			Digest { logs: vec![DigestItem::PreRuntime(AURA_ENGINE_ID, earlier_slot.encode())] };
+		System::initialize(&43, &System::parent_hash(), &pre_digest);
+		Aura::on_initialize(43);
+	});
+}
