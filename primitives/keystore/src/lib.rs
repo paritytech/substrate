@@ -174,37 +174,36 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
-	#[cfg(feature = "bls-experimental")]
 	/// Returns all bls12-381 public keys for the given key type.
+	#[cfg(feature = "bls-experimental")]
 	fn bls381_public_keys(&self, id: KeyTypeId) -> Vec<bls381::Public>;
 
-	#[cfg(feature = "bls-experimental")]
 	/// Returns all bls12-377 public keys for the given key type.
+	#[cfg(feature = "bls-experimental")]
 	fn bls377_public_keys(&self, id: KeyTypeId) -> Vec<bls377::Public>;
 
-	#[cfg(feature = "bls-experimental")]
 	/// Generate a new bls381 key pair for the given key type and an optional seed.
 	///
 	/// Returns an `bls381::Public` key of the generated key pair or an `Err` if
 	/// something failed during key generation.
+	#[cfg(feature = "bls-experimental")]
 	fn bls381_generate_new(
 		&self,
 		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<bls381::Public, Error>;
 
-	#[cfg(feature = "bls-experimental")]
 	/// Generate a new bls377 key pair for the given key type and an optional seed.
 	///
 	/// Returns an `bls377::Public` key of the generated key pair or an `Err` if
 	/// something failed during key generation.
+	#[cfg(feature = "bls-experimental")]
 	fn bls377_generate_new(
 		&self,
 		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<bls377::Public, Error>;
 
-	#[cfg(feature = "bls-experimental")]
 	/// Generate a bls381 signature for a given message.
 	///
 	/// Receives [`KeyTypeId`] and a [`bls381::Public`] key to be able to map
@@ -213,6 +212,7 @@ pub trait Keystore: Send + Sync {
 	/// Returns an [`bls381::Signature`] or `None` in case the given `key_type`
 	/// and `public` combination doesn't exist in the keystore.
 	/// An `Err` will be returned if generating the signature itself failed.
+	#[cfg(feature = "bls-experimental")]
 	fn bls381_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -220,7 +220,6 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8],
 	) -> Result<Option<bls381::Signature>, Error>;
 
-	#[cfg(feature = "bls-experimental")]
 	/// Generate a bls377 signature for a given message.
 	///
 	/// Receives [`KeyTypeId`] and a [`bls377::Public`] key to be able to map
@@ -229,6 +228,7 @@ pub trait Keystore: Send + Sync {
 	/// Returns an [`bls377::Signature`] or `None` in case the given `key_type`
 	/// and `public` combination doesn't exist in the keystore.
 	/// An `Err` will be returned if generating the signature itself failed.
+	#[cfg(feature = "bls-experimental")]
 	fn bls377_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -410,6 +410,54 @@ impl<T: Keystore + ?Sized> Keystore for Arc<T> {
 
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		(**self).has_keys(public_keys)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_public_keys(&self, id: KeyTypeId) -> Vec<bls381::Public> {
+		(**self).bls381_public_keys(id)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_public_keys(&self, id: KeyTypeId) -> Vec<bls377::Public> {
+		(**self).bls377_public_keys(id)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls381::Public, Error> {
+		(**self).bls381_generate_new(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bls377::Public, Error> {
+		(**self).bls377_generate_new(key_type, seed)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls381::Public,
+		msg: &[u8],
+	) -> Result<Option<bls381::Signature>, Error> {
+		(**self).bls381_sign(key_type, public, msg)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bls377::Public,
+		msg: &[u8],
+	) -> Result<Option<bls377::Signature>, Error> {
+		(**self).bls377_sign(key_type, public, msg)
 	}
 }
 
