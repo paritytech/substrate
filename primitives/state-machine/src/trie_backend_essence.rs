@@ -329,12 +329,13 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H>>
 	#[inline]
 	fn with_recorder_and_cache<R>(
 		&self,
-		_storage_root: Option<H::Out>,
+		storage_root: Option<H::Out>,
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
 		) -> R,
 	) -> R {
+		let storage_root = storage_root.unwrap_or_else(|| self.root);
 		let mut cache = self.trie_node_cache.as_ref().map(|c| c.as_trie_db_cache(storage_root));
 		let cache = cache.as_mut().map(|c| c as _);
 
