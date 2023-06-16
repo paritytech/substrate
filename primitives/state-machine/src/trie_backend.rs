@@ -234,12 +234,12 @@ where
 	}
 
 	/// Use the given optional `cache` for the to be configured [`TrieBackend`].
-	#[cfg(feature = "std")]
 	pub fn with_optional_cache<LC>(self, cache: Option<LC>) -> TrieBackendBuilder<S, H, LC> {
 		TrieBackendBuilder {
 			cache,
 			root: self.root,
 			storage: self.storage,
+			#[cfg(feature = "std")]
 			recorder: self.recorder,
 		}
 	}
