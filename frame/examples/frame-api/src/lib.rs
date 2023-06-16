@@ -1,3 +1,5 @@
+//! An example pallet built purely with the `frame` crate.
+
 use frame::prelude::*;
 
 #[frame::pallet]
@@ -20,10 +22,6 @@ pub mod pallet {
 mod tests {
 	use super::pallet as pallet_example;
 	use frame::{prelude::*, testing_prelude::*};
-
-	/// To use the derive-impl, this line must be provided as-is.
-	#[frame::macros::use_attr]
-	use frame::deps::frame_support::derive_impl;
 
 	type UncheckedExtrinsic = MockUncheckedExtrinsic<Test>;
 	type Block = MockBlock<Test>;

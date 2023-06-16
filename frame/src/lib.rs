@@ -73,7 +73,7 @@ pub mod testing_prelude {
 
 	pub use frame_support::{
 		assert_err, assert_err_ignore_postinfo, assert_error_encoded_size, assert_noop, assert_ok,
-		assert_storage_noop, ord_parameter_types, parameter_types,
+		assert_storage_noop, derive_impl, ord_parameter_types, parameter_types,
 		parameter_types_impl_thread_local, storage_alias,
 	};
 	pub use frame_system::mocking::*;
@@ -121,7 +121,7 @@ pub mod derive {
 pub mod runtime {
 	pub mod prelude {
 		pub use frame_executive::*;
-		pub use frame_support::{construct_runtime, parameter_types, OpaqueMetadata};
+		pub use frame_support::{construct_runtime, derive_impl, parameter_types, OpaqueMetadata};
 		pub use sp_api::impl_runtime_apis;
 		pub use sp_inherents::{CheckInherentsResult, InherentData};
 		pub use sp_runtime::{generic as block_types_generic, ApplyExtrinsicResult};
