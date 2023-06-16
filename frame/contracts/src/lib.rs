@@ -148,7 +148,7 @@ pub use crate::wasm::api_doc;
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
-	<<T as Config>::Fungible as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
+	<<T as Config>::Currency as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -211,7 +211,7 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The fungible in which fees are paid and contract balances are held.
-		type Fungible: Inspect<Self::AccountId>
+		type Currency: Inspect<Self::AccountId>
 			+ Mutate<Self::AccountId>
 			+ MutateHold<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
@@ -1547,9 +1547,9 @@ impl<T: Config> Pallet<T> {
 		)
 	}
 
-	/// Return the existential deposit of [`Config::Fungible`].
+	/// Return the existential deposit of [`Config::Currency`].
 	fn min_balance() -> BalanceOf<T> {
-		<T::Fungible as Inspect<AccountIdOf<T>>>::minimum_balance()
+		<T::Currency as Inspect<AccountIdOf<T>>>::minimum_balance()
 	}
 
 	/// Convert gas_limit from 1D Weight to a 2D Weight.

@@ -96,7 +96,7 @@ pub fn store<T: Config>(mut module: PrefabWasmModule<T>, instantiated: bool) -> 
 				);
 				// This `None` case happens only in freshly uploaded modules. This means that
 				// the `owner` is always the origin of the current transaction.
-				T::Fungible::hold(
+				T::Currency::hold(
 					&HoldReason::StorageDepositReserve.into(),
 					&new_owner_info.owner,
 					new_owner_info.deposit,
@@ -163,7 +163,7 @@ pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> D
 		if let Some(owner_info) = existing {
 			ensure!(owner_info.refcount == 0, <Error<T>>::CodeInUse);
 			ensure!(&owner_info.owner == origin, BadOrigin);
-			T::Fungible::release(
+			T::Currency::release(
 				&HoldReason::StorageDepositReserve.into(),
 				&owner_info.owner,
 				owner_info.deposit,

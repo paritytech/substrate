@@ -52,8 +52,8 @@ mod old {
 
 	/// Old Currency type traits
 	///
-	/// This trait holds what the old [`T::Currency`] type required before is was replaced by
-	/// [`T::Fungible`]
+	/// This trait holds what the old [`T::Currency`] type required before is was replaced by the
+	/// `fungible` traits.
 	pub trait CurrencyOf<T: Config>:
 		ReservableCurrency<<T as frame_system::Config>::AccountId>
 		+ Inspect<<T as frame_system::Config>::AccountId, Balance = BalanceOf<T, Self>>

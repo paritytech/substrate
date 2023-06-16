@@ -460,7 +460,7 @@ where
 		System::<T>::inc_consumers(info.deposit_account())?;
 
 		// We also need to make sure that the contract's account itself exists.
-		T::Fungible::transfer(origin, contract, ed, Preservation::Protect)?;
+		T::Currency::transfer(origin, contract, ed, Preservation::Protect)?;
 		System::<T>::inc_consumers(contract)?;
 
 		Ok(deposit)
@@ -527,14 +527,14 @@ impl<T: Config> Ext<T> for ReservingExt {
 		// We are sending the `min_leftover` and the `min_balance` from the origin
 		// account as part of a contract call. Hence origin needs to have those left over
 		// as free balance after accounting for all deposits.
-		let max = T::Fungible::reducible_balance(origin, Preservation::Protect, Polite)
+		let max = T::Currency::reducible_balance(origin, Preservation::Protect, Polite)
 			.saturating_sub(min_leftover)
 			.saturating_sub(Pallet::<T>::min_balance());
 		let default = max.min(T::DefaultDepositLimit::get());
 		let limit = limit.unwrap_or(default);
 		ensure!(
 			limit <= max &&
-				matches!(T::Fungible::can_withdraw(origin, limit), WithdrawConsequence::Success),
+				matches!(T::Currency::can_withdraw(origin, limit), WithdrawConsequence::Success),
 			<Error<T>>::StorageDepositNotEnoughFunds,
 		);
 		Ok(limit)
@@ -548,14 +548,14 @@ impl<T: Config> Ext<T> for ReservingExt {
 	) -> Result<(), DispatchError> {
 		match amount {
 			Deposit::Charge(amount) => {
-				T::Fungible::transfer(origin, deposit_account, *amount, Preservation::Protect)?;
+				T::Currency::transfer(origin, deposit_account, *amount, Preservation::Protect)?;
 				Ok(())
 			},
 			Deposit::Refund(amount) => {
 				if terminated {
 					System::<T>::dec_consumers(&deposit_account);
 				}
-				T::Fungible::transfer(
+				T::Currency::transfer(
 					deposit_account,
 					origin,
 					*amount,
