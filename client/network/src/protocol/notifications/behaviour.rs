@@ -2047,7 +2047,7 @@ impl NetworkBehaviour for Notifications {
 
 			match peer_state {
 				PeerState::Backoff { timer, .. } if *timer == delay_id => {
-					trace!(target: "sub-libp2p", "Libp2p <= Clean up ban of ({:?}, {:?}) from the state", peer_id, set_id);
+					trace!(target: "sub-libp2p", "Libp2p <= Clean up ban of {:?} from the state ({:?})", peer_id, set_id);
 					self.peers.remove(&(peer_id, set_id));
 				},
 
