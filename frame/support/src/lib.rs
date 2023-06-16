@@ -2517,7 +2517,7 @@ pub mod pallet_prelude {
 /// 	//
 /// 	// Type must implement the `Default` trait.
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
+/// 	#[derive(frame_support::DefaultNoBound)]
 /// 	pub struct GenesisConfig<T: Config> {
 /// 	    _config: sp_std::marker::PhantomData<T>,
 /// 		_myfield: u32,
@@ -2655,7 +2655,7 @@ pub mod pallet_prelude {
 /// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
+/// 	#[derive(frame_support::DefaultNoBound)]
 /// 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 /// 	    _config: sp_std::marker::PhantomData<T>,
 /// 	    _instance: sp_std::marker::PhantomData<I>,
