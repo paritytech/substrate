@@ -45,22 +45,22 @@ use trie_db::TrieCache as TrieCacheT;
 #[cfg(not(feature = "std"))]
 use trie_db::{node::NodeOwned, CachedValue};
 
-/// A provider of trie caches that are compatible with `TrieDB`.
+/// A provider of trie caches that are compatible with [`trie_db::TrieDB`].
 pub trait MergeableTrieCacheProvider<H: Hasher> {
-	/// `TrieDB` compatible cache type
+	/// Cache type that implements [`trie_db::TrieCache`].
 	type Cache<'a>: TrieCacheT<sp_trie::NodeCodec<H>> + 'a
 	where
 		Self: 'a;
 
-	/// Return a `TrieDB` compatible cache. The `storage_root`
+	/// Return a [`trie_db::TrieDB`] compatible cache. The `storage_root`
 	/// parameter should be the storage root of the used trie.
 	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_>;
 
-	/// Return a `TrieDBMut` compatible cache. The `storage_root`
+	/// Return a [`trie_db::TrieDBMut`] compatible cache. The `storage_root`
 	/// parameter should be the storage root of the used trie.
 	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_>;
 
-	/// Merge a `TrieDB` compatible cache back into this cache provider.
+	/// Merge a cache back into this cache provider.
 	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out);
 }
 
@@ -98,8 +98,13 @@ impl<H: Hasher> MergeableTrieCacheProvider<H> for &LocalTrieCache<H> {
 	}
 }
 
+/// Placeholder cache that allows
+/// [`TrieBackend`] construction without specifying
+/// a cache implementation. Can not be constructed.
 #[cfg(not(feature = "std"))]
-pub struct UnimplementedCache {}
+pub struct UnimplementedCache {
+	_private: (),
+}
 
 #[cfg(not(feature = "std"))]
 impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCache {
@@ -125,7 +130,7 @@ impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCache {
 }
 
 /// Cache provider that allows construction of a
-/// `TrieBackend` and satisfies the requirements,
+/// [`TrieBackend`] and satisfies the requirements,
 /// but can never be instantiated.
 #[cfg(not(feature = "std"))]
 pub struct UnimplementedCacheProvider<H> {
@@ -314,7 +319,8 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C = DefaultCache<H>>
 	next_storage_key_cache: CacheCell<Option<CachedIter<S, H, C>>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Send + Sync> TrieBackend<S, H, C>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: MergeableTrieCacheProvider<H> + Send + Sync>
+	TrieBackend<S, H, C>
 where
 	H::Out: Codec,
 {
