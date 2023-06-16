@@ -353,7 +353,7 @@ where
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
-		self.print_summary(&block, end_reason, &block_timer);
+		self.print_summary(&block, end_reason, block_timer.elapsed());
 
 		let proof =
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
@@ -536,27 +536,36 @@ where
 		&self,
 		block: &Block,
 		end_reason: EndProposingReason,
-		block_timer: &time::Instant,
+		block_took: time::Duration,
 	) {
+		let extrinsics = block.extrinsics();
 		self.metrics.report(|metrics| {
-			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
-			metrics.block_constructed.observe(block_timer.elapsed().as_secs_f64());
+			metrics.number_of_transactions.set(extrinsics.len() as u64);
+			metrics.block_constructed.observe(block_took.as_secs_f64());
 
 			metrics.report_end_proposing_reason(end_reason);
 		});
 
+		let extrinsics_summary = if extrinsics.is_empty() {
+			"no extrinsics".to_string()
+		} else {
+			format!(
+				"extrinsics ({}): [{}]",
+				extrinsics.len(),
+				extrinsics
+					.iter()
+					.map(|xt| BlakeTwo256::hash_of(xt).to_string())
+					.collect::<Vec<_>>()
+					.join(", ")
+			)
+		};
+
 		info!(
-			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; {extrinsics_summary}",
 			block.header().number(),
-			block_timer.elapsed().as_millis(),
+			block_took.as_millis(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
-			block.extrinsics().len(),
-			block.extrinsics()
-				.iter()
-				.map(|xt| BlakeTwo256::hash_of(xt).to_string())
-				.collect::<Vec<_>>()
-				.join(", ")
 		);
 		telemetry!(
 			self.telemetry;
