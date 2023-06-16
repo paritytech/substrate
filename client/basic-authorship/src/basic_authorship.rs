@@ -57,7 +57,7 @@ pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
 const DEFAULT_SOFT_DEADLINE_PERCENT: Percent = Percent::from_percent(50);
 
-const LOG_TARGET: &'static str = "basic-authorship";
+const LOG_TARGET: &'static str = "sc-basic-authorship";
 
 /// [`Proposer`] factory.
 pub struct ProposerFactory<A, B, C, PR> {
@@ -401,6 +401,7 @@ where
 		Ok(())
 	}
 
+	/// Apply as many extrinsics as possible to the block.
 	async fn apply_extrinsics(
 		&self,
 		block_builder: &mut sc_block_builder::BlockBuilder<'_, Block, C, B>,
