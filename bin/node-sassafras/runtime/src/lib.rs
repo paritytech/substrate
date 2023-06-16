@@ -387,6 +387,10 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
+		fn ring_context() -> Option<sp_consensus_sassafras::RingVrfContext> {
+			Sassafras::ring_context()
+		}
+
 		fn submit_tickets_unsigned_extrinsic(
 			tickets: Vec<sp_consensus_sassafras::TicketEnvelope>
 		) -> bool {
@@ -397,7 +401,7 @@ impl_runtime_apis! {
 			Sassafras::slot_ticket_id(slot)
 		}
 
-		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketData)> {
+		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<(sp_consensus_sassafras::TicketId, sp_consensus_sassafras::TicketBody)> {
 			Sassafras::slot_ticket(slot)
 		}
 

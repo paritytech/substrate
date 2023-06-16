@@ -21,7 +21,10 @@ use super::{Randomness, SASSAFRAS_ENGINE_ID};
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_consensus_slots::Slot;
-use sp_core::bandersnatch::vrf::{VrfInput, VrfOutput, VrfSignData};
+use sp_core::bandersnatch::{
+	ring_vrf::RingVrfSignature,
+	vrf::{VrfInput, VrfOutput, VrfSignData},
+};
 
 /// Ticket identifier.
 ///
@@ -31,30 +34,23 @@ pub type TicketId = u128;
 
 /// Ticket data persisted on-chain.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TicketData {
+pub struct TicketBody {
 	/// Attempt index.
 	pub attempt_idx: u32,
 	/// Ed25519 public key which gets erased when claiming the ticket.
 	pub erased_public: [u8; 32],
-	/// Ed25519 public key which gets exposed when claiming the ticket.
-	pub revealed_public: [u8; 32],
 }
 
-/// Ticket ring proof.
-/// TODO-SASS-P3: this is a placeholder.
-pub type TicketRingProof = ();
+/// Ticket ring vrf signature.
+pub type TicketRingSignature = RingVrfSignature;
 
 /// Ticket envelope used on during submission.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketEnvelope {
-	/// VRF output.
-	pub data: TicketData,
-	/// VRF pre-output used to generate the ticket id.
-	pub vrf_preout: VrfOutput,
-	// /// Pedersen VRF signature
-	// pub ped_signature: (),
-	/// Ring VRF proof.
-	pub ring_proof: TicketRingProof,
+	/// Ticket body.
+	pub body: TicketBody,
+	/// Ring signature.
+	pub ring_signature: TicketRingSignature,
 }
 
 /// Ticket auxiliary information used to claim the ticket ownership.
@@ -110,6 +106,16 @@ pub fn ticket_id_vrf_input(randomness: &Randomness, attempt: u32, epoch: u64) ->
 			(b"epoch", &epoch.to_le_bytes()),
 		],
 	)
+}
+
+/// Data to be signed via ring-vrf.
+pub fn ticket_body_sign_data(ticket_body: &TicketBody) -> VrfSignData {
+	VrfSignData::from_iter(
+		&SASSAFRAS_ENGINE_ID,
+		&[b"ticket-body-transcript", ticket_body.encode().as_slice()],
+		[],
+	)
+	.expect("can't fail; qed")
 }
 
 /// Get ticket-id for a given vrf input and output.

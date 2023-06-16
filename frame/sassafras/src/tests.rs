@@ -343,12 +343,16 @@ fn produce_epoch_change_digest_with_config() {
 	})
 }
 
+// TODO davxy: create a read_tickets method which reads pre-constructed good tickets
+// from a file. Creating this stuff "on-the-fly" is just too much expensive
 #[test]
 fn submit_segments_works() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(1);
 	let pair = &pairs[0];
 	// We're going to generate 14 segments.
 	let segments_count = 3;
+
+	let ring_ctx = RingVrfContext::new_testing();
 
 	ext.execute_with(|| {
 		let start_slot = Slot::from(100);
@@ -361,6 +365,8 @@ fn submit_segments_works() {
 		let mut config = EpochConfig::<Test>::get();
 		config.redundancy_factor = 2;
 		EpochConfig::<Test>::set(config);
+
+		RingContext::<Test>::set(Some(ring_ctx.clone()));
 
 		// Populate the segments via the `submit_tickets`
 		let tickets = make_tickets(start_slot + 1, segments_count * max_tickets, pair);
@@ -392,10 +398,14 @@ fn segments_incremental_sortition_works() {
 	let pair = &pairs[0];
 	let segments_count = 14;
 
+	let ring_ctx = RingVrfContext::new_testing();
+
 	ext.execute_with(|| {
 		let start_slot = Slot::from(100);
 		let start_block = 1;
 		let max_tickets: u32 = <Test as Config>::MaxTickets::get();
+
+		RingContext::<Test>::set(Some(ring_ctx.clone()));
 
 		initialize_block(start_block, start_slot, Default::default(), &pairs[0]);
 
@@ -409,7 +419,7 @@ fn segments_incremental_sortition_works() {
 				.enumerate()
 				.map(|(j, ticket)| {
 					let ticket_id = (i * segment_len + j) as TicketId;
-					TicketsData::<Test>::set(ticket_id, ticket.data.clone());
+					TicketsData::<Test>::set(ticket_id, ticket.body.clone());
 					ticket_id
 				})
 				.collect();
@@ -475,13 +485,19 @@ fn segments_incremental_sortition_works() {
 
 #[test]
 fn submit_enact_claim_tickets() {
+	use sp_core::crypto::VrfSecret;
+
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
+
+	let ring_ctx = RingVrfContext::new_testing();
 
 	ext.execute_with(|| {
 		let start_slot = Slot::from(100);
 		let start_block = 1;
 		let max_tickets: u32 = <Test as Config>::MaxTickets::get();
 		let pair = &pairs[0];
+
+		RingContext::<Test>::set(Some(ring_ctx.clone()));
 
 		initialize_block(start_block, start_slot, Default::default(), pair);
 
@@ -524,15 +540,16 @@ fn submit_enact_claim_tickets() {
 		// Compute and sort the tickets ids (aka tickets scores)
 		let mut expected_ids: Vec<_> = tickets
 			.iter()
-			.map(|t| {
+			.map(|ticket| {
 				let epoch_idx = Sassafras::epoch_index() + 1;
 				let randomness = Sassafras::next_randomness();
 				let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(
 					&randomness,
-					t.data.attempt_idx,
+					ticket.body.attempt_idx,
 					epoch_idx,
 				);
-				sp_consensus_sassafras::ticket_id(&vrf_input, &t.vrf_preout)
+				let vrf_output = pair.as_ref().vrf_output(&vrf_input);
+				sp_consensus_sassafras::ticket_id(&vrf_input, &vrf_output)
 			})
 			.collect();
 		expected_ids.sort();
@@ -575,10 +592,14 @@ fn submit_enact_claim_tickets() {
 fn block_allowed_to_skip_epochs() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
+	let ring_ctx = RingVrfContext::new_testing();
+
 	ext.execute_with(|| {
 		let start_slot = Slot::from(100);
 		let start_block = 1;
 		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
+
+		RingContext::<Test>::set(Some(ring_ctx.clone()));
 
 		initialize_block(start_block, start_slot, Default::default(), &pairs[0]);
 

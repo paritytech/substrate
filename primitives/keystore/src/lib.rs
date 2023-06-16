@@ -209,6 +209,15 @@ pub trait Keystore: Send + Sync {
 		input: &bandersnatch::vrf::VrfInput,
 	) -> Result<Option<bandersnatch::vrf::VrfOutput>, Error>;
 
+	/// DAVXY TODO
+	fn bandersnatch_ring_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		input: &bandersnatch::vrf::VrfSignData,
+		prover: &bandersnatch::ring_vrf::RingProver,
+	) -> Result<Option<bandersnatch::ring_vrf::RingVrfSignature>, Error>;
+
 	#[cfg(feature = "bls-experimental")]
 	/// Returns all bls12-381 public keys for the given key type.
 	fn bls381_public_keys(&self, id: KeyTypeId) -> Vec<bls381::Public>;

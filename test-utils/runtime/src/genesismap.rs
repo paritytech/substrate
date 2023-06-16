@@ -135,7 +135,7 @@ impl GenesisStorageBuilder {
 				epoch_config: Some(crate::TEST_RUNTIME_BABE_EPOCH_CONFIGURATION),
 			},
 			sassafras: pallet_sassafras::GenesisConfig {
-				authorities: authorities_bandersnatch.into_iter().map(|x| (x.into(), 1)).collect(),
+				authorities: authorities_bandersnatch.into_iter().map(|x| x.into()).collect(),
 				epoch_config: sp_consensus_sassafras::SassafrasEpochConfiguration {
 					redundancy_factor: 1,
 					attempts_number: 32,

@@ -356,3 +356,7 @@ common = { git = "https://github.com/davxy/ring-proof", branch = "working-fork" 
 ring = { git = "https://github.com/davxy/ring-proof", branch = "working-fork" }
 # common = { path = "/mnt/ssd/develop/w3f/ring-proof/common" }
 # ring = { path = "/mnt/ssd/develop/w3f/ring-proof/ring" }
+
+[patch.crates-io]
+#parity-scale-codec = { git = "https://github.com/koute/parity-scale-codec", branch = "master_fix_stack_overflow" }
+codec = { package = "parity-scale-codec", git = "https://github.com/koute/parity-scale-codec", branch = "master_fix_stack_overflow" }

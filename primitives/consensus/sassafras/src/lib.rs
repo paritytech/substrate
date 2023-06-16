@@ -18,7 +18,7 @@
 //! Primitives for Sassafras
 //! TODO-SASS-P2 : write proper docs
 
-// TODO DAVXY enable warnings
+// TODO davxy enable warnings
 // #![deny(warnings)]
 // #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -32,15 +32,19 @@ use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
-pub use sp_core::bandersnatch::vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature};
+pub use sp_core::bandersnatch::{
+	ring_vrf::{RingProver, RingVerifier, RingVrfContext},
+	vrf::{VrfInput, VrfOutput, VrfSignData, VrfSignature},
+};
 
 pub mod digests;
 pub mod inherents;
 pub mod ticket;
 
 pub use ticket::{
-	slot_claim_sign_data, slot_claim_vrf_input, ticket_id, ticket_id_threshold,
-	ticket_id_vrf_input, TicketClaim, TicketData, TicketEnvelope, TicketId, TicketSecret,
+	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id,
+	ticket_id_threshold, ticket_id_vrf_input, TicketBody, TicketClaim, TicketEnvelope, TicketId,
+	TicketSecret,
 };
 
 mod app {
@@ -72,11 +76,6 @@ pub type AuthoritySignature = app::Signature;
 /// the main Sassafras module. If that ever changes, then this must, too.
 pub type AuthorityId = app::Public;
 
-/// The weight of an authority.
-// NOTE: we use a unique name for the weight to avoid conflicts with other
-// `Weight` types, since the metadata isn't able to disambiguate.
-pub type SassafrasAuthorityWeight = u64;
-
 /// Weight of a Sassafras block.
 /// Primary blocks have a weight of 1 whereas secondary blocks have a weight of 0.
 pub type SassafrasBlockWeight = u32;
@@ -95,7 +94,7 @@ pub struct SassafrasConfiguration {
 	/// The duration of epoch in slots.
 	pub epoch_duration: u64,
 	/// The authorities for the epoch.
-	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	pub authorities: Vec<AuthorityId>,
 	/// The randomness for the epoch.
 	pub randomness: Randomness,
 	/// Tickets threshold parameters.
@@ -143,6 +142,9 @@ pub struct OpaqueKeyOwnershipProof(Vec<u8>);
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with Sassafras.
 	pub trait SassafrasApi {
+		/// Get ring context to be used for ticket construction and verification.
+		fn ring_context() -> Option<RingVrfContext>;
+
 		/// Submit next epoch validator tickets via an unsigned extrinsic.
 		/// This method returns `false` when creation of the extrinsics fails.
 		fn submit_tickets_unsigned_extrinsic(tickets: Vec<TicketEnvelope>) -> bool;
@@ -151,7 +153,7 @@ sp_api::decl_runtime_apis! {
 		fn slot_ticket_id(slot: Slot) -> Option<TicketId>;
 
 		/// Get ticket id and data associated to the given slot.
-		fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketData)>;
+		fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketBody)>;
 
 		/// Current epoch information.
 		fn current_epoch() -> Epoch;

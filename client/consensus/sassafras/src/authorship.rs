@@ -22,10 +22,9 @@ use super::*;
 
 use sp_consensus_sassafras::{
 	digests::PreDigest, slot_claim_sign_data, ticket_id, ticket_id_threshold, AuthorityId, Slot,
-	TicketClaim, TicketData, TicketEnvelope, TicketId,
+	TicketBody, TicketClaim, TicketEnvelope, TicketId,
 };
-use sp_core::{ed25519, twox_64, ByteArray};
-
+use sp_core::{bandersnatch::ring_vrf::RingVrfContext, ed25519, twox_64, ByteArray};
 use std::pin::Pin;
 
 /// Get secondary authority index for the given epoch and slot.
@@ -42,7 +41,7 @@ pub(crate) fn secondary_authority_index(
 pub(crate) fn claim_slot(
 	slot: Slot,
 	epoch: &mut Epoch,
-	maybe_ticket: Option<(TicketId, TicketData)>,
+	maybe_ticket: Option<(TicketId, TicketBody)>,
 	keystore: &KeystorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let config = &epoch.config;
@@ -79,7 +78,7 @@ pub(crate) fn claim_slot(
 		},
 	};
 
-	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
+	let authority_id = config.authorities.get(authority_idx as usize)?;
 
 	let vrf_signature = keystore
 		.bandersnatch_vrf_sign(AuthorityId::ID, authority_id.as_ref(), &vrf_sign_data)
@@ -92,9 +91,14 @@ pub(crate) fn claim_slot(
 }
 
 /// Generate the tickets for the given epoch.
+///
 /// Tickets additional information will be stored within the `Epoch` structure.
-/// The additional information will be used later during session to claim slots.
-fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<TicketEnvelope> {
+/// The additional information will be used later during the epoch to claim slots.
+fn generate_epoch_tickets(
+	epoch: &mut Epoch,
+	keystore: &KeystorePtr,
+	ring_ctx: &RingVrfContext,
+) -> Vec<TicketEnvelope> {
 	let config = &epoch.config;
 	let max_attempts = config.threshold_params.attempts_number;
 	let redundancy_factor = config.threshold_params.redundancy_factor;
@@ -110,11 +114,17 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 	log::debug!(target: LOG_TARGET, "Generating tickets for epoch {} @ slot {}", epoch.epoch_idx, epoch.start_slot);
 	log::debug!(target: LOG_TARGET, "    threshold: {threshold:016x}");
 
-	let authorities = config.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
-	for (authority_idx, authority_id) in authorities {
+	// We need a list of raw unwrapped keys
+	let pks: Vec<_> = config.authorities.iter().map(|a| *a.as_ref()).collect();
+
+	for (authority_idx, authority_id) in config.authorities.iter().enumerate() {
 		if !keystore.has_keys(&[(authority_id.to_raw_vec(), AuthorityId::ID)]) {
 			continue
 		}
+
+		debug!(target: LOG_TARGET, ">>> Generating new ring prover key...");
+		let prover = ring_ctx.prover(&pks, authority_idx).unwrap();
+		debug!(target: LOG_TARGET, ">>> ...done");
 
 		let make_ticket = |attempt_idx| {
 			let vrf_input = ticket_id_vrf_input(&config.randomness, attempt_idx, epoch.epoch_idx);
@@ -131,25 +141,36 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &KeystorePtr) -> Vec<Tick
 			let (erased_pair, erased_seed) = ed25519::Pair::generate();
 
 			let erased_public: [u8; 32] = *erased_pair.public().as_ref();
-			let revealed_public = [0; 32];
-			let data = TicketData { attempt_idx, erased_public, revealed_public };
+			let ticket_body = TicketBody { attempt_idx, erased_public };
 
-			// TODO DAVXY: placeholder
-			let ring_proof = ();
-			let ticket_envelope = TicketEnvelope { data, vrf_preout, ring_proof };
+			debug!(target: LOG_TARGET, ">>> Creating ring proof for attempt {}", attempt_idx);
+			let mut sign_data = ticket_body_sign_data(&ticket_body);
+			sign_data.push_vrf_input(vrf_input).expect("Can't fail");
+
+			let ring_signature = keystore
+				.bandersnatch_ring_vrf_sign(
+					AuthorityId::ID,
+					authority_id.as_ref(),
+					&sign_data,
+					&prover,
+				)
+				.ok()??;
+			debug!(target: LOG_TARGET, ">>> ...done");
+
+			let ticket_envelope = TicketEnvelope { body: ticket_body, ring_signature };
 
 			let ticket_secret = TicketSecret { attempt_idx, erased_secret: erased_seed };
 
-			Some((ticket_envelope, ticket_id, ticket_secret))
+			Some((ticket_id, ticket_envelope, ticket_secret))
 		};
 
 		for attempt in 0..max_attempts {
-			if let Some((envelope, ticket_id, ticket_secret)) = make_ticket(attempt) {
+			if let Some((ticket_id, ticket_envelope, ticket_secret)) = make_ticket(attempt) {
 				log::debug!(target: LOG_TARGET, "    → {ticket_id:016x}");
 				epoch
 					.tickets_aux
 					.insert(ticket_id, (authority_idx as AuthorityIndex, ticket_secret));
-				tickets.push(envelope);
+				tickets.push(ticket_envelope);
 			}
 		}
 	}
@@ -415,11 +436,6 @@ async fn start_tickets_worker<B, C, SC>(
 			},
 		};
 
-		let tickets = generate_epoch_tickets(&mut epoch, &keystore);
-		if tickets.is_empty() {
-			continue
-		}
-
 		// Get the best block on which we will publish the tickets.
 		let best_hash = match select_chain.best_chain().await {
 			Ok(header) => header.hash(),
@@ -428,6 +444,23 @@ async fn start_tickets_worker<B, C, SC>(
 				continue
 			},
 		};
+
+		let ring_ctx = match client.runtime_api().ring_context(best_hash) {
+			Ok(Some(ctx)) => ctx,
+			Ok(None) => {
+				info!(target: LOG_TARGET, "Ring context not initialized yet");
+				continue
+			},
+			Err(err) => {
+				error!(target: LOG_TARGET, "Unable to read ring context: {}", err);
+				continue
+			},
+		};
+
+		let tickets = generate_epoch_tickets(&mut epoch, &keystore, &ring_ctx);
+		if tickets.is_empty() {
+			continue
+		}
 
 		let err = match client.runtime_api().submit_tickets_unsigned_extrinsic(best_hash, tickets) {
 			Err(err) => Some(err.to_string()),

@@ -77,9 +77,9 @@ use sp_runtime::{
 pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
 	inherents::SassafrasInherentData,
-	slot_claim_sign_data, slot_claim_vrf_input, ticket_id_vrf_input, AuthorityId, AuthorityIndex,
-	AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
-	SassafrasConfiguration, SassafrasEpochConfiguration, TicketClaim, TicketData, TicketEnvelope,
+	slot_claim_sign_data, slot_claim_vrf_input, ticket_body_sign_data, ticket_id_vrf_input,
+	AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, SassafrasApi,
+	SassafrasConfiguration, SassafrasEpochConfiguration, TicketBody, TicketClaim, TicketEnvelope,
 	TicketId, TicketSecret, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
 };
 

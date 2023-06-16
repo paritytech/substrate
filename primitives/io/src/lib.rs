@@ -1142,7 +1142,12 @@ pub trait Crypto {
 		Ok(pubkey.serialize())
 	}
 
-	/// DAVXY
+	/// Generate a `bandersnatch` key pair for the given key type using an optional
+	/// `seed` and store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
 	fn bandersnatch_generate(
 		&mut self,
 		id: KeyTypeId,

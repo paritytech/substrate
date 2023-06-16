@@ -54,9 +54,9 @@ use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, Epoch, EquivocationProof, Randomness, SassafrasAuthorityWeight,
-	SassafrasConfiguration, SassafrasEpochConfiguration, Slot, TicketData, TicketEnvelope,
-	TicketId, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID,
+	AuthorityId, Epoch, EquivocationProof, Randomness, RingVrfContext, SassafrasConfiguration,
+	SassafrasEpochConfiguration, Slot, TicketBody, TicketEnvelope, TicketId, RANDOMNESS_LENGTH,
+	SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
 use sp_runtime::{
@@ -147,20 +147,14 @@ pub mod pallet {
 	/// Current epoch authorities.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub type Authorities<T: Config> = StorageValue<
-		_,
-		WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
-		ValueQuery,
-	>;
+	pub type Authorities<T: Config> =
+		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// Next epoch authorities.
 	#[pallet::storage]
 	#[pallet::getter(fn next_authorities)]
-	pub type NextAuthorities<T: Config> = StorageValue<
-		_,
-		WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
-		ValueQuery,
-	>;
+	pub type NextAuthorities<T: Config> =
+		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The slot at which the first epoch started.
 	/// This is `None` until the first block is imported on chain.
@@ -224,7 +218,7 @@ pub mod pallet {
 
 	/// Tickets to be used for current and next epoch.
 	#[pallet::storage]
-	pub type TicketsData<T> = StorageMap<_, Identity, TicketId, TicketData, ValueQuery>;
+	pub type TicketsData<T> = StorageMap<_, Identity, TicketId, TicketBody, ValueQuery>;
 
 	/// Next epoch tickets accumulator.
 	/// Special `u32::MAX` key is reserved for a partially sorted segment.
@@ -234,12 +228,18 @@ pub mod pallet {
 	pub type NextTicketsSegments<T: Config> =
 		StorageMap<_, Identity, u32, BoundedVec<TicketId, T::MaxTickets>, ValueQuery>;
 
+	/// Parameters used to verify tickets validity via ring-proof
+	/// In practice: Updatable Universal Reference String and the seed.
+	#[pallet::storage]
+	#[pallet::getter(fn ring_context)]
+	pub type RingContext<T: Config> = StorageValue<_, RingVrfContext>;
+
 	/// Genesis configuration for Sassafras protocol.
 	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		/// Genesis authorities.
-		pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+		pub authorities: Vec<AuthorityId>,
 		/// Genesis epoch configuration.
 		pub epoch_config: SassafrasEpochConfiguration,
 	}
@@ -249,6 +249,11 @@ pub mod pallet {
 		fn build(&self) {
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
 			EpochConfig::<T>::put(self.epoch_config.clone());
+
+			// TODO davxy : temporary code to generate a testing ring context
+			log::debug!(target: LOG_TARGET, "Building new testing ring context");
+			let ring_ctx = RingVrfContext::new_testing();
+			RingContext::<T>::set(Some(ring_ctx));
 		}
 	}
 
@@ -355,6 +360,17 @@ pub mod pallet {
 
 			log::debug!(target: LOG_TARGET, "Received {} tickets", tickets.len());
 
+			log::debug!(target: LOG_TARGET, "LOADING RING CTX");
+			let Some(ring_ctx) = RingContext::<T>::get() else {
+				return Err("Ring context not initialized".into())
+			};
+			log::debug!(target: LOG_TARGET, "... Loaded");
+
+			log::debug!(target: LOG_TARGET, "Building prover");
+			let pks: Vec<_> = Self::authorities().iter().map(|auth| *auth.as_ref()).collect();
+			let verifier = ring_ctx.verifier(pks.as_slice()).unwrap();
+			log::debug!(target: LOG_TARGET, "... Built");
+
 			// Check tickets score
 			let next_auth = NextAuthorities::<T>::get();
 			let epoch_config = EpochConfig::<T>::get();
@@ -372,18 +388,35 @@ pub mod pallet {
 			let epoch_idx = EpochIndex::<T>::get() + 1;
 
 			let mut segment = BoundedVec::with_max_capacity();
-			for ticket in tickets.iter() {
+			for ticket in tickets {
+				log::debug!(target: LOG_TARGET, "Checking ring proof");
+
 				let vrf_input = sp_consensus_sassafras::ticket_id_vrf_input(
 					&randomness,
-					ticket.data.attempt_idx,
+					ticket.body.attempt_idx,
 					epoch_idx,
 				);
-				let ticket_id = sp_consensus_sassafras::ticket_id(&vrf_input, &ticket.vrf_preout);
-				if ticket_id < ticket_threshold {
-					TicketsData::<T>::set(ticket_id, ticket.data.clone());
+
+				let Some(vrf_preout) = ticket.ring_signature.outputs.get(0) else {
+					log::debug!(target: LOG_TARGET, "Missing ticket pre-output from ring signature");
+					continue;
+				};
+				let ticket_id = sp_consensus_sassafras::ticket_id(&vrf_input, &vrf_preout);
+				if ticket_id >= ticket_threshold {
+					log::debug!(target: LOG_TARGET, "Over threshold");
+					continue
+				}
+
+				let mut sign_data = sp_consensus_sassafras::ticket_body_sign_data(&ticket.body);
+				sign_data.push_vrf_input(vrf_input).expect("Can't fail");
+
+				if ticket.ring_signature.verify(&sign_data, &verifier) {
+					TicketsData::<T>::set(ticket_id, ticket.body.clone());
 					segment
 						.try_push(ticket_id)
 						.expect("has same length as bounded input vector; qed");
+				} else {
+					log::debug!(target: LOG_TARGET, "Proof verification failure");
 				}
 			}
 
@@ -577,11 +610,8 @@ impl<T: Config> Pallet<T> {
 	/// If we detect one or more skipped epochs the policy is to use the authorities and values
 	/// from the first skipped epoch. The tickets are invalidated.
 	pub(crate) fn enact_epoch_change(
-		authorities: WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
-		next_authorities: WeakBoundedVec<
-			(AuthorityId, SassafrasAuthorityWeight),
-			T::MaxAuthorities,
-		>,
+		authorities: WeakBoundedVec<AuthorityId, T::MaxAuthorities>,
+		next_authorities: WeakBoundedVec<AuthorityId, T::MaxAuthorities>,
 	) {
 		// PRECONDITION: caller has done initialization.
 		// If using the internal trigger or the session pallet then this is guaranteed.
@@ -687,7 +717,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Initialize authorities on genesis phase.
-	fn initialize_genesis_authorities(authorities: &[(AuthorityId, SassafrasAuthorityWeight)]) {
+	fn initialize_genesis_authorities(authorities: &[AuthorityId]) {
 		// Genesis authorities may have been initialized via other means (e.g. via session pallet).
 		// If this function has already been called with some authorities, then the new list
 		// should be match the previously set one.
@@ -820,7 +850,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Refer to the `slot_ticket_id` documentation for the slot-ticket association
 	/// criteria.
-	pub fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketData)> {
+	pub fn slot_ticket(slot: Slot) -> Option<(TicketId, TicketBody)> {
 		Self::slot_ticket_id(slot).map(|id| (id, TicketsData::<T>::get(id)))
 	}
 

@@ -33,11 +33,7 @@ fn make_dummy_ticket(attempt_idx: u32) -> TicketEnvelope {
 		0xa7, 0x3d,
 	];
 	let output = VrfOutput::decode(&mut output_enc).unwrap();
-	let data = TicketData {
-		attempt_idx,
-		erased_public: Default::default(),
-		revealed_public: Default::default(),
-	};
+	let data = TicketData { attempt_idx, erased_public: Default::default() };
 	TicketEnvelope { data, vrf_preout: output, ring_proof: () }
 }
 
