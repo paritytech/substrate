@@ -115,7 +115,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
-			if std::env::var("SKIP_WHITELIST_INTEGRITY_TEST").is_err() {
+			if std::env::var("SKIP_WHITELIST_INTEGRITY_TEST").is_ok() {
 				return
 			}
 

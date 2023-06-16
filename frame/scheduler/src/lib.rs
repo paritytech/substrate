@@ -297,7 +297,7 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			if std::env::var("SKIP_SCHEDULER_INTEGRITY_TEST").is_err() {
+			if std::env::var("SKIP_SCHEDULER_INTEGRITY_TEST").is_ok() {
 				return
 			}
 
