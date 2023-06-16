@@ -94,7 +94,7 @@ impl module::Config for Runtime {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	SystemConfig::default().build_storage().unwrap().into()
+	frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap().into()
 }
 
 fn deposit_events(n: usize) {

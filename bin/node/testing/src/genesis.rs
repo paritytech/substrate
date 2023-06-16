@@ -80,7 +80,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Run
 		babe: BabeConfig {
 			authorities: vec![],
 			epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG),
-			_config: Default::default(),
+			..Default::default()
 		},
 		grandpa: GrandpaConfig { authorities: vec![], _config: Default::default() },
 		im_online: Default::default(),

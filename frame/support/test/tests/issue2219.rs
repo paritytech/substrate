@@ -192,7 +192,7 @@ fn create_genesis_config() {
 		module: module::GenesisConfig {
 			request_life_time: 0,
 			enable_storage_role: true,
-			_config: Default::default(),
+			..Default::default()
 		},
 	};
 	assert_eq!(config.module.request_life_time, 0);

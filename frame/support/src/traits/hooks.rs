@@ -366,20 +366,12 @@ pub trait BuildGenesisConfig {
 	fn build(&self);
 }
 
-#[allow(deprecated)]
-impl<T, I> BuildGenesisConfig for dyn GenesisBuild<T, I> {
-	fn build(&self) {
-		#[allow(deprecated)]
-		<Self as GenesisBuild<T, I>>::build(self);
-	}
-}
-
 /// A trait to define the build function of a genesis config, T and I are placeholder for pallet
 /// trait and pallet instance.
 #[deprecated(
 	note = "GenesisBuild is planned to be removed in December 2023. Use BuildGenesisConfig instead of it."
 )]
-pub trait GenesisBuild<T, I = ()> {
+pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeDeserialize {
 	/// The build function is called within an externalities allowing storage APIs.
 	/// Thus one can write to storage using regular pallet storages.
 	fn build(&self);
