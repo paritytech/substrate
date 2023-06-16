@@ -21,10 +21,7 @@
 mod tests {
 	use assert_cmd::cargo::cargo_bin;
 	use regex::Regex;
-	use std::{
-		process,
-		time::Duration,
-	};
+	use std::{process, time::Duration};
 	use substrate_cli_test_utils as common;
 	use tokio::process::{Child, Command};
 
