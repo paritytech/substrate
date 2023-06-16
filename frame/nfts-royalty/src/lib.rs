@@ -40,6 +40,8 @@ pub use pallet::*;
 pub use scale_info::Type;
 pub use types::*;
 
+pub use sp_std::prelude::*;
+
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::Permill,
