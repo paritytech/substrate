@@ -64,7 +64,7 @@ pub trait TrieCacheProvider<H: Hasher> {
 
 	/// Merge a the cached data in `other` into the provider using the given `new_root`.
 	///
-	/// This must be used for the cache returned by [`Self::as_trie_db_mut`] as otherwise the cached
+	/// This must be used for the cache returned by [`Self::as_trie_db_mut_cache`] as otherwise the cached
 	/// data is just thrown away.
 	fn merge<'a>(&'a self, other: Self::Cache<'a>, new_root: H::Out);
 }
