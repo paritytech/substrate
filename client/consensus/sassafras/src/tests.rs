@@ -185,9 +185,9 @@ fn create_test_config() -> SassafrasConfiguration {
 		slot_duration: SLOT_DURATION,
 		epoch_duration: EPOCH_DURATION,
 		authorities: vec![
-			(Keyring::Alice.public().into(), 1),
-			(Keyring::Bob.public().into(), 1),
-			(Keyring::Charlie.public().into(), 1),
+			Keyring::Alice.public().into(),
+			Keyring::Bob.public().into(),
+			Keyring::Charlie.public().into(),
 		],
 		randomness: [0; 32],
 		threshold_params: SassafrasEpochConfiguration { redundancy_factor: 1, attempts_number: 32 },
@@ -426,7 +426,7 @@ fn claim_primary_slots_works() {
 	let alice_authority_idx = 0_u32;
 
 	let ticket_id = 123;
-	let ticket_data = TicketData { attempt_idx: 0, erased_public: [0; 32] };
+	let ticket_body = TicketBody { attempt_idx: 0, erased_public: [0; 32] };
 	let ticket_secret = TicketSecret { attempt_idx: 0, erased_secret: [0; 32] };
 
 	// Fail if we have authority key in our keystore but not ticket aux data
@@ -435,7 +435,7 @@ fn claim_primary_slots_works() {
 	let claim = authorship::claim_slot(
 		0.into(),
 		&mut epoch,
-		Some((ticket_id, ticket_data.clone())),
+		Some((ticket_id, ticket_body.clone())),
 		&keystore,
 	);
 
@@ -452,7 +452,7 @@ fn claim_primary_slots_works() {
 	let (pre_digest, auth_id) = authorship::claim_slot(
 		0.into(),
 		&mut epoch,
-		Some((ticket_id, ticket_data.clone())),
+		Some((ticket_id, ticket_body.clone())),
 		&keystore,
 	)
 	.unwrap();
@@ -467,7 +467,7 @@ fn claim_primary_slots_works() {
 	epoch.tickets_aux.insert(ticket_id, (alice_authority_idx + 1, ticket_secret));
 
 	let claim =
-		authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_data)), &keystore);
+		authorship::claim_slot(0.into(), &mut epoch, Some((ticket_id, ticket_body)), &keystore);
 	assert!(claim.is_none());
 	assert!(epoch.tickets_aux.is_empty());
 }

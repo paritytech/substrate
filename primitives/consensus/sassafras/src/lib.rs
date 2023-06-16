@@ -18,7 +18,7 @@
 //! Primitives for Sassafras
 //! TODO-SASS-P2 : write proper docs
 
-// TODO DAVXY enable warnings
+// TODO davxy enable warnings
 // #![deny(warnings)]
 // #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
