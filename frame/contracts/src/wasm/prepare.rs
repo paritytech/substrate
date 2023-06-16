@@ -320,7 +320,7 @@ fn validate<E, T>(
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
-) -> Result<Vec<u8>, (DispatchError, &'static str)>
+) -> Result<(Vec<u8>, (u32, u32)), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
@@ -399,7 +399,7 @@ where
 		})?;
 	}
 
-	Ok(code)
+	Ok((code, memory_limits))
 }
 
 /// Validates the given binary `code` is a valid Wasm module satisfying following constraints:
@@ -420,7 +420,8 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	let checked_code = validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
+	let (checked_code, (initial, maximum)) =
+		validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
 	let err = |_| (<Error<T>>::CodeTooLarge.into(), "Validation enlarged the code size!");
 	let checked_code: CodeVec<T> = checked_code.try_into().map_err(err)?;
 	ensure!(
@@ -434,7 +435,7 @@ where
 		.update_contract::<T>(None)
 		.charge_or_zero();
 
-	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0 };
+	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0, initial, maximum };
 
 	Ok(WasmBlob { code, code_info })
 }
@@ -455,8 +456,8 @@ pub mod benchmarking {
 		owner: AccountIdOf<T>,
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let contract_module = ContractModule::new(&code)?;
-		// We do this here just to check that module's memory import satisfies the schedule
-		let _memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+		let (initial, maximum) =
+			get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
 			owner,
@@ -464,6 +465,8 @@ pub mod benchmarking {
 			deposit: Default::default(),
 			refcount: 0,
 			determinism: Determinism::Enforced,
+			initial,
+			maximum,
 		};
 
 		Ok(WasmBlob { code, code_info })

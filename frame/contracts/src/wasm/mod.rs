@@ -88,6 +88,12 @@ pub struct CodeInfo<T: Config> {
 	/// The number of instantiated contracts that use this as their code.
 	#[codec(compact)]
 	refcount: u64,
+	/// Initial memory size of a contract's sandbox.
+	#[codec(compact)]
+	initial: u32,
+	/// Maximum memory size of a contract's sandbox.
+	#[codec(compact)]
+	maximum: u32,
 	/// Marks if the code might contain non-deterministic features and is therefore never allowed
 	/// to be run on-chain. Specifically, such a code can never be instantiated into a contract
 	/// and can just be used through a delegate call.
@@ -416,13 +422,9 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		input_data: Vec<u8>,
 	) -> ExecResult {
 		let code = self.code.as_slice();
-		let contract_module = prepare::ContractModule::new(code)?;
-		// Extract memory limits from the module.
-		// This also checks that module's memory import satisfies the schedule.
-		let memory_limits =
-			prepare::get_memory_limits(contract_module.scan_imports::<T>(&[])?, ext.schedule())?;
 		// Instantiate the Wasm module to the engine.
 		let runtime = Runtime::new(ext, input_data);
+		let memory_limits = (self.code_info.initial, self.code_info.maximum);
 		let (mut store, memory, instance) = Self::instantiate::<crate::wasm::runtime::Env, _>(
 			code,
 			runtime,

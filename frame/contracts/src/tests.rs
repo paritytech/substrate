@@ -2038,7 +2038,7 @@ fn disabled_chain_extension_errors_on_call() {
 		TestExtension::disable();
 		assert_err_ignore_postinfo!(
 			Contracts::call(RuntimeOrigin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, None, vec![],),
-			"module uses chain extensions but chain extensions are disabled",
+			Error::<Test>::NoChainExtension,
 		);
 	});
 }
