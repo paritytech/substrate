@@ -36,7 +36,7 @@ mod testing;
 mod trie_backend;
 mod trie_backend_essence;
 
-pub use trie_backend::AsTrieDbCache;
+pub use trie_backend::MergeableTrieCacheProvider;
 
 #[cfg(not(feature = "std"))]
 pub use trie_backend::UnimplementedCache;
