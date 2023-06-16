@@ -162,7 +162,8 @@ pub mod tests {
 	}
 
 	// Similarly, we use the defaults provided by own crate as well.
-	#[derive_impl(pallet::config_preludes::TestDefaultConfig as pallet::DefaultConfig)]
+	use pallet::config_preludes::*;
+	#[derive_impl(TestDefaultConfig as pallet::DefaultConfig)]
 	impl crate::pallet::Config for Test {
 		// These two both cannot have defaults.
 		type RuntimeEvent = RuntimeEvent;
