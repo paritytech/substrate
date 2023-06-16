@@ -199,6 +199,7 @@ fn construct_runtime_intermediary_expansion(
 	let mut expansion = quote::quote!(
 		#frame_support::construct_runtime! { #input }
 	);
+
 	for pallet in definition.pallets.iter().filter(|pallet| pallet.pallet_parts.is_none()) {
 		let pallet_path = &pallet.path;
 		let pallet_name = &pallet.name;

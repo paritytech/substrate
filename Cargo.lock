@@ -6584,7 +6584,6 @@ name = "pallet-example-frame-api"
 version = "0.1.0"
 dependencies = [
  "frame",
- "frame-support",
  "parity-scale-codec",
  "scale-info",
 ]

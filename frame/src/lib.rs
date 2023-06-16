@@ -76,7 +76,7 @@ pub mod testing_prelude {
 		assert_storage_noop, derive_impl, ord_parameter_types, parameter_types,
 		parameter_types_impl_thread_local, storage_alias,
 	};
-	pub use frame_system::mocking::*;
+	pub use frame_system::{self, mocking::*};
 	pub use sp_io::TestExternalities as TestState;
 }
 
