@@ -65,7 +65,7 @@ pub trait NetworkProvider: NetworkStateInfo + NetworkPeers {}
 
 impl<T> NetworkProvider for T where T: NetworkStateInfo + NetworkPeers {}
 
-/// Special type that implements [`OffchainStorage`].
+/// Special type that implements [`OffchainStorage`](offchain::OffchainStorage).
 ///
 /// This type can not be constructed and should only be used when passing `None` as `offchain_db` to
 /// [`OffchainWorkerOptions`] to make the compiler happy.
