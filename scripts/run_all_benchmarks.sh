@@ -119,7 +119,6 @@ for PALLET in "${PALLETS[@]}"; do
     --repeat=20 \
     --pallet="$PALLET" \
     --extrinsic="*" \
-    --execution=wasm \
     --wasm-execution=compiled \
     --heap-pages=4096 \
     --output="$WEIGHT_FILE" \
@@ -137,7 +136,6 @@ echo "[+] Benchmarking block and extrinsic overheads..."
 OUTPUT=$(
   $SUBSTRATE benchmark overhead \
   --chain=dev \
-  --execution=wasm \
   --wasm-execution=compiled \
   --weight-path="./frame/support/src/weights/" \
   --header="./HEADER-APACHE2" \
