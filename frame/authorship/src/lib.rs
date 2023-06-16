@@ -80,7 +80,7 @@ impl<T: Config> Pallet<T> {
 	pub fn author() -> Option<T::AccountId> {
 		// Check the memorized storage value.
 		if let Some(author) = <Author<T>>::get() {
-			return Some(author);
+			return Some(author)
 		}
 
 		let digest = <frame_system::Pallet<T>>::digest();
