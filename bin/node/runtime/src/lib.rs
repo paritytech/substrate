@@ -101,7 +101,7 @@ pub use sp_runtime::BuildStorage;
 pub mod impls;
 #[cfg(not(feature = "runtime-benchmarks"))]
 use impls::AllianceIdentityVerifier;
-use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor};
+use impls::{AllianceProposalProvider, Author};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -487,7 +487,7 @@ impl pallet_asset_tx_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Fungibles = Assets;
 	type OnChargeAssetTransaction =
-		pallet_asset_tx_payment::AssetConversionAdapter<Balances, CreditToBlockAuthor>;
+		pallet_asset_tx_payment::AssetConversionAdapter<Balances, AssetConversion>;
 }
 
 parameter_types! {

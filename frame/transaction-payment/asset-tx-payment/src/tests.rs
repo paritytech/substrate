@@ -521,8 +521,9 @@ fn payment_from_account_with_only_assets() {
 #[test]
 fn converted_fee_is_never_zero_if_input_fee_is_not() {
 	let base_weight = 1;
+	let balance_factor = 100;
 	ExtBuilder::default()
-		.balance_factor(100)
+		.balance_factor(balance_factor)
 		.base_weight(Weight::from_parts(base_weight, 0))
 		.build()
 		.execute_with(|| {
@@ -537,22 +538,25 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 				min_balance
 			));
 
+			setup_lp(asset_id, balance_factor);
+
 			// mint into the caller account
-			let caller = 333;
+			let caller = 2;
 			let beneficiary = <Runtime as system::Config>::Lookup::unlookup(caller);
 			let balance = 1000;
+
 			assert_ok!(Assets::mint_into(asset_id.into(), &beneficiary, balance));
 			assert_eq!(Assets::balance(asset_id, caller), balance);
+
 			let weight = 1;
 			let len = 1;
-			let fee = (base_weight + weight + len as u64) * min_balance / ExistentialDeposit::get();
-			// naive fee calculation would round down to zero
-			assert_eq!(fee, 0);
+
+			// there will be no conversion when the fee is zero
 			{
 				let pre = ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
 					.pre_dispatch(&caller, CALL, &info_from_pays(Pays::No), len)
 					.unwrap();
-				// `Pays::No` still implies no fees
+				// `Pays::No` implies there are no fees
 				assert_eq!(Assets::balance(asset_id, caller), balance);
 
 				assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
@@ -564,11 +568,21 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 				));
 				assert_eq!(Assets::balance(asset_id, caller), balance);
 			}
+
+			// validate even a small fee gets converted to asset.
+			let fee_in_native = base_weight + weight + len as u64;
+			let fee_in_asset = AssetConversion::quote_price_tokens_for_exact_tokens(
+				NativeOrAssetId::Asset(asset_id),
+				NativeOrAssetId::Native,
+				fee_in_native,
+				true,
+			)
+			.unwrap();
+
 			let pre = ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
 				.pre_dispatch(&caller, CALL, &info_from_weight(Weight::from_parts(weight, 0)), len)
 				.unwrap();
-			// check that at least one coin was charged in the given asset
-			assert_eq!(Assets::balance(asset_id, caller), balance - 1);
+			assert_eq!(Assets::balance(asset_id, caller), balance - fee_in_asset);
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
@@ -577,7 +591,7 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 				len,
 				&Ok(())
 			));
-			assert_eq!(Assets::balance(asset_id, caller), balance - 1);
+			assert_eq!(Assets::balance(asset_id, caller), balance - fee_in_asset);
 		});
 }
 
@@ -610,7 +624,7 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 
 			let weight = 1;
 			let len = 1;
-			let fee = (base_weight + weight + len as u64) * min_balance / ExistentialDeposit::get();
+			let fee = base_weight + weight + len as u64;
 
 			// calculated fee is greater than 0
 			assert!(fee > 0);
