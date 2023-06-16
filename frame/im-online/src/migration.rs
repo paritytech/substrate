@@ -33,7 +33,7 @@ mod v0 {
 	use super::*;
 	use frame_support::traits::WrapperOpaque;
 
-	#[derive(Encode, Decode)]
+	#[derive(Encode, Decode, Default)]
 	pub(super) struct BoundedOpaqueNetworkState {
 		/// PeerId of the local node in SCALE encoded.
 		pub peer_id: Vec<u8>,
@@ -118,8 +118,7 @@ pub mod v1 {
 	}
 }
 
-#[cfg(test)]
-#[cfg(feature = "try-runtime")]
+#[cfg(all(feature = "try-runtime", test))]
 mod test {
 	use super::*;
 	use crate::mock::{new_test_ext, Runtime as T};

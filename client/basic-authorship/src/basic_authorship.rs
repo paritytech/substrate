@@ -57,7 +57,7 @@ pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
 const DEFAULT_SOFT_DEADLINE_PERCENT: Percent = Percent::from_percent(50);
 
-const LOG_TARGET: &'static str = "basic-authorship";
+const LOG_TARGET: &'static str = "sc-basic-authorship";
 
 /// [`Proposer`] factory.
 pub struct ProposerFactory<A, B, C, PR> {
@@ -341,10 +341,34 @@ where
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
-		let propose_with_start = time::Instant::now();
+		let propose_with_timer = time::Instant::now();
 		let mut block_builder =
 			self.client.new_block_at(self.parent_hash, inherent_digests, PR::ENABLED)?;
 
+		self.apply_inherents(&mut block_builder, inherent_data)?;
+
+		// TODO call `after_inherents` and check if we should apply extrinsincs here
+		// <https://github.com/paritytech/substrate/pull/14275/>
+
+		let block_timer = time::Instant::now();
+		let end_reason =
+			self.apply_extrinsics(&mut block_builder, deadline, block_size_limit).await?;
+		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
+		let block_took = block_timer.elapsed();
+
+		let proof =
+			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
+
+		self.print_summary(&block, end_reason, block_took, propose_with_timer.elapsed());
+		Ok(Proposal { block, proof, storage_changes })
+	}
+
+	/// Apply all inherents to the block.
+	fn apply_inherents(
+		&self,
+		block_builder: &mut sc_block_builder::BlockBuilder<'_, Block, C, B>,
+		inherent_data: InherentData,
+	) -> Result<(), sp_blockchain::Error> {
 		let create_inherents_start = time::Instant::now();
 		let inherents = block_builder.create_inherents(inherent_data)?;
 		let create_inherents_end = time::Instant::now();
@@ -374,10 +398,16 @@ where
 				Ok(_) => {},
 			}
 		}
+		Ok(())
+	}
 
-		// Try to progress any ongoing MBMs. No-OP if there are none.
-		let mode = block_builder.after_inherents()?;
-
+	/// Apply as many extrinsics as possible to the block.
+	async fn apply_extrinsics(
+		&self,
+		block_builder: &mut sc_block_builder::BlockBuilder<'_, Block, C, B>,
+		deadline: time::Instant,
+		block_size_limit: Option<usize>,
+	) -> Result<EndProposingReason, sp_blockchain::Error> {
 		// proceed with transactions
 		// We calculate soft deadline used only in case we start skipping transactions.
 		let now = (self.now)();
@@ -385,7 +415,6 @@ where
 		let left_micros: u64 = left.as_micros().saturated_into();
 		let soft_deadline =
 			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
-		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
 
@@ -396,7 +425,7 @@ where
 		let mut pending_iterator = select! {
 			res = t1 => res,
 			_ = t2 => {
-				log::warn!(target: LOG_TARGET,
+				warn!(target: LOG_TARGET,
 					"Timeout fired waiting for transaction pool at block #{}. \
 					Proceeding with production.",
 					self.parent_number,
@@ -456,7 +485,7 @@ where
 			}
 
 			trace!(target: LOG_TARGET, "[{:?}] Pushing to the block.", pending_tx_hash);
-			match sc_block_builder::BlockBuilder::push(&mut block_builder, pending_tx_data) {
+			match sc_block_builder::BlockBuilder::push(block_builder, pending_tx_data) {
 				Ok(()) => {
 					transaction_pushed = true;
 					debug!(target: LOG_TARGET, "[{:?}] Pushed to the block.", pending_tx_hash);
@@ -495,28 +524,45 @@ where
 		}
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
+		Ok(end_reason)
+	}
 
-		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
-
+	/// Prints a summary and does telemetry + metrics.
+	fn print_summary(
+		&self,
+		block: &Block,
+		end_reason: EndProposingReason,
+		block_took: time::Duration,
+		propose_with_took: time::Duration,
+	) {
+		let extrinsics = block.extrinsics();
 		self.metrics.report(|metrics| {
-			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
-			metrics.block_constructed.observe(block_timer.elapsed().as_secs_f64());
-
+			metrics.number_of_transactions.set(extrinsics.len() as u64);
+			metrics.block_constructed.observe(block_took.as_secs_f64());
 			metrics.report_end_proposing_reason(end_reason);
+			metrics.create_block_proposal_time.observe(propose_with_took.as_secs_f64());
 		});
 
+		let extrinsics_summary = if extrinsics.is_empty() {
+			"no extrinsics".to_string()
+		} else {
+			format!(
+				"extrinsics ({}): [{}]",
+				extrinsics.len(),
+				extrinsics
+					.iter()
+					.map(|xt| BlakeTwo256::hash_of(xt).to_string())
+					.collect::<Vec<_>>()
+					.join(", ")
+			)
+		};
+
 		info!(
-			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; {extrinsics_summary}",
 			block.header().number(),
-			block_timer.elapsed().as_millis(),
+			block_took.as_millis(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
-			block.extrinsics().len(),
-			block.extrinsics()
-				.iter()
-				.map(|xt| BlakeTwo256::hash_of(xt).to_string())
-				.collect::<Vec<_>>()
-				.join(", ")
 		);
 		telemetry!(
 			self.telemetry;
@@ -525,18 +571,6 @@ where
 			"number" => ?block.header().number(),
 			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
 		);
-
-		let proof =
-			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
-
-		let propose_with_end = time::Instant::now();
-		self.metrics.report(|metrics| {
-			metrics.create_block_proposal_time.observe(
-				propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64(),
-			);
-		});
-
-		Ok(Proposal { block, proof, storage_changes })
 	}
 }
 
