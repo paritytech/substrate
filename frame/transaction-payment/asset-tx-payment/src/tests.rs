@@ -479,21 +479,29 @@ fn payment_from_account_with_only_assets() {
 
 			let fee_in_native = base_weight + weight + len as u64;
 			let ed = Balances::minimum_balance();
-			let input_quote = AssetConversion::quote_price_tokens_for_exact_tokens(
+			let fee_in_asset = AssetConversion::quote_price_tokens_for_exact_tokens(
 				NativeOrAssetId::Asset(asset_id),
 				NativeOrAssetId::Native,
 				fee_in_native + ed,
 				true,
-			);
-			assert_eq!(input_quote, Some(301));
+			)
+			.unwrap();
+			assert_eq!(fee_in_asset, 301);
 
-			let fee_in_asset = input_quote.unwrap();
 			let pre = ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
 				.pre_dispatch(&caller, CALL, &info_from_weight(WEIGHT_5), len)
 				.unwrap();
 			assert_eq!(Balances::free_balance(caller), ed);
 			// check that fee was charged in the given asset
 			assert_eq!(Assets::balance(asset_id, caller), balance - fee_in_asset);
+
+			let refund = AssetConversion::quote_price_exact_tokens_for_tokens(
+				NativeOrAssetId::Native,
+				NativeOrAssetId::Asset(asset_id),
+				ed,
+				true,
+			)
+			.unwrap();
 
 			assert_ok!(ChargeAssetTxPayment::<Runtime>::post_dispatch(
 				Some(pre),
@@ -502,9 +510,8 @@ fn payment_from_account_with_only_assets() {
 				len,
 				&Ok(())
 			));
+			assert_eq!(Assets::balance(asset_id, caller), balance - fee_in_asset + refund);
 			assert_eq!(Balances::free_balance(caller), 0);
-			// TODO: fix
-			// assert_eq!(Assets::balance(asset_id, caller), balance - fee_in_asset);
 
 			assert_eq!(TipUnbalancedAmount::get(), 0);
 			assert_eq!(FeeUnbalancedAmount::get(), fee_in_native);
@@ -512,40 +519,6 @@ fn payment_from_account_with_only_assets() {
 }
 
 #[test]
-fn payment_only_with_existing_sufficient_asset() {
-	let base_weight = 5;
-	ExtBuilder::default()
-		.balance_factor(100)
-		.base_weight(Weight::from_parts(base_weight, 0))
-		.build()
-		.execute_with(|| {
-			let asset_id = 1;
-			let caller = 1;
-			let len = 10;
-
-			// pre_dispatch fails for non-existent asset
-			assert!(ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
-				.pre_dispatch(&caller, CALL, &info_from_weight(WEIGHT_5), len)
-				.is_err());
-
-			// create the non-sufficient asset
-			let min_balance = 2;
-			assert_ok!(Assets::force_create(
-				RuntimeOrigin::root(),
-				asset_id.into(),
-				42,    /* owner */
-				false, /* is_sufficient */
-				min_balance
-			));
-
-			// pre_dispatch fails for non-sufficient asset
-			assert!(ChargeAssetTxPayment::<Runtime>::from(0, Some(asset_id))
-				.pre_dispatch(&caller, CALL, &info_from_weight(WEIGHT_5), len)
-				.is_err());
-		});
-}
-
-/*#[test]
 fn converted_fee_is_never_zero_if_input_fee_is_not() {
 	let base_weight = 1;
 	ExtBuilder::default()
@@ -606,7 +579,7 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 			));
 			assert_eq!(Assets::balance(asset_id, caller), balance - 1);
 		});
-}*/
+}
 
 #[test]
 fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {

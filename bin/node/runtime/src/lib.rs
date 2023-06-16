@@ -486,10 +486,8 @@ impl pallet_transaction_payment::Config for Runtime {
 impl pallet_asset_tx_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Fungibles = Assets;
-	type OnChargeAssetTransaction = pallet_asset_tx_payment::FungiblesAdapter<
-		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto, Instance1>,
-		CreditToBlockAuthor,
-	>;
+	type OnChargeAssetTransaction =
+		pallet_asset_tx_payment::AssetConversionAdapter<Balances, CreditToBlockAuthor>;
 }
 
 parameter_types! {

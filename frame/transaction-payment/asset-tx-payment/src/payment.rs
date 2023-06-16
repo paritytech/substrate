@@ -90,7 +90,7 @@ where
 	type AssetId = AssetIdOf<T>;
 	type LiquidityInfo = BalanceOf<T>;
 
-	/// Withdraw the predicted fee from the transaction origin.
+	/// Swap & withdraw the predicted fee from the transaction origin.
 	///
 	/// Note: The `fee` already includes the `tip`.
 	fn withdraw_fee(
@@ -103,10 +103,9 @@ where
 	) -> Result<(LiquidityInfoOf<T>, Self::LiquidityInfo), TransactionValidityError> {
 		// convert the asset into native currency
 		let ed = C::minimum_balance();
-		// 0.101 DOT
 		let swap_amount =
 			if C::balance(&who) >= ed.saturating_add(fee.into()) { fee } else { fee + ed.into() };
-		// 0.101 DOT
+
 		let asset_consumed = CON::swap_tokens_for_exact_native(
 			who.clone(),
 			asset_id,
@@ -120,21 +119,20 @@ where
 		ensure!(asset_consumed > Zero::zero(), InvalidTransaction::Payment);
 
 		// charge the fee in native currency
-		// 0.001 DOT
 		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip).map(|r| (r, swap_amount))
 	}
 
-	/// Delegate to the OnChargeTransaction functionality.
+	/// Correct the fee and swap the refund back to asset.
 	///
 	/// Note: The `corrected_fee` already includes the `tip`.
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
-		corrected_fee: BalanceOf<T>, // 0.0004 DOT
+		corrected_fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
-		already_paid: LiquidityInfoOf<T>,   // 0.001 DOT
-		total_swapped: Self::LiquidityInfo, // 0.101 DOT
+		already_paid: LiquidityInfoOf<T>,
+		total_swapped: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError> {
 		// Refund to the account that paid the fees.
@@ -147,10 +145,12 @@ where
 			already_paid,
 		)?;
 
-		// current balance: 0.1006 DOT
 		let swap_back = total_swapped.saturating_sub(corrected_fee);
 		if !swap_back.is_zero() {
-			let _refund_received = CON::swap_exact_native_for_tokens(
+			// If this fails, the account might have dropped below the existential balance or there
+			// is not enough liquidity left in the pool. In that case we don't throw an error and
+			// the account will keep the native currency.
+			CON::swap_exact_native_for_tokens(
 				who.clone(),
 				asset_id,
 				swap_back,
@@ -158,7 +158,7 @@ where
 				who.clone(),
 				false,
 			)
-			.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
+			.ok();
 		}
 
 		Ok(())
