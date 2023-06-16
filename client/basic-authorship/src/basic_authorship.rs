@@ -353,33 +353,7 @@ where
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 
-		self.metrics.report(|metrics| {
-			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
-			metrics.block_constructed.observe(block_timer.elapsed().as_secs_f64());
-
-			metrics.report_end_proposing_reason(end_reason);
-		});
-
-		info!(
-			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
-			block.header().number(),
-			block_timer.elapsed().as_millis(),
-			<Block as BlockT>::Hash::from(block.header().hash()),
-			block.header().parent_hash(),
-			block.extrinsics().len(),
-			block.extrinsics()
-				.iter()
-				.map(|xt| BlakeTwo256::hash_of(xt).to_string())
-				.collect::<Vec<_>>()
-				.join(", ")
-		);
-		telemetry!(
-			self.telemetry;
-			CONSENSUS_INFO;
-			"prepared_block_for_proposing";
-			"number" => ?block.header().number(),
-			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
-		);
+		self.print_summary(&block, end_reason, &block_timer);
 
 		let proof =
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
@@ -555,6 +529,42 @@ where
 
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 		Ok(end_reason)
+	}
+
+	/// Prints a summary and reports telemetry.
+	fn print_summary(
+		&self,
+		block: &Block,
+		end_reason: EndProposingReason,
+		block_timer: &time::Instant,
+	) {
+		self.metrics.report(|metrics| {
+			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
+			metrics.block_constructed.observe(block_timer.elapsed().as_secs_f64());
+
+			metrics.report_end_proposing_reason(end_reason);
+		});
+
+		info!(
+			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+			block.header().number(),
+			block_timer.elapsed().as_millis(),
+			<Block as BlockT>::Hash::from(block.header().hash()),
+			block.header().parent_hash(),
+			block.extrinsics().len(),
+			block.extrinsics()
+				.iter()
+				.map(|xt| BlakeTwo256::hash_of(xt).to_string())
+				.collect::<Vec<_>>()
+				.join(", ")
+		);
+		telemetry!(
+			self.telemetry;
+			CONSENSUS_INFO;
+			"prepared_block_for_proposing";
+			"number" => ?block.header().number(),
+			"hash" => ?<Block as BlockT>::Hash::from(block.header().hash()),
+		);
 	}
 }
 
