@@ -112,24 +112,6 @@ pub mod pallet {
 		CallAlreadyWhitelisted,
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn integrity_test() {
-			if std::env::var("SKIP_WHITELIST_INTEGRITY_TEST").is_ok() {
-				return
-			}
-
-			let w0 = T::WeightInfo::dispatch_whitelisted_call(0).proof_size();
-			let w1 = T::WeightInfo::dispatch_whitelisted_call(1024).proof_size();
-
-			assert!(
-				w1 > w0,
-				"The PoV weight of `dispatch_whitelisted_call` MUST depend on the \
-				component. See <https://github.com/paritytech/substrate/pull/14408> for more info."
-			);
-		}
-	}
-
 	#[pallet::storage]
 	pub type WhitelistedCall<T: Config> =
 		StorageMap<_, Twox64Concat, PreimageHash, (), OptionQuery>;

@@ -183,7 +183,7 @@ impl WeightInfo for TestWeightInfo {
 		Weight::from_parts(0b0001_0100, 0)
 	}
 	fn service_task_fetched(s: u32) -> Weight {
-		Weight::from_parts((s << 8) as u64 + 0b0010_0100, (s * 100).into())
+		Weight::from_parts((s << 8) as u64 + 0b0010_0100, 0)
 	}
 	fn execute_dispatch_signed() -> Weight {
 		Weight::from_parts(0b0100_0000, 0)
