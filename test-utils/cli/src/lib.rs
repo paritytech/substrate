@@ -160,7 +160,6 @@ where
 {
 	let mut stdio_reader = tokio::io::BufReader::new(stream).lines();
 	while let Ok(Some(line)) = stdio_reader.next_line().await {
-		println!("{:?}", line.as_str());
 		match re.find(line.as_str()) {
 			Some(_) => return Ok(()),
 			None => (),
