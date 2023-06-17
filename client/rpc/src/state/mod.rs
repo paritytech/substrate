@@ -30,7 +30,7 @@ use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{core::async_trait, types::ErrorObject, PendingSubscriptionSink};
 
-use sc_rpc_api::{state::ReadProof, DenyUnsafe};
+use sc_rpc_api::DenyUnsafe;
 use sp_core::{
 	storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey},
 	Bytes,

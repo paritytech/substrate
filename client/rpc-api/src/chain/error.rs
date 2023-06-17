@@ -34,7 +34,7 @@ pub enum Error {
 }
 
 /// Base error code for all chain errors.
-const BASE_ERROR: i32 = 3000;
+const BASE_ERROR: i32 = crate::error::base::CHAIN;
 
 impl From<Error> for ErrorObjectOwned {
 	fn from(e: Error) -> ErrorObjectOwned {

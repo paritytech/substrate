@@ -35,7 +35,7 @@ pub enum Error {
 }
 
 /// Base error code for all offchain errors.
-const BASE_ERROR: i32 = 5000;
+const BASE_ERROR: i32 = crate::error::base::OFFCHAIN;
 
 impl From<Error> for ErrorObjectOwned {
 	fn from(e: Error) -> Self {

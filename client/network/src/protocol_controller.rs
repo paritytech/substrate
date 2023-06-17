@@ -43,7 +43,7 @@
 
 use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
 use libp2p::PeerId;
-use log::{error, trace, warn};
+use log::{debug, error, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_arithmetic::traits::SaturatedConversion;
 use std::{
@@ -513,7 +513,7 @@ impl ProtocolController {
 	fn on_disconnect_peer(&mut self, peer_id: PeerId) {
 		// Don't do anything if the node is reserved.
 		if self.reserved_nodes.contains_key(&peer_id) {
-			warn!(
+			debug!(
 				target: LOG_TARGET,
 				"Ignoring request to disconnect reserved peer {} from {:?}.", peer_id, self.set_id,
 			);
@@ -530,7 +530,7 @@ impl ProtocolController {
 				self.drop_connection(peer_id);
 			},
 			None => {
-				warn!(
+				debug!(
 					target: LOG_TARGET,
 					"Trying to disconnect unknown peer {} from {:?}.", peer_id, self.set_id,
 				);
