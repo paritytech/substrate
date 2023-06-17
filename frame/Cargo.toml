@@ -87,3 +87,4 @@ runtime = [
 	"frame-executive",
 	"frame-system-rpc-runtime-api"
 ]
+try-runtime = ["frame-support/try-runtime"]

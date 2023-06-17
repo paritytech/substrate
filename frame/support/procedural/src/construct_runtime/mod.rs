@@ -199,7 +199,6 @@ fn construct_runtime_intermediary_expansion(
 	let mut expansion = quote::quote!(
 		#frame_support::construct_runtime! { #input }
 	);
-
 	for pallet in definition.pallets.iter().filter(|pallet| pallet.pallet_parts.is_none()) {
 		let pallet_path = &pallet.path;
 		let pallet_name = &pallet.name;
@@ -207,6 +206,7 @@ fn construct_runtime_intermediary_expansion(
 		expansion = quote::quote!(
 			#frame_support::tt_call! {
 				macro = [{ #pallet_path::tt_default_parts }]
+				frame_support = [{ #frame_support }]
 				~~> #frame_support::match_and_insert! {
 					target = [{ #expansion }]
 					pattern = [{ #pallet_name: #pallet_path #pallet_instance }]
@@ -650,6 +650,7 @@ fn decl_static_assertions(
 		quote! {
 			#scrate::tt_call! {
 				macro = [{ #path::tt_error_token }]
+				frame_support = [{ #scrate }]
 				~~> #scrate::assert_error_encoded_size! {
 					path = [{ #path }]
 					runtime = [{ #runtime }]

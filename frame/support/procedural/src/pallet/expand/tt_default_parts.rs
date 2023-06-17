@@ -75,8 +75,6 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		.any(|c| matches!(c.composite_keyword, CompositeKeyword::SlashReason(_)))
 		.then_some(quote::quote!(SlashReason,));
 
-	let scrate = &def.frame_support;
-	let tt_return_path = quote::quote!(#scrate::tt_return);
 	quote::quote!(
 		// This macro follows the conventions as laid out by the `tt-call` crate. It does not
 		// accept any arguments and simply returns the pallet parts, separated by commas, then
@@ -92,8 +90,9 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		macro_rules! #default_parts_unique_id {
 			{
 				$caller:tt
+				frame_support = [{ $($frame_support:ident)::* }]
 			} => {
-				#tt_return_path! {
+				$($frame_support)*::tt_return! {
 					$caller
 					tokens = [{
 						::{

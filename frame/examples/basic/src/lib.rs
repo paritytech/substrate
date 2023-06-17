@@ -272,12 +272,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
-use frame_support::{
+use frame::deps::frame_support::{
 	dispatch::{ClassifyDispatch, DispatchClass, DispatchResult, Pays, PaysFee, WeighData},
 	traits::IsSubType,
 	weights::Weight,
 };
-use frame_system::ensure_signed;
+use frame::deps::frame_system::ensure_signed;
 use log::info;
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -351,12 +351,12 @@ impl<T: pallet_balances::Config> PaysFee<(&BalanceOf<T>,)> for WeightForSetDummy
 
 // Definition of the pallet logic, to be aggregated at runtime definition through
 // `construct_runtime`.
-#[frame_support::pallet]
+#[frame::deps::frame_support::pallet]
 pub mod pallet {
 	// Import various types used to declare pallet in scope.
 	use super::*;
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+	use frame::deps::frame_support::pallet_prelude::*;
+	use frame::deps::frame_system::pallet_prelude::*;
 
 	/// Our pallet's configuration trait. All our types and constants go in here. If the
 	/// pallet is dependent on specific other pallets, then their configuration traits
@@ -364,13 +364,13 @@ pub mod pallet {
 	///
 	/// `frame_system::Config` should always be included.
 	#[pallet::config]
-	pub trait Config: pallet_balances::Config + frame_system::Config {
+	pub trait Config: pallet_balances::Config + frame::deps::frame_system::Config {
 		// Setting a constant config parameter from the runtime
 		#[pallet::constant]
 		type MagicNumber: Get<Self::Balance>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame::deps::frame_system::Config>::RuntimeEvent>;
 
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
@@ -618,7 +618,7 @@ pub mod pallet {
 
 	// The genesis config type.
 	#[pallet::genesis_config]
-	#[derive(frame_support::DefaultNoBound)]
+	#[derive(frame::deps::frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub dummy: T::Balance,
 		pub bar: Vec<(T::AccountId, T::Balance)>,
@@ -710,11 +710,11 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
 where
-	<T as frame_system::Config>::RuntimeCall: IsSubType<Call<T>>,
+	<T as frame::deps::frame_system::Config>::RuntimeCall: IsSubType<Call<T>>,
 {
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
-	type Call = <T as frame_system::Config>::RuntimeCall;
+	type Call = <T as frame::deps::frame_system::Config>::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = ();
 

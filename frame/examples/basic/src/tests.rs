@@ -18,7 +18,7 @@
 //! Tests for pallet-example-basic.
 
 use crate::*;
-use frame_support::{
+use frame::deps::frame_support::{
 	assert_ok,
 	dispatch::{DispatchInfo, GetDispatchInfo},
 	traits::{ConstU64, OnInitialize},
@@ -34,24 +34,24 @@ use sp_runtime::{
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example_basic;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
+type UncheckedExtrinsic = frame::deps::frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame::deps::frame_system::mocking::MockBlock<Test>;
 
 // For testing the pallet, we construct a mock runtime.
-frame_support::construct_runtime!(
+frame::deps::frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame::deps::frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Example: pallet_example_basic::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 );
 
-impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
+impl frame::deps::frame_system::Config for Test {
+	type BaseCallFilter = frame::deps::frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -74,7 +74,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = frame::deps::frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
