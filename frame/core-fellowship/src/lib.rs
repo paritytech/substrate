@@ -65,8 +65,10 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
-	ensure,
-	traits::{tokens::Balance as BalanceTrait, EnsureOrigin, Get, RankedMembers},
+	ensure, impl_ensure_origin_with_arg_ignoring_arg,
+	traits::{
+		tokens::Balance as BalanceTrait, EnsureOrigin, EnsureOriginWithArg, Get, RankedMembers,
+	},
 	BoundedVec, RuntimeDebug,
 };
 
@@ -570,7 +572,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	type Success = T::AccountId;
 
 	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let who = frame_system::EnsureSigned::try_origin(o)?;
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
 		match T::Members::rank_of(&who) {
 			Some(rank) if rank >= MIN_RANK && Member::<T, I>::contains_key(&who) => Ok(who),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
@@ -590,4 +592,10 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 		}
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { T: Config<I>, I: 'static, const MIN_RANK: u16, A } >
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureInducted<T, I, MIN_RANK>
+	{}
 }
