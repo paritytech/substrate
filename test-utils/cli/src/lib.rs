@@ -160,6 +160,7 @@ where
 {
 	let mut stdio_reader = tokio::io::BufReader::new(stream).lines();
 	while let Ok(Some(line)) = stdio_reader.next_line().await {
+		println!("{:?}", line.as_str());
 		match re.find(line.as_str()) {
 			Some(_) => return Ok(()),
 			None => (),
@@ -229,7 +230,7 @@ pub async fn block_hash(block_number: u64, url: &str) -> Result<Hash, String> {
 
 	let result = ChainApi::<(), Hash, Header, ()>::block_hash(
 		&rpc,
-		Some(ListOrValue::Value(NumberOrHex::Number(block_number))),
+		Some(ListOrValue::Value(NumberOrHex::Number(block_number.saturating_sub(1)))),
 	)
 	.await
 	.map_err(|_| "Couldn't get block hash".to_string())?;
