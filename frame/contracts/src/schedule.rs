@@ -188,9 +188,6 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_weight_to_fee`.
 	pub weight_to_fee: Weight,
 
-	/// Weight of calling `gas`.
-	pub gas: Weight,
-
 	/// Weight of calling `seal_input`.
 	pub input: Weight,
 
@@ -417,12 +414,6 @@ impl<T: Config> Default for HostFnWeights<T> {
 			block_number: cost!(seal_block_number),
 			now: cost!(seal_now),
 			weight_to_fee: cost!(seal_weight_to_fee),
-			// Manually remove proof size from basic block cost.
-			//
-			// Due to imperfect benchmarking some host functions incur a small
-			// amount of proof size. Usually this is ok. However, charging a basic block is such
-			// a frequent operation that this would be a vast overestimation.
-			gas: cost!(seal_gas).set_proof_size(0),
 			input: cost!(seal_input),
 			input_per_byte: cost!(seal_input_per_byte),
 			r#return: cost!(seal_return),
