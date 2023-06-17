@@ -565,7 +565,7 @@ benchmarks! {
 		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
 
 		// Re-set the controller account as reward destination.
-		Staking::<T>::set_payee(RawOrigin::Signed(validator_controller.clone()).into(), RewardDestination::Account(controller))?;
+		Staking::<T>::set_payee(RawOrigin::Signed(validator_controller.clone()).into(), RewardDestination::Account(validator_controller))?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
