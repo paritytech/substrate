@@ -252,10 +252,11 @@ mod mock;
 mod tests;
 
 use frame_support::{
+	impl_ensure_origin_with_arg_ignoring_arg,
 	pallet_prelude::*,
 	traits::{
-		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, ExistenceRequirement::AllowDeath,
-		Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
+		BalanceStatus, ChangeMembers, Currency, EnsureOrigin, EnsureOriginWithArg,
+		ExistenceRequirement::AllowDeath, Imbalance, OnUnbalanced, Randomness, ReservableCurrency,
 	},
 	PalletId,
 };
@@ -643,21 +644,11 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub pot: BalanceOf<T, I>,
 		pub members: Vec<T::AccountId>,
 		pub max_members: u32,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
-		fn default() -> Self {
-			Self {
-				pot: Default::default(),
-				members: Default::default(),
-				max_members: Default::default(),
-			}
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -1189,6 +1180,12 @@ impl<T: Config> EnsureOrigin<T::RuntimeOrigin> for EnsureFounder<T> {
 		let founder = Founder::<T>::get().ok_or(())?;
 		Ok(T::RuntimeOrigin::from(frame_system::RawOrigin::Signed(founder)))
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl<{ T: Config, A }>
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureFounder<T>
+	{}
 }
 
 /// Pick an item at pseudo-random from the slice, given the `rng`. `None` iff the slice is empty.

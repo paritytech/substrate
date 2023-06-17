@@ -37,7 +37,7 @@ pub mod pallet {
 	pub type Value<T> = StorageValue<_, u32>;
 
 	#[pallet::genesis_config]
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	pub struct GenesisConfig {}
 
 	#[pallet::genesis_build]

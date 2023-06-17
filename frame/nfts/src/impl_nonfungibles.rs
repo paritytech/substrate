@@ -117,6 +117,11 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	///
 	/// Default implementation is that all items are transferable.
 	fn can_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> bool {
+		use PalletAttributes::TransferDisabled;
+		match Self::has_system_attribute(&collection, &item, TransferDisabled) {
+			Ok(transfer_disabled) if transfer_disabled => return false,
+			_ => (),
+		}
 		match (
 			CollectionConfigOf::<T, I>::get(collection),
 			ItemConfigOf::<T, I>::get(collection, item),
@@ -321,6 +326,23 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		destination: &T::AccountId,
 	) -> DispatchResult {
 		Self::do_transfer(*collection, *item, destination.clone(), |_, _| Ok(()))
+	}
+
+	fn disable_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+		<Self as Mutate<T::AccountId, ItemConfig>>::set_attribute(
+			collection,
+			item,
+			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
+			&[],
+		)
+	}
+
+	fn enable_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+		<Self as Mutate<T::AccountId, ItemConfig>>::clear_attribute(
+			collection,
+			item,
+			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
+		)
 	}
 }
 

@@ -30,8 +30,7 @@ pub use substrate_test_runtime as runtime;
 
 pub use self::block_builder_ext::BlockBuilderExt;
 
-use sp_core::storage::{ChildInfo, Storage, StorageChild};
-use substrate_test_client::sc_executor::WasmExecutor;
+use sp_core::storage::ChildInfo;
 use substrate_test_runtime::genesismap::GenesisStorageBuilder;
 
 /// A prelude to import in tests.
@@ -102,7 +101,7 @@ impl GenesisInit for GenesisParameters {
 			.with_heap_pages(self.heap_pages_override)
 			.with_wasm_code(&self.wasm_code)
 			.with_extra_storage(self.extra_storage.clone())
-			.build_storage()
+			.build()
 	}
 }
 

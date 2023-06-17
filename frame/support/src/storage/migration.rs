@@ -37,18 +37,16 @@ pub struct StorageIterator<T> {
 
 impl<T> StorageIterator<T> {
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
-	#[deprecated(
-		note = "Please use the storage_iter or storage_iter_with_suffix functions instead"
-	)]
+	#[deprecated(note = "Will be removed after July 2023; Please use the storage_iter or \
+		storage_iter_with_suffix functions instead")]
 	pub fn new(module: &[u8], item: &[u8]) -> Self {
 		#[allow(deprecated)]
 		Self::with_suffix(module, item, &[][..])
 	}
 
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
-	#[deprecated(
-		note = "Please use the storage_iter or storage_iter_with_suffix functions instead"
-	)]
+	#[deprecated(note = "Will be removed after July 2023; Please use the storage_iter or \
+		storage_iter_with_suffix functions instead")]
 	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
 		let mut prefix = Vec::new();
 		let storage_prefix = storage_prefix(module, item);
@@ -102,18 +100,16 @@ pub struct StorageKeyIterator<K, T, H: ReversibleStorageHasher> {
 
 impl<K, T, H: ReversibleStorageHasher> StorageKeyIterator<K, T, H> {
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
-	#[deprecated(
-		note = "Please use the storage_key_iter or storage_key_iter_with_suffix functions instead"
-	)]
+	#[deprecated(note = "Will be removed after July 2023; Please use the storage_key_iter or \
+		storage_key_iter_with_suffix functions instead")]
 	pub fn new(module: &[u8], item: &[u8]) -> Self {
 		#[allow(deprecated)]
 		Self::with_suffix(module, item, &[][..])
 	}
 
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
-	#[deprecated(
-		note = "Please use the storage_key_iter or storage_key_iter_with_suffix functions instead"
-	)]
+	#[deprecated(note = "Will be removed after July 2023; Please use the storage_key_iter or \
+		storage_key_iter_with_suffix functions instead")]
 	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
 		let mut prefix = Vec::new();
 		let storage_prefix = storage_prefix(module, item);

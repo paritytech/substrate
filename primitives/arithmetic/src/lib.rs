@@ -40,7 +40,9 @@ pub mod per_things;
 pub mod rational;
 pub mod traits;
 
-pub use fixed_point::{FixedI128, FixedI64, FixedPointNumber, FixedPointOperand, FixedU128};
+pub use fixed_point::{
+	FixedI128, FixedI64, FixedPointNumber, FixedPointOperand, FixedU128, FixedU64,
+};
 pub use per_things::{
 	InnerOf, MultiplyArg, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, RationalArg,
 	ReciprocalArg, Rounding, SignedRounding, UpperOf,
@@ -53,12 +55,12 @@ use traits::{BaseArithmetic, One, SaturatedConversion, Unsigned, Zero};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// Arithmetic errors.
 #[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ArithmeticError {
 	/// Underflow.
 	Underflow,

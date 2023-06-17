@@ -18,7 +18,7 @@
 use super::helper;
 use frame_support_procedural_tools::get_doc_literals;
 use quote::ToTokens;
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, token, Token};
 
 /// List of additional token to be used for parsing.
 mod keyword {
@@ -27,12 +27,14 @@ mod keyword {
 	syn::custom_keyword!(T);
 	syn::custom_keyword!(I);
 	syn::custom_keyword!(config);
+	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(IsType);
 	syn::custom_keyword!(RuntimeEvent);
 	syn::custom_keyword!(Event);
-	syn::custom_keyword!(constant);
 	syn::custom_keyword!(frame_system);
 	syn::custom_keyword!(disable_frame_system_supertrait_check);
+	syn::custom_keyword!(no_default);
+	syn::custom_keyword!(constant);
 }
 
 /// Input definition for the pallet config.
@@ -52,6 +54,12 @@ pub struct ConfigDef {
 	pub where_clause: Option<syn::WhereClause>,
 	/// The span of the pallet::config attribute.
 	pub attr_span: proc_macro2::Span,
+	/// Whether a default sub-trait should be generated.
+	///
+	/// Contains default sub-trait items (instantiated by `#[pallet::config(with_default)]`).
+	/// Vec will be empty if `#[pallet::config(with_default)]` is not specified or if there are
+	/// no trait items
+	pub default_sub_trait: Vec<syn::TraitItem>,
 }
 
 /// Input definition for a constant in pallet config.
@@ -123,40 +131,28 @@ impl syn::parse::Parse for DisableFrameSystemSupertraitCheck {
 	}
 }
 
-/// Parse for `#[pallet::constant]`
-pub struct TypeAttrConst {
-	pound_token: syn::Token![#],
-	bracket_token: syn::token::Bracket,
-	pallet_ident: syn::Ident,
-	path_sep_token: syn::token::PathSep,
-	constant_keyword: keyword::constant,
+/// Parsing for the `typ` portion of `PalletAttr`
+#[derive(derive_syn_parse::Parse, PartialEq, Eq)]
+pub enum PalletAttrType {
+	#[peek(keyword::no_default, name = "no_default")]
+	NoDefault(keyword::no_default),
+	#[peek(keyword::constant, name = "constant")]
+	Constant(keyword::constant),
 }
 
-impl syn::parse::Parse for TypeAttrConst {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		let pound_token = input.parse::<syn::Token![#]>()?;
-		let content;
-		let bracket_token = syn::bracketed!(content in input);
-		let pallet_ident = content.parse::<syn::Ident>()?;
-		let path_sep_token = content.parse::<syn::Token![::]>()?;
-		let constant_keyword = content.parse::<keyword::constant>()?;
-
-		Ok(Self { pound_token, bracket_token, pallet_ident, path_sep_token, constant_keyword })
-	}
+/// Parsing for `#[pallet::X]`
+#[derive(derive_syn_parse::Parse)]
+pub struct PalletAttr {
+	_pound: Token![#],
+	#[bracket]
+	_bracket: token::Bracket,
+	#[inside(_bracket)]
+	_pallet: keyword::pallet,
+	#[prefix(Token![::] in _bracket)]
+	#[inside(_bracket)]
+	typ: PalletAttrType,
 }
 
-impl ToTokens for TypeAttrConst {
-	fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-		self.pound_token.to_tokens(tokens);
-		self.bracket_token.surround(tokens, |tokens| {
-			self.pallet_ident.to_tokens(tokens);
-			self.path_sep_token.to_tokens(tokens);
-			self.constant_keyword.to_tokens(tokens);
-		})
-	}
-}
-
-/// Parse for `$ident::Config`
 pub struct ConfigBoundParse(syn::Ident);
 
 impl syn::parse::Parse for ConfigBoundParse {
@@ -307,6 +303,7 @@ impl ConfigDef {
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
+		enable_default: bool,
 	) -> syn::Result<Self> {
 		let item = if let syn::Item::Trait(item) = item {
 			item
@@ -344,38 +341,59 @@ impl ConfigDef {
 
 		let mut has_event_type = false;
 		let mut consts_metadata = vec![];
+		let mut default_sub_trait = vec![];
 		for trait_item in &mut item.items {
-			// Parse for event
-			has_event_type =
-				has_event_type || check_event_type(frame_system, trait_item, has_instance)?;
+			let is_event = check_event_type(frame_system, trait_item, has_instance)?;
+			has_event_type = has_event_type || is_event;
 
-			// Parse for constant
-			let type_attrs_const: Vec<TypeAttrConst> = helper::take_item_pallet_attrs(trait_item)?;
+			let mut already_no_default = false;
+			let mut already_constant = false;
 
-			if type_attrs_const.len() > 1 {
-				let msg = "Invalid attribute in pallet::config, only one attribute is expected";
-				return Err(syn::Error::new(type_attrs_const[1].span(), msg))
-			}
-
-			if type_attrs_const.len() == 1 {
-				match trait_item {
-					syn::TraitItem::Type(ref type_) => {
-						let constant = ConstMetadataDef::try_from(type_)?;
-						consts_metadata.push(constant);
+			while let Ok(Some(pallet_attr)) =
+				helper::take_first_item_pallet_attr::<PalletAttr>(trait_item)
+			{
+				match (pallet_attr.typ, &trait_item) {
+					(PalletAttrType::Constant(_), syn::TraitItem::Type(ref typ)) => {
+						if already_constant {
+							return Err(syn::Error::new(
+								pallet_attr._bracket.span.join(),
+								"Duplicate #[pallet::constant] attribute not allowed.",
+							))
+						}
+						already_constant = true;
+						consts_metadata.push(ConstMetadataDef::try_from(typ)?);
 					},
-					_ => {
-						let msg =
-							"Invalid pallet::constant in pallet::config, expected type trait \
-							item";
-						return Err(syn::Error::new(trait_item.span(), msg))
+					(PalletAttrType::Constant(_), _) =>
+						return Err(syn::Error::new(
+							trait_item.span(),
+							"Invalid #[pallet::constant] in #[pallet::config], expected type item",
+						)),
+					(PalletAttrType::NoDefault(_), _) => {
+						if !enable_default {
+							return Err(syn::Error::new(
+								pallet_attr._bracket.span.join(),
+								"`#[pallet:no_default]` can only be used if `#[pallet::config(with_default)]` \
+								has been specified"
+							))
+						}
+						if already_no_default {
+							return Err(syn::Error::new(
+								pallet_attr._bracket.span.join(),
+								"Duplicate #[pallet::no_default] attribute not allowed.",
+							))
+						}
+						already_no_default = true;
 					},
 				}
+			}
+
+			if !already_no_default && !is_event && enable_default {
+				default_sub_trait.push(trait_item.clone());
 			}
 		}
 
 		let attr: Option<DisableFrameSystemSupertraitCheck> =
 			helper::take_first_item_pallet_attr(&mut item.attrs)?;
-
 		let disable_system_supertrait_check = attr.is_some();
 
 		let has_frame_system_supertrait = item.supertraits.iter().any(|s| {
@@ -407,6 +425,14 @@ impl ConfigDef {
 			return Err(syn::Error::new(item.span(), msg))
 		}
 
-		Ok(Self { index, has_instance, consts_metadata, has_event_type, where_clause, attr_span })
+		Ok(Self {
+			index,
+			has_instance,
+			consts_metadata,
+			has_event_type,
+			where_clause,
+			attr_span,
+			default_sub_trait,
+		})
 	}
 }
