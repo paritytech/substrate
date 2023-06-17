@@ -20,6 +20,7 @@
 #[cfg(feature = "try-runtime")]
 mod tests {
 	use assert_cmd::cargo::cargo_bin;
+	use node_primitives::Hash;
 	use regex::Regex;
 	use std::{process, time::Duration};
 	use substrate_cli_test_utils as common;
@@ -31,13 +32,14 @@ mod tests {
 		common::build_substrate(&["--features=try-runtime"]);
 
 		common::run_with_timeout(Duration::from_secs(60), async move {
-			fn execute_block(ws_url: &str) -> Child {
+			fn execute_block(ws_url: &str, at: Hash) -> Child {
 				Command::new(cargo_bin("substrate"))
 					.stdout(process::Stdio::piped())
 					.stderr(process::Stdio::piped())
 					.args(&["try-runtime", "--runtime=existing"])
 					.args(&["execute-block"])
 					.args(&["live", format!("--uri={}", ws_url).as_str()])
+					.args(&["--at", format!("{:?}", at).as_str()])
 					.kill_on_drop(true)
 					.spawn()
 					.unwrap()
@@ -46,10 +48,18 @@ mod tests {
 			// Start a node and wait for it to begin finalizing blocks
 			let mut node = common::KillChildOnDrop(common::start_node());
 			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
-			common::wait_n_finalized_blocks(1, &ws_url).await;
+			common::wait_n_finalized_blocks(3, &ws_url).await;
 
-			// Try to execute a block.
-			let mut block_execution = execute_block(&ws_url);
+			let block_number = 1;
+			let block_hash = common::block_hash(block_number, &ws_url).await.unwrap();
+			println!("{:?}", block_hash);
+
+			// Try to execute the block.
+			let mut block_execution = execute_block(&ws_url, block_hash);
+
+			let output_to_match = format!(r#".*Block #{} successfully executed"#, block_number);
+			println!("{}", output_to_match);
+			//let re = Regex::new(output_to_match.as_str()).unwrap();
 			let re = Regex::new(r#".*Block #(\d+) successfully executed"#).unwrap();
 			let matched =
 				common::wait_for_stream_pattern_match(block_execution.stderr.take().unwrap(), re)
