@@ -52,15 +52,12 @@ mod tests {
 
 			let block_number = 1;
 			let block_hash = common::block_hash(block_number, &ws_url).await.unwrap();
-			println!("{:?}", block_hash);
 
 			// Try to execute the block.
 			let mut block_execution = execute_block(&ws_url, block_hash);
 
-			let output_to_match = format!(r#".*Block #{} successfully executed"#, block_number);
-			println!("{}", output_to_match);
-			//let re = Regex::new(output_to_match.as_str()).unwrap();
-			let re = Regex::new(r#".*Block #(\d+) successfully executed"#).unwrap();
+			let expected_output = format!(r#".*Block #{} successfully executed"#, block_number);
+			let re = Regex::new(expected_output.as_str()).unwrap();
 			let matched =
 				common::wait_for_stream_pattern_match(block_execution.stderr.take().unwrap(), re)
 					.await;
