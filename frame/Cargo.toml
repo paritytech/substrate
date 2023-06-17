@@ -24,6 +24,7 @@ sp-core = { default-features = false, path = "../primitives/core" }
 sp-arithmetic = { default-features = false, path = "../primitives/arithmetic" }
 
 # frame deps, for developing FRAME pallets.
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "./benchmarking" }
 frame-support = { default-features = false,  path = "./support" }
 frame-system = { default-features = false,  path = "./system" }
 
@@ -72,6 +73,9 @@ std = [
 
 	"frame-executive?/std",
 	"frame-system-rpc-runtime-api?/std",
+
+	# Optional deps for runtime-benchmarks feature
+	"frame-benchmarking?/std",
 ]
 runtime = [
 	"sp-version",
@@ -88,3 +92,4 @@ runtime = [
 	"frame-system-rpc-runtime-api"
 ]
 try-runtime = ["frame-support/try-runtime"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]

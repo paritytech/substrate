@@ -21,8 +21,8 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use crate::*;
-use frame_benchmarking::v2::*;
-use frame_system::RawOrigin;
+use frame::deps::frame_benchmarking::v2::*;
+use frame::deps::frame_system::RawOrigin;
 
 // To actually run this benchmark on pallet-example-basic, we need to put this pallet into the
 //   runtime and compile it with `runtime-benchmarks` feature. The detail procedures are

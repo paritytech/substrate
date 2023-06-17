@@ -16,7 +16,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
 frame = { version = "0.0.1-dev", default-features = false, path = "../../../frame/" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
 sp-io = { version = "23.0.0", default-features = false, path = "../../../primitives/io" }
@@ -30,7 +29,6 @@ sp-core = { version = "21.0.0", default-features = false, path = "../../../primi
 default = ["std"]
 std = [
 	"codec/std",
-	"frame-benchmarking?/std",
 	"frame/std",
 	"log/std",
 	"pallet-balances/std",
@@ -39,5 +37,5 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+runtime-benchmarks = ["frame/runtime-benchmarks"]
 try-runtime = ["frame/try-runtime"]

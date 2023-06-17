@@ -2613,6 +2613,7 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 name = "frame"
 version = "0.0.1-dev"
 dependencies = [
+ "frame-benchmarking",
  "frame-executive",
  "frame-support",
  "frame-system",
@@ -6567,7 +6568,6 @@ name = "pallet-example-basic"
 version = "4.0.0-dev"
 dependencies = [
  "frame",
- "frame-benchmarking",
  "log",
  "pallet-balances",
  "parity-scale-codec",

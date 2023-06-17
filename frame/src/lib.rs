@@ -266,4 +266,7 @@ pub mod deps {
 	pub use sp_api;
 	#[cfg(feature = "runtime")]
 	pub use sp_version;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	pub use frame_benchmarking;
 }
