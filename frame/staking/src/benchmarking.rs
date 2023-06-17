@@ -559,7 +559,7 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
-			RewardDestination::Account(n.into()),
+			RewardDestination::Stash, // NOTE: stash and controller are the same account.
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
