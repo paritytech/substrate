@@ -11138,7 +11138,7 @@ dependencies = [
 name = "sp-core"
 version = "21.0.0"
 dependencies = [
- "aes-gcm 0.10.1",
+ "aes-gcm 0.10.2",
  "array-bytes 4.2.0",
  "bitflags",
  "blake2",
