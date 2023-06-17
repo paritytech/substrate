@@ -559,15 +559,19 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
-			RewardDestination::Stash, // NOTE: stash and controller are the same account.
+			RewardDestination::Stash,
 		)?;
+
+		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
+
+		// Re-set the controller account as reward destination.
+		Staking::<T>::set_payee(RawOrigin::Signed(validator_controller.clone()).into(), RewardDestination::Account(controller))?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
 		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
 
 		let caller = whitelisted_caller();
-		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
 		let balance_before = T::Currency::free_balance(&validator_controller);
 		for (_, controller) in &nominators {
 			let balance = T::Currency::free_balance(controller);
