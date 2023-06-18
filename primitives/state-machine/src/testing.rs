@@ -418,6 +418,7 @@ mod tests {
 			original_ext.backend.backend_storage_mut().emplace(
 				ref_count_key,
 				hash_db::EMPTY_PREFIX,
+				// The value is inconsequential since we are emplacing on an existing key.
 				(&[0u8; 32]).to_vec(),
 			);
 		}
