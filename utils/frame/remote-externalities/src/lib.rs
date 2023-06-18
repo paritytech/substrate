@@ -62,7 +62,8 @@ const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
 struct Snapshot<B: BlockT> {
 	state_version: StateVersion,
 	block_hash: B::Hash,
-	raw_storage: Vec<(H256, Vec<u8>)>,
+	// <Vec<Key, (Value, MemoryDbRefCount)>>
+	raw_storage: Vec<(H256, (Vec<u8>, i32))>,
 	storage_root: H256,
 }
 
