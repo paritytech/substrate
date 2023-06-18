@@ -173,11 +173,7 @@ where
 			// Each time .emplace is called the internal MemoryDb ref count increments.
 			// Repeatedly call emplace to initialise the ref count to the correct value.
 			for _ in 0..ref_count {
-				self.backend.backend_storage_mut().emplace(
-					k.clone(),
-					hash_db::EMPTY_PREFIX,
-					v.clone(),
-				);
+				self.backend.backend_storage_mut().emplace(k, hash_db::EMPTY_PREFIX, v.clone());
 			}
 		}
 		self.backend.set_root(storage_root);
