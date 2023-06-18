@@ -19,13 +19,13 @@
 
 use parking_lot::RwLock;
 use sp_application_crypto::{AppCrypto, AppPair, IsWrappedBy};
-#[cfg(feature = "bls-experimental")]
-use sp_core::{bls377, bls381};
 use sp_core::{
 	bandersnatch,
 	crypto::{ByteArray, ExposeSecret, KeyTypeId, Pair as CorePair, SecretString, VrfSecret},
 	ecdsa, ed25519, sr25519,
 };
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 use sp_keystore::{Error as TraitError, Keystore, KeystorePtr};
 use std::{
 	collections::HashMap,
@@ -239,6 +239,9 @@ impl Keystore for LocalKeystore {
 		self.public_keys::<bandersnatch::Pair>(key_type)
 	}
 
+	/// Generate a new pair compatible with the 'bandersnatch' signature scheme.
+	///
+	/// If `[seed]` is `Some` then the key will be ephemeral and stored in memory.
 	fn bandersnatch_generate_new(
 		&self,
 		key_type: KeyTypeId,

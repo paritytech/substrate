@@ -32,6 +32,7 @@ pub use app::{Public as AppPublic, Signature as AppSignature};
 impl RuntimePublic for Public {
 	type Signature = Signature;
 
+	/// Dummy implementation. Returns an empty vector.
 	fn all(_key_type: KeyTypeId) -> Vec<Self> {
 		Vec::new()
 	}
@@ -40,10 +41,12 @@ impl RuntimePublic for Public {
 		sp_io::crypto::bandersnatch_generate(key_type, seed)
 	}
 
+	/// Dummy implementation. Returns `None`.
 	fn sign<M: AsRef<[u8]>>(&self, _key_type: KeyTypeId, _msg: &M) -> Option<Self::Signature> {
 		None
 	}
 
+	/// Dummy implementation. Returns `false`.
 	fn verify<M: AsRef<[u8]>>(&self, _msg: &M, _signature: &Self::Signature) -> bool {
 		false
 	}

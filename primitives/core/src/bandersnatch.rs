@@ -15,7 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! TODO DOCS.
+//! VRFs backed by [Bandersnatch](https://neuromancer.sk/std/bls/Bandersnatch),
+//! an elliptic curve built over BLS12-381 scalar field.
+//!
+//! The Bandersnatch curve can be represented in twisted Edwards coordinates, allowing
+//! efficieny inside zk-SNARKS circuits.
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
@@ -37,17 +41,21 @@ use sp_std::{boxed::Box, vec::Vec};
 /// Identifier used to match public keys against bandersnatch-vrf keys.
 pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bs38");
 
+/// Context used to produce
 #[cfg(feature = "full_crypto")]
-const SIGNING_CTX: &[u8] = b"SigningContext";
+pub const SIGNING_CTX: &[u8] = b"SigningContext";
 
 #[cfg(feature = "full_crypto")]
 const SEED_SERIALIZED_LEN: usize = 32;
 
-// Edwards form sizes (TODO davxy: propably in the end we'll use this form)
+// Edwards form sizes
+// @burdges @swasilyev: currently ring-proof is using SHORT-WEIERSTRASS
+// I had to temporary patch bandersnatch_vrfs crate to use SW instrad of ED...
+// (@davxy: probably we'll use ED form)
 // const PUBLIC_SERIALIZED_LEN: usize = 32;
 // const SIGNATURE_SERIALIZED_LEN: usize = 64;
 
-// Short-Weierstrass form sizes
+// Short-Weierstrass form sizes (TEMPORARY)
 const PUBLIC_SERIALIZED_LEN: usize = 33;
 const SIGNATURE_SERIALIZED_LEN: usize = 65;
 
@@ -66,9 +74,16 @@ const PEDERSEN_SIGNATURE_SERIALIZED_LEN: usize = 163;
 const RING_PROOF_SERIALIZED_LEN: usize = 592;
 
 // Sise of serialized ring-vrf context params
+// @burdges @swasilyev: This is quite big...
+// This size grows with the domain size.
+// Example values
+// domsize -> serialized-size-in-kilobytes
+// 2^9  ->  74 KB
+// 2^10 -> 147 KB
+// 2^11 -> 295 KB
 const RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN: usize = 147744;
 
-/// XXX.
+/// Bandersnatch public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(
 	Clone,
@@ -148,7 +163,9 @@ impl sp_std::fmt::Debug for Public {
 	}
 }
 
-/// TODO davxy: DOCS
+/// Bandersnatch signature.
+///
+/// The signature is created via the [VrfSecret::vrf_sign] using [SIGNING_CTX] as `label` parameter.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo)]
 pub struct Signature([u8; SIGNATURE_SERIALIZED_LEN]);
@@ -205,11 +222,11 @@ impl sp_std::fmt::Debug for Signature {
 	}
 }
 
-/// The raw secret seed, which can be used to recreate the `Pair`.
+/// The raw secret seed, which can be used to reconstruct the secret `Pair`.
 #[cfg(feature = "full_crypto")]
 type Seed = [u8; SEED_SERIALIZED_LEN];
 
-/// TODO davxy: DOCS
+/// Bandersnatch secret key.
 #[cfg(feature = "full_crypto")]
 #[derive(Clone)]
 pub struct Pair(SecretKey);
@@ -284,9 +301,9 @@ impl TraitPair for Pair {
 
 	/// Return a vec filled with seed raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
-		// TODO davxy: makes sense??? Should we returne the seed or serialized secret key?
-		// If we return the serialized secret there is no method to reconstruct if ...
-		// unimplemented!()
+		// TODO @davxy: this function existance makes sense??? Should we return the seed or
+		// serialized secret key? If we return the serialized secret there is no method to
+		// reconstruct if ... unimplemented!()
 		panic!()
 	}
 }
@@ -296,7 +313,7 @@ impl CryptoType for Pair {
 	type Pair = Pair;
 }
 
-/// VRF related types and operations.
+/// Bandersnatch VRF types and operations.
 pub mod vrf {
 	use super::*;
 	use crate::{bounded::BoundedVec, crypto::VrfCrypto, ConstU32};
@@ -305,13 +322,15 @@ pub mod vrf {
 		ThinVrfSignature, Transcript,
 	};
 
-	/// Max number of VRF inputs/outputs
+	/// Max number of inputs/outputs which can be handled by the VRF signing procedures.
 	pub const MAX_VRF_IOS: u32 = 3;
 
 	/// Bounded vector used for VRF inputs and outputs.
+	///
+	/// Can contain at most `[MAX_VRF_IOS]` elements.
 	pub type VrfIosVec<T> = BoundedVec<T, ConstU32<MAX_VRF_IOS>>;
 
-	/// Input to be used for VRF sign and verify operations.
+	/// VRF input to construct a `[VrfOutput]` instance and embeddable within `[VrfSignData]`.
 	#[derive(Clone, Debug)]
 	pub struct VrfInput(pub(super) bandersnatch_vrfs::VrfInput);
 
@@ -319,9 +338,15 @@ pub mod vrf {
 		/// Build a new VRF input.
 		///
 		/// Each message tuple has the form: (domain, data).
-		// TODO: Maybe we should access directly the transcript.
-		// I see a commented method in bandersnatch_vrfs crate that fullfil what we need...
 		pub fn new(label: &'static [u8], messages: &[(&[u8], &[u8])]) -> Self {
+			// ⚠️ TODO @davxy @burdges (temporary hack and needs to be fixed)
+			// `bandersnatch_vrfs::Message` maps to a single (domain, data) tuple.
+			// We need something to push multiple messages together with a `label`.
+			// One solution is to construct the labeled Transcript here and then use
+			// `dleq_vrf::into_vrf_input()`.
+			// But has been commented out:
+			// https://github.com/w3f/ring-vrf/blob/8ab7b7b56e844f80b76afb1742b201fd69fb6046/dleq_vrf/src/vrf.rs#L38-L55
+			// THIS IS JUST A PLACEHOLDER and we are ignoring the lablel and concat the dom++msgs.
 			let _ = label;
 			let mut buf = Vec::new();
 			messages.into_iter().for_each(|(domain, message)| {
@@ -333,7 +358,9 @@ pub mod vrf {
 		}
 	}
 
-	/// TODO davxy docs
+	/// VRF (pre)output derived from `[VrfInput]` using a `[VrfSecret]`.
+	///
+	/// This is used to produce a verifiable arbitrary number of "random" bytes.
 	#[derive(Clone, Debug, PartialEq, Eq)]
 	pub struct VrfOutput(pub(super) bandersnatch_vrfs::VrfPreOut);
 
@@ -370,16 +397,23 @@ pub mod vrf {
 		}
 	}
 
-	/// TODO davxy docs
+	/// A Fiat-Shamir transcript and a sequence of `[VrfInput]`s ready to be signed.
 	pub struct VrfSignData {
-		/// Associated Fiat-Shamir transcript
-		pub transcript: Transcript,
 		/// VRF inputs to be signed.
 		pub vrf_inputs: VrfIosVec<VrfInput>,
+		/// Associated Fiat-Shamir transcript
+		pub transcript: Transcript,
 	}
 
 	impl VrfSignData {
-		/// Construct a new data to be signed.
+		/// Construct a new signable data instance.
+		///
+		/// The `[transcript_data]` will be used as messages for the Fiat-Shamir
+		/// transform part of the scheme. If unsure just give it a unique label
+		/// depending on the actual usage of the signing data
+		/// (@burges: or leave it empty? There is already the `label` field for contextualization).
+		/// The `[vrf_inputs]` is a sequence of `[VrfInput]`s to be signed and which
+		/// contribute to the actual output bytes produced via the VRF.
 		pub fn new<T: Into<VrfIosVec<VrfInput>>>(
 			label: &'static [u8],
 			transcript_data: &[&[u8]],
@@ -392,7 +426,8 @@ pub mod vrf {
 
 		/// Construct a new data to be signed from an iterator of `VrfInputs`.
 		///
-		/// Returns `Err` if the `vrf_inputs` yields more elements than `MAX_VRF_IOS`
+		/// Fails if the `vrf_inputs` yields more elements than `[MAX_VRF_IOS]`
+		// TODO @davxy: maybe we can just provide one constructor...
 		pub fn from_iter<T: IntoIterator<Item = VrfInput>>(
 			label: &'static [u8],
 			transcript_data: &[&[u8]],
@@ -427,9 +462,9 @@ pub mod vrf {
 	/// VRF signature.
 	#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 	pub struct VrfSignature {
-		/// VRF pre-outputs
+		/// VRF (pre)outputs.
 		pub vrf_outputs: VrfIosVec<VrfOutput>,
-		/// VRF signature
+		/// Transcript @davxy TODO doc signature.
 		pub signature: Signature,
 	}
 
@@ -444,14 +479,15 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	impl VrfSecret for Pair {
 		fn vrf_sign(&self, data: &Self::VrfSignData) -> Self::VrfSignature {
+			// TODO: @davxy
 			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a vec or boxed version?
+			// @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
 			match data.vrf_inputs.len() {
 				0 => self.vrf_sign_gen::<0>(data),
 				1 => self.vrf_sign_gen::<1>(data),
 				2 => self.vrf_sign_gen::<2>(data),
 				3 => self.vrf_sign_gen::<3>(data),
-				_ => panic!("Max VRF inputs is set to: {}", MAX_VRF_IOS),
+				_ => unreachable!(),
 			}
 		}
 
@@ -475,13 +511,13 @@ pub mod vrf {
 				return false
 			}
 			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a vec or boxed version?
+			// @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
 			match preouts_len {
 				0 => self.vrf_verify_gen::<0>(data, signature),
 				1 => self.vrf_verify_gen::<1>(data, signature),
 				2 => self.vrf_verify_gen::<2>(data, signature),
 				3 => self.vrf_verify_gen::<3>(data, signature),
-				_ => panic!("Max VRF input messages is set to: {}", MAX_VRF_IOS),
+				_ => unreachable!(),
 			}
 		}
 	}
@@ -509,9 +545,7 @@ pub mod vrf {
 			VrfSignature { signature: Signature(sign_bytes), vrf_outputs: outputs }
 		}
 
-		/// Generate output bytes from the given VRF input.
-		///
-		/// Index is relative to one of the `VrfInput` messages used during construction.
+		/// Generate an arbitrary number of bytes from the given `[context]` and VRF `[input]`.
 		pub fn make_bytes<const N: usize>(
 			&self,
 			context: &'static [u8],
@@ -544,7 +578,7 @@ pub mod vrf {
 
 			// Deserialize only the proof, the rest has already been deserialized
 			// This is another hack used because backend signature type is generic over the number
-			// of ios. @burdges can we provide a vec or boxed version?
+			// of ios.
 			let Ok(signature) = ThinVrfSignature::<0>::deserialize_compressed(signature.signature.as_ref()).map(|s| s.signature) else {
 				return false
 			};
@@ -557,7 +591,7 @@ pub mod vrf {
 	}
 
 	impl VrfOutput {
-		/// Generate output bytes for the given VRF input.
+		/// Generate an arbitrary number of bytes from the given `[context]` and VRF `[input]`.
 		pub fn make_bytes<const N: usize>(
 			&self,
 			context: &'static [u8],
@@ -571,79 +605,57 @@ pub mod vrf {
 	}
 }
 
-/// Ring VRF related types and operations.
+/// Bandersnatch Ring-VRF types and operations.
 pub mod ring_vrf {
 	use super::{vrf::*, *};
 	pub use bandersnatch_vrfs::ring::{RingProof, RingProver, RingVerifier, KZG};
 	use bandersnatch_vrfs::{CanonicalDeserialize, PedersenVrfSignature, PublicKey};
 
-	/// TODO davxy
+	/// Context used to produce ring signatures.
 	#[derive(Clone)]
-	pub struct RingVrfContext(pub KZG);
+	pub struct RingVrfContext(KZG);
 
 	impl RingVrfContext {
-		/// TODO davxy: This is a temporary function with temporary parameters.
-		///
-		/// Initialization cerimony should be performed via some other means
-		/// For now we call this once here.
+		/// Build an dummy instance used for testing purposes.
 		pub fn new_testing() -> Self {
-			let kzg_seed = [0; 32];
+			let seed = [0; 32];
 			let domain_size = 2usize.pow(10);
-			let kzg = KZG::testing_kzg_setup(kzg_seed, domain_size);
+			let kzg = KZG::testing_kzg_setup(seed, domain_size);
 			Self(kzg)
 		}
 
-		/// Get the keyset size
+		/// Get the keyset size.
+		/// TODO @swasilyev: shouldn't be equal to the domain_size used at init time?
 		pub fn max_keyset_size(&self) -> usize {
 			self.0.max_keyset_size()
 		}
 
-		/// TODO davxy
+		/// Get ring prover for the key at index [public_idx] in the `[public_keys]` set.
 		pub fn prover(&self, public_keys: &[Public], public_idx: usize) -> Option<RingProver> {
 			let mut pks = Vec::with_capacity(public_keys.len());
-			if !public_keys.iter().all(|public_key| {
-				match PublicKey::deserialize_compressed(public_key.as_slice()) {
-					Ok(pk) => {
-						let sw_affine = pk.0 .0.into();
-						pks.push(sw_affine);
-						true
-					},
-					_ => false,
-				}
-			}) {
-				return None
-			};
+			for public_key in public_keys {
+				let pk = PublicKey::deserialize_compressed(public_key.as_slice()).ok()?;
+				pks.push(pk.0 .0.into());
+			}
+
 			let prover_key = self.0.prover_key(pks);
 			let ring_prover = self.0.init_ring_prover(prover_key, public_idx);
-
 			Some(ring_prover)
 		}
 
-		/// TODO davxy
+		/// Get ring verifier for the `[public_keys]` set.
 		pub fn verifier(&self, public_keys: &[Public]) -> Option<RingVerifier> {
 			let mut pks = Vec::with_capacity(public_keys.len());
-			if !public_keys.iter().all(|public_key| {
-				match PublicKey::deserialize_compressed(public_key.as_slice()) {
-					Ok(pk) => {
-						let sw_affine = pk.0 .0.into();
-						pks.push(sw_affine);
-						true
-					},
-					_ => false,
-				}
-			}) {
-				return None
-			};
+			for public_key in public_keys {
+				let pk = PublicKey::deserialize_compressed(public_key.as_slice()).ok()?;
+				pks.push(pk.0 .0.into());
+			}
 
 			let verifier_key = self.0.verifier_key(pks);
 			let ring_verifier = self.0.init_ring_verifier(verifier_key);
-
 			Some(ring_verifier)
 		}
 	}
-
-	// TODO davxy: why this isn't implemented automagically, is there some other required bound???
-	impl codec::EncodeLike for RingVrfContext {}
 
 	impl Encode for RingVrfContext {
 		fn encode(&self) -> Vec<u8> {
@@ -691,20 +703,23 @@ pub mod ring_vrf {
 
 	#[cfg(feature = "full_crypto")]
 	impl Pair {
-		/// TODO davxy
+		/// Produce a ring-vrf signature.
+		///
+		/// The signature is valid if the signing [`Pair`] is part of the ring from which
+		/// the [`RingProver`] has been derived.
 		pub fn ring_vrf_sign(&self, data: &VrfSignData, prover: &RingProver) -> RingVrfSignature {
 			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a vec or boxed version?
+			// @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
 			match data.vrf_inputs.len() {
 				0 => self.ring_vrf_sign_gen::<0>(data, prover),
 				1 => self.ring_vrf_sign_gen::<1>(data, prover),
 				2 => self.ring_vrf_sign_gen::<2>(data, prover),
 				3 => self.ring_vrf_sign_gen::<3>(data, prover),
-				_ => panic!("Max VRF inputs is set to: {}", MAX_VRF_IOS),
+				_ => unreachable!(),
 			}
 		}
 
-		fn ring_vrf_sign_gen<const N: usize>(
+		fn ring_vrf_sign_gen<N: usize>(
 			&self,
 			data: &VrfSignData,
 			prover: &RingProver,
@@ -738,20 +753,23 @@ pub mod ring_vrf {
 	}
 
 	impl RingVrfSignature {
-		/// TODO davxy
+		/// Verify a ring-vrf signature.
+		///
+		/// The signature is valid if has been produced by a member of the ring from which
+		/// the [`RingVerifier`] has been derived.
 		pub fn verify(&self, data: &VrfSignData, verifier: &RingVerifier) -> bool {
 			let preouts_len = self.outputs.len();
 			if preouts_len != data.vrf_inputs.len() {
 				return false
 			}
 			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a vec or boxed version?
+			// @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
 			match preouts_len {
 				0 => self.verify_gen::<0>(data, verifier),
 				1 => self.verify_gen::<1>(data, verifier),
 				2 => self.verify_gen::<2>(data, verifier),
 				3 => self.verify_gen::<3>(data, verifier),
-				_ => panic!("Max VRF input messages is set to: {}", MAX_VRF_IOS),
+				_ => unreachable!(),
 			}
 		}
 
