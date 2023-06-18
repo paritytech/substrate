@@ -165,7 +165,7 @@ impl sp_std::fmt::Debug for Public {
 
 /// Bandersnatch signature.
 ///
-/// The signature is created via the [VrfSecret::vrf_sign] using [SIGNING_CTX] as `label` parameter.
+/// The signature is created via the [`VrfSecret::vrf_sign`] using [`SIGNING_CTX`] as `label`.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, PassByInner, MaxEncodedLen, TypeInfo)]
 pub struct Signature([u8; SIGNATURE_SERIALIZED_LEN]);
@@ -222,7 +222,7 @@ impl sp_std::fmt::Debug for Signature {
 	}
 }
 
-/// The raw secret seed, which can be used to reconstruct the secret `Pair`.
+/// The raw secret seed, which can be used to reconstruct the secret [`Pair`].
 #[cfg(feature = "full_crypto")]
 type Seed = [u8; SEED_SERIALIZED_LEN];
 
@@ -291,7 +291,7 @@ impl TraitPair for Pair {
 
 	/// Verify a signature on a message.
 	///
-	/// Returns true if the signature is good.
+	/// Returns `true` if the signature is good.
 	fn verify<M: AsRef<[u8]>>(signature: &Self::Signature, data: M, public: &Self::Public) -> bool {
 		let data = vrf::VrfSignData::new(SIGNING_CTX, &[data.as_ref()], vrf::VrfIosVec::default());
 		let signature =
@@ -299,7 +299,7 @@ impl TraitPair for Pair {
 		public.vrf_verify(&data, &signature)
 	}
 
-	/// Return a vec filled with seed raw data.
+	/// Return a vector filled with seed raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
 		// TODO @davxy: this function existance makes sense??? Should we return the seed or
 		// serialized secret key? If we return the serialized secret there is no method to
@@ -327,17 +327,17 @@ pub mod vrf {
 
 	/// Bounded vector used for VRF inputs and outputs.
 	///
-	/// Can contain at most `[MAX_VRF_IOS]` elements.
+	/// Can contain at most [`MAX_VRF_IOS`] elements.
 	pub type VrfIosVec<T> = BoundedVec<T, ConstU32<MAX_VRF_IOS>>;
 
-	/// VRF input to construct a `[VrfOutput]` instance and embeddable within `[VrfSignData]`.
+	/// VRF input to construct a [`VrfOutput`] instance and embeddable within [`VrfSignData`].
 	#[derive(Clone, Debug)]
 	pub struct VrfInput(pub(super) bandersnatch_vrfs::VrfInput);
 
 	impl VrfInput {
 		/// Build a new VRF input.
 		///
-		/// Each message tuple has the form: (domain, data).
+		/// Each message tuple has the form: message := (domain, data).
 		pub fn new(label: &'static [u8], messages: &[(&[u8], &[u8])]) -> Self {
 			// ⚠️ TODO @davxy @burdges (temporary hack and needs to be fixed)
 			// `bandersnatch_vrfs::Message` maps to a single (domain, data) tuple.
@@ -358,7 +358,7 @@ pub mod vrf {
 		}
 	}
 
-	/// VRF (pre)output derived from `[VrfInput]` using a `[VrfSecret]`.
+	/// VRF (pre)output derived from [`VrfInput`] using a [`VrfSecret`].
 	///
 	/// This is used to produce a verifiable arbitrary number of "random" bytes.
 	#[derive(Clone, Debug, PartialEq, Eq)]
@@ -397,7 +397,7 @@ pub mod vrf {
 		}
 	}
 
-	/// A Fiat-Shamir transcript and a sequence of `[VrfInput]`s ready to be signed.
+	/// A Fiat-Shamir transcript and a sequence of [`VrfInput`]s ready to be signed.
 	pub struct VrfSignData {
 		/// VRF inputs to be signed.
 		pub vrf_inputs: VrfIosVec<VrfInput>,
@@ -408,11 +408,11 @@ pub mod vrf {
 	impl VrfSignData {
 		/// Construct a new signable data instance.
 		///
-		/// The `[transcript_data]` will be used as messages for the Fiat-Shamir
+		/// The `transcript_data` will be used as messages for the Fiat-Shamir
 		/// transform part of the scheme. If unsure just give it a unique label
 		/// depending on the actual usage of the signing data
 		/// (@burges: or leave it empty? There is already the `label` field for contextualization).
-		/// The `[vrf_inputs]` is a sequence of `[VrfInput]`s to be signed and which
+		/// The `vrf_inputs` is a sequence of [`VrfInput`]s to be signed and which
 		/// contribute to the actual output bytes produced via the VRF.
 		pub fn new<T: Into<VrfIosVec<VrfInput>>>(
 			label: &'static [u8],
@@ -424,9 +424,9 @@ pub mod vrf {
 			VrfSignData { transcript, vrf_inputs: vrf_inputs.into() }
 		}
 
-		/// Construct a new data to be signed from an iterator of `VrfInputs`.
+		/// Construct a new data to be signed from an iterator of [`VrfInput`]s.
 		///
-		/// Fails if the `vrf_inputs` yields more elements than `[MAX_VRF_IOS]`
+		/// Fails if the `vrf_inputs` yields more elements than [`MAX_VRF_IOS`]
 		// TODO @davxy: maybe we can just provide one constructor...
 		pub fn from_iter<T: IntoIterator<Item = VrfInput>>(
 			label: &'static [u8],
@@ -443,8 +443,9 @@ pub mod vrf {
 			self.transcript.append_slice(data);
 		}
 
-		/// Appends a `VrfInput` to the vrf inputs to be signed.
-		/// On failure, returns the `VrfInput`.
+		/// Appends a [`VrfInput`] to the vrf inputs to be signed.
+		///
+		/// On failure, gives back the [`VrfInput`] parameter.
 		pub fn push_vrf_input(&mut self, vrf_input: VrfInput) -> Result<(), VrfInput> {
 			self.vrf_inputs.try_push(vrf_input)
 		}
@@ -464,7 +465,7 @@ pub mod vrf {
 	pub struct VrfSignature {
 		/// VRF (pre)outputs.
 		pub vrf_outputs: VrfIosVec<VrfOutput>,
-		/// Transcript @davxy TODO doc signature.
+		/// VRF signature.
 		pub signature: Signature,
 	}
 
@@ -545,7 +546,7 @@ pub mod vrf {
 			VrfSignature { signature: Signature(sign_bytes), vrf_outputs: outputs }
 		}
 
-		/// Generate an arbitrary number of bytes from the given `[context]` and VRF `[input]`.
+		/// Generate an arbitrary number of bytes from the given `context` and VRF `input`.
 		pub fn make_bytes<const N: usize>(
 			&self,
 			context: &'static [u8],
@@ -577,8 +578,8 @@ pub mod vrf {
 				};
 
 			// Deserialize only the proof, the rest has already been deserialized
-			// This is another hack used because backend signature type is generic over the number
-			// of ios.
+			// This is another hack used because backend signature type is generic over
+			// the number of ios.
 			let Ok(signature) = ThinVrfSignature::<0>::deserialize_compressed(signature.signature.as_ref()).map(|s| s.signature) else {
 				return false
 			};
@@ -591,7 +592,7 @@ pub mod vrf {
 	}
 
 	impl VrfOutput {
-		/// Generate an arbitrary number of bytes from the given `[context]` and VRF `[input]`.
+		/// Generate an arbitrary number of bytes from the given `context` and VRF `input`.
 		pub fn make_bytes<const N: usize>(
 			&self,
 			context: &'static [u8],
@@ -630,7 +631,7 @@ pub mod ring_vrf {
 			self.0.max_keyset_size()
 		}
 
-		/// Get ring prover for the key at index [public_idx] in the `[public_keys]` set.
+		/// Get ring prover for the key at index `public_idx` in the `public_keys` set.
 		pub fn prover(&self, public_keys: &[Public], public_idx: usize) -> Option<RingProver> {
 			let mut pks = Vec::with_capacity(public_keys.len());
 			for public_key in public_keys {
@@ -643,7 +644,7 @@ pub mod ring_vrf {
 			Some(ring_prover)
 		}
 
-		/// Get ring verifier for the `[public_keys]` set.
+		/// Get ring verifier for the `public_keys` set.
 		pub fn verifier(&self, public_keys: &[Public]) -> Option<RingVerifier> {
 			let mut pks = Vec::with_capacity(public_keys.len());
 			for public_key in public_keys {
