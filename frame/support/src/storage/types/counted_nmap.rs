@@ -15,8 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Storage map type. Implements CountedStorageNMap, CountedStorageIterableNMap,
-//! CountedStoragePrefixedNMap traits and their methods directly.
+//! Counted storage n-map type.
 
 use crate::{
 	storage::{
@@ -84,50 +83,6 @@ impl<Prefix: CountedStorageNMapInstance> crate::storage::PrefixIteratorOnRemoval
 {
 	fn on_removal(_key: &[u8], _value: &[u8]) {
 		CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
-	}
-}
-
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-	crate::storage::generator::StorageNMap<Key, Value>
-	for CountedStorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-where
-	Prefix: CountedStorageNMapInstance,
-	Key: super::key::KeyGenerator,
-	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: Get<QueryKind::Query> + 'static,
-	MaxValues: Get<Option<u32>>,
-{
-	type Query = QueryKind::Query;
-	fn module_prefix() -> &'static [u8] {
-		Prefix::pallet_prefix().as_bytes()
-	}
-	fn storage_prefix() -> &'static [u8] {
-		Prefix::STORAGE_PREFIX.as_bytes()
-	}
-	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
-		QueryKind::from_optional_value_to_query(v)
-	}
-	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
-		QueryKind::from_query_to_optional_value(v)
-	}
-}
-
-impl<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues> crate::storage::StoragePrefixedMap<Value>
-	for CountedStorageNMap<Prefix, Key, Value, QueryKind, OnEmpty, MaxValues>
-where
-	Prefix: CountedStorageNMapInstance,
-	Key: super::key::KeyGenerator,
-	Value: FullCodec,
-	QueryKind: QueryKindTrait<Value, OnEmpty>,
-	OnEmpty: Get<QueryKind::Query> + 'static,
-	MaxValues: Get<Option<u32>>,
-{
-	fn module_prefix() -> &'static [u8] {
-		<Self as MapWrapper>::Map::module_prefix()
-	}
-	fn storage_prefix() -> &'static [u8] {
-		<Self as MapWrapper>::Map::storage_prefix()
 	}
 }
 
@@ -670,9 +625,9 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::{StorageHasher as _, *},
-		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
 		storage::types::{Key as NMapKey, ValueQuery},
 	};
+	use sp_api::metadata_ir::{StorageEntryModifierIR, StorageEntryTypeIR, StorageHasherIR};
 	use sp_io::{hashing::twox_128, TestExternalities};
 
 	struct Prefix;
@@ -719,15 +674,6 @@ mod test {
 			assert_eq!(A::get((3,)), Some(10));
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 10);
 			assert_eq!(A::count(), 1);
-
-			// {
-			// 	#[crate::storage_alias]
-			// 	type Foo = CountedStorageNMap<test, (NMapKey<Blake2_128Concat, u16>), u32>;
-
-			// 	assert_eq!(Foo::contains_key((3,)), true);
-			// 	assert_eq!(Foo::get((3,)), Some(10));
-			// 	assert_eq!(A::count(), 1);
-			// }
 
 			A::swap::<NMapKey<Blake2_128Concat, u16>, _, _>((3,), (2,));
 			assert_eq!(A::contains_key((3,)), false);
@@ -861,39 +807,39 @@ mod test {
 			assert_eq!(
 				entries,
 				vec![
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							hashers: vec![StorageHasher::Blake2_128Concat],
+						modifier: StorageEntryModifierIR::Optional,
+						ty: StorageEntryTypeIR::Map {
+							hashers: vec![StorageHasherIR::Blake2_128Concat],
 							key: scale_info::meta_type::<u16>(),
 							value: scale_info::meta_type::<u32>(),
 						},
 						default: Option::<u32>::None.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
 						docs: vec!["Counter for the related counted storage map"],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Map {
-							hashers: vec![StorageHasher::Blake2_128Concat],
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Map {
+							hashers: vec![StorageHasherIR::Blake2_128Concat],
 							key: scale_info::meta_type::<u16>(),
 							value: scale_info::meta_type::<u32>(),
 						},
 						default: 98u32.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
 						docs: vec!["Counter for the related counted storage map"],
 					},
@@ -1102,13 +1048,13 @@ mod test {
 			assert_eq!(
 				entries,
 				vec![
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Optional,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u8)>(),
 							value: scale_info::meta_type::<u32>(),
@@ -1116,20 +1062,20 @@ mod test {
 						default: Option::<u32>::None.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
 						docs: vec!["Counter for the related counted storage map"],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u8)>(),
 							value: scale_info::meta_type::<u32>(),
@@ -1137,10 +1083,10 @@ mod test {
 						default: 98u32.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
 						docs: vec!["Counter for the related counted storage map"],
 					},
@@ -1380,14 +1326,14 @@ mod test {
 			assert_eq!(
 				entries,
 				vec![
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Optional,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u16, u16)>(),
 							value: scale_info::meta_type::<u32>(),
@@ -1395,21 +1341,21 @@ mod test {
 						default: Option::<u32>::None.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
 						docs: vec!["Counter for the related counted storage map"],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Map {
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Map {
 							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Blake2_128Concat,
+								StorageHasherIR::Twox64Concat
 							],
 							key: scale_info::meta_type::<(u16, u16, u16)>(),
 							value: scale_info::meta_type::<u32>(),
@@ -1417,10 +1363,10 @@ mod test {
 						default: 98u32.encode(),
 						docs: vec![],
 					},
-					StorageEntryMetadata {
+					StorageEntryMetadataIR {
 						name: "Foo",
-						modifier: StorageEntryModifier::Default,
-						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
+						modifier: StorageEntryModifierIR::Default,
+						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
 						docs: vec!["Counter for the related counted storage map"],
 					},
