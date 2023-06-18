@@ -24,7 +24,7 @@
 //! `::{Call, ...}` or implicitly.
 //!
 //! In case a pallet defines its parts implicitly, then the pallet must provide the
-//! `tt_default_parts` macro. `construct_rutime` will generate some code which utilizes `tt_call`
+//! `tt_default_parts` macro. `construct_runtime` will generate some code which utilizes `tt_call`
 //! to call the `tt_default_parts` macro of the pallet. `tt_default_parts` will then return the
 //! default pallet parts as input tokens to the `match_and_replace` macro, which ultimately
 //! generates a call to `construct_runtime` again, this time with all the pallet parts explicitly
@@ -178,7 +178,15 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 				.and_then(|_| construct_runtime_final_expansion(explicit_decl)),
 	};
 
-	res.unwrap_or_else(|e| e.to_compile_error()).into()
+	let res = res.unwrap_or_else(|e| e.to_compile_error());
+
+	let res = expander::Expander::new("construct_runtime")
+		.dry(std::env::var("FRAME_EXPAND").is_err())
+		.verbose(true)
+		.write_to_out_dir(res)
+		.expect("Does not fail because of IO in OUT_DIR; qed");
+
+	res.into()
 }
 
 /// When some pallet have implicit parts definition then the macro will expand into a macro call to

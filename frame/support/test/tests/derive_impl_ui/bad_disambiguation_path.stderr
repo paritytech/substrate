@@ -1,0 +1,5 @@
+error[E0433]: failed to resolve: use of undeclared type `Insect`
+  --> tests/derive_impl_ui/bad_disambiguation_path.rs:38:35
+   |
+38 | #[derive_impl(FourLeggedAnimal as Insect)]
+   |                                   ^^^^^^ use of undeclared type `Insect`

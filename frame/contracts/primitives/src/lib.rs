@@ -105,6 +105,8 @@ pub enum ContractAccessError {
 	DoesntExist,
 	/// Storage key cannot be decoded from the provided input data.
 	KeyDecodingFailed,
+	/// Storage is migrating. Try again later.
+	MigrationInProgress,
 }
 
 bitflags! {
