@@ -18,9 +18,7 @@
 //! Tests for pallet-example-kitchensink.
 
 use crate::*;
-#[use_attr]
-use frame_support::derive_impl;
-use frame_support::{macro_magic::use_attr, parameter_types, traits::ConstU64};
+use frame_support::{derive_impl, parameter_types, traits::ConstU64};
 use sp_runtime::BuildStorage;
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example_kitchensink;

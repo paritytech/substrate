@@ -191,10 +191,14 @@ pub trait MigrateSequence: private::Sealed {
 }
 
 /// Performs all necessary migrations based on `StorageVersion`.
-pub struct Migration<T: Config>(PhantomData<T>);
+///
+/// If `TEST_ALL_STEPS == true` and `try-runtime` is enabled, this will run all the migrations
+/// inside `on_runtime_upgrade`. This should be set to false in tests that want to ensure the step
+/// by step migration works.
+pub struct Migration<T: Config, const TEST_ALL_STEPS: bool = true>(PhantomData<T>);
 
 #[cfg(feature = "try-runtime")]
-impl<T: Config> Migration<T> {
+impl<T: Config, const TEST_ALL_STEPS: bool> Migration<T, TEST_ALL_STEPS> {
 	fn run_all_steps() -> Result<(), TryRuntimeError> {
 		let mut weight = Weight::zero();
 		let name = <Pallet<T>>::name();
@@ -221,7 +225,7 @@ impl<T: Config> Migration<T> {
 	}
 }
 
-impl<T: Config> OnRuntimeUpgrade for Migration<T> {
+impl<T: Config, const TEST_ALL_STEPS: bool> OnRuntimeUpgrade for Migration<T, TEST_ALL_STEPS> {
 	fn on_runtime_upgrade() -> Weight {
 		let name = <Pallet<T>>::name();
 		let latest_version = <Pallet<T>>::current_storage_version();
@@ -244,6 +248,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 				"{name}: Migration already in progress {:?}",
 				&storage_version
 			);
+
 			return T::WeightInfo::on_runtime_upgrade_in_progress()
 		}
 
@@ -256,9 +261,11 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		MigrationInProgress::<T>::set(Some(cursor));
 
 		#[cfg(feature = "try-runtime")]
-		Self::run_all_steps().unwrap();
+		if TEST_ALL_STEPS {
+			Self::run_all_steps().unwrap();
+		}
 
-		return T::WeightInfo::on_runtime_upgrade()
+		T::WeightInfo::on_runtime_upgrade()
 	}
 
 	#[cfg(feature = "try-runtime")]
@@ -305,7 +312,7 @@ pub enum StepResult {
 	Completed { steps_done: u32 },
 }
 
-impl<T: Config> Migration<T> {
+impl<T: Config, const TEST_ALL_STEPS: bool> Migration<T, TEST_ALL_STEPS> {
 	/// Verify that each migration's step of the [`T::Migrations`] sequence fits into `Cursor`.
 	pub(crate) fn integrity_test() {
 		let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
@@ -460,7 +467,7 @@ impl MigrateSequence for Tuple {
 							return StepResult::Completed{ steps_done }
 						}
 					}
-					return  StepResult::InProgress{cursor: migration.encode().try_into().expect(PROOF_ENCODE), steps_done }
+					return StepResult::InProgress{cursor: migration.encode().try_into().expect(PROOF_ENCODE), steps_done }
 				}
 			)*
 		);
@@ -569,7 +576,7 @@ mod test {
 
 	#[test]
 	fn migration_works() {
-		type TestMigration = Migration<Test>;
+		type TestMigration = Migration<Test, false>;
 
 		ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
 			assert_eq!(StorageVersion::get::<Pallet<Test>>(), 0);

@@ -193,7 +193,9 @@ use sp_runtime::{
 	ArithmeticError, DispatchError, FixedPointOperand, Perbill, RuntimeDebug, TokenError,
 };
 use sp_std::{cmp, fmt::Debug, mem, prelude::*, result};
-pub use types::{AccountData, BalanceLock, DustCleaner, IdAmount, Reasons, ReserveData};
+pub use types::{
+	AccountData, BalanceLock, DustCleaner, ExtraFlags, IdAmount, Reasons, ReserveData,
+};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
