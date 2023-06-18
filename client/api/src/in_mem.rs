@@ -155,7 +155,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn insert(
 		&self,
 		hash: Block::Hash,
-		header: <Block as sp_runtime::traits::HeaderProvider>::Header,
+		header: <Block as HeaderProvider>::Header,
 		justifications: Option<Justifications>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
@@ -227,7 +227,7 @@ impl<Block: BlockT> Blockchain<Block> {
 
 	fn apply_head(
 		&self,
-		header: &<Block as sp_runtime::traits::HeaderProvider>::Header,
+		header: &<Block as HeaderProvider>::Header,
 	) -> sp_blockchain::Result<()> {
 		let hash = header.hash();
 		let number = header.number();
@@ -334,7 +334,7 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	fn header(
 		&self,
 		hash: Block::Hash,
-	) -> sp_blockchain::Result<Option<<Block as sp_runtime::traits::HeaderProvider>::Header>> {
+	) -> sp_blockchain::Result<Option<<Block as HeaderProvider>::Header>> {
 		Ok(self.storage.read().blocks.get(&hash).map(|b| b.header().clone()))
 	}
 
@@ -369,7 +369,7 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 
 	fn hash(
 		&self,
-		number: <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
+		number: <<Block as HeaderProvider>::Header as HeaderT>::Number,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		Ok(self.id(BlockId::Number(number)))
 	}
@@ -528,7 +528,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 
 	fn set_block_data(
 		&mut self,
-		header: <Block as sp_runtime::traits::HeaderProvider>::Header,
+		header: <Block as HeaderProvider>::Header,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		_indexed_body: Option<Vec<Vec<u8>>>,
 		justifications: Option<Justifications>,

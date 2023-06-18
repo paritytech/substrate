@@ -1165,7 +1165,7 @@ where
 	pub fn header(
 		&self,
 		hash: Block::Hash,
-	) -> sp_blockchain::Result<Option<<Block as sp_runtime::traits::HeaderProvider>::Header>> {
+	) -> sp_blockchain::Result<Option<<Block as HeaderProvider>::Header>> {
 		self.backend.blockchain().header(hash)
 	}
 
@@ -1632,7 +1632,7 @@ where
 		&self,
 		hash: Block::Hash,
 	) -> sp_blockchain::Result<
-		Option<<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number>,
+		Option<<<Block as HeaderProvider>::Header as HeaderT>::Number>,
 	> {
 		self.backend.blockchain().number(hash)
 	}
@@ -1686,7 +1686,7 @@ where
 		&self,
 		hash: Block::Hash,
 	) -> sp_blockchain::Result<
-		Option<<<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number>,
+		Option<<<Block as HeaderProvider>::Header as HeaderT>::Number>,
 	> {
 		(**self).number(hash)
 	}

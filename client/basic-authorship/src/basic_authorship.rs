@@ -190,7 +190,7 @@ where
 {
 	fn init_with_now(
 		&mut self,
-		parent_header: &<Block as sp_runtime::traits::HeaderProvider>::Header,
+		parent_header: &<Block as HeaderProvider>::Header,
 		now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	) -> Proposer<B, Block, C, A, PR> {
 		let parent_hash = parent_header.hash();
@@ -237,7 +237,7 @@ where
 
 	fn init(
 		&mut self,
-		parent_header: &<Block as sp_runtime::traits::HeaderProvider>::Header,
+		parent_header: &<Block as HeaderProvider>::Header,
 	) -> Self::CreateProposer {
 		future::ready(Ok(self.init_with_now(parent_header, Box::new(time::Instant::now))))
 	}
@@ -248,7 +248,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
 	parent_hash: Block::Hash,
-	parent_number: <<Block as sp_runtime::traits::HeaderProvider>::Header as HeaderT>::Number,
+	parent_number: <<Block as HeaderProvider>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
 	now: Box<dyn Fn() -> time::Instant + Send + Sync>,
 	metrics: PrometheusMetrics,

@@ -34,7 +34,7 @@ pub type VotingRuleResult<Block> = Pin<
 	Box<
 		dyn Future<
 				Output = Option<(
-					<Block as sp_runtime::traits::HeaderProvider>::Hash,
+					<Block as HeaderProvider>::Hash,
 					NumberFor<Block>,
 				)>,
 			> + Send,

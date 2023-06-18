@@ -161,7 +161,7 @@ impl PeersClient {
 	pub fn header(
 		&self,
 		hash: <Block as HeaderProvider>::Hash,
-	) -> ClientResult<Option<<Block as sp_runtime::traits::HeaderProvider>::Header>> {
+	) -> ClientResult<Option<<Block as HeaderProvider>::Header>> {
 		self.client.header(hash)
 	}
 
@@ -711,7 +711,7 @@ pub struct FullPeerConfig {
 	/// Enable transaction indexing.
 	pub storage_chain: bool,
 	/// Optional target block header to sync to
-	pub target_block: Option<<Block as sp_runtime::traits::HeaderProvider>::Header>,
+	pub target_block: Option<<Block as HeaderProvider>::Header>,
 }
 
 #[async_trait::async_trait]
@@ -848,7 +848,7 @@ where
 		let warp_sync_params = match config.target_block {
 			Some(target_block) => {
 				let (sender, receiver) =
-					oneshot::channel::<<Block as sp_runtime::traits::HeaderProvider>::Header>();
+					oneshot::channel::<<Block as HeaderProvider>::Header>();
 				let _ = sender.send(target_block);
 				WarpSyncParams::WaitForTarget(receiver)
 			},

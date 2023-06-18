@@ -61,7 +61,7 @@ where
 
 	fn best_header(
 		&self,
-	) -> sp_blockchain::Result<<Block as sp_runtime::traits::HeaderProvider>::Header> {
+	) -> sp_blockchain::Result<<Block as HeaderProvider>::Header> {
 		let best_hash = self.best_hash()?;
 		Ok(self
 			.backend
@@ -146,7 +146,7 @@ where
 
 	async fn best_chain(
 		&self,
-	) -> Result<<Block as sp_runtime::traits::HeaderProvider>::Header, ConsensusError> {
+	) -> Result<<Block as HeaderProvider>::Header, ConsensusError> {
 		LongestChain::best_header(self).map_err(|e| ConsensusError::ChainLookup(e.to_string()))
 	}
 
