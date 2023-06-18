@@ -66,8 +66,7 @@ mod tests {
 			// Try to create a snapshot.
 			let mut snapshot_creation = create_snapshot(&ws_url, &snap_file_path, block_hash);
 
-			let expected_output = format!(r#"writing snapshot of {} bytes to .*"#, block_number);
-			let re = Regex::new(expected_output.as_str()).unwrap();
+			let re = Regex::new(r#".*writing snapshot of (\d+) bytes to .*"#).unwrap();
 			let matched =
 				common::wait_for_stream_pattern_match(snapshot_creation.stderr.take().unwrap(), re)
 					.await;
