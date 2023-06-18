@@ -1398,14 +1398,14 @@ impl pallet_recovery::Config for Runtime {
 }
 
 parameter_types! {
-	pub const CandidateDeposit: Balance = 10 * DOLLARS;
-	pub const WrongSideDeduction: Balance = 2 * DOLLARS;
-	pub const MaxStrikes: u32 = 10;
-	pub const RotationPeriod: BlockNumber = 80 * HOURS;
+	pub const GraceStrikes: u32 = 10;
+	pub const SocietyVotingPeriod: BlockNumber = 80 * HOURS;
+	pub const ClaimPeriod: BlockNumber = 80 * HOURS;
 	pub const PeriodSpend: Balance = 500 * DOLLARS;
 	pub const MaxLockDuration: BlockNumber = 36 * 30 * DAYS;
 	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
-	pub const MaxCandidateIntake: u32 = 10;
+	pub const MaxPayouts: u32 = 10;
+	pub const MaxBids: u32 = 10;
 	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
 }
 
@@ -1414,18 +1414,17 @@ impl pallet_society::Config for Runtime {
 	type PalletId = SocietyPalletId;
 	type Currency = Balances;
 	type Randomness = RandomnessCollectiveFlip;
-	type CandidateDeposit = CandidateDeposit;
-	type WrongSideDeduction = WrongSideDeduction;
-	type MaxStrikes = MaxStrikes;
+	type GraceStrikes = GraceStrikes;
 	type PeriodSpend = PeriodSpend;
-	type MembershipChanged = ();
-	type RotationPeriod = RotationPeriod;
+	type VotingPeriod = SocietyVotingPeriod;
+	type ClaimPeriod = ClaimPeriod;
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin =
 		pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>;
-	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
-	type MaxCandidateIntake = MaxCandidateIntake;
 	type ChallengePeriod = ChallengePeriod;
+	type MaxPayouts = MaxPayouts;
+	type MaxBids = MaxBids;
+	type WeightInfo = pallet_society::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -2048,6 +2047,7 @@ mod benches {
 		[pallet_scheduler, Scheduler]
 		[pallet_glutton, Glutton]
 		[pallet_session, SessionBench::<Runtime>]
+		[pallet_society, Society]
 		[pallet_staking, Staking]
 		[pallet_state_trie_migration, StateTrieMigration]
 		[pallet_sudo, Sudo]

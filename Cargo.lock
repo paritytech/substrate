@@ -979,9 +979,9 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "bounded-collections"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07fbd1d11282a1eb134d3c3b7cf8ce213b5161c6e5f73fb1b98618482c606b64"
+checksum = "eb5b05133427c07c4776906f673ccf36c21b102c9829c641a5b56bd151d44fd6"
 dependencies = [
  "log",
  "parity-scale-codec",
@@ -7300,13 +7300,17 @@ dependencies = [
 name = "pallet-society"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-support-test",
  "frame-system",
+ "hex-literal",
+ "log",
  "pallet-balances",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
