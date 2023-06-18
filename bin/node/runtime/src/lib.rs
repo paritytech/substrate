@@ -1859,6 +1859,35 @@ impl pallet_statement::Config for Runtime {
 	type MaxAllowedBytes = MaxAllowedBytes;
 }
 
+parameter_types! {
+	pub MbmServiceWeight: Weight = Perbill::from_percent(80) * RuntimeBlockWeights::get().max_block;
+	// FAIL-CI remove
+	pub Mbms: pallet_migrations::MigrationsOf<Runtime> = vec![
+		Box::new(pallet_migrations::mock_helpers::MockedMigration(
+			pallet_migrations::mock_helpers::MockedMigrationKind::SucceedAfter, 0
+		)),
+		Box::new(pallet_migrations::mock_helpers::MockedMigration(
+			pallet_migrations::mock_helpers::MockedMigrationKind::SucceedAfter, 2
+		)),
+		Box::new(pallet_migrations::mock_helpers::MockedMigration(
+			pallet_migrations::mock_helpers::MockedMigrationKind::SucceedAfter, 3
+		)),
+		Box::new(pallet_migrations::mock_helpers::MockedMigration(
+			pallet_migrations::mock_helpers::MockedMigrationKind::SucceedAfter, 20
+		))
+	];
+}
+
+impl pallet_migrations::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Migrations = Mbms;
+	type Cursor = pallet_migrations::mock_helpers::MockedCursor;
+	type Identifier = pallet_migrations::mock_helpers::MockedIdentifier;
+	type OnMigrationUpdate = ();
+	type ServiceWeight = MbmServiceWeight;
+	type WeightInfo = pallet_migrations::weights::SubstrateWeight<Runtime>;
+}
+
 construct_runtime!(
 	pub struct Runtime where
 		Block = Block,
@@ -1934,6 +1963,7 @@ construct_runtime!(
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
 		Statement: pallet_statement,
+		MultiBlockMigrations: pallet_migrations,
 	}
 );
 
@@ -1978,6 +2008,7 @@ pub type Executive = frame_executive::Executive<
 	Runtime,
 	AllPalletsWithSystem,
 	Migrations,
+	MultiBlockMigrations,
 >;
 
 // All migrations executed on runtime upgrade as a nested tuple of types implementing
@@ -2033,6 +2064,7 @@ mod benches {
 		[pallet_lottery, Lottery]
 		[pallet_membership, TechnicalMembership]
 		[pallet_message_queue, MessageQueue]
+		[pallet_migrations, MultiBlockMigrations]
 		[pallet_mmr, Mmr]
 		[pallet_multisig, Multisig]
 		[pallet_nomination_pools, NominationPoolsBench::<Runtime>]
@@ -2110,6 +2142,10 @@ impl_runtime_apis! {
 
 		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult {
 			data.check_extrinsics(&block)
+		}
+
+		fn after_inherents() -> sp_runtime::BlockAfterInherentsMode {
+			Executive::after_inherents()
 		}
 	}
 

@@ -133,7 +133,7 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	ApplyExtrinsicResult, BlockAfterInherentsMode,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -165,6 +165,7 @@ pub struct Executive<
 	UnsignedValidator,
 	AllPalletsWithSystem,
 	OnRuntimeUpgrade = (),
+	MultiStepMigrator = (),
 >(
 	PhantomData<(
 		System,
@@ -173,6 +174,7 @@ pub struct Executive<
 		UnsignedValidator,
 		AllPalletsWithSystem,
 		OnRuntimeUpgrade,
+		MultiStepMigrator,
 	)>,
 );
 
@@ -187,9 +189,17 @@ impl<
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
+		MultiStepMigrator: frame_support::migrations::MultiStepMigrator,
 	> ExecuteBlock<Block>
-	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
+	for Executive<
+		System,
+		Block,
+		Context,
+		UnsignedValidator,
+		AllPalletsWithSystem,
+		COnRuntimeUpgrade,
+		MultiStepMigrator,
+	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -205,6 +215,7 @@ where
 			UnsignedValidator,
 			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
+			MultiStepMigrator,
 		>::execute_block(block);
 	}
 }
@@ -222,8 +233,17 @@ impl<
 			+ OffchainWorker<System::BlockNumber>
 			+ frame_support::traits::TryState<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
+		MultiStepMigrator: frame_support::migrations::MultiStepMigrator,
+	>
+	Executive<
+		System,
+		Block,
+		Context,
+		UnsignedValidator,
+		AllPalletsWithSystem,
+		COnRuntimeUpgrade,
+		MultiStepMigrator,
+	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -293,7 +313,12 @@ where
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
-		Self::idle_and_finalize_hook(*header.number());
+		let is_upgrading = MultiStepMigrator::is_upgrading(); // FAIL-CI fix this properly
+		if !is_upgrading {
+			Self::on_idle_hook(*header.number());
+		}
+
+		Self::on_finalize_hook(*header.number());
 
 		// run the try-state checks of all pallets, ensuring they don't alter any state.
 		let _guard = frame_support::StorageNoopGuard::default();
@@ -378,8 +403,17 @@ impl<
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
+		MultiStepMigrator: frame_support::migrations::MultiStepMigrator,
+	>
+	Executive<
+		System,
+		Block,
+		Context,
+		UnsignedValidator,
+		AllPalletsWithSystem,
+		COnRuntimeUpgrade,
+		MultiStepMigrator,
+	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -454,7 +488,8 @@ where
 		}
 	}
 
-	fn initial_checks(block: &Block) {
+	/// Returns the index of the first extrinsic in the block.
+	fn initial_checks(block: &Block) -> u32 {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
 
@@ -467,8 +502,9 @@ where
 			"Parent hash should be valid.",
 		);
 
-		if let Err(i) = System::ensure_inherents_are_first(block) {
-			panic!("Invalid inherent position for extrinsic at index {}", i);
+		match System::ensure_inherents_are_first(block) {
+			Ok(first_extrinsic_index) => first_extrinsic_index,
+			Err(i) => panic!("Invalid inherent position for extrinsic at index {}", i),
 		}
 	}
 
@@ -477,53 +513,90 @@ where
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
-
+			// `on_runtime_upgrade` and `on_initialize`.
 			Self::initialize_block(block.header());
 
-			// any initial checks
-			Self::initial_checks(&block);
+			// Check the block and panic if invalid.
+			let first_extrinsic_index = Self::initial_checks(&block);
+			let (header, dispatchables) = block.deconstruct();
 
-			// execute extrinsics
-			let (header, extrinsics) = block.deconstruct();
-			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+			// Process inherents (if any).
+			let num_inherents = first_extrinsic_index as usize;
+			Self::execute_dispatchables(dispatchables.iter().take(num_inherents));
 
+			match Self::after_inherents() {
+				BlockAfterInherentsMode::ExtrinsicsForbidden => {
+					if num_inherents < dispatchables.len() {
+						panic!("Extrinsics are not allowed");
+					}
+				},
+				BlockAfterInherentsMode::ExtrinsicsAllowed => {
+					Self::execute_dispatchables(dispatchables.iter().skip(num_inherents));
+				},
+			}
+
+			// Dispatchable processing is done now.
+			<frame_system::Pallet<System>>::note_finished_extrinsics();
+			// TODO this could be optimized to be one less storage read.
+			if !MultiStepMigrator::is_upgrading() {
+				Self::on_idle_hook(*header.number());
+			}
+
+			Self::on_finalize_hook(*header.number());
 			// any final checks
 			Self::final_checks(&header);
 		}
 	}
 
-	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
-	fn execute_extrinsics_with_book_keeping(
-		extrinsics: Vec<Block::Extrinsic>,
-		block_number: NumberFor<Block>,
-	) {
-		extrinsics.into_iter().for_each(|e| {
-			if let Err(e) = Self::apply_extrinsic(e) {
+	/// Progress ongoing MBM migrations.
+	// Used by the block builder and Executive.
+	pub fn after_inherents() -> BlockAfterInherentsMode {
+		let is_upgrading = MultiStepMigrator::is_upgrading();
+		if is_upgrading {
+			let used_weight = MultiStepMigrator::step();
+			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
+				used_weight,
+				DispatchClass::Mandatory,
+			);
+		}
+
+		// TODO `poll` hook goes here. <https://github.com/paritytech/substrate/pull/14279>
+
+		if is_upgrading {
+			BlockAfterInherentsMode::ExtrinsicsForbidden
+		} else {
+			BlockAfterInherentsMode::ExtrinsicsAllowed
+		}
+	}
+
+	/// Execute given extrinsics.
+	fn execute_dispatchables<'a>(dispatchables: impl Iterator<Item = &'a Block::Extrinsic>) {
+		dispatchables.into_iter().for_each(|e| {
+			if let Err(e) = Self::apply_extrinsic(e.clone()) {
 				let err: &'static str = e.into();
 				panic!("{}", err)
 			}
 		});
-
-		// post-extrinsics book-keeping
-		<frame_system::Pallet<System>>::note_finished_extrinsics();
-
-		Self::idle_and_finalize_hook(block_number);
 	}
 
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
+	// Note: Only used by the block builder - not Executive itself.
 	pub fn finalize_block() -> System::Header {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "finalize_block");
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Pallet<System>>::block_number();
 
-		Self::idle_and_finalize_hook(block_number);
+		if !MultiStepMigrator::is_upgrading() {
+			Self::on_idle_hook(block_number);
+		}
+		Self::on_finalize_hook(block_number);
 
 		<frame_system::Pallet<System>>::finalize()
 	}
 
-	fn idle_and_finalize_hook(block_number: NumberFor<Block>) {
+	fn on_idle_hook(block_number: NumberFor<Block>) {
 		let weight = <frame_system::Pallet<System>>::block_weight();
 		let max_weight = <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let remaining_weight = max_weight.saturating_sub(weight.total());
@@ -538,7 +611,9 @@ where
 				DispatchClass::Mandatory,
 			);
 		}
+	}
 
+	fn on_finalize_hook(block_number: NumberFor<Block>) {
 		<AllPalletsWithSystem as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
 
@@ -564,6 +639,11 @@ where
 
 		// Decode parameters and dispatch
 		let dispatch_info = xt.get_dispatch_info();
+		if dispatch_info.class != DispatchClass::Mandatory && MultiStepMigrator::is_upgrading() {
+			// The block builder respects this by using the mode returned by `after_inherents`.
+			panic!("Only Mandatory extrinsics are allowed during Multi-Block-Migrations");
+		}
+		// Check whether we need to error because extrinsics are paused.
 		let r = Applyable::apply::<UnsignedValidator>(xt, &dispatch_info, encoded_len)?;
 
 		// Mandatory(inherents) are not allowed to fail.

@@ -36,7 +36,7 @@ use sp_core::ExecutionContext;
 use sp_runtime::{
 	legacy,
 	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
-	Digest,
+	BlockAfterInherentsMode, Digest,
 };
 
 use sc_client_api::backend;
@@ -196,6 +196,14 @@ where
 			backend,
 			estimated_header_size,
 		})
+	}
+
+	/// Called after inherents but before extrinsics have been applied.
+	pub fn after_inherents(&self) -> Result<BlockAfterInherentsMode, Error> {
+		// FAIL-CI why 'with_context'?!
+		self.api
+			.after_inherents_with_context(self.parent_hash, ExecutionContext::BlockConstruction)
+			.map_err(Into::into)
 	}
 
 	/// Push onto the block's list of extrinsics.

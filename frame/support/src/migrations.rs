@@ -18,9 +18,11 @@
 #[cfg(feature = "try-runtime")]
 use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
+	storage::transactional::with_transaction_opaque_err,
 	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
-	weights::{RuntimeDbWeight, Weight},
+	weights::{RuntimeDbWeight, Weight, WeightMeter},
 };
+use codec::{Decode, Encode, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_core::Get;
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
@@ -207,5 +209,126 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 			false => log::info!("No {} keys found post-removal 🎉", P::get()),
 		};
 		Ok(())
+	}
+}
+
+/// A migration that can proceed in multiple steps.
+pub trait SteppedMigration {
+	/// The cursor type that stores the progress (aka. state) of this migration.
+	type Cursor: codec::FullCodec + codec::MaxEncodedLen;
+
+	/// The unique identifier type of this migration.
+	type Identifier: codec::FullCodec + codec::MaxEncodedLen;
+
+	/// The unique identifier of this migration.
+	///
+	/// If two migrations have the same identifier, then they are assumed to be identical.
+	fn id(&self) -> Self::Identifier;
+
+	/// The maximum number of steps that this migration can take at most.
+	///
+	/// This can be used to enforce progress and prevent migrations to be stuck forever. A migration
+	/// that exceeds its max steps is treated as failed. `None` means that there is no limit.
+	fn max_steps(&self) -> Option<u32> {
+		None
+	}
+
+	/// Try to migrate as much as possible with the given weight.
+	///
+	/// **ANY STORAGE CHANGES MUST BE ROLLED-BACK BY THE CALLER UPON ERROR.** This is necessary
+	/// since the caller cannot return a cursor in the error case. `Self::transactional_step` is
+	/// provided as convenience for a caller. A cursor of `None` implies that the migration is at
+	/// its end. TODO: Think about iterator `fuse` requirement.
+	fn step(
+		&self,
+		cursor: &Option<Self::Cursor>,
+		meter: &mut WeightMeter,
+	) -> Result<Option<Self::Cursor>, SteppedMigrationError>;
+
+	/// Same as [`Self::step`], but rolls back pending changes in the error case.
+	fn transactional_step(
+		&self,
+		mut cursor: Option<Self::Cursor>,
+		meter: &mut WeightMeter,
+	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
+		with_transaction_opaque_err(move || match self.step(&cursor, meter) {
+			Ok(new_cursor) => {
+				cursor = new_cursor;
+				sp_api::TransactionOutcome::Commit(Ok(cursor))
+			},
+			Err(err) => sp_api::TransactionOutcome::Rollback(Err(err)),
+		})
+		.map_err(|()| SteppedMigrationError::Failed)?
+	}
+}
+
+#[derive(Debug, Encode, Decode, MaxEncodedLen, scale_info::TypeInfo)]
+pub enum SteppedMigrationError {
+	// Transient errors:
+	/// The remaining weight is not enough to do anything.
+	///
+	/// Can be resolved by calling with at least `required` weight. Note that calling it with
+	/// exactly `required` weight could cause it to not make any progress.
+	InsufficientWeight { required: Weight },
+	// Permanent errors:
+	/// The migration cannot decode its cursor and therefore not proceed.
+	///
+	/// This should not happen unless (1) the migration itself returned an invalid cursor in a
+	/// previous iteration, (2) the storage got corrupted or (3) there is a bug in the caller's
+	/// code.
+	InvalidCursor,
+	/// The migration encountered a permanent error and cannot continue.
+	Failed,
+}
+
+/// Notification handler for status updates regarding runtime upgrades.
+pub trait OnMigrationUpdate {
+	/// Notifies of the start of a runtime upgrade.
+	fn started() {}
+
+	/// Notifies of the completion of a runtime upgrade.
+	fn completed() {}
+
+	/// Infallibly handle a failed runtime upgrade.
+	///
+	/// Gets passed in the optional index of the migration that caused the failure.
+	fn failed(migration: Option<u32>) -> FailedUpgradeHandling;
+}
+
+/// How to proceed after a runtime upgrade failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailedUpgradeHandling {
+	/// Resume extrinsic processing of the chain. This will not resume the upgrade.
+	///
+	/// This should be supplemented with additional measures to ensure that the broken chain state
+	/// does not get further messed up by user extrinsics.
+	ForceUnstuck,
+	/// Do nothing and keep blocking extrinsics.
+	KeepStuck,
+}
+
+impl OnMigrationUpdate for () {
+	fn failed(_migration: Option<u32>) -> FailedUpgradeHandling {
+		FailedUpgradeHandling::KeepStuck
+	}
+}
+
+/// Something that can do multi step migrations.
+pub trait MultiStepMigrator {
+	/// Hint for whether [`step`] should be called.
+	fn is_upgrading() -> bool;
+	/// Do the next step in the MBM process.
+	///
+	/// Must gracefully handle the case that it is currently not upgrading.
+	fn step() -> Weight;
+}
+
+impl MultiStepMigrator for () {
+	fn is_upgrading() -> bool {
+		false
+	}
+
+	fn step() -> Weight {
+		Weight::zero()
 	}
 }

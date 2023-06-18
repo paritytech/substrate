@@ -567,6 +567,8 @@ pub enum DispatchError {
 	Unavailable,
 	/// Root origin is not allowed.
 	RootNotAllowed,
+	/// The runtime is suspended and marks all transactions as failed.
+	Suspended,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -696,6 +698,7 @@ impl From<DispatchError> for &'static str {
 			Corruption => "State corrupt",
 			Unavailable => "Resource unavailable",
 			RootNotAllowed => "Root not allowed",
+			Suspended => "Extrinsics suspended",
 		}
 	}
 }
@@ -743,6 +746,7 @@ impl traits::Printable for DispatchError {
 			Corruption => "State corrupt".print(),
 			Unavailable => "Resource unavailable".print(),
 			RootNotAllowed => "Root not allowed".print(),
+			Suspended => "Extrinsics suspended".print(),
 		}
 	}
 }
@@ -942,6 +946,15 @@ impl<R> TransactionOutcome<R> {
 			Self::Rollback(r) => r,
 		}
 	}
+}
+
+/// The mode of a block after inherents were applied.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
+pub enum BlockAfterInherentsMode {
+	/// No extrinsics should be pushed to the block.
+	ExtrinsicsForbidden,
+	/// Can push extrinsics to the block.
+	ExtrinsicsAllowed,
 }
 
 #[cfg(test)]

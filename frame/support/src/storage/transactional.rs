@@ -127,6 +127,22 @@ where
 	}
 }
 
+/// Same as [`with_transaction`] but casts any internal error to `()`.
+///
+/// This rids `E` of the `From<DispatchError>` bound that is required by `with_transaction`.
+pub fn with_transaction_opaque_err<T, E, F>(f: F) -> Result<Result<T, E>, ()>
+where
+	F: FnOnce() -> TransactionOutcome<Result<T, E>>,
+{
+	with_transaction(move || -> TransactionOutcome<Result<Result<T, E>, DispatchError>> {
+		match f() {
+			TransactionOutcome::Commit(res) => TransactionOutcome::Commit(Ok(res)),
+			TransactionOutcome::Rollback(res) => TransactionOutcome::Rollback(Ok(res)),
+		}
+	})
+	.map_err(|_| ())
+}
+
 /// Same as [`with_transaction`] but without a limit check on nested transactional layers.
 ///
 /// This is mostly for backwards compatibility before there was a transactional layer limit.
