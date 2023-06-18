@@ -719,7 +719,7 @@ pub mod ring_vrf {
 			}
 		}
 
-		fn ring_vrf_sign_gen<N: usize>(
+		fn ring_vrf_sign_gen<const N: usize>(
 			&self,
 			data: &VrfSignData,
 			prover: &RingProver,
@@ -827,26 +827,11 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore]
 	fn derive_hard_known_pair() {
 		let pair = Pair::from_string(&format!("{}//Alice", DEV_PHRASE), None).unwrap();
-		// known address of DEV_PHRASE with 1.1
-		let known = h2b("b0d3648bd5a3542afa16c06fee04cba37cc55c83a8894d36d87897bda0c65eec");
+		// known address of DEV_PHRASE
+		let known = h2b("646b261d8058ba8a3c4ebe152dc837fb2259433270dd5bdc79095874cc78b62f00");
 		assert_eq!(pair.public().as_ref(), known);
-	}
-
-	#[test]
-	#[ignore]
-	fn verify_known_signature() {
-		let pair = Pair::from_seed(DEV_SEED);
-		let public = pair.public();
-
-		let signature_raw =
-	h2b("524b0cbc4eb9579e2cd115fe55e2625e8265b3ea599ac903e67b08c2c669780cf43ca9c1e0a8a63c1dba121a606f95d3466cfe1880acc502c2792775125a7fcc"
-	);
-		let signature = Signature::from_slice(&signature_raw).unwrap();
-
-		assert!(Pair::verify(&signature, b"hello", &public));
 	}
 
 	#[test]
@@ -954,7 +939,7 @@ mod tests {
 		let pair = Pair::from_seed(DEV_SEED);
 		let public = pair.public();
 
-		// Just pick one...
+		// Just pick one index to patch with the actual public key
 		let prover_idx = 3;
 		pks[prover_idx] = public.clone();
 
