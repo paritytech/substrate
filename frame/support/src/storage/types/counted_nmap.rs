@@ -19,7 +19,6 @@
 //! CountedStoragePrefixedNMap traits and their methods directly.
 
 use crate::{
-	metadata::StorageEntryMetadata,
 	storage::{
 		types::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OptionQuery, QueryKindTrait,
@@ -31,6 +30,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
+use sp_api::metadata_ir::StorageEntryMetadataIR;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -621,7 +621,7 @@ where
 	OnEmpty: Get<QueryKind::Query> + 'static,
 	MaxValues: Get<Option<u32>>,
 {
-	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
+	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadataIR>) {
 		<Self as MapWrapper>::Map::build_metadata(docs, entries);
 		CounterFor::<Prefix>::build_metadata(
 			vec![&"Counter for the related counted storage map"],
@@ -1339,9 +1339,9 @@ mod test {
 			let _ = A::clear(u32::max_value(), None);
 			// one of the item has been removed
 			assert!(
-				!A::contains_key((2, 20, 200)) &&
-					!A::contains_key((3, 30, 300)) &&
-					!A::contains_key((4, 40, 400))
+				!A::contains_key((2, 20, 200))
+					&& !A::contains_key((3, 30, 300))
+					&& !A::contains_key((4, 40, 400))
 			);
 			assert_eq!(A::count(), 0);
 
