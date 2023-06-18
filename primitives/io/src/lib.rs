@@ -45,6 +45,7 @@ use sp_core::{
 use sp_keystore::KeystoreExt;
 
 use sp_core::{
+	bandersnatch,
 	crypto::KeyTypeId,
 	ecdsa, ed25519,
 	offchain::{
@@ -1139,6 +1140,24 @@ pub trait Crypto {
 			.recover_ecdsa(&msg, &sig)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize())
+	}
+
+	/// Generate a `bandersnatch` key pair for the given key type using an optional
+	/// `seed` and store it in the keystore.
+	///
+	/// The `seed` needs to be a valid utf8.
+	///
+	/// Returns the public key.
+	fn bandersnatch_generate(
+		&mut self,
+		id: KeyTypeId,
+		seed: Option<Vec<u8>>,
+	) -> bandersnatch::Public {
+		let seed = seed.as_ref().map(|s| std::str::from_utf8(s).expect("Seed is valid utf8!"));
+		self.extension::<KeystoreExt>()
+			.expect("No `keystore` associated for the current context!")
+			.bandersnatch_generate_new(id, seed)
+			.expect("`bandernatch_generate` failed")
 	}
 }
 

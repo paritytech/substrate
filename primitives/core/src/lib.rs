@@ -55,6 +55,7 @@ pub mod crypto;
 pub mod hexdisplay;
 pub use paste;
 
+pub mod bandersnatch;
 #[cfg(feature = "bls-experimental")]
 pub mod bls;
 pub mod defer;

@@ -22,6 +22,7 @@ use crate::{Error, Keystore, KeystorePtr};
 #[cfg(feature = "bls-experimental")]
 use sp_core::{bls377, bls381};
 use sp_core::{
+	bandersnatch,
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSecret},
 	ecdsa, ed25519, sr25519,
 };
@@ -214,6 +215,58 @@ impl Keystore for MemoryKeystore {
 		Ok(sig)
 	}
 
+	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public> {
+		self.public_keys::<bandersnatch::Pair>(key_type)
+	}
+
+	fn bandersnatch_generate_new(
+		&self,
+		key_type: KeyTypeId,
+		seed: Option<&str>,
+	) -> Result<bandersnatch::Public, Error> {
+		self.generate_new::<bandersnatch::Pair>(key_type, seed)
+	}
+
+	fn bandersnatch_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		msg: &[u8],
+	) -> Result<Option<bandersnatch::Signature>, Error> {
+		self.sign::<bandersnatch::Pair>(key_type, public, msg)
+	}
+
+	fn bandersnatch_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		data: &bandersnatch::vrf::VrfSignData,
+	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error> {
+		self.vrf_sign::<bandersnatch::Pair>(key_type, public, data)
+	}
+
+	fn bandersnatch_ring_vrf_sign(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		data: &bandersnatch::vrf::VrfSignData,
+		prover: &bandersnatch::ring_vrf::RingProver,
+	) -> Result<Option<bandersnatch::ring_vrf::RingVrfSignature>, Error> {
+		let sig = self
+			.pair::<bandersnatch::Pair>(key_type, public)
+			.map(|pair| pair.ring_vrf_sign(data, prover));
+		Ok(sig)
+	}
+
+	fn bandersnatch_vrf_output(
+		&self,
+		key_type: KeyTypeId,
+		public: &bandersnatch::Public,
+		input: &bandersnatch::vrf::VrfInput,
+	) -> Result<Option<bandersnatch::vrf::VrfOutput>, Error> {
+		self.vrf_output::<bandersnatch::Pair>(key_type, public, input)
+	}
+
 	#[cfg(feature = "bls-experimental")]
 	fn bls381_public_keys(&self, key_type: KeyTypeId) -> Vec<bls381::Public> {
 		self.public_keys::<bls381::Pair>(key_type)
@@ -330,7 +383,7 @@ mod tests {
 	}
 
 	#[test]
-	fn vrf_sign() {
+	fn sr25519_vrf_sign() {
 		let store = MemoryKeystore::new();
 
 		let secret_uri = "//Alice";
@@ -359,7 +412,7 @@ mod tests {
 	}
 
 	#[test]
-	fn vrf_output() {
+	fn sr25519_vrf_output() {
 		let store = MemoryKeystore::new();
 
 		let secret_uri = "//Alice";
@@ -405,5 +458,10 @@ mod tests {
 
 		let res = store.ecdsa_sign_prehashed(ECDSA, &pair.public(), &msg).unwrap();
 		assert!(res.is_some());
+	}
+
+	#[test]
+	fn bandersnatch_vrf_sign() {
+		panic!("TODO")
 	}
 }
