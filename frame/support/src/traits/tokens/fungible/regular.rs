@@ -108,7 +108,7 @@ pub trait Inspect<AccountId>: Sized {
 
 /// Special dust type which can be type-safely converted into a `Credit`.
 #[must_use]
-pub struct Dust<A, T: Inspect<A>>(pub(crate) T::Balance);
+pub struct Dust<A, T: Inspect<A>>(pub T::Balance);
 
 impl<A, T: Balanced<A>> Dust<A, T> {
 	/// Convert `Dust` into an instance of `Credit`.
