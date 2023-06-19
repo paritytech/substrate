@@ -39,30 +39,29 @@ use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::{boxed::Box, vec::Vec};
 
 /// Identifier used to match public keys against bandersnatch-vrf keys.
-pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bs38");
+pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"band");
 
-/// Context used to produce
+/// Context used to produce a plain signature without any VRF input/output.
 #[cfg(feature = "full_crypto")]
 pub const SIGNING_CTX: &[u8] = b"SigningContext";
 
 #[cfg(feature = "full_crypto")]
 const SEED_SERIALIZED_LEN: usize = 32;
 
-// Edwards form sizes
+// Edwards form sizes.
 // @burdges @swasilyev: currently ring-proof is using SHORT-WEIERSTRASS
 // I had to temporary patch bandersnatch_vrfs crate to use SW instrad of ED...
-// (@davxy: probably we'll use ED form)
 // const PUBLIC_SERIALIZED_LEN: usize = 32;
 // const SIGNATURE_SERIALIZED_LEN: usize = 64;
 
-// Short-Weierstrass form sizes (TEMPORARY)
+// Short-Weierstrass form sizes.
 const PUBLIC_SERIALIZED_LEN: usize = 33;
 const SIGNATURE_SERIALIZED_LEN: usize = 65;
 
 // Edwards form sizes (TODO davxy: probably in the end we'll use this form)
 // const PREOUT_SERIALIZED_LEN: usize = 32;
 
-// Short-Weierstrass form sizes
+// Short-Weierstrass form sizes.
 const PREOUT_SERIALIZED_LEN: usize = 33;
 
 // Size of serialized pedersen-vrf signature
@@ -70,10 +69,10 @@ const PREOUT_SERIALIZED_LEN: usize = 33;
 const PEDERSEN_SIGNATURE_SERIALIZED_LEN: usize = 163;
 
 // Size of serialized ring-proof
-// Short-Weierstrass form sizes
+// Short-Weierstrass form sizes.
 const RING_PROOF_SERIALIZED_LEN: usize = 592;
 
-// Sise of serialized ring-vrf context params
+// Size of serialized ring-vrf context params
 // @burdges @swasilyev: This is quite big...
 // This size grows with the domain size.
 // Example values
@@ -258,12 +257,12 @@ impl TraitPair for Pair {
 		path: Iter,
 		_seed: Option<Seed>,
 	) -> Result<(Pair, Option<Seed>), DeriveError> {
-		// TODO davxy is this good?
 		let derive_hard_junction = |secret_seed, cc| -> Seed {
 			("bandersnatch-vrf-HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
 		};
 
-		let mut acc = [0; SEED_SERIALIZED_LEN];
+		// TODO @burdges : we need a serializable dleq_vrf::SecretKey to initialize acc
+		let mut acc = [0; 32];
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
@@ -301,10 +300,8 @@ impl TraitPair for Pair {
 
 	/// Return a vector filled with seed raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
-		// TODO @davxy: this function existance makes sense??? Should we return the seed or
-		// serialized secret key? If we return the serialized secret there is no method to
-		// reconstruct if ... unimplemented!()
-		panic!()
+		// TODO @burdges: we need a serializable Secret in dleq_vrf?
+		unimplemented!()
 	}
 }
 
