@@ -20,8 +20,9 @@
 use frame_support::traits::BuildGenesisConfig;
 use serde_json::Value;
 
-/// Helper for implementing [`sp_genesis_builder::GenesisBuilder`] for runtimes. Provides common
-/// logic. For more info refer to [`sp_genesis_builder::GenesisBuilder`].
+/// Helper for implementing [`sp_genesis_builder::GenesisBuilder`] for runtimes.
+///
+/// Provides common logic. For more info refer to [`sp_genesis_builder::GenesisBuilder`].
 pub struct GenesisBuilderHelper<GC>(sp_std::marker::PhantomData<GC>);
 
 impl<GC> GenesisBuilderHelper<GC>
