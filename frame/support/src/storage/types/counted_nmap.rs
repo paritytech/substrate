@@ -60,7 +60,7 @@ pub trait CountedStorageNMapInstance: StorageInstance {
 	type CounterPrefix: StorageInstance;
 }
 
-// Private helper trait to access map from counted storage double map
+// Private helper trait to access map from counted storage n-map
 trait MapWrapper {
 	type Map;
 }
