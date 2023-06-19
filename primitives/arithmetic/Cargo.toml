@@ -21,7 +21,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 integer-sqrt = "0.1.2"
 num-traits = { version = "0.2.8", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.136", default-features = false, features = ["derive", "alloc"], optional = true }
+serde = { version = "1.0.163", default-features = false, features = ["derive", "alloc"], optional = true }
 static_assertions = "1.1.0"
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 

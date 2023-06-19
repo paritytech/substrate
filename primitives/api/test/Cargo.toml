@@ -34,8 +34,3 @@ sp-core = { version = "21.0.0", path = "../../core" }
 [[bench]]
 name = "bench"
 harness = false
-
-# We only need this to generate the correct code.
-[features]
-default = [ "std" ]
-std = []

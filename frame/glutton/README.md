@@ -1,6 +1,6 @@
 # WARNING
 
-Do not use on value-bearing chains. This pallet is **only** intended for usage on test-chains.
+**DO NOT USE ON VALUE-BEARING CHAINS. THIS PALLET IS ONLY INTENDED FOR TESTING USAGE.**
 
 # Glutton Pallet
 
