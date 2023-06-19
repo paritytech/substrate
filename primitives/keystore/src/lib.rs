@@ -19,13 +19,13 @@
 
 pub mod testing;
 
-#[cfg(feature = "bls-experimental")]
-use sp_core::{bls377, bls381};
 use sp_core::{
 	bandersnatch,
 	crypto::{ByteArray, CryptoTypeId, KeyTypeId},
 	ecdsa, ed25519, sr25519,
 };
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 
 use std::sync::Arc;
 
@@ -175,17 +175,27 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
 
-	/// DAVXY TODO
+	/// Returns all the bandersnatch public keys for the given key type.
 	fn bandersnatch_public_keys(&self, key_type: KeyTypeId) -> Vec<bandersnatch::Public>;
 
-	/// DAVXY TODO
+	/// Generate a new bandersnatch key pair for the given key type and an optional seed.
+	///
+	/// Returns an `bandersnatch::Public` key of the generated key pair or an `Err` if
+	/// something failed during key generation.
 	fn bandersnatch_generate_new(
 		&self,
 		key_type: KeyTypeId,
 		seed: Option<&str>,
 	) -> Result<bandersnatch::Public, Error>;
 
-	/// DAVXY TODO
+	/// Generate an bandersnatch signature for a given message.
+	///
+	/// Receives [`KeyTypeId`] and an [`bandersnatch::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns an [`bandersnatch::Signature`] or `None` in case the given `key_type`
+	/// and `public` combination doesn't exist in the keystore.
+	/// An `Err` will be returned if generating the signature itself failed.
 	fn bandersnatch_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -193,7 +203,13 @@ pub trait Keystore: Send + Sync {
 		msg: &[u8],
 	) -> Result<Option<bandersnatch::Signature>, Error>;
 
-	/// DAVXY TODO
+	/// Generate a bandersnatch VRF signature for the given data.
+	///
+	/// Receives [`KeyTypeId`] and an [`bandersnatch::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Returns `None` if the given `key_type` and `public` combination doesn't
+	/// exist in the keystore or an `Err` when something failed.
 	fn bandersnatch_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
@@ -201,7 +217,6 @@ pub trait Keystore: Send + Sync {
 		input: &bandersnatch::vrf::VrfSignData,
 	) -> Result<Option<bandersnatch::vrf::VrfSignature>, Error>;
 
-	/// DAVXY TODO
 	fn bandersnatch_vrf_output(
 		&self,
 		key_type: KeyTypeId,
@@ -209,7 +224,18 @@ pub trait Keystore: Send + Sync {
 		input: &bandersnatch::vrf::VrfInput,
 	) -> Result<Option<bandersnatch::vrf::VrfOutput>, Error>;
 
-	/// DAVXY TODO
+	/// Generate a bandersnatch ring-VRF signature for the given data.
+	///
+	/// Receives [`KeyTypeId`] and an [`bandersnatch::Public`] key to be able to map
+	/// them to a private key that exists in the keystore.
+	///
+	/// Also takes a [`RingProver`] instance obtained from a valid [`RingVrfContext`].
+	///
+	/// The signature is valid if the signing key is part of the ring from which
+	/// the [`RingProver`] has been derived.
+	///
+	/// Returns `None` if the given `key_type` and `public` combination doesn't
+	/// exist in the keystore or an `Err` when something failed.
 	fn bandersnatch_ring_vrf_sign(
 		&self,
 		key_type: KeyTypeId,

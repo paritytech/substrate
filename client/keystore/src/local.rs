@@ -259,7 +259,7 @@ impl Keystore for LocalKeystore {
 		self.sign::<bandersnatch::Pair>(key_type, public, msg)
 	}
 
-	// TODO DAVXY
+	// TODO @davxy
 	// Maybe we can expose just this bandersnatch sign (the above one reduces to this with
 	// input len = 0)
 	fn bandersnatch_vrf_sign(

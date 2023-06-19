@@ -19,13 +19,13 @@
 
 use crate::{Error, Keystore, KeystorePtr};
 
-#[cfg(feature = "bls-experimental")]
-use sp_core::{bls377, bls381};
 use sp_core::{
 	bandersnatch,
 	crypto::{ByteArray, KeyTypeId, Pair, VrfSecret},
 	ecdsa, ed25519, sr25519,
 };
+#[cfg(feature = "bls-experimental")]
+use sp_core::{bls377, bls381};
 
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
@@ -352,7 +352,7 @@ mod tests {
 	use super::*;
 	use sp_core::{
 		sr25519,
-		testing::{ECDSA, ED25519, SR25519},
+		testing::{BANDERSNATCH, ECDSA, ED25519, SR25519},
 	};
 
 	#[test]
@@ -462,6 +462,37 @@ mod tests {
 
 	#[test]
 	fn bandersnatch_vrf_sign() {
-		panic!("TODO")
+		let store = MemoryKeystore::new();
+
+		let secret_uri = "//Alice";
+		let key_pair =
+			bandersnatch::Pair::from_string(secret_uri, None).expect("Generates key pair");
+
+		let in1 = bandersnatch::vrf::VrfInput::new(
+			b"input1",
+			&[(b"dom1", b"foo"), (b"dom2", b"bar"), (b"dom3", b"baz")],
+		);
+		let in2 = bandersnatch::vrf::VrfInput::new(
+			b"input2",
+			&[(b"dom1", b"foo"), (b"dom2", b"bar"), (b"dom3", b"baz")],
+		);
+		let in3 = bandersnatch::vrf::VrfInput::new(
+			b"input3",
+			&[(b"dom1", b"foo"), (b"dom2", b"bar"), (b"dom3", b"baz")],
+		);
+		let sign_data =
+			bandersnatch::vrf::VrfSignData::from_iter(b"Test", &[b"msg1"], [in1, in2, in3])
+				.unwrap();
+
+		let result = store.bandersnatch_vrf_sign(BANDERSNATCH, &key_pair.public(), &sign_data);
+		assert!(result.unwrap().is_none());
+
+		store
+			.insert(BANDERSNATCH, secret_uri, key_pair.public().as_ref())
+			.expect("Inserts unknown key");
+
+		let result = store.bandersnatch_vrf_sign(BANDERSNATCH, &key_pair.public(), &sign_data);
+
+		assert!(result.unwrap().is_some());
 	}
 }
