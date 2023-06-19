@@ -2759,8 +2759,6 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "scale-info",
- "sp-api",
- "sp-block-builder",
  "sp-core",
  "sp-inherents",
  "sp-io",

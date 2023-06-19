@@ -34,8 +34,6 @@ sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
 sp-version = { version = "22.0.0", path = "../../primitives/version" }
-sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 
 [features]
 default = ["std"]
@@ -48,11 +46,9 @@ std = [
 	"scale-info/std",
 	"sp-core/std",
 	"sp-io/std",
-	"sp-api/std",
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-tracing/std",
-	"sp-block-builder/std",
 ]
 try-runtime = [
 	"frame-support/try-runtime",
