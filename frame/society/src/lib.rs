@@ -417,7 +417,7 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 }
 
 pub type PayoutsFor<T, I> = BoundedVec<
-	(<T as frame_system::Config>::BlockNumber, BalanceOf<T, I>),
+	(frame_system::BlockNumberOf<T>, BalanceOf<T, I>),
 	<T as Config<I>>::MaxPayouts,
 >;
 
@@ -440,7 +440,7 @@ pub struct PayoutRecord<Balance, PayoutsVec> {
 pub type PayoutRecordFor<T, I> = PayoutRecord<
 	BalanceOf<T, I>,
 	BoundedVec<
-		(<T as frame_system::Config>::BlockNumber, BalanceOf<T, I>),
+		(frame_system::BlockNumberOf<T>, BalanceOf<T, I>),
 		<T as Config<I>>::MaxPayouts,
 	>,
 >;
@@ -1408,7 +1408,7 @@ pub enum Period<BlockNumber> {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the period we are currently in.
-	fn period() -> Period<T::BlockNumber> {
+	fn period() -> Period<frame_system::BlockNumberOf<T>> {
 		let claim_period = T::ClaimPeriod::get();
 		let voting_period = T::VotingPeriod::get();
 		let rotation_period = voting_period + claim_period;
@@ -1938,7 +1938,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// It is the caller's duty to ensure that `who` is already a member. This does nothing if `who`
 	/// is not a member or if `value` is zero.
-	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T, I>) {
+	fn bump_payout(who: &T::AccountId, when: frame_system::BlockNumberOf<T>, value: BalanceOf<T, I>) {
 		if value.is_zero() {
 			return
 		}
