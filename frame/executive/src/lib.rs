@@ -258,7 +258,7 @@ where
 		);
 
 		Self::initialize_block(block.header());
-		Self::initial_checks(&block);
+		let num_inherents = Self::initial_checks(&block) as usize;
 
 		let (header, extrinsics) = block.deconstruct();
 
@@ -283,7 +283,8 @@ where
 			Ok(r.map(|_| ()).map_err(|e| e.error))
 		};
 
-		for e in extrinsics {
+		// Apply all inherents:
+		for e in extrinsics.iter().take(num_inherents) {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
 				frame_support::log::error!(
 					target: LOG_TARGET, "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
@@ -293,6 +294,23 @@ where
 				break
 			}
 		}
+		match Self::after_inherents() {
+			BlockAfterInherentsMode::ExtrinsicsAllowed => {
+				// Apply all extrinsics:
+				for e in extrinsics.iter().skip(num_inherents) {
+					if let Err(err) = try_apply_extrinsic(e.clone()) {
+						frame_support::log::error!(
+							target: LOG_TARGET, "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
+							e,
+							err,
+						);
+						break
+					}
+				}
+			},
+			BlockAfterInherentsMode::ExtrinsicsForbidden => (),
+		}
+		// Apply all extrinsics:
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
@@ -502,7 +520,6 @@ where
 					}
 				},
 				BlockAfterInherentsMode::ExtrinsicsAllowed => {
-					dbg!(num_inherents, applyables.len());
 					Self::execute_applyables(applyables.iter().skip(num_inherents));
 				},
 			}
