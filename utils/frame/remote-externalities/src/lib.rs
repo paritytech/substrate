@@ -57,14 +57,58 @@ type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
+const SNAPSHOT_VERSION: u16 = 2;
+
 /// The snapshot that we store on disk.
 #[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
+	snapshot_version: u16,
 	state_version: StateVersion,
 	block_hash: B::Hash,
 	// <Vec<Key, (Value, MemoryDbRefCount)>>
 	raw_storage: Vec<(H256, (Vec<u8>, i32))>,
 	storage_root: H256,
+}
+
+#[derive(Decode, Encode)]
+struct SnapshotOnlyVersion {
+	snapshot_version: u16,
+}
+
+impl<B: BlockT> Snapshot<B> {
+	pub fn new(
+		state_version: StateVersion,
+		block_hash: B::Hash,
+		raw_storage: Vec<(H256, (Vec<u8>, i32))>,
+		storage_root: H256,
+	) -> Self {
+		Self {
+			snapshot_version: SNAPSHOT_VERSION,
+			state_version,
+			block_hash,
+			raw_storage,
+			storage_root,
+		}
+	}
+
+	fn load(path: &PathBuf) -> Result<Snapshot<B>, &'static str> {
+		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
+		let maybe_version: Result<SnapshotOnlyVersion, _> = Decode::decode(&mut &*bytes);
+		match maybe_version {
+			Ok(snapshot_only_version) => {
+				if snapshot_only_version.snapshot_version != SNAPSHOT_VERSION {
+					return Err(
+						"Unsupported snapshot version detected. Please create a new snapshot.",
+					)
+				}
+				match Decode::decode(&mut &*bytes) {
+					Ok(snapshot) => return Ok(snapshot),
+					Err(_) => Err("Decode failed"),
+				}
+			},
+			Err(_) => Err("Decode failed"),
+		}
+	}
 }
 
 /// An externalities that acts exactly the same as [`sp_io::TestExternalities`] but has a few extra
@@ -899,15 +943,14 @@ where
 		// If we need to save a snapshot, save the raw storage and root hash to the snapshot.
 		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
 			let (raw_storage, storage_root) = pending_ext.into_raw_snapshot();
-			let snapshot = Snapshot::<B> {
+			let snapshot = Snapshot::<B>::new(
 				state_version,
-				block_hash: self
-					.as_online()
+				self.as_online()
 					.at
 					.expect("set to `Some` in `init_remote_client`; must be called before; qed"),
-				raw_storage: raw_storage.clone(),
+				raw_storage.clone(),
 				storage_root,
-			};
+			);
 			let encoded = snapshot.encode();
 			log::info!(
 				target: LOG_TARGET,
@@ -930,12 +973,6 @@ where
 		Ok(pending_ext)
 	}
 
-	fn load_snapshot(&mut self, path: PathBuf) -> Result<Snapshot<B>, &'static str> {
-		info!(target: LOG_TARGET, "loading data from snapshot {:?}", path);
-		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
-		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
-	}
-
 	async fn do_load_remote(&mut self) -> Result<RemoteExternalities<B>, &'static str> {
 		self.init_remote_client().await?;
 		let block_hash = self.as_online().at_expected();
@@ -949,8 +986,9 @@ where
 	) -> Result<RemoteExternalities<B>, &'static str> {
 		let mut sp = Spinner::with_timer(Spinners::Dots, "Loading snapshot...".into());
 		let start = Instant::now();
-		let Snapshot { block_hash, state_version, raw_storage, storage_root } =
-			self.load_snapshot(config.state_snapshot.path.clone())?;
+		info!(target: LOG_TARGET, "Loading snapshot from {:?}", &config.state_snapshot.path);
+		let Snapshot { snapshot_version: _, block_hash, state_version, raw_storage, storage_root } =
+			Snapshot::<B>::load(&config.state_snapshot.path)?;
 
 		let mut inner_ext = TestExternalities::new_with_code_and_state(
 			Default::default(),
