@@ -181,6 +181,10 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 				|_| construct_runtime_intermediary_expansion(input_copy.into(), implicit_def),
 			),
 		RuntimeDeclaration::Explicit(explicit_decl) =>
+			check_pallet_number(input_copy.clone().into(), explicit_decl.pallets.len()).and_then(
+				|_| construct_runtime_explicit_fully_expanded(input_copy.into(), explicit_decl),
+			),
+		RuntimeDeclaration::ExplicitFullyExpanded(explicit_decl) =>
 			check_pallet_number(input_copy.into(), explicit_decl.pallets.len())
 				.and_then(|_| construct_runtime_final_expansion(explicit_decl)),
 	};
@@ -188,8 +192,13 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	res.unwrap_or_else(|e| e.to_compile_error()).into()
 }
 
-/// When some pallet have implicit parts definition then the macro will expand into a macro call to
-/// `construct_runtime_args` of each pallets, see root documentation.
+/// All pallets that have implicit pallet parts (ie `System: frame_system`) are
+/// expanded with the default parts defined by the pallet's `tt_default_parts` macro.
+///
+/// This function transforms the [`RuntimeDeclaration::Implicit`] into
+/// [`RuntimeDeclaration::Explicit`] that is not yet fully expanded.
+///
+/// For more details, please refer to the root documentation.
 fn construct_runtime_intermediary_expansion(
 	input: TokenStream2,
 	definition: ImplicitRuntimeDeclaration,
@@ -205,6 +214,42 @@ fn construct_runtime_intermediary_expansion(
 		expansion = quote::quote!(
 			#frame_support::tt_call! {
 				macro = [{ #pallet_path::tt_default_parts }]
+				frame_support = [{ #frame_support }]
+				~~> #frame_support::match_and_insert! {
+					target = [{ #expansion }]
+					pattern = [{ #pallet_name: #pallet_path #pallet_instance }]
+				}
+			}
+		);
+	}
+
+	Ok(expansion)
+}
+
+/// All pallets that have
+///   (I): explicit pallet parts (ie `System: frame_system::{Pallet, Call}`) and
+///   (II): are not fully expanded (ie do not include the `Error` expansion part)
+/// are fully expanded by including the parts from the pallet's `tt_error_part` macro.
+///
+/// This function transforms the [`RuntimeDeclaration::Explicit`] that is not yet fully expanded
+/// into [`RuntimeDeclaration::ExplicitFullyExpanded`] fully expanded.
+///
+/// For more details, please refer to the root documentation.
+fn construct_runtime_explicit_fully_expanded(
+	input: TokenStream2,
+	definition: ExplicitRuntimeDeclaration,
+) -> Result<TokenStream2> {
+	let frame_support = generate_crate_access_2018("frame-support")?;
+	let mut expansion = quote::quote!(
+		#frame_support::construct_runtime! { #input }
+	);
+	for pallet in definition.pallets.iter().filter(|pallet| !pallet.fully_expanded) {
+		let pallet_path = &pallet.path;
+		let pallet_name = &pallet.name;
+		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(::<#instance>));
+		expansion = quote::quote!(
+			#frame_support::tt_call! {
+				macro = [{ #pallet_path::tt_error_part }]
 				frame_support = [{ #frame_support }]
 				~~> #frame_support::match_and_insert! {
 					target = [{ #expansion }]

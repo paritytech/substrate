@@ -149,11 +149,11 @@ pub fn expand_outer_enum(
 		}
 	}
 
-	// Derives specific to the `RuntimeEvent.
+	// Derives specific for the event.
 	let event_custom_derives =
 		if enum_ty == OuterEnumType::Event { quote!(Clone, PartialEq, Eq,) } else { quote!() };
 
-	// // Implementation specific to the `ModuleErrorType` type.
+	// Implementation specific for errors.
 	let error_custom_impl = generate_error_impl(scrate, enum_ty);
 
 	Ok(quote! {
@@ -268,6 +268,9 @@ fn generate_error_impl(scrate: &TokenStream, enum_ty: OuterEnumType) -> TokenStr
 	let enum_name_ident = Ident::new(enum_ty.struct_name(), Span::call_site());
 
 	quote! {
+		/// Optionally convert the `DispatchError` into the `ModuleErrorType`.
+		///
+		/// Returns `Some` if the error matches the `DispatchError::Module` variant, otherwise `None`.
 		impl #enum_name_ident {
 			pub fn from_dispatch_error(err: #scrate::sp_runtime::DispatchError) -> Option<Self> {
 				let #scrate::sp_runtime::DispatchError::Module(module_error) = err else { return None };

@@ -26,6 +26,8 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 	let default_parts_unique_id =
 		syn::Ident::new(&format!("__tt_default_parts_{}", count), def.item.span());
+	let error_part_unique_id =
+		syn::Ident::new(&format!("__tt_error_part_{}", count), def.item.span());
 
 	let call_part = def.call.as_ref().map(|_| quote::quote!(Call,));
 
@@ -108,5 +110,26 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		pub use #default_parts_unique_id as tt_default_parts;
+
+
+		#[macro_export]
+		#[doc(hidden)]
+		macro_rules! #error_part_unique_id {
+			{
+				$caller:tt
+				frame_support = [{ $($frame_support:ident)::* }]
+			} => {
+				$($frame_support)*::tt_return! {
+					$caller
+					tokens = [{
+						fully_expanded::{
+							#error_part
+						}
+					}]
+				}
+			};
+		}
+
+		pub use #error_part_unique_id as tt_error_part;
 	)
 }
