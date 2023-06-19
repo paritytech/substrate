@@ -57,7 +57,7 @@ pub enum Error {
 }
 
 /// Base code for all authorship errors.
-const BASE_ERROR: i32 = 1000;
+const BASE_ERROR: i32 = crate::error::base::AUTHOR;
 /// Extrinsic has an invalid format.
 const BAD_FORMAT: i32 = BASE_ERROR + 1;
 /// Error during transaction verification in runtime.

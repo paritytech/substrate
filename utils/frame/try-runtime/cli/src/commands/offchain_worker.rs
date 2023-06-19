@@ -46,7 +46,6 @@ pub struct OffchainWorkerCmd {
 impl OffchainWorkerCmd {
 	fn header_ws_uri<Block: BlockT>(&self) -> String
 	where
-		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		match (&self.header_ws_uri, &self.state) {
@@ -70,7 +69,6 @@ pub(crate) async fn offchain_worker<Block, HostFns>(
 where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Header: serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,

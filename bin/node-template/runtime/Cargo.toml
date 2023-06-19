@@ -30,14 +30,14 @@ sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../pri
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/block-builder"}
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/aura" }
 sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/consensus/grandpa" }
-sp-core = { version = "8.0.0", default-features = false, path = "../../../primitives/core" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents"}
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
-sp-runtime = { version = "8.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
-sp-std = { version = "6.0.0", default-features = false, path = "../../../primitives/std" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
-sp-version = { version = "6.0.0", default-features = false, path = "../../../primitives/version" }
+sp-version = { version = "22.0.0", default-features = false, path = "../../../primitives/version" }
 
 # Used for the node template's RPCs
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }

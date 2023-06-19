@@ -17,10 +17,13 @@
 
 //! Tests for the glutton pallet.
 
-use super::*;
-use mock::{new_test_ext, Glutton, RuntimeOrigin, System, Test};
+use super::{mock::*, *};
 
 use frame_support::{assert_err, assert_noop, assert_ok, weights::constants::*};
+use sp_runtime::{traits::One, Perbill};
+
+const CALIBRATION_ERROR: &'static str =
+	"Weight calibration failed. Please re-run the benchmarks on the same hardware.";
 
 #[test]
 fn initialize_pallet_works() {
@@ -86,21 +89,36 @@ fn expand_and_shrink_trash_data_works() {
 #[test]
 fn setting_compute_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(0));
+		assert_eq!(Compute::<Test>::get(), Zero::zero());
 
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(70)));
-		assert_eq!(Compute::<Test>::get(), Perbill::from_percent(70));
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), FixedU64::from_float(0.3)));
+		assert_eq!(Compute::<Test>::get(), FixedU64::from_float(0.3));
 		System::assert_last_event(
-			Event::ComputationLimitSet { compute: Perbill::from_percent(70) }.into(),
+			Event::ComputationLimitSet { compute: FixedU64::from_float(0.3) }.into(),
 		);
 
 		assert_noop!(
-			Glutton::set_compute(RuntimeOrigin::signed(1), Perbill::from_percent(30)),
+			Glutton::set_compute(RuntimeOrigin::signed(1), FixedU64::from_float(0.5)),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			Glutton::set_compute(RuntimeOrigin::none(), Perbill::from_percent(30)),
+			Glutton::set_compute(RuntimeOrigin::none(), FixedU64::from_float(0.5)),
 			DispatchError::BadOrigin
+		);
+	});
+}
+
+#[test]
+fn setting_compute_respects_limit() {
+	new_test_ext().execute_with(|| {
+		// < 1000% is fine
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), FixedU64::from_float(9.99)),);
+		// == 1000% is fine
+		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), FixedU64::from_u32(10)),);
+		// > 1000% is not
+		assert_noop!(
+			Glutton::set_compute(RuntimeOrigin::root(), FixedU64::from_float(10.01)),
+			Error::<Test>::InsaneLimit
 		);
 	});
 }
@@ -108,21 +126,36 @@ fn setting_compute_works() {
 #[test]
 fn setting_storage_works() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(0));
+		assert!(Storage::<Test>::get().is_zero());
 
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(30)));
-		assert_eq!(Storage::<Test>::get(), Perbill::from_percent(30));
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), FixedU64::from_float(0.3)));
+		assert_eq!(Storage::<Test>::get(), FixedU64::from_float(0.3));
 		System::assert_last_event(
-			Event::StorageLimitSet { storage: Perbill::from_percent(30) }.into(),
+			Event::StorageLimitSet { storage: FixedU64::from_float(0.3) }.into(),
 		);
 
 		assert_noop!(
-			Glutton::set_storage(RuntimeOrigin::signed(1), Perbill::from_percent(90)),
+			Glutton::set_storage(RuntimeOrigin::signed(1), FixedU64::from_float(0.5)),
 			DispatchError::BadOrigin
 		);
 		assert_noop!(
-			Glutton::set_storage(RuntimeOrigin::none(), Perbill::from_percent(90)),
+			Glutton::set_storage(RuntimeOrigin::none(), FixedU64::from_float(0.5)),
 			DispatchError::BadOrigin
+		);
+	});
+}
+
+#[test]
+fn setting_storage_respects_limit() {
+	new_test_ext().execute_with(|| {
+		// < 1000% is fine
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), FixedU64::from_float(9.99)),);
+		// == 1000% is fine
+		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), FixedU64::from_u32(10)),);
+		// > 1000% is not
+		assert_noop!(
+			Glutton::set_storage(RuntimeOrigin::root(), FixedU64::from_float(10.01)),
+			Error::<Test>::InsaneLimit
 		);
 	});
 }
@@ -130,8 +163,7 @@ fn setting_storage_works() {
 #[test]
 fn on_idle_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		set_limits(One::one(), One::one());
 
 		Glutton::on_idle(1, Weight::from_parts(20_000_000, 0));
 	});
@@ -141,8 +173,7 @@ fn on_idle_works() {
 #[test]
 fn on_idle_weight_high_proof_is_close_enough_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		set_limits(One::one(), One::one());
 
 		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, WEIGHT_PROOF_SIZE_PER_MB * 5);
 		let got = Glutton::on_idle(1, should);
@@ -151,15 +182,13 @@ fn on_idle_weight_high_proof_is_close_enough_works() {
 		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
 		assert!(
 			ratio >= Perbill::from_percent(99),
-			"Too few proof size consumed, was only {:?} of expected",
-			ratio
+			"Too few proof size consumed, was only {ratio:?} of expected",
 		);
 
 		let ratio = Perbill::from_rational(got.ref_time(), should.ref_time());
 		assert!(
 			ratio >= Perbill::from_percent(99),
-			"Too few ref time consumed, was only {:?} of expected",
-			ratio
+			"Too few ref time consumed, was only {ratio:?} of expected",
 		);
 	});
 }
@@ -167,26 +196,54 @@ fn on_idle_weight_high_proof_is_close_enough_works() {
 #[test]
 fn on_idle_weight_low_proof_is_close_enough_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), Perbill::from_percent(100)));
-		assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), Perbill::from_percent(100)));
+		set_limits(One::one(), One::one());
 
 		let should = Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND, WEIGHT_PROOF_SIZE_PER_KB * 20);
 		let got = Glutton::on_idle(1, should);
 		assert!(got.all_lte(should), "Consumed too much weight");
 
 		let ratio = Perbill::from_rational(got.proof_size(), should.proof_size());
-		// Just a sanity check here.
+		// Just a sanity check here for > 0
 		assert!(
 			ratio >= Perbill::from_percent(50),
-			"Too few proof size consumed, was only {:?} of expected",
-			ratio
+			"Too few proof size consumed, was only {ratio:?} of expected",
 		);
 
 		let ratio = Perbill::from_rational(got.ref_time(), should.ref_time());
 		assert!(
 			ratio >= Perbill::from_percent(99),
-			"Too few ref time consumed, was only {:?} of expected",
-			ratio
+			"Too few ref time consumed, was only {ratio:?} of expected",
+		);
+	});
+}
+
+#[test]
+fn on_idle_weight_over_unity_is_close_enough_works() {
+	new_test_ext().execute_with(|| {
+		// Para blocks get ~500ms compute and ~5MB proof size.
+		let max_block =
+			Weight::from_parts(500 * WEIGHT_REF_TIME_PER_MILLIS, 5 * WEIGHT_PROOF_SIZE_PER_MB);
+		// But now we tell it to consume more than that.
+		set_limits(1.75, 1.5);
+		let want = Weight::from_parts(
+			(1.75 * max_block.ref_time() as f64) as u64,
+			(1.5 * max_block.proof_size() as f64) as u64,
+		);
+
+		let consumed = Glutton::on_idle(1, max_block);
+		assert!(consumed.all_gt(max_block), "Must consume more than the block limit");
+		assert!(consumed.all_lte(want), "Consumed more than the requested weight");
+
+		let ratio = Perbill::from_rational(consumed.proof_size(), want.proof_size());
+		assert!(
+			ratio >= Perbill::from_percent(99),
+			"Too few proof size consumed, was only {ratio:?} of expected",
+		);
+
+		let ratio = Perbill::from_rational(consumed.ref_time(), want.ref_time());
+		assert!(
+			ratio >= Perbill::from_percent(99),
+			"Too few ref time consumed, was only {ratio:?} of expected",
 		);
 	});
 }
@@ -202,7 +259,7 @@ fn waste_at_most_ref_time_weight_close_enough() {
 		// We require it to be under-spend by at most 1%.
 		assert!(
 			meter.consumed_ratio() >= Perbill::from_percent(99),
-			"Consumed too few: {:?}",
+			"{CALIBRATION_ERROR}\nConsumed too few: {:?}",
 			meter.consumed_ratio()
 		);
 	});
@@ -219,7 +276,7 @@ fn waste_at_most_proof_size_weight_close_enough() {
 		// We require it to be under-spend by at most 1%.
 		assert!(
 			meter.consumed_ratio() >= Perbill::from_percent(99),
-			"Consumed too few: {:?}",
+			"{CALIBRATION_ERROR}\nConsumed too few: {:?}",
 			meter.consumed_ratio()
 		);
 	});

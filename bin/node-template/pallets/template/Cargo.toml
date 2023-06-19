@@ -22,9 +22,9 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../..
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/system" }
 
 [dev-dependencies]
-sp-core = { version = "8.0.0", path = "../../../../primitives/core" }
-sp-io = { version = "8.0.0", path = "../../../../primitives/io" }
-sp-runtime = { version = "8.0.0", path = "../../../../primitives/runtime" }
+sp-core = { version = "21.0.0", path = "../../../../primitives/core" }
+sp-io = { version = "23.0.0", path = "../../../../primitives/io" }
+sp-runtime = { version = "24.0.0", path = "../../../../primitives/runtime" }
 
 [features]
 default = ["std"]

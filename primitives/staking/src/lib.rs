@@ -41,7 +41,7 @@ pub type PageIndex = u32;
 
 /// Representation of the status of a staker.
 #[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone))]
 pub enum StakerStatus<AccountId> {
 	/// Chilling.
 	Idle,
