@@ -3280,12 +3280,12 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_parts(7, 0) }
-			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
+			fn on_initialize(n: frame_system::BlockNumberOf<T>,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_parts(7, 0) }
+			fn on_idle(n: frame_system::BlockNumberOf<T>, remaining_weight: Weight,) -> Weight {
 				if n.into() == 42 || remaining_weight == Weight::from_parts(42, 0)  { panic!("on_idle") }
 				Weight::from_parts(7, 0)
 			}
-			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
+			fn on_finalize(n: frame_system::BlockNumberOf<T>,) { if n.into() == 42 { panic!("on_finalize") } }
 			fn on_runtime_upgrade() -> Weight { Weight::from_parts(10, 0) }
 			fn offchain_worker() {}
 			/// Some doc
