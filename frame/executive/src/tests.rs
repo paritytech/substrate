@@ -31,7 +31,7 @@ use sp_runtime::{
 };
 
 use frame_support::{
-	assert_err, parameter_types,
+	assert_err, assert_ok, parameter_types,
 	traits::{fungible, ConstU32, ConstU64, ConstU8, Currency},
 	weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 };
@@ -957,7 +957,6 @@ fn inherents_fail_validate_block() {
 #[test]
 fn inherents_ok_while_exts_forbidden_works() {
 	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
-	let xt2 = xt1.clone();
 
 	let header = new_test_ext(1).execute_with(|| {
 		Executive::initialize_block(&Header::new(
@@ -969,13 +968,13 @@ fn inherents_ok_while_exts_forbidden_works() {
 		));
 
 		Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
-		Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
-
+		// This is not applied:
 		Executive::finalize_block()
 	});
 
 	new_test_ext(1).execute_with(|| {
-		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+		// Tell `after_inherents` to forbid extrinsics:
+		Executive::execute_block(Block::new(header, vec![xt1]));
 	});
 }
 
@@ -1003,7 +1002,97 @@ fn extrinsic_while_exts_forbidden_errors() {
 
 	new_test_ext(1).execute_with(|| {
 		// Tell `after_inherents` to forbid extrinsics:
-		sp_io::storage::set(&b":extrinsics_forbidden"[..], &[0u8; 0]);
+		sp_io::storage::set(&b":extrinsics_forbidden"[..], &[]);
 		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+	});
+}
+
+#[test]
+#[cfg(feature = "try-runtime")]
+fn try_execute_block_works() {
+	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
+
+	let header = new_test_ext(1).execute_with(|| {
+		// Let's build some fake block.
+		Executive::initialize_block(&Header::new(
+			1,
+			H256::default(),
+			H256::default(),
+			[69u8; 32].into(),
+			Digest::default(),
+		));
+
+		Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
+		Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
+
+		Executive::finalize_block()
+	});
+
+	new_test_ext(1).execute_with(|| {
+		Executive::try_execute_block(
+			Block::new(header, vec![xt1, xt2]),
+			true,
+			true,
+			frame_try_runtime::TryStateSelect::All,
+		)
+		.unwrap();
+	});
+}
+
+#[test]
+fn ensure_inherents_are_first_works() {
+	let in1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
+
+	// Header is not checked.
+	let header = new_test_ext(1).execute_with(|| Executive::finalize_block());
+
+	new_test_ext(1).execute_with(|| {
+		assert_ok!(Runtime::ensure_inherents_are_first(&Block::new(header.clone(), vec![]),), 0);
+		assert_ok!(
+			Runtime::ensure_inherents_are_first(&Block::new(header.clone(), vec![xt2.clone()]),),
+			0
+		);
+		assert_ok!(
+			Runtime::ensure_inherents_are_first(&Block::new(header.clone(), vec![in1.clone()]),),
+			1
+		);
+		assert_ok!(
+			Runtime::ensure_inherents_are_first(&Block::new(
+				header.clone(),
+				vec![in1.clone(), xt2.clone()]
+			),),
+			1
+		);
+		assert_ok!(
+			Runtime::ensure_inherents_are_first(&Block::new(
+				header.clone(),
+				vec![in1.clone(), in1.clone(), xt2.clone()]
+			),),
+			2
+		);
+
+		assert_eq!(
+			Runtime::ensure_inherents_are_first(&Block::new(
+				header.clone(),
+				vec![xt2.clone(), in1.clone()]
+			),),
+			Err(1)
+		);
+		assert_eq!(
+			Runtime::ensure_inherents_are_first(&Block::new(
+				header.clone(),
+				vec![xt2.clone(), xt2.clone(), in1.clone()]
+			),),
+			Err(2)
+		);
+		assert_eq!(
+			Runtime::ensure_inherents_are_first(&Block::new(
+				header.clone(),
+				vec![xt2.clone(), xt2.clone(), xt2.clone(), in1.clone()]
+			),),
+			Err(3)
+		);
 	});
 }

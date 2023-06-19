@@ -183,7 +183,7 @@ pub fn expand_outer_inherent(
 				use #scrate::traits::{IsSubType, ExtrinsicCall};
 				use #scrate::sp_runtime::traits::Block as _;
 
-				let mut first_extrinsic_index = None;
+				let mut num_inherents = 0usize;
 
 				for (i, xt) in block.extrinsics().iter().enumerate() {
 					let is_signed = #scrate::sp_runtime::traits::Extrinsic::is_signed(xt)
@@ -209,17 +209,15 @@ pub fn expand_outer_inherent(
 					};
 
 					if is_inherent {
-						if first_extrinsic_index.is_some() {
-							// There is an inherent after an extrinsic:
-							return Err(i as u32)
+						if num_inherents != i{
+							return Err(i as u32);
 						}
-					} else if first_extrinsic_index.is_none() {
-						// This is the first extrinsic:
-						first_extrinsic_index = Some(i as u32);
+
+						num_inherents += 1; // Safe since we are in an `enumerate` loop.
 					}
 				}
 
-				Ok(first_extrinsic_index.unwrap_or(0))
+				Ok(num_inherents as u32)
 			}
 		}
 	}
