@@ -229,7 +229,7 @@ fn construct_runtime_intermediary_expansion(
 /// All pallets that have
 ///   (I): explicit pallet parts (ie `System: frame_system::{Pallet, Call}`) and
 ///   (II): are not fully expanded (ie do not include the `Error` expansion part)
-/// are fully expanded by including the parts from the pallet's `tt_error_part` macro.
+/// are fully expanded by including the parts from the pallet's `tt_extra_parts` macro.
 ///
 /// This function transforms the [`RuntimeDeclaration::Explicit`] that is not yet fully expanded
 /// into [`RuntimeDeclaration::ExplicitFullyExpanded`] fully expanded.
@@ -249,7 +249,7 @@ fn construct_runtime_explicit_fully_expanded(
 		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(::<#instance>));
 		expansion = quote::quote!(
 			#frame_support::tt_call! {
-				macro = [{ #pallet_path::tt_error_part }]
+				macro = [{ #pallet_path::tt_extra_parts }]
 				frame_support = [{ #frame_support }]
 				~~> #frame_support::match_and_insert! {
 					target = [{ #expansion }]
