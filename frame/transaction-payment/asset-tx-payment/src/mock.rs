@@ -29,9 +29,7 @@ use frame_system as system;
 use frame_system::EnsureRoot;
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, ConvertInto, IdentityLookup, SaturatedConversion},
-};
+use sp_runtime::traits::{BlakeTwo256, ConvertInto, IdentityLookup, SaturatedConversion};
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type Balance = u64;

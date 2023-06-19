@@ -225,10 +225,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		self.apply_head(&header)
 	}
 
-	fn apply_head(
-		&self,
-		header: &<Block as HeaderProvider>::Header,
-	) -> sp_blockchain::Result<()> {
+	fn apply_head(&self, header: &<Block as HeaderProvider>::Header) -> sp_blockchain::Result<()> {
 		let hash = header.hash();
 		let number = header.number();
 

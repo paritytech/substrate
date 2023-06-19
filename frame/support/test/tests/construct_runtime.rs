@@ -22,9 +22,8 @@
 #![recursion_limit = "128"]
 
 use codec::MaxEncodedLen;
-use frame_support::derive_impl;
 use frame_support::{
-	parameter_types, traits::PalletInfo as _, weights::RuntimeDbWeight,
+	derive_impl, parameter_types, traits::PalletInfo as _, weights::RuntimeDbWeight,
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 use scale_info::TypeInfo;

@@ -17,8 +17,8 @@
 
 #![recursion_limit = "128"]
 
-use frame_support::derive_impl;
 use frame_support::{
+	derive_impl,
 	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
 	metadata_ir::{
 		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,

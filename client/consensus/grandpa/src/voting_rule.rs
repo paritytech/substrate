@@ -31,14 +31,7 @@ use sp_runtime::traits::{Block as BlockT, Header, HeaderProvider, NumberFor, One
 
 /// A future returned by a `VotingRule` to restrict a given vote, if any restriction is necessary.
 pub type VotingRuleResult<Block> = Pin<
-	Box<
-		dyn Future<
-				Output = Option<(
-					<Block as HeaderProvider>::Hash,
-					NumberFor<Block>,
-				)>,
-			> + Send,
-	>,
+	Box<dyn Future<Output = Option<(<Block as HeaderProvider>::Hash, NumberFor<Block>)>> + Send>,
 >;
 
 /// A trait for custom voting rules in GRANDPA.

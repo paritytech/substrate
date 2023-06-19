@@ -163,9 +163,7 @@ mod tests {
 	use crate as pallet_insecure_randomness_collective_flip;
 
 	use sp_core::H256;
-	use sp_runtime::{
-		traits::{BlakeTwo256, Header as _, IdentityLookup},
-	};
+	use sp_runtime::traits::{BlakeTwo256, Header as _, IdentityLookup};
 
 	use frame_support::{
 		parameter_types,
@@ -176,7 +174,7 @@ mod tests {
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
-		pub enum Test 
+		pub enum Test
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			CollectiveFlip: pallet_insecure_randomness_collective_flip::{Pallet, Storage},

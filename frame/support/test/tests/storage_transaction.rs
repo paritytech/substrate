@@ -19,9 +19,8 @@
 #![allow(deprecated)]
 
 pub use self::pallet::*;
-use frame_support::derive_impl;
 use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop,
+	assert_noop, assert_ok, assert_storage_noop, derive_impl,
 	dispatch::DispatchResult,
 	storage::{with_transaction, TransactionOutcome::*},
 	transactional,

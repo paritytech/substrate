@@ -30,9 +30,7 @@ use frame_support::{
 };
 use pallet_balances::{Instance1, Instance2};
 use sp_core::{ConstU128, H256};
-use sp_runtime::{
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

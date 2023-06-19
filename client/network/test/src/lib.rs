@@ -847,8 +847,7 @@ where
 
 		let warp_sync_params = match config.target_block {
 			Some(target_block) => {
-				let (sender, receiver) =
-					oneshot::channel::<<Block as HeaderProvider>::Header>();
+				let (sender, receiver) = oneshot::channel::<<Block as HeaderProvider>::Header>();
 				let _ = sender.send(target_block);
 				WarpSyncParams::WaitForTarget(receiver)
 			},

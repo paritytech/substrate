@@ -235,10 +235,7 @@ where
 	type Proposer = Proposer<B, Block, C, A, PR>;
 	type Error = sp_blockchain::Error;
 
-	fn init(
-		&mut self,
-		parent_header: &<Block as HeaderProvider>::Header,
-	) -> Self::CreateProposer {
+	fn init(&mut self, parent_header: &<Block as HeaderProvider>::Header) -> Self::CreateProposer {
 		future::ready(Ok(self.init_with_now(parent_header, Box::new(time::Instant::now))))
 	}
 }

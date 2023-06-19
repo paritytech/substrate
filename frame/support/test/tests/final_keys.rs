@@ -16,8 +16,7 @@
 // limitations under the License.
 
 use codec::Encode;
-use frame_support::derive_impl;
-use frame_support::{storage::unhashed, StoragePrefixedMap};
+use frame_support::{derive_impl, storage::unhashed, StoragePrefixedMap};
 use sp_core::{sr25519, ConstU32};
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},

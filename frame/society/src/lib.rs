@@ -416,10 +416,8 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 	}
 }
 
-pub type PayoutsFor<T, I> = BoundedVec<
-	(frame_system::BlockNumberOf<T>, BalanceOf<T, I>),
-	<T as Config<I>>::MaxPayouts,
->;
+pub type PayoutsFor<T, I> =
+	BoundedVec<(frame_system::BlockNumberOf<T>, BalanceOf<T, I>), <T as Config<I>>::MaxPayouts>;
 
 /// Information concerning a member.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -439,10 +437,7 @@ pub struct PayoutRecord<Balance, PayoutsVec> {
 
 pub type PayoutRecordFor<T, I> = PayoutRecord<
 	BalanceOf<T, I>,
-	BoundedVec<
-		(frame_system::BlockNumberOf<T>, BalanceOf<T, I>),
-		<T as Config<I>>::MaxPayouts,
-	>,
+	BoundedVec<(frame_system::BlockNumberOf<T>, BalanceOf<T, I>), <T as Config<I>>::MaxPayouts>,
 >;
 
 /// Record for an individual new member who was elevated from a candidate recently.
@@ -1939,7 +1934,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// It is the caller's duty to ensure that `who` is already a member. This does nothing if `who`
 	/// is not a member or if `value` is zero.
-	fn bump_payout(who: &T::AccountId, when: frame_system::BlockNumberOf<T>, value: BalanceOf<T, I>) {
+	fn bump_payout(
+		who: &T::AccountId,
+		when: frame_system::BlockNumberOf<T>,
+		value: BalanceOf<T, I>,
+	) {
 		if value.is_zero() {
 			return
 		}

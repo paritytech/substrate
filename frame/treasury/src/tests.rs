@@ -20,9 +20,7 @@
 #![cfg(test)]
 
 use sp_core::H256;
-use sp_runtime::{
-	traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup},
-};
+use sp_runtime::traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup};
 
 use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
