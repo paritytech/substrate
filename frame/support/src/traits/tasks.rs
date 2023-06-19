@@ -18,13 +18,14 @@
 //! Contains the [`Task`] trait, which defines a general-purpose way for defining and executing
 //! service work, and supporting types.
 
+use codec::FullCodec;
 use sp_runtime::DispatchError;
 use sp_std::slice::Iter;
 
 /// A general-purpose trait which defines a type of service work (i.e., work to performed by an
 /// off-chain worker) including methods for enumerating, validating, indexing, and running
 /// tasks of this type.
-pub trait Task: Sized {
+pub trait Task: Sized + FullCodec {
 	type Enumeration: sp_std::iter::Iterator<Item = Self>;
 
 	/// Inspects the pallet's state and enumerates tasks of this type.
