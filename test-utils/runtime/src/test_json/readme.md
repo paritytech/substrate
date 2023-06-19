@@ -12,4 +12,4 @@
 	}
 ```
 
-`:code` field was manually truncated to reduce file size. Test is only comparing keys, not the values.
+`:code` field has been manually truncated to reduce file size. Test is only comparing keys, not the values.
