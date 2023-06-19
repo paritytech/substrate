@@ -71,6 +71,7 @@ struct Snapshot<B: BlockT> {
 }
 
 #[derive(Decode, Encode)]
+
 struct SnapshotOnlyVersion {
 	snapshot_version: Compact<u16>,
 }
