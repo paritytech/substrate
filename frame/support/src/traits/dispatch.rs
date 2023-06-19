@@ -48,19 +48,6 @@ pub trait EnsureOrigin<OuterOrigin> {
 	fn try_successful_origin() -> Result<OuterOrigin, ()>;
 }
 
-/// [`EnsureOrigin`] implementation that always fails.
-pub struct NeverEnsureOrigin<Success>(sp_std::marker::PhantomData<Success>);
-impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
-	type Success = Success;
-	fn try_origin(o: OO) -> Result<Success, OO> {
-		Err(o)
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<OO, ()> {
-		Err(())
-	}
-}
-
 /// [`EnsureOrigin`] implementation that checks that an origin has equal or higher privilege
 /// compared to the expected `Origin`.
 ///
@@ -166,6 +153,62 @@ pub trait EnsureOriginWithArg<OuterOrigin, Argument> {
 	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()>;
 }
 
+/// Simple macro to explicitly implement [EnsureOriginWithArg] to be used on any type which
+/// implements [EnsureOrigin]. This is quick and dirty, so you must use the type parameters `O`
+/// (the origin type), `T` (the argument type) and `AccountId` (if you are using the `O: ..` form).
+///
+/// The argument is ignored, much like in [AsEnsureOriginWithArg].
+#[macro_export]
+macro_rules! impl_ensure_origin_with_arg_ignoring_arg {
+	( impl < { O: .., I: 'static, $( $bound:tt )* }> EnsureOriginWithArg<O, $t_param:ty> for $name:ty {} ) => {
+		impl_ensure_origin_with_arg_ignoring_arg! {
+			impl <{
+				O: Into<Result<RawOrigin<AccountId, I>, O>> + From<RawOrigin<AccountId, I>>,
+				I: 'static,
+				$( $bound )*
+			}> EnsureOriginWithArg<O, $t_param> for $name {}
+		}
+	};
+	( impl < { O: .. , $( $bound:tt )* }> EnsureOriginWithArg<O, $t_param:ty> for $name:ty {} ) => {
+		impl_ensure_origin_with_arg_ignoring_arg! {
+			impl <{
+				O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>,
+				$( $bound )*
+			}> EnsureOriginWithArg<O, $t_param> for $name {}
+		}
+	};
+	( impl < { $( $bound:tt )* } > EnsureOriginWithArg<$o_param:ty, $t_param:ty> for $name:ty {} ) => {
+		impl < $( $bound )* > EnsureOriginWithArg<$o_param, $t_param> for $name {
+			type Success = <Self as EnsureOrigin<$o_param>>::Success;
+			fn try_origin(o: $o_param, _: &$t_param) -> Result<Self::Success, $o_param> {
+				<Self as EnsureOrigin<$o_param>>::try_origin(o)
+			}
+			#[cfg(feature = "runtime-benchmarks")]
+			fn try_successful_origin(_: &$t_param) -> Result<$o_param, ()> {
+				<Self as EnsureOrigin<$o_param>>::try_successful_origin()
+			}
+		}
+	}
+}
+
+/// [`EnsureOrigin`] implementation that always fails.
+pub struct NeverEnsureOrigin<Success>(sp_std::marker::PhantomData<Success>);
+impl<OO, Success> EnsureOrigin<OO> for NeverEnsureOrigin<Success> {
+	type Success = Success;
+	fn try_origin(o: OO) -> Result<Success, OO> {
+		Err(o)
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<OO, ()> {
+		Err(())
+	}
+}
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl<{ OO, Success, A }>
+		EnsureOriginWithArg<OO, A> for NeverEnsureOrigin<Success>
+	{}
+}
+
 pub struct AsEnsureOriginWithArg<EO>(sp_std::marker::PhantomData<EO>);
 impl<OuterOrigin, Argument, EO: EnsureOrigin<OuterOrigin>>
 	EnsureOriginWithArg<OuterOrigin, Argument> for AsEnsureOriginWithArg<EO>
@@ -207,6 +250,18 @@ impl<O, Original: EnsureOrigin<O>, Mutator: Morph<Original::Success>> EnsureOrig
 		Original::try_successful_origin()
 	}
 }
+impl<O, Original: EnsureOriginWithArg<O, A>, Mutator: Morph<Original::Success>, A>
+	EnsureOriginWithArg<O, A> for MapSuccess<Original, Mutator>
+{
+	type Success = Mutator::Outcome;
+	fn try_origin(o: O, a: &A) -> Result<Mutator::Outcome, O> {
+		Ok(Mutator::morph(Original::try_origin(o, a)?))
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(a: &A) -> Result<O, ()> {
+		Original::try_successful_origin(a)
+	}
+}
 
 /// A derivative `EnsureOrigin` implementation. It mutates the `Success` result of an `Original`
 /// implementation with a given `Mutator`, allowing the possibility of an error to be returned
@@ -226,6 +281,43 @@ impl<O: Clone, Original: EnsureOrigin<O>, Mutator: TryMorph<Original::Success>> 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<O, ()> {
 		Original::try_successful_origin()
+	}
+}
+impl<O: Clone, Original: EnsureOriginWithArg<O, A>, Mutator: TryMorph<Original::Success>, A>
+	EnsureOriginWithArg<O, A> for TryMapSuccess<Original, Mutator>
+{
+	type Success = Mutator::Outcome;
+	fn try_origin(o: O, a: &A) -> Result<Mutator::Outcome, O> {
+		let orig = o.clone();
+		Mutator::try_morph(Original::try_origin(o, a)?).map_err(|()| orig)
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(a: &A) -> Result<O, ()> {
+		Original::try_successful_origin(a)
+	}
+}
+
+pub struct TryWithMorphedArg<O, A, Morph, Inner, Success>(
+	PhantomData<(O, A, Morph, Inner, Success)>,
+);
+impl<
+		O,
+		A,
+		Morph: for<'a> TryMorph<&'a A>,
+		Inner: for<'a> EnsureOriginWithArg<O, <Morph as TryMorph<&'a A>>::Outcome, Success = Success>,
+		Success,
+	> EnsureOriginWithArg<O, A> for TryWithMorphedArg<O, A, Morph, Inner, Success>
+{
+	type Success = Success;
+	fn try_origin(o: O, a: &A) -> Result<Success, O> {
+		match Morph::try_morph(a) {
+			Ok(x) => Inner::try_origin(o, &x),
+			_ => return Err(o),
+		}
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(a: &A) -> Result<O, ()> {
+		Inner::try_successful_origin(&Morph::try_morph(a).map_err(|_| ())?)
 	}
 }
 
@@ -248,6 +340,24 @@ impl<OuterOrigin, L: EnsureOrigin<OuterOrigin>, R: EnsureOrigin<OuterOrigin>>
 	#[cfg(feature = "runtime-benchmarks")]
 	fn try_successful_origin() -> Result<OuterOrigin, ()> {
 		L::try_successful_origin().or_else(|()| R::try_successful_origin())
+	}
+}
+impl<
+		OuterOrigin,
+		L: EnsureOriginWithArg<OuterOrigin, Argument>,
+		R: EnsureOriginWithArg<OuterOrigin, Argument>,
+		Argument,
+	> EnsureOriginWithArg<OuterOrigin, Argument> for EitherOfDiverse<L, R>
+{
+	type Success = Either<L::Success, R::Success>;
+	fn try_origin(o: OuterOrigin, a: &Argument) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o, a)
+			.map_or_else(|o| R::try_origin(o, a).map(Either::Right), |o| Ok(Either::Left(o)))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()> {
+		L::try_successful_origin(a).or_else(|()| R::try_successful_origin(a))
 	}
 }
 
@@ -283,6 +393,23 @@ impl<
 		L::try_successful_origin().or_else(|()| R::try_successful_origin())
 	}
 }
+impl<
+		OuterOrigin,
+		L: EnsureOriginWithArg<OuterOrigin, Argument>,
+		R: EnsureOriginWithArg<OuterOrigin, Argument, Success = L::Success>,
+		Argument,
+	> EnsureOriginWithArg<OuterOrigin, Argument> for EitherOf<L, R>
+{
+	type Success = L::Success;
+	fn try_origin(o: OuterOrigin, a: &Argument) -> Result<Self::Success, OuterOrigin> {
+		L::try_origin(o, a).or_else(|o| R::try_origin(o, a))
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin(a: &Argument) -> Result<OuterOrigin, ()> {
+		L::try_successful_origin(a).or_else(|()| R::try_successful_origin(a))
+	}
+}
 
 /// Type that can be dispatched with an origin but without checking the origin filter.
 ///
@@ -306,6 +433,21 @@ pub trait CallerTrait<AccountId>: Parameter + Member + From<RawOrigin<AccountId>
 
 	/// Extract a reference to the system-level `RawOrigin` if it is that.
 	fn as_system_ref(&self) -> Option<&RawOrigin<AccountId>>;
+
+	/// Extract the signer from it if a system `Signed` origin, `None` otherwise.
+	fn as_signed(&self) -> Option<&AccountId> {
+		self.as_system_ref().and_then(RawOrigin::as_signed)
+	}
+
+	/// Returns `true` if `self` is a system `Root` origin, `None` otherwise.
+	fn is_root(&self) -> bool {
+		self.as_system_ref().map_or(false, RawOrigin::is_root)
+	}
+
+	/// Returns `true` if `self` is a system `None` origin, `None` otherwise.
+	fn is_none(&self) -> bool {
+		self.as_system_ref().map_or(false, RawOrigin::is_none)
+	}
 }
 
 /// Methods available on `frame_system::Config::RuntimeOrigin`.
@@ -356,7 +498,13 @@ pub trait OriginTrait: Sized {
 	fn signed(by: Self::AccountId) -> Self;
 
 	/// Extract the signer from the message if it is a `Signed` origin.
+	#[deprecated = "Use `into_signer` instead"]
 	fn as_signed(self) -> Option<Self::AccountId> {
+		self.into_signer()
+	}
+
+	/// Extract the signer from the message if it is a `Signed` origin.
+	fn into_signer(self) -> Option<Self::AccountId> {
 		self.into_caller().into_system().and_then(|s| {
 			if let RawOrigin::Signed(who) = s {
 				Some(who)
