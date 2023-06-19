@@ -823,7 +823,11 @@ mod test {
 						modifier: StorageEntryModifierIR::Default,
 						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
 					},
 					StorageEntryMetadataIR {
 						name: "Foo",
@@ -841,7 +845,11 @@ mod test {
 						modifier: StorageEntryModifierIR::Default,
 						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
 					},
 				]
 			);
@@ -1067,7 +1075,11 @@ mod test {
 						modifier: StorageEntryModifierIR::Default,
 						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
 					},
 					StorageEntryMetadataIR {
 						name: "Foo",
@@ -1088,7 +1100,11 @@ mod test {
 						modifier: StorageEntryModifierIR::Default,
 						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
 					},
 				]
 			);
@@ -1346,7 +1362,11 @@ mod test {
 						modifier: StorageEntryModifierIR::Default,
 						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
 					},
 					StorageEntryMetadataIR {
 						name: "Foo",
@@ -1368,7 +1388,11 @@ mod test {
 						modifier: StorageEntryModifierIR::Default,
 						ty: StorageEntryTypeIR::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: if cfg!(feature = "no-metadata-docs") {
+							vec![]
+						} else {
+							vec!["Counter for the related counted storage map"]
+						},
 					},
 				]
 			);
