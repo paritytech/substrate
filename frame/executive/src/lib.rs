@@ -116,6 +116,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+mod tests;
+
 use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
@@ -499,6 +502,7 @@ where
 					}
 				},
 				BlockAfterInherentsMode::ExtrinsicsAllowed => {
+					dbg!(num_inherents, applyables.len());
 					Self::execute_applyables(applyables.iter().skip(num_inherents));
 				},
 			}
@@ -519,9 +523,14 @@ where
 	/// This is always called by the block builder. It returns whether extrinsics are allowed to be
 	/// included in the block or not.
 	pub fn after_inherents() -> BlockAfterInherentsMode {
-		// TODO MBMs and `poll` will add a condition.
+		// TODO add a proper condition here, but now we need this for mocking in tests.
+		//  <https://github.com/paritytech/substrate/pull/14275>
 		//  <https://github.com/paritytech/substrate/pull/14279>
-		//  <https://github.com/paritytech/substrate/issues/13690>
+		#[cfg(all(feature = "std", test))]
+		if sp_io::storage::exists(&b":extrinsics_forbidden"[..]) {
+			return BlockAfterInherentsMode::ExtrinsicsForbidden
+		}
+
 		BlockAfterInherentsMode::ExtrinsicsAllowed
 	}
 

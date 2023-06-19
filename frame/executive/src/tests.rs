@@ -17,8 +17,6 @@
 
 //! Test the `frame-executive` crate.
 
-#![cfg(test)]
-
 use super::*;
 
 use sp_core::H256;
@@ -155,10 +153,7 @@ mod custom {
 		}
 
 		// Inherent call is not validated as unsigned
-		fn validate_unsigned(
-			_source: TransactionSource,
-			call: &Self::Call,
-		) -> TransactionValidity {
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			match call {
 				Call::allowed_unsigned { .. } => Ok(Default::default()),
 				_ => UnknownTransaction::NoUnsignedValidator.into(),
@@ -474,10 +469,7 @@ fn block_weight_limit_enforced() {
 
 		for nonce in 0..=num_to_exhaust_block {
 			let xt = TestXt::new(
-				RuntimeCall::Balances(BalancesCall::transfer_allow_death {
-					dest: 33,
-					value: 0,
-				}),
+				RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 33, value: 0 }),
 				sign_extra(1, nonce.into(), 0),
 			);
 			let res = Executive::apply_extrinsic(xt);
@@ -599,12 +591,8 @@ fn validate_unsigned() {
 fn can_not_pay_for_tx_fee_on_full_lock() {
 	let mut t = new_test_ext(1);
 	t.execute_with(|| {
-		<pallet_balances::Pallet<Runtime> as fungible::MutateFreeze<u64>>::set_freeze(
-			&(),
-			&1,
-			110,
-		)
-		.unwrap();
+		<pallet_balances::Pallet<Runtime> as fungible::MutateFreeze<u64>>::set_freeze(&(), &1, 110)
+			.unwrap();
 		let xt = TestXt::new(
 			RuntimeCall::System(frame_system::Call::remark { remark: vec![1u8] }),
 			sign_extra(1, 0, 0),
@@ -827,15 +815,15 @@ fn all_weights_are_recorded_correctly() {
 			<AllPalletsWithSystem as OnRuntimeUpgrade>::on_runtime_upgrade();
 		let on_initialize_weight =
 			<AllPalletsWithSystem as OnInitialize<u64>>::on_initialize(block_number);
-		let base_block_weight =
-			<Runtime as frame_system::Config>::BlockWeights::get().base_block;
+		let base_block_weight = <Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 		// Weights are recorded correctly
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::block_weight().total(),
 			custom_runtime_upgrade_weight +
 				runtime_upgrade_weight +
-				on_initialize_weight + base_block_weight,
+				on_initialize_weight +
+				base_block_weight,
 		);
 	});
 }
@@ -847,8 +835,7 @@ fn offchain_worker_works_as_expected() {
 		let mut digest = Digest::default();
 		digest.push(DigestItem::Seal([1, 2, 3, 4], vec![5, 6, 7, 8]));
 
-		let header =
-			Header::new(1, H256::default(), H256::default(), parent_hash, digest.clone());
+		let header = Header::new(1, H256::default(), H256::default(), parent_hash, digest.clone());
 
 		Executive::offchain_worker(&header);
 
@@ -942,18 +929,11 @@ fn valid_inherents_position_works() {
 #[test]
 #[should_panic(expected = "A call was labelled as mandatory, but resulted in an Error.")]
 fn invalid_inherents_fail_block_execution() {
-	let xt1 =
-		TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), sign_extra(1, 0, 0));
+	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), sign_extra(1, 0, 0));
 
 	new_test_ext(1).execute_with(|| {
 		Executive::execute_block(Block::new(
-			Header::new(
-				1,
-				H256::default(),
-				H256::default(),
-				[69u8; 32].into(),
-				Digest::default(),
-			),
+			Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()),
 			vec![xt1],
 		));
 	});
@@ -971,4 +951,59 @@ fn inherents_fail_validate_block() {
 			InvalidTransaction::MandatoryValidation.into()
 		);
 	})
+}
+
+/// Inherents still work while `after_initialize` forbids extrinsics.
+#[test]
+fn inherents_ok_while_exts_forbidden_works() {
+	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+	let xt2 = xt1.clone();
+
+	let header = new_test_ext(1).execute_with(|| {
+		Executive::initialize_block(&Header::new(
+			1,
+			H256::default(),
+			H256::default(),
+			[69u8; 32].into(),
+			Digest::default(),
+		));
+
+		Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
+		Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
+
+		Executive::finalize_block()
+	});
+
+	new_test_ext(1).execute_with(|| {
+		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+	});
+}
+
+/// Panics when a block contains extrinsics although `after_inherents` forbids them.
+#[test]
+#[should_panic = "Extrinsics are not allowed in this block"]
+fn extrinsic_while_exts_forbidden_errors() {
+	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
+
+	let header = new_test_ext(1).execute_with(|| {
+		Executive::initialize_block(&Header::new(
+			1,
+			H256::default(),
+			H256::default(),
+			[69u8; 32].into(),
+			Digest::default(),
+		));
+
+		Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
+		Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
+
+		Executive::finalize_block()
+	});
+
+	new_test_ext(1).execute_with(|| {
+		// Tell `after_inherents` to forbid extrinsics:
+		sp_io::storage::set(&b":extrinsics_forbidden"[..], &[0u8; 0]);
+		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+	});
 }
