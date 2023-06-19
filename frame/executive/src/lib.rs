@@ -133,7 +133,7 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult,
+	ApplyExtrinsicResult, BlockAfterInherentsMode,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -293,7 +293,10 @@ where
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
-		Self::idle_and_finalize_hook(*header.number());
+		// TODO MBMs will only conditionally run this.
+		Self::on_idle_hook(*header.number());
+
+		Self::on_finalize_hook(*header.number());
 
 		// run the try-state checks of all pallets, ensuring they don't alter any state.
 		let _guard = frame_support::StorageNoopGuard::default();
@@ -454,7 +457,8 @@ where
 		}
 	}
 
-	fn initial_checks(block: &Block) {
+	/// Returns the number of inherents in the block.
+	fn initial_checks(block: &Block) -> u32 {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
 
@@ -467,8 +471,9 @@ where
 			"Parent hash should be valid.",
 		);
 
-		if let Err(i) = System::ensure_inherents_are_first(block) {
-			panic!("Invalid inherent position for extrinsic at index {}", i);
+		match System::ensure_inherents_are_first(block) {
+			Ok(num_inherents) => num_inherents,
+			Err(i) => panic!("Invalid inherent position for extrinsic at index {}", i),
 		}
 	}
 
@@ -477,53 +482,77 @@ where
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
-
+			// Execute `on_runtime_upgrade` and `on_initialize`.
 			Self::initialize_block(block.header());
 
-			// any initial checks
-			Self::initial_checks(&block);
+			// Check the block and panic if invalid.
+			let num_inherents = Self::initial_checks(&block) as usize;
+			let (header, applyables) = block.deconstruct();
 
-			// execute extrinsics
-			let (header, extrinsics) = block.deconstruct();
-			Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+			// Process inherents (if any).
+			Self::execute_applyables(applyables.iter().take(num_inherents));
 
+			match Self::after_inherents() {
+				BlockAfterInherentsMode::ExtrinsicsForbidden => {
+					if num_inherents < applyables.len() {
+						panic!("Extrinsics are not allowed in this block");
+					}
+				},
+				BlockAfterInherentsMode::ExtrinsicsAllowed => {
+					Self::execute_applyables(applyables.iter().skip(num_inherents));
+				},
+			}
+
+			// Dispatchable processing is done now.
+			<frame_system::Pallet<System>>::note_finished_extrinsics();
+			// TODO MBMs will only conditionally run this.
+			Self::on_idle_hook(*header.number());
+
+			Self::on_finalize_hook(*header.number());
 			// any final checks
 			Self::final_checks(&header);
 		}
 	}
 
-	/// Execute given extrinsics and take care of post-extrinsics book-keeping.
-	fn execute_extrinsics_with_book_keeping(
-		extrinsics: Vec<Block::Extrinsic>,
-		block_number: NumberFor<Block>,
-	) {
-		extrinsics.into_iter().for_each(|e| {
-			if let Err(e) = Self::apply_extrinsic(e) {
+	/// Execute code after inherents but before extrinsic application.
+	///
+	/// This is always called by the block builder. It returns whether extrinsics are allowed to be
+	/// included in the block or not.
+	pub fn after_inherents() -> BlockAfterInherentsMode {
+		// TODO MBMs and `poll` will add a condition.
+		//  <https://github.com/paritytech/substrate/pull/14279>
+		//  <https://github.com/paritytech/substrate/issues/13690>
+		BlockAfterInherentsMode::ExtrinsicsAllowed
+	}
+
+	/// Execute given applyables.
+	fn execute_applyables<'a>(applyables: impl Iterator<Item = &'a Block::Extrinsic>) {
+		applyables.into_iter().for_each(|e| {
+			if let Err(e) = Self::apply_extrinsic(e.clone()) {
 				let err: &'static str = e.into();
 				panic!("{}", err)
 			}
 		});
-
-		// post-extrinsics book-keeping
-		<frame_system::Pallet<System>>::note_finished_extrinsics();
-
-		Self::idle_and_finalize_hook(block_number);
 	}
 
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
+	// Note: Only used by the block builder - not Executive itself.
 	pub fn finalize_block() -> System::Header {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "finalize_block");
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Pallet<System>>::block_number();
 
-		Self::idle_and_finalize_hook(block_number);
+		// TODO MBMs will only conditionally run this.
+		Self::on_idle_hook(block_number);
+
+		Self::on_finalize_hook(block_number);
 
 		<frame_system::Pallet<System>>::finalize()
 	}
 
-	fn idle_and_finalize_hook(block_number: NumberFor<Block>) {
+	fn on_idle_hook(block_number: NumberFor<Block>) {
 		let weight = <frame_system::Pallet<System>>::block_weight();
 		let max_weight = <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let remaining_weight = max_weight.saturating_sub(weight.total());
@@ -538,7 +567,9 @@ where
 				DispatchClass::Mandatory,
 			);
 		}
+	}
 
+	fn on_finalize_hook(block_number: NumberFor<Block>) {
 		<AllPalletsWithSystem as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}
 

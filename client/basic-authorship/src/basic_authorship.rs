@@ -39,7 +39,7 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
-	Digest, Percent, SaturatedConversion,
+	BlockAfterInherentsMode, Digest, Percent, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -347,12 +347,14 @@ where
 
 		self.apply_inherents(&mut block_builder, inherent_data)?;
 
-		// TODO call `after_inherents` and check if we should apply extrinsincs here
-		// <https://github.com/paritytech/substrate/pull/14275/>
-
 		let block_timer = time::Instant::now();
-		let end_reason =
-			self.apply_extrinsics(&mut block_builder, deadline, block_size_limit).await?;
+		let mode = block_builder.after_inherents()?;
+		let end_reason = match mode {
+			BlockAfterInherentsMode::ExtrinsicsAllowed =>
+				self.apply_extrinsics(&mut block_builder, deadline, block_size_limit).await?,
+			BlockAfterInherentsMode::ExtrinsicsForbidden => EndProposingReason::ExtrinsicsForbidden,
+		};
+
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
 		let block_took = block_timer.elapsed();
 
@@ -544,7 +546,12 @@ where
 		});
 
 		let extrinsics_summary = if extrinsics.is_empty() {
-			"no extrinsics".to_string()
+			if end_reason == EndProposingReason::ExtrinsicsForbidden {
+				"extrinsics forbidden"
+			} else {
+				"no extrinsics"
+			}
+			.to_string()
 		} else {
 			format!(
 				"extrinsics ({}): [{}]",
