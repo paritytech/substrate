@@ -120,6 +120,7 @@ pub fn expand_runtime_metadata(
 							<#runtime as #system_path::Config>::RuntimeCall
 						>(),
 					event_enum_ty: #scrate::scale_info::meta_type::<RuntimeEvent>(),
+					module_error_enum_ty: #scrate::scale_info::meta_type::<ModuleErrorType>(),
 				}
 			}
 

@@ -144,6 +144,9 @@
 //! This macro generates the following enums for ease of decoding:
 //!  - `enum RuntimeCall`: This type contains the information needed to decode extrinsics.
 //!  - `enum RuntimeEvent`: This type contains the information needed to decode events.
+//!  - `enum ModuleErrorType`: While this cannot be used directly to decode
+//!    `sp_runtime::DispatchError` from the chain, it contains the information needed to decode the
+//!    `sp_runtime::DispatchError::Module`.
 
 mod expand;
 mod parse;
@@ -260,7 +263,11 @@ fn construct_runtime_final_expansion(
 	let scrate = generate_crate_access(hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(hidden_crate_name, "frame-support");
 
-	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
+	let outer_event =
+		expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Event)?;
+	let outer_error =
+		expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Error)?;
+
 	let outer_origin = expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter(), &features);
 	let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
@@ -331,6 +338,8 @@ fn construct_runtime_final_expansion(
 		impl InternalConstructRuntime for &#name {}
 
 		#outer_event
+
+		#outer_error
 
 		#outer_origin
 

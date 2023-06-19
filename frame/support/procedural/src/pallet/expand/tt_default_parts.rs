@@ -36,6 +36,8 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote!( Event #gen , )
 	});
 
+	let error_part = def.error.as_ref().map(|_| quote::quote!(Error<T>,));
+
 	let origin_part = def.origin.as_ref().map(|origin| {
 		let gen = origin.is_generic.then(|| quote::quote!( <T> ));
 		quote::quote!( Origin #gen , )
@@ -96,7 +98,7 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 					$caller
 					tokens = [{
 						::{
-							Pallet, #call_part #storage_part #event_part #origin_part #config_part
+							Pallet, #call_part #storage_part #event_part #error_part #origin_part #config_part
 							#inherent_part #validate_unsigned_part #freeze_reason_part
 							#hold_reason_part #lock_id_part #slash_reason_part
 						}
