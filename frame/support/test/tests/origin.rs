@@ -23,10 +23,7 @@ use frame_support::traits::{Contains, OriginTrait};
 use sp_core::ConstU32;
 use sp_runtime::{generic, traits::BlakeTwo256, RuntimeDebug};
 
-#[use_attr]
 use frame_support::derive_impl;
-use frame_support::macro_magic::use_attr;
-
 mod nested {
 	#[frame_support::pallet(dev_mode)]
 	pub mod module {

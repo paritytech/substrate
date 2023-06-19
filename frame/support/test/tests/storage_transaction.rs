@@ -19,12 +19,10 @@
 #![allow(deprecated)]
 
 pub use self::pallet::*;
-#[use_attr]
 use frame_support::derive_impl;
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop,
 	dispatch::DispatchResult,
-	macro_magic::use_attr,
 	storage::{with_transaction, TransactionOutcome::*},
 	transactional,
 };

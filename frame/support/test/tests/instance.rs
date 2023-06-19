@@ -17,11 +17,9 @@
 
 #![recursion_limit = "128"]
 
-#[use_attr]
 use frame_support::derive_impl;
 use frame_support::{
 	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
-	macro_magic::use_attr,
 	metadata_ir::{
 		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
 		StorageEntryTypeIR, StorageHasherIR,

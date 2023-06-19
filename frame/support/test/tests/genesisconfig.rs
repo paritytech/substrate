@@ -15,9 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[use_attr]
 use frame_support::derive_impl;
-use frame_support::macro_magic::use_attr;
 use sp_core::{sr25519, ConstU32};
 use sp_runtime::{
 	generic,
