@@ -43,7 +43,7 @@ pub struct PalletCmd {
 	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
-	#[arg(short, long, default_value_t = 2)]
+	#[arg(short, long, default_value_t = 50)]
 	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
@@ -55,7 +55,7 @@ pub struct PalletCmd {
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run from within the wasm.
-	#[arg(short, long, default_value_t = 1)]
+	#[arg(short, long, default_value_t = 20)]
 	pub repeat: u32,
 
 	/// Select how many repetitions of this benchmark should run from the client.
