@@ -21,7 +21,7 @@
 //! based chain, or a local state snapshot file.
 
 use async_recursion::async_recursion;
-use codec::{Decode, Encode};
+use codec::{Compact, Decode, Encode};
 use indicatif::{ProgressBar, ProgressStyle};
 use jsonrpsee::{
 	core::params::ArrayParams,
@@ -57,12 +57,12 @@ type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
-const SNAPSHOT_VERSION: u16 = 2;
+const SNAPSHOT_VERSION: Compact<u16> = Compact(2);
 
 /// The snapshot that we store on disk.
 #[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
-	snapshot_version: u16,
+	snapshot_version: Compact<u16>,
 	state_version: StateVersion,
 	block_hash: B::Hash,
 	// <Vec<Key, (Value, MemoryDbRefCount)>>
@@ -72,7 +72,7 @@ struct Snapshot<B: BlockT> {
 
 #[derive(Decode, Encode)]
 struct SnapshotOnlyVersion {
-	snapshot_version: u16,
+	snapshot_version: Compact<u16>,
 }
 
 impl<B: BlockT> Snapshot<B> {
