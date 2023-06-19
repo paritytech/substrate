@@ -85,9 +85,11 @@ mod test {
 			},
 			ty: meta_type::<()>(),
 			apis: vec![],
-			call_enum_ty: meta_type::<()>(),
-			event_enum_ty: meta_type::<()>(),
-			module_error_enum_ty: meta_type::<()>(),
+			outer_enums: OuterEnumsIR {
+				call_enum_ty: meta_type::<()>(),
+				event_enum_ty: meta_type::<()>(),
+				module_error_enum_ty: meta_type::<()>(),
+			},
 		}
 	}
 

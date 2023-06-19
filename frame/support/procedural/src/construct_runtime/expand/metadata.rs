@@ -116,11 +116,13 @@ pub fn expand_runtime_metadata(
 					},
 					ty: #scrate::scale_info::meta_type::<#runtime>(),
 					apis: (&rt).runtime_metadata(),
-					call_enum_ty: #scrate::scale_info::meta_type::<
-							<#runtime as #system_path::Config>::RuntimeCall
-						>(),
-					event_enum_ty: #scrate::scale_info::meta_type::<RuntimeEvent>(),
-					module_error_enum_ty: #scrate::scale_info::meta_type::<ModuleErrorType>(),
+					outer_enums: #scrate::metadata_ir::OuterEnumsIR {
+						call_enum_ty: #scrate::scale_info::meta_type::<
+								<#runtime as #system_path::Config>::RuntimeCall
+							>(),
+						event_enum_ty: #scrate::scale_info::meta_type::<RuntimeEvent>(),
+						module_error_enum_ty: #scrate::scale_info::meta_type::<ModuleErrorType>(),
+					}
 				}
 			}
 

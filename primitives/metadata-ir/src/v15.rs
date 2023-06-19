@@ -17,6 +17,8 @@
 
 //! Convert the IR to V15 metadata.
 
+use crate::OuterEnumsIR;
+
 use super::types::{
 	ExtrinsicMetadataIR, MetadataIR, PalletCallMetadataIR, PalletConstantMetadataIR,
 	PalletErrorMetadataIR, PalletEventMetadataIR, PalletMetadataIR, PalletStorageMetadataIR,
@@ -26,11 +28,11 @@ use super::types::{
 };
 
 use frame_metadata::v15::{
-	ExtrinsicMetadata, PalletCallMetadata, PalletConstantMetadata, PalletErrorMetadata,
-	PalletEventMetadata, PalletMetadata, PalletStorageMetadata, RuntimeApiMetadata,
-	RuntimeApiMethodMetadata, RuntimeApiMethodParamMetadata, RuntimeMetadataV15,
-	SignedExtensionMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
-	StorageHasher,
+	CustomMetadata, ExtrinsicMetadata, OuterEnums, PalletCallMetadata, PalletConstantMetadata,
+	PalletErrorMetadata, PalletEventMetadata, PalletMetadata, PalletStorageMetadata,
+	RuntimeApiMetadata, RuntimeApiMethodMetadata, RuntimeApiMethodParamMetadata,
+	RuntimeMetadataV15, SignedExtensionMetadata, StorageEntryMetadata, StorageEntryModifier,
+	StorageEntryType, StorageHasher,
 };
 
 impl From<MetadataIR> for RuntimeMetadataV15 {
@@ -40,9 +42,10 @@ impl From<MetadataIR> for RuntimeMetadataV15 {
 			ir.extrinsic.into(),
 			ir.ty,
 			ir.apis.into_iter().map(Into::into).collect(),
-			ir.call_enum_ty,
-			ir.event_enum_ty,
-			ir.module_error_enum_ty,
+			ir.outer_enums.into(),
+			// Substrate does not collect yet the custom metadata fields.
+			// This allows us to extend the V15 easily.
+			CustomMetadata { map: Default::default() },
 		)
 	}
 }
@@ -183,9 +186,23 @@ impl From<SignedExtensionMetadataIR> for SignedExtensionMetadata {
 impl From<ExtrinsicMetadataIR> for ExtrinsicMetadata {
 	fn from(ir: ExtrinsicMetadataIR) -> Self {
 		ExtrinsicMetadata {
-			ty: ir.ty,
 			version: ir.version,
 			signed_extensions: ir.signed_extensions.into_iter().map(Into::into).collect(),
+			// Note: These fields are populated by complementary PR: https://github.com/paritytech/substrate/pull/14123.
+			address_ty: ir.ty,
+			call_ty: ir.ty,
+			signature_ty: ir.ty,
+			extra_ty: ir.ty,
+		}
+	}
+}
+
+impl From<OuterEnumsIR> for OuterEnums {
+	fn from(ir: OuterEnumsIR) -> Self {
+		OuterEnums {
+			call_enum_ty: ir.call_enum_ty,
+			event_enum_ty: ir.event_enum_ty,
+			module_error_enum_ty: ir.module_error_enum_ty,
 		}
 	}
 }
