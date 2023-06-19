@@ -281,7 +281,7 @@ benchmarks! {
 	#[pov_mode = Measured]
 	migrate {
 		StorageVersion::new(0).put::<Pallet<T>>();
-		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
+		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
 		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
 	}: {
 		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap()
@@ -294,7 +294,7 @@ benchmarks! {
 	on_runtime_upgrade_noop {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 	}:  {
-		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
+		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
 	} verify {
 		assert!(MigrationInProgress::<T>::get().is_none());
 	}
@@ -306,7 +306,7 @@ benchmarks! {
 		let v = vec![42u8].try_into().ok();
 		MigrationInProgress::<T>::set(v.clone());
 	}:  {
-		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
+		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
 	} verify {
 		assert!(MigrationInProgress::<T>::get().is_some());
 		assert_eq!(MigrationInProgress::<T>::get(), v);
@@ -317,7 +317,7 @@ benchmarks! {
 	on_runtime_upgrade {
 		StorageVersion::new(0).put::<Pallet<T>>();
 	}:  {
-		<Migration::<T> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
+		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
 	} verify {
 		assert!(MigrationInProgress::<T>::get().is_some());
 	}
