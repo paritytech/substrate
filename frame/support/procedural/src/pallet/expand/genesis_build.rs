@@ -19,7 +19,7 @@ use crate::pallet::Def;
 
 ///
 /// * implement the trait `sp_runtime::BuildStorage`
-pub fn expand_genesis(def: &mut Def) -> proc_macro2::TokenStream {
+pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 	let genesis_config = if let Some(genesis_config) = &def.genesis_config {
 		genesis_config
 	} else {

@@ -66,7 +66,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 	let instances = instances::expand_instances(&mut def);
 	let store_trait = store_trait::expand_store_trait(&mut def);
 	let hooks = hooks::expand_hooks(&mut def);
-	let genesis_build = genesis_build::expand_genesis(&mut def);
+	let genesis_build = genesis_build::expand_genesis_build(&mut def);
 	let genesis_config = genesis_config::expand_genesis_config(&mut def);
 	let type_values = type_value::expand_type_values(&mut def);
 	let origins = origin::expand_origins(&mut def);
