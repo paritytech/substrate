@@ -1,4 +1,3 @@
-use sp_runtime::traits::Block as BlockT;
 use substrate_test_runtime_client::runtime::Block;
 
 /// The declaration of the `Runtime` type is done by the `construct_runtime!` macro in a real
