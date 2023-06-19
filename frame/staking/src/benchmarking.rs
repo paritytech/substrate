@@ -576,6 +576,9 @@ benchmarks! {
 		for (_, controller) in &nominators {
 			let balance = T::Currency::free_balance(controller);
 			ensure!(balance.is_zero(), "Controller has balance, but should be dead.");
+
+			// Re-set the controller account as reward destination.
+			Staking::<T>::set_payee(RawOrigin::Signed(controller.clone()).into(), RewardDestination::Account(controller.clone()))?;
 		}
 	}: payout_stakers(RawOrigin::Signed(caller), validator, current_era)
 	verify {
