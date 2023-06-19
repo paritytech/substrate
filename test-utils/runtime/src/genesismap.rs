@@ -74,7 +74,7 @@ impl Default for GenesisStorageBuilder {
 
 impl GenesisStorageBuilder {
 	/// Creates a storage builder for genesis config. `substrage test runtime`
-	/// `RuntimeGenesisConfig` is initialized with provided `authorities`, `endowed_accounts` with
+	/// [`RuntimeGenesisConfig`] is initialized with provided `authorities`, `endowed_accounts` with
 	/// given balance. Key-value pairs from `extra_storage` will be injected into built storage.
 	/// `HEAP_PAGES` key and value will also be placed into storage.
 	pub fn new(
