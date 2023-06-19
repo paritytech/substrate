@@ -707,6 +707,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Candidates<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
+		Blake2_128Concat,
 		T::AccountId,
 		Candidacy<T::AccountId, BalanceOf<T, I>>,
 		OptionQuery,
