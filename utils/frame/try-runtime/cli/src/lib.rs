@@ -798,7 +798,7 @@ where
 	<Block::Hash as FromStr>::Err: Debug,
 {
 	hash_str
-		.parse::<<Block as HeaderProvider>::Hash>()
+		.parse::<<Block as sp_runtime::traits::HeaderProvider>::Hash>()
 		.map_err(|e| format!("Could not parse block hash: {:?}", e).into())
 }
 
