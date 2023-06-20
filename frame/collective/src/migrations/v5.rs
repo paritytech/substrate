@@ -52,6 +52,10 @@ pub type Voting<T: Config<I>, I: 'static> = StorageMap<
 	OptionQuery,
 >;
 
+#[frame_support::storage_alias]
+pub type Members<T: Config<I>, I: 'static> =
+	StorageValue<Pallet<T, I>, Vec<<T as frame_system::Config>::AccountId>, ValueQuery>;
+
 /// Info for keeping track of a motion being voted on.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct OldVotes<AccountId, BlockNumber> {

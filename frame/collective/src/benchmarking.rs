@@ -56,7 +56,7 @@ benchmarks_instance_pallet! {
 
 		Collective::<T, I>::set_members(
 			SystemOrigin::Root.into(),
-			old_members.clone(),
+			old_members.clone().try_into().unwrap(),
 			old_members.last().cloned(),
 			T::MaxMembers::get(),
 		)?;
@@ -101,7 +101,7 @@ benchmarks_instance_pallet! {
 			new_members.push(member);
 		}
 
-	}: _(SystemOrigin::Root, new_members.clone(), new_members.last().cloned(), T::MaxMembers::get())
+	}: _(SystemOrigin::Root, new_members.clone().try_into().unwrap(), new_members.last().cloned(), T::MaxMembers::get())
 	verify {
 		new_members.sort();
 		assert_eq!(Collective::<T, I>::members(), new_members);
@@ -123,7 +123,7 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 
-		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members, None, T::MaxMembers::get())?;
+		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.try_into().unwrap(), None, T::MaxMembers::get())?;
 
 		let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(1, b as usize) }.into();
 
@@ -153,7 +153,7 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
 
-		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members, None, T::MaxMembers::get())?;
+		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.try_into().unwrap(), None, T::MaxMembers::get())?;
 
 		let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(1, b as usize) }.into();
 		let threshold = 1;
@@ -183,7 +183,7 @@ benchmarks_instance_pallet! {
 		}
 		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
-		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members, None, T::MaxMembers::get())?;
+		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.try_into().unwrap(), None, T::MaxMembers::get())?;
 
 		let threshold = m;
 		// Add previous proposals.
@@ -230,7 +230,7 @@ benchmarks_instance_pallet! {
 		}
 		let voter: T::AccountId = account::<T::AccountId>("voter", 0, SEED);
 		members.push(voter.clone());
-		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.clone(), None, T::MaxMembers::get())?;
+		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.clone().try_into().unwrap(), None, T::MaxMembers::get())?;
 
 		// Threshold is 1 less than the number of members so that one person can vote nay
 		let threshold = m - 1;
@@ -305,7 +305,7 @@ benchmarks_instance_pallet! {
 		}
 		let voter = account::<T::AccountId>("voter", 0, SEED);
 		members.push(voter.clone());
-		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.clone(), None, T::MaxMembers::get())?;
+		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.clone().try_into().unwrap(), None, T::MaxMembers::get())?;
 
 		// Threshold is total members so that one nay will disapprove the vote
 		let threshold = m;
@@ -382,7 +382,7 @@ benchmarks_instance_pallet! {
 		}
 		let caller: T::AccountId = whitelisted_caller();
 		members.push(caller.clone());
-		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.clone(), None, T::MaxMembers::get())?;
+		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members.clone().try_into().unwrap(), None, T::MaxMembers::get())?;
 
 		// Threshold is 2 so any two ayes will approve the vote
 		let threshold = 2;
@@ -465,7 +465,7 @@ benchmarks_instance_pallet! {
 		members.push(caller.clone());
 		Collective::<T, I>::set_members(
 			SystemOrigin::Root.into(),
-			members.clone(),
+			members.clone().try_into().unwrap(),
 			Some(caller.clone()),
 			T::MaxMembers::get(),
 		)?;
@@ -547,7 +547,7 @@ benchmarks_instance_pallet! {
 		members.push(caller.clone());
 		Collective::<T, I>::set_members(
 			SystemOrigin::Root.into(),
-			members.clone(),
+			members.clone().try_into().unwrap(),
 			Some(caller.clone()),
 			T::MaxMembers::get(),
 		)?;
@@ -618,7 +618,7 @@ benchmarks_instance_pallet! {
 		members.push(caller.clone());
 		Collective::<T, I>::set_members(
 			SystemOrigin::Root.into(),
-			members.clone(),
+			members.clone().try_into().unwrap(),
 			Some(caller.clone()),
 			T::MaxMembers::get(),
 		)?;

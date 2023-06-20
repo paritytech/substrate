@@ -184,11 +184,10 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -289,7 +288,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub type Members<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxMembers>, ValueQuery>;
 
 	/// The prime member that helps determine the default vote behavior in case of absentations.
 	#[pallet::storage]
@@ -400,19 +399,11 @@ pub mod pallet {
 		))]
 		pub fn set_members(
 			origin: OriginFor<T>,
-			new_members: Vec<T::AccountId>,
+			new_members: BoundedVec<T::AccountId, T::MaxMembers>,
 			prime: Option<T::AccountId>,
 			old_count: MemberCount,
 		) -> DispatchResultWithPostInfo {
 			T::SetMembersOrigin::ensure_origin(origin)?;
-			if new_members.len() > T::MaxMembers::get() as usize {
-				log::error!(
-					target: LOG_TARGET,
-					"New members count ({}) exceeds maximum amount of members expected ({}).",
-					new_members.len(),
-					T::MaxMembers::get(),
-				);
-			}
 
 			let old = Members::<T, I>::get();
 			if old.len() > old_count as usize {
@@ -1113,7 +1104,9 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 				}
 			});
 		}
-		Members::<T, I>::put(new);
+		Members::<T, I>::put(
+			BoundedVec::try_from(new.to_vec()).expect("Members bound was already checked; qed"),
+		);
 		Prime::<T, I>::kill();
 	}
 
@@ -1132,7 +1125,7 @@ impl<T: Config<I>, I: 'static> InitializeMembers<T::AccountId> for Pallet<T, I> 
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
 			let mut members = members.to_vec();
 			members.sort();
-			<Members<T, I>>::put(members);
+			<Members<T, I>>::put(BoundedVec::try_from(members).expect("Members are too many"));
 		}
 	}
 }

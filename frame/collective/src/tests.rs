@@ -375,7 +375,7 @@ fn close_works() {
 fn proposal_weight_limit_works_on_approve() {
 	ExtBuilder::default().build_and_execute(|| {
 		let proposal = RuntimeCall::Collective(crate::Call::set_members {
-			new_members: vec![1, 2, 3],
+			new_members: vec![1, 2, 3].try_into().unwrap(),
 			prime: None,
 			old_count: MaxMembers::get(),
 		});
@@ -417,7 +417,7 @@ fn proposal_weight_limit_works_on_approve() {
 fn proposal_weight_limit_ignored_on_disapprove() {
 	ExtBuilder::default().build_and_execute(|| {
 		let proposal = RuntimeCall::Collective(crate::Call::set_members {
-			new_members: vec![1, 2, 3],
+			new_members: vec![1, 2, 3].try_into().unwrap(),
 			prime: None,
 			old_count: MaxMembers::get(),
 		});
@@ -452,7 +452,7 @@ fn close_with_prime_works() {
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		assert_ok!(Collective::set_members(
 			RuntimeOrigin::root(),
-			vec![1, 2, 3],
+			vec![1, 2, 3].try_into().unwrap(),
 			Some(3),
 			MaxMembers::get()
 		));
@@ -519,7 +519,7 @@ fn close_with_voting_prime_works() {
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		assert_ok!(Collective::set_members(
 			RuntimeOrigin::root(),
-			vec![1, 2, 3],
+			vec![1, 2, 3].try_into().unwrap(),
 			Some(1),
 			MaxMembers::get()
 		));
@@ -592,7 +592,7 @@ fn close_with_no_prime_but_majority_works() {
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		assert_ok!(CollectiveMajority::set_members(
 			RuntimeOrigin::root(),
-			vec![1, 2, 3, 4, 5],
+			vec![1, 2, 3, 4, 5].try_into().unwrap(),
 			Some(5),
 			MaxMembers::get()
 		));
@@ -782,7 +782,7 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 		);
 		assert_ok!(Collective::set_members(
 			RuntimeOrigin::root(),
-			vec![2, 3, 4],
+			vec![2, 3, 4].try_into().unwrap(),
 			None,
 			MaxMembers::get()
 		));
@@ -821,7 +821,7 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 		);
 		assert_ok!(Collective::set_members(
 			RuntimeOrigin::root(),
-			vec![2, 4],
+			vec![2, 4].try_into().unwrap(),
 			None,
 			MaxMembers::get()
 		));
@@ -900,7 +900,7 @@ fn limit_active_proposals() {
 fn correct_validate_and_get_proposal() {
 	ExtBuilder::default().build_and_execute(|| {
 		let proposal = RuntimeCall::Collective(crate::Call::set_members {
-			new_members: vec![1, 2, 3],
+			new_members: vec![1, 2, 3].try_into().unwrap(),
 			prime: None,
 			old_count: MaxMembers::get(),
 		});
@@ -1671,7 +1671,13 @@ fn migration_v4() {
 fn migration_v5() {
 	ExtBuilder::default().build_and_execute(|| {
 		use sp_runtime::traits::Hash;
-		assert_eq!(StorageVersion::get::<Pallet<Test, ()>>(), 4);
+		StorageVersion::put::<Pallet<Test, ()>>(&StorageVersion::new(4));
+
+		// Setup the members.
+		let members: Vec<<Test as frame_system::Config>::AccountId> =
+			(1..<Test as Config>::MaxMembers::get()).map(|i| i.into()).collect();
+
+		crate::migrations::v5::Members::<Test, ()>::put(members.clone());
 
 		// Create a proposal.
 		let proposal = <Test as frame_system::Config>::RuntimeCall::System(
@@ -1684,13 +1690,10 @@ fn migration_v5() {
 		crate::migrations::v5::ProposalOf::<Test, ()>::insert(proposal_hash, proposal.clone());
 
 		// Create some votes.
-		let ayes: Vec<<Test as frame_system::Config>::AccountId> =
-			(1..<Test as Config>::MaxMembers::get()).map(|i| i.into()).collect();
-
 		let vote = crate::migrations::v5::OldVotes {
 			index: 0,
 			threshold: 1,
-			ayes: ayes.clone(),
+			ayes: members.clone(),
 			nays: bounded_vec![],
 			end: 100,
 		};
@@ -1711,7 +1714,7 @@ fn migration_v5() {
 			BoundedVec::<
 				<Test as frame_system::Config>::AccountId,
 				<Test as Config>::MaxMembers
-			>::try_from(ayes)
+			>::try_from(members)
 			.unwrap()
 		);
 	});
