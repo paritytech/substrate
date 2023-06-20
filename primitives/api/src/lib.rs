@@ -408,7 +408,7 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 ///
 /// ## Example
 /// ```rust
-/// # use sp_runtime::traits::Block as BlockT;
+/// # use sp_runtime::traits::{Block as BlockT, HeaderProvider};
 /// # use sp_test_primitives::Block;
 /// # use codec;
 /// #
