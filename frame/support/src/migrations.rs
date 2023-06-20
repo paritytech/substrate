@@ -88,8 +88,8 @@ impl<
 		DbWeight: Get<RuntimeDbWeight>,
 	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<From, To, Inner, Pallet, DbWeight>
 {
-	/// Executes post_upgrade if the migration will run, and passes a boolean to post_upgrade
-	/// indicating if the migration will run.
+	/// Executes pre_upgrade if the migration will run, and passes a boolean to post_upgrade
+	/// indicating if the migration ran.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
@@ -128,7 +128,7 @@ impl<
 		}
 	}
 
-	/// Executes post_upgrade if the migration will run.
+	/// Executes post_upgrade if the migration just ran.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(pre_upgrade_return_bytes: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
 		use codec::Decode;
