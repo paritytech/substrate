@@ -316,7 +316,7 @@ fn set_item_royalty_fail_item_not_exist() {
 }
 
 #[test]
-fn set_item_royalty_fail_no_permission() {
+fn set_item_royalty_fail_not_collection_owner() {
 	new_test_ext().execute_with(|| {
 		create_collection();
 		let mint_id = mint_item();
@@ -327,6 +327,31 @@ fn set_item_royalty_fail_no_permission() {
 				mint_id,
 				Permill::from_percent(5),
 				account(2),
+				vec![RoyaltyDetails {
+					royalty_recipient: account(1),
+					royalty_recipient_percentage: Permill::from_percent(100),
+				}]
+			),
+			Error::<Test>::NoPermission
+		);
+	});
+}
+
+#[test]
+fn set_item_royalty_fail_not_item_owner() {
+	new_test_ext().execute_with(|| {
+		create_collection();
+		let initial_balance = 100;
+		set_up_balances(initial_balance);
+		let item_id = 42;
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(1)), 0, item_id, account(3), None,));
+		assert_noop!(
+			NftsRoyalty::set_item_royalty(
+				RuntimeOrigin::signed(account(1)),
+				0,
+				item_id,
+				Permill::from_percent(5),
+				account(1),
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
 					royalty_recipient_percentage: Permill::from_percent(100),
