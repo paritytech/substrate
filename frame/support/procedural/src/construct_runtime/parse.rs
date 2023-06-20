@@ -46,7 +46,7 @@ mod keyword {
 	syn::custom_keyword!(SlashReason);
 	syn::custom_keyword!(exclude_parts);
 	syn::custom_keyword!(use_parts);
-	syn::custom_keyword!(fully_expanded);
+	syn::custom_keyword!(expanded);
 }
 
 /// Declaration of a runtime.
@@ -58,7 +58,7 @@ mod keyword {
 pub enum RuntimeDeclaration {
 	Implicit(ImplicitRuntimeDeclaration),
 	Explicit(ExplicitRuntimeDeclaration),
-	ExplicitFullyExpanded(ExplicitRuntimeDeclaration),
+	ExplicitExpanded(ExplicitRuntimeDeclaration),
 }
 
 /// Declaration of a runtime with some pallet with implicit declaration of parts.
@@ -109,8 +109,8 @@ impl Parse for RuntimeDeclaration {
 					pallets,
 					pallets_token,
 				})),
-			PalletsConversion::ExplicitFullyExpanded(pallets) =>
-				Ok(RuntimeDeclaration::ExplicitFullyExpanded(ExplicitRuntimeDeclaration {
+			PalletsConversion::ExplicitExpanded(pallets) =>
+				Ok(RuntimeDeclaration::ExplicitExpanded(ExplicitRuntimeDeclaration {
 					name,
 					where_section,
 					pallets,
@@ -199,7 +199,7 @@ impl Parse for WhereDefinition {
 #[derive(Debug, Clone)]
 pub struct PalletDeclaration {
 	/// Is this pallet fully expanded?
-	pub fully_expanded: bool,
+	pub is_expanded: bool,
 	/// The name of the pallet, e.g.`System` in `System: frame_system`.
 	pub name: Ident,
 	/// Optional attributes tagged right above a pallet declaration.
@@ -245,7 +245,7 @@ impl Parse for PalletDeclaration {
 			let _: Token![>] = input.parse()?;
 			res
 		} else if !(input.peek(Token![::]) && input.peek3(token::Brace)) &&
-			!input.peek(keyword::fully_expanded) &&
+			!input.peek(keyword::expanded) &&
 			!input.peek(keyword::exclude_parts) &&
 			!input.peek(keyword::use_parts) &&
 			!input.peek(Token![=]) &&
@@ -253,21 +253,21 @@ impl Parse for PalletDeclaration {
 			!input.is_empty()
 		{
 			return Err(input.error(
-				"Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
+				"Unexpected tokens, expected one of `::$ident` `::{`, `expanded` `exclude_parts`, `use_parts`, `=`, `,`",
 			));
 		} else {
 			None
 		};
 
 		// Check if the pallet is fully expanded.
-		let maybe_error_part = if input.peek(keyword::fully_expanded) {
-			let _: keyword::fully_expanded = input.parse()?;
+		let maybe_error_part = if input.peek(keyword::expanded) {
+			let _: keyword::expanded = input.parse()?;
 			let _: Token![::] = input.parse()?;
 			Some(parse_pallet_parts(input)?)
 		} else {
 			None
 		};
-		let fully_expanded = maybe_error_part.is_some();
+		let is_expanded = maybe_error_part.is_some();
 
 		// Parse for explicit parts
 		let mut pallet_parts = if input.peek(Token![::]) && input.peek3(token::Brace) {
@@ -317,16 +317,7 @@ impl Parse for PalletDeclaration {
 			None
 		};
 
-		Ok(Self {
-			fully_expanded,
-			attrs,
-			name,
-			path,
-			instance,
-			pallet_parts,
-			specified_parts,
-			index,
-		})
+		Ok(Self { is_expanded, attrs, name, path, instance, pallet_parts, specified_parts, index })
 	}
 }
 
@@ -598,7 +589,7 @@ fn parse_pallet_parts_no_generic(input: ParseStream) -> Result<Vec<PalletPartNoG
 #[derive(Debug, Clone)]
 pub struct Pallet {
 	/// Is this pallet fully expanded?
-	pub fully_expanded: bool,
+	pub is_expanded: bool,
 	/// The name of the pallet, e.g.`System` in `System: frame_system`.
 	pub name: Ident,
 	/// Either automatically infered, or defined (e.g. `MyPallet ...  = 3,`).
@@ -635,9 +626,9 @@ impl Pallet {
 /// # State Transitions
 ///
 /// ```ignore
-/// +----------+    +----------+    +-----------------------+
-/// | Implicit | -> | Explicit | -> | ExplicitFullyExpanded |
-/// +----------+    +----------+    +-----------------------+
+/// +----------+    +----------+    +------------------+
+/// | Implicit | -> | Explicit | -> | ExplicitExpanded |
+/// +----------+    +----------+    +------------------+
 /// ```
 enum PalletsConversion {
 	/// Pallets implicitely declare parts.
@@ -656,10 +647,10 @@ enum PalletsConversion {
 	/// This is the end state that contains extra parts included by
 	/// default by Subtrate.
 	///
-	/// `System: frame_system fully_expanded::{Error} ::{Pallet, Call}`
+	/// `System: frame_system expanded::{Error} ::{Pallet, Call}`
 	///
 	/// For this example, the `Pallet`, `Call` and `Error` parts are collected.
-	ExplicitFullyExpanded(Vec<Pallet>),
+	ExplicitExpanded(Vec<Pallet>),
 }
 
 /// Convert from the parsed pallet declaration to their final information.
@@ -675,7 +666,7 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 	let mut indices = HashMap::new();
 	let mut last_index: Option<u8> = None;
 	let mut names = HashMap::new();
-	let mut fully_expanded = true;
+	let mut is_expanded = true;
 
 	let pallets = pallets
 		.into_iter()
@@ -770,12 +761,12 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 				})
 				.collect::<Result<Vec<_>>>()?;
 
-			if !pallet.fully_expanded {
-				fully_expanded = false;
+			if !pallet.is_expanded {
+				is_expanded = false;
 			}
 
 			Ok(Pallet {
-				fully_expanded: pallet.fully_expanded,
+				is_expanded: pallet.is_expanded,
 				name: pallet.name,
 				index: final_index,
 				path: pallet.path,
@@ -786,8 +777,8 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 		})
 		.collect::<Result<Vec<_>>>()?;
 
-	if fully_expanded {
-		Ok(PalletsConversion::ExplicitFullyExpanded(pallets))
+	if is_expanded {
+		Ok(PalletsConversion::ExplicitExpanded(pallets))
 	} else {
 		Ok(PalletsConversion::Explicit(pallets))
 	}

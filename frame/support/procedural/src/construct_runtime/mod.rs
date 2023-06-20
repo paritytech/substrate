@@ -178,13 +178,16 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let res = match definition {
 		RuntimeDeclaration::Implicit(implicit_def) =>
 			check_pallet_number(input_copy.clone().into(), implicit_def.pallets.len()).and_then(
-				|_| construct_runtime_intermediary_expansion(input_copy.into(), implicit_def),
+				|_| construct_runtime_implicit_to_explicit(input_copy.into(), implicit_def),
 			),
-		RuntimeDeclaration::Explicit(explicit_decl) =>
-			check_pallet_number(input_copy.clone().into(), explicit_decl.pallets.len()).and_then(
-				|_| construct_runtime_explicit_fully_expanded(input_copy.into(), explicit_decl),
-			),
-		RuntimeDeclaration::ExplicitFullyExpanded(explicit_decl) =>
+		RuntimeDeclaration::Explicit(explicit_decl) => check_pallet_number(
+			input_copy.clone().into(),
+			explicit_decl.pallets.len(),
+		)
+		.and_then(|_| {
+			construct_runtime_explicit_to_explicit_expanded(input_copy.into(), explicit_decl)
+		}),
+		RuntimeDeclaration::ExplicitExpanded(explicit_decl) =>
 			check_pallet_number(input_copy.into(), explicit_decl.pallets.len())
 				.and_then(|_| construct_runtime_final_expansion(explicit_decl)),
 	};
@@ -199,7 +202,7 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// [`RuntimeDeclaration::Explicit`] that is not yet fully expanded.
 ///
 /// For more details, please refer to the root documentation.
-fn construct_runtime_intermediary_expansion(
+fn construct_runtime_implicit_to_explicit(
 	input: TokenStream2,
 	definition: ImplicitRuntimeDeclaration,
 ) -> Result<TokenStream2> {
@@ -232,10 +235,10 @@ fn construct_runtime_intermediary_expansion(
 /// are fully expanded by including the parts from the pallet's `tt_extra_parts` macro.
 ///
 /// This function transforms the [`RuntimeDeclaration::Explicit`] that is not yet fully expanded
-/// into [`RuntimeDeclaration::ExplicitFullyExpanded`] fully expanded.
+/// into [`RuntimeDeclaration::ExplicitExpanded`] fully expanded.
 ///
 /// For more details, please refer to the root documentation.
-fn construct_runtime_explicit_fully_expanded(
+fn construct_runtime_explicit_to_explicit_expanded(
 	input: TokenStream2,
 	definition: ExplicitRuntimeDeclaration,
 ) -> Result<TokenStream2> {
@@ -243,7 +246,7 @@ fn construct_runtime_explicit_fully_expanded(
 	let mut expansion = quote::quote!(
 		#frame_support::construct_runtime! { #input }
 	);
-	for pallet in definition.pallets.iter().filter(|pallet| !pallet.fully_expanded) {
+	for pallet in definition.pallets.iter().filter(|pallet| !pallet.is_expanded) {
 		let pallet_path = &pallet.path;
 		let pallet_name = &pallet.name;
 		let pallet_instance = pallet.instance.as_ref().map(|instance| quote::quote!(::<#instance>));

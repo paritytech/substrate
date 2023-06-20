@@ -122,7 +122,7 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 				$($frame_support)*::tt_return! {
 					$caller
 					tokens = [{
-						fully_expanded::{
+						expanded::{
 							#error_part
 						}
 					}]
