@@ -44,6 +44,8 @@ use frame_system::{
 use sc_genesis_builder::GenesisBuilderHelper;
 use scale_info::TypeInfo;
 use sp_std::prelude::*;
+#[cfg(not(feature = "std"))]
+use sp_std::vec;
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{OpaqueMetadata, RuntimeDebug};
@@ -148,9 +150,6 @@ pub type SignedPayload = sp_runtime::generic::SignedPayload<RuntimeCall, SignedE
 /// Unchecked extrinsic type as expected by this runtime.
 pub type Extrinsic =
 	sp_runtime::generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
-
-#[cfg(all(not(feature = "std")))]
-use sp_std::vec;
 
 /// An identifier for an account on this system.
 pub type AccountId = <Signature as Verify>::Signer;
