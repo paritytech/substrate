@@ -29,11 +29,10 @@ use crate::{
 use codec::MaxEncodedLen;
 use sp_runtime::DispatchError;
 use sp_std::prelude::*;
-use wasm_instrument::parity_wasm::elements::{
-	self, External, Internal, MemoryType, Type, ValueType,
+use wasm_instrument::parity_wasm::elements::{self, External, Internal, MemoryType, Type};
+use wasmi::{
+	core::ValueType, Config as WasmiConfig, Engine, FuelConsumptionMode, Module, StackLimits, Store,
 };
-use wasmi::StackLimits;
-use wasmparser::{Validator, WasmFeatures};
 
 /// Imported memory must be located inside this module. The reason for hardcoding is that current
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
@@ -55,15 +54,44 @@ pub enum TryInstantiate {
 }
 
 /// The inner deserialized module is valid (this is guaranteed by `new` method).
-pub struct ContractModule(elements::Module);
+pub struct ContractModule(Module);
 
 impl ContractModule {
 	/// Creates a new instance of `ContractModule`.
 	///
+	/// The inner Wasm module is checked not the have restricted WebAssembly proposals.
 	/// Returns `Err` if the `code` couldn't be decoded or
 	/// if it contains an invalid module.
-	pub fn new(code: &[u8]) -> Result<Self, &'static str> {
-		let module = elements::deserialize_buffer(code).map_err(|_| "Can't decode Wasm code")?;
+	pub fn new<T: Config>(code: &[u8], determinism: Determinism) -> Result<Self, &'static str> {
+		// TODO DRY as it's (almost) the same as in WasmBlob::instantiate
+		// Do not enable any features here. Any additional feature needs to be carefully
+		// checked for potential security issues. For example, enabling multi value could lead
+		// to a DoS vector: It breaks our assumption that branch instructions are of constant time.
+		// Depending on the implementation they can linearly depend on the amount of values returned
+		// from a block.
+		// NOTE: wasmi does not support unstable WebAssembly features. The module is implicitly
+		// checked for not having those when creating wasmi::Module below.
+		let mut config = WasmiConfig::default();
+		config
+			// TODO shoudnd't we put it to Schedule.limits?
+			//			.set_stack_limits(stack_limits)
+			.wasm_multi_value(false)
+			.wasm_mutable_global(false)
+			.wasm_sign_extension(false)
+			.wasm_bulk_memory(false)
+			.wasm_reference_types(false)
+			.wasm_tail_call(false)
+			.wasm_extended_const(false)
+			.wasm_saturating_float_to_int(false)
+			// This is not our only defense: All instructions explicitly need to have weights
+			// assigned or the deployment will fail. We have none assigned for float instructions.
+			.floats(matches!(determinism, Determinism::Relaxed))
+			.consume_fuel(true)
+			.fuel_consumption_mode(FuelConsumptionMode::Eager);
+
+		let engine = Engine::new(&config);
+		let module =
+			Module::new(&engine, code.clone()).map_err(|_| "Validation of new code failed!")?;
 
 		// Return a `ContractModule` instance with
 		// __valid__ module.
@@ -75,88 +103,88 @@ impl ContractModule {
 	/// In this runtime we only allow wasm module to import memory from the environment.
 	/// Memory section contains declarations of internal linear memories, so if we find one
 	/// we reject such a module.
-	fn ensure_no_internal_memory(&self) -> Result<(), &'static str> {
-		if self.0.memory_section().map_or(false, |ms| ms.entries().len() > 0) {
-			return Err("module declares internal memory")
-		}
-		Ok(())
-	}
+	// fn ensure_no_internal_memory(&self) -> Result<(), &'static str> {
+	// 	if self.0.memory_section().map_or(false, |ms| ms.entries().len() > 0) {
+	// 		return Err("module declares internal memory")
+	// 	}
+	// 	Ok(())
+	// }
 
 	/// Ensures that tables declared in the module are not too big.
-	fn ensure_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
-		if let Some(table_section) = self.0.table_section() {
-			// In Wasm MVP spec, there may be at most one table declared. Double check this
-			// explicitly just in case the Wasm version changes.
-			if table_section.entries().len() > 1 {
-				return Err("multiple tables declared")
-			}
-			if let Some(table_type) = table_section.entries().first() {
-				// Check the table's initial size as there is no instruction or environment function
-				// capable of growing the table.
-				if table_type.limits().initial() > limit {
-					return Err("table exceeds maximum size allowed")
-				}
-			}
-		}
-		Ok(())
-	}
+	// fn ensure_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
+	// 	if let Some(table_section) = self.0.table_section() {
+	// 		// In Wasm MVP spec, there may be at most one table declared. Double check this
+	// 		// explicitly just in case the Wasm version changes.
+	// 		if table_section.entries().len() > 1 {
+	// 			return Err("multiple tables declared")
+	// 		}
+	// 		if let Some(table_type) = table_section.entries().first() {
+	// 			// Check the table's initial size as there is no instruction or environment function
+	// 			// capable of growing the table.
+	// 			if table_type.limits().initial() > limit {
+	// 				return Err("table exceeds maximum size allowed")
+	// 			}
+	// 		}
+	// 	}
+	// 	Ok(())
+	// }
 
 	/// Ensure that any `br_table` instruction adheres to its immediate value limit.
-	fn ensure_br_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
-		let code_section = if let Some(type_section) = self.0.code_section() {
-			type_section
-		} else {
-			return Ok(())
-		};
-		for instr in code_section.bodies().iter().flat_map(|body| body.code().elements()) {
-			use self::elements::Instruction::BrTable;
-			if let BrTable(table) = instr {
-				if table.table.len() > limit as usize {
-					return Err("BrTable's immediate value is too big.")
-				}
-			}
-		}
-		Ok(())
-	}
+	// fn ensure_br_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
+	// 	let code_section = if let Some(type_section) = self.0.code_section() {
+	// 		type_section
+	// 	} else {
+	// 		return Ok(())
+	// 	};
+	// 	for instr in code_section.bodies().iter().flat_map(|body| body.code().elements()) {
+	// 		use self::elements::Instruction::BrTable;
+	// 		if let BrTable(table) = instr {
+	// 			if table.table.len() > limit as usize {
+	// 				return Err("BrTable's immediate value is too big.")
+	// 			}
+	// 		}
+	// 	}
+	// 	Ok(())
+	// }
 
-	fn ensure_global_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
-		if let Some(global_section) = self.0.global_section() {
-			if global_section.entries().len() > limit as usize {
-				return Err("module declares too many globals")
-			}
-		}
-		Ok(())
-	}
+	// fn ensure_global_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
+	// 	if let Some(global_section) = self.0.global_section() {
+	// 		if global_section.entries().len() > limit as usize {
+	// 			return Err("module declares too many globals")
+	// 		}
+	// 	}
+	// 	Ok(())
+	// }
 
-	fn ensure_local_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
-		if let Some(code_section) = self.0.code_section() {
-			for func_body in code_section.bodies() {
-				let locals_count: u32 =
-					func_body.locals().iter().map(|val_type| val_type.count()).sum();
-				if locals_count > limit {
-					return Err("single function declares too many locals")
-				}
-			}
-		}
-		Ok(())
-	}
+	// fn ensure_local_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
+	// 	if let Some(code_section) = self.0.code_section() {
+	// 		for func_body in code_section.bodies() {
+	// 			let locals_count: u32 =
+	// 				func_body.locals().iter().map(|val_type| val_type.count()).sum();
+	// 			if locals_count > limit {
+	// 				return Err("single function declares too many locals")
+	// 			}
+	// 		}
+	// 	}
+	// 	Ok(())
+	// }
 
 	/// Ensure that no function exists that has more parameters than allowed.
-	fn ensure_parameter_limit(&self, limit: u32) -> Result<(), &'static str> {
-		let type_section = if let Some(type_section) = self.0.type_section() {
-			type_section
-		} else {
-			return Ok(())
-		};
+	// fn ensure_parameter_limit(&self, limit: u32) -> Result<(), &'static str> {
+	// 	let type_section = if let Some(type_section) = self.0.type_section() {
+	// 		type_section
+	// 	} else {
+	// 		return Ok(())
+	// 	};
 
-		for Type::Function(func) in type_section.types() {
-			if func.params().len() > limit as usize {
-				return Err("Use of a function type with too many parameters.")
-			}
-		}
+	// 	for Type::Function(func) in type_section.types() {
+	// 		if func.params().len() > limit as usize {
+	// 			return Err("Use of a function type with too many parameters.")
+	// 		}
+	// 	}
 
-		Ok(())
-	}
+	// 	Ok(())
+	// }
 
 	/// Check that the module has required exported functions. For now
 	/// these are just entrypoints:
@@ -168,26 +196,24 @@ impl ContractModule {
 	fn scan_exports(&self) -> Result<(), &'static str> {
 		let mut deploy_found = false;
 		let mut call_found = false;
-
 		let module = &self.0;
 
-		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
-		let export_entries = module.export_section().map(|is| is.entries()).unwrap_or(&[]);
-		let func_entries = module.function_section().map(|fs| fs.entries()).unwrap_or(&[]);
+		//		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
+		let exports = module.exports();
+		//		let func_entries = module.function_section().map(|fs| fs.entries()).unwrap_or(&[]);
 
 		// Function index space consists of imported function following by
 		// declared functions. Calculate the total number of imported functions so
 		// we can use it to convert indexes from function space to declared function space.
-		let fn_space_offset = module
-			.import_section()
-			.map(|is| is.entries())
-			.unwrap_or(&[])
-			.iter()
-			.filter(|entry| matches!(*entry.external(), External::Function(_)))
-			.count();
-
-		for export in export_entries {
-			match export.field() {
+		// let fn_space_offset = module
+		// 	.import_section()
+		// 	.map(|is| is.entries())
+		// 	.unwrap_or(&[])
+		// 	.iter()
+		// 	.filter(|entry| matches!(*entry.external(), External::Function(_)))
+		// 	.count();
+		for export in exports {
+			match export.name() {
 				"call" => call_found = true,
 				"deploy" => deploy_found = true,
 				_ => return Err("unknown export: expecting only deploy and call functions"),
@@ -195,29 +221,24 @@ impl ContractModule {
 
 			// Then check the export kind. "call" and "deploy" are
 			// functions.
-			let fn_idx = match export.internal() {
-				Internal::Function(ref fn_idx) => *fn_idx,
-				_ => return Err("expected a function"),
-			};
-
+			let func_ty = export.ty().func().ok_or("expected a function")?;
+			// TODO add a test where fn_idx could point to an imported fn?
+			// let fn_idx = match export.internal() {
+			// 	Internal::Function(ref fn_idx) => *fn_idx,
+			// 	_ => return Err("expected a function"),
+			// };
 			// convert index from function index space to declared index space.
-			let fn_idx = match fn_idx.checked_sub(fn_space_offset as u32) {
-				Some(fn_idx) => fn_idx,
-				None => {
-					// Underflow here means fn_idx points to imported function which we don't allow!
-					return Err("entry point points to an imported function")
-				},
-			};
+			// let fn_idx = match fn_idx.checked_sub(fn_space_offset as u32) {
+			// 	Some(fn_idx) => fn_idx,
+			// 	None => {
+			// 		// Underflow here means fn_idx points to imported function which we don't allow!
+			// 		return Err("entry point points to an imported function")
+			// 	},
+			// };
 
 			// Then check the signature.
 			// Both "call" and "deploy" has a () -> () function type.
 			// We still support () -> (i32) for backwards compatibility.
-			let func_ty_idx = func_entries
-				.get(fn_idx as usize)
-				.ok_or("export refers to non-existent function")?
-				.type_ref();
-			let Type::Function(ref func_ty) =
-				types.get(func_ty_idx as usize).ok_or("function has a non-existent type")?;
 			if !(func_ty.params().is_empty() &&
 				(func_ty.results().is_empty() || func_ty.results() == [ValueType::I32]))
 			{
@@ -284,9 +305,9 @@ impl ContractModule {
 		Ok(imported_mem_type)
 	}
 
-	fn into_wasm_code(self) -> Result<Vec<u8>, &'static str> {
-		elements::serialize(self.0).map_err(|_| "error serializing contract module")
-	}
+	// fn into_wasm_code(self) -> Result<Vec<u8>, &'static str> {
+	// 	elements::serialize(self.0).map_err(|_| "error serializing contract module")
+	// }
 }
 #[cfg(any(test, feature = "runtime-benchmarks"))]
 pub fn get_memory_limits<T: Config>(
@@ -314,6 +335,11 @@ pub fn get_memory_limits<T: Config>(
 }
 
 /// Check that given `code` satisfies constraints required for the contract Wasm module.
+/// This includes two groups of checks:
+///
+/// 1. General engine-side validation makes sure the module is consistent and does not contain
+///    forbidden WebAssembly features.
+/// 2. Additional checks which are specific to smart contracts eligible for this pallet.
 ///
 /// On success it returns back the code.
 fn validate<E, T>(
@@ -326,52 +352,23 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	// Do not enable any features here. Any additional feature needs to be carefully
-	// checked for potential security issues. For example, enabling multi value could lead
-	// to a DoS vector: It breaks our assumption that branch instructions are of constant time.
-	// Depending on the implementation they can linearly depend on the amount of values returned
-	// from a block.
-	Validator::new_with_features(WasmFeatures {
-		relaxed_simd: false,
-		threads: false,
-		tail_call: false,
-		multi_memory: false,
-		exceptions: false,
-		memory64: false,
-		extended_const: false,
-		component_model: false,
-		// This is not our only defense: All instructions explicitly need to have weights assigned
-		// or the deployment will fail. We have none assigned for float instructions.
-		floats: matches!(determinism, Determinism::Relaxed),
-		mutable_global: false,
-		saturating_float_to_int: false,
-		sign_extension: false,
-		bulk_memory: false,
-		multi_value: false,
-		reference_types: false,
-		simd: false,
-		memory_control: false,
-	})
-	.validate_all(code)
-	.map_err(|err| {
-		log::debug!(target: LOG_TARGET, "{}", err);
-		(Error::<T>::CodeRejected.into(), "Validation of new code failed!")
-	})?;
-
 	let code = (|| {
-		let contract_module = ContractModule::new(code)?;
-		// TODO: query w wasmi
+		// We check that the module is generally valid,
+		// and does not have restricted WebAssembly features, here.
+		let contract_module = ContractModule::new::<T>(code, determinism)?;
+		// Below go further checks required by our pallet.
 		contract_module.scan_exports()?;
-		contract_module.ensure_no_internal_memory()?;
-		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
-		contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
-		contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
-		contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
-		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
+		// contract_module.ensure_no_internal_memory()?;
+		// contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
+		// contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
+		// contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
+		// contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
+		// contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 		// Extract memory limits from the module.
 		// This also checks that module's memory import satisfies the schedule.
-		let code = contract_module.into_wasm_code()?;
-		Ok(code)
+		// TODO: there is no way to serialize wasmi::Module?
+		//	let code = contract_module.into_wasm_code()?;
+		Ok(code.to_vec())
 	})()
 	.map_err(|msg: &str| {
 		log::debug!(target: LOG_TARGET, "New code rejected: {}", msg);
