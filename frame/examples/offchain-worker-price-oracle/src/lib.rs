@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! <!-- markdown-link-check-disable -->
-//! <!-- markdown-link-check-disable -->
 //! # Price Oracle Offchain Worker Example Pallet
 //!
 //! The Price Oracle Offchain Worker Example: A simple pallet demonstrating
