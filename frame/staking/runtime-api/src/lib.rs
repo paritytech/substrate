@@ -30,7 +30,7 @@ sp_api::decl_runtime_apis! {
 		/// Returns the nominations quota for a nominator with a given balance.
 		fn nominations_quota(balance: Balance) -> u32;
 
-		/// Returns the count of pages exposure of the validator is split into.
+		/// Returns the page count of exposures for a validator in a given era.
 		fn era_page_count(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::PageIndex;
 	}
 }
