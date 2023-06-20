@@ -468,8 +468,8 @@ pub mod pallet {
 	}
 }
 
-/// Payload used by this example crate to hold pong response
-/// data required to submit an unsigned transaction.
+/// Payload used by this example crate to hold pong response data required to
+/// submit an unsigned transaction.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
 pub struct PongPayload<Public, BlockNumber> {
 	block_number: BlockNumber,
