@@ -323,7 +323,7 @@ impl OpaqueKeyOwnershipProof {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters with only ECDSA key.
-	pub trait BeefyApi<AuthorityId> where AuthorityId : Encode + Decode
+	pub trait BeefyApi<AuthorityId> where AuthorityId : Codec
 	{
 		/// Return the block number where BEEFY consensus is enabled/started
 		fn beefy_genesis() -> Option<NumberFor<Block>>;
