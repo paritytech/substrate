@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "3.2.2", default-features = 
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
 serde = { version = "1.0.163", optional = true,  default-features = false, features = ["derive", "alloc"] }
-bounded-collections = { version = "0.1.7", default-features = false }
+bounded-collections = { version = "0.1.8", default-features = false }
 primitive-types = { version = "0.12.0", default-features = false, features = ["codec", "scale-info"] }
 impl-serde = { version = "0.4.0", default-features = false, optional = true }
 hash-db = { version = "0.16.0", default-features = false }
