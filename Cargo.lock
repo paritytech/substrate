@@ -6494,7 +6494,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-example-offchain-worker"
+name = "pallet-example-offchain-worker-ping-pong"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "lite-json",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-example-offchain-worker-price-oracle"
 version = "4.0.0-dev"
 dependencies = [
  "frame-support",
