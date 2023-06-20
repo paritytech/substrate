@@ -18,8 +18,7 @@
 //! Tests for VersionedRuntimeUpgrade
 
 use frame_support::{
-	construct_runtime,
-	macro_magic::use_attr,
+	construct_runtime, derive_impl,
 	migrations::VersionedRuntimeUpgrade,
 	parameter_types,
 	traits::{ConstU32, GetStorageVersion, OnRuntimeUpgrade, StorageVersion},
@@ -32,12 +31,6 @@ use sp_core::{ConstU16, Get};
 use once_cell::sync::Lazy;
 #[cfg(feature = "try-runtime")]
 use std::sync::Mutex;
-
-// Because `derive_impl` is a [macro_magic](https://crates.io/crates/macro_magic) attribute
-// macro, [`#[use_attr]`](`frame_support::macro_magic::use_attr`) must be attached to any use
-// statement that brings it into scope.
-#[use_attr]
-use frame_support::derive_impl;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
