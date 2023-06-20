@@ -423,7 +423,7 @@ pub struct OuterEnumsIR<T: Form = MetaForm> {
 	///   It provides just the information needed to decode `sp_runtime::DispatchError::Module`.
 	/// - Decoding the 5 error bytes into this type will not always lead to all of the bytes being
 	///   consumed; many error types do not require all of the bytes to represent them fully.
-	pub module_error_enum_ty: T::Type,
+	pub error_enum_ty: T::Type,
 }
 
 impl IntoPortable for OuterEnumsIR {
@@ -433,7 +433,7 @@ impl IntoPortable for OuterEnumsIR {
 		OuterEnumsIR {
 			call_enum_ty: registry.register_type(&self.call_enum_ty),
 			event_enum_ty: registry.register_type(&self.event_enum_ty),
-			module_error_enum_ty: registry.register_type(&self.module_error_enum_ty),
+			error_enum_ty: registry.register_type(&self.error_enum_ty),
 		}
 	}
 }

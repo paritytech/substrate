@@ -88,7 +88,7 @@ mod test {
 			outer_enums: OuterEnumsIR {
 				call_enum_ty: meta_type::<()>(),
 				event_enum_ty: meta_type::<()>(),
-				module_error_enum_ty: meta_type::<()>(),
+				error_enum_ty: meta_type::<()>(),
 			},
 		}
 	}

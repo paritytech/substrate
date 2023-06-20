@@ -422,9 +422,9 @@ fn error_expand() {
 #[test]
 fn module_error_outer_enum_expand() {
 	// assert that all variants of the Example pallet are included into the
-	// ModuleErrorType definition.
-	match ModuleErrorType::Example(pallet::Error::InsufficientProposersBalance) {
-		ModuleErrorType::Example(example) => match example {
+	// RuntimeError definition.
+	match RuntimeError::Example(pallet::Error::InsufficientProposersBalance) {
+		RuntimeError::Example(example) => match example {
 			pallet::Error::InsufficientProposersBalance => (),
 			pallet::Error::NonExistentStorageValue => (),
 			// Extra pattern added by `construct_runtime`.
@@ -441,15 +441,15 @@ fn module_error_from_dispatch_error() {
 		error: [0; 4],
 		message: Some("InsufficientProposersBalance"),
 	});
-	let err = ModuleErrorType::from_dispatch_error(dispatch_err).unwrap();
+	let err = RuntimeError::from_dispatch_error(dispatch_err).unwrap();
 
 	match err {
-		ModuleErrorType::Example(pallet::Error::InsufficientProposersBalance) => (),
+		RuntimeError::Example(pallet::Error::InsufficientProposersBalance) => (),
 		_ => panic!("Module error constructed incorrectly"),
 	};
 
 	// Only `ModuleError` is converted.
-	assert!(ModuleErrorType::from_dispatch_error(DispatchError::BadOrigin).is_none());
+	assert!(RuntimeError::from_dispatch_error(DispatchError::BadOrigin).is_none());
 }
 
 #[test]

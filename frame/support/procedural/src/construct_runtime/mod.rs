@@ -38,7 +38,7 @@
 //! This macro also generates the following enums for ease of decoding:
 //!  - `enum RuntimeCall`: This type contains the information needed to decode extrinsics.
 //!  - `enum RuntimeEvent`: This type contains the information needed to decode events.
-//!  - `enum ModuleErrorType`: While this cannot be used directly to decode
+//!  - `enum RuntimeError`: While this cannot be used directly to decode
 //!    `sp_runtime::DispatchError` from the chain, it contains the information needed to decode the
 //!    `sp_runtime::DispatchError::Module`.
 //!

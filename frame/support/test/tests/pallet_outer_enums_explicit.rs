@@ -99,9 +99,9 @@ fn module_error_outer_enum_expand_explicit() {
 	// The Runtime has *all* parts explicitely defined.
 
 	// Check that all error types are propagated
-	match ModuleErrorType::Example(pallet::Error::InsufficientProposersBalance) {
+	match RuntimeError::Example(pallet::Error::InsufficientProposersBalance) {
 		// Error passed implicitely to the pallet system.
-		ModuleErrorType::System(system) => match system {
+		RuntimeError::System(system) => match system {
 			frame_system::Error::InvalidSpecName => (),
 			frame_system::Error::SpecVersionNeedsToIncrease => (),
 			frame_system::Error::FailedToExtractRuntimeVersion => (),
@@ -112,26 +112,26 @@ fn module_error_outer_enum_expand_explicit() {
 		},
 
 		// Error declared explicitely.
-		ModuleErrorType::Example(example) => match example {
+		RuntimeError::Example(example) => match example {
 			pallet::Error::InsufficientProposersBalance => (),
 			pallet::Error::NonExistentStorageValue => (),
 			pallet::Error::__Ignore(_, _) => (),
 		},
 		// Error declared explicitely.
-		ModuleErrorType::Instance1Example(example) => match example {
+		RuntimeError::Instance1Example(example) => match example {
 			pallet::Error::InsufficientProposersBalance => (),
 			pallet::Error::NonExistentStorageValue => (),
 			pallet::Error::__Ignore(_, _) => (),
 		},
 
 		// Error must propagate even if not defined explicitely as pallet part.
-		ModuleErrorType::Example2(example) => match example {
+		RuntimeError::Example2(example) => match example {
 			pallet2::Error::OtherInsufficientProposersBalance => (),
 			pallet2::Error::OtherNonExistentStorageValue => (),
 			pallet2::Error::__Ignore(_, _) => (),
 		},
 		// Error must propagate even if not defined explicitely as pallet part.
-		ModuleErrorType::Instance1Example2(example) => match example {
+		RuntimeError::Instance1Example2(example) => match example {
 			pallet2::Error::OtherInsufficientProposersBalance => (),
 			pallet2::Error::OtherNonExistentStorageValue => (),
 			pallet2::Error::__Ignore(_, _) => (),

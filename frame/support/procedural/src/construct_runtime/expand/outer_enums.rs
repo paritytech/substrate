@@ -35,7 +35,7 @@ impl OuterEnumType {
 	fn struct_name(&self) -> &str {
 		match self {
 			OuterEnumType::Event => "RuntimeEvent",
-			OuterEnumType::Error => "ModuleErrorType",
+			OuterEnumType::Error => "RuntimeError",
 		}
 	}
 
@@ -268,7 +268,7 @@ fn generate_error_impl(scrate: &TokenStream, enum_ty: OuterEnumType) -> TokenStr
 	let enum_name_ident = Ident::new(enum_ty.struct_name(), Span::call_site());
 
 	quote! {
-		/// Optionally convert the `DispatchError` into the `ModuleErrorType`.
+		/// Optionally convert the `DispatchError` into the `RuntimeError`.
 		///
 		/// Returns `Some` if the error matches the `DispatchError::Module` variant, otherwise `None`.
 		impl #enum_name_ident {
