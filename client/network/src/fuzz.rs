@@ -32,7 +32,7 @@ use rand::{
 	distributions::{Distribution, Uniform, WeightedIndex},
 	seq::IteratorRandom,
 };
-use sc_utils::mpsc::tracing_unbounded;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::oneshot;
 
@@ -90,227 +90,244 @@ impl From<State> for BareState {
 	}
 }
 
-#[tokio::test]
-async fn run() {
-	sp_tracing::try_init_simple();
-
-	for _ in 0..50 {
-		test_once().await;
-	}
+/// The main test fixture of the module.
+struct ConnectionFuzzer {
+	/// Nodes that we know about.
+	known_nodes: HashMap<PeerId, State>,
+	/// Nodes that we have reserved. Always a subset of `known_nodes`.
+	reserved_nodes: HashSet<PeerId>,
+	/// List of nodes we assume we are connected to. Always a subset of `known_nodes`.
+	connected_nodes: HashSet<PeerId>,
+	/// List of nodes in the `incoming` stae that haven't been accepted or rejected yet.
+	incoming_nodes: HashMap<IncomingIndex, PeerId>,
+	/// Next id for incoming connections.
+	next_incoming_id: IncomingIndex,
+	/// Protocol controller we are testing.
+	protocol_controller: ProtocolController,
+	/// Receiver of `ProtocolController` messages.
+	from_controller: TracingUnboundedReceiver<Message>,
+	/// Allowed events that can be received in a specific state.
+	allowed_events: HashMap<BareState, HashSet<Event>>,
 }
 
-async fn test_once() {
-	// Allowed events that can be received in a specific state.
-	let allowed_events: HashMap<BareState, HashSet<Event>> = [
-		(
-			BareState::Disconnected,
-			[Event::Incoming, Event::PsmConnect, Event::PsmDrop /* must be ignored */]
-				.into_iter()
-				.collect::<HashSet<_>>(),
-		),
-		(
-			BareState::Incoming,
-			[Event::PsmAccept, Event::PsmReject].into_iter().collect::<HashSet<_>>(),
-		),
-		(
-			BareState::Inbound,
-			[Event::Disconnected, Event::PsmDrop, Event::PsmConnect /* must be ignored */]
-				.into_iter()
-				.collect::<HashSet<_>>(),
-		),
-		(
-			BareState::Outbound,
-			[Event::Disconnected, Event::PsmDrop, Event::PsmConnect /* must be ignored */]
-				.into_iter()
-				.collect::<HashSet<_>>(),
-		),
-	]
-	.into_iter()
-	.collect();
-
-	// PRNG to use.
-	let mut rng = rand::thread_rng();
-
-	// Nodes that the peerset knows about.
-	let mut known_nodes = HashMap::<PeerId, State>::new();
-	// Nodes that we have reserved. Always a subset of `known_nodes`.
-	let mut reserved_nodes = HashSet::<PeerId>::new();
-
-	// Bootnodes for `PeerStore` initialization.
-	let bootnodes = (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
-		.map(|_| {
-			let id = PeerId::random();
-			known_nodes.insert(id, State::Disconnected);
-			id
-		})
+impl ConnectionFuzzer {
+	/// Initialize the fuzzer.
+	pub fn new() -> Self {
+		let allowed_events: HashMap<BareState, HashSet<Event>> = [
+			(
+				BareState::Disconnected,
+				[Event::Incoming, Event::PsmConnect, Event::PsmDrop /* must be ignored */]
+					.into_iter()
+					.collect::<HashSet<_>>(),
+			),
+			(
+				BareState::Incoming,
+				[Event::PsmAccept, Event::PsmReject].into_iter().collect::<HashSet<_>>(),
+			),
+			(
+				BareState::Inbound,
+				[Event::Disconnected, Event::PsmDrop, Event::PsmConnect /* must be ignored */]
+					.into_iter()
+					.collect::<HashSet<_>>(),
+			),
+			(
+				BareState::Outbound,
+				[Event::Disconnected, Event::PsmDrop, Event::PsmConnect /* must be ignored */]
+					.into_iter()
+					.collect::<HashSet<_>>(),
+			),
+		]
+		.into_iter()
 		.collect();
 
-	let peer_store = PeerStore::new(bootnodes);
-	let mut peer_store_handle = peer_store.handle();
+		let mut known_nodes = HashMap::<PeerId, State>::new();
+		let mut reserved_nodes = HashSet::<PeerId>::new();
 
-	let (to_notifications, mut from_controller) =
-		tracing_unbounded("test_to_notifications", 10_000);
-	let (protocol_handle, mut protocol_controller) = ProtocolController::new(
-		SetId::from(0),
-		ProtoSetConfig {
-			reserved_nodes: {
-				(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
-					.map(|_| {
-						let id = PeerId::random();
-						known_nodes.insert(id, State::Disconnected);
-						reserved_nodes.insert(id);
-						id
-					})
-					.collect()
-			},
-			in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
-			out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
-			reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
-		},
-		to_notifications,
-		Box::new(peer_store_handle.clone()),
-	);
-
-	tokio::spawn(peer_store.run());
-
-	// List of nodes the user of `peerset` assumes it's connected to. Always a subset of
-	// `known_nodes`.
-	let mut connected_nodes = HashSet::<PeerId>::new();
-	// List of nodes the user of `peerset` called `incoming` with and that haven't been
-	// accepted or rejected yet.
-	let mut incoming_nodes = HashMap::<IncomingIndex, PeerId>::new();
-	// Next id for incoming connections.
-	let mut next_incoming_id = IncomingIndex(0);
-
-	let (tx, rx) = oneshot::channel();
-
-	// The loop below is effectively synchronous, so for `PeerStore` & `ProtocolController`
-	// runners, spawned above, to advance, we use `spawn_blocking`.
-	let fuzz = tokio::task::spawn_blocking(move || {
-		// PRNG to use in `spawn_blocking` context.
+		// PRNG to use.
 		let mut rng = rand::thread_rng();
 
-		// Returns `Some((peer, event, last_state))` if the message was processed, and `None`
-		// if it was ignored.
-		let handle_controller_message =
-			|message,
-			 known_nodes: &mut HashMap<PeerId, State>,
-			 connected_nodes: &mut HashSet<PeerId>,
-			 incoming_nodes: &mut HashMap<IncomingIndex, PeerId>| {
-				match message {
-					Message::Connect { peer_id, .. } => {
-						log::info!("PSM: connecting to peer {}", peer_id);
+		// Bootnodes for `PeerStore` initialization.
+		let bootnodes = (0..Uniform::new_inclusive(0, 4).sample(&mut rng))
+			.map(|_| {
+				let id = PeerId::random();
+				known_nodes.insert(id, State::Disconnected);
+				id
+			})
+			.collect();
 
-						let state = known_nodes.get_mut(&peer_id).unwrap();
-						if matches!(*state, State::Incoming(_)) {
-							log::info!(
-							"Awaiting incoming response, ignoring obsolete Connect from PSM for peer {}",
-							peer_id,
-						);
-							return None
-						}
+		let peer_store = PeerStore::new(bootnodes);
+		let mut peer_store_handle = peer_store.handle();
 
-						let last_state = *state;
+		let (to_notifications, from_controller) =
+			tracing_unbounded("test_to_notifications", 10_000);
+		let (protocol_handle, protocol_controller) = ProtocolController::new(
+			SetId::from(0),
+			ProtoSetConfig {
+				reserved_nodes: {
+					(0..Uniform::new_inclusive(0, 2).sample(&mut rng))
+						.map(|_| {
+							let id = PeerId::random();
+							known_nodes.insert(id, State::Disconnected);
+							reserved_nodes.insert(id);
+							id
+						})
+						.collect()
+				},
+				in_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
+				out_peers: Uniform::new_inclusive(0, 25).sample(&mut rng),
+				reserved_only: Uniform::new_inclusive(0, 10).sample(&mut rng) == 0,
+			},
+			to_notifications,
+			Box::new(peer_store_handle.clone()),
+		);
 
-						if *state != State::Inbound {
-							*state = State::Outbound;
-						}
+		tokio::spawn(peer_store.run());
 
-						if !connected_nodes.insert(peer_id) {
-							log::info!("Request to connect to an already connected node {peer_id}");
-						}
+		Self {
+			known_nodes,
+			reserved_nodes,
+			connected_nodes: HashSet::<PeerId>::new(),
+			incoming_nodes: HashMap::<IncomingIndex, PeerId>::new(),
+			next_incoming_id: IncomingIndex(0),
+			protocol_controller,
+			from_controller,
+			allowed_events,
+		}
+	}
 
-						Some((peer_id, last_state, Event::PsmConnect))
-					},
-					Message::Drop { peer_id, .. } => {
-						log::info!("PSM: dropping peer {}", peer_id);
+	pub fn run(&mut self) {
+		self.fuzz();  // `ProtocolController` must be running
+		self.poll_remaining_protocol_controller();
+		self.process_remaining_messages();
+		self.check_state_consistency();
+	}
 
-						let state = known_nodes.get_mut(&peer_id).unwrap();
-						if matches!(*state, State::Incoming(_)) {
-							log::info!(
-							"Awaiting incoming response, ignoring obsolete Drop from PSM for peer {}",
-							peer_id,
-						);
-							return None
-						}
+	/// Ensure a valid event was received in this state.
+	fn validate_state_transition(&self, peer_id: &PeerId, state: &BareState, event: &Event) {
+		if !self.allowed_events.get(state).unwrap().contains(event) {
+			panic!("Invalid state transition: {:?} x {:?} for peer {}", state, event, peer_id,);
+		}
+	}
 
-						let last_state = *state;
-						*state = State::Disconnected;
+	/// Returns `Some((peer, event, last_state))` if the message was processed, and `None`
+	/// if it was ignored.
+	fn handle_message(&mut self, message: Message) -> Option<(PeerId, State, Event)> {
+		match message {
+			Message::Connect { peer_id, .. } => {
+				log::info!("PSM: connecting to peer {}", peer_id);
 
-						if !connected_nodes.remove(&peer_id) {
-							log::info!("Ignoring attempt to drop a disconnected peer {}", peer_id);
-						}
-
-						Some((peer_id, last_state, Event::PsmDrop))
-					},
-					Message::Accept(n) => {
-						log::info!("PSM: accepting index {}", n.0);
-
-						let peer_id = incoming_nodes.remove(&n).unwrap();
-
-						let state = known_nodes.get_mut(&peer_id).unwrap();
-						match *state {
-							State::Incoming(incoming_index) =>
-								if n.0 < incoming_index.0 {
-									log::info!(
-									"Ignoring obsolete Accept for {:?} while awaiting {:?} for peer {}",
-									n, incoming_index, peer_id,
-								);
-									return None
-								} else if n.0 > incoming_index.0 {
-									panic!(
-										"Received {:?} while awaiting {:?} for peer {}",
-										n, incoming_index, peer_id,
-									);
-								},
-							_ => {},
-						}
-
-						let last_state = *state;
-						*state = State::Inbound;
-
-						assert!(connected_nodes.insert(peer_id));
-
-						Some((peer_id, last_state, Event::PsmAccept))
-					},
-					Message::Reject(n) => {
-						log::info!("PSM: rejecting index {}", n.0);
-
-						let peer_id = incoming_nodes.remove(&n).unwrap();
-
-						let state = known_nodes.get_mut(&peer_id).unwrap();
-						match *state {
-							State::Incoming(incoming_index) =>
-								if n.0 < incoming_index.0 {
-									log::info!(
-									"Ignoring obsolete Reject for {:?} while awaiting {:?} for peer {}",
-									n, incoming_index, peer_id,
-								);
-									return None
-								} else if n.0 > incoming_index.0 {
-									panic!(
-										"Received {:?} while awaiting {:?} for peer {}",
-										n, incoming_index, peer_id,
-									);
-								},
-							_ => {},
-						}
-
-						let last_state = *state;
-						*state = State::Disconnected;
-
-						assert!(!connected_nodes.contains(&peer_id));
-
-						Some((peer_id, last_state, Event::PsmReject))
-					},
+				let state = self.known_nodes.get_mut(&peer_id).unwrap();
+				if matches!(*state, State::Incoming(_)) {
+					log::info!(
+						"Awaiting incoming response, ignoring obsolete Connect from PSM for peer {}",
+						peer_id,
+					);
+					return None
 				}
-			};
 
-		let validate_state_transition = |peer_id, state: State, event| {
-			if !allowed_events.get(&state.into()).unwrap().contains(&event) {
-				panic!("Invalid state transition: {:?} x {:?} for peer {}", state, event, peer_id,);
-			}
-		};
+				let last_state = *state;
+
+				if *state != State::Inbound {
+					*state = State::Outbound;
+				}
+
+				if !self.connected_nodes.insert(peer_id) {
+					log::info!("Request to connect to an already connected node {peer_id}");
+				}
+
+				Some((peer_id, last_state, Event::PsmConnect))
+			},
+			Message::Drop { peer_id, .. } => {
+				log::info!("PSM: dropping peer {}", peer_id);
+
+				let state = self.known_nodes.get_mut(&peer_id).unwrap();
+				if matches!(*state, State::Incoming(_)) {
+					log::info!(
+						"Awaiting incoming response, ignoring obsolete Drop from PSM for peer {}",
+						peer_id,
+					);
+					return None
+				}
+
+				let last_state = *state;
+				*state = State::Disconnected;
+
+				if !self.connected_nodes.remove(&peer_id) {
+					log::info!("Ignoring attempt to drop a disconnected peer {}", peer_id);
+				}
+
+				Some((peer_id, last_state, Event::PsmDrop))
+			},
+			Message::Accept(n) => {
+				log::info!("PSM: accepting index {}", n.0);
+
+				let peer_id = self.incoming_nodes.remove(&n).unwrap();
+
+				let state = self.known_nodes.get_mut(&peer_id).unwrap();
+				match *state {
+					State::Incoming(incoming_index) =>
+						if n.0 < incoming_index.0 {
+							log::info!(
+								"Ignoring obsolete Accept for {:?} while awaiting {:?} for peer {}",
+								n,
+								incoming_index,
+								peer_id,
+							);
+							return None
+						} else if n.0 > incoming_index.0 {
+							panic!(
+								"Received {:?} while awaiting {:?} for peer {}",
+								n, incoming_index, peer_id,
+							);
+						},
+					_ => {},
+				}
+
+				let last_state = *state;
+				*state = State::Inbound;
+
+				assert!(self.connected_nodes.insert(peer_id));
+
+				Some((peer_id, last_state, Event::PsmAccept))
+			},
+			Message::Reject(n) => {
+				log::info!("PSM: rejecting index {}", n.0);
+
+				let peer_id = self.incoming_nodes.remove(&n).unwrap();
+
+				let state = self.known_nodes.get_mut(&peer_id).unwrap();
+				match *state {
+					State::Incoming(incoming_index) =>
+						if n.0 < incoming_index.0 {
+							log::info!(
+								"Ignoring obsolete Reject for {:?} while awaiting {:?} for peer {}",
+								n,
+								incoming_index,
+								peer_id,
+							);
+							return None
+						} else if n.0 > incoming_index.0 {
+							panic!(
+								"Received {:?} while awaiting {:?} for peer {}",
+								n, incoming_index, peer_id,
+							);
+						},
+					_ => {},
+				}
+
+				let last_state = *state;
+				*state = State::Disconnected;
+
+				assert!(!self.connected_nodes.contains(&peer_id));
+
+				Some((peer_id, last_state, Event::PsmReject))
+			},
+		}
+	}
+
+	fn fuzz(&mut self) {
+		// PRNG to use in a `spawn_blocking` context.
+		let mut rng = rand::thread_rng();
 
 		// Perform a certain number of actions while checking that the state is consistent. If we
 		// reach the end of the loop, the run has succeeded.
@@ -436,14 +453,16 @@ async fn test_once() {
 
 			// Validate state transitions.
 			if let Some(peer_id) = current_peer {
-				validate_state_transition(peer_id, last_state.unwrap(), current_event.unwrap());
+				self.validate_state_transition(
+					&peer_id,
+					&last_state.unwrap(),
+					&current_event.unwrap(),
+				);
 			}
 		}
+	}
 
-		// To check eventual consistency, let `ProtocolController` process remaining incoming
-		// events.
-		std::thread::sleep(std::time::Duration::from_secs(10));
-
+	fn process_remaining_messages(&mut self) {
 		// Validate remaining messages.
 		while let Some(message) = from_controller.next().now_or_never() {
 			if let Some(message) = message {
@@ -462,27 +481,66 @@ async fn test_once() {
 				panic!("`ProtocolController` has terminated.")
 			}
 		}
+	}
 
-		let _ = tx.send(known_nodes);
-	});
+	fn check_state_consistency(&mut self) {
+		protocol_controller.connected_peers().for_each(|(peer_id, direction)| {
+			match known_nodes.remove(peer_id).unwrap() {
+				State::Disconnected => panic!("State mismatch: {peer_id} is not connected."),
+				State::Incoming(_) => panic!("State mismatch: {peer_id} is marked as incoming."),
+				State::Inbound =>
+					if !matches!(direction, Direction::Inbound) {
+						panic!(
+							"State mismatch: {peer_id} is connected via outbound instead of inbound."
+						);
+					},
+				State::Outbound =>
+					if !matches!(direction, Direction::Outbound) {
+						panic!(
+							"State mismatch: {peer_id} is connected via inbound instead of outbound."
+						);
+					},
+			}
+		});
+	
+		// Make sure only disconnected nodes are left.
+		assert!(known_nodes.iter().all(|(_, state)| matches!(state, State::Disconnected)));
+	}
+}
+
+#[tokio::test]
+async fn run() {
+	sp_tracing::try_init_simple();
+
+	for _ in 0..50 {
+		test_once().await;
+	}
+}
+
+async fn test_once() {
+	// Allowed events that can be received in a specific state.
+
+	let (tx, rx) = oneshot::channel();
+
+	// The loop below is effectively synchronous, so for `PeerStore` & `ProtocolController`
+	// runners, spawned above, to advance, we use `spawn_blocking`.
+	let fuzz = tokio::task::spawn_blocking(move || {});
 
 	// Run `ProtocolController` until fuzz test has finished.
 	while !fuzz.is_finished() {
 		let protocol_controller_future = protocol_controller.next_action();
 		pin_mut!(protocol_controller_future);
-		futures::future::poll_fn(|cx| {
-			match protocol_controller_future.poll_unpin(cx) {
-				Poll::Pending => {
-					if fuzz.is_finished() {
-						Poll::Ready(())
-					} else {
-						Poll::Pending
-					}
+		futures::future::poll_fn(|cx| match protocol_controller_future.poll_unpin(cx) {
+			Poll::Pending =>
+				if fuzz.is_finished() {
+					Poll::Ready(())
+				} else {
+					Poll::Pending
 				},
-				Poll::Ready(true) => Poll::Ready(()),
-				Poll::Ready(false) => panic!("`ProtocolController` has terminated."),
-			}
-		}).await;
+			Poll::Ready(true) => Poll::Ready(()),
+			Poll::Ready(false) => panic!("`ProtocolController` has terminated."),
+		})
+		.await;
 	}
 
 	let mut known_nodes = rx.await.unwrap();
@@ -494,11 +552,15 @@ async fn test_once() {
 			State::Incoming(_) => panic!("State mismatch: {peer_id} is marked as incoming."),
 			State::Inbound =>
 				if !matches!(direction, Direction::Inbound) {
-					panic!("State mismatch: {peer_id} is connected via outbound instead of inbound.");
+					panic!(
+						"State mismatch: {peer_id} is connected via outbound instead of inbound."
+					);
 				},
 			State::Outbound =>
 				if !matches!(direction, Direction::Outbound) {
-					panic!("State mismatch: {peer_id} is connected via inbound instead of outbound.");
+					panic!(
+						"State mismatch: {peer_id} is connected via inbound instead of outbound."
+					);
 				},
 		}
 	});
