@@ -127,10 +127,10 @@ impl<
 
 	/// Executes post_upgrade if the migration will run.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+	fn post_upgrade(pre_upgrade_return_bytes: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == From::get() {
-			Inner::post_upgrade(_state)
+			Inner::post_upgrade(pre_upgrade_return_bytes)
 		} else {
 			Ok(())
 		}
