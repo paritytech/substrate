@@ -69,7 +69,7 @@ pub type AccountId = <AccountSignature as Verify>::Signer;
 /// A simple hash type for all our hashing.
 pub type Hash = H256;
 /// The block number type used in this runtime.
-pub type BlockNumber = u64;
+pub type BlockNumber = u32;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.

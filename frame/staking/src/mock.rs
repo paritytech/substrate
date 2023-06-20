@@ -43,7 +43,7 @@ pub const BLOCK_TIME: u64 = 1000;
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
-pub(crate) type BlockNumber = u64;
+pub(crate) type BlockNumber = u32;
 pub(crate) type Balance = u128;
 
 /// Another session handler struct to test on_disabled.

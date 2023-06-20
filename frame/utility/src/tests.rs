@@ -37,7 +37,7 @@ use sp_runtime::{
 	TokenError,
 };
 
-type BlockNumber = u64;
+type BlockNumber = u32;
 
 // example module to test behaviors.
 #[frame_support::pallet(dev_mode)]

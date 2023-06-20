@@ -154,7 +154,7 @@ pub type Hash = H256;
 /// The hashing algorithm used.
 pub type Hashing = BlakeTwo256;
 /// The block number type used in this runtime.
-pub type BlockNumber = u64;
+pub type BlockNumber = u32;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.

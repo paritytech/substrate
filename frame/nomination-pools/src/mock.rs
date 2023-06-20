@@ -5,7 +5,7 @@ use frame_system::RawOrigin;
 use sp_runtime::FixedU128;
 use sp_staking::Stake;
 
-pub type BlockNumber = u64;
+pub type BlockNumber = u32;
 pub type AccountId = u128;
 pub type Balance = u128;
 pub type RewardCounter = FixedU128;

@@ -68,7 +68,7 @@
 //! 	pub pool: PoolParams,
 //! }
 //!
-//! pub type BlockNumber = u64;
+//! pub type BlockNumber = u32;
 //!
 //! /// A chain spec supporting forkable `ClientParams`.
 //! pub type MyChainSpec1<G> = GenericChainSpec<G, Forks<BlockNumber, ClientParams>>;

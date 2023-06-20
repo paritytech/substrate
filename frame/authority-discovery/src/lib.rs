@@ -216,7 +216,7 @@ mod tests {
 		type FullIdentificationOf = ();
 	}
 
-	pub type BlockNumber = u64;
+	pub type BlockNumber = u32;
 
 	parameter_types! {
 		pub const Period: BlockNumber = 1;
