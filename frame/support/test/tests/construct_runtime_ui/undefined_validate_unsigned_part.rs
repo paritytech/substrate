@@ -52,8 +52,8 @@ construct_runtime! {
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-		Pallet: pallet::{Pallet, ValidateUnsigned},
+		System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+		Pallet: pallet expanded::{}::{Pallet, ValidateUnsigned},
 	}
 }
 
