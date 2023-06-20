@@ -289,7 +289,8 @@ pub mod pallet {
 
 		/// Set the royalty for an existing NFT item.
 		///
-		/// The origin must be the actual owner of the `item` or `ForceOrigin`.
+		/// Either the origin must be both the owner of the `item` and 
+		/// of the `collection` or the origin must be `ForceOrigin`.
 		///
 		/// - `collection`: The NFT collection of the NFT item.
 		/// - `item`: The NFT item to set the royalty for.
@@ -320,12 +321,27 @@ pub mod pallet {
 			);
 
 			if let Some(check_owner) = maybe_check_owner {
+
+				// Check that the sender is the owner of the item
 				ensure!(
 					T::Nfts::owner(&collection_id, &item_id) == Some(check_owner.clone()),
 					Error::<T>::NoPermission
 				);
-				let owner = &check_owner;
-				T::Currency::reserve(owner, T::ItemRoyaltyDeposit::get())?;
+
+				// Check that the sender is also the owner of the collection
+				ensure!(
+					T::Nfts::collection_owner(&collection_id) == Some(check_owner.clone()),
+					Error::<T>::NoPermission
+				);
+
+				// TODO: Allow the NFT collection issuer to set an item's royalty
+				// ensure!(
+				// 	T::Nfts::collection_issuer(&collection_id) == Some(check_owner.clone()),
+				// 	Error::<T>::NoPermission
+				// );
+				
+				let collection_and_item_owner = &check_owner;
+				T::Currency::reserve(collection_and_item_owner, T::ItemRoyaltyDeposit::get())?;
 			}
 
 			// Check whether the item already has a royalty, if so do not allow to set it again
