@@ -24,7 +24,7 @@ quote = "1.0.28"
 syn = { version = "2.0.16", features = ["full"] }
 frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
 proc-macro-warning = { version = "0.4.1", default-features = false }
-macro_magic = { version = "0.3.5", features = ["proc_support"] }
+macro_magic = { version = "0.4.1", features = ["proc_support"] }
 expander = "2.0.0"
 
 [features]

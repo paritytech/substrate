@@ -186,6 +186,14 @@ where
 		<Self as crate::storage::StorageMap<Key, Value>>::try_mutate(key, f)
 	}
 
+	/// Mutate the value under a key iff it exists. Do nothing and return the default value if not.
+	pub fn mutate_extant<KeyArg: EncodeLike<Key>, R: Default, F: FnOnce(&mut Value) -> R>(
+		key: KeyArg,
+		f: F,
+	) -> R {
+		<Self as crate::storage::StorageMap<Key, Value>>::mutate_extant(key, f)
+	}
+
 	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
 	pub fn mutate_exists<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Option<Value>) -> R>(
 		key: KeyArg,
@@ -366,6 +374,16 @@ where
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter_from(starting_raw_key)
 	}
 
+	/// Enumerate all elements in the map after a specified `starting_key` in no
+	/// particular order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_from_key(
+		starting_key: impl EncodeLike<Key>,
+	) -> crate::storage::PrefixIterator<(Key, Value)> {
+		Self::iter_from(Self::hashed_key_for(starting_key))
+	}
+
 	/// Enumerate all keys in the map in no particular order.
 	///
 	/// If you alter the map while doing this, you'll get undefined results.
@@ -379,6 +397,16 @@ where
 	/// If you alter the map while doing this, you'll get undefined results.
 	pub fn iter_keys_from(starting_raw_key: Vec<u8>) -> crate::storage::KeyPrefixIterator<Key> {
 		<Self as crate::storage::IterableStorageMap<Key, Value>>::iter_keys_from(starting_raw_key)
+	}
+
+	/// Enumerate all keys in the map after a specified `starting_key` in no particular
+	/// order.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys_from_key(
+		starting_key: impl EncodeLike<Key>,
+	) -> crate::storage::KeyPrefixIterator<Key> {
+		Self::iter_keys_from(Self::hashed_key_for(starting_key))
 	}
 
 	/// Remove all elements from the map and iterate through them in no particular order.
