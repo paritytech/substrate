@@ -101,16 +101,16 @@ mod tests;
 
 /// Defines application identifier for crypto keys of this module.
 ///
-/// Every module that deals with signatures needs to declare its unique identifier for
-/// its crypto keys.
-/// When offchain worker is signing transactions it's going to request keys of type
-/// `KeyTypeId` from the keystore and use the ones it finds to sign the transaction.
-/// The keys can be inserted manually via RPC (see `author_insertKey`).
+/// Every module that deals with signatures needs to declare its unique
+/// identifier for its crypto keys. When offchain worker is signing transactions
+/// it's going to request keys of type `KeyTypeId` from the keystore and use the
+/// ones it finds to sign the transaction. The keys can be inserted manually via
+/// RPC (see `author_insertKey`).
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"pong");
 
-/// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto type wrappers.
-/// We can use from supported crypto kinds (`sr25519`, `ed25519` and `ecdsa`) and augment
-/// the types with this pallet-specific identifier.
+/// Based on the above `KeyTypeId` we need to generate a pallet-specific crypto
+/// type wrappers. We can use from supported crypto kinds (`sr25519`, `ed25519`
+/// and `ecdsa`) and augment the types with this pallet-specific identifier.
 pub mod crypto {
 	use super::KEY_TYPE;
 	use sp_core::sr25519::Signature as Sr25519Signature;
@@ -228,8 +228,8 @@ pub mod pallet {
 	/// Defines the block when next unsigned transaction will be accepted.
 	///
 	/// To prevent spam of unsigned (and unpaid!) transactions on the network,
-	/// we only allow one transaction every `T::UnsignedInterval` blocks.
-	/// This storage entry defines when new transaction is going to be accepted.
+	/// we only allow one transaction every `T::UnsignedInterval` blocks. This
+	/// storage entry defines when new transaction is going to be accepted.
 	#[pallet::storage]
 	#[pallet::getter(fn next_unsigned_at)]
 	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
@@ -241,24 +241,26 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Offchain Worker entry point.
 		///
-		/// By implementing `fn offchain_worker` you declare a new offchain worker.
-		/// This function will be called when the node is fully synced and a new best block is
-		/// successfully imported.
-		/// Note that it's not guaranteed for offchain workers to run on EVERY block, there might
-		/// be cases where some blocks are skipped, or for some the worker runs twice (re-orgs),
-		/// so the code should be able to handle that.
-		/// You can use `Local Storage` API to coordinate runs of the worker.
+		/// By implementing `fn offchain_worker` you declare a new offchain
+		/// worker. This function will be called when the node is fully synced
+		/// and a new best block is successfully imported. Note that it's not
+		/// guaranteed for offchain workers to run on EVERY block, there might
+		/// be cases where some blocks are skipped, or for some the worker runs
+		/// twice (re-orgs), so the code should be able to handle that. You can
+		/// use `Local Storage` API to coordinate runs of the worker.
 		fn offchain_worker(block_number: T::BlockNumber) {
-			// Note that having logs compiled to WASM may cause the size of the blob to increase
-			// significantly. You can use `RuntimeDebug` custom derive to hide details of the types
-			// in WASM. The `sp-api` crate also provides a feature `disable-logging` to disable
-			// all logging and thus, remove any logging from the WASM.
+			// Note that having logs compiled to WASM may cause the size of the
+			// blob to increase significantly. You can use `RuntimeDebug` custom
+			// derive to hide details of the types in WASM. The `sp-api` crate
+			// also provides a feature `disable-logging` to disable all logging
+			// and thus, remove any logging from the WASM.
 			log::info!("Hello World from offchain workers!");
 
-			// Since off-chain workers are just part of the runtime code, they have direct access
-			// to the storage and other included pallets.
+			// Since off-chain workers are just part of the runtime code, they
+			// have direct access to the storage and other included pallets.
 			//
-			// We can easily import `frame_system` and retrieve a block hash of the parent block.
+			// We can easily import `frame_system` and retrieve a block hash of
+			// the parent block.
 			let parent_hash = <system::Pallet<T>>::block_hash(block_number - 1u32.into());
 			log::debug!("Current block: {:?} (parent hash: {:?})", block_number, parent_hash);
 
@@ -284,7 +286,8 @@ pub mod pallet {
 				}
 			}
 
-			// try to send a pong_signed (node needs to be loaded with keys, account needs to be funded)
+			// try to send a pong_signed (node needs to be loaded with keys,
+			// account needs to be funded)
 			if let Err(e) = Self::ocw_pong_signed() {
 				log::error!("Error: {}", e);
 			}
@@ -339,7 +342,8 @@ pub mod pallet {
 			_block_number: T::BlockNumber,
 			nonce: u32,
 		) -> DispatchResultWithPostInfo {
-			// This ensures that the function can only be called via unsigned transaction.
+			// This ensures that the function can only be called via unsigned
+			// transaction.
 			ensure_none(origin)?;
 
 			// Emit the PongAckUnauthenticated event
@@ -348,7 +352,8 @@ pub mod pallet {
 				unsigned_type: UnsignedType::RawUnsigned,
 			});
 
-			// now increment the block number at which we expect next unsigned transaction.
+			// now increment the block number at which we expect next unsigned
+			// transaction.
 			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
 			Ok(().into())
@@ -361,7 +366,8 @@ pub mod pallet {
 			pong_payload: PongPayload<T::Public, T::BlockNumber>,
 			_signature: T::Signature,
 		) -> DispatchResultWithPostInfo {
-			// This ensures that the function can only be called via unsigned transaction.
+			// This ensures that the function can only be called via unsigned
+			// transaction.
 			ensure_none(origin)?;
 
 			Self::deposit_event(Event::PongAckUnauthenticated {
@@ -369,7 +375,8 @@ pub mod pallet {
 				unsigned_type: UnsignedType::UnsignedWithSignedPayload,
 			});
 
-			// now increment the block number at which we expect next unsigned transaction.
+			// now increment the block number at which we expect next unsigned
+			// transaction.
 			let current_block = <system::Pallet<T>>::block_number();
 			<NextUnsignedAt<T>>::put(current_block + T::UnsignedInterval::get());
 			Ok(().into())
@@ -428,18 +435,21 @@ pub mod pallet {
 
 		/// Validate unsigned calls to this module.
 		///
-		/// By default, unsigned transactions are disallowed, but implementing this function
-		/// we make sure that some particular calls are being whitelisted and marked as valid.
+		/// By default, unsigned transactions are disallowed, but implementing
+		/// this function we make sure that some particular calls are being
+		/// whitelisted and marked as valid.
 		///
-		/// ⚠ WARNING ⚠
-		/// Anyone could be sending these unsigned transactions, not only OCWs!
+		/// ⚠ WARNING ⚠ Anyone could be sending these unsigned transactions, not
+		/// only OCWs!
 		///
-		/// When it comes to signed payloads, **we only check if the signature is coherent with the signer,
-		/// but we don't really check if the signer is an authorized OCW**!
+		/// When it comes to signed payloads, **we only check if the signature
+		/// is coherent with the signer, but we don't really check if the signer
+		/// is an authorized OCW**!
 		///
-		/// You should not interpret signed payloads as a filter that only allows transactions from
-		/// authorized OCWs. Anyone could have signed those payloads, even malicious actors trying
-		/// to "impersonate" an OCW.
+		/// You should not interpret signed payloads as a filter that only
+		/// allows transactions from authorized OCWs. Anyone could have signed
+		/// those payloads, even malicious actors trying to "impersonate" an
+		/// OCW.
 		///
 		/// There are NO implicit security assumptions here!
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
@@ -449,10 +459,10 @@ pub mod pallet {
 				ref signature,
 			} = call
 			{
-				// ⚠ WARNING ⚠
-				// this is nothing but a "sanity check" on the signature
-				// it only checks if the signature is coherent with the public key of `SignedPayload`
-				// whoever that might be (not necessarily an authorized OCW)
+				// ⚠ WARNING ⚠ this is nothing but a "sanity check" on the
+				// signature it only checks if the signature is coherent with
+				// the public key of `SignedPayload` whoever that might be (not
+				// necessarily an authorized OCW)
 				let signature_valid =
 					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 				if !signature_valid {
@@ -501,27 +511,27 @@ impl<T: Config> Pallet<T> {
 		}
 
 		ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
-			// We set base priority to 2**20 and hope it's included before any other
-			// transactions in the pool.
+			// We set base priority to 2**20 and hope it's included before any
+			// other transactions in the pool.
 			.priority(T::UnsignedPriority::get().saturating_add(0))
-			// This transaction does not require anything else to go before into the pool.
-			// In theory we could require `previous_unsigned_at` transaction to go first,
-			// but it's not necessary in our case.
-			//.and_requires()
-			// We set the `provides` tag to be the same as `next_unsigned_at`. This makes
-			// sure only one transaction produced after `next_unsigned_at` will ever
-			// get to the transaction pool and will end up in the block.
-			// We can still have multiple transactions compete for the same "spot",
-			// and the one with higher priority will replace other one in the pool.
+			// This transaction does not require anything else to go before into
+			// the pool. In theory we could require `previous_unsigned_at`
+			// transaction to go first, but it's not necessary in our case.
+			//.and_requires() We set the `provides` tag to be the same as
+			// `next_unsigned_at`. This makes sure only one transaction produced
+			// after `next_unsigned_at` will ever get to the transaction pool
+			// and will end up in the block. We can still have multiple
+			// transactions compete for the same "spot", and the one with higher
+			// priority will replace other one in the pool.
 			.and_provides(next_unsigned_at)
 			// The transaction is only valid for next 5 blocks. After that it's
 			// going to be revalidated by the pool.
 			.longevity(5)
-			// It's fine to propagate that transaction to other peers, which means it can be
-			// created even by nodes that don't produce blocks.
-			// Note that sometimes it's better to keep it for yourself (if you are the block
-			// producer), since for instance in some schemes others may copy your solution and
-			// claim a reward.
+			// It's fine to propagate that transaction to other peers, which
+			// means it can be created even by nodes that don't produce blocks.
+			// Note that sometimes it's better to keep it for yourself (if you
+			// are the block producer), since for instance in some schemes
+			// others may copy your solution and claim a reward.
 			.propagate(true)
 			.build()
 	}
@@ -539,14 +549,15 @@ impl<T: Config> Pallet<T> {
 		for p in pings {
 			let Ping(nonce) = p;
 
-			// Using `send_signed_transaction` associated type we create and submit a transaction
-			// representing the call, we've just created.
-			// Submit signed will return a vector of results for all accounts that were found in the
-			// local keystore with expected `KEY_TYPE`.
+			// Using `send_signed_transaction` associated type we create and
+			// submit a transaction representing the call, we've just created.
+			// Submit signed will return a vector of results for all accounts
+			// that were found in the local keystore with expected `KEY_TYPE`.
 			let results = signer.send_signed_transaction(|_account| {
-				// nonce is wrapped into a call to `pong_signed` public function of this
-				// pallet. This means that the transaction, when executed, will simply call that
-				// function passing `nonce` as an argument.
+				// nonce is wrapped into a call to `pong_signed` public function
+				// of this pallet. This means that the transaction, when
+				// executed, will simply call that function passing `nonce` as
+				// an argument.
 				Call::pong_signed { nonce }
 			});
 
@@ -615,19 +626,20 @@ impl<T: Config> Pallet<T> {
 		let pings = <Pings<T>>::get();
 		for p in pings {
 			let Ping(nonce) = p;
-			// nonce is wrapped into a call to `pong_unsigned` public function of this
-			// pallet. This means that the transaction, when executed, will simply call that function
-			// passing `nonce` as an argument.
+			// nonce is wrapped into a call to `pong_unsigned` public function
+			// of this pallet. This means that the transaction, when executed,
+			// will simply call that function passing `nonce` as an argument.
 			let call = Call::pong_unsigned { block_number, nonce };
 
-			// Now let's create a transaction out of this call and submit it to the pool.
-			// Here we showcase two ways to send an unsigned transaction / unsigned payload (raw)
+			// Now let's create a transaction out of this call and submit it to
+			// the pool. Here we showcase two ways to send an unsigned
+			// transaction / unsigned payload (raw)
 			//
-			// By default unsigned transactions are disallowed, so we need to whitelist this case
-			// by writing `UnsignedValidator`. Note that it's EXTREMELY important to carefuly
-			// implement unsigned validation logic, as any mistakes can lead to opening DoS or spam
+			// By default unsigned transactions are disallowed, so we need to
+			// whitelist this case by writing `UnsignedValidator`. Note that
+			// it's EXTREMELY important to carefuly implement unsigned
+			// validation logic, as any mistakes can lead to opening DoS or spam
 			// attack vectors. See validation logic docs for more details.
-			//
 			SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into())
 				.map_err(|()| "Unable to submit unsigned transaction.")?;
 		}
