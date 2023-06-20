@@ -26,7 +26,9 @@ use frame_support::{
 	weights::constants::RocksDbWeight,
 };
 use frame_system::Config;
+use once_cell::sync::Lazy;
 use sp_core::{ConstU16, Get};
+use std::sync::Mutex;
 
 // Because `derive_impl` is a [macro_magic](https://crates.io/crates/macro_magic) attribute
 // macro, [`#[use_attr]`](`frame_support::macro_magic::use_attr`) must be attached to any use
@@ -102,12 +104,36 @@ parameter_types! {
 	const UpgradeWrites: u64 = 2;
 }
 
+static PRE_UPGRADE_RETURN_BYTES: [u8; 4] = [0, 1, 2, 3];
+
+// We can't write to pallet storage from pre/post hooks, so use a global variable to track that they
+// are called correctly.
+#[cfg(feature = "try-runtime")]
+static PRE_UPGRADE_CALLED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
+#[cfg(feature = "try-runtime")]
+static POST_UPGRADE_CALLED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
+#[cfg(feature = "try-runtime")]
+static POST_UPGRADE_CALLED_WITH: Lazy<Mutex<Vec<u8>>> = Lazy::new(|| Mutex::new(Vec::new()));
+
 /// Implement `OnRuntimeUpgrade` for `SomeUnversionedMigration`.
 /// It sets SomeStorage to S, and returns a weight derived from UpgradeReads and UpgradeWrites.
 impl<T: dummy_pallet::Config, S: Get<u32>> OnRuntimeUpgrade for SomeUnversionedMigration<T, S> {
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		*PRE_UPGRADE_CALLED.lock().unwrap() = true;
+		Ok(PRE_UPGRADE_RETURN_BYTES.to_vec())
+	}
+
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		dummy_pallet::SomeStorage::<T>::put(S::get());
 		RocksDbWeight::get().reads_writes(UpgradeReads::get(), UpgradeWrites::get())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+		*POST_UPGRADE_CALLED.lock().unwrap() = true;
+		*POST_UPGRADE_CALLED_WITH.lock().unwrap() = state;
+		Ok(())
 	}
 }
 
@@ -205,4 +231,30 @@ fn weights_are_returned_correctly() {
 		let weight = VersionedMigrationV0ToV1::on_runtime_upgrade();
 		assert_eq!(weight, RocksDbWeight::get().reads(1));
 	});
+}
+
+#[test]
+#[cfg(feature = "try-runtime")]
+fn pre_and_post_checks_behave_correctly() {
+	new_test_ext().execute_with(|| {
+		// Check initial state
+		assert_eq!(*PRE_UPGRADE_CALLED.lock().unwrap(), false);
+		assert_eq!(*POST_UPGRADE_CALLED.lock().unwrap(), false);
+		assert_eq!(*POST_UPGRADE_CALLED_WITH.lock().unwrap(), Vec::<u8>::new());
+
+		// Check pre/post hooks are called correctly when upgrade occurs.
+		VersionedMigrationV0ToV1::try_on_runtime_upgrade(true).unwrap();
+		assert_eq!(*PRE_UPGRADE_CALLED.lock().unwrap(), true);
+		assert_eq!(*POST_UPGRADE_CALLED.lock().unwrap(), true);
+		assert_eq!(*POST_UPGRADE_CALLED_WITH.lock().unwrap(), PRE_UPGRADE_RETURN_BYTES.to_vec());
+
+		// Reset hook tracking state.
+		*PRE_UPGRADE_CALLED.lock().unwrap() = false;
+		*POST_UPGRADE_CALLED.lock().unwrap() = false;
+
+		// Check pre/post hooks are not called when an upgrade is skipped.
+		VersionedMigrationV0ToV1::try_on_runtime_upgrade(true).unwrap();
+		assert_eq!(*PRE_UPGRADE_CALLED.lock().unwrap(), false);
+		assert_eq!(*POST_UPGRADE_CALLED.lock().unwrap(), false);
+	})
 }

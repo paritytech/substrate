@@ -95,7 +95,7 @@ impl<
 		use codec::Encode;
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == From::get() {
-			Ok((Inner::pre_upgrade(), true).encode())
+			Ok((Inner::pre_upgrade()?, true).encode())
 		} else {
 			Ok((Vec::<u8>::new(), false).encode())
 		}
