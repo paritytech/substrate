@@ -47,10 +47,10 @@
 //! they emit an `PongAck*` event so we can track with existing UIs.
 //!
 //! The `PongAck*` events come in two different flavors:
-//! - `PongAckAuthenticated`: emitted when the call was made by an
-//!   **authenticated** offchain worker (whitelisted via `Authorities` storage)
-//! - `PongAckUnauthenticated`: emitted when the call was made by an
-//!   **unauthenticated** offchain worker (or potentially malicious actors
+//! - `PongAckAuthenticated`: emitted when the call was made by an **authenticated** offchain worker
+//!   (whitelisted via `Authorities` storage)
+//! - `PongAckUnauthenticated`: emitted when the call was made by an **unauthenticated** offchain
+//!   worker (or potentially malicious actors
 //!
 //! The security implications from `PongAckUnauthenticated` should be obvious:
 //! not **ONLY** offchain workers can call `pong_unsigned*`. **ANYONE** can do
@@ -233,7 +233,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> =
-	StorageValue<_, BoundedVec<T::AccountId, T::MaxAuthorities>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxAuthorities>, ValueQuery>;
 
 	/// Defines the block when next unsigned transaction will be accepted.
 	///
@@ -476,7 +476,7 @@ pub mod pallet {
 				let signature_valid =
 					SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone());
 				if !signature_valid {
-					return InvalidTransaction::BadProof.into();
+					return InvalidTransaction::BadProof.into()
 				}
 				Self::validate_transaction_parameters(&payload.block_number)
 			} else if let Call::pong_unsigned { block_number, nonce: _n } = call {
@@ -512,12 +512,12 @@ impl<T: Config> Pallet<T> {
 		// Now let's check if the transaction has any chance to succeed.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if &next_unsigned_at > block_number {
-			return InvalidTransaction::Stale.into();
+			return InvalidTransaction::Stale.into()
 		}
 		// Let's make sure to reject transactions from the future.
 		let current_block = <system::Pallet<T>>::block_number();
 		if &current_block < block_number {
-			return InvalidTransaction::Future.into();
+			return InvalidTransaction::Future.into()
 		}
 
 		ValidTransaction::with_tag_prefix("ExampleOffchainWorker")
@@ -552,7 +552,7 @@ impl<T: Config> Pallet<T> {
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
-			);
+			)
 		}
 
 		let pings = <Pings<T>>::get();
@@ -623,7 +623,7 @@ impl<T: Config> Pallet<T> {
 				);
 			for (_account_id, result) in transaction_results.into_iter() {
 				if result.is_err() {
-					return Err("Unable to submit transaction");
+					return Err("Unable to submit transaction")
 				}
 			}
 		}
