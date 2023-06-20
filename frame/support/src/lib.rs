@@ -2656,8 +2656,7 @@ pub mod pallet_prelude {
 /// 	#[pallet::genesis_config]
 /// 	#[derive(frame_support::DefaultNoBound)]
 /// 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
-/// 	    _config: sp_std::marker::PhantomData<T>,
-/// 	    _instance: sp_std::marker::PhantomData<I>,
+/// 		 _config: sp_std::marker::PhantomData<(T,I)>,
 /// 		_myfield: u32,
 /// 	}
 ///

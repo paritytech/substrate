@@ -230,6 +230,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		#[serde(skip)]
 		pub phantom: PhantomData<I>,
 		pub members: Vec<T::AccountId>,
 	}

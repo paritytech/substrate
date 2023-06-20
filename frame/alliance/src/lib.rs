@@ -405,6 +405,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub fellows: Vec<T::AccountId>,
 		pub allies: Vec<T::AccountId>,
+		#[serde(skip)]
 		pub phantom: PhantomData<(T, I)>,
 	}
 

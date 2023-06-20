@@ -237,9 +237,7 @@ pub mod pallet {
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		#[serde(skip)]
-		_config: sp_std::marker::PhantomData<T>,
-		#[serde(skip)]
-		_instance: sp_std::marker::PhantomData<I>,
+		_config: sp_std::marker::PhantomData<(T, I)>,
 	}
 
 	#[pallet::genesis_build]

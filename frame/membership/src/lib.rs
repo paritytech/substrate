@@ -108,6 +108,7 @@ pub mod pallet {
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub members: BoundedVec<T::AccountId, T::MaxMembers>,
+		#[serde(skip)]
 		pub phantom: PhantomData<I>,
 	}
 
