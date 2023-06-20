@@ -20,47 +20,54 @@
 //! The Ping-Pong Offchain Worker Example: A simple pallet demonstrating
 //! concepts, APIs and structures common to most offchain workers.
 //!
-//! Run `cargo doc --package pallet-example-offchain-worker-ping-pong --open` to view this module's
-//! documentation.
+//! Run `cargo doc --package pallet-example-offchain-worker-ping-pong --open` to
+//! view this module's documentation.
 //!
-//! **This pallet serves as an example showcasing Substrate off-chain worker and is not meant to
-//! be used in production.**
+//! **This pallet serves as an example showcasing Substrate off-chain worker and
+//! is not meant to be used in production.**
 //!
 //! ## Overview
 //!
-//! This is a simple example pallet to showcase how the runtime can and should interact with an
-//! offchain worker asynchronously.
-//! It also showcases the potential pitfalls and security considerations that come with it.
+//! This is a simple example pallet to showcase how the runtime can and should
+//! interact with an offchain worker asynchronously. It also showcases the
+//! potential pitfalls and security considerations that come with it.
 //!
-//! It is based on [this example by `gnunicorn`](https://gnunicorn.github.io/substrate-offchain-cb/),
-//! although an updated version with a few modifications.
+//! It is based on [this example by
+//! `gnunicorn`](https://gnunicorn.github.io/substrate-offchain-cb/), although
+//! an updated version with a few modifications.
 //!
-//! The example plays simple ping-pong with off-chain workers:
-//! Once a signed transaction to `ping` is submitted (by any user), a Ping request is written into Storage.
-//! Each Ping request has a `nonce`, which is arbitrarily chosen by the user (not necessarily unique).
+//! The example plays simple ping-pong with off-chain workers: Once a signed
+//! transaction to `ping` is submitted (by any user), a Ping request is written
+//! into Storage. Each Ping request has a `nonce`, which is arbitrarily chosen
+//! by the user (not necessarily unique).
 //!
-//! After every block, the offchain worker is triggered. If it sees a Ping request in the current
-//! block, it reacts by sending a transaction to send a Pong with the corresponding `nonce`.
-//! When `pong_*` extrinsics are executed, they emit an `PongAck*` event so we can track with existing UIs.
+//! After every block, the offchain worker is triggered. If it sees a Ping
+//! request in the current block, it reacts by sending a transaction to send a
+//! Pong with the corresponding `nonce`. When `pong_*` extrinsics are executed,
+//! they emit an `PongAck*` event so we can track with existing UIs.
 //!
 //! The `PongAck*` events come in two different flavors:
-//! - `PongAckAuthenticated`: emitted when the call was made by an **authenticated** offchain worker (whitelisted via `Authorities` storage)
-//! - `PongAckUnauthenticated`: emitted when the call was made by an **unauthenticated** offchain worker (or potentially malicious actors
+//! - `PongAckAuthenticated`: emitted when the call was made by an
+//!   **authenticated** offchain worker (whitelisted via `Authorities` storage)
+//! - `PongAckUnauthenticated`: emitted when the call was made by an
+//!   **unauthenticated** offchain worker (or potentially malicious actors
 //!
-//! The security implications from `PongAckUnauthenticated` should be obvious: not **ONLY** offchain workers can
-//! call `pong_unsigned*`. **ANYONE** can do it, and they can actually use a different `nonce`
-//! from the original ping (try it yourself!). If the `nonce` actually had some important meaning
-//! to the state of our chain, this would be a **VULNERABILITY**.
+//! The security implications from `PongAckUnauthenticated` should be obvious:
+//! not **ONLY** offchain workers can call `pong_unsigned*`. **ANYONE** can do
+//! it, and they can actually use a different `nonce` from the original ping
+//! (try it yourself!). If the `nonce` actually had some important meaning to
+//! the state of our chain, this would be a **VULNERABILITY**.
 //!
 //! Also, unsigned transactions can easily become a vector for DoS attacks!
 //!
-//! This is meant to highlight the importance of solid security assumptions when using unsigned transactions.
-//! In other words:
+//! This is meant to highlight the importance of solid security assumptions when
+//! using unsigned transactions. In other words:
 //!
-//! ⚠️ **DO NOT USE UNSIGNED TRANSACTIONS UNLESS YOU KNOW EXACTLY WHAT YOU ARE DOING!** ⚠️
+//! ⚠️ **DO NOT USE UNSIGNED TRANSACTIONS UNLESS YOU KNOW EXACTLY WHAT YOU ARE
+//! DOING!** ⚠️
 //!
-//! Here's an example of how a node admin can inject some keys into the keystore, so that the OCW
-//! can call `pong_signed`:
+//! Here's an example of how a node admin can inject some keys into the
+//! keystore, so that the OCW can call `pong_signed`:
 //!
 //! ```bash
 //! $ curl --location --request POST 'http://localhost:9944' \
@@ -73,10 +80,13 @@
 //! }'
 //! ```
 //!
-//! Then make sure that the corresponding address (`5GCCgshTQCfGkXy6kAkFDW1TZXAdsbCNZJ9Uz2c7ViBnwcVg`) has funds and is added to `Authorities` in the runtime by adding it via `add_authority` extrinsic (from `root`).
+//! Then make sure that the corresponding address
+//! (`5GCCgshTQCfGkXy6kAkFDW1TZXAdsbCNZJ9Uz2c7ViBnwcVg`) has funds and is added
+//! to `Authorities` in the runtime by adding it via `add_authority` extrinsic
+//! (from `root`).
 //!
-//! More complex management models and session
-//! based key rotations should be considered, but that's outside the scope of this example.
+//! More complex management models and session based key rotations should be
+//! considered, but that's outside the scope of this example.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
