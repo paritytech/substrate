@@ -37,7 +37,10 @@ use schnorrkel::{
 use sp_std::vec::Vec;
 
 use crate::{
-	crypto::{ByteArray, CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom},
+	crypto::{
+		ByteArray, CryptoType, CryptoTypeId, Derive, FromEntropy, Public as TraitPublic,
+		UncheckedFrom,
+	},
 	hash::{H256, H512},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -88,6 +91,14 @@ impl Clone for Pair {
 			secret: schnorrkel::SecretKey::from_bytes(&self.0.secret.to_bytes()[..])
 				.expect("key is always the correct size; qed"),
 		})
+	}
+}
+
+impl FromEntropy for Public {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		let mut result = Self([0u8; 32]);
+		input.read(&mut result.0[..])?;
+		Ok(result)
 	}
 }
 
