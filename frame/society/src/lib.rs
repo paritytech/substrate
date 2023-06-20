@@ -466,11 +466,11 @@ pub struct GroupParams<Balance> {
 
 pub type GroupParamsFor<T, I> = GroupParams<BalanceOf<T, I>>;
 
+pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
