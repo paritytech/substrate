@@ -1158,7 +1158,7 @@ where
 		let mut path = sp_std::vec::Vec::new();
 		path.push(T::MultiAssetIdConverter::get_native());
 		path.push(T::MultiAssetIdConverter::into_multiasset_id(&asset_id));
-		let path = path.try_into().unwrap();
+		let path = path.try_into().expect("MaxSwapPathLength must be greater than 1");
 
 		let amount_in = Self::native_to_asset(amount_in)?;
 
