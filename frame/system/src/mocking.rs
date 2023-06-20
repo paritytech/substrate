@@ -29,6 +29,6 @@ pub type MockUncheckedExtrinsic<T, Signature = (), Extra = ()> = generic::Unchec
 
 /// An implementation of `sp_runtime::traits::Block` to be used in tests.
 pub type MockBlock<T> = generic::Block<
-	generic::Header<u64, sp_runtime::traits::BlakeTwo256>,
+	generic::Header<u32, sp_runtime::traits::BlakeTwo256>,
 	MockUncheckedExtrinsic<T>,
 >;
