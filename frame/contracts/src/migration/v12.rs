@@ -25,8 +25,7 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	codec, pallet_prelude::*, storage_alias, traits::ReservableCurrency, BoundedVec,
-	DefaultNoBound, Identity,
+	codec, pallet_prelude::*, storage_alias, traits::ReservableCurrency, DefaultNoBound, Identity,
 };
 use scale_info::prelude::format;
 use sp_core::hexdisplay::HexDisplay;
@@ -112,7 +111,7 @@ pub fn store_old_dummy_code<T: Config>(len: usize, account: T::AccountId) {
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
-	last_key: Option<BoundedVec<u8, ConstU32<256>>>,
+	last_code_hash: Option<CodeHash<T>>,
 	_phantom: PhantomData<T>,
 }
 
@@ -124,8 +123,8 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let mut iter = if let Some(last_key) = self.last_key.take() {
-			PristineCode::<T>::iter_from(last_key.to_vec())
+		let mut iter = if let Some(last_key) = self.last_code_hash.take() {
+			PristineCode::<T>::iter_from(PristineCode::<T>::hashed_key_for(last_key))
 		} else {
 			PristineCode::<T>::iter()
 		};
@@ -206,7 +205,7 @@ impl<T: Config> Migrate for Migration<T> {
 			}
 			CodeInfoOf::<T>::insert(hash, info);
 
-			self.last_key = Some(iter.last_raw_key().to_vec().try_into().unwrap());
+			self.last_code_hash = Some(hash);
 
 			(IsFinished::No, T::WeightInfo::v12_migration_step(code.len() as u32))
 		} else {
