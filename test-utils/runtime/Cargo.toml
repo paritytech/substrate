@@ -18,8 +18,8 @@ sp-application-crypto = { version = "23.0.0", default-features = false, path = "
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura", features = ["serde"] }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe", features = ["serde"] }
 sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy", features = ["serde"] }
-sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../primitives/genesis-builder" }
-sc-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../client/genesis-builder" }
+sp-genesis-builder = { version = "0.1.0-dev", default-features = false, optional = true, path = "../../primitives/genesis-builder" }
+sc-genesis-builder = { version = "0.1.0-dev", default-features = false, optional = true, path = "../../client/genesis-builder" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
@@ -75,7 +75,10 @@ default = [
 	"std",
 	"genesis-builder",
 ]
-genesis-builder = []
+genesis-builder = [
+	"sp-genesis-builder",
+	"sc-genesis-builder",
+]
 std = [
 	"array-bytes",
 	"sp-genesis-builder/std",
