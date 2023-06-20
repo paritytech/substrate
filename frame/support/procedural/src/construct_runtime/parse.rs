@@ -260,19 +260,20 @@ impl Parse for PalletDeclaration {
 		};
 
 		// Check if the pallet is fully expanded.
-		let maybe_error_part = if input.peek(keyword::expanded) {
+		let (is_expanded, extra_parts) = if input.peek(keyword::expanded) {
 			let _: keyword::expanded = input.parse()?;
 			let _: Token![::] = input.parse()?;
-			Some(parse_pallet_parts(input)?)
+			(true, parse_pallet_parts(input)?)
 		} else {
-			None
+			(false, vec![])
 		};
-		let is_expanded = maybe_error_part.is_some();
 
 		// Parse for explicit parts
-		let mut pallet_parts = if input.peek(Token![::]) && input.peek3(token::Brace) {
+		let pallet_parts = if input.peek(Token![::]) && input.peek3(token::Brace) {
 			let _: Token![::] = input.parse()?;
-			Some(parse_pallet_parts(input)?)
+			let mut parts = parse_pallet_parts(input)?;
+			parts.extend(extra_parts.into_iter());
+			Some(parts)
 		} else if !input.peek(keyword::exclude_parts) &&
 			!input.peek(keyword::use_parts) &&
 			!input.peek(Token![=]) &&
@@ -283,14 +284,12 @@ impl Parse for PalletDeclaration {
 				"Unexpected tokens, expected one of `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
 			))
 		} else {
-			None
+			if is_expanded {
+				Some(extra_parts)
+			} else {
+				None
+			}
 		};
-
-		if let (Some(pallet_parts_vec), Some(maybe_error_part)) =
-			(pallet_parts.as_mut(), maybe_error_part)
-		{
-			pallet_parts_vec.extend(maybe_error_part.into_iter());
-		}
 
 		// Parse for specified parts
 		let specified_parts = if input.peek(keyword::exclude_parts) {
