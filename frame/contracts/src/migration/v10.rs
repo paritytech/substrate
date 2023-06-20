@@ -42,7 +42,7 @@ use sp_core::hexdisplay::HexDisplay;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Perbill, Saturating};
-use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
+use sp_std::{ops::Deref, prelude::*};
 
 mod old {
 	use super::*;
@@ -109,8 +109,7 @@ pub struct ContractInfo<T: Config> {
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
-	last_key: Option<BoundedVec<u8, ConstU32<256>>>,
-	_phantom: PhantomData<T>,
+	last_account: Option<T::AccountId>,
 }
 
 #[storage_alias]
@@ -125,8 +124,10 @@ impl<T: Config> MigrationStep for Migration<T> {
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let mut iter = if let Some(last_key) = self.last_key.take() {
-			old::ContractInfoOf::<T>::iter_from(last_key.to_vec())
+		let mut iter = if let Some(last_account) = self.last_account.take() {
+			old::ContractInfoOf::<T>::iter_from(old::ContractInfoOf::<T>::hashed_key_for(
+				last_account,
+			))
 		} else {
 			old::ContractInfoOf::<T>::iter()
 		};
@@ -134,9 +135,6 @@ impl<T: Config> MigrationStep for Migration<T> {
 		if let Some((account, contract)) = iter.next() {
 			let min_balance = Pallet::<T>::min_balance();
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
-
-			// Store last key for next migration step
-			self.last_key = Some(iter.last_raw_key().to_vec().try_into().unwrap());
 
 			// Get the new deposit account address
 			let deposit_account: DepositAccount<T> =
@@ -223,6 +221,10 @@ impl<T: Config> MigrationStep for Migration<T> {
 			};
 
 			ContractInfoOf::<T>::insert(&account, new_contract_info);
+
+			// Store last key for next migration step
+			self.last_account = Some(account);
+
 			(IsFinished::No, T::WeightInfo::v10_migration_step())
 		} else {
 			log::debug!(target: LOG_TARGET, "Done Migrating contract info");
