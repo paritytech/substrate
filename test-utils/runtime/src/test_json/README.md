@@ -12,4 +12,9 @@
 	}
 ```
 
-`:code` field has been manually truncated to reduce file size. Test is only comparing keys, not the values.
+`:code` field has been manually truncated to reduce file size. Test is only
+comparing keys, not the values.
+
+`default_genesis_config_invalid.json` is just a broken copy of
+`default_genesis_config.json` with `authorities` field renamed to
+`renamed_authorities`.
