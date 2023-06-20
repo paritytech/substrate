@@ -103,6 +103,7 @@ impl ContractModule {
 	/// In this runtime we only allow wasm module to import memory from the environment.
 	/// Memory section contains declarations of internal linear memories, so if we find one
 	/// we reject such a module.
+	// TODO we need instantiate the module to check this, first
 	// fn ensure_no_internal_memory(&self) -> Result<(), &'static str> {
 	// 	if self.0.memory_section().map_or(false, |ms| ms.entries().len() > 0) {
 	// 		return Err("module declares internal memory")
@@ -358,7 +359,7 @@ where
 		let contract_module = ContractModule::new::<T>(code, determinism)?;
 		// Below go further checks required by our pallet.
 		contract_module.scan_exports()?;
-		// contract_module.ensure_no_internal_memory()?;
+		contract_module.ensure_no_internal_memory()?;
 		// contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
 		// contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
 		// contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
