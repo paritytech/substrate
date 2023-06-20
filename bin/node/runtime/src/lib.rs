@@ -55,6 +55,8 @@ use frame_system::{
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
 use pallet_asset_conversion::{NativeOrAssetId, NativeOrAssetIdConverter};
+#[cfg(feature = "runtime-benchmarks")]
+use pallet_contracts::NoopMigration;
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use pallet_nfts::PalletFeatures;
@@ -326,8 +328,9 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 					RuntimeCall::Elections(..) |
 					RuntimeCall::Treasury(..)
 			),
-			ProxyType::Staking =>
-				matches!(c, RuntimeCall::Staking(..) | RuntimeCall::FastUnstake(..)),
+			ProxyType::Staking => {
+				matches!(c, RuntimeCall::Staking(..) | RuntimeCall::FastUnstake(..))
+			},
 		}
 	}
 	fn is_superset(&self, o: &Self) -> bool {
@@ -1240,6 +1243,10 @@ impl pallet_contracts::Config for Runtime {
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = ConstBool<false>;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
+	#[cfg(not(feature = "runtime-benchmarks"))]
+	type Migrations = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type Migrations = (NoopMigration<1>, NoopMigration<2>);
 }
 
 impl pallet_sudo::Config for Runtime {
@@ -1255,7 +1262,6 @@ parameter_types! {
 	pub const MaxAuthorities: u32 = 100;
 	pub const MaxKeys: u32 = 10_000;
 	pub const MaxPeerInHeartbeats: u32 = 10_000;
-	pub const MaxPeerDataEncodingSize: u32 = 1_000;
 }
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
@@ -1323,7 +1329,6 @@ impl pallet_im_online::Config for Runtime {
 	type WeightInfo = pallet_im_online::weights::SubstrateWeight<Runtime>;
 	type MaxKeys = MaxKeys;
 	type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
-	type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
 }
 
 impl pallet_offences::Config for Runtime {
@@ -1393,14 +1398,14 @@ impl pallet_recovery::Config for Runtime {
 }
 
 parameter_types! {
-	pub const CandidateDeposit: Balance = 10 * DOLLARS;
-	pub const WrongSideDeduction: Balance = 2 * DOLLARS;
-	pub const MaxStrikes: u32 = 10;
-	pub const RotationPeriod: BlockNumber = 80 * HOURS;
+	pub const GraceStrikes: u32 = 10;
+	pub const SocietyVotingPeriod: BlockNumber = 80 * HOURS;
+	pub const ClaimPeriod: BlockNumber = 80 * HOURS;
 	pub const PeriodSpend: Balance = 500 * DOLLARS;
 	pub const MaxLockDuration: BlockNumber = 36 * 30 * DAYS;
 	pub const ChallengePeriod: BlockNumber = 7 * DAYS;
-	pub const MaxCandidateIntake: u32 = 10;
+	pub const MaxPayouts: u32 = 10;
+	pub const MaxBids: u32 = 10;
 	pub const SocietyPalletId: PalletId = PalletId(*b"py/socie");
 }
 
@@ -1409,18 +1414,17 @@ impl pallet_society::Config for Runtime {
 	type PalletId = SocietyPalletId;
 	type Currency = Balances;
 	type Randomness = RandomnessCollectiveFlip;
-	type CandidateDeposit = CandidateDeposit;
-	type WrongSideDeduction = WrongSideDeduction;
-	type MaxStrikes = MaxStrikes;
+	type GraceStrikes = GraceStrikes;
 	type PeriodSpend = PeriodSpend;
-	type MembershipChanged = ();
-	type RotationPeriod = RotationPeriod;
+	type VotingPeriod = SocietyVotingPeriod;
+	type ClaimPeriod = ClaimPeriod;
 	type MaxLockDuration = MaxLockDuration;
 	type FounderSetOrigin =
 		pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>;
-	type SuspensionJudgementOrigin = pallet_society::EnsureFounder<Runtime>;
-	type MaxCandidateIntake = MaxCandidateIntake;
 	type ChallengePeriod = ChallengePeriod;
+	type MaxPayouts = MaxPayouts;
+	type MaxBids = MaxBids;
+	type WeightInfo = pallet_society::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -2043,6 +2047,7 @@ mod benches {
 		[pallet_scheduler, Scheduler]
 		[pallet_glutton, Glutton]
 		[pallet_session, SessionBench::<Runtime>]
+		[pallet_society, Society]
 		[pallet_staking, Staking]
 		[pallet_state_trie_migration, StateTrieMigration]
 		[pallet_sudo, Sudo]
