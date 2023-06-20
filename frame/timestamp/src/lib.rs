@@ -122,6 +122,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use scale_info::TypeInfo;
 
 	/// The pallet configuration trait
 	#[pallet::config]
@@ -130,7 +131,7 @@ pub mod pallet {
 		type Moment: Parameter
 			+ Default
 			+ AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment>
+			+ Scale<BlockNumberFor<Self>, Output = Self::Moment>
 			+ Copy
 			+ MaxEncodedLen
 			+ scale_info::StaticTypeInfo;
@@ -177,6 +178,21 @@ pub mod pallet {
 		}
 	}
 
+	/// This *magical* wrapper ensures that we break the cycle of rustc checking for traits to be
+	/// implemented.
+	///
+	/// A proper solution requires that rustc solves their trait resolver: https://github.com/rust-lang/rust/labels/fixed-by-next-solver
+	#[derive(Encode, Decode, Debug, PartialEq, Eq, Clone)]
+	pub struct Wrapper<T>(pub T);
+
+	impl<T: TypeInfo + 'static> TypeInfo for Wrapper<T> {
+		type Identity = T;
+
+		fn type_info() -> scale_info::Type {
+			T::type_info()
+		}
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Set the current time.
@@ -213,6 +229,19 @@ pub mod pallet {
 			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 
 			Ok(())
+		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight((
+			T::WeightInfo::set(),
+			DispatchClass::Mandatory
+		))]
+		pub fn set2(
+			origin: OriginFor<T>,
+			header: Wrapper<<T::Block as sp_runtime::traits::Block>::Header>,
+			n: Wrapper<BlockNumberFor<T>>,
+		) -> DispatchResult {
+			unimplemented!()
 		}
 	}
 

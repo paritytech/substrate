@@ -89,7 +89,15 @@ pub struct Block<Header, Extrinsic: MaybeSerialize> {
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
-	Extrinsic: Member + Codec + traits::Extrinsic,
+	Extrinsic: sp_std::fmt::Debug
+		+ Clone
+		+ Send
+		+ Sync
+		+ Codec
+		+ traits::Extrinsic
+		+ MaybeSerialize
+		+ Eq
+		+ 'static,
 {
 	type Extrinsic = Extrinsic;
 	type Header = Header;

@@ -19,6 +19,8 @@
 
 use sp_runtime::generic;
 
+use crate::pallet_prelude::BlockNumberFor;
+
 /// An unchecked extrinsic type to be used in tests.
 pub type MockUncheckedExtrinsic<T, Signature = (), Extra = ()> = generic::UncheckedExtrinsic<
 	<T as crate::Config>::AccountId,
@@ -29,6 +31,6 @@ pub type MockUncheckedExtrinsic<T, Signature = (), Extra = ()> = generic::Unchec
 
 /// An implementation of `sp_runtime::traits::Block` to be used in tests.
 pub type MockBlock<T> = generic::Block<
-	generic::Header<<T as crate::Config>::BlockNumber, sp_runtime::traits::BlakeTwo256>,
+	generic::Header<u64, sp_runtime::traits::BlakeTwo256>,
 	MockUncheckedExtrinsic<T>,
 >;
