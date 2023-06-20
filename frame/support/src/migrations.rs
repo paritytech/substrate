@@ -87,6 +87,17 @@ impl<
 		DbWeight: Get<RuntimeDbWeight>,
 	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<From, To, Inner, Pallet, DbWeight>
 {
+	/// Executes post_upgrade if the migration will run.
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		let on_chain_version = Pallet::on_chain_storage_version();
+		if on_chain_version == From::get() {
+			Inner::pre_upgrade()
+		} else {
+			Ok(Vec::new())
+		}
+	}
+
 	/// Executes the versioned runtime upgrade.
 	///
 	/// First checks if the pallets on-chain storage version matches the version of this upgrade. If
@@ -111,6 +122,17 @@ impl<
 				on_chain_version
 			);
 			DbWeight::get().reads(1)
+		}
+	}
+
+	/// Executes post_upgrade if the migration will run.
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+		let on_chain_version = Pallet::on_chain_storage_version();
+		if on_chain_version == From::get() {
+			Inner::post_upgrade(_state)
+		} else {
+			Ok(())
 		}
 	}
 }
