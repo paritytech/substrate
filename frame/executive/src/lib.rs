@@ -310,11 +310,10 @@ where
 			},
 			BlockAfterInherentsMode::ExtrinsicsForbidden => (),
 		}
-		// Apply all extrinsics:
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
-		// TODO MBMs will only conditionally run this.
+		// TODO MBMs will conditionally run this.
 		Self::on_idle_hook(*header.number());
 
 		Self::on_finalize_hook(*header.number());
@@ -478,7 +477,7 @@ where
 		}
 	}
 
-	/// Returns the number of inherents in the block.
+	/// Check the block and panic if invalid. Returns the number of inherents in it.
 	fn initial_checks(block: &Block) -> u32 {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "initial_checks");
 		let header = block.header();
@@ -506,7 +505,6 @@ where
 			// Execute `on_runtime_upgrade` and `on_initialize`.
 			Self::initialize_block(block.header());
 
-			// Check the block and panic if invalid.
 			let num_inherents = Self::initial_checks(&block) as usize;
 			let (header, applyables) = block.deconstruct();
 
@@ -526,7 +524,7 @@ where
 
 			// Dispatchable processing is done now.
 			<frame_system::Pallet<System>>::note_finished_extrinsics();
-			// TODO MBMs will only conditionally run this.
+			// TODO MBMs will conditionally run this.
 			Self::on_idle_hook(*header.number());
 
 			Self::on_finalize_hook(*header.number());
@@ -551,7 +549,7 @@ where
 		BlockAfterInherentsMode::ExtrinsicsAllowed
 	}
 
-	/// Execute given applyables.
+	/// Execute given applyables (extrinsics or intrinsics).
 	fn execute_applyables<'a>(applyables: impl Iterator<Item = &'a Block::Extrinsic>) {
 		applyables.into_iter().for_each(|e| {
 			if let Err(e) = Self::apply_extrinsic(e.clone()) {
@@ -570,7 +568,7 @@ where
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Pallet<System>>::block_number();
 
-		// TODO MBMs will only conditionally run this.
+		// TODO MBMs will conditionally run this.
 		Self::on_idle_hook(block_number);
 
 		Self::on_finalize_hook(block_number);
@@ -578,6 +576,7 @@ where
 		<frame_system::Pallet<System>>::finalize()
 	}
 
+	/// Run the `on_idle` hook of all pallet, but only if there is weight remaining.
 	fn on_idle_hook(block_number: NumberFor<Block>) {
 		let weight = <frame_system::Pallet<System>>::block_weight();
 		let max_weight = <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
@@ -595,6 +594,7 @@ where
 		}
 	}
 
+	/// Run the `on_finalize` hook of all pallet.
 	fn on_finalize_hook(block_number: NumberFor<Block>) {
 		<AllPalletsWithSystem as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
 	}

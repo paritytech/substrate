@@ -480,7 +480,7 @@ impl_runtime_apis! {
 
 		fn initialize_block(header: &<Block as BlockT>::Header) {
 			log::trace!(target: LOG_TARGET, "initialize_block: {header:#?}");
-			Executive::initialize_block(header)
+			Executive::initialize_block(header);
 		}
 	}
 
