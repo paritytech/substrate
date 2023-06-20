@@ -323,7 +323,9 @@ impl OpaqueKeyOwnershipProof {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters with only ECDSA key.
-	pub trait BeefyApi<AuthorityId> where AuthorityId : Encode + Decode
+	pub trait BeefyApi<AuthorityId, TSignature> where
+	AuthorityId : Codec,
+		TSignature : Codec
 	{
 		/// Return the block number where BEEFY consensus is enabled/started
 		fn beefy_genesis() -> Option<NumberFor<Block>>;
@@ -341,7 +343,7 @@ sp_api::decl_runtime_apis! {
 		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_equivocation_unsigned_extrinsic(
 			equivocation_proof:
-				EquivocationProof<NumberFor<Block>, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>,
+				EquivocationProof<NumberFor<Block>, AuthorityId, TSignature>,
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 
@@ -358,7 +360,7 @@ sp_api::decl_runtime_apis! {
 		/// older states to be available.
 		fn generate_key_ownership_proof(
 			set_id: ValidatorSetId,
-			authority_id: ecdsa_crypto::AuthorityId,
+			authority_id: AuthorityId,
 		) -> Option<OpaqueKeyOwnershipProof>;
 	}
 

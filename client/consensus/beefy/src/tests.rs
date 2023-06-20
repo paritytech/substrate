@@ -293,7 +293,7 @@ impl ProvideRuntimeApi<Block> for TestApi {
 	}
 }
 sp_api::mock_impl_runtime_apis! {
-	impl BeefyApi<Block, AuthorityId> for RuntimeApi {
+	impl BeefyApi<Block, AuthorityId, Signature> for RuntimeApi {
 		fn beefy_genesis() -> Option<NumberFor<Block>> {
 			Some(self.inner.beefy_genesis)
 		}
