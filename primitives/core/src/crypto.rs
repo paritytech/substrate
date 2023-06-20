@@ -1158,6 +1158,52 @@ pub mod key_types {
 	pub const DUMMY: KeyTypeId = KeyTypeId(*b"dumy");
 }
 
+/// Create random values of `Self` given a stream of entropy.
+pub trait FromEntropy: Sized {
+	/// Create a random value of `Self` given a stream of random bytes on `input`. May only fail if
+	/// `input` has an error.
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error>;
+}
+
+impl FromEntropy for bool {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		Ok(input.read_byte()? % 2 == 1)
+	}
+}
+
+macro_rules! impl_from_entropy {
+	($type:ty , $( $others:tt )*) => {
+		impl_from_entropy!($type);
+		impl_from_entropy!($( $others )*);
+	};
+	($type:ty) => {
+		impl FromEntropy for $type {
+			fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+				<Self as codec::Decode>::decode(input)
+			}
+		}
+	}
+}
+
+macro_rules! impl_from_entropy_base {
+	($type:ty , $( $others:tt )*) => {
+		impl_from_entropy_base!($type);
+		impl_from_entropy_base!($( $others )*);
+	};
+	($type:ty) => {
+		impl_from_entropy!($type,
+			[$type; 1], [$type; 2], [$type; 3], [$type; 4], [$type; 5], [$type; 6], [$type; 7], [$type; 8],
+			[$type; 9], [$type; 10], [$type; 11], [$type; 12], [$type; 13], [$type; 14], [$type; 15], [$type; 16],
+			[$type; 17], [$type; 18], [$type; 19], [$type; 20], [$type; 21], [$type; 22], [$type; 23], [$type; 24],
+			[$type; 25], [$type; 26], [$type; 27], [$type; 28], [$type; 29], [$type; 30], [$type; 31], [$type; 32],
+			[$type; 36], [$type; 40], [$type; 44], [$type; 48], [$type; 56], [$type; 64], [$type; 72], [$type; 80],
+			[$type; 96], [$type; 112], [$type; 128], [$type; 160], [$type; 192], [$type; 224], [$type; 256]
+		);
+	}
+}
+
+impl_from_entropy_base!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
+
 #[cfg(test)]
 mod tests {
 	use super::*;
