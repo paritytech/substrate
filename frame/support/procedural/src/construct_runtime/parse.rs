@@ -253,7 +253,7 @@ impl Parse for PalletDeclaration {
 			!input.is_empty()
 		{
 			return Err(input.error(
-				"Unexpected tokens, expected one of `::$ident` `::{`, `expanded` `exclude_parts`, `use_parts`, `=`, `,`",
+				"Unexpected tokens, expected one of `::$ident` `::{`, `expanded`, `exclude_parts`, `use_parts`, `=`, `,`",
 			));
 		} else {
 			None
