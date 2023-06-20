@@ -41,12 +41,21 @@ use sp_runtime::{
 
 use crate::{
 	authorities::{AuthoritySet, DelayKind, PendingChange, SharedAuthoritySet},
-	environment::finalize_block,
+	environment,
 	justification::GrandpaJustification,
 	notification::GrandpaJustificationSender,
 	AuthoritySetChanges, ClientForGrandpa, CommandOrError, Error, NewAuthoritySet, VoterCommand,
 	LOG_TARGET,
 };
+
+/// The minimum period on which justifications will be imported.
+///
+/// When importing a block, if it includes a justification it will
+/// only be processed if it fits within this period, otherwise it
+/// will be ignored (and won't be validated). This is to avoid slowing
+/// down sync by a peer serving us unnecessary justifications which
+/// aren't trivial to validate.
+const JUSTIFICATION_IMPORT_PERIOD: u32 = 512;
 
 /// A block-import handler for GRANDPA.
 ///
@@ -648,26 +657,39 @@ where
 
 		match grandpa_justification {
 			Some(justification) => {
-				let import_res = self.import_justification(
-					hash,
+				if environment::should_process_justification(
+					&*self.inner,
+					JUSTIFICATION_IMPORT_PERIOD,
 					number,
-					(GRANDPA_ENGINE_ID, justification),
 					needs_justification,
-					initial_sync,
-				);
+				) {
+					let import_res = self.import_justification(
+						hash,
+						number,
+						(GRANDPA_ENGINE_ID, justification),
+						needs_justification,
+						initial_sync,
+					);
 
-				import_res.unwrap_or_else(|err| {
-					if needs_justification {
-						debug!(
-							target: LOG_TARGET,
-							"Requesting justification from peers due to imported block #{} that enacts authority set change with invalid justification: {}",
-							number,
-							err
-						);
-						imported_aux.bad_justification = true;
-						imported_aux.needs_justification = true;
-					}
-				});
+					import_res.unwrap_or_else(|err| {
+						if needs_justification {
+							debug!(
+								target: LOG_TARGET,
+								"Requesting justification from peers due to imported block #{} that enacts authority set change with invalid justification: {}",
+								number,
+								err
+							);
+							imported_aux.bad_justification = true;
+							imported_aux.needs_justification = true;
+						}
+					});
+				} else {
+					debug!(
+						target: LOG_TARGET,
+						"Ignoring unnecessary justification for block #{}",
+						number,
+					);
+				}
 			},
 			None =>
 				if needs_justification {
@@ -783,7 +805,7 @@ where
 			Ok(justification) => justification,
 		};
 
-		let result = finalize_block(
+		let result = environment::finalize_block(
 			self.inner.clone(),
 			&self.authority_set,
 			None,
