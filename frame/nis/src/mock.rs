@@ -165,7 +165,7 @@ pub fn new_test_ext_empty() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
 }
 
-pub fn run_to_block(n: u64) {
+pub fn run_to_block(n: u32) {
 	while System::block_number() < n {
 		Nis::on_finalize(System::block_number());
 		Balances::on_finalize(System::block_number());

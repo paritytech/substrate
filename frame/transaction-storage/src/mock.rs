@@ -111,7 +111,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-pub fn run_to_block(n: u64, f: impl Fn() -> Option<TransactionStorageProof>) {
+pub fn run_to_block(n: u32, f: impl Fn() -> Option<TransactionStorageProof>) {
 	while System::block_number() < n {
 		if let Some(proof) = f() {
 			TransactionStorage::check_proof(RuntimeOrigin::none(), proof).unwrap();
