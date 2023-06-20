@@ -117,7 +117,7 @@ pub mod crypto {
 
 pub use pallet::*;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -283,7 +283,7 @@ pub mod pallet {
 		///
 		/// This only works if the caller is in `Authorities`.
 		#[pallet::call_index(0)]
-		#[pallet::weight({0})]
+		#[pallet::weight(0)]
 		pub fn submit_price(origin: OriginFor<T>, price: u32) -> DispatchResultWithPostInfo {
 			// Retrieve sender of the transaction.
 			let who = ensure_signed(origin)?;
@@ -298,7 +298,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight({0})]
+		#[pallet::weight(0)]
 		pub fn add_authority(
 			origin: OriginFor<T>,
 			authority: T::AccountId,
@@ -321,7 +321,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight({0})]
+		#[pallet::weight(0)]
 		pub fn remove_authority(
 			origin: OriginFor<T>,
 			authority: T::AccountId,
