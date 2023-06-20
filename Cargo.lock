@@ -3926,6 +3926,7 @@ dependencies = [
  "pallet-multisig",
  "pallet-nft-fractionalization",
  "pallet-nfts",
+ "pallet-nfts-royalty",
  "pallet-nfts-runtime-api",
  "pallet-nis",
  "pallet-nomination-pools",
