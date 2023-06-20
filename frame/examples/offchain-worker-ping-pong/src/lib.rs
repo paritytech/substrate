@@ -141,7 +141,7 @@ pub mod crypto {
 
 pub use pallet::*;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -301,7 +301,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		#[pallet::weight({0})]
+		#[pallet::weight(0)]
 		pub fn ping(origin: OriginFor<T>, nonce: u32) -> DispatchResultWithPostInfo {
 			let _who = ensure_signed(origin)?;
 
@@ -319,7 +319,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight({0})]
+		#[pallet::weight(0)]
 		pub fn pong_signed(origin: OriginFor<T>, nonce: u32) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
@@ -333,7 +333,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight({0})]
+		#[pallet::weight(0)]
 		pub fn pong_unsigned(
 			origin: OriginFor<T>,
 			_block_number: T::BlockNumber,
@@ -355,7 +355,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(3)]
-		#[pallet::weight({0})]
+		#[pallet::weight(0)]
 		pub fn pong_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
 			pong_payload: PongPayload<T::Public, T::BlockNumber>,
@@ -376,7 +376,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight({0})]
+		#[pallet::weight(0)]
 		pub fn add_authority(
 			origin: OriginFor<T>,
 			authority: T::AccountId,
@@ -399,7 +399,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(5)]
-		#[pallet::weight({0})]
+		#[pallet::weight(0)]
 		pub fn remove_authority(
 			origin: OriginFor<T>,
 			authority: T::AccountId,
