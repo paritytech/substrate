@@ -33,6 +33,7 @@ use frame_support::{
 	ord_parameter_types,
 	pallet_prelude::Get,
 	parameter_types,
+	tests::RuntimeGenesisConfig,
 	traits::{
 		fungible::ItemOf,
 		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
@@ -69,7 +70,7 @@ use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 // #[cfg(feature = "genesis-builder")]
-use sc_genesis_builder::GenesisBuilderHelper;
+use frame_support::genesis_builder_helper::GenesisBuilderHelper;
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -2077,8 +2078,6 @@ mod benches {
 	);
 }
 
-use frame_support::traits::GenesisBuild;
-
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -2603,12 +2602,12 @@ impl_runtime_apis! {
 	}
 
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
-		fn get_default_as_json() -> Vec<u8> {
-			GenesisBuilderHelper::<RuntimeGenesisConfig>::get_default_as_json()
+		fn create_default_config() -> Vec<u8> {
+			GenesisBuilderHelper::<RuntimeGenesisConfig>::create_default_config()
 		}
 
-		fn build_config(patch_json: Vec<u8>) {
-			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config(patch_json);
+		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
+			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config(config)
 		}
 	}
 }
