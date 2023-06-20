@@ -125,6 +125,8 @@ impl pallet_nfts::Config for Test {
 	/// Using `AccountPublic` here makes it trivial to convert to `AccountId` via `into_account()`.
 	type OffchainPublic = AccountPublic;
 	type WeightInfo = ();
+	#[cfg(feature = "runtime-benchmarks")]
+	type Helper = ();
 }
 
 impl Config for Test {
