@@ -42,10 +42,11 @@ use sp_std::vec::Vec;
 /// - `Pallet`: The Pallet being upgraded.
 /// - `Weight`: The runtime's RuntimeDbWeight implementation.
 ///
-/// When a VersionedRuntimeUpgrades `on_runtime_upgrade` method is called, the on-chain version of
-/// the pallet is compared to `From`. If they match, `Inner::on_runtime_upgrade` is called and the
-/// pallets on-chain version is set to `To`. Otherwise, a warning is logged notifying the developer
-/// that the upgrade was a noop and should probably be removed.
+/// When a VersionedRuntimeUpgrades `on_runtime_upgrade`, `pre_upgrade`, or `post_upgrade` method is
+/// called, the on-chain version of the pallet is compared to `From`. If they match, the Inner
+/// equivalent is called and the pallets on-chain version is set to `To` after the migration.
+/// Otherwise, a warning is logged notifying the developer that the upgrade was a noop and should
+/// probably be removed.
 ///
 /// Example:
 /// ```ignore
