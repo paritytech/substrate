@@ -54,25 +54,21 @@ use tokio_retry::{strategy::FixedInterval, Retry};
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
 type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
+type SnapshotVersion = Compact<u16>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
-const SNAPSHOT_VERSION: Compact<u16> = Compact(2);
+const SNAPSHOT_VERSION: SnapshotVersion = Compact(2);
 
 /// The snapshot that we store on disk.
 #[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
-	snapshot_version: Compact<u16>,
+	snapshot_version: SnapshotVersion,
 	state_version: StateVersion,
 	block_hash: B::Hash,
 	// <Vec<Key, (Value, MemoryDbRefCount)>>
 	raw_storage: Vec<(H256, (Vec<u8>, i32))>,
 	storage_root: H256,
-}
-
-#[derive(Decode, Encode)]
-struct SnapshotOnlyVersion {
-	snapshot_version: Compact<u16>,
 }
 
 impl<B: BlockT> Snapshot<B> {
@@ -93,10 +89,12 @@ impl<B: BlockT> Snapshot<B> {
 
 	fn load(path: &PathBuf) -> Result<Snapshot<B>, &'static str> {
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
-		let maybe_version: Result<SnapshotOnlyVersion, _> = Decode::decode(&mut &*bytes);
+		// The first item in the SCALE encoded struct bytes is the snapshot version. We decode and
+		// check that first, before proceeding to decode the rest of the snapshot.
+		let maybe_version: Result<SnapshotVersion, _> = Decode::decode(&mut &*bytes);
 		match maybe_version {
-			Ok(snapshot_only_version) => {
-				if snapshot_only_version.snapshot_version != SNAPSHOT_VERSION {
+			Ok(snapshot_version) => {
+				if snapshot_version != SNAPSHOT_VERSION {
 					return Err(
 						"Unsupported snapshot version detected. Please create a new snapshot.",
 					)
