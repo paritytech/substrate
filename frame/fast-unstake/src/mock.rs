@@ -326,7 +326,7 @@ impl ExtBuilder {
 	}
 }
 
-pub(crate) fn run_to_block(n: u32, on_idle: bool) {
+pub(crate) fn run_to_block(n: u64, on_idle: bool) {
 	let current_block = System::block_number();
 	assert!(n > current_block);
 	while System::block_number() < n {

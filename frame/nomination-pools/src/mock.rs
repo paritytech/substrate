@@ -374,13 +374,13 @@ parameter_types! {
 }
 
 /// Helper to run a specified amount of blocks.
-pub fn run_blocks(n: u32) {
+pub fn run_blocks(n: u64) {
 	let current_block = System::block_number();
 	run_to_block(n + current_block);
 }
 
 /// Helper to run to a specific block.
-pub fn run_to_block(n: u32) {
+pub fn run_to_block(n: u64) {
 	let current_block = System::block_number();
 	assert!(n > current_block);
 	while System::block_number() < n {
