@@ -87,6 +87,10 @@ use std::{
 /// a given address.
 const MAX_KNOWN_EXTERNAL_ADDRESSES: usize = 32;
 
+/// Default value for Kademlia replication factor which  determines to how many closest peers a
+/// record is replicated to.
+pub const DEFAULT_KADEMLIA_REPLICATION_FACTOR: usize = 20;
+
 /// `DiscoveryBehaviour` configuration.
 ///
 /// Note: In order to discover nodes or load and store values via Kademlia one has to add
@@ -101,7 +105,7 @@ pub struct DiscoveryConfig {
 	enable_mdns: bool,
 	kademlia_disjoint_query_paths: bool,
 	kademlia_protocols: Vec<Vec<u8>>,
-	kademlia_replication_factor: Option<NonZeroUsize>,
+	kademlia_replication_factor: NonZeroUsize,
 }
 
 impl DiscoveryConfig {
@@ -117,7 +121,8 @@ impl DiscoveryConfig {
 			enable_mdns: false,
 			kademlia_disjoint_query_paths: false,
 			kademlia_protocols: Vec::new(),
-			kademlia_replication_factor: None,
+			kademlia_replication_factor: NonZeroUsize::new(DEFAULT_KADEMLIA_REPLICATION_FACTOR)
+				.expect("value is a constant; constant is non-zero; qed."),
 		}
 	}
 
@@ -186,7 +191,7 @@ impl DiscoveryConfig {
 
 	/// Sets Kademlia replication factor.
 	pub fn with_kademlia_replication_factor(&mut self, value: NonZeroUsize) -> &mut Self {
-		self.kademlia_replication_factor = Some(value);
+		self.kademlia_replication_factor = value;
 		self
 	}
 
@@ -208,10 +213,7 @@ impl DiscoveryConfig {
 		let kademlia = if !kademlia_protocols.is_empty() {
 			let mut config = KademliaConfig::default();
 
-			if let Some(replication_factor) = kademlia_replication_factor {
-				config.set_replication_factor(replication_factor);
-			}
-
+			config.set_replication_factor(kademlia_replication_factor);
 			config.set_protocol_names(kademlia_protocols.into_iter().map(Into::into).collect());
 			// By default Kademlia attempts to insert all peers into its routing table once a
 			// dialing attempt succeeds. In order to control which peer is added, disable the
