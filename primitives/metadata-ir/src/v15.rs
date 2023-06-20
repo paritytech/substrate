@@ -20,15 +20,14 @@
 use crate::OuterEnumsIR;
 
 use super::types::{
-	ExtrinsicMetadataIR, MetadataIR, PalletMetadataIR,
-	RuntimeApiMetadataIR, RuntimeApiMethodMetadataIR, RuntimeApiMethodParamMetadataIR,
-	SignedExtensionMetadataIR
+	ExtrinsicMetadataIR, MetadataIR, PalletMetadataIR, RuntimeApiMetadataIR,
+	RuntimeApiMethodMetadataIR, RuntimeApiMethodParamMetadataIR, SignedExtensionMetadataIR,
 };
 
 use frame_metadata::v15::{
-	CustomMetadata, ExtrinsicMetadata, OuterEnums, PalletMetadata,
-	RuntimeApiMetadata, RuntimeApiMethodMetadata, RuntimeApiMethodParamMetadata,
-	RuntimeMetadataV15, SignedExtensionMetadata,
+	CustomMetadata, ExtrinsicMetadata, OuterEnums, PalletMetadata, RuntimeApiMetadata,
+	RuntimeApiMethodMetadata, RuntimeApiMethodParamMetadata, RuntimeMetadataV15,
+	SignedExtensionMetadata,
 };
 
 impl From<MetadataIR> for RuntimeMetadataV15 {
