@@ -241,6 +241,7 @@ impl ContractModule {
 	/// and enforces and returns the memory type declared by the contract if any.
 	///
 	/// `import_fn_banlist`: list of function names that are disallowed to be imported
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	pub fn scan_imports<T: Config>(
 		&self,
 		import_fn_banlist: &[&[u8]],
@@ -287,7 +288,7 @@ impl ContractModule {
 		elements::serialize(self.0).map_err(|_| "error serializing contract module")
 	}
 }
-
+#[cfg(any(test, feature = "runtime-benchmarks"))]
 pub fn get_memory_limits<T: Config>(
 	module: Option<&MemoryType>,
 	schedule: &Schedule<T>,
@@ -320,7 +321,7 @@ fn validate<E, T>(
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
-) -> Result<(Vec<u8>, (u32, u32)), (DispatchError, &'static str)>
+) -> Result<Vec<u8>, (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
@@ -357,8 +358,9 @@ where
 		(Error::<T>::CodeRejected.into(), "Validation of new code failed!")
 	})?;
 
-	let (code, memory_limits) = (|| {
+	let code = (|| {
 		let contract_module = ContractModule::new(code)?;
+		// TODO: query w wasmi
 		contract_module.scan_exports()?;
 		contract_module.ensure_no_internal_memory()?;
 		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
@@ -368,10 +370,8 @@ where
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 		// Extract memory limits from the module.
 		// This also checks that module's memory import satisfies the schedule.
-		let memory_limits = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 		let code = contract_module.into_wasm_code()?;
-
-		Ok((code, memory_limits))
+		Ok(code)
 	})()
 	.map_err(|msg: &str| {
 		log::debug!(target: LOG_TARGET, "New code rejected: {}", msg);
@@ -389,7 +389,7 @@ where
 		WasmBlob::<T>::instantiate::<E, _>(
 			&code,
 			(),
-			memory_limits,
+			schedule,
 			stack_limits,
 			AllowDeprecatedInterface::No,
 		)
@@ -398,8 +398,7 @@ where
 			(Error::<T>::CodeRejected.into(), "New code rejected on wasmi instantiation!")
 		})?;
 	}
-
-	Ok((code, memory_limits))
+	Ok(code)
 }
 
 /// Validates the given binary `code` is a valid Wasm module satisfying following constraints:
@@ -420,8 +419,7 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	let (checked_code, (initial, maximum)) =
-		validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
+	let checked_code = validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
 	let err = |_| (<Error<T>>::CodeTooLarge.into(), "Validation enlarged the code size!");
 	let checked_code: CodeVec<T> = checked_code.try_into().map_err(err)?;
 	ensure!(
@@ -435,7 +433,7 @@ where
 		.update_contract::<T>(None)
 		.charge_or_zero();
 
-	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0, initial, maximum };
+	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0 };
 
 	Ok(WasmBlob { code, code_info })
 }
@@ -456,8 +454,8 @@ pub mod benchmarking {
 		owner: AccountIdOf<T>,
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let contract_module = ContractModule::new(&code)?;
-		let (initial, maximum) =
-			get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+		println!("benchmarking::prepare----------->");
+		let _ = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
 			owner,
@@ -465,10 +463,7 @@ pub mod benchmarking {
 			deposit: Default::default(),
 			refcount: 0,
 			determinism: Determinism::Enforced,
-			initial,
-			maximum,
 		};
-
 		Ok(WasmBlob { code, code_info })
 	}
 }
@@ -743,7 +738,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.")
+			Err("New code rejected on wasmi instantiation!")
 		);
 
 		prepare_test!(
@@ -756,7 +751,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Memory import must have the field name 'memory'")
+			Err("New code rejected on wasmi instantiation!")
 		);
 
 		prepare_test!(
@@ -783,7 +778,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Cannot import tables")
+			Err("New code rejected on wasmi instantiation!")
 		);
 
 		prepare_test!(
@@ -795,7 +790,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Cannot import globals")
+			Err("New code rejected on wasmi instantiation!")
 		);
 	}
 
@@ -895,7 +890,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Invalid module for imported memory")
+			Err("New code rejected on wasmi instantiation!")
 		);
 
 		// memory is in "env" and not in some arbitrary module
@@ -909,7 +904,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Invalid module for imported memory")
+			Err("New code rejected on wasmi instantiation!")
 		);
 
 		prepare_test!(
