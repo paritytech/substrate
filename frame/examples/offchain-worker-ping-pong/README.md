@@ -1,4 +1,3 @@
-<!-- markdown-link-check-disable -->
 # Ping-Pong Offchain Worker Example Pallet
 
 A simple pallet demonstrating concepts, APIs and structures common to most offchain workers.
