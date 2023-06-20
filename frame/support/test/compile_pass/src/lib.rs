@@ -44,7 +44,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
-pub type BlockNumber = u32;
+pub type BlockNumber = u64;
 pub type Index = u64;
 
 parameter_types! {

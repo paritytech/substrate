@@ -164,7 +164,7 @@ pub trait IsForks {
 }
 
 impl IsForks for Option<()> {
-	type BlockNumber = u32;
+	type BlockNumber = u64;
 	type Extension = Self;
 }
 

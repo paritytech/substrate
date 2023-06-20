@@ -50,7 +50,7 @@ pub struct Extension {
 		pub pool: PoolParams,
 }
 
-pub type BlockNumber = u32;
+pub type BlockNumber = u64;
 
 /// A chain spec supporting forkable `ClientParams`.
 pub type MyChainSpec1<G> = GenericChainSpec<G, Forks<BlockNumber, ClientParams>>;

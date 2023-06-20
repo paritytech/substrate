@@ -30,7 +30,7 @@ use sp_runtime::{
 
 type AccountId = u128;
 type AccountIndex = u32;
-type BlockNumber = u32;
+type BlockNumber = u64;
 type Balance = u128;
 
 pub(crate) type T = Runtime;

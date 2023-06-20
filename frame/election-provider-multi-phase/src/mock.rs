@@ -64,7 +64,7 @@ frame_support::construct_runtime!(
 
 pub(crate) type Balance = u64;
 pub(crate) type AccountId = u64;
-pub(crate) type BlockNumber = u32;
+pub(crate) type BlockNumber = u64;
 pub(crate) type VoterIndex = u32;
 pub(crate) type TargetIndex = u16;
 
@@ -319,7 +319,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 pub struct MockFallback;
 impl ElectionProviderBase for MockFallback {
 	type AccountId = AccountId;
-	type BlockNumber = u32;
+	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
 	type MaxWinners = MaxWinners;
@@ -433,7 +433,7 @@ pub struct ExtBuilder {}
 pub struct StakingMock;
 impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
-	type BlockNumber = u32;
+	type BlockNumber = u64;
 	type MaxVotesPerVoter = MaxNominations;
 
 	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {

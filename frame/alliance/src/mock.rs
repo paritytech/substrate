@@ -37,7 +37,7 @@ pub use crate as pallet_alliance;
 
 use super::*;
 
-type BlockNumber = u32;
+type BlockNumber = u64;
 type AccountId = u64;
 
 parameter_types! {
