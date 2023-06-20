@@ -26,8 +26,11 @@ use frame_support::{
 	weights::constants::RocksDbWeight,
 };
 use frame_system::Config;
-use once_cell::sync::Lazy;
 use sp_core::{ConstU16, Get};
+
+#[cfg(feature = "try-runtime")]
+use once_cell::sync::Lazy;
+#[cfg(feature = "try-runtime")]
 use std::sync::Mutex;
 
 // Because `derive_impl` is a [macro_magic](https://crates.io/crates/macro_magic) attribute
@@ -104,6 +107,7 @@ parameter_types! {
 	const UpgradeWrites: u64 = 2;
 }
 
+#[cfg(feature = "try-runtime")]
 static PRE_UPGRADE_RETURN_BYTES: [u8; 4] = [0, 1, 2, 3];
 
 // We can't write to pallet storage from pre/post hooks, so use a global variable to track that they
