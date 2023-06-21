@@ -43,7 +43,7 @@ pub use sp_core::storage::StateVersion;
 pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_core::{
-	crypto::{self, ByteArray},
+	crypto::{self, ByteArray, FromEntropy},
 	ecdsa, ed25519,
 	hash::{H256, H512},
 	sr25519,
@@ -309,6 +309,16 @@ pub enum MultiSigner {
 	Sr25519(sr25519::Public),
 	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the compressed pub key).
 	Ecdsa(ecdsa::Public),
+}
+
+impl FromEntropy for MultiSigner {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		Ok(match input.read_byte()? % 3 {
+			0 => Self::Ed25519(FromEntropy::from_entropy(input)?),
+			1 => Self::Sr25519(FromEntropy::from_entropy(input)?),
+			2.. => Self::Ecdsa(FromEntropy::from_entropy(input)?),
+		})
+	}
 }
 
 /// NOTE: This implementations is required by `SimpleAddressDeterminer`,

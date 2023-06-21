@@ -11,5 +11,6 @@ note: required by a bound in `GenesisBuild`
    |                                    ^^^^^^^ required by this bound in `GenesisBuild`
 help: consider annotating `pallet::GenesisConfig` with `#[derive(Default)]`
     |
-19  |     #[derive(Default)]
+19  +     #[derive(Default)]
+20  |     pub struct GenesisConfig;
     |
