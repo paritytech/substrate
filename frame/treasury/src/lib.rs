@@ -133,10 +133,49 @@ pub struct Proposal<AccountId, Balance> {
 	bond: Balance,
 }
 
-#[frame_support::pallet]
+/// The state of the payment claim.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub enum PaymentState<Id> {
+	/// Pending claim.
+	Pending,
+	/// Payment attempted with a payment identifier.
+	Attempted { id: Id },
+	/// Payment failed.
+	Failed,
+}
+
+/// Info regarding an approved treasury spend.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
+pub struct SpendStatus<AssetKind, Beneficiary, BlockNumber, PaymentId> {
+	/// The kind of asset that are going to be spend.
+	asset_kind: AssetKind,
+	/// The beneficiary of the spend.
+	beneficiary: Beneficiary,
+	/// The block number by which the spend has to be claimed.
+	expire_at: BlockNumber,
+	/// The status of the payout/claim.
+	status: PaymentState<PaymentId>,
+}
+
+/// Index of an approved treasury spend.
+pub type SpendIndex = u32;
+
+/// Trait to determine the fungibility of an `AssetKind` and retrieve its balance.
+pub trait MatchesFungible<AssetKind, Balance> {
+	fn matches_fungible(a: &AssetKind) -> Option<Balance>;
+}
+
+// TODO remove dev_mode
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
-	use frame_support::{dispatch_context::with_context, pallet_prelude::*};
+	use frame_support::{
+		dispatch_context::with_context,
+		pallet_prelude::*,
+		traits::tokens::{ConversionFromAssetBalance, Pay},
+	};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -204,6 +243,32 @@ pub mod pallet {
 		/// process. The `Success` value is the maximum amount that this origin is allowed to
 		/// spend at a time.
 		type SpendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = BalanceOf<Self, I>>;
+
+		/// Type parameter representing the asset kinds to be spent from the treasury.
+		///
+		/// This type can describe both fungible and non-fungible assets and is inspected by
+		/// [`Self::AssetMatcher`].
+		type AssetKind: Parameter + MaxEncodedLen;
+
+		/// Type parameter used to identify the beneficiaries eligible to receive treasury spend.
+		type Beneficiary: Parameter + MaxEncodedLen;
+
+		/// Type for processing spends of [Self::AssetKind] in favor of [Self::Beneficiary].
+		type Paymaster: Pay<Beneficiary = Self::Beneficiary, AssetKind = Self::AssetKind>;
+
+		/// Type to determine the fungibility of an `AssetKind` and retrieving its balance.
+		type AssetMatcher: MatchesFungible<Self::AssetKind, <Self::Paymaster as Pay>::Balance>;
+
+		/// Type to convert the balance of an [`Self::AssetKind`] to balance of the native asset.
+		type BalanceConverter: ConversionFromAssetBalance<
+			<Self::Paymaster as Pay>::Balance,
+			Self::AssetKind,
+			BalanceOf<Self, I>,
+		>;
+
+		/// The period during which an approved treasury spend has to be claimed.
+		#[pallet::constant]
+		type PayoutPeriod: Get<Self::BlockNumber>;
 	}
 
 	/// Number of proposals that have been made.
@@ -232,6 +297,20 @@ pub mod pallet {
 	#[pallet::getter(fn approvals)]
 	pub type Approvals<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BoundedVec<ProposalIndex, T::MaxApprovals>, ValueQuery>;
+
+	/// The count of spends that have been made.
+	#[pallet::storage]
+	pub(crate) type SpendCount<T, I = ()> = StorageValue<_, SpendIndex, ValueQuery>;
+
+	/// Spends that have been approved and being processed.
+	#[pallet::storage]
+	pub type Spends<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		SpendIndex,
+		SpendStatus<T::AssetKind, T::Beneficiary, T::BlockNumber, <T::Paymaster as Pay>::Id>,
+		OptionQuery,
+	>;
 
 	#[pallet::genesis_config]
 	#[derive(Default)]
@@ -294,7 +373,7 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// Proposer's balance is too low.
 		InsufficientProposersBalance,
-		/// No proposal or bounty at that index.
+		/// No proposal, bounty or spend at that index.
 		InvalidIndex,
 		/// Too many approvals in the queue.
 		TooManyApprovals,
@@ -303,6 +382,14 @@ pub mod pallet {
 		InsufficientPermission,
 		/// Proposal has not been approved.
 		ProposalNotApproved,
+		/// The asset kind is not fungible.
+		NotFungible,
+		/// The balance of the asset kind is not convertible to the balance of the native asset.
+		FailedToConvertBalance,
+		/// The spend has expired and cannot be claimed.
+		SpendExpired,
+		/// The payment has already been attempted.
+		AlreadyAttempted,
 	}
 
 	#[pallet::hooks]
@@ -328,6 +415,8 @@ pub mod pallet {
 			} else {
 				Weight::zero()
 			}
+
+			// TODO: once in a while remove expired `Spends`
 		}
 	}
 
@@ -424,7 +513,7 @@ pub mod pallet {
 		/// beneficiary.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::spend())]
-		pub fn spend(
+		pub fn spend_local(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T, I>,
 			beneficiary: AccountIdLookupOf<T>,
@@ -498,6 +587,112 @@ pub mod pallet {
 					Err(Error::<T, I>::ProposalNotApproved.into())
 				}
 			})?;
+
+			Ok(())
+		}
+
+		/// Propose and approve a spend of treasury funds.
+		///
+		/// An approved spend must be claimed via the `payout` dispatchable within the
+		/// [`T::PayoutPeriod`].
+		///
+		/// - `origin`: Must be `T::SpendOrigin` with the `Success` value being at least `amount`.
+		/// - `asset_kind`: An indicator of the specific asset class to be spent.
+		/// - `beneficiary`: The beneficiary of the spend.
+		// TODO weight
+		#[pallet::call_index(5)]
+		pub fn spend(
+			origin: OriginFor<T>,
+			asset_kind: T::AssetKind,
+			beneficiary: T::Beneficiary,
+		) -> DispatchResult {
+			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
+
+			let asset_amount =
+				T::AssetMatcher::matches_fungible(&asset_kind).ok_or(Error::<T, I>::NotFungible)?;
+			let native_amount =
+				T::BalanceConverter::from_asset_balance(asset_amount, asset_kind.clone())
+					.map_err(|_| Error::<T, I>::FailedToConvertBalance)?;
+
+			ensure!(native_amount <= max_amount, Error::<T, I>::InsufficientPermission);
+
+			with_context::<SpendContext<BalanceOf<T, I>>, _>(|v| {
+				let context = v.or_default();
+				// We group based on `max_amount`, to distinguish between different kind of
+				// origins. (assumes that all origins have different `max_amount`)
+				//
+				// Worst case is that we reject some "valid" request.
+				let spend = context.spend_in_context.entry(max_amount).or_default();
+
+				// Ensure that we don't overflow nor use more than `max_amount`
+				if spend.checked_add(&native_amount).map(|s| s > max_amount).unwrap_or(true) {
+					Err(Error::<T, I>::InsufficientPermission)
+				} else {
+					*spend = spend.saturating_add(native_amount);
+					Ok(())
+				}
+			})
+			.unwrap_or(Ok(()))?;
+
+			let index = SpendCount::<T, I>::get();
+			Spends::<T, I>::insert(
+				index,
+				SpendStatus {
+					asset_kind,
+					beneficiary,
+					expire_at: frame_system::Pallet::<T>::block_number()
+						.saturating_add(T::PayoutPeriod::get()),
+					status: PaymentState::Pending,
+				},
+			);
+			SpendCount::<T, I>::put(index + 1);
+
+			// TODO deposit event
+
+			Ok(())
+		}
+
+		/// Claim a spend.
+		///
+		/// To claim a spend, it must be done within the [`T::PayoutPeriod`] after approval.
+		/// In case of a payout failure, the spend status should be updated with the `check_status`
+		/// before retrying with the current function.
+		///
+		/// - `origin`: Must be `Signed`.
+		/// - `index`: The spend index.
+		// TODO weight
+		#[pallet::call_index(6)]
+		pub fn payout(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
+			ensure_signed(origin)?;
+
+			let spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
+			ensure!(
+				spend.expire_at > frame_system::Pallet::<T>::block_number(),
+				Error::<T, I>::SpendExpired
+			);
+			ensure!(
+				matches!(spend.status, PaymentState::Pending | PaymentState::Failed),
+				Error::<T, I>::AlreadyAttempted
+			);
+
+			// TODO payout
+			// TODO update status
+
+			Ok(())
+		}
+
+		/// Check the status of the spend.
+		///
+		/// The status check is a prerequisite for retrying a failed payout.
+		///
+		/// - `origin`: Must be `Signed`.
+		/// - `index`: The spend index.
+		// TODO weight
+		#[pallet::call_index(7)]
+		pub fn check_status(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
+			ensure_signed(origin)?;
+
+			// TODO check and update status
 
 			Ok(())
 		}
