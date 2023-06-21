@@ -509,12 +509,10 @@ where
 			// Process extrinsics.
 			Self::execute_applyables(applyables.iter().skip(num_inherents));
 
-			// Dispatchable processing is done now.
 			<frame_system::Pallet<System>>::note_finished_extrinsics();
 
 			Self::on_idle_hook(*header.number());
 			Self::on_finalize_hook(*header.number());
-			// any final checks
 			Self::final_checks(&header);
 		}
 	}
