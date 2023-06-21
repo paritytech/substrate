@@ -19,7 +19,7 @@ prost-build = "0.11"
 array-bytes = "4.1"
 async-channel = "1.8.0"
 async-trait = "0.1.58"
-codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }
 futures = "0.3.21"
 futures-timer = "3.0.2"
 libp2p = "0.51.3"
