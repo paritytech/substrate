@@ -20,7 +20,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_benchmarking::v1::{benchmarks, whitelisted_caller};
+use frame_benchmarking::{
+	v1::{benchmarks, whitelisted_caller},
+	BenchmarkError,
+};
 use frame_support::{dispatch::DispatchClass, storage, traits::Get};
 use frame_system::{Call, Pallet as System, RawOrigin};
 use sp_core::storage::well_known_keys;
@@ -29,8 +32,25 @@ use sp_std::{prelude::*, vec};
 
 mod mock;
 
+/// Benchmark Helper
+pub trait BenchmarkHelper {
+	/// Adds ability to the Runtime to prepare/initialize before running benchmark `set_code`.
+	fn prepare_set_code_requirements() -> Result<(), BenchmarkError>;
+}
+
+impl BenchmarkHelper for () {
+	fn prepare_set_code_requirements() -> Result<(), BenchmarkError> {
+		// doing nothing
+		Ok(())
+	}
+}
+
 pub struct Pallet<T: Config>(System<T>);
-pub trait Config: frame_system::Config {}
+pub trait Config: frame_system::Config {
+	/// Benchmark Helper
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper: BenchmarkHelper;
+}
 
 benchmarks! {
 	remark {
@@ -50,6 +70,7 @@ benchmarks! {
 
 	set_code {
 		let runtime_blob = include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec();
+		T::BenchmarkHelper::prepare_set_code_requirements()?;
 	}: _(RawOrigin::Root, runtime_blob)
 	verify {
 		System::<T>::assert_last_event(frame_system::Event::<T>::CodeUpdated.into());
