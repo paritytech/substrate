@@ -1201,6 +1201,42 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
+	async fn child_keys_are_loaded() {
+		const CACHE: &'static str = "snapshot_retains_storage";
+		init_logger();
+
+		// create an ext with children keys
+		let child_ext = Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				pallets: vec!["Proxy".to_owned()],
+				child_trie: true,
+				state_snapshot: Some(SnapshotConfig::new(CACHE)),
+				..Default::default()
+			}))
+			.build()
+			.await
+			.unwrap();
+
+		// create an ext without children keys
+		let ext = Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				pallets: vec!["Proxy".to_owned()],
+				child_trie: false,
+				state_snapshot: Some(SnapshotConfig::new(CACHE)),
+				..Default::default()
+			}))
+			.build()
+			.await
+			.unwrap();
+
+		// there should be more keys in the child ext.
+		assert!(
+			child_ext.as_backend().backend_storage().keys().len() >
+				ext.as_backend().backend_storage().keys().len()
+		);
+	}
+
+	#[tokio::test]
 	async fn offline_else_online_works() {
 		const CACHE: &'static str = "offline_else_online_works_data";
 		init_logger();
