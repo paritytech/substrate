@@ -1,5 +1,5 @@
 use crate as pallet_template;
-use frame_support::traits::{ConstU16, ConstU64};
+use frame_support::{derive_impl, traits::{ConstU16, ConstU64}};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -17,35 +17,22 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		TemplateModule: pallet_template,
+		TemplatePallet: pallet_template,
 	}
 );
 
+/// Using a default config for [`frame_system`] in tests. See `default-config` example for more
+/// details.
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ConstU64<250>;
-	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+
+	type AccountData = pallet_balances::AccountData<u64>;
 }
 
 impl pallet_template::Config for Test {

@@ -6,7 +6,7 @@ edition = "2021"
 license = "MIT-0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME example pallet"
+description = "FRAME example splitted pallet"
 readme = "README.md"
 
 [package.metadata.docs.rs]
@@ -16,14 +16,19 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
 log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
+
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
-pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
+
 sp-io = { version = "23.0.0", default-features = false, path = "../../../primitives/io" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
-macro_magic = "0.3.1"
+
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
+
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
+
+macro_magic = "0.4.1"
 
 [dev-dependencies]
 sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
@@ -32,15 +37,19 @@ sp-core = { version = "21.0.0", default-features = false, path = "../../../primi
 default = ["std"]
 std = [
 	"codec/std",
-	"frame-benchmarking?/std",
+	"log/std",
+	"scale-info/std",
+
 	"frame-support/std",
 	"frame-system/std",
-	"log/std",
-	"pallet-balances/std",
-	"scale-info/std",
+
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+
+	"frame-benchmarking?/std",
+
+	"pallet-balances/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]
