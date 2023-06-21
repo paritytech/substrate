@@ -24,7 +24,7 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../..
 sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }
 scale-info = "2.1.1"
 frame-election-provider-support = { version = "4.0.0-dev", path = "../../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
