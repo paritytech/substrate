@@ -1555,8 +1555,14 @@ where
 					}
 				}
 			},
-			SwarmEvent::ConnectionClosed { peer_id, cause, endpoint, num_established } => {
-				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?}, {:?})", peer_id, cause);
+			SwarmEvent::ConnectionClosed {
+				connection_id,
+				peer_id,
+				cause,
+				endpoint,
+				num_established,
+			} => {
+				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?} via {}, {:?})", peer_id, connection_id, cause);
 				if let Some(metrics) = self.metrics.as_ref() {
 					let direction = match endpoint {
 						ConnectedPoint::Dialer { .. } => "out",
@@ -1594,12 +1600,12 @@ where
 					metrics.listeners_local_addresses.dec();
 				}
 			},
-			SwarmEvent::OutgoingConnectionError { peer_id, error } => {
+			SwarmEvent::OutgoingConnectionError { connection_id, peer_id, error } => {
 				if let Some(peer_id) = peer_id {
 					trace!(
 						target: "sub-libp2p",
-						"Libp2p => Failed to reach {:?}: {}",
-						peer_id, error,
+						"Libp2p => Failed to reach {:?} via {}: {}",
+						peer_id, connection_id, error,
 					);
 
 					if self.boot_node_ids.contains(&peer_id) {
@@ -1643,18 +1649,23 @@ where
 			SwarmEvent::Dialing(peer_id) => {
 				trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id)
 			},
-			SwarmEvent::IncomingConnection { local_addr, send_back_addr } => {
-				trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({},{}))",
-					local_addr, send_back_addr);
+			SwarmEvent::IncomingConnection { connection_id, local_addr, send_back_addr } => {
+				trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({},{},{}))",
+					connection_id, local_addr, send_back_addr);
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.incoming_connections_total.inc();
 				}
 			},
-			SwarmEvent::IncomingConnectionError { local_addr, send_back_addr, error } => {
+			SwarmEvent::IncomingConnectionError {
+				connection_id,
+				local_addr,
+				send_back_addr,
+				error,
+			} => {
 				debug!(
 					target: "sub-libp2p",
-					"Libp2p => IncomingConnectionError({},{}): {}",
-					local_addr, send_back_addr, error,
+					"Libp2p => IncomingConnectionError({},{},{}): {}",
+					connection_id, local_addr, send_back_addr, error,
 				);
 				if let Some(metrics) = self.metrics.as_ref() {
 					#[allow(deprecated)]

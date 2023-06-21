@@ -55,17 +55,16 @@ use ip_network::IpNetwork;
 use libp2p::{
 	core::{Endpoint, Multiaddr},
 	kad::{
-		handler::KademliaHandler,
 		record::store::{MemoryStore, RecordStore},
 		GetClosestPeersError, GetRecordOk, Kademlia, KademliaBucketInserts, KademliaConfig,
-		KademliaEvent, QueryId, QueryResult, Quorum, Record, RecordKey,
+		KademliaEvent, KademliaHandler, QueryId, QueryResult, Quorum, Record, RecordKey,
 	},
 	mdns::{self, tokio::Behaviour as TokioMdns},
 	multiaddr::Protocol,
 	swarm::{
 		behaviour::{
 			toggle::{Toggle, ToggleConnectionHandler},
-			DialFailure, FromSwarm, NewExternalAddr,
+			DialFailure, FromSwarm, NewExternalAddrCandidate,
 		},
 		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, PollParameters, THandler,
 		THandlerInEvent, THandlerOutEvent, ToSwarm,
@@ -483,7 +482,6 @@ pub enum DiscoveryOut {
 
 impl NetworkBehaviour for DiscoveryBehaviour {
 	type ConnectionHandler = ToggleConnectionHandler<KademliaHandler<QueryId>>;
-	type OutEvent = DiscoveryOut;
 
 	fn handle_established_inbound_connection(
 		&mut self,
@@ -625,7 +623,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			FromSwarm::ExpiredListenAddr(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
 			},
-			FromSwarm::NewExternalAddr(e @ NewExternalAddr { addr }) => {
+			FromSwarm::NewExternalAddrCandidate(e @ NewExternalAddrCandidate { addr }) => {
 				let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.into()));
 
 				if Self::can_add_to_dht(addr) {
@@ -640,7 +638,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					}
 				}
 
-				self.kademlia.on_swarm_event(FromSwarm::NewExternalAddr(e));
+				self.kademlia.on_swarm_event(FromSwarm::NewExternalAddrCandidate(e));
 			},
 			FromSwarm::AddressChange(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::AddressChange(e));
@@ -664,7 +662,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
 		// Immediately process the content of `discovered`.
 		if let Some(ev) = self.pending_events.pop_front() {
 			return Poll::Ready(ToSwarm::GenerateEvent(ev))

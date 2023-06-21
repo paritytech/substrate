@@ -42,7 +42,7 @@ pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, R
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "BehaviourOut")]
+#[behaviour(to_swarm = "BehaviourOut")]
 pub struct Behaviour<B: BlockT> {
 	/// All the substrate-specific protocols.
 	substrate: Protocol<B>,

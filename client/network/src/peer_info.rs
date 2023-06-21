@@ -31,13 +31,13 @@ use libp2p::{
 		Info as IdentifyInfo,
 	},
 	identity::PublicKey,
-	ping::{Behaviour as Ping, Config as PingConfig, Event as PingEvent, Success as PingSuccess},
+	ping::{Behaviour as Ping, Config as PingConfig, Event as PingEvent},
 	swarm::{
 		behaviour::{
 			AddressChange, ConnectionClosed, ConnectionEstablished, DialFailure, FromSwarm,
 			ListenFailure,
 		},
-		ConnectionDenied, ConnectionHandler, ConnectionId, IntoConnectionHandlerSelect,
+		ConnectionDenied, ConnectionHandler, ConnectionHandlerSelect, ConnectionId,
 		NetworkBehaviour, PollParameters, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
 	Multiaddr, PeerId,
@@ -121,13 +121,18 @@ impl PeerInfoBehaviour {
 
 	/// Inserts a ping time in the cache. Has no effect if we don't have any entry for that node,
 	/// which shouldn't happen.
-	fn handle_ping_report(&mut self, peer_id: &PeerId, ping_time: Duration) {
-		trace!(target: "sub-libp2p", "Ping time with {:?}: {:?}", peer_id, ping_time);
+	fn handle_ping_report(
+		&mut self,
+		peer_id: &PeerId,
+		ping_time: Duration,
+		connection: ConnectionId,
+	) {
+		trace!(target: "sub-libp2p", "Ping time with {:?} via {}: {:?}", peer_id, connection, ping_time);
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
 			entry.latest_ping = Some(ping_time);
 		} else {
 			error!(target: "sub-libp2p",
-				"Received ping from node we're not connected to {:?}", peer_id);
+				"Received ping from node we're not connected to {:?} ({})", peer_id, connection);
 		}
 	}
 
@@ -181,11 +186,10 @@ pub enum PeerInfoEvent {
 }
 
 impl NetworkBehaviour for PeerInfoBehaviour {
-	type ConnectionHandler = IntoConnectionHandlerSelect<
+	type ConnectionHandler = ConnectionHandlerSelect<
 		<Ping as NetworkBehaviour>::ConnectionHandler,
 		<Identify as NetworkBehaviour>::ConnectionHandler,
 	>;
-	type OutEvent = PeerInfoEvent;
 
 	fn handle_pending_inbound_connection(
 		&mut self,
@@ -408,13 +412,13 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
 		loop {
 			match self.ping.poll(cx, params) {
 				Poll::Pending => break,
 				Poll::Ready(ToSwarm::GenerateEvent(ev)) => {
-					if let PingEvent { peer, result: Ok(PingSuccess::Ping { rtt }) } = ev {
-						self.handle_ping_report(&peer, rtt)
+					if let PingEvent { peer, result: Ok(rtt), connection } = ev {
+						self.handle_ping_report(&peer, rtt, connection)
 					}
 				},
 				Poll::Ready(ToSwarm::Dial { opts }) => return Poll::Ready(ToSwarm::Dial { opts }),

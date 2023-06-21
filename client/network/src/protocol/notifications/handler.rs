@@ -74,8 +74,8 @@ use futures::{
 use libp2p::{
 	core::ConnectedPoint,
 	swarm::{
-		handler::ConnectionEvent, ConnectionHandler, ConnectionHandlerEvent, KeepAlive,
-		NegotiatedSubstream, SubstreamProtocol,
+		handler::ConnectionEvent, ConnectionHandler, ConnectionHandlerEvent, KeepAlive, Stream,
+		SubstreamProtocol,
 	},
 	PeerId,
 };
@@ -189,7 +189,7 @@ enum State {
 	/// emitted.
 	OpenDesiredByRemote {
 		/// Substream opened by the remote and that hasn't been accepted/rejected yet.
-		in_substream: NotificationsInSubstream<NegotiatedSubstream>,
+		in_substream: NotificationsInSubstream<Stream>,
 
 		/// See [`State::Closed::pending_opening`].
 		pending_opening: bool,
@@ -202,7 +202,7 @@ enum State {
 	/// be emitted when transitionning to respectively [`State::Open`] or [`State::Closed`].
 	Opening {
 		/// Substream opened by the remote. If `Some`, has been accepted.
-		in_substream: Option<NotificationsInSubstream<NegotiatedSubstream>>,
+		in_substream: Option<NotificationsInSubstream<Stream>>,
 	},
 
 	/// Protocol is in the "Open" state.
@@ -224,14 +224,14 @@ enum State {
 		/// Always `Some` on transition to [`State::Open`]. Switched to `None` only if the remote
 		/// closed the substream. If `None`, a [`NotifsHandlerOut::CloseDesired`] event has been
 		/// emitted.
-		out_substream: Option<NotificationsOutSubstream<NegotiatedSubstream>>,
+		out_substream: Option<NotificationsOutSubstream<Stream>>,
 
 		/// Substream opened by the remote.
 		///
 		/// Contrary to the `out_substream` field, operations continue as normal even if the
 		/// substream has been closed by the remote. A `None` is treated the same way as if there
 		/// was an idle substream.
-		in_substream: Option<NotificationsInSubstream<NegotiatedSubstream>>,
+		in_substream: Option<NotificationsInSubstream<Stream>>,
 	},
 }
 
@@ -435,8 +435,6 @@ pub enum NotifsHandlerError {
 }
 
 impl ConnectionHandler for NotifsHandler {
-	type InEvent = NotifsHandlerIn;
-	type OutEvent = NotifsHandlerOut;
 	type Error = NotifsHandlerError;
 	type InboundProtocol = UpgradeCollec<NotificationsIn>;
 	type OutboundProtocol = NotificationsOut;
@@ -684,7 +682,7 @@ impl ConnectionHandler for NotifsHandler {
 		ConnectionHandlerEvent<
 			Self::OutboundProtocol,
 			Self::OutboundOpenInfo,
-			Self::OutEvent,
+			Self::ToSwarm,
 			Self::Error,
 		>,
 	> {

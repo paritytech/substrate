@@ -999,7 +999,7 @@ impl Notifications {
 
 impl NetworkBehaviour for Notifications {
 	type ConnectionHandler = NotifsHandler;
-	type OutEvent = NotificationsOut;
+	type ToSwarm = NotificationsOut;
 
 	fn handle_pending_inbound_connection(
 		&mut self,
@@ -2006,7 +2006,7 @@ impl NetworkBehaviour for Notifications {
 		&mut self,
 		cx: &mut Context,
 		_params: &mut impl PollParameters,
-	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
 		if let Some(event) = self.events.pop_front() {
 			return Poll::Ready(event)
 		}
