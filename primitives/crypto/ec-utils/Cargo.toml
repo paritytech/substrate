@@ -21,7 +21,7 @@ ark-bw6-761 = { version = "0.4.0", default-features = false }
 ark-ed-on-bls12-381-bandersnatch = { version = "0.4.0", default-features = false }
 ark-ed-on-bls12-377 = { version = "0.4.0", default-features = false }
 sp-std = { version = "8.0.0", path = "../../std", default-features = false }
-codec = { package = "parity-scale-codec", version = "3.5.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false }
 ark-scale = { version = "0.0.3", features = ["hazmat"], default-features = false }
 sp-runtime-interface = { version = "17.0.0", default-features = false, path = "../../runtime-interface" }
 

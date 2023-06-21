@@ -39,7 +39,7 @@ async-trait = "0.1.57"
 clap = { version = "4.2.5", features = ["derive"] }
 hex = { version = "0.4.3", default-features = false }
 log = "0.4.17"
-parity-scale-codec = "3.2.2"
+parity-scale-codec = "3.6.1"
 serde = "1.0.163"
 serde_json = "1.0.85"
 zstd = { version = "0.12.3", default-features = false }

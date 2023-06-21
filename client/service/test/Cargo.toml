@@ -17,7 +17,7 @@ array-bytes = "4.1"
 fdlimit = "0.2.1"
 futures = "0.3.21"
 log = "0.4.17"
-parity-scale-codec = "3.2.2"
+parity-scale-codec = "3.6.1"
 parking_lot = "0.12.1"
 tempfile = "3.1.0"
 tokio = { version = "1.22.0", features = ["time"] }
