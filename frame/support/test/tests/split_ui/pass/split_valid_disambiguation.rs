@@ -29,8 +29,8 @@ mod second {
 	}
 }
 
-#[import_section(section)]
-#[import_section(section2)]
+#[import_section(first::section)]
+#[import_section(second::section2)]
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;

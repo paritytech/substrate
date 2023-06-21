@@ -10,4 +10,4 @@ error: cannot find macro `__export_tokens_tt_storages_dev` in this scope
 7 | #[import_section(storages_dev)]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this error originates in the macro `::macro_magic::forward_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the macro `frame_support::macro_magic::forward_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)

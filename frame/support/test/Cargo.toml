@@ -33,7 +33,6 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../executive" }
 # The "std" feature for this pallet is never activated on purpose, in order to test construct_runtime error message
 test-pallet = { package = "frame-support-test-pallet", default-features = false, path = "pallet" }
-macro_magic = "0.3.1"
 
 [features]
 default = ["std"]

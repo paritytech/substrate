@@ -1,10 +1,5 @@
 use crate as pallet_template;
-use frame_support::{derive_impl, traits::{ConstU16, ConstU64}};
-use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use frame_support::derive_impl;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -31,8 +26,6 @@ impl frame_system::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
 	type OnSetCode = ();
-
-	type AccountData = pallet_balances::AccountData<u64>;
 }
 
 impl pallet_template::Config for Test {

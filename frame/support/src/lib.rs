@@ -2896,7 +2896,6 @@ pub use frame_support_procedural::pallet;
 
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
-	#[macro_magic::use_attr]
 	pub use frame_support_procedural::import_section;
 	pub use frame_support_procedural::{
 		call_index, compact, composite_enum, config, constant,

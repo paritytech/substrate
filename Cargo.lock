@@ -2887,7 +2887,6 @@ dependencies = [
  "frame-support",
  "frame-support-test-pallet",
  "frame-system",
- "macro_magic",
  "parity-scale-codec",
  "pretty_assertions",
  "rustversion",
@@ -6589,6 +6588,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-example-split"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-examples"
 version = "4.0.0-dev"
 dependencies = [
@@ -6597,7 +6612,7 @@ dependencies = [
  "pallet-example-basic",
  "pallet-example-kitchensink",
  "pallet-example-offchain-worker",
- "pallet-example-split"
+ "pallet-example-split",
 ]
 
 [[package]]

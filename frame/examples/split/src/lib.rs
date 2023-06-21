@@ -35,7 +35,7 @@ pub mod weights;
 use frame_support::pallet_macros::*;
 pub use weights::*;
 
-#[import_section(events)]
+#[import_section(events::events)]
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;

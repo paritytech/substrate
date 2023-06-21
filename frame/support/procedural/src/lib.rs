@@ -1827,7 +1827,18 @@ pub fn pallet_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 ///
 /// Note that sections are imported by their module name/ident, and should be referred to by
 /// their _full path_ from the perspective of the target pallet.
-#[import_tokens_attr]
+#[import_tokens_attr {
+    format!(
+        "{}::macro_magic",
+        match generate_crate_access_2018("frame-support") {
+            Ok(path) => Ok(path),
+            Err(_) => generate_crate_access_2018("frame"),
+        }
+        .expect("Failed to find either `frame-support` or `frame` in `Cargo.toml` dependencies.")
+        .to_token_stream()
+        .to_string()
+    )
+}]
 #[proc_macro_attribute]
 pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
 	let foreign_mod = parse_macro_input!(attr as ItemMod);
