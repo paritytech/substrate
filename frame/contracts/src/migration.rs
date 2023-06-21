@@ -15,7 +15,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Migration framework for pallets.
+//! Multi-block Migration framework for pallet-contracts.
+//!
+//! This module allows us to define a migration as a sequence of [`MigrationStep`]s that can be
+//! executed across multiple blocks.
+//!
+//! # Usage
+//!
+//! A migration step is defined under `src/migration/vX.rs`, where `X` is the version number.
+//! For example, `vX.rs` defines a migration from version `X - 1` to version `X`.
+//!
+//! ## Example:
+//!
+//! To configure a migration to `v11` for a runtime using `v8` of pallet-contracts on the chain, you
+//! would set the `Migrations` type as follows:
+//!
+//! ```
+//! use pallet_contracts::migration::{v9, v10, v11};
+//! # pub enum Runtime {};
+//! type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+//! ```
+//!
+//! ## Notes:
+//!
+//! - Migrations should always be tested with `try-runtime` before being deployed.
+//! - By testing with `try-runtime` against a live network, you ensure that all migration steps work
+//!   and that you have included the required steps.
+//!
+//! ## Low Level / Implementation Details
+//!
+//! When a migration starts and [`OnRuntimeUpgrade::on_runtime_upgrade`] is called, instead of
+//! performing the actual migration, we set a custom storage item [`MigrationInProgress`].
+//! This storage item defines a [`Cursor`] for the current migration.
+//!
+//! If the [`MigrationInProgress`] storage item exists, it means a migration is in progress, and its
+//! value holds a cursor for the current migration step. These migration steps are executed during
+//! [`Hooks<BlockNumber>::on_idle`] or when the [`Pallet::migrate`] dispatchable is
+//! called.
+//!
+//! While the migration is in progress, all dispatchables except `migrate`, are blocked, and returns
+//! a `MigrationInProgress` error.
 
 pub mod v10;
 pub mod v11;
@@ -28,6 +67,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{ConstU32, OnRuntimeUpgrade},
 };
+use sp_runtime::Saturating;
 use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
@@ -44,7 +84,8 @@ fn invalid_version(version: StorageVersion) -> ! {
 	panic!("Required migration {version:?} not supported by this runtime. This is a bug.");
 }
 
-/// The cursor used to store the state of the current migration step.
+/// The cursor used to encode the position (usually the last iterated key) of the current migration
+/// step.
 pub type Cursor = BoundedVec<u8, ConstU32<1024>>;
 
 /// IsFinished describes whether a migration is finished or not.
@@ -57,7 +98,7 @@ pub enum IsFinished {
 ///
 /// The migration is done in steps. The migration is finished when
 /// `step()` returns `IsFinished::Yes`.
-pub trait Migrate: Codec + MaxEncodedLen + Default {
+pub trait MigrationStep: Codec + MaxEncodedLen + Default {
 	/// Returns the version of the migration.
 	const VERSION: u16;
 
@@ -110,7 +151,7 @@ pub trait Migrate: Codec + MaxEncodedLen + Default {
 #[derive(frame_support::DefaultNoBound, Encode, Decode, MaxEncodedLen)]
 pub struct NoopMigration<const N: u16>;
 
-impl<const N: u16> Migrate for NoopMigration<N> {
+impl<const N: u16> MigrationStep for NoopMigration<N> {
 	const VERSION: u16 = N;
 	fn max_step_weight() -> Weight {
 		Weight::zero()
@@ -122,10 +163,10 @@ impl<const N: u16> Migrate for NoopMigration<N> {
 }
 
 mod private {
-	use crate::migration::Migrate;
+	use crate::migration::MigrationStep;
 	pub trait Sealed {}
 	#[impl_trait_for_tuples::impl_for_tuples(10)]
-	#[tuple_types_custom_trait_bound(Migrate)]
+	#[tuple_types_custom_trait_bound(MigrationStep)]
 	impl Sealed for Tuple {}
 }
 
@@ -134,11 +175,11 @@ mod private {
 /// The sequence must be defined by a tuple of migrations, each of which must implement the
 /// `Migrate` trait. Migrations must be ordered by their versions with no gaps.
 pub trait MigrateSequence: private::Sealed {
-	/// Returns the range of versions that this migration can handle.
+	/// Returns the range of versions that this migrations sequence can handle.
 	/// Migrations must be ordered by their versions with no gaps.
-	/// The following code will fail to compile:
 	///
 	/// The following code will fail to compile:
+	///
 	/// ```compile_fail
 	///     # use pallet_contracts::{NoopMigration, MigrateSequence};
 	/// 	let _ = <(NoopMigration<1>, NoopMigration<3>)>::VERSION_RANGE;
@@ -172,21 +213,10 @@ pub trait MigrateSequence: private::Sealed {
 
 	/// Returns whether migrating from `in_storage` to `target` is supported.
 	///
-	/// A migration is supported if (in_storage + 1, target) is contained by `VERSION_RANGE`.
+	/// A migration is supported if `VERSION_RANGE` is (in_storage + 1, target).
 	fn is_upgrade_supported(in_storage: StorageVersion, target: StorageVersion) -> bool {
-		if in_storage == target {
-			return true
-		}
-		if in_storage > target {
-			return false
-		}
-
 		let (low, high) = Self::VERSION_RANGE;
-		let Some(first_supported) = low.checked_sub(1) else {
-			return false
-		};
-
-		in_storage >= first_supported && target == high
+		target == high && in_storage + 1 == low
 	}
 }
 
@@ -276,17 +306,20 @@ impl<T: Config, const TEST_ALL_STEPS: bool> OnRuntimeUpgrade for Migration<T, TE
 		let storage_version = <Pallet<T>>::on_chain_storage_version();
 		let target_version = <Pallet<T>>::current_storage_version();
 
+		ensure!(
+			storage_version != target_version,
+			"No upgrade: Please remove this migration from your runtime upgrade configuration."
+		);
+
 		log::debug!(
 			target: LOG_TARGET,
-			"{}: Range supported {:?}, range requested {:?}",
-			<Pallet<T>>::name(),
-			T::Migrations::VERSION_RANGE,
-			(storage_version, target_version)
+			"Requested migration of {} from {:?}(on-chain storage version) to {:?}(current storage version)",
+			<Pallet<T>>::name(), storage_version, target_version
 		);
 
 		ensure!(
 			T::Migrations::is_upgrade_supported(storage_version, target_version),
-			"Unsupported upgrade"
+			"Unsupported upgrade: VERSION_RANGE should be (on-chain storage version + 1, current storage version)"
 		);
 		Ok(Default::default())
 	}
@@ -313,7 +346,8 @@ pub enum StepResult {
 }
 
 impl<T: Config, const TEST_ALL_STEPS: bool> Migration<T, TEST_ALL_STEPS> {
-	/// Verify that each migration's step of the [`T::Migrations`] sequence fits into `Cursor`.
+	/// Verify that each migration's step of the [`Config::Migrations`] sequence fits into
+	/// `Cursor`.
 	pub(crate) fn integrity_test() {
 		let max_weight = <T as frame_system::Config>::BlockWeights::get().max_block;
 		T::Migrations::integrity_test(max_weight)
@@ -394,7 +428,7 @@ impl<T: Config, const TEST_ALL_STEPS: bool> Migration<T, TEST_ALL_STEPS> {
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(10)]
-#[tuple_types_custom_trait_bound(Migrate)]
+#[tuple_types_custom_trait_bound(MigrationStep)]
 impl MigrateSequence for Tuple {
 	const VERSION_RANGE: (u16, u16) = {
 		let mut versions: (u16, u16) = (0, 0);
@@ -461,7 +495,7 @@ impl MigrateSequence for Tuple {
 					let mut steps_done = 0;
 					while weight_left.all_gt(max_weight) {
 						let (finished, weight) = migration.step();
-						steps_done += 1;
+						steps_done.saturating_accrue(1);
 						weight_left.saturating_reduce(weight);
 						if matches!(finished, IsFinished::Yes) {
 							return StepResult::Completed{ steps_done }
@@ -494,7 +528,7 @@ mod test {
 		count: u16,
 	}
 
-	impl<const N: u16> Migrate for MockMigration<N> {
+	impl<const N: u16> MigrationStep for MockMigration<N> {
 		const VERSION: u16 = N;
 		fn max_step_weight() -> Weight {
 			Weight::from_all(1)
@@ -519,30 +553,9 @@ mod test {
 	#[test]
 	fn is_upgrade_supported_works() {
 		type Migrations = (MockMigration<9>, MockMigration<10>, MockMigration<11>);
-
-		[(1, 1), (8, 11), (9, 11)].into_iter().for_each(|(from, to)| {
-			assert!(
-				Migrations::is_upgrade_supported(
-					StorageVersion::new(from),
-					StorageVersion::new(to)
-				),
-				"{} -> {} is supported",
-				from,
-				to
-			)
-		});
-
-		[(1, 0), (0, 3), (7, 11), (8, 10)].into_iter().for_each(|(from, to)| {
-			assert!(
-				!Migrations::is_upgrade_supported(
-					StorageVersion::new(from),
-					StorageVersion::new(to)
-				),
-				"{} -> {} is not supported",
-				from,
-				to
-			)
-		});
+		assert!(Migrations::is_upgrade_supported(StorageVersion::new(8), StorageVersion::new(11)));
+		assert!(!Migrations::is_upgrade_supported(StorageVersion::new(9), StorageVersion::new(11)));
+		assert!(!Migrations::is_upgrade_supported(StorageVersion::new(8), StorageVersion::new(12)));
 	}
 
 	#[test]
