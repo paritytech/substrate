@@ -35,6 +35,6 @@
 //!
 //! - [**`pallet-example-kitchensink`**](./kitchensink): A simple example of a FRAME pallet
 //!   demonstrating a catalog of the the FRAME macros and their various syntax options.
-//! 
-//! - [**`pallet-example-split`**](./split): A simple example of a FRAME pallet
-//!   demonstrating the ability to split sections across multiple files.
+//!
+//! - [**`pallet-example-split`**](./split): A simple example of a FRAME pallet demonstrating the
+//!   ability to split sections across multiple files.
