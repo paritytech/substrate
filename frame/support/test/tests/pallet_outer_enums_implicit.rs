@@ -111,26 +111,26 @@ fn module_error_outer_enum_expand_implicit() {
 			frame_system::Error::__Ignore(_, _) => (),
 		},
 
-		// Error declared explicitely.
+		// Error declared explicitly.
 		RuntimeError::Example(example) => match example {
 			pallet::Error::InsufficientProposersBalance => (),
 			pallet::Error::NonExistentStorageValue => (),
 			pallet::Error::__Ignore(_, _) => (),
 		},
-		// Error declared explicitely.
+		// Error declared explicitly.
 		RuntimeError::Instance1Example(example) => match example {
 			pallet::Error::InsufficientProposersBalance => (),
 			pallet::Error::NonExistentStorageValue => (),
 			pallet::Error::__Ignore(_, _) => (),
 		},
 
-		// Error must propagate even if not defined explicitely as pallet part.
+		// Error must propagate even if not defined explicitly as pallet part.
 		RuntimeError::Example2(example) => match example {
 			pallet2::Error::OtherInsufficientProposersBalance => (),
 			pallet2::Error::OtherNonExistentStorageValue => (),
 			pallet2::Error::__Ignore(_, _) => (),
 		},
-		// Error must propagate even if not defined explicitely as pallet part.
+		// Error must propagate even if not defined explicitly as pallet part.
 		RuntimeError::Instance1Example2(example) => match example {
 			pallet2::Error::OtherInsufficientProposersBalance => (),
 			pallet2::Error::OtherNonExistentStorageValue => (),

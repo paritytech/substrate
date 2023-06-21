@@ -80,7 +80,7 @@ frame_support::construct_runtime!(
 		// Exclude part `Storage` in order not to check its metadata in tests.
 		System: frame_system::{Pallet, Config, Call, Event<T> },
 
-		// This pallet exposes the Error type explicitely.
+		// This pallet exposes the Error type explicitly.
 		Example: common::outer_enums::pallet::{Pallet, Config<T>, Event<T>, Error<T>},
 		Instance1Example: common::outer_enums::pallet::<Instance1>::{ Pallet, Config<T>, Event<T> },
 
@@ -96,7 +96,7 @@ frame_support::construct_runtime!(
 
 #[test]
 fn module_error_outer_enum_expand_explicit() {
-	// The Runtime has *all* parts explicitely defined.
+	// The Runtime has *all* parts explicitly defined.
 
 	// Check that all error types are propagated
 	match RuntimeError::Example(pallet::Error::InsufficientProposersBalance) {
@@ -111,26 +111,26 @@ fn module_error_outer_enum_expand_explicit() {
 			frame_system::Error::__Ignore(_, _) => (),
 		},
 
-		// Error declared explicitely.
+		// Error declared explicitly.
 		RuntimeError::Example(example) => match example {
 			pallet::Error::InsufficientProposersBalance => (),
 			pallet::Error::NonExistentStorageValue => (),
 			pallet::Error::__Ignore(_, _) => (),
 		},
-		// Error declared explicitely.
+		// Error declared explicitly.
 		RuntimeError::Instance1Example(example) => match example {
 			pallet::Error::InsufficientProposersBalance => (),
 			pallet::Error::NonExistentStorageValue => (),
 			pallet::Error::__Ignore(_, _) => (),
 		},
 
-		// Error must propagate even if not defined explicitely as pallet part.
+		// Error must propagate even if not defined explicitly as pallet part.
 		RuntimeError::Example2(example) => match example {
 			pallet2::Error::OtherInsufficientProposersBalance => (),
 			pallet2::Error::OtherNonExistentStorageValue => (),
 			pallet2::Error::__Ignore(_, _) => (),
 		},
-		// Error must propagate even if not defined explicitely as pallet part.
+		// Error must propagate even if not defined explicitly as pallet part.
 		RuntimeError::Instance1Example2(example) => match example {
 			pallet2::Error::OtherInsufficientProposersBalance => (),
 			pallet2::Error::OtherNonExistentStorageValue => (),

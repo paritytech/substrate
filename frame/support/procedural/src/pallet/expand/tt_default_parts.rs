@@ -112,6 +112,13 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		pub use #default_parts_unique_id as tt_default_parts;
 
 
+		// This macro is similar to the `tt_default_parts!`. It expands the pallets thare are declared
+		// explicitly (`System: frame_system::{Pallet, Call}`) with extra parts.
+		//
+		// For example, after expansion an explicit pallet would look like:
+		// `System: expanded::{Error} ::{Pallet, Call}`.
+		//
+		// The `expanded` keyword is a marker of the final state of the `construct_runtime!`.
 		#[macro_export]
 		#[doc(hidden)]
 		macro_rules! #extra_parts_unique_id {

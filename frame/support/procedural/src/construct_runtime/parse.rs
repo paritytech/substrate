@@ -253,7 +253,7 @@ impl Parse for PalletDeclaration {
 			!input.is_empty()
 		{
 			return Err(input.error(
-				"Unexpected tokens, expected one of `::$ident` `::{`, `expanded`, `exclude_parts`, `use_parts`, `=`, `,`",
+				"Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
 			));
 		} else {
 			None
@@ -630,14 +630,14 @@ enum PalletsConversion {
 	///
 	/// `System: frame_system`.
 	Implicit(Vec<PalletDeclaration>),
-	/// Pallets explicitely declare parts.
+	/// Pallets explicitly declare parts.
 	///
 	/// `System: frame_system::{Pallet, Call}`
 	///
 	/// However, for backwards compatibility with Polkadot/Kusama
 	/// we must propagate some other parts to the pallet by default.
 	Explicit(Vec<Pallet>),
-	/// Pallets explicitely declare parts that are fully expanded.
+	/// Pallets explicitly declare parts that are fully expanded.
 	///
 	/// This is the end state that contains extra parts included by
 	/// default by Subtrate.

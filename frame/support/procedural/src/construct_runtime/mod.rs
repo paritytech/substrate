@@ -22,7 +22,7 @@
 //!
 //! Pallets can define their parts:
 //!  - Implicitely: `System: frame_system`
-//!  - Explicitely: `System: frame_system::{Pallet, Call}`
+//!  - Explicitly: `System: frame_system::{Pallet, Call}`
 //!
 //! The `construct_runtime` transitions from the implicit definition to the explict one.
 //! From the explicit state, Substrate expands the pallets with additional information
