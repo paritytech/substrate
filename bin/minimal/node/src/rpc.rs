@@ -39,8 +39,8 @@ where
 	>,
 	C: HeaderBackend<OpaqueBlock> + HeaderMetadata<OpaqueBlock, Error = BlockChainError> + 'static,
 	C: Send + Sync + 'static,
-	C::Api: BlockBuilder<OpaqueBlock>,
 	P: TransactionPool + 'static,
+	C::Api: BlockBuilder<OpaqueBlock>,
 	C::Api: substrate_frame_rpc_system::AccountNonceApi<OpaqueBlock, AccountId, Index>,
 {
 	use substrate_frame_rpc_system::{System, SystemApiServer};
@@ -49,8 +49,7 @@ where
 	let FullDeps { client, pool, deny_unsafe } = deps;
 
 	module.merge(System::new(client.clone(), pool.clone(), deny_unsafe).into_rpc())?;
-	// use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApiServer};
-	// module.merge(TransactionPayment::new(client).into_rpc())?;
+	// NOTE: we have intentionally ignored adding tx-pool's custom RPC here.
 
 	Ok(module)
 }

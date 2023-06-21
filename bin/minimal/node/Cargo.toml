@@ -20,38 +20,28 @@ name = "minimal-node"
 clap = { version = "4.0.9", features = ["derive"] }
 futures = { version = "0.3.21", features = ["thread-pool"] }
 futures-timer = "3.0.1"
+jsonrpsee = { version = "0.16.2", features = ["server"] }
 
 sc-cli = { path = "../../../client/cli" }
 sc-executor = {  path = "../../../client/executor" }
 sc-network = {  path = "../../../client/network" }
 sc-service = {  path = "../../../client/service" }
 sc-telemetry = { path = "../../../client/telemetry" }
-sc-keystore = { path = "../../../client/keystore" }
 sc-transaction-pool = { path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { path = "../../../client/transaction-pool/api" }
 sc-consensus = { path = "../../../client/consensus/common" }
 sc-consensus-manual-seal = { path = "../../../client/consensus/manual-seal" }
-sc-client-api = { path = "../../../client/api" }
-sc-rpc = { path = "../../../client/rpc" }
 sc-rpc-api = { path = "../../../client/rpc-api" }
 sc-basic-authorship = { path = "../../../client/basic-authorship" }
 
-sp-core = { path = "../../../primitives/core" }
-sp-consensus = { path = "../../../primitives/consensus/common" }
-sp-io = { path = "../../../primitives/io" }
 sp-timestamp = { path = "../../../primitives/timestamp" }
-sp-inherents = { path = "../../../primitives/inherents" }
 sp-keyring = { path = "../../../primitives/keyring" }
 sp-api = { path = "../../../primitives/api" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 sp-block-builder = { path = "../../../primitives/block-builder" }
 
-pallet-transaction-payment = { path = "../../../frame/transaction-payment" }
-
-jsonrpsee = { version = "0.16.2", features = ["server"] }
 
 substrate-frame-rpc-system = { path = "../../../utils/frame/rpc/system" }
-pallet-transaction-payment-rpc = { path = "../../../frame/transaction-payment/rpc" } # TODO: bad name
 
 frame = { path = "../../../frame" }
 runtime = { package = "minimal-runtime", path = "../runtime" }
