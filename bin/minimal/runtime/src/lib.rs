@@ -56,7 +56,7 @@ construct_runtime!(
 		System: frame_system = 0,
 		Balances: pallet_balances = 1,
 		Sudo: pallet_sudo = 2,
-		// TODO: this is causing some issues and should be removed for now.
+		// TODO: this is causing some issues in the JS side.
 		// Timestamp: pallet_timestamp = 3,
 		TransactionPayment: pallet_transaction_payment = 4,
 	}
@@ -108,8 +108,8 @@ impl pallet_timestamp::Config for Runtime {
 impl pallet_transaction_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type OnChargeTransaction = pallet_transaction_payment::CurrencyAdapter<Balances, ()>;
-	type WeightToFee = FixedFee<1, interface::Balance>;
-	type LengthToFee = FixedFee<0, interface::Balance>;
+	type WeightToFee = FixedFee<0, interface::Balance>;
+	type LengthToFee = FixedFee<1, interface::Balance>;
 }
 
 /// Some re-exports that the node side code needs to know. Some are useful in this context as well.

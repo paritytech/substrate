@@ -7,7 +7,7 @@ pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
 
 fn props() -> Properties {
 	let mut properties = Properties::new();
-	properties.insert("tokenDecimals".to_string(), 1.into());
+	properties.insert("tokenDecimals".to_string(), 0.into());
 	properties.insert("tokenSymbol".to_string(), "TEST".into());
 	properties
 }
