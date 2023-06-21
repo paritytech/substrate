@@ -20,7 +20,7 @@
 //! **This pallet serves as an example and is not meant to be used in production.**
 //!
 //! A FRAME pallet demonstrating the ability to split sections across multiple files.
-//! 
+//!
 //! Note that this is purely experimental at this point.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -68,8 +68,8 @@ pub mod pallet {
 	// https://docs.substrate.io/main-docs/build/runtime-storage/
 	#[pallet::storage]
 	#[pallet::getter(fn something)] // optional
-	// Learn more about declaring storage items:
-	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
+								// Learn more about declaring storage items:
+								// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
 	pub type Something<T> = StorageValue<_, u32>;
 
 	// Errors inform users that something went wrong.
