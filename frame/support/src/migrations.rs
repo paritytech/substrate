@@ -133,7 +133,7 @@ impl<
 	fn post_upgrade(pre_upgrade_return_bytes: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
 		use codec::Decode;
 		let (inner_bytes, migration_ran) =
-			<(Vec<u8>, bool)>::decode(&mut &pre_upgrade_return_bytes[..]).map_err(|_| {
+			<(Vec<u8>, bool)>::decode_all(&mut &pre_upgrade_return_bytes[..]).map_err(|_| {
 				"VersionedRuntimeUpgrade post_upgrade failed to decode pre_upgrade bytes"
 			})?;
 		if migration_ran {
