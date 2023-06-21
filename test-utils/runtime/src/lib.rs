@@ -721,8 +721,12 @@ impl_runtime_apis! {
 			GenesisBuilderHelper::<RuntimeGenesisConfig>::get_default_as_json()
 		}
 
-		fn build_config(patch_json: Vec<u8>) {
-			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config(patch_json);
+		fn build_config(patch_json: Vec<u8>) -> sp_genesis_builder::Result {
+			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config(patch_json)
+		}
+
+		fn build_config_no_defaults(json: sp_std::vec::Vec<u8>) -> sp_genesis_builder::Result {
+			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config_no_defaults(json)
 		}
 
 	}
@@ -1203,8 +1207,9 @@ mod tests {
 		use serde_json::json;
 		use sp_application_crypto::Ss58Codec;
 		use sp_core::traits::{CallContext, CodeExecutor, Externalities, RuntimeCode};
+		use sp_genesis_builder::Result as BuildResult;
 		use sp_state_machine::BasicExternalities;
-		use std::{env, fs, io::Write};
+		use std::{fs, io::Write};
 		use storage_key_generator::hex;
 
 		pub struct LocalExecutorDispatch;
@@ -1306,12 +1311,14 @@ mod tests {
 		}
 
 		#[test]
-		fn build_genesis_config_from_json_works() {
+		fn build_config_no_defaults_from_json_works() {
 			sp_tracing::try_init_simple();
 			let j = include_str!("test_json/default_genesis_config.json");
 
 			let mut t = BasicExternalities::new_empty();
-			executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
+			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
+			let r = BuildResult::decode(&mut &r[..]);
+			assert!(r.is_ok());
 
 			let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
 
@@ -1323,38 +1330,74 @@ mod tests {
 			assert_eq!(keys, storage_key_generator::get_expected_storage_hashed_keys());
 		}
 
-		fn build_genesis_config_from_invalid_json() -> Result<Vec<u8>> {
+		#[test]
+		fn build_config_no_defaults_from_invalid_json_fails() {
+			sp_tracing::try_init_simple();
 			let j = include_str!("test_json/default_genesis_config_invalid.json");
 			let mut t = BasicExternalities::new_empty();
-			executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0
+			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
+			let r = BuildResult::decode(&mut &r[..]).unwrap();
+			log::info!("result: {:#?}", r);
+			assert_eq!(r, Err(
+				RuntimeString::Owned(
+					"Patching does not result in correct GenesisConfig: unknown field `renamed_authorities`, expected `authorities` or `epochConfig`".to_string(),
+				))
+			);
 		}
 
 		#[test]
-		fn build_genesis_config_from_invalid_json_panics() {
-			let call_result = build_genesis_config_from_invalid_json();
-			assert!(matches!(call_result, Err(sc_executor::error::Error::AbortedDueToTrap(_))));
+		fn build_config_no_defaults_from_incomplete_json_fails() {
+			sp_tracing::try_init_simple();
+			let j = include_str!("test_json/default_genesis_config_incomplete.json");
+
+			let mut t = BasicExternalities::new_empty();
+			let r = executor_call(&mut t, "GenesisBuilder_build_config_no_defaults", &j.encode())
+				.0
+				.unwrap();
+			let r = core::result::Result::<(), RuntimeString>::decode(&mut &r[..]).unwrap();
+			assert_eq!(
+				r,
+				Err(RuntimeString::Owned(
+					"Invalid JSON blob: missing field `authorities` at line 13 column 3"
+						.to_string()
+				))
+			);
 		}
 
 		#[test]
-		fn build_genesis_config_from_invalid_json_logs_parser_error() {
-			if env::var("RUN_TEST").is_ok() {
-				sp_tracing::try_init_simple();
-				let _ = build_genesis_config_from_invalid_json();
-			} else {
-				let executable = std::env::current_exe().unwrap();
-				let output = std::process::Command::new(executable)
-					.env("RUN_TEST", "1")
-					.env("RUST_LOG", "error")
-					.args(&[
-						"--nocapture",
-						"build_genesis_config_from_invalid_json_logs_parser_error",
-					])
-					.output()
-					.unwrap();
+		fn build_config_from_json_works() {
+			sp_tracing::try_init_simple();
+			let j = include_str!("test_json/default_genesis_config.json");
 
-				let output = String::from_utf8(output.stderr).unwrap();
-				assert!(output.contains("unknown field `renamed_authorities`"));
-			}
+			let mut t = BasicExternalities::new_empty();
+			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
+			let r = BuildResult::decode(&mut &r[..]);
+			assert!(r.is_ok());
+
+			let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
+
+			// following keys are not placed during `<RuntimeGenesisConfig as GenesisBuild>::build`
+			// process, add them `keys` to assert against known keys.
+			keys.push(hex(b":heappages"));
+			keys.sort();
+
+			assert_eq!(keys, storage_key_generator::get_expected_storage_hashed_keys());
+		}
+
+		#[test]
+		fn build_config_from_invalid_json_fails() {
+			sp_tracing::try_init_simple();
+			let j = include_str!("test_json/default_genesis_config_invalid.json");
+			let mut t = BasicExternalities::new_empty();
+			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
+			let r = BuildResult::decode(&mut &r[..]).unwrap();
+			assert_eq!(r,
+				Err(
+					RuntimeString::Owned(
+						"Patching does not result in correct GenesisConfig: unknown field `renamed_authorities`, \
+						expected `authorities` or `epochConfig`".to_string(),
+				))
+			);
 		}
 
 		#[test]
@@ -1375,7 +1418,7 @@ mod tests {
 		}
 
 		#[test]
-		fn patching_config_works() {
+		fn build_genesis_config_with_patch_json_works() {
 			sp_tracing::try_init_simple();
 
 			// Patch default json with some custom values:
@@ -1405,17 +1448,14 @@ mod tests {
 
 			// Ensure that custom values are in the genesis storage:
 			let storage = t.into_storages();
+			let get_from_storage = |key: &str| -> Vec<u8> {
+				storage.top.get(&array_bytes::hex2bytes(key).unwrap()).unwrap().clone()
+			};
+
 			//SubstrateTest|Authorities
-			let value: Vec<u8> = storage
-				.top
-				.get(
-					&array_bytes::hex2bytes(
-						"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
-					)
-					.unwrap(),
-				)
-				.unwrap()
-				.clone();
+			let value: Vec<u8> = get_from_storage(
+				"00771836bebdd29870ff246d305c578c5e0621c4869aa60c02be9adcc98a0d1d",
+			);
 			let authority_key_vec =
 				Vec::<sp_core::sr25519::Public>::decode(&mut &value[..]).unwrap();
 			assert_eq!(authority_key_vec.len(), 2);
@@ -1423,16 +1463,9 @@ mod tests {
 			assert_eq!(authority_key_vec[1], sp_keyring::AccountKeyring::Alice.public());
 
 			//Babe|Authorities
-			let value: Vec<u8> = storage
-				.top
-				.get(
-					&array_bytes::hex2bytes(
-						"1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef",
-					)
-					.unwrap(),
-				)
-				.unwrap()
-				.clone();
+			let value: Vec<u8> = get_from_storage(
+				"1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef",
+			);
 			assert_eq!(
 				BabeEpochConfiguration::decode(&mut &value[..]).unwrap(),
 				BabeEpochConfiguration {
@@ -1443,34 +1476,19 @@ mod tests {
 
 			// Ensure that some values are default ones:
 			// Balances|TotalIssuance
-			let value: Vec<u8> = storage
-				.top
-				.get(
-					&array_bytes::hex2bytes(
-						"c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80",
-					)
-					.unwrap(),
-				)
-				.unwrap()
-				.clone();
+			let value: Vec<u8> = get_from_storage(
+				"c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80",
+			);
 			assert_eq!(u64::decode(&mut &value[..]).unwrap(), 0);
 
 			// :code
-			let value: Vec<u8> =
-				storage.top.get(&array_bytes::hex2bytes("3a636f6465").unwrap()).unwrap().clone();
+			let value: Vec<u8> = get_from_storage("3a636f6465");
 			assert!(Vec::<u8>::decode(&mut &value[..]).is_err());
 
 			//System|ParentHash
-			let value: Vec<u8> = storage
-				.top
-				.get(
-					&array_bytes::hex2bytes(
-						"26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc",
-					)
-					.unwrap(),
-				)
-				.unwrap()
-				.clone();
+			let value: Vec<u8> = get_from_storage(
+				"26aa394eea5630e07c48ae0c9558cef78a42f33323cb5ced3b44dd825fda9fcc",
+			);
 			assert_eq!(H256::decode(&mut &value[..]).unwrap(), [69u8; 32].into());
 		}
 	}
