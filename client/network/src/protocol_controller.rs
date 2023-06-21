@@ -306,10 +306,11 @@ impl ProtocolController {
 	}
 
 	/// Send "accept" message to `Notifications`.
-	fn accept_connection(&mut self, incoming_index: IncomingIndex) {
+	fn accept_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
 		trace!(
 			target: LOG_TARGET,
-			"Accepting {:?} on {:?} ({}/{} num_in/max_in).",
+			"Accepting {} ({:?}) on {:?} ({}/{} num_in/max_in).",
+			peer_id,
 			incoming_index,
 			self.set_id,
 			self.num_in,
@@ -320,10 +321,11 @@ impl ProtocolController {
 	}
 
 	/// Send "reject" message to `Notifications`.
-	fn reject_connection(&mut self, incoming_index: IncomingIndex) {
+	fn reject_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
 		trace!(
 			target: LOG_TARGET,
-			"Rejecting {:?} on {:?} ({}/{} num_in/max_in).",
+			"Rejecting {} ({:?}) on {:?} ({}/{} num_in/max_in).",
+			peer_id,
 			incoming_index,
 			self.set_id,
 			self.num_in,
@@ -590,7 +592,7 @@ impl ProtocolController {
 		);
 
 		if self.reserved_only && !self.reserved_nodes.contains_key(&peer_id) {
-			self.reject_connection(incoming_index);
+			self.reject_connection(peer_id, incoming_index);
 			return
 		}
 
@@ -601,14 +603,14 @@ impl ProtocolController {
 					// We are accepting an incoming connection, so ensure the direction is inbound.
 					// (See the implementation note above.)
 					*direction = Direction::Inbound;
-					self.accept_connection(incoming_index);
+					self.accept_connection(peer_id, incoming_index);
 				},
 				PeerState::NotConnected =>
 					if self.peer_store.is_banned(&peer_id) {
-						self.reject_connection(incoming_index);
+						self.reject_connection(peer_id, incoming_index);
 					} else {
 						*state = PeerState::Connected(Direction::Inbound);
-						self.accept_connection(incoming_index);
+						self.accept_connection(peer_id, incoming_index);
 					},
 			}
 			return
@@ -631,18 +633,18 @@ impl ProtocolController {
 		}
 
 		if self.num_in >= self.max_in {
-			self.reject_connection(incoming_index);
+			self.reject_connection(peer_id, incoming_index);
 			return
 		}
 
 		if self.is_banned(&peer_id) {
-			self.reject_connection(incoming_index);
+			self.reject_connection(peer_id, incoming_index);
 			return
 		}
 
 		self.num_in += 1;
 		self.nodes.insert(peer_id, Direction::Inbound);
-		self.accept_connection(incoming_index);
+		self.accept_connection(peer_id, incoming_index);
 	}
 
 	/// Indicate that a connection with the peer was dropped.
