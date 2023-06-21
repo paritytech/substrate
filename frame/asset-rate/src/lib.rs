@@ -161,10 +161,10 @@ pub mod pallet {
 			T::CreateOrigin::ensure_origin(origin)?;
 
 			ensure!(
-				!ConversionRateToNative::<T>::contains_key(asset_id),
+				!ConversionRateToNative::<T>::contains_key(asset_id.clone()),
 				Error::<T>::AlreadyExists
 			);
-			ConversionRateToNative::<T>::set(asset_id, Some(rate));
+			ConversionRateToNative::<T>::set(asset_id.clone(), Some(rate));
 
 			Self::deposit_event(Event::AssetRateCreated { asset_id, rate });
 			Ok(())
@@ -184,7 +184,7 @@ pub mod pallet {
 			T::UpdateOrigin::ensure_origin(origin)?;
 
 			let mut old = FixedU128::zero();
-			ConversionRateToNative::<T>::mutate(asset_id, |maybe_rate| {
+			ConversionRateToNative::<T>::mutate(asset_id.clone(), |maybe_rate| {
 				if let Some(r) = maybe_rate {
 					old = *r;
 					*r = rate;
@@ -209,10 +209,10 @@ pub mod pallet {
 			T::RemoveOrigin::ensure_origin(origin)?;
 
 			ensure!(
-				ConversionRateToNative::<T>::contains_key(asset_id),
+				ConversionRateToNative::<T>::contains_key(asset_id.clone()),
 				Error::<T>::UnknownAssetId
 			);
-			ConversionRateToNative::<T>::remove(asset_id);
+			ConversionRateToNative::<T>::remove(asset_id.clone());
 
 			Self::deposit_event(Event::AssetRateRemoved { asset_id });
 			Ok(())

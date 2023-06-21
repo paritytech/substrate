@@ -19,19 +19,78 @@ use crate::*;
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::{Pays, PostDispatchInfo, WithPostDispatchInfo},
+	traits::WhitelistedStorageKeys,
 };
+use std::collections::BTreeSet;
+
 use mock::{RuntimeOrigin, *};
-use sp_core::H256;
+use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_runtime::{
 	traits::{BlakeTwo256, Header},
 	DispatchError, DispatchErrorWithPostInfo,
 };
 
 #[test]
+fn check_whitelist() {
+	let whitelist: BTreeSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
+		.iter()
+		.map(|s| HexDisplay::from(&s.key).to_string())
+		.collect();
+
+	// Block Number
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"));
+	// Execution Phase
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a"));
+	// Event Count
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"));
+	// System Events
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7"));
+	// System BlockWeight
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96"));
+}
+
+#[test]
 fn origin_works() {
 	let o = RuntimeOrigin::from(RawOrigin::<u64>::Signed(1u64));
 	let x: Result<RawOrigin<u64>, RuntimeOrigin> = o.into();
 	assert_eq!(x.unwrap(), RawOrigin::<u64>::Signed(1u64));
+}
+
+#[test]
+fn unique_datum_works() {
+	new_test_ext().execute_with(|| {
+		System::initialize(&1, &[0u8; 32].into(), &Default::default());
+		assert!(sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+
+		let h1 = unique(b"");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
+		let h2 = unique(b"");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
+		assert_ne!(h1, h2);
+
+		let h3 = unique(b"Hello");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
+		assert_ne!(h2, h3);
+
+		let h4 = unique(b"Hello");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
+		assert_ne!(h3, h4);
+
+		System::finalize();
+		assert!(!sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+	});
 }
 
 #[test]
@@ -550,7 +609,12 @@ fn set_code_checks_works() {
 		("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
-		("test", 2, 1, Ok(PostDispatchInfo::default())),
+		(
+			"test",
+			2,
+			1,
+			Ok(Some(<mock::Test as pallet::Config>::BlockWeights::get().max_block).into()),
+		),
 		("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 	];
@@ -682,19 +746,20 @@ fn ensure_signed_stuff_works() {
 	}
 
 	let signed_origin = RuntimeOrigin::signed(0u64);
-	assert_ok!(EnsureSigned::try_origin(signed_origin.clone()));
-	assert_ok!(EnsureSignedBy::<Members, _>::try_origin(signed_origin));
+	assert_ok!(<EnsureSigned<_> as EnsureOrigin<_>>::try_origin(signed_origin.clone()));
+	assert_ok!(<EnsureSignedBy<Members, _> as EnsureOrigin<_>>::try_origin(signed_origin));
 
 	#[cfg(feature = "runtime-benchmarks")]
 	{
-		let successful_origin: RuntimeOrigin = EnsureSigned::try_successful_origin()
-			.expect("EnsureSigned has no successful origin required for the test");
-		assert_ok!(EnsureSigned::try_origin(successful_origin));
+		let successful_origin: RuntimeOrigin =
+			<EnsureSigned<_> as EnsureOrigin<_>>::try_successful_origin()
+				.expect("EnsureSigned has no successful origin required for the test");
+		assert_ok!(<EnsureSigned<_> as EnsureOrigin<_>>::try_origin(successful_origin));
 
 		let successful_origin: RuntimeOrigin =
-			EnsureSignedBy::<Members, _>::try_successful_origin()
+			<EnsureSignedBy<Members, _> as EnsureOrigin<_>>::try_successful_origin()
 				.expect("EnsureSignedBy has no successful origin required for the test");
-		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
+		assert_ok!(<EnsureSignedBy<Members, _> as EnsureOrigin<_>>::try_origin(successful_origin));
 	}
 }
 

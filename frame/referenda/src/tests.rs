@@ -190,6 +190,8 @@ fn queueing_works() {
 				set_balance_proposal_bounded(i),
 				DispatchTime::After(0),
 			));
+		}
+		for i in [1, 2, 4] {
 			assert_ok!(Referenda::place_decision_deposit(RuntimeOrigin::signed(i), i as u32));
 			// TODO: decision deposit after some initial votes with a non-highest voted coming
 			// first.

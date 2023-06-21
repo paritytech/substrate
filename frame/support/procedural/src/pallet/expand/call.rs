@@ -15,8 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{pallet::Def, COUNTER};
-use quote::ToTokens;
+use crate::{
+	pallet::{
+		parse::call::{CallVariantDef, CallWeightDef},
+		Def,
+	},
+	COUNTER,
+};
+use proc_macro2::TokenStream as TokenStream2;
+use quote::{quote, ToTokens};
 use syn::spanned::Spanned;
 
 ///
@@ -74,15 +81,12 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		call_index_warnings.push(warning);
 	}
 
-	let fn_weight = methods.iter().map(|method| &method.weight);
+	let mut fn_weight = Vec::<TokenStream2>::new();
 	let mut weight_warnings = Vec::new();
-	for weight in fn_weight.clone() {
-		if def.dev_mode {
-			continue
-		}
-
-		match weight {
-			syn::Expr::Lit(lit) => {
+	for method in &methods {
+		match &method.weight {
+			CallWeightDef::DevModeDefault => fn_weight.push(syn::parse_quote!(0)),
+			CallWeightDef::Immediate(e @ syn::Expr::Lit(lit)) if !def.dev_mode => {
 				let warning = proc_macro_warning::Warning::new_deprecated("ConstantWeight")
 					.index(weight_warnings.len())
 					.old("use hard-coded constant as call weight")
@@ -91,12 +95,43 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 					.span(lit.span())
 					.build();
 				weight_warnings.push(warning);
+				fn_weight.push(e.into_token_stream());
 			},
-			_ => {},
+			CallWeightDef::Immediate(e) => fn_weight.push(e.into_token_stream()),
+			CallWeightDef::Inherited => {
+				let pallet_weight = def
+					.call
+					.as_ref()
+					.expect("we have methods; we have calls; qed")
+					.inherited_call_weight
+					.as_ref()
+					.expect("the parser prevents this");
+
+				// Expand `<<T as Config>::WeightInfo>::call_name()`.
+				let t = &pallet_weight.typename;
+				let n = &method.name;
+				fn_weight.push(quote!({ < #t > :: #n ()	}));
+			},
 		}
 	}
+	debug_assert_eq!(fn_weight.len(), methods.len());
 
-	let fn_doc = methods.iter().map(|method| &method.docs).collect::<Vec<_>>();
+	let map_fn_docs = if !def.dev_mode {
+		// Emit the [`Pallet::method`] documentation only for non-dev modes.
+		|method: &CallVariantDef| {
+			let reference = format!("See [`Pallet::{}`].", method.name);
+			quote!(#reference)
+		}
+	} else {
+		// For the dev-mode do not provide a documenation link as it will break the
+		// `cargo doc` if the pallet is private inside a test.
+		|method: &CallVariantDef| {
+			let reference = format!("See `Pallet::{}`.", method.name);
+			quote!(#reference)
+		}
+	};
+
+	let fn_doc = methods.iter().map(map_fn_docs).collect::<Vec<_>>();
 
 	let args_name = methods
 		.iter()
@@ -158,9 +193,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			.collect::<Vec<_>>()
 	});
 
-	let default_docs = [syn::parse_quote!(
-		r"Contains one variant per dispatchable that can be called by an extrinsic."
-	)];
+	let default_docs =
+		[syn::parse_quote!(r"Contains a variant per dispatchable extrinsic that this pallet has.")];
 	let docs = if docs.is_empty() { &default_docs[..] } else { &docs[..] };
 
 	let maybe_compile_error = if def.call.is_none() {
@@ -257,7 +291,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				#frame_support::Never,
 			),
 			#(
-				#( #[doc = #fn_doc] )*
+				#[doc = #fn_doc]
 				#[codec(index = #call_index)]
 				#fn_name {
 					#(

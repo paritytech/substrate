@@ -193,7 +193,9 @@ use sp_runtime::{
 	ArithmeticError, DispatchError, FixedPointOperand, Perbill, RuntimeDebug, TokenError,
 };
 use sp_std::{cmp, fmt::Debug, mem, prelude::*, result};
-pub use types::{AccountData, BalanceLock, DustCleaner, IdAmount, Reasons, ReserveData};
+pub use types::{
+	AccountData, BalanceLock, DustCleaner, ExtraFlags, IdAmount, Reasons, ReserveData,
+};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -257,8 +259,8 @@ pub mod pallet {
 		/// Use of reserves is deprecated in favour of holds. See `https://github.com/paritytech/substrate/pull/12951/`
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
-		/// The ID type for holds.
-		type HoldIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
+		/// The overarching hold reason.
+		type RuntimeHoldReason: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
 		/// The ID type for freezes.
 		type FreezeIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
@@ -437,7 +439,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<IdAmount<T::HoldIdentifier, T::Balance>, T::MaxHolds>,
+		BoundedVec<IdAmount<T::RuntimeHoldReason, T::Balance>, T::MaxHolds>,
 		ValueQuery,
 	>;
 
@@ -456,7 +458,6 @@ pub mod pallet {
 		pub balances: Vec<(T::AccountId, T::Balance)>,
 	}
 
-	#[cfg(feature = "std")]
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
 		fn default() -> Self {
 			Self { balances: Default::default() }
@@ -483,7 +484,7 @@ pub mod pallet {
 				.iter()
 				.map(|(x, _)| x)
 				.cloned()
-				.collect::<std::collections::BTreeSet<_>>();
+				.collect::<sp_std::collections::btree_set::BTreeSet<_>>();
 
 			assert!(
 				endowed_accounts.len() == self.balances.len(),
@@ -526,7 +527,7 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
+	#[pallet::call(weight(<T as Config<I>>::WeightInfo))]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Transfer some liquid free balance to another account.
 		///
@@ -536,7 +537,6 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be `Signed` by the transactor.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::transfer_allow_death())]
 		pub fn transfer_allow_death(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -598,7 +598,6 @@ pub mod pallet {
 		/// Exactly as `transfer_allow_death`, except the origin must be root and the source account
 		/// may be specified.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
 			source: AccountIdLookupOf<T>,
@@ -619,7 +618,6 @@ pub mod pallet {
 		///
 		/// [`transfer_allow_death`]: struct.Pallet.html#method.transfer
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -647,7 +645,6 @@ pub mod pallet {
 		///   transfer everything except at least the existential deposit, which will guarantee to
 		///   keep the sender account alive (true).
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::transfer_all())]
 		pub fn transfer_all(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -674,7 +671,6 @@ pub mod pallet {
 		///
 		/// Can only be called by ROOT.
 		#[pallet::call_index(5)]
-		#[pallet::weight(T::WeightInfo::force_unreserve())]
 		pub fn force_unreserve(
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
@@ -788,7 +784,7 @@ pub mod pallet {
 				return false
 			}
 			a.flags.set_new_logic();
-			if !a.reserved.is_zero() || !a.frozen.is_zero() {
+			if !a.reserved.is_zero() && a.frozen.is_zero() {
 				if system::Pallet::<T>::providers(who) == 0 {
 					// Gah!! We have no provider refs :(
 					// This shouldn't practically happen, but we need a failsafe anyway: let's give
