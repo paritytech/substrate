@@ -539,9 +539,7 @@ impl_runtime_apis! {
 			use frame_system_benchmarking::Pallet as SystemBench;
 			use baseline::Pallet as BaselineBench;
 
-			impl frame_system_benchmarking::Config for Runtime {
-				type BenchmarkHelper = ();
-			}
+			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 
 			use frame_support::traits::WhitelistedStorageKeys;
