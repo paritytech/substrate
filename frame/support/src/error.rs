@@ -21,7 +21,6 @@
 pub use sp_runtime::traits::{BadOrigin, LookupError};
 
 /// Declare an error type for a runtime module.
-///
 #[macro_export]
 #[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
 	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]

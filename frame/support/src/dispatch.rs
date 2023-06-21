@@ -645,7 +645,6 @@ impl<T> PaysFee<T> for (u64, Pays) {
 // END TODO
 
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
-///
 #[macro_export]
 #[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
 	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
