@@ -586,9 +586,15 @@ fn process_unnamed_generics(
 		StorageKind::Value => {
 			(None, Metadata::Value { value: retrieve_arg(1)? }, retrieve_arg(2).ok(), false)
 		},
-		StorageKind::Map | StorageKind::CountedMap => (
+		StorageKind::Map => (
 			None,
 			Metadata::Map { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
+			retrieve_arg(4).ok(),
+			use_default_hasher(1)?,
+		),
+		StorageKind::CountedMap => (
+			None,
+			Metadata::CountedMap { key: retrieve_arg(2)?, value: retrieve_arg(3)? },
 			retrieve_arg(4).ok(),
 			use_default_hasher(1)?,
 		),
@@ -602,12 +608,22 @@ fn process_unnamed_generics(
 			retrieve_arg(6).ok(),
 			use_default_hasher(1)? && use_default_hasher(3)?,
 		),
-		StorageKind::NMap | StorageKind::CountedNMap => {
+		StorageKind::NMap => {
 			let keygen = retrieve_arg(1)?;
 			let keys = collect_keys(&keygen)?;
 			(
 				None,
 				Metadata::NMap { keys, keygen, value: retrieve_arg(2)? },
+				retrieve_arg(3).ok(),
+				false,
+			)
+		},
+		StorageKind::CountedNMap => {
+			let keygen = retrieve_arg(1)?;
+			let keys = collect_keys(&keygen)?;
+			(
+				None,
+				Metadata::CountedNMap { keys, keygen, value: retrieve_arg(2)? },
 				retrieve_arg(3).ok(),
 				false,
 			)
@@ -632,7 +648,7 @@ fn process_generics(
 		found => {
 			let msg = format!(
 				"Invalid pallet::storage, expected ident: `StorageValue` or \
-				`StorageMap` or `CountedStorageMap` or `StorageDoubleMap` or `StorageNMap` \
+				`StorageMap` or `CountedStorageMap` or `StorageDoubleMap` or `StorageNMap` or `CountedStorageNMap` \
 				in order to expand metadata, found `{}`.",
 				found,
 			);
