@@ -229,7 +229,7 @@ pub async fn block_hash(block_number: u64, url: &str) -> Result<Hash, String> {
 
 	let result = ChainApi::<(), Hash, Header, ()>::block_hash(
 		&rpc,
-		Some(ListOrValue::Value(NumberOrHex::Number(block_number.saturating_sub(1)))),
+		Some(ListOrValue::Value(NumberOrHex::Number(block_number))),
 	)
 	.await
 	.map_err(|_| "Couldn't get block hash".to_string())?;

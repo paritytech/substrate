@@ -18,64 +18,64 @@
 
 #![cfg(unix)]
 #![cfg(feature = "try-runtime")]
-	use assert_cmd::cargo::cargo_bin;
-	use node_primitives::Hash;
-	use regex::Regex;
-	use std::{
-		path::{Path, PathBuf},
-		process,
-		time::Duration,
-	};
-	use substrate_cli_test_utils as common;
-	use tokio::process::{Child, Command};
 
-	#[tokio::test]
-	async fn create_snapshot_works() {
-		// Build substrate so binaries used in the test use the latest code.
-		common::build_substrate(&["--features=try-runtime"]);
+use assert_cmd::cargo::cargo_bin;
+use node_primitives::Hash;
+use regex::Regex;
+use std::{
+	path::{Path, PathBuf},
+	process,
+	time::Duration,
+};
+use substrate_cli_test_utils as common;
+use tokio::process::{Child, Command};
 
-		let temp_dir = tempfile::Builder::new()
-			.prefix("try-runtime-cli-test-dir")
-			.tempdir()
-			.expect("Failed to create a tempdir");
-		let snap_file_path = temp_dir.path().join("snapshot.snap");
+#[tokio::test]
+async fn create_snapshot_works() {
+	// Build substrate so binaries used in the test use the latest code.
+	common::build_substrate(&["--features=try-runtime"]);
 
-		common::run_with_timeout(Duration::from_secs(60), async move {
-			fn create_snapshot(ws_url: &str, snap_file: &PathBuf, at: Hash) -> Child {
-				Command::new(cargo_bin("substrate"))
-					.stdout(process::Stdio::piped())
-					.stderr(process::Stdio::piped())
-					.args(&["try-runtime", "--runtime=existing"])
-					.args(&["create-snapshot", format!("--uri={}", ws_url).as_str()])
-					.arg(snap_file)
-					.args(&["--at", format!("{:?}", at).as_str()])
-					.kill_on_drop(true)
-					.spawn()
-					.unwrap()
-			}
+	let temp_dir = tempfile::Builder::new()
+		.prefix("try-runtime-cli-test-dir")
+		.tempdir()
+		.expect("Failed to create a tempdir");
+	let snap_file_path = temp_dir.path().join("snapshot.snap");
 
-			// Start a node and wait for it to begin finalizing blocks
-			let mut node = common::KillChildOnDrop(common::start_node());
-			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
-			common::wait_n_finalized_blocks(3, &ws_url).await;
+	common::run_with_timeout(Duration::from_secs(60), async move {
+		fn create_snapshot(ws_url: &str, snap_file: &PathBuf, at: Hash) -> Child {
+			Command::new(cargo_bin("substrate"))
+				.stdout(process::Stdio::piped())
+				.stderr(process::Stdio::piped())
+				.args(&["try-runtime", "--runtime=existing"])
+				.args(&["create-snapshot", format!("--uri={}", ws_url).as_str()])
+				.arg(snap_file)
+				.args(&["--at", format!("{:?}", at).as_str()])
+				.kill_on_drop(true)
+				.spawn()
+				.unwrap()
+		}
 
-			let block_number = 2;
-			let block_hash = common::block_hash(block_number, &ws_url).await.unwrap();
+		// Start a node and wait for it to begin finalizing blocks
+		let mut node = common::KillChildOnDrop(common::start_node());
+		let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
+		common::wait_n_finalized_blocks(3, &ws_url).await;
 
-			// Try to create a snapshot.
-			let mut snapshot_creation = create_snapshot(&ws_url, &snap_file_path, block_hash);
+		let block_number = 2;
+		let block_hash = common::block_hash(block_number, &ws_url).await.unwrap();
 
-			let re = Regex::new(r#".*writing snapshot of (\d+) bytes to .*"#).unwrap();
-			let matched =
-				common::wait_for_stream_pattern_match(snapshot_creation.stderr.take().unwrap(), re)
-					.await;
+		// Try to create a snapshot.
+		let mut snapshot_creation = create_snapshot(&ws_url, &snap_file_path, block_hash);
 
-			// Assert that the snapshot creation succeded.
-			assert!(matched.is_ok(), "Failed to create snapshot");
+		let re = Regex::new(r#".*writing snapshot of (\d+) bytes to .*"#).unwrap();
+		let matched =
+			common::wait_for_stream_pattern_match(snapshot_creation.stderr.take().unwrap(), re)
+				.await;
 
-			let snapshot_is_on_disk = Path::new(&snap_file_path).exists();
-			assert!(snapshot_is_on_disk, "Snapshot was not written to disk");
-		})
-		.await;
-	}
+		// Assert that the snapshot creation succeded.
+		assert!(matched.is_ok(), "Failed to create snapshot");
+
+		let snapshot_is_on_disk = Path::new(&snap_file_path).exists();
+		assert!(snapshot_is_on_disk, "Snapshot was not written to disk");
+	})
+	.await;
 }
