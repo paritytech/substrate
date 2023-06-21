@@ -23,9 +23,8 @@ pub mod sr25519;
 /// Test account crypto for ed25519.
 pub mod ed25519;
 
-/// Convenience export: Sr25519's Keyring is exposed as `AccountKeyring`,
-/// since it tends to be used for accounts (although it may also be used
-/// by authorities).
+/// Convenience export: Sr25519's Keyring is exposed as `AccountKeyring`, since it tends to be
+/// used for accounts (although it may also be used by authorities).
 pub use sr25519::Keyring as AccountKeyring;
 
 pub use ed25519::Keyring as Ed25519Keyring;

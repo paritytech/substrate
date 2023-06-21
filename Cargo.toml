@@ -2,6 +2,8 @@
 resolver = "2"
 
 members = [
+	"bin/minimal/node",
+	"bin/minimal/runtime",
 	"bin/node-template/node",
 	"bin/node-template/pallets/template",
 	"bin/node-template/runtime",
