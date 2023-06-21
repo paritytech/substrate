@@ -22,6 +22,8 @@
 use assert_cmd::cargo::cargo_bin;
 use node_primitives::Hash;
 use regex::Regex;
+use remote_externalities::{Builder, Mode, OfflineConfig, SnapshotConfig};
+use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 use std::{
 	path::{Path, PathBuf},
 	process,
@@ -29,6 +31,8 @@ use std::{
 };
 use substrate_cli_test_utils as common;
 use tokio::process::{Child, Command};
+
+type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
 #[tokio::test]
 async fn create_snapshot_works() {
@@ -76,6 +80,16 @@ async fn create_snapshot_works() {
 
 		let snapshot_is_on_disk = Path::new(&snap_file_path).exists();
 		assert!(snapshot_is_on_disk, "Snapshot was not written to disk");
+
+		// Try and load the snapshot we have created by running `create-snapshot`.
+		let snapshot_loading_result = Builder::<Block>::new()
+			.mode(Mode::Offline(OfflineConfig {
+				state_snapshot: SnapshotConfig { path: snap_file_path },
+			}))
+			.build()
+			.await;
+
+		assert!(snapshot_loading_result.is_ok(), "Snapshot couldn't be loaded");
 	})
 	.await;
 }
