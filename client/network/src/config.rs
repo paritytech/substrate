@@ -22,6 +22,7 @@
 //! See the documentation of [`Params`].
 
 pub use crate::{
+	discovery::DEFAULT_KADEMLIA_REPLICATION_FACTOR,
 	protocol::NotificationsSink,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
@@ -50,6 +51,7 @@ use std::{
 	io::{self, Write},
 	iter,
 	net::Ipv4Addr,
+	num::NonZeroUsize,
 	path::{Path, PathBuf},
 	pin::Pin,
 	str::{self, FromStr},
@@ -605,6 +607,12 @@ pub struct NetworkConfiguration {
 	/// the presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
 
+	/// Kademlia replication factor determines to how many closest peers a record is replicated to.
+	///
+	/// Discovery mechanism requires successful replication to all
+	/// `kademlia_replication_factor` peers to consider record successfully put.
+	pub kademlia_replication_factor: NonZeroUsize,
+
 	/// Enable serving block data over IPFS bitswap.
 	pub ipfs_server: bool,
 
@@ -656,6 +664,8 @@ impl NetworkConfiguration {
 			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
+			kademlia_replication_factor: NonZeroUsize::new(DEFAULT_KADEMLIA_REPLICATION_FACTOR)
+				.expect("value is a constant; constant is non-zero; qed."),
 			yamux_window_size: None,
 			ipfs_server: false,
 		}
