@@ -47,8 +47,6 @@ impl BenchmarkHelper for () {
 
 pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {
-	/// Benchmark Helper
-	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper: BenchmarkHelper;
 }
 
@@ -69,8 +67,10 @@ benchmarks! {
 	}: _(RawOrigin::Root, Default::default())
 
 	set_code {
-		let runtime_blob = include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec();
+		// prepare runtime
 		T::BenchmarkHelper::prepare_set_code_requirements()?;
+
+		let runtime_blob = include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec();
 	}: _(RawOrigin::Root, runtime_blob)
 	verify {
 		System::<T>::assert_last_event(frame_system::Event::<T>::CodeUpdated.into());
@@ -78,6 +78,9 @@ benchmarks! {
 
 	#[extra]
 	set_code_without_checks {
+		// prepare runtime
+		T::BenchmarkHelper::prepare_set_code_requirements()?;
+
 		// Assume Wasm ~4MB
 		let code = vec![1; 4_000_000 as usize];
 	}: _(RawOrigin::Root, code)
