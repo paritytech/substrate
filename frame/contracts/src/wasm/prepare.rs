@@ -453,7 +453,6 @@ pub mod benchmarking {
 		owner: AccountIdOf<T>,
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let contract_module = ContractModule::new(&code)?;
-		println!("benchmarking::prepare----------->");
 		let _ = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
