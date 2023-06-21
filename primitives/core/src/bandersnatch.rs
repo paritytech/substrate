@@ -935,11 +935,10 @@ mod tests {
 		assert!(pks.len() <= ring_ctx.max_keyset_size());
 
 		let pair = Pair::from_seed(DEV_SEED);
-		let public = pair.public();
 
 		// Just pick one index to patch with the actual public key
 		let prover_idx = 3;
-		pks[prover_idx] = public.clone();
+		pks[prover_idx] = pair.public();
 
 		let i1 = VrfInput::new(b"in1", &[(b"dom1", b"foo"), (b"dom2", b"bar")]);
 		let i2 = VrfInput::new(b"in2", &[(b"domx", b"hello")]);
@@ -962,11 +961,10 @@ mod tests {
 		assert!(pks.len() <= ring_ctx.max_keyset_size());
 
 		let pair = Pair::from_seed(DEV_SEED);
-		let public = pair.public();
 
 		// Just pick one...
 		let prover_idx = 3;
-		pks[prover_idx] = public.clone();
+		pks[prover_idx] = pair.public();
 
 		let i1 = VrfInput::new(b"in1", &[(b"dom1", b"foo"), (b"dom2", b"bar")]);
 		let i2 = VrfInput::new(b"in2", &[(b"domx", b"hello")]);
