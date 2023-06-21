@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use libp2p::core::upgrade::{InboundUpgrade, ProtocolName, UpgradeInfo};
+use libp2p::core::upgrade::{InboundUpgrade, UpgradeInfo};
 use std::{
 	iter::FromIterator,
 	pin::Pin,
@@ -76,9 +76,9 @@ where
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProtoNameWithUsize<T>(T, usize);
 
-impl<T: ProtocolName> ProtocolName for ProtoNameWithUsize<T> {
-	fn protocol_name(&self) -> &[u8] {
-		self.0.protocol_name()
+impl<T: AsRef<str>> AsRef<str> for ProtoNameWithUsize<T> {
+	fn as_ref(&self) -> &str {
+		self.0.as_ref()
 	}
 }
 
@@ -104,13 +104,13 @@ impl<T: Future<Output = Result<O, E>>, O, E> Future for FutWithUsize<T> {
 mod tests {
 	use super::*;
 	use crate::types::ProtocolName as ProtoName;
-	use libp2p::core::upgrade::{ProtocolName, UpgradeInfo};
+	use libp2p::core::upgrade::UpgradeInfo;
 
 	// TODO: move to mocks
 	mockall::mock! {
 		pub ProtocolUpgrade<T> {}
 
-		impl<T: Clone + ProtocolName> UpgradeInfo for ProtocolUpgrade<T> {
+		impl<T: Clone + AsRef<str>> UpgradeInfo for ProtocolUpgrade<T> {
 			type Info = T;
 			type InfoIter = vec::IntoIter<T>;
 			fn protocol_info(&self) -> vec::IntoIter<T>;
