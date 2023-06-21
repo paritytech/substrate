@@ -30,7 +30,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{v10, v11, v12, v9, Migrate},
+	migration::{v10, v11, v12, v9, MigrationStep},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -267,15 +267,15 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 	}
 
-	// This benchmarks the weight of executing Migration::migrate when there are no migration in progress.
+	// This benchmarks the weight of dispatching migrate to execute 1 `NoopMigraton`
 	#[pov_mode = Measured]
 	migrate {
 		StorageVersion::new(0).put::<Pallet<T>>();
 		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
-		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
-	}: {
-		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap()
-	} verify {
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
+	}: _(origin, Weight::MAX)
+	verify {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 	}
 

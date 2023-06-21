@@ -261,14 +261,14 @@ impl<T: Config> WasmBlob<T> {
 		let mut mem_type = None;
 		for import in imports {
 			match *import.ty() {
-				ExternType::Memory(ref mt) => {
+				ExternType::Memory(mt) => {
 					if import.module() != IMPORT_MODULE_MEMORY {
 						return Err("Invalid module for imported memory")
 					}
 					if import.name() != "memory" {
 						return Err("Memory import must have the field name 'memory'")
 					}
-					mem_type = Some(mt.clone());
+					mem_type = Some(mt);
 					break
 				},
 				_ => continue,

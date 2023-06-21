@@ -668,7 +668,6 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 				|reason| { reason }
 			}
 		};
-		let into_trap = quote! { |e| TrapReason::from(e) };
 		let allow_unused =  if expand_blocks {
 			quote! { }
 		} else {
@@ -676,23 +675,37 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 		};
 		let sync_gas_before = if expand_blocks {
 			quote! {
+				// Gas left in the gas meter right before switching to engine execution.
 				let __gas_before__ = {
-					let engine_consumed_total = __caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
+					let engine_consumed_total =
+						__caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
 					let gas_meter = __caller__.data_mut().ext().gas_meter_mut();
-					gas_meter.sync_fuel(engine_consumed_total).map_err(#into_trap).map_err(#into_host)?.ref_time()
+					gas_meter
+						.sync_fuel(engine_consumed_total)
+						.map_err(TrapReason::from)
+						.map_err(#into_host)?
+						.ref_time()
 				};
 			}
 		} else {
 			quote! { }
 		};
+		// Gas left in the gas meter right after returning from engine execution.
 		let sync_gas_after = if expand_blocks {
 			quote! {
 				let mut gas_after = __caller__.data_mut().ext().gas_meter().gas_left().ref_time();
 				let mut host_consumed = __gas_before__.saturating_sub(gas_after);
 				// Possible undercharge of at max 1 fuel here, if host consumed less than `instruction_weights.base`
 				// Not a problem though, as soon as host accounts its spent gas properly.
-				let fuel_consumed = host_consumed.checked_div(__caller__.data_mut().ext().schedule().instruction_weights.base as u64).ok_or(Error::<E::T>::InvalidSchedule).map_err(#into_trap).map_err(#into_host)?;
-				__caller__.consume_fuel(fuel_consumed).map_err(|_| TrapReason::from(Error::<E::T>::OutOfGas)).map_err(#into_host)?;
+				let fuel_consumed = host_consumed
+					.checked_div(__caller__.data_mut().ext().schedule().instruction_weights.base as u64)
+					.ok_or(Error::<E::T>::InvalidSchedule)
+					.map_err(TrapReason::from)
+					.map_err(#into_host)?;
+				 __caller__
+					 .consume_fuel(fuel_consumed)
+					 .map_err(|_| TrapReason::from(Error::<E::T>::OutOfGas))
+					 .map_err(#into_host)?;
 			}
 		} else {
 			quote! { }

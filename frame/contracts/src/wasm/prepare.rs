@@ -359,6 +359,7 @@ where
 		let contract_module = ContractModule::new::<T>(code, determinism)?;
 		// Below go further checks required by our pallet.
 		contract_module.scan_exports()?;
+		contract_module.scan_imports::<T>(&[])?;
 		contract_module.ensure_no_internal_memory()?;
 		// contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
 		// contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
@@ -452,7 +453,6 @@ pub mod benchmarking {
 		owner: AccountIdOf<T>,
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let contract_module = ContractModule::new(&code)?;
-		println!("benchmarking::prepare----------->");
 		let _ = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
 		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
