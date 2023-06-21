@@ -56,6 +56,7 @@ use wasmi::{
 	Config as WasmiConfig, Engine, ExternType, FuelConsumptionMode, Instance, Linker, Memory,
 	MemoryType, Module, StackLimits, Store,
 };
+
 const BYTES_PER_PAGE: usize = 64 * 1024;
 
 /// Validated Wasm module ready for execution.

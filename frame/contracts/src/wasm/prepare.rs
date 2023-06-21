@@ -29,9 +29,9 @@ use crate::{
 use codec::MaxEncodedLen;
 use sp_runtime::DispatchError;
 use sp_std::prelude::*;
-use wasm_instrument::parity_wasm::elements::{self, External, Internal, MemoryType, Type};
 use wasmi::{
-	core::ValueType, Config as WasmiConfig, Engine, FuelConsumptionMode, Module, StackLimits, Store,
+	core::ValueType, Config as WasmiConfig, Engine, ExternType, FuelConsumptionMode, MemoryType,
+	Module, StackLimits, Store,
 };
 
 /// Imported memory must be located inside this module. The reason for hardcoding is that current
@@ -263,41 +263,42 @@ impl ContractModule {
 	/// and enforces and returns the memory type declared by the contract if any.
 	///
 	/// `import_fn_banlist`: list of function names that are disallowed to be imported
-	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	pub fn scan_imports<T: Config>(
 		&self,
 		import_fn_banlist: &[&[u8]],
-	) -> Result<Option<&MemoryType>, &'static str> {
+	) -> Result<Option<MemoryType>, &'static str> {
 		let module = &self.0;
-		let import_entries = module.import_section().map(|is| is.entries()).unwrap_or(&[]);
+		let imports = module.imports();
 		let mut imported_mem_type = None;
 
-		for import in import_entries {
-			match *import.external() {
-				External::Table(_) => return Err("Cannot import tables"),
-				External::Global(_) => return Err("Cannot import globals"),
-				External::Function(_) => {
+		for import in imports {
+			match *import.ty() {
+				ExternType::Table(_) => return Err("Cannot import tables"),
+				ExternType::Global(_) => return Err("Cannot import globals"),
+				ExternType::Func(_) => {
+					let _ = import.ty().func().ok_or("expected a function")?;
 					if !<T as Config>::ChainExtension::enabled() &&
-						import.field().as_bytes() == b"seal_call_chain_extension"
+						import.module().as_bytes()[0..4] == b"seal"[0..4] &&
+						import.name().as_bytes() == b"seal_call_chain_extension" ||
+						import.name().as_bytes() == b"call_chain_extension"
 					{
 						return Err("module uses chain extensions but chain extensions are disabled")
 					}
-
-					if import_fn_banlist.iter().any(|f| import.field().as_bytes() == *f) {
+					if import_fn_banlist.iter().any(|f| import.name().as_bytes() == *f) {
 						return Err("module imports a banned function")
 					}
 				},
-				External::Memory(ref memory_type) => {
-					if import.module() != IMPORT_MODULE_MEMORY {
+				ExternType::Memory(mt) => {
+					if import.module().as_bytes() != IMPORT_MODULE_MEMORY.as_bytes() {
 						return Err("Invalid module for imported memory")
 					}
-					if import.field() != "memory" {
+					if import.name().as_bytes() != b"memory" {
 						return Err("Memory import must have the field name 'memory'")
 					}
 					if imported_mem_type.is_some() {
 						return Err("Multiple memory imports defined")
 					}
-					imported_mem_type = Some(memory_type);
+					imported_mem_type = Some(mt);
 					continue
 				},
 			}
@@ -360,7 +361,7 @@ where
 		// Below go further checks required by our pallet.
 		contract_module.scan_exports()?;
 		contract_module.scan_imports::<T>(&[])?;
-		contract_module.ensure_no_internal_memory()?;
+		//contract_module.ensure_no_internal_memory()?;
 		// contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
 		// contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
 		// contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
