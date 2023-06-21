@@ -319,7 +319,25 @@ pub mod pallet {
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
-	#[pallet::config]
+	pub mod config_preludes {
+		use super::*;
+
+		pub struct SolochainDefaultConfig;
+		#[frame_support::register_default_impl(SolochainDefaultConfig)]
+		impl DefaultConfig for SolochainDefaultConfig {
+			type FeeMultiplierUpdate = ();
+			type OperationalFeeMultiplier = ();
+		}
+
+		pub struct TestDefaultConfig;
+		#[frame_support::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type FeeMultiplierUpdate = ();
+			type OperationalFeeMultiplier = ();
+		}
+	}
+
+	#[pallet::config(with_default)]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -330,12 +348,24 @@ pub mod pallet {
 		/// adjusted, depending on the used resources by the transaction. If the
 		/// transaction weight is lower than expected, parts of the transaction fee
 		/// might be refunded. In the end the fees can be deposited.
+		#[pallet::no_default]
 		type OnChargeTransaction: OnChargeTransaction<Self>;
 
-		/// A fee mulitplier for `Operational` extrinsics to compute "virtual tip" to boost their
+		/// Convert a weight value into a deductible fee based on the currency type.
+		#[pallet::no_default]
+		type WeightToFee: WeightToFee<Balance = BalanceOf<Self>>;
+
+		/// Convert a length value into a deductible fee based on the currency type.
+		#[pallet::no_default]
+		type LengthToFee: WeightToFee<Balance = BalanceOf<Self>>;
+
+		/// Update the multiplier of the next block, based on the previous block's weight.
+		type FeeMultiplierUpdate: MultiplierUpdate;
+
+		/// A fee multiplier for `Operational` extrinsics to compute "virtual tip" to boost their
 		/// `priority`
 		///
-		/// This value is multipled by the `final_fee` to obtain a "virtual tip" that is later
+		/// This value is multiplied by the `final_fee` to obtain a "virtual tip" that is later
 		/// added to a tip component in regular `priority` calculations.
 		/// It means that a `Normal` transaction can front-run a similarly-sized `Operational`
 		/// extrinsic (with no tip), by including a tip value greater than the virtual tip.
@@ -355,15 +385,6 @@ pub mod pallet {
 		/// transactions.
 		#[pallet::constant]
 		type OperationalFeeMultiplier: Get<u8>;
-
-		/// Convert a weight value into a deductible fee based on the currency type.
-		type WeightToFee: WeightToFee<Balance = BalanceOf<Self>>;
-
-		/// Convert a length value into a deductible fee based on the currency type.
-		type LengthToFee: WeightToFee<Balance = BalanceOf<Self>>;
-
-		/// Update the multiplier of the next block, based on the previous block's weight.
-		type FeeMultiplierUpdate: MultiplierUpdate;
 	}
 
 	#[pallet::type_value]

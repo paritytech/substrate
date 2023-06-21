@@ -219,7 +219,6 @@ pub mod pallet {
 		use super::*;
 
 		pub struct TestDefaultConfig;
-
 		#[frame_support::register_default_impl(TestDefaultConfig)]
 		impl DefaultConfig for TestDefaultConfig {
 			type Balance = u64;
@@ -236,15 +235,14 @@ pub mod pallet {
 		}
 
 		pub struct SolochainDefaultConfig;
-
 		#[frame_support::register_default_impl(SolochainDefaultConfig)]
 		impl DefaultConfig for SolochainDefaultConfig {
 			type Balance = u128;
 			type ExistentialDeposit = ();
-			type MaxLocks = ConstU32<{ u32::MAX }>;
-			type MaxReserves = ConstU32<{ u32::MAX }>;
-			type MaxFreezes = ConstU32<{ u32::MAX }>;
-			type MaxHolds = ConstU32<{ u32::MAX }>;
+			type MaxLocks = ConstU32<{ 128 }>;
+			type MaxReserves = ConstU32<{ 128 }>;
+			type MaxFreezes = ConstU32<{ 128 }>;
+			type MaxHolds = ConstU32<{ 128 }>;
 
 			type ReserveIdentifier = ();
 			type FreezeIdentifier = ();

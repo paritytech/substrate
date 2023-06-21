@@ -10,6 +10,7 @@ use frame::{
 		prelude::*,
 		runtime_apis,
 		runtime_types_common::{self, ExtrinsicOf, HeaderOf},
+		weights::FixedFee,
 	},
 };
 
@@ -42,6 +43,7 @@ type SignedExtra = (
 	frame_system::CheckEra<Runtime>,
 	frame_system::CheckNonce<Runtime>,
 	frame_system::CheckWeight<Runtime>,
+	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 );
 
 construct_runtime!(
@@ -54,7 +56,9 @@ construct_runtime!(
 		System: frame_system = 0,
 		Balances: pallet_balances = 1,
 		Sudo: pallet_sudo = 2,
+		// TODO: this is causing some issues and should be removed for now.
 		// Timestamp: pallet_timestamp = 3,
+		TransactionPayment: pallet_transaction_payment = 4,
 	}
 );
 
@@ -87,21 +91,28 @@ impl pallet_balances::Config for Runtime {
 	type AccountStore = System;
 }
 
+#[derive_impl(pallet_sudo::config_preludes::SolochainDefaultConfig as pallet_sudo::DefaultConfig)]
 impl pallet_sudo::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
-	type WeightInfo = ();
 }
 
-// impl pallet_timestamp::Config for Runtime {
-// 	type Moment = u64;
-// 	type OnTimestampSet = ();
-// 	type MinimumPeriod = ();
-// 	type WeightInfo = ();
-// }
+#[derive_impl(pallet_timestamp::config_preludes::SolochainDefaultConfig as pallet_timestamp::DefaultConfig)]
+impl pallet_timestamp::Config for Runtime {
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = ();
+}
 
-/// Some re-exports that the node side code needs to know. Some are useful in this context as
-/// well.
+#[derive_impl(pallet_transaction_payment::config_preludes::SolochainDefaultConfig as pallet_transaction_payment::DefaultConfig)]
+impl pallet_transaction_payment::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type OnChargeTransaction = pallet_transaction_payment::CurrencyAdapter<Balances, ()>;
+	type WeightToFee = FixedFee<1, interface::Balance>;
+	type LengthToFee = FixedFee<0, interface::Balance>;
+}
+
+/// Some re-exports that the node side code needs to know. Some are useful in this context as well.
 ///
 /// Other types should preferably be private.
 pub mod interface {

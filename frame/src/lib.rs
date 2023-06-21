@@ -121,7 +121,14 @@ pub mod derive {
 pub mod runtime {
 	pub mod prelude {
 		pub use frame_executive::*;
-		pub use frame_support::{construct_runtime, derive_impl, parameter_types, OpaqueMetadata};
+		pub use frame_support::{
+			construct_runtime, derive_impl, parameter_types,
+			traits::{
+				ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
+				ConstU32, ConstU64, ConstU8,
+			},
+			OpaqueMetadata,
+		};
 		pub use sp_api::impl_runtime_apis;
 		pub use sp_inherents::{CheckInherentsResult, InherentData};
 		pub use sp_runtime::{generic as block_types_generic, ApplyExtrinsicResult};
