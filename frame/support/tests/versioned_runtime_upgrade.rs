@@ -17,6 +17,8 @@
 
 //! Tests for VersionedRuntimeUpgrade
 
+#![cfg(feature = "experimental")]
+
 use frame_support::{
 	construct_runtime, derive_impl,
 	migrations::VersionedRuntimeUpgrade,

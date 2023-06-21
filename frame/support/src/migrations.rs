@@ -16,9 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	traits::{
-		GetStorageVersion, NoStorageVersionSet, OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
-	},
+	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
 	weights::{RuntimeDbWeight, Weight},
 };
 use impl_trait_for_tuples::impl_for_tuples;
@@ -28,6 +26,9 @@ use sp_std::marker::PhantomData;
 
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
+
+#[cfg(feature = "experimental")]
+use crate::traits::OnRuntimeUpgrade;
 
 /// Make it easier to write versioned runtime upgrades.
 ///
@@ -70,6 +71,7 @@ use sp_std::vec::Vec;
 /// 	// ...other migrations
 /// );
 /// ```
+#[cfg(feature = "experimental")]
 pub struct VersionedRuntimeUpgrade<From, To, Inner, Pallet, Weight> {
 	_marker: PhantomData<(From, To, Inner, Pallet, Weight)>,
 }
@@ -80,6 +82,7 @@ pub struct VersionedRuntimeUpgrade<From, To, Inner, Pallet, Weight> {
 /// version of the pallets storage matches `From`, and after the upgrade set the on-chian storage to
 /// `To`. If the versions do not match, it writes a log notifying the developer that the migration
 /// is a noop.
+#[cfg(feature = "experimental")]
 impl<
 		From: Get<u16>,
 		To: Get<u16>,
