@@ -78,8 +78,8 @@ pub fn expand_outer_config(
 			#fields
 		}
 
-		// GenesisConfig is in the process of being deprecated [https://github.com/paritytech/substrate/issues/14065]
 		#[cfg(any(feature = "std", test))]
+		#[deprecated(note = "GenesisConfig is planned to be removed in December 2023. Use `RuntimeGenesisConfig` instead.")]
 		pub type GenesisConfig = RuntimeGenesisConfig;
 
 		#[cfg(any(feature = "std", test))]

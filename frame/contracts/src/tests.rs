@@ -28,8 +28,8 @@ use crate::{
 	wasm::{Determinism, PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
-	DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, Origin, Pallet,
-	Schedule,
+	DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, NoopMigration,
+	Origin, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -428,6 +428,7 @@ impl Config for Test {
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = UnstableInterface;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
+	type Migrations = (NoopMigration<1>, NoopMigration<2>);
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -556,6 +557,24 @@ fn calling_plain_account_fails() {
 			})
 		);
 	});
+}
+
+#[test]
+fn migration_on_idle_hooks_works() {
+	// Defines expectations of how many migration steps can be done given the weight limit.
+	let tests = [
+		(Weight::zero(), 0),
+		(<Test as Config>::WeightInfo::migrate() + 1.into(), 1),
+		(Weight::MAX, 2),
+	];
+
+	for (weight, expected_version) in tests {
+		ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
+			MigrationInProgress::<Test>::set(Some(Default::default()));
+			Contracts::on_idle(System::block_number(), weight);
+			assert_eq!(StorageVersion::get::<Pallet<Test>>(), expected_version);
+		});
+	}
 }
 
 #[test]

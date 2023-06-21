@@ -89,8 +89,11 @@ fn existential_weight<T: pallet_staking::Config>(
 /// Just searches the git working directory root for files matching certain patterns; it's
 /// pretty naive.
 fn path_to_header_file() -> Option<PathBuf> {
-	let repo = git2::Repository::open_from_env().ok()?;
-	let workdir = repo.workdir()?;
+	let mut workdir: &Path = &std::env::current_dir().ok()?;
+	while !workdir.join(".git").exists() {
+		workdir = workdir.parent()?;
+	}
+
 	for file_name in &["HEADER-APACHE2", "HEADER-GPL3", "HEADER", "file_header.txt"] {
 		let path = workdir.join(file_name);
 		if path.exists() {
