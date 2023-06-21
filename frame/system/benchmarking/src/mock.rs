@@ -66,9 +66,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-impl crate::Config for Test {
-	type BenchmarkHelper = ();
-}
+impl crate::Config for Test {}
 
 struct MockedReadRuntimeVersion(Vec<u8>);
 

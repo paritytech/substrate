@@ -32,22 +32,12 @@ use sp_std::{prelude::*, vec};
 
 mod mock;
 
-/// Benchmark Helper
-pub trait BenchmarkHelper {
-	/// Adds ability to the Runtime to prepare/initialize before running benchmark `set_code`.
-	fn prepare_set_code_requirements() -> Result<(), BenchmarkError>;
-}
-
-impl BenchmarkHelper for () {
-	fn prepare_set_code_requirements() -> Result<(), BenchmarkError> {
-		// doing nothing
-		Ok(())
-	}
-}
-
 pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {
-	type BenchmarkHelper: BenchmarkHelper;
+	/// Adds ability to the Runtime to prepare/initialize before running benchmark `set_code`.
+	fn prepare_set_code_requirements() -> Result<(), BenchmarkError> {
+		Ok(())
+	}
 }
 
 benchmarks! {
@@ -68,7 +58,7 @@ benchmarks! {
 
 	set_code {
 		// prepare runtime
-		T::BenchmarkHelper::prepare_set_code_requirements()?;
+		T::prepare_set_code_requirements()?;
 
 		let runtime_blob = include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec();
 	}: _(RawOrigin::Root, runtime_blob)
@@ -79,7 +69,7 @@ benchmarks! {
 	#[extra]
 	set_code_without_checks {
 		// prepare runtime
-		T::BenchmarkHelper::prepare_set_code_requirements()?;
+		T::prepare_set_code_requirements()?;
 
 		// Assume Wasm ~4MB
 		let code = vec![1; 4_000_000 as usize];
