@@ -200,10 +200,14 @@ where
 
 	/// Called after inherents but before extrinsics have been applied.
 	pub fn after_inherents(&self) -> Result<(), Error> {
-		// FAIL-CI check version of the API
-		self.api
-			.after_inherents_with_context(self.parent_hash, ExecutionContext::BlockConstruction)
-			.map_err(Into::into)
+		if self.version >= 7 {
+			self.api
+				.after_inherents_with_context(self.parent_hash, ExecutionContext::BlockConstruction)
+				.map_err(Into::into)
+		} else {
+			// Not yet available; this is fine.
+			Ok(())
+		}
 	}
 
 	/// Push onto the block's list of extrinsics.
