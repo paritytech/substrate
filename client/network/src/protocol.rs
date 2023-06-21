@@ -353,6 +353,7 @@ pub enum CustomMessageOutcome {
 
 impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
+	type ToSwarm = CustomMessageOutcome;
 
 	fn handle_established_inbound_connection(
 		&mut self,
