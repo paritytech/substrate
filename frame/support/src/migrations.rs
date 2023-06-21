@@ -55,15 +55,15 @@ use crate::traits::OnRuntimeUpgrade;
 /// pub type Migrations = (
 /// 	// ...other migrations
 /// 	VersionedRuntimeUpgrade<
-/// 		Const16<4>, // From on-chain version 4
-/// 		Const16<5>, // To on-chain version 5
+/// 		4, // From on-chain version 4
+/// 		5, // To on-chain version 5
 /// 		parachains_configuration::migration::v5::MigrateToV5<Runtime>,
 /// 		Configuration,
 /// 		RocksDbWeight,
 /// 	>,
 /// 	VersionedRuntimeUpgrade<
-/// 		Const16<5>, // From on-chain version 5
-/// 		Const16<7>, // To on-chain version 7
+/// 		5, // From on-chain version 5
+/// 		7, // To on-chain version 7
 /// 		parachains_configuration::migration::v6::MigrateToV6<Runtime>,
 /// 		Configuration,
 /// 		RocksDbWeight,
@@ -72,8 +72,8 @@ use crate::traits::OnRuntimeUpgrade;
 /// );
 /// ```
 #[cfg(feature = "experimental")]
-pub struct VersionedRuntimeUpgrade<From, To, Inner, Pallet, Weight> {
-	_marker: PhantomData<(From, To, Inner, Pallet, Weight)>,
+pub struct VersionedRuntimeUpgrade<const FROM: u16, const TO: u16, Inner, Pallet, Weight> {
+	_marker: PhantomData<(Inner, Pallet, Weight)>,
 }
 
 /// Implementation of the `OnRuntimeUpgrade` trait for `VersionedRuntimeUpgrade`.
@@ -84,12 +84,12 @@ pub struct VersionedRuntimeUpgrade<From, To, Inner, Pallet, Weight> {
 /// is a noop.
 #[cfg(feature = "experimental")]
 impl<
-		From: Get<u16>,
-		To: Get<u16>,
+		const FROM: u16,
+		const TO: u16,
 		Inner: OnRuntimeUpgrade,
 		Pallet: GetStorageVersion<CurrentStorageVersion = StorageVersion> + PalletInfoAccess,
 		DbWeight: Get<RuntimeDbWeight>,
-	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<From, To, Inner, Pallet, DbWeight>
+	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<FROM, TO, Inner, Pallet, DbWeight>
 {
 	/// Executes pre_upgrade if the migration will run, and passes a boolean to post_upgrade
 	/// indicating if the migration ran.
@@ -97,7 +97,7 @@ impl<
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
 		let on_chain_version = Pallet::on_chain_storage_version();
-		if on_chain_version == From::get() {
+		if on_chain_version == FROM {
 			Ok((Inner::pre_upgrade()?, true).encode())
 		} else {
 			Ok((Vec::<u8>::new(), false).encode())
@@ -112,19 +112,19 @@ impl<
 	/// is a noop.
 	fn on_runtime_upgrade() -> Weight {
 		let on_chain_version = Pallet::on_chain_storage_version();
-		if on_chain_version == From::get() {
+		if on_chain_version == FROM {
 			// Execute the migration
 			let weight = Inner::on_runtime_upgrade();
 
 			// Update the on-chain version
-			StorageVersion::new(To::get()).put::<Pallet>();
+			StorageVersion::new(TO).put::<Pallet>();
 
 			weight.saturating_add(DbWeight::get().reads_writes(1, 1))
 		} else {
 			log::warn!(
 				"{} VersionedOnRuntimeUpgrade {:?} skipped because current on-chain version is {:?}.",
 				Pallet::name(),
-				From::get(),
+				FROM,
 				on_chain_version
 			);
 			DbWeight::get().reads(1)

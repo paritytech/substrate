@@ -23,11 +23,10 @@ use frame_support::{
 	construct_runtime, derive_impl,
 	migrations::VersionedRuntimeUpgrade,
 	parameter_types,
-	traits::{ConstU32, GetStorageVersion, OnRuntimeUpgrade, StorageVersion},
+	traits::{GetStorageVersion, OnRuntimeUpgrade, StorageVersion},
 	weights::constants::RocksDbWeight,
 };
 use frame_system::Config;
-use sp_core::{ConstU16, Get};
 
 #[cfg(feature = "try-runtime")]
 use once_cell::sync::Lazy;
@@ -95,7 +94,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 /// A dummy migration for testing the `VersionedRuntimeUpgrade` trait.
 /// Sets SomeStorage to S.
-struct SomeUnversionedMigration<T: Config, S: Get<u32>>(sp_std::marker::PhantomData<(T, S)>);
+struct SomeUnversionedMigration<T: Config, const S: u32>(sp_std::marker::PhantomData<T>);
 
 parameter_types! {
 	const UpgradeReads: u64 = 4;
@@ -116,7 +115,7 @@ static POST_UPGRADE_CALLED_WITH: Lazy<Mutex<Vec<u8>>> = Lazy::new(|| Mutex::new(
 
 /// Implement `OnRuntimeUpgrade` for `SomeUnversionedMigration`.
 /// It sets SomeStorage to S, and returns a weight derived from UpgradeReads and UpgradeWrites.
-impl<T: dummy_pallet::Config, S: Get<u32>> OnRuntimeUpgrade for SomeUnversionedMigration<T, S> {
+impl<T: dummy_pallet::Config, const S: u32> OnRuntimeUpgrade for SomeUnversionedMigration<T, S> {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		*PRE_UPGRADE_CALLED.lock().unwrap() = true;
@@ -124,7 +123,7 @@ impl<T: dummy_pallet::Config, S: Get<u32>> OnRuntimeUpgrade for SomeUnversionedM
 	}
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		dummy_pallet::SomeStorage::<T>::put(S::get());
+		dummy_pallet::SomeStorage::<T>::put(S);
 		RocksDbWeight::get().reads_writes(UpgradeReads::get(), UpgradeWrites::get())
 	}
 
@@ -136,29 +135,14 @@ impl<T: dummy_pallet::Config, S: Get<u32>> OnRuntimeUpgrade for SomeUnversionedM
 	}
 }
 
-type VersionedMigrationV0ToV1 = VersionedRuntimeUpgrade<
-	ConstU16<0>,
-	ConstU16<1>,
-	SomeUnversionedMigration<Test, ConstU32<1>>,
-	DummyPallet,
-	RocksDbWeight,
->;
+type VersionedMigrationV0ToV1 =
+	VersionedRuntimeUpgrade<0, 1, SomeUnversionedMigration<Test, 1>, DummyPallet, RocksDbWeight>;
 
-type VersionedMigrationV1ToV2 = VersionedRuntimeUpgrade<
-	ConstU16<1>,
-	ConstU16<2>,
-	SomeUnversionedMigration<Test, ConstU32<2>>,
-	DummyPallet,
-	RocksDbWeight,
->;
+type VersionedMigrationV1ToV2 =
+	VersionedRuntimeUpgrade<1, 2, SomeUnversionedMigration<Test, 2>, DummyPallet, RocksDbWeight>;
 
-type VersionedMigrationV2ToV4 = VersionedRuntimeUpgrade<
-	ConstU16<2>,
-	ConstU16<4>,
-	SomeUnversionedMigration<Test, ConstU32<4>>,
-	DummyPallet,
-	RocksDbWeight,
->;
+type VersionedMigrationV2ToV4 =
+	VersionedRuntimeUpgrade<2, 4, SomeUnversionedMigration<Test, 4>, DummyPallet, RocksDbWeight>;
 
 #[test]
 fn successful_upgrade_path() {
