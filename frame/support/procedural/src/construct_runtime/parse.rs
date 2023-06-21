@@ -284,11 +284,7 @@ impl Parse for PalletDeclaration {
 				"Unexpected tokens, expected one of `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
 			))
 		} else {
-			if is_expanded {
-				Some(extra_parts)
-			} else {
-				None
-			}
+			is_expanded.then_some(extra_parts)
 		};
 
 		// Parse for specified parts
