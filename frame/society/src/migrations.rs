@@ -40,7 +40,6 @@ impl<
 {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-		log::info!(target: TARGET, "pre_upgrade");
 		if !can_migrate::<T, I>() {
 			log::warn!(target: TARGET, "Already migrated");
 		}
