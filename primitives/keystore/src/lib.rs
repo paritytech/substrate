@@ -229,10 +229,11 @@ pub trait Keystore: Send + Sync {
 	/// Receives [`KeyTypeId`] and an [`bandersnatch::Public`] key to be able to map
 	/// them to a private key that exists in the keystore.
 	///
-	/// Also takes a [`RingProver`] instance obtained from a valid [`RingVrfContext`].
+	/// Also takes a [`bandersnatch::ring_vrf::RingProver`] instance obtained from
+	/// a valid [`bandersnatch::ring_vrf::RingVrfContext`].
 	///
 	/// The signature is valid if the signing key is part of the ring from which
-	/// the [`RingProver`] has been derived.
+	/// the `RingProver` has been derived.
 	///
 	/// Returns `None` if the given `key_type` and `public` combination doesn't
 	/// exist in the keystore or an `Err` when something failed.
