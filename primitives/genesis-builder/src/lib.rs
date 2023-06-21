@@ -30,6 +30,9 @@
 //! Providing externalities with empty storage and putting `GenesisConfig` into storage allows to
 //! catch and build the raw storage of `GenesisConfig` which is the foundation for genesis block.
 
+/// The result type alias, used in build methods. `Err` contains formatted error message.
+pub type Result = core::result::Result<(), sp_runtime::RuntimeString>;
+
 sp_api::decl_runtime_apis! {
 	/// API to interact with GenesisConfig for the runtime
 	pub trait GenesisBuilder {
@@ -46,8 +49,8 @@ sp_api::decl_runtime_apis! {
 		/// The resulting `GenesisConfig` is then deserialized from the patched JSON representation and
 		/// stored in the storage.
 		///
-		/// If the provided JSON patch is incorrect or the deserialization fails, this method will panic.
-		/// Any errors encountered during this process should be logged.
+		/// If the provided JSON patch is incorrect or the deserialization fails the error will be returned.
+		/// Method may panic if creation of json representation of default config fails.
 		///
 		/// The patching process modifies the default `GenesisConfig` according to the following rules:
 		/// 1. Existing keys in the default configuration will be overridden by the corresponding values in the patch.
@@ -55,7 +58,16 @@ sp_api::decl_runtime_apis! {
 		/// 3. Keys in the default configuration that have null values in the patch will be removed from the resulting
 		///    `GenesisConfig`. This is helpful for changing enum variant value.
 		///
-		/// Please note the patch may contain full `GenesisConfig`.
-		fn build_config(patch: sp_std::vec::Vec<u8>);
+		/// Please note that the patch may contain full `GenesisConfig`.
+		fn build_config(patch: sp_std::vec::Vec<u8>) -> Result;
+
+		/// Build `GenesisConfig` from a JSON blob not using any defaults and store it in the storage.
+		///
+		/// This function deserializes the full `GenesisConfig` from the given JSON blob and puts it into the storage.
+		/// If the provided JSON blob is incorrect or incomplete or the deserialization fails, an error is returned.
+		/// It is recommended to log any errors encountered during the process.
+		///
+		/// Please note that provided json blob must contain all `GenesisConfig` fields, no defaults will be used.
+		fn build_config_no_defaults(json: sp_std::vec::Vec<u8>) -> Result;
 	}
 }
