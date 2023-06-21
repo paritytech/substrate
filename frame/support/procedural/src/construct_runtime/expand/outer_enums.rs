@@ -268,10 +268,10 @@ fn generate_error_impl(scrate: &TokenStream, enum_ty: OuterEnumType) -> TokenStr
 	let enum_name_ident = Ident::new(enum_ty.struct_name(), Span::call_site());
 
 	quote! {
-		/// Optionally convert the `DispatchError` into the `RuntimeError`.
-		///
-		/// Returns `Some` if the error matches the `DispatchError::Module` variant, otherwise `None`.
 		impl #enum_name_ident {
+			/// Optionally convert the `DispatchError` into the `RuntimeError`.
+			///
+			/// Returns `Some` if the error matches the `DispatchError::Module` variant, otherwise `None`.
 			pub fn from_dispatch_error(err: #scrate::sp_runtime::DispatchError) -> Option<Self> {
 				let #scrate::sp_runtime::DispatchError::Module(module_error) = err else { return None };
 
