@@ -1589,8 +1589,8 @@ impl NetworkBehaviour for Notifications {
 								let incoming_id = self.next_incoming_index;
 								self.next_incoming_index.0 += 1;
 
-								trace!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}).",
-									peer_id, incoming_id);
+								trace!(target: "sub-libp2p", "PSM <= Incoming({}, {:?}, {:?}).",
+									peer_id, set_id, incoming_id);
 								self.peerset.incoming(set_id, peer_id, incoming_id);
 								self.incoming.push(IncomingPeer {
 									peer_id,
@@ -1730,7 +1730,7 @@ impl NetworkBehaviour for Notifications {
 								_ => None,
 							}) {
 							if pos <= replacement_pos {
-								trace!(target: "sub-libp2p", "External API <= Sink replaced({:?})", peer_id);
+								trace!(target: "sub-libp2p", "External API <= Sink replaced({:?}, {:?})", peer_id, set_id);
 								let event = NotificationsOut::CustomProtocolReplaced {
 									peer_id,
 									set_id,
@@ -1920,7 +1920,7 @@ impl NetworkBehaviour for Notifications {
 						if !connections.iter().any(|(_, s)| {
 							matches!(s, ConnectionState::Opening | ConnectionState::Open(_))
 						}) {
-							trace!(target: "sub-libp2p", "PSM <= Dropped({:?})", peer_id);
+							trace!(target: "sub-libp2p", "PSM <= Dropped({:?}, {:?})", peer_id, set_id);
 							self.peerset.dropped(set_id, peer_id, DropReason::Refused);
 
 							let ban_dur = Uniform::new(5, 10).sample(&mut rand::thread_rng());
@@ -2047,12 +2047,12 @@ impl NetworkBehaviour for Notifications {
 
 			match peer_state {
 				PeerState::Backoff { timer, .. } if *timer == delay_id => {
-					trace!(target: "sub-libp2p", "Libp2p <= Clean up ban of {:?} from the state", peer_id);
+					trace!(target: "sub-libp2p", "Libp2p <= Clean up ban of {:?} from the state ({:?})", peer_id, set_id);
 					self.peers.remove(&(peer_id, set_id));
 				},
 
 				PeerState::PendingRequest { timer, .. } if *timer == delay_id => {
-					trace!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired", peer_id);
+					trace!(target: "sub-libp2p", "Libp2p <= Dial {:?} now that ban has expired ({:?})", peer_id, set_id);
 					self.events.push_back(ToSwarm::Dial { opts: peer_id.into() });
 					*peer_state = PeerState::Requested;
 				},
