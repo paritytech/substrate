@@ -19,7 +19,7 @@
 //! repay deposits.
 
 use crate::{
-	migration::{IsFinished, Migrate},
+	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
 	AccountIdOf, BalanceOf, CodeHash, Config, Determinism, Pallet, Weight, LOG_TARGET,
 };
@@ -115,7 +115,7 @@ pub struct Migration<T: Config> {
 	_phantom: PhantomData<T>,
 }
 
-impl<T: Config> Migrate for Migration<T> {
+impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 12;
 
 	fn max_step_weight() -> Weight {
