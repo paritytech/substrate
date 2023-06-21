@@ -1029,7 +1029,6 @@ fn remove_collection_royalty_fail_if_collection_still_exists() {
 			],
 		));
 
-		// Call remove_collection_royalty and assert that it fails with error CollectionStillExists
 		assert_noop!(
 			NftsRoyalty::remove_collection_royalty(
 				RuntimeOrigin::signed(account(1)),

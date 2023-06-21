@@ -9,7 +9,7 @@ use frame_support::{
 	assert_ok,
 	pallet_prelude::*,
 	traits::{
-		tokens::nonfungibles_v2::{Create, Mutate, Buy},
+		tokens::nonfungibles_v2::{Create, Mutate, Buy, Destroy},
 		Currency,
 	},
 };
@@ -31,7 +31,8 @@ pub(super) type ItemPrice<T> = BalanceOf<T>;
     T::NftCollectionId: From<u32>,
     T::NftItemId: From<u32>,
     T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>> 
-		+ Mutate<T::AccountId, ItemConfig> + Buy<T::AccountId, ItemPrice<T>>,
+		+ Mutate<T::AccountId, ItemConfig> + Buy<T::AccountId, ItemPrice<T>> + Destroy<T::AccountId>,
+	T::Currency: Currency<T::AccountId>,
 	)]
 mod benchmarks {
 	use super::*;
@@ -282,6 +283,12 @@ mod benchmarks {
 			list_recipients.clone(),
 		));
 
+		let w = T::Nfts::get_destroy_witness(&collection_id).unwrap();
+		assert_ok!(T::Nfts::destroy(collection_id, w, Some(caller.clone())));
+
+		assert_eq!(T::Nfts::collections().any(|x| x == collection_id), false);
+
+
 		#[extrinsic_call]
 		remove_collection_royalty(
 			RawOrigin::Signed(caller),
@@ -314,6 +321,10 @@ mod benchmarks {
 			item_owner.clone(),
 			list_recipients.clone()
 		));
+
+		assert_ok!(T::Nfts::burn(&collection_id, &item_id, Some(&caller.clone())));
+
+		assert_eq!(T::Nfts::items(&collection_id).any(|id| id == item_id), false);
 
 		#[extrinsic_call]
 		remove_item_royalty(
