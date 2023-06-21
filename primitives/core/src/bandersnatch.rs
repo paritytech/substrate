@@ -915,7 +915,7 @@ mod tests {
 			data.vrf_inputs.len() * PREOUT_SERIALIZED_LEN + SIGNATURE_SERIALIZED_LEN + 1;
 		assert_eq!(bytes.len(), expected_len);
 
-		let decoded = VrfSignature::decode(&mut &bytes[..]).unwrap();
+		let decoded = VrfSignature::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(expected, decoded);
 
 		let data = VrfSignData::from_iter(b"mydata", &[b"tdata"], []).unwrap();
@@ -923,7 +923,7 @@ mod tests {
 
 		let bytes = expected.encode();
 
-		let decoded = VrfSignature::decode(&mut &bytes[..]).unwrap();
+		let decoded = VrfSignature::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(expected, decoded);
 	}
 
@@ -983,23 +983,21 @@ mod tests {
 			1;
 		assert_eq!(bytes.len(), expected_len);
 
-		let decoded = RingVrfSignature::decode(&mut &bytes[..]).unwrap();
+		let decoded = RingVrfSignature::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(expected, decoded);
 	}
 
-	// Requires parity-scale-codec v0.3.6
 	#[test]
-	#[ignore]
 	fn encode_decode_ring_vrf_context() {
-		let ring_ctx = RingVrfContext::new_testing();
+		let ctx1 = RingVrfContext::new_testing();
+		let enc1 = ctx1.encode();
 
-		let encoded = ring_ctx.encode();
-		println!("SIZE: {}", encoded.len());
+		println!("SIZE: {}", enc1.len());
+		assert_eq!(enc1.len(), RingVrfContext::max_encoded_len());
 
-		assert_eq!(encoded.len(), RingVrfContext::max_encoded_len());
+		let ctx2 = RingVrfContext::decode(&mut enc1.as_slice()).unwrap();
+		let enc2 = ctx2.encode();
 
-		let _decoded = RingVrfContext::decode(&mut &encoded[..]).unwrap();
-
-		// TODO davxy... just use unsafe pointers comparison
+		assert_eq!(enc1, enc2);
 	}
 }
