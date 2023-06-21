@@ -17,7 +17,7 @@ hex-literal = "0.3.4"
 log = { version = "0.4.17", default-features = false }
 rand_chacha = { version = "0.2", default-features = false }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }

@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sp-metadata-ir"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false }
 frame-metadata = { version = "15.1.0", default-features = false, features = ["v14", "v15-unstable"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
