@@ -31,7 +31,9 @@ use scale_info::TypeInfo;
 
 #[cfg(feature = "serde")]
 use crate::crypto::Ss58Codec;
-use crate::crypto::{CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom};
+use crate::crypto::{
+	CryptoType, CryptoTypeId, Derive, FromEntropy, Public as TraitPublic, UncheckedFrom,
+};
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "full_crypto")]
@@ -77,6 +79,14 @@ pub struct Public(pub [u8; 32]);
 pub struct Pair {
 	public: VerificationKey,
 	secret: SigningKey,
+}
+
+impl FromEntropy for Public {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		let mut result = Self([0u8; 32]);
+		input.read(&mut result.0[..])?;
+		Ok(result)
+	}
 }
 
 impl AsRef<[u8; 32]> for Public {

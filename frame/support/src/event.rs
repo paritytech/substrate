@@ -101,7 +101,7 @@
 /// # fn main() {}
 /// ```
 #[macro_export]
-#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
+#[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
 	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 macro_rules! decl_event {
 	(
