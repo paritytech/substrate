@@ -136,7 +136,7 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, BlockAfterInherentsMode,
+	ApplyExtrinsicResult,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -294,28 +294,23 @@ where
 				break
 			}
 		}
-		match Self::after_inherents() {
-			BlockAfterInherentsMode::ExtrinsicsAllowed => {
-				// Apply all extrinsics:
-				for e in extrinsics.iter().skip(num_inherents) {
-					if let Err(err) = try_apply_extrinsic(e.clone()) {
-						frame_support::log::error!(
-							target: LOG_TARGET, "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
-							e,
-							err,
-						);
-						break
-					}
-				}
-			},
-			BlockAfterInherentsMode::ExtrinsicsForbidden => (),
+		Self::after_inherents();
+
+		// Apply all extrinsics:
+		for e in extrinsics.iter().skip(num_inherents) {
+			if let Err(err) = try_apply_extrinsic(e.clone()) {
+				frame_support::log::error!(
+					target: LOG_TARGET, "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					e,
+					err,
+				);
+				break
+			}
 		}
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
-		// TODO MBMs will conditionally run this.
 		Self::on_idle_hook(*header.number());
-
 		Self::on_finalize_hook(*header.number());
 
 		// run the try-state checks of all pallets, ensuring they don't alter any state.
@@ -508,25 +503,16 @@ where
 			let num_inherents = Self::initial_checks(&block) as usize;
 			let (header, applyables) = block.deconstruct();
 
-			// Process inherents (if any).
+			// Process inherents.
 			Self::execute_applyables(applyables.iter().take(num_inherents));
-
-			match Self::after_inherents() {
-				BlockAfterInherentsMode::ExtrinsicsForbidden => {
-					if num_inherents < applyables.len() {
-						panic!("Extrinsics are not allowed in this block");
-					}
-				},
-				BlockAfterInherentsMode::ExtrinsicsAllowed => {
-					Self::execute_applyables(applyables.iter().skip(num_inherents));
-				},
-			}
+			Self::after_inherents();
+			// Process extrinsics.
+			Self::execute_applyables(applyables.iter().skip(num_inherents));
 
 			// Dispatchable processing is done now.
 			<frame_system::Pallet<System>>::note_finished_extrinsics();
-			// TODO MBMs will conditionally run this.
-			Self::on_idle_hook(*header.number());
 
+			Self::on_idle_hook(*header.number());
 			Self::on_finalize_hook(*header.number());
 			// any final checks
 			Self::final_checks(&header);
@@ -535,18 +521,19 @@ where
 
 	/// Execute code after inherents but before extrinsic application.
 	///
-	/// This is always called by the block builder. It returns whether extrinsics are allowed to be
-	/// included in the block or not.
-	pub fn after_inherents() -> BlockAfterInherentsMode {
-		// TODO add a proper condition here, but now we need this for mocking in tests.
+	/// It may consume all remaining weight of the block.
+	pub fn after_inherents() {
+		// TODO run the MBMs and poll hooks here.
 		//  <https://github.com/paritytech/substrate/pull/14275>
 		//  <https://github.com/paritytech/substrate/pull/14279>
+		// TODO add a proper condition here, but now we need this for mocking in tests.
 		#[cfg(all(feature = "std", test))]
-		if sp_io::storage::exists(&b":extrinsics_forbidden"[..]) {
-			return BlockAfterInherentsMode::ExtrinsicsForbidden
+		if sp_io::storage::exists(&b":after_inherents_max_weight"[..]) {
+			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
+				Self::remaining_weight(),
+				DispatchClass::Mandatory,
+			);
 		}
-
-		BlockAfterInherentsMode::ExtrinsicsAllowed
 	}
 
 	/// Execute given applyables (extrinsics or intrinsics).
@@ -568,9 +555,7 @@ where
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Pallet<System>>::block_number();
 
-		// TODO MBMs will conditionally run this.
 		Self::on_idle_hook(block_number);
-
 		Self::on_finalize_hook(block_number);
 
 		<frame_system::Pallet<System>>::finalize()
@@ -578,9 +563,7 @@ where
 
 	/// Run the `on_idle` hook of all pallet, but only if there is weight remaining.
 	fn on_idle_hook(block_number: NumberFor<Block>) {
-		let weight = <frame_system::Pallet<System>>::block_weight();
-		let max_weight = <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
-		let remaining_weight = max_weight.saturating_sub(weight.total());
+		let remaining_weight = Self::remaining_weight();
 
 		if remaining_weight.all_gt(Weight::zero()) {
 			let used_weight = <AllPalletsWithSystem as OnIdle<System::BlockNumber>>::on_idle(
@@ -725,5 +708,12 @@ where
 		<AllPalletsWithSystem as OffchainWorker<System::BlockNumber>>::offchain_worker(
 			*header.number(),
 		)
+	}
+
+	/// Returns the remaining weight of the current block.
+	fn remaining_weight() -> Weight {
+		let used = <frame_system::Pallet<System>>::block_weight();
+		let max = <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
+		max.saturating_sub(used.total())
 	}
 }

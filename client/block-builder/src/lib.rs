@@ -36,7 +36,7 @@ use sp_core::ExecutionContext;
 use sp_runtime::{
 	legacy,
 	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
-	BlockAfterInherentsMode, Digest,
+	Digest,
 };
 
 use sc_client_api::backend;
@@ -199,7 +199,8 @@ where
 	}
 
 	/// Called after inherents but before extrinsics have been applied.
-	pub fn after_inherents(&self) -> Result<BlockAfterInherentsMode, Error> {
+	pub fn after_inherents(&self) -> Result<(), Error> {
+		// FAIL-CI check version of the API
 		self.api
 			.after_inherents_with_context(self.parent_hash, ExecutionContext::BlockConstruction)
 			.map_err(Into::into)

@@ -944,15 +944,6 @@ impl<R> TransactionOutcome<R> {
 	}
 }
 
-/// The mode of a block after inherents were applied.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
-pub enum BlockAfterInherentsMode {
-	/// No extrinsics should be pushed to the block - not even mandatory ones.
-	ExtrinsicsForbidden,
-	/// Can push extrinsics to the block.
-	ExtrinsicsAllowed,
-}
-
 #[cfg(test)]
 mod tests {
 	use crate::traits::BlakeTwo256;
