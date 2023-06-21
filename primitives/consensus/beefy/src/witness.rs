@@ -86,7 +86,7 @@ mod tests {
 	use crate::{ecdsa_crypto, known_payloads, Payload, KEY_TYPE};
 
 	#[cfg(feature = "bls-experimental")]
-	use crate::bls_crypto::Signature as BLSSignature;
+	use crate::bls_crypto::Signature as BlsSignature;
 
 	#[cfg(feature = "bls-experimental")]
 	use w3f_bls::{
@@ -103,13 +103,13 @@ mod tests {
 
 	#[cfg(feature = "bls-experimental")]
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-	struct ECDSABLSSignaturePair(ecdsa_crypto::Signature, BLSSignature);
+	struct EcdsaBlsSignaturePair(ecdsa_crypto::Signature, BlsSignature);
 
 	///types for commitment containing  bls signature along side ecdsa signature
 	#[cfg(feature = "bls-experimental")]
-	type TestBLSSignedCommitment = SignedCommitment<u128, ECDSABLSSignaturePair>;
+	type TestBlsSignedCommitment = SignedCommitment<u128, EcdsaBlsSignaturePair>;
 	#[cfg(feature = "bls-experimental")]
-	type TestBLSSignedCommitmentWitness = SignedCommitmentWitness<u128, Vec<u8>>;
+	type TestBlsSignedCommitmentWitness = SignedCommitmentWitness<u128, Vec<u8>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
@@ -130,7 +130,7 @@ mod tests {
 	///generates mock aggregatable bls signature for generating test commitment
 	///BLS signatures
 	#[cfg(feature = "bls-experimental")]
-	fn mock_bls_signatures() -> (BLSSignature, BLSSignature) {
+	fn mock_bls_signatures() -> (BlsSignature, BlsSignature) {
 		let store: KeystorePtr = MemoryKeystore::new().into();
 
 		let alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
@@ -159,7 +159,7 @@ mod tests {
 	}
 
 	#[cfg(feature = "bls-experimental")]
-	fn ecdsa_and_bls_signed_commitment() -> TestBLSSignedCommitment {
+	fn ecdsa_and_bls_signed_commitment() -> TestBlsSignedCommitment {
 		let payload = Payload::from_single_entry(
 			known_payloads::MMR_ROOT_ID,
 			"Hello World!".as_bytes().to_vec(),
@@ -175,8 +175,8 @@ mod tests {
 			signatures: vec![
 				None,
 				None,
-				Some(ECDSABLSSignaturePair(ecdsa_sigs.0, bls_sigs.0)),
-				Some(ECDSABLSSignaturePair(ecdsa_sigs.1, bls_sigs.1)),
+				Some(EcdsaBlsSignaturePair(ecdsa_sigs.0, bls_sigs.0)),
+				Some(EcdsaBlsSignaturePair(ecdsa_sigs.1, bls_sigs.1)),
 			],
 		}
 	}
@@ -203,7 +203,7 @@ mod tests {
 		// when
 		let (witness, _signatures) =
 		        //from signed take a function as the aggregator 
-			TestBLSSignedCommitmentWitness::from_signed::<_, _>(signed, |sigs| {
+			TestBlsSignedCommitmentWitness::from_signed::<_, _>(signed, |sigs| {
 			    //we are going to aggregate the signatures here
 			    let mut aggregatedsigs: SignatureAggregatorAssumingPoP<TinyBLS377> =
 				SignatureAggregatorAssumingPoP::new(Message::new(b"", b"mock payload"));
@@ -224,7 +224,7 @@ mod tests {
 			    (&aggregatedsigs).signature().to_bytes()
 			});
 
-		//We can't use BLSSignature::try_from because it expected 112Bytes (CP (64) + BLS 48)
+		//We can't use BlsSignature::try_from because it expected 112Bytes (CP (64) + BLS 48)
 		// single signature while we are having a BLS aggregated signature corresponding to no CP.
 		w3f_bls::Signature::<TinyBLS377>::from_bytes(witness.signature_accumulator.as_slice())
 			.unwrap();
