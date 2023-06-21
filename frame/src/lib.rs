@@ -17,7 +17,7 @@
 //!
 //! 1. A *runtime* which represents the state transition function of a blockchain, and is encoded
 //! as a Wasm blob.
-//! 2. A client' who's primary purpose is to execute the given runtime.
+//! 2. A client whose primary purpose is to execute the given runtime.
 //!
 //! FRAME is the primary framework to build a runtime.
 //!
