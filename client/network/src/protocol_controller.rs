@@ -384,7 +384,9 @@ impl ProtocolController {
 		if self.reserved_nodes.contains_key(&peer_id) {
 			warn!(
 				target: LOG_TARGET,
-				"Trying to add an already reserved node as reserved: {peer_id}.",
+				"Trying to add an already reserved node {} as reserved on {:?}.",
+				peer_id,
+				self.set_id,
 			);
 			return
 		}
@@ -394,12 +396,20 @@ impl ProtocolController {
 			Some(direction) => {
 				trace!(
 					target: LOG_TARGET,
-					"Marking previously connected node {peer_id} ({direction:?}) as reserved.",
+					"Marking previously connected node {} ({:?}) as reserved on {:?}.",
+					peer_id,
+					direction,
+					self.set_id
 				);
 				PeerState::Connected(direction)
 			},
 			None => {
-				trace!(target: LOG_TARGET, "Adding reserved node {peer_id}.");
+				trace!(
+					target: LOG_TARGET,
+					"Adding reserved node {} on {:?}.",
+					peer_id,
+					self.set_id,
+				);
 				PeerState::NotConnected
 			},
 		};
@@ -420,7 +430,12 @@ impl ProtocolController {
 		let state = match self.reserved_nodes.remove(&peer_id) {
 			Some(state) => state,
 			None => {
-				warn!(target: LOG_TARGET, "Trying to remove unknown reserved node: {peer_id}.");
+				warn!(
+					target: LOG_TARGET,
+					"Trying to remove unknown reserved node {} from {:?}.",
+					peer_id,
+					self.set_id,
+				);
 				return
 			},
 		};
@@ -456,7 +471,12 @@ impl ProtocolController {
 				assert!(prev.is_none(), "Corrupted state: reserved node was also non-reserved.");
 			}
 		} else {
-			trace!(target: LOG_TARGET, "Removed disconnected reserved node {peer_id}.");
+			trace!(
+				target: LOG_TARGET,
+				"Removed disconnected reserved node {} from {:?}.",
+				peer_id,
+				self.set_id,
+			);
 		}
 	}
 
@@ -479,7 +499,12 @@ impl ProtocolController {
 	/// Change "reserved only" flag. In "reserved only" mode we connect and accept connections to
 	/// reserved nodes only.
 	fn on_set_reserved_only(&mut self, reserved_only: bool) {
-		trace!(target: LOG_TARGET, "Set reserved only: {reserved_only}");
+		trace!(
+			target: LOG_TARGET,
+			"Set reserved only to `{}` on {:?}",
+			reserved_only,
+			self.set_id,
+		);
 
 		self.reserved_only = reserved_only;
 
@@ -522,7 +547,13 @@ impl ProtocolController {
 
 		match self.nodes.remove(&peer_id) {
 			Some(direction) => {
-				trace!(target: LOG_TARGET, "Disconnecting peer {peer_id} ({direction:?}).");
+				trace!(
+					target: LOG_TARGET,
+					"Disconnecting peer {} ({:?}) from {:?}.",
+					peer_id,
+					direction,
+					self.set_id
+				);
 				match direction {
 					Direction::Inbound => self.num_in -= 1,
 					Direction::Outbound => self.num_out -= 1,
@@ -550,7 +581,13 @@ impl ProtocolController {
 	// until it receives a response for the incoming request to `ProtocolController`, so we must
 	// ensure we handle this incoming request correctly.
 	fn on_incoming_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
-		trace!(target: LOG_TARGET, "Incoming connection from peer {peer_id} ({incoming_index:?}).",);
+		trace!(
+			target: LOG_TARGET,
+			"Incoming connection from peer {} ({:?}) on {:?}.",
+			peer_id,
+			incoming_index,
+			self.set_id,
+		);
 
 		if self.reserved_only && !self.reserved_nodes.contains_key(&peer_id) {
 			self.reject_connection(incoming_index);
@@ -582,9 +619,10 @@ impl ProtocolController {
 		if let Some(direction) = self.nodes.remove(&peer_id) {
 			trace!(
 				target: LOG_TARGET,
-				"Handling incoming connection from peer {} we think we already connected as {:?}.",
+				"Handling incoming connection from peer {} we think we already connected as {:?} on {:?}.",
 				peer_id,
 				direction,
+				self.set_id
 			);
 			match direction {
 				Direction::Inbound => self.num_in -= 1,
@@ -644,7 +682,13 @@ impl ProtocolController {
 		};
 
 		if let PeerState::Connected(direction) = state {
-			trace!(target: LOG_TARGET, "Reserved peer {peer_id} ({direction:?}) dropped.");
+			trace!(
+				target: LOG_TARGET,
+				"Reserved peer {} ({:?}) dropped from {:?}.",
+				peer_id,
+				direction,
+				self.set_id,
+			);
 			*state = PeerState::NotConnected;
 			Ok(true)
 		} else {
@@ -659,7 +703,13 @@ impl ProtocolController {
 			return false
 		};
 
-		trace!(target: LOG_TARGET, "Peer {peer_id} ({direction:?}) dropped.");
+		trace!(
+			target: LOG_TARGET,
+			"Peer {} ({:?}) dropped from {:?}.",
+			peer_id,
+			direction,
+			self.set_id,
+		);
 
 		match direction {
 			Direction::Inbound => self.num_in -= 1,
