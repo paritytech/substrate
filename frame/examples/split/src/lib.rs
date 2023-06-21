@@ -15,11 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Split Example Pallet
+//!
+//! **This pallet serves as an example and is not meant to be used in production.**
+//!
+//! A FRAME pallet demonstrating the ability to split sections across multiple files.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
-/// Edit this file to define custom logic or remove it if it is not needed.
-/// Learn more about FRAME and the core library of Substrate FRAME pallets:
-/// <https://docs.substrate.io/reference/frame-pallets/>
+// Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
 
 #[cfg(test)]
@@ -31,10 +35,14 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod events;
+
 pub mod weights;
-use frame_support::pallet_macros::*;
 pub use weights::*;
 
+use frame_support::pallet_macros::*;
+
+/// Imports a [`pallet_section`] defined at [`events::events`].
+/// This brings the events defined in that section into the pallet's namespace.
 #[import_section(events::events)]
 #[frame_support::pallet]
 pub mod pallet {
@@ -57,7 +65,7 @@ pub mod pallet {
 	// The pallet's runtime storage items.
 	// https://docs.substrate.io/main-docs/build/runtime-storage/
 	#[pallet::storage]
-	#[pallet::getter(fn something)]
+	#[pallet::getter(fn something)] // optional
 	// Learn more about declaring storage items:
 	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
 	pub type Something<T> = StorageValue<_, u32>;

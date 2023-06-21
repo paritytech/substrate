@@ -21,7 +21,6 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../..
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 
 sp-io = { version = "23.0.0", default-features = false, path = "../../../primitives/io" }
-sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
@@ -40,7 +39,6 @@ std = [
 	"frame-system/std",
 
 	"sp-io/std",
-	"sp-runtime/std",
 	"sp-std/std",
 
 	"frame-benchmarking?/std",

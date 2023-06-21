@@ -17,6 +17,8 @@
 
 use frame_support::pallet_macros::*;
 
+/// A [`pallet_section`] that defines the events for a pallet. 
+/// This can later be imported into the pallet using [`import_section`].
 #[pallet_section]
 mod events {
 	#[pallet::event]
