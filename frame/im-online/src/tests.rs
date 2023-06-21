@@ -22,12 +22,9 @@
 use super::*;
 use crate::mock::*;
 use frame_support::{assert_noop, dispatch};
-use sp_core::{
-	offchain::{
-		testing::{TestOffchainExt, TestTransactionPoolExt},
-		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
-	},
-	OpaquePeerId,
+use sp_core::offchain::{
+	testing::{TestOffchainExt, TestTransactionPoolExt},
+	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 };
 use sp_runtime::{
 	testing::UintAuthorityId,
@@ -121,14 +118,8 @@ fn heartbeat(
 	id: UintAuthorityId,
 	validators: Vec<u64>,
 ) -> dispatch::DispatchResult {
-	use frame_support::unsigned::ValidateUnsigned;
-
 	let heartbeat = Heartbeat {
 		block_number,
-		network_state: OpaqueNetworkState {
-			peer_id: OpaquePeerId(vec![1]),
-			external_addresses: vec![],
-		},
 		session_index,
 		authority_index,
 		validators_len: validators.len() as u32,
@@ -212,8 +203,6 @@ fn late_heartbeat_and_invalid_keys_len_should_fail() {
 
 #[test]
 fn should_generate_heartbeats() {
-	use frame_support::traits::OffchainWorker;
-
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, state) = TestTransactionPoolExt::new();
@@ -252,7 +241,6 @@ fn should_generate_heartbeats() {
 			heartbeat,
 			Heartbeat {
 				block_number: block,
-				network_state: sp_io::offchain::network_state().unwrap(),
 				session_index: 2,
 				authority_index: 2,
 				validators_len: 3,
@@ -365,21 +353,13 @@ fn should_not_send_a_report_if_already_online() {
 
 		assert_eq!(
 			heartbeat,
-			Heartbeat {
-				block_number: 4,
-				network_state: sp_io::offchain::network_state().unwrap(),
-				session_index: 2,
-				authority_index: 0,
-				validators_len: 3,
-			}
+			Heartbeat { block_number: 4, session_index: 2, authority_index: 0, validators_len: 3 }
 		);
 	});
 }
 
 #[test]
 fn should_handle_missing_progress_estimates() {
-	use frame_support::traits::OffchainWorker;
-
 	let mut ext = new_test_ext();
 	let (offchain, _state) = TestOffchainExt::new();
 	let (pool, state) = TestTransactionPoolExt::new();

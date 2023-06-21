@@ -57,5 +57,5 @@ help: you might have meant to use the associated type
    |                       ~~~~~~~~~~~~~~~~
 help: consider importing this trait
    |
-1  | use frame_support::traits::PalletInfo;
+1  + use frame_support::traits::PalletInfo;
    |

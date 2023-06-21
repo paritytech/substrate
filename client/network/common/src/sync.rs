@@ -22,7 +22,7 @@ pub mod message;
 pub mod metrics;
 pub mod warp;
 
-use crate::role::Roles;
+use crate::{role::Roles, types::ReputationChange};
 use futures::Stream;
 
 use libp2p_identity::PeerId;
@@ -106,7 +106,7 @@ pub struct SyncStatus<Block: BlockT> {
 
 /// A peer did not behave as expected and should be reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BadPeer(pub PeerId, pub sc_peerset::ReputationChange);
+pub struct BadPeer(pub PeerId, pub ReputationChange);
 
 impl fmt::Display for BadPeer {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

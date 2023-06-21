@@ -20,8 +20,6 @@ use proc_macro2::Span;
 use crate::pallet::Def;
 
 pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
-	let storage_names = def.storages.iter().map(|storage| &storage.ident);
-	let storage_docs = def.storages.iter().map(|storage| &storage.docs);
 	let dispatchables = if let Some(call_def) = &def.call {
 		let type_impl_generics = def.type_impl_generics(Span::call_site());
 		call_def
@@ -35,17 +33,16 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 					.map(|(_, arg_name, arg_type)| quote::quote!( #arg_name: #arg_type, ))
 					.collect::<proc_macro2::TokenStream>();
 				let docs = &method.docs;
-				let line_2 =
-					format!(" designed to document the [`{}`][`Call::{}`] variant of", name, name);
+
+				let real = format!(" [`Pallet::{}`].", name);
 				quote::quote!(
 					#( #[doc = #docs] )*
 					///
-					/// ---
+					/// # Warning: Doc-Only
 					///
-					/// NOTE: This function is an automatically generated, doc only, uncallable stub.
-					#[ doc = #line_2 ]
-					/// the pallet [`Call`] enum. You should not attempt to call this function
-					/// directly.
+					/// This function is an automatically generated, and is doc-only, uncallable
+					/// stub. See the real version in
+					#[ doc = #real ]
 					pub fn #name<#type_impl_generics>(#args) { unreachable!(); }
 				)
 			})
@@ -54,22 +51,49 @@ pub fn expand_doc_only(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote!()
 	};
 
+	let storage_types = def
+		.storages
+		.iter()
+		.map(|storage| {
+			let storage_name = &storage.ident;
+			let storage_type_docs = &storage.docs;
+			let real = format!("[`pallet::{}`].", storage_name);
+			quote::quote!(
+				#( #[doc = #storage_type_docs] )*
+				///
+				/// # Warning: Doc-Only
+				///
+				/// This type is automatically generated, and is doc-only. See the real version in
+				#[ doc = #real ]
+				pub struct #storage_name();
+			)
+		})
+		.collect::<proc_macro2::TokenStream>();
+
 	quote::quote!(
-		/// Auto-generated docs-only module listing all defined storage types for this pallet.
-		/// Note that members of this module cannot be used directly and are only provided for
-		/// documentation purposes.
+		/// Auto-generated docs-only module listing all (public and private) defined storage types
+		/// for this pallet.
+		///
+		/// # Warning: Doc-Only
+		///
+		/// Members of this module cannot be used directly and are only provided for documentation
+		/// purposes.
+		///
+		/// To see the actual storage type, find a struct with the same name at the root of the
+		/// pallet, in the list of [*Type Definitions*](../index.html#types).
 		#[cfg(doc)]
 		pub mod storage_types {
 			use super::*;
-			#(
-				#( #[doc = #storage_docs] )*
-				pub struct #storage_names();
-			)*
+			#storage_types
 		}
 
 		/// Auto-generated docs-only module listing all defined dispatchables for this pallet.
-		/// Note that members of this module cannot be used directly and are only provided for
-		/// documentation purposes.
+		///
+		/// # Warning: Doc-Only
+		///
+		/// Members of this module cannot be used directly and are only provided for documentation
+		/// purposes. To see the real version of each dispatchable, look for them in [`Pallet`] or
+		/// [`Call`].
 		#[cfg(doc)]
 		pub mod dispatchables {
 			use super::*;

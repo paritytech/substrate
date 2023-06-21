@@ -96,15 +96,6 @@ impl<T> InstanceFilter<T> for () {
 	}
 }
 
-/// Re-expected for the macro.
-#[doc(hidden)]
-pub use sp_std::{
-	boxed::Box,
-	cell::RefCell,
-	mem::{swap, take},
-	vec::Vec,
-};
-
 #[macro_export]
 macro_rules! impl_filter_stack {
 	($target:ty, $base:ty, $call:ty, $module:ident) => {
@@ -112,7 +103,8 @@ macro_rules! impl_filter_stack {
 		mod $module {
 			#[allow(unused_imports)]
 			use super::*;
-			use $crate::traits::filter::{swap, take, RefCell, Vec, Box, Contains, FilterStack};
+			use $crate::sp_std::{boxed::Box, cell::RefCell, mem::{swap, take}, vec::Vec};
+			use $crate::traits::filter::{Contains, FilterStack};
 
 			thread_local! {
 				static FILTER: RefCell<Vec<Box<dyn Fn(&$call) -> bool + 'static>>> = RefCell::new(Vec::new());

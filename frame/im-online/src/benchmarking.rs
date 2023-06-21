@@ -24,7 +24,6 @@ use super::*;
 use frame_benchmarking::v1::benchmarks;
 use frame_support::{traits::UnfilteredDispatchable, WeakBoundedVec};
 use frame_system::RawOrigin;
-use sp_core::{offchain::OpaqueMultiaddr, OpaquePeerId};
 use sp_runtime::{
 	traits::{ValidateUnsigned, Zero},
 	transaction_validity::TransactionSource,
@@ -33,11 +32,9 @@ use sp_runtime::{
 use crate::Pallet as ImOnline;
 
 const MAX_KEYS: u32 = 1000;
-const MAX_EXTERNAL_ADDRESSES: u32 = 100;
 
 pub fn create_heartbeat<T: Config>(
 	k: u32,
-	e: u32,
 ) -> Result<
 	(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature),
 	&'static str,
@@ -50,13 +47,8 @@ pub fn create_heartbeat<T: Config>(
 		.map_err(|()| "More than the maximum number of keys provided")?;
 	Keys::<T>::put(bounded_keys);
 
-	let network_state = OpaqueNetworkState {
-		peer_id: OpaquePeerId::default(),
-		external_addresses: vec![OpaqueMultiaddr::new(vec![0; 32]); e as usize],
-	};
 	let input_heartbeat = Heartbeat {
 		block_number: T::BlockNumber::zero(),
-		network_state,
 		session_index: 0,
 		authority_index: k - 1,
 		validators_len: keys.len() as u32,
@@ -73,15 +65,13 @@ benchmarks! {
 	#[extra]
 	heartbeat {
 		let k in 1 .. MAX_KEYS;
-		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
-		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
+		let (input_heartbeat, signature) = create_heartbeat::<T>(k)?;
 	}: _(RawOrigin::None, input_heartbeat, signature)
 
 	#[extra]
 	validate_unsigned {
 		let k in 1 .. MAX_KEYS;
-		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
-		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
+		let (input_heartbeat, signature) = create_heartbeat::<T>(k)?;
 		let call = Call::heartbeat { heartbeat: input_heartbeat, signature };
 	}: {
 		ImOnline::<T>::validate_unsigned(TransactionSource::InBlock, &call)
@@ -90,8 +80,7 @@ benchmarks! {
 
 	validate_unsigned_and_then_heartbeat {
 		let k in 1 .. MAX_KEYS;
-		let e in 1 .. MAX_EXTERNAL_ADDRESSES;
-		let (input_heartbeat, signature) = create_heartbeat::<T>(k, e)?;
+		let (input_heartbeat, signature) = create_heartbeat::<T>(k)?;
 		let call = Call::heartbeat { heartbeat: input_heartbeat, signature };
 		let call_enc = call.encode();
 	}: {
