@@ -17,7 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![cfg(unix)]
-#[cfg(feature = "try-runtime")]
+#![cfg(feature = "try-runtime")]
+
 use assert_cmd::cargo::cargo_bin;
 use regex::Regex;
 use std::{
