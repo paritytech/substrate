@@ -139,7 +139,6 @@ impl<T: Config<I>, I: 'static> InspectRole<<T as SystemConfig>::AccountId> for P
 	fn is_issuer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
 		Self::has_role(collection, who, CollectionRole::Issuer)
 	}
-	/// Returns `true` if `who` is the admin of the `collection`.
 	fn is_admin(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
 		Self::has_role(collection, who, CollectionRole::Admin)
 	}
