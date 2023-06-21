@@ -60,7 +60,7 @@ fn check_prefix_duplicates(
 	if let Some(other_dup_err) = used_prefixes.insert(prefix.clone(), dup_err.clone()) {
 		let mut err = dup_err;
 		err.combine(other_dup_err);
-		return Err(err)
+		return Err(err);
 	}
 
 	if let Metadata::CountedMap { .. } = storage_def.metadata {
@@ -77,7 +77,7 @@ fn check_prefix_duplicates(
 		if let Some(other_dup_err) = used_prefixes.insert(counter_prefix, counter_dup_err.clone()) {
 			let mut err = counter_dup_err;
 			err.combine(other_dup_err);
-			return Err(err)
+			return Err(err);
 		}
 	}
 
@@ -150,7 +150,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					variant_name: variant_name.clone(),
 					span: storage_def.attr_span,
 				});
-				return syn::parse_quote!(#on_empty_ident)
+				return syn::parse_quote!(#on_empty_ident);
 			}
 			syn::parse_quote!(#frame_support::traits::GetDefault)
 		};
@@ -176,7 +176,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 						with 1 type parameter, found `{}`",
 						query_type.to_token_stream().to_string()
 					);
-					return Err(syn::Error::new(query_type.span(), msg))
+					return Err(syn::Error::new(query_type.span(), msg));
 				}
 			}
 			Ok(())
@@ -194,19 +194,8 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					let on_empty = on_empty.unwrap_or_else(|| default_on_empty(value));
 					args.args.push(syn::GenericArgument::Type(on_empty));
 				},
-				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values } => {
-					args.args.push(syn::GenericArgument::Type(hasher));
-					args.args.push(syn::GenericArgument::Type(key));
-					args.args.push(syn::GenericArgument::Type(value.clone()));
-					let mut query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
-					set_result_query_type_parameter(&mut query_kind)?;
-					args.args.push(syn::GenericArgument::Type(query_kind));
-					let on_empty = on_empty.unwrap_or_else(|| default_on_empty(value));
-					args.args.push(syn::GenericArgument::Type(on_empty));
-					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
-					args.args.push(syn::GenericArgument::Type(max_values));
-				},
-				StorageGenerics::CountedMap {
+				StorageGenerics::Map { hasher, key, value, query_kind, on_empty, max_values }
+				| StorageGenerics::CountedMap {
 					hasher,
 					key,
 					value,
@@ -248,7 +237,14 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 					let max_values = max_values.unwrap_or_else(|| default_max_values.clone());
 					args.args.push(syn::GenericArgument::Type(max_values));
 				},
-				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values } => {
+				StorageGenerics::NMap { keygen, value, query_kind, on_empty, max_values }
+				| StorageGenerics::CountedNMap {
+					keygen,
+					value,
+					query_kind,
+					on_empty,
+					max_values,
+				} => {
 					args.args.push(syn::GenericArgument::Type(keygen));
 					args.args.push(syn::GenericArgument::Type(value.clone()));
 					let mut query_kind = query_kind.unwrap_or_else(|| default_query_kind.clone());
@@ -265,7 +261,7 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 
 			let (value_idx, query_idx, on_empty_idx) = match storage_def.metadata {
 				Metadata::Value { .. } => (1, 2, 3),
-				Metadata::NMap { .. } => (2, 3, 4),
+				Metadata::NMap { .. } | Metadata::CountedNMap { .. } => (2, 3, 4),
 				Metadata::Map { .. } | Metadata::CountedMap { .. } => (3, 4, 5),
 				Metadata::DoubleMap { .. } => (5, 6, 7),
 			};
@@ -295,8 +291,8 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 
 			// Here, we only need to check if OnEmpty is *not* specified, and if so, then we have to
 			// generate a default OnEmpty struct for it.
-			if on_empty_idx >= args.args.len() &&
-				matches!(storage_def.query_kind.as_ref(), Some(QueryKind::ResultQuery(_, _)))
+			if on_empty_idx >= args.args.len()
+				&& matches!(storage_def.query_kind.as_ref(), Some(QueryKind::ResultQuery(_, _)))
 			{
 				let value_ty = match args.args[value_idx].clone() {
 					syn::GenericArgument::Type(ty) => ty,
@@ -359,6 +355,17 @@ fn augment_final_docs(def: &mut Def) {
 			);
 			push_string_literal(&doc_line, storage);
 		},
+		Metadata::CountedNMap { keys, value, .. } => {
+			let doc_line = format!(
+				"Storage type is [`CountedStorageNMap`] with keys type ({}) and value type {}.",
+				keys.iter()
+					.map(|k| k.to_token_stream().to_string())
+					.collect::<Vec<_>>()
+					.join(", "),
+				value.to_token_stream()
+			);
+			push_string_literal(&doc_line, storage);
+		},
 		Metadata::CountedMap { key, value } => {
 			let doc_line = format!(
 				"Storage type is [`CountedStorageMap`] with key type {} and value type {}.",
@@ -393,7 +400,7 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		.filter_map(|storage_def| check_prefix_duplicates(storage_def, &mut prefix_set).err());
 	if let Some(mut final_error) = errors.next() {
 		errors.for_each(|error| final_error.combine(error));
-		return final_error.into_compile_error()
+		return final_error.into_compile_error();
 	}
 
 	let frame_support = &def.frame_support;
@@ -575,6 +582,36 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 									#full_ident as
 									#frame_support::storage::StorageNMap<#keygen, #value>
 								>::get(key)
+							}
+						}
+					)
+				},
+				Metadata::CountedNMap { keygen, value, .. } => {
+					let query = match storage.query_kind.as_ref().expect("Checked by def") {
+						QueryKind::OptionQuery => quote::quote_spanned!(storage.attr_span =>
+							Option<#value>
+						),
+						QueryKind::ResultQuery(error_path, _) => {
+							quote::quote_spanned!(storage.attr_span =>
+								Result<#value, #error_path>
+							)
+						},
+						QueryKind::ValueQuery => quote::quote!(#value),
+					};
+					quote::quote_spanned!(storage.attr_span =>
+						#(#cfg_attrs)*
+						impl<#type_impl_gen> #pallet_ident<#type_use_gen> #completed_where_clause {
+							#[doc = #getter_doc_line]
+							pub fn #getter<KArg>(key: KArg) -> #query
+							where
+								KArg: #frame_support::storage::types::EncodeLikeTuple<
+									<#keygen as #frame_support::storage::types::KeyGenerator>::KArg
+								>
+									+ #frame_support::storage::types::TupleToEncodedIter,
+							{	
+								// NOTE: we can't use any trait here because CountedStorageNMap
+								// doesn't implement any.
+								<#full_ident>::get(key)
 							}
 						}
 					)
