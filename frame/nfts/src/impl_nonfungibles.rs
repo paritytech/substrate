@@ -136,7 +136,6 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 }
 
 impl<T: Config<I>, I: 'static> InspectRole<<T as SystemConfig>::AccountId> for Pallet<T, I> {
-	/// Returns `true` if `who` is the issuer of the `collection`.
 	fn is_issuer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
 		Self::has_role(collection, who, CollectionRole::Issuer)
 	}
