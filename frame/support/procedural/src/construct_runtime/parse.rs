@@ -760,9 +760,7 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 				})
 				.collect::<Result<Vec<_>>>()?;
 
-			if !pallet.is_expanded {
-				is_expanded = false;
-			}
+			is_expanded &= pallet.is_expanded;
 
 			Ok(Pallet {
 				is_expanded: pallet.is_expanded,
