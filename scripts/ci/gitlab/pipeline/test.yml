@@ -324,7 +324,6 @@ test-frame-examples-compile-to-wasm:
     - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
     - cd ../offchain-worker-price-oracle/
     - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
-    - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
     - cd ../basic
     - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
     - rusty-cachier cache upload
