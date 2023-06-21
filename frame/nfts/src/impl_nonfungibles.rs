@@ -142,7 +142,6 @@ impl<T: Config<I>, I: 'static> InspectRole<<T as SystemConfig>::AccountId> for P
 	fn is_admin(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
 		Self::has_role(collection, who, CollectionRole::Admin)
 	}
-	/// Returns `true` if `who` is the freezer of the `collection`.
 	fn is_freezer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
 		Self::has_role(collection, who, CollectionRole::Freezer)
 	}
