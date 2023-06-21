@@ -19,6 +19,8 @@
 
 use frame_support::traits::BuildGenesisConfig;
 use serde_json::Value;
+use sp_genesis_builder::Result as BuildResult;
+use sp_runtime::format_runtime_string;
 
 /// Helper for implementing [`sp_genesis_builder::GenesisBuilder`] for runtimes.
 ///
@@ -29,27 +31,40 @@ impl<GC> GenesisBuilderHelper<GC>
 where
 	GC: BuildGenesisConfig,
 {
-	/// Get the default `GenesisConfig` as a JSON blob.
+	/// Get the default `GenesisConfig` as a JSON blob. For more info refer to
+	/// [`sp_genesis_builder::GenesisBuilder::get_default_as_json`]
 	pub fn get_default_as_json() -> sp_std::vec::Vec<u8> {
 		serde_json::to_string(&GC::default())
 			.expect("serialization to json is expected to work. qed.")
 			.into_bytes()
 	}
 
-	/// Patch default `GenesisConfig` using given JSON patch and store it in the storage.
-	pub fn build_config(patch_json: sp_std::vec::Vec<u8>) {
+	/// Patch default `GenesisConfig` using given JSON patch and store it in the storage. For more
+	/// info refer to [`sp_genesis_builder::GenesisBuilder::build_config`].
+	pub fn build_config(patch_json: sp_std::vec::Vec<u8>) -> BuildResult {
 		let mut json = serde_json::to_value(&GC::default())
 			.expect("serialization to json is expected to work. qed.");
 
 		let patch: Value = serde_json::from_slice(&patch_json)
-			.expect("provided json patch is expected to be valid. qed.");
+			.map_err(|e| format_runtime_string!("Invalid JSON patch: {}", e))?;
 
 		merge(&mut json, patch);
 
-		let gc = serde_json::from_value::<GC>(json)
-			.expect("patched default config json is expected to be valid. qed.");
+		let gc = serde_json::from_value::<GC>(json).map_err(|e| {
+			format_runtime_string!("Patching does not result in correct GenesisConfig: {}", e)
+		})?;
 
 		<GC as BuildGenesisConfig>::build(&gc);
+		Ok(())
+	}
+
+	/// Patch default `GenesisConfig` using given JSON patch and store it in the storage. For more
+	/// info refer to [`sp_genesis_builder::GenesisBuilder::build_config_no_defaults`].
+	pub fn build_config_no_defaults(json: sp_std::vec::Vec<u8>) -> BuildResult {
+		let gc = serde_json::from_slice::<GC>(&json)
+			.map_err(|e| format_runtime_string!("Invalid JSON blob: {}", e))?;
+		<GC as BuildGenesisConfig>::build(&gc);
+		Ok(())
 	}
 }
 
