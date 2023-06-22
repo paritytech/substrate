@@ -519,7 +519,7 @@ impl Statement {
 	) -> core::result::Result<(), ecies::Error> {
 		let encrypted = ecies::encrypt_ed25519(key, data)?;
 		self.data = Some(encrypted);
-		self.decryption_key = Some(key.clone().into());
+		self.decryption_key = Some((*key).into());
 		Ok(())
 	}
 
