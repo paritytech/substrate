@@ -41,7 +41,7 @@ impl<
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		if !can_migrate::<T, I>() {
-			log::warn!(target: TARGET, "Already migrated");
+			log::warn!(target: TARGET, "pallet_society::MigrateToV2: Already migrated");
 		}
 
 		Ok((old::Candidates::<T, I>::get(), old::Members::<T, I>::get()).encode())
