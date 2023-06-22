@@ -20,12 +20,12 @@
 //!
 //! ## Overview
 
-//! It does this by extending transactions to include an optional `AssetId` that specifies the asset
+//! This pallet provides a `SignedExtension` with an optional `AssetId` that specifies the asset
 //! to be used for payment (defaulting to the native token on `None`). It expects an
-//! [`OnChargeAssetTransaction`] implementation analogously to [`pallet-transaction-payment`]. The
+//! [`OnChargeAssetTransaction`] implementation analogous to [`pallet-transaction-payment`]. The
 //! included [`AssetConversionAdapter`] (implementing [`OnChargeAssetTransaction`]) determines the
-//! fee amount by converting the fee calculated by [`pallet-transaction-payment`] into the desired
-//! asset.
+//! fee amount by converting the fee calculated by [`pallet-transaction-payment`] in the native asset
+//! into the amount required of the specified asset.
 //!
 //! ## Integration
 
