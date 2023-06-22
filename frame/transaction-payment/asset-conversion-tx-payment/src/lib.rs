@@ -16,7 +16,7 @@
 //! # Asset Conversion Transaction Payment Pallet
 //!
 //! This pallet allows runtimes that include it to pay for transactions in assets other than the
-//! main token of the chain.
+//! chain's native asset.
 //!
 //! ## Overview
 
