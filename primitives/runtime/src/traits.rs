@@ -26,7 +26,7 @@ use crate::{
 	},
 	DispatchResult,
 };
-use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
+use codec::{Codec, Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 #[cfg(feature = "serde")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -1154,7 +1154,7 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + TypeInfo + 'static {
 	/// Header number.
 	type Number: Member
 		+ MaybeSerializeDeserialize
@@ -1164,7 +1164,10 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 		+ Copy
 		+ MaybeDisplay
 		+ AtLeast32BitUnsigned
-		+ Codec;
+		+ Default
+		+ TypeInfo
+		+ MaxEncodedLen
+		+ FullCodec;
 	/// Header hash type
 	type Hash: HashOutput;
 	/// Hashing algorithm
@@ -1224,7 +1227,15 @@ pub trait HeaderProvider {
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: HeaderProvider<HeaderT = <Self as Block>::Header, HashT = <Self as Block>::Hash> + Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Type for extrinsics.
-	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
+	type Extrinsic: Debug
+		+ Clone
+		+ Send
+		+ Sync
+		+ Codec
+		+ Extrinsic
+		+ MaybeSerialize
+		+ Eq
+		+ PartialEq;
 	/// Header type.
 	type Header: Header<Hash = Self::Hash>;
 	/// Block hash type.
