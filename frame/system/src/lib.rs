@@ -219,7 +219,6 @@ pub mod pallet {
 			type Index = u32;
 			type BlockNumber = u32;
 			type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
-			type Block = sp_runtime::generic::Block<Self::Header, sp_runtime::OpaqueExtrinsic>;
 			type Hash = sp_core::hash::H256;
 			type Hashing = sp_runtime::traits::BlakeTwo256;
 			type AccountId = u64;
@@ -344,6 +343,7 @@ pub mod pallet {
 
 		/// The Block type used by the runtime. This is used by `construct_runtime` to retrieve the
 		/// extrinsics or other block specific data as needed.
+		#[pallet::no_default]
 		type Block: Parameter + traits::Block<Header = Self::Header, Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
@@ -1838,4 +1838,7 @@ pub mod pallet_prelude {
 
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
+
+	/// Type alias for the `Header`.
+	pub type HeaderFor<T> = <<T as crate::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
 }

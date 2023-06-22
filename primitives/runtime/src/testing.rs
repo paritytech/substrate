@@ -244,6 +244,14 @@ pub struct Block<Xt> {
 }
 
 impl<
+		Xt
+	> traits::HeaderProvider for Block<Xt>
+{
+	type HeaderT = Header;
+	type HashT = <Header as traits::Header>::Hash;
+}
+
+impl<
 		Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic,
 	> traits::Block for Block<Xt>
 {
