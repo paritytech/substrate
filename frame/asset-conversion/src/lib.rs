@@ -298,7 +298,8 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
-	pub enum Error<T> {
+	pub enum Error<T>
+	 {
 		/// Provided assets are equal.
 		EqualAssets,
 		/// Pool already exists.
@@ -307,7 +308,10 @@ pub mod pallet {
 		WrongDesiredAmount,
 		/// Provided amount should be greater than or equal to the existential deposit/asset's
 		/// minimal amount.
-		AmountLessThanMinimal,
+		AmountOneLessThanMinimal,
+		/// Provided amount should be greater than or equal to the existential deposit/asset's
+		/// minimal amount.
+		AmountTwoLessThanMinimal,
 		/// Reserve needs to always be greater than or equal to the existential deposit/asset's
 		/// minimal amount.
 		ReserveLeftLessThanMinimal,
@@ -488,9 +492,9 @@ pub mod pallet {
 			}
 
 			Self::validate_minimal_amount(amount1.saturating_add(reserve1), &asset1)
-				.map_err(|_| Error::<T>::AmountLessThanMinimal)?;
+				.map_err(|_| Error::<T>::AmountOneLessThanMinimal)?;
 			Self::validate_minimal_amount(amount2.saturating_add(reserve2), &asset2)
-				.map_err(|_| Error::<T>::AmountLessThanMinimal)?;
+				.map_err(|_| Error::<T>::AmountTwoLessThanMinimal)?;
 
 			Self::transfer(&asset1, &sender, &pool_account, amount1, true)?;
 			Self::transfer(&asset2, &sender, &pool_account, amount2, true)?;
