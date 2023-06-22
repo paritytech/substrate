@@ -102,13 +102,13 @@ where
 	) -> Result<(LiquidityInfoOf<T>, Self::LiquidityInfo), TransactionValidityError> {
 		// convert the asset into native currency
 		let ed = C::minimum_balance();
-		let swap_amount =
+		let native_asset_required =
 			if C::balance(&who) >= ed.saturating_add(fee.into()) { fee } else { fee + ed.into() };
 
 		let asset_consumed = CON::swap_tokens_for_exact_native(
 			who.clone(),
 			asset_id,
-			swap_amount,
+			native_asset_required,
 			None,
 			who.clone(),
 			true,
@@ -118,7 +118,8 @@ where
 		ensure!(asset_consumed > Zero::zero(), InvalidTransaction::Payment);
 
 		// charge the fee in native currency
-		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip).map(|r| (r, swap_amount))
+		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)
+			.map(|r| (r, native_asset_required))
 	}
 
 	/// Correct the fee and swap the refund back to asset.
