@@ -19,8 +19,8 @@
 //! ECIES encryption scheme using x25519 key exchange and AEAD.
 // end::description[]
 
-use aes_gcm::{aead::Aead, KeyInit};
-use rand::{rngs::OsRng, RngCore};
+use aes_gcm::{aead::Aead, KeyInit, AeadCore};
+use rand::rngs::OsRng;
 use sha2::Digest;
 use sp_core::crypto::Pair;
 
@@ -79,8 +79,7 @@ pub fn encrypt_x25519(pk: &PublicKey, plaintext: &[u8]) -> Result<Vec<u8>, Error
 
 	let aes_key = kdf(&shared_secret);
 
-	let mut nonce = [0u8; NONCE_LEN];
-	OsRng.fill_bytes(&mut nonce);
+	let nonce = aes_gcm::Aes256Gcm::generate_nonce(OsRng);
 	let ciphertext = aes_encrypt(&aes_key, &nonce, plaintext)?;
 
 	let mut out = Vec::with_capacity(ciphertext.len() + PK_LEN + NONCE_LEN);
@@ -97,8 +96,7 @@ pub fn encrypt_ed25519(pk: &sp_core::ed25519::Public, plaintext: &[u8]) -> Resul
 	let ed25519 = curve25519_dalek::edwards::CompressedEdwardsY(pk.0);
 	let x25519 = ed25519
 		.decompress()
-		.ok_or(Error::BadData)
-		.expect("The compressed point is invalid")
+		.ok_or(Error::BadData)?
 		.to_montgomery();
 	let montgomery = x25519_dalek::PublicKey::from(x25519.to_bytes());
 	encrypt_x25519(&montgomery, plaintext)
@@ -126,7 +124,7 @@ pub fn decrypt_x25519(sk: &SecretKey, encrypted: &[u8]) -> Result<Vec<u8>, Error
 pub fn decrypt_ed25519(pair: &sp_core::ed25519::Pair, encrypted: &[u8]) -> Result<Vec<u8>, Error> {
 	let raw = pair.to_raw_vec();
 	let hash: [u8; 32] =
-		sha2::Sha512::digest(&raw).as_slice()[..32].try_into().expect("Hashing error");
+		sha2::Sha512::digest(&raw).as_slice()[..32].try_into().map_err(|_| Error::Decryption)?;
 	let secret = x25519_dalek::StaticSecret::from(hash);
 	decrypt_x25519(&secret, encrypted)
 }
