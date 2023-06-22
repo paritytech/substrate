@@ -1324,8 +1324,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///  storage map.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> Result<(), TryRuntimeError> {
-		use sp_runtime::traits::Bounded;
-
 		ensure!(
 			ReferendumCount::<T, I>::get() as usize ==
 				ReferendumInfoFor::<T, I>::iter_keys().count(),
