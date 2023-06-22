@@ -195,7 +195,7 @@ pub mod benchmarking;
 
 pub mod migrations;
 
-const DEMOCRACY_ID: LockIdentifier = *b"democrac";
+pub(crate) const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;

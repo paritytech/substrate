@@ -4,20 +4,22 @@ This document is only focused on documenting parts of substrate that relates to 
 
 These are crates that are often used by external developers and need more thorough documentation. These are the crates most concerned with FRAME development.
 
-- [General/Non-Pallet Crates](#generalnon-pallet-crates)
-  - [What to Document?](#what-to-document)
-    - [Rust Docs vs. Code Comments](#rust-docs-vs-code-comments)
-  - [How to Document?](#how-to-document)
-    - [TLDR](#tldr)
-    - [Proc-Macros](#proc-macros)
-  - [Other Guidelines](#other-guidelines)
-    - [Document Through Code](#document-through-code)
-    - [Formatting Matters](#formatting-matters)
-- [Pallet Crates](#pallet-crates)
-  - [Top Level Pallet Docs (`lib.rs`)](#top-level-pallet-docs-librs)
-    - [Polkadot and Substrate](#polkadot-and-substrate)
-  - [Dispatchable](#dispatchable)
-  - [Storage Items](#storage-items)
+- [Substrate Documentation Guidelines](#substrate-documentation-guidelines)
+  - [General/Non-Pallet Crates](#generalnon-pallet-crates)
+    - [What to Document?](#what-to-document)
+      - [Rust Docs vs. Code Comments](#rust-docs-vs-code-comments)
+    - [How to Document?](#how-to-document)
+      - [TLDR](#tldr)
+      - [Proc-Macros](#proc-macros)
+    - [Other Guidelines](#other-guidelines)
+      - [Document Through Code](#document-through-code)
+      - [Formatting Matters](#formatting-matters)
+  - [Pallet Crates](#pallet-crates)
+    - [Top Level Pallet Docs (`lib.rs`)](#top-level-pallet-docs-librs)
+      - [Polkadot and Substrate](#polkadot-and-substrate)
+    - [Dispatchables](#dispatchables)
+    - [Storage Items](#storage-items)
+    - [Errors and Events](#errors-and-events)
 
 
 ## General/Non-Pallet Crates
@@ -222,9 +224,9 @@ Optionally, in order to demonstrate the relation between the two, you can start 
 //! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
 ```
 
-### Dispatchable
+### Dispatchables
 
-For each dispatchable (`fn` item inside `pallet::call`), consider the following template:
+For each dispatchable (`fn` item inside `#[pallet::call]`), consider the following template:
 
 ```
 /// <One-liner explaining what the dispatchable does>
@@ -247,8 +249,16 @@ For each dispatchable (`fn` item inside `pallet::call`), consider the following 
 pub fn name_of_dispatchable(origin: OriginFor<T>, ...) -> DispatchResult {}
 ```
 
+Consider the fact that these docs will be part of the metadata of the associated dispatchable, and might be used by wallets and explorers.
+
 ### Storage Items
 
 1. If a map-like type is being used, always note the choice of your hashers as private code docs (`// Hasher X chosen because ...`). Recall that this is not relevant information to external people, so it must be documented as `//`.
 2. Consider explaining the crypto-economics of how a deposit is being taken in return of the storage being used.
 3. Consider explaining why it is safe for the storage item to be unbounded, if `#[pallet::unbounded]` or `#[pallet::without_storage_info]` is being used.
+
+### Errors and Events
+
+Consider the fact that, similar to dispatchables, these docs will be part of the metadata of the associated event/error, and might be used by wallets and explorers.
+
+Specifically for `error`, explain why the error has happened, and what can be done in order to avoid it.
