@@ -190,6 +190,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 		<Ping as NetworkBehaviour>::ConnectionHandler,
 		<Identify as NetworkBehaviour>::ConnectionHandler,
 	>;
+	type ToSwarm = PeerInfoEvent;
 
 	fn handle_pending_inbound_connection(
 		&mut self,
@@ -355,9 +356,9 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 				self.ping.on_swarm_event(FromSwarm::ListenerError(e));
 				self.identify.on_swarm_event(FromSwarm::ListenerError(e));
 			},
-			FromSwarm::ExpiredExternalAddr(e) => {
-				self.ping.on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
-				self.identify.on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
+			FromSwarm::ExternalAddrExpired(e) => {
+				self.ping.on_swarm_event(FromSwarm::ExternalAddrExpired(e));
+				self.identify.on_swarm_event(FromSwarm::ExternalAddrExpired(e));
 			},
 			FromSwarm::NewListener(e) => {
 				self.ping.on_swarm_event(FromSwarm::NewListener(e));
@@ -367,9 +368,13 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 				self.ping.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
 				self.identify.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
 			},
-			FromSwarm::NewExternalAddr(e) => {
-				self.ping.on_swarm_event(FromSwarm::NewExternalAddr(e));
-				self.identify.on_swarm_event(FromSwarm::NewExternalAddr(e));
+			FromSwarm::NewExternalAddrCandidate(e) => {
+				self.ping.on_swarm_event(FromSwarm::NewExternalAddrCandidate(e));
+				self.identify.on_swarm_event(FromSwarm::NewExternalAddrCandidate(e));
+			},
+			FromSwarm::ExternalAddrConfirmed(e) => {
+				self.ping.on_swarm_event(FromSwarm::ExternalAddrConfirmed(e));
+				self.identify.on_swarm_event(FromSwarm::ExternalAddrConfirmed(e));
 			},
 			FromSwarm::AddressChange(e @ AddressChange { peer_id, old, new, .. }) => {
 				self.ping.on_swarm_event(FromSwarm::AddressChange(e));
@@ -428,10 +433,18 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						handler,
 						event: Either::Left(event),
 					}),
-				Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
-					return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
 				Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
 					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
+				Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)) =>
+					return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
+				Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)) =>
+					return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
+				Poll::Ready(ToSwarm::ExternalAddrExpired(addr)) =>
+					return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
+				Poll::Ready(ToSwarm::ListenOn { opts }) =>
+					return Poll::Ready(ToSwarm::ListenOn { opts }),
+				Poll::Ready(ToSwarm::RemoveListener { id }) =>
+					return Poll::Ready(ToSwarm::RemoveListener { id }),
 			}
 		}
 
@@ -457,10 +470,18 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 						handler,
 						event: Either::Right(event),
 					}),
-				Poll::Ready(ToSwarm::ReportObservedAddr { address, score }) =>
-					return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
 				Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }) =>
 					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
+				Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)) =>
+					return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
+				Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)) =>
+					return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
+				Poll::Ready(ToSwarm::ExternalAddrExpired(addr)) =>
+					return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
+				Poll::Ready(ToSwarm::ListenOn { opts }) =>
+					return Poll::Ready(ToSwarm::ListenOn { opts }),
+				Poll::Ready(ToSwarm::RemoveListener { id }) =>
+					return Poll::Ready(ToSwarm::RemoveListener { id }),
 			}
 		}
 

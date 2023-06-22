@@ -482,6 +482,7 @@ pub enum DiscoveryOut {
 
 impl NetworkBehaviour for DiscoveryBehaviour {
 	type ConnectionHandler = ToggleConnectionHandler<KademliaHandler<QueryId>>;
+	type ToSwarm = DiscoveryOut;
 
 	fn handle_established_inbound_connection(
 		&mut self,
@@ -611,11 +612,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			FromSwarm::ListenerError(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::ListenerError(e));
 			},
-			FromSwarm::ExpiredExternalAddr(e) => {
+			FromSwarm::ExternalAddrExpired(e) => {
 				// We intentionally don't remove the element from `known_external_addresses` in
 				// order to not print the log line again.
 
-				self.kademlia.on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
+				self.kademlia.on_swarm_event(FromSwarm::ExternalAddrExpired(e));
 			},
 			FromSwarm::NewListener(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::NewListener(e));
@@ -645,6 +646,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			},
 			FromSwarm::NewListenAddr(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::NewListenAddr(e));
+			},
+			FromSwarm::ExternalAddrConfirmed(addr) => {
+				self.kademlia.on_swarm_event(FromSwarm::ExternalAddrConfirmed(addr));
 			},
 		}
 	}
@@ -873,8 +877,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				ToSwarm::Dial { opts } => return Poll::Ready(ToSwarm::Dial { opts }),
 				ToSwarm::NotifyHandler { peer_id, handler, event } =>
 					return Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }),
-				ToSwarm::ReportObservedAddr { address, score } =>
-					return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+				ToSwarm::NewExternalAddrCandidate(observed) =>
+					return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
 				ToSwarm::CloseConnection { peer_id, connection } =>
 					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 			}
@@ -904,8 +908,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					ToSwarm::NotifyHandler { event, .. } => match event {}, /* `event` is an */
 					// enum with no
 					// variant
-					ToSwarm::ReportObservedAddr { address, score } =>
-						return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
+					ToSwarm::NewExternalAddrCandidate(observed) =>
+						return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
 					ToSwarm::CloseConnection { peer_id, connection } =>
 						return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
 				}

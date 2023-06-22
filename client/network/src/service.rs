@@ -592,7 +592,7 @@ where
 
 		let peer_id = Swarm::<Behaviour<B>>::local_peer_id(swarm).to_base58();
 		let listened_addresses = swarm.listeners().cloned().collect();
-		let external_addresses = swarm.external_addresses().map(|r| &r.addr).cloned().collect();
+		let external_addresses = swarm.external_addresses().cloned().collect();
 
 		NetworkState {
 			peer_id,
@@ -1185,8 +1185,7 @@ where
 			self.network_service.behaviour_mut().user_protocol_mut().num_connected_peers();
 		self.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
-			let external_addresses =
-				self.network_service.external_addresses().map(|r| &r.addr).cloned().collect();
+			let external_addresses = self.network_service.external_addresses().cloned().collect();
 			*self.external_addresses.lock() = external_addresses;
 
 			let listen_addresses =
