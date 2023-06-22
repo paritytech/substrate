@@ -12,7 +12,7 @@ homepage = "https://substrate.io"
 array-bytes = "4.1"
 async-channel = "1.8.0"
 async-trait = "0.1.57"
-codec = { package = "parity-scale-codec", version = "3.2.2", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }
 fnv = "1.0.6"
 futures = "0.3"
 log = "0.4"
