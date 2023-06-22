@@ -553,7 +553,7 @@ pub mod pallet {
 			T::WeightInfo::approve_as_multi_create(s)
 				.max(T::WeightInfo::approve_as_multi_approve(s))
 				.saturating_add(*max_weight)
-				.saturating_add(T::DbWeight::get().writes(1).ref_time())
+				.saturating_add(T::DbWeight::get().writes(1))
 		})]
 		pub fn create_multisig_with_expiry(
 			origin: OriginFor<T>,
