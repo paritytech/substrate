@@ -19,7 +19,7 @@
 //! chain's native asset.
 //!
 //! ## Overview
-
+//!
 //! This pallet provides a `SignedExtension` with an optional `AssetId` that specifies the asset
 //! to be used for payment (defaulting to the native token on `None`). It expects an
 //! [`OnChargeAssetTransaction`] implementation analogous to [`pallet-transaction-payment`]. The
@@ -27,11 +27,18 @@
 //! fee amount by converting the fee calculated by [`pallet-transaction-payment`] in the native
 //! asset into the amount required of the specified asset.
 //!
-//! ## Integration
-
-//! This pallet wraps FRAME's Transaction Payment pallet and functions as a replacement. This means
-//! you should include both pallets in your `construct_runtime` macro, but only include this
-//! pallet's [`SignedExtension`] ([`ChargeAssetTxPayment`]).
+//! ## Pallet API
+//!
+//! This pallet does not have any dispatchable calls or storage. It wraps FRAME's Transaction
+//! Payment pallet and functions as a replacement. This means you should include both pallets in
+//! your `construct_runtime` macro, but only include this pallet's [`SignedExtension`]
+//! ([`ChargeAssetTxPayment`]).
+//!
+//! ## Terminology
+//!
+//! - Native Asset or Native Currency: The asset that a chain considers native, as in its default
+//!   for transaction fee payment, deposits, inflation, etc.
+//! - Other assets: Other assets that may exist on chain, for example under the Assets pallet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -67,28 +74,26 @@ pub use payment::*;
 /// Type aliases used for interaction with `OnChargeTransaction`.
 pub(crate) type OnChargeTransactionOf<T> =
 	<T as pallet_transaction_payment::Config>::OnChargeTransaction;
-/// Balance type alias.
+/// Balance type alias for balances of the chain's native asset.
 pub(crate) type BalanceOf<T> = <OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance;
 /// Liquidity info type alias.
 pub(crate) type LiquidityInfoOf<T> =
 	<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::LiquidityInfo;
 
-/// Type alias used for interaction with fungibles (assets).
-/// Balance type alias.
+/// Balance type alias for balances of assets that implement the `fungibles` trait.
 pub(crate) type AssetBalanceOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
-/// Asset id type alias.
+/// Type alias for Asset IDs.
 pub(crate) type AssetIdOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
-/// Type aliases used for interaction with `OnChargeAssetTransaction`.
-/// Balance type alias.
+/// Type alias for the interaction of balances with `OnChargeAssetTransaction`.
 pub(crate) type ChargeAssetBalanceOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::Balance;
-/// Asset id type alias.
+/// Type alias for Asset IDs in their interaction with `OnChargeAssetTransaction`.
 pub(crate) type ChargeAssetIdOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::AssetId;
-/// Liquidity info type alias.
+/// Liquidity info type alias for interaction with `OnChargeAssetTransaction`.
 pub(crate) type ChargeAssetLiquidityOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::LiquidityInfo;
 
@@ -130,7 +135,7 @@ pub mod pallet {
 		/// has been paid by `who` in an asset `asset_id`.
 		AssetTxFeePaid {
 			who: T::AccountId,
-			actual_fee: BalanceOf<T>,
+			actual_fee: AssetBalanceOf<T>,
 			tip: BalanceOf<T>,
 			asset_id: ChargeAssetIdOf<T>,
 		},

@@ -584,10 +584,13 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	fn done_withdraw(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
 }
 
-/// Trait for providing methods to swap the native token to an asset and back.
+/// Trait for providing methods to swap between the chain's native token and other asset classes.
 pub trait SwapNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
-	/// Swaps the provided amount of the `asset_id` into exact amount of native.
-	/// If successful, returns the amount of `asset_id` consumed to provide `amount_out`.
+	/// Take an `asset_id` and swap some amount for `amount_out` of the chain's native asset. If an
+	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
+	/// too costly.
+	///
+	/// If successful returns the amount of the `asset_id` taken to provide `amount_out`.
 	fn swap_tokens_for_exact_native(
 		sender: AccountId,
 		asset_id: AssetId,
@@ -597,7 +600,10 @@ pub trait SwapNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
 		keep_alive: bool,
 	) -> Result<AssetBalance, DispatchError>;
 
-	/// Swaps the provided exact amount of the native currency into the amount of `asset_id`.
+	/// Take an `asset_id` and swap `amount_in` of the chain's native asset for it. If an
+	/// `amount_out_min` is specified, it will return an error if it is unable to acquire the amount
+	/// desired.
+	///
 	/// If successful, returns the amount of `asset_id` acquired for the `amount_in`.
 	fn swap_exact_native_for_tokens(
 		sender: AccountId,
