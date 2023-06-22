@@ -277,6 +277,10 @@ where
 		if let Some((tip, who, initial_payment, asset_id)) = pre {
 			match initial_payment {
 				InitialPayment::Native(already_withdrawn) => {
+					debug_assert!(
+						asset_id.is_none(),
+						"For that payment type the `asset_id` should be None"
+					);
 					pallet_transaction_payment::ChargeTransactionPayment::<T>::post_dispatch(
 						Some((tip, who, already_withdrawn)),
 						info,
@@ -286,6 +290,10 @@ where
 					)?;
 				},
 				InitialPayment::Asset(already_withdrawn) => {
+					debug_assert!(
+						asset_id.is_some(),
+						"For that payment type the `asset_id` should be set"
+					);
 					let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
 						len as u32, info, post_info, tip,
 					);
