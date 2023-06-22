@@ -598,7 +598,7 @@ pub trait SwapNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
 	) -> Result<AssetBalance, DispatchError>;
 
 	/// Swaps the provided exact amount of the native currency into the amount of `asset_id`.
-	/// If successful, returns the received amount of `asset_id`.
+	/// If successful, returns the amount of `asset_id` acquired for the `amount_in`.
 	fn swap_exact_native_for_tokens(
 		sender: AccountId,
 		asset_id: AssetId,
