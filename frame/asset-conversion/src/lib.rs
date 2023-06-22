@@ -635,16 +635,7 @@ pub mod pallet {
 			let amount_out = *amounts.last().expect("Has always more than 1 element");
 			ensure!(amount_out >= amount_out_min, Error::<T>::ProvidedMinimumNotSufficientForSwap);
 
-			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-			Self::deposit_event(Event::SwapExecuted {
-				who: sender,
-				send_to,
-				path,
-				amount_in,
-				amount_out,
-			});
-
+			Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
 			Ok(())
 		}
 
@@ -676,16 +667,7 @@ pub mod pallet {
 			let amount_in = *amounts.first().expect("Always has more than one element");
 			ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 
-			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-			Self::deposit_event(Event::SwapExecuted {
-				who: sender,
-				send_to,
-				path,
-				amount_in,
-				amount_out,
-			});
-
+			Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
 			Ok(())
 		}
 	}
@@ -736,10 +718,10 @@ pub mod pallet {
 		}
 
 		pub(crate) fn do_swap(
-			sender: &T::AccountId,
+			sender: T::AccountId,
 			amounts: &Vec<T::AssetBalance>,
-			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
-			send_to: &T::AccountId,
+			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
+			send_to: T::AccountId,
 			keep_alive: bool,
 		) -> Result<(), DispatchError> {
 			if let Some([asset1, asset2]) = path.get(0..2) {
@@ -747,7 +729,7 @@ pub mod pallet {
 				let pool_account = Self::get_pool_account(&pool_id);
 				let first_amount = amounts.first().expect("Always has more than one element");
 
-				Self::transfer(asset1, sender, &pool_account, *first_amount, keep_alive)?;
+				Self::transfer(asset1, &sender, &pool_account, *first_amount, keep_alive)?;
 
 				let mut i = 0;
 				let path_len = path.len() as u32;
@@ -778,6 +760,13 @@ pub mod pallet {
 					}
 					i.saturating_inc();
 				}
+				Self::deposit_event(Event::SwapExecuted {
+					who: sender,
+					send_to,
+					path,
+					amount_in: *first_amount,
+					amount_out: *amounts.last().unwrap(),
+				});
 			}
 			Ok(())
 		}
@@ -1129,16 +1118,7 @@ where
 			ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 		}
 
-		Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-		Self::deposit_event(Event::SwapExecuted {
-			who: sender,
-			send_to,
-			path,
-			amount_in,
-			amount_out,
-		});
-
+		Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
 		Ok(amount_in)
 	}
 
@@ -1168,16 +1148,7 @@ where
 			ensure!(amount_out >= amount_out_min, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 		}
 
-		Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-		Self::deposit_event(Event::SwapExecuted {
-			who: sender,
-			send_to,
-			path,
-			amount_in,
-			amount_out,
-		});
-
+		Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
 		Ok(amount_out)
 	}
 }
