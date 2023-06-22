@@ -98,12 +98,12 @@ pub(crate) type ChargeAssetLiquidityOf<T> =
 /// Used to pass the initial payment info from pre- to post-dispatch.
 #[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
 pub enum InitialPayment<T: Config> {
-	/// No initial fee was payed.
+	/// No initial fee was paid.
 	#[default]
 	Nothing,
-	/// The initial fee was payed in the native currency.
+	/// The initial fee was paid in the native currency.
 	Native(LiquidityInfoOf<T>),
-	/// The initial fee was payed in an asset.
+	/// The initial fee was paid in an asset.
 	Asset(Credit<T::AccountId, T::Fungibles>),
 }
 
