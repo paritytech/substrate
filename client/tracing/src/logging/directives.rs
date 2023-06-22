@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::sync::OnceLock;
 use parking_lot::Mutex;
+use std::sync::OnceLock;
 use tracing_subscriber::{
 	filter::Directive, fmt as tracing_fmt, layer, reload::Handle, EnvFilter, Registry,
 };
