@@ -210,7 +210,6 @@ impl TypeId for PalletId {
 /// ```
 pub use frame_support_procedural::storage_alias;
 
-#[macro_magic::use_attr]
 pub use frame_support_procedural::derive_impl;
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
@@ -848,7 +847,7 @@ pub mod tests {
 		use crate::pallet_prelude::*;
 
 		#[pallet::pallet]
-		pub struct Pallet<T>(PhantomData<T>);
+		pub struct Pallet<T>(_);
 
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
@@ -1564,6 +1563,7 @@ pub mod pallet_prelude {
 	pub use frame_support::pallet_macros::*;
 	pub use frame_support_procedural::register_default_impl;
 	pub use scale_info::TypeInfo;
+	pub use sp_inherents::MakeFatalError;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{

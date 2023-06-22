@@ -37,7 +37,6 @@ fn should_submit_unsigned_transaction() {
 			pallet_im_online::sr25519::AuthoritySignature::try_from(vec![0; 64]).unwrap();
 		let heartbeat_data = pallet_im_online::Heartbeat {
 			block_number: 1,
-			network_state: Default::default(),
 			session_index: 1,
 			authority_index: 0,
 			validators_len: 0,
