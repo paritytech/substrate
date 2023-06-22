@@ -1,6 +1,6 @@
 # pallet-asset-conversion-tx-payment
 
-## Asset Asset Conversion Transaction Payment Pallet
+## Asset Conversion Transaction Payment Pallet
 
 This pallet allows runtimes that include it to pay for transactions in assets other than the
 native token of the chain.
