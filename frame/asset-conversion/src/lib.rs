@@ -1121,8 +1121,10 @@ where
 		path.push(T::MultiAssetIdConverter::get_native());
 		let path = path.try_into().unwrap();
 
+		// convert `amount_out` from native balance type, to asset balance type
 		let amount_out = Self::native_to_asset(amount_out)?;
 
+		// calculate the amount we need to provide
 		let amounts = Self::get_amounts_in(&amount_out, &path)?;
 		let amount_in = *amounts.first().expect("Always has more than one element");
 		if let Some(amount_in_max) = amount_in_max {
@@ -1160,8 +1162,10 @@ where
 		path.push(T::MultiAssetIdConverter::into_multiasset_id(&asset_id));
 		let path = path.try_into().expect("MaxSwapPathLength must be greater than 1");
 
+		// convert `amount_in` from native balance type, to asset balance type
 		let amount_in = Self::native_to_asset(amount_in)?;
 
+		// calculate the amount we should receive
 		let amounts = Self::get_amounts_out(&amount_in, &path)?;
 		let amount_out = *amounts.last().expect("Always has more than one element");
 		if let Some(amount_out_min) = amount_out_min {
