@@ -137,11 +137,11 @@ pub mod pallet {
 	}
 }
 
-/// Require the transactor pay for themselves and maybe include a tip to gain additional priority
+/// Require payment for transaction inclusion and optionally include a tip to gain additional priority
 /// in the queue. Allows paying via both `Currency` as well as `fungibles::Balanced`.
 ///
 /// Wraps the transaction logic in [`pallet_transaction_payment`] and extends it with assets.
-/// An asset id of `None` falls back to the underlying transaction payment via the native currency.
+/// An asset ID of `None` falls back to the underlying transaction payment logic via the native currency.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct ChargeAssetTxPayment<T: Config> {
