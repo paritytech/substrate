@@ -471,7 +471,7 @@ impl ConnectionHandler for NotifsHandler {
 
 				match protocol_info.state {
 					State::Closed { pending_opening } => {
-						self.events_queue.push_back(ConnectionHandlerEvent::Custom(
+						self.events_queue.push_back(ConnectionHandlerEvent::NotifyBehaviour(
 							NotifsHandlerOut::OpenDesiredByRemote { protocol_index },
 						));
 
@@ -536,7 +536,7 @@ impl ConnectionHandler for NotifsHandler {
 							in_substream: in_substream.take(),
 						};
 
-						self.events_queue.push_back(ConnectionHandlerEvent::Custom(
+						self.events_queue.push_back(ConnectionHandlerEvent::NotifyBehaviour(
 							NotifsHandlerOut::OpenResultOk {
 								protocol_index,
 								negotiated_fallback: new_open.negotiated_fallback,
@@ -565,7 +565,7 @@ impl ConnectionHandler for NotifsHandler {
 					self.protocols[dial_upgrade_error.info].state =
 						State::Closed { pending_opening: false };
 
-					self.events_queue.push_back(ConnectionHandlerEvent::Custom(
+					self.events_queue.push_back(ConnectionHandlerEvent::NotifyBehaviour(
 						NotifsHandlerOut::OpenResultErr { protocol_index: dial_upgrade_error.info },
 					));
 				},
@@ -651,7 +651,7 @@ impl ConnectionHandler for NotifsHandler {
 						self.protocols[protocol_index].state =
 							State::Closed { pending_opening: true };
 
-						self.events_queue.push_back(ConnectionHandlerEvent::Custom(
+						self.events_queue.push_back(ConnectionHandlerEvent::NotifyBehaviour(
 							NotifsHandlerOut::OpenResultErr { protocol_index },
 						));
 					},
@@ -661,7 +661,7 @@ impl ConnectionHandler for NotifsHandler {
 					State::Closed { .. } => {},
 				}
 
-				self.events_queue.push_back(ConnectionHandlerEvent::Custom(
+				self.events_queue.push_back(ConnectionHandlerEvent::NotifyBehaviour(
 					NotifsHandlerOut::CloseResult { protocol_index },
 				));
 			},
@@ -755,7 +755,7 @@ impl ConnectionHandler for NotifsHandler {
 						Poll::Ready(Err(_)) => {
 							*out_substream = None;
 							let event = NotifsHandlerOut::CloseDesired { protocol_index };
-							return Poll::Ready(ConnectionHandlerEvent::Custom(event))
+							return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(event))
 						},
 					};
 				},
@@ -781,7 +781,7 @@ impl ConnectionHandler for NotifsHandler {
 						Poll::Pending => {},
 						Poll::Ready(Some(Ok(message))) => {
 							let event = NotifsHandlerOut::Notification { protocol_index, message };
-							return Poll::Ready(ConnectionHandlerEvent::Custom(event))
+							return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(event))
 						},
 						Poll::Ready(None) | Poll::Ready(Some(Err(_))) => *in_substream = None,
 					},
@@ -793,7 +793,7 @@ impl ConnectionHandler for NotifsHandler {
 						Poll::Ready(Err(_)) => {
 							self.protocols[protocol_index].state =
 								State::Closed { pending_opening: *pending_opening };
-							return Poll::Ready(ConnectionHandlerEvent::Custom(
+							return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
 								NotifsHandlerOut::CloseDesired { protocol_index },
 							))
 						},
@@ -1591,15 +1591,15 @@ pub mod tests {
 		futures::future::poll_fn(|cx| {
 			assert!(std::matches!(
 				handler.poll(cx),
-				Poll::Ready(ConnectionHandlerEvent::Custom(
+				Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
 					NotifsHandlerOut::OpenDesiredByRemote { protocol_index: 0 },
 				))
 			));
 			assert!(std::matches!(
 				handler.poll(cx),
-				Poll::Ready(ConnectionHandlerEvent::Custom(NotifsHandlerOut::CloseDesired {
-					protocol_index: 0
-				},))
+				Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
+					NotifsHandlerOut::CloseDesired { protocol_index: 0 },
+				))
 			));
 			Poll::Ready(())
 		})

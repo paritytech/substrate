@@ -332,8 +332,8 @@ impl RequestResponsesBehaviour {
 			};
 
 			let rq_rp = Behaviour::new(
-				iter::once(protocol.name.as_bytes().to_vec())
-					.chain(protocol.fallback_names.iter().map(|name| name.as_bytes().to_vec()))
+				iter::once(protocol.name)
+					.chain(protocol.fallback_names)
 					.zip(iter::repeat(protocol_support)),
 				cfg,
 			);
