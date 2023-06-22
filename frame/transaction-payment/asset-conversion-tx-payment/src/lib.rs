@@ -29,7 +29,7 @@
 //!
 //! ## Integration
 
-//! This pallet wraps FRAME's transaction payment pallet and functions as a replacement. This means
+//! This pallet wraps FRAME's Transaction Payment pallet and functions as a replacement. This means
 //! you should include both pallets in your `construct_runtime` macro, but only include this
 //! pallet's [`SignedExtension`] ([`ChargeAssetTxPayment`]).
 
