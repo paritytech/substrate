@@ -40,7 +40,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 	/// The type used to store the intermediate values between pre- and post-dispatch.
 	type LiquidityInfo;
 
-	/// Before the transaction is executed the payment of the transaction fees needs to be secured.
+	/// Secure the payment of the transaction fees before the transaction is executed.
 	///
 	/// Note: The `fee` already includes the `tip`.
 	fn withdraw_fee(
@@ -52,9 +52,8 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		tip: Self::Balance,
 	) -> Result<(LiquidityInfoOf<T>, Self::LiquidityInfo), TransactionValidityError>;
 
-	/// After the transaction was executed the actual fee can be calculated.
-	/// This function should refund any overpaid fees and optionally deposit
-	/// the corrected amount.
+	/// Refund any overpaid fees and deposit the corrected amount.
+	/// The actual fee gets calculated once the transaction is executed.
 	///
 	/// Note: The `fee` already includes the `tip`.
 	///
