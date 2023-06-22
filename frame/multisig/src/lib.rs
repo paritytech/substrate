@@ -234,7 +234,12 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new multisig operation has begun.
-		NewMultisig { approving: T::AccountId, multisig: T::AccountId, call_hash: CallHash },
+		NewMultisig {
+			approving: T::AccountId,
+			multisig: T::AccountId,
+			call_hash: CallHash,
+			expiry: Option<T::BlockNumber>,
+		},
 		/// A multisig operation has been approved by someone.
 		MultisigApproval {
 			approving: T::AccountId,
@@ -508,8 +513,48 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Register approval for a dispatch to be made from a deterministic composite account if
+		/// approved by a total of `threshold - 1` of `other_signatories`.
+		///
+		/// Payment: `DepositBase` will be reserved if this is the first approval, plus
+		/// `threshold` times `DepositFactor`. It is returned once this dispatch happens or
+		/// is cancelled.
+		///
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
+		/// - `other_signatories`: The accounts (other than the sender) who can approve this
+		/// dispatch. May not be empty.
+		/// - `maybe_timepoint`: If this is the first approval, then this must be `None`. If it is
+		/// not the first approval, then it must be `Some`, with the timepoint (block number and
+		/// transaction index) of the first approval transaction.
+		/// - `call_hash`: The hash of the call to be executed.
+		/// - `expiry`: An optional expiry of the multisig operation defined in block number.
+		///
+		/// NOTE: If this is the final approval, you will want to use `as_multi` instead.
+		///
+		/// ## Complexity
+		/// - `O(S)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - Up to one binary search and insert (`O(logS + S)`).
+		/// - I/O: 1 read `O(S)`, up to 1 mutate `O(S)`. Up to one remove.
+		/// - One event.
+		/// - Storage: inserts one item, value size bounded by `MaxSignatories`, with a deposit
+		///   taken for its lifetime of `DepositBase + threshold * DepositFactor`.
 		#[pallet::call_index(4)]
-		#[pallet::weight(T::WeightInfo::cancel_as_multi(other_signatories.len() as u32))]
+		#[pallet::weight({
+			let s = other_signatories.len() as u32;
+
+			// The weight is the same as for `approve_as_multi` but there is an
+			// additional write since we are writing into `MultisigExpiries`. 
+			T::WeightInfo::approve_as_multi_create(s)
+				.max(T::WeightInfo::approve_as_multi_approve(s))
+				.saturating_add(*max_weight)
+				.saturating_add(T::DbWeight::get().writes(1).ref_time())
+		})]
 		pub fn create_multisig_with_expiry(
 			origin: OriginFor<T>,
 			threshold: u16,
@@ -694,7 +739,12 @@ impl<T: Config> Pallet<T> {
 				<MultisigExpiries<T>>::insert(&id, call_hash, expiry);
 			}
 
-			Self::deposit_event(Event::NewMultisig { approving: who, multisig: id, call_hash });
+			Self::deposit_event(Event::NewMultisig {
+				approving: who,
+				multisig: id,
+				call_hash,
+				expiry: maybe_expiry,
+			});
 
 			let final_weight =
 				T::WeightInfo::as_multi_create(other_signatories_len as u32, call_len as u32);
