@@ -85,6 +85,9 @@ use sp_runtime::{
 };
 use sp_std::{fmt::Debug, prelude::*};
 
+#[cfg(any(test, feature = "try-runtime"))]
+use sp_runtime::TryRuntimeError;
+
 mod branch;
 pub mod migration;
 mod types;
@@ -419,7 +422,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()?;
 			Ok(())
 		}
@@ -1320,23 +1323,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///   `ReferendumInfoFor`
 	///  storage map.
 	#[cfg(any(feature = "try-runtime", test))]
-	fn do_try_state() -> DispatchResult {
+	fn do_try_state() -> Result<(), TryRuntimeError> {
 		use sp_runtime::traits::Bounded;
 
 		ensure!(
 			ReferendumCount::<T, I>::get() as usize ==
 				ReferendumInfoFor::<T, I>::iter_keys().count(),
-			DispatchError::Other(
-				"Number of referenda in `ReferendumInfoFor` is greater than `ReferendumCount`"
-			)
+			"Number of referenda in `ReferendumInfoFor` is greater than `ReferendumCount`"
 		);
 
 		MetadataOf::<T, I>::iter_keys().try_for_each(|referendum_index| -> DispatchResult {
 			ensure!(
 				ReferendumInfoFor::<T, I>::contains_key(referendum_index),
-				DispatchError::Other(
-					"Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoOf`"
-				)
+				"Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoOf`"
 			);
 			Ok(())
 		})?;
@@ -1346,16 +1345,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ReferendumInfo::Ongoing(status) => {
 					ensure!(
 						Self::track(status.track).is_some(),
-						DispatchError::Other("No track info for the track of the referendum.")
+						"No track info for the track of the referendum."
 					);
 
 					if let Some(deciding) = status.deciding {
 						ensure!(
 							deciding.since <
 								deciding.confirming.unwrap_or(T::BlockNumber::max_value()),
-							DispatchError::Other(
 								"Deciding status cannot begin before confirming stage."
-							)
 						)
 					}
 
@@ -1370,25 +1367,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		T::Tracks::tracks().iter().try_for_each(|track| -> DispatchResult {
 			if DecidingCount::<T, I>::get(track.0) < track.1.max_deciding {
-				let timed_out = TrackQueue::<T, I>::get(track.0).iter().filter(|(i, _)| match ReferendumInfoFor::<T, I>::get(i).unwrap() {
-					ReferendumInfo::TimedOut(..) => true,
-					_ => false
-				}).count();
+				let timed_out = TrackQueue::<T, I>::get(track.0)
+					.iter()
+					.filter(|(i, _)| match ReferendumInfoFor::<T, I>::get(i).unwrap() {
+						ReferendumInfo::TimedOut(..) => true,
+						_ => false,
+					})
+					.count();
 
 				// Timed out proposals cannot be in the deciding phase.
 				ensure!(
 					(TrackQueue::<T, I>::get(track.0).iter().count()).saturating_sub(timed_out) == 0,
-					DispatchError::Other("`TrackQueue` should be empty when `DecidingCount` is less than `TrackInfo::max_decidin`.")
+					"`TrackQueue` should be empty when `DecidingCount` is less than `TrackInfo::max_decidin`."
 				);
 			}
 
-			TrackQueue::<T, I>::get(track.0).iter().try_for_each(|(referendum_index, _)| -> DispatchResult {
-				ensure!(
-					ReferendumInfoFor::<T, I>::contains_key(referendum_index), 
-					DispatchError::Other("`ReferendumIndex` inside the `TrackQueue` should be a key in `ReferendumInfoFor`")
+			TrackQueue::<T, I>::get(track.0).iter().try_for_each(
+				|(referendum_index, _)| -> DispatchResult {
+					ensure!(
+					ReferendumInfoFor::<T, I>::contains_key(referendum_index),
+					"`ReferendumIndex` inside the `TrackQueue` should be a key in `ReferendumInfoFor`"
 				);
-				Ok(())
-			})?;
+					Ok(())
+				},
+			)?;
 			Ok(())
 		})?;
 
