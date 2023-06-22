@@ -30,13 +30,14 @@ use codec::MaxEncodedLen;
 use sp_runtime::DispatchError;
 use sp_std::prelude::*;
 use wasmi::{
-	core::ValueType, Config as WasmiConfig, Engine, ExternType, FuelConsumptionMode, MemoryType,
-	Module, StackLimits, Store,
+	core::ValueType, Config as WasmiConfig, Engine, ExternType, FuelConsumptionMode, Module,
+	StackLimits,
 };
 
 /// Imported memory must be located inside this module. The reason for hardcoding is that current
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
 pub const IMPORT_MODULE_MEMORY: &str = "env";
+const BYTES_PER_PAGE: usize = 64 * 1024;
 
 /// Determines whether a module should be instantiated during preparation.
 pub enum TryInstantiate {
@@ -53,28 +54,33 @@ pub enum TryInstantiate {
 	Skip,
 }
 
-/// The inner deserialized module is valid (this is guaranteed by `new` method).
-pub struct ContractModule(Module);
+/// The inner deserialized module is valid and contains only allowed WebAssembly features.
+/// This is checked by loading it into wasmi interpreter `engine`.
+pub struct LoadedModule {
+	pub module: Module,
+	pub engine: Engine,
+}
 
-impl ContractModule {
-	/// Creates a new instance of `ContractModule`.
+impl LoadedModule {
+	/// Creates a new instance of `LoadedModule`.
 	///
 	/// The inner Wasm module is checked not the have restricted WebAssembly proposals.
-	/// Returns `Err` if the `code` couldn't be decoded or
-	/// if it contains an invalid module.
-	pub fn new<T: Config>(code: &[u8], determinism: Determinism) -> Result<Self, &'static str> {
-		// TODO DRY as it's (almost) the same as in WasmBlob::instantiate
+	/// Returns `Err` if the `code` cannot be deserialized or if it contains an invalid module.
+	pub fn new<T>(
+		code: &[u8],
+		determinism: Determinism,
+		stack_limits: Option<StackLimits>,
+	) -> Result<Self, &'static str> {
 		// Do not enable any features here. Any additional feature needs to be carefully
 		// checked for potential security issues. For example, enabling multi value could lead
 		// to a DoS vector: It breaks our assumption that branch instructions are of constant time.
 		// Depending on the implementation they can linearly depend on the amount of values returned
 		// from a block.
+		//
 		// NOTE: wasmi does not support unstable WebAssembly features. The module is implicitly
-		// checked for not having those when creating wasmi::Module below.
+		// checked for not having those ones when creating `wasmi::Module` below.
 		let mut config = WasmiConfig::default();
 		config
-			// TODO shoudnd't we put it to Schedule.limits?
-			//			.set_stack_limits(stack_limits)
 			.wasm_multi_value(false)
 			.wasm_mutable_global(false)
 			.wasm_sign_extension(false)
@@ -89,103 +95,18 @@ impl ContractModule {
 			.consume_fuel(true)
 			.fuel_consumption_mode(FuelConsumptionMode::Eager);
 
+		if let Some(stack_limits) = stack_limits {
+			config.set_stack_limits(stack_limits);
+		}
+
 		let engine = Engine::new(&config);
 		let module =
 			Module::new(&engine, code.clone()).map_err(|_| "Validation of new code failed!")?;
 
-		// Return a `ContractModule` instance with
+		// Return a `LoadedModule` instance with
 		// __valid__ module.
-		Ok(ContractModule(module))
+		Ok(LoadedModule { module, engine })
 	}
-
-	/// Ensures that module doesn't declare internal memories.
-	///
-	/// In this runtime we only allow wasm module to import memory from the environment.
-	/// Memory section contains declarations of internal linear memories, so if we find one
-	/// we reject such a module.
-	// TODO we need instantiate the module to check this, first
-	// fn ensure_no_internal_memory(&self) -> Result<(), &'static str> {
-	// 	if self.0.memory_section().map_or(false, |ms| ms.entries().len() > 0) {
-	// 		return Err("module declares internal memory")
-	// 	}
-	// 	Ok(())
-	// }
-
-	/// Ensures that tables declared in the module are not too big.
-	// fn ensure_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
-	// 	if let Some(table_section) = self.0.table_section() {
-	// 		// In Wasm MVP spec, there may be at most one table declared. Double check this
-	// 		// explicitly just in case the Wasm version changes.
-	// 		if table_section.entries().len() > 1 {
-	// 			return Err("multiple tables declared")
-	// 		}
-	// 		if let Some(table_type) = table_section.entries().first() {
-	// 			// Check the table's initial size as there is no instruction or environment function
-	// 			// capable of growing the table.
-	// 			if table_type.limits().initial() > limit {
-	// 				return Err("table exceeds maximum size allowed")
-	// 			}
-	// 		}
-	// 	}
-	// 	Ok(())
-	// }
-
-	/// Ensure that any `br_table` instruction adheres to its immediate value limit.
-	// fn ensure_br_table_size_limit(&self, limit: u32) -> Result<(), &'static str> {
-	// 	let code_section = if let Some(type_section) = self.0.code_section() {
-	// 		type_section
-	// 	} else {
-	// 		return Ok(())
-	// 	};
-	// 	for instr in code_section.bodies().iter().flat_map(|body| body.code().elements()) {
-	// 		use self::elements::Instruction::BrTable;
-	// 		if let BrTable(table) = instr {
-	// 			if table.table.len() > limit as usize {
-	// 				return Err("BrTable's immediate value is too big.")
-	// 			}
-	// 		}
-	// 	}
-	// 	Ok(())
-	// }
-
-	// fn ensure_global_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
-	// 	if let Some(global_section) = self.0.global_section() {
-	// 		if global_section.entries().len() > limit as usize {
-	// 			return Err("module declares too many globals")
-	// 		}
-	// 	}
-	// 	Ok(())
-	// }
-
-	// fn ensure_local_variable_limit(&self, limit: u32) -> Result<(), &'static str> {
-	// 	if let Some(code_section) = self.0.code_section() {
-	// 		for func_body in code_section.bodies() {
-	// 			let locals_count: u32 =
-	// 				func_body.locals().iter().map(|val_type| val_type.count()).sum();
-	// 			if locals_count > limit {
-	// 				return Err("single function declares too many locals")
-	// 			}
-	// 		}
-	// 	}
-	// 	Ok(())
-	// }
-
-	/// Ensure that no function exists that has more parameters than allowed.
-	// fn ensure_parameter_limit(&self, limit: u32) -> Result<(), &'static str> {
-	// 	let type_section = if let Some(type_section) = self.0.type_section() {
-	// 		type_section
-	// 	} else {
-	// 		return Ok(())
-	// 	};
-
-	// 	for Type::Function(func) in type_section.types() {
-	// 		if func.params().len() > limit as usize {
-	// 			return Err("Use of a function type with too many parameters.")
-	// 		}
-	// 	}
-
-	// 	Ok(())
-	// }
 
 	/// Check that the module has required exported functions. For now
 	/// these are just entrypoints:
@@ -197,53 +118,32 @@ impl ContractModule {
 	fn scan_exports(&self) -> Result<(), &'static str> {
 		let mut deploy_found = false;
 		let mut call_found = false;
-		let module = &self.0;
-
-		//		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
+		let module = &self.module;
 		let exports = module.exports();
-		//		let func_entries = module.function_section().map(|fs| fs.entries()).unwrap_or(&[]);
 
-		// Function index space consists of imported function following by
-		// declared functions. Calculate the total number of imported functions so
-		// we can use it to convert indexes from function space to declared function space.
-		// let fn_space_offset = module
-		// 	.import_section()
-		// 	.map(|is| is.entries())
-		// 	.unwrap_or(&[])
-		// 	.iter()
-		// 	.filter(|entry| matches!(*entry.external(), External::Function(_)))
-		// 	.count();
 		for export in exports {
-			match export.name() {
-				"call" => call_found = true,
-				"deploy" => deploy_found = true,
-				_ => return Err("unknown export: expecting only deploy and call functions"),
-			}
-
-			// Then check the export kind. "call" and "deploy" are
-			// functions.
-			let func_ty = export.ty().func().ok_or("expected a function")?;
-			// TODO add a test where fn_idx could point to an imported fn?
-			// let fn_idx = match export.internal() {
-			// 	Internal::Function(ref fn_idx) => *fn_idx,
-			// 	_ => return Err("expected a function"),
-			// };
-			// convert index from function index space to declared index space.
-			// let fn_idx = match fn_idx.checked_sub(fn_space_offset as u32) {
-			// 	Some(fn_idx) => fn_idx,
-			// 	None => {
-			// 		// Underflow here means fn_idx points to imported function which we don't allow!
-			// 		return Err("entry point points to an imported function")
-			// 	},
-			// };
-
-			// Then check the signature.
-			// Both "call" and "deploy" has a () -> () function type.
-			// We still support () -> (i32) for backwards compatibility.
-			if !(func_ty.params().is_empty() &&
-				(func_ty.results().is_empty() || func_ty.results() == [ValueType::I32]))
-			{
-				return Err("entry point has wrong signature")
+			match export.ty() {
+				ExternType::Func(ft) => {
+					match export.name() {
+						"call" => call_found = true,
+						"deploy" => deploy_found = true,
+						_ =>
+							return Err(
+								"unknown function export: expecting only deploy and call functions",
+							),
+					}
+					// Check the signature.
+					// Both "call" and "deploy" has a () -> () function type.
+					// We still support () -> (i32) for backwards compatibility.
+					if !(ft.params().is_empty() &&
+						(ft.results().is_empty() || ft.results() == [ValueType::I32]))
+					{
+						return Err("entry point has wrong signature")
+					}
+				},
+				ExternType::Memory(_) => return Err("memory export is forbidden"),
+				ExternType::Global(_) => return Err("global export is forbidden"),
+				ExternType::Table(_) => return Err("table export is forbidden"),
 			}
 		}
 
@@ -259,17 +159,29 @@ impl ContractModule {
 
 	/// Scan an import section if any.
 	///
-	/// This makes sure that the import section looks as we expect it from a contract
-	/// and enforces and returns the memory type declared by the contract if any.
+	/// This makes sure that the import section looks as we expect it from a contract.
+	/// Makes sure the limits of the memory type declared by the contract comply with the Schedule.
+	/// Returns the checked memory limits back to caller.
 	///
-	/// `import_fn_banlist`: list of function names that are disallowed to be imported
+	/// `import_fn_banlist`: list of function names that are disallowed to be imported.
+	///
+	/// This method fails if:
+	///
+	/// - banned function found among imports,
+	/// - tables or globals found among imports,
+	/// - call_chain_extension host function is imported, while chain extensions are disabled,
+	/// - no valid memory import found in the module,
+	///
+	/// NOTE that only single memory instance is allowed for contract modules, which is enforced by
+	/// this check combined with multi_memory proposal disabling in the engine.
 	pub fn scan_imports<T: Config>(
 		&self,
 		import_fn_banlist: &[&[u8]],
-	) -> Result<Option<MemoryType>, &'static str> {
-		let module = &self.0;
+		schedule: &Schedule<T>,
+	) -> Result<(u32, u32), &'static str> {
+		let module = &self.module;
 		let imports = module.imports();
-		let mut imported_mem_type = None;
+		let mut memory_limits = None;
 
 		for import in imports {
 			match *import.ty() {
@@ -295,44 +207,34 @@ impl ContractModule {
 					if import.name().as_bytes() != b"memory" {
 						return Err("Memory import must have the field name 'memory'")
 					}
-					if imported_mem_type.is_some() {
+					if memory_limits.is_some() {
 						return Err("Multiple memory imports defined")
 					}
-					imported_mem_type = Some(mt);
+					// Parse memory limits defaulting it to (0,0).
+					// Any access to it will then lead to out of bounds trap.
+					let (initial, maximum) = (
+						mt.initial_pages().to_bytes().unwrap_or(0).saturating_div(BYTES_PER_PAGE)
+							as u32,
+						mt.maximum_pages().map_or(schedule.limits.memory_pages, |p| {
+							p.to_bytes().unwrap_or(0).saturating_div(BYTES_PER_PAGE) as u32
+						}),
+					);
+					if initial > maximum {
+						return Err(
+						"Requested initial number of memory pages should not exceed the requested maximum",
+					)
+					}
+					if maximum > schedule.limits.memory_pages {
+						return Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.")
+					}
+
+					memory_limits = Some((initial, maximum));
 					continue
 				},
 			}
 		}
 
-		Ok(imported_mem_type)
-	}
-
-	// fn into_wasm_code(self) -> Result<Vec<u8>, &'static str> {
-	// 	elements::serialize(self.0).map_err(|_| "error serializing contract module")
-	// }
-}
-#[cfg(any(test, feature = "runtime-benchmarks"))]
-pub fn get_memory_limits<T: Config>(
-	module: Option<&MemoryType>,
-	schedule: &Schedule<T>,
-) -> Result<(u32, u32), &'static str> {
-	if let Some(memory_type) = module {
-		// Inspect the module to extract the initial and maximum page count.
-		let limits = memory_type.limits();
-		match (limits.initial(), limits.maximum()) {
-			(initial, Some(maximum)) if initial > maximum =>
-				Err("Requested initial number of memory pages should not exceed the requested maximum"),
-			(_, Some(maximum)) if maximum > schedule.limits.memory_pages =>
-				Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule."),
-			(initial, Some(maximum)) => Ok((initial, maximum)),
-			(initial, None) => {
-				Ok((initial, schedule.limits.memory_pages))
-			},
-		}
-	} else {
-		// None memory imported in the Wasm module,
-		// any access to it will lead to out of bounds trap.
-		Ok((0, 0))
+		memory_limits.ok_or("No memory import found in the module")
 	}
 }
 
@@ -357,20 +259,10 @@ where
 	let code = (|| {
 		// We check that the module is generally valid,
 		// and does not have restricted WebAssembly features, here.
-		let contract_module = ContractModule::new::<T>(code, determinism)?;
-		// Below go further checks required by our pallet.
+		let contract_module = LoadedModule::new::<T>(code, determinism, None)?;
+		// Checks that module satisfies constraints required for contracts.
 		contract_module.scan_exports()?;
-		contract_module.scan_imports::<T>(&[])?;
-		//contract_module.ensure_no_internal_memory()?;
-		// contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
-		// contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
-		// contract_module.ensure_local_variable_limit(schedule.limits.locals)?;
-		// contract_module.ensure_parameter_limit(schedule.limits.parameters)?;
-		// contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
-		// Extract memory limits from the module.
-		// This also checks that module's memory import satisfies the schedule.
-		// TODO: there is no way to serialize wasmi::Module?
-		//	let code = contract_module.into_wasm_code()?;
+		contract_module.scan_imports::<T>(&[], schedule)?;
 		Ok(code.to_vec())
 	})()
 	.map_err(|msg: &str| {
@@ -398,13 +290,14 @@ where
 			(Error::<T>::CodeRejected.into(), "New code rejected on wasmi instantiation!")
 		})?;
 	}
+
 	Ok(code)
 }
 
 /// Validates the given binary `code` is a valid Wasm module satisfying following constraints:
 ///
-/// - The module doesn't define an internal memory instance.
-/// - Imported memory (if any) doesn't reserve more memory than permitted by the `schedule`.
+/// - The module doesn't export any memory.
+/// - The module imports memory, which limits lay within the limits permitted by the `schedule`.
 /// - All imported functions from the external environment match defined by `env` module.
 ///
 /// Also constructs contract `code_info` by calculating the storage deposit.
@@ -432,7 +325,6 @@ where
 	let deposit = Diff { bytes_added, items_added: 2, ..Default::default() }
 		.update_contract::<T>(None)
 		.charge_or_zero();
-
 	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0 };
 
 	Ok(WasmBlob { code, code_info })
@@ -447,21 +339,22 @@ where
 pub mod benchmarking {
 	use super::*;
 
-	/// Prepare function that does not perform most checks on the passed in code.
+	/// Prepare function that does not perform export section checks on the passed in code.
 	pub fn prepare<T: Config>(
 		code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 	) -> Result<WasmBlob<T>, DispatchError> {
-		let contract_module = ContractModule::new(&code)?;
-		let _ = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+		let determinism = Determinism::Enforced;
+		let contract_module = LoadedModule::new(&code, determinism, None)?;
+		let _ = contract_module.scan_imports::<T>(&[], schedule)?;
 		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
 			owner,
 			// this is a helper function for benchmarking which skips deposit collection
 			deposit: Default::default(),
 			refcount: 0,
-			determinism: Determinism::Enforced,
+			determinism,
 		};
 		Ok(WasmBlob { code, code_info })
 	}
