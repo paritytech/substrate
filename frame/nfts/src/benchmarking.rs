@@ -680,9 +680,9 @@ benchmarks_instance_pallet! {
 		let buyer_lookup = T::Lookup::unlookup(buyer.clone());
 		let price = ItemPrice::<T, I>::from(0u32);
 		let origin = SystemOrigin::Signed(seller.clone()).into();
-		Nfts::<T, I>::set_price(origin, collection, item, Some(price.clone()), Some(buyer_lookup))?;
+		Nfts::<T, I>::set_price(origin, collection, item, Some(price), Some(buyer_lookup))?;
 		T::Currency::make_free_balance_be(&buyer, DepositBalanceOf::<T, I>::max_value());
-	}: _(SystemOrigin::Signed(buyer.clone()), collection, item, price.clone())
+	}: _(SystemOrigin::Signed(buyer.clone()), collection, item, price)
 	verify {
 		assert_last_event::<T, I>(Event::ItemBought {
 			collection,

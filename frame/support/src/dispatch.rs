@@ -899,7 +899,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 ///   in an externalities-provided environment. Implement
 ///   [`IntegrityTest`](./trait.IntegrityTest.html) trait.
 #[macro_export]
-#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
+#[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
 	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 macro_rules! decl_module {
 	// Entry point #1.
@@ -3582,7 +3582,7 @@ mod weight_tests {
 		use crate::pallet_prelude::*;
 
 		#[pallet::pallet]
-		pub struct Pallet<T>(PhantomData<T>);
+		pub struct Pallet<T>(_);
 
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]

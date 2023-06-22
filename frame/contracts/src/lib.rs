@@ -80,6 +80,7 @@
 //! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
 //! WebAssembly based smart contracts in the Rust programming language.
 
+#![allow(rustdoc::private_intra_doc_links)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "1024")]
 
@@ -102,7 +103,6 @@ use crate::{
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
 	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
-	weights::WeightInfo,
 };
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
@@ -129,7 +129,8 @@ use pallet_contracts_primitives::{
 use scale_info::TypeInfo;
 use smallvec::Array;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_std::{fmt::Debug, prelude::*};
+pub use weights::WeightInfo;
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
@@ -191,7 +192,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -328,19 +329,35 @@ pub mod pallet {
 		/// # struct Runtime {};
 		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
 		/// ```
+		///
+		/// If you have a single migration step, you can use a tuple with a single element:
+		/// ```
+		/// use pallet_contracts::migration::v9;
+		/// # struct Runtime {};
+		/// type Migrations = (v9::Migration<Runtime>,);
+		/// ```
 		type Migrations: MigrateSequence;
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
+		fn on_idle(_block: T::BlockNumber, mut remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
 
-			let (result, weight) = Migration::<T>::migrate(remaining_weight);
-			let remaining_weight = remaining_weight.saturating_sub(weight);
+			loop {
+				let (result, weight) = Migration::<T>::migrate(remaining_weight);
+				remaining_weight.saturating_reduce(weight);
 
-			if !matches!(result, Completed | NoMigrationInProgress) {
-				return weight
+				match result {
+					// There is not enough weight to perform a migration, or make any progress, we
+					// just return the remaining weight.
+					NoMigrationPerformed | InProgress { steps_done: 0 } => return remaining_weight,
+					// Migration is still in progress, we can start the next step.
+					InProgress { .. } => continue,
+					// Either no migration is in progress, or we are done with all migrations, we
+					// can do some more other work with the remaining weight.
+					Completed | NoMigrationInProgress => break,
+				}
 			}
 
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
@@ -987,6 +1004,8 @@ pub mod pallet {
 	pub(crate) type DeletionQueueCounter<T: Config> =
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
 
+	/// A migration can span across multiple blocks. This storage defines a cursor to track the
+	/// progress of the migration, enabling us to resume from the last completed position.
 	#[pallet::storage]
 	pub(crate) type MigrationInProgress<T: Config> =
 		StorageValue<_, migration::Cursor, OptionQuery>;
