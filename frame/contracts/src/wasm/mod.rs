@@ -181,7 +181,7 @@ impl<T: Config> WasmBlob<T> {
 	/// Returns `0` if the module is already in storage and hence no deposit will
 	/// be charged when storing it.
 	pub fn open_deposit(&self, code_info: CodeInfo<T>) -> BalanceOf<T> {
-		<CodeInfoOf<T>>::try_get(self.code_hash()).map_or(code_info.deposit, |_| 0u32.into())
+		Self::load_code_info(self.code_hash()).map_or(code_info.deposit, |_| 0u32.into())
 	}
 
 	/// Creates and returns an instance of the supplied code.
@@ -193,13 +193,14 @@ impl<T: Config> WasmBlob<T> {
 		code: &[u8],
 		host_state: H,
 		schedule: &Schedule<T>,
+		determinism: Determinism,
 		stack_limits: StackLimits,
 		allow_deprecated: AllowDeprecatedInterface,
 	) -> Result<(Store<H>, Memory, Instance), &'static str>
 	where
 		E: Environment<H>,
 	{
-		let contract = LoadedModule::new::<T>(&code, Determinism::Enforced, Some(stack_limits))?;
+		let contract = LoadedModule::new::<T>(&code, determinism, Some(stack_limits))?;
 		let mut store = Store::new(&contract.engine, host_state);
 		let mut linker = Linker::new(&contract.engine);
 		E::define(
@@ -346,6 +347,17 @@ impl<T: Config> WasmBlob<T> {
 			}
 		})
 	}
+
+	/// Load code_info for the code_hash.
+	///
+	/// # Errors
+	///
+	/// [`Error::CodeInfoNotFound`] is returned if no stored code_info found for the specified
+	/// `code_hash`.
+	fn load_code_info(code_hash: CodeHash<T>) -> Result<CodeInfo<T>, DispatchError> {
+		<CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeInfoNotFound.into())
+	}
+
 	/// See [`Self::from_code_unchecked`].
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_unchecked(
@@ -420,6 +432,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 			code,
 			runtime,
 			&schedule,
+			self.code_info.determinism,
 			StackLimits::default(),
 			match function {
 				ExportedFunction::Call => AllowDeprecatedInterface::Yes,
@@ -3265,6 +3278,8 @@ mod tests {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "instantiation_nonce" (func $nonce (result i64)))
+	(import "env" "memory" (memory 1 1))
+
 	(func $assert (param i32)
 		(block $ok
 			(br_if $ok
@@ -3295,6 +3310,8 @@ mod tests {
 		const CANNOT_DEPLOY_UNSTABLE: &str = r#"
 (module
 	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3315,6 +3332,8 @@ mod tests {
 		const CODE_RANDOM_0: &str = r#"
 (module
 	(import "seal0" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3322,6 +3341,8 @@ mod tests {
 		const CODE_RANDOM_1: &str = r#"
 (module
 	(import "seal1" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3329,6 +3350,8 @@ mod tests {
 		const CODE_RANDOM_2: &str = r#"
 (module
 	(import "seal0" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3336,6 +3359,8 @@ mod tests {
 		const CODE_RANDOM_3: &str = r#"
 (module
 	(import "seal1" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )

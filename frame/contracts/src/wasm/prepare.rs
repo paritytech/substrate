@@ -21,7 +21,6 @@
 
 use crate::{
 	chain_extension::ChainExtension,
-	ensure,
 	storage::meter::Diff,
 	wasm::{runtime::AllowDeprecatedInterface, CodeInfo, Determinism, Environment, WasmBlob},
 	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
@@ -101,7 +100,7 @@ impl LoadedModule {
 
 		let engine = Engine::new(&config);
 		let module =
-			Module::new(&engine, code.clone()).map_err(|_| "Validation of new code failed!")?;
+			Module::new(&engine, code.clone()).map_err(|_| "Can't load the module to wasmi!")?;
 
 		// Return a `LoadedModule` instance with
 		// __valid__ module.
@@ -133,7 +132,7 @@ impl LoadedModule {
 							),
 					}
 					// Check the signature.
-					// Both "call" and "deploy" has a () -> () function type.
+					// Both "call" and "deploy" have the () -> () function type.
 					// We still support () -> (i32) for backwards compatibility.
 					if !(ft.params().is_empty() &&
 						(ft.results().is_empty() || ft.results() == [ValueType::I32]))
@@ -189,15 +188,15 @@ impl LoadedModule {
 				ExternType::Global(_) => return Err("Cannot import globals"),
 				ExternType::Func(_) => {
 					let _ = import.ty().func().ok_or("expected a function")?;
+
 					if !<T as Config>::ChainExtension::enabled() &&
-						import.module().as_bytes()[0..4] == b"seal"[0..4] &&
 						import.name().as_bytes() == b"seal_call_chain_extension" ||
 						import.name().as_bytes() == b"call_chain_extension"
 					{
-						return Err("module uses chain extensions but chain extensions are disabled")
+						return Err("Module uses chain extensions but chain extensions are disabled")
 					}
 					if import_fn_banlist.iter().any(|f| import.name().as_bytes() == *f) {
-						return Err("module imports a banned function")
+						return Err("Module imports a banned function")
 					}
 				},
 				ExternType::Memory(mt) => {
@@ -225,7 +224,7 @@ impl LoadedModule {
 					)
 					}
 					if maximum > schedule.limits.memory_pages {
-						return Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.")
+						return Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule")
 					}
 
 					memory_limits = Some((initial, maximum));
@@ -244,29 +243,27 @@ impl LoadedModule {
 /// 1. General engine-side validation makes sure the module is consistent and does not contain
 ///    forbidden WebAssembly features.
 /// 2. Additional checks which are specific to smart contracts eligible for this pallet.
-///
-/// On success it returns back the code.
 fn validate<E, T>(
 	code: &[u8],
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
-) -> Result<Vec<u8>, (DispatchError, &'static str)>
+) -> Result<(), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
 {
-	let code = (|| {
+	(|| {
 		// We check that the module is generally valid,
 		// and does not have restricted WebAssembly features, here.
 		let contract_module = LoadedModule::new::<T>(code, determinism, None)?;
 		// Checks that module satisfies constraints required for contracts.
 		contract_module.scan_exports()?;
 		contract_module.scan_imports::<T>(&[], schedule)?;
-		Ok(code.to_vec())
+		Ok(())
 	})()
 	.map_err(|msg: &str| {
-		log::debug!(target: LOG_TARGET, "New code rejected: {}", msg);
+		log::debug!(target: LOG_TARGET, "New code rejected on validation: {}", msg);
 		(Error::<T>::CodeRejected.into(), msg)
 	})?;
 
@@ -282,6 +279,7 @@ where
 			&code,
 			(),
 			schedule,
+			determinism,
 			stack_limits,
 			AllowDeprecatedInterface::No,
 		)
@@ -291,7 +289,7 @@ where
 		})?;
 	}
 
-	Ok(code)
+	Ok(())
 }
 
 /// Validates the given binary `code` is a valid Wasm module satisfying following constraints:
@@ -312,13 +310,7 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	let checked_code = validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
-	let err = |_| (<Error<T>>::CodeTooLarge.into(), "Validation enlarged the code size!");
-	let checked_code: CodeVec<T> = checked_code.try_into().map_err(err)?;
-	ensure!(
-		code == checked_code,
-		(<Error<T>>::CodeRejected.into(), "Validation altered the code!")
-	);
+	validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
 
 	// Calculate deposit for storing contract code and `code_info` in two different storage items.
 	let bytes_added = code.len().saturating_add(<CodeInfo<T>>::max_encoded_len()) as u32;
@@ -346,7 +338,7 @@ pub mod benchmarking {
 		owner: AccountIdOf<T>,
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let determinism = Determinism::Enforced;
-		let contract_module = LoadedModule::new(&code, determinism, None)?;
+		let contract_module = LoadedModule::new::<T>(&code, determinism, None)?;
 		let _ = contract_module.scan_imports::<T>(&[], schedule)?;
 		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
@@ -451,107 +443,8 @@ mod tests {
 			)
 			(func (export "deploy"))
 		)"#,
-		Err("Validation of new code failed!")
+		Err("Can't load the module to wasmi!")
 	);
-
-	mod functions {
-		use super::*;
-
-		prepare_test!(
-			param_number_valid,
-			r#"
-			(module
-				(func (export "call"))
-				(func (export "deploy"))
-				(func (param i32 i32 i32))
-			)
-			"#,
-			Ok(_)
-		);
-
-		prepare_test!(
-			param_number_invalid,
-			r#"
-			(module
-				(func (export "call"))
-				(func (export "deploy"))
-				(func (param i32 i32 i32 i32))
-				(func (param i32))
-			)
-			"#,
-			Err("Use of a function type with too many parameters.")
-		);
-	}
-
-	mod globals {
-		use super::*;
-
-		prepare_test!(
-			global_number_valid,
-			r#"
-			(module
-				(global i64 (i64.const 0))
-				(global i64 (i64.const 0))
-				(global i64 (i64.const 0))
-				(func (export "call"))
-				(func (export "deploy"))
-			)
-			"#,
-			Ok(_)
-		);
-
-		prepare_test!(
-			global_number_too_high,
-			r#"
-			(module
-				(global i64 (i64.const 0))
-				(global i64 (i64.const 0))
-				(global i64 (i64.const 0))
-				(global i64 (i64.const 0))
-				(func (export "call"))
-				(func (export "deploy"))
-			)
-			"#,
-			Err("module declares too many globals")
-		);
-	}
-
-	mod locals {
-		use super::*;
-
-		prepare_test!(
-			local_number_valid,
-			r#"
-			(module
-				(func
-					(local i32)
-					(local i32)
-					(local i32)
-				)
-				(func (export "call"))
-				(func (export "deploy"))
-			)
-			"#,
-			Ok(_)
-		);
-
-		prepare_test!(
-			local_number_too_high,
-			r#"
-			(module
-				(func
-					(local i32)
-					(local i32)
-					(local i32)
-					(local i32)
-				)
-				(func (export "call"))
-				(func (export "deploy"))
-			)
-			"#,
-			Err("single function declares too many locals")
-		);
-	}
 
 	mod memories {
 		use super::*;
@@ -579,7 +472,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("module declares internal memory")
+			Err("No memory import found in the module")
 		);
 
 		prepare_test!(
@@ -591,7 +484,7 @@ mod tests {
 				(func (export "call"))
 				(func (export "deploy"))
 			)"#,
-			Ok(_)
+			Err("No memory import found in the module")
 		);
 
 		prepare_test!(
@@ -604,7 +497,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Validation of new code failed!")
+			Err("Can't load the module to wasmi!")
 		);
 
 		prepare_test!(
@@ -630,7 +523,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("New code rejected on wasmi instantiation!")
+			Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule")
 		);
 
 		prepare_test!(
@@ -643,7 +536,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("New code rejected on wasmi instantiation!")
+			Err("Memory import must have the field name 'memory'")
 		);
 
 		prepare_test!(
@@ -657,7 +550,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Validation of new code failed!")
+			Err("Can't load the module to wasmi!")
 		);
 
 		prepare_test!(
@@ -670,7 +563,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("New code rejected on wasmi instantiation!")
+			Err("Cannot import tables")
 		);
 
 		prepare_test!(
@@ -682,76 +575,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("New code rejected on wasmi instantiation!")
-		);
-	}
-
-	mod tables {
-		use super::*;
-
-		prepare_test!(
-			no_tables,
-			r#"
-			(module
-				(func (export "call"))
-				(func (export "deploy"))
-			)
-			"#,
-			Ok(_)
-		);
-
-		prepare_test!(
-			table_valid_size,
-			r#"
-			(module
-				(table 3 funcref)
-
-				(func (export "call"))
-				(func (export "deploy"))
-			)
-			"#,
-			Ok(_)
-		);
-
-		prepare_test!(
-			table_too_big,
-			r#"
-			(module
-				(table 4 funcref)
-
-				(func (export "call"))
-				(func (export "deploy"))
-			)"#,
-			Err("table exceeds maximum size allowed")
-		);
-
-		prepare_test!(
-			br_table_valid_size,
-			r#"
-			(module
-				(func (export "call"))
-				(func (export "deploy"))
-				(func
-					i32.const 0
-					br_table 0 0 0 0
-				)
-			)
-			"#,
-			Ok(_)
-		);
-
-		prepare_test!(
-			br_table_too_big,
-			r#"
-			(module
-				(func (export "call"))
-				(func (export "deploy"))
-				(func
-					i32.const 0
-					br_table 0 0 0 0 0
-				)
-			)"#,
-			Err("BrTable's immediate value is too big.")
+			Err("Cannot import globals")
 		);
 	}
 
@@ -763,6 +587,7 @@ mod tests {
 			r#"
 			(module
 				(import "seal0" "nop" (func (param i64)))
+				(import "env" "memory" (memory 1 1))
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -782,10 +607,10 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("New code rejected on wasmi instantiation!")
+			Err("Invalid module for imported memory")
 		);
 
-		// memory is in "env" and not in some arbitrary module
+		// Memory is in "env" and not in some arbitrary module
 		prepare_test!(
 			memory_not_in_arbitrary_module,
 			r#"
@@ -796,7 +621,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("New code rejected on wasmi instantiation!")
+			Err("Invalid module for imported memory")
 		);
 
 		prepare_test!(
@@ -804,6 +629,8 @@ mod tests {
 			r#"
 			(module
 				(import "seal1" "nop" (func (param i32)))
+				(import "env" "memory" (memory 1 1))
+
 
 				(func (export "call"))
 				(func (export "deploy"))
@@ -822,6 +649,21 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
+			Err("No memory import found in the module")
+		);
+
+		// Try to import function from not a "seal*" module.
+		prepare_test!(
+			try_import_from_wrong_module,
+			r#"
+			(module
+				(import "env" "panic" (func))
+				(import "env" "memory" (memory 1 1))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
 			Err("New code rejected on wasmi instantiation!")
 		);
 	}
@@ -833,11 +675,23 @@ mod tests {
 			it_works,
 			r#"
 			(module
+				(import "env" "memory" (memory 1 1))
 				(func (export "call"))
 				(func (export "deploy"))
 			)
 			"#,
 			Ok(_)
+		);
+
+		prepare_test!(
+			omit_memory,
+			r#"
+			(module
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("No memory import found in the module")
 		);
 
 		prepare_test!(
@@ -861,21 +715,23 @@ mod tests {
 		);
 
 		// Try to use imported function as an entry point.
+		// This is allowed.
 		prepare_test!(
 			try_sneak_export_as_entrypoint,
 			r#"
 			(module
 				(import "seal0" "panic" (func))
+				(import "env" "memory" (memory 1 1))
 
 				(func (export "deploy"))
 
 				(export "call" (func 0))
 			)
 			"#,
-			Err("entry point points to an imported function")
+			Ok(_)
 		);
 
-		// Try to use imported function as an entry point.
+		// Try to use global as an entry point.
 		prepare_test!(
 			try_sneak_export_as_global,
 			r#"
@@ -884,7 +740,7 @@ mod tests {
 				(global (export "call") i32 (i32.const 0))
 			)
 			"#,
-			Err("expected a function")
+			Err("global export is forbidden")
 		);
 
 		prepare_test!(
@@ -907,7 +763,7 @@ mod tests {
 				(func (export "whatevs"))
 			)
 			"#,
-			Err("unknown export: expecting only deploy and call functions")
+			Err("unknown function export: expecting only deploy and call functions")
 		);
 
 		prepare_test!(
@@ -919,7 +775,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Validation of new code failed!")
+			Err("Can't load the module to wasmi!")
 		);
 
 		prepare_test!(
@@ -931,7 +787,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Validation of new code failed!")
+			Err("Can't load the module to wasmi!")
 		);
 
 		prepare_test!(
@@ -943,7 +799,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Validation of new code failed!")
+			Err("Can't load the module to wasmi!")
 		);
 
 		prepare_test!(
@@ -955,7 +811,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Validation of new code failed!")
+			Err("Can't load the module to wasmi!")
 		);
 	}
 }

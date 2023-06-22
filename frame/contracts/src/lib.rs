@@ -885,6 +885,8 @@ pub mod pallet {
 		CodeTooLarge,
 		/// No code could be found at the supplied code hash.
 		CodeNotFound,
+		/// No code info could be found at the supplied code hash.
+		CodeInfoNotFound,
 		/// A buffer outside of sandbox memory was passed to a contract API function.
 		OutOfBounds,
 		/// Input passed to a contract API function failed to decode as expected type.
