@@ -186,6 +186,12 @@ pub mod pallet {
 		Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId, T::MaxSignatories>,
 	>;
 
+	/// A mapping containing information on whether a multisig has an expiry
+	/// time or not.
+	#[pallet::storage]
+	pub type MultisigExpiries<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, T::AccountId, Blake2_128Concat, [u8; 32], T::BlockNumber>;
+
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Threshold must be 2 or greater.
@@ -216,6 +222,12 @@ pub mod pallet {
 		MaxWeightTooLow,
 		/// The data to be stored is already stored.
 		AlreadyStored,
+		/// A different expiry was given to the multisig operation that is underway.
+		WrongExpiry,
+		/// The expiry cannot be specified for a multisig that is yet to be created.
+		UnexpectedExpiry,
+		/// The multisig operation got expired.
+		MultisigExpired,
 	}
 
 	#[pallet::event]
@@ -378,6 +390,7 @@ pub mod pallet {
 				maybe_timepoint,
 				CallOrHash::Call(*call),
 				max_weight,
+				None,
 			)
 		}
 
@@ -435,6 +448,7 @@ pub mod pallet {
 				maybe_timepoint,
 				CallOrHash::Hash(call_hash),
 				max_weight,
+				None,
 			)
 		}
 
@@ -493,6 +507,29 @@ pub mod pallet {
 			});
 			Ok(())
 		}
+
+		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::cancel_as_multi(other_signatories.len() as u32))]
+		pub fn create_multisig_with_expiry(
+			origin: OriginFor<T>,
+			threshold: u16,
+			other_signatories: Vec<T::AccountId>,
+			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
+			call: Box<<T as Config>::RuntimeCall>,
+			max_weight: Weight,
+			expiry: T::BlockNumber,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			Self::operate(
+				who,
+				threshold,
+				other_signatories,
+				maybe_timepoint,
+				CallOrHash::Call(*call),
+				max_weight,
+				Some(expiry),
+			)
+		}
 	}
 }
 
@@ -514,6 +551,7 @@ impl<T: Config> Pallet<T> {
 		maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
 		call_or_hash: CallOrHash<T>,
 		max_weight: Weight,
+		maybe_expiry: Option<T::BlockNumber>,
 	) -> DispatchResultWithPostInfo {
 		ensure!(threshold >= 2, Error::<T>::MinimumThreshold);
 		let max_sigs = T::MaxSignatories::get() as usize;
@@ -538,6 +576,21 @@ impl<T: Config> Pallet<T> {
 			// Yes; ensure that the timepoint exists and agrees.
 			let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
+
+			// Ensure that the provided expiry is the same as the one specified
+			// in `MultisigExpiries`.
+			ensure!(
+				maybe_expiry == <MultisigExpiries<T>>::get(&id, call_hash),
+				Error::<T>::WrongExpiry
+			);
+
+			// Ensure that the mutlisig did not expire.
+			if let Some(expiry) = maybe_expiry {
+				ensure!(
+					expiry >= <frame_system::Pallet<T>>::block_number(),
+					Error::<T>::MultisigExpired
+				);
+			}
 
 			// Ensure that either we have not yet signed or that it is at threshold.
 			let mut approvals = m.approvals.len() as u16;
@@ -609,6 +662,13 @@ impl<T: Config> Pallet<T> {
 			// Not yet started; there should be no timepoint given.
 			ensure!(maybe_timepoint.is_none(), Error::<T>::UnexpectedTimepoint);
 
+			// Not yet started; The expiry for this multisig cannot already be specified
+			// in `MultisigExpiries`.
+			ensure!(
+				<MultisigExpiries<T>>::get(&id, call_hash).is_none(),
+				Error::<T>::UnexpectedExpiry
+			);
+
 			// Just start the operation by recording it in storage.
 			let deposit = T::DepositBase::get() + T::DepositFactor::get() * threshold.into();
 
@@ -627,6 +687,13 @@ impl<T: Config> Pallet<T> {
 					approvals: initial_approvals,
 				},
 			);
+
+			// If an expiry is specified insert it into `MultisigExpiries` for
+			// this specific multisig.
+			if let Some(expiry) = maybe_expiry {
+				<MultisigExpiries<T>>::insert(&id, call_hash, expiry);
+			}
+
 			Self::deposit_event(Event::NewMultisig { approving: who, multisig: id, call_hash });
 
 			let final_weight =
