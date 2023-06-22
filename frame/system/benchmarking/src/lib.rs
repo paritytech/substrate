@@ -34,8 +34,14 @@ mod mock;
 
 pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {
+	/// Adds ability to the Runtime to test against their sample code.
+	/// Default is `../res/kitchensink_runtime.compact.compressed.wasm`.
+	fn set_code_data() -> Vec<u8> {
+		include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec()
+	}
+
 	/// Adds ability to the Runtime to prepare/initialize before running benchmark `set_code`.
-	fn prepare_set_code_requirements() -> Result<(), BenchmarkError> {
+	fn prepare_set_code_requirements(_code: &Vec<u8>) -> Result<(), BenchmarkError> {
 		Ok(())
 	}
 }
@@ -57,10 +63,8 @@ benchmarks! {
 	}: _(RawOrigin::Root, Default::default())
 
 	set_code {
-		// prepare runtime
-		T::prepare_set_code_requirements()?;
-
-		let runtime_blob = include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec();
+		let runtime_blob = T::set_code_data();
+		T::prepare_set_code_requirements(&runtime_blob)?;
 	}: _(RawOrigin::Root, runtime_blob)
 	verify {
 		System::<T>::assert_last_event(frame_system::Event::<T>::CodeUpdated.into());
@@ -68,11 +72,9 @@ benchmarks! {
 
 	#[extra]
 	set_code_without_checks {
-		// prepare runtime
-		T::prepare_set_code_requirements()?;
-
 		// Assume Wasm ~4MB
 		let code = vec![1; 4_000_000 as usize];
+		T::prepare_set_code_requirements(&code)?;
 	}: _(RawOrigin::Root, code)
 	verify {
 		let current_code = storage::unhashed::get_raw(well_known_keys::CODE).ok_or("Code not stored.")?;
