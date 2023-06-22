@@ -560,6 +560,24 @@ fn calling_plain_account_fails() {
 }
 
 #[test]
+fn migration_on_idle_hooks_works() {
+	// Defines expectations of how many migration steps can be done given the weight limit.
+	let tests = [
+		(Weight::zero(), 0),
+		(<Test as Config>::WeightInfo::migrate() + 1.into(), 1),
+		(Weight::MAX, 2),
+	];
+
+	for (weight, expected_version) in tests {
+		ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
+			MigrationInProgress::<Test>::set(Some(Default::default()));
+			Contracts::on_idle(System::block_number(), weight);
+			assert_eq!(StorageVersion::get::<Pallet<Test>>(), expected_version);
+		});
+	}
+}
+
+#[test]
 fn migration_in_progress_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 

@@ -18,7 +18,7 @@
 //! Tests for pallet-example-kitchensink.
 
 use crate::*;
-use frame_support::{derive_impl, parameter_types, traits::ConstU64};
+use frame_support::{assert_ok, derive_impl, parameter_types, traits::ConstU64};
 use sp_runtime::BuildStorage;
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example_kitchensink;
@@ -99,4 +99,15 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.build_storage()
 	.unwrap();
 	t.into()
+}
+
+#[test]
+fn set_foo_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(Foo::<Test>::get(), Some(24)); // From genesis config.
+
+		let val1 = 42;
+		assert_ok!(Kitchensink::set_foo(RuntimeOrigin::root(), val1, 2));
+		assert_eq!(Foo::<Test>::get(), Some(val1));
+	});
 }
