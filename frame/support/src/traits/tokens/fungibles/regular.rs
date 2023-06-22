@@ -586,7 +586,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 /// Use an on-chain exchange to convert the asset to the equivalent in native tokens and back.
 pub trait SwapNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
-	// If successful returns the consumed tokens amount.
+	// If successful, returns the amount of `asset_id` consumed to provide `amount_out`.
 	fn swap_tokens_for_exact_native(
 		sender: AccountId,
 		asset_id: AssetId,
