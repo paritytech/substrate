@@ -24,8 +24,8 @@
 //! to be used for payment (defaulting to the native token on `None`). It expects an
 //! [`OnChargeAssetTransaction`] implementation analogous to [`pallet-transaction-payment`]. The
 //! included [`AssetConversionAdapter`] (implementing [`OnChargeAssetTransaction`]) determines the
-//! fee amount by converting the fee calculated by [`pallet-transaction-payment`] in the native asset
-//! into the amount required of the specified asset.
+//! fee amount by converting the fee calculated by [`pallet-transaction-payment`] in the native
+//! asset into the amount required of the specified asset.
 //!
 //! ## Integration
 
@@ -64,31 +64,31 @@ mod tests;
 mod payment;
 pub use payment::*;
 
-// Type aliases used for interaction with `OnChargeTransaction`.
+/// Type aliases used for interaction with `OnChargeTransaction`.
 pub(crate) type OnChargeTransactionOf<T> =
 	<T as pallet_transaction_payment::Config>::OnChargeTransaction;
-// Balance type alias.
+/// Balance type alias.
 pub(crate) type BalanceOf<T> = <OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance;
-// Liquity info type alias.
+/// Liquidity info type alias.
 pub(crate) type LiquidityInfoOf<T> =
 	<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::LiquidityInfo;
 
-// Type alias used for interaction with fungibles (assets).
-// Balance type alias.
+/// Type alias used for interaction with fungibles (assets).
+/// Balance type alias.
 pub(crate) type AssetBalanceOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 /// Asset id type alias.
 pub(crate) type AssetIdOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
-// Type aliases used for interaction with `OnChargeAssetTransaction`.
-// Balance type alias.
+/// Type aliases used for interaction with `OnChargeAssetTransaction`.
+/// Balance type alias.
 pub(crate) type ChargeAssetBalanceOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::Balance;
-// Asset id type alias.
+/// Asset id type alias.
 pub(crate) type ChargeAssetIdOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::AssetId;
-// Liquity info type alias.
+/// Liquidity info type alias.
 pub(crate) type ChargeAssetLiquidityOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::LiquidityInfo;
 
@@ -137,11 +137,12 @@ pub mod pallet {
 	}
 }
 
-/// Require payment for transaction inclusion and optionally include a tip to gain additional priority
-/// in the queue. Allows paying via both `Currency` as well as `fungibles::Balanced`.
+/// Require payment for transaction inclusion and optionally include a tip to gain additional
+/// priority in the queue. Allows paying via both `Currency` as well as `fungibles::Balanced`.
 ///
 /// Wraps the transaction logic in [`pallet_transaction_payment`] and extends it with assets.
-/// An asset ID of `None` falls back to the underlying transaction payment logic via the native currency.
+/// An asset ID of `None` falls back to the underlying transaction payment logic via the native
+/// currency.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct ChargeAssetTxPayment<T: Config> {
