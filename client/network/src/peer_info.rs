@@ -127,12 +127,12 @@ impl PeerInfoBehaviour {
 		ping_time: Duration,
 		connection: ConnectionId,
 	) {
-		trace!(target: "sub-libp2p", "Ping time with {:?} via {}: {:?}", peer_id, connection, ping_time);
+		trace!(target: "sub-libp2p", "Ping time with {:?} via {:?}: {:?}", peer_id, connection, ping_time);
 		if let Some(entry) = self.nodes_info.get_mut(peer_id) {
 			entry.latest_ping = Some(ping_time);
 		} else {
 			error!(target: "sub-libp2p",
-				"Received ping from node we're not connected to {:?} ({})", peer_id, connection);
+				"Received ping from node we're not connected to {:?} via {:?}", peer_id, connection);
 		}
 	}
 

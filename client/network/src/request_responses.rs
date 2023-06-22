@@ -723,10 +723,18 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								handler,
 								event: ((*protocol).to_string(), event),
 							}),
-						ToSwarm::NewExternalAddrCandidate(observed) =>
-							return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
 						ToSwarm::CloseConnection { peer_id, connection } =>
 							return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
+						ToSwarm::NewExternalAddrCandidate(observed) =>
+							return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
+						ToSwarm::ExternalAddrConfirmed(addr) =>
+							return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
+						ToSwarm::ExternalAddrExpired(addr) =>
+							return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
+						ToSwarm::ListenOn { opts } =>
+							return Poll::Ready(ToSwarm::ListenOn { opts }),
+						ToSwarm::RemoveListener { id } =>
+							return Poll::Ready(ToSwarm::RemoveListener { id }),
 					};
 
 					match ev {

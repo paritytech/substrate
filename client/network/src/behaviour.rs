@@ -247,7 +247,7 @@ impl<B: BlockT> Behaviour<B> {
 	pub fn add_self_reported_address_to_dht(
 		&mut self,
 		peer_id: &PeerId,
-		supported_protocols: &[impl AsRef<[u8]>],
+		supported_protocols: &[impl AsRef<str>],
 		addr: Multiaddr,
 	) {
 		self.discovery.add_self_reported_address(peer_id, supported_protocols, addr);

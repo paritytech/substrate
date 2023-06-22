@@ -670,8 +670,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.into_iter()
 			.map(|mut addr| {
 				let peer = match addr.pop() {
-					Some(multiaddr::Protocol::P2p(key)) => PeerId::from_multihash(key)
-						.map_err(|_| "Invalid PeerId format".to_string())?,
+					Some(multiaddr::Protocol::P2p(key)) => key,
 					_ => return Err("Missing PeerId from address".to_string()),
 				};
 
@@ -1556,7 +1555,7 @@ where
 				endpoint,
 				num_established,
 			} => {
-				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?} via {}, {:?})", peer_id, connection_id, cause);
+				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?} via {:?}, {:?})", peer_id, connection_id, cause);
 				if let Some(metrics) = self.metrics.as_ref() {
 					let direction = match endpoint {
 						ConnectedPoint::Dialer { .. } => "out",
@@ -1598,7 +1597,7 @@ where
 				if let Some(peer_id) = peer_id {
 					trace!(
 						target: "sub-libp2p",
-						"Libp2p => Failed to reach {:?} via {}: {}",
+						"Libp2p => Failed to reach {:?} via {:?}: {}",
 						peer_id, connection_id, error,
 					);
 
@@ -1644,7 +1643,7 @@ where
 				trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id)
 			},
 			SwarmEvent::IncomingConnection { connection_id, local_addr, send_back_addr } => {
-				trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({},{},{}))",
+				trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({:?},{},{}))",
 					connection_id, local_addr, send_back_addr);
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.incoming_connections_total.inc();
@@ -1658,7 +1657,7 @@ where
 			} => {
 				debug!(
 					target: "sub-libp2p",
-					"Libp2p => IncomingConnectionError({},{},{}): {}",
+					"Libp2p => IncomingConnectionError({:?},{},{}): {}",
 					connection_id, local_addr, send_back_addr, error,
 				);
 				if let Some(metrics) = self.metrics.as_ref() {

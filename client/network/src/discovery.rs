@@ -66,8 +66,8 @@ use libp2p::{
 			toggle::{Toggle, ToggleConnectionHandler},
 			DialFailure, FromSwarm, NewExternalAddrCandidate,
 		},
-		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, PollParameters, THandler,
-		THandlerInEvent, THandlerOutEvent, ToSwarm,
+		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, PollParameters,
+		StreamProtocol, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
 	},
 	PeerId,
 };
@@ -99,7 +99,7 @@ pub struct DiscoveryConfig {
 	discovery_only_if_under_num: u64,
 	enable_mdns: bool,
 	kademlia_disjoint_query_paths: bool,
-	kademlia_protocols: Vec<Vec<u8>>,
+	kademlia_protocols: Vec<StreamProtocol>,
 }
 
 impl DiscoveryConfig {
@@ -336,7 +336,7 @@ impl DiscoveryBehaviour {
 	pub fn add_self_reported_address(
 		&mut self,
 		peer_id: &PeerId,
-		supported_protocols: &[impl AsRef<[u8]>],
+		supported_protocols: &[impl AsRef<str>],
 		addr: Multiaddr,
 	) {
 		if let Some(kademlia) = self.kademlia.as_mut() {
@@ -355,7 +355,7 @@ impl DiscoveryBehaviour {
 				trace!(
 					target: "sub-libp2p",
 					"Adding self-reported address {} from {} to Kademlia DHT {}.",
-					addr, peer_id, String::from_utf8_lossy(matching_protocol.as_ref()),
+					addr, peer_id, matching_protocol.as_ref(),
 				);
 				kademlia.add_address(peer_id, addr.clone());
 			} else {
@@ -877,10 +877,17 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				ToSwarm::Dial { opts } => return Poll::Ready(ToSwarm::Dial { opts }),
 				ToSwarm::NotifyHandler { peer_id, handler, event } =>
 					return Poll::Ready(ToSwarm::NotifyHandler { peer_id, handler, event }),
-				ToSwarm::NewExternalAddrCandidate(observed) =>
-					return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
 				ToSwarm::CloseConnection { peer_id, connection } =>
 					return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
+				ToSwarm::NewExternalAddrCandidate(observed) =>
+					return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
+				ToSwarm::ExternalAddrConfirmed(addr) =>
+					return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
+				ToSwarm::ExternalAddrExpired(addr) =>
+					return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
+				ToSwarm::ListenOn { opts } => return Poll::Ready(ToSwarm::ListenOn { opts }),
+				ToSwarm::RemoveListener { id } =>
+					return Poll::Ready(ToSwarm::RemoveListener { id }),
 			}
 		}
 
@@ -908,10 +915,17 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					ToSwarm::NotifyHandler { event, .. } => match event {}, /* `event` is an */
 					// enum with no
 					// variant
-					ToSwarm::NewExternalAddrCandidate(observed) =>
-						return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
 					ToSwarm::CloseConnection { peer_id, connection } =>
 						return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
+					ToSwarm::NewExternalAddrCandidate(observed) =>
+						return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
+					ToSwarm::ExternalAddrConfirmed(addr) =>
+						return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
+					ToSwarm::ExternalAddrExpired(addr) =>
+						return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
+					ToSwarm::ListenOn { opts } => return Poll::Ready(ToSwarm::ListenOn { opts }),
+					ToSwarm::RemoveListener { id } =>
+						return Poll::Ready(ToSwarm::RemoveListener { id }),
 				}
 			}
 		}
@@ -921,21 +935,23 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 }
 
 /// Legacy (fallback) Kademlia protocol name based on `protocol_id`.
-fn legacy_kademlia_protocol_name(id: &ProtocolId) -> Vec<u8> {
-	let mut v = vec![b'/'];
-	v.extend_from_slice(id.as_ref().as_bytes());
-	v.extend_from_slice(b"/kad");
-	v
+fn legacy_kademlia_protocol_name(id: &ProtocolId) -> StreamProtocol {
+	let name = format!("/{}/kad", id.as_ref());
+	StreamProtocol::new(&name)
 }
 
 /// Kademlia protocol name based on `genesis_hash` and `fork_id`.
-fn kademlia_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> Vec<u8> {
+fn kademlia_protocol_name<Hash: AsRef<[u8]>>(
+	genesis_hash: Hash,
+	fork_id: Option<&str>,
+) -> StreamProtocol {
 	let genesis_hash_hex = bytes2hex("", genesis_hash.as_ref());
-	if let Some(fork_id) = fork_id {
-		format!("/{}/{}/kad", genesis_hash_hex, fork_id).as_bytes().into()
+	let name = if let Some(fork_id) = fork_id {
+		format!("/{}/{}/kad", genesis_hash_hex, fork_id)
 	} else {
-		format!("/{}/kad", genesis_hash_hex).as_bytes().into()
-	}
+		format!("/{}/kad", genesis_hash_hex)
+	};
+	StreamProtocol::new(&name)
 }
 
 #[cfg(test)]
