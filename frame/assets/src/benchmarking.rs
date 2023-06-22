@@ -144,7 +144,7 @@ benchmarks_instance_pallet! {
 		let caller = T::CreateOrigin::ensure_origin(origin.clone(), &asset_id.into()).unwrap();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	}: _<T::RuntimeOrigin>(origin, asset_id.clone(), caller_lookup, 1u32.into())
+	}: _<T::RuntimeOrigin>(origin, asset_id, caller_lookup, 1u32.into())
 	verify {
 		assert_last_event::<T, I>(Event::Created { asset_id: asset_id.into(), creator: caller.clone(), owner: caller }.into());
 	}
