@@ -760,8 +760,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				// Should only destroy accounts while the asset is in a destroying state
 				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
-				let mut accounts_processed = 0;
-				for (who, mut v) in Account::<T, I>::iter_prefix(&id) {
+				for (i, (who, mut v)) in Account::<T, I>::iter_prefix(&id).enumerate() {
 					// unreserve the existence deposit if any
 					if let Some((depositor, deposit)) = v.reason.take_deposit_from() {
 						T::Currency::unreserve(&depositor, deposit);
@@ -776,8 +775,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						Account::<T, I>::insert(&id, &who, v);
 						debug_assert!(false, "destroy did not result in dead account?!");
 					}
-					accounts_processed += 1;
-					if accounts_processed >= max_items {
+					if i + 1 >= (max_items as usize) {
 						break
 					}
 				}
