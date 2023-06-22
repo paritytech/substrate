@@ -765,7 +765,7 @@ pub mod pallet {
 					send_to,
 					path,
 					amount_in: *first_amount,
-					amount_out: *amounts.last().unwrap(),
+					amount_out: *amounts.last().expect("Always has more than 1 element"),
 				});
 			}
 			Ok(())
