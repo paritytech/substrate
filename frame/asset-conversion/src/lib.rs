@@ -724,7 +724,8 @@ pub mod pallet {
 			send_to: T::AccountId,
 			keep_alive: bool,
 		) -> Result<(), DispatchError> {
-			if let Some([asset1, asset2]) = path.get(0..2) {
+			ensure!(amounts.len() > 1, Error::<T>::InvalidPath);
+			if let Some([asset1, asset2]) = &path.get(0..2) {
 				let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 				let pool_account = Self::get_pool_account(&pool_id);
 				let first_amount = amounts.first().expect("Always has more than one element");
@@ -767,6 +768,8 @@ pub mod pallet {
 					amount_in: *first_amount,
 					amount_out: *amounts.last().expect("Always has more than 1 element"),
 				});
+			} else {
+				return Err(Error::<T>::InvalidPath.into());
 			}
 			Ok(())
 		}
