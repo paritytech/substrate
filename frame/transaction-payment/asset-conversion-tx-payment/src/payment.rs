@@ -136,7 +136,7 @@ where
 	///
 	/// Note: The `corrected_fee` already includes the `tip`.
 	/// Note: Is the ED wasn't needed, the `received_exchanged` will be equal to `fee_paid`, or
-	/// `fee_paid` + ed otherwise
+	/// `fee_paid + ed` otherwise.
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
