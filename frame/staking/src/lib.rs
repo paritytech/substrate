@@ -412,9 +412,9 @@ pub enum PayeeDestination<AccountId> {
 	/// Pay a part back into the stash and compound to bond, and send another part to a specified
 	/// account as free balance.
 	Split((Perbill, AccountId)),
-	/// Pay into a specified account as free balance. (stays the same).
+	/// Pay into a specified account as free balance.
 	Free(AccountId),
-	/// Receive no reward. (stays the same).
+	/// Receive no reward.
 	None,
 }
 
