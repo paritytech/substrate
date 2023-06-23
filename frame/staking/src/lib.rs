@@ -383,40 +383,6 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 }
 
 /// A destination account for payment.
-/// NOTE: Being lazily migrated and deprecated in favour of `PayeeDestination`.
-#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum RewardDestination<AccountId> {
-	/// Pay into the stash account, increasing the amount at stake accordingly.
-	Staked,
-	/// Pay into the stash account, not increasing the amount at stake.
-	Stash,
-	/// Pay into the controller account.
-	Controller,
-	/// Pay into a specified account.
-	Account(AccountId),
-	/// Receive no reward.
-	None,
-}
-
-impl<AccountId> Default for RewardDestination<AccountId> {
-	fn default() -> Self {
-		RewardDestination::Staked
-	}
-}
-
-impl<AccountId> RewardDestination<AccountId> {
-	fn to_payee_destination(&self, who: AccountId) -> PayeeDestination<AccountId> {
-		match self {
-			RewardDestination::Staked => PayeeDestination::Compound,
-			RewardDestination::Stash => PayeeDestination::Free(who),
-			RewardDestination::Controller => PayeeDestination::Free(who),
-			RewardDestination::Account(a) => PayeeDestination::Free(*a),
-			RewardDestination::None => PayeeDestination::None,
-		}
-	}
-}
-
-/// A destination account for payment.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PayeeDestination<AccountId> {
 	/// Pay into the stash account and compound to bond.
@@ -433,6 +399,40 @@ pub enum PayeeDestination<AccountId> {
 impl<AccountId> Default for PayeeDestination<AccountId> {
 	fn default() -> Self {
 		PayeeDestination::Compound
+	}
+}
+
+/// A destination account for payment.
+/// NOTE: Being lazily migrated and deprecated in favour of `PayeeDestination`.
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum RewardDestination<AccountId> {
+	/// Pay into the stash account, increasing the amount at stake accordingly.
+	Staked,
+	/// Pay into the stash account, not increasing the amount at stake.
+	Stash,
+	/// Pay into the controller account.
+	Controller,
+	/// Pay into a specified account.
+	Account(AccountId),
+	/// Receive no reward.
+	None,
+}
+
+impl<AccountId: Clone> Default for RewardDestination<AccountId> {
+	fn default() -> Self {
+		RewardDestination::Staked
+	}
+}
+
+impl<AccountId: Clone> RewardDestination<AccountId> {
+	fn to_payee_destination(&self, who: AccountId) -> PayeeDestination<AccountId> {
+		match self {
+			RewardDestination::Staked => PayeeDestination::Compound,
+			RewardDestination::Stash => PayeeDestination::Free(who),
+			RewardDestination::Controller => PayeeDestination::Free(who),
+			RewardDestination::Account(a) => PayeeDestination::Free(a.clone()),
+			RewardDestination::None => PayeeDestination::None,
+		}
 	}
 }
 
