@@ -769,7 +769,7 @@ pub mod pallet {
 					amount_out: *amounts.last().expect("Always has more than 1 element"),
 				});
 			} else {
-				return Err(Error::<T>::InvalidPath.into());
+				return Err(Error::<T>::InvalidPath.into())
 			}
 			Ok(())
 		}
