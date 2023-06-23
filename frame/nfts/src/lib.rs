@@ -102,15 +102,13 @@ pub mod pallet {
 
 		/// Identifier for the collection of item.
 		///
-		/// SAFETY: The functions in the `Incrementable` trait are fallible.
-		/// If the functions of the implementation both return `None`,
-		/// the automatic CollectionId generation should not be used.
-		/// So the `create` and `force_create` extrinsics
-		/// and the `create_collection` function will return an `UnknownCollection` Error.
-		/// Instead use the `create_collection_with_id` function.
-		/// However, if the `Incrementable` trait implementation has an incremental order,
-		/// the `create_collection_with_id` function should not be used
-		/// as it can claim a value in the ID sequence.
+		/// SAFETY: The functions in the `Incrementable` trait are fallible. If the functions of the
+		/// implementation both return `None`, the automatic CollectionId generation should not be
+		/// used. So the `create` and `force_create` extrinsics and the `create_collection` function
+		/// will return an `UnknownCollection` Error. Instead use the `create_collection_with_id`
+		/// function. However, if the `Incrementable` trait implementation has an incremental order,
+		/// the `create_collection_with_id` function should not be used as it can claim a value in
+		/// the ID sequence.
 		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + Incrementable;
 
 		/// The type used to identify a unique item within a collection.
