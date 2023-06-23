@@ -978,9 +978,9 @@ fn inherents_ok_while_exts_forbidden_works() {
 	});
 }
 
-/// Panics when a block contains extrinsics although `after_inherents` consumed all weight.
+/// Panics when a block contains extrinsics although `after_inherents` forbids them.
 #[test]
-#[should_panic = "Transaction would exhaust the block limits"]
+#[should_panic = "Extrinsics are not allowed in this block"]
 fn extrinsic_while_exts_forbidden_errors() {
 	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
@@ -1001,22 +1001,9 @@ fn extrinsic_while_exts_forbidden_errors() {
 	});
 
 	new_test_ext(1).execute_with(|| {
-		// Tell `after_inherents` to use all remaining weight:
-		sp_io::storage::set(&b":after_inherents_max_weight"[..], &[]);
+		// Tell `after_inherents` to forbid extrinsics:
+		sp_io::storage::set(&b":extrinsics_forbidden"[..], &[]);
 		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
-	});
-}
-
-#[test]
-fn after_inherents_uses_all_weight() {
-	new_test_ext(1).execute_with(|| {
-		// Tell `after_inherents` to use all remaining weight:
-		sp_io::storage::set(&b":after_inherents_max_weight"[..], &[]);
-		Executive::after_inherents();
-
-		let used = frame_system::Pallet::<Runtime>::block_weight().total();
-		let max = BlockWeights::get().max_block;
-		assert_eq!(used, max);
 	});
 }
 

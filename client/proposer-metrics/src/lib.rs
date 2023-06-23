@@ -49,6 +49,8 @@ pub enum EndProposingReason {
 	HitDeadline,
 	HitBlockSizeLimit,
 	HitBlockWeightLimit,
+	/// No extrinsics are allowed in the block.
+	ExtrinsicsForbidden,
 }
 
 /// Authorship metrics.
@@ -112,6 +114,7 @@ impl Metrics {
 			EndProposingReason::NoMoreTransactions => "no_more_transactions",
 			EndProposingReason::HitBlockSizeLimit => "hit_block_size_limit",
 			EndProposingReason::HitBlockWeightLimit => "hit_block_weight_limit",
+			EndProposingReason::ExtrinsicsForbidden => "extrinsics_forbidden",
 		};
 
 		self.end_proposing_reason.with_label_values(&[reason]).inc();

@@ -20,7 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_inherents::{CheckInherentsResult, InherentData};
-use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
+use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult, BlockAfterInherentsMode};
 
 sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
@@ -50,6 +50,6 @@ sp_api::decl_runtime_apis! {
 		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult;
 
 		/// Called after inherents but before extrinsic application.
-		fn after_inherents();
+		fn after_inherents() -> BlockAfterInherentsMode;
 	}
 }
