@@ -724,7 +724,7 @@ pub mod pallet {
 			send_to: T::AccountId,
 			keep_alive: bool,
 		) -> Result<(), DispatchError> {
-			ensure!(amounts.len() > 1, Error::<T>::InvalidPath);
+			ensure!(amounts.len() > 1, Error::<T>::CorrespondenceError);
 			if let Some([asset1, asset2]) = &path.get(0..2) {
 				let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 				let pool_account = Self::get_pool_account(&pool_id);
