@@ -17,7 +17,7 @@
 
 //! Tests for VersionedRuntimeUpgrade
 
-#![cfg(feature = "experimental")]
+#![cfg(all(feature = "experimental", feature = "try-runtime"))]
 
 use frame_support::{
 	construct_runtime, derive_impl,
@@ -27,11 +27,6 @@ use frame_support::{
 	weights::constants::RocksDbWeight,
 };
 use frame_system::Config;
-
-#[cfg(feature = "try-runtime")]
-use once_cell::sync::Lazy;
-#[cfg(feature = "try-runtime")]
-use std::sync::Mutex;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -99,27 +94,18 @@ struct SomeUnversionedMigration<T: Config, const S: u32>(sp_std::marker::Phantom
 parameter_types! {
 	const UpgradeReads: u64 = 4;
 	const UpgradeWrites: u64 = 2;
+	const PreUpgradeReturnBytes: [u8; 4] = [0, 1, 2, 3];
+	static PreUpgradeCalled: bool = false;
+	static PostUpgradeCalled: bool = false;
+	static PostUpgradeCalledWith: Vec<u8> = Vec::new();
 }
-
-#[cfg(feature = "try-runtime")]
-static PRE_UPGRADE_RETURN_BYTES: [u8; 4] = [0, 1, 2, 3];
-
-// We can't write to pallet storage from pre/post hooks, so use a global variable to track that they
-// are called correctly.
-#[cfg(feature = "try-runtime")]
-static PRE_UPGRADE_CALLED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
-#[cfg(feature = "try-runtime")]
-static POST_UPGRADE_CALLED: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
-#[cfg(feature = "try-runtime")]
-static POST_UPGRADE_CALLED_WITH: Lazy<Mutex<Vec<u8>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 /// Implement `OnRuntimeUpgrade` for `SomeUnversionedMigration`.
 /// It sets SomeStorage to S, and returns a weight derived from UpgradeReads and UpgradeWrites.
 impl<T: dummy_pallet::Config, const S: u32> OnRuntimeUpgrade for SomeUnversionedMigration<T, S> {
-	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
-		*PRE_UPGRADE_CALLED.lock().unwrap() = true;
-		Ok(PRE_UPGRADE_RETURN_BYTES.to_vec())
+		PreUpgradeCalled::set(true);
+		Ok(PreUpgradeReturnBytes::get().to_vec())
 	}
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -127,10 +113,9 @@ impl<T: dummy_pallet::Config, const S: u32> OnRuntimeUpgrade for SomeUnversioned
 		RocksDbWeight::get().reads_writes(UpgradeReads::get(), UpgradeWrites::get())
 	}
 
-	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
-		*POST_UPGRADE_CALLED.lock().unwrap() = true;
-		*POST_UPGRADE_CALLED_WITH.lock().unwrap() = state;
+		PostUpgradeCalled::set(true);
+		PostUpgradeCalledWith::set(state);
 		Ok(())
 	}
 }
@@ -217,27 +202,26 @@ fn weights_are_returned_correctly() {
 }
 
 #[test]
-#[cfg(feature = "try-runtime")]
 fn pre_and_post_checks_behave_correctly() {
 	new_test_ext().execute_with(|| {
 		// Check initial state
-		assert_eq!(*PRE_UPGRADE_CALLED.lock().unwrap(), false);
-		assert_eq!(*POST_UPGRADE_CALLED.lock().unwrap(), false);
-		assert_eq!(*POST_UPGRADE_CALLED_WITH.lock().unwrap(), Vec::<u8>::new());
+		assert_eq!(PreUpgradeCalled::get(), false);
+		assert_eq!(PostUpgradeCalled::get(), false);
+		assert_eq!(PostUpgradeCalledWith::get(), Vec::<u8>::new());
 
 		// Check pre/post hooks are called correctly when upgrade occurs.
 		VersionedMigrationV0ToV1::try_on_runtime_upgrade(true).unwrap();
-		assert_eq!(*PRE_UPGRADE_CALLED.lock().unwrap(), true);
-		assert_eq!(*POST_UPGRADE_CALLED.lock().unwrap(), true);
-		assert_eq!(*POST_UPGRADE_CALLED_WITH.lock().unwrap(), PRE_UPGRADE_RETURN_BYTES.to_vec());
+		assert_eq!(PreUpgradeCalled::get(), true);
+		assert_eq!(PostUpgradeCalled::get(), true);
+		assert_eq!(PostUpgradeCalledWith::get(), PreUpgradeReturnBytes::get().to_vec());
 
 		// Reset hook tracking state.
-		*PRE_UPGRADE_CALLED.lock().unwrap() = false;
-		*POST_UPGRADE_CALLED.lock().unwrap() = false;
+		PreUpgradeCalled::set(false);
+		PostUpgradeCalled::set(false);
 
 		// Check pre/post hooks are not called when an upgrade is skipped.
 		VersionedMigrationV0ToV1::try_on_runtime_upgrade(true).unwrap();
-		assert_eq!(*PRE_UPGRADE_CALLED.lock().unwrap(), false);
-		assert_eq!(*POST_UPGRADE_CALLED.lock().unwrap(), false);
+		assert_eq!(PreUpgradeCalled::get(), false);
+		assert_eq!(PostUpgradeCalled::get(), false);
 	})
 }
