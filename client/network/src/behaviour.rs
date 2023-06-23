@@ -30,8 +30,13 @@ use crate::{
 use bytes::Bytes;
 use futures::channel::oneshot;
 use libp2p::{
-	core::Multiaddr, identify::Info as IdentifyInfo, identity::PublicKey, kad::RecordKey,
-	swarm::NetworkBehaviour, PeerId,
+	connection_limits::ConnectionLimits,
+	core::{connection, Multiaddr},
+	identify::Info as IdentifyInfo,
+	identity::PublicKey,
+	kad::RecordKey,
+	swarm::NetworkBehaviour,
+	PeerId,
 };
 
 use sc_network_common::role::{ObservedRole, Roles};
@@ -51,6 +56,8 @@ pub struct Behaviour<B: BlockT> {
 	peer_info: peer_info::PeerInfoBehaviour,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
+	/// Connection limits.
+	connection_limits: libp2p::connection_limits::Behaviour,
 	/// Generic request-response protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,
 }
@@ -171,11 +178,13 @@ impl<B: BlockT> Behaviour<B> {
 		disco_config: DiscoveryConfig,
 		request_response_protocols: Vec<ProtocolConfig>,
 		peerset: PeersetHandle,
+		connection_limits: ConnectionLimits,
 	) -> Result<Self, request_responses::RegisterError> {
 		Ok(Self {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
+			connection_limits: Behaviour::new(connection_limits),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
 				request_response_protocols.into_iter(),
 				peerset,
