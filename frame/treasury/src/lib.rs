@@ -149,9 +149,11 @@ pub enum PaymentState<Id> {
 /// Info regarding an approved treasury spend.
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
-pub struct SpendStatus<AssetKind, Beneficiary, BlockNumber, PaymentId> {
+pub struct SpendStatus<AssetKind, AssetBalance, Beneficiary, BlockNumber, PaymentId> {
 	/// The kind of asset that are going to be spend.
 	asset_kind: AssetKind,
+	/// The asset amount of the spend.
+	amount: AssetBalance,
 	/// The beneficiary of the spend.
 	beneficiary: Beneficiary,
 	/// The block number by which the spend has to be claimed.
@@ -300,7 +302,13 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		SpendIndex,
-		SpendStatus<T::AssetKind, T::Beneficiary, T::BlockNumber, <T::Paymaster as Pay>::Id>,
+		SpendStatus<
+			T::AssetKind,
+			AssetBalanceOf<T, I>,
+			T::Beneficiary,
+			T::BlockNumber,
+			<T::Paymaster as Pay>::Id,
+		>,
 		OptionQuery,
 	>;
 
@@ -630,6 +638,7 @@ pub mod pallet {
 				index,
 				SpendStatus {
 					asset_kind,
+					amount,
 					beneficiary,
 					expire_at: frame_system::Pallet::<T>::block_number()
 						.saturating_add(T::PayoutPeriod::get()),
