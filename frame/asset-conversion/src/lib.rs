@@ -53,7 +53,7 @@
 //! (This can be run against the kitchen sync node in the `node` folder of this repo.)
 #![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-use frame_support::traits::Incrementable;
+use frame_support::traits::{DefensiveOption, Incrementable};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -1167,7 +1167,8 @@ where
 
 		// calculate the amount we need to provide
 		let amounts = Self::get_amounts_in(&amount_out, &path)?;
-		let amount_in = *amounts.first().expect("Always has more than one element");
+		let amount_in =
+			*amounts.first().defensive_ok_or("get_amounts_in() returned an empty result")?;
 		if let Some(amount_in_max) = amount_in_max {
 			ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 		}
@@ -1214,7 +1215,8 @@ where
 
 		// calculate the amount we should receive
 		let amounts = Self::get_amounts_out(&amount_in, &path)?;
-		let amount_out = *amounts.last().expect("Always has more than one element");
+		let amount_out =
+			*amounts.last().defensive_ok_or("get_amounts_out() returned an empty result")?;
 		if let Some(amount_out_min) = amount_out_min {
 			ensure!(amount_out >= amount_out_min, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 		}
