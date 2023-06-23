@@ -146,12 +146,22 @@ macro_rules! impl_incrementable {
 	};
 }
 
-/// For example: allows new identifiers to be created in a linear fashion.
+/// A trait representing an incrementable type.
+///
+/// The `increment` and `initial_value` functions are fallible.
+/// They should either both return a Some with a valid value, or None.
 pub trait Incrementable
 where
 	Self: Sized,
 {
+	/// Increments the value.
+	///
+	/// Returns `Some` with the incremented value if it is possible, or `None` if it is not.
 	fn increment(&self) -> Option<Self>;
+
+	/// Returns the initial value.
+	///
+	/// Returns `Some` with the initial value if it is available, or `None` if it is not.
 	fn initial_value() -> Option<Self>;
 }
 
