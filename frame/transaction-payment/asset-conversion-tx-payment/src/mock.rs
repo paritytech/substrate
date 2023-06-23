@@ -262,8 +262,9 @@ impl pallet_asset_conversion::Config for Runtime {
 	type MultiAssetId = NativeOrAssetId<u32>;
 	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 
-	#[cfg(feature = "runtime-benchmarks")]
-	type BenchmarkHelper = ();
+	pallet_asset_conversion::runtime_benchmarks_enabled! {
+		type BenchmarkHelper = ();
+	}
 }
 
 impl Config for Runtime {
