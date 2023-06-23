@@ -13,25 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Asset Asset Conversion Transaction Payment Pallet
+//! # Asset Conversion Transaction Payment Pallet
 //!
 //! This pallet allows runtimes that include it to pay for transactions in assets other than the
-//! main token of the chain.
+//! chain's native asset.
 //!
 //! ## Overview
-
-//! It does this by extending transactions to include an optional `AssetId` that specifies the asset
-//! to be used for payment (defaulting to the native token on `None`). It expects an
-//! [`OnChargeAssetTransaction`] implementation analogously to [`pallet-transaction-payment`]. The
-//! included [`AssetConversionAdapter`] (implementing [`OnChargeAssetTransaction`]) determines the
-//! fee amount by converting the fee calculated by [`pallet-transaction-payment`] into the desired
-//! asset.
 //!
-//! ## Integration
-
-//! This pallet wraps FRAME's transaction payment pallet and functions as a replacement. This means
-//! you should include both pallets in your `construct_runtime` macro, but only include this
-//! pallet's [`SignedExtension`] ([`ChargeAssetTxPayment`]).
+//! This pallet provides a `SignedExtension` with an optional `AssetId` that specifies the asset
+//! to be used for payment (defaulting to the native token on `None`). It expects an
+//! [`OnChargeAssetTransaction`] implementation analogous to [`pallet-transaction-payment`]. The
+//! included [`AssetConversionAdapter`] (implementing [`OnChargeAssetTransaction`]) determines the
+//! fee amount by converting the fee calculated by [`pallet-transaction-payment`] in the native
+//! asset into the amount required of the specified asset.
+//!
+//! ## Pallet API
+//!
+//! This pallet does not have any dispatchable calls or storage. It wraps FRAME's Transaction
+//! Payment pallet and functions as a replacement. This means you should include both pallets in
+//! your `construct_runtime` macro, but only include this pallet's [`SignedExtension`]
+//! ([`ChargeAssetTxPayment`]).
+//!
+//! ## Terminology
+//!
+//! - Native Asset or Native Currency: The asset that a chain considers native, as in its default
+//!   for transaction fee payment, deposits, inflation, etc.
+//! - Other assets: Other assets that may exist on chain, for example under the Assets pallet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -64,44 +71,42 @@ mod tests;
 mod payment;
 pub use payment::*;
 
-// Type aliases used for interaction with `OnChargeTransaction`.
+/// Type aliases used for interaction with `OnChargeTransaction`.
 pub(crate) type OnChargeTransactionOf<T> =
 	<T as pallet_transaction_payment::Config>::OnChargeTransaction;
-// Balance type alias.
+/// Balance type alias for balances of the chain's native asset.
 pub(crate) type BalanceOf<T> = <OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance;
-// Liquity info type alias.
+/// Liquidity info type alias.
 pub(crate) type LiquidityInfoOf<T> =
 	<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::LiquidityInfo;
 
-// Type alias used for interaction with fungibles (assets).
-// Balance type alias.
+/// Balance type alias for balances of assets that implement the `fungibles` trait.
 pub(crate) type AssetBalanceOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
-/// Asset id type alias.
+/// Type alias for Asset IDs.
 pub(crate) type AssetIdOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
-// Type aliases used for interaction with `OnChargeAssetTransaction`.
-// Balance type alias.
+/// Type alias for the interaction of balances with `OnChargeAssetTransaction`.
 pub(crate) type ChargeAssetBalanceOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::Balance;
-// Asset id type alias.
+/// Type alias for Asset IDs in their interaction with `OnChargeAssetTransaction`.
 pub(crate) type ChargeAssetIdOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::AssetId;
-// Liquity info type alias.
+/// Liquidity info type alias for interaction with `OnChargeAssetTransaction`.
 pub(crate) type ChargeAssetLiquidityOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::LiquidityInfo;
 
 /// Used to pass the initial payment info from pre- to post-dispatch.
 #[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
 pub enum InitialPayment<T: Config> {
-	/// No initial fee was payed.
+	/// No initial fee was paid.
 	#[default]
 	Nothing,
-	/// The initial fee was payed in the native currency.
+	/// The initial fee was paid in the native currency.
 	Native(LiquidityInfoOf<T>),
-	/// The initial fee was payed in an asset.
-	Asset((LiquidityInfoOf<T>, BalanceOf<T>)),
+	/// The initial fee was paid in an asset.
+	Asset((LiquidityInfoOf<T>, BalanceOf<T>, AssetBalanceOf<T>)),
 }
 
 pub use pallet::*;
@@ -130,18 +135,21 @@ pub mod pallet {
 		/// has been paid by `who` in an asset `asset_id`.
 		AssetTxFeePaid {
 			who: T::AccountId,
-			actual_fee: BalanceOf<T>,
+			actual_fee: AssetBalanceOf<T>,
 			tip: BalanceOf<T>,
 			asset_id: ChargeAssetIdOf<T>,
 		},
+		/// A swap of the refund in native currency back to asset failed.
+		AssetRefundFailed { native_amount_kept: BalanceOf<T> },
 	}
 }
 
-/// Require the transactor pay for themselves and maybe include a tip to gain additional priority
-/// in the queue. Allows paying via both `Currency` as well as `fungibles::Balanced`.
+/// Require payment for transaction inclusion and optionally include a tip to gain additional
+/// priority in the queue. Allows paying via both `Currency` as well as `fungibles::Balanced`.
 ///
 /// Wraps the transaction logic in [`pallet_transaction_payment`] and extends it with assets.
-/// An asset id of `None` falls back to the underlying transaction payment via the native currency.
+/// An asset ID of `None` falls back to the underlying transaction payment logic via the native
+/// currency.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct ChargeAssetTxPayment<T: Config> {
@@ -188,7 +196,16 @@ where
 				fee.into(),
 				self.tip.into(),
 			)
-			.map(|(paid, swapped)| (fee, InitialPayment::Asset((paid.into(), swapped.into()))))
+			.map(|(used_for_fee, received_exchanged, asset_consumed)| {
+				(
+					fee,
+					InitialPayment::Asset((
+						used_for_fee.into(),
+						received_exchanged.into(),
+						asset_consumed.into(),
+					)),
+				)
+			})
 		} else {
 			<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::withdraw_fee(
 				who, call, info, fee, self.tip,
@@ -276,6 +293,10 @@ where
 		if let Some((tip, who, initial_payment, asset_id)) = pre {
 			match initial_payment {
 				InitialPayment::Native(already_withdrawn) => {
+					debug_assert!(
+						asset_id.is_none(),
+						"For that payment type the `asset_id` should be None"
+					);
 					pallet_transaction_payment::ChargeTransactionPayment::<T>::post_dispatch(
 						Some((tip, who, already_withdrawn)),
 						info,
@@ -285,26 +306,31 @@ where
 					)?;
 				},
 				InitialPayment::Asset(already_withdrawn) => {
+					debug_assert!(
+						asset_id.is_some(),
+						"For that payment type the `asset_id` should be set"
+					);
 					let actual_fee = pallet_transaction_payment::Pallet::<T>::compute_actual_fee(
 						len as u32, info, post_info, tip,
 					);
 
 					if let Some(asset_id) = asset_id {
-						let (paid_fee, swapped) = already_withdrawn;
-						T::OnChargeAssetTransaction::correct_and_deposit_fee(
+						let (used_for_fee, received_exchanged, asset_consumed) = already_withdrawn;
+						let converted_fee = T::OnChargeAssetTransaction::correct_and_deposit_fee(
 							&who,
 							info,
 							post_info,
 							actual_fee.into(),
 							tip.into(),
-							paid_fee.into(),
-							swapped.into(),
+							used_for_fee.into(),
+							received_exchanged.into(),
 							asset_id,
+							asset_consumed.into(),
 						)?;
 
 						Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
 							who,
-							actual_fee,
+							actual_fee: converted_fee,
 							tip,
 							asset_id,
 						});

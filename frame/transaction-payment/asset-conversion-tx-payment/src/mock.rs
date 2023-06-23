@@ -229,7 +229,8 @@ impl pallet_assets::Config<Instance2> for Runtime {
 parameter_types! {
 	pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
 	pub storage AllowMultiAssetPools: bool = false;
-	pub storage LiquidityWithdrawalFee: Permill = Permill::from_percent(0); // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
+	// should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
+	pub storage LiquidityWithdrawalFee: Permill = Permill::from_percent(0);
 	pub const MaxSwapPathLength: u32 = 4;
 }
 
@@ -261,8 +262,9 @@ impl pallet_asset_conversion::Config for Runtime {
 	type MultiAssetId = NativeOrAssetId<u32>;
 	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 
-	#[cfg(feature = "runtime-benchmarks")]
-	type BenchmarkHelper = ();
+	pallet_asset_conversion::runtime_benchmarks_enabled! {
+		type BenchmarkHelper = ();
+	}
 }
 
 impl Config for Runtime {
