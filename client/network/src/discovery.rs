@@ -901,8 +901,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 								continue
 							}
 
-							self.pending_events
-								.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
+							self.pending_events.extend(
+								list.into_iter()
+									.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)),
+							);
 							if let Some(ev) = self.pending_events.pop_front() {
 								return Poll::Ready(ToSwarm::GenerateEvent(ev))
 							}

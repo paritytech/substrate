@@ -369,7 +369,6 @@ where
 					SpawnImpl(params.executor),
 				)
 			};
-			#[allow(deprecated)]
 			let builder = builder
 				.connection_limits(
 					ConnectionLimits::default()
@@ -1555,7 +1554,7 @@ where
 				endpoint,
 				num_established,
 			} => {
-				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?} via {:?}, {:?})", peer_id, connection_id, cause);
+				debug!(target: "sub-libp2p", "Libp2p => Disconnected({:?} via {:?}: {:?})", peer_id, connection_id, cause);
 				if let Some(metrics) = self.metrics.as_ref() {
 					let direction = match endpoint {
 						ConnectedPoint::Dialer { .. } => "out",
@@ -1624,12 +1623,9 @@ where
 							} else {
 								None
 							},
-						DialError::ConnectionLimit(_) => Some("limit-reached"),
-						DialError::InvalidPeerId(_) |
-						DialError::WrongPeerId { .. } |
-						DialError::LocalPeerId { .. } => Some("invalid-peer-id"),
+						DialError::WrongPeerId { .. } | DialError::LocalPeerId { .. } =>
+							Some("invalid-peer-id"),
 						DialError::Transport(_) => Some("transport-error"),
-						DialError::Banned |
 						DialError::NoAddresses |
 						DialError::DialPeerConditionFalse(_) |
 						DialError::Aborted => None, // ignore them
@@ -1639,12 +1635,12 @@ where
 					}
 				}
 			},
-			SwarmEvent::Dialing(peer_id) => {
-				trace!(target: "sub-libp2p", "Libp2p => Dialing({:?})", peer_id)
+			SwarmEvent::Dialing { peer_id, connection_id } => {
+				trace!(target: "sub-libp2p", "Libp2p => Dialing({:?} via {:?})", peer_id, connection_id)
 			},
 			SwarmEvent::IncomingConnection { connection_id, local_addr, send_back_addr } => {
-				trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({:?},{},{}))",
-					connection_id, local_addr, send_back_addr);
+				trace!(target: "sub-libp2p", "Libp2p => IncomingConnection({},{} via {:?}))",
+					local_addr, send_back_addr, connection_id);
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.incoming_connections_total.inc();
 				}
@@ -1657,8 +1653,8 @@ where
 			} => {
 				debug!(
 					target: "sub-libp2p",
-					"Libp2p => IncomingConnectionError({:?},{},{}): {}",
-					connection_id, local_addr, send_back_addr, error,
+					"Libp2p => IncomingConnectionError({},{} via {:?}): {}",
+					local_addr, send_back_addr,	connection_id, error,
 				);
 				if let Some(metrics) = self.metrics.as_ref() {
 					#[allow(deprecated)]
@@ -1669,7 +1665,6 @@ where
 							} else {
 								None
 							},
-						ListenError::ConnectionLimit(_) => Some("limit-reached"),
 						ListenError::WrongPeerId { .. } | ListenError::LocalPeerId { .. } =>
 							Some("invalid-peer-id"),
 						ListenError::Transport(_) => Some("transport-error"),
@@ -1684,17 +1679,17 @@ where
 					}
 				}
 			},
-			#[allow(deprecated)]
-			SwarmEvent::BannedPeer { peer_id, endpoint } => {
-				debug!(
-					target: "sub-libp2p",
-					"Libp2p => BannedPeer({}). Connected via {:?}.",
-					peer_id, endpoint,
-				);
-				if let Some(metrics) = self.metrics.as_ref() {
-					metrics.incoming_connections_errors_total.with_label_values(&["banned"]).inc();
-				}
-			},
+			// #[allow(deprecated)]
+			// SwarmEvent::BannedPeer { peer_id, endpoint } => {
+			// 	debug!(
+			// 		target: "sub-libp2p",
+			// 		"Libp2p => BannedPeer({}). Connected via {:?}.",
+			// 		peer_id, endpoint,
+			// 	);
+			// 	if let Some(metrics) = self.metrics.as_ref() {
+			// 		metrics.incoming_connections_errors_total.with_label_values(&["banned"]).inc();
+			// 	}
+			// },
 			SwarmEvent::ListenerClosed { reason, addresses, .. } => {
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.listeners_local_addresses.sub(addresses.len() as u64);
