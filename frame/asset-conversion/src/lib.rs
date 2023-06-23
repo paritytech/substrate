@@ -350,8 +350,10 @@ pub mod pallet {
 		PathError,
 		/// The provided path must consists of unique assets.
 		NonUniquePath,
-		/// No corresponding element in `amounts`.
-		AmountsError,
+		/// Unable to find an element in an array/vec that should have one-to-one correspondence
+		/// with another. For example, an array of assets constituting a `path` should have a
+		/// corresponding array of `amounts` along the path.
+		CorrespondenceError,
 	}
 
 	/// Pallet's callable functions.
@@ -764,7 +766,7 @@ pub mod pallet {
 				let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 				let pool_account = Self::get_pool_account(&pool_id);
 				// amounts should always a corresponding element to path.
-				let first_amount = amounts.first().ok_or(Error::<T>::AmountsError)?;
+				let first_amount = amounts.first().ok_or(Error::<T>::CorrespondenceError)?;
 
 				Self::transfer(asset1, sender, &pool_account, *first_amount, keep_alive)?;
 
@@ -776,7 +778,7 @@ pub mod pallet {
 						let pool_account = Self::get_pool_account(&pool_id);
 
 						let amount_out =
-							amounts.get((i + 1) as usize).ok_or(Error::<T>::PathError)?;
+							amounts.get((i + 1) as usize).ok_or(Error::<T>::CorrespondenceError)?;
 
 						let to = if i < path_len - 2 {
 							let asset3 = path.get((i + 2) as usize).ok_or(Error::<T>::PathError)?;
