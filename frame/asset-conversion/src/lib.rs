@@ -652,16 +652,7 @@ pub mod pallet {
 			let amount_out = *amounts.last().expect("Has always more than 1 element");
 			ensure!(amount_out >= amount_out_min, Error::<T>::ProvidedMinimumNotSufficientForSwap);
 
-			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-			Self::deposit_event(Event::SwapExecuted {
-				who: sender,
-				send_to,
-				path,
-				amount_in,
-				amount_out,
-			});
-
+			Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
 			Ok(())
 		}
 
@@ -693,16 +684,7 @@ pub mod pallet {
 			let amount_in = *amounts.first().expect("Always has more than one element");
 			ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 
-			Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-			Self::deposit_event(Event::SwapExecuted {
-				who: sender,
-				send_to,
-				path,
-				amount_in,
-				amount_out,
-			});
-
+			Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
 			Ok(())
 		}
 	}
@@ -766,19 +748,20 @@ pub mod pallet {
 
 		/// Swap assets along a `path`, depositing in `send_to`.
 		pub(crate) fn do_swap(
-			sender: &T::AccountId,
+			sender: T::AccountId,
 			amounts: &Vec<T::AssetBalance>,
-			path: &BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
-			send_to: &T::AccountId,
+			path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
+			send_to: T::AccountId,
 			keep_alive: bool,
 		) -> Result<(), DispatchError> {
-			if let Some([asset1, asset2]) = path.get(0..2) {
+			ensure!(amounts.len() > 1, Error::<T>::CorrespondenceError);
+			if let Some([asset1, asset2]) = &path.get(0..2) {
 				let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 				let pool_account = Self::get_pool_account(&pool_id);
 				// amounts should always contain a corresponding element to path.
 				let first_amount = amounts.first().ok_or(Error::<T>::CorrespondenceError)?;
 
-				Self::transfer(asset1, sender, &pool_account, *first_amount, keep_alive)?;
+				Self::transfer(asset1, &sender, &pool_account, *first_amount, keep_alive)?;
 
 				let mut i = 0;
 				let path_len = path.len() as u32;
@@ -809,6 +792,15 @@ pub mod pallet {
 					}
 					i.saturating_inc();
 				}
+				Self::deposit_event(Event::SwapExecuted {
+					who: sender,
+					send_to,
+					path,
+					amount_in: *first_amount,
+					amount_out: *amounts.last().expect("Always has more than 1 element"),
+				});
+			} else {
+				return Err(Error::<T>::InvalidPath.into())
 			}
 			Ok(())
 		}
@@ -1173,16 +1165,7 @@ where
 			ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 		}
 
-		Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-		Self::deposit_event(Event::SwapExecuted {
-			who: sender,
-			send_to,
-			path,
-			amount_in,
-			amount_out,
-		});
-
+		Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
 		Ok(amount_in)
 	}
 
@@ -1221,16 +1204,7 @@ where
 			ensure!(amount_out >= amount_out_min, Error::<T>::ProvidedMaximumNotSufficientForSwap);
 		}
 
-		Self::do_swap(&sender, &amounts, &path, &send_to, keep_alive)?;
-
-		Self::deposit_event(Event::SwapExecuted {
-			who: sender,
-			send_to,
-			path,
-			amount_in,
-			amount_out,
-		});
-
+		Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
 		Ok(amount_out)
 	}
 }
