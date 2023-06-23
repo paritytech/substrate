@@ -91,16 +91,16 @@ impl<
 		DbWeight: Get<RuntimeDbWeight>,
 	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<FROM, TO, Inner, Pallet, DbWeight>
 {
-	/// Executes pre_upgrade if the migration will run, and passes a boolean to post_upgrade
-	/// indicating if the migration ran.
+	/// Executes pre_upgrade if the migration will run, and wraps the pre_upgrade bytes in an Option
+	/// before passing them to post_upgrade, so it knows whether the migration ran or not.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == FROM {
-			Ok((Inner::pre_upgrade()?, true).encode())
+			Ok(Some(Inner::pre_upgrade()?).encode())
 		} else {
-			Ok((Vec::<u8>::new(), false).encode())
+			Ok(None::<Vec<u8>>.encode())
 		}
 	}
 
@@ -139,17 +139,18 @@ impl<
 	}
 
 	/// Executes post_upgrade if the migration just ran.
+	///
+	/// pre_upgrade passes Some(Vec<u8>) to post_upgrade if the migration ran, and None otherwise.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(pre_upgrade_return_bytes: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
 		use codec::DecodeAll;
-		let (inner_bytes, migration_ran) =
-			<(Vec<u8>, bool)>::decode_all(&mut &pre_upgrade_return_bytes[..]).map_err(|_| {
-				"VersionedRuntimeUpgrade post_upgrade failed to decode pre_upgrade bytes"
-			})?;
-		if migration_ran {
-			Inner::post_upgrade(inner_bytes)
-		} else {
-			Ok(())
+		let maybe_inner_bytes = <Option<Vec<u8>>>::decode_all(&mut &pre_upgrade_return_bytes[..])
+			.map_err(|_| {
+			"VersionedRuntimeUpgrade post_upgrade failed to decode pre_upgrade bytes"
+		})?;
+		match maybe_inner_bytes {
+			Some(inner_bytes) => Inner::post_upgrade(inner_bytes),
+			None => Ok(()),
 		}
 	}
 }
