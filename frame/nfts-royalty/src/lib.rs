@@ -334,18 +334,6 @@ pub mod pallet {
 					Error::<T>::NoPermission
 				);
 
-				// TODO: Allow the NFT collection admin to set an item's royalty
-				// ensure!(
-				// 	T::Nfts::collection_admin(&collection_id) == Some(check_owner.clone()),
-				// 	Error::<T>::NoPermission
-				// );
-
-				// TODO: Allow the NFT collection issuer to set an item's royalty
-				// ensure!(
-				// 	T::Nfts::collection_issuer(&collection_id) == Some(check_owner.clone()),
-				// 	Error::<T>::NoPermission
-				// );
-
 				let collection_and_item_owner = &check_owner;
 				T::Currency::reserve(collection_and_item_owner, T::ItemRoyaltyDeposit::get())?;
 			}
