@@ -590,6 +590,9 @@ pub trait SwapNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
 	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
 	/// too costly.
 	///
+	/// Withdraws `asset_id` from `sender`, deposits native asset to `send_to`, respecting
+	/// `keep_alive`.
+	///
 	/// If successful returns the amount of the `asset_id` taken to provide `amount_out`.
 	fn swap_tokens_for_exact_native(
 		sender: AccountId,
@@ -603,6 +606,9 @@ pub trait SwapNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
 	/// Take an `asset_id` and swap `amount_in` of the chain's native asset for it. If an
 	/// `amount_out_min` is specified, it will return an error if it is unable to acquire the amount
 	/// desired.
+	///
+	/// Withdraws native asset from `sender`, deposits `asset_id` to `send_to`, respecting
+	/// `keep_alive`.
 	///
 	/// If successful, returns the amount of `asset_id` acquired for the `amount_in`.
 	fn swap_exact_native_for_tokens(
