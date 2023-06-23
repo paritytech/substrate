@@ -135,7 +135,7 @@ pub mod pallet {
 		/// has been paid by `who` in an asset `asset_id`.
 		AssetTxFeePaid {
 			who: T::AccountId,
-			actual_fee: AssetBalanceOf<T>,
+			actual_fee: BalanceOf<T>,
 			tip: BalanceOf<T>,
 			asset_id: ChargeAssetIdOf<T>,
 		},

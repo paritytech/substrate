@@ -135,7 +135,7 @@ where
 		total_swapped: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
 	) -> Result<(), TransactionValidityError> {
-		// Refund to the account that paid the fees.
+		// Refund the native asset to the account that paid the fees (`who`).
 		<T::OnChargeTransaction>::correct_and_deposit_fee(
 			who,
 			dispatch_info,
@@ -145,18 +145,19 @@ where
 			already_paid,
 		)?;
 
+		// amount, in native asset, to swap back to the desired `asset_id`
 		let swap_back = total_swapped.saturating_sub(corrected_fee);
 		if !swap_back.is_zero() {
 			// If this fails, the account might have dropped below the existential balance or there
 			// is not enough liquidity left in the pool. In that case we don't throw an error and
 			// the account will keep the native currency.
 			CON::swap_exact_native_for_tokens(
-				who.clone(),
-				asset_id,
-				swap_back,
-				None,
-				who.clone(),
-				false,
+				who.clone(), // we already deposited the native to `who`
+				asset_id,    // we want asset_id back
+				swap_back,   // amount of the native asset to convert to `asset_id`
+				None,        // no minimum amount back
+				who.clone(), // we will refund to `who`
+				false,       // no need to keep alive
 			)
 			.ok();
 		}
