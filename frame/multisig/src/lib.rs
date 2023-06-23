@@ -222,8 +222,6 @@ pub mod pallet {
 		MaxWeightTooLow,
 		/// The data to be stored is already stored.
 		AlreadyStored,
-		/// A different expiry was given to the multisig operation that is underway.
-		WrongExpiry,
 		/// The expiry cannot be specified for a multisig that is yet to be created.
 		UnexpectedExpiry,
 		/// The multisig operation got expired.
@@ -562,7 +560,7 @@ pub mod pallet {
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
-			call: Box<<T as Config>::RuntimeCall>,
+			call_hash: [u8; 32],
 			max_weight: Weight,
 			expiry: T::BlockNumber,
 		) -> DispatchResultWithPostInfo {
@@ -572,7 +570,7 @@ pub mod pallet {
 				threshold,
 				other_signatories,
 				maybe_timepoint,
-				CallOrHash::Call(*call),
+				CallOrHash::Hash(call_hash),
 				max_weight,
 				Some(expiry),
 			)
@@ -684,15 +682,8 @@ impl<T: Config> Pallet<T> {
 			let timepoint = maybe_timepoint.ok_or(Error::<T>::NoTimepoint)?;
 			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
 
-			// Ensure that the provided expiry is the same as the one specified
-			// in `MultisigExpiries`.
-			ensure!(
-				maybe_expiry == <MultisigExpiries<T>>::get(&id, call_hash),
-				Error::<T>::WrongExpiry
-			);
-
 			// Ensure that the mutlisig did not expire.
-			if let Some(expiry) = maybe_expiry {
+			if let Some(expiry) = <MultisigExpiries<T>>::get(&id, call_hash) {
 				ensure!(
 					expiry >= <frame_system::Pallet<T>>::block_number(),
 					Error::<T>::MultisigExpired
@@ -719,6 +710,7 @@ impl<T: Config> Pallet<T> {
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.
 				<Multisigs<T>>::remove(&id, call_hash);
+				<MultisigExpiries<T>>::remove(&id, call_hash);
 				T::Currency::unreserve(&m.depositor, m.deposit);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());

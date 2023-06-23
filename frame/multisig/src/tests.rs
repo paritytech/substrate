@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Tests for Multisig Pallet
+//! Tests for Multisig Pallet
 
 #![cfg(test)]
 
@@ -253,6 +253,121 @@ fn timepoint_checking_works() {
 			Error::<Test>::WrongTimepoint,
 		);
 	});
+}
+
+#[test]
+fn mutlisig_with_expiry_works() {
+	new_test_ext().execute_with(|| {
+		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(3), multi, 5));
+
+		let call = call_transfer(6, 15);
+		let call_weight = call.get_dispatch_info().weight;
+		let hash = blake2_256(&call.encode());
+		assert_ok!(Multisig::create_multisig_with_expiry(
+			RuntimeOrigin::signed(1),
+			2,
+			vec![2, 3],
+			None,
+			hash,
+			Weight::zero(),
+			5, // expiry is set to block five.
+		));
+
+		assert_eq!(Balances::free_balance(1), 2);
+		assert_eq!(Balances::reserved_balance(1), 3);
+		assert_eq!(Balances::free_balance(6), 0);
+
+		let timepoint = now();
+
+		assert_eq!(MultisigExpiries::<Test>::get(multi, hash), Some(5));
+
+		// The expiry is at block 5, so at block 3 the multisig won't be expired.
+		System::set_block_number(3);
+
+		assert_ok!(Multisig::as_multi(
+			RuntimeOrigin::signed(2),
+			2,
+			vec![1, 3],
+			Some(timepoint),
+			call,
+			call_weight
+		),);
+
+		assert!(MultisigExpiries::<Test>::get(multi, hash).is_none());
+		assert!(Multisigs::<Test>::get(multi, hash).is_none());
+
+		// The deposit got undreserved after clearing the multisig.
+		assert_eq!(Balances::free_balance(1), 5);
+		assert_eq!(Balances::reserved_balance(1), 0);
+
+		assert_eq!(Balances::free_balance(6), 15);
+	})
+}
+
+#[test]
+fn mutlisig_wont_get_executed_when_expired() {
+	new_test_ext().execute_with(|| {
+		let multi = Multisig::multi_account_id(&[1, 2, 3][..], 2);
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1), multi, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(2), multi, 5));
+		assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(3), multi, 5));
+
+		let call = call_transfer(6, 15);
+		let call_weight = call.get_dispatch_info().weight;
+		let hash = blake2_256(&call.encode());
+		assert_ok!(Multisig::create_multisig_with_expiry(
+			RuntimeOrigin::signed(1),
+			2,
+			vec![2, 3],
+			None,
+			hash,
+			Weight::zero(),
+			5, // expiry is set to block five.
+		));
+
+		assert_eq!(Balances::free_balance(1), 2);
+		assert_eq!(Balances::reserved_balance(1), 3);
+		assert_eq!(Balances::free_balance(6), 0);
+
+		let timepoint = now();
+
+		assert_eq!(MultisigExpiries::<Test>::get(multi, hash), Some(5));
+
+		// The expiry is at block 5, so at block 6 the multisig will get expired.
+		System::set_block_number(6);
+
+		assert_noop!(
+			Multisig::as_multi(
+				RuntimeOrigin::signed(2),
+				2,
+				vec![1, 3],
+				Some(timepoint),
+				call,
+				call_weight
+			),
+			Error::<Test>::MultisigExpired
+		);
+
+		assert_ok!(Multisig::clear_multi(
+			RuntimeOrigin::signed(42),
+			2,
+			vec![1, 2, 3],
+			timepoint,
+			hash
+		));
+
+		assert!(MultisigExpiries::<Test>::get(multi, hash).is_none());
+		assert!(Multisigs::<Test>::get(multi, hash).is_none());
+
+		// The deposit got undreserved after clearing the multisig.
+		assert_eq!(Balances::free_balance(1), 5);
+		assert_eq!(Balances::reserved_balance(1), 0);
+
+		assert_eq!(Balances::free_balance(6), 0);
+	})
 }
 
 #[test]
