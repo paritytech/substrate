@@ -113,6 +113,13 @@ impl<
 	fn on_runtime_upgrade() -> Weight {
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == FROM {
+			log::info!(
+				"Running {} VersionedOnRuntimeUpgrade. Upgrading from version {:?} to {:?}.",
+				Pallet::name(),
+				FROM,
+				TO
+			);
+
 			// Execute the migration
 			let weight = Inner::on_runtime_upgrade();
 
