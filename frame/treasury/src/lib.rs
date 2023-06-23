@@ -75,7 +75,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use frame_support::{
 	print,
 	traits::{
-		Currency, ExistenceRequirement::KeepAlive, Get, Imbalance, OnUnbalanced,
+		tokens::Pay, Currency, ExistenceRequirement::KeepAlive, Get, Imbalance, OnUnbalanced,
 		ReservableCurrency, WithdrawReasons,
 	},
 	weights::Weight,
@@ -87,6 +87,7 @@ pub use weights::WeightInfo;
 
 pub type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type AssetBalanceOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Balance;
 pub type PositiveImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::PositiveImbalance;
@@ -162,19 +163,13 @@ pub struct SpendStatus<AssetKind, Beneficiary, BlockNumber, PaymentId> {
 /// Index of an approved treasury spend.
 pub type SpendIndex = u32;
 
-/// Trait to determine the fungibility of an `AssetKind` and retrieve its balance.
-pub trait MatchesFungible<AssetKind, Balance> {
-	fn matches_fungible(a: &AssetKind) -> Option<Balance>;
-}
-
 // TODO remove dev_mode
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
 	use frame_support::{
-		dispatch_context::with_context,
-		pallet_prelude::*,
-		traits::tokens::{ConversionFromAssetBalance, Pay},
+		dispatch_context::with_context, pallet_prelude::*,
+		traits::tokens::ConversionFromAssetBalance,
 	};
 	use frame_system::pallet_prelude::*;
 
@@ -255,9 +250,6 @@ pub mod pallet {
 
 		/// Type for processing spends of [Self::AssetKind] in favor of [Self::Beneficiary].
 		type Paymaster: Pay<Beneficiary = Self::Beneficiary, AssetKind = Self::AssetKind>;
-
-		/// Type to determine the fungibility of an `AssetKind` and retrieving its balance.
-		type AssetMatcher: MatchesFungible<Self::AssetKind, <Self::Paymaster as Pay>::Balance>;
 
 		/// Type to convert the balance of an [`Self::AssetKind`] to balance of the native asset.
 		type BalanceConverter: ConversionFromAssetBalance<
@@ -598,21 +590,20 @@ pub mod pallet {
 		///
 		/// - `origin`: Must be `T::SpendOrigin` with the `Success` value being at least `amount`.
 		/// - `asset_kind`: An indicator of the specific asset class to be spent.
+		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The beneficiary of the spend.
 		// TODO weight
 		#[pallet::call_index(5)]
 		pub fn spend(
 			origin: OriginFor<T>,
 			asset_kind: T::AssetKind,
+			#[pallet::compact] amount: AssetBalanceOf<T, I>,
 			beneficiary: T::Beneficiary,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 
-			let asset_amount =
-				T::AssetMatcher::matches_fungible(&asset_kind).ok_or(Error::<T, I>::NotFungible)?;
-			let native_amount =
-				T::BalanceConverter::from_asset_balance(asset_amount, asset_kind.clone())
-					.map_err(|_| Error::<T, I>::FailedToConvertBalance)?;
+			let native_amount = T::BalanceConverter::from_asset_balance(amount, asset_kind.clone())
+				.map_err(|_| Error::<T, I>::FailedToConvertBalance)?;
 
 			ensure!(native_amount <= max_amount, Error::<T, I>::InsufficientPermission);
 
