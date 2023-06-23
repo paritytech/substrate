@@ -356,6 +356,16 @@ pub mod pallet {
 		CorrespondenceError,
 	}
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+		fn integrity_test() {
+			assert!(
+				T::MaxSwapPathLength::get() > 1,
+				"the `MaxSwapPathLength` should be greater than 1",
+			);
+		}
+	}
+
 	/// Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
