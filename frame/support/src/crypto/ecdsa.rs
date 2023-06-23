@@ -47,3 +47,19 @@ impl ECDSAExt for Public {
 		})
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_core::{ecdsa, Pair};
+
+	#[test]
+	fn to_eth_address_works() {
+		let pair = ecdsa::Pair::from_string("//Alice//password", None).unwrap();
+		let eth_address = pair.public().to_eth_address().unwrap();
+		assert_eq!(
+			array_bytes::bytes2hex("0x", &eth_address),
+			"0xdc1cce4263956850a3c8eb349dc6fc3f7792cb27"
+		);
+	}
+}
