@@ -166,7 +166,7 @@ where
 			// If this fails, the account might have dropped below the existential balance or there
 			// is not enough liquidity left in the pool. In that case we don't throw an error and
 			// the account will keep the native currency.
-			asset_refund = CON::swap_exact_native_for_tokens(
+			match CON::swap_exact_native_for_tokens(
 				who.clone(), // we already deposited the native to `who`
 				asset_id,    // we want asset_id back
 				swap_back,   // amount of the native asset to convert to `asset_id`
@@ -174,7 +174,15 @@ where
 				who.clone(), // we will refund to `who`
 				false,       // no need to keep alive
 			)
-			.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
+			.ok()
+			{
+				Some(acquired) => asset_refund = acquired,
+				None => {
+					Pallet::<T>::deposit_event(Event::<T>::AssetRefundFailed {
+						native_amount_kept: swap_back,
+					});
+				},
+			}
 		}
 
 		let actual_paid = initial_asset_consumed.saturating_sub(asset_refund);

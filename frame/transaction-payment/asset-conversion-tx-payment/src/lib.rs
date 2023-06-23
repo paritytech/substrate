@@ -139,6 +139,8 @@ pub mod pallet {
 			tip: BalanceOf<T>,
 			asset_id: ChargeAssetIdOf<T>,
 		},
+		/// A swap of the refund in native currency back to asset failed.
+		AssetRefundFailed { native_amount_kept: BalanceOf<T> },
 	}
 }
 
