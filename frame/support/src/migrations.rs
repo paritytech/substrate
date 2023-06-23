@@ -114,7 +114,7 @@ impl<
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == FROM {
 			log::info!(
-				"Running {} VersionedOnRuntimeUpgrade. Upgrading from version {:?} to {:?}.",
+				"Running {} VersionedOnRuntimeUpgrade: version {:?} to {:?}.",
 				Pallet::name(),
 				FROM,
 				TO
