@@ -193,7 +193,7 @@ fn disable_logging_works() {
 
 #[test]
 fn ensure_transactional_works() {
-	const KEY: &[u8] = &*b"test";
+	const KEY: &[u8] = b"test";
 
 	let client = TestClientBuilder::new().build();
 	let best_hash = client.chain_info().best_hash;
