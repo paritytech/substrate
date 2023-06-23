@@ -129,7 +129,7 @@ impl<
 			weight.saturating_add(DbWeight::get().reads_writes(1, 1))
 		} else {
 			log::warn!(
-				"{} VersionedOnRuntimeUpgrade {:?} skipped because current on-chain version is {:?}.",
+				"{} VersionedOnRuntimeUpgrade for version {:?} skipped because current on-chain version is {:?}.",
 				Pallet::name(),
 				FROM,
 				on_chain_version
