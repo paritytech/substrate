@@ -17,7 +17,6 @@ substrate-rpc-client = { path = "../../utils/frame/rpc/client" }
 assert_cmd = "2.0.10"
 nix = "0.26.2"
 regex = "1.7.3"
-tempfile = "3.5.0"
 tokio = { version = "1.22.0", features = ["full"] }
 node-primitives = { path = "../../bin/node/primitives" }
 futures = "0.3.28"
