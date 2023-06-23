@@ -229,7 +229,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		#crate_::std_enabled! {
 			pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 				call: &'static C,
-				commit_on_success: std::cell::RefCell<bool>,
+				in_transaction: std::cell::RefCell<bool>,
 				changes: std::cell::RefCell<#crate_::OverlayedChanges>,
 				storage_transaction_cache: std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, C::StateBackend>
@@ -248,11 +248,13 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				) -> R where Self: Sized {
 					self.start_transaction();
 
-					*std::cell::RefCell::borrow_mut(&self.commit_on_success) = false;
+					let old_value = std::cell::RefCell::replace(&self.in_transaction, true);
 					let res = call(self);
-					*std::cell::RefCell::borrow_mut(&self.commit_on_success) = true;
+					*std::cell::RefCell::borrow_mut(&self.in_transaction) = old_value;
 
-					self.commit_or_rollback(std::matches!(res, #crate_::TransactionOutcome::Commit(_)));
+					self.commit_or_rollback_transaction(
+						std::matches!(res, #crate_::TransactionOutcome::Commit(_))
+					);
 
 					res.into_inner()
 				}
@@ -332,7 +334,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				) -> #crate_::ApiRef<'a, Self::RuntimeApi> {
 					RuntimeApiImpl {
 						call: unsafe { std::mem::transmute(call) },
-						commit_on_success: true.into(),
+						in_transaction: false.into(),
 						changes: std::default::Default::default(),
 						recorder: std::default::Default::default(),
 						storage_transaction_cache: std::default::Default::default(),
@@ -341,52 +343,47 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			}
 
 			impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C> {
-				fn commit_or_rollback(&self, commit: bool) {
+				fn commit_or_rollback_transaction(&self, commit: bool) {
 					let proof = "\
 					We only close a transaction when we opened one ourself.
 					Other parts of the runtime that make use of transactions (state-machine)
 					also balance their transactions. The runtime cannot close client initiated
 					transactions; qed";
-					if *std::cell::RefCell::borrow(&self.commit_on_success) {
-						let res = if commit {
-							let res = if let Some(recorder) = &self.recorder {
-								#crate_::ProofRecorder::<Block>::commit_transaction(&recorder)
-							} else {
-								Ok(())
-							};
 
-							let res2 = #crate_::OverlayedChanges::commit_transaction(
-								&mut std::cell::RefCell::borrow_mut(&self.changes)
-							);
-
-							// Will panic on an `Err` below, however we should call commit
-							// on the recorder and the changes together.
-							std::result::Result::and(res, std::result::Result::map_err(res2, drop))
+					let res = if commit {
+						let res = if let Some(recorder) = &self.recorder {
+							#crate_::ProofRecorder::<Block>::commit_transaction(&recorder)
 						} else {
-							let res = if let Some(recorder) = &self.recorder {
-								#crate_::ProofRecorder::<Block>::rollback_transaction(&recorder)
-							} else {
-								Ok(())
-							};
-
-							let res2 = #crate_::OverlayedChanges::rollback_transaction(
-								&mut std::cell::RefCell::borrow_mut(&self.changes)
-							);
-
-							// Will panic on an `Err` below, however we should call commit
-							// on the recorder and the changes together.
-							std::result::Result::and(res, std::result::Result::map_err(res2, drop))
+							Ok(())
 						};
 
-						std::result::Result::expect(res, proof);
-					}
+						let res2 = #crate_::OverlayedChanges::commit_transaction(
+							&mut std::cell::RefCell::borrow_mut(&self.changes)
+						);
+
+						// Will panic on an `Err` below, however we should call commit
+						// on the recorder and the changes together.
+						std::result::Result::and(res, std::result::Result::map_err(res2, drop))
+					} else {
+						let res = if let Some(recorder) = &self.recorder {
+							#crate_::ProofRecorder::<Block>::rollback_transaction(&recorder)
+						} else {
+							Ok(())
+						};
+
+						let res2 = #crate_::OverlayedChanges::rollback_transaction(
+							&mut std::cell::RefCell::borrow_mut(&self.changes)
+						);
+
+						// Will panic on an `Err` below, however we should call commit
+						// on the recorder and the changes together.
+						std::result::Result::and(res, std::result::Result::map_err(res2, drop))
+					};
+
+					std::result::Result::expect(res, proof);
 				}
 
 				fn start_transaction(&self) {
-					if !*std::cell::RefCell::borrow(&self.commit_on_success) {
-						return
-					}
-
 					#crate_::OverlayedChanges::start_transaction(
 						&mut std::cell::RefCell::borrow_mut(&self.changes)
 					);
@@ -486,7 +483,13 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
-				self.start_transaction();
+				// If we are not already in a transaction, we should create a new transaction
+				// and then commit/roll it back at the end!
+				let in_transaction = *std::cell::RefCell::borrow(&self.in_transaction);
+
+				if !in_transaction {
+					self.start_transaction();
+				}
 
 				let res = (|| {
 					let version = #crate_::CallApiAt::<__SrApiBlock__>::runtime_version_at(
@@ -510,7 +513,9 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					)
 				})();
 
-				self.commit_or_rollback(std::result::Result::is_ok(&res));
+				if !in_transaction {
+					self.commit_or_rollback_transaction(std::result::Result::is_ok(&res));
+				}
 
 				res
 			}

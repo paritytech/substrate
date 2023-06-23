@@ -15,8 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use sp_api::{Core, ProvideRuntimeApi};
-use sp_runtime::traits::{HashFor, Header as HeaderT};
+use sp_api::{ApiExt, Core, ProvideRuntimeApi};
+use sp_runtime::{
+	traits::{HashFor, Header as HeaderT},
+	TransactionOutcome,
+};
 use sp_state_machine::{
 	create_proof_check_backend, execution_proof_check_on_trie_backend, ExecutionStrategy,
 };
@@ -186,4 +189,42 @@ fn disable_logging_works() {
 		assert!(!output.contains("Hey I'm runtime"));
 		assert!(output.contains("Logging from native works"));
 	}
+}
+
+#[test]
+fn ensure_transactional_works() {
+	const KEY: &[u8] = &*b"test";
+
+	let client = TestClientBuilder::new().build();
+	let best_hash = client.chain_info().best_hash;
+
+	let runtime_api = client.runtime_api();
+	runtime_api.execute_in_transaction(|api| {
+		api.write_key_value(best_hash, KEY.to_vec(), vec![1, 2, 3], false).unwrap();
+
+		api.execute_in_transaction(|api| {
+			api.write_key_value(best_hash, KEY.to_vec(), vec![1, 2, 3, 4], false).unwrap();
+
+			TransactionOutcome::Commit(())
+		});
+
+		TransactionOutcome::Commit(())
+	});
+
+	let changes = runtime_api
+		.into_storage_changes(&client.state_at(best_hash).unwrap(), best_hash)
+		.unwrap();
+	assert_eq!(changes.main_storage_changes[0].1, Some(vec![1, 2, 3, 4]));
+
+	let runtime_api = client.runtime_api();
+	runtime_api.execute_in_transaction(|api| {
+		assert!(api.write_key_value(best_hash, KEY.to_vec(), vec![1, 2, 3], true).is_err());
+
+		TransactionOutcome::Commit(())
+	});
+
+	let changes = runtime_api
+		.into_storage_changes(&client.state_at(best_hash).unwrap(), best_hash)
+		.unwrap();
+	assert_eq!(changes.main_storage_changes[0].1, Some(vec![1, 2, 3]));
 }
