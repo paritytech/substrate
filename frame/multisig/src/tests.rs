@@ -287,6 +287,12 @@ fn mutlisig_with_expiry_works() {
 		// The expiry is at block 5, so at block 3 the multisig won't be expired.
 		System::set_block_number(3);
 
+		// Cannot clear the multisig operation since it has not expired yet.
+		assert_noop!(
+			Multisig::clear_multi(RuntimeOrigin::signed(42), 2, vec![1, 2, 3], timepoint, hash),
+			Error::<Test>::MultisigNotExpired
+		);
+
 		assert_ok!(Multisig::as_multi(
 			RuntimeOrigin::signed(2),
 			2,
@@ -367,6 +373,12 @@ fn mutlisig_wont_get_executed_when_expired() {
 		assert_eq!(Balances::reserved_balance(1), 0);
 
 		assert_eq!(Balances::free_balance(6), 0);
+
+		// Cannot clear the multisig operation since it does not longer exist.
+		assert_noop!(
+			Multisig::clear_multi(RuntimeOrigin::signed(42), 2, vec![1, 2, 3], timepoint, hash),
+			Error::<Test>::NotFound
+		);
 	})
 }
 
