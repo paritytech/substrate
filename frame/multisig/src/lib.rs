@@ -228,6 +228,8 @@ pub mod pallet {
 		UnexpectedExpiry,
 		/// The multisig operation got expired.
 		MultisigExpired,
+		/// The multisig has not expired.
+		MultisigNotExpired,
 	}
 
 	#[pallet::event]
@@ -574,6 +576,66 @@ pub mod pallet {
 				max_weight,
 				Some(expiry),
 			)
+		}
+
+		/// Clear up all the state of an expired multisig operation. Any deposit reserved previously
+		/// for this operation will be unreserved on success.
+		///
+		/// Anyone can call this and free up the not needed state of the expired multisig.
+		/// The dispatch origin for this call must be _Signed_.
+		///
+		/// - `threshold`: The total number of approvals for this dispatch before it is executed.
+		/// - `signatories`: The accounts who can approve this dispatch.
+		/// - `timepoint`: The timepoint (block number and transaction index) of the first approval
+		/// transaction for this dispatch.
+		/// - `call_hash`: The hash of the call to be executed.
+		///
+		/// ## Complexity
+		/// - `O(S)`.
+		/// - Up to one balance-reserve or unreserve operation.
+		/// - One passthrough operation, one insert, both `O(S)` where `S` is the number of
+		///   signatories. `S` is capped by `MaxSignatories`, with weight being proportional.
+		/// - One encode & hash, both of complexity `O(S)`.
+		/// - One event.
+		/// - I/O: 1 read `O(S)`, one remove.
+		/// - Storage: removes one item.
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::cancel_as_multi(signatories.len() as u32))]
+		pub fn clear_multi(
+			origin: OriginFor<T>,
+			threshold: u16,
+			signatories: Vec<T::AccountId>,
+			timepoint: Timepoint<T::BlockNumber>,
+			call_hash: [u8; 32],
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			let id = Self::multi_account_id(&signatories, threshold);
+
+			let m = <Multisigs<T>>::get(&id, call_hash).ok_or(Error::<T>::NotFound)?;
+			let expiry =
+				<MultisigExpiries<T>>::get(&id, call_hash).ok_or(Error::<T>::MultisigNotExpired)?;
+
+			ensure!(m.when == timepoint, Error::<T>::WrongTimepoint);
+			ensure!(
+				expiry < <frame_system::Pallet<T>>::block_number(),
+				Error::<T>::MultisigNotExpired
+			);
+
+			// Clean up all the state that is not needed anymore since the multisig expired.
+			<Multisigs<T>>::remove(&id, call_hash);
+			<MultisigExpiries<T>>::remove(&id, call_hash);
+
+			T::Currency::unreserve(&m.depositor, m.deposit);
+
+			Self::deposit_event(Event::MultisigCancelled {
+				cancelling: who,
+				timepoint,
+				multisig: id,
+				call_hash,
+			});
+
+			Ok(())
 		}
 	}
 }
