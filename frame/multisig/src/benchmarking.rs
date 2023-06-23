@@ -21,7 +21,7 @@
 
 use super::*;
 use frame_benchmarking::v1::{account, benchmarks};
-use frame_system::RawOrigin;
+use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::Bounded;
 
 use crate::Pallet as Multisig;
@@ -208,6 +208,33 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
 	verify {
 		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));
+	}
+
+	clear_multi {
+		// Signatories, need at least 2 people
+		let s in 2 .. T::MaxSignatories::get();
+		// Transaction Length, not a component
+		let z = 10_000;
+		let (mut signatories, call) = setup_multi::<T>(s, z)?;
+		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
+		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
+		let call_hash = call.using_encoded(blake2_256);
+		let timepoint = Multisig::<T>::timepoint();
+		// Create the multi
+		let o = RawOrigin::Signed(caller.clone()).into();
+		Multisig::<T>::create_multisig_with_expiry(o, s as u16, signatories.clone(), None, call_hash, Weight::zero(), 3u32.into())?;
+		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
+		// Multisig expires after block 3 so we proceed to block 4.
+		System::<T>::set_block_number(4u32.into());
+		// Whitelist caller account from further DB operations.
+		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
+		// For calling clear_multi all the signatories must be specified.
+		signatories.push(caller.clone());
+	}: _(RawOrigin::Signed(caller), s as u16, signatories, timepoint, call_hash)
+	verify {
+		assert!(!Multisigs::<T>::contains_key(multi_account_id.clone(), call_hash));
+		assert!(!MultisigExpiries::<T>::contains_key(multi_account_id, call_hash));
 	}
 
 	impl_benchmark_test_suite!(Multisig, crate::tests::new_test_ext(), crate::tests::Test);
