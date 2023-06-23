@@ -404,6 +404,18 @@ impl<AccountId> Default for RewardDestination<AccountId> {
 	}
 }
 
+impl<AccountId> RewardDestination<AccountId> {
+	fn to_payee_destination(&self, who: AccountId) -> PayeeDestination<AccountId> {
+		match self {
+			RewardDestination::Staked => PayeeDestination::Compound,
+			RewardDestination::Stash => PayeeDestination::Free(who),
+			RewardDestination::Controller => PayeeDestination::Free(who),
+			RewardDestination::Account(a) => PayeeDestination::Free(*a),
+			RewardDestination::None => PayeeDestination::None,
+		}
+	}
+}
+
 /// A destination account for payment.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PayeeDestination<AccountId> {

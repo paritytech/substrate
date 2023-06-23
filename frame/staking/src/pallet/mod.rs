@@ -763,6 +763,8 @@ pub mod pallet {
 		CommissionTooLow,
 		/// Some bound is not met.
 		BoundNotMet,
+		/// The given staker does not have a payee record, or the payee has already been migrated.
+		BadUpdate,
 	}
 
 	#[pallet::hooks]
@@ -1230,16 +1232,33 @@ pub mod pallet {
 			let stash = &ledger.stash;
 			Payee::<T>::insert(stash, payee.clone());
 
-			// Im-progress lazy migration:
-			// Also sync this to `Payees` and `PayeeDestination`.
-			let payee_destination: PayeeDestination<T::AccountId> = match payee {
-				RewardDestination::Staked => PayeeDestination::Compound,
-				RewardDestination::Stash => PayeeDestination::Free(stash.clone()),
-				RewardDestination::Controller => PayeeDestination::Free(stash.clone()),
-				RewardDestination::Account(a) => PayeeDestination::Free(a),
-				RewardDestination::None => PayeeDestination::None,
-			};
-			Payees::<T>::insert(stash, payee_destination);
+			// In-progress lazy migration to `Payees` storage item.
+			// NOTE: To be removed in next runtime upgrade once migration is completed.
+			Payees::<T>::insert(stash, payee.to_payee_destination(stash.clone()));
+			Ok(())
+		}
+
+		/// Migrates an account's `RewardDestination` in `Payee` to `PayeeDestination` in `Payees`,
+		/// if a record exists and if it has not already been migrated.
+		///
+		/// Effects will be felt instantly (as soon as this function is completed successfully).
+		///
+		/// The dispatch origin for this call can be signed by any account.
+		///
+		/// ## Complexity
+		/// - O(1)
+		/// - Independent of the arguments. Insignificant complexity.
+		/// - Contains a limited number of reads.
+		/// - Writes are limited to the `who` account key.
+		#[pallet::call_index(27)]
+		#[pallet::weight(T::WeightInfo::set_payee())]
+		pub fn update_payee(origin: OriginFor<T>, payee: T::AccountId) -> DispatchResult {
+			let _ = ensure_signed(origin)?;
+			ensure!(
+				Payee::<T>::contains_key(&payee) && !Payees::<T>::contains_key(&payee),
+				Error::<T>::BadUpdate
+			);
+			Payees::<T>::insert(payee.clone(), Payee::<T>::get(&payee).to_payee_destination(payee));
 			Ok(())
 		}
 
