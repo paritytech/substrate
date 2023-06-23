@@ -106,7 +106,7 @@ pub enum InitialPayment<T: Config> {
 	/// The initial fee was paid in the native currency.
 	Native(LiquidityInfoOf<T>),
 	/// The initial fee was paid in an asset.
-	Asset((LiquidityInfoOf<T>, BalanceOf<T>)),
+	Asset((LiquidityInfoOf<T>, BalanceOf<T>, AssetBalanceOf<T>)),
 }
 
 pub use pallet::*;
@@ -135,7 +135,7 @@ pub mod pallet {
 		/// has been paid by `who` in an asset `asset_id`.
 		AssetTxFeePaid {
 			who: T::AccountId,
-			actual_fee: BalanceOf<T>,
+			actual_fee: AssetBalanceOf<T>,
 			tip: BalanceOf<T>,
 			asset_id: ChargeAssetIdOf<T>,
 		},
@@ -194,7 +194,16 @@ where
 				fee.into(),
 				self.tip.into(),
 			)
-			.map(|(paid, swapped)| (fee, InitialPayment::Asset((paid.into(), swapped.into()))))
+			.map(|(used_for_fee, received_exchanged, asset_consumed)| {
+				(
+					fee,
+					InitialPayment::Asset((
+						used_for_fee.into(),
+						received_exchanged.into(),
+						asset_consumed.into(),
+					)),
+				)
+			})
 		} else {
 			<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::withdraw_fee(
 				who, call, info, fee, self.tip,
@@ -304,21 +313,22 @@ where
 					);
 
 					if let Some(asset_id) = asset_id {
-						let (paid_fee, swapped) = already_withdrawn;
-						T::OnChargeAssetTransaction::correct_and_deposit_fee(
+						let (used_for_fee, received_exchanged, asset_consumed) = already_withdrawn;
+						let converted_fee = T::OnChargeAssetTransaction::correct_and_deposit_fee(
 							&who,
 							info,
 							post_info,
 							actual_fee.into(),
 							tip.into(),
-							paid_fee.into(),
-							swapped.into(),
+							used_for_fee.into(),
+							received_exchanged.into(),
 							asset_id,
+							asset_consumed.into(),
 						)?;
 
 						Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
 							who,
-							actual_fee,
+							actual_fee: converted_fee,
 							tip,
 							asset_id,
 						});

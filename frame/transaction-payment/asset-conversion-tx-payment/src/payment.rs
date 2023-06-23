@@ -25,7 +25,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf},
+	traits::{DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf, Zero},
 	transaction_validity::InvalidTransaction,
 	Saturating,
 };
@@ -50,7 +50,10 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		asset_id: Self::AssetId,
 		fee: Self::Balance,
 		tip: Self::Balance,
-	) -> Result<(LiquidityInfoOf<T>, Self::LiquidityInfo), TransactionValidityError>;
+	) -> Result<
+		(LiquidityInfoOf<T>, Self::LiquidityInfo, AssetBalanceOf<T>),
+		TransactionValidityError,
+	>;
 
 	/// Refund any overpaid fees and deposit the corrected amount.
 	/// The actual fee gets calculated once the transaction is executed.
@@ -64,10 +67,11 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
-		already_paid: LiquidityInfoOf<T>,
-		total_swapped: Self::LiquidityInfo,
+		fee_paid: LiquidityInfoOf<T>,
+		received_exchanged: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
-	) -> Result<(), TransactionValidityError>;
+		initial_asset_consumed: AssetBalanceOf<T>,
+	) -> Result<AssetBalanceOf<T>, TransactionValidityError>;
 }
 
 /// Implements the asset transaction for a balance to asset converter (implementing
@@ -92,6 +96,9 @@ where
 	/// Swap & withdraw the predicted fee from the transaction origin.
 	///
 	/// Note: The `fee` already includes the `tip`.
+	///
+	/// Returns the total amount in native currency received by exchanging the `asset_id` and the
+	/// amount in native currency used to pay the fee.
 	fn withdraw_fee(
 		who: &T::AccountId,
 		call: &T::RuntimeCall,
@@ -99,7 +106,10 @@ where
 		asset_id: Self::AssetId,
 		fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
-	) -> Result<(LiquidityInfoOf<T>, Self::LiquidityInfo), TransactionValidityError> {
+	) -> Result<
+		(LiquidityInfoOf<T>, Self::LiquidityInfo, AssetBalanceOf<T>),
+		TransactionValidityError,
+	> {
 		// convert the asset into native currency
 		let ed = C::minimum_balance();
 		let native_asset_required =
@@ -119,39 +129,44 @@ where
 
 		// charge the fee in native currency
 		<T::OnChargeTransaction>::withdraw_fee(who, call, info, fee, tip)
-			.map(|r| (r, native_asset_required))
+			.map(|r| (r, native_asset_required, asset_consumed))
 	}
 
 	/// Correct the fee and swap the refund back to asset.
 	///
 	/// Note: The `corrected_fee` already includes the `tip`.
+	/// Note: Is the ED wasn't needed, the `received_exchanged` will be equal to `fee_paid`, or
+	/// `fee_paid` + ed otherwise
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
 		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
-		already_paid: LiquidityInfoOf<T>,
-		total_swapped: Self::LiquidityInfo,
+		fee_paid: LiquidityInfoOf<T>,
+		received_exchanged: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
-	) -> Result<(), TransactionValidityError> {
+		initial_asset_consumed: AssetBalanceOf<T>,
+	) -> Result<AssetBalanceOf<T>, TransactionValidityError> {
 		// Refund the native asset to the account that paid the fees (`who`).
+		// The `who` account will receive the "fee_paid - corrected_fee" refund.
 		<T::OnChargeTransaction>::correct_and_deposit_fee(
 			who,
 			dispatch_info,
 			post_info,
 			corrected_fee,
 			tip,
-			already_paid,
+			fee_paid,
 		)?;
 
-		// amount, in native asset, to swap back to the desired `asset_id`
-		let swap_back = total_swapped.saturating_sub(corrected_fee);
+		// calculate the refund in native asset, to swap back to the desired `asset_id`
+		let swap_back = received_exchanged.saturating_sub(corrected_fee);
+		let mut asset_refund = Zero::zero();
 		if !swap_back.is_zero() {
 			// If this fails, the account might have dropped below the existential balance or there
 			// is not enough liquidity left in the pool. In that case we don't throw an error and
 			// the account will keep the native currency.
-			CON::swap_exact_native_for_tokens(
+			asset_refund = CON::swap_exact_native_for_tokens(
 				who.clone(), // we already deposited the native to `who`
 				asset_id,    // we want asset_id back
 				swap_back,   // amount of the native asset to convert to `asset_id`
@@ -159,9 +174,10 @@ where
 				who.clone(), // we will refund to `who`
 				false,       // no need to keep alive
 			)
-			.ok();
+			.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
 		}
 
-		Ok(())
+		let actual_paid = initial_asset_consumed.saturating_sub(asset_refund);
+		Ok(actual_paid)
 	}
 }

@@ -765,7 +765,7 @@ pub mod pallet {
 			if let Some([asset1, asset2]) = path.get(0..2) {
 				let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
 				let pool_account = Self::get_pool_account(&pool_id);
-				// amounts should always a corresponding element to path.
+				// amounts should always contain a corresponding element to path.
 				let first_amount = amounts.first().ok_or(Error::<T>::CorrespondenceError)?;
 
 				Self::transfer(asset1, sender, &pool_account, *first_amount, keep_alive)?;
