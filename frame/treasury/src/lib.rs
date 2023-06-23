@@ -95,6 +95,7 @@ pub type NegativeImbalanceOf<T, I = ()> = <<T as Config<I>>::Currency as Currenc
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+type BeneficiaryLookupOf<T, I> = <<T as Config<I>>::BeneficiaryLookup as StaticLookup>::Source;
 
 /// A trait to allow the Treasury Pallet to spend it's funds for other purposes.
 /// There is an expectation that the implementer of this trait will correctly manage
@@ -249,6 +250,9 @@ pub mod pallet {
 
 		/// Type parameter used to identify the beneficiaries eligible to receive treasury spend.
 		type Beneficiary: Parameter + MaxEncodedLen;
+
+		/// Converting trait to take a source type and convert to `Beneficiary`.
+		type BeneficiaryLookup: StaticLookup<Target = Self::Beneficiary>;
 
 		/// Type for processing spends of [Self::AssetKind] in favor of [Self::Beneficiary].
 		type Paymaster: Pay<Beneficiary = Self::Beneficiary, AssetKind = Self::AssetKind>;
@@ -606,9 +610,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset_kind: T::AssetKind,
 			#[pallet::compact] amount: AssetBalanceOf<T, I>,
-			beneficiary: T::Beneficiary,
+			beneficiary: BeneficiaryLookupOf<T, I>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
+			let beneficiary = T::BeneficiaryLookup::lookup(beneficiary)?;
 
 			let native_amount = T::BalanceConverter::from_asset_balance(amount, asset_kind.clone())
 				.map_err(|_| Error::<T, I>::FailedToConvertBalance)?;
