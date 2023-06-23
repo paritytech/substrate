@@ -383,6 +383,7 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 }
 
 /// A destination account for payment.
+/// NOTE: Being lazily migrated and deprecated in favour of `PayeeDestination`.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum RewardDestination<AccountId> {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
@@ -400,6 +401,26 @@ pub enum RewardDestination<AccountId> {
 impl<AccountId> Default for RewardDestination<AccountId> {
 	fn default() -> Self {
 		RewardDestination::Staked
+	}
+}
+
+/// A destination account for payment.
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum PayeeDestination<AccountId> {
+	/// Pay into the stash account and compound to bond.
+	Compound,
+	/// Pay a part back into the stash and compound to bond, and send another part to a specified
+	/// account as free balance.
+	Split((Perbill, AccountId)),
+	/// Pay into a specified account as free balance. (stays the same).
+	Free(AccountId),
+	/// Receive no reward. (stays the same).
+	None,
+}
+
+impl<AccountId> Default for PayeeDestination<AccountId> {
+	fn default() -> Self {
+		PayeeDestination::Compound
 	}
 }
 

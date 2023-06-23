@@ -45,9 +45,9 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PayeeDestination,
+	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash,
+	UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -322,11 +322,20 @@ pub mod pallet {
 
 	/// Where the reward payment should be made. Keyed by stash.
 	///
+	/// NOTE: Being lazily migrated and deprecated in favour of `Payees`.
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn payee)]
 	pub type Payee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardDestination<T::AccountId>, ValueQuery>;
+
+	/// Where the reward payment should be made. Keyed by stash.
+	///
+	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
+	#[pallet::storage]
+	#[pallet::getter(fn payees)]
+	pub type Payees<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, PayeeDestination<T::AccountId>, ValueQuery>;
 
 	/// The map from (wannabe) validator stash key to the preferences of that validator.
 	///
@@ -1219,7 +1228,18 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
-			<Payee<T>>::insert(stash, payee);
+			Payee::<T>::insert(stash, payee.clone());
+
+			// Im-progress lazy migration:
+			// Also sync this to `Payees` and `PayeeDestination`.
+			let payee_destination: PayeeDestination<T::AccountId> = match payee {
+				RewardDestination::Staked => PayeeDestination::Compound,
+				RewardDestination::Stash => PayeeDestination::Free(stash.clone()),
+				RewardDestination::Controller => PayeeDestination::Free(stash.clone()),
+				RewardDestination::Account(a) => PayeeDestination::Free(a),
+				RewardDestination::None => PayeeDestination::None,
+			};
+			Payees::<T>::insert(stash, payee_destination);
 			Ok(())
 		}
 
