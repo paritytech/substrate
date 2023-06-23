@@ -661,7 +661,7 @@ macro_rules! benchmark_backend {
 		{ $( PRE { $( $pre_parsed:tt )* } )* }
 		{ $eval:block }
 		{
-			let $pre_id:tt : $pre_ty:ty = $pre_ex:expr;
+			let $pre_id:tt $( : $pre_ty:ty )? = $pre_ex:expr;
 			$( $rest:tt )*
 		}
 		$postcode:block
@@ -672,7 +672,7 @@ macro_rules! benchmark_backend {
 			{ $( $where_clause )* }
 			{
 				$( PRE { $( $pre_parsed )* } )*
-				PRE { $pre_id , $pre_ty , $pre_ex }
+				PRE { $pre_id , $( $pre_ty , )? $pre_ex }
 			}
 			{ $eval }
 			{ $( $rest )* }
@@ -756,39 +756,13 @@ macro_rules! benchmark_backend {
 			$postcode
 		}
 	};
-	// mutation arm to look after `let _ =`
-	(
-		{ $( $instance:ident: $instance_bound:tt )? }
-		$name:ident
-		{ $( $where_clause:tt )* }
-		{ $( $parsed:tt )* }
-		{ $eval:block }
-		{
-			let $pre_id:tt = $pre_ex:expr;
-			$( $rest:tt )*
-		}
-		$postcode:block
-	) => {
-		$crate::benchmark_backend! {
-			{ $( $instance: $instance_bound )? }
-			$name
-			{ $( $where_clause )* }
-			{ $( $parsed )* }
-			{ $eval }
-			{
-				let $pre_id : _ = $pre_ex;
-				$( $rest )*
-			}
-			$postcode
-		}
-	};
 	// actioning arm
 	(
 		{ $( $instance:ident: $instance_bound:tt )? }
 		$name:ident
 		{ $( $where_clause:tt )* }
 		{
-			$( PRE { $pre_id:tt , $pre_ty:ty , $pre_ex:expr } )*
+			$( PRE { $pre_id:tt , $( $pre_ty:ty , )? $pre_ex:expr } )*
 			$( PARAM { $param:ident , $param_from:expr , $param_to:expr , $param_instancer:expr } )*
 		}
 		{ $eval:block }
@@ -823,7 +797,7 @@ macro_rules! benchmark_backend {
 						.1;
 				)*
 				$(
-					let $pre_id : $pre_ty = $pre_ex;
+					let $pre_id $( : $pre_ty )? = $pre_ex;
 				)*
 				$( $param_instancer ; )*
 				$( $post )*
