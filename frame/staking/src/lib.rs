@@ -387,11 +387,11 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 pub enum PayeeDestination<AccountId> {
 	/// Pay into the stash account and compound to bond.
 	Compound,
+	/// Pay into a specified account as free balance.
+	Free(AccountId),
 	/// Pay a part back into the stash and compound to bond, and send another part to a specified
 	/// account as free balance.
 	Split((Perbill, AccountId)),
-	/// Pay into a specified account as free balance.
-	Free(AccountId),
 	/// Receive no reward.
 	None,
 }
