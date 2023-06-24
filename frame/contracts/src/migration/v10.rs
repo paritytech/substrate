@@ -16,12 +16,12 @@
 // limitations under the License.
 
 //! Don't rely on reserved balances keeping an account alive
-//! See <https://github.com/paritytech/substrate/pull/13370>.
+//! See <https://github.com/paritytech/substrate/pull/13369>.
 
 use crate::{
 	address::AddressGenerator,
 	exec::AccountIdOf,
-	migration::{IsFinished, Migrate},
+	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
 	BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
@@ -42,7 +42,7 @@ use sp_core::hexdisplay::HexDisplay;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Perbill, Saturating};
-use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
+use sp_std::{ops::Deref, prelude::*};
 
 mod old {
 	use super::*;
@@ -69,7 +69,7 @@ mod old {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_contrat_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
 	let info = old::ContractInfo {
 		trie_id: info.trie_id,
 		code_hash: info.code_hash,
@@ -109,15 +109,14 @@ pub struct ContractInfo<T: Config> {
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
-	last_key: Option<BoundedVec<u8, ConstU32<256>>>,
-	_phantom: PhantomData<T>,
+	last_account: Option<T::AccountId>,
 }
 
 #[storage_alias]
 type ContractInfoOf<T: Config> =
 	StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
 
-impl<T: Config> Migrate for Migration<T> {
+impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 10;
 
 	fn max_step_weight() -> Weight {
@@ -125,8 +124,10 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let mut iter = if let Some(last_key) = self.last_key.take() {
-			old::ContractInfoOf::<T>::iter_from(last_key.to_vec())
+		let mut iter = if let Some(last_account) = self.last_account.take() {
+			old::ContractInfoOf::<T>::iter_from(old::ContractInfoOf::<T>::hashed_key_for(
+				last_account,
+			))
 		} else {
 			old::ContractInfoOf::<T>::iter()
 		};
@@ -134,9 +135,6 @@ impl<T: Config> Migrate for Migration<T> {
 		if let Some((account, contract)) = iter.next() {
 			let min_balance = Pallet::<T>::min_balance();
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
-
-			// Store last key for next migration step
-			self.last_key = Some(iter.last_raw_key().to_vec().try_into().unwrap());
 
 			// Get the new deposit account address
 			let deposit_account: DepositAccount<T> =
@@ -181,14 +179,14 @@ impl<T: Config> Migrate for Migration<T> {
 			})
 			// If it fails we fallback to minting the ED.
 			.unwrap_or_else(|err| {
-				log::error!(target: LOG_TARGET, "Failed to transfer ED, reason: {:?}", err);
+				log::error!(target: LOG_TARGET, "Failed to transfer the base deposit, reason: {:?}", err);
 				T::Currency::deposit_creating(&deposit_account, min_balance);
 				min_balance
 			});
 
 			// Calculate the new base_deposit to store in the contract:
-			// Ideally: it should be the same as the old one
-			// Ideally, it should be at least 2xED (for the contract and deposit account).
+			// Ideally, it should be the same as the old one
+			// Ideally, it should be at least 2xED (for the contract and deposit accounts).
 			// It can't be more than the `new_deposit`.
 			let new_base_deposit = min(
 				max(contract.storage_base_deposit, min_balance.saturating_add(min_balance)),
@@ -223,6 +221,10 @@ impl<T: Config> Migrate for Migration<T> {
 			};
 
 			ContractInfoOf::<T>::insert(&account, new_contract_info);
+
+			// Store last key for next migration step
+			self.last_account = Some(account);
+
 			(IsFinished::No, T::WeightInfo::v10_migration_step())
 		} else {
 			log::debug!(target: LOG_TARGET, "Done Migrating contract info");
@@ -240,8 +242,8 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let sample =
-			<Vec<(T::AccountId, old::ContractInfo<T>)> as Decode>::decode(&mut &state[..]).unwrap();
+		let sample = <Vec<(T::AccountId, old::ContractInfo<T>)> as Decode>::decode(&mut &state[..])
+			.expect("pre_upgrade_step provides a valid state; qed");
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
 		for (account, old_contract) in sample {
