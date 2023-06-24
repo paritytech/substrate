@@ -11944,6 +11944,7 @@ dependencies = [
  "nix 0.26.2",
  "node-primitives",
  "regex",
+ "sp-rpc",
  "substrate-rpc-client",
  "tempfile",
  "tokio",
@@ -12880,6 +12881,7 @@ dependencies = [
  "frame-try-runtime",
  "hex",
  "log",
+ "node-primitives",
  "parity-scale-codec",
  "regex",
  "sc-cli",
@@ -12905,6 +12907,7 @@ dependencies = [
  "sp-weights",
  "substrate-cli-test-utils",
  "substrate-rpc-client",
+ "tempfile",
  "tokio",
  "zstd 0.12.3+zstd.1.5.2",
 ]
