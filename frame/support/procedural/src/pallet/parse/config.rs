@@ -37,6 +37,12 @@ mod keyword {
 	syn::custom_keyword!(constant);
 }
 
+#[derive(Default)]
+pub struct DefaultTrait {
+	pub items: Vec<syn::TraitItem>,
+	pub has_system: bool,
+}
+
 /// Input definition for the pallet config.
 pub struct ConfigDef {
 	/// The index of item in pallet module.
@@ -58,8 +64,8 @@ pub struct ConfigDef {
 	///
 	/// Contains default sub-trait items (instantiated by `#[pallet::config(with_default)]`).
 	/// Vec will be empty if `#[pallet::config(with_default)]` is not specified or if there are
-	/// no trait items
-	pub default_sub_trait: Vec<syn::TraitItem>,
+	/// no trait items.
+	pub default_sub_trait: Option<DefaultTrait>,
 }
 
 /// Input definition for a constant in pallet config.
@@ -339,9 +345,21 @@ impl ConfigDef {
 			false
 		};
 
+		let has_frame_system_supertrait = item.supertraits.iter().any(|s| {
+			syn::parse2::<ConfigBoundParse>(s.to_token_stream())
+				.map_or(false, |b| b.0 == *frame_system)
+		});
+
 		let mut has_event_type = false;
 		let mut consts_metadata = vec![];
-		let mut default_sub_trait = vec![];
+		let mut default_sub_trait = if enable_default {
+			Some(DefaultTrait {
+				items: Default::default(),
+				has_system: has_frame_system_supertrait,
+			})
+		} else {
+			None
+		};
 		for trait_item in &mut item.items {
 			let is_event = check_event_type(frame_system, trait_item, has_instance)?;
 			has_event_type = has_event_type || is_event;
@@ -382,24 +400,24 @@ impl ConfigDef {
 								"Duplicate #[pallet::no_default] attribute not allowed.",
 							))
 						}
+
 						already_no_default = true;
 					},
 				}
 			}
 
 			if !already_no_default && !is_event && enable_default {
-				default_sub_trait.push(trait_item.clone());
+				default_sub_trait
+					.as_mut()
+					.expect("is 'Some(_)' if 'enable_default'; qed")
+					.items
+					.push(trait_item.clone());
 			}
 		}
 
 		let attr: Option<DisableFrameSystemSupertraitCheck> =
 			helper::take_first_item_pallet_attr(&mut item.attrs)?;
 		let disable_system_supertrait_check = attr.is_some();
-
-		let has_frame_system_supertrait = item.supertraits.iter().any(|s| {
-			syn::parse2::<ConfigBoundParse>(s.to_token_stream())
-				.map_or(false, |b| b.0 == *frame_system)
-		});
 
 		if !has_frame_system_supertrait && !disable_system_supertrait_check {
 			let found = if item.supertraits.is_empty() {
