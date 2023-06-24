@@ -404,7 +404,7 @@ impl<AccountId> Default for PayeeDestination<AccountId> {
 
 /// A destination account for payment.
 /// NOTE: Being lazily migrated and deprecated in favour of `PayeeDestination`.
-/// Tracking at https://github.com/paritytech/substrate/issues/14438
+/// Tracking at <https://github.com/paritytech/substrate/issues/14438>
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum RewardDestination<AccountId> {
 	/// Pay into the stash account, increasing the amount at stake accordingly.
