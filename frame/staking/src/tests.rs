@@ -717,6 +717,63 @@ fn set_payee_also_updates_payee_destination() {
 }
 
 #[test]
+fn update_payee_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// `update_payee` is used to lazily migrate `Payee` records into `Payees` records. It will
+		// fail with `BadState` if a key either does not exist in `Payee`, or already exists in
+		// `Payees`.
+		//
+		// This test checks both these scnerarios, and also tests a successful update.
+
+		// Results in error if key does not exist in `Payee`.
+
+		// Given
+		assert!(!Payee::<Test>::contains_key(1337));
+
+		// Then
+		assert_noop!(
+			Staking::update_payee(RuntimeOrigin::signed(1), 1337),
+			Error::<Test>::BadUpdate
+		);
+
+		// Results in error if key already exists in `Payees`.
+
+		// Given
+		let (stash, controller) =
+			testing_utils::create_stash_controller::<Test>(12, 13, RewardDestination::Controller)
+				.unwrap();
+
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(controller), RewardDestination::Stash));
+		assert!(Payee::<Test>::contains_key(controller));
+		assert!(Payees::<Test>::contains_key(controller));
+
+		// Then
+		assert_noop!(
+			Staking::update_payee(RuntimeOrigin::signed(stash), controller),
+			Error::<Test>::BadUpdate
+		);
+
+		// Successfully sets yet to be inserted `Payees` record from a `Payee` record.
+
+		// Given
+		let (stash, controller) =
+			testing_utils::create_stash_controller::<Test>(14, 15, RewardDestination::Controller)
+				.unwrap();
+
+		Payee::<Test>::insert(controller, RewardDestination::Controller);
+		assert_eq!(Payee::<Test>::get(controller), RewardDestination::Controller);
+		assert!(Payee::<Test>::contains_key(controller));
+
+		// When
+		assert_ok!(Staking::update_payee(RuntimeOrigin::signed(stash), controller));
+
+		// Then
+		assert_eq!(Payee::<Test>::get(controller), RewardDestination::Controller);
+		assert_eq!(Payees::<Test>::get(controller), PayeeDestination::Free(controller));
+	});
+}
+
+#[test]
 fn nominators_also_get_slashed_pro_rata() {
 	ExtBuilder::default().build_and_execute(|| {
 		mock::start_active_era(1);
