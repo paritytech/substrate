@@ -31,7 +31,7 @@ The file will contain the concrete weight value and various statistics about the
 ///   95th: 3_595_674
 ///   75th: 3_526_435
 pub const BlockExecutionWeight: Weight =
-    Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(3_532_484));
+    Weight::from_parts(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(3_532_484), 0);
 ```
 
 In this example it takes 3.5 ms to execute an empty block. That means that it always takes at least 3.5 ms to execute *any* block.
@@ -61,7 +61,7 @@ The relevant section in the output file looks like this:
 ///   95th: 67_843
 ///   75th: 67_749
 pub const ExtrinsicBaseWeight: Weight =
-    Weight::from_ref_time(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(67_745));
+    Weight::from_parts(WEIGHT_REF_TIME_PER_NANOS.saturating_mul(67_745), 0);
 ```
 
 In this example it takes 67.7 µs to execute a NO-OP extrinsic. That means that it always takes at least 67.7 µs to execute *any* extrinsic.
@@ -103,12 +103,12 @@ Writing weights to "extrinsic_weights.rs"
 
 The complete command for Polkadot looks like this:
 ```sh
-cargo run --profile=production -- benchmark overhead --chain=polkadot-dev --execution=wasm --wasm-execution=compiled --weight-path=runtime/polkadot/constants/src/weights/
+cargo run --profile=production -- benchmark overhead --chain=polkadot-dev --wasm-execution=compiled --weight-path=runtime/polkadot/constants/src/weights/
 ```
 
 This will overwrite the the [block_weights.rs](https://github.com/paritytech/polkadot/blob/c254e5975711a6497af256f6831e9a6c752d28f5/runtime/polkadot/constants/src/weights/block_weights.rs) and [extrinsic_weights.rs](https://github.com/paritytech/polkadot/blob/c254e5975711a6497af256f6831e9a6c752d28f5/runtime/polkadot/constants/src/weights/extrinsic_weights.rs) files in the Polkadot runtime directory.
 You can try the same for *Rococo* and to see that the results slightly differ.
-👉 It is paramount to use `--profile=production`, `--execution=wasm` and `--wasm-execution=compiled` as the results are otherwise useless.
+👉 It is paramount to use `--profile=production` and `--wasm-execution=compiled` as the results are otherwise useless.
 
 ## Output Interpretation
 
@@ -122,7 +122,6 @@ Minimizing this is important to have a large transaction throughput.
 - `--weight-path` Set the output directory or file to write the weights to.
 - `--repeat` Set the repetitions of both benchmarks.
 - `--warmup` Set the rounds of warmup before measuring.
-- `--execution` Should be set to `wasm` for correct results.
 - `--wasm-execution` Should be set to `compiled` for correct results.
 - [`--mul`](../shared/README.md#arguments)
 - [`--add`](../shared/README.md#arguments)

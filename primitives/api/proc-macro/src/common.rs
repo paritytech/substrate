@@ -18,9 +18,6 @@
 /// The ident used for the block generic parameter.
 pub const BLOCK_GENERIC_IDENT: &str = "Block";
 
-/// Unique identifier used to make the hidden includes unique for this macro.
-pub const HIDDEN_INCLUDES_ID: &str = "DECL_RUNTIME_APIS";
-
 /// The `core_trait` attribute.
 pub const CORE_TRAIT_ATTRIBUTE: &str = "core_trait";
 /// The `api_version` attribute.

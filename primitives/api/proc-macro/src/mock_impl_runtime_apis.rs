@@ -17,8 +17,8 @@
 
 use crate::utils::{
 	extract_block_type_from_trait_path, extract_impl_trait,
-	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
-	return_type_extract_type, AllowSelfRefInParameters, RequireQualifiedTraitPath,
+	extract_parameter_names_types_and_borrows, generate_crate_access, return_type_extract_type,
+	AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -32,9 +32,6 @@ use syn::{
 	spanned::Spanned,
 	Attribute, ItemImpl, Pat, Type, TypePath,
 };
-
-/// Unique identifier used to make the hidden includes unique for this macro.
-const HIDDEN_INCLUDES_ID: &str = "MOCK_IMPL_RUNTIME_APIS";
 
 /// The `advanced` attribute.
 ///
@@ -65,7 +62,7 @@ impl Parse for RuntimeApiImpls {
 
 /// Implement the `ApiExt` trait and the `Core` runtime api.
 fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<TokenStream> {
-	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+	let crate_ = generate_crate_access();
 
 	Ok(quote!(
 		impl #crate_::ApiExt<#block_type> for #self_ty {
@@ -124,13 +121,20 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 			> where Self: Sized {
 				unimplemented!("`into_storage_changes` not implemented for runtime api mocks")
 			}
+
+			fn set_call_context(&mut self, _: #crate_::CallContext) {
+				unimplemented!("`set_call_context` not implemented for runtime api mocks")
+			}
+
+			fn register_extension<E: #crate_::Extension>(&mut self, _: E) {
+				unimplemented!("`register_extension` not implemented for runtime api mocks")
+			}
 		}
 
 		impl #crate_::Core<#block_type> for #self_ty {
 			fn __runtime_api_internal_call_api_at(
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
 				_: std::vec::Vec<u8>,
 				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
@@ -144,14 +148,6 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				unimplemented!("`Core::version` not implemented for runtime api mocks")
 			}
 
-			fn version_with_context(
-				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
-			) -> std::result::Result<#crate_::RuntimeVersion, #crate_::ApiError> {
-				unimplemented!("`Core::version` not implemented for runtime api mocks")
-			}
-
 			fn execute_block(
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
@@ -160,27 +156,9 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				unimplemented!("`Core::execute_block` not implemented for runtime api mocks")
 			}
 
-			fn execute_block_with_context(
-				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
-				_: #block_type,
-			) -> std::result::Result<(), #crate_::ApiError> {
-				unimplemented!("`Core::execute_block` not implemented for runtime api mocks")
-			}
-
 			fn initialize_block(
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
-				_: &<#block_type as #crate_::BlockT>::Header,
-			) -> std::result::Result<(), #crate_::ApiError> {
-				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
-			}
-
-			fn initialize_block_with_context(
-				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
 				_: &<#block_type as #crate_::BlockT>::Header,
 			) -> std::result::Result<(), #crate_::ApiError> {
 				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
@@ -195,7 +173,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 fn has_advanced_attribute(attributes: &mut Vec<Attribute>) -> bool {
 	let mut found = false;
 	attributes.retain(|attr| {
-		if attr.path.is_ident(ADVANCED_ATTRIBUTE) {
+		if attr.path().is_ident(ADVANCED_ATTRIBUTE) {
 			found = true;
 			false
 		} else {
@@ -256,20 +234,7 @@ impl<'a> FoldRuntimeApiImpl<'a> {
 	fn process(mut self, impl_item: syn::ItemImpl) -> syn::ItemImpl {
 		let mut impl_item = self.fold_item_impl(impl_item);
 
-		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-
-		// We also need to overwrite all the `_with_context` methods. To do this,
-		// we clone all methods and add them again with the new name plus one more argument.
-		impl_item.items.extend(impl_item.items.clone().into_iter().filter_map(|i| {
-			if let syn::ImplItem::Method(mut m) = i {
-				m.sig.ident = quote::format_ident!("{}_with_context", m.sig.ident);
-				m.sig.inputs.insert(2, parse_quote!( _: #crate_::ExecutionContext ));
-
-				Some(m.into())
-			} else {
-				None
-			}
-		}));
+		let crate_ = generate_crate_access();
 
 		let block_type = self.block_type;
 
@@ -277,7 +242,6 @@ impl<'a> FoldRuntimeApiImpl<'a> {
 			fn __runtime_api_internal_call_api_at(
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
 				_: std::vec::Vec<u8>,
 				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
@@ -293,9 +257,9 @@ impl<'a> FoldRuntimeApiImpl<'a> {
 }
 
 impl<'a> Fold for FoldRuntimeApiImpl<'a> {
-	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
+	fn fold_impl_item_fn(&mut self, mut input: syn::ImplItemFn) -> syn::ImplItemFn {
 		let block = {
-			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+			let crate_ = generate_crate_access();
 			let is_advanced = has_advanced_attribute(&mut input.attrs);
 			let mut errors = Vec::new();
 
@@ -380,7 +344,7 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 			)
 		};
 
-		let mut input = fold::fold_impl_item_method(self, input);
+		let mut input = fold::fold_impl_item_fn(self, input);
 		// We need to set the block, after we modified the rest of the ast, otherwise we would
 		// modify our generated block as well.
 		input.block = block;
@@ -469,14 +433,11 @@ pub fn mock_impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro
 }
 
 fn mock_impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
-	let hidden_includes = generate_hidden_includes(HIDDEN_INCLUDES_ID);
 	let GeneratedRuntimeApiImpls { impls, block_type, self_ty } =
 		generate_runtime_api_impls(api_impls)?;
 	let api_traits = implement_common_api_traits(block_type, self_ty)?;
 
 	Ok(quote!(
-		#hidden_includes
-
 		#impls
 
 		#api_traits

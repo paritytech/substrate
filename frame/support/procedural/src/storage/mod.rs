@@ -332,8 +332,8 @@ impl StorageLineDefExt {
 		let doc_attrs = storage_def
 			.attrs
 			.iter()
-			.filter_map(|a| a.parse_meta().ok())
-			.filter(|m| m.path().is_ident("doc"))
+			.filter(|a| a.meta.path().is_ident("doc"))
+			.map(|a| a.meta.clone())
 			.collect();
 
 		Self {
@@ -454,13 +454,13 @@ impl HasherKind {
 
 	fn into_metadata(&self) -> proc_macro2::TokenStream {
 		match self {
-			HasherKind::Blake2_256 => quote!(StorageHasher::Blake2_256),
-			HasherKind::Blake2_128 => quote!(StorageHasher::Blake2_128),
-			HasherKind::Blake2_128Concat => quote!(StorageHasher::Blake2_128Concat),
-			HasherKind::Twox256 => quote!(StorageHasher::Twox256),
-			HasherKind::Twox128 => quote!(StorageHasher::Twox128),
-			HasherKind::Twox64Concat => quote!(StorageHasher::Twox64Concat),
-			HasherKind::Identity => quote!(StorageHasher::Identity),
+			HasherKind::Blake2_256 => quote!(StorageHasherIR::Blake2_256),
+			HasherKind::Blake2_128 => quote!(StorageHasherIR::Blake2_128),
+			HasherKind::Blake2_128Concat => quote!(StorageHasherIR::Blake2_128Concat),
+			HasherKind::Twox256 => quote!(StorageHasherIR::Twox256),
+			HasherKind::Twox128 => quote!(StorageHasherIR::Twox128),
+			HasherKind::Twox64Concat => quote!(StorageHasherIR::Twox64Concat),
+			HasherKind::Identity => quote!(StorageHasherIR::Identity),
 		}
 	}
 }

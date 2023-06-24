@@ -40,7 +40,7 @@ use std::{
 
 use crate::{
 	backend::{self, NewBlockState},
-	blockchain::{self, well_known_cache_keys::Id as CacheKeyId, BlockStatus, HeaderBackend},
+	blockchain::{self, BlockStatus, HeaderBackend},
 	leaves::LeafSet,
 	UsageInfo,
 };
@@ -114,6 +114,7 @@ struct BlockchainStorage<Block: BlockT> {
 }
 
 /// In-memory blockchain. Supports concurrent reads.
+#[derive(Clone)]
 pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
 }
@@ -121,13 +122,6 @@ pub struct Blockchain<Block: BlockT> {
 impl<Block: BlockT> Default for Blockchain<Block> {
 	fn default() -> Self {
 		Self::new()
-	}
-}
-
-impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
-	fn clone(&self) -> Self {
-		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
-		Blockchain { storage }
 	}
 }
 
@@ -493,10 +487,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	set_head: Option<Block::Hash>,
 }
 
-impl<Block: BlockT> BlockImportOperation<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_storage(
 		&mut self,
 		storage: Storage,
@@ -525,10 +516,7 @@ where
 	}
 }
 
-impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
 	type State = InMemoryBackend<HashFor<Block>>;
 
 	fn state(&self) -> sp_blockchain::Result<Option<&Self::State>> {
@@ -548,8 +536,6 @@ where
 			Some(PendingBlock { block: StoredBlock::new(header, body, justifications), state });
 		Ok(())
 	}
-
-	fn update_cache(&mut self, _cache: HashMap<CacheKeyId, Vec<u8>>) {}
 
 	fn update_db_storage(
 		&mut self,
@@ -619,33 +605,40 @@ where
 ///
 /// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
 /// > struct for testing purposes. Do **NOT** use in production.
-pub struct Backend<Block: BlockT>
-where
-	Block::Hash: Ord,
-{
+pub struct Backend<Block: BlockT> {
 	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashFor<Block>>>>,
 	blockchain: Blockchain<Block>,
 	import_lock: RwLock<()>,
+	pinned_blocks: RwLock<HashMap<Block::Hash, i64>>,
 }
 
-impl<Block: BlockT> Backend<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of in-mem backend.
+	///
+	/// # Warning
+	///
+	/// For testing purposes only!
 	pub fn new() -> Self {
 		Backend {
 			states: RwLock::new(HashMap::new()),
 			blockchain: Blockchain::new(),
 			import_lock: Default::default(),
+			pinned_blocks: Default::default(),
 		}
+	}
+
+	/// Return the number of references active for a pinned block.
+	///
+	/// # Warning
+	///
+	/// For testing purposes only!
+	pub fn pin_refs(&self, hash: &<Block as BlockT>::Hash) -> Option<i64> {
+		let blocks = self.pinned_blocks.read();
+		blocks.get(hash).map(|value| *value)
 	}
 }
 
-impl<Block: BlockT> backend::AuxStore for Backend<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> backend::AuxStore for Backend<Block> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -665,10 +658,7 @@ where
 	}
 }
 
-impl<Block: BlockT> backend::Backend<Block> for Backend<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemoryBackend<HashFor<Block>>;
@@ -789,14 +779,19 @@ where
 		false
 	}
 
-	fn pin_block(&self, _: <Block as BlockT>::Hash) -> blockchain::Result<()> {
+	fn pin_block(&self, hash: <Block as BlockT>::Hash) -> blockchain::Result<()> {
+		let mut blocks = self.pinned_blocks.write();
+		*blocks.entry(hash).or_default() += 1;
 		Ok(())
 	}
 
-	fn unpin_block(&self, _: <Block as BlockT>::Hash) {}
+	fn unpin_block(&self, hash: <Block as BlockT>::Hash) {
+		let mut blocks = self.pinned_blocks.write();
+		blocks.entry(hash).and_modify(|counter| *counter -= 1).or_insert(-1);
+	}
 }
 
-impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}
+impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> {}
 
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {

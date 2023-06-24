@@ -172,6 +172,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 		message: &[u8],
 		origin: Self::Origin,
 		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
 	) -> Result<bool, ProcessMessageError> {
 		processing_message(message, &origin)?;
 
@@ -239,6 +240,7 @@ impl ProcessMessage for CountingMessageProcessor {
 		message: &[u8],
 		origin: Self::Origin,
 		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
 	) -> Result<bool, ProcessMessageError> {
 		if let Err(e) = processing_message(message, &origin) {
 			NumMessagesErrored::set(NumMessagesErrored::get() + 1);
@@ -319,4 +321,13 @@ pub fn knit(queue: &MessageOrigin) {
 
 pub fn unknit(queue: &MessageOrigin) {
 	super::mock_helpers::unknit::<Test>(queue);
+}
+
+pub fn num_overweight_enqueued_events() -> u32 {
+	frame_system::Pallet::<Test>::events()
+		.into_iter()
+		.filter(|e| {
+			matches!(e.event, RuntimeEvent::MessageQueue(crate::Event::OverweightEnqueued { .. }))
+		})
+		.count() as u32
 }

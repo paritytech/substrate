@@ -55,17 +55,16 @@ use sc_consensus::{
 };
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend};
+use sp_blockchain::HeaderBackend;
 use sp_consensus::{Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle};
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
-use sp_core::ExecutionContext;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
 	generic::{BlockId, Digest, DigestItem},
 	traits::{Block as BlockT, Header as HeaderT},
 	RuntimeString,
 };
-use std::{cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc, time::Duration};
+use std::{cmp::Ordering, marker::PhantomData, sync::Arc, time::Duration};
 
 const LOG_TARGET: &str = "pow";
 
@@ -269,7 +268,6 @@ where
 		block: B,
 		at_hash: B::Hash,
 		inherent_data_providers: CIDP::InherentDataProviders,
-		execution_context: ExecutionContext,
 	) -> Result<(), Error<B>> {
 		if *block.header().number() < self.check_inherents_after {
 			return Ok(())
@@ -283,7 +281,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents_with_context(at_hash, execution_context, block, inherent_data)
+			.check_inherents(at_hash, block, inherent_data)
 			.map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
@@ -325,7 +323,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut block: BlockImportParams<B, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let best_header = self
 			.select_chain
@@ -349,7 +346,6 @@ where
 					self.create_inherent_data_providers
 						.create_inherent_data_providers(parent_hash, ())
 						.await?,
-					block.origin.into(),
 				)
 				.await?;
 			}
@@ -399,7 +395,7 @@ where
 			));
 		}
 
-		self.inner.import_block(block, new_cache).await.map_err(Into::into)
+		self.inner.import_block(block).await.map_err(Into::into)
 	}
 }
 
@@ -449,7 +445,7 @@ where
 	async fn verify(
 		&mut self,
 		mut block: BlockImportParams<B, ()>,
-	) -> Result<(BlockImportParams<B, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
+	) -> Result<BlockImportParams<B, ()>, String> {
 		let hash = block.header.hash();
 		let (checked_header, seal) = self.check_header(block.header)?;
 
@@ -459,7 +455,7 @@ where
 		block.insert_intermediate(INTERMEDIATE_KEY, intermediate);
 		block.post_hash = Some(hash);
 
-		Ok((block, None))
+		Ok(block)
 	}
 }
 

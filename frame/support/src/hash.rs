@@ -17,7 +17,7 @@
 
 //! Hash utilities.
 
-use crate::metadata;
+use crate::metadata_ir;
 use codec::{Codec, MaxEncodedLen};
 use sp_io::hashing::{blake2_128, blake2_256, twox_128, twox_256, twox_64};
 use sp_std::prelude::Vec;
@@ -59,7 +59,7 @@ impl<T: Codec> Hashable for T {
 
 /// Hasher to use to hash keys to insert to storage.
 pub trait StorageHasher: 'static {
-	const METADATA: metadata::StorageHasher;
+	const METADATA: metadata_ir::StorageHasherIR;
 	type Output: AsRef<[u8]>;
 	fn hash(x: &[u8]) -> Self::Output;
 
@@ -80,7 +80,7 @@ pub trait ReversibleStorageHasher: StorageHasher {
 /// Store the key directly.
 pub struct Identity;
 impl StorageHasher for Identity {
-	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Identity;
+	const METADATA: metadata_ir::StorageHasherIR = metadata_ir::StorageHasherIR::Identity;
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
 		x.to_vec()
@@ -98,7 +98,7 @@ impl ReversibleStorageHasher for Identity {
 /// Hash storage keys with `concat(twox64(key), key)`
 pub struct Twox64Concat;
 impl StorageHasher for Twox64Concat {
-	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Twox64Concat;
+	const METADATA: metadata_ir::StorageHasherIR = metadata_ir::StorageHasherIR::Twox64Concat;
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
 		twox_64(x).iter().chain(x.iter()).cloned().collect::<Vec<_>>()
@@ -120,7 +120,7 @@ impl ReversibleStorageHasher for Twox64Concat {
 /// Hash storage keys with `concat(blake2_128(key), key)`
 pub struct Blake2_128Concat;
 impl StorageHasher for Blake2_128Concat {
-	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Blake2_128Concat;
+	const METADATA: metadata_ir::StorageHasherIR = metadata_ir::StorageHasherIR::Blake2_128Concat;
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
 		blake2_128(x).iter().chain(x.iter()).cloned().collect::<Vec<_>>()
@@ -142,7 +142,7 @@ impl ReversibleStorageHasher for Blake2_128Concat {
 /// Hash storage keys with blake2 128
 pub struct Blake2_128;
 impl StorageHasher for Blake2_128 {
-	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Blake2_128;
+	const METADATA: metadata_ir::StorageHasherIR = metadata_ir::StorageHasherIR::Blake2_128;
 	type Output = [u8; 16];
 	fn hash(x: &[u8]) -> [u8; 16] {
 		blake2_128(x)
@@ -155,7 +155,7 @@ impl StorageHasher for Blake2_128 {
 /// Hash storage keys with blake2 256
 pub struct Blake2_256;
 impl StorageHasher for Blake2_256 {
-	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Blake2_256;
+	const METADATA: metadata_ir::StorageHasherIR = metadata_ir::StorageHasherIR::Blake2_256;
 	type Output = [u8; 32];
 	fn hash(x: &[u8]) -> [u8; 32] {
 		blake2_256(x)
@@ -168,7 +168,7 @@ impl StorageHasher for Blake2_256 {
 /// Hash storage keys with twox 128
 pub struct Twox128;
 impl StorageHasher for Twox128 {
-	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Twox128;
+	const METADATA: metadata_ir::StorageHasherIR = metadata_ir::StorageHasherIR::Twox128;
 	type Output = [u8; 16];
 	fn hash(x: &[u8]) -> [u8; 16] {
 		twox_128(x)
@@ -181,7 +181,7 @@ impl StorageHasher for Twox128 {
 /// Hash storage keys with twox 256
 pub struct Twox256;
 impl StorageHasher for Twox256 {
-	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Twox256;
+	const METADATA: metadata_ir::StorageHasherIR = metadata_ir::StorageHasherIR::Twox256;
 	type Output = [u8; 32];
 	fn hash(x: &[u8]) -> [u8; 32] {
 		twox_256(x)

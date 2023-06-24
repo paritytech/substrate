@@ -27,7 +27,7 @@
 //! Implementations of these traits may be converted to implementations of corresponding
 //! `nonfungible` traits by using the `nonfungible::ItemOf` type adapter.
 
-use crate::dispatch::{DispatchError, DispatchResult};
+use crate::dispatch::{DispatchError, DispatchResult, Parameter};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
@@ -35,11 +35,11 @@ use sp_std::prelude::*;
 /// Trait for providing an interface to many read-only NFT-like sets of items.
 pub trait Inspect<AccountId> {
 	/// Type for identifying an item.
-	type ItemId;
+	type ItemId: Parameter;
 
 	/// Type for identifying a collection (an identifier for an independent collection of
 	/// items).
-	type CollectionId;
+	type CollectionId: Parameter;
 
 	/// Returns the owner of `item` of `collection`, or `None` if the item doesn't exist
 	/// (or somehow has no owner).
@@ -180,6 +180,16 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 	) -> Self::OwnedInCollectionIterator;
 }
 
+/// Trait for providing an interface to check the account's role within the collection.
+pub trait InspectRole<AccountId>: Inspect<AccountId> {
+	/// Returns `true` if `who` is the issuer of the `collection`.
+	fn is_issuer(collection: &Self::CollectionId, who: &AccountId) -> bool;
+	/// Returns `true` if `who` is the admin of the `collection`.
+	fn is_admin(collection: &Self::CollectionId, who: &AccountId) -> bool;
+	/// Returns `true` if `who` is the freezer of the `collection`.
+	fn is_freezer(collection: &Self::CollectionId, who: &AccountId) -> bool;
+}
+
 /// Trait for providing the ability to create collections of nonfungible items.
 pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
@@ -193,7 +203,7 @@ pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 /// Trait for providing the ability to destroy collections of nonfungible items.
 pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// The witness data needed to destroy an item.
-	type DestroyWitness;
+	type DestroyWitness: Parameter;
 
 	/// Provide the appropriate witness data needed to destroy an item.
 	fn get_destroy_witness(collection: &Self::CollectionId) -> Option<Self::DestroyWitness>;
@@ -338,4 +348,18 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 		item: &Self::ItemId,
 		destination: &AccountId,
 	) -> DispatchResult;
+
+	/// Disable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn disable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Re-enable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn enable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
 }

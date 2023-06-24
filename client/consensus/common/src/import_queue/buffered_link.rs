@@ -53,7 +53,7 @@ use super::BlockImportResult;
 /// can be used to buffer commands, and the receiver can be used to poll said commands and transfer
 /// them to another link. `queue_size_warning` sets the warning threshold of the channel queue size.
 pub fn buffered_link<B: BlockT>(
-	queue_size_warning: i64,
+	queue_size_warning: usize,
 ) -> (BufferedLinkSender<B>, BufferedLinkReceiver<B>) {
 	let (tx, rx) = tracing_unbounded("mpsc_buffered_link", queue_size_warning);
 	let tx = BufferedLinkSender { tx };
@@ -166,7 +166,7 @@ impl<B: BlockT> BufferedLinkReceiver<B> {
 	}
 
 	/// Close the channel.
-	pub fn close(&mut self) {
+	pub fn close(&mut self) -> bool {
 		self.rx.get_mut().close()
 	}
 }

@@ -55,22 +55,19 @@ pub struct Db<Storage> {
 	persistent: Storage,
 }
 
-impl<Storage: OffchainStorage> Db<Storage> {
+impl<Storage> Db<Storage> {
 	/// Create new instance of Offchain DB.
 	pub fn new(persistent: Storage) -> Self {
 		Self { persistent }
 	}
 
-	/// Create new instance of Offchain DB, backed by given backend.
-	pub fn factory_from_backend<Backend, Block>(
-		backend: &Backend,
-	) -> Option<Box<dyn sc_client_api::execution_extensions::DbExternalitiesFactory>>
+	/// Create new instance of Offchain DB, backed by the given backend.
+	pub fn from_backend<Backend, Block>(backend: &Backend) -> Option<Db<Backend::OffchainStorage>>
 	where
-		Backend: sc_client_api::Backend<Block, OffchainStorage = Storage>,
+		Backend: sc_client_api::Backend<Block>,
 		Block: sp_runtime::traits::Block,
-		Storage: 'static,
 	{
-		sc_client_api::Backend::offchain_storage(backend).map(|db| Box::new(Self::new(db)) as _)
+		sc_client_api::Backend::offchain_storage(backend).map(|db| Db::new(db))
 	}
 }
 
@@ -324,14 +321,11 @@ impl AsyncApi {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use libp2p::PeerId;
 	use sc_client_db::offchain::LocalStorage;
-	use sc_network_common::{
-		config::MultiaddrWithPeerId,
-		protocol::ProtocolName,
-		service::{NetworkPeers, NetworkStateInfo},
+	use sc_network::{
+		config::MultiaddrWithPeerId, types::ProtocolName, NetworkPeers, NetworkStateInfo,
+		ReputationChange,
 	};
-	use sc_peerset::ReputationChange;
 	use sp_core::offchain::{DbExternalities, Externalities};
 	use std::time::SystemTime;
 
@@ -391,18 +385,6 @@ mod tests {
 		}
 
 		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
-			unimplemented!();
-		}
-
-		fn add_to_peers_set(
-			&self,
-			_protocol: ProtocolName,
-			_peers: HashSet<Multiaddr>,
-		) -> Result<(), String> {
-			unimplemented!();
-		}
-
-		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 			unimplemented!();
 		}
 

@@ -39,7 +39,7 @@
 //! which queue it will be stored. Messages are stored by being appended to the last [`Page`] of a
 //! book. Each book keeps track of its pages by indexing `Pages`. The `ReadyRing` contains all
 //! queues which hold at least one unprocessed message and are thereby *ready* to be serviced. The
-//! `ServiceHead` indicates which *ready* queue is the next to be serviced.  
+//! `ServiceHead` indicates which *ready* queue is the next to be serviced.
 //! The pallet implements [`frame_support::traits::EnqueueMessage`],
 //! [`frame_support::traits::ServiceQueues`] and has [`frame_support::traits::ProcessMessage`] and
 //! [`OnQueueChanged`] hooks to communicate with the outside world.
@@ -56,7 +56,7 @@
 //! **Pagination**
 //!
 //! Queues are stored in a *paged* manner by splitting their messages into [`Page`]s. This results
-//! in a lot of complexity when implementing the pallet but is completely necessary to archive the
+//! in a lot of complexity when implementing the pallet but is completely necessary to achieve the
 //! second #[Design Goal](design-goals). The problem comes from the fact a message can *possibly* be
 //! quite large, lets say 64KiB. This then results in a *MEL* of at least 64KiB which results in a
 //! PoV of at least 64KiB. Now we have the assumption that most messages are much shorter than their
@@ -204,7 +204,7 @@ pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{BaseArithmetic, Unsigned};
 use sp_runtime::{
-	traits::{Hash, One, Zero},
+	traits::{One, Zero},
 	SaturatedConversion, Saturating,
 };
 use sp_std::{fmt::Debug, ops::Deref, prelude::*, vec};
@@ -438,7 +438,6 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	/// The module configuration trait.
@@ -500,16 +499,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Message discarded due to an inability to decode the item. Usually caused by state
-		/// corruption.
-		Discarded { hash: T::Hash },
 		/// Message discarded due to an error in the `MessageProcessor` (usually a format error).
-		ProcessingFailed { hash: T::Hash, origin: MessageOriginOf<T>, error: ProcessMessageError },
+		ProcessingFailed { id: [u8; 32], origin: MessageOriginOf<T>, error: ProcessMessageError },
 		/// Message is processed.
-		Processed { hash: T::Hash, origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
+		Processed { id: [u8; 32], origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
 		/// Message placed in overweight queue.
 		OverweightEnqueued {
-			hash: T::Hash,
+			id: [u8; 32],
 			origin: MessageOriginOf<T>,
 			page_index: PageIndex,
 			message_index: T::Size,
@@ -961,11 +957,11 @@ impl<T: Config> Pallet<T> {
 			book_state.begin.saturating_inc();
 		}
 		let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
-		if book_state.begin >= book_state.end && total_processed > 0 {
+		if book_state.begin >= book_state.end {
 			// No longer ready - unknit.
 			if let Some(neighbours) = book_state.ready_neighbours.take() {
 				Self::ready_ring_unknit(&origin, neighbours);
-			} else {
+			} else if total_processed > 0 {
 				defensive!("Freshly processed queue must have been ready");
 			}
 		}
@@ -1148,15 +1144,16 @@ impl<T: Config> Pallet<T> {
 		meter: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
-		let hash = T::Hashing::hash(message);
+		let hash = sp_io::hashing::blake2_256(message);
 		use ProcessMessageError::*;
 		let prev_consumed = meter.consumed;
+		let mut id = hash;
 
-		match T::MessageProcessor::process_message(message, origin.clone(), meter) {
+		match T::MessageProcessor::process_message(message, origin.clone(), meter, &mut id) {
 			Err(Overweight(w)) if w.any_gt(overweight_limit) => {
 				// Permanently overweight.
 				Self::deposit_event(Event::<T>::OverweightEnqueued {
-					hash,
+					id,
 					origin,
 					page_index,
 					message_index,
@@ -1174,13 +1171,13 @@ impl<T: Config> Pallet<T> {
 			},
 			Err(error @ BadFormat | error @ Corrupt | error @ Unsupported) => {
 				// Permanent error - drop
-				Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
+				Self::deposit_event(Event::<T>::ProcessingFailed { id, origin, error });
 				MessageExecutionStatus::Unprocessable { permanent: true }
 			},
 			Ok(success) => {
 				// Success
 				let weight_used = meter.consumed.saturating_sub(prev_consumed);
-				Self::deposit_event(Event::<T>::Processed { hash, origin, weight_used, success });
+				Self::deposit_event(Event::<T>::Processed { id, origin, weight_used, success });
 				MessageExecutionStatus::Processed
 			},
 		}

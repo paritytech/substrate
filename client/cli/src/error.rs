@@ -64,7 +64,7 @@ pub enum Error {
 	SignatureInvalid,
 
 	#[error("Key store operation failed")]
-	KeyStoreOperation,
+	KeystoreOperation,
 
 	#[error("Key storage issue encountered")]
 	KeyStorage(#[from] sc_keystore::Error),

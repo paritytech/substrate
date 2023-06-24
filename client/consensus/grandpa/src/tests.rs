@@ -33,6 +33,7 @@ use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestClient, TestNetFactory,
 };
+use sc_transaction_pool_api::RejectAllTxPool;
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_consensus_grandpa::{
@@ -40,18 +41,15 @@ use sp_consensus_grandpa::{
 };
 use sp_core::H256;
 use sp_keyring::Ed25519Keyring;
-use sp_keystore::{testing::KeyStore as TestKeyStore, SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{testing::MemoryKeystore, Keystore, KeystorePtr};
 use sp_runtime::{
 	codec::Encode,
 	generic::{BlockId, DigestItem},
 	traits::{Block as BlockT, Header as HeaderT},
 	Justifications,
 };
-use std::{
-	collections::{HashMap, HashSet},
-	pin::Pin,
-};
-use substrate_test_runtime_client::runtime::BlockNumber;
+use std::{collections::HashSet, pin::Pin};
+use substrate_test_runtime_client::{runtime::BlockNumber, BlockBuilderExt};
 use tokio::runtime::Handle;
 
 use authorities::AuthoritySet;
@@ -143,6 +141,10 @@ impl TestNetFactory for GrandpaTestNet {
 
 	fn peers(&self) -> &Vec<GrandpaPeer> {
 		&self.peers
+	}
+
+	fn peers_mut(&mut self) -> &mut Vec<GrandpaPeer> {
+		&mut self.peers
 	}
 
 	fn mut_peers<F: FnOnce(&mut Vec<GrandpaPeer>)>(&mut self, closure: F) {
@@ -279,11 +281,12 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|&key| key.public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(TestKeyStore::new());
-	SyncCryptoStore::ed25519_generate_new(&*keystore, GRANDPA, Some(&authority.to_seed()))
-		.expect("Creates authority key");
+fn create_keystore(authority: Ed25519Keyring) -> KeystorePtr {
+	let keystore = MemoryKeystore::new();
 	keystore
+		.ed25519_generate_new(GRANDPA, Some(&authority.to_seed()))
+		.expect("Creates authority key");
+	keystore.into()
 }
 
 async fn run_until_complete(future: impl Future + Unpin, net: &Arc<Mutex<GrandpaTestNet>>) {
@@ -310,6 +313,7 @@ fn initialize_grandpa(
 				net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 			(net.peers[peer_id].network_service().clone(), link)
 		};
+		let sync = net.peers[peer_id].sync_service().clone();
 
 		let grandpa_params = GrandpaParams {
 			config: Config {
@@ -324,9 +328,13 @@ fn initialize_grandpa(
 			},
 			link,
 			network: net_service,
+			sync,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 			telemetry: None,
 		};
 		let voter =
@@ -395,22 +403,27 @@ async fn run_to_completion(
 	run_to_completion_with(blocks, net, peers, |_| None).await
 }
 
-fn add_scheduled_change(block: &mut Block, change: ScheduledChange<BlockNumber>) {
-	block.header.digest_mut().push(DigestItem::Consensus(
-		GRANDPA_ENGINE_ID,
-		sp_consensus_grandpa::ConsensusLog::ScheduledChange(change).encode(),
-	));
+fn add_scheduled_change(builder: &mut impl BlockBuilderExt, change: ScheduledChange<BlockNumber>) {
+	builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			GRANDPA_ENGINE_ID,
+			sp_consensus_grandpa::ConsensusLog::ScheduledChange(change).encode(),
+		))
+		.unwrap();
 }
 
 fn add_forced_change(
-	block: &mut Block,
+	builder: &mut impl BlockBuilderExt,
 	median_last_finalized: BlockNumber,
 	change: ScheduledChange<BlockNumber>,
 ) {
-	block.header.digest_mut().push(DigestItem::Consensus(
-		GRANDPA_ENGINE_ID,
-		sp_consensus_grandpa::ConsensusLog::ForcedChange(median_last_finalized, change).encode(),
-	));
+	builder
+		.push_deposit_log_digest_item(DigestItem::Consensus(
+			GRANDPA_ENGINE_ID,
+			sp_consensus_grandpa::ConsensusLog::ForcedChange(median_last_finalized, change)
+				.encode(),
+		))
+		.unwrap();
 }
 
 #[tokio::test]
@@ -451,6 +464,7 @@ async fn finalize_3_voters_1_full_observer() {
 	tokio::spawn({
 		let peer_id = 3;
 		let net_service = net.peers[peer_id].network_service().clone();
+		let sync = net.peers[peer_id].sync_service().clone();
 		let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
 
 		let grandpa_params = GrandpaParams {
@@ -466,10 +480,14 @@ async fn finalize_3_voters_1_full_observer() {
 			},
 			link,
 			network: net_service,
+			sync,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
@@ -533,11 +551,15 @@ async fn transition_3_voters_twice_1_full_observer() {
 	for (peer_id, local_key) in all_peers.clone().into_iter().enumerate() {
 		let keystore = create_keystore(local_key);
 
-		let (net_service, link) = {
+		let (net_service, link, sync) = {
 			let net = net.lock();
 			let link =
 				net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
-			(net.peers[peer_id].network_service().clone(), link)
+			(
+				net.peers[peer_id].network_service().clone(),
+				link,
+				net.peers[peer_id].sync_service().clone(),
+			)
 		};
 
 		let grandpa_params = GrandpaParams {
@@ -553,10 +575,14 @@ async fn transition_3_voters_twice_1_full_observer() {
 			},
 			link,
 			network: net_service,
+			sync,
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		voters
@@ -594,28 +620,24 @@ async fn transition_3_voters_twice_1_full_observer() {
 					},
 					14 => {
 						// generate transition at block 15, applied at 20.
-						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-							let mut block = builder.build().unwrap().block;
+						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |mut builder| {
 							add_scheduled_change(
-								&mut block,
+								&mut builder,
 								ScheduledChange { next_authorities: make_ids(peers_b), delay: 4 },
 							);
-
-							block
+							builder.build().unwrap().block
 						});
 						net.lock().peer(0).push_blocks(5, false);
 					},
 					20 => {
 						// at block 21 we do another transition, but this time instant.
 						// add more until we have 30.
-						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-							let mut block = builder.build().unwrap().block;
+						net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |mut builder| {
 							add_scheduled_change(
-								&mut block,
+								&mut builder,
 								ScheduledChange { next_authorities: make_ids(&peers_c), delay: 0 },
 							);
-
-							block
+							builder.build().unwrap().block
 						});
 						net.lock().peer(0).push_blocks(9, false);
 					},
@@ -697,13 +719,12 @@ async fn sync_justifications_on_change_blocks() {
 	// at block 21 we do add a transition which is instant
 	let hashof21 = net
 		.peer(0)
-		.generate_blocks(1, BlockOrigin::File, |builder| {
-			let mut block = builder.build().unwrap().block;
+		.generate_blocks(1, BlockOrigin::File, |mut builder| {
 			add_scheduled_change(
-				&mut block,
+				&mut builder,
 				ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
 			);
-			block
+			builder.build().unwrap().block
 		})
 		.pop()
 		.unwrap();
@@ -767,26 +788,24 @@ async fn finalizes_multiple_pending_changes_in_order() {
 	net.peer(0).push_blocks(20, false);
 
 	// at block 21 we do add a transition which is instant
-	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		let mut block = builder.build().unwrap().block;
+	net.peer(0).generate_blocks(1, BlockOrigin::File, |mut builder| {
 		add_scheduled_change(
-			&mut block,
+			&mut builder,
 			ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
 		);
-		block
+		builder.build().unwrap().block
 	});
 
 	// add more blocks on top of it (until we have 25)
 	net.peer(0).push_blocks(4, false);
 
 	// at block 26 we add another which is enacted at block 30
-	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		let mut block = builder.build().unwrap().block;
+	net.peer(0).generate_blocks(1, BlockOrigin::File, |mut builder| {
 		add_scheduled_change(
-			&mut block,
+			&mut builder,
 			ScheduledChange { next_authorities: make_ids(peers_c), delay: 4 },
 		);
-		block
+		builder.build().unwrap().block
 	});
 
 	// add more blocks on top of it (until we have 30)
@@ -822,23 +841,21 @@ async fn force_change_to_new_set() {
 	let voters_future = initialize_grandpa(&mut net, peers_a);
 	let net = Arc::new(Mutex::new(net));
 
-	net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
-		let mut block = builder.build().unwrap().block;
-
+	net.lock().peer(0).generate_blocks(1, BlockOrigin::File, |mut builder| {
 		// add a forced transition at block 12.
 		add_forced_change(
-			&mut block,
+			&mut builder,
 			0,
 			ScheduledChange { next_authorities: voters.clone(), delay: 10 },
 		);
 
 		// add a normal transition too to ensure that forced changes take priority.
 		add_scheduled_change(
-			&mut block,
+			&mut builder,
 			ScheduledChange { next_authorities: make_ids(genesis_authorities), delay: 5 },
 		);
 
-		block
+		builder.build().unwrap().block
 	});
 
 	net.lock().peer(0).push_blocks(25, false);
@@ -874,14 +891,15 @@ async fn allows_reimporting_change_blocks() {
 	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_client();
-	let builder = full_client
+	let mut builder = full_client
 		.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap();
-	let mut block = builder.build().unwrap().block;
+
 	add_scheduled_change(
-		&mut block,
+		&mut builder,
 		ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
 	);
+	let block = builder.build().unwrap().block;
 
 	let block = || {
 		let block = block.clone();
@@ -893,7 +911,7 @@ async fn allows_reimporting_change_blocks() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).await.unwrap(),
+		block_import.import_block(block()).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -903,10 +921,7 @@ async fn allows_reimporting_change_blocks() {
 		}),
 	);
 
-	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).await.unwrap(),
-		ImportResult::AlreadyInChain
-	);
+	assert_eq!(block_import.import_block(block()).await.unwrap(), ImportResult::AlreadyInChain);
 }
 
 #[tokio::test]
@@ -921,15 +936,16 @@ async fn test_bad_justification() {
 	let (mut block_import, ..) = net.make_block_import(client.clone());
 
 	let full_client = client.as_client();
-	let builder = full_client
+	let mut builder = full_client
 		.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false)
 		.unwrap();
-	let mut block = builder.build().unwrap().block;
 
 	add_scheduled_change(
-		&mut block,
+		&mut builder,
 		ScheduledChange { next_authorities: make_ids(peers_b), delay: 0 },
 	);
+
+	let block = builder.build().unwrap().block;
 
 	let block = || {
 		let block = block.clone();
@@ -942,7 +958,7 @@ async fn test_bad_justification() {
 	};
 
 	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).await.unwrap(),
+		block_import.import_block(block()).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: true,
 			clear_justification_requests: false,
@@ -952,10 +968,7 @@ async fn test_bad_justification() {
 		}),
 	);
 
-	assert_eq!(
-		block_import.import_block(block(), HashMap::new()).await.unwrap(),
-		ImportResult::AlreadyInChain
-	);
+	assert_eq!(block_import.import_block(block()).await.unwrap(), ImportResult::AlreadyInChain);
 }
 
 #[tokio::test]
@@ -999,6 +1012,7 @@ async fn voter_persists_its_votes() {
 
 		communication::NetworkBridge::new(
 			net.peers[1].network_service().clone(),
+			net.peers[1].sync_service().clone(),
 			config.clone(),
 			set_state,
 			None,
@@ -1016,6 +1030,7 @@ async fn voter_persists_its_votes() {
 			let link = net.peers[0].data.lock().take().expect("link initialized at startup; qed");
 			(net.peers[0].network_service().clone(), link)
 		};
+		let sync = net.peers[0].sync_service().clone();
 
 		let grandpa_params = GrandpaParams {
 			config: Config {
@@ -1030,10 +1045,14 @@ async fn voter_persists_its_votes() {
 			},
 			link,
 			network: net_service,
+			sync,
 			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
@@ -1050,6 +1069,7 @@ async fn voter_persists_its_votes() {
 		// the network service of this new peer
 		net.add_authority_peer();
 		let net_service = net.peers[2].network_service().clone();
+		let sync = net.peers[2].sync_service().clone();
 		// but we'll reuse the client from the first peer (alice_voter1)
 		// since we want to share the same database, so that we can
 		// read the persisted state after aborting alice_voter1.
@@ -1071,10 +1091,14 @@ async fn voter_persists_its_votes() {
 			},
 			link,
 			network: net_service,
+			sync,
 			voting_rule: VotingRulesBuilder::default().build(),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		run_grandpa_voter(grandpa_params)
@@ -1232,6 +1256,7 @@ async fn finalize_3_voters_1_light_observer() {
 		},
 		net.peers[3].data.lock().take().expect("link initialized at startup; qed"),
 		net.peers[3].network_service().clone(),
+		net.peers[3].sync_service().clone(),
 	)
 	.unwrap();
 	net.peer(0).push_blocks(20, false);
@@ -1265,6 +1290,7 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 	             link,
 	             net: Arc<Mutex<GrandpaTestNet>>|
 	 -> Pin<Box<dyn Future<Output = ()> + Send>> {
+		let mut net = net.lock();
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
@@ -1277,11 +1303,15 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 				protocol_name: grandpa_protocol_name::NAME.into(),
 			},
 			link,
-			network: net.lock().peer(peer_id).network_service().clone(),
+			network: net.peer(peer_id).network_service().clone(),
+			sync: net.peer(peer_id).sync_service().clone(),
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		Box::pin(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
@@ -1359,18 +1389,20 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 	future::select(test, drive_to_completion).await;
 }
 
-type TestEnvironment<N, SC, VR> =
-	Environment<substrate_test_runtime_client::Backend, Block, TestClient, N, SC, VR>;
+type TestEnvironment<N, S, SC, VR> =
+	Environment<substrate_test_runtime_client::Backend, Block, TestClient, N, S, SC, VR>;
 
-fn test_environment_with_select_chain<N, VR, SC>(
+fn test_environment_with_select_chain<N, S, VR, SC>(
 	link: &TestLinkHalf,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	network_service: N,
+	sync_service: S,
 	select_chain: SC,
 	voting_rule: VR,
-) -> TestEnvironment<N, SC, VR>
+) -> TestEnvironment<N, S, SC, VR>
 where
 	N: NetworkT<Block>,
+	S: SyncingT<Block>,
 	VR: VotingRule<Block, TestClient>,
 {
 	let PersistentData { ref authority_set, ref set_state, .. } = link.persistent_data;
@@ -1386,8 +1418,14 @@ where
 		protocol_name: grandpa_protocol_name::NAME.into(),
 	};
 
-	let network =
-		NetworkBridge::new(network_service.clone(), config.clone(), set_state.clone(), None, None);
+	let network = NetworkBridge::new(
+		network_service.clone(),
+		sync_service,
+		config.clone(),
+		set_state.clone(),
+		None,
+		None,
+	);
 
 	Environment {
 		authority_set: authority_set.clone(),
@@ -1403,23 +1441,27 @@ where
 		justification_sender: None,
 		telemetry: None,
 		_phantom: PhantomData,
+		offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(RejectAllTxPool::default()),
 	}
 }
 
-fn test_environment<N, VR>(
+fn test_environment<N, S, VR>(
 	link: &TestLinkHalf,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	network_service: N,
+	sync_service: S,
 	voting_rule: VR,
-) -> TestEnvironment<N, LongestChain<substrate_test_runtime_client::Backend, Block>, VR>
+) -> TestEnvironment<N, S, LongestChain<substrate_test_runtime_client::Backend, Block>, VR>
 where
 	N: NetworkT<Block>,
+	S: SyncingT<Block>,
 	VR: VotingRule<Block, TestClient>,
 {
 	test_environment_with_select_chain(
 		link,
 		keystore,
 		network_service,
+		sync_service,
 		link.select_chain.clone(),
 		voting_rule,
 	)
@@ -1435,19 +1477,22 @@ async fn grandpa_environment_respects_voting_rules() {
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 	let peer = net.peer(0);
 	let network_service = peer.network_service().clone();
+	let sync_service = peer.sync_service().clone();
 	let link = peer.data.lock().take().unwrap();
 
 	// add 21 blocks
 	let hashes = peer.push_blocks(21, false);
 
 	// create an environment with no voting rule restrictions
-	let unrestricted_env = test_environment(&link, None, network_service.clone(), ());
+	let unrestricted_env =
+		test_environment(&link, None, network_service.clone(), sync_service.clone(), ());
 
 	// another with 3/4 unfinalized chain voting rule restriction
 	let three_quarters_env = test_environment(
 		&link,
 		None,
 		network_service.clone(),
+		sync_service.clone(),
 		voting_rule::ThreeQuartersOfTheUnfinalizedChain,
 	);
 
@@ -1457,6 +1502,7 @@ async fn grandpa_environment_respects_voting_rules() {
 		&link,
 		None,
 		network_service.clone(),
+		sync_service,
 		VotingRulesBuilder::default().build(),
 	);
 
@@ -1549,6 +1595,7 @@ async fn grandpa_environment_passes_actual_best_block_to_voting_rules() {
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 	let peer = net.peer(0);
 	let network_service = peer.network_service().clone();
+	let sync_service = peer.sync_service().clone();
 	let link = peer.data.lock().take().unwrap();
 	let client = peer.client().as_client().clone();
 	let select_chain = MockSelectChain::default();
@@ -1562,6 +1609,7 @@ async fn grandpa_environment_passes_actual_best_block_to_voting_rules() {
 		&link,
 		None,
 		network_service.clone(),
+		sync_service,
 		select_chain.clone(),
 		voting_rule::BeforeBestBlockBy(5),
 	);
@@ -1599,6 +1647,7 @@ async fn grandpa_environment_passes_actual_best_block_to_voting_rules() {
 
 #[tokio::test]
 async fn grandpa_environment_checks_if_best_block_is_descendent_of_finality_target() {
+	sp_tracing::try_init_simple();
 	use finality_grandpa::voter::Environment;
 
 	let peers = &[Ed25519Keyring::Alice];
@@ -1607,6 +1656,7 @@ async fn grandpa_environment_checks_if_best_block_is_descendent_of_finality_targ
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 	let peer = net.peer(0);
 	let network_service = peer.network_service().clone();
+	let sync_service = peer.sync_service().clone();
 	let link = peer.data.lock().take().unwrap();
 	let client = peer.client().as_client().clone();
 	let select_chain = MockSelectChain::default();
@@ -1615,6 +1665,7 @@ async fn grandpa_environment_checks_if_best_block_is_descendent_of_finality_targ
 		&link,
 		None,
 		network_service.clone(),
+		sync_service.clone(),
 		select_chain.clone(),
 		voting_rule.clone(),
 	);
@@ -1630,10 +1681,9 @@ async fn grandpa_environment_checks_if_best_block_is_descendent_of_finality_targ
 		BlockId::Number(4),
 		6,
 		BlockOrigin::File,
-		|builder| {
-			let mut block = builder.build().unwrap().block;
-			block.header.digest_mut().push(DigestItem::Other(vec![1]));
-			block
+		|mut builder| {
+			builder.push_deposit_log_digest_item(DigestItem::Other(vec![1])).unwrap();
+			builder.build().unwrap().block
 		},
 		false,
 		false,
@@ -1717,10 +1767,12 @@ async fn grandpa_environment_never_overwrites_round_voter_state() {
 	let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 	let peer = net.peer(0);
 	let network_service = peer.network_service().clone();
+	let sync_service = peer.sync_service().clone();
 	let link = peer.data.lock().take().unwrap();
 
 	let keystore = create_keystore(peers[0]);
-	let environment = test_environment(&link, Some(keystore), network_service.clone(), ());
+	let environment =
+		test_environment(&link, Some(keystore), network_service.clone(), sync_service, ());
 
 	let round_state = || finality_grandpa::round::State::genesis(Default::default());
 	let base = || Default::default();
@@ -1896,7 +1948,7 @@ async fn imports_justification_for_regular_blocks_on_import() {
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
 	assert_eq!(
-		block_import.import_block(import, HashMap::new()).await.unwrap(),
+		block_import.import_block(import).await.unwrap(),
 		ImportResult::Imported(ImportedAux {
 			needs_justification: false,
 			clear_justification_requests: false,
@@ -1921,9 +1973,10 @@ async fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 		let mut net = GrandpaTestNet::new(TestApi::new(voters), 1, 0);
 		let peer = net.peer(0);
 		let network_service = peer.network_service().clone();
+		let sync_service = peer.sync_service().clone();
 		let link = peer.data.lock().take().unwrap();
 		let keystore = create_keystore(alice);
-		test_environment(&link, Some(keystore), network_service.clone(), ())
+		test_environment(&link, Some(keystore), network_service.clone(), sync_service, ())
 	};
 
 	let signed_prevote = {
@@ -1953,7 +2006,7 @@ async fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 	// keys it should work
 	equivocation.identity = TryFrom::try_from(&[1; 32][..]).unwrap();
 	let equivocation_proof = sp_consensus_grandpa::Equivocation::Prevote(equivocation);
-	assert!(environment.report_equivocation(equivocation_proof).is_ok());
+	environment.report_equivocation(equivocation_proof).unwrap();
 }
 
 #[tokio::test]
@@ -1964,13 +2017,12 @@ async fn revert_prunes_authority_changes() {
 
 	type TestBlockBuilder<'a> =
 		BlockBuilder<'a, Block, PeersFullClient, substrate_test_runtime_client::Backend>;
-	let edit_block = |builder: TestBlockBuilder| {
-		let mut block = builder.build().unwrap().block;
+	let edit_block = |mut builder: TestBlockBuilder| {
 		add_scheduled_change(
-			&mut block,
+			&mut builder,
 			ScheduledChange { next_authorities: make_ids(peers), delay: 0 },
 		);
-		block
+		builder.build().unwrap().block
 	};
 
 	let api = TestApi::new(make_ids(peers));
@@ -2012,10 +2064,9 @@ async fn revert_prunes_authority_changes() {
 			BlockId::Number(23),
 			3,
 			BlockOrigin::File,
-			|builder| {
-				let mut block = builder.build().unwrap().block;
-				block.header.digest_mut().push(DigestItem::Other(vec![1]));
-				block
+			|mut builder| {
+				builder.push_deposit_log_digest_item(DigestItem::Other(vec![1])).unwrap();
+				builder.build().unwrap().block
 			},
 			false,
 			false,
@@ -2044,10 +2095,9 @@ async fn revert_prunes_authority_changes() {
 			BlockId::Number(25),
 			3,
 			BlockOrigin::File,
-			|builder| {
-				let mut block = builder.build().unwrap().block;
-				block.header.digest_mut().push(DigestItem::Other(vec![2]));
-				block
+			|mut builder| {
+				builder.push_deposit_log_digest_item(DigestItem::Other(vec![2])).unwrap();
+				builder.build().unwrap().block
 			},
 			false,
 			false,

@@ -40,8 +40,8 @@ pub struct OnRuntimeUpgradeCmd {
 	/// Performing any checks will potentially invalidate the measured PoV/Weight.
 	// NOTE: The clap attributes make it backwards compatible with the previous `--checks` flag.
 	#[clap(long,
-		default_value = "None",
-		default_missing_value = "All",
+		default_value = "pre-and-post",
+		default_missing_value = "all",
 		num_args = 0..=1,
 		require_equals = true,
 		verbatim_doc_comment)]
@@ -54,7 +54,6 @@ pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 	Block::Header: serde::de::DeserializeOwned,
 	NumberFor<Block>: FromStr,

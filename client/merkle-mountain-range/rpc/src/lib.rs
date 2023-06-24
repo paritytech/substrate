@@ -172,12 +172,7 @@ where
 			self.client.info().best_hash);
 
 		let (leaves, proof) = api
-			.generate_proof_with_context(
-				block_hash,
-				sp_core::ExecutionContext::OffchainCall(None),
-				block_numbers,
-				best_known_block_number,
-			)
+			.generate_proof(block_hash, block_numbers, best_known_block_number)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;
 
@@ -193,14 +188,9 @@ where
 		let decoded_proof = Decode::decode(&mut &proof.proof.0[..])
 			.map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
-		api.verify_proof_with_context(
-			proof.block_hash,
-			sp_core::ExecutionContext::OffchainCall(None),
-			leaves,
-			decoded_proof,
-		)
-		.map_err(runtime_error_into_rpc_error)?
-		.map_err(mmr_error_into_rpc_error)?;
+		api.verify_proof(proof.block_hash, leaves, decoded_proof)
+			.map_err(runtime_error_into_rpc_error)?
+			.map_err(mmr_error_into_rpc_error)?;
 
 		Ok(true)
 	}

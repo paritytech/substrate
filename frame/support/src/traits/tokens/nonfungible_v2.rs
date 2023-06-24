@@ -25,7 +25,10 @@
 //! use.
 
 use super::nonfungibles_v2 as nonfungibles;
-use crate::{dispatch::DispatchResult, traits::Get};
+use crate::{
+	dispatch::{DispatchResult, Parameter},
+	traits::Get,
+};
 use codec::{Decode, Encode};
 use sp_runtime::TokenError;
 use sp_std::prelude::*;
@@ -33,7 +36,7 @@ use sp_std::prelude::*;
 /// Trait for providing an interface to a read-only NFT-like item.
 pub trait Inspect<AccountId> {
 	/// Type for identifying an item.
-	type ItemId;
+	type ItemId: Parameter;
 
 	/// Returns the owner of `item`, or `None` if the item doesn't exist or has no
 	/// owner.
@@ -170,10 +173,18 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	}
 }
 
-/// Trait for transferring a non-fungible item.
+/// Trait for transferring and controlling the transfer of non-fungible sets of items.
 pub trait Transfer<AccountId>: Inspect<AccountId> {
 	/// Transfer `item` into `destination` account.
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult;
+	/// Disable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn disable_transfer(item: &Self::ItemId) -> DispatchResult;
+	/// Re-enable the `item` of `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn enable_transfer(item: &Self::ItemId) -> DispatchResult;
 }
 
 /// Convert a `nonfungibles` trait implementation into a `nonfungible` trait implementation by
@@ -308,5 +319,11 @@ impl<
 {
 	fn transfer(item: &Self::ItemId, destination: &AccountId) -> DispatchResult {
 		<F as nonfungibles::Transfer<AccountId>>::transfer(&A::get(), item, destination)
+	}
+	fn disable_transfer(item: &Self::ItemId) -> DispatchResult {
+		<F as nonfungibles::Transfer<AccountId>>::disable_transfer(&A::get(), item)
+	}
+	fn enable_transfer(item: &Self::ItemId) -> DispatchResult {
+		<F as nonfungibles::Transfer<AccountId>>::enable_transfer(&A::get(), item)
 	}
 }

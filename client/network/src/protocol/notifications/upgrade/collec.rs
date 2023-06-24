@@ -103,8 +103,8 @@ impl<T: Future<Output = Result<O, E>>, O, E> Future for FutWithUsize<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::types::ProtocolName as ProtoName;
 	use libp2p::core::upgrade::{ProtocolName, UpgradeInfo};
-	use sc_network_common::protocol::ProtocolName as ProtoName;
 
 	// TODO: move to mocks
 	mockall::mock! {

@@ -51,8 +51,8 @@ use sp_api::{
 	ProvideRuntimeApi,
 };
 use sp_blockchain::{
-	self as blockchain, well_known_cache_keys::Id as CacheKeyId, Backend as ChainBackend,
-	CachedHeaderMetadata, Error, HeaderBackend as ChainHeaderBackend, HeaderMetadata,
+	self as blockchain, Backend as ChainBackend, CachedHeaderMetadata, Error,
+	HeaderBackend as ChainHeaderBackend, HeaderMetadata, Info as BlockchainInfo,
 };
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
@@ -62,10 +62,8 @@ use sp_core::{
 		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
 		StorageKey,
 	},
-	traits::SpawnNamed,
+	traits::{CallContext, SpawnNamed},
 };
-#[cfg(feature = "test-helpers")]
-use sp_keystore::SyncCryptoStorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
@@ -161,7 +159,6 @@ pub fn new_in_mem<E, Block, G, RA>(
 	backend: Arc<in_mem::Backend<Block>>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -181,7 +178,6 @@ where
 		backend,
 		executor,
 		genesis_block_builder,
-		keystore,
 		spawn_handle,
 		prometheus_registry,
 		telemetry,
@@ -224,7 +220,6 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
@@ -239,19 +234,10 @@ where
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
 {
-	let extensions = ExecutionExtensions::new(
-		Default::default(),
-		keystore,
-		sc_offchain::OffchainDb::factory_from_backend(&*backend),
-	);
+	let extensions = ExecutionExtensions::new(None, Arc::new(executor.clone()));
 
-	let call_executor = LocalCallExecutor::new(
-		backend.clone(),
-		executor,
-		spawn_handle.clone(),
-		config.clone(),
-		extensions,
-	)?;
+	let call_executor =
+		LocalCallExecutor::new(backend.clone(), executor, config.clone(), extensions)?;
 
 	Client::new(
 		backend,
@@ -504,7 +490,6 @@ where
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
 		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		storage_changes: Option<
 			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
 		>,
@@ -559,7 +544,6 @@ where
 			body,
 			indexed_body,
 			storage_changes,
-			new_cache,
 			finalized,
 			auxiliary,
 			fork_choice,
@@ -599,7 +583,6 @@ where
 		storage_changes: Option<
 			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
 		>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		fork_choice: ForkChoiceStrategy,
@@ -712,7 +695,6 @@ where
 					},
 				};
 
-				operation.op.update_cache(new_cache);
 				storage_changes
 			},
 			None => None,
@@ -725,7 +707,7 @@ where
 				operation,
 				parent_hash,
 				None,
-				info.best_hash,
+				&info,
 				make_notifications,
 			)?;
 		}
@@ -883,12 +865,12 @@ where
 			// We should enact state, but don't have any storage changes, so we need to execute the
 			// block.
 			(true, None, Some(ref body)) => {
-				let runtime_api = self.runtime_api();
-				let execution_context = import_block.origin.into();
+				let mut runtime_api = self.runtime_api();
 
-				runtime_api.execute_block_with_context(
+				runtime_api.set_call_context(CallContext::Onchain);
+
+				runtime_api.execute_block(
 					*parent_hash,
-					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
 
@@ -915,48 +897,57 @@ where
 	fn apply_finality_with_block_hash(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		block: Block::Hash,
+		hash: Block::Hash,
 		justification: Option<Justification>,
-		best_block: Block::Hash,
+		info: &BlockchainInfo<Block>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
-		// find tree route from last finalized to given block.
-		let last_finalized = self.backend.blockchain().last_finalized()?;
-
-		if block == last_finalized {
+		if hash == info.finalized_hash {
 			warn!(
 				"Possible safety violation: attempted to re-finalize last finalized block {:?} ",
-				last_finalized
+				hash,
 			);
 			return Ok(())
 		}
 
+		// Find tree route from last finalized to given block.
 		let route_from_finalized =
-			sp_blockchain::tree_route(self.backend.blockchain(), last_finalized, block)?;
+			sp_blockchain::tree_route(self.backend.blockchain(), info.finalized_hash, hash)?;
 
 		if let Some(retracted) = route_from_finalized.retracted().get(0) {
 			warn!(
 				"Safety violation: attempted to revert finalized block {:?} which is not in the \
 				same chain as last finalized {:?}",
-				retracted, last_finalized
+				retracted, info.finalized_hash
 			);
 
 			return Err(sp_blockchain::Error::NotInFinalizedChain)
 		}
 
-		let route_from_best =
-			sp_blockchain::tree_route(self.backend.blockchain(), best_block, block)?;
+		// We may need to coercively update the best block if there is more than one
+		// leaf or if the finalized block number is greater than last best number recorded
+		// by the backend. This last condition may apply in case of consensus implementations
+		// not always checking this condition.
+		let block_number = self
+			.backend
+			.blockchain()
+			.number(hash)?
+			.ok_or(Error::MissingHeader(format!("{hash:?}")))?;
+		if self.backend.blockchain().leaves()?.len() > 1 || info.best_number < block_number {
+			let route_from_best =
+				sp_blockchain::tree_route(self.backend.blockchain(), info.best_hash, hash)?;
 
-		// if the block is not a direct ancestor of the current best chain,
-		// then some other block is the common ancestor.
-		if route_from_best.common_block().hash != block {
-			// NOTE: we're setting the finalized block as best block, this might
-			// be slightly inaccurate since we might have a "better" block
-			// further along this chain, but since best chain selection logic is
-			// plugable we cannot make a better choice here. usages that need
-			// an accurate "best" block need to go through `SelectChain`
-			// instead.
-			operation.op.mark_head(block)?;
+			// If the block is not a direct ancestor of the current best chain,
+			// then some other block is the common ancestor.
+			if route_from_best.common_block().hash != hash {
+				// NOTE: we're setting the finalized block as best block, this might
+				// be slightly inaccurate since we might have a "better" block
+				// further along this chain, but since best chain selection logic is
+				// plugable we cannot make a better choice here. usages that need
+				// an accurate "best" block need to go through `SelectChain`
+				// instead.
+				operation.op.mark_head(hash)?;
+			}
 		}
 
 		let enacted = route_from_finalized.enacted();
@@ -965,8 +956,8 @@ where
 			operation.op.mark_finalized(finalize_new.hash, None)?;
 		}
 
-		assert_eq!(enacted.last().map(|e| e.hash), Some(block));
-		operation.op.mark_finalized(block, justification)?;
+		assert_eq!(enacted.last().map(|e| e.hash), Some(hash));
+		operation.op.mark_finalized(hash, justification)?;
 
 		if notify {
 			let finalized =
@@ -988,7 +979,7 @@ where
 			let header = self
 				.backend
 				.blockchain()
-				.header(block)?
+				.header(hash)?
 				.expect("Block to finalize expected to be onchain; qed");
 
 			operation.notify_finalized = Some(FinalizeSummary { header, finalized, stale_heads });
@@ -1132,7 +1123,7 @@ where
 	}
 
 	/// Get blockchain info.
-	pub fn chain_info(&self) -> blockchain::Info<Block> {
+	pub fn chain_info(&self) -> BlockchainInfo<Block> {
 		self.backend.blockchain().info()
 	}
 
@@ -1726,7 +1717,8 @@ where
 				params.overlayed_changes,
 				Some(params.storage_transaction_cache),
 				params.recorder,
-				params.context,
+				params.call_context,
+				params.extensions,
 			)
 			.map_err(Into::into)
 	}
@@ -1737,6 +1729,18 @@ where
 
 	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
 		self.state_at(at).map_err(Into::into)
+	}
+
+	fn initialize_extensions(
+		&self,
+		at: Block::Hash,
+		extensions: &mut sp_externalities::Extensions,
+	) -> Result<(), sp_api::ApiError> {
+		let block_number = self.expect_block_number_from_id(&BlockId::Hash(at))?;
+
+		extensions.merge(self.executor.execution_extensions().extensions(at, block_number));
+
+		Ok(())
 	}
 }
 
@@ -1770,7 +1774,6 @@ where
 	async fn import_block(
 		&mut self,
 		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
 		let _enter = span.enter();
@@ -1785,7 +1788,7 @@ where
 			};
 
 		self.lock_import_and_run(|operation| {
-			self.apply_block(operation, import_block, new_cache, storage_changes)
+			self.apply_block(operation, import_block, storage_changes)
 		})
 		.map_err(|e| {
 			warn!("Block import error: {}", e);
@@ -1875,9 +1878,8 @@ where
 	async fn import_block(
 		&mut self,
 		import_block: BlockImportParams<Block, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(&*self).import_block(import_block, new_cache).await
+		(&*self).import_block(import_block).await
 	}
 
 	async fn check_block(
@@ -1901,8 +1903,8 @@ where
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
-		let last_best = self.backend.blockchain().info().best_hash;
-		self.apply_finality_with_block_hash(operation, hash, justification, last_best, notify)
+		let info = self.backend.blockchain().info();
+		self.apply_finality_with_block_hash(operation, hash, justification, &info, notify)
 	}
 
 	fn finalize_block(

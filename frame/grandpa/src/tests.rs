@@ -21,12 +21,11 @@
 
 use super::{Call, Event, *};
 use crate::mock::*;
-use codec::Encode;
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
 	dispatch::{GetDispatchInfo, Pays},
-	traits::{Currency, OnFinalize, OneSessionHandler},
+	traits::{Currency, KeyOwnerProofSystem, OnFinalize, OneSessionHandler},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;
@@ -297,12 +296,12 @@ fn schedule_resume_only_when_paused() {
 #[test]
 fn time_slot_have_sane_ord() {
 	// Ensure that `Ord` implementation is sane.
-	const FIXTURE: &[GrandpaTimeSlot] = &[
-		GrandpaTimeSlot { set_id: 0, round: 0 },
-		GrandpaTimeSlot { set_id: 0, round: 1 },
-		GrandpaTimeSlot { set_id: 1, round: 0 },
-		GrandpaTimeSlot { set_id: 1, round: 1 },
-		GrandpaTimeSlot { set_id: 1, round: 2 },
+	const FIXTURE: &[TimeSlot] = &[
+		TimeSlot { set_id: 0, round: 0 },
+		TimeSlot { set_id: 0, round: 1 },
+		TimeSlot { set_id: 1, round: 0 },
+		TimeSlot { set_id: 1, round: 1 },
+		TimeSlot { set_id: 1, round: 2 },
 	];
 	assert!(FIXTURE.windows(2).all(|f| f[0] < f[1]));
 }

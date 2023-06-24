@@ -37,9 +37,8 @@ fn positive_rx_receives_relevant_messages_and_terminates_upon_hub_drop() {
 		// Hub is disposed. The rx_01 should be over after that.
 		std::mem::drop(hub);
 
-		assert!(!rx_01.is_terminated());
-		assert_eq!(None, rx_01.next().await);
 		assert!(rx_01.is_terminated());
+		assert_eq!(None, rx_01.next().await);
 	});
 }
 

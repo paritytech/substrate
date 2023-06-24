@@ -25,31 +25,27 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, Pays},
 	ensure,
-	traits::{
-		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
-		OneSessionHandler,
-	},
+	traits::{ConstU32, DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
-use sp_application_crypto::ByteArray;
-use sp_runtime::{
-	generic::DigestItem,
-	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
-	ConsensusEngineId, KeyTypeId, Permill,
-};
-use sp_session::{GetSessionNumber, GetValidatorCount};
-use sp_staking::SessionIndex;
-use sp_std::prelude::*;
-
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
-	EquivocationProof, Slot, BABE_ENGINE_ID,
+	EquivocationProof, Randomness as BabeRandomness, Slot, BABE_ENGINE_ID, RANDOMNESS_LENGTH,
+	RANDOMNESS_VRF_CONTEXT,
 };
-use sp_consensus_vrf::schnorrkel;
+use sp_core::crypto::Wraps;
+use sp_runtime::{
+	generic::DigestItem,
+	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
+	ConsensusEngineId, Permill,
+};
+use sp_session::{GetSessionNumber, GetValidatorCount};
+use sp_staking::{offence::OffenceReportSystem, SessionIndex};
+use sp_std::prelude::*;
 
-pub use sp_consensus_babe::{AuthorityId, PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH};
+pub use sp_consensus_babe::AuthorityId;
 
 const LOG_TARGET: &str = "runtime::babe";
 
@@ -64,7 +60,7 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
-pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
+pub use equivocation::{EquivocationOffence, EquivocationReportSystem};
 #[allow(deprecated)]
 pub use randomness::CurrentBlockRandomness;
 pub use randomness::{
@@ -118,7 +114,6 @@ pub mod pallet {
 
 	/// The BABE Pallet
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -150,35 +145,25 @@ pub mod pallet {
 		/// initialization.
 		type DisabledValidators: DisabledValidators;
 
-		/// The proof of key ownership, used for validating equivocation reports.
-		/// The proof must include the session index and validator count of the
-		/// session at which the equivocation occurred.
-		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
-
-		/// The identification of a key owner, used when reporting equivocations.
-		type KeyOwnerIdentification: Parameter;
-
-		/// A system for proving ownership of keys, i.e. that a given key was part
-		/// of a validator set, needed for validating equivocation reports.
-		type KeyOwnerProofSystem: KeyOwnerProofSystem<
-			(KeyTypeId, AuthorityId),
-			Proof = Self::KeyOwnerProof,
-			IdentificationTuple = Self::KeyOwnerIdentification,
-		>;
-
-		/// The equivocation handling subsystem, defines methods to report an
-		/// offence (after the equivocation has been validated) and for submitting a
-		/// transaction to report an equivocation (from an offchain context).
-		/// NOTE: when enabling equivocation handling (i.e. this type isn't set to
-		/// `()`) you must use this pallet's `ValidateUnsigned` in the runtime
-		/// definition.
-		type HandleEquivocation: HandleEquivocation<Self>;
-
+		/// Helper for weights computations
 		type WeightInfo: WeightInfo;
 
 		/// Max number of authorities allowed
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// The proof of key ownership, used for validating equivocation reports.
+		/// The proof must include the session index and validator count of the
+		/// session at which the equivocation occurred.
+		type KeyOwnerProof: Parameter + GetSessionNumber + GetValidatorCount;
+
+		/// The equivocation handling subsystem, defines methods to check/report an
+		/// offence and for submitting a transaction to report an equivocation
+		/// (from an offchain context).
+		type EquivocationReportSystem: OffenceReportSystem<
+			Option<Self::AccountId>,
+			(EquivocationProof<Self::Header>, Self::KeyOwnerProof),
+		>;
 	}
 
 	#[pallet::error]
@@ -233,7 +218,7 @@ pub mod pallet {
 	// variable to its underlying value.
 	#[pallet::storage]
 	#[pallet::getter(fn randomness)]
-	pub type Randomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type Randomness<T> = StorageValue<_, BabeRandomness, ValueQuery>;
 
 	/// Pending epoch configuration change that will be applied when the next epoch is enacted.
 	#[pallet::storage]
@@ -241,7 +226,7 @@ pub mod pallet {
 
 	/// Next epoch randomness.
 	#[pallet::storage]
-	pub(super) type NextRandomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub(super) type NextRandomness<T> = StorageValue<_, BabeRandomness, ValueQuery>;
 
 	/// Next epoch authorities.
 	#[pallet::storage]
@@ -269,7 +254,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		u32,
-		BoundedVec<schnorrkel::Randomness, ConstU32<UNDER_CONSTRUCTION_SEGMENT_LENGTH>>,
+		BoundedVec<BabeRandomness, ConstU32<UNDER_CONSTRUCTION_SEGMENT_LENGTH>>,
 		ValueQuery,
 	>;
 
@@ -285,8 +270,7 @@ pub mod pallet {
 	/// It is set in `on_finalize`, before it will contain the value from the last block.
 	#[pallet::storage]
 	#[pallet::getter(fn author_vrf_randomness)]
-	pub(super) type AuthorVrfRandomness<T> =
-		StorageValue<_, Option<schnorrkel::Randomness>, ValueQuery>;
+	pub(super) type AuthorVrfRandomness<T> = StorageValue<_, Option<BabeRandomness>, ValueQuery>;
 
 	/// The block numbers when the last and current epoch have started, respectively `N-1` and
 	/// `N`.
@@ -330,7 +314,7 @@ pub mod pallet {
 	pub(super) type SkippedEpochs<T> =
 		StorageValue<_, BoundedVec<(u64, SessionIndex), ConstU32<100>>, ValueQuery>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
@@ -373,31 +357,29 @@ pub mod pallet {
 					);
 				}
 
-				if let Some((vrf_output, vrf_proof)) = pre_digest.vrf() {
-					let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
+				if let Some(signature) = pre_digest.vrf_signature() {
+					let randomness: Option<BabeRandomness> = Authorities::<T>::get()
 						.get(authority_index as usize)
 						.and_then(|(authority, _)| {
-							schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
-						})
-						.and_then(|pubkey| {
-							let current_slot = CurrentSlot::<T>::get();
-
-							let transcript = sp_consensus_babe::make_transcript(
+							let public = authority.as_inner_ref();
+							let transcript = sp_consensus_babe::make_vrf_transcript(
 								&Self::randomness(),
-								current_slot,
+								CurrentSlot::<T>::get(),
 								EpochIndex::<T>::get(),
 							);
 
 							// NOTE: this is verified by the client when importing the block, before
-							// execution. we don't run the verification again here to avoid slowing
+							// execution. We don't run the verification again here to avoid slowing
 							// down the runtime.
-							debug_assert!(pubkey
-								.vrf_verify(transcript.clone(), vrf_output, vrf_proof)
-								.is_ok());
+							debug_assert!({
+								use sp_core::crypto::VrfPublic;
+								public.vrf_verify(&transcript.clone().into_sign_data(), &signature)
+							});
 
-							vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
-						})
-						.map(|inout| inout.make_bytes(sp_consensus_babe::BABE_VRF_INOUT_CONTEXT));
+							public
+								.make_bytes(RANDOMNESS_VRF_CONTEXT, &transcript, &signature.output)
+								.ok()
+						});
 
 					if let Some(randomness) = pre_digest.is_primary().then(|| randomness).flatten()
 					{
@@ -429,8 +411,12 @@ pub mod pallet {
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
-
-			Self::do_report_equivocation(Some(reporter), *equivocation_proof, key_owner_proof)
+			T::EquivocationReportSystem::process_evidence(
+				Some(reporter),
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
 		}
 
 		/// Report authority equivocation/misbehavior. This method will verify
@@ -451,12 +437,11 @@ pub mod pallet {
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
-
-			Self::do_report_equivocation(
-				T::HandleEquivocation::block_author(),
-				*equivocation_proof,
-				key_owner_proof,
-			)
+			T::EquivocationReportSystem::process_evidence(
+				None,
+				(*equivocation_proof, key_owner_proof),
+			)?;
+			Ok(Pays::No.into())
 		}
 
 		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
@@ -495,9 +480,6 @@ pub mod pallet {
 		}
 	}
 }
-
-/// A BABE public key
-pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
 impl<T: Config> FindAuthor<u32> for Pallet<T> {
 	fn find_author<'a, I>(digests: I) -> Option<u32>
@@ -749,7 +731,7 @@ impl<T: Config> Pallet<T> {
 		<frame_system::Pallet<T>>::deposit_log(log)
 	}
 
-	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
+	fn deposit_randomness(randomness: &BabeRandomness) {
 		let segment_idx = SegmentIndex::<T>::get();
 		let mut segment = UnderConstruction::<T>::get(&segment_idx);
 		if segment.try_push(*randomness).is_ok() {
@@ -843,7 +825,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Call this function exactly once when an epoch changes, to update the
 	/// randomness. Returns the new randomness.
-	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
+	fn randomness_change_epoch(next_epoch_index: u64) -> BabeRandomness {
 		let this_randomness = NextRandomness::<T>::get();
 		let segment_idx: u32 = SegmentIndex::<T>::mutate(|s| sp_std::mem::replace(s, 0));
 
@@ -866,7 +848,7 @@ impl<T: Config> Pallet<T> {
 	/// This function is only well defined for epochs that actually existed,
 	/// e.g. if we skipped from epoch 10 to 20 then a call for epoch 15 (which
 	/// didn't exist) will return an incorrect session index.
-	fn session_index_for_epoch(epoch_index: u64) -> SessionIndex {
+	pub(crate) fn session_index_for_epoch(epoch_index: u64) -> SessionIndex {
 		let skipped_epochs = SkippedEpochs::<T>::get();
 		match skipped_epochs.binary_search_by_key(&epoch_index, |(epoch_index, _)| *epoch_index) {
 			// we have an exact match so we just return the given session index
@@ -890,50 +872,6 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn do_report_equivocation(
-		reporter: Option<T::AccountId>,
-		equivocation_proof: EquivocationProof<T::Header>,
-		key_owner_proof: T::KeyOwnerProof,
-	) -> DispatchResultWithPostInfo {
-		let offender = equivocation_proof.offender.clone();
-		let slot = equivocation_proof.slot;
-
-		// validate the equivocation proof
-		if !sp_consensus_babe::check_equivocation_proof(equivocation_proof) {
-			return Err(Error::<T>::InvalidEquivocationProof.into())
-		}
-
-		let validator_set_count = key_owner_proof.validator_count();
-		let session_index = key_owner_proof.session();
-
-		let epoch_index = *slot.saturating_sub(GenesisSlot::<T>::get()) / T::EpochDuration::get();
-
-		// check that the slot number is consistent with the session index
-		// in the key ownership proof (i.e. slot is for that epoch)
-		if Self::session_index_for_epoch(epoch_index) != session_index {
-			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
-		}
-
-		// check the membership proof and extract the offender's id
-		let key = (sp_consensus_babe::KEY_TYPE, offender);
-		let offender = T::KeyOwnerProofSystem::check_proof(key, key_owner_proof)
-			.ok_or(Error::<T>::InvalidKeyOwnershipProof)?;
-
-		let offence =
-			BabeEquivocationOffence { slot, validator_set_count, offender, session_index };
-
-		let reporters = match reporter {
-			Some(id) => vec![id],
-			None => vec![],
-		};
-
-		T::HandleEquivocation::report_offence(reporters, offence)
-			.map_err(|_| Error::<T>::DuplicateOffenceReport)?;
-
-		// waive the fee since the report is valid and beneficial
-		Ok(Pays::No.into())
-	}
-
 	/// Submits an extrinsic to report an equivocation. This method will create
 	/// an unsigned extrinsic with a call to `report_equivocation_unsigned` and
 	/// will push the transaction to the pool. Only useful in an offchain
@@ -942,11 +880,7 @@ impl<T: Config> Pallet<T> {
 		equivocation_proof: EquivocationProof<T::Header>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
-		T::HandleEquivocation::submit_unsigned_equivocation_report(
-			equivocation_proof,
-			key_owner_proof,
-		)
-		.ok()
+		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 }
 
@@ -1050,12 +984,12 @@ where
 //
 // an optional size hint as to how many VRF outputs there were may be provided.
 fn compute_randomness(
-	last_epoch_randomness: schnorrkel::Randomness,
+	last_epoch_randomness: BabeRandomness,
 	epoch_index: u64,
-	rho: impl Iterator<Item = schnorrkel::Randomness>,
+	rho: impl Iterator<Item = BabeRandomness>,
 	rho_size_hint: Option<usize>,
-) -> schnorrkel::Randomness {
-	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * VRF_OUTPUT_LENGTH);
+) -> BabeRandomness {
+	let mut s = Vec::with_capacity(40 + rho_size_hint.unwrap_or(0) * RANDOMNESS_LENGTH);
 	s.extend_from_slice(&last_epoch_randomness);
 	s.extend_from_slice(&epoch_index.to_le_bytes());
 

@@ -51,13 +51,12 @@ frame_support::construct_runtime!(
 
 mod mock_democracy {
 	pub use pallet::*;
-	#[frame_support::pallet]
+	#[frame_support::pallet(dev_mode)]
 	pub mod pallet {
 		use frame_support::pallet_prelude::*;
 		use frame_system::pallet_prelude::*;
 
 		#[pallet::pallet]
-		#[pallet::generate_store(pub(super) trait Store)]
 		pub struct Pallet<T>(_);
 
 		#[pallet::config]
@@ -69,8 +68,6 @@ mod mock_democracy {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
-			#[pallet::call_index(0)]
-			#[pallet::weight(0)]
 			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
 				T::ExternalMajorityOrigin::ensure_origin(origin)?;
 				Self::deposit_event(Event::<T>::ExternalProposed);
@@ -87,14 +84,18 @@ mod mock_democracy {
 }
 
 pub type MaxMembers = ConstU32<100>;
+type AccountId = u64;
 
 parameter_types! {
 	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 257;
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
+	pub static MaxProposalWeight: Weight = default_max_proposal_weight();
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
@@ -103,7 +104,7 @@ impl frame_system::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
@@ -128,6 +129,7 @@ impl Config<Instance1> for Test {
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 impl Config<Instance2> for Test {
 	type RuntimeOrigin = RuntimeOrigin;
@@ -139,6 +141,7 @@ impl Config<Instance2> for Test {
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 impl mock_democracy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -154,25 +157,50 @@ impl Config for Test {
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities = GenesisConfig {
-		collective: pallet_collective::GenesisConfig {
-			members: vec![1, 2, 3],
-			phantom: Default::default(),
-		},
-		collective_majority: pallet_collective::GenesisConfig {
-			members: vec![1, 2, 3, 4, 5],
-			phantom: Default::default(),
-		},
-		default_collective: Default::default(),
+pub struct ExtBuilder {
+	collective_members: Vec<AccountId>,
+}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self { collective_members: vec![1, 2, 3] }
 	}
-	.build_storage()
-	.unwrap()
-	.into();
-	ext.execute_with(|| System::set_block_number(1));
-	ext
+}
+
+impl ExtBuilder {
+	fn set_collective_members(mut self, collective_members: Vec<AccountId>) -> Self {
+		self.collective_members = collective_members;
+		self
+	}
+
+	pub fn build(self) -> sp_io::TestExternalities {
+		let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
+			collective: pallet_collective::GenesisConfig {
+				members: self.collective_members,
+				phantom: Default::default(),
+			},
+			collective_majority: pallet_collective::GenesisConfig {
+				members: vec![1, 2, 3, 4, 5],
+				phantom: Default::default(),
+			},
+			default_collective: Default::default(),
+		}
+		.build_storage()
+		.unwrap()
+		.into();
+		ext.execute_with(|| System::set_block_number(1));
+		ext
+	}
+
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(|| {
+			test();
+			Collective::do_try_state().unwrap();
+		})
+	}
 }
 
 fn make_proposal(value: u64) -> RuntimeCall {
@@ -185,17 +213,62 @@ fn record(event: RuntimeEvent) -> EventRecord<RuntimeEvent, H256> {
 	EventRecord { phase: Phase::Initialization, event, topics: vec![] }
 }
 
+fn default_max_proposal_weight() -> Weight {
+	sp_runtime::Perbill::from_percent(80) * BlockWeights::get().max_block
+}
+
 #[test]
 fn motions_basic_environment_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(Collective::members(), vec![1, 2, 3]);
 		assert_eq!(*Collective::proposals(), Vec::<H256>::new());
 	});
 }
 
 #[test]
+fn initialize_members_sorts_members() {
+	let unsorted_members = vec![3, 2, 4, 1];
+	let expected_members = vec![1, 2, 3, 4];
+	ExtBuilder::default()
+		.set_collective_members(unsorted_members)
+		.build_and_execute(|| {
+			assert_eq!(Collective::members(), expected_members);
+		});
+}
+
+#[test]
+fn proposal_weight_limit_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		let proposal = make_proposal(42);
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+
+		assert_ok!(Collective::propose(
+			RuntimeOrigin::signed(1),
+			2,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+
+		// set a small limit for max proposal weight.
+		MaxProposalWeight::set(Weight::from_parts(1, 1));
+		assert_noop!(
+			Collective::propose(
+				RuntimeOrigin::signed(1),
+				2,
+				Box::new(proposal.clone()),
+				proposal_len
+			),
+			Error::<Test, Instance1>::WrongProposalWeight
+		);
+
+		// reset the max weight to default.
+		MaxProposalWeight::set(default_max_proposal_weight());
+	});
+}
+
+#[test]
 fn close_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -263,7 +336,7 @@ fn close_works() {
 
 #[test]
 fn proposal_weight_limit_works_on_approve() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = RuntimeCall::Collective(crate::Call::set_members {
 			new_members: vec![1, 2, 3],
 			prime: None,
@@ -288,7 +361,7 @@ fn proposal_weight_limit_works_on_approve() {
 				RuntimeOrigin::signed(4),
 				hash,
 				0,
-				proposal_weight - Weight::from_ref_time(100),
+				proposal_weight - Weight::from_parts(100, 0),
 				proposal_len
 			),
 			Error::<Test, Instance1>::WrongProposalWeight
@@ -305,7 +378,7 @@ fn proposal_weight_limit_works_on_approve() {
 
 #[test]
 fn proposal_weight_limit_ignored_on_disapprove() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = RuntimeCall::Collective(crate::Call::set_members {
 			new_members: vec![1, 2, 3],
 			prime: None,
@@ -327,7 +400,7 @@ fn proposal_weight_limit_ignored_on_disapprove() {
 			RuntimeOrigin::signed(4),
 			hash,
 			0,
-			proposal_weight - Weight::from_ref_time(100),
+			proposal_weight - Weight::from_parts(100, 0),
 			proposal_len
 		));
 	})
@@ -335,7 +408,7 @@ fn proposal_weight_limit_ignored_on_disapprove() {
 
 #[test]
 fn close_with_prime_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -403,7 +476,7 @@ fn close_with_prime_works() {
 
 #[test]
 fn close_with_voting_prime_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -473,7 +546,7 @@ fn close_with_voting_prime_works() {
 
 #[test]
 fn close_with_no_prime_but_majority_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -553,7 +626,7 @@ fn close_with_no_prime_but_majority_works() {
 
 #[test]
 fn removal_of_old_voters_votes_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash = BlakeTwo256::hash_of(&proposal);
@@ -601,7 +674,7 @@ fn removal_of_old_voters_votes_works() {
 
 #[test]
 fn removal_of_old_voters_votes_works_with_set_members() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash = BlakeTwo256::hash_of(&proposal);
@@ -659,7 +732,7 @@ fn removal_of_old_voters_votes_works_with_set_members() {
 
 #[test]
 fn propose_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash = proposal.blake2_256().into();
@@ -691,7 +764,7 @@ fn propose_works() {
 
 #[test]
 fn limit_active_proposals() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		for i in 0..MaxProposals::get() {
 			let proposal = make_proposal(i as u64);
 			let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
@@ -718,7 +791,7 @@ fn limit_active_proposals() {
 
 #[test]
 fn correct_validate_and_get_proposal() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = RuntimeCall::Collective(crate::Call::set_members {
 			new_members: vec![1, 2, 3],
 			prime: None,
@@ -750,7 +823,7 @@ fn correct_validate_and_get_proposal() {
 			Collective::validate_and_get_proposal(
 				&hash,
 				length,
-				weight - Weight::from_ref_time(10)
+				weight - Weight::from_parts(10, 0)
 			),
 			Error::<Test, Instance1>::WrongProposalWeight
 		);
@@ -764,7 +837,7 @@ fn correct_validate_and_get_proposal() {
 
 #[test]
 fn motions_ignoring_non_collective_proposals_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		assert_noop!(
@@ -781,7 +854,7 @@ fn motions_ignoring_non_collective_proposals_works() {
 
 #[test]
 fn motions_ignoring_non_collective_votes_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash: H256 = proposal.blake2_256().into();
@@ -800,7 +873,7 @@ fn motions_ignoring_non_collective_votes_works() {
 
 #[test]
 fn motions_ignoring_bad_index_collective_vote_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		System::set_block_number(3);
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
@@ -820,7 +893,7 @@ fn motions_ignoring_bad_index_collective_vote_works() {
 
 #[test]
 fn motions_vote_after_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash: H256 = proposal.blake2_256().into();
@@ -889,7 +962,7 @@ fn motions_vote_after_works() {
 
 #[test]
 fn motions_all_first_vote_free_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash: H256 = proposal.blake2_256().into();
@@ -947,7 +1020,7 @@ fn motions_all_first_vote_free_works() {
 
 #[test]
 fn motions_reproposing_disapproved_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -979,7 +1052,7 @@ fn motions_reproposing_disapproved_works() {
 
 #[test]
 fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = RuntimeCall::Democracy(mock_democracy::Call::external_propose_majority {});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -1109,7 +1182,7 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 
 #[test]
 fn motions_disapproval_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -1168,7 +1241,7 @@ fn motions_disapproval_works() {
 
 #[test]
 fn motions_approval_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -1229,7 +1302,7 @@ fn motions_approval_works() {
 
 #[test]
 fn motion_with_no_votes_closes_with_disapproval() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -1290,7 +1363,7 @@ fn close_disapprove_does_not_care_about_weight_or_len() {
 	// This test confirms that if you close a proposal that would be disapproved,
 	// we do not care about the proposal length or proposal weight since it will
 	// not be read from storage or executed.
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash: H256 = proposal.blake2_256().into();
@@ -1322,7 +1395,7 @@ fn close_disapprove_does_not_care_about_weight_or_len() {
 
 #[test]
 fn disapprove_proposal_works() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		let proposal = make_proposal(42);
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let hash: H256 = proposal.blake2_256().into();
@@ -1368,6 +1441,19 @@ fn disapprove_proposal_works() {
 	})
 }
 
+#[should_panic(expected = "Members length cannot exceed MaxMembers.")]
+#[test]
+fn genesis_build_panics_with_too_many_members() {
+	let max_members: u32 = MaxMembers::get();
+	let too_many_members = (1..=max_members as u64 + 1).collect::<Vec<AccountId>>();
+	pallet_collective::GenesisConfig::<Test> {
+		members: too_many_members,
+		phantom: Default::default(),
+	}
+	.build_storage()
+	.unwrap();
+}
+
 #[test]
 #[should_panic(expected = "Members cannot contain duplicate accounts.")]
 fn genesis_build_panics_with_duplicate_members() {
@@ -1381,7 +1467,7 @@ fn genesis_build_panics_with_duplicate_members() {
 
 #[test]
 fn migration_v4() {
-	new_test_ext().execute_with(|| {
+	ExtBuilder::default().build_and_execute(|| {
 		use frame_support::traits::PalletInfoAccess;
 
 		let old_pallet = "OldCollective";

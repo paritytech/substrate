@@ -62,7 +62,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -97,7 +96,7 @@ impl<T: Config> Pallet<T> {
 	/// Prune historical stored session roots up to (but not including)
 	/// `up_to`.
 	pub fn prune_up_to(up_to: SessionIndex) {
-		<Self as Store>::StoredRange::mutate(|range| {
+		StoredRange::<T>::mutate(|range| {
 			let (start, end) = match *range {
 				Some(range) => range,
 				None => return, // nothing to prune.
@@ -109,7 +108,7 @@ impl<T: Config> Pallet<T> {
 				return // out of bounds. harmless.
 			}
 
-			(start..up_to).for_each(<Self as Store>::HistoricalSessions::remove);
+			(start..up_to).for_each(HistoricalSessions::<T>::remove);
 
 			let new_start = up_to;
 			*range = if new_start == end {

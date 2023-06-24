@@ -18,15 +18,17 @@
 
 use futures::channel::oneshot;
 use libp2p::{Multiaddr, PeerId};
+
 use sc_consensus::{BlockImportError, BlockImportStatus};
-use sc_network_common::{
+use sc_network::{
 	config::MultiaddrWithPeerId,
-	protocol::ProtocolName,
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{NetworkPeers, NetworkRequest, NetworkSyncForkRequest},
+	types::ProtocolName,
+	NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
+	NotificationSenderError, NotificationSenderT, ReputationChange,
 };
-use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
+
 use std::collections::HashSet;
 
 mockall::mock! {
@@ -98,12 +100,6 @@ mockall::mock! {
 			peers: HashSet<Multiaddr>,
 		) -> Result<(), String>;
 		fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
-		fn add_to_peers_set(
-			&self,
-			protocol: ProtocolName,
-			peers: HashSet<Multiaddr>,
-		) -> Result<(), String>;
-		fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
 		fn sync_num_connected(&self) -> usize;
 	}
 
@@ -124,5 +120,15 @@ mockall::mock! {
 			tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 			connect: IfDisconnected,
 		);
+	}
+
+	impl NetworkNotification for Network {
+		fn write_notification(&self, target: PeerId, protocol: ProtocolName, message: Vec<u8>);
+		fn notification_sender(
+			&self,
+			target: PeerId,
+			protocol: ProtocolName,
+		) -> Result<Box<dyn NotificationSenderT>, NotificationSenderError>;
+		fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>);
 	}
 }
