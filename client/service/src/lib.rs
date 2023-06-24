@@ -162,7 +162,7 @@ async fn build_network_future<
 	sync_service: Arc<SyncingService<B>>,
 	announce_imported_blocks: bool,
 ) {
-	let mut imported_blocks_stream = client.import_notification_stream().fuse();
+	let mut imported_blocks_stream = client.every_import_notification_stream().fuse();
 
 	// Stream of finalized blocks reported by the client.
 	let mut finality_notification_stream = client.finality_notification_stream().fuse();
