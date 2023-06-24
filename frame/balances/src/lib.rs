@@ -222,7 +222,6 @@ pub mod pallet {
 		#[frame_support::register_default_impl(TestDefaultConfig)]
 		impl DefaultConfig for TestDefaultConfig {
 			type Balance = u64;
-			type ExistentialDeposit = ();
 			type MaxLocks = ConstU32<{ u32::MAX }>;
 			type MaxReserves = ConstU32<{ u32::MAX }>;
 			type MaxFreezes = ConstU32<{ u32::MAX }>;
@@ -238,7 +237,6 @@ pub mod pallet {
 		#[frame_support::register_default_impl(SolochainDefaultConfig)]
 		impl DefaultConfig for SolochainDefaultConfig {
 			type Balance = u128;
-			type ExistentialDeposit = ();
 			type MaxLocks = ConstU32<{ 128 }>;
 			type MaxReserves = ConstU32<{ 128 }>;
 			type MaxFreezes = ConstU32<{ 128 }>;
@@ -286,6 +284,7 @@ pub mod pallet {
 		///
 		/// Bottom line: Do yourself a favour and make it at least one!
 		#[pallet::constant]
+		#[pallet::no_default]
 		type ExistentialDeposit: Get<Self::Balance>;
 
 		/// The means of storing the balances of an account.

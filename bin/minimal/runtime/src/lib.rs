@@ -13,10 +13,6 @@ use frame::{
 		weights::FixedFee,
 	},
 };
-
-// TODO: this is temp
-use frame::deps::frame_support;
-
 #[runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("minimal-runtime"),
@@ -89,6 +85,7 @@ impl pallet_balances::Config for Runtime {
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type DustRemoval = ();
 	type AccountStore = System;
+	type ExistentialDeposit = ConstU128<1>;
 }
 
 #[derive_impl(pallet_sudo::config_preludes::SolochainDefaultConfig as pallet_sudo::DefaultConfig)]

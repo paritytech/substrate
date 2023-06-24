@@ -66,16 +66,18 @@ pub mod prelude {
 	pub use sp_std::prelude::*;
 }
 
+pub use frame_support::log;
+
 #[cfg(feature = "std")]
 pub mod testing_prelude {
-	#[cfg(feature = "runtime")]
-	pub use super::runtime::testing_prelude::*;
+	pub use super::runtime::{prelude::*, testing_prelude::*};
 
 	pub use frame_support::{
 		assert_err, assert_err_ignore_postinfo, assert_error_encoded_size, assert_noop, assert_ok,
 		assert_storage_noop, derive_impl, ord_parameter_types, parameter_types,
 		parameter_types_impl_thread_local, storage_alias,
 	};
+
 	pub use frame_system::{self, mocking::*};
 	pub use sp_io::TestExternalities as TestState;
 }
@@ -117,12 +119,15 @@ pub mod derive {
 
 /// types that are often needed to amalgamate a real runtime. In principle, this is very similar to
 /// [`test`], but it contains production-ready types, as opposed to mocks.
-#[cfg(feature = "runtime")]
+#[cfg(any(feature = "runtime", feature = "std"))]
 pub mod runtime {
 	pub mod prelude {
 		pub use frame_executive::*;
 		pub use frame_support::{
-			construct_runtime, derive_impl, parameter_types,
+			self, // TODO: this is a temporary hack.
+			construct_runtime,
+			derive_impl,
+			parameter_types,
 			traits::{
 				ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
 				ConstU32, ConstU64, ConstU8,

@@ -51,6 +51,8 @@ pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 /// for `frame-support` output will for example be `frame_support`.
 pub fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Path, Error> {
 	if let Ok(FoundCrate::Name(name)) = crate_name(&"frame") {
+		// TODO: add tes to make sure `frame` always contains
+		// `frame::deps::frame_support/frame_system`.
 		let path = format!("{}::deps::{}", name, def_crate.to_string().replace("-", "_"));
 		let path = syn::parse_str::<syn::Path>(&path)?;
 		return Ok(path)
@@ -73,6 +75,9 @@ pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream
 	let mod_name = generate_hidden_includes_mod_name(unique_id);
 
 	if let Ok(FoundCrate::Name(name)) = crate_name(&"frame") {
+		// TODO: add tes to make sure `frame` always contains
+		// `frame::deps::frame_support/frame_system`.
+		// TODO: handle error.
 		let path = format!("{}::deps::{}", name, def_crate.to_string().replace("-", "_"));
 		let path = syn::parse_str::<syn::Path>(&path).unwrap();
 		return quote::quote!(
