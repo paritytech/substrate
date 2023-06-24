@@ -7266,13 +7266,17 @@ dependencies = [
 name = "pallet-society"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-support-test",
  "frame-system",
+ "hex-literal",
+ "log",
  "pallet-balances",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
