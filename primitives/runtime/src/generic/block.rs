@@ -91,7 +91,6 @@ where
 	Header: HeaderT
 {
 	type HeaderT = Header;
-	type HashT = <Self::HeaderT as traits::Header>::Hash;
 }
 
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>

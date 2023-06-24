@@ -248,7 +248,6 @@ impl<
 	> traits::HeaderProvider for Block<Xt>
 {
 	type HeaderT = Header;
-	type HashT = <Header as traits::Header>::Hash;
 }
 
 impl<

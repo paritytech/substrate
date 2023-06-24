@@ -1216,16 +1216,14 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + Ty
 /// Something that provides the Header Type.
 pub trait HeaderProvider {
 	/// Header type.
-	type HeaderT: Header<Hash = Self::HashT>;
-	/// Block hash type.
-	type HashT: HashOutput;
+	type HeaderT: Header;
 }
 
 /// Something which fulfills the abstract idea of a Substrate block. It has types for
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: HeaderProvider<HeaderT = <Self as Block>::Header, HashT = <Self as Block>::Hash> + Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Block: HeaderProvider<HeaderT = <Self as Block>::Header> + Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Type for extrinsics.
 	type Extrinsic: Debug
 		+ Clone

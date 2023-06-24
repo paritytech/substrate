@@ -1821,5 +1821,5 @@ pub mod pallet_prelude {
 	pub type HeaderFor<T> = <<T as crate::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
 
 	/// Type alias for the `BlockNumber` associated type of system config.
-	pub type BlockNumberFor<T> = sp_runtime::traits::NumberFor<<T as crate::Config>::Block>;
+	pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 }
