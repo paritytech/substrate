@@ -1238,30 +1238,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Migrates an account's `RewardDestination` in `Payee` to `PayeeDestination` in `Payees`,
-		/// if a record exists and if it has not already been migrated.
-		///
-		/// Effects will be felt instantly (as soon as this function is completed successfully).
-		///
-		/// The dispatch origin for this call can be signed by any account.
-		///
-		/// ## Complexity
-		/// - O(1)
-		/// - Independent of the arguments. Insignificant complexity.
-		/// - Contains a limited number of reads.
-		/// - Writes are limited to the `who` account key.
-		#[pallet::call_index(27)]
-		#[pallet::weight(T::WeightInfo::set_payee())]
-		pub fn update_payee(origin: OriginFor<T>, payee: T::AccountId) -> DispatchResult {
-			let _ = ensure_signed(origin)?;
-			ensure!(
-				Payee::<T>::contains_key(&payee) && !Payees::<T>::contains_key(&payee),
-				Error::<T>::BadUpdate
-			);
-			Payees::<T>::insert(payee.clone(), Payee::<T>::get(&payee).to_payee_destination(payee));
-			Ok(())
-		}
-
 		/// (Re-)sets the controller of a stash to the stash itself. This function previously
 		/// accepted a `controller` argument to set the controller to an account other than the
 		/// stash itself. This functionality has now been removed, now only setting the controller
@@ -1808,6 +1784,30 @@ pub mod pallet {
 		pub fn set_min_commission(origin: OriginFor<T>, new: Perbill) -> DispatchResult {
 			T::AdminOrigin::ensure_origin(origin)?;
 			MinCommission::<T>::put(new);
+			Ok(())
+		}
+
+		/// Migrates an account's `RewardDestination` in `Payee` to `PayeeDestination` in `Payees`,
+		/// if a record exists and if it has not already been migrated.
+		///
+		/// Effects will be felt instantly (as soon as this function is completed successfully).
+		///
+		/// The dispatch origin for this call can be signed by any account.
+		///
+		/// ## Complexity
+		/// - O(1)
+		/// - Independent of the arguments. Insignificant complexity.
+		/// - Contains a limited number of reads.
+		/// - Writes are limited to the `who` account key.
+		#[pallet::call_index(26)]
+		#[pallet::weight(T::WeightInfo::update_payee())]
+		pub fn update_payee(origin: OriginFor<T>, payee: T::AccountId) -> DispatchResult {
+			let _ = ensure_signed(origin)?;
+			ensure!(
+				Payee::<T>::contains_key(&payee) && !Payees::<T>::contains_key(&payee),
+				Error::<T>::BadUpdate
+			);
+			Payees::<T>::insert(payee.clone(), Payee::<T>::get(&payee).to_payee_destination(payee));
 			Ok(())
 		}
 	}
