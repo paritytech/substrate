@@ -105,7 +105,11 @@ pub mod utils {
 
 						match sink.send_timeout(msg, std::time::Duration::from_secs(60)).await {
 							Ok(_) => (),
-							Err(SendTimeoutError::Closed(_)) | Err(SendTimeoutError::Timeout(_)) => break SubscriptionResponse::Closed,
+							Err(SendTimeoutError::Closed(_)) => break SubscriptionResponse::Closed,
+							Err(SendTimeoutError::Timeout(_)) => {
+								log::warn!(target: "rpc", "dropping subscription; timeout");
+								break SubscriptionResponse::Closed
+							}
 						}
 					}
 				}
