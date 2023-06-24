@@ -20,26 +20,26 @@
 #![cfg(feature = "try-runtime")]
 
 use assert_cmd::cargo::cargo_bin;
+use node_primitives::Hash;
 use regex::Regex;
-use std::{
-	process::{self},
-	time::Duration,
-};
+use std::{process, time::Duration};
 use substrate_cli_test_utils as common;
 use tokio::process::{Child, Command};
 
 #[tokio::test]
-async fn follow_chain_works() {
+async fn block_execution_works() {
 	// Build substrate so binaries used in the test use the latest code.
 	common::build_substrate(&["--features=try-runtime"]);
 
 	common::run_with_timeout(Duration::from_secs(60), async move {
-		fn start_follow(ws_url: &str) -> Child {
+		fn execute_block(ws_url: &str, at: Hash) -> Child {
 			Command::new(cargo_bin("substrate"))
 				.stdout(process::Stdio::piped())
 				.stderr(process::Stdio::piped())
 				.args(&["try-runtime", "--runtime=existing"])
-				.args(&["follow-chain", format!("--uri={}", ws_url).as_str()])
+				.args(&["execute-block"])
+				.args(&["live", format!("--uri={}", ws_url).as_str()])
+				.args(&["--at", format!("{:?}", at).as_str()])
 				.kill_on_drop(true)
 				.spawn()
 				.unwrap()
@@ -48,15 +48,22 @@ async fn follow_chain_works() {
 		// Start a node and wait for it to begin finalizing blocks
 		let mut node = common::KillChildOnDrop(common::start_node());
 		let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
-		common::wait_n_finalized_blocks(1, &ws_url).await;
+		common::wait_n_finalized_blocks(3, &ws_url).await;
 
-		// Kick off the follow-chain process and wait for it to process at least 3 blocks.
-		let mut follow = start_follow(&ws_url);
-		let re = Regex::new(r#".*executed block ([3-9]|[1-9]\d+).*"#).unwrap();
+		let block_number = 1;
+		let block_hash = common::block_hash(block_number, &ws_url).await.unwrap();
+
+		// Try to execute the block.
+		let mut block_execution = execute_block(&ws_url, block_hash);
+
+		// The execute-block command is actually executing the next block.
+		let expected_output =
+			format!(r#".*Block #{} successfully executed"#, block_number.saturating_add(1));
+		let re = Regex::new(expected_output.as_str()).unwrap();
 		let matched =
-			common::wait_for_stream_pattern_match(follow.stderr.take().unwrap(), re).await;
+			common::wait_for_stream_pattern_match(block_execution.stderr.take().unwrap(), re).await;
 
-		// Assert that the follow-chain process has followed at least 3 blocks.
+		// Assert that the block-execution process has executed a block.
 		assert!(matched.is_ok());
 	})
 	.await;
