@@ -743,9 +743,10 @@ fn update_payee_works() {
 			testing_utils::create_stash_controller::<Test>(12, 13, RewardDestination::Controller)
 				.unwrap();
 
+		// When
 		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(controller), RewardDestination::Stash));
-		assert!(Payee::<Test>::contains_key(controller));
-		assert!(Payees::<Test>::contains_key(controller));
+		assert!(Payee::<Test>::contains_key(stash));
+		assert!(Payees::<Test>::contains_key(stash));
 
 		// Then
 		assert_noop!(
@@ -753,23 +754,45 @@ fn update_payee_works() {
 			Error::<Test>::BadUpdate
 		);
 
-		// Successfully sets yet to be inserted `Payees` record from a `Payee` record.
+		// Successfully sets yet to be inserted `Payees` record from a `Payee` record of
+		// `RewardDestination::Controller`.
 
 		// Given
 		let (stash, controller) =
 			testing_utils::create_stash_controller::<Test>(14, 15, RewardDestination::Controller)
 				.unwrap();
+		Payees::<Test>::remove(stash);
 
-		Payee::<Test>::insert(controller, RewardDestination::Controller);
-		assert_eq!(Payee::<Test>::get(controller), RewardDestination::Controller);
-		assert!(Payee::<Test>::contains_key(controller));
+		assert_eq!(Payee::<Test>::get(stash), RewardDestination::Controller);
+		assert!(Payee::<Test>::contains_key(stash));
+		assert!(!Payees::<Test>::contains_key(stash));
 
 		// When
-		assert_ok!(Staking::update_payee(RuntimeOrigin::signed(stash), controller));
+		assert_ok!(Staking::update_payee(RuntimeOrigin::signed(stash), stash));
 
 		// Then
-		assert_eq!(Payee::<Test>::get(controller), RewardDestination::Controller);
-		assert_eq!(Payees::<Test>::get(controller), PayeeDestination::Free(controller));
+		assert_eq!(Payee::<Test>::get(stash), RewardDestination::Controller);
+		assert_eq!(Payees::<Test>::get(stash), PayeeDestination::Free(controller));
+
+		// Successfully sets yet to be inserted `Payees` record from a `Payee` record of
+		// `RewardDestination::Account(AccountId)`.
+
+		// Given
+		let (stash, _) =
+			testing_utils::create_stash_controller::<Test>(16, 17, RewardDestination::Account(69))
+				.unwrap();
+		Payees::<Test>::remove(stash);
+
+		assert_eq!(Payee::<Test>::get(stash), RewardDestination::Account(69));
+		assert!(Payee::<Test>::contains_key(stash));
+		assert!(!Payees::<Test>::contains_key(stash));
+
+		// When
+		assert_ok!(Staking::update_payee(RuntimeOrigin::signed(stash), stash));
+
+		// Then
+		assert_eq!(Payee::<Test>::get(stash), RewardDestination::Account(69));
+		assert_eq!(Payees::<Test>::get(stash), PayeeDestination::Free(69));
 	});
 }
 
