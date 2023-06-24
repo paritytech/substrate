@@ -705,6 +705,18 @@ fn nominating_and_rewards_should_work() {
 }
 
 #[test]
+fn set_payee_also_updates_payee_destination() {
+	ExtBuilder::default().build_and_execute(|| {
+		// When
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(11), RewardDestination::Controller));
+
+		// Then
+		assert_eq!(Payee::<Test>::get(11), RewardDestination::Controller);
+		assert_eq!(Payees::<Test>::get(11), PayeeDestination::Free(11));
+	});
+}
+
+#[test]
 fn nominators_also_get_slashed_pro_rata() {
 	ExtBuilder::default().build_and_execute(|| {
 		mock::start_active_era(1);
