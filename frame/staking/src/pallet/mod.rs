@@ -323,7 +323,7 @@ pub mod pallet {
 	/// Where the reward payment should be made. Keyed by stash.
 	///
 	/// NOTE: Being lazily migrated and deprecated in favour of `Payees`.
-	/// Tracking at https://github.com/paritytech/substrate/issues/14438
+	/// Tracking at <https://github.com/paritytech/substrate/issues/14438>
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn payee)]
