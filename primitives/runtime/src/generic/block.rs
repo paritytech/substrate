@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	codec::{Codec, Decode, Encode},
-	traits::{self, Block as BlockT, Header as HeaderT, MaybeSerialize, NumberFor},
+	traits::{self, Block as BlockT, Header as HeaderT, MaybeSerialize, Member, NumberFor},
 	Justifications,
 };
 use sp_core::RuntimeDebug;
@@ -96,15 +96,7 @@ where
 impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
-	Extrinsic: sp_std::fmt::Debug
-		+ Clone
-		+ Send
-		+ Sync
-		+ Codec
-		+ traits::Extrinsic
-		+ MaybeSerialize
-		+ Eq
-		+ 'static,
+	Extrinsic: Member + Codec + traits::Extrinsic,
 {
 	type Extrinsic = Extrinsic;
 	type Header = Header;

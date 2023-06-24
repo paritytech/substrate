@@ -1225,15 +1225,7 @@ pub trait HeaderProvider {
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: HeaderProvider<HeaderT = <Self as Block>::Header> + Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
 	/// Type for extrinsics.
-	type Extrinsic: Debug
-		+ Clone
-		+ Send
-		+ Sync
-		+ Codec
-		+ Extrinsic
-		+ MaybeSerialize
-		+ Eq
-		+ PartialEq;
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
 	type Header: Header<Hash = Self::Hash>;
 	/// Block hash type.
