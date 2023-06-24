@@ -467,10 +467,12 @@ benchmarks! {
 	set_payee {
 		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
 		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Staked);
+		Payees::<T>::remove(&stash);
 		whitelist_account!(controller);
-	}: _(RawOrigin::Signed(controller), RewardDestination::Controller)
+	}: _(RawOrigin::Signed(controller.clone()), RewardDestination::Controller)
 	verify {
 		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Controller);
+		assert_eq!(Payees::<T>::get(&stash), PayeeDestination::Free(controller));
 	}
 
 	update_payee {
