@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 async-trait = { version = "0.1.57", optional = true }
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 futures-timer = { version = "3.0.2", optional = true }
 log = { version = "0.4.17", optional = true }
 thiserror = { version = "1.0.30", optional = true }
