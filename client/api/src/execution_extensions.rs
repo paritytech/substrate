@@ -99,7 +99,7 @@ pub struct ExecutionExtensions<Block: BlockT> {
 }
 
 impl<Block: BlockT> ExecutionExtensions<Block> {
-	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
+	/// Create new `ExecutionExtensions` given an `extensions_factory`.
 	pub fn new(
 		extensions_factory: Option<Box<dyn ExtensionsFactory<Block>>>,
 		read_runtime_version: Arc<dyn ReadRuntimeVersion>,
