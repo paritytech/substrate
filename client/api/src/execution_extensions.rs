@@ -106,7 +106,7 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 	) -> Self {
 		Self {
 			extensions_factory: extensions_factory
-				.map(|f| RwLock::new(f))
+				.map(RwLock::new)
 				.unwrap_or_else(|| RwLock::new(Box::new(()))),
 			read_runtime_version,
 		}
