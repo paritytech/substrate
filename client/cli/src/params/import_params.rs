@@ -168,7 +168,7 @@ impl ExecutionStrategiesParams {
 		] {
 			if param.is_some() {
 				eprintln!(
-					"CLI parameter `--{name}` is deprecated and will be removed in the future!"
+					"CLI parameter `--{name}` has no effect anymore and will be removed in the future!"
 				);
 			}
 		}
