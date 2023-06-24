@@ -70,10 +70,7 @@ impl<T> NetworkProvider for T where T: NetworkStateInfo + NetworkPeers {}
 /// This type can not be constructed and should only be used when passing `None` as `offchain_db` to
 /// [`OffchainWorkerOptions`] to make the compiler happy.
 #[derive(Clone)]
-pub struct NoOffchainStorage {
-	// Ensure no one can construct this type
-	_priv: (),
-}
+pub enum NoOffchainStorage {}
 
 impl offchain::OffchainStorage for NoOffchainStorage {
 	fn set(&mut self, _: &[u8], _: &[u8], _: &[u8]) {
