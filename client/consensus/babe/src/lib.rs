@@ -1152,10 +1152,10 @@ where
 			// Verification for imported blocks is skipped in two cases:
 			// 1. When importing blocks below the last finalized block during network initial
 			//    synchronization.
-			// 2. When importing whole state we don't calculate epoch descriptor, but rather
-			//    read it from the state after import. We also skip all verifications
-			//    because there's no parent state and we trust the sync module to verify
-			//    that the state is correct and finalized.
+			// 2. When importing whole state we don't calculate epoch descriptor, but rather read it
+			//    from the state after import. We also skip all verifications because there's no
+			//    parent state and we trust the sync module to verify that the state is correct and
+			//    finalized.
 			return Ok(block)
 		}
 

@@ -220,16 +220,16 @@ pub struct OffenceDetails<Reporter, Offender> {
 /// for a typical usage scenario:
 ///
 /// 1. An offence is detected and an evidence is submitted on-chain via the
-///    [`OffenceReportSystem::publish_evidence`] method. This will construct
-///    and submit an extrinsic transaction containing the offence evidence.
+///    [`OffenceReportSystem::publish_evidence`] method. This will construct and submit an extrinsic
+///    transaction containing the offence evidence.
 ///
-/// 2. If the extrinsic is unsigned then the transaction receiver may want to
-///    perform some preliminary checks before further processing. This is a good
-///    place to call the [`OffenceReportSystem::check_evidence`] method.
+/// 2. If the extrinsic is unsigned then the transaction receiver may want to perform some
+///    preliminary checks before further processing. This is a good place to call the
+///    [`OffenceReportSystem::check_evidence`] method.
 ///
-/// 3. Finally the report extrinsic is executed on-chain. This is where the user
-///    calls the [`OffenceReportSystem::process_evidence`] to consume the offence
-///    report and enact any required action.
+/// 3. Finally the report extrinsic is executed on-chain. This is where the user calls the
+///    [`OffenceReportSystem::process_evidence`] to consume the offence report and enact any
+///    required action.
 pub trait OffenceReportSystem<Reporter, Evidence> {
 	/// Longevity, in blocks, for the evidence report validity.
 	///

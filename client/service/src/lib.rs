@@ -37,7 +37,7 @@ mod task_manager;
 use std::{collections::HashMap, net::SocketAddr};
 
 use codec::{Decode, Encode};
-use futures::{channel::mpsc, pin_mut, FutureExt, StreamExt};
+use futures::{pin_mut, FutureExt, StreamExt};
 use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
@@ -111,9 +111,9 @@ impl RpcHandlers {
 	pub async fn rpc_query(
 		&self,
 		json_query: &str,
-	) -> Result<(String, mpsc::UnboundedReceiver<String>), JsonRpseeError> {
+	) -> Result<(String, tokio::sync::mpsc::Receiver<String>), JsonRpseeError> {
 		self.0
-			.raw_json_request(json_query)
+			.raw_json_request(json_query, usize::MAX)
 			.await
 			.map(|(method_res, recv)| (method_res.result, recv))
 	}
@@ -396,6 +396,7 @@ where
 		max_payload_in_mb: config.rpc_max_request_size,
 		max_payload_out_mb: config.rpc_max_response_size,
 		max_subs_per_conn: config.rpc_max_subs_per_conn,
+		message_buffer_capacity: config.rpc_message_buffer_capacity,
 		rpc_api: gen_rpc_module(deny_unsafe(addr, &config.rpc_methods))?,
 		metrics,
 		id_provider: rpc_id_provider,

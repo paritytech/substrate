@@ -20,8 +20,7 @@ use super::{helpers::SyncState, *};
 use assert_matches::assert_matches;
 use futures::prelude::*;
 use jsonrpsee::{
-	core::Error as RpcError,
-	types::{error::CallError, EmptyServerParams as EmptyParams},
+	core::{EmptyServerParams as EmptyParams, Error as RpcError},
 	RpcModule,
 };
 use sc_network::{self, config::Role, PeerId};
@@ -312,7 +311,7 @@ async fn system_network_add_reserved() {
 	let bad_peer_id = ["/ip4/198.51.100.19/tcp/30333"];
 	assert_matches!(
 		api(None).call::<_, ()>("system_addReservedPeer", bad_peer_id).await,
-		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Peer id is missing from the address")
+		Err(RpcError::Call(err)) if err.message().contains("Peer id is missing from the address")
 	);
 }
 
@@ -328,7 +327,7 @@ async fn system_network_remove_reserved() {
 
 	assert_matches!(
 		api(None).call::<_, String>("system_removeReservedPeer", bad_peer_id).await,
-		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("base-58 decode error: provided string contained invalid character '/' at byte 0")
+		Err(RpcError::Call(err)) if err.message().contains("base-58 decode error: provided string contained invalid character '/' at byte 0")
 	);
 }
 #[tokio::test]

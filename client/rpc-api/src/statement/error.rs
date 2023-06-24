@@ -18,10 +18,7 @@
 
 //! Statement RPC errors.
 
-use jsonrpsee::{
-	core::Error as JsonRpseeError,
-	types::error::{CallError, ErrorObject},
-};
+use jsonrpsee::types::error::{ErrorObject, ErrorObjectOwned};
 
 /// Statement RPC Result type.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -40,15 +37,14 @@ pub enum Error {
 /// Base error code for all statement errors.
 const BASE_ERROR: i32 = crate::error::base::STATEMENT;
 
-impl From<Error> for JsonRpseeError {
+impl From<Error> for ErrorObjectOwned {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::StatementStore(message) => CallError::Custom(ErrorObject::owned(
+			Error::StatementStore(message) => ErrorObject::owned(
 				BASE_ERROR + 1,
 				format!("Statement store error: {message}"),
 				None::<()>,
-			))
-			.into(),
+			),
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
 	}

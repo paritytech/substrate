@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use sc_consensus_grandpa::FinalityProofProvider;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct EncodedFinalityProof(pub sp_core::Bytes);
 
 /// Local trait mainly to allow mocking in tests.

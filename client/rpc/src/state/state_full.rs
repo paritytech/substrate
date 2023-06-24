@@ -25,13 +25,10 @@ use super::{
 	error::{Error, Result},
 	ChildStateBackend, StateBackend,
 };
-use crate::{DenyUnsafe, SubscriptionTaskExecutor};
+use crate::{utils::accept_and_pipe_from_stream, DenyUnsafe, SubscriptionTaskExecutor};
 
-use futures::{future, stream, FutureExt, StreamExt};
-use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError},
-	SubscriptionSink,
-};
+use futures::{future, stream, StreamExt};
+use jsonrpsee::{core::async_trait, PendingSubscriptionSink};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -377,9 +374,7 @@ where
 			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) {
-		let client = self.client.clone();
-
+	async fn subscribe_runtime_version(&self, pending: PendingSubscriptionSink) {
 		let initial = match self
 			.block_or_best(None)
 			.and_then(|block| self.client.runtime_version_at(block).map_err(Into::into))
@@ -387,12 +382,13 @@ where
 		{
 			Ok(initial) => initial,
 			Err(e) => {
-				let _ = sink.reject(JsonRpseeError::from(e));
+				pending.reject(e).await;
 				return
 			},
 		};
 
 		let mut previous_version = initial.clone();
+		let client = self.client.clone();
 
 		// A stream of new versions
 		let version_stream = client
@@ -412,37 +408,43 @@ where
 			});
 
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
-
-		let fut = async move {
-			sink.pipe_from_stream(stream).await;
-		};
-
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		accept_and_pipe_from_stream::<(), _, _>(pending, stream, &self.executor).await;
 	}
 
-	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) {
+	async fn subscribe_storage(
+		&self,
+		pending: PendingSubscriptionSink,
+		keys: Option<Vec<StorageKey>>,
+	) {
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(blockchain_err) => {
-				let _ = sink.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))));
+				pending.reject(Error::Client(Box::new(blockchain_err))).await;
 				return
 			},
 		};
 
-		// initial values
-		let initial = stream::iter(keys.map(|keys| {
-			let block = self.client.info().best_hash;
-			let changes = keys
+		let client = self.client.clone();
+
+		// Initial values
+		//
+		// This may read from the DB that's why is used `spawn_blocking` here.
+		let Ok(initial) = tokio::task::spawn_blocking(move || {
+			stream::iter(keys.map(|keys| {
+				let block = client.info().best_hash;
+				let changes = keys
 				.into_iter()
 				.map(|key| {
-					let v = self.client.storage(block, &key).ok().flatten();
+					let v = client.storage(block, &key).ok().flatten();
 					(key, v)
 				})
 				.collect();
-			StorageChangeSet { block, changes }
-		}));
+				StorageChangeSet { block, changes }
+			}))
+		}).await else {
+			return;
+		};
 
-		// let storage_stream = stream.map(|(block, changes)| StorageChangeSet {
 		let storage_stream = stream.map(|storage_notif| StorageChangeSet {
 			block: storage_notif.block,
 			changes: storage_notif
@@ -456,11 +458,7 @@ where
 			.chain(storage_stream)
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
-		let fut = async move {
-			sink.pipe_from_stream(stream).await;
-		};
-
-		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		accept_and_pipe_from_stream::<(), _, _>(pending, stream, &self.executor).await;
 	}
 
 	fn trace_block(

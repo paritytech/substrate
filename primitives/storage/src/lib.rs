@@ -178,8 +178,8 @@ pub struct Storage {
 
 /// Storage change set
 #[derive(RuntimeDebug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize, PartialEq, Eq))]
-#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", derive(Clone, Serialize, Deserialize, PartialEq, Eq))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct StorageChangeSet<Hash> {
 	/// Block hash
 	pub block: Hash,

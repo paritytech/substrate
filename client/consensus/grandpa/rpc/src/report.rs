@@ -57,21 +57,21 @@ impl ReportVoterState for SharedVoterState {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Prevotes {
 	current_weight: u32,
 	missing: BTreeSet<AuthorityId>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Precommits {
 	current_weight: u32,
 	missing: BTreeSet<AuthorityId>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RoundState {
 	round: u32,
@@ -111,7 +111,7 @@ impl RoundState {
 
 /// The state of the current best round, as well as the background rounds in a
 /// form suitable for serialization.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportedRoundStates {
 	set_id: u32,

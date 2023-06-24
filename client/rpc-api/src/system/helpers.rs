@@ -38,7 +38,7 @@ pub struct SystemInfo {
 }
 
 /// Health struct returned by the RPC
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Health {
 	/// Number of connected peers
@@ -58,7 +58,7 @@ impl fmt::Display for Health {
 }
 
 /// Network Peer information
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PeerInfo<Hash, Number> {
 	/// Peer ID
@@ -72,7 +72,7 @@ pub struct PeerInfo<Hash, Number> {
 }
 
 /// The role the node is running as
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum NodeRole {
 	/// The node is a full node
 	Full,
@@ -81,7 +81,7 @@ pub enum NodeRole {
 }
 
 /// The state of the syncing of the node.
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncState<Number> {
 	/// Height of the block at which syncing started.

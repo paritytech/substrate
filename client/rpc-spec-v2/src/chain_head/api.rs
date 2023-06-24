@@ -21,6 +21,7 @@
 //! API trait of the chain head.
 use crate::chain_head::event::{ChainHeadEvent, FollowEvent, NetworkConfig};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use sc_rpc::utils::SubscriptionResponse;
 
 #[rpc(client, server)]
 pub trait ChainHeadApi<Hash> {
@@ -34,7 +35,10 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Hash>,
 	)]
-	fn chain_head_unstable_follow(&self, with_runtime: bool);
+	async fn chain_head_unstable_follow(
+		&self,
+		with_runtime: bool,
+	) -> SubscriptionResponse<FollowEvent<Hash>>;
 
 	/// Retrieves the body (list of transactions) of a pinned block.
 	///
@@ -52,12 +56,12 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_stopBody",
 		item = ChainHeadEvent<String>,
 	)]
-	fn chain_head_unstable_body(
+	async fn chain_head_unstable_body(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
 		network_config: Option<NetworkConfig>,
-	);
+	) -> SubscriptionResponse<ChainHeadEvent<String>>;
 
 	/// Retrieves the header of a pinned block.
 	///
@@ -96,14 +100,14 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_stopStorage",
 		item = ChainHeadEvent<String>,
 	)]
-	fn chain_head_unstable_storage(
+	async fn chain_head_unstable_storage(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
 		key: String,
 		child_key: Option<String>,
 		network_config: Option<NetworkConfig>,
-	);
+	) -> SubscriptionResponse<ChainHeadEvent<Option<String>>>;
 
 	/// Call into the Runtime API at a specified block's state.
 	///
@@ -115,14 +119,14 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_stopCall",
 		item = ChainHeadEvent<String>,
 	)]
-	fn chain_head_unstable_call(
+	async fn chain_head_unstable_call(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
 		function: String,
 		call_parameters: String,
 		network_config: Option<NetworkConfig>,
-	);
+	) -> SubscriptionResponse<ChainHeadEvent<String>>;
 
 	/// Unpin a block reported by the `follow` method.
 	///

@@ -43,7 +43,7 @@ pub enum ImportResult {
 }
 
 /// Auxiliary data associated with an imported block result.
-#[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImportedAux {
 	/// Only the header has been imported. Block body verification was skipped.
 	pub header_only: bool,

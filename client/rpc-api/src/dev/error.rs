@@ -18,10 +18,10 @@
 
 //! Error helpers for Dev RPC module.
 
-use jsonrpsee::{
-	core::Error as JsonRpseeError,
-	types::error::{CallError, ErrorObject},
-};
+use jsonrpsee::types::error::{ErrorObject, ErrorObjectOwned};
+
+/// Dev RPC Result type.
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Dev RPC errors.
 #[derive(Debug, thiserror::Error)]
@@ -46,21 +46,16 @@ pub enum Error {
 /// Base error code for all dev errors.
 const BASE_ERROR: i32 = crate::error::base::DEV;
 
-impl From<Error> for JsonRpseeError {
+impl From<Error> for ErrorObjectOwned {
 	fn from(e: Error) -> Self {
 		let msg = e.to_string();
 
 		match e {
-			Error::BlockQueryError(_) =>
-				CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, msg, None::<()>)),
-			Error::BlockExecutionFailed =>
-				CallError::Custom(ErrorObject::owned(BASE_ERROR + 3, msg, None::<()>)),
-			Error::WitnessCompactionFailed =>
-				CallError::Custom(ErrorObject::owned(BASE_ERROR + 4, msg, None::<()>)),
-			Error::ProofExtractionFailed =>
-				CallError::Custom(ErrorObject::owned(BASE_ERROR + 5, msg, None::<()>)),
+			Error::BlockQueryError(_) => ErrorObject::owned(BASE_ERROR + 1, msg, None::<()>),
+			Error::BlockExecutionFailed => ErrorObject::owned(BASE_ERROR + 3, msg, None::<()>),
+			Error::WitnessCompactionFailed => ErrorObject::owned(BASE_ERROR + 4, msg, None::<()>),
+			Error::ProofExtractionFailed => ErrorObject::owned(BASE_ERROR + 5, msg, None::<()>),
 			Error::UnsafeRpcCalled(e) => e.into(),
 		}
-		.into()
 	}
 }
