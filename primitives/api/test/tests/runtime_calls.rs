@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::panic::UnwindSafe;
+
 use sp_api::{ApiExt, Core, ProvideRuntimeApi};
 use sp_runtime::{
 	traits::{HashFor, Header as HeaderT},
@@ -26,7 +28,7 @@ use sp_state_machine::{
 use substrate_test_runtime_client::{
 	prelude::*,
 	runtime::{Block, Header, TestAPI, Transfer},
-	DefaultTestClientBuilderExt, TestClientBuilder,
+	DefaultTestClientBuilderExt, TestClient, TestClientBuilder,
 };
 
 use codec::Encode;
@@ -190,6 +192,11 @@ fn disable_logging_works() {
 		assert!(output.contains("Logging from native works"));
 	}
 }
+
+// Certain logic like the transaction handling is not unwind safe.
+//
+// Ensure that the type is not unwind safe!
+static_assertions::assert_not_impl_any!(<TestClient as ProvideRuntimeApi<_>>::Api: UnwindSafe);
 
 #[test]
 fn ensure_transactional_works() {
