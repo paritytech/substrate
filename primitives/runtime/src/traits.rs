@@ -1214,6 +1214,21 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + Ty
 }
 
 /// Something that provides the Header Type.
+// This is needed to fix the "cyclical" issue in loading Header/BlockNumber as part of a 
+// `pallet::call`. Essentially, `construct_runtime` aggregates all calls to create a `RuntimeCall`
+// that is then used to define `UncheckedExtrinsic`.
+// ```ignore
+// pub type UncheckedExtrinsic =
+//	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+// ```
+// This `UncheckedExtrinsic` is supplied to the `Block`.
+// ```ignore
+// pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+// ```
+// So, if we do not create a trait outside of `Block` that doesn't have `Extrinsic`, we go into a 
+// recursive loop leading to a build error.
+// 
+// Note that this is a workaround and should be removed once we have a better solution.
 pub trait HeaderProvider {
 	/// Header type.
 	type HeaderT: Header;
