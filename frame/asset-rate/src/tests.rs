@@ -66,7 +66,7 @@ fn remove_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			AssetRate::remove(RuntimeOrigin::root(), ASSET_ID,),
-			Error::<Test>::UnknownAssetId
+			Error::<Test>::UnknownAssetKind
 		);
 	});
 }
@@ -89,7 +89,7 @@ fn update_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			AssetRate::update(RuntimeOrigin::root(), ASSET_ID, FixedU128::from_float(0.5)),
-			Error::<Test>::UnknownAssetId
+			Error::<Test>::UnknownAssetKind
 		);
 	});
 }
@@ -101,7 +101,7 @@ fn convert_works() {
 
 		let conversion = <AssetRate as ConversionFromAssetBalance<
 			BalanceOf<Test>,
-			<Test as pallet_asset_rate::Config>::AssetId,
+			<Test as pallet_asset_rate::Config>::AssetKind,
 			BalanceOf<Test>,
 		>>::from_asset_balance(10, ASSET_ID);
 		assert_eq!(conversion.expect("Conversion rate exists for asset"), 25);
@@ -113,7 +113,7 @@ fn convert_unknown_throws() {
 	new_test_ext().execute_with(|| {
 		let conversion = <AssetRate as ConversionFromAssetBalance<
 			BalanceOf<Test>,
-			<Test as pallet_asset_rate::Config>::AssetId,
+			<Test as pallet_asset_rate::Config>::AssetKind,
 			BalanceOf<Test>,
 		>>::from_asset_balance(10, ASSET_ID);
 		assert!(conversion.is_err());
