@@ -40,10 +40,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 // For testing the module, we construct a mock runtime.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Example: example_offchain_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},

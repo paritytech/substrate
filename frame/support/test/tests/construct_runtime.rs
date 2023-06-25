@@ -253,10 +253,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 use frame_support_test as system;
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
 		System: system::{Pallet, Call, Event<T>, Origin<T>} = 30,
 		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},

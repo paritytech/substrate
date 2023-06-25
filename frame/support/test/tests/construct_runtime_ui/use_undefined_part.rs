@@ -25,10 +25,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Sign
 impl pallet::Config for Runtime {}
 
 construct_runtime! {
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
 		System: system::{Pallet, Call, Storage, Config, Event<T>},
 		Pallet: pallet use_parts { Call },

@@ -197,10 +197,7 @@ mod tests {
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 
 	frame_support::construct_runtime!(
-		pub struct Runtime where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic
+		pub struct Runtime
 		{
 			System: frame_system::{Pallet, Call, Event<T>},
 		}

@@ -54,10 +54,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>
 type Extrinsic = testing::TestXt<RuntimeCall, ()>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub enum Runtime
 	{
 		System: frame_system,
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,

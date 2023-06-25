@@ -42,10 +42,7 @@ type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
 
 // Configure a mock runtime to test the pallet.
 construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		NftFractionalization: pallet_nft_fractionalization,

@@ -41,10 +41,7 @@ pub const MIN_ALLOWED_BYTES: u32 = 1024;
 pub const MAX_ALLOWED_BYTES: u32 = 4096;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Balances: pallet_balances,
