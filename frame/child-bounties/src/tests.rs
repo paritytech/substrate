@@ -33,14 +33,13 @@ use frame_support::{
 
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 	Perbill, Permill, TokenError,
 };
 
 use super::Event as ChildBountiesEvent;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 type BountiesError = pallet_bounties::Error<Test>;
 

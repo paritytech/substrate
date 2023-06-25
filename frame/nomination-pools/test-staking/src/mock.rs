@@ -186,7 +186,7 @@ impl pallet_nomination_pools::Config for Runtime {
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+
 
 frame_support::construct_runtime!(
 	pub struct Runtime

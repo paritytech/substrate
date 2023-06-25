@@ -38,8 +38,7 @@ use scale_info::TypeInfo;
 use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_io;
 use sp_runtime::{
-	testing::Header,
-	traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
+		traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
 	ArithmeticError, DispatchError, DispatchResult, FixedPointNumber, TokenError,
 };
 use std::collections::BTreeSet;
@@ -50,7 +49,7 @@ mod fungible_conformance_tests;
 mod fungible_tests;
 mod reentrancy_tests;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 #[derive(

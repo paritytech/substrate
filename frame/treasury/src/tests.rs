@@ -21,8 +21,7 @@
 
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup},
+		traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup},
 };
 
 use frame_support::{
@@ -36,7 +35,7 @@ use frame_support::{
 use super::*;
 use crate as treasury;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 type UtilityCall = pallet_utility::Call<Test>;
 type TreasuryCall = crate::Call<Test>;

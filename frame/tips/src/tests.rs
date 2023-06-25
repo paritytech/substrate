@@ -21,8 +21,7 @@
 
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill, Permill,
 };
 use sp_storage::Storage;
@@ -39,7 +38,7 @@ use frame_support::{
 use super::*;
 use crate::{self as pallet_tips, Event as TipEvent};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

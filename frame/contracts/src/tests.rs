@@ -50,13 +50,13 @@ use sp_core::ByteArray;
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
-	testing::{Header, H256},
+	testing::{H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32, TokenError,
 };
 use std::ops::Deref;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

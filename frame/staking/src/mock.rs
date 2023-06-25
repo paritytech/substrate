@@ -32,7 +32,7 @@ use sp_core::H256;
 use sp_io;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	testing::{Header, UintAuthorityId},
+	testing::{UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
@@ -82,7 +82,7 @@ pub fn is_disabled(controller: AccountId) -> bool {
 	Session::disabled_validators().contains(&validator_index)
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

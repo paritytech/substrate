@@ -22,12 +22,10 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill,
 };
 
-type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

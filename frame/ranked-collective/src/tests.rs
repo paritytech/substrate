@@ -27,14 +27,13 @@ use frame_support::{
 };
 use sp_core::{Get, H256};
 use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, ReduceBy},
+		traits::{BlakeTwo256, IdentityLookup, ReduceBy},
 };
 
 use super::*;
 use crate as pallet_ranked_collective;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 type Class = Rank;
 

@@ -31,8 +31,7 @@ use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, Hash, IdentityLookup},
+		traits::{BadOrigin, BlakeTwo256, Hash, IdentityLookup},
 	Perbill,
 };
 mod cancellation;
@@ -51,7 +50,7 @@ const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
 const BIG_AYE: Vote = Vote { aye: true, conviction: Conviction::Locked1x };
 const BIG_NAY: Vote = Vote { aye: false, conviction: Conviction::Locked1x };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

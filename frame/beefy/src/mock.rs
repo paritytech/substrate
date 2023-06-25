@@ -32,7 +32,7 @@ use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
-	testing::{Header, TestXt},
+	testing::{TestXt},
 	traits::{BlakeTwo256, IdentityLookup, OpaqueKeys},
 	Perbill,
 };
@@ -51,7 +51,7 @@ impl_opaque_keys! {
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(

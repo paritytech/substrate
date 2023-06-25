@@ -175,12 +175,12 @@ mod tests {
 	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
 	use sp_runtime::{
-		testing::{Header, UintAuthorityId},
+		testing::{UintAuthorityId},
 		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		KeyTypeId, Perbill,
 	};
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(

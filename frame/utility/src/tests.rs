@@ -33,8 +33,7 @@ use frame_support::{
 use pallet_collective::{EnsureProportionAtLeast, Instance1};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, Hash, IdentityLookup},
+		traits::{BlakeTwo256, Hash, IdentityLookup},
 	TokenError,
 };
 
@@ -125,7 +124,7 @@ mod mock_democracy {
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

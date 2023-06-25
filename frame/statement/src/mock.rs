@@ -27,12 +27,11 @@ use frame_support::{
 };
 use sp_core::{Pair, H256};
 use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup},
 	AccountId32,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub const MIN_ALLOWED_STATEMENTS: u32 = 4;

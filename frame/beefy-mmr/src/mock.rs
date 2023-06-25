@@ -29,8 +29,7 @@ use sp_core::H256;
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
-	testing::Header,
-	traits::{BlakeTwo256, ConvertInto, IdentityLookup, Keccak256, OpaqueKeys},
+		traits::{BlakeTwo256, ConvertInto, IdentityLookup, Keccak256, OpaqueKeys},
 };
 
 use crate as pallet_beefy_mmr;
@@ -45,7 +44,7 @@ impl_opaque_keys! {
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(

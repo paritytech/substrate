@@ -31,7 +31,7 @@ type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u64;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

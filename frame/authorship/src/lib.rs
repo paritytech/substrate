@@ -108,7 +108,7 @@ mod tests {
 		traits::{BlakeTwo256, Header as HeaderT, IdentityLookup},
 	};
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(

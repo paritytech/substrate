@@ -22,7 +22,7 @@
 use super::*;
 use frame_support::traits::ConstU32;
 use sp_runtime::{
-	testing::{Header, H256},
+	testing::{H256},
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
@@ -76,7 +76,7 @@ mod pallet_test {
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

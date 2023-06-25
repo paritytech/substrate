@@ -36,13 +36,13 @@ use sp_keyring::Ed25519Keyring;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
-	testing::{Header, TestXt, UintAuthorityId},
+	testing::{TestXt, UintAuthorityId},
 	traits::{IdentityLookup, OpaqueKeys},
 	DigestItem, Perbill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

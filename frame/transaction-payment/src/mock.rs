@@ -20,8 +20,7 @@ use crate as pallet_transaction_payment;
 
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup},
 };
 
 use frame_support::{
@@ -33,7 +32,7 @@ use frame_support::{
 use frame_system as system;
 use pallet_balances::Call as BalancesCall;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(

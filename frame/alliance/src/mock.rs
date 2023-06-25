@@ -20,8 +20,7 @@
 pub use sp_core::H256;
 use sp_runtime::traits::Hash;
 pub use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+		traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
 use sp_std::convert::{TryFrom, TryInto};
@@ -237,7 +236,7 @@ impl Config for Test {
 	type RetirementPeriod = RetirementPeriod;
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
