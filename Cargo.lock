@@ -2817,7 +2817,6 @@ dependencies = [
  "k256",
  "log",
  "macro_magic",
- "once_cell",
  "parity-scale-codec",
  "paste",
  "pretty_assertions",
@@ -4048,6 +4047,7 @@ dependencies = [
  "node-primitives",
  "pallet-alliance",
  "pallet-asset-conversion",
+ "pallet-asset-conversion-tx-payment",
  "pallet-asset-rate",
  "pallet-asset-tx-payment",
  "pallet-assets",
@@ -5398,6 +5398,7 @@ dependencies = [
  "node-primitives",
  "node-rpc",
  "pallet-asset-conversion",
+ "pallet-asset-conversion-tx-payment",
  "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-balances",
@@ -5680,6 +5681,7 @@ dependencies = [
  "node-executor",
  "node-primitives",
  "pallet-asset-conversion",
+ "pallet-asset-conversion-tx-payment",
  "pallet-asset-tx-payment",
  "pallet-assets",
  "pallet-transaction-payment",
@@ -5991,6 +5993,25 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-asset-conversion-tx-payment"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-asset-conversion",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-storage",
 ]
 
 [[package]]
@@ -9542,7 +9563,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "log",
- "once_cell",
  "parity-scale-codec",
  "paste",
  "rustix 0.36.14",
@@ -10226,7 +10246,6 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "once_cell",
  "parking_lot 0.12.1",
  "regex",
  "rustc-hash",
@@ -11925,6 +11944,7 @@ dependencies = [
  "nix 0.26.2",
  "node-primitives",
  "regex",
+ "sp-rpc",
  "substrate-rpc-client",
  "tempfile",
  "tokio",
@@ -12861,6 +12881,7 @@ dependencies = [
  "frame-try-runtime",
  "hex",
  "log",
+ "node-primitives",
  "parity-scale-codec",
  "regex",
  "sc-cli",
@@ -12886,6 +12907,7 @@ dependencies = [
  "sp-weights",
  "substrate-cli-test-utils",
  "substrate-rpc-client",
+ "tempfile",
  "tokio",
  "zstd 0.12.3+zstd.1.5.2",
 ]

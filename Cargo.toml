@@ -169,6 +169,7 @@ members = [
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
+	"frame/transaction-payment/asset-conversion-tx-payment",
 	"frame/transaction-payment/asset-tx-payment",
 	"frame/transaction-payment/rpc",
 	"frame/transaction-payment/rpc/runtime-api",
