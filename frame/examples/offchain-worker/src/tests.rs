@@ -55,12 +55,11 @@ impl frame_system::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
-	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -271,7 +270,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 			let signature_valid =
 				<PricePayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					frame_system::pallet_prelude::BlockNumberFor<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
 
 			assert!(signature_valid);
@@ -325,7 +324,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 			let signature_valid =
 				<PricePayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					frame_system::pallet_prelude::BlockNumberFor<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
 
 			assert!(signature_valid);

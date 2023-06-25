@@ -66,13 +66,12 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
-	type BlockNumber = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -99,7 +98,7 @@ impl pallet_session::Config for Test {
 }
 
 pub type MmrLeaf = sp_consensus_beefy::mmr::MmrLeaf<
-	<Test as frame_system::Config>::BlockNumber,
+	frame_system::pallet_prelude::BlockNumberFor<Test>,
 	<Test as frame_system::Config>::Hash,
 	crate::MerkleRootOf<Test>,
 	Vec<u8>,

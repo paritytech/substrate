@@ -69,7 +69,7 @@ pub struct PendingSwap<T: Config> {
 	/// Action of this swap.
 	pub action: T::SwapAction,
 	/// End block of the lock.
-	pub end_block: T::BlockNumber,
+	pub end_block: frame_system::pallet_prelude::BlockNumberFor::<T>,
 }
 
 /// Hashed proof type.
@@ -249,7 +249,7 @@ pub mod pallet {
 			target: T::AccountId,
 			hashed_proof: HashedProof,
 			action: T::SwapAction,
-			duration: T::BlockNumber,
+			duration: frame_system::pallet_prelude::BlockNumberFor::<T>,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			ensure!(

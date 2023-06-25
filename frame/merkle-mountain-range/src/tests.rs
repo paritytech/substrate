@@ -53,7 +53,7 @@ pub(crate) fn hex(s: &str) -> H256 {
 	s.parse().unwrap()
 }
 
-type BlockNumber = <Test as frame_system::Config>::BlockNumber;
+type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Test>;
 
 fn decode_node(
 	v: Vec<u8>,

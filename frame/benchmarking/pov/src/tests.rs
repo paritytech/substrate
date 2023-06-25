@@ -188,7 +188,7 @@ mod mock {
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = u32;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::testing::Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ();
 		type Version = ();

@@ -45,7 +45,7 @@ pub mod pallet {
 		/// Find the author of a block.
 		type FindAuthor: FindAuthor<Self::AccountId>;
 		/// An event handler for authored blocks.
-		type EventHandler: EventHandler<Self::AccountId, Self::BlockNumber>;
+		type EventHandler: EventHandler<Self::AccountId, frame_system::pallet_prelude::BlockNumberFor<Self>>;
 	}
 
 	#[pallet::pallet]
@@ -53,7 +53,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: T::BlockNumber) -> Weight {
+		fn on_initialize(_: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
 			if let Some(author) = Self::author() {
 				T::EventHandler::note_author(author);
 			}
@@ -61,7 +61,7 @@ pub mod pallet {
 			Weight::zero()
 		}
 
-		fn on_finalize(_: T::BlockNumber) {
+		fn on_finalize(_: frame_system::pallet_prelude::BlockNumberFor::<T>) {
 			// ensure we never go to trie with these values.
 			<Author<T>>::kill();
 		}
@@ -132,7 +132,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();

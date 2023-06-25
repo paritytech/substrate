@@ -178,14 +178,14 @@ pub struct Executive<
 
 impl<
 		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Block: traits::Block<Header = frame_system::pallet_prelude::HeaderFor<System>, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>,
+			+ OnInitialize<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ OnIdle<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ OnFinalize<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ OffchainWorker<frame_system::pallet_prelude::BlockNumberFor<System>>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
@@ -212,15 +212,15 @@ where
 #[cfg(feature = "try-runtime")]
 impl<
 		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Block: traits::Block<Header = frame_system::pallet_prelude::HeaderFor<System>, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>
-			+ frame_support::traits::TryState<System::BlockNumber>,
+			+ OnInitialize<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ OnIdle<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ OnFinalize<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ OffchainWorker<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ frame_support::traits::TryState<frame_system::pallet_prelude::BlockNumberFor<System>>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
@@ -297,7 +297,7 @@ where
 
 		// run the try-state checks of all pallets, ensuring they don't alter any state.
 		let _guard = frame_support::StorageNoopGuard::default();
-		<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+		<AllPalletsWithSystem as frame_support::traits::TryState<frame_system::pallet_prelude::BlockNumberFor<System>>>::try_state(
 			*header.number(),
 			select,
 		)
@@ -344,7 +344,7 @@ where
 	) -> Result<Weight, TryRuntimeError> {
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
-			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+			<AllPalletsWithSystem as frame_support::traits::TryState<frame_system::pallet_prelude::BlockNumberFor<System>>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
 				frame_try_runtime::TryStateSelect::All,
 			)?;
@@ -357,7 +357,7 @@ where
 
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
-			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+			<AllPalletsWithSystem as frame_support::traits::TryState<frame_system::pallet_prelude::BlockNumberFor<System>>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
 				frame_try_runtime::TryStateSelect::All,
 			)?;
@@ -369,14 +369,14 @@ where
 
 impl<
 		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Block: traits::Block<Header = frame_system::pallet_prelude::HeaderFor<System>, Hash = System::Hash>,
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>,
+			+ OnInitialize<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ OnIdle<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ OnFinalize<frame_system::pallet_prelude::BlockNumberFor<System>>
+			+ OffchainWorker<frame_system::pallet_prelude::BlockNumberFor<System>>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
@@ -393,14 +393,14 @@ where
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize_block(header: &System::Header) {
+	pub fn initialize_block(header: &frame_system::pallet_prelude::HeaderFor<System>) {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(header);
 		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
 	}
 
-	fn extract_pre_digest(header: &System::Header) -> Digest {
+	fn extract_pre_digest(header: &frame_system::pallet_prelude::HeaderFor<System>) -> Digest {
 		let mut digest = <Digest>::default();
 		header.digest().logs().iter().for_each(|d| {
 			if d.as_pre_runtime().is_some() {
@@ -411,7 +411,7 @@ where
 	}
 
 	fn initialize_block_impl(
-		block_number: &System::BlockNumber,
+		block_number: &frame_system::pallet_prelude::BlockNumberFor<System>,
 		parent_hash: &System::Hash,
 		digest: &Digest,
 	) {
@@ -426,7 +426,7 @@ where
 		}
 		<frame_system::Pallet<System>>::initialize(block_number, parent_hash, digest);
 		weight = weight.saturating_add(<AllPalletsWithSystem as OnInitialize<
-			System::BlockNumber,
+			frame_system::pallet_prelude::BlockNumberFor<System>,
 		>>::on_initialize(*block_number));
 		weight = weight.saturating_add(
 			<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block,
@@ -461,8 +461,8 @@ where
 		// Check that `parent_hash` is correct.
 		let n = *header.number();
 		assert!(
-			n > System::BlockNumber::zero() &&
-				<frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one()) ==
+			n > frame_system::pallet_prelude::BlockNumberFor::<System>::zero() &&
+				<frame_system::Pallet<System>>::block_hash(n - frame_system::pallet_prelude::BlockNumberFor::<System>::one()) ==
 					*header.parent_hash(),
 			"Parent hash should be valid.",
 		);
@@ -512,7 +512,7 @@ where
 
 	/// Finalize the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
-	pub fn finalize_block() -> System::Header {
+	pub fn finalize_block() -> frame_system::pallet_prelude::HeaderFor<System> {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "finalize_block");
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
@@ -529,7 +529,7 @@ where
 		let remaining_weight = max_weight.saturating_sub(weight.total());
 
 		if remaining_weight.all_gt(Weight::zero()) {
-			let used_weight = <AllPalletsWithSystem as OnIdle<System::BlockNumber>>::on_idle(
+			let used_weight = <AllPalletsWithSystem as OnIdle<frame_system::pallet_prelude::BlockNumberFor<System>>>::on_idle(
 				block_number,
 				remaining_weight,
 			);
@@ -539,7 +539,7 @@ where
 			);
 		}
 
-		<AllPalletsWithSystem as OnFinalize<System::BlockNumber>>::on_finalize(block_number);
+		<AllPalletsWithSystem as OnFinalize<frame_system::pallet_prelude::BlockNumberFor<System>>>::on_finalize(block_number);
 	}
 
 	/// Apply extrinsic outside of the block execution function.
@@ -579,7 +579,7 @@ where
 		Ok(r.map(|_| ()).map_err(|e| e.error))
 	}
 
-	fn final_checks(header: &System::Header) {
+	fn final_checks(header: &frame_system::pallet_prelude::HeaderFor<System>) {
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "final_checks");
 		// remove temporaries
 		let new_header = <frame_system::Pallet<System>>::finalize();
@@ -651,7 +651,7 @@ where
 	}
 
 	/// Start an offchain worker and generate extrinsics.
-	pub fn offchain_worker(header: &System::Header) {
+	pub fn offchain_worker(header: &frame_system::pallet_prelude::HeaderFor<System>) {
 		sp_io::init_tracing();
 		// We need to keep events available for offchain workers,
 		// hence we initialize the block manually.
@@ -665,7 +665,7 @@ where
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
-		<AllPalletsWithSystem as OffchainWorker<System::BlockNumber>>::offchain_worker(
+		<AllPalletsWithSystem as OffchainWorker<frame_system::pallet_prelude::BlockNumberFor<System>>>::offchain_worker(
 			*header.number(),
 		)
 	}
@@ -712,17 +712,17 @@ mod tests {
 		impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 			// module hooks.
 			// one with block number arg and one without
-			fn on_initialize(n: T::BlockNumber) -> Weight {
+			fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
 				println!("on_initialize({})", n);
 				Weight::from_parts(175, 0)
 			}
 
-			fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
+			fn on_idle(n: frame_system::pallet_prelude::BlockNumberFor::<T>, remaining_weight: Weight) -> Weight {
 				println!("on_idle{}, {})", n, remaining_weight);
 				Weight::from_parts(175, 0)
 			}
 
-			fn on_finalize(n: T::BlockNumber) {
+			fn on_finalize(n: frame_system::pallet_prelude::BlockNumberFor::<T>) {
 				println!("on_finalize({})", n);
 			}
 
@@ -731,8 +731,8 @@ mod tests {
 				Weight::from_parts(200, 0)
 			}
 
-			fn offchain_worker(n: T::BlockNumber) {
-				assert_eq!(T::BlockNumber::from(1u32), n);
+			fn offchain_worker(n: frame_system::pallet_prelude::BlockNumberFor::<T>) {
+				assert_eq!(frame_system::pallet_prelude::BlockNumberFor::<T>::from(1u32), n);
 			}
 		}
 
@@ -859,7 +859,7 @@ mod tests {
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = RuntimeVersion;

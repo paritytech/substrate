@@ -1094,7 +1094,7 @@ mod mock {
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
+		type Header = sp_runtime::generic::Header<frame_system::pallet_prelude::BlockNumberFor<Self>, BlakeTwo256>;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();

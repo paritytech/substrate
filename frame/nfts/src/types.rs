@@ -34,7 +34,7 @@ pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 pub(super) type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
 	<T as SystemConfig>::AccountId,
-	Option<<T as SystemConfig>::BlockNumber>,
+	Option<frame_system::pallet_prelude::BlockNumberFor<T>>,
 	<T as Config<I>>::ApprovalsLimit,
 >;
 pub(super) type ItemAttributesApprovals<T, I = ()> =
@@ -58,21 +58,21 @@ pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 >;
 pub(super) type CollectionConfigFor<T, I = ()> = CollectionConfig<
 	BalanceOf<T, I>,
-	<T as SystemConfig>::BlockNumber,
+	frame_system::pallet_prelude::BlockNumberFor<T>,
 	<T as Config<I>>::CollectionId,
 >;
 pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
-	<T as SystemConfig>::BlockNumber,
+	frame_system::pallet_prelude::BlockNumberFor<T>,
 	BalanceOf<T, I>,
 >;
 pub(super) type PreSignedAttributesOf<T, I = ()> = PreSignedAttributes<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
-	<T as SystemConfig>::BlockNumber,
+	frame_system::pallet_prelude::BlockNumberFor<T>,
 >;
 
 /// Information about a collection.

@@ -417,7 +417,7 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 }
 
 pub type PayoutsFor<T, I> = BoundedVec<
-	(<T as frame_system::Config>::BlockNumber, BalanceOf<T, I>),
+	(frame_system::pallet_prelude::BlockNumberFor<T>, BalanceOf<T, I>),
 	<T as Config<I>>::MaxPayouts,
 >;
 
@@ -440,7 +440,7 @@ pub struct PayoutRecord<Balance, PayoutsVec> {
 pub type PayoutRecordFor<T, I> = PayoutRecord<
 	BalanceOf<T, I>,
 	BoundedVec<
-		(<T as frame_system::Config>::BlockNumber, BalanceOf<T, I>),
+		(frame_system::pallet_prelude::BlockNumberFor<T>, BalanceOf<T, I>),
 		<T as Config<I>>::MaxPayouts,
 	>,
 >;
@@ -491,7 +491,7 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// Something that provides randomness in the runtime.
-		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
+		type Randomness: Randomness<Self::Hash, frame_system::pallet_prelude::BlockNumberFor<Self>>;
 
 		/// The maximum number of strikes before a member gets funds slashed.
 		#[pallet::constant]
@@ -504,23 +504,23 @@ pub mod pallet {
 		/// The number of blocks on which new candidates should be voted on. Together with
 		/// `ClaimPeriod`, this sums to the number of blocks between candidate intake periods.
 		#[pallet::constant]
-		type VotingPeriod: Get<Self::BlockNumber>;
+		type VotingPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
 
 		/// The number of blocks on which new candidates can claim their membership and be the
 		/// named head.
 		#[pallet::constant]
-		type ClaimPeriod: Get<Self::BlockNumber>;
+		type ClaimPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
 
 		/// The maximum duration of the payout lock.
 		#[pallet::constant]
-		type MaxLockDuration: Get<Self::BlockNumber>;
+		type MaxLockDuration: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
 
 		/// The origin that is allowed to call `found`.
 		type FounderSetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The number of blocks between membership challenges.
 		#[pallet::constant]
-		type ChallengePeriod: Get<Self::BlockNumber>;
+		type ChallengePeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
 
 		/// The maximum number of payouts a member may have waiting unclaimed.
 		#[pallet::constant]
@@ -758,7 +758,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
 			let mut weight = Weight::zero();
 			let weights = T::BlockWeights::get();
 
@@ -1409,7 +1409,7 @@ pub enum Period<BlockNumber> {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the period we are currently in.
-	fn period() -> Period<T::BlockNumber> {
+	fn period() -> Period<frame_system::pallet_prelude::BlockNumberFor::<T>> {
 		let claim_period = T::ClaimPeriod::get();
 		let voting_period = T::VotingPeriod::get();
 		let rotation_period = voting_period + claim_period;
@@ -1902,7 +1902,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		candidate: &T::AccountId,
 		value: BalanceOf<T, I>,
 		kind: BidKind<T::AccountId, BalanceOf<T, I>>,
-		maturity: T::BlockNumber,
+		maturity: frame_system::pallet_prelude::BlockNumberFor::<T>,
 	) {
 		let value = match kind {
 			BidKind::Deposit(deposit) => {
@@ -1939,7 +1939,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// It is the caller's duty to ensure that `who` is already a member. This does nothing if `who`
 	/// is not a member or if `value` is zero.
-	fn bump_payout(who: &T::AccountId, when: T::BlockNumber, value: BalanceOf<T, I>) {
+	fn bump_payout(who: &T::AccountId, when: frame_system::pallet_prelude::BlockNumberFor::<T>, value: BalanceOf<T, I>) {
 		if value.is_zero() {
 			return
 		}
@@ -2022,7 +2022,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// This is a rather opaque calculation based on the formula here:
 	/// https://www.desmos.com/calculator/9itkal1tce
-	fn lock_duration(x: u32) -> T::BlockNumber {
+	fn lock_duration(x: u32) -> frame_system::pallet_prelude::BlockNumberFor::<T> {
 		let lock_pc = 100 - 50_000 / (x + 500);
 		Percent::from_percent(lock_pc as u8) * T::MaxLockDuration::get()
 	}

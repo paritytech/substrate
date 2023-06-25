@@ -77,7 +77,7 @@ mod module1 {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub value: <T as Config<I>>::GenericType,
-		pub test: <T as frame_system::Config>::BlockNumber,
+		pub test: frame_system::pallet_prelude::BlockNumberFor<T>,
 	}
 
 	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
@@ -89,7 +89,7 @@ mod module1 {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
 	where
-		T::BlockNumber: std::fmt::Display,
+		frame_system::pallet_prelude::BlockNumberFor::<T>: std::fmt::Display,
 	{
 		fn build(&self) {
 			<Value<T, I>>::put(self.value.clone());
@@ -123,7 +123,7 @@ mod module1 {
 	#[pallet::inherent]
 	impl<T: Config<I>, I: 'static> ProvideInherent for Pallet<T, I>
 	where
-		T::BlockNumber: From<u32>,
+		frame_system::pallet_prelude::BlockNumberFor::<T>: From<u32>,
 	{
 		type Call = Call<T, I>;
 		type Error = MakeFatalError<()>;
@@ -198,7 +198,7 @@ mod module2 {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
 	where
-		T::BlockNumber: std::fmt::Display,
+		frame_system::pallet_prelude::BlockNumberFor::<T>: std::fmt::Display,
 	{
 		fn build(&self) {
 			<Value<T, I>>::put(self.value.clone());
@@ -301,7 +301,6 @@ frame_support::construct_runtime!(
 );
 
 impl frame_support_test::Config for Runtime {
-	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;

@@ -73,7 +73,7 @@ pub trait Config {
 	/// Something that provides the data for election.
 	type DataProvider: ElectionDataProvider<
 		AccountId = <Self::System as frame_system::Config>::AccountId,
-		BlockNumber = <Self::System as frame_system::Config>::BlockNumber,
+		BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Self::System>,
 	>;
 
 	/// Weight information for extrinsics in this pallet.
@@ -151,7 +151,7 @@ fn elect_with_input_bounds<T: Config>(
 
 impl<T: Config> ElectionProviderBase for OnChainExecution<T> {
 	type AccountId = <T::System as frame_system::Config>::AccountId;
-	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
+	type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<T::System>;
 	type Error = Error;
 	type MaxWinners = T::MaxWinners;
 	type DataProvider = T::DataProvider;
@@ -208,13 +208,12 @@ mod tests {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type Index = AccountId;
-		type BlockNumber = BlockNumber;
-		type RuntimeCall = RuntimeCall;
+			type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::testing::Header;
+		type Block = Block;
 		type RuntimeEvent = ();
 		type BlockHashCount = ();
 		type DbWeight = ();
@@ -267,8 +266,7 @@ mod tests {
 		pub struct DataProvider;
 		impl ElectionDataProvider for DataProvider {
 			type AccountId = AccountId;
-			type BlockNumber = BlockNumber;
-			type MaxVotesPerVoter = ConstU32<2>;
+					type MaxVotesPerVoter = ConstU32<2>;
 			fn electing_voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 				Ok(vec![
 					(1, 10, bounded_vec![10, 20]),

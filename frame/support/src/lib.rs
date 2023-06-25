@@ -882,12 +882,12 @@ pub mod tests {
 		#[pallet::storage]
 		#[pallet::getter(fn generic_data)]
 		pub type GenericData<T: Config> =
-			StorageMap<_, Identity, T::BlockNumber, T::BlockNumber, ValueQuery>;
+			StorageMap<_, Identity, frame_system::pallet_prelude::BlockNumberFor::<T>, frame_system::pallet_prelude::BlockNumberFor::<T>, ValueQuery>;
 
 		#[pallet::storage]
 		#[pallet::getter(fn generic_data2)]
 		pub type GenericData2<T: Config> =
-			StorageMap<_, Blake2_128Concat, T::BlockNumber, T::BlockNumber, OptionQuery>;
+			StorageMap<_, Blake2_128Concat, frame_system::pallet_prelude::BlockNumberFor::<T>, frame_system::pallet_prelude::BlockNumberFor::<T>, OptionQuery>;
 
 		#[pallet::storage]
 		pub type DataDM<T> =
@@ -897,10 +897,10 @@ pub mod tests {
 		pub type GenericDataDM<T: Config> = StorageDoubleMap<
 			_,
 			Blake2_128Concat,
-			T::BlockNumber,
+			frame_system::pallet_prelude::BlockNumberFor::<T>,
 			Identity,
-			T::BlockNumber,
-			T::BlockNumber,
+			frame_system::pallet_prelude::BlockNumberFor::<T>,
+			frame_system::pallet_prelude::BlockNumberFor::<T>,
 			ValueQuery,
 		>;
 
@@ -908,10 +908,10 @@ pub mod tests {
 		pub type GenericData2DM<T: Config> = StorageDoubleMap<
 			_,
 			Blake2_128Concat,
-			T::BlockNumber,
+			frame_system::pallet_prelude::BlockNumberFor::<T>,
 			Twox64Concat,
-			T::BlockNumber,
-			T::BlockNumber,
+			frame_system::pallet_prelude::BlockNumberFor::<T>,
+			frame_system::pallet_prelude::BlockNumberFor::<T>,
 			OptionQuery,
 		>;
 
@@ -922,7 +922,7 @@ pub mod tests {
 			Blake2_128Concat,
 			u32,
 			Blake2_128Concat,
-			T::BlockNumber,
+			frame_system::pallet_prelude::BlockNumberFor::<T>,
 			Vec<u32>,
 			ValueQuery,
 		>;
@@ -964,18 +964,13 @@ pub mod tests {
 
 	crate::construct_runtime!(
 		pub enum Runtime
-		where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: self::frame_system,
 		}
 	);
 
 	impl Config for Runtime {
-		type BlockNumber = BlockNumber;
-		type AccountId = AccountId;
+			type AccountId = AccountId;
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;

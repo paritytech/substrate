@@ -201,11 +201,11 @@ pub mod pallet {
 
 		/// The delay period for which a bounty beneficiary need to wait before claim the payout.
 		#[pallet::constant]
-		type BountyDepositPayoutDelay: Get<Self::BlockNumber>;
+		type BountyDepositPayoutDelay: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
 
 		/// Bounty duration in blocks.
 		#[pallet::constant]
-		type BountyUpdatePeriod: Get<Self::BlockNumber>;
+		type BountyUpdatePeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
 
 		/// The curator deposit is calculated as a percentage of the curator fee.
 		///
@@ -305,7 +305,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		BountyIndex,
-		Bounty<T::AccountId, BalanceOf<T, I>, T::BlockNumber>,
+		Bounty<T::AccountId, BalanceOf<T, I>, frame_system::pallet_prelude::BlockNumberFor::<T>>,
 	>;
 
 	/// The description of each bounty.

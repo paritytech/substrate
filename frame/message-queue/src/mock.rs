@@ -51,13 +51,12 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
-	type BlockNumber = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -272,7 +271,7 @@ impl OnQueueChanged<MessageOrigin> for RecordingQueueChangeHandler {
 /// Is generic since it is used by the unit test, integration tests and benchmarks.
 pub fn new_test_ext<T: Config>() -> sp_io::TestExternalities
 where
-	<T as frame_system::Config>::BlockNumber: From<u32>,
+	frame_system::pallet_prelude::BlockNumberFor<T>: From<u32>,
 {
 	sp_tracing::try_init_simple();
 	WeightForCall::take();

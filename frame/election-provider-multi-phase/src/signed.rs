@@ -101,7 +101,7 @@ pub type SignedSubmissionOf<T> = SignedSubmission<
 /// Always sorted vector of a score, submitted at the given block number, which can be found at the
 /// given index (`u32`) of the `SignedSubmissionsMap`.
 pub type SubmissionIndicesOf<T> = BoundedVec<
-	(ElectionScore, <T as frame_system::Config>::BlockNumber, u32),
+	(ElectionScore, frame_system::pallet_prelude::BlockNumberFor<T>, u32),
 	<T as Config>::SignedMaxSubmissions,
 >;
 
@@ -216,7 +216,7 @@ impl<T: Config> SignedSubmissions<T> {
 	fn swap_out_submission(
 		&mut self,
 		remove_pos: usize,
-		insert: Option<(ElectionScore, T::BlockNumber, u32)>,
+		insert: Option<(ElectionScore, frame_system::pallet_prelude::BlockNumberFor::<T>, u32)>,
 	) -> Option<SignedSubmissionOf<T>> {
 		if remove_pos >= self.indices.len() {
 			return None

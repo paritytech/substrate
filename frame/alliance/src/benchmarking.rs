@@ -432,7 +432,7 @@ benchmarks_instance_pallet! {
 			false,
 		)?;
 
-		System::<T>::set_block_number(T::BlockNumber::max_value());
+		System::<T>::set_block_number(frame_system::pallet_prelude::BlockNumberFor::<T>::max_value());
 
 	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
@@ -504,7 +504,7 @@ benchmarks_instance_pallet! {
 		}
 
 		// caller is prime, prime already votes aye by creating the proposal
-		System::<T>::set_block_number(T::BlockNumber::max_value());
+		System::<T>::set_block_number(frame_system::pallet_prelude::BlockNumberFor::<T>::max_value());
 
 	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {

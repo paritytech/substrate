@@ -59,7 +59,7 @@ mod no_instance {
 
 	#[pallet::storage]
 	#[pallet::getter(fn test_generic_value)]
-	pub type TestGenericValue<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
+	pub type TestGenericValue<T: Config> = StorageValue<_, frame_system::pallet_prelude::BlockNumberFor::<T>, OptionQuery>;
 	#[pallet::storage]
 	#[pallet::getter(fn foo2)]
 	pub type TestGenericDoubleMap<T: Config> = StorageDoubleMap<
@@ -67,7 +67,7 @@ mod no_instance {
 		Blake2_128Concat,
 		u32,
 		Blake2_128Concat,
-		T::BlockNumber,
+		frame_system::pallet_prelude::BlockNumberFor::<T>,
 		u32,
 		ValueQuery,
 	>;
@@ -75,8 +75,8 @@ mod no_instance {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub value: u32,
-		pub test_generic_value: T::BlockNumber,
-		pub test_generic_double_map: Vec<(u32, T::BlockNumber, u32)>,
+		pub test_generic_value: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		pub test_generic_double_map: Vec<(u32, frame_system::pallet_prelude::BlockNumberFor::<T>, u32)>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -136,7 +136,7 @@ mod instance {
 	#[pallet::storage]
 	#[pallet::getter(fn test_generic_value)]
 	pub type TestGenericValue<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, T::BlockNumber, OptionQuery>;
+		StorageValue<_, frame_system::pallet_prelude::BlockNumberFor::<T>, OptionQuery>;
 	#[pallet::storage]
 	#[pallet::getter(fn foo2)]
 	pub type TestGenericDoubleMap<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
@@ -144,7 +144,7 @@ mod instance {
 		Blake2_128Concat,
 		u32,
 		Blake2_128Concat,
-		T::BlockNumber,
+		frame_system::pallet_prelude::BlockNumberFor::<T>,
 		u32,
 		ValueQuery,
 	>;
@@ -152,8 +152,8 @@ mod instance {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub value: u32,
-		pub test_generic_value: T::BlockNumber,
-		pub test_generic_double_map: Vec<(u32, T::BlockNumber, u32)>,
+		pub test_generic_value: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		pub test_generic_double_map: Vec<(u32, frame_system::pallet_prelude::BlockNumberFor::<T>, u32)>,
 		pub phantom: PhantomData<I>,
 	}
 
@@ -201,10 +201,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	
 	{
 		System: frame_support_test,
 		FinalKeysNone: no_instance,
@@ -214,7 +211,6 @@ frame_support::construct_runtime!(
 );
 
 impl frame_support_test::Config for Runtime {
-	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;

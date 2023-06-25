@@ -58,13 +58,12 @@ impl frame_system::Config for Runtime {
 	type Index = u128;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type Header = Header;
+	type Block = Block;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type BlockHashCount = ConstU64<2400>;
 	type Version = Version;
 	type AccountData = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
@@ -84,10 +83,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Sign
 
 construct_runtime!(
 	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	
 	{
 		System: frame_system,
 	}

@@ -78,7 +78,7 @@ fn create_tips<T: Config<I>, I: 'static>(
 	}
 	Tips::<T, I>::mutate(hash, |maybe_tip| {
 		if let Some(open_tip) = maybe_tip {
-			open_tip.closes = Some(T::BlockNumber::zero());
+			open_tip.closes = Some(frame_system::pallet_prelude::BlockNumberFor::<T>::zero());
 		}
 	});
 	Ok(())

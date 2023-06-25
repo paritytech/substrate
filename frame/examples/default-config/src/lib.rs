@@ -137,7 +137,7 @@ pub mod tests {
 
 		// type Index = u32;
 		// type BlockNumber = u32;
-		// type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
+		// type Header = sp_runtime::generic::Header<frame_system::pallet_prelude::BlockNumberFor<Self>, Self::Hashing>;
 		// type Hash = sp_core::hash::H256;
 		// type Hashing = sp_runtime::traits::BlakeTwo256;
 		// type AccountId = u64;

@@ -113,18 +113,13 @@ mod tests {
 
 	crate::construct_runtime!(
 		pub enum Runtime
-		where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: self::frame_system,
 		}
 	);
 
 	impl self::frame_system::Config for Runtime {
-		type BlockNumber = BlockNumber;
-		type AccountId = AccountId;
+			type AccountId = AccountId;
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;

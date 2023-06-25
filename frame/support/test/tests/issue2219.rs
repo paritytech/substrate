@@ -28,7 +28,7 @@ mod module {
 	use frame_support_test as frame_system;
 
 	pub type Request<T> =
-		(<T as frame_system::Config>::AccountId, Role, <T as frame_system::Config>::BlockNumber);
+		(<T as frame_system::Config>::AccountId, Role, frame_system::pallet_prelude::BlockNumberFor<T>);
 	pub type Requests<T> = Vec<Request<T>>;
 
 	#[derive(Copy, Clone, Eq, PartialEq, Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -46,35 +46,35 @@ mod module {
 		pub max_actors: u32,
 
 		// payouts are made at this block interval
-		pub reward_period: T::BlockNumber,
+		pub reward_period: frame_system::pallet_prelude::BlockNumberFor::<T>,
 
 		// minimum amount of time before being able to unstake
-		pub bonding_period: T::BlockNumber,
+		pub bonding_period: frame_system::pallet_prelude::BlockNumberFor::<T>,
 
 		// how long tokens remain locked for after unstaking
-		pub unbonding_period: T::BlockNumber,
+		pub unbonding_period: frame_system::pallet_prelude::BlockNumberFor::<T>,
 
 		// minimum period required to be in service. unbonding before this time is highly penalized
-		pub min_service_period: T::BlockNumber,
+		pub min_service_period: frame_system::pallet_prelude::BlockNumberFor::<T>,
 
 		// "startup" time allowed for roles that need to sync their infrastructure
 		// with other providers before they are considered in service and punishable for
 		// not delivering required level of service.
-		pub startup_grace_period: T::BlockNumber,
+		pub startup_grace_period: frame_system::pallet_prelude::BlockNumberFor::<T>,
 	}
 
 	impl<T: Config> Default for RoleParameters<T> {
 		fn default() -> Self {
 			Self {
 				max_actors: 10,
-				reward_period: T::BlockNumber::default(),
-				unbonding_period: T::BlockNumber::default(),
+				reward_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
+				unbonding_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
 
 				// not currently used
 				min_actors: 5,
-				bonding_period: T::BlockNumber::default(),
-				min_service_period: T::BlockNumber::default(),
-				startup_grace_period: T::BlockNumber::default(),
+				bonding_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
+				min_service_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
+				startup_grace_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
 			}
 		}
 	}
@@ -115,7 +115,7 @@ mod module {
 	/// tokens locked until given block number
 	#[pallet::storage]
 	#[pallet::getter(fn bondage)]
-	pub type Bondage<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber>;
+	pub type Bondage<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, frame_system::pallet_prelude::BlockNumberFor::<T>>;
 
 	/// First step before enter a role is registering intent with a new account/key.
 	/// This is done by sending a role_entry_request() from the new account.
@@ -160,7 +160,6 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Sign
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 impl frame_support_test::Config for Runtime {
-	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -174,10 +173,7 @@ impl module::Config for Runtime {}
 
 frame_support::construct_runtime!(
 	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	
 	{
 		System: frame_support_test,
 		Module: module,

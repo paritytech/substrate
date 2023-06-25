@@ -201,7 +201,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The time-out for council motions.
-		type MotionDuration: Get<Self::BlockNumber>;
+		type MotionDuration: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
 
 		/// Maximum number of proposals allowed to be active in parallel.
 		type MaxProposals: Get<ProposalIndex>;
@@ -273,7 +273,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
 	pub type Voting<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, T::BlockNumber>, OptionQuery>;
+		StorageMap<_, Identity, T::Hash, Votes<T::AccountId, frame_system::pallet_prelude::BlockNumberFor::<T>>, OptionQuery>;
 
 	/// Proposals so far.
 	#[pallet::storage]

@@ -39,11 +39,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::unbounded]
 	pub type AppendableDM<T: Config> =
-		StorageDoubleMap<_, Identity, u32, Identity, T::BlockNumber, Vec<u32>>;
+		StorageDoubleMap<_, Identity, u32, Identity, frame_system::pallet_prelude::BlockNumberFor::<T>, Vec<u32>>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub t: Vec<(u32, T::BlockNumber, Vec<u32>)>,
+		pub t: Vec<(u32, frame_system::pallet_prelude::BlockNumberFor::<T>, Vec<u32>)>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -71,10 +71,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 frame_support::construct_runtime!(
 	pub enum Test
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	
 	{
 		System: frame_support_test,
 		MyPallet: pallet,
@@ -82,7 +79,6 @@ frame_support::construct_runtime!(
 );
 
 impl frame_support_test::Config for Test {
-	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;

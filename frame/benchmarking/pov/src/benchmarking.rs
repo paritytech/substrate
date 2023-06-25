@@ -363,13 +363,12 @@ mod mock {
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
 		type Index = AccountIndex;
-		type BlockNumber = BlockNumber;
-		type RuntimeCall = RuntimeCall;
+			type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::testing::Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ();
 		type Version = ();

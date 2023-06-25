@@ -34,10 +34,10 @@ pub mod v1 {
 	pub(crate) type Agenda<T: Config> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
-		<T as frame_system::Config>::BlockNumber,
+		frame_system::pallet_prelude::BlockNumberFor<T>,
 		Vec<
 			Option<
-				ScheduledV1<<T as Config>::RuntimeCall, <T as frame_system::Config>::BlockNumber>,
+				ScheduledV1<<T as Config>::RuntimeCall, frame_system::pallet_prelude::BlockNumberFor<T>>,
 			>,
 		>,
 		ValueQuery,
@@ -48,7 +48,7 @@ pub mod v1 {
 		Pallet<T>,
 		Twox64Concat,
 		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
+		TaskAddress<frame_system::pallet_prelude::BlockNumberFor<T>>,
 	>;
 }
 
@@ -60,7 +60,7 @@ pub mod v2 {
 	pub(crate) type Agenda<T: Config> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
-		<T as frame_system::Config>::BlockNumber,
+		frame_system::pallet_prelude::BlockNumberFor<T>,
 		Vec<Option<ScheduledV2Of<T>>>,
 		ValueQuery,
 	>;
@@ -70,7 +70,7 @@ pub mod v2 {
 		Pallet<T>,
 		Twox64Concat,
 		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
+		TaskAddress<frame_system::pallet_prelude::BlockNumberFor<T>>,
 	>;
 }
 
@@ -82,7 +82,7 @@ pub mod v3 {
 	pub(crate) type Agenda<T: Config> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
-		<T as frame_system::Config>::BlockNumber,
+		frame_system::pallet_prelude::BlockNumberFor<T>,
 		Vec<Option<ScheduledV3Of<T>>>,
 		ValueQuery,
 	>;
@@ -92,7 +92,7 @@ pub mod v3 {
 		Pallet<T>,
 		Twox64Concat,
 		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
+		TaskAddress<frame_system::pallet_prelude::BlockNumberFor<T>>,
 	>;
 
 	/// Migrate the scheduler pallet from V3 to V4.

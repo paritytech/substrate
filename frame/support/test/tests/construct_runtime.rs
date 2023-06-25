@@ -272,7 +272,6 @@ frame_support::construct_runtime!(
 );
 
 impl frame_support_test::Config for Runtime {
-	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;

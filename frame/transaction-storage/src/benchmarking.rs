@@ -113,7 +113,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 	assert_eq!(event, &system_event);
 }
 
-pub fn run_to_block<T: Config>(n: T::BlockNumber) {
+pub fn run_to_block<T: Config>(n: frame_system::pallet_prelude::BlockNumberFor::<T>) {
 	while frame_system::Pallet::<T>::block_number() < n {
 		crate::Pallet::<T>::on_finalize(frame_system::Pallet::<T>::block_number());
 		frame_system::Pallet::<T>::on_finalize(frame_system::Pallet::<T>::block_number());
@@ -144,7 +144,7 @@ benchmarks! {
 			vec![0u8; T::MaxTransactionSize::get() as usize],
 		)?;
 		run_to_block::<T>(1u32.into());
-	}: _(RawOrigin::Signed(caller.clone()), T::BlockNumber::zero(), 0)
+	}: _(RawOrigin::Signed(caller.clone()), frame_system::pallet_prelude::BlockNumberFor::<T>::zero(), 0)
 	verify {
 		assert_last_event::<T>(Event::Renewed { index: 0 }.into());
 	}
@@ -159,7 +159,7 @@ benchmarks! {
 				vec![0u8; T::MaxTransactionSize::get() as usize],
 			)?;
 		}
-		run_to_block::<T>(StoragePeriod::<T>::get() + T::BlockNumber::one());
+		run_to_block::<T>(StoragePeriod::<T>::get() + frame_system::pallet_prelude::BlockNumberFor::<T>::one());
 		let encoded_proof = proof();
 		let proof = TransactionStorageProof::decode(&mut &*encoded_proof).unwrap();
 	}: check_proof(RawOrigin::None, proof)

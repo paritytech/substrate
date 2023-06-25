@@ -82,10 +82,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	
 	{
 		System: frame_support_test,
 		MyPallet: pallet,
@@ -93,7 +90,6 @@ frame_support::construct_runtime!(
 );
 
 impl frame_support_test::Config for Runtime {
-	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
