@@ -1066,7 +1066,7 @@ mod mock {
 	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-	type Block = frame_system::mocking::MockBlock<Test>;
+	type Block = frame_system::mocking::MockBlockU32<Test>;
 
 	// Configure a mock runtime to test the pallet.
 	frame_support::construct_runtime!(
@@ -1089,12 +1089,11 @@ mod mock {
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
 		type Index = u64;
-		type BlockNumber = u32;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = sp_runtime::generic::Header<frame_system::pallet_prelude::BlockNumberFor<Self>, BlakeTwo256>;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();

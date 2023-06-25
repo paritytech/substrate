@@ -182,7 +182,6 @@ mod mock {
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u32;
-		type BlockNumber = u64;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;

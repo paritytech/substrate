@@ -32,3 +32,9 @@ pub type MockBlock<T> = generic::Block<
 	generic::Header<u64, sp_runtime::traits::BlakeTwo256>,
 	MockUncheckedExtrinsic<T>,
 >;
+
+/// An implementation of `sp_runtime::traits::Block` to be used in tests with u32 BlockNumber type.
+pub type MockBlockU32<T> = generic::Block<
+	generic::Header<u32, sp_runtime::traits::BlakeTwo256>,
+	MockUncheckedExtrinsic<T>,
+>;

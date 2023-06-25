@@ -107,6 +107,7 @@ pub mod pallet {
 pub mod tests {
 	use super::*;
 	use frame_support::derive_impl;
+	use sp_runtime::traits::ConstU64;
 
 	use super::pallet as pallet_default_config_example;
 
@@ -126,6 +127,8 @@ pub mod tests {
 		// these items are defined by frame-system as `no_default`, so we must specify them here.
 		// Note that these are types that actually rely on the outer runtime, and can't sensibly
 		// have an _independent_ default.
+		type Block = Block;
+		type BlockHashCount = ConstU64<10>;
 		type BaseCallFilter = frame_support::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;

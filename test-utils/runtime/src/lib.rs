@@ -291,10 +291,7 @@ impl sp_runtime::traits::SignedExtension for CheckSubstrateCall {
 }
 
 construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = Extrinsic
+	pub enum Runtime
 	{
 		System: frame_system,
 		Babe: pallet_babe,

@@ -318,6 +318,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 
 pub struct MockFallback;
 impl ElectionProviderBase for MockFallback {
+	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
@@ -431,6 +432,7 @@ pub struct ExtBuilder {}
 
 pub struct StakingMock;
 impl ElectionDataProvider for StakingMock {
+	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type MaxVotesPerVoter = MaxNominations;
 

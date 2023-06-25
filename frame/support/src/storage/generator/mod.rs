@@ -58,7 +58,7 @@ mod tests {
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
 		pub trait Config: 'static {
-			type BlockNumber;
+			type Block: sp_runtime::traits::Block;
 			type AccountId;
 			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
 			type RuntimeOrigin;
@@ -102,6 +102,11 @@ mod tests {
 
 		pub mod pallet_prelude {
 			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
+
+			pub type HeaderFor<T> =
+			<<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+			
+			pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 		}
 	}
 
@@ -119,7 +124,8 @@ mod tests {
 	);
 
 	impl self::frame_system::Config for Runtime {
-			type AccountId = AccountId;
+		type AccountId = AccountId;
+		type Block = Block;
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;

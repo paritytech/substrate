@@ -3280,12 +3280,12 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor::<T>,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_parts(7, 0) }
-			fn on_idle(n: frame_system::pallet_prelude::BlockNumberFor::<T>, remaining_weight: Weight,) -> Weight {
+			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_parts(7, 0) }
+			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
 				if n.into() == 42 || remaining_weight == Weight::from_parts(42, 0)  { panic!("on_idle") }
 				Weight::from_parts(7, 0)
 			}
-			fn on_finalize(n: frame_system::pallet_prelude::BlockNumberFor::<T>,) { if n.into() == 42 { panic!("on_finalize") } }
+			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
 			fn on_runtime_upgrade() -> Weight { Weight::from_parts(10, 0) }
 			fn offchain_worker() {}
 			/// Some doc
@@ -3587,7 +3587,7 @@ mod weight_tests {
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
 		pub trait Config: 'static {
-			type BlockNumber: Parameter + Default + MaxEncodedLen;
+			type Block: Parameter + sp_runtime::traits::Block;
 			type AccountId;
 			type Balance;
 			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
@@ -3653,6 +3653,10 @@ mod weight_tests {
 
 		pub mod pallet_prelude {
 			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
+
+			pub type HeaderFor<T> = <<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+
+			pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 		}
 	}
 
@@ -3678,7 +3682,8 @@ mod weight_tests {
 	}
 
 	impl Config for Runtime {
-			type AccountId = AccountId;
+		type Block = Block;
+		type AccountId = AccountId;
 		type Balance = Balance;
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;

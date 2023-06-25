@@ -837,7 +837,7 @@ pub mod tests {
 	use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 	use sp_std::result;
 
-	pub use self::frame_system::{Config, Pallet};
+	pub use self::frame_system::{Config, Pallet, pallet_prelude::*};
 
 	#[pallet]
 	pub mod frame_system {
@@ -852,7 +852,7 @@ pub mod tests {
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
 		pub trait Config: 'static {
-			type BlockNumber: Parameter + Default + MaxEncodedLen;
+			type Block: Parameter + sp_runtime::traits::Block;
 			type AccountId;
 			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
 			type RuntimeOrigin;
@@ -882,12 +882,12 @@ pub mod tests {
 		#[pallet::storage]
 		#[pallet::getter(fn generic_data)]
 		pub type GenericData<T: Config> =
-			StorageMap<_, Identity, frame_system::pallet_prelude::BlockNumberFor::<T>, frame_system::pallet_prelude::BlockNumberFor::<T>, ValueQuery>;
+			StorageMap<_, Identity, BlockNumberFor<T>, BlockNumberFor<T>, ValueQuery>;
 
 		#[pallet::storage]
 		#[pallet::getter(fn generic_data2)]
 		pub type GenericData2<T: Config> =
-			StorageMap<_, Blake2_128Concat, frame_system::pallet_prelude::BlockNumberFor::<T>, frame_system::pallet_prelude::BlockNumberFor::<T>, OptionQuery>;
+			StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, BlockNumberFor<T>, OptionQuery>;
 
 		#[pallet::storage]
 		pub type DataDM<T> =
@@ -897,10 +897,10 @@ pub mod tests {
 		pub type GenericDataDM<T: Config> = StorageDoubleMap<
 			_,
 			Blake2_128Concat,
-			frame_system::pallet_prelude::BlockNumberFor::<T>,
+			BlockNumberFor<T>,
 			Identity,
-			frame_system::pallet_prelude::BlockNumberFor::<T>,
-			frame_system::pallet_prelude::BlockNumberFor::<T>,
+			BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			ValueQuery,
 		>;
 
@@ -908,10 +908,10 @@ pub mod tests {
 		pub type GenericData2DM<T: Config> = StorageDoubleMap<
 			_,
 			Blake2_128Concat,
-			frame_system::pallet_prelude::BlockNumberFor::<T>,
+			BlockNumberFor<T>,
 			Twox64Concat,
-			frame_system::pallet_prelude::BlockNumberFor::<T>,
-			frame_system::pallet_prelude::BlockNumberFor::<T>,
+			BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			OptionQuery,
 		>;
 
@@ -922,7 +922,7 @@ pub mod tests {
 			Blake2_128Concat,
 			u32,
 			Blake2_128Concat,
-			frame_system::pallet_prelude::BlockNumberFor::<T>,
+			BlockNumberFor<T>,
 			Vec<u32>,
 			ValueQuery,
 		>;
@@ -953,6 +953,10 @@ pub mod tests {
 
 		pub mod pallet_prelude {
 			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
+
+			pub type HeaderFor<T> = <<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+			
+			pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 		}
 	}
 
@@ -970,7 +974,8 @@ pub mod tests {
 	);
 
 	impl Config for Runtime {
-			type AccountId = AccountId;
+		type Block = Block;
+		type AccountId = AccountId;
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
@@ -1000,8 +1005,8 @@ pub mod tests {
 			type GenericData2<T> = StorageMap<
 				System,
 				Blake2_128Concat,
-				<T as Config>::BlockNumber,
-				<T as Config>::BlockNumber,
+				BlockNumberFor<T>,
+				BlockNumberFor<T>,
 			>;
 
 			assert_eq!(Pallet::<Runtime>::generic_data2(5), None);
@@ -1013,8 +1018,8 @@ pub mod tests {
 			pub type GenericData<T> = StorageMap<
 				Test2,
 				Blake2_128Concat,
-				<T as Config>::BlockNumber,
-				<T as Config>::BlockNumber,
+				BlockNumberFor<T>,
+				BlockNumberFor<T>,
 			>;
 		});
 	}

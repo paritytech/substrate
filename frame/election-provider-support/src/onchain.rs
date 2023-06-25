@@ -266,7 +266,8 @@ mod tests {
 		pub struct DataProvider;
 		impl ElectionDataProvider for DataProvider {
 			type AccountId = AccountId;
-					type MaxVotesPerVoter = ConstU32<2>;
+			type BlockNumber = BlockNumber;
+			type MaxVotesPerVoter = ConstU32<2>;
 			fn electing_voters(_: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
 				Ok(vec![
 					(1, 10, bounded_vec![10, 20]),
