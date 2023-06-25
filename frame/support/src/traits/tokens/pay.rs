@@ -134,7 +134,7 @@ where
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_successful(_: &Self::Beneficiary, asset: Self::AssetKind, amount: Self::Balance) {
-		<F as fungibles::Mutate<_>>::mint_into(asset.id, &A::get(), amount).unwrap();
+		<F as fungibles::Mutate<_>>::mint_into(asset, &A::get(), amount).unwrap();
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_concluded(_: Self::Id) {}
