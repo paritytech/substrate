@@ -865,8 +865,8 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// in your runtime. To use the default behavior, add `fn deposit_event() = default;` to your
 /// `Module`.
 ///
-/// The following reserved functions also take the block number (with type `frame_system::pallet_prelude::BlockNumberFor::<T>`) as an
-/// optional input:
+/// The following reserved functions also take the block number (with type
+/// `frame_system::pallet_prelude::BlockNumberFor::<T>`) as an optional input:
 ///
 /// * `on_runtime_upgrade`: Executes at the beginning of a block prior to on_initialize when there
 /// is a runtime upgrade. This allows each module to upgrade its storage before the storage items
@@ -3654,7 +3654,8 @@ mod weight_tests {
 		pub mod pallet_prelude {
 			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
 
-			pub type HeaderFor<T> = <<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+			pub type HeaderFor<T> =
+				<<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
 
 			pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 		}

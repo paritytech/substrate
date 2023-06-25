@@ -24,10 +24,9 @@ use crate::{
 use frame_support::traits::{ConstU16, ConstU32, ConstU64, OnFinalize, OnInitialize};
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
 
 pub type Block = frame_system::mocking::MockBlock<Test>;
 

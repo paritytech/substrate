@@ -145,7 +145,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
+		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			// Drop obsolete roots. The proof for `obsolete` will be checked later
 			// in this block, so we drop `obsolete` - 1.
 			let period = <StoragePeriod<T>>::get();
@@ -158,7 +158,7 @@ pub mod pallet {
 			T::DbWeight::get().reads_writes(2, 4)
 		}
 
-		fn on_finalize(n: frame_system::pallet_prelude::BlockNumberFor::<T>) {
+		fn on_finalize(n: frame_system::pallet_prelude::BlockNumberFor<T>) {
 			assert!(
 				<ProofChecked<T>>::take() || {
 					// Proof is not required for early or empty blocks.
@@ -238,7 +238,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::renew())]
 		pub fn renew(
 			origin: OriginFor<T>,
-			block: frame_system::pallet_prelude::BlockNumberFor::<T>,
+			block: frame_system::pallet_prelude::BlockNumberFor<T>,
 			index: u32,
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
@@ -342,15 +342,20 @@ pub mod pallet {
 	pub(super) type Transactions<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		frame_system::pallet_prelude::BlockNumberFor::<T>,
+		frame_system::pallet_prelude::BlockNumberFor<T>,
 		BoundedVec<TransactionInfo, T::MaxBlockTransactions>,
 		OptionQuery,
 	>;
 
 	/// Count indexed chunks for each block.
 	#[pallet::storage]
-	pub(super) type ChunkCount<T: Config> =
-		StorageMap<_, Blake2_128Concat, frame_system::pallet_prelude::BlockNumberFor::<T>, u32, ValueQuery>;
+	pub(super) type ChunkCount<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		frame_system::pallet_prelude::BlockNumberFor<T>,
+		u32,
+		ValueQuery,
+	>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn byte_fee)]
@@ -365,7 +370,8 @@ pub mod pallet {
 	/// Storage period for data in blocks. Should match `sp_storage_proof::DEFAULT_STORAGE_PERIOD`
 	/// for block authoring.
 	#[pallet::storage]
-	pub(super) type StoragePeriod<T: Config> = StorageValue<_, frame_system::pallet_prelude::BlockNumberFor::<T>, ValueQuery>;
+	pub(super) type StoragePeriod<T: Config> =
+		StorageValue<_, frame_system::pallet_prelude::BlockNumberFor<T>, ValueQuery>;
 
 	// Intermediates
 	#[pallet::storage]
@@ -380,7 +386,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub byte_fee: BalanceOf<T>,
 		pub entry_fee: BalanceOf<T>,
-		pub storage_period: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		pub storage_period: frame_system::pallet_prelude::BlockNumberFor<T>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {

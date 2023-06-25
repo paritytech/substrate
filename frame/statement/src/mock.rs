@@ -27,10 +27,9 @@ use frame_support::{
 };
 use sp_core::{Pair, H256};
 use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	AccountId32,
 };
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

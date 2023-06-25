@@ -216,7 +216,7 @@ impl<T: Config> SignedSubmissions<T> {
 	fn swap_out_submission(
 		&mut self,
 		remove_pos: usize,
-		insert: Option<(ElectionScore, frame_system::pallet_prelude::BlockNumberFor::<T>, u32)>,
+		insert: Option<(ElectionScore, frame_system::pallet_prelude::BlockNumberFor<T>, u32)>,
 	) -> Option<SignedSubmissionOf<T>> {
 		if remove_pos >= self.indices.len() {
 			return None

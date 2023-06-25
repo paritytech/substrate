@@ -28,10 +28,9 @@ use frame_support::{
 use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

@@ -78,7 +78,7 @@ pub trait WeightInfo {
 pub trait EpochChangeTrigger {
 	/// Trigger an epoch change, if any should take place. This should be called
 	/// during every block, after initialization is done.
-	fn trigger<T: Config>(now: frame_system::pallet_prelude::BlockNumberFor::<T>);
+	fn trigger<T: Config>(now: frame_system::pallet_prelude::BlockNumberFor<T>);
 }
 
 /// A type signifying to BABE that an external trigger
@@ -86,7 +86,7 @@ pub trait EpochChangeTrigger {
 pub struct ExternalTrigger;
 
 impl EpochChangeTrigger for ExternalTrigger {
-	fn trigger<T: Config>(_: frame_system::pallet_prelude::BlockNumberFor::<T>) {} // nothing - trigger is external.
+	fn trigger<T: Config>(_: frame_system::pallet_prelude::BlockNumberFor<T>) {} // nothing - trigger is external.
 }
 
 /// A type signifying to BABE that it should perform epoch changes
@@ -94,7 +94,7 @@ impl EpochChangeTrigger for ExternalTrigger {
 pub struct SameAuthoritiesForever;
 
 impl EpochChangeTrigger for SameAuthoritiesForever {
-	fn trigger<T: Config>(now: frame_system::pallet_prelude::BlockNumberFor::<T>) {
+	fn trigger<T: Config>(now: frame_system::pallet_prelude::BlockNumberFor<T>) {
 		if <Pallet<T>>::should_epoch_change(now) {
 			let authorities = <Pallet<T>>::authorities();
 			let next_authorities = authorities.clone();
@@ -278,8 +278,14 @@ pub mod pallet {
 	/// entropy was fixed (i.e. it was known to chain observers). Since epochs are defined in
 	/// slots, which may be skipped, the block numbers may not line up with the slot numbers.
 	#[pallet::storage]
-	pub(super) type EpochStart<T: Config> =
-		StorageValue<_, (frame_system::pallet_prelude::BlockNumberFor::<T>, frame_system::pallet_prelude::BlockNumberFor::<T>), ValueQuery>;
+	pub(super) type EpochStart<T: Config> = StorageValue<
+		_,
+		(
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+		),
+		ValueQuery,
+	>;
 
 	/// How late the current block is compared to its parent.
 	///
@@ -288,7 +294,8 @@ pub mod pallet {
 	/// execution context should always yield zero.
 	#[pallet::storage]
 	#[pallet::getter(fn lateness)]
-	pub(super) type Lateness<T: Config> = StorageValue<_, frame_system::pallet_prelude::BlockNumberFor::<T>, ValueQuery>;
+	pub(super) type Lateness<T: Config> =
+		StorageValue<_, frame_system::pallet_prelude::BlockNumberFor<T>, ValueQuery>;
 
 	/// The configuration for the current epoch. Should never be `None` as it is initialized in
 	/// genesis.
@@ -503,8 +510,10 @@ impl<T: Config> IsMember<AuthorityId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> pallet_session::ShouldEndSession<frame_system::pallet_prelude::BlockNumberFor::<T>> for Pallet<T> {
-	fn should_end_session(now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> bool {
+impl<T: Config> pallet_session::ShouldEndSession<frame_system::pallet_prelude::BlockNumberFor<T>>
+	for Pallet<T>
+{
+	fn should_end_session(now: frame_system::pallet_prelude::BlockNumberFor<T>) -> bool {
 		// it might be (and it is in current implementation) that session module is calling
 		// `should_end_session` from it's own `on_initialize` handler, in which case it's
 		// possible that babe's own `on_initialize` has not run yet, so let's ensure that we
@@ -524,7 +533,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Determine whether an epoch change should take place at this block.
 	/// Assumes that initialization has already taken place.
-	pub fn should_epoch_change(now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> bool {
+	pub fn should_epoch_change(now: frame_system::pallet_prelude::BlockNumberFor<T>) -> bool {
 		// The epoch has technically ended during the passage of time
 		// between this block and the last, but we have to "end" the epoch now,
 		// since there is no earlier possible block we could have done it.
@@ -554,11 +563,14 @@ impl<T: Config> Pallet<T> {
 	//
 	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you
 	// update this function, you must also update the corresponding weight.
-	pub fn next_expected_epoch_change(now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Option<frame_system::pallet_prelude::BlockNumberFor::<T>> {
+	pub fn next_expected_epoch_change(
+		now: frame_system::pallet_prelude::BlockNumberFor<T>,
+	) -> Option<frame_system::pallet_prelude::BlockNumberFor<T>> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot.checked_sub(*CurrentSlot::<T>::get()).map(|slots_remaining| {
 			// This is a best effort guess. Drifts in the slot/block ratio will cause errors here.
-			let blocks_remaining: frame_system::pallet_prelude::BlockNumberFor::<T> = slots_remaining.saturated_into();
+			let blocks_remaining: frame_system::pallet_prelude::BlockNumberFor<T> =
+				slots_remaining.saturated_into();
 			now.saturating_add(blocks_remaining)
 		})
 	}
@@ -776,7 +788,7 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
 	}
 
-	fn initialize(now: frame_system::pallet_prelude::BlockNumberFor::<T>) {
+	fn initialize(now: frame_system::pallet_prelude::BlockNumberFor<T>) {
 		// since `initialize` can be called twice (e.g. if session module is present)
 		// let's ensure that we only do the initialization once per block
 		let initialized = Self::initialized().is_some();
@@ -811,7 +823,8 @@ impl<T: Config> Pallet<T> {
 
 			// how many slots were skipped between current and last block
 			let lateness = current_slot.saturating_sub(CurrentSlot::<T>::get() + 1);
-			let lateness = frame_system::pallet_prelude::BlockNumberFor::<T>::from(*lateness as u32);
+			let lateness =
+				frame_system::pallet_prelude::BlockNumberFor::<T>::from(*lateness as u32);
 
 			Lateness::<T>::put(lateness);
 			CurrentSlot::<T>::put(current_slot);
@@ -899,12 +912,18 @@ impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
 	}
 }
 
-impl<T: Config> frame_support::traits::EstimateNextSessionRotation<frame_system::pallet_prelude::BlockNumberFor::<T>> for Pallet<T> {
-	fn average_session_length() -> frame_system::pallet_prelude::BlockNumberFor::<T> {
+impl<T: Config>
+	frame_support::traits::EstimateNextSessionRotation<
+		frame_system::pallet_prelude::BlockNumberFor<T>,
+	> for Pallet<T>
+{
+	fn average_session_length() -> frame_system::pallet_prelude::BlockNumberFor<T> {
 		T::EpochDuration::get().saturated_into()
 	}
 
-	fn estimate_current_session_progress(_now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> (Option<Permill>, Weight) {
+	fn estimate_current_session_progress(
+		_now: frame_system::pallet_prelude::BlockNumberFor<T>,
+	) -> (Option<Permill>, Weight) {
 		let elapsed = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start()) + 1;
 
 		(
@@ -914,7 +933,9 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<frame_system:
 		)
 	}
 
-	fn estimate_next_session_rotation(now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> (Option<frame_system::pallet_prelude::BlockNumberFor::<T>>, Weight) {
+	fn estimate_next_session_rotation(
+		now: frame_system::pallet_prelude::BlockNumberFor<T>,
+	) -> (Option<frame_system::pallet_prelude::BlockNumberFor<T>>, Weight) {
 		(
 			Self::next_expected_epoch_change(now),
 			// Read: Current Slot, Epoch Index, Genesis Slot
@@ -923,8 +944,10 @@ impl<T: Config> frame_support::traits::EstimateNextSessionRotation<frame_system:
 	}
 }
 
-impl<T: Config> frame_support::traits::Lateness<frame_system::pallet_prelude::BlockNumberFor::<T>> for Pallet<T> {
-	fn lateness(&self) -> frame_system::pallet_prelude::BlockNumberFor::<T> {
+impl<T: Config> frame_support::traits::Lateness<frame_system::pallet_prelude::BlockNumberFor<T>>
+	for Pallet<T>
+{
+	fn lateness(&self) -> frame_system::pallet_prelude::BlockNumberFor<T> {
 		Self::lateness()
 	}
 }

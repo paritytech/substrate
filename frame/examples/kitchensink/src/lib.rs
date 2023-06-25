@@ -183,7 +183,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub foo: u32,
-		pub bar: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		pub bar: frame_system::pallet_prelude::BlockNumberFor<T>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -249,22 +249,25 @@ pub mod pallet {
 	/// All the possible hooks that a pallet can have. See [`frame_support::traits::Hooks`] for more
 	/// info.
 	#[pallet::hooks]
-	impl<T: Config> Hooks<frame_system::pallet_prelude::BlockNumberFor::<T>> for Pallet<T> {
+	impl<T: Config> Hooks<frame_system::pallet_prelude::BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {}
 
-		fn offchain_worker(_n: frame_system::pallet_prelude::BlockNumberFor::<T>) {
+		fn offchain_worker(_n: frame_system::pallet_prelude::BlockNumberFor<T>) {
 			unimplemented!()
 		}
 
-		fn on_initialize(_n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
+		fn on_initialize(_n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			unimplemented!()
 		}
 
-		fn on_finalize(_n: frame_system::pallet_prelude::BlockNumberFor::<T>) {
+		fn on_finalize(_n: frame_system::pallet_prelude::BlockNumberFor<T>) {
 			unimplemented!()
 		}
 
-		fn on_idle(_n: frame_system::pallet_prelude::BlockNumberFor::<T>, _remaining_weight: Weight) -> Weight {
+		fn on_idle(
+			_n: frame_system::pallet_prelude::BlockNumberFor<T>,
+			_remaining_weight: Weight,
+		) -> Weight {
 			unimplemented!()
 		}
 
@@ -283,7 +286,9 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Result<(), TryRuntimeError> {
+		fn try_state(
+			_n: frame_system::pallet_prelude::BlockNumberFor<T>,
+		) -> Result<(), TryRuntimeError> {
 			unimplemented!()
 		}
 	}

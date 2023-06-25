@@ -834,7 +834,7 @@ pub mod tests {
 	use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 	use sp_std::result;
 
-	pub use self::frame_system::{Config, Pallet, pallet_prelude::*};
+	pub use self::frame_system::{pallet_prelude::*, Config, Pallet};
 
 	#[pallet]
 	pub mod frame_system {
@@ -951,8 +951,9 @@ pub mod tests {
 		pub mod pallet_prelude {
 			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
 
-			pub type HeaderFor<T> = <<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
-			
+			pub type HeaderFor<T> =
+				<<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+
 			pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 		}
 	}
@@ -999,12 +1000,8 @@ pub mod tests {
 	fn storage_alias_works() {
 		new_test_ext().execute_with(|| {
 			#[crate::storage_alias]
-			type GenericData2<T> = StorageMap<
-				System,
-				Blake2_128Concat,
-				BlockNumberFor<T>,
-				BlockNumberFor<T>,
-			>;
+			type GenericData2<T> =
+				StorageMap<System, Blake2_128Concat, BlockNumberFor<T>, BlockNumberFor<T>>;
 
 			assert_eq!(Pallet::<Runtime>::generic_data2(5), None);
 			GenericData2::<Runtime>::insert(5, 5);
@@ -1012,12 +1009,8 @@ pub mod tests {
 
 			/// Some random docs that ensure that docs are accepted
 			#[crate::storage_alias]
-			pub type GenericData<T> = StorageMap<
-				Test2,
-				Blake2_128Concat,
-				BlockNumberFor<T>,
-				BlockNumberFor<T>,
-			>;
+			pub type GenericData<T> =
+				StorageMap<Test2, Blake2_128Concat, BlockNumberFor<T>, BlockNumberFor<T>>;
 		});
 	}
 

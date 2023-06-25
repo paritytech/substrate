@@ -20,7 +20,7 @@
 pub use sp_core::H256;
 use sp_runtime::traits::Hash;
 pub use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
 use sp_std::convert::{TryFrom, TryInto};
@@ -235,7 +235,6 @@ impl Config for Test {
 	type WeightInfo = ();
 	type RetirementPeriod = RetirementPeriod;
 }
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

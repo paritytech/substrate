@@ -282,7 +282,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
-		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
+		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			if n % T::Period::get() == Zero::zero() {
 				let pool = <Pool<T, I>>::get();
 				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);

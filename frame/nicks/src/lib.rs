@@ -238,11 +238,8 @@ mod tests {
 	};
 	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
-	use sp_runtime::{
-				traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	};
+	use sp_runtime::traits::{BadOrigin, BlakeTwo256, IdentityLookup};
 
-	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(

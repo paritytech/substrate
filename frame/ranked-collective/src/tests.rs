@@ -26,13 +26,10 @@ use frame_support::{
 	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling},
 };
 use sp_core::{Get, H256};
-use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, ReduceBy},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup, ReduceBy};
 
 use super::*;
 use crate as pallet_ranked_collective;
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 type Class = Rank;

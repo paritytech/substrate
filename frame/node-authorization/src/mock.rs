@@ -26,15 +26,12 @@ use frame_support::{
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
-use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
-};
-
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test 
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		NodeAuthorization: pallet_node_authorization::{

@@ -38,12 +38,18 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::unbounded]
-	pub type AppendableDM<T: Config> =
-		StorageDoubleMap<_, Identity, u32, Identity, frame_system::pallet_prelude::BlockNumberFor::<T>, Vec<u32>>;
+	pub type AppendableDM<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		u32,
+		Identity,
+		frame_system::pallet_prelude::BlockNumberFor<T>,
+		Vec<u32>,
+	>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub t: Vec<(u32, frame_system::pallet_prelude::BlockNumberFor::<T>, Vec<u32>)>,
+		pub t: Vec<(u32, frame_system::pallet_prelude::BlockNumberFor<T>, Vec<u32>)>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -71,7 +77,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 frame_support::construct_runtime!(
 	pub enum Test
-	
+
 	{
 		System: frame_support_test,
 		MyPallet: pallet,

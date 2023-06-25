@@ -22,7 +22,7 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill,
 };
 

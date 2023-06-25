@@ -19,9 +19,7 @@ use super::*;
 use crate as pallet_transaction_payment;
 
 use sp_core::H256;
-use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 use frame_support::{
 	dispatch::DispatchClass,
@@ -31,7 +29,6 @@ use frame_support::{
 };
 use frame_system as system;
 use pallet_balances::Call as BalancesCall;
-
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 

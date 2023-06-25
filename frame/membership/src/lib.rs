@@ -523,9 +523,7 @@ mod tests {
 	use crate as pallet_membership;
 
 	use sp_core::H256;
-	use sp_runtime::{
-				traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	};
+	use sp_runtime::traits::{BadOrigin, BlakeTwo256, IdentityLookup};
 
 	use frame_support::{
 		assert_noop, assert_ok, bounded_vec, ord_parameter_types, parameter_types,
@@ -533,7 +531,6 @@ mod tests {
 	};
 	use frame_system::EnsureSignedBy;
 
-	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(

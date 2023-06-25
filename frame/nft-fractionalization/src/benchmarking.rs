@@ -58,8 +58,14 @@ where
 
 fn mint_nft<T: Config>(nft_id: T::NftId) -> (T::AccountId, AccountIdLookupOf<T>)
 where
-	T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor::<T>, T::NftCollectionId>>
-		+ Mutate<T::AccountId, ItemConfig>,
+	T::Nfts: Create<
+			T::AccountId,
+			CollectionConfig<
+				BalanceOf<T>,
+				frame_system::pallet_prelude::BlockNumberFor<T>,
+				T::NftCollectionId,
+			>,
+		> + Mutate<T::AccountId, ItemConfig>,
 {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());

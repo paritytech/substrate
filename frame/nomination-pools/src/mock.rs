@@ -244,7 +244,6 @@ impl pools::Config for Runtime {
 	type MaxPointsToBalance = frame_support::traits::ConstU8<10>;
 }
 
-
 type Block = frame_system::mocking::MockBlock<Runtime>;
 frame_support::construct_runtime!(
 	pub struct Runtime

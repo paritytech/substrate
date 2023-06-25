@@ -20,9 +20,7 @@
 #![cfg(test)]
 
 use sp_core::H256;
-use sp_runtime::{
-		traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup},
-};
+use sp_runtime::traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup};
 
 use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
@@ -34,7 +32,6 @@ use frame_support::{
 
 use super::*;
 use crate as treasury;
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 type UtilityCall = pallet_utility::Call<Test>;

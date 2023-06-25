@@ -31,10 +31,9 @@ use frame_support::{
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BlakeTwo256, Hash, IdentityLookup},
+	traits::{BlakeTwo256, Hash, IdentityLookup},
 	DispatchResult, Perbill,
 };
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

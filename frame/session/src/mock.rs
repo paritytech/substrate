@@ -27,7 +27,7 @@ use std::collections::BTreeMap;
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	impl_opaque_keys,
-	testing::{UintAuthorityId},
+	testing::UintAuthorityId,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 use sp_staking::SessionIndex;
@@ -74,7 +74,6 @@ impl OpaqueKeys for PreUpgradeMockSessionKeys {
 		}
 	}
 }
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

@@ -129,8 +129,10 @@ pub struct ParentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 					 Please use `ParentBlockRandomness` instead.")]
 pub struct CurrentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> RandomnessT<T::Hash, frame_system::pallet_prelude::BlockNumberFor::<T>> for RandomnessFromTwoEpochsAgo<T> {
-	fn random(subject: &[u8]) -> (T::Hash, frame_system::pallet_prelude::BlockNumberFor::<T>) {
+impl<T: Config> RandomnessT<T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>>
+	for RandomnessFromTwoEpochsAgo<T>
+{
+	fn random(subject: &[u8]) -> (T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>) {
 		let mut subject = subject.to_vec();
 		subject.reserve(RANDOMNESS_LENGTH);
 		subject.extend_from_slice(&Randomness::<T>::get()[..]);
@@ -139,8 +141,10 @@ impl<T: Config> RandomnessT<T::Hash, frame_system::pallet_prelude::BlockNumberFo
 	}
 }
 
-impl<T: Config> RandomnessT<T::Hash, frame_system::pallet_prelude::BlockNumberFor::<T>> for RandomnessFromOneEpochAgo<T> {
-	fn random(subject: &[u8]) -> (T::Hash, frame_system::pallet_prelude::BlockNumberFor::<T>) {
+impl<T: Config> RandomnessT<T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>>
+	for RandomnessFromOneEpochAgo<T>
+{
+	fn random(subject: &[u8]) -> (T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>) {
 		let mut subject = subject.to_vec();
 		subject.reserve(RANDOMNESS_LENGTH);
 		subject.extend_from_slice(&NextRandomness::<T>::get()[..]);
@@ -149,8 +153,12 @@ impl<T: Config> RandomnessT<T::Hash, frame_system::pallet_prelude::BlockNumberFo
 	}
 }
 
-impl<T: Config> RandomnessT<Option<T::Hash>, frame_system::pallet_prelude::BlockNumberFor::<T>> for ParentBlockRandomness<T> {
-	fn random(subject: &[u8]) -> (Option<T::Hash>, frame_system::pallet_prelude::BlockNumberFor::<T>) {
+impl<T: Config> RandomnessT<Option<T::Hash>, frame_system::pallet_prelude::BlockNumberFor<T>>
+	for ParentBlockRandomness<T>
+{
+	fn random(
+		subject: &[u8],
+	) -> (Option<T::Hash>, frame_system::pallet_prelude::BlockNumberFor<T>) {
 		let random = AuthorVrfRandomness::<T>::get().map(|random| {
 			let mut subject = subject.to_vec();
 			subject.reserve(RANDOMNESS_LENGTH);
@@ -164,8 +172,12 @@ impl<T: Config> RandomnessT<Option<T::Hash>, frame_system::pallet_prelude::Block
 }
 
 #[allow(deprecated)]
-impl<T: Config> RandomnessT<Option<T::Hash>, frame_system::pallet_prelude::BlockNumberFor::<T>> for CurrentBlockRandomness<T> {
-	fn random(subject: &[u8]) -> (Option<T::Hash>, frame_system::pallet_prelude::BlockNumberFor::<T>) {
+impl<T: Config> RandomnessT<Option<T::Hash>, frame_system::pallet_prelude::BlockNumberFor<T>>
+	for CurrentBlockRandomness<T>
+{
+	fn random(
+		subject: &[u8],
+	) -> (Option<T::Hash>, frame_system::pallet_prelude::BlockNumberFor<T>) {
 		let (random, _) = ParentBlockRandomness::<T>::random(subject);
 		(random, <frame_system::Pallet<T>>::block_number())
 	}

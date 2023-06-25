@@ -28,11 +28,8 @@ use frame_support::{
 	traits::{ConstU32, ConstU64},
 };
 use sp_core::H256;
-use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use sp_std::collections::btree_map::BTreeMap;
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

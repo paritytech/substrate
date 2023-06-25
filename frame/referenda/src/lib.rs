@@ -161,8 +161,15 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
-		type Scheduler: ScheduleAnon<frame_system::pallet_prelude::BlockNumberFor<Self>, CallOf<Self, I>, PalletsOriginOf<Self>>
-			+ ScheduleNamed<frame_system::pallet_prelude::BlockNumberFor<Self>, CallOf<Self, I>, PalletsOriginOf<Self>>;
+		type Scheduler: ScheduleAnon<
+				frame_system::pallet_prelude::BlockNumberFor<Self>,
+				CallOf<Self, I>,
+				PalletsOriginOf<Self>,
+			> + ScheduleNamed<
+				frame_system::pallet_prelude::BlockNumberFor<Self>,
+				CallOf<Self, I>,
+				PalletsOriginOf<Self>,
+			>;
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
@@ -214,8 +221,14 @@ pub mod pallet {
 		#[pallet::constant]
 		type Tracks: Get<
 				Vec<(
-					<Self::Tracks as TracksInfo<BalanceOf<Self, I>, frame_system::pallet_prelude::BlockNumberFor<Self>>>::Id,
-					TrackInfo<BalanceOf<Self, I>, frame_system::pallet_prelude::BlockNumberFor<Self>>,
+					<Self::Tracks as TracksInfo<
+						BalanceOf<Self, I>,
+						frame_system::pallet_prelude::BlockNumberFor<Self>,
+					>>::Id,
+					TrackInfo<
+						BalanceOf<Self, I>,
+						frame_system::pallet_prelude::BlockNumberFor<Self>,
+					>,
 				)>,
 			> + TracksInfo<
 				BalanceOf<Self, I>,
@@ -432,7 +445,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			proposal_origin: Box<PalletsOriginOf<T>>,
 			proposal: BoundedCallOf<T, I>,
-			enactment_moment: DispatchTime<frame_system::pallet_prelude::BlockNumberFor::<T>>,
+			enactment_moment: DispatchTime<frame_system::pallet_prelude::BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let proposal_origin = *proposal_origin;
 			let who = T::SubmitOrigin::ensure_origin(origin, &proposal_origin)?;
@@ -704,7 +717,7 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 	type Index = ReferendumIndex;
 	type Votes = VotesOf<T, I>;
-	type Moment = frame_system::pallet_prelude::BlockNumberFor::<T>;
+	type Moment = frame_system::pallet_prelude::BlockNumberFor<T>;
 	type Class = TrackIdOf<T, I>;
 
 	fn classes() -> Vec<Self::Class> {
@@ -713,7 +726,13 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 
 	fn access_poll<R>(
 		index: Self::Index,
-		f: impl FnOnce(PollStatus<&mut T::Tally, frame_system::pallet_prelude::BlockNumberFor::<T>, TrackIdOf<T, I>>) -> R,
+		f: impl FnOnce(
+			PollStatus<
+				&mut T::Tally,
+				frame_system::pallet_prelude::BlockNumberFor<T>,
+				TrackIdOf<T, I>,
+			>,
+		) -> R,
 	) -> R {
 		match ReferendumInfoFor::<T, I>::get(index) {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
@@ -732,7 +751,11 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 	fn try_access_poll<R>(
 		index: Self::Index,
 		f: impl FnOnce(
-			PollStatus<&mut T::Tally, frame_system::pallet_prelude::BlockNumberFor::<T>, TrackIdOf<T, I>>,
+			PollStatus<
+				&mut T::Tally,
+				frame_system::pallet_prelude::BlockNumberFor<T>,
+				TrackIdOf<T, I>,
+			>,
 		) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError> {
 		match ReferendumInfoFor::<T, I>::get(index) {
@@ -849,7 +872,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn schedule_enactment(
 		index: ReferendumIndex,
 		track: &TrackInfoOf<T, I>,
-		desired: DispatchTime<frame_system::pallet_prelude::BlockNumberFor::<T>>,
+		desired: DispatchTime<frame_system::pallet_prelude::BlockNumberFor<T>>,
 		origin: PalletsOriginOf<T>,
 		call: BoundedCallOf<T, I>,
 	) {
@@ -871,8 +894,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Set an alarm to dispatch `call` at block number `when`.
 	fn set_alarm(
 		call: BoundedCallOf<T, I>,
-		when: frame_system::pallet_prelude::BlockNumberFor::<T>,
-	) -> Option<(frame_system::pallet_prelude::BlockNumberFor::<T>, ScheduleAddressOf<T, I>)> {
+		when: frame_system::pallet_prelude::BlockNumberFor<T>,
+	) -> Option<(frame_system::pallet_prelude::BlockNumberFor<T>, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
 		// Alarm must go off no earlier than `when`.
 		// This rounds `when` upwards to the next multiple of `alarm_interval`.
@@ -905,9 +928,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn begin_deciding(
 		status: &mut ReferendumStatusOf<T, I>,
 		index: ReferendumIndex,
-		now: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		now: frame_system::pallet_prelude::BlockNumberFor<T>,
 		track: &TrackInfoOf<T, I>,
-	) -> (Option<frame_system::pallet_prelude::BlockNumberFor::<T>>, BeginDecidingBranch) {
+	) -> (Option<frame_system::pallet_prelude::BlockNumberFor<T>>, BeginDecidingBranch) {
 		let is_passing = Self::is_passing(
 			&status.tally,
 			Zero::zero(),
@@ -943,11 +966,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// If `None`, then it is queued and should be nudged automatically as the queue gets drained.
 	fn ready_for_deciding(
-		now: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		now: frame_system::pallet_prelude::BlockNumberFor<T>,
 		track: &TrackInfoOf<T, I>,
 		index: ReferendumIndex,
 		status: &mut ReferendumStatusOf<T, I>,
-	) -> (Option<frame_system::pallet_prelude::BlockNumberFor::<T>>, ServiceBranch) {
+	) -> (Option<frame_system::pallet_prelude::BlockNumberFor<T>>, ServiceBranch) {
 		let deciding_count = DecidingCount::<T, I>::get(status.track);
 		if deciding_count < track.max_deciding {
 			// Begin deciding.
@@ -1004,7 +1027,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn ensure_alarm_at(
 		status: &mut ReferendumStatusOf<T, I>,
 		index: ReferendumIndex,
-		alarm: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		alarm: frame_system::pallet_prelude::BlockNumberFor<T>,
 	) -> bool {
 		if status.alarm.as_ref().map_or(true, |&(when, _)| when != alarm) {
 			// Either no alarm or one that was different
@@ -1049,7 +1072,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// `TrackQueue`. Basically this happens when a referendum is in the deciding queue and receives
 	/// a vote, or when it moves into the deciding queue.
 	fn service_referendum(
-		now: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		now: frame_system::pallet_prelude::BlockNumberFor<T>,
 		index: ReferendumIndex,
 		mut status: ReferendumStatusOf<T, I>,
 	) -> (ReferendumInfoOf<T, I>, bool, ServiceBranch) {
@@ -1192,7 +1215,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		}
 
-		let dirty_alarm = if alarm < frame_system::pallet_prelude::BlockNumberFor::<T>::max_value() {
+		let dirty_alarm = if alarm < frame_system::pallet_prelude::BlockNumberFor::<T>::max_value()
+		{
 			Self::ensure_alarm_at(&mut status, index, alarm)
 		} else {
 			Self::ensure_no_alarm(&mut status)
@@ -1207,7 +1231,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tally: &T::Tally,
 		track_id: TrackIdOf<T, I>,
 		track: &TrackInfoOf<T, I>,
-	) -> frame_system::pallet_prelude::BlockNumberFor::<T> {
+	) -> frame_system::pallet_prelude::BlockNumberFor<T> {
 		deciding.confirming.unwrap_or_else(|| {
 			// Set alarm to the point where the current voting would make it pass.
 			let approval = tally.approval(track_id);
@@ -1266,8 +1290,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// `approval_needed`.
 	fn is_passing(
 		tally: &T::Tally,
-		elapsed: frame_system::pallet_prelude::BlockNumberFor::<T>,
-		period: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		elapsed: frame_system::pallet_prelude::BlockNumberFor<T>,
+		period: frame_system::pallet_prelude::BlockNumberFor<T>,
 		support_needed: &Curve,
 		approval_needed: &Curve,
 		id: TrackIdOf<T, I>,

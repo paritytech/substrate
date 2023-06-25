@@ -91,7 +91,8 @@ pub struct ParentNumberAndHash<T: frame_system::Config> {
 }
 
 impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
-	type LeafData = (frame_system::pallet_prelude::BlockNumberFor<T>, <T as frame_system::Config>::Hash);
+	type LeafData =
+		(frame_system::pallet_prelude::BlockNumberFor<T>, <T as frame_system::Config>::Hash);
 
 	fn leaf_data() -> Self::LeafData {
 		(
@@ -201,7 +202,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(_n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
+		fn on_initialize(_n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = sp_mmr_primitives::utils::NodesUtils::new(leaves).number_of_peaks();
@@ -298,16 +299,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Convert a block number into a leaf index.
-	fn block_num_to_leaf_index(block_num: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Result<LeafIndex, Error>
+	fn block_num_to_leaf_index(
+		block_num: frame_system::pallet_prelude::BlockNumberFor<T>,
+	) -> Result<LeafIndex, Error>
 	where
 		T: frame_system::Config,
 	{
-		let first_mmr_block = utils::first_mmr_block_num::<frame_system::pallet_prelude::HeaderFor<T>>(
-			<frame_system::Pallet<T>>::block_number(),
-			Self::mmr_leaves(),
-		)?;
+		let first_mmr_block = utils::first_mmr_block_num::<
+			frame_system::pallet_prelude::HeaderFor<T>,
+		>(<frame_system::Pallet<T>>::block_number(), Self::mmr_leaves())?;
 
-		utils::block_num_to_leaf_index::<frame_system::pallet_prelude::HeaderFor<T>>(block_num, first_mmr_block)
+		utils::block_num_to_leaf_index::<frame_system::pallet_prelude::HeaderFor<T>>(
+			block_num,
+			first_mmr_block,
+		)
 	}
 
 	/// Generate an MMR proof for the given `block_numbers`.
@@ -320,8 +325,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(
-		block_numbers: Vec<frame_system::pallet_prelude::BlockNumberFor::<T>>,
-		best_known_block_number: Option<frame_system::pallet_prelude::BlockNumberFor::<T>>,
+		block_numbers: Vec<frame_system::pallet_prelude::BlockNumberFor<T>>,
+		best_known_block_number: Option<frame_system::pallet_prelude::BlockNumberFor<T>>,
 	) -> Result<(Vec<LeafOf<T, I>>, primitives::Proof<HashOf<T, I>>), primitives::Error> {
 		// check whether best_known_block_number provided, else use current best block
 		let best_known_block_number =

@@ -30,7 +30,7 @@ use frame_support::{
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	Perbill,
 };
 
@@ -91,7 +91,6 @@ pub mod logger {
 		}
 	}
 }
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

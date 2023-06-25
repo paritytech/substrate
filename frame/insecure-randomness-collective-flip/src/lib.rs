@@ -78,7 +78,9 @@ use sp_runtime::traits::{Hash, Saturating};
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
 
-fn block_number_to_index<T: Config>(block_number: frame_system::pallet_prelude::BlockNumberFor::<T>) -> usize {
+fn block_number_to_index<T: Config>(
+	block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
+) -> usize {
 	// on_initialize is called on the first block after genesis
 	let index = (block_number - 1u32.into()) % RANDOM_MATERIAL_LEN.into();
 	index.try_into().ok().expect("Something % 81 is always smaller than usize; qed")
@@ -100,7 +102,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(block_number: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
+		fn on_initialize(block_number: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 
 			<RandomMaterial<T>>::mutate(|ref mut values| {
@@ -123,7 +125,7 @@ pub mod pallet {
 		StorageValue<_, BoundedVec<T::Hash, ConstU32<RANDOM_MATERIAL_LEN>>, ValueQuery>;
 }
 
-impl<T: Config> Randomness<T::Hash, frame_system::pallet_prelude::BlockNumberFor::<T>> for Pallet<T> {
+impl<T: Config> Randomness<T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>> for Pallet<T> {
 	/// This randomness uses a low-influence function, drawing upon the block hashes from the
 	/// previous 81 blocks. Its result for any given subject will be known far in advance by anyone
 	/// observing the chain. Any block producer has significant influence over their block hashes
@@ -134,7 +136,7 @@ impl<T: Config> Randomness<T::Hash, frame_system::pallet_prelude::BlockNumberFor
 	/// WARNING: Hashing the result of this function will remove any low-influence properties it has
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
 	/// the parent block, who can determine the value of `parent_hash`.
-	fn random(subject: &[u8]) -> (T::Hash, frame_system::pallet_prelude::BlockNumberFor::<T>) {
+	fn random(subject: &[u8]) -> (T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>) {
 		let block_number = <frame_system::Pallet<T>>::block_number();
 		let index = block_number_to_index::<T>(block_number);
 
@@ -163,9 +165,7 @@ mod tests {
 	use crate as pallet_insecure_randomness_collective_flip;
 
 	use sp_core::H256;
-	use sp_runtime::{
-				traits::{BlakeTwo256, Header as _, IdentityLookup},
-	};
+	use sp_runtime::traits::{BlakeTwo256, Header as _, IdentityLookup};
 
 	use frame_support::{
 		parameter_types,
@@ -173,7 +173,6 @@ mod tests {
 	};
 	use frame_system::limits;
 
-	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(

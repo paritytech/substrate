@@ -1021,7 +1021,9 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		Ok(Self::get_npos_targets(None))
 	}
 
-	fn next_election_prediction(now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> frame_system::pallet_prelude::BlockNumberFor::<T> {
+	fn next_election_prediction(
+		now: frame_system::pallet_prelude::BlockNumberFor<T>,
+	) -> frame_system::pallet_prelude::BlockNumberFor<T> {
 		let current_era = Self::current_era().unwrap_or(0);
 		let current_session = Self::current_planned_session();
 		let current_era_start_session_index =
@@ -1038,16 +1040,17 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 
 		let session_length = T::NextNewSession::average_session_length();
 
-		let sessions_left: frame_system::pallet_prelude::BlockNumberFor::<T> = match ForceEra::<T>::get() {
-			Forcing::ForceNone => Bounded::max_value(),
-			Forcing::ForceNew | Forcing::ForceAlways => Zero::zero(),
-			Forcing::NotForcing if era_progress >= T::SessionsPerEra::get() => Zero::zero(),
-			Forcing::NotForcing => T::SessionsPerEra::get()
-				.saturating_sub(era_progress)
-				// One session is computed in this_session_end.
-				.saturating_sub(1)
-				.into(),
-		};
+		let sessions_left: frame_system::pallet_prelude::BlockNumberFor<T> =
+			match ForceEra::<T>::get() {
+				Forcing::ForceNone => Bounded::max_value(),
+				Forcing::ForceNew | Forcing::ForceAlways => Zero::zero(),
+				Forcing::NotForcing if era_progress >= T::SessionsPerEra::get() => Zero::zero(),
+				Forcing::NotForcing => T::SessionsPerEra::get()
+					.saturating_sub(era_progress)
+					// One session is computed in this_session_end.
+					.saturating_sub(1)
+					.into(),
+			};
 
 		now.saturating_add(
 			until_this_session_end.saturating_add(sessions_left.saturating_mul(session_length)),
@@ -1237,7 +1240,9 @@ impl<T: Config> historical::SessionManager<T::AccountId, Exposure<T::AccountId, 
 
 /// Add reward points to block authors:
 /// * 20 points to the block producer for producing a (non-uncle) block,
-impl<T> pallet_authorship::EventHandler<T::AccountId, frame_system::pallet_prelude::BlockNumberFor::<T>> for Pallet<T>
+impl<T>
+	pallet_authorship::EventHandler<T::AccountId, frame_system::pallet_prelude::BlockNumberFor<T>>
+	for Pallet<T>
 where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {

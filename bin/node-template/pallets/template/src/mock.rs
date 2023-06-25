@@ -1,16 +1,13 @@
 use crate as pallet_template;
 use frame_support::traits::{ConstU16, ConstU64};
 use sp_core::H256;
-use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
-};
-
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-	pub enum Test 
+	pub enum Test
 	{
 		System: frame_system,
 		TemplateModule: pallet_template,

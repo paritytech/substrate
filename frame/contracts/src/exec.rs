@@ -394,7 +394,7 @@ pub struct Stack<'a, T: Config, E> {
 	/// The timestamp at the point of call stack instantiation.
 	timestamp: MomentOf<T>,
 	/// The block number at the time of call stack instantiation.
-	block_number: frame_system::pallet_prelude::BlockNumberFor::<T>,
+	block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
 	/// The nonce is cached here when accessed. It is written back when the call stack
 	/// finishes executing. Please refer to [`Nonce`] to a description of
 	/// the nonce itself.
@@ -1356,7 +1356,7 @@ where
 		);
 	}
 
-	fn block_number(&self) -> frame_system::pallet_prelude::BlockNumberFor::<T> {
+	fn block_number(&self) -> frame_system::pallet_prelude::BlockNumberFor<T> {
 		self.block_number
 	}
 

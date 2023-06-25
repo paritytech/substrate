@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{BlockHash, Config, Pallet, pallet_prelude::BlockNumberFor};
+use crate::{pallet_prelude::BlockNumberFor, BlockHash, Config, Pallet};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{

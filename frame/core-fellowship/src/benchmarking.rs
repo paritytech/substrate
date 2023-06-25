@@ -75,7 +75,9 @@ mod benchmarks {
 		let member = make_member::<T, I>(0)?;
 
 		// Set it to the max value to ensure that any possible auto-demotion period has passed.
-		frame_system::Pallet::<T>::set_block_number(frame_system::pallet_prelude::BlockNumberFor::<T>::max_value());
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::pallet_prelude::BlockNumberFor::<T>::max_value(),
+		);
 		ensure_evidence::<T, I>(&member)?;
 		assert!(Member::<T, I>::contains_key(&member));
 
@@ -92,7 +94,9 @@ mod benchmarks {
 		let member = make_member::<T, I>(2)?;
 
 		// Set it to the max value to ensure that any possible auto-demotion period has passed.
-		frame_system::Pallet::<T>::set_block_number(frame_system::pallet_prelude::BlockNumberFor::<T>::max_value());
+		frame_system::Pallet::<T>::set_block_number(
+			frame_system::pallet_prelude::BlockNumberFor::<T>::max_value(),
+		);
 		ensure_evidence::<T, I>(&member)?;
 		assert!(Member::<T, I>::contains_key(&member));
 		assert_eq!(T::Members::rank_of(&member), Some(2));

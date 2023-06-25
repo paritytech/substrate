@@ -102,7 +102,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
+		fn on_initialize(_: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			if let Some(new_slot) = Self::current_slot_from_digests() {
 				let current_slot = CurrentSlot::<T>::get();
 

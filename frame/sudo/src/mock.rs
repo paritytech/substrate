@@ -22,9 +22,7 @@ use crate as sudo;
 use frame_support::traits::{ConstU32, ConstU64, Contains, GenesisBuild};
 use sp_core::H256;
 use sp_io;
-use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 
 // Logger module to track execution.
 #[frame_support::pallet]
@@ -88,7 +86,6 @@ pub mod logger {
 	#[pallet::getter(fn i32_log)]
 	pub(super) type I32Log<T> = StorageValue<_, BoundedVec<i32, ConstU32<1_000>>, ValueQuery>;
 }
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

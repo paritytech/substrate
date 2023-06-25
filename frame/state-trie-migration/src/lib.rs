@@ -1065,7 +1065,6 @@ mod mock {
 		StorageChild,
 	};
 
-	
 	type Block = frame_system::mocking::MockBlockU32<Test>;
 
 	// Configure a mock runtime to test the pallet.

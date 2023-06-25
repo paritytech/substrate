@@ -88,7 +88,7 @@ pub struct Block<Header, Extrinsic> {
 
 impl<Header, Extrinsic> traits::HeaderProvider for Block<Header, Extrinsic>
 where
-	Header: HeaderT
+	Header: HeaderT,
 {
 	type HeaderT = Header;
 }

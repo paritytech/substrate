@@ -842,7 +842,7 @@ impl<T: Config<I>, I: 'static> LockableCurrency<T::AccountId> for Pallet<T, I>
 where
 	T::Balance: MaybeSerializeDeserialize + Debug,
 {
-	type Moment = frame_system::pallet_prelude::BlockNumberFor::<T>;
+	type Moment = frame_system::pallet_prelude::BlockNumberFor<T>;
 
 	type MaxLocks = T::MaxLocks;
 

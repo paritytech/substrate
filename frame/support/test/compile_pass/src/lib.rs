@@ -82,9 +82,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 construct_runtime!(
-	pub struct Runtime
-	
-	{
+	pub struct Runtime {
 		System: frame_system,
 	}
 );

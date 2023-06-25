@@ -1154,7 +1154,9 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + TypeInfo + 'static {
+pub trait Header:
+	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + TypeInfo + 'static
+{
 	/// Header number.
 	type Number: Member
 		+ MaybeSerializeDeserialize
@@ -1214,20 +1216,20 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + Ty
 }
 
 /// Something that provides the Header Type.
-// This is needed to fix the "cyclical" issue in loading Header/BlockNumber as part of a 
+// This is needed to fix the "cyclical" issue in loading Header/BlockNumber as part of a
 // `pallet::call`. Essentially, `construct_runtime` aggregates all calls to create a `RuntimeCall`
 // that is then used to define `UncheckedExtrinsic`.
 // ```ignore
 // pub type UncheckedExtrinsic =
-//	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+// 	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
 // ```
 // This `UncheckedExtrinsic` is supplied to the `Block`.
 // ```ignore
 // pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 // ```
-// So, if we do not create a trait outside of `Block` that doesn't have `Extrinsic`, we go into a 
+// So, if we do not create a trait outside of `Block` that doesn't have `Extrinsic`, we go into a
 // recursive loop leading to a build error.
-// 
+//
 // Note that this is a workaround and should be removed once we have a better solution.
 pub trait HeaderProvider {
 	/// Header type.
@@ -1238,7 +1240,17 @@ pub trait HeaderProvider {
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: HeaderProvider<HeaderT = <Self as Block>::Header> + Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Block:
+	HeaderProvider<HeaderT = <Self as Block>::Header>
+	+ Clone
+	+ Send
+	+ Sync
+	+ Codec
+	+ Eq
+	+ MaybeSerialize
+	+ Debug
+	+ 'static
+{
 	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.

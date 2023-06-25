@@ -87,11 +87,7 @@ impl Parse for RuntimeDeclaration {
 		}
 
 		let name = input.parse::<syn::Ident>()?;
-		let where_section = if input.peek(token::Where) {
-			Some(input.parse()?)
-		} else {
-			None
-		};
+		let where_section = if input.peek(token::Where) { Some(input.parse()?) } else { None };
 		let pallets =
 			input.parse::<ext::Braces<ext::Punctuated<PalletDeclaration, Token![,]>>>()?;
 		let pallets_token = pallets.token;

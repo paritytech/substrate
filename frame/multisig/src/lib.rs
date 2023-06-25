@@ -183,7 +183,12 @@ pub mod pallet {
 		T::AccountId,
 		Blake2_128Concat,
 		[u8; 32],
-		Multisig<frame_system::pallet_prelude::BlockNumberFor::<T>, BalanceOf<T>, T::AccountId, T::MaxSignatories>,
+		Multisig<
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BalanceOf<T>,
+			T::AccountId,
+			T::MaxSignatories,
+		>,
 	>;
 
 	#[pallet::error]
@@ -226,14 +231,14 @@ pub mod pallet {
 		/// A multisig operation has been approved by someone.
 		MultisigApproval {
 			approving: T::AccountId,
-			timepoint: Timepoint<frame_system::pallet_prelude::BlockNumberFor::<T>>,
+			timepoint: Timepoint<frame_system::pallet_prelude::BlockNumberFor<T>>,
 			multisig: T::AccountId,
 			call_hash: CallHash,
 		},
 		/// A multisig operation has been executed.
 		MultisigExecuted {
 			approving: T::AccountId,
-			timepoint: Timepoint<frame_system::pallet_prelude::BlockNumberFor::<T>>,
+			timepoint: Timepoint<frame_system::pallet_prelude::BlockNumberFor<T>>,
 			multisig: T::AccountId,
 			call_hash: CallHash,
 			result: DispatchResult,
@@ -241,7 +246,7 @@ pub mod pallet {
 		/// A multisig operation has been cancelled.
 		MultisigCancelled {
 			cancelling: T::AccountId,
-			timepoint: Timepoint<frame_system::pallet_prelude::BlockNumberFor::<T>>,
+			timepoint: Timepoint<frame_system::pallet_prelude::BlockNumberFor<T>>,
 			multisig: T::AccountId,
 			call_hash: CallHash,
 		},
@@ -366,7 +371,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
-			maybe_timepoint: Option<Timepoint<frame_system::pallet_prelude::BlockNumberFor::<T>>>,
+			maybe_timepoint: Option<Timepoint<frame_system::pallet_prelude::BlockNumberFor<T>>>,
 			call: Box<<T as Config>::RuntimeCall>,
 			max_weight: Weight,
 		) -> DispatchResultWithPostInfo {
@@ -423,7 +428,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
-			maybe_timepoint: Option<Timepoint<frame_system::pallet_prelude::BlockNumberFor::<T>>>,
+			maybe_timepoint: Option<Timepoint<frame_system::pallet_prelude::BlockNumberFor<T>>>,
 			call_hash: [u8; 32],
 			max_weight: Weight,
 		) -> DispatchResultWithPostInfo {
@@ -465,7 +470,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
-			timepoint: Timepoint<frame_system::pallet_prelude::BlockNumberFor::<T>>,
+			timepoint: Timepoint<frame_system::pallet_prelude::BlockNumberFor<T>>,
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -511,7 +516,7 @@ impl<T: Config> Pallet<T> {
 		who: T::AccountId,
 		threshold: u16,
 		other_signatories: Vec<T::AccountId>,
-		maybe_timepoint: Option<Timepoint<frame_system::pallet_prelude::BlockNumberFor::<T>>>,
+		maybe_timepoint: Option<Timepoint<frame_system::pallet_prelude::BlockNumberFor<T>>>,
 		call_or_hash: CallOrHash<T>,
 		max_weight: Weight,
 	) -> DispatchResultWithPostInfo {
@@ -637,7 +642,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// The current `Timepoint`.
-	pub fn timepoint() -> Timepoint<frame_system::pallet_prelude::BlockNumberFor::<T>> {
+	pub fn timepoint() -> Timepoint<frame_system::pallet_prelude::BlockNumberFor<T>> {
 		Timepoint {
 			height: <system::Pallet<T>>::block_number(),
 			index: <system::Pallet<T>>::extrinsic_index().unwrap_or_default(),

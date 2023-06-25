@@ -113,7 +113,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 	assert_eq!(event, &system_event);
 }
 
-pub fn run_to_block<T: Config>(n: frame_system::pallet_prelude::BlockNumberFor::<T>) {
+pub fn run_to_block<T: Config>(n: frame_system::pallet_prelude::BlockNumberFor<T>) {
 	while frame_system::Pallet::<T>::block_number() < n {
 		crate::Pallet::<T>::on_finalize(frame_system::Pallet::<T>::block_number());
 		frame_system::Pallet::<T>::on_finalize(frame_system::Pallet::<T>::block_number());

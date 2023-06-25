@@ -27,10 +27,7 @@ use frame_support::{
 };
 use frame_system as system;
 use pallet_session::historical as pallet_session_historical;
-use sp_runtime::{
-	testing::{UintAuthorityId},
-	traits::IdentityLookup,
-};
+use sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup};
 
 type AccountId = u64;
 type AccountIndex = u32;

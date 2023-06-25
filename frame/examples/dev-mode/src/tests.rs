@@ -21,12 +21,11 @@ use crate::*;
 use frame_support::{assert_ok, traits::ConstU64};
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_dev_mode;
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

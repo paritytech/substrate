@@ -111,7 +111,6 @@ pub mod tests {
 
 	use super::pallet as pallet_default_config_example;
 
-	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
@@ -140,8 +139,9 @@ pub mod tests {
 
 		// type Index = u32;
 		// type BlockNumber = u32;
-		// type Header = sp_runtime::generic::Header<frame_system::pallet_prelude::BlockNumberFor<Self>, Self::Hashing>;
-		// type Hash = sp_core::hash::H256;
+		// type Header =
+		// sp_runtime::generic::Header<frame_system::pallet_prelude::BlockNumberFor<Self>,
+		// Self::Hashing>; type Hash = sp_core::hash::H256;
 		// type Hashing = sp_runtime::traits::BlakeTwo256;
 		// type AccountId = u64;
 		// type Lookup = sp_runtime::traits::IdentityLookup<u64>;

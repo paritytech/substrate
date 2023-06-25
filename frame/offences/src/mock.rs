@@ -29,7 +29,7 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	Perbill,
 };
 use sp_staking::{
@@ -64,7 +64,6 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
 pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
 	OnOffencePerbill::mutate(|fractions| f(fractions))
 }
-
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 

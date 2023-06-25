@@ -85,7 +85,6 @@ impl bags_list::Config for Runtime {
 	type Score = VoteWeight;
 }
 
-
 type Block = frame_system::mocking::MockBlock<Runtime>;
 frame_support::construct_runtime!(
 	pub struct Runtime

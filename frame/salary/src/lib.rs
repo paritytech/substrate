@@ -145,8 +145,11 @@ pub mod pallet {
 	pub type CycleIndexOf<T> = frame_system::pallet_prelude::BlockNumberFor<T>;
 	pub type BalanceOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Balance;
 	pub type IdOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Id;
-	pub type StatusOf<T, I> =
-		StatusType<CycleIndexOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>, BalanceOf<T, I>>;
+	pub type StatusOf<T, I> = StatusType<
+		CycleIndexOf<T>,
+		frame_system::pallet_prelude::BlockNumberFor<T>,
+		BalanceOf<T, I>,
+	>;
 	pub type ClaimantStatusOf<T, I> = ClaimantStatus<CycleIndexOf<T>, BalanceOf<T, I>, IdOf<T, I>>;
 
 	/// The overall status of the system.
@@ -389,7 +392,7 @@ pub mod pallet {
 		pub fn last_active(who: &T::AccountId) -> Result<CycleIndexOf<T>, DispatchError> {
 			Ok(Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?.last_active)
 		}
-		pub fn cycle_period() -> frame_system::pallet_prelude::BlockNumberFor::<T> {
+		pub fn cycle_period() -> frame_system::pallet_prelude::BlockNumberFor<T> {
 			T::RegistrationPeriod::get() + T::PayoutPeriod::get()
 		}
 		fn do_payout(who: T::AccountId, beneficiary: T::AccountId) -> DispatchResult {

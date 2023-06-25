@@ -37,7 +37,10 @@ pub mod v1 {
 		frame_system::pallet_prelude::BlockNumberFor<T>,
 		Vec<
 			Option<
-				ScheduledV1<<T as Config>::RuntimeCall, frame_system::pallet_prelude::BlockNumberFor<T>>,
+				ScheduledV1<
+					<T as Config>::RuntimeCall,
+					frame_system::pallet_prelude::BlockNumberFor<T>,
+				>,
 			>,
 		>,
 		ValueQuery,

@@ -19,7 +19,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	Perbill,
 };
 
@@ -41,7 +41,6 @@ mod module {
 		Complex(Vec<u8>, u32, u16, u128),
 	}
 }
-
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 

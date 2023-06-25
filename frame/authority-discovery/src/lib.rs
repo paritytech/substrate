@@ -175,12 +175,11 @@ mod tests {
 	use sp_core::{crypto::key_types, H256};
 	use sp_io::TestExternalities;
 	use sp_runtime::{
-		testing::{UintAuthorityId},
+		testing::UintAuthorityId,
 		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
 		KeyTypeId, Perbill,
 	};
 
-	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
@@ -231,7 +230,7 @@ mod tests {
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
-			type RuntimeCall = RuntimeCall;
+		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AuthorityId;

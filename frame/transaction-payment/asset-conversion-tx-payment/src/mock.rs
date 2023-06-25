@@ -33,10 +33,9 @@ use pallet_asset_conversion::{NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_runtime::{
-		traits::{AccountIdConversion, BlakeTwo256, IdentityLookup, SaturatedConversion},
+	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup, SaturatedConversion},
 	Permill,
 };
-
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type Balance = u64;

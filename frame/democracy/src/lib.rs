@@ -226,14 +226,21 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The Scheduler.
-		type Scheduler: ScheduleNamed<frame_system::pallet_prelude::BlockNumberFor<Self>, CallOf<Self>, Self::PalletsOrigin>;
+		type Scheduler: ScheduleNamed<
+			frame_system::pallet_prelude::BlockNumberFor<Self>,
+			CallOf<Self>,
+			Self::PalletsOrigin,
+		>;
 
 		/// The Preimage provider.
 		type Preimages: QueryPreimage + StorePreimage;
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = frame_system::pallet_prelude::BlockNumberFor<Self>>;
+			+ LockableCurrency<
+				Self::AccountId,
+				Moment = frame_system::pallet_prelude::BlockNumberFor<Self>,
+			>;
 
 		/// The period between a proposal being approved and enacted.
 		///
@@ -387,7 +394,11 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		ReferendumIndex,
-		ReferendumInfo<frame_system::pallet_prelude::BlockNumberFor::<T>, BoundedCallOf<T>, BalanceOf<T>>,
+		ReferendumInfo<
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BoundedCallOf<T>,
+			BalanceOf<T>,
+		>,
 	>;
 
 	/// All votes for a particular voter. We store the balance for the number of votes that we
@@ -399,7 +410,12 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Voting<BalanceOf<T>, T::AccountId, frame_system::pallet_prelude::BlockNumberFor::<T>, T::MaxVotes>,
+		Voting<
+			BalanceOf<T>,
+			T::AccountId,
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			T::MaxVotes,
+		>,
 		ValueQuery,
 	>;
 
@@ -422,7 +438,10 @@ pub mod pallet {
 		_,
 		Identity,
 		H256,
-		(frame_system::pallet_prelude::BlockNumberFor::<T>, BoundedVec<T::AccountId, T::MaxBlacklisted>),
+		(
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BoundedVec<T::AccountId, T::MaxBlacklisted>,
+		),
 	>;
 
 	/// Record of all proposals that have been subject to emergency cancellation.
@@ -475,7 +494,11 @@ pub mod pallet {
 		/// An account has cancelled a previous delegation operation.
 		Undelegated { account: T::AccountId },
 		/// An external proposal has been vetoed.
-		Vetoed { who: T::AccountId, proposal_hash: H256, until: frame_system::pallet_prelude::BlockNumberFor::<T> },
+		Vetoed {
+			who: T::AccountId,
+			proposal_hash: H256,
+			until: frame_system::pallet_prelude::BlockNumberFor<T>,
+		},
 		/// A proposal_hash has been blacklisted permanently.
 		Blacklisted { proposal_hash: H256 },
 		/// An account has voted in a referendum
@@ -565,7 +588,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Weight: see `begin_block`
-		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
+		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			Self::begin_block(n)
 		}
 	}
@@ -775,8 +798,8 @@ pub mod pallet {
 		pub fn fast_track(
 			origin: OriginFor<T>,
 			proposal_hash: H256,
-			voting_period: frame_system::pallet_prelude::BlockNumberFor::<T>,
-			delay: frame_system::pallet_prelude::BlockNumberFor::<T>,
+			voting_period: frame_system::pallet_prelude::BlockNumberFor<T>,
+			delay: frame_system::pallet_prelude::BlockNumberFor<T>,
 		) -> DispatchResult {
 			// Rather complicated bit of code to ensure that either:
 			// - `voting_period` is at least `FastTrackVotingPeriod` and `origin` is
@@ -794,7 +817,10 @@ pub mod pallet {
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
 
-			ensure!(voting_period > frame_system::pallet_prelude::BlockNumberFor::<T>::zero(), Error::<T>::VotingPeriodLow);
+			ensure!(
+				voting_period > frame_system::pallet_prelude::BlockNumberFor::<T>::zero(),
+				Error::<T>::VotingPeriodLow
+			);
 			let (ext_proposal, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
@@ -1047,7 +1073,10 @@ pub mod pallet {
 			T::BlacklistOrigin::ensure_origin(origin)?;
 
 			// Insert the proposal into the blacklist.
-			let permanent = (frame_system::pallet_prelude::BlockNumberFor::<T>::max_value(), BoundedVec::<T::AccountId, _>::default());
+			let permanent = (
+				frame_system::pallet_prelude::BlockNumberFor::<T>::max_value(),
+				BoundedVec::<T::AccountId, _>::default(),
+			);
 			Blacklist::<T>::insert(&proposal_hash, permanent);
 
 			// Remove the queued proposal, if it's there.
@@ -1200,17 +1229,31 @@ impl<T: Config> Pallet<T> {
 
 	/// Get all referenda ready for tally at block `n`.
 	pub fn maturing_referenda_at(
-		n: frame_system::pallet_prelude::BlockNumberFor::<T>,
-	) -> Vec<(ReferendumIndex, ReferendumStatus<frame_system::pallet_prelude::BlockNumberFor::<T>, BoundedCallOf<T>, BalanceOf<T>>)> {
+		n: frame_system::pallet_prelude::BlockNumberFor<T>,
+	) -> Vec<(
+		ReferendumIndex,
+		ReferendumStatus<
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BoundedCallOf<T>,
+			BalanceOf<T>,
+		>,
+	)> {
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
 		Self::maturing_referenda_at_inner(n, next..last)
 	}
 
 	fn maturing_referenda_at_inner(
-		n: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		n: frame_system::pallet_prelude::BlockNumberFor<T>,
 		range: core::ops::Range<PropIndex>,
-	) -> Vec<(ReferendumIndex, ReferendumStatus<frame_system::pallet_prelude::BlockNumberFor::<T>, BoundedCallOf<T>, BalanceOf<T>>)> {
+	) -> Vec<(
+		ReferendumIndex,
+		ReferendumStatus<
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BoundedCallOf<T>,
+			BalanceOf<T>,
+		>,
+	)> {
 		range
 			.into_iter()
 			.map(|i| (i, Self::referendum_info(i)))
@@ -1228,7 +1271,7 @@ impl<T: Config> Pallet<T> {
 	pub fn internal_start_referendum(
 		proposal: BoundedCallOf<T>,
 		threshold: VoteThreshold,
-		delay: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		delay: frame_system::pallet_prelude::BlockNumberFor<T>,
 	) -> ReferendumIndex {
 		<Pallet<T>>::inject_referendum(
 			<frame_system::Pallet<T>>::block_number().saturating_add(T::VotingPeriod::get()),
@@ -1249,8 +1292,19 @@ impl<T: Config> Pallet<T> {
 
 	/// Ok if the given referendum is active, Err otherwise
 	fn ensure_ongoing(
-		r: ReferendumInfo<frame_system::pallet_prelude::BlockNumberFor::<T>, BoundedCallOf<T>, BalanceOf<T>>,
-	) -> Result<ReferendumStatus<frame_system::pallet_prelude::BlockNumberFor::<T>, BoundedCallOf<T>, BalanceOf<T>>, DispatchError> {
+		r: ReferendumInfo<
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BoundedCallOf<T>,
+			BalanceOf<T>,
+		>,
+	) -> Result<
+		ReferendumStatus<
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BoundedCallOf<T>,
+			BalanceOf<T>,
+		>,
+		DispatchError,
+	> {
 		match r {
 			ReferendumInfo::Ongoing(s) => Ok(s),
 			_ => Err(Error::<T>::ReferendumInvalid.into()),
@@ -1259,7 +1313,14 @@ impl<T: Config> Pallet<T> {
 
 	fn referendum_status(
 		ref_index: ReferendumIndex,
-	) -> Result<ReferendumStatus<frame_system::pallet_prelude::BlockNumberFor::<T>, BoundedCallOf<T>, BalanceOf<T>>, DispatchError> {
+	) -> Result<
+		ReferendumStatus<
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BoundedCallOf<T>,
+			BalanceOf<T>,
+		>,
+		DispatchError,
+	> {
 		let info = ReferendumInfoOf::<T>::get(ref_index).ok_or(Error::<T>::ReferendumInvalid)?;
 		Self::ensure_ongoing(info)
 	}
@@ -1514,10 +1575,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Start a referendum
 	fn inject_referendum(
-		end: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		end: frame_system::pallet_prelude::BlockNumberFor<T>,
 		proposal: BoundedCallOf<T>,
 		threshold: VoteThreshold,
-		delay: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		delay: frame_system::pallet_prelude::BlockNumberFor<T>,
 	) -> ReferendumIndex {
 		let ref_index = Self::referendum_count();
 		ReferendumCount::<T>::put(ref_index + 1);
@@ -1530,7 +1591,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Table the next waiting proposal for a vote.
-	fn launch_next(now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> DispatchResult {
+	fn launch_next(now: frame_system::pallet_prelude::BlockNumberFor<T>) -> DispatchResult {
 		if LastTabledWasExternal::<T>::take() {
 			Self::launch_public(now).or_else(|_| Self::launch_external(now))
 		} else {
@@ -1540,7 +1601,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Table the waiting external proposal for a vote, if there is one.
-	fn launch_external(now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> DispatchResult {
+	fn launch_external(now: frame_system::pallet_prelude::BlockNumberFor<T>) -> DispatchResult {
 		if let Some((proposal, threshold)) = <NextExternal<T>>::take() {
 			LastTabledWasExternal::<T>::put(true);
 			Self::deposit_event(Event::<T>::ExternalTabled);
@@ -1558,7 +1619,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Table the waiting public proposal with the highest backing for a vote.
-	fn launch_public(now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> DispatchResult {
+	fn launch_public(now: frame_system::pallet_prelude::BlockNumberFor<T>) -> DispatchResult {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter().enumerate().max_by_key(
 			// defensive only: All current public proposals have an amount locked
@@ -1591,9 +1652,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn bake_referendum(
-		now: frame_system::pallet_prelude::BlockNumberFor::<T>,
+		now: frame_system::pallet_prelude::BlockNumberFor<T>,
 		index: ReferendumIndex,
-		status: ReferendumStatus<frame_system::pallet_prelude::BlockNumberFor::<T>, BoundedCallOf<T>, BalanceOf<T>>,
+		status: ReferendumStatus<
+			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BoundedCallOf<T>,
+			BalanceOf<T>,
+		>,
 	) -> bool {
 		let total_issuance = T::Currency::total_issuance();
 		let approved = status.threshold.approved(status.tally, total_issuance);
@@ -1628,7 +1693,7 @@ impl<T: Config> Pallet<T> {
 	/// ## Complexity:
 	/// If a referendum is launched or maturing, this will take full block weight if queue is not
 	/// empty. Otherwise, `O(R)` where `R` is the number of unbaked referenda.
-	fn begin_block(now: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
+	fn begin_block(now: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let mut weight = Weight::zero();
 

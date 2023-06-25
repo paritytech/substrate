@@ -38,7 +38,7 @@ use scale_info::TypeInfo;
 use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_io;
 use sp_runtime::{
-		traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
+	traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
 	ArithmeticError, DispatchError, DispatchResult, FixedPointNumber, TokenError,
 };
 use std::collections::BTreeSet;
@@ -48,7 +48,6 @@ mod dispatchable_tests;
 mod fungible_conformance_tests;
 mod fungible_tests;
 mod reentrancy_tests;
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

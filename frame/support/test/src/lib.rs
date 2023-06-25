@@ -126,12 +126,13 @@ pub mod pallet_prelude {
 /// tests!
 pub struct TestRandomness<T>(sp_std::marker::PhantomData<T>);
 
-impl<Output: codec::Decode + Default, T> frame_support::traits::Randomness<Output, frame_system::pallet_prelude::BlockNumberFor::<T>>
+impl<Output: codec::Decode + Default, T>
+	frame_support::traits::Randomness<Output, frame_system::pallet_prelude::BlockNumberFor<T>>
 	for TestRandomness<T>
 where
 	T: frame_system::Config,
 {
-	fn random(subject: &[u8]) -> (Output, frame_system::pallet_prelude::BlockNumberFor::<T>) {
+	fn random(subject: &[u8]) -> (Output, frame_system::pallet_prelude::BlockNumberFor<T>) {
 		use sp_runtime::traits::TrailingZeroInput;
 
 		(

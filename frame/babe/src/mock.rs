@@ -42,7 +42,6 @@ use sp_staking::{EraIndex, SessionIndex};
 
 type DummyValidatorId = u64;
 
-
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(

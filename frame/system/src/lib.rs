@@ -73,9 +73,9 @@ use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
 	generic,
 	traits::{
-		self, AtLeast32Bit, BadOrigin, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Header, Lookup, LookupError, MaybeDisplay,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+		self, AtLeast32Bit, BadOrigin, BlockNumberProvider, Bounded, CheckEqual, Dispatchable,
+		Hash, Header, Lookup, LookupError, MaybeDisplay, MaybeSerializeDeserialize, Member, One,
+		Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
 	DispatchError, RuntimeDebug,
 };
@@ -1463,13 +1463,7 @@ impl<T: Config> Pallet<T> {
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
 			.expect("Node is configured to use the same hash; qed");
 
-		HeaderFor::<T>::new(
-			number,
-			extrinsics_root,
-			storage_root,
-			parent_hash,
-			digest,
-		)
+		HeaderFor::<T>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
@@ -1818,7 +1812,8 @@ pub mod pallet_prelude {
 	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
 	/// Type alias for the `Header`.
-	pub type HeaderFor<T> = <<T as crate::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+	pub type HeaderFor<T> =
+		<<T as crate::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
 
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;

@@ -345,7 +345,6 @@ mod mock {
 	type AccountIndex = u32;
 	type BlockNumber = u64;
 
-	
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
@@ -363,7 +362,7 @@ mod mock {
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
 		type Index = AccountIndex;
-			type RuntimeCall = RuntimeCall;
+		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;

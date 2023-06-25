@@ -37,11 +37,8 @@ use frame_support::{
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::Pareto;
 use sp_core::H256;
-use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use std::collections::{BTreeMap, BTreeSet};
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

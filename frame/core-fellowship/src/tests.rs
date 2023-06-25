@@ -28,14 +28,13 @@ use frame_support::{
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BlakeTwo256, IdentityLookup, TryMorphInto},
+	traits::{BlakeTwo256, IdentityLookup, TryMorphInto},
 	DispatchError, DispatchResult,
 };
 use sp_std::cell::RefCell;
 
 use super::*;
 use crate as pallet_core_fellowship;
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

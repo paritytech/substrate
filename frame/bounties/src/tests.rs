@@ -32,12 +32,11 @@ use frame_support::{
 
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill, Storage,
 };
 
 use super::Event as BountiesEvent;
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

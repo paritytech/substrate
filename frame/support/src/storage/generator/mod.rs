@@ -104,8 +104,8 @@ mod tests {
 			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
 
 			pub type HeaderFor<T> =
-			<<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
-			
+				<<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+
 			pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 		}
 	}

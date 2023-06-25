@@ -32,7 +32,7 @@ use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
-	testing::{TestXt},
+	testing::TestXt,
 	traits::{BlakeTwo256, IdentityLookup, OpaqueKeys},
 	Perbill,
 };
@@ -50,7 +50,6 @@ impl_opaque_keys! {
 		pub dummy: pallet_beefy::Pallet<Test>,
 	}
 }
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

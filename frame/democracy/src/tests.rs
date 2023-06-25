@@ -31,7 +31,7 @@ use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
-		traits::{BadOrigin, BlakeTwo256, Hash, IdentityLookup},
+	traits::{BadOrigin, BlakeTwo256, Hash, IdentityLookup},
 	Perbill,
 };
 mod cancellation;
@@ -49,7 +49,6 @@ const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
 const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
 const BIG_AYE: Vote = Vote { aye: true, conviction: Conviction::Locked1x };
 const BIG_NAY: Vote = Vote { aye: false, conviction: Conviction::Locked1x };
-
 
 type Block = frame_system::mocking::MockBlock<Test>;
 

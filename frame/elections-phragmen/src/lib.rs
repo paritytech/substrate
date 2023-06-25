@@ -203,8 +203,10 @@ pub mod pallet {
 		type PalletId: Get<LockIdentifier>;
 
 		/// The currency that people are electing with.
-		type Currency: LockableCurrency<Self::AccountId, Moment = frame_system::pallet_prelude::BlockNumberFor<Self>>
-			+ ReservableCurrency<Self::AccountId>;
+		type Currency: LockableCurrency<
+				Self::AccountId,
+				Moment = frame_system::pallet_prelude::BlockNumberFor<Self>,
+			> + ReservableCurrency<Self::AccountId>;
 
 		/// What to do when the members change.
 		type ChangeMembers: ChangeMembers<Self::AccountId>;
@@ -285,7 +287,7 @@ pub mod pallet {
 		/// What to do at the end of each block.
 		///
 		/// Checks if an election needs to happen or not.
-		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Weight {
+		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			let term_duration = T::TermDuration::get();
 			if !term_duration.is_zero() && (n % term_duration).is_zero() {
 				Self::do_phragmen()
@@ -330,7 +332,9 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: frame_system::pallet_prelude::BlockNumberFor::<T>) -> Result<(), TryRuntimeError> {
+		fn try_state(
+			_n: frame_system::pallet_prelude::BlockNumberFor<T>,
+		) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}

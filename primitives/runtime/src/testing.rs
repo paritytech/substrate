@@ -243,10 +243,7 @@ pub struct Block<Xt> {
 	pub extrinsics: Vec<Xt>,
 }
 
-impl<
-		Xt
-	> traits::HeaderProvider for Block<Xt>
-{
+impl<Xt> traits::HeaderProvider for Block<Xt> {
 	type HeaderT = Header;
 }
 
