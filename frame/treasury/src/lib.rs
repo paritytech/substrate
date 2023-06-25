@@ -151,7 +151,7 @@ pub enum PaymentState<Id> {
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub struct SpendStatus<AssetKind, AssetBalance, Beneficiary, BlockNumber, PaymentId> {
-	/// The kind of asset that are going to be spend.
+	// The kind of asset to be spent.
 	asset_kind: AssetKind,
 	/// The asset amount of the spend.
 	amount: AssetBalance,
@@ -251,10 +251,10 @@ pub mod pallet {
 		/// Type parameter used to identify the beneficiaries eligible to receive treasury spend.
 		type Beneficiary: Parameter + MaxEncodedLen;
 
-		/// Converting trait to take a source type and convert to `Beneficiary`.
+		/// Converting trait to take a source type and convert to [`Self::Beneficiary`].
 		type BeneficiaryLookup: StaticLookup<Target = Self::Beneficiary>;
 
-		/// Type for processing spends of [Self::AssetKind] in favor of [Self::Beneficiary].
+		/// Type for processing spends of [Self::AssetKind] in favor of [`Self::Beneficiary`].
 		type Paymaster: Pay<Beneficiary = Self::Beneficiary, AssetKind = Self::AssetKind>;
 
 		/// Type to convert the balance of an [`Self::AssetKind`] to balance of the native asset.
