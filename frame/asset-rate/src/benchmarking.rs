@@ -30,18 +30,18 @@ fn default_conversion_rate() -> FixedU128 {
 	FixedU128::from_u32(1u32)
 }
 
-#[benchmarks(where <T as Config>::AssetId: From<u32>)]
+#[benchmarks(where <T as Config>::AssetKind: From<u32>)]
 mod benchmarks {
 	use super::*;
 
 	#[benchmark]
 	fn create() -> Result<(), BenchmarkError> {
-		let asset_id: T::AssetId = ASSET_ID.into();
+		let asset_kind: T::AssetKind = ASSET_ID.into();
 		#[extrinsic_call]
-		_(RawOrigin::Root, asset_id.clone(), default_conversion_rate());
+		_(RawOrigin::Root, asset_kind.clone(), default_conversion_rate());
 
 		assert_eq!(
-			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id),
+			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_kind),
 			Some(default_conversion_rate())
 		);
 		Ok(())
@@ -49,18 +49,18 @@ mod benchmarks {
 
 	#[benchmark]
 	fn update() -> Result<(), BenchmarkError> {
-		let asset_id: T::AssetId = ASSET_ID.into();
+		let asset_kind: T::AssetKind = ASSET_ID.into();
 		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
-			asset_id.clone(),
+			asset_kind.clone(),
 			default_conversion_rate()
 		));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, asset_id.clone(), FixedU128::from_u32(2));
+		_(RawOrigin::Root, asset_kind.clone(), FixedU128::from_u32(2));
 
 		assert_eq!(
-			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id),
+			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_kind),
 			Some(FixedU128::from_u32(2))
 		);
 		Ok(())
@@ -68,7 +68,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn remove() -> Result<(), BenchmarkError> {
-		let asset_id: T::AssetId = ASSET_ID.into();
+		let asset_kind: T::AssetKind = ASSET_ID.into();
 		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
 			ASSET_ID.into(),
@@ -76,9 +76,9 @@ mod benchmarks {
 		));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, asset_id.clone());
+		_(RawOrigin::Root, asset_kind.clone());
 
-		assert!(pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id).is_none());
+		assert!(pallet_asset_rate::ConversionRateToNative::<T>::get(asset_kind).is_none());
 		Ok(())
 	}
 
