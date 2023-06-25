@@ -18,7 +18,7 @@
 //! Functions for the Assets pallet.
 
 use super::*;
-use frame_support::{traits::Get, BoundedVec};
+use frame_support::{defensive, traits::Get, BoundedVec};
 
 #[must_use]
 pub(super) enum DeadConsequence {
