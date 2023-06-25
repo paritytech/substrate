@@ -773,7 +773,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					} else {
 						// deposit may have been released, need to update `Account`
 						Account::<T, I>::insert(&id, &who, v);
-						debug_assert!(false, "destroy did not result in dead account?!");
+						defensive!("destroy did not result in dead account?!");
 					}
 					if i + 1 >= (max_items as usize) {
 						break
