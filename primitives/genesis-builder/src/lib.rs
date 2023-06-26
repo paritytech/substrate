@@ -36,30 +36,11 @@ pub type Result = core::result::Result<(), sp_runtime::RuntimeString>;
 sp_api::decl_runtime_apis! {
 	/// API to interact with GenesisConfig for the runtime
 	pub trait GenesisBuilder {
-		/// Get the default `GenesisConfig` as a JSON blob.
+		/// Creates the default `GenesisConfig` and returns it as a JSON blob.
 		///
 		/// This function instantiates the default `GenesisConfig` struct for the runtime and serializes it into a JSON
 		/// blob. It returns a `Vec<u8>` containing the JSON representation of the default `GenesisConfig`.
-		fn get_default_as_json() -> sp_std::vec::Vec<u8>;
-
-		/// Patch default `GenesisConfig` using given JSON patch and store it in the storage.
-		///
-		/// This function generates the `GenesisConfig` for the runtime by applying a provided JSON patch.
-		/// The patch modifies the default `GenesisConfig` allowing customization of the specific keys.
-		/// The resulting `GenesisConfig` is then deserialized from the patched JSON representation and
-		/// stored in the storage.
-		///
-		/// If the provided JSON patch is incorrect or the deserialization fails the error will be returned.
-		/// Method may panic if creation of json representation of default config fails.
-		///
-		/// The patching process modifies the default `GenesisConfig` according to the following rules:
-		/// 1. Existing keys in the default configuration will be overridden by the corresponding values in the patch.
-		/// 2. If a key exists in the patch but not in the default configuration, it will be added to the resulting `GenesisConfig`.
-		/// 3. Keys in the default configuration that have null values in the patch will be removed from the resulting
-		///    `GenesisConfig`. This is helpful for changing enum variant value.
-		///
-		/// Please note that the patch may contain full `GenesisConfig`.
-		fn build_config(patch: sp_std::vec::Vec<u8>) -> Result;
+		fn create_default_config() -> sp_std::vec::Vec<u8>;
 
 		/// Build `GenesisConfig` from a JSON blob not using any defaults and store it in the storage.
 		///
@@ -68,6 +49,6 @@ sp_api::decl_runtime_apis! {
 		/// It is recommended to log any errors encountered during the process.
 		///
 		/// Please note that provided json blob must contain all `GenesisConfig` fields, no defaults will be used.
-		fn build_config_no_defaults(json: sp_std::vec::Vec<u8>) -> Result;
+		fn build_config(json: sp_std::vec::Vec<u8>) -> Result;
 	}
 }
