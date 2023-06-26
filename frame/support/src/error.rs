@@ -67,7 +67,7 @@ pub use sp_runtime::traits::{BadOrigin, LookupError};
 /// For instantiable modules you also need to give the instance generic type and bound to the
 /// error declaration.
 #[macro_export]
-#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
+#[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
 	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 macro_rules! decl_error {
 	(

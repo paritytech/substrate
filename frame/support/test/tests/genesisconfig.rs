@@ -28,7 +28,7 @@ pub mod pallet {
 	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
