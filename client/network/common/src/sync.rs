@@ -203,6 +203,8 @@ pub enum SyncMode {
 	},
 	/// Warp sync - verify authority set transitions and the latest state.
 	Warp,
+	/// Sync is paused.
+	Paused,
 }
 
 impl SyncMode {

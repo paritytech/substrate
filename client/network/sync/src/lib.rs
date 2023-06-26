@@ -1494,6 +1494,7 @@ where
 				BlockAttributes::HEADER |
 					BlockAttributes::JUSTIFICATION |
 					BlockAttributes::INDEXED_BODY,
+			SyncMode::Paused => BlockAttributes::empty(),
 		}
 	}
 
@@ -1502,6 +1503,7 @@ where
 			SyncMode::Full => false,
 			SyncMode::LightState { .. } => true,
 			SyncMode::Warp => true,
+			SyncMode::Paused => false,
 		}
 	}
 
@@ -2340,10 +2342,13 @@ where
 	}
 
 	fn block_requests(&mut self) -> Vec<(PeerId, BlockRequest<B>)> {
-		if self.mode.load(Ordering::Acquire) == SyncMode::Warp {
-			return self
-				.warp_target_block_request()
-				.map_or_else(|| Vec::new(), |req| Vec::from([req]))
+		match self.mode.load(Ordering::Acquire) {
+			SyncMode::Warp =>
+				return self.warp_target_block_request().map_or_else(|| Vec::new(), |req| vec![req]),
+			SyncMode::Paused => return Vec::new(),
+			SyncMode::LightState { .. } | SyncMode::Full => {
+				// Continue
+			},
 		}
 
 		if self.allowed_requests.is_empty() || self.state_sync.is_some() {
