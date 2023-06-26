@@ -41,7 +41,7 @@ use frame_system::{
 	CheckNonce, CheckWeight,
 };
 #[cfg(feature = "genesis-builder")]
-use sc_genesis_builder::GenesisBuilderHelper;
+use frame_support::genesis_builder_helper::GenesisBuilderHelper;
 use scale_info::TypeInfo;
 use sp_std::prelude::*;
 #[cfg(not(feature = "std"))]
