@@ -731,6 +731,15 @@ impl<T> Convert<T, T> for Identity {
 		a
 	}
 }
+
+/// A structure that performs identity conversion of the reference by cloning it.
+pub struct CloneIdentity;
+impl<T: Clone> Convert<&T, T> for CloneIdentity {
+	fn convert(a: &T) -> T {
+		a.clone()
+	}
+}
+
 impl<T> ConvertBack<T, T> for Identity {
 	fn convert_back(a: T) -> T {
 		a
