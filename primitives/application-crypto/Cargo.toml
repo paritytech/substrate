@@ -56,4 +56,5 @@ full_crypto = [
 # the BLS implementation and interface may still be subject to significant change.
 bls-experimental = [
 	 "sp-core/bls-experimental",
+	 "sp-io/bls-experimental",
 ]
