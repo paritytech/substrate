@@ -13,12 +13,13 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"]  }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -28,9 +29,6 @@ sp-arithmetic = { version = "16.0.0", default-features = false, path = "../../pr
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-assets = { version = "4.0.0-dev", path = "../assets" }
 primitive-types = { version = "0.12.0", default-features = false, features = ["codec", "scale-info", "num-traits"] }
-sp-std = { version = "8.0.0", path = "../../primitives/std" }
-sp-core = { version = "21.0.0", path = "../../primitives/core" }
-sp-io = { version = "23.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
