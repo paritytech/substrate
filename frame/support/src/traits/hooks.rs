@@ -360,6 +360,7 @@ pub trait Hooks<BlockNumber> {
 }
 
 /// A trait to define the build function of a genesis config for both runtime and pallets.
+///
 /// Replaces deprecated [`GenesisBuild<T,I>`].
 pub trait BuildGenesisConfig: Default + sp_runtime::traits::MaybeSerializeDeserialize {
 	/// The build function puts initial `GenesisConfig` keys/values pairs into the storage.
