@@ -243,9 +243,6 @@ pub mod pallet {
 		type SpendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = BalanceOf<Self, I>>;
 
 		/// Type parameter representing the asset kinds to be spent from the treasury.
-		///
-		/// This type can describe both fungible and non-fungible assets and is inspected by
-		/// [`Self::AssetMatcher`].
 		type AssetKind: Parameter + MaxEncodedLen;
 
 		/// Type parameter used to identify the beneficiaries eligible to receive treasury spend.
