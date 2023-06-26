@@ -44,6 +44,7 @@ pub use sc_network_common::{
 use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::Block as BlockT;
 
+use atomic::Atomic;
 use std::{
 	error::Error,
 	fmt, fs,
@@ -55,6 +56,7 @@ use std::{
 	path::{Path, PathBuf},
 	pin::Pin,
 	str::{self, FromStr},
+	sync::Arc,
 };
 
 pub use libp2p::{
@@ -558,8 +560,8 @@ pub struct NetworkConfiguration {
 	/// Maximum number of blocks per request.
 	pub max_blocks_per_request: u32,
 
-	/// Initial syncing mode.
-	pub sync_mode: SyncMode,
+	/// Syncing mode.
+	pub sync_mode: Arc<Atomic<SyncMode>>,
 
 	/// True if Kademlia random discovery should be enabled.
 	///
@@ -626,7 +628,7 @@ impl NetworkConfiguration {
 			transport: TransportConfig::Normal { enable_mdns: false, allow_private_ip: true },
 			max_parallel_downloads: 5,
 			max_blocks_per_request: 64,
-			sync_mode: SyncMode::Full,
+			sync_mode: Arc::new(Atomic::new(SyncMode::Full)),
 			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,

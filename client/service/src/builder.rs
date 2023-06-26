@@ -75,7 +75,7 @@ use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
 use std::{
 	str::FromStr,
-	sync::Arc,
+	sync::{atomic::Ordering, Arc},
 	time::{Duration, SystemTime},
 };
 
@@ -225,7 +225,7 @@ where
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
-					config.network.sync_mode,
+					config.network.sync_mode.load(Ordering::Acquire),
 					SyncMode::LightState { .. } | SyncMode::Warp { .. }
 				),
 				wasm_runtime_substitutes,
@@ -788,12 +788,12 @@ where
 		warp_sync_params,
 	} = params;
 
-	if warp_sync_params.is_none() && config.network.sync_mode.is_warp() {
+	if warp_sync_params.is_none() && config.network.sync_mode.load(Ordering::Acquire).is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
 
 	if client.requires_full_sync() {
-		match config.network.sync_mode {
+		match config.network.sync_mode.load(Ordering::Acquire) {
 			SyncMode::LightState { .. } =>
 				return Err("Fast sync doesn't work for archive nodes".into()),
 			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),

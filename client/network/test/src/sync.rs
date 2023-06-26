@@ -1131,8 +1131,10 @@ async fn syncs_state() {
 		net.add_full_peer_with_config(config_one);
 		let mut config_two = FullPeerConfig::default();
 		config_two.extra_storage = Some(genesis_storage);
-		config_two.sync_mode =
-			SyncMode::LightState { skip_proofs: *skip_proofs, storage_chain_mode: false };
+		config_two.sync_mode = Arc::new(Atomic::new(SyncMode::LightState {
+			skip_proofs: *skip_proofs,
+			storage_chain_mode: false,
+		}));
 		net.add_full_peer_with_config(config_two);
 		let hashes = net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.
@@ -1175,7 +1177,10 @@ async fn syncs_indexed_blocks() {
 	net.add_full_peer_with_config(FullPeerConfig { storage_chain: true, ..Default::default() });
 	net.add_full_peer_with_config(FullPeerConfig {
 		storage_chain: true,
-		sync_mode: SyncMode::LightState { skip_proofs: false, storage_chain_mode: true },
+		sync_mode: Arc::new(Atomic::new(SyncMode::LightState {
+			skip_proofs: false,
+			storage_chain_mode: true,
+		})),
 		..Default::default()
 	});
 	net.peer(0).generate_blocks_at(
@@ -1228,7 +1233,7 @@ async fn warp_sync() {
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(Default::default());
 	net.add_full_peer_with_config(FullPeerConfig {
-		sync_mode: SyncMode::Warp,
+		sync_mode: Arc::new(Atomic::new(SyncMode::Warp)),
 		..Default::default()
 	});
 	let gap_end = net.peer(0).push_blocks(63, false).pop().unwrap();
@@ -1269,7 +1274,7 @@ async fn warp_sync_to_target_block() {
 	let target_block = net.peer(0).client.header(target).unwrap().unwrap();
 
 	net.add_full_peer_with_config(FullPeerConfig {
-		sync_mode: SyncMode::Warp,
+		sync_mode: Arc::new(Atomic::new(SyncMode::Warp)),
 		target_block: Some(target_block),
 		..Default::default()
 	});

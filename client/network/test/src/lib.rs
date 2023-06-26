@@ -28,11 +28,12 @@ use std::{
 	collections::HashMap,
 	marker::PhantomData,
 	pin::Pin,
-	sync::Arc,
+	sync::{atomic::Ordering, Arc},
 	task::{Context as FutureContext, Poll},
 	time::Duration,
 };
 
+use atomic::Atomic;
 use futures::{channel::oneshot, future::BoxFuture, pin_mut, prelude::*};
 use libp2p::{build_multiaddr, PeerId};
 use log::trace;
@@ -701,7 +702,7 @@ pub struct FullPeerConfig {
 	/// Whether the full peer should have the authority role.
 	pub is_authority: bool,
 	/// Syncing mode
-	pub sync_mode: SyncMode,
+	pub sync_mode: Arc<Atomic<SyncMode>>,
 	/// Extra genesis storage.
 	pub extra_storage: Option<sp_core::storage::Storage>,
 	/// Enable transaction indexing.
@@ -770,7 +771,10 @@ where
 			*genesis_extra_storage = storage;
 		}
 
-		if matches!(config.sync_mode, SyncMode::LightState { .. } | SyncMode::Warp) {
+		if matches!(
+			config.sync_mode.load(Ordering::Acquire),
+			SyncMode::LightState { .. } | SyncMode::Warp
+		) {
 			test_client_builder = test_client_builder.set_no_genesis();
 		}
 		let backend = test_client_builder.backend();

@@ -15,6 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 tokio = "1.22.0"
 async-trait = "0.1.57"
+atomic = "0.5.3"
 futures = "0.3.21"
 futures-timer = "3.0.1"
 libp2p = "0.51.3"

@@ -727,6 +727,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c59bdb34bc650a32731b31bd8f0829cc15d24a708ee31559e0bb34f2bc320cba"
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8928,6 +8934,7 @@ name = "sc-cli"
 version = "0.10.0-dev"
 dependencies = [
  "array-bytes 4.2.0",
+ "atomic",
  "chrono",
  "clap 4.3.2",
  "fdlimit",
@@ -9499,6 +9506,7 @@ dependencies = [
  "async-channel",
  "async-trait",
  "asynchronous-codec",
+ "atomic",
  "bytes",
  "either",
  "fnv",
@@ -9649,6 +9657,7 @@ dependencies = [
  "array-bytes 4.2.0",
  "async-channel",
  "async-trait",
+ "atomic",
  "fork-tree",
  "futures",
  "futures-timer",
@@ -9686,6 +9695,7 @@ name = "sc-network-test"
 version = "0.8.0"
 dependencies = [
  "async-trait",
+ "atomic",
  "futures",
  "futures-timer",
  "libp2p",

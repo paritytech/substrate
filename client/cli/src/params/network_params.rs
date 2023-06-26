@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{arg_enums::SyncMode, params::node_key_params::NodeKeyParams};
+use atomic::Atomic;
 use clap::Args;
 use sc_network::{
 	config::{
@@ -28,7 +29,7 @@ use sc_service::{
 	config::{Multiaddr, MultiaddrWithPeerId},
 	ChainSpec, ChainType,
 };
-use std::{borrow::Cow, num::NonZeroUsize, path::PathBuf};
+use std::{borrow::Cow, num::NonZeroUsize, path::PathBuf, sync::Arc};
 
 /// Parameters used to create the network configuration.
 #[derive(Debug, Clone, Args)]
@@ -243,7 +244,7 @@ impl NetworkParams {
 			kademlia_replication_factor: self.kademlia_replication_factor,
 			yamux_window_size: None,
 			ipfs_server: self.ipfs_server,
-			sync_mode: self.sync.into(),
+			sync_mode: Arc::new(Atomic::new(self.sync.into())),
 		}
 	}
 }
