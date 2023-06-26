@@ -39,7 +39,6 @@ members = [
 	"client/executor/common",
 	"client/executor/runtime-test",
 	"client/executor/wasmtime",
-	"client/genesis-builder",
 	"client/informant",
 	"client/keystore",
 	"client/merkle-mountain-range",
