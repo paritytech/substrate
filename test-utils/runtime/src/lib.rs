@@ -717,18 +717,13 @@ impl_runtime_apis! {
 
 	#[cfg(feature = "genesis-builder")]
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
-		fn get_default_as_json() -> Vec<u8> {
-			GenesisBuilderHelper::<RuntimeGenesisConfig>::get_default_as_json()
+		fn create_default_config() -> Vec<u8> {
+			GenesisBuilderHelper::<RuntimeGenesisConfig>::create_default_config()
 		}
 
 		fn build_config(patch_json: Vec<u8>) -> sp_genesis_builder::Result {
 			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config(patch_json)
 		}
-
-		fn build_config_no_defaults(json: sp_std::vec::Vec<u8>) -> sp_genesis_builder::Result {
-			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config_no_defaults(json)
-		}
-
 	}
 }
 
@@ -1302,66 +1297,14 @@ mod tests {
 		fn default_config_as_json_works() {
 			sp_tracing::try_init_simple();
 			let mut t = BasicExternalities::new_empty();
-			let r = executor_call(&mut t, "GenesisBuilder_get_default_as_json", &vec![]).0.unwrap();
+			let r = executor_call(&mut t, "GenesisBuilder_create_default_config", &vec![])
+				.0
+				.unwrap();
 			let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
 			let json = String::from_utf8(r.into()).expect("returned value is json. qed.");
 
 			let expected = r#"{"system":{"code":"0x"},"babe":{"authorities":[],"epochConfig":null},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
 			assert_eq!(expected.to_string(), json);
-		}
-
-		#[test]
-		fn build_config_no_defaults_from_json_works() {
-			sp_tracing::try_init_simple();
-			let j = include_str!("test_json/default_genesis_config.json");
-
-			let mut t = BasicExternalities::new_empty();
-			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
-			let r = BuildResult::decode(&mut &r[..]);
-			assert!(r.is_ok());
-
-			let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
-
-			// following keys are not placed during `<RuntimeGenesisConfig as GenesisBuild>::build`
-			// process, add them `keys` to assert against known keys.
-			keys.push(hex(b":heappages"));
-			keys.sort();
-
-			assert_eq!(keys, storage_key_generator::get_expected_storage_hashed_keys());
-		}
-
-		#[test]
-		fn build_config_no_defaults_from_invalid_json_fails() {
-			sp_tracing::try_init_simple();
-			let j = include_str!("test_json/default_genesis_config_invalid.json");
-			let mut t = BasicExternalities::new_empty();
-			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
-			let r = BuildResult::decode(&mut &r[..]).unwrap();
-			log::info!("result: {:#?}", r);
-			assert_eq!(r, Err(
-				RuntimeString::Owned(
-					"Patching does not result in correct GenesisConfig: unknown field `renamed_authorities`, expected `authorities` or `epochConfig`".to_string(),
-				))
-			);
-		}
-
-		#[test]
-		fn build_config_no_defaults_from_incomplete_json_fails() {
-			sp_tracing::try_init_simple();
-			let j = include_str!("test_json/default_genesis_config_incomplete.json");
-
-			let mut t = BasicExternalities::new_empty();
-			let r = executor_call(&mut t, "GenesisBuilder_build_config_no_defaults", &j.encode())
-				.0
-				.unwrap();
-			let r = core::result::Result::<(), RuntimeString>::decode(&mut &r[..]).unwrap();
-			assert_eq!(
-				r,
-				Err(RuntimeString::Owned(
-					"Invalid JSON blob: missing field `authorities` at line 13 column 3"
-						.to_string()
-				))
-			);
 		}
 
 		#[test]
@@ -1391,11 +1334,28 @@ mod tests {
 			let mut t = BasicExternalities::new_empty();
 			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
 			let r = BuildResult::decode(&mut &r[..]).unwrap();
-			assert_eq!(r,
-				Err(
-					RuntimeString::Owned(
-						"Patching does not result in correct GenesisConfig: unknown field `renamed_authorities`, \
-						expected `authorities` or `epochConfig`".to_string(),
+			log::info!("result: {:#?}", r);
+			assert_eq!(r, Err(
+				sp_runtime::RuntimeString::Owned(
+					"Invalid JSON blob: unknown field `renamed_authorities`, expected `authorities` or `epochConfig` at line 6 column 25".to_string(),
+				))
+			);
+		}
+
+		#[test]
+		fn build_config_from_incomplete_json_fails() {
+			sp_tracing::try_init_simple();
+			let j = include_str!("test_json/default_genesis_config_incomplete.json");
+
+			let mut t = BasicExternalities::new_empty();
+			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
+			let r =
+				core::result::Result::<(), sp_runtime::RuntimeString>::decode(&mut &r[..]).unwrap();
+			assert_eq!(
+				r,
+				Err(sp_runtime::RuntimeString::Owned(
+					"Invalid JSON blob: missing field `authorities` at line 13 column 3"
+						.to_string()
 				))
 			);
 		}
@@ -1419,7 +1379,16 @@ mod tests {
 
 		#[test]
 		fn build_genesis_config_with_patch_json_works() {
+			//this tests shows how to do patching on native side
 			sp_tracing::try_init_simple();
+
+			let mut t = BasicExternalities::new_empty();
+			let r = executor_call(&mut t, "GenesisBuilder_create_default_config", &vec![])
+				.0
+				.unwrap();
+			let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
+			let mut default_config: serde_json::Value =
+				serde_json::from_slice(&r[..]).expect("returned value is json. qed.");
 
 			// Patch default json with some custom values:
 			let patch = json!({
@@ -1440,11 +1409,17 @@ mod tests {
 				}
 			});
 
+			json_patch::merge(&mut default_config, &patch);
+
 			// Build genesis config using custom json:
 			let mut t = BasicExternalities::new_empty();
-			executor_call(&mut t, "GenesisBuilder_build_config", &patch.to_string().encode())
-				.0
-				.unwrap();
+			executor_call(
+				&mut t,
+				"GenesisBuilder_build_config",
+				&default_config.to_string().encode(),
+			)
+			.0
+			.unwrap();
 
 			// Ensure that custom values are in the genesis storage:
 			let storage = t.into_storages();
