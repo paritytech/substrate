@@ -528,7 +528,9 @@ mod test {
 	// Only passes if the seed = (seed mod ScalarField)
 	#[test]
 	fn seed_and_derive_should_work() {
-		let seed = array_bytes::hex2array_unchecked("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f00");
+		let seed = array_bytes::hex2array_unchecked(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f00",
+		);
 		let pair = Pair::from_seed(&seed);
 		// we are using hash to field so this is not going to work
 		// assert_eq!(pair.seed(), seed);
@@ -536,14 +538,16 @@ mod test {
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.to_raw_vec(),
-			array_bytes::hex2array_unchecked::<32>("a4f2269333b3e87c577aa00c4a2cd650b3b30b2e8c286a47c251279ff3a26e0d")
+			array_bytes::hex2array_unchecked::<32>(
+				"a4f2269333b3e87c577aa00c4a2cd650b3b30b2e8c286a47c251279ff3a26e0d"
+			)
 		);
 	}
 
 	#[test]
 	fn test_vector_should_work() {
-		let pair = Pair::from_seed(&array_bytes::hex2array_unchecked (
-			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"
+		let pair = Pair::from_seed(&array_bytes::hex2array_unchecked(
+			"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
 		));
 		let public = pair.public();
 		assert_eq!(

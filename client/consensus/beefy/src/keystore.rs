@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sp_application_crypto::RuntimeAppPublic;
+use sp_application_crypto::{key_types::BEEFY as BEEFY_KEY_TYPE, RuntimeAppPublic};
 use sp_core::keccak_256;
 use sp_keystore::KeystorePtr;
 
@@ -24,7 +24,7 @@ use log::warn;
 
 use sp_consensus_beefy::{
 	ecdsa_crypto::{Public, Signature},
-	BeefyAuthorityId, KEY_TYPE,
+	BeefyAuthorityId,
 };
 
 use crate::{error, LOG_TARGET};
@@ -50,7 +50,7 @@ impl BeefyKeystore {
 		// we do check for multiple private keys as a key store sanity check.
 		let public: Vec<Public> = keys
 			.iter()
-			.filter(|k| store.has_keys(&[(k.to_raw_vec(), KEY_TYPE)]))
+			.filter(|k| store.has_keys(&[(k.to_raw_vec(), BEEFY_KEY_TYPE)]))
 			.cloned()
 			.collect();
 
@@ -78,7 +78,7 @@ impl BeefyKeystore {
 		let public = public.as_ref();
 
 		let sig = store
-			.ecdsa_sign_prehashed(KEY_TYPE, public, &msg)
+			.ecdsa_sign_prehashed(BEEFY_KEY_TYPE, public, &msg)
 			.map_err(|e| error::Error::Keystore(e.to_string()))?
 			.ok_or_else(|| error::Error::Signature("ecdsa_sign_prehashed() failed".to_string()))?;
 
@@ -96,7 +96,7 @@ impl BeefyKeystore {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
 		let pk: Vec<Public> =
-			store.ecdsa_public_keys(KEY_TYPE).drain(..).map(Public::from).collect();
+			store.ecdsa_public_keys(BEEFY_KEY_TYPE).drain(..).map(Public::from).collect();
 
 		Ok(pk)
 	}
@@ -210,7 +210,7 @@ pub mod tests {
 		let store = keystore();
 
 		let alice: ecdsa_crypto::Public = store
-			.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 			.ok()
 			.unwrap()
 			.into();
@@ -236,7 +236,7 @@ pub mod tests {
 		let store = keystore();
 
 		let alice: ecdsa_crypto::Public = store
-			.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 			.ok()
 			.unwrap()
 			.into();
@@ -255,7 +255,10 @@ pub mod tests {
 	fn sign_error() {
 		let store = keystore();
 
-		store.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Bob.to_seed())).ok().unwrap();
+		store
+			.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&Keyring::Bob.to_seed()))
+			.ok()
+			.unwrap();
 
 		let store: BeefyKeystore = Some(store).into();
 
@@ -285,7 +288,7 @@ pub mod tests {
 		let store = keystore();
 
 		let alice: ecdsa_crypto::Public = store
-			.ecdsa_generate_new(KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 			.ok()
 			.unwrap()
 			.into();
@@ -321,11 +324,11 @@ pub mod tests {
 		let _ = add_key(TEST_TYPE, None);
 
 		// BEEFY keys
-		let _ = add_key(KEY_TYPE, Some(Keyring::Dave.to_seed().as_str()));
-		let _ = add_key(KEY_TYPE, Some(Keyring::Eve.to_seed().as_str()));
+		let _ = add_key(BEEFY_KEY_TYPE, Some(Keyring::Dave.to_seed().as_str()));
+		let _ = add_key(BEEFY_KEY_TYPE, Some(Keyring::Eve.to_seed().as_str()));
 
-		let key1: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
-		let key2: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
+		let key1: ecdsa_crypto::Public = add_key(BEEFY_KEY_TYPE, None).into();
+		let key2: ecdsa_crypto::Public = add_key(BEEFY_KEY_TYPE, None).into();
 
 		let store: BeefyKeystore = Some(store).into();
 

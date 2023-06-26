@@ -50,9 +50,6 @@ use sp_core::H256;
 use sp_runtime::traits::{Hash, Keccak256, NumberFor};
 use sp_std::prelude::*;
 
-/// Key type for BEEFY module.
-pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::KeyTypeId(*b"beef");
-
 /// Trait representing BEEFY authority id, including custom signature verification.
 ///
 /// Accepts custom hashing fn for the message and custom convertor fn for the signer.
@@ -74,9 +71,9 @@ pub trait BeefyAuthorityId<MsgHash: Hash>: RuntimeAppPublic {
 /// functionality.
 pub mod ecdsa_crypto {
 	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic};
-	use sp_application_crypto::{app_crypto, ecdsa};
+	use sp_application_crypto::{app_crypto, ecdsa, key_types::BEEFY as BEEFY_KEY_TYPE};
 	use sp_core::crypto::Wraps;
-	app_crypto!(ecdsa, crate::KEY_TYPE);
+	app_crypto!(ecdsa, BEEFY_KEY_TYPE);
 
 	/// Identity of a BEEFY authority using ECDSA as its crypto.
 	pub type AuthorityId = Public;
@@ -113,8 +110,8 @@ pub mod ecdsa_crypto {
 
 #[cfg(feature = "bls-experimental")]
 pub mod bls_crypto {
-	use sp_application_crypto::{app_crypto, bls377};
-	app_crypto!(bls377, crate::KEY_TYPE);
+	use sp_application_crypto::{app_crypto, bls377, key_types::BEEFY as BEEFY_KEY_TYPE};
+	app_crypto!(bls377, BEEFY_KEY_TYPE);
 
 	/// Identity of a BEEFY authority using BLS as its crypto.
 	pub type AuthorityId = Public;

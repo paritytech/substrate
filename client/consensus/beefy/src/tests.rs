@@ -48,6 +48,7 @@ use sc_network_test::{
 use sc_utils::notification::NotificationReceiver;
 use serde::{Deserialize, Serialize};
 use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_application_crypto::key_types::BEEFY as BEEFY_KEY_TYPE;
 use sp_consensus::BlockOrigin;
 use sp_consensus_beefy::{
 	ecdsa_crypto::{AuthorityId, Signature},
@@ -55,7 +56,7 @@ use sp_consensus_beefy::{
 	mmr::{find_mmr_root_digest, MmrRootProvider},
 	BeefyApi, Commitment, ConsensusLog, EquivocationProof, Keyring as BeefyKeyring, MmrRootHash,
 	OpaqueKeyOwnershipProof, Payload, SignedCommitment, ValidatorSet, ValidatorSetId,
-	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, KEY_TYPE as BeefyKeyType,
+	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 use sp_core::H256;
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystorePtr};
@@ -352,7 +353,7 @@ pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> KeystorePtr {
 	let keystore = MemoryKeystore::new();
 	keystore
-		.ecdsa_generate_new(BeefyKeyType, Some(&authority.to_seed()))
+		.ecdsa_generate_new(BEEFY_KEY_TYPE, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 	keystore.into()
 }
