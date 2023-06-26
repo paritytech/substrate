@@ -26,6 +26,8 @@ pub mod genesismap;
 pub mod substrate_test_pallet;
 
 use codec::{Decode, Encode};
+#[cfg(feature = "genesis-builder")]
+use frame_support::genesis_builder_helper::GenesisBuilderHelper;
 use frame_support::{
 	construct_runtime,
 	dispatch::DispatchClass,
@@ -40,8 +42,6 @@ use frame_system::{
 	limits::{BlockLength, BlockWeights},
 	CheckNonce, CheckWeight,
 };
-#[cfg(feature = "genesis-builder")]
-use frame_support::genesis_builder_helper::GenesisBuilderHelper;
 use scale_info::TypeInfo;
 use sp_std::prelude::*;
 #[cfg(not(feature = "std"))]
@@ -721,8 +721,8 @@ impl_runtime_apis! {
 			GenesisBuilderHelper::<RuntimeGenesisConfig>::create_default_config()
 		}
 
-		fn build_config(patch_json: Vec<u8>) -> sp_genesis_builder::Result {
-			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config(patch_json)
+		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
+			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config(config)
 		}
 	}
 }
