@@ -298,7 +298,6 @@ hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
 integer-sqrt = { opt-level = 3 }
-k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 libm = { opt-level = 3 }
 librocksdb-sys = { opt-level = 3 }
