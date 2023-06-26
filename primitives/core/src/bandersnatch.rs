@@ -334,23 +334,21 @@ pub mod vrf {
 	impl VrfInput {
 		/// Build a new VRF input.
 		///
-		/// Each message tuple has the form: message := (domain, data).
-		pub fn new(label: &'static [u8], messages: &[(&[u8], &[u8])]) -> Self {
-			// ⚠️ TODO @davxy @burdges (temporary hack and needs to be fixed)
-			// `bandersnatch_vrfs::Message` maps to a single (domain, data) tuple.
-			// We need something to push multiple messages together with a `label`.
-			// One solution is to construct the labeled Transcript here and then use
-			// `dleq_vrf::into_vrf_input()`.
-			// But has been commented out:
-			// https://github.com/w3f/ring-vrf/blob/8ab7b7b56e844f80b76afb1742b201fd69fb6046/dleq_vrf/src/vrf.rs#L38-L55
-			// THIS IS JUST A PLACEHOLDER and we are ignoring the lablel and concat the dom++msgs.
-			let _ = label;
+		/// Each message tuple has the form: message_data := (sub-domain, data).
+		pub fn new(domain: &'static [u8], message_data: &[(&[u8], &[u8])]) -> Self {
+			// ⚠️ TODO @davxy @burdges (temporary hack and probably needs to be fixed)
+			// In sassafras we want to construct a single `VrfInput` from multiple datas
+			// E.g. the ticket score uses: epoch-randomness, attempt-index, epoch-index
+			// Currently, `bandersnatch_vrfs::Message` has a single (domain, data) fields,
+			// so we need a workaround here...
 			let mut buf = Vec::new();
-			messages.into_iter().for_each(|(domain, message)| {
-				buf.extend_from_slice(domain);
-				buf.extend_from_slice(message);
+			message_data.into_iter().for_each(|(sub_domain, data)| {
+				buf.extend_from_slice(sub_domain);
+				buf.extend_from_slice(&sub_domain.len().to_le_bytes());
+				buf.extend_from_slice(data);
+				buf.extend_from_slice(&data.len().to_le_bytes());
 			});
-			let msg = Message { domain: b"TODO-DAVXY-FIXME", message: buf.as_slice() };
+			let msg = Message { domain, message: buf.as_slice() };
 			VrfInput(msg.into_vrf_input())
 		}
 	}
