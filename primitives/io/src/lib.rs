@@ -44,8 +44,9 @@ use sp_core::{
 #[cfg(feature = "std")]
 use sp_keystore::KeystoreExt;
 
+#[cfg(feature = "bandersnatch-experimental")]
+use sp_core::bandersnatch;
 use sp_core::{
-	bandersnatch,
 	crypto::KeyTypeId,
 	ecdsa, ed25519,
 	offchain::{
@@ -1148,6 +1149,7 @@ pub trait Crypto {
 	/// The `seed` needs to be a valid utf8.
 	///
 	/// Returns the public key.
+	#[cfg(feature = "bandersnatch-experimental")]
 	fn bandersnatch_generate(
 		&mut self,
 		id: KeyTypeId,
