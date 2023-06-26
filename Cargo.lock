@@ -11143,6 +11143,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-genesis-builder"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "sp-api",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "sp-inherents"
 version = "4.0.0-dev"
 dependencies = [
