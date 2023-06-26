@@ -57,9 +57,9 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
+		pub authorities: Vec<Public>,
 		#[serde(skip)]
 		pub _config: sp_std::marker::PhantomData<T>,
-		pub authorities: Vec<Public>,
 	}
 
 	#[pallet::genesis_build]
