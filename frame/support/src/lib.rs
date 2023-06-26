@@ -929,10 +929,10 @@ pub mod tests {
 
 		#[pallet::genesis_config]
 		pub struct GenesisConfig<T: Config> {
-			#[serde(skip)]
-			pub _config: sp_std::marker::PhantomData<T>,
 			pub data: Vec<(u32, u64)>,
 			pub test_config: Vec<(u32, u32, u64)>,
+			#[serde(skip)]
+			pub _config: sp_std::marker::PhantomData<T>,
 		}
 
 		impl<T: Config> Default for GenesisConfig<T> {

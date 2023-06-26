@@ -673,10 +673,10 @@ pub mod pallet {
 	#[derive(frame_support::DefaultNoBound)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		#[serde(skip)]
-		pub _config: sp_std::marker::PhantomData<T>,
 		#[serde(with = "sp_core::bytes")]
 		pub code: Vec<u8>,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]

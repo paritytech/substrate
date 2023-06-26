@@ -381,9 +381,9 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
+		pub multiplier: Multiplier,
 		#[serde(skip)]
 		pub _config: sp_std::marker::PhantomData<T>,
-		pub multiplier: Multiplier,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {

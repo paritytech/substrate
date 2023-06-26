@@ -136,10 +136,10 @@ mod module {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		#[serde(skip)]
-		pub _config: sp_std::marker::PhantomData<T>,
 		pub enable_storage_role: bool,
 		pub request_life_time: u64,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]

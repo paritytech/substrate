@@ -317,10 +317,10 @@ pub mod pallet {
 	#[derive(frame_support::DefaultNoBound)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		#[serde(skip)]
-		pub _config: sp_std::marker::PhantomData<T>,
 		pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 		pub epoch_config: Option<BabeEpochConfiguration>,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]

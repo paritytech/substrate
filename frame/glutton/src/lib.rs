@@ -131,11 +131,11 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		#[serde(skip)]
-		pub _config: sp_std::marker::PhantomData<T>,
 		pub compute: FixedU64,
 		pub storage: FixedU64,
 		pub trash_data_count: u32,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]

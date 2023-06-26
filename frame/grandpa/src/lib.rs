@@ -336,9 +336,9 @@ pub mod pallet {
 	#[derive(frame_support::DefaultNoBound)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
+		pub authorities: AuthorityList,
 		#[serde(skip)]
 		pub _config: sp_std::marker::PhantomData<T>,
-		pub authorities: AuthorityList,
 	}
 
 	#[pallet::genesis_build]
