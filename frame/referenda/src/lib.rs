@@ -1346,7 +1346,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///  from the submission block.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn try_state_referenda_info() -> Result<(), TryRuntimeError> {
-		ReferendumInfoFor::<T, I>::iter().try_for_each(|(_, referendum)| -> DispatchResult {
+		ReferendumInfoFor::<T, I>::iter().try_for_each(|(_, referendum)| {
 			match referendum {
 				ReferendumInfo::Ongoing(status) => {
 					ensure!(
