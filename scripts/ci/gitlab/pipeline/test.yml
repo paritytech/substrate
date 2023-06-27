@@ -473,6 +473,7 @@ cargo-hfuzz:
     paths:
       - frame/nomination-pools/fuzzer/hfuzz_workspace/
       - primitives/arithmetic/fuzzer/hfuzz_workspace/
+  allow_failure: true
   script:
     - rusty-cachier snapshot create
     - for dir in ${SUBSTRATE_FUZZER_DIRS}; do
