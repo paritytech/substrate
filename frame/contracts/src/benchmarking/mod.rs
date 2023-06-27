@@ -30,7 +30,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{v10, v11, v9, Migrate},
+	migration::{v10, v11, v9, MigrationStep},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -237,7 +237,7 @@ benchmarks! {
 	// This benchmarks the v9 migration step. (update codeStorage)
 	#[pov_mode = Measured]
 	v9_migration_step {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let c in 0 .. T::MaxCodeLen::get();
 		v9::store_old_dummy_code::<T>(c as usize);
 		let mut m = v9::Migration::<T>::default();
 	}: {
@@ -251,7 +251,7 @@ benchmarks! {
 			whitelisted_caller(), WasmModule::dummy(), vec![],
 		)?;
 
-		v10::store_old_contrat_info::<T>(contract.account_id.clone(), contract.info()?);
+		v10::store_old_contract_info::<T>(contract.account_id.clone(), contract.info()?);
 		let mut m = v10::Migration::<T>::default();
 	}: {
 		m.step();
@@ -277,15 +277,15 @@ benchmarks! {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
 	}
 
-	// This benchmarks the weight of executing Migration::migrate when there are no migration in progress.
+	// This benchmarks the weight of dispatching migrate to execute 1 `NoopMigraton`
 	#[pov_mode = Measured]
 	migrate {
 		StorageVersion::new(0).put::<Pallet<T>>();
 		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
-		let origin: RawOrigin<<T as frame_system::Config>::AccountId> = RawOrigin::Signed(whitelisted_caller());
-	}: {
-		<Contracts<T>>::migrate(origin.into(), Weight::MAX).unwrap()
-	} verify {
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
+	}: _(origin, Weight::MAX)
+	verify {
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 	}
 
