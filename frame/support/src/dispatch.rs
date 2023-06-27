@@ -339,6 +339,13 @@ pub trait WithPostDispatchInfo {
 	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
 	/// ```
 	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
+	/// Call this on your modules custom errors type in order to decide fee payment on error.
+	///
+	/// # Example
+	///
+	/// ```ignore
+	/// ensure!(validate(params), Error::<T>::NotMe.with_pays_fee(Pays::No));
+	/// ```
 	fn with_pays_fee(self, pays_fee: Pays) -> DispatchErrorWithPostInfo;
 }
 
