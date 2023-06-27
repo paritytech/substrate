@@ -101,10 +101,8 @@ pub type SignedSubmissionOf<T> = SignedSubmission<
 
 /// Always sorted vector of a score, submitted at the given block number, which can be found at the
 /// given index (`u32`) of the `SignedSubmissionsMap`.
-pub type SubmissionIndicesOf<T> = BoundedVec<
-	(ElectionScore, BlockNumberFor<T>, u32),
-	<T as Config>::SignedMaxSubmissions,
->;
+pub type SubmissionIndicesOf<T> =
+	BoundedVec<(ElectionScore, BlockNumberFor<T>, u32), <T as Config>::SignedMaxSubmissions>;
 
 /// Outcome of [`SignedSubmissions::insert`].
 pub enum InsertResult<T: Config> {

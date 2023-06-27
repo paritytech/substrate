@@ -59,8 +59,7 @@ mod no_instance {
 
 	#[pallet::storage]
 	#[pallet::getter(fn test_generic_value)]
-	pub type TestGenericValue<T: Config> =
-		StorageValue<_, BlockNumberFor<T>, OptionQuery>;
+	pub type TestGenericValue<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
 	#[pallet::storage]
 	#[pallet::getter(fn foo2)]
 	pub type TestGenericDoubleMap<T: Config> = StorageDoubleMap<
@@ -77,8 +76,7 @@ mod no_instance {
 	pub struct GenesisConfig<T: Config> {
 		pub value: u32,
 		pub test_generic_value: BlockNumberFor<T>,
-		pub test_generic_double_map:
-			Vec<(u32, BlockNumberFor<T>, u32)>,
+		pub test_generic_double_map: Vec<(u32, BlockNumberFor<T>, u32)>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -155,8 +153,7 @@ mod instance {
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub value: u32,
 		pub test_generic_value: BlockNumberFor<T>,
-		pub test_generic_double_map:
-			Vec<(u32, BlockNumberFor<T>, u32)>,
+		pub test_generic_double_map: Vec<(u32, BlockNumberFor<T>, u32)>,
 		pub phantom: PhantomData<I>,
 	}
 

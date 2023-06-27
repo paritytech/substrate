@@ -72,8 +72,10 @@ use frame_support::{
 	},
 	weights::{Weight, WeightMeter},
 };
-use frame_system::pallet_prelude::BlockNumberFor;
-use frame_system::{self as system};
+use frame_system::{
+	pallet_prelude::BlockNumberFor,
+	{self as system},
+};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
@@ -232,8 +234,7 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
-	pub type IncompleteSince<T: Config> =
-		StorageValue<_, BlockNumberFor<T>>;
+	pub type IncompleteSince<T: Config> = StorageValue<_, BlockNumberFor<T>>;
 
 	/// Items to be executed, indexed by the block number that they should be executed on.
 	#[pallet::storage]
@@ -250,12 +251,8 @@ pub mod pallet {
 	/// For v3 -> v4 the previously unbounded identities are Blake2-256 hashed to form the v4
 	/// identities.
 	#[pallet::storage]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		TaskName,
-		TaskAddress<BlockNumberFor<T>>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<_, Twox64Concat, TaskName, TaskAddress<BlockNumberFor<T>>>;
 
 	/// Events type.
 	#[pallet::event]
@@ -272,20 +269,11 @@ pub mod pallet {
 			result: DispatchResult,
 		},
 		/// The call for the provided hash was not found so the task has been aborted.
-		CallUnavailable {
-			task: TaskAddress<BlockNumberFor<T>>,
-			id: Option<TaskName>,
-		},
+		CallUnavailable { task: TaskAddress<BlockNumberFor<T>>, id: Option<TaskName> },
 		/// The given task was unable to be renewed since the agenda is full at that block.
-		PeriodicFailed {
-			task: TaskAddress<BlockNumberFor<T>>,
-			id: Option<TaskName>,
-		},
+		PeriodicFailed { task: TaskAddress<BlockNumberFor<T>>, id: Option<TaskName> },
 		/// The given task can never be executed since it is overweight.
-		PermanentlyOverweight {
-			task: TaskAddress<BlockNumberFor<T>>,
-			id: Option<TaskName>,
-		},
+		PermanentlyOverweight { task: TaskAddress<BlockNumberFor<T>>, id: Option<TaskName> },
 	}
 
 	#[pallet::error]
@@ -320,9 +308,7 @@ pub mod pallet {
 		pub fn schedule(
 			origin: OriginFor<T>,
 			when: BlockNumberFor<T>,
-			maybe_periodic: Option<
-				schedule::Period<BlockNumberFor<T>>,
-			>,
+			maybe_periodic: Option<schedule::Period<BlockNumberFor<T>>>,
 			priority: schedule::Priority,
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
@@ -341,11 +327,7 @@ pub mod pallet {
 		/// Cancel an anonymously scheduled task.
 		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::cancel(T::MaxScheduledPerBlock::get()))]
-		pub fn cancel(
-			origin: OriginFor<T>,
-			when: BlockNumberFor<T>,
-			index: u32,
-		) -> DispatchResult {
+		pub fn cancel(origin: OriginFor<T>, when: BlockNumberFor<T>, index: u32) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
 			let origin = <T as Config>::RuntimeOrigin::from(origin);
 			Self::do_cancel(Some(origin.caller().clone()), (when, index))?;
@@ -359,9 +341,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			id: TaskName,
 			when: BlockNumberFor<T>,
-			maybe_periodic: Option<
-				schedule::Period<BlockNumberFor<T>>,
-			>,
+			maybe_periodic: Option<schedule::Period<BlockNumberFor<T>>>,
 			priority: schedule::Priority,
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
@@ -394,9 +374,7 @@ pub mod pallet {
 		pub fn schedule_after(
 			origin: OriginFor<T>,
 			after: BlockNumberFor<T>,
-			maybe_periodic: Option<
-				schedule::Period<BlockNumberFor<T>>,
-			>,
+			maybe_periodic: Option<schedule::Period<BlockNumberFor<T>>>,
 			priority: schedule::Priority,
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
@@ -419,9 +397,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			id: TaskName,
 			after: BlockNumberFor<T>,
-			maybe_periodic: Option<
-				schedule::Period<BlockNumberFor<T>>,
-			>,
+			maybe_periodic: Option<schedule::Period<BlockNumberFor<T>>>,
 			priority: schedule::Priority,
 			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
@@ -461,14 +437,7 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 		}
 
 		Agenda::<T>::translate::<
-			Vec<
-				Option<
-					ScheduledV1<
-						<T as Config>::RuntimeCall,
-						BlockNumberFor<T>,
-					>,
-				>,
-			>,
+			Vec<Option<ScheduledV1<<T as Config>::RuntimeCall, BlockNumberFor<T>>>>,
 			_,
 		>(|_, agenda| {
 			Some(BoundedVec::truncate_from(
@@ -751,10 +720,7 @@ impl<T: Config> Pallet<T> {
 	fn place_task(
 		when: BlockNumberFor<T>,
 		what: ScheduledOf<T>,
-	) -> Result<
-		TaskAddress<BlockNumberFor<T>>,
-		(DispatchError, ScheduledOf<T>),
-	> {
+	) -> Result<TaskAddress<BlockNumberFor<T>>, (DispatchError, ScheduledOf<T>)> {
 		let maybe_name = what.maybe_id;
 		let index = Self::push_to_agenda(when, what)?;
 		let address = (when, index);
@@ -992,11 +958,7 @@ use ServiceTaskError::*;
 
 impl<T: Config> Pallet<T> {
 	/// Service up to `max` agendas queue starting from earliest incompletely executed agenda.
-	fn service_agendas(
-		weight: &mut WeightMeter,
-		now: BlockNumberFor<T>,
-		max: u32,
-	) {
+	fn service_agendas(weight: &mut WeightMeter, now: BlockNumberFor<T>, max: u32) {
 		if !weight.check_accrue(T::WeightInfo::service_agendas_base()) {
 			return
 		}
@@ -1204,11 +1166,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config<Hash = PreimageHash>>
-	schedule::v2::Anon<
-		BlockNumberFor<T>,
-		<T as Config>::RuntimeCall,
-		T::PalletsOrigin,
-	> for Pallet<T>
+	schedule::v2::Anon<BlockNumberFor<T>, <T as Config>::RuntimeCall, T::PalletsOrigin> for Pallet<T>
 {
 	type Address = TaskAddress<BlockNumberFor<T>>;
 	type Hash = T::Hash;
@@ -1236,19 +1194,13 @@ impl<T: Config<Hash = PreimageHash>>
 		Self::do_reschedule(address, when)
 	}
 
-	fn next_dispatch_time(
-		(when, index): Self::Address,
-	) -> Result<BlockNumberFor<T>, ()> {
+	fn next_dispatch_time((when, index): Self::Address) -> Result<BlockNumberFor<T>, ()> {
 		Agenda::<T>::get(when).get(index as usize).ok_or(()).map(|_| when)
 	}
 }
 
 impl<T: Config<Hash = PreimageHash>>
-	schedule::v2::Named<
-		BlockNumberFor<T>,
-		<T as Config>::RuntimeCall,
-		T::PalletsOrigin,
-	> for Pallet<T>
+	schedule::v2::Named<BlockNumberFor<T>, <T as Config>::RuntimeCall, T::PalletsOrigin> for Pallet<T>
 {
 	type Address = TaskAddress<BlockNumberFor<T>>;
 	type Hash = T::Hash;
@@ -1280,9 +1232,7 @@ impl<T: Config<Hash = PreimageHash>>
 		Self::do_reschedule_named(name, when)
 	}
 
-	fn next_dispatch_time(
-		id: Vec<u8>,
-	) -> Result<BlockNumberFor<T>, ()> {
+	fn next_dispatch_time(id: Vec<u8>) -> Result<BlockNumberFor<T>, ()> {
 		let name = blake2_256(&id[..]);
 		Lookup::<T>::get(name)
 			.and_then(|(when, index)| Agenda::<T>::get(when).get(index as usize).map(|_| when))
@@ -1290,12 +1240,8 @@ impl<T: Config<Hash = PreimageHash>>
 	}
 }
 
-impl<T: Config>
-	schedule::v3::Anon<
-		BlockNumberFor<T>,
-		<T as Config>::RuntimeCall,
-		T::PalletsOrigin,
-	> for Pallet<T>
+impl<T: Config> schedule::v3::Anon<BlockNumberFor<T>, <T as Config>::RuntimeCall, T::PalletsOrigin>
+	for Pallet<T>
 {
 	type Address = TaskAddress<BlockNumberFor<T>>;
 
@@ -1332,12 +1278,8 @@ impl<T: Config>
 
 use schedule::v3::TaskName;
 
-impl<T: Config>
-	schedule::v3::Named<
-		BlockNumberFor<T>,
-		<T as Config>::RuntimeCall,
-		T::PalletsOrigin,
-	> for Pallet<T>
+impl<T: Config> schedule::v3::Named<BlockNumberFor<T>, <T as Config>::RuntimeCall, T::PalletsOrigin>
+	for Pallet<T>
 {
 	type Address = TaskAddress<BlockNumberFor<T>>;
 
@@ -1363,9 +1305,7 @@ impl<T: Config>
 		Self::do_reschedule_named(id, when).map_err(map_err_to_v3_err::<T>)
 	}
 
-	fn next_dispatch_time(
-		id: TaskName,
-	) -> Result<BlockNumberFor<T>, DispatchError> {
+	fn next_dispatch_time(id: TaskName) -> Result<BlockNumberFor<T>, DispatchError> {
 		Lookup::<T>::get(id)
 			.and_then(|(when, index)| Agenda::<T>::get(when).get(index as usize).map(|_| when))
 			.ok_or(DispatchError::Unavailable)

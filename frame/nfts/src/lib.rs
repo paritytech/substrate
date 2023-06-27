@@ -1659,11 +1659,7 @@ pub mod pallet {
 		pub fn update_mint_settings(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			mint_settings: MintSettings<
-				BalanceOf<T, I>,
-				BlockNumberFor<T>,
-				T::CollectionId,
-			>,
+			mint_settings: MintSettings<BalanceOf<T, I>, BlockNumberFor<T>, T::CollectionId>,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)

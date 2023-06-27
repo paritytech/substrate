@@ -264,10 +264,7 @@ pub mod pallet {
 			unimplemented!()
 		}
 
-		fn on_idle(
-			_n: BlockNumberFor<T>,
-			_remaining_weight: Weight,
-		) -> Weight {
+		fn on_idle(_n: BlockNumberFor<T>, _remaining_weight: Weight) -> Weight {
 			unimplemented!()
 		}
 
@@ -286,9 +283,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(
-			_n: BlockNumberFor<T>,
-		) -> Result<(), TryRuntimeError> {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			unimplemented!()
 		}
 	}

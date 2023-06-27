@@ -165,8 +165,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use frame_system::pallet_prelude::OriginFor;
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 use sp_runtime::{
 	traits::{Bounded as ArithBounded, One, Saturating, StaticLookup, Zero},
 	ArithmeticError, DispatchError, DispatchResult,
@@ -395,11 +394,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		ReferendumIndex,
-		ReferendumInfo<
-			BlockNumberFor<T>,
-			BoundedCallOf<T>,
-			BalanceOf<T>,
-		>,
+		ReferendumInfo<BlockNumberFor<T>, BoundedCallOf<T>, BalanceOf<T>>,
 	>;
 
 	/// All votes for a particular voter. We store the balance for the number of votes that we
@@ -411,12 +406,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Voting<
-			BalanceOf<T>,
-			T::AccountId,
-			BlockNumberFor<T>,
-			T::MaxVotes,
-		>,
+		Voting<BalanceOf<T>, T::AccountId, BlockNumberFor<T>, T::MaxVotes>,
 		ValueQuery,
 	>;
 
@@ -439,10 +429,7 @@ pub mod pallet {
 		_,
 		Identity,
 		H256,
-		(
-			BlockNumberFor<T>,
-			BoundedVec<T::AccountId, T::MaxBlacklisted>,
-		),
+		(BlockNumberFor<T>, BoundedVec<T::AccountId, T::MaxBlacklisted>),
 	>;
 
 	/// Record of all proposals that have been subject to emergency cancellation.
@@ -495,11 +482,7 @@ pub mod pallet {
 		/// An account has cancelled a previous delegation operation.
 		Undelegated { account: T::AccountId },
 		/// An external proposal has been vetoed.
-		Vetoed {
-			who: T::AccountId,
-			proposal_hash: H256,
-			until: BlockNumberFor<T>,
-		},
+		Vetoed { who: T::AccountId, proposal_hash: H256, until: BlockNumberFor<T> },
 		/// A proposal_hash has been blacklisted permanently.
 		Blacklisted { proposal_hash: H256 },
 		/// An account has voted in a referendum
@@ -1231,14 +1214,8 @@ impl<T: Config> Pallet<T> {
 	/// Get all referenda ready for tally at block `n`.
 	pub fn maturing_referenda_at(
 		n: BlockNumberFor<T>,
-	) -> Vec<(
-		ReferendumIndex,
-		ReferendumStatus<
-			BlockNumberFor<T>,
-			BoundedCallOf<T>,
-			BalanceOf<T>,
-		>,
-	)> {
+	) -> Vec<(ReferendumIndex, ReferendumStatus<BlockNumberFor<T>, BoundedCallOf<T>, BalanceOf<T>>)>
+	{
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();
 		Self::maturing_referenda_at_inner(n, next..last)
@@ -1247,14 +1224,8 @@ impl<T: Config> Pallet<T> {
 	fn maturing_referenda_at_inner(
 		n: BlockNumberFor<T>,
 		range: core::ops::Range<PropIndex>,
-	) -> Vec<(
-		ReferendumIndex,
-		ReferendumStatus<
-			BlockNumberFor<T>,
-			BoundedCallOf<T>,
-			BalanceOf<T>,
-		>,
-	)> {
+	) -> Vec<(ReferendumIndex, ReferendumStatus<BlockNumberFor<T>, BoundedCallOf<T>, BalanceOf<T>>)>
+	{
 		range
 			.into_iter()
 			.map(|i| (i, Self::referendum_info(i)))
@@ -1293,19 +1264,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Ok if the given referendum is active, Err otherwise
 	fn ensure_ongoing(
-		r: ReferendumInfo<
-			BlockNumberFor<T>,
-			BoundedCallOf<T>,
-			BalanceOf<T>,
-		>,
-	) -> Result<
-		ReferendumStatus<
-			BlockNumberFor<T>,
-			BoundedCallOf<T>,
-			BalanceOf<T>,
-		>,
-		DispatchError,
-	> {
+		r: ReferendumInfo<BlockNumberFor<T>, BoundedCallOf<T>, BalanceOf<T>>,
+	) -> Result<ReferendumStatus<BlockNumberFor<T>, BoundedCallOf<T>, BalanceOf<T>>, DispatchError>
+	{
 		match r {
 			ReferendumInfo::Ongoing(s) => Ok(s),
 			_ => Err(Error::<T>::ReferendumInvalid.into()),
@@ -1314,14 +1275,8 @@ impl<T: Config> Pallet<T> {
 
 	fn referendum_status(
 		ref_index: ReferendumIndex,
-	) -> Result<
-		ReferendumStatus<
-			BlockNumberFor<T>,
-			BoundedCallOf<T>,
-			BalanceOf<T>,
-		>,
-		DispatchError,
-	> {
+	) -> Result<ReferendumStatus<BlockNumberFor<T>, BoundedCallOf<T>, BalanceOf<T>>, DispatchError>
+	{
 		let info = ReferendumInfoOf::<T>::get(ref_index).ok_or(Error::<T>::ReferendumInvalid)?;
 		Self::ensure_ongoing(info)
 	}
@@ -1655,11 +1610,7 @@ impl<T: Config> Pallet<T> {
 	fn bake_referendum(
 		now: BlockNumberFor<T>,
 		index: ReferendumIndex,
-		status: ReferendumStatus<
-			BlockNumberFor<T>,
-			BoundedCallOf<T>,
-			BalanceOf<T>,
-		>,
+		status: ReferendumStatus<BlockNumberFor<T>, BoundedCallOf<T>, BalanceOf<T>>,
 	) -> bool {
 		let total_issuance = T::Currency::total_issuance();
 		let approved = status.threshold.approved(status.tally, total_issuance);

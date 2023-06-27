@@ -40,8 +40,7 @@ use frame_support::{
 	traits::{Currency, Get, InstanceFilter, IsSubType, IsType, OriginTrait, ReservableCurrency},
 	RuntimeDebug,
 };
-use frame_system::{self as system, ensure_signed};
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{self as system, ensure_signed, pallet_prelude::BlockNumberFor};
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
@@ -577,11 +576,7 @@ pub mod pallet {
 		T::AccountId,
 		(
 			BoundedVec<
-				ProxyDefinition<
-					T::AccountId,
-					T::ProxyType,
-					BlockNumberFor<T>,
-				>,
+				ProxyDefinition<T::AccountId, T::ProxyType, BlockNumberFor<T>>,
 				T::MaxProxies,
 			>,
 			BalanceOf<T>,
@@ -597,14 +592,7 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		(
-			BoundedVec<
-				Announcement<
-					T::AccountId,
-					CallHashOf<T>,
-					BlockNumberFor<T>,
-				>,
-				T::MaxPending,
-			>,
+			BoundedVec<Announcement<T::AccountId, CallHashOf<T>, BlockNumberFor<T>>, T::MaxPending>,
 			BalanceOf<T>,
 		),
 		ValueQuery,
@@ -749,13 +737,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn edit_announcements<
-		F: FnMut(
-			&Announcement<
-				T::AccountId,
-				CallHashOf<T>,
-				BlockNumberFor<T>,
-			>,
-		) -> bool,
+		F: FnMut(&Announcement<T::AccountId, CallHashOf<T>, BlockNumberFor<T>>) -> bool,
 	>(
 		delegate: &T::AccountId,
 		f: F,
@@ -781,20 +763,8 @@ impl<T: Config> Pallet<T> {
 		real: &T::AccountId,
 		delegate: &T::AccountId,
 		force_proxy_type: Option<T::ProxyType>,
-	) -> Result<
-		ProxyDefinition<
-			T::AccountId,
-			T::ProxyType,
-			BlockNumberFor<T>,
-		>,
-		DispatchError,
-	> {
-		let f = |x: &ProxyDefinition<
-			T::AccountId,
-			T::ProxyType,
-			BlockNumberFor<T>,
-		>|
-		 -> bool {
+	) -> Result<ProxyDefinition<T::AccountId, T::ProxyType, BlockNumberFor<T>>, DispatchError> {
+		let f = |x: &ProxyDefinition<T::AccountId, T::ProxyType, BlockNumberFor<T>>| -> bool {
 			&x.delegate == delegate &&
 				force_proxy_type.as_ref().map_or(true, |y| &x.proxy_type == y)
 		};
@@ -802,11 +772,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_proxy(
-		def: ProxyDefinition<
-			T::AccountId,
-			T::ProxyType,
-			BlockNumberFor<T>,
-		>,
+		def: ProxyDefinition<T::AccountId, T::ProxyType, BlockNumberFor<T>>,
 		real: T::AccountId,
 		call: <T as Config>::RuntimeCall,
 	) {

@@ -27,11 +27,7 @@ mod module {
 	use frame_support::pallet_prelude::*;
 	use frame_support_test as frame_system;
 
-	pub type Request<T> = (
-		<T as frame_system::Config>::AccountId,
-		Role,
-		BlockNumberFor<T>,
-	);
+	pub type Request<T> = (<T as frame_system::Config>::AccountId, Role, BlockNumberFor<T>);
 	pub type Requests<T> = Vec<Request<T>>;
 
 	#[derive(Copy, Clone, Eq, PartialEq, Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -118,12 +114,7 @@ mod module {
 	/// tokens locked until given block number
 	#[pallet::storage]
 	#[pallet::getter(fn bondage)]
-	pub type Bondage<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		BlockNumberFor<T>,
-	>;
+	pub type Bondage<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, BlockNumberFor<T>>;
 
 	/// First step before enter a role is registering intent with a new account/key.
 	/// This is done by sending a role_entry_request() from the new account.

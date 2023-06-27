@@ -46,11 +46,7 @@ mod v0 {
 		Pallet<T>,
 		frame_support::Twox64Concat,
 		ReferendumIndex,
-		ReferendumInfo<
-			BlockNumberFor<T>,
-			<T as frame_system::Config>::Hash,
-			BalanceOf<T>,
-		>,
+		ReferendumInfo<BlockNumberFor<T>, <T as frame_system::Config>::Hash, BalanceOf<T>>,
 	>;
 }
 
@@ -88,12 +84,7 @@ pub mod v1 {
 			}
 
 			ReferendumInfoOf::<T>::translate(
-				|index,
-				 old: ReferendumInfo<
-					BlockNumberFor<T>,
-					T::Hash,
-					BalanceOf<T>,
-				>| {
+				|index, old: ReferendumInfo<BlockNumberFor<T>, T::Hash, BalanceOf<T>>| {
 					weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					log::info!(target: TARGET, "migrating referendum #{:?}", &index);
 					Some(match old {

@@ -38,14 +38,8 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::unbounded]
-	pub type AppendableDM<T: Config> = StorageDoubleMap<
-		_,
-		Identity,
-		u32,
-		Identity,
-		BlockNumberFor<T>,
-		Vec<u32>,
-	>;
+	pub type AppendableDM<T: Config> =
+		StorageDoubleMap<_, Identity, u32, Identity, BlockNumberFor<T>, Vec<u32>>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {

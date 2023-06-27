@@ -60,12 +60,9 @@ pub type ReferendumStatusOf<T, I> = ReferendumStatus<
 	ScheduleAddressOf<T, I>,
 >;
 pub type DecidingStatusOf<T> = DecidingStatus<BlockNumberFor<T>>;
-pub type TrackInfoOf<T, I = ()> =
-	TrackInfo<BalanceOf<T, I>, BlockNumberFor<T>>;
-pub type TrackIdOf<T, I> = <<T as Config<I>>::Tracks as TracksInfo<
-	BalanceOf<T, I>,
-	BlockNumberFor<T>,
->>::Id;
+pub type TrackInfoOf<T, I = ()> = TrackInfo<BalanceOf<T, I>, BlockNumberFor<T>>;
+pub type TrackIdOf<T, I> =
+	<<T as Config<I>>::Tracks as TracksInfo<BalanceOf<T, I>, BlockNumberFor<T>>>::Id;
 pub type ScheduleAddressOf<T, I> = <<T as Config<I>>::Scheduler as Anon<
 	BlockNumberFor<T>,
 	CallOf<T, I>,

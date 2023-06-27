@@ -129,9 +129,7 @@ impl VestingAction {
 	fn pick_schedules<T: Config>(
 		&self,
 		schedules: Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
-	) -> impl Iterator<
-		Item = VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
-	> + '_ {
+	) -> impl Iterator<Item = VestingInfo<BalanceOf<T>, BlockNumberFor<T>>> + '_ {
 		schedules.into_iter().enumerate().filter_map(move |(index, schedule)| {
 			if self.should_remove(index) {
 				None
@@ -207,10 +205,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<
-			VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
-			MaxVestingSchedulesGet<T>,
-		>,
+		BoundedVec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>, MaxVestingSchedulesGet<T>>,
 	>;
 
 	/// Storage version of the pallet.
@@ -225,12 +220,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		pub vesting: Vec<(
-			T::AccountId,
-			BlockNumberFor<T>,
-			BlockNumberFor<T>,
-			BalanceOf<T>,
-		)>,
+		pub vesting: Vec<(T::AccountId, BlockNumberFor<T>, BlockNumberFor<T>, BalanceOf<T>)>,
 	}
 
 	#[pallet::genesis_build]
@@ -547,10 +537,7 @@ impl<T: Config> Pallet<T> {
 	fn report_schedule_updates(
 		schedules: Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
 		action: VestingAction,
-	) -> (
-		Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
-		BalanceOf<T>,
-	) {
+	) -> (Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>, BalanceOf<T>) {
 		let now = <frame_system::Pallet<T>>::block_number();
 
 		let mut total_locked_now: BalanceOf<T> = Zero::zero();
@@ -621,13 +608,7 @@ impl<T: Config> Pallet<T> {
 	fn exec_action(
 		schedules: Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
 		action: VestingAction,
-	) -> Result<
-		(
-			Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
-			BalanceOf<T>,
-		),
-		DispatchError,
-	> {
+	) -> Result<(Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>, BalanceOf<T>), DispatchError> {
 		let (schedules, locked_now) = match action {
 			VestingAction::Merge { index1: idx1, index2: idx2 } => {
 				// The schedule index is based off of the schedule ordering prior to filtering out

@@ -29,8 +29,7 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
-use frame_system::pallet_prelude::BlockNumberFor;
-use frame_system::pallet_prelude::HeaderFor;
+use frame_system::pallet_prelude::{BlockNumberFor, HeaderFor};
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
@@ -280,14 +279,8 @@ pub mod pallet {
 	/// entropy was fixed (i.e. it was known to chain observers). Since epochs are defined in
 	/// slots, which may be skipped, the block numbers may not line up with the slot numbers.
 	#[pallet::storage]
-	pub(super) type EpochStart<T: Config> = StorageValue<
-		_,
-		(
-			BlockNumberFor<T>,
-			BlockNumberFor<T>,
-		),
-		ValueQuery,
-	>;
+	pub(super) type EpochStart<T: Config> =
+		StorageValue<_, (BlockNumberFor<T>, BlockNumberFor<T>), ValueQuery>;
 
 	/// How late the current block is compared to its parent.
 	///
@@ -296,8 +289,7 @@ pub mod pallet {
 	/// execution context should always yield zero.
 	#[pallet::storage]
 	#[pallet::getter(fn lateness)]
-	pub(super) type Lateness<T: Config> =
-		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub(super) type Lateness<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// The configuration for the current epoch. Should never be `None` as it is initialized in
 	/// genesis.
@@ -512,9 +504,7 @@ impl<T: Config> IsMember<AuthorityId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>>
-	for Pallet<T>
-{
+impl<T: Config> pallet_session::ShouldEndSession<BlockNumberFor<T>> for Pallet<T> {
 	fn should_end_session(now: BlockNumberFor<T>) -> bool {
 		// it might be (and it is in current implementation) that session module is calling
 		// `should_end_session` from it's own `on_initialize` handler, in which case it's
@@ -565,14 +555,11 @@ impl<T: Config> Pallet<T> {
 	//
 	// WEIGHT NOTE: This function is tied to the weight of `EstimateNextSessionRotation`. If you
 	// update this function, you must also update the corresponding weight.
-	pub fn next_expected_epoch_change(
-		now: BlockNumberFor<T>,
-	) -> Option<BlockNumberFor<T>> {
+	pub fn next_expected_epoch_change(now: BlockNumberFor<T>) -> Option<BlockNumberFor<T>> {
 		let next_slot = Self::current_epoch_start().saturating_add(T::EpochDuration::get());
 		next_slot.checked_sub(*CurrentSlot::<T>::get()).map(|slots_remaining| {
 			// This is a best effort guess. Drifts in the slot/block ratio will cause errors here.
-			let blocks_remaining: BlockNumberFor<T> =
-				slots_remaining.saturated_into();
+			let blocks_remaining: BlockNumberFor<T> = slots_remaining.saturated_into();
 			now.saturating_add(blocks_remaining)
 		})
 	}
@@ -914,18 +901,14 @@ impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
 	}
 }
 
-impl<T: Config>
-	frame_support::traits::EstimateNextSessionRotation<
-		BlockNumberFor<T>,
-	> for Pallet<T>
+impl<T: Config> frame_support::traits::EstimateNextSessionRotation<BlockNumberFor<T>>
+	for Pallet<T>
 {
 	fn average_session_length() -> BlockNumberFor<T> {
 		T::EpochDuration::get().saturated_into()
 	}
 
-	fn estimate_current_session_progress(
-		_now: BlockNumberFor<T>,
-	) -> (Option<Permill>, Weight) {
+	fn estimate_current_session_progress(_now: BlockNumberFor<T>) -> (Option<Permill>, Weight) {
 		let elapsed = CurrentSlot::<T>::get().saturating_sub(Self::current_epoch_start()) + 1;
 
 		(
@@ -946,9 +929,7 @@ impl<T: Config>
 	}
 }
 
-impl<T: Config> frame_support::traits::Lateness<BlockNumberFor<T>>
-	for Pallet<T>
-{
+impl<T: Config> frame_support::traits::Lateness<BlockNumberFor<T>> for Pallet<T> {
 	fn lateness(&self) -> BlockNumberFor<T> {
 		Self::lateness()
 	}

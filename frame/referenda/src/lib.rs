@@ -727,13 +727,7 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 
 	fn access_poll<R>(
 		index: Self::Index,
-		f: impl FnOnce(
-			PollStatus<
-				&mut T::Tally,
-				BlockNumberFor<T>,
-				TrackIdOf<T, I>,
-			>,
-		) -> R,
+		f: impl FnOnce(PollStatus<&mut T::Tally, BlockNumberFor<T>, TrackIdOf<T, I>>) -> R,
 	) -> R {
 		match ReferendumInfoFor::<T, I>::get(index) {
 			Some(ReferendumInfo::Ongoing(mut status)) => {
@@ -752,11 +746,7 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 	fn try_access_poll<R>(
 		index: Self::Index,
 		f: impl FnOnce(
-			PollStatus<
-				&mut T::Tally,
-				BlockNumberFor<T>,
-				TrackIdOf<T, I>,
-			>,
+			PollStatus<&mut T::Tally, BlockNumberFor<T>, TrackIdOf<T, I>>,
 		) -> Result<R, DispatchError>,
 	) -> Result<R, DispatchError> {
 		match ReferendumInfoFor::<T, I>::get(index) {

@@ -737,10 +737,7 @@ mod tests {
 				Weight::from_parts(175, 0)
 			}
 
-			fn on_idle(
-				n: BlockNumberFor<T>,
-				remaining_weight: Weight,
-			) -> Weight {
+			fn on_idle(n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 				println!("on_idle{}, {})", n, remaining_weight);
 				Weight::from_parts(175, 0)
 			}

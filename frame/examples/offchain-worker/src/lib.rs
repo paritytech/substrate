@@ -53,8 +53,8 @@ use frame_system::{
 		AppCrypto, CreateSignedTransaction, SendSignedTransaction, SendUnsignedTransaction,
 		SignedPayload, Signer, SigningTypes, SubmitTransaction,
 	},
+	pallet_prelude::BlockNumberFor,
 };
-use frame_system::pallet_prelude::BlockNumberFor;
 use lite_json::json::JsonValue;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
@@ -342,8 +342,7 @@ pub mod pallet {
 	/// This storage entry defines when new transaction is going to be accepted.
 	#[pallet::storage]
 	#[pallet::getter(fn next_unsigned_at)]
-	pub(super) type NextUnsignedAt<T: Config> =
-		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 }
 
 /// Payload used by this example crate to hold price
@@ -355,9 +354,7 @@ pub struct PricePayload<Public, BlockNumber> {
 	public: Public,
 }
 
-impl<T: SigningTypes> SignedPayload<T>
-	for PricePayload<T::Public, BlockNumberFor<T>>
-{
+impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, BlockNumberFor<T>> {
 	fn public(&self) -> T::Public {
 		self.public.clone()
 	}
@@ -378,9 +375,7 @@ impl<T: Config> Pallet<T> {
 	/// and local storage usage.
 	///
 	/// Returns a type of transaction that should be produced in current run.
-	fn choose_transaction_type(
-		block_number: BlockNumberFor<T>,
-	) -> TransactionType {
+	fn choose_transaction_type(block_number: BlockNumberFor<T>) -> TransactionType {
 		/// A friendlier name for the error that is going to be returned in case we are in the grace
 		/// period.
 		const RECENTLY_SENT: () = ();
@@ -395,11 +390,8 @@ impl<T: Config> Pallet<T> {
 		// low-level method of local storage API, which means that only one worker
 		// will be able to "acquire a lock" and send a transaction if multiple workers
 		// happen to be executed concurrently.
-		let res = val.mutate(
-			|last_send: Result<
-				Option<BlockNumberFor<T>>,
-				StorageRetrievalError,
-			>| {
+		let res =
+			val.mutate(|last_send: Result<Option<BlockNumberFor<T>>, StorageRetrievalError>| {
 				match last_send {
 					// If we already have a value in storage and the block number is recent enough
 					// we avoid sending another transaction at this time.
@@ -408,8 +400,7 @@ impl<T: Config> Pallet<T> {
 					// In every other case we attempt to acquire the lock and send a transaction.
 					_ => Ok(block_number),
 				}
-			},
-		);
+			});
 
 		// The result of `mutate` call will give us a nested `Result` type.
 		// The first one matches the return of the closure passed to `mutate`, i.e.

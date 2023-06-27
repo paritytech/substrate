@@ -475,13 +475,8 @@ pub mod pallet {
 	/// period stored as a future block number.
 	#[pallet::storage]
 	#[pallet::getter(fn retiring_members)]
-	pub type RetiringMembers<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		BlockNumberFor<T>,
-		OptionQuery,
-	>;
+	pub type RetiringMembers<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, BlockNumberFor<T>, OptionQuery>;
 
 	/// The current list of accounts deemed unscrupulous. These accounts non grata cannot submit
 	/// candidacy.

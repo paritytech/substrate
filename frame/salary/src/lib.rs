@@ -145,11 +145,7 @@ pub mod pallet {
 	pub type CycleIndexOf<T> = BlockNumberFor<T>;
 	pub type BalanceOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Balance;
 	pub type IdOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Id;
-	pub type StatusOf<T, I> = StatusType<
-		CycleIndexOf<T>,
-		BlockNumberFor<T>,
-		BalanceOf<T, I>,
-	>;
+	pub type StatusOf<T, I> = StatusType<CycleIndexOf<T>, BlockNumberFor<T>, BalanceOf<T, I>>;
 	pub type ClaimantStatusOf<T, I> = ClaimantStatus<CycleIndexOf<T>, BalanceOf<T, I>, IdOf<T, I>>;
 
 	/// The overall status of the system.

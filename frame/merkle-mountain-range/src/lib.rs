@@ -57,8 +57,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{log, weights::Weight};
-use frame_system::pallet_prelude::BlockNumberFor;
-use frame_system::pallet_prelude::HeaderFor;
+use frame_system::pallet_prelude::{BlockNumberFor, HeaderFor};
 use sp_mmr_primitives::utils;
 use sp_runtime::{
 	traits::{self, One, Saturating},
@@ -93,8 +92,7 @@ pub struct ParentNumberAndHash<T: frame_system::Config> {
 }
 
 impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
-	type LeafData =
-		(BlockNumberFor<T>, <T as frame_system::Config>::Hash);
+	type LeafData = (BlockNumberFor<T>, <T as frame_system::Config>::Hash);
 
 	fn leaf_data() -> Self::LeafData {
 		(
@@ -268,11 +266,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		pos: NodeIndex,
 		parent_hash: <T as frame_system::Config>::Hash,
 	) -> sp_std::prelude::Vec<u8> {
-		NodesUtils::node_temp_offchain_key::<HeaderFor<T>>(
-			&T::INDEXING_PREFIX,
-			pos,
-			parent_hash,
-		)
+		NodesUtils::node_temp_offchain_key::<HeaderFor<T>>(&T::INDEXING_PREFIX, pos, parent_hash)
 	}
 
 	/// Build canonical offchain key for node `pos` in MMR.
@@ -300,20 +294,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Convert a block number into a leaf index.
-	fn block_num_to_leaf_index(
-		block_num: BlockNumberFor<T>,
-	) -> Result<LeafIndex, Error>
+	fn block_num_to_leaf_index(block_num: BlockNumberFor<T>) -> Result<LeafIndex, Error>
 	where
 		T: frame_system::Config,
 	{
-		let first_mmr_block = utils::first_mmr_block_num::<
-			HeaderFor<T>,
-		>(<frame_system::Pallet<T>>::block_number(), Self::mmr_leaves())?;
+		let first_mmr_block = utils::first_mmr_block_num::<HeaderFor<T>>(
+			<frame_system::Pallet<T>>::block_number(),
+			Self::mmr_leaves(),
+		)?;
 
-		utils::block_num_to_leaf_index::<HeaderFor<T>>(
-			block_num,
-			first_mmr_block,
-		)
+		utils::block_num_to_leaf_index::<HeaderFor<T>>(block_num, first_mmr_block)
 	}
 
 	/// Generate an MMR proof for the given `block_numbers`.

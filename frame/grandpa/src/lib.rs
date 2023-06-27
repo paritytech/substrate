@@ -195,9 +195,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<
-				EquivocationProof<T::Hash, BlockNumberFor<T>>,
-			>,
+			equivocation_proof: Box<EquivocationProof<T::Hash, BlockNumberFor<T>>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
@@ -223,9 +221,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<
-				EquivocationProof<T::Hash, BlockNumberFor<T>>,
-			>,
+			equivocation_proof: Box<EquivocationProof<T::Hash, BlockNumberFor<T>>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -295,45 +291,31 @@ pub mod pallet {
 	}
 
 	#[pallet::type_value]
-	pub(super) fn DefaultForState<T: Config>(
-	) -> StoredState<BlockNumberFor<T>> {
+	pub(super) fn DefaultForState<T: Config>() -> StoredState<BlockNumberFor<T>> {
 		StoredState::Live
 	}
 
 	/// State of the current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn state)]
-	pub(super) type State<T: Config> = StorageValue<
-		_,
-		StoredState<BlockNumberFor<T>>,
-		ValueQuery,
-		DefaultForState<T>,
-	>;
+	pub(super) type State<T: Config> =
+		StorageValue<_, StoredState<BlockNumberFor<T>>, ValueQuery, DefaultForState<T>>;
 
 	/// Pending change: (signaled at, scheduled change).
 	#[pallet::storage]
 	#[pallet::getter(fn pending_change)]
-	pub(super) type PendingChange<T: Config> = StorageValue<
-		_,
-		StoredPendingChange<BlockNumberFor<T>, T::MaxAuthorities>,
-	>;
+	pub(super) type PendingChange<T: Config> =
+		StorageValue<_, StoredPendingChange<BlockNumberFor<T>, T::MaxAuthorities>>;
 
 	/// next block number where we can force a change.
 	#[pallet::storage]
 	#[pallet::getter(fn next_forced)]
-	pub(super) type NextForced<T: Config> =
-		StorageValue<_, BlockNumberFor<T>>;
+	pub(super) type NextForced<T: Config> = StorageValue<_, BlockNumberFor<T>>;
 
 	/// `true` if we are currently stalled.
 	#[pallet::storage]
 	#[pallet::getter(fn stalled)]
-	pub(super) type Stalled<T: Config> = StorageValue<
-		_,
-		(
-			BlockNumberFor<T>,
-			BlockNumberFor<T>,
-		),
-	>;
+	pub(super) type Stalled<T: Config> = StorageValue<_, (BlockNumberFor<T>, BlockNumberFor<T>)>;
 
 	/// The number of changes (both in terms of keys and underlying economic responsibilities)
 	/// in the "set" of Grandpa validators from genesis.
@@ -449,9 +431,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Schedule GRANDPA to pause starting in the given number of blocks.
 	/// Cannot be done when already paused.
-	pub fn schedule_pause(
-		in_blocks: BlockNumberFor<T>,
-	) -> DispatchResult {
+	pub fn schedule_pause(in_blocks: BlockNumberFor<T>) -> DispatchResult {
 		if let StoredState::Live = <State<T>>::get() {
 			let scheduled_at = <frame_system::Pallet<T>>::block_number();
 			<State<T>>::put(StoredState::PendingPause { delay: in_blocks, scheduled_at });
@@ -463,9 +443,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Schedule a resume of GRANDPA after pausing.
-	pub fn schedule_resume(
-		in_blocks: BlockNumberFor<T>,
-	) -> DispatchResult {
+	pub fn schedule_resume(in_blocks: BlockNumberFor<T>) -> DispatchResult {
 		if let StoredState::Paused = <State<T>>::get() {
 			let scheduled_at = <frame_system::Pallet<T>>::block_number();
 			<State<T>>::put(StoredState::PendingResume { delay: in_blocks, scheduled_at });
@@ -554,19 +532,13 @@ impl<T: Config> Pallet<T> {
 	/// will push the transaction to the pool. Only useful in an offchain
 	/// context.
 	pub fn submit_unsigned_equivocation_report(
-		equivocation_proof: EquivocationProof<
-			T::Hash,
-			BlockNumberFor<T>,
-		>,
+		equivocation_proof: EquivocationProof<T::Hash, BlockNumberFor<T>>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
 		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()
 	}
 
-	fn on_stalled(
-		further_wait: BlockNumberFor<T>,
-		median: BlockNumberFor<T>,
-	) {
+	fn on_stalled(further_wait: BlockNumberFor<T>, median: BlockNumberFor<T>) {
 		// when we record old authority sets we could try to figure out _who_
 		// failed. until then, we can't meaningfully guard against
 		// `next == last` the way that normal session changes do.

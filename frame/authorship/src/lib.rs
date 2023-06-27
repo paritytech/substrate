@@ -45,10 +45,7 @@ pub mod pallet {
 		/// Find the author of a block.
 		type FindAuthor: FindAuthor<Self::AccountId>;
 		/// An event handler for authored blocks.
-		type EventHandler: EventHandler<
-			Self::AccountId,
-			BlockNumberFor<Self>,
-		>;
+		type EventHandler: EventHandler<Self::AccountId, BlockNumberFor<Self>>;
 	}
 
 	#[pallet::pallet]

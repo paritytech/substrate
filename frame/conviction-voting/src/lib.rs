@@ -74,11 +74,8 @@ type VotingOf<T, I = ()> = Voting<
 	<T as Config<I>>::MaxVotes,
 >;
 #[allow(dead_code)]
-type DelegatingOf<T, I = ()> = Delegating<
-	BalanceOf<T, I>,
-	<T as frame_system::Config>::AccountId,
-	BlockNumberFor<T>,
->;
+type DelegatingOf<T, I = ()> =
+	Delegating<BalanceOf<T, I>, <T as frame_system::Config>::AccountId, BlockNumberFor<T>>;
 pub type TallyOf<T, I = ()> = Tally<BalanceOf<T, I>, <T as Config<I>>::MaxTurnout>;
 pub type VotesOf<T, I = ()> = BalanceOf<T, I>;
 type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;

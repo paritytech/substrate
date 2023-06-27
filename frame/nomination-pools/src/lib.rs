@@ -834,10 +834,7 @@ impl<T: Config> Commission<T> {
 	///
 	/// No change rate will always be less restrictive than some change rate, so where no
 	/// `change_rate` is currently set, `false` is returned.
-	fn less_restrictive(
-		&self,
-		new: &CommissionChangeRate<BlockNumberFor<T>>,
-	) -> bool {
+	fn less_restrictive(&self, new: &CommissionChangeRate<BlockNumberFor<T>>) -> bool {
 		self.change_rate
 			.as_ref()
 			.map(|c| new.max_increase > c.max_increase || new.min_delay < c.min_delay)

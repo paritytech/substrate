@@ -902,18 +902,14 @@ impl<T: Config> ValidatorSet<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> EstimateNextNewSession<BlockNumberFor<T>>
-	for Pallet<T>
-{
+impl<T: Config> EstimateNextNewSession<BlockNumberFor<T>> for Pallet<T> {
 	fn average_session_length() -> BlockNumberFor<T> {
 		T::NextSessionRotation::average_session_length()
 	}
 
 	/// This session pallet always calls new_session and next_session at the same time, hence we
 	/// do a simple proxy and pass the function to next rotation.
-	fn estimate_next_new_session(
-		now: BlockNumberFor<T>,
-	) -> (Option<BlockNumberFor<T>>, Weight) {
+	fn estimate_next_new_session(now: BlockNumberFor<T>) -> (Option<BlockNumberFor<T>>, Weight) {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
 	}
 }

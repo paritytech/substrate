@@ -186,14 +186,10 @@ pub mod pallet {
 		<<T as Config>::Currency as FunInspect<<T as frame_system::Config>::AccountId>>::Balance;
 	type DebtOf<T> =
 		fungible::Debt<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
-	type ReceiptRecordOf<T> = ReceiptRecord<
-		<T as frame_system::Config>::AccountId,
-		BlockNumberFor<T>,
-		BalanceOf<T>,
-	>;
+	type ReceiptRecordOf<T> =
+		ReceiptRecord<<T as frame_system::Config>::AccountId, BlockNumberFor<T>, BalanceOf<T>>;
 	type IssuanceInfoOf<T> = IssuanceInfo<BalanceOf<T>>;
-	type SummaryRecordOf<T> =
-		SummaryRecord<BlockNumberFor<T>, BalanceOf<T>>;
+	type SummaryRecordOf<T> = SummaryRecord<BlockNumberFor<T>, BalanceOf<T>>;
 	type BidOf<T> = Bid<BalanceOf<T>, <T as frame_system::Config>::AccountId>;
 	type QueueTotalsTypeOf<T> = BoundedVec<(u32, BalanceOf<T>), <T as Config>::QueueCount>;
 

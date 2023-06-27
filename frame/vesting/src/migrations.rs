@@ -40,27 +40,26 @@ pub mod v1 {
 	pub fn migrate<T: Config>() -> Weight {
 		let mut reads_writes = 0;
 
-		Vesting::<T>::translate::<
-			VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
-			_,
-		>(|_key, vesting_info| {
-			reads_writes += 1;
-			let v: Option<
-				BoundedVec<
-					VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
-					MaxVestingSchedulesGet<T>,
-				>,
-			> = vec![vesting_info].try_into().ok();
+		Vesting::<T>::translate::<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>, _>(
+			|_key, vesting_info| {
+				reads_writes += 1;
+				let v: Option<
+					BoundedVec<
+						VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
+						MaxVestingSchedulesGet<T>,
+					>,
+				> = vec![vesting_info].try_into().ok();
 
-			if v.is_none() {
-				log::warn!(
-					target: "runtime::vesting",
-					"migration: Failed to move a vesting schedule into a BoundedVec"
-				);
-			}
+				if v.is_none() {
+					log::warn!(
+						target: "runtime::vesting",
+						"migration: Failed to move a vesting schedule into a BoundedVec"
+					);
+				}
 
-			v
-		});
+				v
+			},
+		);
 
 		T::DbWeight::get().reads_writes(reads_writes, reads_writes)
 	}

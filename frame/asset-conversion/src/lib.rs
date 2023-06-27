@@ -72,7 +72,10 @@ use frame_support::{
 	ensure,
 	traits::tokens::{AssetId, Balance},
 };
-use frame_system::{ensure_signed, pallet_prelude::{BlockNumberFor, OriginFor}};
+use frame_system::{
+	ensure_signed,
+	pallet_prelude::{BlockNumberFor, OriginFor},
+};
 pub use pallet::*;
 use sp_arithmetic::traits::Unsigned;
 use sp_runtime::{

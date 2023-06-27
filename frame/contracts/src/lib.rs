@@ -341,10 +341,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_idle(
-			_block: BlockNumberFor<T>,
-			mut remaining_weight: Weight,
-		) -> Weight {
+		fn on_idle(_block: BlockNumberFor<T>, mut remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
 
 			loop {

@@ -141,10 +141,7 @@ where
 	R: ReportOffence<
 		T::AccountId,
 		P::IdentificationTuple,
-		EquivocationOffence<
-			P::IdentificationTuple,
-			BlockNumberFor<T>,
-		>,
+		EquivocationOffence<P::IdentificationTuple, BlockNumberFor<T>>,
 	>,
 	P: KeyOwnerProofSystem<(KeyTypeId, T::BeefyId), Proof = T::KeyOwnerProof>,
 	P::IdentificationTuple: Clone,

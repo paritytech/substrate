@@ -341,8 +341,7 @@ pub mod pallet {
 	/// more accurate then the value we calculate for `HeartbeatAfter`.
 	#[pallet::storage]
 	#[pallet::getter(fn heartbeat_after)]
-	pub(super) type HeartbeatAfter<T: Config> =
-		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+	pub(super) type HeartbeatAfter<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// The current set of keys that may issue a heartbeat.
 	#[pallet::storage]
@@ -508,8 +507,7 @@ pub mod pallet {
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
 impl<T: Config + pallet_authorship::Config>
-	pallet_authorship::EventHandler<ValidatorId<T>, BlockNumberFor<T>>
-	for Pallet<T>
+	pallet_authorship::EventHandler<ValidatorId<T>, BlockNumberFor<T>> for Pallet<T>
 {
 	fn note_author(author: ValidatorId<T>) {
 		Self::note_authorship(author);
@@ -691,10 +689,7 @@ impl<T: Config> Pallet<T> {
 		};
 		let storage = StorageValueRef::persistent(&key);
 		let res = storage.mutate(
-			|status: Result<
-				Option<HeartbeatStatus<BlockNumberFor<T>>>,
-				StorageRetrievalError,
-			>| {
+			|status: Result<Option<HeartbeatStatus<BlockNumberFor<T>>>, StorageRetrievalError>| {
 				// Check if there is already a lock for that particular block.
 				// This means that the heartbeat has already been sent, and we are just waiting
 				// for it to be included. However if it doesn't get included for INCLUDE_THRESHOLD

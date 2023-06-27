@@ -50,6 +50,7 @@ use frame_support::{
 	weights::Weight,
 	RuntimeDebugNoBound,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeDebug;
@@ -58,7 +59,6 @@ use sp_std::{
 	ops::{Deref, DerefMut},
 	prelude::*,
 };
-use frame_system::pallet_prelude::BlockNumberFor;
 
 /// Pending atomic swap operation.
 #[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode, TypeInfo, MaxEncodedLen)]

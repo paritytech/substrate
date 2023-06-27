@@ -107,10 +107,8 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
 impl<T, R, P, L>
-	OffenceReportSystem<
-		Option<T::AccountId>,
-		(EquivocationProof<HeaderFor<T>>, T::KeyOwnerProof),
-	> for EquivocationReportSystem<T, R, P, L>
+	OffenceReportSystem<Option<T::AccountId>, (EquivocationProof<HeaderFor<T>>, T::KeyOwnerProof)>
+	for EquivocationReportSystem<T, R, P, L>
 where
 	T: Config + pallet_authorship::Config + frame_system::offchain::SendTransactionTypes<Call<T>>,
 	R: ReportOffence<

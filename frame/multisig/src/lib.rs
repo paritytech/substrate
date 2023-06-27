@@ -59,8 +59,7 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, RuntimeDebug,
 };
-use frame_system::{self as system, RawOrigin};
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{self as system, pallet_prelude::BlockNumberFor, RawOrigin};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
@@ -184,12 +183,7 @@ pub mod pallet {
 		T::AccountId,
 		Blake2_128Concat,
 		[u8; 32],
-		Multisig<
-			BlockNumberFor<T>,
-			BalanceOf<T>,
-			T::AccountId,
-			T::MaxSignatories,
-		>,
+		Multisig<BlockNumberFor<T>, BalanceOf<T>, T::AccountId, T::MaxSignatories>,
 	>;
 
 	#[pallet::error]
