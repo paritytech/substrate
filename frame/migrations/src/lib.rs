@@ -136,7 +136,7 @@
 
 mod benchmarking;
 mod mock;
-pub mod mock_helpers;
+//pub mod mock_helpers;
 mod tests;
 pub mod weights;
 
@@ -200,16 +200,6 @@ impl<Cursor, BlockNumber> ActiveCursor<Cursor, BlockNumber> {
 	}
 }
 
-/// A collection of migrations that must be executed in order.
-pub type MigrationsOf<T> = Vec<
-	Box<
-		dyn SteppedMigration<
-			Cursor = <T as Config>::Cursor,
-			Identifier = <T as Config>::Identifier,
-		>,
-	>,
->;
-
 /// Convenience alias for [`MigrationCursor`].
 pub type CursorOf<T> =
 	MigrationCursor<<T as Config>::Cursor, <T as frame_system::Config>::BlockNumber>;
@@ -236,7 +226,7 @@ pub mod pallet {
 		///
 		/// Should only be updated in a runtime-upgrade once all the old migrations have completed.
 		/// (Check that `Cursor` is `None`).
-		type Migrations: Get<MigrationsOf<Self>>;
+		type Migrations: SteppedMigrations<Cursor=Self::Cursor, Identifier=Self::Identifier>;
 
 		/// The cursor type that is shared across all migrations.
 		type Cursor: FullCodec + MaxEncodedLen + TypeInfo + Parameter;
@@ -384,7 +374,7 @@ impl<T: Config> Pallet<T> {
 			return T::WeightInfo::on_runtime_upgrade()
 		}
 
-		let migrations = T::Migrations::get().len() as u32;
+		let migrations = T::Migrations::len();
 		log::info!(target: LOG, "Onboarding {migrations} MBM migrations");
 		if migrations > 0 {
 			Cursor::<T>::set(Some(
@@ -423,9 +413,8 @@ impl<T: Config> Pallet<T> {
 		};
 		debug_assert!(<Self as MultiStepMigrator>::is_upgrading());
 
-		let migrations = T::Migrations::get();
 		for i in 0.. {
-			match Self::exec_migration(&mut meter, &migrations, cursor, i == 0) {
+			match Self::exec_migration(&mut meter, cursor, i == 0) {
 				None => return meter.consumed,
 				Some(ControlFlow::Break(last_cursor)) => {
 					cursor = last_cursor;
@@ -448,24 +437,23 @@ impl<T: Config> Pallet<T> {
 	/// remaining weight that can be consumed.
 	fn exec_migration(
 		meter: &mut WeightMeter,
-		migrations: &MigrationsOf<T>,
 		mut cursor: ActiveCursorOf<T>,
 		is_first: bool,
 	) -> Option<ControlFlow<ActiveCursorOf<T>, ActiveCursorOf<T>>> {
-		let Some(migration) = migrations.get(cursor.index as usize) else {
+		let Some(id) = T::Migrations::nth_id(cursor.index) else {
 			Self::deposit_event(Event::UpgradeCompleted);
 			Cursor::<T>::kill();
 			T::OnMigrationUpdate::completed();
 			return None;
 		};
-		if Historic::<T>::contains_key(&migration.id()) {
+		if Historic::<T>::contains_key(&id) {
 			Self::deposit_event(Event::MigrationSkippedHistoric { index: cursor.index });
 			cursor.advance(System::<T>::block_number());
 			return Some(ControlFlow::Continue(cursor))
 		}
 
 		let blocks = System::<T>::block_number().saturating_sub(cursor.started_at);
-		match migration.transactional_step(cursor.inner_cursor.clone(), meter) {
+		match T::Migrations::nth_transactional_step(cursor.index, cursor.inner_cursor.clone(), meter) {
 			Ok(Some(next_cursor)) => {
 				Self::deposit_event(Event::MigrationAdvanced { index: cursor.index, blocks });
 				cursor.inner_cursor = Some(next_cursor);

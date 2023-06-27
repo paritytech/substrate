@@ -59,7 +59,6 @@ impl SteppedMigration for MockedMigration {
 	}
 
 	fn step(
-		&self,
 		cursor: &Option<Self::Cursor>,
 		_meter: &mut WeightMeter,
 	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
