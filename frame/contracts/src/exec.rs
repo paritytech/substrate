@@ -363,7 +363,7 @@ pub trait Executable<T: Config>: Sized {
 	) -> ExecResult;
 
 	/// The code hash of the executable.
-	fn code_hash(&self) -> CodeHash<T>;
+	fn code_hash(&self) -> &CodeHash<T>;
 
 	/// Size of the contract code in bytes.
 	fn code_len(&self) -> u32;
@@ -764,7 +764,7 @@ where
 						input_data,
 						salt,
 					);
-					let contract = ContractInfo::new(&account_id, nonce, executable.code_hash())?;
+					let contract = ContractInfo::new(&account_id, nonce, *executable.code_hash())?;
 					(
 						account_id,
 						contract,
@@ -844,8 +844,11 @@ where
 	fn run(&mut self, executable: E, input_data: Vec<u8>) -> Result<ExecReturnValue, ExecError> {
 		let frame = self.top_frame();
 		let entry_point = frame.entry_point;
-		let delegated_code_hash =
-			if frame.delegate_caller.is_some() { Some(executable.code_hash()) } else { None };
+		let delegated_code_hash = if frame.delegate_caller.is_some() {
+			Some(executable.code_hash().clone())
+		} else {
+			None
+		};
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
@@ -1626,8 +1629,8 @@ mod tests {
 			}
 		}
 
-		fn code_hash(&self) -> CodeHash<Test> {
-			self.code_hash
+		fn code_hash(&self) -> &CodeHash<Test> {
+			&self.code_hash
 		}
 
 		fn code_len(&self) -> u32 {

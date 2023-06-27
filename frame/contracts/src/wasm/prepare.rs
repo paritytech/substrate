@@ -27,7 +27,7 @@ use crate::{
 	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
 use codec::MaxEncodedLen;
-use sp_runtime::DispatchError;
+use sp_runtime::{traits::Hash, DispatchError};
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{
 	self, External, Internal, MemoryType, Type, ValueType,
@@ -433,8 +433,9 @@ where
 		.charge_or_zero();
 
 	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0 };
+	let code_hash = T::Hashing::hash(&code);
 
-	Ok(WasmBlob { code, code_info })
+	Ok(WasmBlob { code, code_info, code_hash })
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
@@ -454,6 +455,7 @@ pub mod benchmarking {
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let contract_module = ContractModule::new(&code)?;
 		let _ = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+		let code_hash = T::Hashing::hash(&code);
 		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
 			owner,
@@ -462,7 +464,8 @@ pub mod benchmarking {
 			refcount: 0,
 			determinism: Determinism::Enforced,
 		};
-		Ok(WasmBlob { code, code_info })
+
+		Ok(WasmBlob { code, code_info, code_hash })
 	}
 }
 

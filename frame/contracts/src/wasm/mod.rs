@@ -50,7 +50,7 @@ use frame_support::{
 	traits::ReservableCurrency,
 };
 use sp_core::Get;
-use sp_runtime::{traits::Hash, RuntimeDebug};
+use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 use wasmi::{
 	Config as WasmiConfig, Engine, ExternType, FuelConsumptionMode, Instance, Linker, Memory,
@@ -68,6 +68,9 @@ pub struct WasmBlob<T: Config> {
 	// This isn't needed for contract execution and is not stored alongside it.
 	#[codec(skip)]
 	code_info: CodeInfo<T>,
+	// This is for not calculating the hash every time we need it.
+	#[codec(skip)]
+	code_hash: CodeHash<T>,
 }
 
 /// Contract code related data, such as:
@@ -311,7 +314,7 @@ impl<T: Config> WasmBlob<T> {
 	/// Increments the reference count of the in-storage `WasmBlob`, if it already exists in
 	/// storage.
 	fn store_code(mut module: Self, instantiated: bool) -> DispatchResult {
-		let code_hash = &module.code_hash();
+		let code_hash = &module.code_hash().clone();
 		<CodeInfoOf<T>>::mutate(code_hash, |stored_code_info| {
 			match stored_code_info {
 				// Instantiate existing contract.
@@ -429,7 +432,7 @@ impl<T: Config> WasmBlob<T> {
 	///
 	/// This is useful for benchmarking where we don't want validation of the module to skew
 	/// our results. This also does not collect any deposit from the `owner`. Also useful
- 	/// during testing when we want to deploy codes that do not pass the instantiation checks.
+	/// during testing when we want to deploy codes that do not pass the instantiation checks.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	fn from_code_unchecked(
 		code: Vec<u8>,
@@ -454,14 +457,13 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
 		let code = Self::load_code(code_hash, gas_meter)?;
-		let code_hash = T::Hashing::hash(&code);
 		// We store `code_info` at the same time as contract code,
 		// therefore this query shouldn't really fail.
 		// We consider its failure equal to `CodeNotFound`, as contract code without
 		// `code_info` is unusable in this pallet.
 		let code_info = <CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
 
-		Ok(Self { code, code_info })
+		Ok(Self { code, code_info, code_hash })
 	}
 
 	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
@@ -534,8 +536,8 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		store.into_data().to_execution_result(result)
 	}
 
-	fn code_hash(&self) -> CodeHash<T> {
-		T::Hashing::hash(&self.code)
+	fn code_hash(&self) -> &CodeHash<T> {
+		&self.code_hash
 	}
 
 	fn code_len(&self) -> u32 {
