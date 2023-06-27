@@ -1369,9 +1369,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				_ => {},
 			}
 			Ok(())
-		})?;
-
-		Ok(())
+		})
 	}
 
 	/// Looking at tracks:
@@ -1380,9 +1378,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///  `ReferendumInfoFor` storage map.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn try_state_tracks() -> Result<(), TryRuntimeError> {
-		T::Tracks::tracks().iter().try_for_each(|track| -> DispatchResult {
+		T::Tracks::tracks().iter().try_for_each(|track| {
 			TrackQueue::<T, I>::get(track.0).iter().try_for_each(
-				|(referendum_index, _)| -> DispatchResult {
+				|(referendum_index, _)| -> Result<(), TryRuntimeError> {
 					ensure!(
 					ReferendumInfoFor::<T, I>::contains_key(referendum_index),
 					"`ReferendumIndex` inside the `TrackQueue` should be a key in `ReferendumInfoFor`"
@@ -1391,8 +1389,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 			)?;
 			Ok(())
-		})?;
-
-		Ok(())
+		})
 	}
 }
