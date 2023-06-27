@@ -426,11 +426,15 @@ impl<AccountId: Clone> Default for RewardDestination<AccountId> {
 }
 
 impl<AccountId: Clone> RewardDestination<AccountId> {
-	fn to_payee_destination(&self, who: AccountId) -> PayeeDestination<AccountId> {
+	fn to_payee_destination(
+		&self,
+		stash: AccountId,
+		controller: AccountId,
+	) -> PayeeDestination<AccountId> {
 		match self {
 			RewardDestination::Staked => PayeeDestination::Compound,
-			RewardDestination::Stash => PayeeDestination::Free(who),
-			RewardDestination::Controller => PayeeDestination::Free(who),
+			RewardDestination::Stash => PayeeDestination::Free(stash),
+			RewardDestination::Controller => PayeeDestination::Free(controller),
 			RewardDestination::Account(a) => PayeeDestination::Free(a.clone()),
 			RewardDestination::None => PayeeDestination::None,
 		}

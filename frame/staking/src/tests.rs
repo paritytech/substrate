@@ -733,7 +733,7 @@ fn update_payee_works() {
 		// Then
 		assert_noop!(
 			Staking::update_payee(RuntimeOrigin::signed(1), 1337),
-			Error::<Test>::BadUpdate
+			Error::<Test>::NotController
 		);
 
 		// Results in error if key already exists in `Payees`.
@@ -768,7 +768,7 @@ fn update_payee_works() {
 		assert!(!Payees::<Test>::contains_key(stash));
 
 		// When
-		assert_ok!(Staking::update_payee(RuntimeOrigin::signed(stash), stash));
+		assert_ok!(Staking::update_payee(RuntimeOrigin::signed(stash), controller));
 
 		// Then
 		assert_eq!(Payee::<Test>::get(stash), RewardDestination::Controller);
@@ -778,7 +778,7 @@ fn update_payee_works() {
 		// `RewardDestination::Account(AccountId)`.
 
 		// Given
-		let (stash, _) =
+		let (stash, controller) =
 			testing_utils::create_stash_controller::<Test>(16, 17, RewardDestination::Account(69))
 				.unwrap();
 		Payees::<Test>::remove(stash);
@@ -788,7 +788,7 @@ fn update_payee_works() {
 		assert!(!Payees::<Test>::contains_key(stash));
 
 		// When
-		assert_ok!(Staking::update_payee(RuntimeOrigin::signed(stash), stash));
+		assert_ok!(Staking::update_payee(RuntimeOrigin::signed(stash), controller));
 
 		// Then
 		assert_eq!(Payee::<Test>::get(stash), RewardDestination::Account(69));

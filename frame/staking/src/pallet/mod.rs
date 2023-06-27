@@ -1235,7 +1235,7 @@ pub mod pallet {
 
 			// In-progress lazy migration to `Payees` storage item.
 			// NOTE: To be removed in next runtime upgrade once migration is completed.
-			Payees::<T>::insert(stash, payee.to_payee_destination(stash.clone()));
+			Payees::<T>::insert(stash, payee.to_payee_destination(stash.clone(), controller));
 			Ok(())
 		}
 
@@ -1802,13 +1802,19 @@ pub mod pallet {
 		/// - Writes are limited to the `who` account key.
 		#[pallet::call_index(26)]
 		#[pallet::weight(T::WeightInfo::update_payee())]
-		pub fn update_payee(origin: OriginFor<T>, payee: T::AccountId) -> DispatchResult {
+		pub fn update_payee(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
+			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let stash = &ledger.stash;
+
 			ensure!(
-				Payee::<T>::contains_key(&payee) && !Payees::<T>::contains_key(&payee),
+				Payee::<T>::contains_key(&stash) && !Payees::<T>::contains_key(&stash),
 				Error::<T>::BadUpdate
 			);
-			Payees::<T>::insert(payee.clone(), Payee::<T>::get(&payee).to_payee_destination(payee));
+			Payees::<T>::insert(
+				stash.clone(),
+				Payee::<T>::get(&stash).to_payee_destination(stash.clone(), controller),
+			);
 			Ok(())
 		}
 	}
