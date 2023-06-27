@@ -1325,7 +1325,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(
 			ReferendumCount::<T, I>::get() as usize ==
 				ReferendumInfoFor::<T, I>::iter_keys().count(),
-			"Number of referenda in `ReferendumInfoFor` is greater than `ReferendumCount`"
+			"Number of referenda in `ReferendumInfoFor` is different than `ReferendumCount`"
 		);
 
 		MetadataOf::<T, I>::iter_keys().try_for_each(|referendum_index| -> DispatchResult {
