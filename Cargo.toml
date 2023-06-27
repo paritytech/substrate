@@ -206,6 +206,7 @@ members = [
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/externalities",
+	"primitives/genesis-builder",
 	"primitives/inherents",
 	"primitives/io",
 	"primitives/keyring",
