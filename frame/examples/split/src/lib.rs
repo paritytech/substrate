@@ -20,7 +20,7 @@
 //! **This pallet serves as an example and is not meant to be used in production.**
 //!
 //! A FRAME pallet demonstrating the ability to split sections across multiple files.
-//! 
+//!
 //! Note that this is purely experimental at this point.
 
 #![cfg_attr(not(feature = "std"), no_std)]
