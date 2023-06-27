@@ -463,6 +463,8 @@ cargo-hfuzz:
     HFUZZ_BUILD_ARGS: >
       --config=patch.crates-io.honggfuzz.git="https://github.com/altaua/honggfuzz-rs"
       --config=patch.crates-io.honggfuzz.rev="205f7c8c059a0d98fe1cb912cdac84f324cb6981"
+    SUBSTRATE_FUZZER_DIRS: >
+      primitives/arithmetic/fuzzer
   artifacts:
     name: "hfuzz-$CI_COMMIT_SHORT_SHA"
     expire_in: 7 days
@@ -470,9 +472,17 @@ cargo-hfuzz:
     paths:
       - primitives/arithmetic/fuzzer/hfuzz_workspace/
   script:
-    - cd ./primitives/arithmetic/fuzzer
     - rusty-cachier snapshot create
-    - cargo hfuzz build
+    - for dir in ${SUBSTRATE_FUZZER_DIRS}; do
+      pushd "${dir}";
+      cargo hfuzz build;
+      popd;
+      done
     - rusty-cachier cache upload
-    - for target in $(cargo read-manifest | jq -r '.targets | .[] | .name'); do
-      cargo hfuzz run "$target" || { printf "fuzzing failure for %s\n" "$target"; exit 1; }; done
+    - for dir in ${SUBSTRATE_FUZZER_DIRS}; do
+      pushd "${dir}";
+      for target in $(cargo read-manifest | jq -r '.targets | .[] | .name'); do
+      cargo hfuzz run "$target" || { printf "fuzzing failure for %s\n" "$target"; exit 1; };
+      done;
+      popd;
+      done;
