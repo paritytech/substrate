@@ -43,7 +43,7 @@ use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Perbill, Saturating};
 use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 
-mod old {
+pub mod old {
 	use super::*;
 
 	pub type BalanceOf<T, Currency> = <Currency as frame_support::traits::Currency<
@@ -84,7 +84,7 @@ mod old {
 #[cfg(feature = "runtime-benchmarks")]
 pub fn store_old_contract_info<T: Config, Currency: old::CurrencyOf<T>>(
 	account: T::AccountId,
-	info: crate::ContractInfo<T, Currency>,
+	info: crate::ContractInfo<T>,
 ) {
 	let info = old::ContractInfo {
 		trie_id: info.trie_id,

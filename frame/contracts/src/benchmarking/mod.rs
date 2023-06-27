@@ -36,7 +36,9 @@ use crate::{
 };
 use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
-use frame_support::{pallet_prelude::StorageVersion, weights::Weight};
+use frame_support::{
+	pallet_prelude::StorageVersion, traits::fungible::InspectHold, weights::Weight,
+};
 use frame_system::RawOrigin;
 use sp_runtime::{
 	traits::{Bounded, Hash},
@@ -69,6 +71,7 @@ struct Contract<T: Config> {
 impl<T: Config> Contract<T>
 where
 	<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
+	BalanceOf<T>: FixedPointOperand,
 {
 	/// Create new contract and use a default account id as instantiator.
 	fn new(module: WasmModule<T>, data: Vec<u8>) -> Result<Contract<T>, &'static str> {
@@ -91,7 +94,7 @@ where
 		data: Vec<u8>,
 	) -> Result<Contract<T>, &'static str> {
 		let value = Pallet::<T>::min_balance();
-		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
+		T::Currency::set_balance(&caller, caller_funding::<T>());
 		let salt = vec![0xff];
 		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &data, &salt);
 
@@ -157,7 +160,7 @@ where
 
 	/// Set the balance of the contract to the supplied amount.
 	fn set_balance(&self, balance: BalanceOf<T>) {
-		T::Currency::make_free_balance_be(&self.account_id, balance);
+		T::Currency::set_balance(&self.account_id, balance);
 	}
 
 	/// Returns `true` iff all storage entries related to code storage exist.
@@ -201,6 +204,7 @@ macro_rules! load_benchmark {
 benchmarks! {
 	where_clause { where
 		<BalanceOf<T> as codec::HasCompact>::Type: Clone + Eq + PartialEq + sp_std::fmt::Debug + scale_info::TypeInfo + codec::Encode,
+		BalanceOf<T>: FixedPointOperand,
 	}
 
 	// The base weight consumed on processing contracts deletion queue.
@@ -362,22 +366,22 @@ benchmarks! {
 		let salt = vec![42u8; s as usize];
 		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
+		T::Currency::set_balance(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
 	}: _(origin, value, Weight::MAX, None, code, input, salt)
 	verify {
 		let deposit_account = Contract::<T>::address_info(&addr)?.deposit_account().clone();
-		let deposit = T::Currency::free_balance(&deposit_account);
+		let deposit = T::Currency::balance(&deposit_account);
 		// uploading the code reserves some balance in the callers account
-		let code_deposit = T::Currency::reserved_balance(&caller);
+		let code_deposit = T::Currency::total_balance_on_hold(&caller);
 		assert_eq!(
-			T::Currency::free_balance(&caller),
+			T::Currency::balance(&caller),
 			caller_funding::<T>() - value - deposit - code_deposit - Pallet::<T>::min_balance(),
 		);
 		// contract has the full value
-		assert_eq!(T::Currency::free_balance(&addr), value + Pallet::<T>::min_balance());
+		assert_eq!(T::Currency::balance(&addr), value + Pallet::<T>::min_balance());
 	}
 
 	// Instantiate uses a dummy contract constructor to measure the overhead of the instantiate.
@@ -391,7 +395,7 @@ benchmarks! {
 		let salt = vec![42u8; s as usize];
 		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
+		T::Currency::set_balance(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
 		let addr = Contracts::<T>::contract_address(&caller, &hash, &input, &salt);
@@ -399,14 +403,14 @@ benchmarks! {
 	}: _(origin, value, Weight::MAX, None, hash, input, salt)
 	verify {
 		let deposit_account = Contract::<T>::address_info(&addr)?.deposit_account().clone();
-		let deposit = T::Currency::free_balance(&deposit_account);
+		let deposit = T::Currency::balance(&deposit_account);
 		// value was removed from the caller
 		assert_eq!(
-			T::Currency::free_balance(&caller),
+			T::Currency::balance(&caller),
 			caller_funding::<T>() - value - deposit - Pallet::<T>::min_balance(),
 		);
 		// contract has the full value
-		assert_eq!(T::Currency::free_balance(&addr), value + Pallet::<T>::min_balance());
+		assert_eq!(T::Currency::balance(&addr), value + Pallet::<T>::min_balance());
 	}
 
 	// We just call a dummy contract to measure the overhead of the call extrinsic.
@@ -426,18 +430,18 @@ benchmarks! {
 		let value = Pallet::<T>::min_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
-		let before = T::Currency::free_balance(&instance.account_id);
-		let before_deposit = T::Currency::free_balance(&deposit_account);
+		let before = T::Currency::balance(&instance.account_id);
+		let before_deposit = T::Currency::balance(&deposit_account);
 	}: _(origin, callee, value, Weight::MAX, None, data)
 	verify {
-		let deposit = T::Currency::free_balance(&deposit_account);
+		let deposit = T::Currency::balance(&deposit_account);
 		// value and value transferred via call should be removed from the caller
 		assert_eq!(
-			T::Currency::free_balance(&instance.caller),
+			T::Currency::balance(&instance.caller),
 			caller_funding::<T>() - instance.value - value - deposit - Pallet::<T>::min_balance(),
 		);
 		// contract should have received the value
-		assert_eq!(T::Currency::free_balance(&instance.account_id), before + value);
+		assert_eq!(T::Currency::balance(&instance.account_id), before + value);
 		// contract should still exist
 		instance.info()?;
 	}
@@ -454,13 +458,13 @@ benchmarks! {
 	upload_code {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		let caller = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
+		T::Currency::set_balance(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
 	}: _(origin, code, None, Determinism::Enforced)
 	verify {
 		// uploading the code reserves some balance in the callers account
-		assert!(T::Currency::reserved_balance(&caller) > 0u32.into());
+		assert!(T::Currency::total_balance_on_hold(&caller) > 0u32.into());
 		assert!(<Contract<T>>::code_exists(&hash));
 	}
 
@@ -470,17 +474,17 @@ benchmarks! {
 	#[pov_mode = Measured]
 	remove_code {
 		let caller = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
+		T::Currency::set_balance(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
 		let uploaded = <Contracts<T>>::bare_upload_code(caller.clone(), code, None, Determinism::Enforced)?;
 		assert_eq!(uploaded.code_hash, hash);
-		assert_eq!(uploaded.deposit, T::Currency::reserved_balance(&caller));
+		assert_eq!(uploaded.deposit, T::Currency::total_balance_on_hold(&caller));
 		assert!(<Contract<T>>::code_exists(&hash));
 	}: _(origin, hash)
 	verify {
 		// removing the code should have unreserved the deposit
-		assert_eq!(T::Currency::reserved_balance(&caller), 0u32.into());
+		assert_eq!(T::Currency::total_balance_on_hold(&caller), 0u32.into());
 		assert!(<Contract<T>>::code_removed(&hash));
 	}
 
@@ -897,15 +901,15 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let deposit_account = instance.info()?.deposit_account().clone();
-		assert_eq!(<T::Currency as Currency<_>>::total_balance(&beneficiary), 0u32.into());
-		assert_eq!(T::Currency::free_balance(&instance.account_id), Pallet::<T>::min_balance() * 2u32.into());
-		assert_ne!(T::Currency::free_balance(&deposit_account), 0u32.into());
+		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
+		assert_eq!(T::Currency::balance(&instance.account_id), Pallet::<T>::min_balance() * 2u32.into());
+		assert_ne!(T::Currency::balance(&deposit_account), 0u32.into());
 	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		if r > 0 {
-			assert_eq!(<T::Currency as Currency<_>>::total_balance(&instance.account_id), 0u32.into());
-			assert_eq!(<T::Currency as Currency<_>>::total_balance(&deposit_account), 0u32.into());
-			assert_eq!(<T::Currency as Currency<_>>::total_balance(&beneficiary), Pallet::<T>::min_balance() * 2u32.into());
+			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
+			assert_eq!(T::Currency::total_balance(&deposit_account), 0u32.into());
+			assert_eq!(T::Currency::total_balance(&beneficiary), Pallet::<T>::min_balance() * 2u32.into());
 		}
 	}
 
@@ -1674,12 +1678,12 @@ benchmarks! {
 		instance.set_balance(value * (r + 1).into());
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		for account in &accounts {
-			assert_eq!(<T::Currency as Currency<_>>::total_balance(account), 0u32.into());
+			assert_eq!(T::Currency::total_balance(account), 0u32.into());
 		}
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		for account in &accounts {
-			assert_eq!(<T::Currency as Currency<_>>::total_balance(account), value);
+			assert_eq!(T::Currency::total_balance(account), value);
 		}
 	}
 
