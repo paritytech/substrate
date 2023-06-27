@@ -1614,8 +1614,7 @@ pub(crate) mod remote_tests {
 		traits::{Get, Hooks},
 		weights::Weight,
 	};
-	use frame_system::Pallet as System;
-	use frame_system::pallet_prelude::BlockNumberFor;
+	use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System};
 	use remote_externalities::Mode;
 	use sp_core::H256;
 	use sp_runtime::{
