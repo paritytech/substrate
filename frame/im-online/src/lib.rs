@@ -245,7 +245,7 @@ pub type IdentificationTuple<T> = (
 	>>::Identification,
 );
 
-type OffchainResult<T, A> = Result<A, OffchainErr<frame_system::pallet_prelude::BlockNumberFor<T>>>;
+type OffchainResult<T, A> = Result<A, OffchainErr<BlockNumberFor<T>>>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -342,7 +342,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn heartbeat_after)]
 	pub(super) type HeartbeatAfter<T: Config> =
-		StorageValue<_, frame_system::pallet_prelude::BlockNumberFor<T>, ValueQuery>;
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// The current set of keys that may issue a heartbeat.
 	#[pallet::storage]
@@ -396,7 +396,7 @@ pub mod pallet {
 		))]
 		pub fn heartbeat(
 			origin: OriginFor<T>,
-			heartbeat: Heartbeat<frame_system::pallet_prelude::BlockNumberFor<T>>,
+			heartbeat: Heartbeat<BlockNumberFor<T>>,
 			// since signature verification is done in `validate_unsigned`
 			// we can skip doing it here again.
 			_signature: <T::AuthorityId as RuntimeAppPublic>::Signature,
@@ -508,7 +508,7 @@ pub mod pallet {
 /// Keep track of number of authored blocks per authority, uncles are counted as
 /// well since they're a valid proof of being online.
 impl<T: Config + pallet_authorship::Config>
-	pallet_authorship::EventHandler<ValidatorId<T>, frame_system::pallet_prelude::BlockNumberFor<T>>
+	pallet_authorship::EventHandler<ValidatorId<T>, BlockNumberFor<T>>
 	for Pallet<T>
 {
 	fn note_author(author: ValidatorId<T>) {
@@ -555,7 +555,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(crate) fn send_heartbeats(
-		block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
+		block_number: BlockNumberFor<T>,
 	) -> OffchainResult<T, impl Iterator<Item = OffchainResult<T, ()>>> {
 		const START_HEARTBEAT_RANDOM_PERIOD: Permill = Permill::from_percent(10);
 		const START_HEARTBEAT_FINAL_PERIOD: Permill = Permill::from_percent(80);
@@ -618,7 +618,7 @@ impl<T: Config> Pallet<T> {
 		authority_index: u32,
 		key: T::AuthorityId,
 		session_index: SessionIndex,
-		block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
+		block_number: BlockNumberFor<T>,
 		validators_len: u32,
 	) -> OffchainResult<T, ()> {
 		// A helper function to prepare heartbeat call.
@@ -681,7 +681,7 @@ impl<T: Config> Pallet<T> {
 	fn with_heartbeat_lock<R>(
 		authority_index: u32,
 		session_index: SessionIndex,
-		now: frame_system::pallet_prelude::BlockNumberFor<T>,
+		now: BlockNumberFor<T>,
 		f: impl FnOnce() -> OffchainResult<T, R>,
 	) -> OffchainResult<T, R> {
 		let key = {
@@ -692,7 +692,7 @@ impl<T: Config> Pallet<T> {
 		let storage = StorageValueRef::persistent(&key);
 		let res = storage.mutate(
 			|status: Result<
-				Option<HeartbeatStatus<frame_system::pallet_prelude::BlockNumberFor<T>>>,
+				Option<HeartbeatStatus<BlockNumberFor<T>>>,
 				StorageRetrievalError,
 			>| {
 				// Check if there is already a lock for that particular block.

@@ -41,6 +41,7 @@ use frame_support::{
 	RuntimeDebug,
 };
 use frame_system::{self as system, ensure_signed};
+use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
@@ -227,7 +228,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			delegate: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
-			delay: frame_system::pallet_prelude::BlockNumberFor<T>,
+			delay: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
@@ -247,7 +248,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			delegate: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
-			delay: frame_system::pallet_prelude::BlockNumberFor<T>,
+			delay: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
@@ -291,7 +292,7 @@ pub mod pallet {
 		pub fn create_pure(
 			origin: OriginFor<T>,
 			proxy_type: T::ProxyType,
-			delay: frame_system::pallet_prelude::BlockNumberFor<T>,
+			delay: BlockNumberFor<T>,
 			index: u16,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -341,7 +342,7 @@ pub mod pallet {
 			spawner: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
 			index: u16,
-			#[pallet::compact] height: frame_system::pallet_prelude::BlockNumberFor<T>,
+			#[pallet::compact] height: BlockNumberFor<T>,
 			#[pallet::compact] ext_index: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -535,14 +536,14 @@ pub mod pallet {
 			delegator: T::AccountId,
 			delegatee: T::AccountId,
 			proxy_type: T::ProxyType,
-			delay: frame_system::pallet_prelude::BlockNumberFor<T>,
+			delay: BlockNumberFor<T>,
 		},
 		/// A proxy was removed.
 		ProxyRemoved {
 			delegator: T::AccountId,
 			delegatee: T::AccountId,
 			proxy_type: T::ProxyType,
-			delay: frame_system::pallet_prelude::BlockNumberFor<T>,
+			delay: BlockNumberFor<T>,
 		},
 	}
 
@@ -579,7 +580,7 @@ pub mod pallet {
 				ProxyDefinition<
 					T::AccountId,
 					T::ProxyType,
-					frame_system::pallet_prelude::BlockNumberFor<T>,
+					BlockNumberFor<T>,
 				>,
 				T::MaxProxies,
 			>,
@@ -600,7 +601,7 @@ pub mod pallet {
 				Announcement<
 					T::AccountId,
 					CallHashOf<T>,
-					frame_system::pallet_prelude::BlockNumberFor<T>,
+					BlockNumberFor<T>,
 				>,
 				T::MaxPending,
 			>,
@@ -626,7 +627,7 @@ impl<T: Config> Pallet<T> {
 		who: &T::AccountId,
 		proxy_type: &T::ProxyType,
 		index: u16,
-		maybe_when: Option<(frame_system::pallet_prelude::BlockNumberFor<T>, u32)>,
+		maybe_when: Option<(BlockNumberFor<T>, u32)>,
 	) -> T::AccountId {
 		let (height, ext_index) = maybe_when.unwrap_or_else(|| {
 			(
@@ -652,7 +653,7 @@ impl<T: Config> Pallet<T> {
 		delegator: &T::AccountId,
 		delegatee: T::AccountId,
 		proxy_type: T::ProxyType,
-		delay: frame_system::pallet_prelude::BlockNumberFor<T>,
+		delay: BlockNumberFor<T>,
 	) -> DispatchResult {
 		ensure!(delegator != &delegatee, Error::<T>::NoSelfProxy);
 		Proxies::<T>::try_mutate(delegator, |(ref mut proxies, ref mut deposit)| {
@@ -692,7 +693,7 @@ impl<T: Config> Pallet<T> {
 		delegator: &T::AccountId,
 		delegatee: T::AccountId,
 		proxy_type: T::ProxyType,
-		delay: frame_system::pallet_prelude::BlockNumberFor<T>,
+		delay: BlockNumberFor<T>,
 	) -> DispatchResult {
 		Proxies::<T>::try_mutate_exists(delegator, |x| {
 			let (mut proxies, old_deposit) = x.take().ok_or(Error::<T>::NotFound)?;
@@ -752,7 +753,7 @@ impl<T: Config> Pallet<T> {
 			&Announcement<
 				T::AccountId,
 				CallHashOf<T>,
-				frame_system::pallet_prelude::BlockNumberFor<T>,
+				BlockNumberFor<T>,
 			>,
 		) -> bool,
 	>(
@@ -784,14 +785,14 @@ impl<T: Config> Pallet<T> {
 		ProxyDefinition<
 			T::AccountId,
 			T::ProxyType,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 		>,
 		DispatchError,
 	> {
 		let f = |x: &ProxyDefinition<
 			T::AccountId,
 			T::ProxyType,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 		>|
 		 -> bool {
 			&x.delegate == delegate &&
@@ -804,7 +805,7 @@ impl<T: Config> Pallet<T> {
 		def: ProxyDefinition<
 			T::AccountId,
 			T::ProxyType,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 		>,
 		real: T::AccountId,
 		call: <T as Config>::RuntimeCall,

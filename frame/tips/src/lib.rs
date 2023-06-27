@@ -74,6 +74,7 @@ use frame_support::{
 	},
 	Parameter,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -176,7 +177,7 @@ pub mod pallet {
 		OpenTip<
 			T::AccountId,
 			BalanceOf<T, I>,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			T::Hash,
 		>,
 		OptionQuery,
@@ -478,7 +479,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tip: &mut OpenTip<
 			T::AccountId,
 			BalanceOf<T, I>,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			T::Hash,
 		>,
 		tipper: T::AccountId,
@@ -528,7 +529,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tip: OpenTip<
 			T::AccountId,
 			BalanceOf<T, I>,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			T::Hash,
 		>,
 	) {
@@ -595,7 +596,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			OldOpenTip<
 				T::AccountId,
 				BalanceOf<T, I>,
-				frame_system::pallet_prelude::BlockNumberFor<T>,
+				BlockNumberFor<T>,
 				T::Hash,
 			>,
 			Twox64Concat,

@@ -30,7 +30,7 @@ mod module {
 	pub type Request<T> = (
 		<T as frame_system::Config>::AccountId,
 		Role,
-		frame_system::pallet_prelude::BlockNumberFor<T>,
+		BlockNumberFor<T>,
 	);
 	pub type Requests<T> = Vec<Request<T>>;
 
@@ -49,21 +49,21 @@ mod module {
 		pub max_actors: u32,
 
 		// payouts are made at this block interval
-		pub reward_period: frame_system::pallet_prelude::BlockNumberFor<T>,
+		pub reward_period: BlockNumberFor<T>,
 
 		// minimum amount of time before being able to unstake
-		pub bonding_period: frame_system::pallet_prelude::BlockNumberFor<T>,
+		pub bonding_period: BlockNumberFor<T>,
 
 		// how long tokens remain locked for after unstaking
-		pub unbonding_period: frame_system::pallet_prelude::BlockNumberFor<T>,
+		pub unbonding_period: BlockNumberFor<T>,
 
 		// minimum period required to be in service. unbonding before this time is highly penalized
-		pub min_service_period: frame_system::pallet_prelude::BlockNumberFor<T>,
+		pub min_service_period: BlockNumberFor<T>,
 
 		// "startup" time allowed for roles that need to sync their infrastructure
 		// with other providers before they are considered in service and punishable for
 		// not delivering required level of service.
-		pub startup_grace_period: frame_system::pallet_prelude::BlockNumberFor<T>,
+		pub startup_grace_period: BlockNumberFor<T>,
 	}
 
 	impl<T: Config> Default for RoleParameters<T> {
@@ -122,7 +122,7 @@ mod module {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		frame_system::pallet_prelude::BlockNumberFor<T>,
+		BlockNumberFor<T>,
 	>;
 
 	/// First step before enter a role is registering intent with a new account/key.

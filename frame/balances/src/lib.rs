@@ -517,7 +517,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<frame_system::pallet_prelude::BlockNumberFor<T>>
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>>
 		for Pallet<T, I>
 	{
 		#[cfg(not(feature = "insecure_zero_ed"))]

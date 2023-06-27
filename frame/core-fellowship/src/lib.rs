@@ -195,10 +195,10 @@ pub mod pallet {
 
 	pub type ParamsOf<T, I> = ParamsType<
 		<T as Config<I>>::Balance,
-		frame_system::pallet_prelude::BlockNumberFor<T>,
+		BlockNumberFor<T>,
 		RANK_COUNT,
 	>;
-	pub type MemberStatusOf<T> = MemberStatus<frame_system::pallet_prelude::BlockNumberFor<T>>;
+	pub type MemberStatusOf<T> = MemberStatus<BlockNumberFor<T>>;
 	pub type RankOf<T, I> = <<T as Config<I>>::Members as RankedMembers>::Rank;
 
 	/// The overall status of the system.

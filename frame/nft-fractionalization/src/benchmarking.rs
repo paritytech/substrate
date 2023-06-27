@@ -41,7 +41,7 @@ type BalanceOf<T> =
 
 type CollectionConfigOf<T> = CollectionConfig<
 	BalanceOf<T>,
-	frame_system::pallet_prelude::BlockNumberFor<T>,
+	BlockNumberFor<T>,
 	<T as Config>::NftCollectionId,
 >;
 
@@ -62,7 +62,7 @@ where
 			T::AccountId,
 			CollectionConfig<
 				BalanceOf<T>,
-				frame_system::pallet_prelude::BlockNumberFor<T>,
+				BlockNumberFor<T>,
 				T::NftCollectionId,
 			>,
 		> + Mutate<T::AccountId, ItemConfig>,

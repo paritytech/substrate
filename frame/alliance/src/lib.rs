@@ -479,7 +479,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		frame_system::pallet_prelude::BlockNumberFor<T>,
+		BlockNumberFor<T>,
 		OptionQuery,
 	>;
 

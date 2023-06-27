@@ -209,7 +209,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type Lottery<T: Config> = StorageValue<
 		_,
-		LotteryConfig<frame_system::pallet_prelude::BlockNumberFor<T>, BalanceOf<T>>,
+		LotteryConfig<BlockNumberFor<T>, BalanceOf<T>>,
 	>;
 
 	/// Users who have purchased a ticket. (Lottery Index, Tickets Purchased)
@@ -241,7 +241,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			Lottery::<T>::mutate(|mut lottery| -> Weight {
 				if let Some(config) = &mut lottery {
 					let payout_block =
@@ -352,8 +352,8 @@ pub mod pallet {
 		pub fn start_lottery(
 			origin: OriginFor<T>,
 			price: BalanceOf<T>,
-			length: frame_system::pallet_prelude::BlockNumberFor<T>,
-			delay: frame_system::pallet_prelude::BlockNumberFor<T>,
+			length: BlockNumberFor<T>,
+			delay: BlockNumberFor<T>,
 			repeat: bool,
 		) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;

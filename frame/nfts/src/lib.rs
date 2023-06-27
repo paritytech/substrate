@@ -343,7 +343,7 @@ pub mod pallet {
 			T::CollectionId,
 			T::ItemId,
 			PriceWithDirection<ItemPrice<T, I>>,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 		>,
 		OptionQuery,
 	>;
@@ -414,7 +414,7 @@ pub mod pallet {
 			item: T::ItemId,
 			owner: T::AccountId,
 			delegate: T::AccountId,
-			deadline: Option<frame_system::pallet_prelude::BlockNumberFor<T>>,
+			deadline: Option<BlockNumberFor<T>>,
 		},
 		/// An approval for a `delegate` account to transfer the `item` of an item
 		/// `collection` was cancelled by its `owner`.
@@ -509,7 +509,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: frame_system::pallet_prelude::BlockNumberFor<T>,
+			deadline: BlockNumberFor<T>,
 		},
 		/// The swap was cancelled.
 		SwapCancelled {
@@ -518,7 +518,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: frame_system::pallet_prelude::BlockNumberFor<T>,
+			deadline: BlockNumberFor<T>,
 		},
 		/// The swap has been claimed.
 		SwapClaimed {
@@ -529,7 +529,7 @@ pub mod pallet {
 			received_item: T::ItemId,
 			received_item_owner: T::AccountId,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: frame_system::pallet_prelude::BlockNumberFor<T>,
+			deadline: BlockNumberFor<T>,
 		},
 		/// New attributes have been set for an `item` of the `collection`.
 		PreSignedAttributesSet {
@@ -1236,7 +1236,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
-			maybe_deadline: Option<frame_system::pallet_prelude::BlockNumberFor<T>>,
+			maybe_deadline: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1661,7 +1661,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			mint_settings: MintSettings<
 				BalanceOf<T, I>,
-				frame_system::pallet_prelude::BlockNumberFor<T>,
+				BlockNumberFor<T>,
 				T::CollectionId,
 			>,
 		) -> DispatchResult {
@@ -1759,7 +1759,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			maybe_desired_item: Option<T::ItemId>,
 			maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			duration: frame_system::pallet_prelude::BlockNumberFor<T>,
+			duration: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_create_swap(

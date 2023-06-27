@@ -54,6 +54,7 @@ use frame_system::{
 		SignedPayload, Signer, SigningTypes, SubmitTransaction,
 	},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use lite_json::json::JsonValue;
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
@@ -171,7 +172,7 @@ pub mod pallet {
 		/// be cases where some blocks are skipped, or for some the worker runs twice (re-orgs),
 		/// so the code should be able to handle that.
 		/// You can use `Local Storage` API to coordinate runs of the worker.
-		fn offchain_worker(block_number: frame_system::pallet_prelude::BlockNumberFor<T>) {
+		fn offchain_worker(block_number: BlockNumberFor<T>) {
 			// Note that having logs compiled to WASM may cause the size of the blob to increase
 			// significantly. You can use `RuntimeDebug` custom derive to hide details of the types
 			// in WASM. The `sp-api` crate also provides a feature `disable-logging` to disable
@@ -258,7 +259,7 @@ pub mod pallet {
 		#[pallet::weight({0})]
 		pub fn submit_price_unsigned(
 			origin: OriginFor<T>,
-			_block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
+			_block_number: BlockNumberFor<T>,
 			price: u32,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
@@ -275,7 +276,7 @@ pub mod pallet {
 		#[pallet::weight({0})]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
-			price_payload: PricePayload<T::Public, frame_system::pallet_prelude::BlockNumberFor<T>>,
+			price_payload: PricePayload<T::Public, BlockNumberFor<T>>,
 			_signature: T::Signature,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
@@ -342,7 +343,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn next_unsigned_at)]
 	pub(super) type NextUnsignedAt<T: Config> =
-		StorageValue<_, frame_system::pallet_prelude::BlockNumberFor<T>, ValueQuery>;
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 }
 
 /// Payload used by this example crate to hold price
@@ -355,7 +356,7 @@ pub struct PricePayload<Public, BlockNumber> {
 }
 
 impl<T: SigningTypes> SignedPayload<T>
-	for PricePayload<T::Public, frame_system::pallet_prelude::BlockNumberFor<T>>
+	for PricePayload<T::Public, BlockNumberFor<T>>
 {
 	fn public(&self) -> T::Public {
 		self.public.clone()
@@ -378,7 +379,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns a type of transaction that should be produced in current run.
 	fn choose_transaction_type(
-		block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
+		block_number: BlockNumberFor<T>,
 	) -> TransactionType {
 		/// A friendlier name for the error that is going to be returned in case we are in the grace
 		/// period.
@@ -396,7 +397,7 @@ impl<T: Config> Pallet<T> {
 		// happen to be executed concurrently.
 		let res = val.mutate(
 			|last_send: Result<
-				Option<frame_system::pallet_prelude::BlockNumberFor<T>>,
+				Option<BlockNumberFor<T>>,
 				StorageRetrievalError,
 			>| {
 				match last_send {
@@ -487,7 +488,7 @@ impl<T: Config> Pallet<T> {
 
 	/// A helper function to fetch the price and send a raw unsigned transaction.
 	fn fetch_price_and_send_raw_unsigned(
-		block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
+		block_number: BlockNumberFor<T>,
 	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
@@ -521,7 +522,7 @@ impl<T: Config> Pallet<T> {
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
 	fn fetch_price_and_send_unsigned_for_any_account(
-		block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
+		block_number: BlockNumberFor<T>,
 	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
@@ -551,7 +552,7 @@ impl<T: Config> Pallet<T> {
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
 	fn fetch_price_and_send_unsigned_for_all_accounts(
-		block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
+		block_number: BlockNumberFor<T>,
 	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
@@ -685,7 +686,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn validate_transaction_parameters(
-		block_number: &frame_system::pallet_prelude::BlockNumberFor<T>,
+		block_number: &BlockNumberFor<T>,
 		new_price: &u32,
 	) -> TransactionValidity {
 		// Now let's check if the transaction has any chance to succeed.

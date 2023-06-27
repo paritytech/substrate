@@ -39,6 +39,7 @@ use frame_support::{
 	log,
 	traits::{Get, KeyOwnerProofSystem},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use log::{error, info};
 use sp_consensus_beefy::{EquivocationProof, ValidatorSetId, KEY_TYPE};
 use sp_runtime::{
@@ -126,7 +127,7 @@ pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, 
 /// Equivocation evidence convenience alias.
 pub type EquivocationEvidenceFor<T> = (
 	EquivocationProof<
-		frame_system::pallet_prelude::BlockNumberFor<T>,
+		BlockNumberFor<T>,
 		<T as Config>::BeefyId,
 		<<T as Config>::BeefyId as RuntimeAppPublic>::Signature,
 	>,
@@ -142,7 +143,7 @@ where
 		P::IdentificationTuple,
 		EquivocationOffence<
 			P::IdentificationTuple,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 		>,
 	>,
 	P: KeyOwnerProofSystem<(KeyTypeId, T::BeefyId), Proof = T::KeyOwnerProof>,

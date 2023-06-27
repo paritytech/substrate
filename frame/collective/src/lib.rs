@@ -276,7 +276,7 @@ pub mod pallet {
 		_,
 		Identity,
 		T::Hash,
-		Votes<T::AccountId, frame_system::pallet_prelude::BlockNumberFor<T>>,
+		Votes<T::AccountId, BlockNumberFor<T>>,
 		OptionQuery,
 	>;
 

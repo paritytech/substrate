@@ -43,13 +43,13 @@ pub mod pallet {
 		Identity,
 		u32,
 		Identity,
-		frame_system::pallet_prelude::BlockNumberFor<T>,
+		BlockNumberFor<T>,
 		Vec<u32>,
 	>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub t: Vec<(u32, frame_system::pallet_prelude::BlockNumberFor<T>, Vec<u32>)>,
+		pub t: Vec<(u32, BlockNumberFor<T>, Vec<u32>)>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {

@@ -126,6 +126,7 @@ use frame_support::{
 	weights::Weight,
 	Parameter,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
 	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
@@ -559,7 +560,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Called when a block is initialized. Will rotate session if it is the last
 		/// block of the current session.
-		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			if T::ShouldEndSession::should_end_session(n) {
 				Self::rotate_session();
 				T::BlockWeights::get().max_block
@@ -901,18 +902,18 @@ impl<T: Config> ValidatorSet<T::AccountId> for Pallet<T> {
 	}
 }
 
-impl<T: Config> EstimateNextNewSession<frame_system::pallet_prelude::BlockNumberFor<T>>
+impl<T: Config> EstimateNextNewSession<BlockNumberFor<T>>
 	for Pallet<T>
 {
-	fn average_session_length() -> frame_system::pallet_prelude::BlockNumberFor<T> {
+	fn average_session_length() -> BlockNumberFor<T> {
 		T::NextSessionRotation::average_session_length()
 	}
 
 	/// This session pallet always calls new_session and next_session at the same time, hence we
 	/// do a simple proxy and pass the function to next rotation.
 	fn estimate_next_new_session(
-		now: frame_system::pallet_prelude::BlockNumberFor<T>,
-	) -> (Option<frame_system::pallet_prelude::BlockNumberFor<T>>, Weight) {
+		now: BlockNumberFor<T>,
+	) -> (Option<BlockNumberFor<T>>, Weight) {
 		T::NextSessionRotation::estimate_next_session_rotation(now)
 	}
 }

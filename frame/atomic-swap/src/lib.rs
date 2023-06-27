@@ -58,6 +58,7 @@ use sp_std::{
 	ops::{Deref, DerefMut},
 	prelude::*,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 
 /// Pending atomic swap operation.
 #[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -69,7 +70,7 @@ pub struct PendingSwap<T: Config> {
 	/// Action of this swap.
 	pub action: T::SwapAction,
 	/// End block of the lock.
-	pub end_block: frame_system::pallet_prelude::BlockNumberFor<T>,
+	pub end_block: BlockNumberFor<T>,
 }
 
 /// Hashed proof type.
@@ -249,7 +250,7 @@ pub mod pallet {
 			target: T::AccountId,
 			hashed_proof: HashedProof,
 			action: T::SwapAction,
-			duration: frame_system::pallet_prelude::BlockNumberFor<T>,
+			duration: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			ensure!(

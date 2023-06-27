@@ -42,6 +42,7 @@ use frame_support::{
 	weights::Weight,
 	WeakBoundedVec,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_consensus_grandpa::{
 	ConsensusLog, EquivocationProof, ScheduledChange, SetId, GRANDPA_AUTHORITIES_KEY,
@@ -122,7 +123,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_finalize(block_number: frame_system::pallet_prelude::BlockNumberFor<T>) {
+		fn on_finalize(block_number: BlockNumberFor<T>) {
 			// check for scheduled pending authority set changes
 			if let Some(pending_change) = <PendingChange<T>>::get() {
 				// emit signal if we're at the block that scheduled the change
@@ -195,7 +196,7 @@ pub mod pallet {
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
-				EquivocationProof<T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>>,
+				EquivocationProof<T::Hash, BlockNumberFor<T>>,
 			>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
@@ -223,7 +224,7 @@ pub mod pallet {
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<
-				EquivocationProof<T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>>,
+				EquivocationProof<T::Hash, BlockNumberFor<T>>,
 			>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
@@ -252,8 +253,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::note_stalled())]
 		pub fn note_stalled(
 			origin: OriginFor<T>,
-			delay: frame_system::pallet_prelude::BlockNumberFor<T>,
-			best_finalized_block_number: frame_system::pallet_prelude::BlockNumberFor<T>,
+			delay: BlockNumberFor<T>,
+			best_finalized_block_number: BlockNumberFor<T>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -295,7 +296,7 @@ pub mod pallet {
 
 	#[pallet::type_value]
 	pub(super) fn DefaultForState<T: Config>(
-	) -> StoredState<frame_system::pallet_prelude::BlockNumberFor<T>> {
+	) -> StoredState<BlockNumberFor<T>> {
 		StoredState::Live
 	}
 
@@ -304,7 +305,7 @@ pub mod pallet {
 	#[pallet::getter(fn state)]
 	pub(super) type State<T: Config> = StorageValue<
 		_,
-		StoredState<frame_system::pallet_prelude::BlockNumberFor<T>>,
+		StoredState<BlockNumberFor<T>>,
 		ValueQuery,
 		DefaultForState<T>,
 	>;
@@ -314,14 +315,14 @@ pub mod pallet {
 	#[pallet::getter(fn pending_change)]
 	pub(super) type PendingChange<T: Config> = StorageValue<
 		_,
-		StoredPendingChange<frame_system::pallet_prelude::BlockNumberFor<T>, T::MaxAuthorities>,
+		StoredPendingChange<BlockNumberFor<T>, T::MaxAuthorities>,
 	>;
 
 	/// next block number where we can force a change.
 	#[pallet::storage]
 	#[pallet::getter(fn next_forced)]
 	pub(super) type NextForced<T: Config> =
-		StorageValue<_, frame_system::pallet_prelude::BlockNumberFor<T>>;
+		StorageValue<_, BlockNumberFor<T>>;
 
 	/// `true` if we are currently stalled.
 	#[pallet::storage]
@@ -329,8 +330,8 @@ pub mod pallet {
 	pub(super) type Stalled<T: Config> = StorageValue<
 		_,
 		(
-			frame_system::pallet_prelude::BlockNumberFor<T>,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
+			BlockNumberFor<T>,
 		),
 	>;
 
@@ -449,7 +450,7 @@ impl<T: Config> Pallet<T> {
 	/// Schedule GRANDPA to pause starting in the given number of blocks.
 	/// Cannot be done when already paused.
 	pub fn schedule_pause(
-		in_blocks: frame_system::pallet_prelude::BlockNumberFor<T>,
+		in_blocks: BlockNumberFor<T>,
 	) -> DispatchResult {
 		if let StoredState::Live = <State<T>>::get() {
 			let scheduled_at = <frame_system::Pallet<T>>::block_number();
@@ -463,7 +464,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Schedule a resume of GRANDPA after pausing.
 	pub fn schedule_resume(
-		in_blocks: frame_system::pallet_prelude::BlockNumberFor<T>,
+		in_blocks: BlockNumberFor<T>,
 	) -> DispatchResult {
 		if let StoredState::Paused = <State<T>>::get() {
 			let scheduled_at = <frame_system::Pallet<T>>::block_number();
@@ -491,8 +492,8 @@ impl<T: Config> Pallet<T> {
 	/// an error if a change is already pending.
 	pub fn schedule_change(
 		next_authorities: AuthorityList,
-		in_blocks: frame_system::pallet_prelude::BlockNumberFor<T>,
-		forced: Option<frame_system::pallet_prelude::BlockNumberFor<T>>,
+		in_blocks: BlockNumberFor<T>,
+		forced: Option<BlockNumberFor<T>>,
 	) -> DispatchResult {
 		if !<PendingChange<T>>::exists() {
 			let scheduled_at = <frame_system::Pallet<T>>::block_number();
@@ -529,7 +530,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposit one of this module's logs.
-	fn deposit_log(log: ConsensusLog<frame_system::pallet_prelude::BlockNumberFor<T>>) {
+	fn deposit_log(log: ConsensusLog<BlockNumberFor<T>>) {
 		let log = DigestItem::Consensus(GRANDPA_ENGINE_ID, log.encode());
 		<frame_system::Pallet<T>>::deposit_log(log);
 	}
@@ -555,7 +556,7 @@ impl<T: Config> Pallet<T> {
 	pub fn submit_unsigned_equivocation_report(
 		equivocation_proof: EquivocationProof<
 			T::Hash,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 		>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
@@ -563,8 +564,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn on_stalled(
-		further_wait: frame_system::pallet_prelude::BlockNumberFor<T>,
-		median: frame_system::pallet_prelude::BlockNumberFor<T>,
+		further_wait: BlockNumberFor<T>,
+		median: BlockNumberFor<T>,
 	) {
 		// when we record old authority sets we could try to figure out _who_
 		// failed. until then, we can't meaningfully guard against

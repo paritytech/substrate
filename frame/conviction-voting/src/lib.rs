@@ -35,6 +35,7 @@ use frame_support::{
 		ReservableCurrency, WithdrawReasons,
 	},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
 	ArithmeticError, Perbill,
@@ -68,7 +69,7 @@ type BalanceOf<T, I = ()> =
 type VotingOf<T, I = ()> = Voting<
 	BalanceOf<T, I>,
 	<T as frame_system::Config>::AccountId,
-	frame_system::pallet_prelude::BlockNumberFor<T>,
+	BlockNumberFor<T>,
 	PollIndexOf<T, I>,
 	<T as Config<I>>::MaxVotes,
 >;
@@ -76,7 +77,7 @@ type VotingOf<T, I = ()> = Voting<
 type DelegatingOf<T, I = ()> = Delegating<
 	BalanceOf<T, I>,
 	<T as frame_system::Config>::AccountId,
-	frame_system::pallet_prelude::BlockNumberFor<T>,
+	BlockNumberFor<T>,
 >;
 pub type TallyOf<T, I = ()> = Tally<BalanceOf<T, I>, <T as Config<I>>::MaxTurnout>;
 pub type VotesOf<T, I = ()> = BalanceOf<T, I>;

@@ -417,7 +417,7 @@ impl<AccountId: PartialEq, Balance> BidKind<AccountId, Balance> {
 }
 
 pub type PayoutsFor<T, I> = BoundedVec<
-	(frame_system::pallet_prelude::BlockNumberFor<T>, BalanceOf<T, I>),
+	(BlockNumberFor<T>, BalanceOf<T, I>),
 	<T as Config<I>>::MaxPayouts,
 >;
 
@@ -440,7 +440,7 @@ pub struct PayoutRecord<Balance, PayoutsVec> {
 pub type PayoutRecordFor<T, I> = PayoutRecord<
 	BalanceOf<T, I>,
 	BoundedVec<
-		(frame_system::pallet_prelude::BlockNumberFor<T>, BalanceOf<T, I>),
+		(BlockNumberFor<T>, BalanceOf<T, I>),
 		<T as Config<I>>::MaxPayouts,
 	>,
 >;
@@ -758,7 +758,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let mut weight = Weight::zero();
 			let weights = T::BlockWeights::get();
 
@@ -1409,7 +1409,7 @@ pub enum Period<BlockNumber> {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Get the period we are currently in.
-	fn period() -> Period<frame_system::pallet_prelude::BlockNumberFor<T>> {
+	fn period() -> Period<BlockNumberFor<T>> {
 		let claim_period = T::ClaimPeriod::get();
 		let voting_period = T::VotingPeriod::get();
 		let rotation_period = voting_period + claim_period;
@@ -1902,7 +1902,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		candidate: &T::AccountId,
 		value: BalanceOf<T, I>,
 		kind: BidKind<T::AccountId, BalanceOf<T, I>>,
-		maturity: frame_system::pallet_prelude::BlockNumberFor<T>,
+		maturity: BlockNumberFor<T>,
 	) {
 		let value = match kind {
 			BidKind::Deposit(deposit) => {
@@ -1941,7 +1941,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// is not a member or if `value` is zero.
 	fn bump_payout(
 		who: &T::AccountId,
-		when: frame_system::pallet_prelude::BlockNumberFor<T>,
+		when: BlockNumberFor<T>,
 		value: BalanceOf<T, I>,
 	) {
 		if value.is_zero() {
@@ -2026,7 +2026,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// This is a rather opaque calculation based on the formula here:
 	/// https://www.desmos.com/calculator/9itkal1tce
-	fn lock_duration(x: u32) -> frame_system::pallet_prelude::BlockNumberFor<T> {
+	fn lock_duration(x: u32) -> BlockNumberFor<T> {
 		let lock_pc = 100 - 50_000 / (x + 500);
 		Percent::from_percent(lock_pc as u8) * T::MaxLockDuration::get()
 	}

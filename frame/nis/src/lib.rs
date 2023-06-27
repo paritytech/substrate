@@ -188,12 +188,12 @@ pub mod pallet {
 		fungible::Debt<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
 	type ReceiptRecordOf<T> = ReceiptRecord<
 		<T as frame_system::Config>::AccountId,
-		frame_system::pallet_prelude::BlockNumberFor<T>,
+		BlockNumberFor<T>,
 		BalanceOf<T>,
 	>;
 	type IssuanceInfoOf<T> = IssuanceInfo<BalanceOf<T>>;
 	type SummaryRecordOf<T> =
-		SummaryRecord<frame_system::pallet_prelude::BlockNumberFor<T>, BalanceOf<T>>;
+		SummaryRecord<BlockNumberFor<T>, BalanceOf<T>>;
 	type BidOf<T> = Bid<BalanceOf<T>, <T as frame_system::Config>::AccountId>;
 	type QueueTotalsTypeOf<T> = BoundedVec<(u32, BalanceOf<T>), <T as Config>::QueueCount>;
 
@@ -414,7 +414,7 @@ pub mod pallet {
 			/// The identity of the receipt.
 			index: ReceiptIndex,
 			/// The block number at which the receipt may be thawed.
-			expiry: frame_system::pallet_prelude::BlockNumberFor<T>,
+			expiry: BlockNumberFor<T>,
 			/// The owner of the receipt.
 			who: T::AccountId,
 			/// The proportion of the effective total issuance which the receipt represents.
@@ -509,7 +509,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let mut weight_counter =
 				WeightCounter { used: Weight::zero(), limit: T::MaxIntakeWeight::get() };
 			if T::IntakePeriod::get().is_zero() || (n % T::IntakePeriod::get()).is_zero() {
@@ -1063,7 +1063,7 @@ pub mod pallet {
 
 		pub(crate) fn process_queue(
 			duration: u32,
-			now: frame_system::pallet_prelude::BlockNumberFor<T>,
+			now: BlockNumberFor<T>,
 			our_account: &T::AccountId,
 			issuance: &IssuanceInfo<BalanceOf<T>>,
 			max_bids: u32,
@@ -1107,7 +1107,7 @@ pub mod pallet {
 
 		pub(crate) fn process_bid(
 			mut bid: BidOf<T>,
-			expiry: frame_system::pallet_prelude::BlockNumberFor<T>,
+			expiry: BlockNumberFor<T>,
 			_our_account: &T::AccountId,
 			issuance: &IssuanceInfo<BalanceOf<T>>,
 			remaining: &mut BalanceOf<T>,

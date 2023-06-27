@@ -67,6 +67,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{
@@ -127,9 +128,9 @@ impl VestingAction {
 	/// Pick the schedules that this action dictates should continue vesting undisturbed.
 	fn pick_schedules<T: Config>(
 		&self,
-		schedules: Vec<VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>>,
+		schedules: Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
 	) -> impl Iterator<
-		Item = VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>,
+		Item = VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
 	> + '_ {
 		schedules.into_iter().enumerate().filter_map(move |(index, schedule)| {
 			if self.should_remove(index) {
@@ -207,7 +208,7 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::AccountId,
 		BoundedVec<
-			VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>,
+			VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
 			MaxVestingSchedulesGet<T>,
 		>,
 	>;
@@ -226,8 +227,8 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub vesting: Vec<(
 			T::AccountId,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			BalanceOf<T>,
 		)>,
 	}
@@ -355,7 +356,7 @@ pub mod pallet {
 		pub fn vested_transfer(
 			origin: OriginFor<T>,
 			target: AccountIdLookupOf<T>,
-			schedule: VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>,
+			schedule: VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let transactor = ensure_signed(origin)?;
 			let transactor = <T::Lookup as StaticLookup>::unlookup(transactor);
@@ -384,7 +385,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			source: AccountIdLookupOf<T>,
 			target: AccountIdLookupOf<T>,
-			schedule: VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>,
+			schedule: VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_vested_transfer(source, target, schedule)
@@ -446,10 +447,10 @@ impl<T: Config> Pallet<T> {
 	// Create a new `VestingInfo`, based off of two other `VestingInfo`s.
 	// NOTE: We assume both schedules have had funds unlocked up through the current block.
 	fn merge_vesting_info(
-		now: frame_system::pallet_prelude::BlockNumberFor<T>,
-		schedule1: VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>,
-		schedule2: VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>,
-	) -> Option<VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>> {
+		now: BlockNumberFor<T>,
+		schedule1: VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
+		schedule2: VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
+	) -> Option<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>> {
 		let schedule1_ending_block = schedule1.ending_block_as_balance::<T::BlockNumberToBalance>();
 		let schedule2_ending_block = schedule2.ending_block_as_balance::<T::BlockNumberToBalance>();
 		let now_as_balance = T::BlockNumberToBalance::convert(now);
@@ -496,7 +497,7 @@ impl<T: Config> Pallet<T> {
 	fn do_vested_transfer(
 		source: AccountIdLookupOf<T>,
 		target: AccountIdLookupOf<T>,
-		schedule: VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>,
+		schedule: VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
 	) -> DispatchResult {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
@@ -544,10 +545,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// NOTE: the amount locked does not include any schedules that are filtered out via `action`.
 	fn report_schedule_updates(
-		schedules: Vec<VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>>,
+		schedules: Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
 		action: VestingAction,
 	) -> (
-		Vec<VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>>,
+		Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
 		BalanceOf<T>,
 	) {
 		let now = <frame_system::Pallet<T>>::block_number();
@@ -586,10 +587,10 @@ impl<T: Config> Pallet<T> {
 	/// Write an accounts updated vesting schedules to storage.
 	fn write_vesting(
 		who: &T::AccountId,
-		schedules: Vec<VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>>,
+		schedules: Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
 	) -> Result<(), DispatchError> {
 		let schedules: BoundedVec<
-			VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>,
+			VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
 			MaxVestingSchedulesGet<T>,
 		> = schedules.try_into().map_err(|_| Error::<T>::AtMaxVestingSchedules)?;
 
@@ -618,11 +619,11 @@ impl<T: Config> Pallet<T> {
 	/// Execute a `VestingAction` against the given `schedules`. Returns the updated schedules
 	/// and locked amount.
 	fn exec_action(
-		schedules: Vec<VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>>,
+		schedules: Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
 		action: VestingAction,
 	) -> Result<
 		(
-			Vec<VestingInfo<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor<T>>>,
+			Vec<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>>,
 			BalanceOf<T>,
 		),
 		DispatchError,
@@ -671,7 +672,7 @@ where
 	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
 {
 	type Currency = T::Currency;
-	type Moment = frame_system::pallet_prelude::BlockNumberFor<T>;
+	type Moment = BlockNumberFor<T>;
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	fn vesting_balance(who: &T::AccountId) -> Option<BalanceOf<T>> {
@@ -702,7 +703,7 @@ where
 		who: &T::AccountId,
 		locked: BalanceOf<T>,
 		per_block: BalanceOf<T>,
-		starting_block: frame_system::pallet_prelude::BlockNumberFor<T>,
+		starting_block: BlockNumberFor<T>,
 	) -> DispatchResult {
 		if locked.is_zero() {
 			return Ok(())
@@ -735,7 +736,7 @@ where
 		who: &T::AccountId,
 		locked: BalanceOf<T>,
 		per_block: BalanceOf<T>,
-		starting_block: frame_system::pallet_prelude::BlockNumberFor<T>,
+		starting_block: BlockNumberFor<T>,
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
 		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {

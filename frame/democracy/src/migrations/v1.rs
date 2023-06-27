@@ -19,6 +19,7 @@
 
 use crate::*;
 use frame_support::{pallet_prelude::*, storage_alias, traits::OnRuntimeUpgrade, BoundedVec};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::H256;
 
 /// The log target.
@@ -46,7 +47,7 @@ mod v0 {
 		frame_support::Twox64Concat,
 		ReferendumIndex,
 		ReferendumInfo<
-			frame_system::pallet_prelude::BlockNumberFor<T>,
+			BlockNumberFor<T>,
 			<T as frame_system::Config>::Hash,
 			BalanceOf<T>,
 		>,
@@ -89,7 +90,7 @@ pub mod v1 {
 			ReferendumInfoOf::<T>::translate(
 				|index,
 				 old: ReferendumInfo<
-					frame_system::pallet_prelude::BlockNumberFor<T>,
+					BlockNumberFor<T>,
 					T::Hash,
 					BalanceOf<T>,
 				>| {

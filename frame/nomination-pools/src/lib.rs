@@ -366,6 +366,7 @@ use frame_support::{
 	},
 	DefaultNoBound, PalletError,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
@@ -676,10 +677,10 @@ pub struct Commission<T: Config> {
 	pub max: Option<Perbill>,
 	/// Optional configuration around how often commission can be updated, and when the last
 	/// commission update took place.
-	pub change_rate: Option<CommissionChangeRate<frame_system::pallet_prelude::BlockNumberFor<T>>>,
+	pub change_rate: Option<CommissionChangeRate<BlockNumberFor<T>>>,
 	/// The block from where throttling should be checked from. This value will be updated on all
 	/// commission updates and when setting an initial `change_rate`.
-	pub throttle_from: Option<frame_system::pallet_prelude::BlockNumberFor<T>>,
+	pub throttle_from: Option<BlockNumberFor<T>>,
 }
 
 impl<T: Config> Commission<T> {
@@ -813,7 +814,7 @@ impl<T: Config> Commission<T> {
 	/// throttling can be checked from this block.
 	fn try_update_change_rate(
 		&mut self,
-		change_rate: CommissionChangeRate<frame_system::pallet_prelude::BlockNumberFor<T>>,
+		change_rate: CommissionChangeRate<BlockNumberFor<T>>,
 	) -> DispatchResult {
 		ensure!(!&self.less_restrictive(&change_rate), Error::<T>::CommissionChangeRateNotAllowed);
 
@@ -835,7 +836,7 @@ impl<T: Config> Commission<T> {
 	/// `change_rate` is currently set, `false` is returned.
 	fn less_restrictive(
 		&self,
-		new: &CommissionChangeRate<frame_system::pallet_prelude::BlockNumberFor<T>>,
+		new: &CommissionChangeRate<BlockNumberFor<T>>,
 	) -> bool {
 		self.change_rate
 			.as_ref()
@@ -1764,7 +1765,7 @@ pub mod pallet {
 		/// A pool's commission `change_rate` has been changed.
 		PoolCommissionChangeRateUpdated {
 			pool_id: PoolId,
-			change_rate: CommissionChangeRate<frame_system::pallet_prelude::BlockNumberFor<T>>,
+			change_rate: CommissionChangeRate<BlockNumberFor<T>>,
 		},
 		/// Pool commission has been claimed.
 		PoolCommissionClaimed { pool_id: PoolId, commission: BalanceOf<T> },
@@ -2600,7 +2601,7 @@ pub mod pallet {
 		pub fn set_commission_change_rate(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			change_rate: CommissionChangeRate<frame_system::pallet_prelude::BlockNumberFor<T>>,
+			change_rate: CommissionChangeRate<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;

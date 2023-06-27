@@ -47,7 +47,7 @@ pub mod pallet {
 		/// An event handler for authored blocks.
 		type EventHandler: EventHandler<
 			Self::AccountId,
-			frame_system::pallet_prelude::BlockNumberFor<Self>,
+			BlockNumberFor<Self>,
 		>;
 	}
 
@@ -56,7 +56,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if let Some(author) = Self::author() {
 				T::EventHandler::note_author(author);
 			}
@@ -64,7 +64,7 @@ pub mod pallet {
 			Weight::zero()
 		}
 
-		fn on_finalize(_: frame_system::pallet_prelude::BlockNumberFor<T>) {
+		fn on_finalize(_: BlockNumberFor<T>) {
 			// ensure we never go to trie with these values.
 			<Author<T>>::kill();
 		}

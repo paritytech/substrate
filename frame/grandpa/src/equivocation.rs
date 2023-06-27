@@ -37,6 +37,7 @@
 
 use codec::{self as codec, Decode, Encode};
 use frame_support::traits::{Get, KeyOwnerProofSystem};
+use frame_system::pallet_prelude::BlockNumberFor;
 use log::{error, info};
 use sp_consensus_grandpa::{AuthorityId, EquivocationProof, RoundNumber, SetId, KEY_TYPE};
 use sp_runtime::{
@@ -119,7 +120,7 @@ impl<T, R, P, L>
 	OffenceReportSystem<
 		Option<T::AccountId>,
 		(
-			EquivocationProof<T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>>,
+			EquivocationProof<T::Hash, BlockNumberFor<T>>,
 			T::KeyOwnerProof,
 		),
 	> for EquivocationReportSystem<T, R, P, L>
@@ -138,7 +139,7 @@ where
 
 	fn publish_evidence(
 		evidence: (
-			EquivocationProof<T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>>,
+			EquivocationProof<T::Hash, BlockNumberFor<T>>,
 			T::KeyOwnerProof,
 		),
 	) -> Result<(), ()> {
@@ -159,7 +160,7 @@ where
 
 	fn check_evidence(
 		evidence: (
-			EquivocationProof<T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>>,
+			EquivocationProof<T::Hash, BlockNumberFor<T>>,
 			T::KeyOwnerProof,
 		),
 	) -> Result<(), TransactionValidityError> {
@@ -182,7 +183,7 @@ where
 	fn process_evidence(
 		reporter: Option<T::AccountId>,
 		evidence: (
-			EquivocationProof<T::Hash, frame_system::pallet_prelude::BlockNumberFor<T>>,
+			EquivocationProof<T::Hash, BlockNumberFor<T>>,
 			T::KeyOwnerProof,
 		),
 	) -> Result<(), DispatchError> {

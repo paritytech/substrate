@@ -57,6 +57,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{log, weights::Weight};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_mmr_primitives::utils;
 use sp_runtime::{
 	traits::{self, One, Saturating},
@@ -92,7 +93,7 @@ pub struct ParentNumberAndHash<T: frame_system::Config> {
 
 impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
 	type LeafData =
-		(frame_system::pallet_prelude::BlockNumberFor<T>, <T as frame_system::Config>::Hash);
+		(BlockNumberFor<T>, <T as frame_system::Config>::Hash);
 
 	fn leaf_data() -> Self::LeafData {
 		(
@@ -121,7 +122,6 @@ pub(crate) type HashOf<T, I> = <<T as Config<I>>::Hashing as traits::Hash>::Outp
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -202,7 +202,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(_n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = sp_mmr_primitives::utils::NodesUtils::new(leaves).number_of_peaks();
@@ -287,7 +287,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn leaf_index_to_parent_block_num(
 		leaf_index: LeafIndex,
 		leaves_count: LeafIndex,
-	) -> frame_system::pallet_prelude::BlockNumberFor<T> {
+	) -> BlockNumberFor<T> {
 		// leaves are zero-indexed and were added one per block since pallet activation,
 		// while block numbers are one-indexed, so block number that added `leaf_idx` is:
 		// `block_num = block_num_when_pallet_activated + leaf_idx + 1`
@@ -300,7 +300,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Convert a block number into a leaf index.
 	fn block_num_to_leaf_index(
-		block_num: frame_system::pallet_prelude::BlockNumberFor<T>,
+		block_num: BlockNumberFor<T>,
 	) -> Result<LeafIndex, Error>
 	where
 		T: frame_system::Config,
@@ -325,8 +325,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(
-		block_numbers: Vec<frame_system::pallet_prelude::BlockNumberFor<T>>,
-		best_known_block_number: Option<frame_system::pallet_prelude::BlockNumberFor<T>>,
+		block_numbers: Vec<BlockNumberFor<T>>,
+		best_known_block_number: Option<BlockNumberFor<T>>,
 	) -> Result<(Vec<LeafOf<T, I>>, primitives::Proof<HashOf<T, I>>), primitives::Error> {
 		// check whether best_known_block_number provided, else use current best block
 		let best_known_block_number =

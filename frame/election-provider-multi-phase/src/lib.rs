@@ -242,6 +242,7 @@ use frame_support::{
 	DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_arithmetic::{
 	traits::{CheckedAdd, Zero},
@@ -747,7 +748,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(now: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
+		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
 			let next_election = T::DataProvider::next_election_prediction(now).max(now);
 
 			let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
@@ -824,7 +825,7 @@ pub mod pallet {
 			}
 		}
 
-		fn offchain_worker(now: frame_system::pallet_prelude::BlockNumberFor<T>) {
+		fn offchain_worker(now: BlockNumberFor<T>) {
 			use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 
 			// Create a lock with the maximum deadline of number of blocks in the unsigned phase.
@@ -887,7 +888,7 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn try_state(
-			_n: frame_system::pallet_prelude::BlockNumberFor<T>,
+			_n: BlockNumberFor<T>,
 		) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
@@ -1158,8 +1159,8 @@ pub mod pallet {
 		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// There was a phase transition in a given round.
 		PhaseTransitioned {
-			from: Phase<frame_system::pallet_prelude::BlockNumberFor<T>>,
-			to: Phase<frame_system::pallet_prelude::BlockNumberFor<T>>,
+			from: Phase<BlockNumberFor<T>>,
+			to: Phase<BlockNumberFor<T>>,
 			round: u32,
 		},
 	}
@@ -1264,7 +1265,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_phase)]
 	pub type CurrentPhase<T: Config> =
-		StorageValue<_, Phase<frame_system::pallet_prelude::BlockNumberFor<T>>, ValueQuery>;
+		StorageValue<_, Phase<BlockNumberFor<T>>, ValueQuery>;
 
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	///
@@ -1356,7 +1357,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 	/// acquired with success.
-	fn do_synchronized_offchain_worker(now: frame_system::pallet_prelude::BlockNumberFor<T>) {
+	fn do_synchronized_offchain_worker(now: BlockNumberFor<T>) {
 		let current_phase = Self::current_phase();
 		log!(trace, "lock for offchain worker acquired. Phase = {:?}", current_phase);
 		match current_phase {
@@ -1382,7 +1383,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Phase transition helper.
-	pub(crate) fn phase_transition(to: Phase<frame_system::pallet_prelude::BlockNumberFor<T>>) {
+	pub(crate) fn phase_transition(to: Phase<BlockNumberFor<T>>) {
 		log!(info, "Starting phase {:?}, round {}.", to, Self::round());
 		Self::deposit_event(Event::PhaseTransitioned {
 			from: <CurrentPhase<T>>::get(),
@@ -1679,7 +1680,7 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
-	type BlockNumber = frame_system::pallet_prelude::BlockNumberFor<T>;
+	type BlockNumber = BlockNumberFor<T>;
 	type Error = ElectionError<T>;
 	type MaxWinners = T::MaxWinners;
 	type DataProvider = T::DataProvider;
