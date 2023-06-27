@@ -27,11 +27,13 @@ use frame_support::{
 };
 use frame_system as system;
 use pallet_session::historical as pallet_session_historical;
-use sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup};
+use sp_runtime::{
+	testing::{Header, UintAuthorityId},
+	traits::IdentityLookup,
+};
 
 type AccountId = u64;
 type AccountIndex = u32;
-type BlockNumber = u64;
 type Balance = u64;
 
 impl frame_system::Config for Test {

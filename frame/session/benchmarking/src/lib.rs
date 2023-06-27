@@ -31,7 +31,7 @@ use frame_support::{
 	codec::Decode,
 	traits::{Get, KeyOwnerProofSystem, OnInitialize},
 };
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,

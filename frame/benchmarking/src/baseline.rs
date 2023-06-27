@@ -115,7 +115,6 @@ pub mod mock {
 
 	type AccountId = u64;
 	type AccountIndex = u32;
-	type BlockNumber = u64;
 
 	type Block = frame_system::mocking::MockBlock<Test>;
 
