@@ -43,7 +43,7 @@ use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
-use syn::{parse_macro_input, ItemImpl};
+use syn::{parse_macro_input, Error, ItemImpl, ItemMod};
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -1760,4 +1760,114 @@ pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
+}
+
+/// Can be attached to a module. Doing so will declare that module as importable into a pallet
+/// via [`#[import_section]`](`macro@import_section`).
+///
+/// Note that sections are imported by their module name/ident, and should be referred to by
+/// their _full path_ from the perspective of the target pallet. Do not attempt to make use
+/// of `use` statements to bring pallet sections into scope, as this will not work (unless
+/// you do so as part of a wildcard import, in which case it will work).
+///
+/// ## Naming Logistics
+///
+/// Also note that because of how `#[pallet_section]` works, pallet section names must be
+/// globally unique _within the crate in which they are defined_. For more information on
+/// why this must be the case, see macro_magic's
+/// [`#[export_tokens]`](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) macro.
+///
+/// Optionally, you may provide an argument to `#[pallet_section]` such as
+/// `#[pallet_section(some_ident)]`, in the event that there is another pallet section in
+/// same crate with the same ident/name. The ident you specify can then be used instead of
+/// the module's ident name when you go to import it via `#[import_section]`.
+#[proc_macro_attribute]
+pub fn pallet_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	let tokens_clone = tokens.clone();
+	// ensure this can only be attached to a module
+	let _mod = parse_macro_input!(tokens_clone as ItemMod);
+
+	// use macro_magic's export_tokens as the internal implementation otherwise
+	match macro_magic::mm_core::export_tokens_internal(attr, tokens, false) {
+		Ok(tokens) => tokens.into(),
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro that can be attached to a module declaration. Doing so will
+/// Imports the contents of the specified external pallet section that was defined
+/// previously using [`#[pallet_section]`](`macro@pallet_section`).
+///
+/// ## Example
+/// ```ignore
+/// #[import_section(some_section)]
+/// #[pallet]
+/// pub mod pallet {
+///     // ...
+/// }
+/// ```
+/// where `some_section` was defined elsewhere via:
+/// ```ignore
+/// #[pallet_section]
+/// pub mod some_section {
+///     // ...
+/// }
+/// ```
+///
+/// This will result in the contents of `some_section` being _verbatim_ imported into
+/// the pallet above. Note that since the tokens for `some_section` are essentially
+/// copy-pasted into the target pallet, you cannot refer to imports that don't also
+/// exist in the target pallet, but this is easily resolved by including all relevant
+/// `use` statements within your pallet section, so they are imported as well, or by
+/// otherwise ensuring that you have the same imports on the target pallet.
+///
+/// It is perfectly permissible to import multiple pallet sections into the same pallet,
+/// which can be done by having multiple `#[import_section(something)]` attributes
+/// attached to the pallet.
+///
+/// Note that sections are imported by their module name/ident, and should be referred to by
+/// their _full path_ from the perspective of the target pallet.
+#[import_tokens_attr {
+    format!(
+        "{}::macro_magic",
+        match generate_crate_access_2018("frame-support") {
+            Ok(path) => Ok(path),
+            Err(_) => generate_crate_access_2018("frame"),
+        }
+        .expect("Failed to find either `frame-support` or `frame` in `Cargo.toml` dependencies.")
+        .to_token_stream()
+        .to_string()
+    )
+}]
+#[proc_macro_attribute]
+pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	let foreign_mod = parse_macro_input!(attr as ItemMod);
+	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
+
+	// check that internal_mod is a pallet module
+	if !internal_mod.attrs.iter().any(|attr| {
+		if let Some(last_seg) = attr.path().segments.last() {
+			last_seg.ident == "pallet"
+		} else {
+			false
+		}
+	}) {
+		return Error::new(
+			internal_mod.ident.span(),
+			"`#[import_section]` can only be applied to a valid pallet module",
+		)
+		.to_compile_error()
+		.into()
+	}
+
+	if let Some(ref mut content) = internal_mod.content {
+		if let Some(foreign_content) = foreign_mod.content {
+			content.1.extend(foreign_content.1);
+		}
+	}
+
+	quote! {
+		#internal_mod
+	}
+	.into()
 }

@@ -111,6 +111,7 @@ members = [
 	"frame/examples/offchain-worker",
 	"frame/examples/kitchensink",
 	"frame/examples/dev-mode",
+	"frame/examples/split",
 	"frame/examples/default-config",
 	"frame/executive",
 	"frame/nis",

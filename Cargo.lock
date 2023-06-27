@@ -6513,6 +6513,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-example-split"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-examples"
 version = "4.0.0-dev"
 dependencies = [
@@ -6521,6 +6536,7 @@ dependencies = [
  "pallet-example-basic",
  "pallet-example-kitchensink",
  "pallet-example-offchain-worker",
+ "pallet-example-split",
 ]
 
 [[package]]
