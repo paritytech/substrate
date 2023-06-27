@@ -1317,8 +1317,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///  from the submission block.
 	///
 	/// Looking at tracks:
-	/// * The `TrackQueue` should be empty if `DecidingCount` is less than
-	///   `TrackInfo::max_deciding`.
 	/// * The referendum indices stored in `TrackQueue` must exist as keys in the
 	///   `ReferendumInfoFor`
 	///  storage map.
@@ -1364,22 +1362,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		T::Tracks::tracks().iter().try_for_each(|track| -> DispatchResult {
-			if DecidingCount::<T, I>::get(track.0) < track.1.max_deciding {
-				let timed_out = TrackQueue::<T, I>::get(track.0)
-					.iter()
-					.filter(|(i, _)| match ReferendumInfoFor::<T, I>::get(i).unwrap() {
-						ReferendumInfo::TimedOut(..) => true,
-						_ => false,
-					})
-					.count();
-
-				// Timed out proposals cannot be in the deciding phase.
-				ensure!(
-					(TrackQueue::<T, I>::get(track.0).iter().count()).saturating_sub(timed_out) == 0,
-					"`TrackQueue` should be empty when `DecidingCount` is less than `TrackInfo::max_decidin`."
-				);
-			}
-
 			TrackQueue::<T, I>::get(track.0).iter().try_for_each(
 				|(referendum_index, _)| -> DispatchResult {
 					ensure!(
