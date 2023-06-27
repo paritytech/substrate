@@ -331,7 +331,11 @@ impl RequestResponsesBehaviour {
 				ProtocolSupport::Outbound
 			};
 
-			let rq_rp = Behaviour::new(
+			let rq_rp = Behaviour::with_codec(
+				GenericCodec {
+					max_request_size: protocol.max_request_size,
+					max_response_size: protocol.max_response_size,
+				},
 				iter::once(protocol.name)
 					.chain(protocol.fallback_names)
 					.zip(iter::repeat(protocol_support)),
@@ -930,7 +934,7 @@ pub struct GenericCodec {
 
 #[async_trait::async_trait]
 impl Codec for GenericCodec {
-	type Protocol = String;
+	type Protocol = ProtocolName;
 	type Request = Vec<u8>;
 	type Response = Result<Vec<u8>, ()>;
 

@@ -30,13 +30,8 @@ use crate::{
 use bytes::Bytes;
 use futures::channel::oneshot;
 use libp2p::{
-	connection_limits::ConnectionLimits,
-	core::{connection, Multiaddr},
-	identify::Info as IdentifyInfo,
-	identity::PublicKey,
-	kad::RecordKey,
-	swarm::NetworkBehaviour,
-	PeerId,
+	connection_limits::ConnectionLimits, core::Multiaddr, identify::Info as IdentifyInfo,
+	identity::PublicKey, kad::RecordKey, swarm::NetworkBehaviour, PeerId,
 };
 
 use sc_network_common::role::{ObservedRole, Roles};
@@ -184,7 +179,7 @@ impl<B: BlockT> Behaviour<B> {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
-			connection_limits: Behaviour::new(connection_limits),
+			connection_limits: libp2p::connection_limits::Behaviour::new(connection_limits),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
 				request_response_protocols.into_iter(),
 				peerset,
@@ -358,5 +353,11 @@ impl From<DiscoveryOut> for BehaviourOut {
 				BehaviourOut::Dht(DhtEvent::ValuePutFailed(key), duration),
 			DiscoveryOut::RandomKademliaStarted => BehaviourOut::RandomKademliaStarted,
 		}
+	}
+}
+
+impl From<void::Void> for BehaviourOut {
+	fn from(_e: void::Void) -> Self {
+		Self::None
 	}
 }
