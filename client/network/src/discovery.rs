@@ -940,7 +940,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 /// Legacy (fallback) Kademlia protocol name based on `protocol_id`.
 fn legacy_kademlia_protocol_name(id: &ProtocolId) -> StreamProtocol {
 	let name = format!("/{}/kad", id.as_ref());
-	StreamProtocol::new(&name)
+	StreamProtocol::try_from_owned(name).expect("protocol name is valid. qed")
 }
 
 /// Kademlia protocol name based on `genesis_hash` and `fork_id`.
@@ -954,7 +954,7 @@ fn kademlia_protocol_name<Hash: AsRef<[u8]>>(
 	} else {
 		format!("/{}/kad", genesis_hash_hex)
 	};
-	StreamProtocol::new(&name)
+	StreamProtocol::try_from_owned(name).expect("protocol name is valid. qed")
 }
 
 #[cfg(test)]

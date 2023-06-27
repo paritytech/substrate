@@ -61,12 +61,13 @@ use libp2p::{
 	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
-	ping::Failure as PingFailure,
+	// ping::Failure as PingFailure,
 	swarm::{
 		ConnectionError, ConnectionId, DialError, Executor, ListenError, NetworkBehaviour, Swarm,
 		SwarmBuilder, SwarmEvent, THandlerErr,
 	},
-	Multiaddr, PeerId,
+	Multiaddr,
+	PeerId,
 };
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
@@ -1560,9 +1561,9 @@ where
 					};
 					let reason = match cause {
 						Some(ConnectionError::IO(_)) => "transport-error",
-						Some(ConnectionError::Handler(Either::Left(Either::Left(
-							Either::Right(Either::Left(Either::Left(PingFailure::Timeout))),
-						)))) => "ping-timeout",
+						// Some(ConnectionError::Handler(Either::Left(Either::Left(
+						// 	Either::Right(PingFailure::Timeout),
+						// )))) => "ping-timeout",
 						Some(ConnectionError::Handler(Either::Left(Either::Left(
 							Either::Left(Either::Left(
 								NotifsHandlerError::SyncNotificationsClogged,
