@@ -41,9 +41,6 @@ pub use codec;
 pub use frame_metadata as metadata;
 #[doc(hidden)]
 pub use log;
-#[cfg(feature = "std")]
-#[doc(hidden)]
-pub use once_cell;
 #[doc(hidden)]
 pub use paste;
 #[doc(hidden)]
