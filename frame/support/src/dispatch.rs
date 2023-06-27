@@ -344,7 +344,7 @@ pub trait WithPostDispatchInfo {
 	/// # Example
 	///
 	/// ```ignore
-	/// ensure!(validate(params), Error::<T>::NotMe.with_pays_fee(Pays::No));
+	/// ensure!(validate(params), Error::<T>::InvalidParameters.with_pays_fee(Pays::No));
 	/// ```
 	fn with_pays_fee(self, pays_fee: Pays) -> DispatchErrorWithPostInfo;
 }
