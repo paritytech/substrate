@@ -30,6 +30,7 @@ use frame_support::{
 	BoundedVec, WeakBoundedVec,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::pallet_prelude::HeaderFor;
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextEpochDescriptor, PreDigest},
 	AllowedSlots, BabeAuthorityWeight, BabeEpochConfiguration, ConsensusLog, Epoch,
@@ -415,7 +416,7 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<EquivocationProof<frame_system::pallet_prelude::HeaderFor<T>>>,
+			equivocation_proof: Box<EquivocationProof<HeaderFor<T>>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			let reporter = ensure_signed(origin)?;
@@ -441,7 +442,7 @@ pub mod pallet {
 		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
-			equivocation_proof: Box<EquivocationProof<frame_system::pallet_prelude::HeaderFor<T>>>,
+			equivocation_proof: Box<EquivocationProof<HeaderFor<T>>>,
 			key_owner_proof: T::KeyOwnerProof,
 		) -> DispatchResultWithPostInfo {
 			ensure_none(origin)?;
@@ -891,7 +892,7 @@ impl<T: Config> Pallet<T> {
 	/// will push the transaction to the pool. Only useful in an offchain
 	/// context.
 	pub fn submit_unsigned_equivocation_report(
-		equivocation_proof: EquivocationProof<frame_system::pallet_prelude::HeaderFor<T>>,
+		equivocation_proof: EquivocationProof<HeaderFor<T>>,
 		key_owner_proof: T::KeyOwnerProof,
 	) -> Option<()> {
 		T::EquivocationReportSystem::publish_evidence((equivocation_proof, key_owner_proof)).ok()

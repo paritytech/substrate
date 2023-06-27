@@ -58,6 +58,7 @@
 
 use frame_support::{log, weights::Weight};
 use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::pallet_prelude::HeaderFor;
 use sp_mmr_primitives::utils;
 use sp_runtime::{
 	traits::{self, One, Saturating},
@@ -267,7 +268,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		pos: NodeIndex,
 		parent_hash: <T as frame_system::Config>::Hash,
 	) -> sp_std::prelude::Vec<u8> {
-		NodesUtils::node_temp_offchain_key::<frame_system::pallet_prelude::HeaderFor<T>>(
+		NodesUtils::node_temp_offchain_key::<HeaderFor<T>>(
 			&T::INDEXING_PREFIX,
 			pos,
 			parent_hash,
@@ -306,10 +307,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		T: frame_system::Config,
 	{
 		let first_mmr_block = utils::first_mmr_block_num::<
-			frame_system::pallet_prelude::HeaderFor<T>,
+			HeaderFor<T>,
 		>(<frame_system::Pallet<T>>::block_number(), Self::mmr_leaves())?;
 
-		utils::block_num_to_leaf_index::<frame_system::pallet_prelude::HeaderFor<T>>(
+		utils::block_num_to_leaf_index::<HeaderFor<T>>(
 			block_num,
 			first_mmr_block,
 		)
