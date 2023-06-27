@@ -275,9 +275,8 @@ fn generate_error_impl(scrate: &TokenStream, enum_ty: OuterEnumType) -> TokenStr
 			pub fn from_dispatch_error(err: #scrate::sp_runtime::DispatchError) -> Option<Self> {
 				let #scrate::sp_runtime::DispatchError::Module(module_error) = err else { return None };
 
-				let bytes: Vec<u8> = #scrate::codec::Encode::encode(&module_error);
-				let cursor = &mut &bytes[..];
-				#scrate::codec::Decode::decode(cursor).ok()
+				let bytes = #scrate::codec::Encode::encode(&module_error);
+				#scrate::codec::Decode::decode(&mut &bytes[..]).ok()
 			}
 		}
 	}
