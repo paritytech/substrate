@@ -31,7 +31,7 @@ use sp_std::{borrow::ToOwned, prelude::*};
 use wasm_instrument::parity_wasm::{
 	builder,
 	elements::{
-		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, MemoryType,
+		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions,
 		Module, Section, ValueType,
 	},
 };
@@ -163,7 +163,7 @@ impl<T: Config> From<ModuleDefinition> for WasmModule<T> {
 		}
 
 		// Grant access to linear memory.
-		// Evety contract module is required to have an imported memory.
+		// Every contract module is required to have an imported memory.
 		// If no memory is specified in the passed ModuleDefenition, then
 		// default to (1, 1).
 		let (init, max) = if let Some(memory) = &def.memory {
