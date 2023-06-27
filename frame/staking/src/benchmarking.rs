@@ -481,7 +481,7 @@ benchmarks! {
 		Payees::<T>::remove(&stash);
 		assert!(!Payees::<T>::contains_key(&stash));
 		whitelist_account!(controller);
-	}: _(RawOrigin::Signed(stash.clone()), controller.clone())
+	}: _(RawOrigin::Signed(stash.clone()), controller)
 	verify {
 		assert_eq!(Payees::<T>::get(&stash), PayeeDestination::Compound);
 	}
