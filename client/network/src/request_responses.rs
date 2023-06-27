@@ -336,7 +336,7 @@ impl RequestResponsesBehaviour {
 					max_request_size: protocol.max_request_size,
 					max_response_size: protocol.max_response_size,
 				},
-				iter::once(protocol.name)
+				iter::once(protocol.name.clone())
 					.chain(protocol.fallback_names)
 					.zip(iter::repeat(protocol_support)),
 				cfg,
