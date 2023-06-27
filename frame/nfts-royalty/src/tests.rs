@@ -93,6 +93,8 @@ fn set_collection_royalty_should_work() {
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 
@@ -275,6 +277,8 @@ fn set_item_royalty_should_work() {
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, mint_id)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 
@@ -487,6 +491,8 @@ fn transfer_collection_royalty_should_work() {
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 
@@ -499,6 +505,8 @@ fn transfer_collection_royalty_should_work() {
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(2));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 		// Check if the event has been emitted.
@@ -532,6 +540,8 @@ fn transfer_collection_royalty_should_fail_if_no_royalty_recipient() {
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 
@@ -547,6 +557,8 @@ fn transfer_collection_royalty_should_fail_if_no_royalty_recipient() {
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 	});
@@ -574,6 +586,8 @@ fn transfer_item_royalty_should_work() {
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 
@@ -587,6 +601,8 @@ fn transfer_item_royalty_should_work() {
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(2));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 		// Check if the event has been emitted.
@@ -623,6 +639,8 @@ fn transfer_item_royalty_should_fail_if_no_royalty_recipient() {
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 
@@ -639,6 +657,8 @@ fn transfer_item_royalty_should_fail_if_no_royalty_recipient() {
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
 		assert_eq!(nft_with_royalty.royalty_admin, account(1));
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
+		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 	});
@@ -1060,6 +1080,9 @@ fn remove_item_royalty_should_work() {
 				},
 			],
 		));
+
+		let nft_with_royalty = ItemRoyalty::<Test>::get((0, mint_id)).unwrap();
+		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 
 		assert_eq!(Balances::free_balance(&account(1)), initial_balance - 1);
 

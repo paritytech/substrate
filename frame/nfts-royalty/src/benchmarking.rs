@@ -92,7 +92,7 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		set_collection_royalty(
-			RawOrigin::Signed(caller),
+			RawOrigin::Signed(caller.clone()),
 			collection_id,
 			Permill::from_percent(10),
 			collection_owner.clone(),
@@ -105,6 +105,7 @@ mod benchmarks {
 		assert_eq!(collection_royalty_from_storage.royalty_admin, collection_owner);
 		assert_eq!(collection_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 		assert_eq!(collection_royalty_from_storage.recipients, bounded_vec);
+		assert_eq!(collection_royalty_from_storage.depositor, Some(caller.clone()));
 		assert_eq!(collection_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	}
 
@@ -125,7 +126,7 @@ mod benchmarks {
 
 		#[extrinsic_call]
 		set_item_royalty(
-			RawOrigin::Signed(caller),
+			RawOrigin::Signed(caller.clone()),
 			collection_id,
 			item_id,
 			Permill::from_percent(10),
@@ -138,6 +139,7 @@ mod benchmarks {
 		assert_eq!(item_royalty_from_storage.royalty_admin, item_owner);
 		assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 		assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
+		assert_eq!(item_royalty_from_storage.depositor, Some(caller.clone()));
 		assert_eq!(item_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	}
 
@@ -164,7 +166,7 @@ mod benchmarks {
 		let new_recipient = account::<T::AccountId>("member A", 2, 2);
 		#[extrinsic_call]
 		transfer_collection_royalty_recipient(
-			RawOrigin::Signed(caller),
+			RawOrigin::Signed(caller.clone()),
 			collection_id,
 			new_recipient.clone(),
 		);
@@ -174,6 +176,7 @@ mod benchmarks {
 		assert_eq!(collection_royalty_from_storage.royalty_admin, new_recipient);
 		assert_eq!(collection_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 		assert_eq!(collection_royalty_from_storage.recipients, bounded_vec);
+		assert_eq!(collection_royalty_from_storage.depositor, Some(caller.clone()));
 		assert_eq!(collection_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	}
 
@@ -204,7 +207,7 @@ mod benchmarks {
 		let new_recipient = account::<T::AccountId>("member A", 2, 2);
 		#[extrinsic_call]
 		transfer_item_royalty_recipient(
-			RawOrigin::Signed(caller),
+			RawOrigin::Signed(caller.clone()),
 			collection_id,
 			item_id,
 			new_recipient.clone(),
@@ -216,6 +219,7 @@ mod benchmarks {
 		assert_eq!(item_royalty_from_storage.royalty_admin, new_recipient);
 		assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 		assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
+		assert_eq!(item_royalty_from_storage.depositor, Some(caller.clone()));
 		assert_eq!(item_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	}
 
@@ -260,6 +264,7 @@ mod benchmarks {
 	// 	assert_eq!(item_royalty_from_storage.royalty_admin, new_recipient);
 	// 	assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 	// 	assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
+	//  assert_eq!(item_royalty_from_storage.depositor, Some(caller.clone()));
 	// 	assert_eq!(item_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	// }
 

@@ -53,6 +53,9 @@ pub struct RoyaltyConfig<AccountId, BalanceOf, MaxRecipients: Get<u32>> {
 	/// percentage of the royalties.
 	pub recipients: BoundedVec<RoyaltyDetails<AccountId>, MaxRecipients>,
 
+	/// The account that will pay the deposit
+	pub depositor: Option<AccountId>,
+
 	/// The amount held in reserve of the `depositor`,
 	/// to be returned once this royaltiy is removed.
 	pub deposit: BalanceOf,
