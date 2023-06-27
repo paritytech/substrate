@@ -464,12 +464,14 @@ cargo-hfuzz:
       --config=patch.crates-io.honggfuzz.git="https://github.com/altaua/honggfuzz-rs"
       --config=patch.crates-io.honggfuzz.rev="205f7c8c059a0d98fe1cb912cdac84f324cb6981"
     SUBSTRATE_FUZZER_DIRS: >
+      frame/nomination-pools/fuzzer
       primitives/arithmetic/fuzzer
   artifacts:
     name: "hfuzz-$CI_COMMIT_SHORT_SHA"
     expire_in: 7 days
     when: on_failure
     paths:
+      - frame/nomination-pools/fuzzer/hfuzz_workspace/
       - primitives/arithmetic/fuzzer/hfuzz_workspace/
   script:
     - rusty-cachier snapshot create
