@@ -344,8 +344,8 @@ pub fn testnet_genesis(
 			..Default::default()
 		},
 		im_online: ImOnlineConfig { keys: vec![] },
-		authority_discovery: AuthorityDiscoveryConfig::default(),
-		grandpa: GrandpaConfig::default(),
+		authority_discovery: Default::default(),
+		grandpa: Default::default(),
 		technical_membership: Default::default(),
 		treasury: Default::default(),
 		society: SocietyConfig { pot: 0 },
