@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ use sp_runtime::{
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
 
-use sp_consensus::{BlockOrigin, CacheKeyId, Error};
+use sp_consensus::{BlockOrigin, Error};
 
 /// Block import result.
 #[derive(Debug, PartialEq, Eq)]
@@ -348,12 +348,9 @@ pub trait BlockImport<B: BlockT> {
 	) -> Result<ImportResult, Self::Error>;
 
 	/// Import a block.
-	///
-	/// Cached data can be accessed through the blockchain cache.
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<B, Self::Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error>;
 }
 
@@ -374,14 +371,11 @@ where
 	}
 
 	/// Import a block.
-	///
-	/// Cached data can be accessed through the blockchain cache.
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<B, Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(**self).import_block(block, cache).await
+		(**self).import_block(block).await
 	}
 }
 
@@ -405,9 +399,8 @@ where
 	async fn import_block(
 		&mut self,
 		block: BlockImportParams<B, Transaction>,
-		cache: HashMap<CacheKeyId, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
-		(&**self).import_block(block, cache).await
+		(&**self).import_block(block).await
 	}
 }
 

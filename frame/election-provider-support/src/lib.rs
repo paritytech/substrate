@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -189,15 +189,32 @@ pub use sp_npos_elections::{
 };
 pub use traits::NposSolution;
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 // re-export for the solution macro, with the dependencies of the macro.
 #[doc(hidden)]
-pub use codec;
-#[doc(hidden)]
-pub use scale_info;
-#[doc(hidden)]
-pub use sp_arithmetic;
-#[doc(hidden)]
-pub use sp_std;
+pub mod private {
+	pub use codec;
+	pub use scale_info;
+	pub use sp_arithmetic;
+	pub use sp_std;
+
+	// Simple Extension trait to easily convert `None` from index closures to `Err`.
+	//
+	// This is only generated and re-exported for the solution code to use.
+	pub trait __OrInvalidIndex<T> {
+		fn or_invalid_index(self) -> Result<T, crate::Error>;
+	}
+
+	impl<T> __OrInvalidIndex<T> for Option<T> {
+		fn or_invalid_index(self) -> Result<T, crate::Error> {
+			self.ok_or(crate::Error::SolutionInvalidIndex)
+		}
+	}
+}
+
+use private::__OrInvalidIndex;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -206,19 +223,6 @@ pub use weights::WeightInfo;
 mod mock;
 #[cfg(test)]
 mod tests;
-// Simple Extension trait to easily convert `None` from index closures to `Err`.
-//
-// This is only generated and re-exported for the solution code to use.
-#[doc(hidden)]
-pub trait __OrInvalidIndex<T> {
-	fn or_invalid_index(self) -> Result<T, Error>;
-}
-
-impl<T> __OrInvalidIndex<T> for Option<T> {
-	fn or_invalid_index(self) -> Result<T, Error> {
-		self.ok_or(Error::SolutionInvalidIndex)
-	}
-}
 
 /// The [`IndexAssignment`] type is an intermediate between the assignments list
 /// ([`&[Assignment<T>]`][Assignment]) and `SolutionOf<T>`.
@@ -562,8 +566,9 @@ pub trait SortedListProvider<AccountId> {
 	/// unbounded amount of storage accesses.
 	fn unsafe_clear();
 
-	/// Check internal state of list. Only meant for debugging.
-	fn try_state() -> Result<(), &'static str>;
+	/// Check internal state of the list. Only meant for debugging.
+	#[cfg(feature = "try-runtime")]
+	fn try_state() -> Result<(), TryRuntimeError>;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
@@ -581,7 +586,7 @@ pub trait ScoreProvider<AccountId> {
 	fn score(who: &AccountId) -> Self::Score;
 
 	/// For tests, benchmarks and fuzzing, set the `score`.
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", feature = "std"))]
 	fn set_score_of(_: &AccountId, _: Self::Score) {}
 }
 
@@ -672,5 +677,14 @@ pub type BoundedSupportsOf<E> = BoundedSupports<
 	<E as ElectionProviderBase>::MaxWinners,
 >;
 
-sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
-sp_core::generate_feature_enabled_macro!(runtime_benchmarks_or_fuzz_enabled, any(feature = "runtime-benchmarks", feature = "fuzzing"), $);
+sp_core::generate_feature_enabled_macro!(
+	runtime_benchmarks_enabled,
+	feature = "runtime-benchmarks",
+	$
+);
+
+sp_core::generate_feature_enabled_macro!(
+	runtime_benchmarks_fuzz_or_std_enabled,
+	any(feature = "runtime-benchmarks", feature = "fuzzing", feature = "std"),
+	$
+);

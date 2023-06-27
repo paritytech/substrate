@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,6 +67,8 @@ pub use sp_runtime::traits::{BadOrigin, LookupError};
 /// For instantiable modules you also need to give the instance generic type and bound to the
 /// error declaration.
 #[macro_export]
+#[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
+	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 macro_rules! decl_error {
 	(
 		$(#[$attr:meta])*

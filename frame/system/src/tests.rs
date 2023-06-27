@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +19,35 @@ use crate::*;
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::{Pays, PostDispatchInfo, WithPostDispatchInfo},
+	traits::WhitelistedStorageKeys,
 };
+use std::collections::BTreeSet;
+
 use mock::{RuntimeOrigin, *};
-use sp_core::H256;
+use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_runtime::{
 	traits::{BlakeTwo256, Header},
 	DispatchError, DispatchErrorWithPostInfo,
 };
+
+#[test]
+fn check_whitelist() {
+	let whitelist: BTreeSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
+		.iter()
+		.map(|s| HexDisplay::from(&s.key).to_string())
+		.collect();
+
+	// Block Number
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"));
+	// Execution Phase
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a"));
+	// Event Count
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"));
+	// System Events
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7"));
+	// System BlockWeight
+	assert!(whitelist.contains("26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96"));
+}
 
 #[test]
 fn origin_works() {
@@ -35,8 +57,46 @@ fn origin_works() {
 }
 
 #[test]
+fn unique_datum_works() {
+	new_test_ext().execute_with(|| {
+		System::initialize(&1, &[0u8; 32].into(), &Default::default());
+		assert!(sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+
+		let h1 = unique(b"");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
+		let h2 = unique(b"");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
+		assert_ne!(h1, h2);
+
+		let h3 = unique(b"Hello");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
+		assert_ne!(h2, h3);
+
+		let h4 = unique(b"Hello");
+		assert_eq!(
+			32,
+			sp_io::storage::read(well_known_keys::INTRABLOCK_ENTROPY, &mut [], 0).unwrap()
+		);
+		assert_ne!(h3, h4);
+
+		System::finalize();
+		assert!(!sp_io::storage::exists(well_known_keys::INTRABLOCK_ENTROPY));
+	});
+}
+
+#[test]
 fn stored_map_works() {
 	new_test_ext().execute_with(|| {
+		assert_eq!(System::inc_providers(&0), IncRefStatus::Created);
 		assert_ok!(System::insert(&0, 42));
 		assert!(!System::is_provider_required(&0));
 
@@ -56,6 +116,7 @@ fn stored_map_works() {
 
 		assert!(Killed::get().is_empty());
 		assert_ok!(System::remove(&0));
+		assert_ok!(System::dec_providers(&0));
 		assert_eq!(Killed::get(), vec![0u64]);
 	});
 }
@@ -233,20 +294,26 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 		let normal_base = <Test as crate::Config>::BlockWeights::get()
 			.get(DispatchClass::Normal)
 			.base_extrinsic;
-		let pre_info = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
-		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
-		System::note_applied_extrinsic(&Ok(Some(1000).into()), pre_info);
+		let pre_info = DispatchInfo { weight: Weight::from_parts(1000, 0), ..Default::default() };
+		System::note_applied_extrinsic(&Ok(from_actual_ref_time(Some(300))), pre_info);
+		System::note_applied_extrinsic(&Ok(from_actual_ref_time(Some(1000))), pre_info);
 		System::note_applied_extrinsic(
 			// values over the pre info should be capped at pre dispatch value
-			&Ok(Some(1200).into()),
+			&Ok(from_actual_ref_time(Some(1200))),
 			pre_info,
 		);
-		System::note_applied_extrinsic(&Ok((Some(2_500_000), Pays::Yes).into()), pre_info);
-		System::note_applied_extrinsic(&Ok(Pays::No.into()), pre_info);
-		System::note_applied_extrinsic(&Ok((Some(2_500_000), Pays::No).into()), pre_info);
-		System::note_applied_extrinsic(&Ok((Some(500), Pays::No).into()), pre_info);
 		System::note_applied_extrinsic(
-			&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(999))),
+			&Ok(from_post_weight_info(Some(2_500_000), Pays::Yes)),
+			pre_info,
+		);
+		System::note_applied_extrinsic(&Ok(Pays::No.into()), pre_info);
+		System::note_applied_extrinsic(
+			&Ok(from_post_weight_info(Some(2_500_000), Pays::No)),
+			pre_info,
+		);
+		System::note_applied_extrinsic(&Ok(from_post_weight_info(Some(500), Pays::No)), pre_info);
+		System::note_applied_extrinsic(
+			&Err(DispatchError::BadOrigin.with_weight(Weight::from_parts(999, 0))),
 			pre_info,
 		);
 
@@ -260,7 +327,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 		System::note_applied_extrinsic(
 			&Err(DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(Weight::from_ref_time(800)),
+					actual_weight: Some(Weight::from_parts(800, 0)),
 					pays_fee: Pays::Yes,
 				},
 				error: DispatchError::BadOrigin,
@@ -270,7 +337,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 		System::note_applied_extrinsic(
 			&Err(DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(Weight::from_ref_time(800)),
+					actual_weight: Some(Weight::from_parts(800, 0)),
 					pays_fee: Pays::No,
 				},
 				error: DispatchError::BadOrigin,
@@ -283,11 +350,11 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 			.base_extrinsic;
 		assert!(normal_base != operational_base, "Test pre-condition violated");
 		let pre_info = DispatchInfo {
-			weight: Weight::from_ref_time(1000),
+			weight: Weight::from_parts(1000, 0),
 			class: DispatchClass::Operational,
 			..Default::default()
 		};
-		System::note_applied_extrinsic(&Ok(Some(300).into()), pre_info);
+		System::note_applied_extrinsic(&Ok(from_actual_ref_time(Some(300))), pre_info);
 
 		let got = System::events();
 		let want = vec![
@@ -295,7 +362,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(0),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(300).saturating_add(normal_base),
+						weight: Weight::from_parts(300, 0).saturating_add(normal_base),
 						..Default::default()
 					},
 				}
@@ -306,7 +373,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(1),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						..Default::default()
 					},
 				}
@@ -317,7 +384,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(2),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						..Default::default()
 					},
 				}
@@ -328,7 +395,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(3),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						pays_fee: Pays::Yes,
 						..Default::default()
 					},
@@ -340,7 +407,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(4),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						pays_fee: Pays::No,
 						..Default::default()
 					},
@@ -352,7 +419,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(5),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						pays_fee: Pays::No,
 						..Default::default()
 					},
@@ -364,7 +431,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(6),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(500).saturating_add(normal_base),
+						weight: Weight::from_parts(500, 0).saturating_add(normal_base),
 						pays_fee: Pays::No,
 						..Default::default()
 					},
@@ -377,7 +444,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				event: SysEvent::ExtrinsicFailed {
 					dispatch_error: DispatchError::BadOrigin.into(),
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(999).saturating_add(normal_base),
+						weight: Weight::from_parts(999, 0).saturating_add(normal_base),
 						..Default::default()
 					},
 				}
@@ -389,7 +456,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				event: SysEvent::ExtrinsicFailed {
 					dispatch_error: DispatchError::BadOrigin.into(),
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(1000).saturating_add(normal_base),
+						weight: Weight::from_parts(1000, 0).saturating_add(normal_base),
 						pays_fee: Pays::Yes,
 						..Default::default()
 					},
@@ -402,7 +469,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				event: SysEvent::ExtrinsicFailed {
 					dispatch_error: DispatchError::BadOrigin.into(),
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(800).saturating_add(normal_base),
+						weight: Weight::from_parts(800, 0).saturating_add(normal_base),
 						pays_fee: Pays::Yes,
 						..Default::default()
 					},
@@ -415,7 +482,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				event: SysEvent::ExtrinsicFailed {
 					dispatch_error: DispatchError::BadOrigin.into(),
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(800).saturating_add(normal_base),
+						weight: Weight::from_parts(800, 0).saturating_add(normal_base),
 						pays_fee: Pays::No,
 						..Default::default()
 					},
@@ -427,7 +494,7 @@ fn deposit_event_uses_actual_weight_and_pays_fee() {
 				phase: Phase::ApplyExtrinsic(11),
 				event: SysEvent::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
-						weight: Weight::from_ref_time(300).saturating_add(operational_base),
+						weight: Weight::from_parts(300, 0).saturating_add(operational_base),
 						class: DispatchClass::Operational,
 						..Default::default()
 					},
@@ -542,7 +609,12 @@ fn set_code_checks_works() {
 		("test", 1, 2, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test2", 1, 1, Err(Error::<Test>::InvalidSpecName)),
-		("test", 2, 1, Ok(PostDispatchInfo::default())),
+		(
+			"test",
+			2,
+			1,
+			Ok(Some(<mock::Test as pallet::Config>::BlockWeights::get().max_block).into()),
+		),
 		("test", 0, 1, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 		("test", 1, 0, Err(Error::<Test>::SpecVersionNeedsToIncrease)),
 	];
@@ -581,7 +653,7 @@ fn assert_runtime_updated_digest(num: usize) {
 
 #[test]
 fn set_code_with_real_wasm_blob() {
-	let executor = substrate_test_runtime_client::new_native_executor();
+	let executor = substrate_test_runtime_client::new_native_or_wasm_executor();
 	let mut ext = new_test_ext();
 	ext.register_extension(sp_core::traits::ReadRuntimeVersionExt::new(executor));
 	ext.execute_with(|| {
@@ -605,7 +677,7 @@ fn set_code_with_real_wasm_blob() {
 
 #[test]
 fn runtime_upgraded_with_set_storage() {
-	let executor = substrate_test_runtime_client::new_native_executor();
+	let executor = substrate_test_runtime_client::new_native_or_wasm_executor();
 	let mut ext = new_test_ext();
 	ext.register_extension(sp_core::traits::ReadRuntimeVersionExt::new(executor));
 	ext.execute_with(|| {
@@ -674,18 +746,30 @@ fn ensure_signed_stuff_works() {
 	}
 
 	let signed_origin = RuntimeOrigin::signed(0u64);
-	assert_ok!(EnsureSigned::try_origin(signed_origin.clone()));
-	assert_ok!(EnsureSignedBy::<Members, _>::try_origin(signed_origin));
+	assert_ok!(<EnsureSigned<_> as EnsureOrigin<_>>::try_origin(signed_origin.clone()));
+	assert_ok!(<EnsureSignedBy<Members, _> as EnsureOrigin<_>>::try_origin(signed_origin));
 
 	#[cfg(feature = "runtime-benchmarks")]
 	{
-		let successful_origin: RuntimeOrigin = EnsureSigned::try_successful_origin()
-			.expect("EnsureSigned has no successful origin required for the test");
-		assert_ok!(EnsureSigned::try_origin(successful_origin));
+		let successful_origin: RuntimeOrigin =
+			<EnsureSigned<_> as EnsureOrigin<_>>::try_successful_origin()
+				.expect("EnsureSigned has no successful origin required for the test");
+		assert_ok!(<EnsureSigned<_> as EnsureOrigin<_>>::try_origin(successful_origin));
 
 		let successful_origin: RuntimeOrigin =
-			EnsureSignedBy::<Members, _>::try_successful_origin()
+			<EnsureSignedBy<Members, _> as EnsureOrigin<_>>::try_successful_origin()
 				.expect("EnsureSignedBy has no successful origin required for the test");
-		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
+		assert_ok!(<EnsureSignedBy<Members, _> as EnsureOrigin<_>>::try_origin(successful_origin));
 	}
+}
+
+pub fn from_actual_ref_time(ref_time: Option<u64>) -> PostDispatchInfo {
+	PostDispatchInfo {
+		actual_weight: ref_time.map(|t| Weight::from_all(t)),
+		pays_fee: Default::default(),
+	}
+}
+
+pub fn from_post_weight_info(ref_time: Option<u64>, pays_fee: Pays) -> PostDispatchInfo {
+	PostDispatchInfo { actual_weight: ref_time.map(|t| Weight::from_all(t)), pays_fee }
 }

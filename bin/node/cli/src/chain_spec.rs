@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -21,10 +21,10 @@
 use grandpa_primitives::AuthorityId as GrandpaId;
 use kitchensink_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig,
-	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GrandpaConfig,
-	ImOnlineConfig, IndicesConfig, MaxNominations, NominationPoolsConfig, SessionConfig,
-	SessionKeys, SocietyConfig, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
-	TechnicalCommitteeConfig,
+	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GluttonConfig,
+	GrandpaConfig, ImOnlineConfig, IndicesConfig, MaxNominations, NominationPoolsConfig,
+	SessionConfig, SessionKeys, SocietyConfig, StakerStatus, StakingConfig, SudoConfig,
+	SystemConfig, TechnicalCommitteeConfig,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sc_chain_spec::ChainSpecExtension;
@@ -39,7 +39,7 @@ use sp_runtime::{
 	Perbill,
 };
 
-pub use kitchensink_runtime::GenesisConfig;
+pub use kitchensink_runtime::RuntimeGenesisConfig;
 pub use node_primitives::{AccountId, Balance, Signature};
 
 type AccountPublic = <Signature as Verify>::Signer;
@@ -62,7 +62,7 @@ pub struct Extensions {
 }
 
 /// Specialized `ChainSpec`.
-pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig, Extensions>;
+pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig, Extensions>;
 /// Flaming Fir testnet generator
 pub fn flaming_fir_config() -> Result<ChainSpec, String> {
 	ChainSpec::from_json_bytes(&include_bytes!("../res/flaming-fir.json")[..])
@@ -77,7 +77,7 @@ fn session_keys(
 	SessionKeys { grandpa, babe, im_online, authority_discovery }
 }
 
-fn staging_testnet_config_genesis() -> GenesisConfig {
+fn staging_testnet_config_genesis() -> RuntimeGenesisConfig {
 	#[rustfmt::skip]
 	// stash, controller, session-key
 	// generated with secret:
@@ -229,7 +229,7 @@ pub fn authority_keys_from_seed(
 	)
 }
 
-/// Helper function to create GenesisConfig for testing
+/// Helper function to create RuntimeGenesisConfig for testing
 pub fn testnet_genesis(
 	initial_authorities: Vec<(
 		AccountId,
@@ -242,7 +242,7 @@ pub fn testnet_genesis(
 	initial_nominators: Vec<AccountId>,
 	root_key: AccountId,
 	endowed_accounts: Option<Vec<AccountId>>,
-) -> GenesisConfig {
+) -> RuntimeGenesisConfig {
 	let mut endowed_accounts: Vec<AccountId> = endowed_accounts.unwrap_or_else(|| {
 		vec![
 			get_account_id_from_seed::<sr25519::Public>("Alice"),
@@ -274,7 +274,7 @@ pub fn testnet_genesis(
 	let mut rng = rand::thread_rng();
 	let stakers = initial_authorities
 		.iter()
-		.map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
+		.map(|x| (x.0.clone(), x.0.clone(), STASH, StakerStatus::Validator))
 		.chain(initial_nominators.iter().map(|x| {
 			use rand::{seq::SliceRandom, Rng};
 			let limit = (MaxNominations::get() as usize).min(initial_authorities.len());
@@ -294,7 +294,7 @@ pub fn testnet_genesis(
 	const ENDOWMENT: Balance = 10_000_000 * DOLLARS;
 	const STASH: Balance = ENDOWMENT / 1000;
 
-	GenesisConfig {
+	RuntimeGenesisConfig {
 		system: SystemConfig { code: wasm_binary_unwrap().to_vec() },
 		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
@@ -348,21 +348,14 @@ pub fn testnet_genesis(
 		grandpa: GrandpaConfig { authorities: vec![] },
 		technical_membership: Default::default(),
 		treasury: Default::default(),
-		society: SocietyConfig {
-			members: endowed_accounts
-				.iter()
-				.take((num_endowed_accounts + 1) / 2)
-				.cloned()
-				.collect(),
-			pot: 0,
-			max_members: 999,
-		},
+		society: SocietyConfig { pot: 0 },
 		vesting: Default::default(),
 		assets: pallet_assets::GenesisConfig {
 			// This asset is used by the NIS pallet as counterpart currency.
 			assets: vec![(9, get_account_id_from_seed::<sr25519::Public>("Alice"), true, 1)],
 			..Default::default()
 		},
+		pool_assets: Default::default(),
 		transaction_storage: Default::default(),
 		transaction_payment: Default::default(),
 		alliance: Default::default(),
@@ -372,10 +365,15 @@ pub fn testnet_genesis(
 			min_join_bond: 1 * DOLLARS,
 			..Default::default()
 		},
+		glutton: GluttonConfig {
+			compute: Default::default(),
+			storage: Default::default(),
+			trash_data_count: Default::default(),
+		},
 	}
 }
 
-fn development_config_genesis() -> GenesisConfig {
+fn development_config_genesis() -> RuntimeGenesisConfig {
 	testnet_genesis(
 		vec![authority_keys_from_seed("Alice")],
 		vec![],
@@ -400,7 +398,7 @@ pub fn development_config() -> ChainSpec {
 	)
 }
 
-fn local_testnet_genesis() -> GenesisConfig {
+fn local_testnet_genesis() -> RuntimeGenesisConfig {
 	testnet_genesis(
 		vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
 		vec![],
@@ -432,7 +430,7 @@ pub(crate) mod tests {
 	use sc_service_test;
 	use sp_runtime::BuildStorage;
 
-	fn local_testnet_genesis_instant_single() -> GenesisConfig {
+	fn local_testnet_genesis_instant_single() -> RuntimeGenesisConfig {
 		testnet_genesis(
 			vec![authority_keys_from_seed("Alice")],
 			vec![],
@@ -479,12 +477,13 @@ pub(crate) mod tests {
 		sp_tracing::try_init_simple();
 
 		sc_service_test::connectivity(integration_test_config_with_two_authorities(), |config| {
-			let NewFullBase { task_manager, client, network, transaction_pool, .. } =
+			let NewFullBase { task_manager, client, network, sync, transaction_pool, .. } =
 				new_full_base(config, false, |_, _| ())?;
 			Ok(sc_service_test::TestNetComponents::new(
 				task_manager,
 				client,
 				network,
+				sync,
 				transaction_pool,
 			))
 		});

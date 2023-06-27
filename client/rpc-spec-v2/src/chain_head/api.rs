@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -34,7 +34,7 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Hash>,
 	)]
-	fn chain_head_unstable_follow(&self, runtime_updates: bool);
+	fn chain_head_unstable_follow(&self, with_runtime: bool);
 
 	/// Retrieves the body (list of transactions) of a pinned block.
 	///

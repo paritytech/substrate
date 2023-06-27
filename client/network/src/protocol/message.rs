@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -61,7 +61,7 @@ pub mod generic {
 	use sc_client_api::StorageProof;
 	use sc_network_common::{
 		message::RequestId,
-		protocol::role::Roles,
+		role::Roles,
 		sync::message::{
 			generic::{BlockRequest, BlockResponse},
 			BlockAnnounce,

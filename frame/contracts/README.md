@@ -1,11 +1,11 @@
-# Contract Module
+# Contracts Module
 
-The Contract module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
+The Contracts module provides functionality for the runtime to deploy and execute WebAssembly smart-contracts.
 
 - [`Call`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Call.html)
 - [`Config`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/trait.Config.html)
 - [`Error`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Error.html)
-- [`Event`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Error.html)
+- [`Event`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/enum.Event.html)
 
 ## Overview
 
@@ -63,9 +63,9 @@ directly. This makes sure that by default `pallet-contracts` does not expose any
 When setting up the `Schedule` for your runtime make sure to set `InstructionWeights::fallback`
 to a non zero value. The default is `0` and prevents the upload of any non deterministic code.
 
-An indeterministic code can be deployed on-chain by passing `Determinism::AllowIndeterministic`
-to `upload_code`. A determinstic contract can then delegate call into it if and only if it
-is ran by using `bare_call` and passing `Determinism::AllowIndeterministic` to it. **Never use
+An indeterministic code can be deployed on-chain by passing `Determinism::Relaxed`
+to `upload_code`. A deterministic contract can then delegate call into it if and only if it
+is ran by using `bare_call` and passing `Determinism::Relaxed` to it. **Never use
 this argument when the contract is called from an on-chain transaction.**
 
 ## Interface
@@ -106,14 +106,14 @@ Look for the `define_env!` macro invocation.
 
 This module executes WebAssembly smart contracts. These can potentially be written in any language
 that compiles to web assembly. However, using a language that specifically targets this module
-will make things a lot easier. One such language is [`ink`](https://github.com/paritytech/ink)
+will make things a lot easier. One such language is [`ink!`](https://use.ink)
 which is an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables
 writing WebAssembly based smart contracts in the Rust programming language.
 
 ## Debugging
 
 Contracts can emit messages to the client when called as RPC through the `seal_debug_message`
-API. This is exposed in ink! via
+API. This is exposed in [ink!](https://use.ink) via
 [`ink_env::debug_message()`](https://paritytech.github.io/ink/ink_env/fn.debug_message.html).
 
 Those messages are gathered into an internal buffer and send to the RPC client.
@@ -134,6 +134,18 @@ to `error` in order to prevent them from spamming the console.
 
 `--dev`: Use a dev chain spec
 `--tmp`: Use temporary storage for chain data (the chain state is deleted on exit)
+
+## Host function tracing
+
+For contract authors, it can be a helpful debugging tool to see which host functions are called, with which arguments, and what the result was. 
+
+In order to see these messages on the node console, the log level for the `runtime::contracts::strace` target needs to be raised to the `trace` level. 
+
+Example: 
+
+```bash
+cargo run --release -- --dev -lerror,runtime::contracts::strace=trace,runtime::contracts=debug
+```
 
 ## Unstable Interfaces
 

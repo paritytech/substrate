@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -133,14 +133,13 @@ impl GenesisConfigDef {
 				.attrs
 				.iter()
 				.map(|attr| {
-					let meta = attr.parse_meta()?;
-					if meta.path().is_ident("cfg") {
+					if attr.meta.path().is_ident("cfg") {
 						return Err(syn::Error::new(
-							meta.span(),
+							attr.meta.span(),
 							"extra genesis config items do not support `cfg` attribute",
 						))
 					}
-					Ok(meta)
+					Ok(attr.meta.clone())
 				})
 				.collect::<syn::Result<_>>()?;
 

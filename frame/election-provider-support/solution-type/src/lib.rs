@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -161,7 +161,7 @@ fn check_attributes(input: ParseStream) -> syn::Result<bool> {
 		return Ok(false)
 	}
 	let attr = attrs.pop().expect("attributes vec with len 1 can be popped.");
-	if attr.path.is_ident("compact") {
+	if attr.path().is_ident("compact") {
 		Ok(true)
 	} else {
 		Err(syn::Error::new_spanned(attr, "compact solution can accept only #[compact]"))
@@ -200,7 +200,7 @@ impl Parse for SolutionDef {
 						format!("Expected binding: `{} = ...`", expected),
 					))
 				},
-				syn::GenericArgument::Binding(syn::Binding { ident, ty, .. }) => {
+				syn::GenericArgument::AssocType(syn::AssocType { ident, ty, .. }) => {
 					// check that we have the right keyword for this position in the argument list
 					if ident == expected {
 						Ok(ty.clone())
@@ -252,10 +252,16 @@ where
 
 fn imports() -> Result<TokenStream2> {
 	match crate_name("frame-election-provider-support") {
-		Ok(FoundCrate::Itself) => Ok(quote! { use crate as _feps; }),
+		Ok(FoundCrate::Itself) => Ok(quote! {
+			use crate as _feps;
+			use _feps::private as _fepsp;
+		}),
 		Ok(FoundCrate::Name(frame_election_provider_support)) => {
 			let ident = syn::Ident::new(&frame_election_provider_support, Span::call_site());
-			Ok(quote!( extern crate #ident as _feps; ))
+			Ok(quote!(
+					use #ident as _feps;
+					use _feps::private as _fepsp;
+			))
 		},
 		Err(e) => Err(syn::Error::new(Span::call_site(), e)),
 	}

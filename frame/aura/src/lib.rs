@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -81,6 +81,20 @@ pub mod pallet {
 		/// Blocks authored by a disabled validator will lead to a panic as part of this module's
 		/// initialization.
 		type DisabledValidators: DisabledValidators;
+
+		/// Whether to allow block authors to create multiple blocks per slot.
+		///
+		/// If this is `true`, the pallet will allow slots to stay the same across sequential
+		/// blocks. If this is `false`, the pallet will require that subsequent blocks always have
+		/// higher slots than previous ones.
+		///
+		/// Regardless of the setting of this storage value, the pallet will always enforce the
+		/// invariant that slots don't move backwards as the chain progresses.
+		///
+		/// The typical value for this should be 'false' unless this pallet is being augmented by
+		/// another pallet which enforces some limitation on the number of blocks authors can create
+		/// using the same slot.
+		type AllowMultipleBlocksPerSlot: Get<bool>;
 	}
 
 	#[pallet::pallet]
@@ -92,7 +106,12 @@ pub mod pallet {
 			if let Some(new_slot) = Self::current_slot_from_digests() {
 				let current_slot = CurrentSlot::<T>::get();
 
-				assert!(current_slot < new_slot, "Slot must increase");
+				if T::AllowMultipleBlocksPerSlot::get() {
+					assert!(current_slot <= new_slot, "Slot must not decrease");
+				} else {
+					assert!(current_slot < new_slot, "Slot must increase");
+				}
+
 				CurrentSlot::<T>::put(new_slot);
 
 				if let Some(n_authorities) = <Authorities<T>>::decode_len() {
@@ -129,15 +148,9 @@ pub mod pallet {
 	pub(super) type CurrentSlot<T: Config> = StorageValue<_, Slot, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub authorities: Vec<T::AuthorityId>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { authorities: Vec::new() }
-		}
 	}
 
 	#[pallet::genesis_build]

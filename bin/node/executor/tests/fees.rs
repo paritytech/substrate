@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -120,9 +120,9 @@ fn new_account_info(free_dollars: u128) -> Vec<u8> {
 	frame_system::AccountInfo {
 		nonce: 0u32,
 		consumers: 0,
-		providers: 0,
+		providers: 1,
 		sufficients: 0,
-		data: (free_dollars * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS),
+		data: (free_dollars * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 1u128 << 127),
 	}
 	.encode()
 }
@@ -214,7 +214,7 @@ fn block_weight_capacity_report() {
 		let mut xts = (0..num_transfers)
 			.map(|i| CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
-				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
 					dest: bob().into(),
 					value: 0,
 				}),

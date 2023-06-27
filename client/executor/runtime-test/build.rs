@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ fn main() {
 			.with_current_project()
 			.export_heap_base()
 			.import_memory()
+			.disable_runtime_version_section_check()
 			.build();
 	}
 
@@ -36,6 +37,7 @@ fn main() {
 			.import_memory()
 			.set_file_name("wasm_binary_with_tracing.rs")
 			.append_to_rust_flags(r#"--cfg feature="with-tracing""#)
+			.disable_runtime_version_section_check()
 			.build();
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -42,7 +42,7 @@ use frame_support::{
 	dispatch::{DispatchInfo, DispatchResult, PostDispatchInfo},
 	traits::{
 		tokens::{
-			fungibles::{Balanced, CreditOf, Inspect},
+			fungibles::{Balanced, Credit, Inspect},
 			WithdrawConsequence,
 		},
 		IsType,
@@ -67,17 +67,17 @@ mod tests;
 mod payment;
 pub use payment::*;
 
-// Type aliases used for interaction with `OnChargeTransaction`.
+/// Type aliases used for interaction with `OnChargeTransaction`.
 pub(crate) type OnChargeTransactionOf<T> =
 	<T as pallet_transaction_payment::Config>::OnChargeTransaction;
-// Balance type alias.
+/// Balance type alias.
 pub(crate) type BalanceOf<T> = <OnChargeTransactionOf<T> as OnChargeTransaction<T>>::Balance;
-// Liquity info type alias.
+/// Liquidity info type alias.
 pub(crate) type LiquidityInfoOf<T> =
 	<OnChargeTransactionOf<T> as OnChargeTransaction<T>>::LiquidityInfo;
 
-// Type alias used for interaction with fungibles (assets).
-// Balance type alias.
+/// Type alias used for interaction with fungibles (assets).
+/// Balance type alias.
 pub(crate) type AssetBalanceOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 /// Asset id type alias.
@@ -85,26 +85,26 @@ pub(crate) type AssetIdOf<T> =
 	<<T as Config>::Fungibles as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
 // Type aliases used for interaction with `OnChargeAssetTransaction`.
-// Balance type alias.
+/// Balance type alias.
 pub(crate) type ChargeAssetBalanceOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::Balance;
-// Asset id type alias.
+/// Asset id type alias.
 pub(crate) type ChargeAssetIdOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::AssetId;
-// Liquity info type alias.
+/// Liquidity info type alias.
 pub(crate) type ChargeAssetLiquidityOf<T> =
 	<<T as Config>::OnChargeAssetTransaction as OnChargeAssetTransaction<T>>::LiquidityInfo;
 
 /// Used to pass the initial payment info from pre- to post-dispatch.
 #[derive(Encode, Decode, DefaultNoBound, TypeInfo)]
 pub enum InitialPayment<T: Config> {
-	/// No initial fee was payed.
+	/// No initial fee was paid.
 	#[default]
 	Nothing,
-	/// The initial fee was payed in the native currency.
+	/// The initial fee was paid in the native currency.
 	Native(LiquidityInfoOf<T>),
-	/// The initial fee was payed in an asset.
-	Asset(CreditOf<T::AccountId, T::Fungibles>),
+	/// The initial fee was paid in an asset.
+	Asset(Credit<T::AccountId, T::Fungibles>),
 }
 
 pub use pallet::*;
@@ -124,7 +124,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::event]
@@ -160,7 +159,7 @@ where
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
+	Credit<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
 {
 	/// Utility constructor. Used only in client/factory code.
 	pub fn from(tip: BalanceOf<T>, asset_id: Option<ChargeAssetIdOf<T>>) -> Self {
@@ -217,7 +216,7 @@ where
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
-	CreditOf<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
+	Credit<T::AccountId, T::Fungibles>: IsType<ChargeAssetLiquidityOf<T>>,
 {
 	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
 	type AccountId = T::AccountId;

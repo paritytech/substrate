@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -101,6 +101,8 @@
 /// # fn main() {}
 /// ```
 #[macro_export]
+#[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
+	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 macro_rules! decl_event {
 	(
 		$(#[$attr:meta])*
