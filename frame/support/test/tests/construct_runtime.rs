@@ -629,7 +629,16 @@ fn call_subtype_conversion() {
 fn test_metadata() {
 	use frame_support::metadata::*;
 	use scale_info::meta_type;
+	use sp_core::Encode;
 
+	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
+		if cfg!(feature = "no-metadata-docs") {
+			vec![]
+		} else {
+			doc
+		}
+	}
+	
 	let pallets = vec![
 		PalletMetadata {
 			name: "System",
