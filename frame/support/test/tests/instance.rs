@@ -41,9 +41,9 @@ pub trait Currency {}
 // * Origin, Inherent, Event
 #[frame_support::pallet(dev_mode)]
 mod module1 {
-	use frame_system::pallet_prelude::*;
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);

@@ -22,9 +22,10 @@
 #![recursion_limit = "128"]
 
 use codec::MaxEncodedLen;
-use frame_system::limits::{BlockWeights, BlockLength};
-use frame_support::weights::RuntimeDbWeight;
-use frame_support::{derive_impl, parameter_types, traits::PalletInfo as _};
+use frame_support::{
+	derive_impl, parameter_types, traits::PalletInfo as _, weights::RuntimeDbWeight,
+};
+use frame_system::limits::{BlockLength, BlockWeights};
 use scale_info::TypeInfo;
 use sp_api::RuntimeVersion;
 use sp_core::{sr25519, ConstU64};

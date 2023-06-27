@@ -19,8 +19,7 @@
 #![allow(deprecated)]
 
 use frame_support::{
-	derive_impl,
-	assert_noop, assert_ok, assert_storage_noop,
+	assert_noop, assert_ok, assert_storage_noop, derive_impl,
 	dispatch::DispatchResult,
 	storage::{with_transaction, TransactionOutcome::*},
 	transactional,
@@ -37,9 +36,9 @@ pub use self::pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_system::pallet_prelude::*;
 	use super::*;
 	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
