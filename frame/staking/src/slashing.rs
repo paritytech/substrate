@@ -319,7 +319,7 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 		<Pallet<T>>::chill_stash(params.stash);
 	}
 
-	let disable_without_slash = params.disable_strategy == DisableStrategy::Always;
+	let disable_without_slash = params.disable_strategy != DisableStrategy::Never;
 	add_offending_validator::<T>(params.stash, disable_without_slash);
 }
 
