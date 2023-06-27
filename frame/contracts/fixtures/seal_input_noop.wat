@@ -1,4 +1,4 @@
-;; Stores a value of the passed size.
+;; Everything prepared for the host function call, but no call is performed.
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "env" "memory" (memory 1 1))

@@ -67,7 +67,7 @@ pub struct WasmBlob<T: Config> {
 	code: CodeVec<T>,
 	// This isn't needed for contract execution and is not stored alongside it.
 	#[codec(skip)]
-	pub code_info: CodeInfo<T>,
+	code_info: CodeInfo<T>,
 }
 
 /// Contract code related data, such as:
@@ -183,9 +183,13 @@ impl<T: Config> WasmBlob<T> {
 	/// Returns whether there is a deposit to be paid for this module.
 	///
 	/// Returns `0` if the module is already in storage and hence no deposit will
-	/// be charged when storing it.
-	pub fn open_deposit(&self, code_info: CodeInfo<T>) -> BalanceOf<T> {
-		<CodeInfoOf<T>>::try_get(self.code_hash()).map_or(code_info.deposit, |_| 0u32.into())
+	/// be charged for storing it.
+	pub fn open_deposit(&self, code_info: &CodeInfo<T>) -> BalanceOf<T> {
+		if <CodeInfoOf<T>>::contains_key(self.code_hash()) {
+			0u32.into()
+		} else {
+			code_info.deposit
+		}
 	}
 
 	/// Creates and returns an instance of the supplied code.
@@ -295,6 +299,11 @@ impl<T: Config> WasmBlob<T> {
 			return Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.")
 		}
 		Ok((initial, maximum))
+	}
+
+	/// Getter method for the code_info.
+	pub fn code_info(&self) -> &CodeInfo<T> {
+		&self.code_info
 	}
 
 	/// Put the module blob into storage.
@@ -420,7 +429,7 @@ impl<T: Config> WasmBlob<T> {
 	///
 	/// This is useful for benchmarking where we don't want validation of the module to skew
 	/// our results. This also does not collect any deposit from the `owner`. Also useful
-	/// during testing when we want to deploy codes that do not pass the instantiation checks.
+ 	/// during testing when we want to deploy codes that do not pass the instantiation checks.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	fn from_code_unchecked(
 		code: Vec<u8>,
@@ -520,7 +529,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		let engine_consumed_total = store.fuel_consumed().expect("Fuel metering is enabled; qed");
 		// Sync this frame's gas meter with the engine's one.
 		let gas_meter = store.data_mut().ext().gas_meter_mut();
-		gas_meter.sync_fuel(engine_consumed_total)?;
+		gas_meter.charge_fuel(engine_consumed_total)?;
 
 		store.into_data().to_execution_result(result)
 	}

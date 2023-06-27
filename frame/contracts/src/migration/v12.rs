@@ -32,7 +32,7 @@ use sp_core::hexdisplay::HexDisplay;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, FixedPointNumber, FixedU128, Saturating};
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::prelude::*;
 
 mod old {
 	use super::*;
@@ -112,7 +112,6 @@ pub fn store_old_dummy_code<T: Config>(len: usize, account: T::AccountId) {
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
 	last_code_hash: Option<CodeHash<T>>,
-	_phantom: PhantomData<T>,
 }
 
 impl<T: Config> MigrationStep for Migration<T> {

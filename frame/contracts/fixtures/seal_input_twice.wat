@@ -1,4 +1,4 @@
-;; Stores a value of the passed size.
+;; Stores a value of the passed size. The host function is called twice.
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "env" "memory" (memory 1 1))

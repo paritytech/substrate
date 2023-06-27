@@ -945,11 +945,11 @@ pub mod pallet {
 		NoMigrationPerformed,
 	}
 
-	/// A mapping from an original code hash to the original code.
+	/// A mapping from a contract's code hash to its code.
 	#[pallet::storage]
 	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeVec<T>>;
 
-	/// A mapping between an original code hash and its owner information.
+	/// A mapping from a contract's code hash to its code info.
 	#[pallet::storage]
 	pub(crate) type CodeInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeInfo<T>>;
 
@@ -1247,12 +1247,11 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 							.map(|buffer| buffer.try_extend(&mut msg.bytes()));
 						err
 					})?;
-					let code_info = executable.code_info.clone();
 					// The open deposit will be charged during execution when the
 					// uploaded module does not already exist. This deposit is not part of the
 					// storage meter because it is not transferred to the contract but
 					// reserved on the uploading account.
-					(executable.open_deposit(code_info), executable)
+					(executable.open_deposit(&executable.code_info()), executable)
 				},
 				Code::Existing(hash) =>
 					(Default::default(), WasmBlob::from_storage(*hash, &mut gas_meter)?),
@@ -1439,7 +1438,7 @@ impl<T: Config> Pallet<T> {
 		let module =
 			WasmBlob::from_code(code, &schedule, origin, determinism, TryInstantiate::Instantiate)
 				.map_err(|(err, _)| err)?;
-		let deposit = module.open_deposit(module.code_info.clone());
+		let deposit = module.open_deposit(&module.code_info());
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
 		}
