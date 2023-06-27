@@ -481,7 +481,8 @@ pub enum DiscoveryOut {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-	type ConnectionHandler = ToggleConnectionHandler<KademliaHandler<QueryId>>;
+	type ConnectionHandler =
+		ToggleConnectionHandler<<Kademlia<MemoryStore> as NetworkBehaviour>::ConnectionHandler>;
 	type ToSwarm = DiscoveryOut;
 
 	fn handle_established_inbound_connection(

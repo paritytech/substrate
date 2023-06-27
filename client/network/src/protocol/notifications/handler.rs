@@ -777,7 +777,10 @@ impl ConnectionHandler for NotifsHandler {
 				State::Opening { in_substream: None } => {},
 
 				State::Open { in_substream: in_substream @ Some(_), .. } =>
-					match Stream::poll_next(Pin::new(in_substream.as_mut().unwrap()), cx) {
+					match futures::prelude::Stream::poll_next(
+						Pin::new(in_substream.as_mut().unwrap()),
+						cx,
+					) {
 						Poll::Pending => {},
 						Poll::Ready(Some(Ok(message))) => {
 							let event = NotifsHandlerOut::Notification { protocol_index, message };
