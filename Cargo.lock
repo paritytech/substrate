@@ -3832,7 +3832,6 @@ dependencies = [
 [[package]]
 name = "jsonrpsee"
 version = "0.18.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-with-debug-info#3c77ce52ccb59f36dbe17cdf68fca76e0c9d2ae3"
 dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-http-client",
@@ -3846,7 +3845,6 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-client-transport"
 version = "0.18.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-with-debug-info#3c77ce52ccb59f36dbe17cdf68fca76e0c9d2ae3"
 dependencies = [
  "futures-util",
  "http",
@@ -3864,7 +3862,6 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-core"
 version = "0.18.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-with-debug-info#3c77ce52ccb59f36dbe17cdf68fca76e0c9d2ae3"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -3890,7 +3887,6 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-http-client"
 version = "0.18.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-with-debug-info#3c77ce52ccb59f36dbe17cdf68fca76e0c9d2ae3"
 dependencies = [
  "async-trait",
  "hyper",
@@ -3908,7 +3904,6 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-proc-macros"
 version = "0.18.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-with-debug-info#3c77ce52ccb59f36dbe17cdf68fca76e0c9d2ae3"
 dependencies = [
  "heck",
  "proc-macro-crate",
@@ -3920,7 +3915,6 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-server"
 version = "0.18.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-with-debug-info#3c77ce52ccb59f36dbe17cdf68fca76e0c9d2ae3"
 dependencies = [
  "futures-util",
  "hyper",
@@ -3939,7 +3933,6 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-types"
 version = "0.18.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-with-debug-info#3c77ce52ccb59f36dbe17cdf68fca76e0c9d2ae3"
 dependencies = [
  "anyhow",
  "beef",
@@ -3952,7 +3945,6 @@ dependencies = [
 [[package]]
 name = "jsonrpsee-ws-client"
 version = "0.18.2"
-source = "git+https://github.com/paritytech/jsonrpsee?branch=na-with-debug-info#3c77ce52ccb59f36dbe17cdf68fca76e0c9d2ae3"
 dependencies = [
  "http",
  "jsonrpsee-client-transport",
