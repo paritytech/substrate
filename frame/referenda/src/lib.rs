@@ -1304,7 +1304,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// General assertions:
 	///
 	/// * `ReferendumCount` must always be equal to the number of referenda in `ReferendumInfoFor`.
-	/// * Referendum indices must be sorted in the `ReferendumInfoFor` storage map.
 	/// * Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoFor`.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> Result<(), TryRuntimeError> {
@@ -1312,14 +1311,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ReferendumCount::<T, I>::get() as usize ==
 				ReferendumInfoFor::<T, I>::iter_keys().count(),
 			"Number of referenda in `ReferendumInfoFor` is different than `ReferendumCount`"
-		);
-
-		ensure!(
-			ReferendumInfoFor::<T, I>::iter_keys()
-				.collect::<Vec<_>>()
-				.windows(2)
-				.all(|v| v[0] <= v[1]),
-			"Referendum indices must be sorted in the `ReferendumInfoFor` storage map"
 		);
 
 		MetadataOf::<T, I>::iter_keys().try_for_each(|referendum_index| -> DispatchResult {
