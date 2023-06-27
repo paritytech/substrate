@@ -48,7 +48,7 @@ assert_cmd = "2.0.10"
 node-primitives = { path = "../../../../bin/node/primitives" }
 regex = "1.7.3"
 substrate-cli-test-utils = { path = "../../../../test-utils/cli" }
-tempfile = "3.1.0"
+tempfile = "3.6.0"
 tokio = "1.27.0"
 
 [features]

@@ -48,7 +48,7 @@ regex = "1.6.0"
 criterion = "0.4.0"
 env_logger = "0.9"
 num_cpus = "1.13.1"
-tempfile = "3.3.0"
+tempfile = "3.6.0"
 
 [[bench]]
 name = "bench"

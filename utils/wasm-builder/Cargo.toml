@@ -17,7 +17,7 @@ ansi_term = "0.12.1"
 build-helper = "0.1.1"
 cargo_metadata = "0.15.4"
 strum = { version = "0.24.1", features = ["derive"] }
-tempfile = "3.1.0"
+tempfile = "3.6.0"
 toml = "0.7.3"
 walkdir = "2.3.2"
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }

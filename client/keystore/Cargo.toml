@@ -23,7 +23,7 @@ sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 
 [dev-dependencies]
-tempfile = "3.1.0"
+tempfile = "3.6.0"
 
 [features]
 # This feature adds BLS crypto primitives. It should not be used in production since
