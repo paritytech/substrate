@@ -22,9 +22,12 @@
 #![recursion_limit = "128"]
 
 use codec::MaxEncodedLen;
+use frame_system::limits::{BlockWeights, BlockLength};
+use frame_support::weights::RuntimeDbWeight;
 use frame_support::{derive_impl, parameter_types, traits::PalletInfo as _};
 use scale_info::TypeInfo;
-use sp_core::{sr25519, ConstU32};
+use sp_api::RuntimeVersion;
+use sp_core::{sr25519, ConstU64};
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
@@ -246,8 +249,6 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-use frame_support_test as system;
-
 frame_support::construct_runtime!(
 	pub struct Runtime
 	{
@@ -278,7 +279,7 @@ impl frame_system::Config for Runtime {
 	type PalletInfo = PalletInfo;
 	type OnSetCode = ();
 	type Block = Block;
-	type BlockHashCount = ConstU32<10>;
+	type BlockHashCount = ConstU64<10>;
 }
 
 impl module1::Config<module1::Instance1> for Runtime {
@@ -461,7 +462,8 @@ fn origin_codec() {
 fn event_codec() {
 	use codec::Encode;
 
-	let event = frame_system::Event::<Runtime>::ExtrinsicSuccess;
+	let event =
+		frame_system::Event::<Runtime>::ExtrinsicSuccess { dispatch_info: Default::default() };
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 30);
 
 	let event = module1::Event::<Runtime, module1::Instance1>::A(test_pub());
@@ -498,7 +500,7 @@ fn event_codec() {
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(RuntimeCall::System(frame_system::Call::noop {}).encode()[0], 30);
+	assert_eq!(RuntimeCall::System(frame_system::Call::remark { remark: vec![1] }).encode()[0], 30);
 	assert_eq!(RuntimeCall::Module1_1(module1::Call::fail {}).encode()[0], 31);
 	assert_eq!(RuntimeCall::Module2(module2::Call::fail {}).encode()[0], 32);
 	assert_eq!(RuntimeCall::Module1_2(module1::Call::fail {}).encode()[0], 33);
@@ -660,8 +662,8 @@ fn test_metadata() {
 				},
 				PalletConstantMetadata {
 					name: "BlockHashCount",
-					ty: meta_type::<u32>(),
-					value: 10u32.encode(),
+					ty: meta_type::<u64>(),
+					value: 10u64.encode(),
 					docs: maybe_docs(vec![" Maximum number of block number to block hash mappings to keep (oldest pruned first)."]),
 				},
 				PalletConstantMetadata {

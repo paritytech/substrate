@@ -18,6 +18,7 @@
 #![recursion_limit = "128"]
 
 use frame_support::{
+	derive_impl,
 	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
 	metadata_ir::{
 		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
@@ -25,6 +26,7 @@ use frame_support::{
 	},
 	traits::ConstU32,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::sr25519;
 use sp_runtime::{
 	generic,
@@ -39,10 +41,9 @@ pub trait Currency {}
 // * Origin, Inherent, Event
 #[frame_support::pallet(dev_mode)]
 mod module1 {
-	use self::frame_system::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(_);
@@ -150,7 +151,6 @@ mod module1 {
 mod module2 {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -252,7 +252,6 @@ mod module2 {
 mod module3 {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -279,7 +278,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 frame_support::construct_runtime!(
 	pub enum Runtime
 	{
-		System: frame_support_test::{Pallet, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Event<T>},
 		Module1_1: module1::<Instance1>::{
 			Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>, Inherent
 		},
@@ -300,14 +299,16 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl frame_support_test::Config for Runtime {
-	type AccountId = AccountId;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
 }
 
 impl module1::Config<module1::Instance1> for Runtime {

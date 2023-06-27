@@ -20,6 +20,8 @@ use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, Verify},
 };
+use frame_support::derive_impl;
+use frame_system::pallet_prelude::BlockNumberFor;
 
 #[frame_support::pallet]
 mod module {
@@ -158,7 +160,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Sign
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
-impl frame_system::Config for Test {
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Block = Block;
 	type BlockHashCount = ConstU64<10>;
@@ -167,8 +169,6 @@ impl frame_system::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
 	type OnSetCode = ();
-
-	type AccountData = pallet_balances::AccountData<u64>;
 }
 
 impl module::Config for Runtime {}
@@ -183,6 +183,7 @@ frame_support::construct_runtime!(
 #[test]
 fn create_genesis_config() {
 	let config = RuntimeGenesisConfig {
+		system: Default::default(),
 		module: module::GenesisConfig { request_life_time: 0, enable_storage_role: true },
 	};
 	assert_eq!(config.module.request_life_time, 0);
