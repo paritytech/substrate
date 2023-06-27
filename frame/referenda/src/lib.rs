@@ -1304,28 +1304,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// General assertions:
 	///
 	/// * `ReferendumCount` must always be equal to the number of referenda in `ReferendumInfoFor`.
-	/// * Referendum indices must be sorted in the `ReferendumInfoOf` storage map.
-	/// * Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoOf`.
-	///
-	/// Looking at referenda info:
-	///
-	/// - Data regarding ongoing phase:
-	///
-	/// * There must exist track info for the track of the referendum.
-	/// * The deciding stage has to begin before confirmation period.
-	/// * If alarm is set the nudge call has to be at most `UndecidingTimeout` blocks away
-	///  from the submission block.
-	///
-	/// Looking at tracks:
-	/// * The referendum indices stored in `TrackQueue` must exist as keys in the
-	///   `ReferendumInfoFor`
-	///  storage map.
+	/// * Referendum indices must be sorted in the `ReferendumInfoFor` storage map.
+	/// * Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoFor`.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> Result<(), TryRuntimeError> {
 		ensure!(
 			ReferendumCount::<T, I>::get() as usize ==
 				ReferendumInfoFor::<T, I>::iter_keys().count(),
 			"Number of referenda in `ReferendumInfoFor` is different than `ReferendumCount`"
+		);
+
+		ensure!(
+			ReferendumInfoFor::<T, I>::iter_keys()
+				.collect::<Vec<_>>()
+				.windows(2)
+				.all(|v| v[0] <= v[1]),
+			"Referendum indices must be sorted in the `ReferendumInfoFor` storage map"
 		);
 
 		MetadataOf::<T, I>::iter_keys().try_for_each(|referendum_index| -> DispatchResult {
@@ -1336,6 +1330,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
+		Self::try_state_referenda_info()?;
+		Self::try_state_tracks()?;
+
+		Ok(())
+	}
+
+	/// Looking at referenda info:
+	///
+	/// - Data regarding ongoing phase:
+	///
+	/// * There must exist track info for the track of the referendum.
+	/// * The deciding stage has to begin before confirmation period.
+	/// * If alarm is set the nudge call has to be at most `UndecidingTimeout` blocks away
+	///  from the submission block.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn try_state_referenda_info() -> Result<(), TryRuntimeError> {
 		ReferendumInfoFor::<T, I>::iter().try_for_each(|(_, referendum)| -> DispatchResult {
 			match referendum {
 				ReferendumInfo::Ongoing(status) => {
@@ -1361,6 +1371,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
+		Ok(())
+	}
+
+	/// Looking at tracks:
+	///
+	/// * The referendum indices stored in `TrackQueue` must exist as keys in the
+	///  `ReferendumInfoFor` storage map.
+	#[cfg(any(feature = "try-runtime", test))]
+	fn try_state_tracks() -> Result<(), TryRuntimeError> {
 		T::Tracks::tracks().iter().try_for_each(|track| -> DispatchResult {
 			TrackQueue::<T, I>::get(track.0).iter().try_for_each(
 				|(referendum_index, _)| -> DispatchResult {
