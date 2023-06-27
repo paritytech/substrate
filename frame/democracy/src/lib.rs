@@ -802,7 +802,7 @@ pub mod pallet {
 			}
 
 			ensure!(
-				voting_period > frame_system::pallet_prelude::BlockNumberFor::<T>::zero(),
+				voting_period > BlockNumberFor::<T>::zero(),
 				Error::<T>::VotingPeriodLow
 			);
 			let (ext_proposal, threshold) =
@@ -1058,7 +1058,7 @@ pub mod pallet {
 
 			// Insert the proposal into the blacklist.
 			let permanent = (
-				frame_system::pallet_prelude::BlockNumberFor::<T>::max_value(),
+				BlockNumberFor::<T>::max_value(),
 				BoundedVec::<T::AccountId, _>::default(),
 			);
 			Blacklist::<T>::insert(&proposal_hash, permanent);

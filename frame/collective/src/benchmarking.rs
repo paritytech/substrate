@@ -25,6 +25,7 @@ use sp_std::mem::size_of;
 
 use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
 use frame_system::{Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin};
+use frame_system::pallet_prelude::BlockNumberFor;
 
 const SEED: u32 = 0;
 
@@ -516,7 +517,7 @@ benchmarks_instance_pallet! {
 			false,
 		)?;
 
-		System::<T>::set_block_number(frame_system::pallet_prelude::BlockNumberFor::<T>::max_value());
+		System::<T>::set_block_number(BlockNumberFor::<T>::max_value());
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 
 		// Prime nay will close it as disapproved
@@ -588,7 +589,7 @@ benchmarks_instance_pallet! {
 		}
 
 		// caller is prime, prime already votes aye by creating the proposal
-		System::<T>::set_block_number(frame_system::pallet_prelude::BlockNumberFor::<T>::max_value());
+		System::<T>::set_block_number(BlockNumberFor::<T>::max_value());
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 
 		// Prime aye will close it as approved
@@ -637,7 +638,7 @@ benchmarks_instance_pallet! {
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
 
-		System::<T>::set_block_number(frame_system::pallet_prelude::BlockNumberFor::<T>::max_value());
+		System::<T>::set_block_number(BlockNumberFor::<T>::max_value());
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 
 	}: _(SystemOrigin::Root, last_hash)

@@ -30,6 +30,7 @@ use frame_support::{
 	},
 };
 use frame_system::RawOrigin as SystemOrigin;
+use frame_system::pallet_prelude::BlockNumberFor;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, MintSettings};
 use sp_runtime::traits::StaticLookup;
 use sp_std::prelude::*;

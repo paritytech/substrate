@@ -23,6 +23,7 @@ use super::*;
 use frame_benchmarking::v1::{benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get, OnFinalize, OnInitialize};
 use frame_system::{EventRecord, Pallet as System, RawOrigin};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::{Bounded, One, Zero};
 use sp_std::*;
 use sp_transaction_storage_proof::TransactionStorageProof;
@@ -144,7 +145,7 @@ benchmarks! {
 			vec![0u8; T::MaxTransactionSize::get() as usize],
 		)?;
 		run_to_block::<T>(1u32.into());
-	}: _(RawOrigin::Signed(caller.clone()), frame_system::pallet_prelude::BlockNumberFor::<T>::zero(), 0)
+	}: _(RawOrigin::Signed(caller.clone()), BlockNumberFor::<T>::zero(), 0)
 	verify {
 		assert_last_event::<T>(Event::Renewed { index: 0 }.into());
 	}
@@ -159,7 +160,7 @@ benchmarks! {
 				vec![0u8; T::MaxTransactionSize::get() as usize],
 			)?;
 		}
-		run_to_block::<T>(StoragePeriod::<T>::get() + frame_system::pallet_prelude::BlockNumberFor::<T>::one());
+		run_to_block::<T>(StoragePeriod::<T>::get() + BlockNumberFor::<T>::one());
 		let encoded_proof = proof();
 		let proof = TransactionStorageProof::decode(&mut &*encoded_proof).unwrap();
 	}: check_proof(RawOrigin::None, proof)

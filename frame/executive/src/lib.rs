@@ -126,6 +126,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::{
 	generic::Digest,
 	traits::{
@@ -479,9 +480,9 @@ where
 		// Check that `parent_hash` is correct.
 		let n = *header.number();
 		assert!(
-			n > frame_system::pallet_prelude::BlockNumberFor::<System>::zero() &&
+			n > BlockNumberFor::<System>::zero() &&
 				<frame_system::Pallet<System>>::block_hash(
-					n - frame_system::pallet_prelude::BlockNumberFor::<System>::one()
+					n - BlockNumberFor::<System>::one()
 				) == *header.parent_hash(),
 			"Parent hash should be valid.",
 		);
@@ -752,7 +753,7 @@ mod tests {
 			}
 
 			fn offchain_worker(n: BlockNumberFor<T>) {
-				assert_eq!(frame_system::pallet_prelude::BlockNumberFor::<T>::from(1u32), n);
+				assert_eq!(BlockNumberFor::<T>::from(1u32), n);
 			}
 		}
 

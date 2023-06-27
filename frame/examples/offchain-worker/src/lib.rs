@@ -422,11 +422,11 @@ impl<T: Config> Pallet<T> {
 				if transaction_type == Zero::zero() {
 					TransactionType::Signed
 				} else if transaction_type ==
-					frame_system::pallet_prelude::BlockNumberFor::<T>::from(1u32)
+					BlockNumberFor::<T>::from(1u32)
 				{
 					TransactionType::UnsignedForAny
 				} else if transaction_type ==
-					frame_system::pallet_prelude::BlockNumberFor::<T>::from(2u32)
+					BlockNumberFor::<T>::from(2u32)
 				{
 					TransactionType::UnsignedForAll
 				} else {

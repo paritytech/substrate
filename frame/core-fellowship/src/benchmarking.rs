@@ -24,6 +24,7 @@ use crate::Pallet as CoreFellowship;
 
 use frame_benchmarking::v2::*;
 use frame_system::RawOrigin;
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_arithmetic::traits::Bounded;
 
 const SEED: u32 = 0;
@@ -76,7 +77,7 @@ mod benchmarks {
 
 		// Set it to the max value to ensure that any possible auto-demotion period has passed.
 		frame_system::Pallet::<T>::set_block_number(
-			frame_system::pallet_prelude::BlockNumberFor::<T>::max_value(),
+			BlockNumberFor::<T>::max_value(),
 		);
 		ensure_evidence::<T, I>(&member)?;
 		assert!(Member::<T, I>::contains_key(&member));
@@ -95,7 +96,7 @@ mod benchmarks {
 
 		// Set it to the max value to ensure that any possible auto-demotion period has passed.
 		frame_system::Pallet::<T>::set_block_number(
-			frame_system::pallet_prelude::BlockNumberFor::<T>::max_value(),
+			BlockNumberFor::<T>::max_value(),
 		);
 		ensure_evidence::<T, I>(&member)?;
 		assert!(Member::<T, I>::contains_key(&member));

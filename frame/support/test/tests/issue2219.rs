@@ -25,7 +25,6 @@ use sp_runtime::{
 mod module {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	pub type Request<T> = (<T as frame_system::Config>::AccountId, Role, BlockNumberFor<T>);
 	pub type Requests<T> = Vec<Request<T>>;
@@ -66,14 +65,14 @@ mod module {
 		fn default() -> Self {
 			Self {
 				max_actors: 10,
-				reward_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
-				unbonding_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
+				reward_period: BlockNumberFor::<T>::default(),
+				unbonding_period: BlockNumberFor::<T>::default(),
 
 				// not currently used
 				min_actors: 5,
-				bonding_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
-				min_service_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
-				startup_grace_period: frame_system::pallet_prelude::BlockNumberFor::<T>::default(),
+				bonding_period: BlockNumberFor::<T>::default(),
+				min_service_period: BlockNumberFor::<T>::default(),
+				startup_grace_period: BlockNumberFor::<T>::default(),
 			}
 		}
 	}
@@ -158,21 +157,25 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-impl frame_support_test::Config for Runtime {
-	type AccountId = AccountId;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
+	type BlockHashCount = ConstU64<10>;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
+
+	type AccountData = pallet_balances::AccountData<u64>;
 }
 
 impl module::Config for Runtime {}
 
 frame_support::construct_runtime!(
 	pub struct Runtime {
-		System: frame_support_test,
+		System: frame_system,
 		Module: module,
 	}
 );
