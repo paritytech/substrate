@@ -1206,8 +1206,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		}
 
-		let dirty_alarm = if alarm < BlockNumberFor::<T>::max_value()
-		{
+		let dirty_alarm = if alarm < BlockNumberFor::<T>::max_value() {
 			Self::ensure_alarm_at(&mut status, index, alarm)
 		} else {
 			Self::ensure_no_alarm(&mut status)

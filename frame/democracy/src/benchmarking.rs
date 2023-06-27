@@ -24,8 +24,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	traits::{Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable},
 };
-use frame_system::RawOrigin;
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_core::H256;
 use sp_runtime::{traits::Bounded, BoundedVec};
 

@@ -481,9 +481,8 @@ where
 		let n = *header.number();
 		assert!(
 			n > BlockNumberFor::<System>::zero() &&
-				<frame_system::Pallet<System>>::block_hash(
-					n - BlockNumberFor::<System>::one()
-				) == *header.parent_hash(),
+				<frame_system::Pallet<System>>::block_hash(n - BlockNumberFor::<System>::one()) ==
+					*header.parent_hash(),
 			"Parent hash should be valid.",
 		);
 

@@ -24,8 +24,7 @@ use super::*;
 use frame_benchmarking::v1::{
 	account, benchmarks_instance_pallet, whitelisted_caller, BenchmarkError,
 };
-use frame_system::RawOrigin;
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_runtime::traits::Bounded;
 
 use crate::Pallet as Bounties;

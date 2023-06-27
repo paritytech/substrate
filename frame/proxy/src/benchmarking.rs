@@ -22,8 +22,7 @@
 use super::*;
 use crate::Pallet as Proxy;
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
-use frame_system::RawOrigin;
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;

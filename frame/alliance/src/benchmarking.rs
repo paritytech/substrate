@@ -27,8 +27,7 @@ use sp_std::{
 
 use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError};
 use frame_support::traits::{EnsureOrigin, Get, UnfilteredDispatchable};
-use frame_system::{Pallet as System, RawOrigin as SystemOrigin};
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System, RawOrigin as SystemOrigin};
 
 use super::{Call as AllianceCall, Pallet as Alliance, *};
 

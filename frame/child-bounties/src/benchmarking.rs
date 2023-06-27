@@ -22,8 +22,7 @@
 use super::*;
 
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller, BenchmarkError};
-use frame_system::RawOrigin;
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 
 use crate::Pallet as ChildBounties;
 use pallet_bounties::Pallet as Bounties;

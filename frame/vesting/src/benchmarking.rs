@@ -21,8 +21,7 @@
 
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::assert_ok;
-use frame_system::{Pallet as System, RawOrigin};
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, CheckedDiv, CheckedMul};
 
 use super::*;

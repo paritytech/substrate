@@ -638,7 +638,7 @@ fn test_metadata() {
 			doc
 		}
 	}
-	
+
 	let pallets = vec![
 		PalletMetadata {
 			name: "System",

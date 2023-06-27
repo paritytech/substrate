@@ -30,8 +30,7 @@ use frame_support::{
 	traits::{EnsureOrigin, Get},
 	BoundedVec,
 };
-use frame_system::RawOrigin as SystemOrigin;
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin as SystemOrigin};
 use sp_io::crypto::{sr25519_generate, sr25519_sign};
 use sp_runtime::{
 	traits::{Bounded, IdentifyAccount, One},

@@ -801,10 +801,7 @@ pub mod pallet {
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
 
-			ensure!(
-				voting_period > BlockNumberFor::<T>::zero(),
-				Error::<T>::VotingPeriodLow
-			);
+			ensure!(voting_period > BlockNumberFor::<T>::zero(), Error::<T>::VotingPeriodLow);
 			let (ext_proposal, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
@@ -1057,10 +1054,8 @@ pub mod pallet {
 			T::BlacklistOrigin::ensure_origin(origin)?;
 
 			// Insert the proposal into the blacklist.
-			let permanent = (
-				BlockNumberFor::<T>::max_value(),
-				BoundedVec::<T::AccountId, _>::default(),
-			);
+			let permanent =
+				(BlockNumberFor::<T>::max_value(), BoundedVec::<T::AccountId, _>::default());
 			Blacklist::<T>::insert(&proposal_hash, permanent);
 
 			// Remove the queued proposal, if it's there.

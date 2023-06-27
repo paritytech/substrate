@@ -23,8 +23,7 @@ use frame_support::{
 	ensure,
 	traits::{schedule::Priority, BoundedInline},
 };
-use frame_system::RawOrigin;
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_std::{prelude::*, vec};
 
 use crate::Pallet as Scheduler;
