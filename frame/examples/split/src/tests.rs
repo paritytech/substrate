@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{mock::*, Error, Event};
+use crate::{mock::*, Error, Event, Something};
 use frame_support::{assert_noop, assert_ok};
 
 #[test]
@@ -26,7 +26,7 @@ fn it_works_for_default_value() {
 		// Dispatch a signed extrinsic.
 		assert_ok!(TemplatePallet::do_something(RuntimeOrigin::signed(1), 42));
 		// Read pallet storage and assert an expected result.
-		assert_eq!(TemplatePallet::something(), Some(42));
+		assert_eq!(Something::<Test>::get(), Some(42));
 		// Assert that the correct event was deposited
 		System::assert_last_event(Event::SomethingStored { something: 42, who: 1 }.into());
 	});
