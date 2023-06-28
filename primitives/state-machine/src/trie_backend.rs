@@ -62,7 +62,7 @@ pub trait TrieCacheProvider<H: Hasher> {
 	/// merge the cached items for the correct `storage_root`.
 	fn as_trie_db_mut_cache(&self) -> Self::Cache<'_>;
 
-	/// Merge a the cached data in `other` into the provider using the given `new_root`.
+	/// Merge the cached data in `other` into the provider using the given `new_root`.
 	///
 	/// This must be used for the cache returned by [`Self::as_trie_db_mut_cache`] as otherwise the
 	/// cached data is just thrown away.
@@ -130,10 +130,11 @@ impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCacheProvider<
 /// can never be instantiated.
 #[cfg(not(feature = "std"))]
 pub struct UnimplementedCacheProvider<H> {
-	// Not strictly necessary, but the private field prevents construction
-	// and the H bound allow to use this as drop-in replacement for the
-	// `LocalTrieCache` variant that is available in "std" environments.
+	// Not strictly necessary, but the H bound allows to use this as a drop-in
+	// replacement for the `LocalTrieCache` in no-std contexts.
 	_phantom: PhantomData<H>,
+	// Statically prevents construction.
+	_infallible: core::convert::Infallible,
 }
 
 #[cfg(not(feature = "std"))]
