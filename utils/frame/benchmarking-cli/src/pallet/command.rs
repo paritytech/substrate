@@ -211,11 +211,14 @@ impl PalletCmd {
 		let method =
 			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy);
 
-		let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::builder()
-			.with_execution_method(method)
-			.with_max_runtime_instances(2)
-			.with_runtime_cache_size(2)
-			.build();
+		let executor = WasmExecutor::<(
+			sp_io::SubstrateHostFunctions,
+			frame_benchmarking::benchmarking::HostFunctions,
+		)>::builder()
+		.with_execution_method(method)
+		.with_max_runtime_instances(2)
+		.with_runtime_cache_size(2)
+		.build();
 
 		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
