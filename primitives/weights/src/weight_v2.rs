@@ -25,7 +25,7 @@ use super::*;
 #[derive(
 	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Weight {
 	#[codec(compact)]
 	/// The weight of computational time used based on some reference hardware.
@@ -95,18 +95,6 @@ impl Weight {
 		} else {
 			Some(total)
 		}
-	}
-
-	/// Construct [`Weight`] with reference time weight and 0 storage size weight.
-	#[deprecated = "Will be removed soon; use `from_parts` instead."]
-	pub const fn from_ref_time(ref_time: u64) -> Self {
-		Self { ref_time, proof_size: 0 }
-	}
-
-	/// Construct [`Weight`] with storage size weight and 0 reference time weight.
-	#[deprecated = "Will be removed soon; use `from_parts` instead."]
-	pub const fn from_proof_size(proof_size: u64) -> Self {
-		Self { ref_time: 0, proof_size }
 	}
 
 	/// Construct [`Weight`] from weight parts, namely reference time and proof size weights.

@@ -1,0 +1,5 @@
+error: expected `impl`
+  --> tests/derive_impl_ui/attached_to_non_impl.rs:39:1
+   |
+39 | struct Something {}
+   | ^^^^^^

@@ -375,7 +375,7 @@ fn get_benchmark_data(
 	}
 }
 
-// Create weight file from benchmark data and Handlebars template.
+/// Create weight file from benchmark data and Handlebars template.
 pub(crate) fn write_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
@@ -384,7 +384,7 @@ pub(crate) fn write_results(
 	default_pov_mode: PovEstimationMode,
 	path: &PathBuf,
 	cmd: &PalletCmd,
-) -> Result<(), std::io::Error> {
+) -> Result<(), sc_cli::Error> {
 	// Use custom template if provided.
 	let template: String = match &cmd.template {
 		Some(template_file) => fs::read_to_string(template_file)?,
@@ -492,10 +492,21 @@ pub(crate) fn write_results(
 		created_files.push(file_path);
 	}
 
-	for file in created_files.iter().duplicates() {
-		// This can happen when there are multiple instances of a pallet deployed
-		// and `--output` forces the output of all instances into the same file.
-		println!("Multiple benchmarks were written to the same file: {:?}.", file);
+	let overwritten_files = created_files.iter().duplicates().collect::<Vec<_>>();
+	if !overwritten_files.is_empty() {
+		let msg = format!(
+			"Multiple results were written to the same file. This can happen when \
+		there are multiple instances of a pallet deployed and `--output` forces the output of all \
+		instances into the same file. Use `--unsafe-overwrite-results` to ignore this error. The \
+		affected files are: {:?}",
+			overwritten_files
+		);
+
+		if cmd.unsafe_overwrite_results {
+			println!("{msg}");
+		} else {
+			return Err(msg.into())
+		}
 	}
 	Ok(())
 }

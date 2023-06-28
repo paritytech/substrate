@@ -81,7 +81,38 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 	}
 }
 
-impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {}
+impl<T: Config<I>, I: 'static> fungibles::Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+	fn done_mint_into(
+		asset_id: Self::AssetId,
+		beneficiary: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) {
+		Self::deposit_event(Event::Issued { asset_id, owner: beneficiary.clone(), amount })
+	}
+
+	fn done_burn_from(
+		asset_id: Self::AssetId,
+		target: &<T as SystemConfig>::AccountId,
+		balance: Self::Balance,
+	) {
+		Self::deposit_event(Event::Burned { asset_id, owner: target.clone(), balance });
+	}
+
+	fn done_transfer(
+		asset_id: Self::AssetId,
+		source: &<T as SystemConfig>::AccountId,
+		dest: &<T as SystemConfig>::AccountId,
+		amount: Self::Balance,
+	) {
+		Self::deposit_event(Event::Transferred {
+			asset_id,
+			from: source.clone(),
+			to: dest.clone(),
+			amount,
+		});
+	}
+}
+
 impl<T: Config<I>, I: 'static> fungibles::Balanced<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
@@ -192,6 +223,19 @@ impl<T: Config<I>, I: 'static> fungibles::metadata::Mutate<<T as SystemConfig>::
 		decimals: u8,
 	) -> DispatchResult {
 		Self::do_set_metadata(asset, from, name, symbol, decimals)
+	}
+}
+
+impl<T: Config<I>, I: 'static>
+	fungibles::metadata::MetadataDeposit<
+		<T::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance,
+	> for Pallet<T, I>
+{
+	fn calc_metadata_deposit(
+		name: &[u8],
+		symbol: &[u8],
+	) -> <T::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance {
+		Self::calc_metadata_deposit(&name, &symbol)
 	}
 }
 

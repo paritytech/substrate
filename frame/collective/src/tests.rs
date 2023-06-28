@@ -68,8 +68,6 @@ mod mock_democracy {
 
 		#[pallet::call]
 		impl<T: Config> Pallet<T> {
-			#[pallet::call_index(0)]
-			#[pallet::weight(0)]
 			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
 				T::ExternalMajorityOrigin::ensure_origin(origin)?;
 				Self::deposit_event(Event::<T>::ExternalProposed);
@@ -86,14 +84,18 @@ mod mock_democracy {
 }
 
 pub type MaxMembers = ConstU32<100>;
+type AccountId = u64;
 
 parameter_types! {
 	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 257;
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
+	pub static MaxProposalWeight: Weight = default_max_proposal_weight();
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
@@ -102,7 +104,7 @@ impl frame_system::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
@@ -127,6 +129,7 @@ impl Config<Instance1> for Test {
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 impl Config<Instance2> for Test {
 	type RuntimeOrigin = RuntimeOrigin;
@@ -138,6 +141,7 @@ impl Config<Instance2> for Test {
 	type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 impl mock_democracy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -153,21 +157,29 @@ impl Config for Test {
 	type DefaultVote = PrimeDefaultVote;
 	type WeightInfo = ();
 	type SetMembersOrigin = EnsureRoot<Self::AccountId>;
+	type MaxProposalWeight = MaxProposalWeight;
 }
 
-pub struct ExtBuilder {}
+pub struct ExtBuilder {
+	collective_members: Vec<AccountId>,
+}
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self {}
+		Self { collective_members: vec![1, 2, 3] }
 	}
 }
 
 impl ExtBuilder {
+	fn set_collective_members(mut self, collective_members: Vec<AccountId>) -> Self {
+		self.collective_members = collective_members;
+		self
+	}
+
 	pub fn build(self) -> sp_io::TestExternalities {
-		let mut ext: sp_io::TestExternalities = GenesisConfig {
+		let mut ext: sp_io::TestExternalities = RuntimeGenesisConfig {
 			collective: pallet_collective::GenesisConfig {
-				members: vec![1, 2, 3],
+				members: self.collective_members,
 				phantom: Default::default(),
 			},
 			collective_majority: pallet_collective::GenesisConfig {
@@ -201,11 +213,56 @@ fn record(event: RuntimeEvent) -> EventRecord<RuntimeEvent, H256> {
 	EventRecord { phase: Phase::Initialization, event, topics: vec![] }
 }
 
+fn default_max_proposal_weight() -> Weight {
+	sp_runtime::Perbill::from_percent(80) * BlockWeights::get().max_block
+}
+
 #[test]
 fn motions_basic_environment_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_eq!(Collective::members(), vec![1, 2, 3]);
 		assert_eq!(*Collective::proposals(), Vec::<H256>::new());
+	});
+}
+
+#[test]
+fn initialize_members_sorts_members() {
+	let unsorted_members = vec![3, 2, 4, 1];
+	let expected_members = vec![1, 2, 3, 4];
+	ExtBuilder::default()
+		.set_collective_members(unsorted_members)
+		.build_and_execute(|| {
+			assert_eq!(Collective::members(), expected_members);
+		});
+}
+
+#[test]
+fn proposal_weight_limit_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		let proposal = make_proposal(42);
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+
+		assert_ok!(Collective::propose(
+			RuntimeOrigin::signed(1),
+			2,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+
+		// set a small limit for max proposal weight.
+		MaxProposalWeight::set(Weight::from_parts(1, 1));
+		assert_noop!(
+			Collective::propose(
+				RuntimeOrigin::signed(1),
+				2,
+				Box::new(proposal.clone()),
+				proposal_len
+			),
+			Error::<Test, Instance1>::WrongProposalWeight
+		);
+
+		// reset the max weight to default.
+		MaxProposalWeight::set(default_max_proposal_weight());
 	});
 }
 
@@ -1382,6 +1439,19 @@ fn disapprove_proposal_works() {
 			]
 		);
 	})
+}
+
+#[should_panic(expected = "Members length cannot exceed MaxMembers.")]
+#[test]
+fn genesis_build_panics_with_too_many_members() {
+	let max_members: u32 = MaxMembers::get();
+	let too_many_members = (1..=max_members as u64 + 1).collect::<Vec<AccountId>>();
+	pallet_collective::GenesisConfig::<Test> {
+		members: too_many_members,
+		phantom: Default::default(),
+	}
+	.build_storage()
+	.unwrap();
 }
 
 #[test]

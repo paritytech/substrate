@@ -28,7 +28,7 @@ use sc_service::{
 	config::{Multiaddr, MultiaddrWithPeerId},
 	ChainSpec, ChainType,
 };
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, num::NonZeroUsize, path::PathBuf};
 
 /// Parameters used to create the network configuration.
 #[derive(Debug, Clone, Args)]
@@ -42,9 +42,7 @@ pub struct NetworkParams {
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Whether to only synchronize the chain with reserved nodes.
-	///
 	/// Also disables automatic peer discovery.
-	///
 	/// TCP connections might still be established with non-reserved nodes.
 	/// In particular, if you are a validator your node might still connect to other
 	/// validator nodes and collator nodes regardless of whether they are defined as
@@ -95,14 +93,12 @@ pub struct NetworkParams {
 	pub in_peers_light: u32,
 
 	/// Disable mDNS discovery.
-	///
 	/// By default, the network will use mDNS to discover other nodes on the
 	/// local network. This disables it. Automatically implied when using --dev.
 	#[arg(long)]
 	pub no_mdns: bool,
 
 	/// Maximum number of peers from which to ask for the same blocks in parallel.
-	///
 	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
 	#[arg(long, value_name = "COUNT", default_value_t = 5)]
@@ -113,7 +109,6 @@ pub struct NetworkParams {
 	pub node_key_params: NodeKeyParams,
 
 	/// Enable peer discovery on local networks.
-	///
 	/// By default this option is `true` for `--dev` or when the chain type is
 	/// `Local`/`Development` and false otherwise.
 	#[arg(long)]
@@ -121,11 +116,17 @@ pub struct NetworkParams {
 
 	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
 	/// the presence of potentially adversarial nodes.
-	///
 	/// See the S/Kademlia paper for more information on the high level design as well as its
 	/// security improvements.
 	#[arg(long)]
 	pub kademlia_disjoint_query_paths: bool,
+
+	/// Kademlia replication factor determines to how many closest peers a record is replicated to.
+	///
+	/// Discovery mechanism requires successful replication to all
+	/// `kademlia_replication_factor` peers to consider record successfully put.
+	#[arg(long, default_value = "20")]
+	pub kademlia_replication_factor: NonZeroUsize,
 
 	/// Join the IPFS network and serve transactions over bitswap protocol.
 	#[arg(long)]
@@ -227,8 +228,6 @@ impl NetworkParams {
 			default_peers_set_num_full: self.in_peers + self.out_peers,
 			listen_addresses,
 			public_addresses,
-			extra_sets: Vec::new(),
-			request_response_protocols: Vec::new(),
 			node_key,
 			node_name: node_name.to_string(),
 			client_version: client_id.to_string(),
@@ -241,6 +240,7 @@ impl NetworkParams {
 			enable_dht_random_walk: !self.reserved_only,
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
+			kademlia_replication_factor: self.kademlia_replication_factor,
 			yamux_window_size: None,
 			ipfs_server: self.ipfs_server,
 			sync_mode: self.sync.into(),
