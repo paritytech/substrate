@@ -162,8 +162,8 @@ impl AddrCache {
 
 fn peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
 	addr.iter().last().and_then(|protocol| {
-		if let Protocol::P2p(multihash) = protocol {
-			PeerId::from_multihash(multihash).ok()
+		if let Protocol::P2p(peer_id) = protocol {
+			Some(peer_id)
 		} else {
 			None
 		}
