@@ -49,7 +49,7 @@ pub trait TrieCacheProvider<H: Hasher> {
 	where
 		Self: 'a;
 
-	/// Return a [`trie_db::TrieDB`] compatible cache. 
+	/// Return a [`trie_db::TrieDB`] compatible cache.
 	///
 	/// The `storage_root` parameter should be the storage root of the used trie.
 	fn as_trie_db_cache(&self, storage_root: H::Out) -> Self::Cache<'_>;
