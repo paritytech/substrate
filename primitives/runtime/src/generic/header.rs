@@ -22,7 +22,7 @@ use crate::{
 	generic::Digest,
 	scale_info::TypeInfo,
 	traits::{
-		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeFromStr,
+		self, AsPrimitive, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeFromStr,
 		MaybeSerializeDeserialize, Member,
 	},
 };
@@ -92,7 +92,8 @@ where
 		+ MaxEncodedLen
 		+ Into<U256>
 		+ TryFrom<U256>
-		+ TypeInfo,
+		+ TypeInfo
+		+ AsPrimitive<usize>,
 	Hash: HashT,
 {
 	type Number = Number;

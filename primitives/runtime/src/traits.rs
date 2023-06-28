@@ -32,7 +32,7 @@ use impl_trait_for_tuples::impl_for_tuples;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_application_crypto::AppCrypto;
 pub use sp_arithmetic::traits::{
-	checked_pow, ensure_pow, AtLeast32Bit, AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedDiv,
+	checked_pow, ensure_pow, AsPrimitive, AtLeast32Bit, AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedDiv,
 	CheckedMul, CheckedShl, CheckedShr, CheckedSub, Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv,
 	EnsureDivAssign, EnsureFixedPointNumber, EnsureFrom, EnsureInto, EnsureMul, EnsureMulAssign,
 	EnsureOp, EnsureOpAssign, EnsureSub, EnsureSubAssign, IntegerSquareRoot, One,
@@ -1169,7 +1169,8 @@ pub trait Header:
 		+ Default
 		+ TypeInfo
 		+ MaxEncodedLen
-		+ FullCodec;
+		+ FullCodec
+		+ AsPrimitive<usize>;
 	/// Header hash type
 	type Hash: HashOutput;
 	/// Hashing algorithm
@@ -1254,7 +1255,7 @@ pub trait Block:
 	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
-	type Header: Header<Hash = Self::Hash>;
+	type Header: Header<Hash = Self::Hash> + MaybeSerializeDeserialize;
 	/// Block hash type.
 	type Hash: HashOutput;
 
