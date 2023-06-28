@@ -2698,8 +2698,7 @@ dependencies = [
 [[package]]
 name = "frame-metadata"
 version = "15.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2a893ede8dde2293e94dacf9c8f5db5d0506cd909257a8f0ac2b7d610baf50c"
+source = "git+https://github.com/paritytech/frame-metadata.git?branch=lexnv/stable_v15#e19a5873674457677cb978599f02783112231821"
 dependencies = [
  "cfg-if",
  "parity-scale-codec",
