@@ -320,6 +320,7 @@ where
 				config.use_kademlia_disjoint_query_paths(
 					network_config.kademlia_disjoint_query_paths,
 				);
+				config.with_kademlia_replication_factor(network_config.kademlia_replication_factor);
 
 				match network_config.transport {
 					TransportConfig::MemoryOnly => {

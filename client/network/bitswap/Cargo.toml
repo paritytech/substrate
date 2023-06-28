@@ -26,7 +26,6 @@ thiserror = "1.0"
 unsigned-varint = { version = "0.7.1", features = ["futures", "asynchronous_codec"] }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-network = { version = "0.10.0-dev", path = "../" }
-sc-network-common = { version = "0.10.0-dev", path = "../common" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 
