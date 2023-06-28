@@ -216,16 +216,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher, C> {
 impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
-		TrieBackendEssence {
-			storage,
-			root,
-			empty: H::hash(&[0u8]),
-			#[cfg(feature = "std")]
-			cache: Arc::new(RwLock::new(Cache::new())),
-			trie_node_cache: None,
-			#[cfg(feature = "std")]
-			recorder: None,
-		}
+		Self::new_with_cache(storage, root, None)
 	}
 
 	/// Create new trie-based backend.

@@ -25,9 +25,6 @@ use crate::{
 	Backend, StorageKey, StorageValue,
 };
 
-#[cfg(not(feature = "std"))]
-use core::marker::PhantomData;
-
 use codec::Codec;
 #[cfg(feature = "std")]
 use hash_db::HashDB;
@@ -132,7 +129,7 @@ impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCacheProvider<
 pub struct UnimplementedCacheProvider<H> {
 	// Not strictly necessary, but the H bound allows to use this as a drop-in
 	// replacement for the `LocalTrieCache` in no-std contexts.
-	_phantom: PhantomData<H>,
+	_phantom: core::marker::PhantomData<H>,
 	// Statically prevents construction.
 	_infallible: core::convert::Infallible,
 }
