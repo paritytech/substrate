@@ -291,30 +291,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEs
 	/// Call the given closure passing it the recorder and the cache.
 	///
 	/// If the given `storage_root` is `None`, `self.root` will be used.
-	#[cfg(feature = "std")]
-	#[inline]
-	fn with_recorder_and_cache<R>(
-		&self,
-		storage_root: Option<H::Out>,
-		callback: impl FnOnce(
-			Option<&mut dyn TrieRecorder<H::Out>>,
-			Option<&mut dyn TrieCache<NodeCodec<H>>>,
-		) -> R,
-	) -> R {
-		let storage_root = storage_root.unwrap_or_else(|| self.root);
-		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder(storage_root));
-		let recorder = match recorder.as_mut() {
-			Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out>),
-			None => None,
-		};
-
-		let mut cache = self.trie_node_cache.as_ref().map(|c| c.as_trie_db_cache(storage_root));
-		let cache = cache.as_mut().map(|c| c as _);
-
-		callback(recorder, cache)
-	}
-
-	#[cfg(not(feature = "std"))]
 	#[inline]
 	fn with_recorder_and_cache<R>(
 		&self,
@@ -328,7 +304,20 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEs
 		let mut cache = self.trie_node_cache.as_ref().map(|c| c.as_trie_db_cache(storage_root));
 		let cache = cache.as_mut().map(|c| c as _);
 
-		callback(None, cache)
+		#[cfg(feature = "std")]
+		{
+			let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder(storage_root));
+			let recorder = match recorder.as_mut() {
+				Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out>),
+				None => None,
+			};
+			callback(recorder, cache)
+		}
+
+		#[cfg(not(feature = "std"))]
+		{
+			callback(None, cache)
+		}
 	}
 
 	/// Call the given closure passing it the recorder and the cache.

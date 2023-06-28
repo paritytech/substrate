@@ -100,6 +100,17 @@ impl<H: Hasher> TrieCacheProvider<H> for &LocalTrieCache<H> {
 	}
 }
 
+/// Cache provider that allows construction of a [`TrieBackend`] and satisfies the requirements, but
+/// can never be instantiated.
+#[cfg(not(feature = "std"))]
+pub struct UnimplementedCacheProvider<H> {
+	// Not strictly necessary, but the H bound allows to use this as a drop-in
+	// replacement for the `LocalTrieCache` in no-std contexts.
+	_phantom: core::marker::PhantomData<H>,
+	// Statically prevents construction.
+	_infallible: core::convert::Infallible,
+}
+
 #[cfg(not(feature = "std"))]
 impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCacheProvider<H> {
 	fn lookup_value_for_key(&mut self, _key: &[u8]) -> Option<&CachedValue<H::Out>> {
@@ -121,17 +132,6 @@ impl<H: Hasher> trie_db::TrieCache<NodeCodec<H>> for UnimplementedCacheProvider<
 	fn get_node(&mut self, _hash: &H::Out) -> Option<&NodeOwned<H::Out>> {
 		unimplemented!()
 	}
-}
-
-/// Cache provider that allows construction of a [`TrieBackend`] and satisfies the requirements, but
-/// can never be instantiated.
-#[cfg(not(feature = "std"))]
-pub struct UnimplementedCacheProvider<H> {
-	// Not strictly necessary, but the H bound allows to use this as a drop-in
-	// replacement for the `LocalTrieCache` in no-std contexts.
-	_phantom: core::marker::PhantomData<H>,
-	// Statically prevents construction.
-	_infallible: core::convert::Infallible,
 }
 
 #[cfg(not(feature = "std"))]
