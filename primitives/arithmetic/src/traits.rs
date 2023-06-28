@@ -25,8 +25,8 @@ pub use ensure::{
 };
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{
-	checked_pow, AsPrimitive, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedShl,
-	CheckedShr, CheckedSub, One, Signed, Unsigned, Zero,
+	checked_pow, AsPrimitive, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem,
+	CheckedShl, CheckedShr, CheckedSub, One, Signed, Unsigned, Zero,
 };
 use sp_std::ops::{
 	Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Shl, Shr, Sub, SubAssign,

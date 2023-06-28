@@ -25,7 +25,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	codec::{Codec, Decode, Encode},
-	traits::{self, Block as BlockT, Header as HeaderT, MaybeSerializeDeserialize, MaybeSerialize, Member, NumberFor},
+	traits::{
+		self, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeSerializeDeserialize,
+		Member, NumberFor,
+	},
 	Justifications,
 };
 use sp_core::RuntimeDebug;
