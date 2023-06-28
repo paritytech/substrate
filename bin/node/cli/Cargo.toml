@@ -56,7 +56,6 @@ sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keyring = { version = "24.0.0", path = "../../../primitives/keyring" }
 sp-keystore = { version = "0.27.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-transaction-pool = { version = "4.0.0-dev", path = "../../../primitives/transaction-pool" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
 sp-io = { path = "../../../primitives/io" }
 
@@ -87,8 +86,6 @@ sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monito
 # frame dependencies
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", path = "../../../frame/system/rpc/runtime-api" }
-pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
-pallet-asset-conversion = { version = "4.0.0-dev", path = "../../../frame/asset-conversion" }
 pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets/" }
 pallet-asset-conversion-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-conversion-tx-payment" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment" }

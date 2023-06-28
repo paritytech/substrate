@@ -19,7 +19,6 @@ digest = { version = "0.10.3", default-features = false }
 sha2 = { version = "0.10.2", default-features = false }
 sha3 = { version = "0.10.0", default-features = false }
 twox-hash = { version = "1.6.3", default-features = false, features = ["digest_0_10"] }
-sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 
 [features]
 default = ["std"]
@@ -29,6 +28,5 @@ std = [
 	"byteorder/std",
 	"sha2/std",
 	"sha3/std",
-	"sp-std/std",
 	"twox-hash/std",
 ]
