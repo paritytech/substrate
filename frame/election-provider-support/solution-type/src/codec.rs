@@ -51,14 +51,14 @@ fn decode_impl(
 		quote! {
 			let #name =
 			<
-				_feps::sp_std::prelude::Vec<(_feps::codec::Compact<#voter_type>, _feps::codec::Compact<#target_type>)>
+				_fepsp::sp_std::prelude::Vec<(_fepsp::codec::Compact<#voter_type>, _fepsp::codec::Compact<#target_type>)>
 				as
-				_feps::codec::Decode
+				_fepsp::codec::Decode
 			>::decode(value)?;
 			let #name = #name
 				.into_iter()
 				.map(|(v, t)| (v.0, t.0))
-				.collect::<_feps::sp_std::prelude::Vec<_>>();
+				.collect::<_fepsp::sp_std::prelude::Vec<_>>();
 		}
 	};
 
@@ -73,12 +73,12 @@ fn decode_impl(
 			quote! {
 				let #name =
 				<
-					_feps::sp_std::prelude::Vec<(
-						_feps::codec::Compact<#voter_type>,
-						[(_feps::codec::Compact<#target_type>, _feps::codec::Compact<#weight_type>); #c-1],
-						_feps::codec::Compact<#target_type>,
+					_fepsp::sp_std::prelude::Vec<(
+						_fepsp::codec::Compact<#voter_type>,
+						[(_fepsp::codec::Compact<#target_type>, _fepsp::codec::Compact<#weight_type>); #c-1],
+						_fepsp::codec::Compact<#target_type>,
 					)>
-					as _feps::codec::Decode
+					as _fepsp::codec::Decode
 				>::decode(value)?;
 				let #name = #name
 					.into_iter()
@@ -87,7 +87,7 @@ fn decode_impl(
 						[ #inner_impl ],
 						t_last.0,
 					))
-					.collect::<_feps::sp_std::prelude::Vec<_>>();
+					.collect::<_fepsp::sp_std::prelude::Vec<_>>();
 			}
 		})
 		.collect::<TokenStream2>();
@@ -100,8 +100,8 @@ fn decode_impl(
 		.collect::<TokenStream2>();
 
 	quote!(
-		impl _feps::codec::Decode for #ident {
-			fn decode<I: _feps::codec::Input>(value: &mut I) -> Result<Self, _feps::codec::Error> {
+		impl _fepsp::codec::Decode for #ident {
+			fn decode<I: _fepsp::codec::Input>(value: &mut I) -> Result<Self, _fepsp::codec::Error> {
 				#decode_impl_single
 				#decode_impl_rest
 
@@ -123,10 +123,10 @@ fn encode_impl(ident: &syn::Ident, count: usize) -> TokenStream2 {
 			let #name = self.#name
 				.iter()
 				.map(|(v, t)| (
-					_feps::codec::Compact(v.clone()),
-					_feps::codec::Compact(t.clone()),
+					_fepsp::codec::Compact(v.clone()),
+					_fepsp::codec::Compact(t.clone()),
 				))
-				.collect::<_feps::sp_std::prelude::Vec<_>>();
+				.collect::<_fepsp::sp_std::prelude::Vec<_>>();
 			#name.encode_to(&mut r);
 		}
 	};
@@ -139,8 +139,8 @@ fn encode_impl(ident: &syn::Ident, count: usize) -> TokenStream2 {
 			let inners_solution_array = (0..c - 1)
 				.map(|i| {
 					quote! {(
-						_feps::codec::Compact(inner[#i].0.clone()),
-						_feps::codec::Compact(inner[#i].1.clone()),
+						_fepsp::codec::Compact(inner[#i].0.clone()),
+						_fepsp::codec::Compact(inner[#i].1.clone()),
 					),}
 				})
 				.collect::<TokenStream2>();
@@ -149,19 +149,19 @@ fn encode_impl(ident: &syn::Ident, count: usize) -> TokenStream2 {
 				let #name = self.#name
 					.iter()
 					.map(|(v, inner, t_last)| (
-						_feps::codec::Compact(v.clone()),
+						_fepsp::codec::Compact(v.clone()),
 						[ #inners_solution_array ],
-						_feps::codec::Compact(t_last.clone()),
+						_fepsp::codec::Compact(t_last.clone()),
 					))
-					.collect::<_feps::sp_std::prelude::Vec<_>>();
+					.collect::<_fepsp::sp_std::prelude::Vec<_>>();
 				#name.encode_to(&mut r);
 			}
 		})
 		.collect::<TokenStream2>();
 
 	quote!(
-		impl _feps::codec::Encode for #ident {
-			fn encode(&self) -> _feps::sp_std::prelude::Vec<u8> {
+		impl _fepsp::codec::Encode for #ident {
+			fn encode(&self) -> _fepsp::sp_std::prelude::Vec<u8> {
 				let mut r = vec![];
 				#encode_impl_single
 				#encode_impl_rest
@@ -182,8 +182,8 @@ fn scale_info_impl(
 		let name = format!("{}", vote_field(1));
 		quote! {
 			.field(|f|
-				f.ty::<_feps::sp_std::prelude::Vec<
-				   (_feps::codec::Compact<#voter_type>, _feps::codec::Compact<#target_type>)
+				f.ty::<_fepsp::sp_std::prelude::Vec<
+				   (_fepsp::codec::Compact<#voter_type>, _fepsp::codec::Compact<#target_type>)
 				>>()
 				.name(#name)
 			)
@@ -194,10 +194,10 @@ fn scale_info_impl(
 		let name = format!("{}", vote_field(2));
 		quote! {
 			.field(|f|
-				f.ty::<_feps::sp_std::prelude::Vec<(
-					_feps::codec::Compact<#voter_type>,
-					(_feps::codec::Compact<#target_type>, _feps::codec::Compact<#weight_type>),
-					_feps::codec::Compact<#target_type>
+				f.ty::<_fepsp::sp_std::prelude::Vec<(
+					_fepsp::codec::Compact<#voter_type>,
+					(_fepsp::codec::Compact<#target_type>, _fepsp::codec::Compact<#weight_type>),
+					_fepsp::codec::Compact<#target_type>
 				)>>()
 				.name(#name)
 			)
@@ -209,13 +209,13 @@ fn scale_info_impl(
 			let name = format!("{}", vote_field(c));
 			quote! {
 				.field(|f|
-					f.ty::<_feps::sp_std::prelude::Vec<(
-						_feps::codec::Compact<#voter_type>,
+					f.ty::<_fepsp::sp_std::prelude::Vec<(
+						_fepsp::codec::Compact<#voter_type>,
 						[
-							(_feps::codec::Compact<#target_type>, _feps::codec::Compact<#weight_type>);
+							(_fepsp::codec::Compact<#target_type>, _fepsp::codec::Compact<#weight_type>);
 							#c - 1
 						],
-						_feps::codec::Compact<#target_type>
+						_fepsp::codec::Compact<#target_type>
 					)>>()
 					.name(#name)
 				)
@@ -224,14 +224,14 @@ fn scale_info_impl(
 		.collect::<TokenStream2>();
 
 	quote!(
-		 impl _feps::scale_info::TypeInfo for #ident {
+		 impl _fepsp::scale_info::TypeInfo for #ident {
 			 type Identity = Self;
 
-			 fn type_info() -> _feps::scale_info::Type<_feps::scale_info::form::MetaForm> {
-				 _feps::scale_info::Type::builder()
-					 .path(_feps::scale_info::Path::new(stringify!(#ident), module_path!()))
+			 fn type_info() -> _fepsp::scale_info::Type<_fepsp::scale_info::form::MetaForm> {
+				 _fepsp::scale_info::Type::builder()
+					 .path(_fepsp::scale_info::Path::new(stringify!(#ident), module_path!()))
 					 .composite(
-						 _feps::scale_info::build::Fields::named()
+						 _fepsp::scale_info::build::Fields::named()
 						 #scale_info_impl_single
 						 #scale_info_impl_double
 						 #scale_info_impl_rest

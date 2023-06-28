@@ -97,18 +97,6 @@ impl Weight {
 		}
 	}
 
-	/// Construct [`Weight`] with reference time weight and 0 storage size weight.
-	#[deprecated = "Will be removed soon; use `from_parts` instead."]
-	pub const fn from_ref_time(ref_time: u64) -> Self {
-		Self { ref_time, proof_size: 0 }
-	}
-
-	/// Construct [`Weight`] with storage size weight and 0 reference time weight.
-	#[deprecated = "Will be removed soon; use `from_parts` instead."]
-	pub const fn from_proof_size(proof_size: u64) -> Self {
-		Self { ref_time: 0, proof_size }
-	}
-
 	/// Construct [`Weight`] from weight parts, namely reference time and proof size weights.
 	pub const fn from_parts(ref_time: u64, proof_size: u64) -> Self {
 		Self { ref_time, proof_size }

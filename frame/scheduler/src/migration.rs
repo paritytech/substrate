@@ -499,7 +499,7 @@ mod test {
 
 			// The pre_upgrade hook fails:
 			let err = v3::MigrateToV4::<Test>::pre_upgrade().unwrap_err();
-			assert!(err == "Call is too large".into());
+			assert_eq!(DispatchError::from("Call is too large."), err);
 			// But the migration itself works:
 			let _w = v3::MigrateToV4::<Test>::on_runtime_upgrade();
 

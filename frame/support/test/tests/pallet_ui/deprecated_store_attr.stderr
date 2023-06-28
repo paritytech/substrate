@@ -1,5 +1,5 @@
 error: use of deprecated struct `pallet::_::Store`:
-               Use of `#[pallet::generate_store(pub(super) trait Store)]` will be removed soon.
+               Use of `#[pallet::generate_store(pub(super) trait Store)]` will be removed after July 2023.
                Check https://github.com/paritytech/substrate/pull/13535 for more details.
  --> tests/pallet_ui/deprecated_store_attr.rs:7:3
   |
