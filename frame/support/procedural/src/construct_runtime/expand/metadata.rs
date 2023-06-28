@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
-use crate::construct_runtime::Pallet;
+use crate::construct_runtime::{parse::PalletPath, Pallet};
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::str::FromStr;
@@ -26,6 +26,7 @@ pub fn expand_runtime_metadata(
 	pallet_declarations: &[Pallet],
 	scrate: &TokenStream,
 	extrinsic: &TypePath,
+	system_path: &PalletPath,
 ) -> TokenStream {
 	let pallets = pallet_declarations
 		.iter()
@@ -115,6 +116,13 @@ pub fn expand_runtime_metadata(
 					},
 					ty: #scrate::scale_info::meta_type::<#runtime>(),
 					apis: (&rt).runtime_metadata(),
+					outer_enums: #scrate::metadata_ir::OuterEnumsIR {
+						call_enum_ty: #scrate::scale_info::meta_type::<
+								<#runtime as #system_path::Config>::RuntimeCall
+							>(),
+						event_enum_ty: #scrate::scale_info::meta_type::<RuntimeEvent>(),
+						error_enum_ty: #scrate::scale_info::meta_type::<RuntimeError>(),
+					}
 				}
 			}
 

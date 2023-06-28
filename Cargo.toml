@@ -111,6 +111,7 @@ members = [
 	"frame/examples/offchain-worker",
 	"frame/examples/kitchensink",
 	"frame/examples/dev-mode",
+	"frame/examples/split",
 	"frame/examples/default-config",
 	"frame/executive",
 	"frame/nis",
@@ -206,6 +207,7 @@ members = [
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/externalities",
+	"primitives/genesis-builder",
 	"primitives/inherents",
 	"primitives/io",
 	"primitives/keyring",
@@ -298,7 +300,6 @@ hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
 integer-sqrt = { opt-level = 3 }
-k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 libm = { opt-level = 3 }
 librocksdb-sys = { opt-level = 3 }

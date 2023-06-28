@@ -164,9 +164,17 @@ where
 	///
 	/// This can be used as a fast way to restore the storage state from a backup because the trie
 	/// does not need to be computed.
-	pub fn from_raw_snapshot(&mut self, raw_storage: Vec<(H::Out, Vec<u8>)>, storage_root: H::Out) {
-		for (k, v) in raw_storage {
-			self.backend.backend_storage_mut().emplace(k, hash_db::EMPTY_PREFIX, v);
+	pub fn from_raw_snapshot(
+		&mut self,
+		raw_storage: Vec<(H::Out, (Vec<u8>, i32))>,
+		storage_root: H::Out,
+	) {
+		for (k, (v, ref_count)) in raw_storage {
+			// Each time .emplace is called the internal MemoryDb ref count increments.
+			// Repeatedly call emplace to initialise the ref count to the correct value.
+			for _ in 0..ref_count {
+				self.backend.backend_storage_mut().emplace(k, hash_db::EMPTY_PREFIX, v.clone());
+			}
 		}
 		self.backend.set_root(storage_root);
 	}
@@ -176,14 +184,13 @@ where
 	/// Useful for backing up the storage in a format that can be quickly re-loaded.
 	///
 	/// Note: This DB will be inoperable after this call.
-	pub fn into_raw_snapshot(mut self) -> (Vec<(H::Out, Vec<u8>)>, H::Out) {
+	pub fn into_raw_snapshot(mut self) -> (Vec<(H::Out, (Vec<u8>, i32))>, H::Out) {
 		let raw_key_values = self
 			.backend
 			.backend_storage_mut()
 			.drain()
 			.into_iter()
-			.map(|(k, v)| (k, v.0))
-			.collect::<Vec<(H::Out, Vec<u8>)>>();
+			.collect::<Vec<(H::Out, (Vec<u8>, i32))>>();
 
 		(raw_key_values, *self.backend.root())
 	}
@@ -402,6 +409,28 @@ mod tests {
 		original_ext.insert_child(child_info.clone(), b"cattytown".to_vec(), b"is_dark".to_vec());
 		original_ext.insert_child(child_info.clone(), b"doggytown".to_vec(), b"is_sunny".to_vec());
 
+		// Call emplace on one of the keys to increment the MemoryDb refcount, so we can check
+		// that it is intact in the recovered_ext.
+		let keys = original_ext.backend.backend_storage_mut().keys();
+		let expected_ref_count = 5;
+		let ref_count_key = keys.into_iter().next().unwrap().0;
+		for _ in 0..expected_ref_count - 1 {
+			original_ext.backend.backend_storage_mut().emplace(
+				ref_count_key,
+				hash_db::EMPTY_PREFIX,
+				// We can use anything for the 'value' because it does not affect behavior when
+				// emplacing an existing key.
+				(&[0u8; 32]).to_vec(),
+			);
+		}
+		let refcount = original_ext
+			.backend
+			.backend_storage()
+			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
+			.unwrap()
+			.1;
+		assert_eq!(refcount, expected_ref_count);
+
 		// Drain the raw storage and root.
 		let root = *original_ext.backend.root();
 		let (raw_storage, storage_root) = original_ext.into_raw_snapshot();
@@ -428,6 +457,15 @@ mod tests {
 			recovered_ext.backend.child_storage(&child_info, b"doggytown").unwrap(),
 			Some(b"is_sunny".to_vec())
 		);
+
+		// Check the refcount of the key with > 1 refcount is correct.
+		let refcount = recovered_ext
+			.backend
+			.backend_storage()
+			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
+			.unwrap()
+			.1;
+		assert_eq!(refcount, expected_ref_count);
 	}
 
 	#[test]
