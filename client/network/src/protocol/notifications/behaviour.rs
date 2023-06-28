@@ -2105,7 +2105,6 @@ impl NetworkBehaviour for Notifications {
 mod tests {
 	use super::*;
 	use crate::{peerset::IncomingIndex, protocol::notifications::handler::tests::*};
-	use libp2p::swarm::AddressRecord;
 	use std::{collections::HashSet, iter};
 
 	impl PartialEq for ConnectionState {
@@ -2124,30 +2123,13 @@ mod tests {
 	}
 
 	#[derive(Clone)]
-	struct MockPollParams {
-		peer_id: PeerId,
-		addr: Multiaddr,
-	}
+	struct MockPollParams {}
 
 	impl PollParameters for MockPollParams {
 		type SupportedProtocolsIter = std::vec::IntoIter<Vec<u8>>;
-		type ListenedAddressesIter = std::vec::IntoIter<Multiaddr>;
-		type ExternalAddressesIter = std::vec::IntoIter<AddressRecord>;
 
 		fn supported_protocols(&self) -> Self::SupportedProtocolsIter {
 			vec![].into_iter()
-		}
-
-		fn listened_addresses(&self) -> Self::ListenedAddressesIter {
-			vec![self.addr.clone()].into_iter()
-		}
-
-		fn external_addresses(&self) -> Self::ExternalAddressesIter {
-			vec![].into_iter()
-		}
-
-		fn local_peer_id(&self) -> &PeerId {
-			&self.peer_id
 		}
 	}
 
@@ -3669,7 +3651,7 @@ mod tests {
 		assert!(notif.peers.get(&(peer, set_id)).is_some());
 
 		if tokio::time::timeout(Duration::from_secs(5), async {
-			let mut params = MockPollParams { peer_id: PeerId::random(), addr: Multiaddr::empty() };
+			let mut params = MockPollParams {};
 
 			loop {
 				futures::future::poll_fn(|cx| {
@@ -3778,7 +3760,7 @@ mod tests {
 		// verify that the code continues to keep the peer disabled by resetting the timer
 		// after the first one expired.
 		if tokio::time::timeout(Duration::from_secs(5), async {
-			let mut params = MockPollParams { peer_id: PeerId::random(), addr: Multiaddr::empty() };
+			let mut params = MockPollParams {};
 
 			loop {
 				futures::future::poll_fn(|cx| {

@@ -830,7 +830,7 @@ pub mod tests {
 	use asynchronous_codec::Framed;
 	use libp2p::{
 		core::muxing::SubstreamBox,
-		swarm::{handler, ConnectionHandlerUpgrErr},
+		swarm::{handler, StreamUpgradeError},
 		Multiaddr,
 	};
 	use multistream_select::{dialer_select_proto, listener_select_proto, Negotiated, Version};
@@ -1451,7 +1451,7 @@ pub mod tests {
 
 		// inject dial failure to an already closed substream and verify outbound state is reset
 		handler.on_connection_event(handler::ConnectionEvent::DialUpgradeError(
-			handler::DialUpgradeError { info: 0, error: ConnectionHandlerUpgrErr::Timeout },
+			handler::DialUpgradeError { info: 0, error: StreamUpgradeError::Timeout },
 		));
 		assert!(std::matches!(
 			handler.protocols[0].state,
@@ -1521,7 +1521,7 @@ pub mod tests {
 
 		// inject dial failure to an already closed substream and verify outbound state is reset
 		handler.on_connection_event(handler::ConnectionEvent::DialUpgradeError(
-			handler::DialUpgradeError { info: 0, error: ConnectionHandlerUpgrErr::Timeout },
+			handler::DialUpgradeError { info: 0, error: StreamUpgradeError::Timeout },
 		));
 		assert!(std::matches!(
 			handler.protocols[0].state,
