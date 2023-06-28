@@ -2606,6 +2606,7 @@ dependencies = [
  "sp-state-machine",
  "sp-storage",
  "sp-trie",
+ "sp-wasm-interface",
  "thiserror",
  "thousands",
 ]
@@ -5354,6 +5355,7 @@ dependencies = [
  "sp-keyring",
  "sp-keystore",
  "sp-runtime",
+ "sp-statement-store",
  "sp-timestamp",
  "sp-tracing",
  "sp-transaction-storage-proof",
