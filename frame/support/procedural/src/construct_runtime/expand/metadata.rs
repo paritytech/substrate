@@ -96,11 +96,29 @@ pub fn expand_runtime_metadata(
 				// `Deref` needs a reference for resolving the function call.
 				let rt = #runtime;
 
+				let ty = #scrate::scale_info::meta_type::<#extrinsic>();
+				let address_ty = #scrate::scale_info::meta_type::<
+						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::SignatureAddress
+					>();
+				let call_ty = #scrate::scale_info::meta_type::<
+					<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::Call
+					>();
+				let signature_ty = #scrate::scale_info::meta_type::<
+						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::Signature
+					>();
+				let extra_ty = #scrate::scale_info::meta_type::<
+						<<#extrinsic as #scrate::sp_runtime::traits::Extrinsic>::SignaturePayload as #scrate::sp_runtime::traits::SignaturePayload>::SignatureExtra
+					>();
+
 				#scrate::metadata_ir::MetadataIR {
 					pallets: #scrate::sp_std::vec![ #(#pallets),* ],
 					extrinsic: #scrate::metadata_ir::ExtrinsicMetadataIR {
-						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
+						ty,
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,
+						address_ty,
+						call_ty,
+						signature_ty,
+						extra_ty,
 						signed_extensions: <
 								<
 									#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata
