@@ -7,8 +7,8 @@ error: `Pallet` does not have #[pallet::origin] defined, perhaps you should remo
 48 | / construct_runtime! {
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, Origin},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Origin},
 53 | |     }
 54 | | }
    | |_- in this macro invocation
@@ -21,8 +21,8 @@ error[E0412]: cannot find type `Origin` in module `pallet`
 48 | / construct_runtime! {
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, Origin},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Origin},
 53 | |     }
 54 | | }
    | |_^ not found in `pallet`

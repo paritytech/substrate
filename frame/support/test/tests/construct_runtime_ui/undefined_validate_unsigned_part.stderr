@@ -26,50 +26,54 @@ error[E0599]: no variant or associated item named `Pallet` found for enum `Runti
    | ||        -^^^^^^ variant or associated item not found in `RuntimeCall`
    | ||________|
    | |
-53 | |      }
-54 | |  }
-   | |__- variant or associated item `Pallet` not found for this enum
+...  |
 
 error[E0599]: no function or associated item named `pre_dispatch` found for struct `pallet::Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:48:1
    |
-11 |       pub struct Pallet<T>(_);
-   |       -------------------- function or associated item `pre_dispatch` not found for this struct
+11 |        pub struct Pallet<T>(_);
+   |        -------------------- function or associated item `pre_dispatch` not found for this struct
 ...
-48 |   construct_runtime! {
-   |  _^
-49 | |     pub struct Runtime
-50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, ValidateUnsigned},
-53 | |     }
-54 | | }
-   | |_^ function or associated item not found in `Pallet<Runtime>`
+48 |    construct_runtime! {
+   |  __^
+   | | _|
+   | ||
+49 | ||     pub struct Runtime
+50 | ||     {
+51 | ||         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+52 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
+53 | ||     }
+54 | || }
+   | ||_- in this macro invocation
+...  |
    |
    = help: items from traits can only be used if the trait is implemented and in scope
    = note: the following traits define an item `pre_dispatch`, perhaps you need to implement one of them:
            candidate #1: `SignedExtension`
            candidate #2: `ValidateUnsigned`
-   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `frame_support::construct_runtime` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0599]: no function or associated item named `validate_unsigned` found for struct `pallet::Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:48:1
    |
-11 |       pub struct Pallet<T>(_);
-   |       -------------------- function or associated item `validate_unsigned` not found for this struct
+11 |        pub struct Pallet<T>(_);
+   |        -------------------- function or associated item `validate_unsigned` not found for this struct
 ...
-48 |   construct_runtime! {
-   |  _^
-49 | |     pub struct Runtime
-50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, ValidateUnsigned},
-53 | |     }
-54 | | }
-   | |_^ function or associated item not found in `Pallet<Runtime>`
+48 |    construct_runtime! {
+   |  __^
+   | | _|
+   | ||
+49 | ||     pub struct Runtime
+50 | ||     {
+51 | ||         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+52 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
+53 | ||     }
+54 | || }
+   | ||_- in this macro invocation
+...  |
    |
    = help: items from traits can only be used if the trait is implemented and in scope
    = note: the following traits define an item `validate_unsigned`, perhaps you need to implement one of them:
            candidate #1: `SignedExtension`
            candidate #2: `ValidateUnsigned`
-   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `frame_support::construct_runtime` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -7,8 +7,8 @@ error: `Pallet` does not have #[pallet::inherent] defined, perhaps you should re
 48 | / construct_runtime! {
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, Inherent},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Inherent},
 53 | |     }
 54 | | }
    | |_- in this macro invocation
@@ -25,8 +25,8 @@ error[E0599]: no function or associated item named `create_inherent` found for s
    |  _^
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, Inherent},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Inherent},
 53 | |     }
 54 | | }
    | |_^ function or associated item not found in `Pallet<Runtime>`
@@ -46,8 +46,8 @@ error[E0599]: no function or associated item named `is_inherent` found for struc
    |  _^
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, Inherent},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Inherent},
 53 | |     }
 54 | | }
    | |_^ function or associated item not found in `Pallet<Runtime>`
@@ -67,8 +67,8 @@ error[E0599]: no function or associated item named `check_inherent` found for st
    |  _^
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, Inherent},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Inherent},
 53 | |     }
 54 | | }
    | |_^ function or associated item not found in `Pallet<Runtime>`
@@ -88,8 +88,8 @@ error[E0599]: no associated item named `INHERENT_IDENTIFIER` found for struct `p
    |  _^
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, Inherent},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Inherent},
 53 | |     }
 54 | | }
    | |_^ associated item not found in `Pallet<Runtime>`
@@ -109,8 +109,8 @@ error[E0599]: no function or associated item named `is_inherent_required` found 
    |  _^
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-52 | |         Pallet: pallet::{Pallet, Inherent},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Inherent},
 53 | |     }
 54 | | }
    | |_^ function or associated item not found in `Pallet<Runtime>`

@@ -4,7 +4,7 @@ construct_runtime! {
 	pub struct Runtime
 	{
 		System: system::{Pallet},
-		Balance: balances::{Error},
+		Balance: balances::{Unexpected},
 	}
 }
 

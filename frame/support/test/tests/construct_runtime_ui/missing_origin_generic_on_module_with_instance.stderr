@@ -1,5 +1,5 @@
 error: Instantiable pallet with no generic `Origin` cannot be constructed: pallet `Balance` must have generic `Origin`
  --> tests/construct_runtime_ui/missing_origin_generic_on_module_with_instance.rs:7:3
   |
-7 |         Balance: balances::<Instance1>::{Origin},
+7 |         Balance: balances::<Instance1> expanded::{}::{Origin},
   |         ^^^^^^^
