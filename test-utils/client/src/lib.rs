@@ -34,14 +34,14 @@ pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
 };
 pub use sp_keystore::{Keystore, KeystorePtr};
-pub use sp_runtime::{Storage, StorageChild};
+pub use sp_runtime::{Storage, StorageDefaultChild};
 pub use sp_state_machine::ExecutionStrategy;
 
 use futures::{future::Future, stream::StreamExt};
 use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
-use sp_core::{storage::ChildInfo, testing::TaskExecutor};
+use sp_core::{storage::DefaultChild, testing::TaskExecutor};
 use sp_runtime::{
 	codec::Encode,
 	traits::{Block as BlockT, Header},
@@ -71,7 +71,7 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend: 'static, 
 	genesis_init: G,
 	/// The key is an unprefixed storage key, this only contains
 	/// default child trie content.
-	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
+	child_storage_extension: HashMap<Vec<u8>, StorageDefaultChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<ExecutorDispatch>,
 	keystore: Option<KeystorePtr>,
@@ -150,14 +150,14 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	/// Extend child storage
 	pub fn add_child_storage(
 		mut self,
-		child_info: &ChildInfo,
+		child_info: &DefaultChild,
 		key: impl AsRef<[u8]>,
 		value: impl AsRef<[u8]>,
 	) -> Self {
-		let storage_key = child_info.storage_key();
-		let entry = self.child_storage_extension.entry(storage_key.to_vec()).or_insert_with(|| {
-			StorageChild { data: Default::default(), child_info: child_info.clone() }
-		});
+		let entry =
+			self.child_storage_extension.entry(child_info.name.clone()).or_insert_with(|| {
+				StorageDefaultChild { data: Default::default(), info: child_info.clone() }
+			});
 		entry.data.insert(key.as_ref().to_vec(), value.as_ref().to_vec());
 		self
 	}
@@ -217,9 +217,9 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 			for (key, child_content) in self.child_storage_extension {
 				storage.children_default.insert(
 					key,
-					StorageChild {
+					StorageDefaultChild {
 						data: child_content.data.into_iter().collect(),
-						child_info: child_content.child_info,
+						info: child_content.info,
 					},
 				);
 			}

@@ -384,7 +384,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, NumberFor},
 	DeserializeOwned, Digest,
 };
-use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackendBuilder};
+use sp_state_machine::{Changes, CompactProof, StateMachine, TrieBackendBuilder};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
@@ -859,7 +859,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 	method: &'static str,
 	data: &[u8],
 	extensions: Extensions,
-) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
+) -> sc_cli::Result<(Changes, Vec<u8>)> {
 	let mut changes = Default::default();
 	let encoded_results = StateMachine::new(
 		&ext.backend,
@@ -889,7 +889,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	data: &[u8],
 	extensions: Extensions,
 	maybe_export_proof: Option<PathBuf>,
-) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
+) -> sc_cli::Result<(Changes, Vec<u8>)> {
 	use parity_scale_codec::Encode;
 
 	let mut changes = Default::default();

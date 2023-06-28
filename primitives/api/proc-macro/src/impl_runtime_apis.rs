@@ -230,7 +230,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 				call: &'static C,
 				commit_on_success: std::cell::RefCell<bool>,
-				changes: std::cell::RefCell<#crate_::OverlayedChanges>,
+				changes: std::cell::RefCell<#crate_::Changes>,
 				storage_transaction_cache: std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, C::StateBackend>
 				>,
@@ -311,7 +311,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 							.map(|v| #crate_::RuntimeVersion::state_version(&v))
 							.map_err(|e| format!("Failed to get state version: {}", e))?;
 
-						#crate_::OverlayedChanges::into_storage_changes(
+						#crate_::Changes::into_storage_changes(
 							std::cell::RefCell::take(&self.changes),
 							backend,
 							core::cell::RefCell::take(&self.storage_transaction_cache),
@@ -355,7 +355,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 								Ok(())
 							};
 
-							let res2 = #crate_::OverlayedChanges::commit_transaction(
+							let res2 = #crate_::Changes::commit_transaction(
 								&mut std::cell::RefCell::borrow_mut(&self.changes)
 							);
 
@@ -369,7 +369,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 								Ok(())
 							};
 
-							let res2 = #crate_::OverlayedChanges::rollback_transaction(
+							let res2 = #crate_::Changes::rollback_transaction(
 								&mut std::cell::RefCell::borrow_mut(&self.changes)
 							);
 
@@ -387,7 +387,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 						return
 					}
 
-					#crate_::OverlayedChanges::start_transaction(
+					#crate_::Changes::start_transaction(
 						&mut std::cell::RefCell::borrow_mut(&self.changes)
 					);
 					if let Some(recorder) = &self.recorder {

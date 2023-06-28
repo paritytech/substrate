@@ -154,15 +154,14 @@ pub struct StorageData(
 #[cfg(feature = "std")]
 pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
 
-/// Child trie storage data.
+/// Default child trie storage data.
 #[cfg(feature = "std")]
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct StorageChild {
+pub struct StorageDefaultChild {
 	/// Child data for storage.
 	pub data: StorageMap,
-	/// Associated child info for a child
-	/// trie.
-	pub child_info: ChildInfo,
+	/// Associated default child trie info.
+	pub info: DefaultChild,
 }
 
 /// Struct containing data needed for a storage.
@@ -172,8 +171,8 @@ pub struct Storage {
 	/// Top trie storage data.
 	pub top: StorageMap,
 	/// Children trie storage data. Key does not include prefix, only for the `default` trie kind,
-	/// of `ChildType::ParentKeyId` type.
-	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
+	/// of `ChildType::Default` type.
+	pub children_default: std::collections::HashMap<Vec<u8>, StorageDefaultChild>,
 }
 
 /// Storage change set
@@ -248,28 +247,29 @@ pub const TRIE_VALUE_NODE_THRESHOLD: u32 = 33;
 #[cfg_attr(feature = "serde", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
 pub enum ChildInfo {
 	/// This is the one used by default.
-	ParentKeyId(ChildTrieParentKeyId),
+	Default(DefaultChild),
 }
 
 impl ChildInfo {
 	/// Instantiates child information for a default child trie
-	/// of kind `ChildType::ParentKeyId`, using an unprefixed parent
+	/// of kind `ChildType::Default`, using an unprefixed parent
 	/// storage key.
 	pub fn new_default(storage_key: &[u8]) -> Self {
-		let data = storage_key.to_vec();
-		ChildInfo::ParentKeyId(ChildTrieParentKeyId { data })
+		let name = storage_key.to_vec();
+		ChildInfo::Default(DefaultChild { name })
 	}
 
 	/// Same as `new_default` but with `Vec<u8>` as input.
 	pub fn new_default_from_vec(storage_key: Vec<u8>) -> Self {
-		ChildInfo::ParentKeyId(ChildTrieParentKeyId { data: storage_key })
+		ChildInfo::Default(DefaultChild { name: storage_key })
 	}
 
 	/// Try to update with another instance, return false if both instance
 	/// are not compatible.
 	pub fn try_update(&mut self, other: &ChildInfo) -> bool {
-		match self {
-			ChildInfo::ParentKeyId(child_trie) => child_trie.try_update(other),
+		match (self, other) {
+			(ChildInfo::Default(child_trie), ChildInfo::Default(other)) =>
+				child_trie.try_update(other),
 		}
 	}
 
@@ -279,7 +279,7 @@ impl ChildInfo {
 	#[inline]
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
-			ChildInfo::ParentKeyId(..) => self.storage_key(),
+			ChildInfo::Default(..) => self.storage_key(),
 		}
 	}
 
@@ -288,7 +288,7 @@ impl ChildInfo {
 	/// child trie.
 	pub fn storage_key(&self) -> &[u8] {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) => &data[..],
+			ChildInfo::Default(DefaultChild { name }) => &name[..],
 		}
 	}
 
@@ -296,8 +296,8 @@ impl ChildInfo {
 	/// this trie.
 	pub fn prefixed_storage_key(&self) -> PrefixedStorageKey {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) =>
-				ChildType::ParentKeyId.new_prefixed_key(data.as_slice()),
+			ChildInfo::Default(DefaultChild { name }) =>
+				ChildType::Default.new_prefixed_key(name.as_slice()),
 		}
 	}
 
@@ -305,9 +305,9 @@ impl ChildInfo {
 	/// this trie.
 	pub fn into_prefixed_storage_key(self) -> PrefixedStorageKey {
 		match self {
-			ChildInfo::ParentKeyId(ChildTrieParentKeyId { mut data }) => {
-				ChildType::ParentKeyId.do_prefix_key(&mut data);
-				PrefixedStorageKey(data)
+			ChildInfo::Default(DefaultChild { mut name }) => {
+				ChildType::Default.do_prefix_key(&mut name);
+				PrefixedStorageKey(name)
 			},
 		}
 	}
@@ -315,7 +315,7 @@ impl ChildInfo {
 	/// Returns the type for this child info.
 	pub fn child_type(&self) -> ChildType {
 		match self {
-			ChildInfo::ParentKeyId(..) => ChildType::ParentKeyId,
+			ChildInfo::Default(..) => ChildType::Default,
 		}
 	}
 }
@@ -329,14 +329,16 @@ impl ChildInfo {
 pub enum ChildType {
 	/// If runtime module ensures that the child key is a unique id that will
 	/// only be used once, its parent key is used as a child trie unique id.
-	ParentKeyId = 1,
+	/// Child state is automatically attached to the parent state on parent
+	/// root calculation.
+	Default = 1,
 }
 
 impl ChildType {
 	/// Try to get a child type from its `u32` representation.
 	pub fn new(repr: u32) -> Option<ChildType> {
 		Some(match repr {
-			r if r == ChildType::ParentKeyId as u32 => ChildType::ParentKeyId,
+			r if r == ChildType::Default as u32 => ChildType::Default,
 			_ => return None,
 		})
 	}
@@ -352,11 +354,11 @@ impl ChildType {
 				None
 			}
 		};
-		match_type(storage_key, ChildType::ParentKeyId)
+		match_type(storage_key, ChildType::Default)
 	}
 
 	/// Produce a prefixed key for a given child type.
-	fn new_prefixed_key(&self, key: &[u8]) -> PrefixedStorageKey {
+	pub fn new_prefixed_key(&self, key: &[u8]) -> PrefixedStorageKey {
 		let parent_prefix = self.parent_prefix();
 		let mut result = Vec::with_capacity(parent_prefix.len() + key.len());
 		result.extend_from_slice(parent_prefix);
@@ -379,7 +381,7 @@ impl ChildType {
 	/// is one.
 	pub fn parent_prefix(&self) -> &'static [u8] {
 		match self {
-			&ChildType::ParentKeyId => well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
+			&ChildType::Default => well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
 		}
 	}
 }
@@ -393,18 +395,21 @@ impl ChildType {
 /// avoid any unique id to be prefixed by an other unique id.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(PartialEq, Eq, Hash, PartialOrd, Ord, Encode, Decode))]
-pub struct ChildTrieParentKeyId {
-	/// Data is the storage key without prefix.
-	data: Vec<u8>,
+pub struct DefaultChild {
+	/// name is the storage key without prefix.
+	pub name: Vec<u8>,
 }
 
-impl ChildTrieParentKeyId {
+impl DefaultChild {
+	/// Instantiate with name
+	pub fn new(name: impl AsRef<[u8]>) -> Self {
+		DefaultChild { name: name.as_ref().into() }
+	}
+
 	/// Try to update with another instance, return false if both instance
 	/// are not compatible.
-	fn try_update(&mut self, other: &ChildInfo) -> bool {
-		match other {
-			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
-		}
+	pub fn try_update(&mut self, other: &Self) -> bool {
+		self.name[..] == other.name[..]
 	}
 }
 

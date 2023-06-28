@@ -28,7 +28,10 @@ use jsonrpsee::{
 use sc_block_builder::BlockBuilderProvider;
 use sc_rpc_api::DenyUnsafe;
 use sp_consensus::BlockOrigin;
-use sp_core::{hash::H256, storage::ChildInfo};
+use sp_core::{
+	hash::H256,
+	storage::{ChildInfo, DefaultChild},
+};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	prelude::*,
@@ -129,7 +132,7 @@ async fn should_return_storage_entries() {
 
 #[tokio::test]
 async fn should_return_child_storage() {
-	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let child_info = DefaultChild::new(STORAGE_KEY);
 	let client = Arc::new(
 		substrate_test_runtime_client::TestClientBuilder::new()
 			.add_child_storage(&child_info, "key", vec![42_u8])
@@ -159,7 +162,7 @@ async fn should_return_child_storage() {
 
 #[tokio::test]
 async fn should_return_child_storage_entries() {
-	let child_info = ChildInfo::new_default(STORAGE_KEY);
+	let child_info = DefaultChild::new(STORAGE_KEY);
 	let client = Arc::new(
 		substrate_test_runtime_client::TestClientBuilder::new()
 			.add_child_storage(&child_info, "key1", vec![42_u8])

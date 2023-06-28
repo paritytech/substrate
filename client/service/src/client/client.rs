@@ -59,8 +59,8 @@ use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
-		StorageKey,
+		well_known_keys, ChildInfo, ChildType, DefaultChild, PrefixedStorageKey, StorageData,
+		StorageDefaultChild, StorageKey,
 	},
 	traits::SpawnNamed,
 };
@@ -659,33 +659,40 @@ where
 					},
 					sc_consensus::StorageChanges::Import(changes) => {
 						let mut storage = sp_storage::Storage::default();
-						for state in changes.state.0.into_iter() {
+						for mut state in changes.state.0.into_iter() {
 							if state.parent_storage_keys.is_empty() && state.state_root.is_empty() {
 								for (key, value) in state.key_values.into_iter() {
 									storage.top.insert(key, value);
 								}
 							} else {
-								for parent_storage in state.parent_storage_keys {
+								let nb = state.parent_storage_keys.len();
+								for (i, parent_storage) in
+									state.parent_storage_keys.into_iter().enumerate()
+								{
 									let storage_key = PrefixedStorageKey::new_ref(&parent_storage);
-									let storage_key =
-										match ChildType::from_prefixed_key(storage_key) {
-											Some((ChildType::ParentKeyId, storage_key)) =>
-												storage_key,
-											None =>
-												return Err(Error::Backend(
-													"Invalid child storage key.".to_string(),
-												)),
-										};
-									let entry = storage
-										.children_default
-										.entry(storage_key.to_vec())
-										.or_insert_with(|| StorageChild {
-											data: Default::default(),
-											child_info: ChildInfo::new_default(storage_key),
-										});
-									for (key, value) in state.key_values.iter() {
-										entry.data.insert(key.clone(), value.clone());
-									}
+									match ChildType::from_prefixed_key(&storage_key) {
+										Some((ChildType::Default, storage_key)) => {
+											let entry = storage
+												.children_default
+												.entry(storage_key.to_vec())
+												.or_insert_with(|| StorageDefaultChild {
+													data: Default::default(),
+													info: DefaultChild::new(storage_key),
+												});
+											let key_values = if i + 1 == nb {
+												std::mem::take(&mut state.key_values)
+											} else {
+												state.key_values.clone()
+											};
+											for (key, value) in key_values.into_iter() {
+												entry.data.insert(key, value);
+											}
+										},
+										None =>
+											return Err(Error::Backend(
+												"Invalid child storage key.".to_string(),
+											)),
+									};
 								}
 							}
 						}
@@ -1299,8 +1306,7 @@ where
 		let child_info = |storage_key: &Vec<u8>| -> sp_blockchain::Result<ChildInfo> {
 			let storage_key = PrefixedStorageKey::new_ref(storage_key);
 			match ChildType::from_prefixed_key(storage_key) {
-				Some((ChildType::ParentKeyId, storage_key)) =>
-					Ok(ChildInfo::new_default(storage_key)),
+				Some((ChildType::Default, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 				None => Err(Error::Backend("Invalid child storage key.".to_string())),
 			}
 		};

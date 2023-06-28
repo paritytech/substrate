@@ -40,7 +40,7 @@ pub use sp_application_crypto as app_crypto;
 
 pub use sp_core::storage::StateVersion;
 #[cfg(feature = "std")]
-pub use sp_core::storage::{Storage, StorageChild};
+pub use sp_core::storage::{Storage, StorageDefaultChild};
 
 use sp_core::{
 	crypto::{self, ByteArray, FromEntropy},
@@ -215,7 +215,7 @@ impl BuildStorage for sp_core::storage::Storage {
 			let k = k.clone();
 			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
-				if !map.child_info.try_update(&other_map.child_info) {
+				if !map.info.try_update(&other_map.info) {
 					return Err("Incompatible child info update".to_string())
 				}
 			} else {

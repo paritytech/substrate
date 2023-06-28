@@ -118,8 +118,8 @@ impl From<MultiRemovalResults> for KillStorageResult {
 #[runtime_interface]
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
-	fn get(&self, key: &[u8]) -> Option<bytes::Bytes> {
-		self.storage(key).map(|s| bytes::Bytes::from(s.to_vec()))
+	fn get(&mut self, key: &[u8]) -> Option<bytes::Bytes> {
+		self.storage(key, 0, None).map(|value| value.into_owned().into())
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
@@ -127,13 +127,11 @@ pub trait Storage {
 	/// doesn't exist at all.
 	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
 	/// are copied into `value_out`.
-	fn read(&self, key: &[u8], value_out: &mut [u8], value_offset: u32) -> Option<u32> {
-		self.storage(key).map(|value| {
-			let value_offset = value_offset as usize;
-			let data = &value[value_offset.min(value.len())..];
-			let written = std::cmp::min(data.len(), value_out.len());
-			value_out[..written].copy_from_slice(&data[..written]);
-			data.len() as u32
+	fn read(&mut self, key: &[u8], value_out: &mut [u8], value_offset: u32) -> Option<u32> {
+		self.storage(key, value_offset, None).map(|value| {
+			let written = std::cmp::min(value.len(), value_out.len());
+			value_out[..written].copy_from_slice(&value[..written]);
+			value.len() as u32
 		})
 	}
 
@@ -148,7 +146,7 @@ pub trait Storage {
 	}
 
 	/// Check whether the given `key` exists in storage.
-	fn exists(&self, key: &[u8]) -> bool {
+	fn exists(&mut self, key: &[u8]) -> bool {
 		self.exists_storage(key)
 	}
 
@@ -324,9 +322,10 @@ pub trait DefaultChildStorage {
 	///
 	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the
 	/// parent trie. Result is `None` if the value for `key` in the child storage can not be found.
-	fn get(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	fn get(&mut self, storage_key: &[u8], key: &[u8]) -> Option<bytes::Bytes> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage(&child_info, key).map(|s| s.to_vec())
+		self.child_storage(&child_info, key, 0, None)
+			.map(|value| value.into_owned().into())
 	}
 
 	/// Allocation efficient variant of `get`.
@@ -337,19 +336,17 @@ pub trait DefaultChildStorage {
 	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
 	/// are copied into `value_out`.
 	fn read(
-		&self,
+		&mut self,
 		storage_key: &[u8],
 		key: &[u8],
 		value_out: &mut [u8],
 		value_offset: u32,
 	) -> Option<u32> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.child_storage(&child_info, key).map(|value| {
-			let value_offset = value_offset as usize;
-			let data = &value[value_offset.min(value.len())..];
-			let written = std::cmp::min(data.len(), value_out.len());
-			value_out[..written].copy_from_slice(&data[..written]);
-			data.len() as u32
+		self.child_storage(&child_info, key, value_offset, None).map(|value| {
+			let written = std::cmp::min(value.len(), value_out.len());
+			value_out[..written].copy_from_slice(&value[..written]);
+			value.len() as u32
 		})
 	}
 
@@ -358,7 +355,7 @@ pub trait DefaultChildStorage {
 	/// Set `key` to `value` in the child storage denoted by `storage_key`.
 	fn set(&mut self, storage_key: &[u8], key: &[u8], value: &[u8]) {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
+		self.set_child_storage(&child_info, key, value);
 	}
 
 	/// Clear a child storage key.
@@ -415,7 +412,7 @@ pub trait DefaultChildStorage {
 	/// Check a child storage key.
 	///
 	/// Check whether the given `key` exists in default child defined at `storage_key`.
-	fn exists(&self, storage_key: &[u8], key: &[u8]) -> bool {
+	fn exists(&mut self, storage_key: &[u8], key: &[u8]) -> bool {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.exists_child_storage(&child_info, key)
 	}
@@ -472,6 +469,7 @@ pub trait DefaultChildStorage {
 	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.child_storage_root(&child_info, StateVersion::V0)
+			.expect("Root always calculated for default storage.")
 	}
 
 	/// Default child root calculation.
@@ -484,6 +482,7 @@ pub trait DefaultChildStorage {
 	fn root(&mut self, storage_key: &[u8], version: StateVersion) -> Vec<u8> {
 		let child_info = ChildInfo::new_default(storage_key);
 		self.child_storage_root(&child_info, version)
+			.expect("Root always calculated for default storage.")
 	}
 
 	/// Child storage key iteration.
@@ -491,7 +490,8 @@ pub trait DefaultChildStorage {
 	/// Get the next key in storage after the given one in lexicographic order in child storage.
 	fn next_key(&mut self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.next_child_storage_key(&child_info, key)
+		self.next_child_storage_key(&child_info, key, 1)
+			.and_then(|mut nexts| nexts.get_mut(0).map(|v| sp_std::mem::take(v)))
 	}
 }
 
@@ -1496,6 +1496,12 @@ pub struct Crossing<T: Encode + Decode>(T);
 
 impl<T: Encode + Decode> PassBy for Crossing<T> {
 	type PassBy = sp_runtime_interface::pass_by::Codec<Self>;
+}
+
+impl<T: Encode + Decode> From<T> for Crossing<T> {
+	fn from(t: T) -> Crossing<T> {
+		Crossing(t)
+	}
 }
 
 impl<T: Encode + Decode> Crossing<T> {

@@ -24,38 +24,36 @@ use sp_std::prelude::Vec;
 /// In-memory storage for offchain workers recoding changes for the actual offchain storage
 /// implementation.
 #[derive(Debug, Clone, Default)]
-pub struct OffchainOverlayedChanges(OverlayedMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange>);
+pub struct OffchainChanges(OverlayedMap<(Vec<u8>, Vec<u8>), OffchainOverlayedChange>);
 
 /// Item for iterating over offchain changes.
 ///
 /// First element i a tuple of `(prefix, key)`, second element ist the actual change
 /// (remove or set value).
-type OffchainOverlayedChangesItem<'i> = (&'i (Vec<u8>, Vec<u8>), &'i OffchainOverlayedChange);
+type OffchainChangesItem<'i> = (&'i (Vec<u8>, Vec<u8>), &'i OffchainOverlayedChange);
 
 /// Iterator over offchain changes, owned memory version.
-type OffchainOverlayedChangesItemOwned = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
+type OffchainChangesItemOwned = ((Vec<u8>, Vec<u8>), OffchainOverlayedChange);
 
-impl OffchainOverlayedChanges {
+impl OffchainChanges {
 	/// Consume the offchain storage and iterate over all key value pairs.
-	pub fn into_iter(self) -> impl Iterator<Item = OffchainOverlayedChangesItemOwned> {
+	pub fn into_iter(self) -> impl Iterator<Item = OffchainChangesItemOwned> {
 		self.0.into_changes().map(|kv| (kv.0, kv.1.into_value()))
 	}
 
 	/// Iterate over all key value pairs by reference.
-	pub fn iter(&self) -> impl Iterator<Item = OffchainOverlayedChangesItem> {
+	pub fn iter(&self) -> impl Iterator<Item = OffchainChangesItem> {
 		self.0.changes().map(|kv| (kv.0, kv.1.value_ref()))
 	}
 
 	/// Drain all elements of changeset.
-	pub fn drain(&mut self) -> impl Iterator<Item = OffchainOverlayedChangesItemOwned> {
+	pub fn drain(&mut self) -> impl Iterator<Item = OffchainChangesItemOwned> {
 		sp_std::mem::take(self).into_iter()
 	}
 
 	/// Remove a key and its associated value from the offchain database.
 	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let _ = self
-			.0
-			.set((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::Remove, None);
+		let _ = self.0.set((prefix.to_vec(), key.to_vec()), OffchainOverlayedChange::Remove);
 	}
 
 	/// Set the value associated with a key under a prefix to the value provided.
@@ -63,7 +61,6 @@ impl OffchainOverlayedChanges {
 		let _ = self.0.set(
 			(prefix.to_vec(), key.to_vec()),
 			OffchainOverlayedChange::SetValue(value.to_vec()),
-			None,
 		);
 	}
 
@@ -93,7 +90,7 @@ mod test {
 
 	#[test]
 	fn test_drain() {
-		let mut ooc = OffchainOverlayedChanges::default();
+		let mut ooc = OffchainChanges::default();
 		ooc.set(STORAGE_PREFIX, b"kkk", b"vvv");
 		let drained = ooc.drain().count();
 		assert_eq!(drained, 1);
@@ -110,7 +107,7 @@ mod test {
 
 	#[test]
 	fn test_accumulated_set_remove_set() {
-		let mut ooc = OffchainOverlayedChanges::default();
+		let mut ooc = OffchainChanges::default();
 		ooc.set(STORAGE_PREFIX, b"ppp", b"qqq");
 		ooc.remove(STORAGE_PREFIX, b"ppp");
 		// keys are equiv, so it will overwrite the value and the overlay will contain
