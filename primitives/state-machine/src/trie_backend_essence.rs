@@ -369,7 +369,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEs
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
 		) -> (Option<H::Out>, R),
 	) -> R {
-		let result = if let Some(local_cache) = self.trie_node_cache.as_ref() {
+		if let Some(local_cache) = self.trie_node_cache.as_ref() {
 			let mut cache = local_cache.as_trie_db_mut_cache();
 
 			let (new_root, r) = callback(None, Some(&mut cache));
@@ -381,9 +381,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEs
 			r
 		} else {
 			callback(None, None).1
-		};
-
-		result
+		}
 	}
 }
 
