@@ -229,7 +229,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 		#crate_::std_enabled! {
 			pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 				call: &'static C,
-				in_transaction: std::cell::RefCell<bool>,
+				transaction_depth: std::cell::RefCell<u16>,
 				changes: std::cell::RefCell<#crate_::OverlayedChanges>,
 				storage_transaction_cache: std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, C::StateBackend>
@@ -248,9 +248,11 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				) -> R where Self: Sized {
 					self.start_transaction();
 
-					let old_value = std::cell::RefCell::replace(&self.in_transaction, true);
+					*std::cell::RefCell::borrow_mut(&self.transaction_depth) += 1;
 					let res = call(self);
-					*std::cell::RefCell::borrow_mut(&self.in_transaction) = old_value;
+					std::cell::RefCell::borrow_mut(&self.transaction_depth)
+						.checked_sub(1)
+						.expect("Transactions are opened and closed together; qed");
 
 					self.commit_or_rollback_transaction(
 						std::matches!(res, #crate_::TransactionOutcome::Commit(_))
@@ -334,7 +336,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				) -> #crate_::ApiRef<'a, Self::RuntimeApi> {
 					RuntimeApiImpl {
 						call: unsafe { std::mem::transmute(call) },
-						in_transaction: false.into(),
+						transaction_depth: 0.into(),
 						changes: std::default::Default::default(),
 						recorder: std::default::Default::default(),
 						storage_transaction_cache: std::default::Default::default(),
@@ -485,9 +487,9 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
 				// If we are not already in a transaction, we should create a new transaction
 				// and then commit/roll it back at the end!
-				let in_transaction = *std::cell::RefCell::borrow(&self.in_transaction);
+				let transaction_depth = *std::cell::RefCell::borrow(&self.transaction_depth);
 
-				if !in_transaction {
+				if transaction_depth == 0 {
 					self.start_transaction();
 				}
 
@@ -513,7 +515,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					)
 				})();
 
-				if !in_transaction {
+				if transaction_depth == 0 {
 					self.commit_or_rollback_transaction(std::result::Result::is_ok(&res));
 				}
 
