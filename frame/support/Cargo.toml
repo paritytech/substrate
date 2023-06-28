@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.163", default-features = false, features = ["alloc", "derive"] }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-frame-metadata = { version = "15.1.0", default-features = false, features = ["v14", "v15-unstable"] }
+frame-metadata = { version = "15.2.0", default-features = false, features = ["unstable"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }

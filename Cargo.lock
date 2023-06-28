@@ -2697,9 +2697,9 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata"
-version = "15.1.0"
+version = "15.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "878babb0b136e731cc77ec2fd883ff02745ff21e6fb662729953d44923df009c"
+checksum = "f2a893ede8dde2293e94dacf9c8f5db5d0506cd909257a8f0ac2b7d610baf50c"
 dependencies = [
  "cfg-if",
  "parity-scale-codec",
