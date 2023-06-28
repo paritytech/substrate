@@ -268,6 +268,18 @@
 //!     --at 0xa1b16c1efd889a9f17375ec4dd5c1b4351a2be17fa069564fced10d23b9b3836
 //! ```
 //!
+//! * Run migrations with pre- and post- upgrade checks and fast running try-state checks.
+//!
+//! ```bash
+//! ./substrate-try-runtime \
+//!     try-runtime \
+//!     --runtime runtime-try-runtime.wasm \
+//!     -lruntime=debug \
+//!     on-runtime-upgrade \
+//!     --checks=fast-all \
+//!     live --uri ws://localhost:9999
+//! ```
+//!
 //! * Executing the same command with the [`Runtime::Existing`] will fail because the existing
 //!   runtime, stored onchain in `substrate` binary that we compiled earlier does not have
 //!   `try-runtime` feature!

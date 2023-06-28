@@ -17,6 +17,8 @@
 
 //! Traits for hooking tasks to events in a blockchain's lifecycle.
 
+#[cfg(feature = "try-runtime")]
+use super::try_runtime::Select as TryStateSelect;
 use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::traits::AtLeast32BitUnsigned;
@@ -306,9 +308,12 @@ pub trait Hooks<BlockNumber> {
 	/// It should focus on certain checks to ensure that the state is sensible. This is never
 	/// executed in a consensus code-path, therefore it can consume as much weight as it needs.
 	///
+	/// Takes the block number and `TryStateSelect`as a parameter. The `TryStateSelect` is used to
+	/// select which state tests to execute.
+	///
 	/// This hook should not alter any storage.
 	#[cfg(feature = "try-runtime")]
-	fn try_state(_n: BlockNumber) -> Result<(), TryRuntimeError> {
+	fn try_state(_n: BlockNumber, _s: TryStateSelect) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 

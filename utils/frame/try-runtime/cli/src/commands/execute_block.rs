@@ -39,6 +39,7 @@ pub struct ExecuteBlockCmd {
 	///
 	/// Expected values:
 	/// - `all`
+	/// - `fast`
 	/// - `none`
 	/// - A comma separated list of pallets, as per pallet names in `construct_runtime!()` (e.g.
 	///   `Staking, System`).

@@ -154,6 +154,7 @@ pub mod pallet {
 		pallet_prelude::*,
 		traits::{Defensive, ReservableCurrency, StorageVersion},
 	};
+
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::{traits::Zero, DispatchResult};
 	use sp_staking::{EraIndex, StakingInterface};
@@ -295,7 +296,10 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
+		fn try_state(
+			_n: T::BlockNumber,
+			_: frame_support::traits::TryStateSelect,
+		) -> Result<(), TryRuntimeError> {
 			// ensure that the value of `ErasToCheckPerBlock` is less than
 			// `T::MaxErasToCheckPerBlock`.
 			ensure!(

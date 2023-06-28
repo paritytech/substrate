@@ -109,7 +109,10 @@ pub mod v1 {
 				Pallet::<T>::on_chain_storage_version() == 1,
 				"The onchain version must be updated after the migration."
 			);
-			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number())?;
+			Pallet::<T>::try_state(
+				frame_system::Pallet::<T>::block_number(),
+				frame_support::traits::TryStateSelect::All,
+			)?;
 			Ok(())
 		}
 	}

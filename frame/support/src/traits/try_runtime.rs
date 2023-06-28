@@ -23,7 +23,7 @@ use sp_runtime::TryRuntimeError;
 use sp_std::prelude::*;
 
 /// Which state tests to execute.
-#[derive(codec::Encode, codec::Decode, Clone, scale_info::TypeInfo)]
+#[derive(codec::Encode, codec::Decode, Clone, Eq, PartialEq, scale_info::TypeInfo)]
 pub enum Select {
 	/// None of them.
 	None,
@@ -35,6 +35,10 @@ pub enum Select {
 	///
 	/// Pallet names are obtained from [`super::PalletInfoAccess`].
 	Only(Vec<Vec<u8>>),
+	/// Run only fast running tests for all pallets.
+	///
+	/// Optimal mode for CI. Avoids long running tests. Each pallet chooses what it considers fast.
+	Fast,
 }
 
 impl Default for Select {
@@ -56,6 +60,7 @@ impl sp_std::fmt::Debug for Select {
 			),
 			Select::All => write!(f, "All"),
 			Select::None => write!(f, "None"),
+			Select::Fast => write!(f, "Fast"),
 		}
 	}
 }
@@ -64,9 +69,10 @@ impl sp_std::fmt::Debug for Select {
 impl sp_std::str::FromStr for Select {
 	type Err = &'static str;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s {
-			"all" | "All" => Ok(Select::All),
-			"none" | "None" => Ok(Select::None),
+		match s.to_lowercase().as_ref() {
+			"fast" => Ok(Select::Fast),
+			"all" => Ok(Select::All),
+			"none" => Ok(Select::None),
 			_ =>
 				if s.starts_with("rr-") {
 					let count = s
@@ -89,21 +95,33 @@ pub enum UpgradeCheckSelect {
 	None,
 	/// Run the `try_state`, `pre_upgrade` and `post_upgrade` checks.
 	All,
+	/// Run all fast running `try_state` checks, `pre_upgrade` and `post_upgrade` checks.
+	///
+	/// Skips long running try_state checks.
+	FastAll,
 	/// Run the `pre_upgrade` and `post_upgrade` checks.
 	PreAndPost,
 	/// Run the `try_state` checks.
 	TryState,
+	/// Run all fast running `try_state` checks.
+	///
+	/// Skips long running try_state checks.
+	FastTryState,
 }
 
 impl UpgradeCheckSelect {
 	/// Whether the pre- and post-upgrade checks are selected.
 	pub fn pre_and_post(&self) -> bool {
-		matches!(self, Self::All | Self::PreAndPost)
+		matches!(self, Self::All | Self::FastAll | Self::PreAndPost)
 	}
 
 	/// Whether the try-state checks are selected.
 	pub fn try_state(&self) -> bool {
-		matches!(self, Self::All | Self::TryState)
+		matches!(self, Self::All | Self::TryState | Self::FastAll | Self::FastTryState)
+	}
+
+	pub fn fast_try_state(&self) -> bool {
+		matches!(self, Self::FastAll | Self::FastTryState)
 	}
 }
 
@@ -115,8 +133,10 @@ impl core::str::FromStr for UpgradeCheckSelect {
 		match s.to_lowercase().as_str() {
 			"none" => Ok(Self::None),
 			"all" => Ok(Self::All),
+			"fast-all" => Ok(Self::FastAll),
 			"pre-and-post" => Ok(Self::PreAndPost),
 			"try-state" => Ok(Self::TryState),
+			"fast-try-state" => Ok(Self::FastTryState),
 			_ => Err("Invalid CheckSelector"),
 		}
 	}
@@ -143,7 +163,7 @@ impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<Bl
 	fn try_state(n: BlockNumber, targets: Select) -> Result<(), TryRuntimeError> {
 		match targets {
 			Select::None => Ok(()),
-			Select::All => {
+			Select::All | Select::Fast => {
 				let mut result = Ok(());
 				for_tuples!( #( result = result.and(Tuple::try_state(n.clone(), targets.clone())); )* );
 				result

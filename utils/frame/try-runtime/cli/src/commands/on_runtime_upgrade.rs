@@ -34,8 +34,10 @@ pub struct OnRuntimeUpgradeCmd {
 	///
 	/// - `none`: Perform no checks (default when the arg is not present).
 	/// - `all`: Perform all checks (default when the arg is present).
+	/// - `fast-all`: Perform fast running state, pre- and post-upgrade checks.
 	/// - `pre-and-post`: Perform pre- and post-upgrade checks.
 	/// - `try-state`: Perform the try-state checks.
+	/// - `fast-try-state`: Perform fast running state checks.
 	///
 	/// Performing any checks will potentially invalidate the measured PoV/Weight.
 	// NOTE: The clap attributes make it backwards compatible with the previous `--checks` flag.
