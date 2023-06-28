@@ -40,7 +40,8 @@ use frame_support::{
 	traits::{Currency, Get, InstanceFilter, IsSubType, IsType, OriginTrait, ReservableCurrency},
 	RuntimeDebug,
 };
-use frame_system::{self as system};
+use frame_system::{self as system, ensure_signed};
+pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
@@ -49,8 +50,6 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
-
-pub use pallet::*;
 
 type CallHashOf<T> = <<T as Config>::CallHasher as Hash>::Output;
 
@@ -265,9 +264,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get()))]
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let (_, old_deposit) = Proxies::<T>::take(&who);
-			T::Currency::unreserve(&who, old_deposit);
-
+			Self::remove_all_proxy_delegates(&who);
 			Ok(())
 		}
 
@@ -798,5 +795,14 @@ impl<T: Config> Pallet<T> {
 		});
 		let e = call.dispatch(origin);
 		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
+	}
+
+	/// Removes all proxy delegates for a given delegator.
+	///
+	/// Parameters:
+	/// - `delegator`: The delegator account.
+	pub fn remove_all_proxy_delegates(delegator: &T::AccountId) {
+		let (_, old_deposit) = Proxies::<T>::take(&delegator);
+		T::Currency::unreserve(&delegator, old_deposit);
 	}
 }

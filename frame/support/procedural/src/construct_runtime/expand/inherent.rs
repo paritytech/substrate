@@ -58,22 +58,22 @@ pub fn expand_outer_inherent(
 
 		trait InherentDataExt {
 			fn create_extrinsics(&self) ->
-				#scrate::inherent::Vec<<#block as #scrate::inherent::BlockT>::Extrinsic>;
+				#scrate::sp_std::vec::Vec<<#block as #scrate::sp_runtime::traits::Block>::Extrinsic>;
 			fn check_extrinsics(&self, block: &#block) -> #scrate::inherent::CheckInherentsResult;
 		}
 
 		impl InherentDataExt for #scrate::inherent::InherentData {
 			fn create_extrinsics(&self) ->
-				#scrate::inherent::Vec<<#block as #scrate::inherent::BlockT>::Extrinsic>
+				#scrate::sp_std::vec::Vec<<#block as #scrate::sp_runtime::traits::Block>::Extrinsic>
 			{
 				use #scrate::inherent::ProvideInherent;
 
-				let mut inherents = Vec::new();
+				let mut inherents = #scrate::sp_std::vec::Vec::new();
 
 				#(
 					#pallet_attrs
 					if let Some(inherent) = #pallet_names::create_inherent(self) {
-						let inherent = <#unchecked_extrinsic as #scrate::inherent::Extrinsic>::new(
+						let inherent = <#unchecked_extrinsic as #scrate::sp_runtime::traits::Extrinsic>::new(
 							inherent.into(),
 							None,
 						).expect("Runtime UncheckedExtrinsic is not Opaque, so it has to return \
@@ -96,7 +96,7 @@ pub fn expand_outer_inherent(
 				for xt in block.extrinsics() {
 					// Inherents are before any other extrinsics.
 					// And signed extrinsics are not inherents.
-					if #scrate::inherent::Extrinsic::is_signed(xt).unwrap_or(false) {
+					if #scrate::sp_runtime::traits::Extrinsic::is_signed(xt).unwrap_or(false) {
 						break
 					}
 
@@ -134,7 +134,7 @@ pub fn expand_outer_inherent(
 					match #pallet_names::is_inherent_required(self) {
 						Ok(Some(e)) => {
 							let found = block.extrinsics().iter().any(|xt| {
-								let is_signed = #scrate::inherent::Extrinsic::is_signed(xt)
+								let is_signed = #scrate::sp_runtime::traits::Extrinsic::is_signed(xt)
 									.unwrap_or(false);
 
 								if !is_signed {
@@ -186,7 +186,8 @@ pub fn expand_outer_inherent(
 				let mut first_signed_observed = false;
 
 				for (i, xt) in block.extrinsics().iter().enumerate() {
-					let is_signed = #scrate::inherent::Extrinsic::is_signed(xt).unwrap_or(false);
+					let is_signed = #scrate::sp_runtime::traits::Extrinsic::is_signed(xt)
+						.unwrap_or(false);
 
 					let is_inherent = if is_signed {
 						// Signed extrinsics are not inherents.

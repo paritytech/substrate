@@ -39,6 +39,8 @@ pub struct MetadataIR<T: Form = MetaForm> {
 	pub ty: T::Type,
 	/// Metadata of the Runtime API.
 	pub apis: Vec<RuntimeApiMetadataIR<T>>,
+	/// The outer enums types as found in the runtime.
+	pub outer_enums: OuterEnumsIR<T>,
 }
 
 /// Metadata of a runtime trait.
@@ -396,5 +398,42 @@ impl IntoPortable for PalletErrorMetadataIR {
 impl From<MetaType> for PalletErrorMetadataIR {
 	fn from(ty: MetaType) -> Self {
 		Self { ty }
+	}
+}
+
+/// The type of the outer enums.
+#[derive(Clone, PartialEq, Eq, Encode, Debug)]
+pub struct OuterEnumsIR<T: Form = MetaForm> {
+	/// The type of the outer `RuntimeCall` enum.
+	pub call_enum_ty: T::Type,
+	/// The type of the outer `RuntimeEvent` enum.
+	pub event_enum_ty: T::Type,
+	/// The module error type of the
+	/// [`DispatchError::Module`](https://docs.rs/sp-runtime/24.0.0/sp_runtime/enum.DispatchError.html#variant.Module) variant.
+	///
+	/// The `Module` variant will be 5 scale encoded bytes which are normally decoded into
+	/// an `{ index: u8, error: [u8; 4] }` struct. This type ID points to an enum type which
+	/// instead interprets the first `index` byte as a pallet variant, and the remaining `error`
+	/// bytes as the appropriate `pallet::Error` type. It is an equally valid way to decode the
+	/// error bytes, and can be more informative.
+	///
+	/// # Note
+	///
+	/// - This type cannot be used directly to decode `sp_runtime::DispatchError` from the chain.
+	///   It provides just the information needed to decode `sp_runtime::DispatchError::Module`.
+	/// - Decoding the 5 error bytes into this type will not always lead to all of the bytes being
+	///   consumed; many error types do not require all of the bytes to represent them fully.
+	pub error_enum_ty: T::Type,
+}
+
+impl IntoPortable for OuterEnumsIR {
+	type Output = OuterEnumsIR<PortableForm>;
+
+	fn into_portable(self, registry: &mut Registry) -> Self::Output {
+		OuterEnumsIR {
+			call_enum_ty: registry.register_type(&self.call_enum_ty),
+			event_enum_ty: registry.register_type(&self.event_enum_ty),
+			error_enum_ty: registry.register_type(&self.error_enum_ty),
+		}
 	}
 }
