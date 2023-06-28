@@ -166,13 +166,36 @@ pub struct SpendStatus<AssetKind, AssetBalance, Beneficiary, BlockNumber, Paymen
 /// Index of an approved treasury spend.
 pub type SpendIndex = u32;
 
+/// Trait describing factory functions for dispatchables' parameters
+#[cfg(feature = "runtime-benchmarks")]
+pub trait BenchmarkHelper<AssetKind, Beneficiary> {
+	/// Factory function for an asset kind
+	fn create_asset_kind(seed: u32) -> AssetKind;
+	/// Factory function for a beneficiary
+	fn create_beneficiary(seed: [u8; 32]) -> Beneficiary;
+}
+#[cfg(feature = "runtime-benchmarks")]
+impl<AssetKind, Beneficiary> BenchmarkHelper<AssetKind, Beneficiary> for ()
+where
+	AssetKind: From<u32>,
+	Beneficiary: From<[u8; 32]>,
+{
+	fn create_asset_kind(seed: u32) -> AssetKind {
+		seed.into()
+	}
+	fn create_beneficiary(seed: [u8; 32]) -> Beneficiary {
+		seed.into()
+	}
+}
+
 // TODO remove dev_mode
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
 	use frame_support::{
-		dispatch_context::with_context, pallet_prelude::*,
-		traits::tokens::ConversionFromAssetBalance,
+		dispatch_context::with_context,
+		pallet_prelude::*,
+		traits::tokens::{ConversionFromAssetBalance, PaymentStatus},
 	};
 	use frame_system::pallet_prelude::*;
 
@@ -264,6 +287,10 @@ pub mod pallet {
 		/// The period during which an approved treasury spend has to be claimed.
 		#[pallet::constant]
 		type PayoutPeriod: Get<Self::BlockNumber>;
+
+		/// Helper type for benchmarks.
+		#[cfg(feature = "runtime-benchmarks")]
+		type BenchmarkHelper: BenchmarkHelper<Self::AssetKind, Self::Beneficiary>;
 	}
 
 	/// Number of proposals that have been made.
@@ -367,6 +394,20 @@ pub mod pallet {
 		},
 		/// The inactive funds of the pallet have been updated.
 		UpdatedInactive { reactivated: BalanceOf<T, I>, deactivated: BalanceOf<T, I> },
+		/// A new asset spend proposal has been approved.
+		AssetSpendApproved {
+			index: SpendIndex,
+			asset_kind: T::AssetKind,
+			amount: AssetBalanceOf<T, I>,
+			beneficiary: T::Beneficiary,
+			expire_at: T::BlockNumber,
+		},
+		/// A payment happened.
+		Paid { index: SpendIndex, payment_id: <T::Paymaster as Pay>::Id },
+		/// A payment succeed, the spend removed from the storage.
+		PaymentSucceed { index: SpendIndex, payment_id: <T::Paymaster as Pay>::Id },
+		/// A payment failed.
+		PaymentFailed { index: SpendIndex, payment_id: <T::Paymaster as Pay>::Id },
 	}
 
 	/// Error for the treasury pallet.
@@ -383,14 +424,18 @@ pub mod pallet {
 		InsufficientPermission,
 		/// Proposal has not been approved.
 		ProposalNotApproved,
-		/// The asset kind is not fungible.
-		NotFungible,
 		/// The balance of the asset kind is not convertible to the balance of the native asset.
 		FailedToConvertBalance,
 		/// The spend has expired and cannot be claimed.
 		SpendExpired,
 		/// The payment has already been attempted.
 		AlreadyAttempted,
+		/// There was some issue with the mechanism of payment.
+		PayoutError,
+		/// The payout was not yet attempted/claimed.
+		NotAttempted,
+		/// The payment has neither failed nor succeeded yet.
+		Inconclusive,
 	}
 
 	#[pallet::hooks]
@@ -513,7 +558,6 @@ pub mod pallet {
 		/// NOTE: For record-keeping purposes, the proposer is deemed to be equivalent to the
 		/// beneficiary.
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend_local(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T, I>,
@@ -636,21 +680,27 @@ pub mod pallet {
 			.unwrap_or(Ok(()))?;
 
 			let index = SpendCount::<T, I>::get();
+			let expire_at =
+				frame_system::Pallet::<T>::block_number().saturating_add(T::PayoutPeriod::get());
 			Spends::<T, I>::insert(
 				index,
 				SpendStatus {
-					asset_kind,
+					asset_kind: asset_kind.clone(),
 					amount,
-					beneficiary,
-					expire_at: frame_system::Pallet::<T>::block_number()
-						.saturating_add(T::PayoutPeriod::get()),
+					beneficiary: beneficiary.clone(),
+					expire_at,
 					status: PaymentState::Pending,
 				},
 			);
 			SpendCount::<T, I>::put(index + 1);
 
-			// TODO deposit event
-
+			Self::deposit_event(Event::AssetSpendApproved {
+				index,
+				asset_kind,
+				amount,
+				beneficiary,
+				expire_at,
+			});
 			Ok(())
 		}
 
@@ -666,8 +716,7 @@ pub mod pallet {
 		#[pallet::call_index(6)]
 		pub fn payout(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
 			ensure_signed(origin)?;
-
-			let spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
+			let mut spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
 			ensure!(
 				spend.expire_at > frame_system::Pallet::<T>::block_number(),
 				Error::<T, I>::SpendExpired
@@ -677,8 +726,13 @@ pub mod pallet {
 				Error::<T, I>::AlreadyAttempted
 			);
 
-			// TODO payout
-			// TODO update status
+			let id = T::Paymaster::pay(&spend.beneficiary, spend.asset_kind.clone(), spend.amount)
+				.map_err(|_| Error::<T, I>::PayoutError)?;
+
+			spend.status = PaymentState::Attempted { id };
+			Spends::<T, I>::insert(index, spend);
+
+			Self::deposit_event(Event::<T, I>::Paid { index, payment_id: id });
 
 			Ok(())
 		}
@@ -693,9 +747,25 @@ pub mod pallet {
 		#[pallet::call_index(7)]
 		pub fn check_status(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
 			ensure_signed(origin)?;
+			let mut spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
 
-			// TODO check and update status
+			let payment_id = match spend.status {
+				PaymentState::Attempted { id } => id,
+				_ => return Err(Error::<T, I>::NotAttempted.into()),
+			};
 
+			match T::Paymaster::check_payment(payment_id) {
+				PaymentStatus::Failure => {
+					spend.status = PaymentState::Failed;
+					Spends::<T, I>::insert(index, spend);
+					Self::deposit_event(Event::<T, I>::PaymentFailed { index, payment_id });
+				},
+				PaymentStatus::Success => {
+					Spends::<T, I>::remove(index);
+					Self::deposit_event(Event::<T, I>::PaymentSucceed { index, payment_id });
+				},
+				_ => return Err(Error::<T, I>::Inconclusive.into()),
+			}
 			Ok(())
 		}
 	}
