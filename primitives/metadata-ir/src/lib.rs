@@ -62,7 +62,7 @@ pub fn into_latest(metadata: MetadataIR) -> RuntimeMetadataPrefixed {
 	latest.into()
 }
 
-/// Transform the IR to the latest stable metadata version.
+/// Transform the IR to metadata version 14.
 pub fn into_v14(metadata: MetadataIR) -> RuntimeMetadataPrefixed {
 	let latest: frame_metadata::v14::RuntimeMetadataV14 = metadata.into();
 	latest.into()
