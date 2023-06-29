@@ -642,7 +642,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				self.kademlia.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
 			},
 			FromSwarm::NewExternalAddrCandidate(e @ NewExternalAddrCandidate { addr }) => {
-				let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.into()));
+				let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id));
 
 				if Self::can_add_to_dht(addr) {
 					// NOTE: we might re-discover the same address multiple times

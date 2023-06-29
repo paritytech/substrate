@@ -207,7 +207,7 @@ mod tests {
 			let multiaddr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
 				.parse::<Multiaddr>()
 				.unwrap()
-				.with(Protocol::P2p(peer_id.into()));
+				.with(Protocol::P2p(peer_id));
 
 			TestMultiaddr(multiaddr)
 		}
@@ -225,11 +225,11 @@ mod tests {
 			let multiaddr1 = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
 				.parse::<Multiaddr>()
 				.unwrap()
-				.with(Protocol::P2p(peer_id.into()));
+				.with(Protocol::P2p(peer_id));
 			let multiaddr2 = "/ip6/2002:db8:0:0:0:0:0:2/tcp/30133"
 				.parse::<Multiaddr>()
 				.unwrap()
-				.with(Protocol::P2p(peer_id.into()));
+				.with(Protocol::P2p(peer_id));
 			TestMultiaddrsSamePeerCombo(multiaddr1, multiaddr2)
 		}
 	}
@@ -366,7 +366,7 @@ mod tests {
 		let mut addr_cache = AddrCache::new();
 
 		let peer_id = PeerId::random();
-		let addr = Multiaddr::empty().with(Protocol::P2p(peer_id.into()));
+		let addr = Multiaddr::empty().with(Protocol::P2p(peer_id));
 
 		let authority_id0 = AuthorityPair::generate().0.public();
 		let authority_id1 = AuthorityPair::generate().0.public();

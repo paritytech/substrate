@@ -109,7 +109,7 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 /// Splits a Multiaddress into a Multiaddress and PeerId.
 pub fn parse_addr(mut addr: Multiaddr) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) => key,
+		Some(multiaddr::Protocol::P2p(peer_id)) => peer_id,
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
