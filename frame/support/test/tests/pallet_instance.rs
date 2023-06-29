@@ -420,6 +420,39 @@ fn error_expand() {
 }
 
 #[test]
+fn module_error_outer_enum_expand() {
+	// assert that all variants of the Example pallet are included into the
+	// RuntimeError definition.
+	match RuntimeError::Example(pallet::Error::InsufficientProposersBalance) {
+		RuntimeError::Example(example) => match example {
+			pallet::Error::InsufficientProposersBalance => (),
+			pallet::Error::NonExistentStorageValue => (),
+			// Extra pattern added by `construct_runtime`.
+			pallet::Error::__Ignore(_, _) => (),
+		},
+		_ => (),
+	};
+}
+
+#[test]
+fn module_error_from_dispatch_error() {
+	let dispatch_err = DispatchError::Module(ModuleError {
+		index: 1,
+		error: [0; 4],
+		message: Some("InsufficientProposersBalance"),
+	});
+	let err = RuntimeError::from_dispatch_error(dispatch_err).unwrap();
+
+	match err {
+		RuntimeError::Example(pallet::Error::InsufficientProposersBalance) => (),
+		_ => panic!("Module error constructed incorrectly"),
+	};
+
+	// Only `ModuleError` is converted.
+	assert!(RuntimeError::from_dispatch_error(DispatchError::BadOrigin).is_none());
+}
+
+#[test]
 fn instance_expand() {
 	// assert same type
 	let _: pallet::__InherentHiddenInstance = ();

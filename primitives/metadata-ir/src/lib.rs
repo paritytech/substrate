@@ -81,10 +81,19 @@ mod test {
 			extrinsic: ExtrinsicMetadataIR {
 				ty: meta_type::<()>(),
 				version: 0,
+				address_ty: meta_type::<()>(),
+				call_ty: meta_type::<()>(),
+				signature_ty: meta_type::<()>(),
+				extra_ty: meta_type::<()>(),
 				signed_extensions: vec![],
 			},
 			ty: meta_type::<()>(),
 			apis: vec![],
+			outer_enums: OuterEnumsIR {
+				call_enum_ty: meta_type::<()>(),
+				event_enum_ty: meta_type::<()>(),
+				error_enum_ty: meta_type::<()>(),
+			},
 		}
 	}
 
