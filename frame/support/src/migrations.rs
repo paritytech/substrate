@@ -32,9 +32,9 @@ use crate::traits::OnRuntimeUpgrade;
 
 /// Make it easier to write versioned runtime upgrades.
 ///
-/// [`VersionedRuntimeUpgrade`] allows developers to write migrations without worrying about checking
-/// and setting storage versions. Instead, the developer wraps their migration in this struct which
-/// takes care of version handling using best practices.
+/// [`VersionedRuntimeUpgrade`] allows developers to write migrations without worrying about
+/// checking and setting storage versions. Instead, the developer wraps their migration in this
+/// struct which takes care of version handling using best practices.
 ///
 /// It takes 5 type parameters:
 /// - `From`: The version being upgraded from.
@@ -43,37 +43,44 @@ use crate::traits::OnRuntimeUpgrade;
 /// - `Pallet`: The Pallet being upgraded.
 /// - `Weight`: The runtime's RuntimeDbWeight implementation.
 ///
-/// When a [`VersionedRuntimeUpgrades`] `on_runtime_upgrade`, `pre_upgrade`, or `post_upgrade` method is
-/// called, the on-chain version of the pallet is compared to `From`. If they match, the `Inner`
-/// equivalent is called and the pallets on-chain version is set to `To` after the migration.
-/// Otherwise, a warning is logged notifying the developer that the upgrade was a noop and should
-/// probably be removed.
+/// When a [`VersionedRuntimeUpgrades`] `on_runtime_upgrade`, `pre_upgrade`, or `post_upgrade`
+/// method is called, the on-chain version of the pallet is compared to `From`. If they match, the
+/// `Inner` equivalent is called and the pallets on-chain version is set to `To` after the
+/// migration. Otherwise, a warning is logged notifying the developer that the upgrade was a noop
+/// and should probably be removed.
 ///
-/// Example:
+/// ### Examples
 /// ```ignore
-/// // Migrations to pass to the Executive pallet.
+/// // In file defining migrations
+/// pub struct VersionUncheckedMigrateV5ToV6<T>(sp_std::marker::PhantomData<T>);
+/// impl<T: Config> OnRuntimeUpgrade for VersionUncheckedMigrateV5ToV6<T> {
+/// 	// OnRuntimeUpgrade implementation...
+/// }
+///
+/// pub type VersionCheckedMigrateV5ToV6<Runtime, Pallet, DbWeight> =
+/// 	VersionedRuntimeUpgrade<5, 6, VersionUncheckedMigrateV5ToV6<Runtime>, Pallet, DbWeight>;
+///
+/// // Migrations tuple to pass to the Executive pallet:
 /// pub type Migrations = (
-/// 	// ...other migrations
-/// 	VersionedRuntimeUpgrade<
-/// 		4, // From on-chain version 4
-/// 		5, // To on-chain version 5
-/// 		parachains_configuration::migration::v5::MigrateToV5<Runtime>,
-/// 		Configuration,
-/// 		RocksDbWeight,
-/// 	>,
-/// 	VersionedRuntimeUpgrade<
-/// 		5, // From on-chain version 5
-/// 		7, // To on-chain version 7
-/// 		parachains_configuration::migration::v6::MigrateToV7<Runtime>,
-/// 		Configuration,
-/// 		RocksDbWeight,
-/// 	>,
-/// 	// ...other migrations
+/// 	// other migrations...
+/// 	VersionCheckedMigrateV5ToV6<Runtime, Balances, RuntimeDbWeight>,
+/// 	// other migrations...
 /// );
 /// ```
 #[cfg(feature = "experimental")]
 pub struct VersionedRuntimeUpgrade<const FROM: u16, const TO: u16, Inner, Pallet, Weight> {
 	_marker: PhantomData<(Inner, Pallet, Weight)>,
+}
+
+/// A helper enum to wrap the pre_upgrade bytes like an Option before passing them to post_upgrade.
+/// This enum is used rather than an Option to make the API clearer to the developer.
+#[cfg(feature = "experimental")]
+#[derive(codec::Encode, codec::Decode)]
+enum VersionedPostUpgradeData {
+	/// The migration ran, inner vec contains pre_upgrade data.
+	MigrationExecuted(Vec<u8>),
+	/// This migration is a noop, do not run post_upgrade checks.
+	Noop,
 }
 
 /// Implementation of the `OnRuntimeUpgrade` trait for `VersionedRuntimeUpgrade`.
@@ -91,16 +98,17 @@ impl<
 		DbWeight: Get<RuntimeDbWeight>,
 	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<FROM, TO, Inner, Pallet, DbWeight>
 {
-	/// Executes pre_upgrade if the migration will run, and wraps the pre_upgrade bytes in an Option
-	/// before passing them to post_upgrade, so it knows whether the migration ran or not.
+	/// Executes pre_upgrade if the migration will run, and wraps the pre_upgrade bytes in
+	/// [`VersionedPostUpgradeData`] before passing them to post_upgrade, so it knows whether the
+	/// migration ran or not.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == FROM {
-			Ok(Some(Inner::pre_upgrade()?).encode())
+			Ok(VersionedPostUpgradeData::MigrationExecuted(Inner::pre_upgrade()?).encode())
 		} else {
-			Ok(None::<Vec<u8>>.encode())
+			Ok(VersionedPostUpgradeData::Noop.encode())
 		}
 	}
 
@@ -140,17 +148,19 @@ impl<
 
 	/// Executes post_upgrade if the migration just ran.
 	///
-	/// pre_upgrade passes Some(Vec<u8>) to post_upgrade if the migration ran, and None otherwise.
+	/// pre_upgrade passes [`VersionedPostUpgradeData::MigrationExecuted`] to post_upgrade if
+	/// the migration ran, and [`VersionedPostUpgradeData::Noop`] otherwise.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(pre_upgrade_return_bytes: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+	fn post_upgrade(
+		versioned_post_upgrade_data_bytes: Vec<u8>,
+	) -> Result<(), sp_runtime::TryRuntimeError> {
 		use codec::DecodeAll;
-		let maybe_inner_bytes = <Option<Vec<u8>>>::decode_all(&mut &pre_upgrade_return_bytes[..])
-			.map_err(|_| {
-			"VersionedRuntimeUpgrade post_upgrade failed to decode pre_upgrade bytes"
-		})?;
-		match maybe_inner_bytes {
-			Some(inner_bytes) => Inner::post_upgrade(inner_bytes),
-			None => Ok(()),
+		match <VersionedPostUpgradeData>::decode_all(&mut &versioned_post_upgrade_data_bytes[..])
+			.map_err(|_| "VersionedRuntimeUpgrade post_upgrade failed to decode PreUpgradeData")?
+		{
+			VersionedPostUpgradeData::MigrationExecuted(inner_bytes) =>
+				Inner::post_upgrade(inner_bytes),
+			VersionedPostUpgradeData::Noop => Ok(()),
 		}
 	}
 }
