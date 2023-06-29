@@ -2697,8 +2697,9 @@ dependencies = [
 
 [[package]]
 name = "frame-metadata"
-version = "15.2.0"
-source = "git+https://github.com/paritytech/frame-metadata.git#62fb6340d412fd04afd1235ff21de4b29dc2aaae"
+version = "16.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87cf1549fba25a6fcac22785b61698317d958e96cac72a59102ea45b9ae64692"
 dependencies = [
  "cfg-if",
  "parity-scale-codec",
