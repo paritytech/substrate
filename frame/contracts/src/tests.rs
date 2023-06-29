@@ -217,7 +217,6 @@ impl ChainExtension<Test> for TestExtension {
 					u32::decode(&mut enc).map_err(|_| Error::<Test>::ContractTrapped)?.into(),
 					0,
 				);
-				println!("Charging from extension: {:?}", &weight);
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(id))
 			},

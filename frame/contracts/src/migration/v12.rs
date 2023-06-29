@@ -215,7 +215,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
-		let len = 5;
+		let len = 100;
 		log::debug!(target: LOG_TARGET, "Taking sample of {} OwnerInfo(s)", len);
 		let sample: Vec<_> = old::OwnerInfoOf::<T>::iter()
 			.take(len)

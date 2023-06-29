@@ -366,8 +366,6 @@ pub mod body {
 	/// When generating contract code by repeating a Wasm sequence, it's sometimes necessary
 	/// to change those instructions on each repetition. The variants of this enum describe
 	/// various ways in which this can happen.
-	// Not all variants are used in the current benchmarks,
-	// but they could be used in future benchmarks. Hence keeping them with the attribute.
 	pub enum DynInstr {
 		/// Insert the associated instruction.
 		Regular(Instruction),
@@ -418,13 +416,6 @@ pub mod body {
 			.chain(sp_std::iter::once(Instruction::End))
 			.collect();
 		FuncBody::new(Vec::new(), Instructions::new(body))
-	}
-
-	/// Replace the locals of the supplied `body` with `num` i64 locals.
-	#[allow(dead_code)]
-	pub fn inject_locals(body: &mut FuncBody, num: u32) {
-		use self::elements::Local;
-		*body.locals_mut() = vec![Local::new(num, ValueType::I64)];
 	}
 }
 

@@ -21,7 +21,6 @@
 
 use crate::{
 	chain_extension::ChainExtension,
-	ensure,
 	storage::meter::Diff,
 	wasm::{runtime::AllowDeprecatedInterface, CodeInfo, Determinism, Environment, WasmBlob},
 	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
@@ -239,12 +238,7 @@ impl ContractModule {
 	///
 	/// This makes sure that the import section looks as we expect it from a contract
 	/// and enforces and returns the memory type declared by the contract if any.
-	///
-	/// `import_fn_banlist`: list of function names that are disallowed to be imported
-	pub fn scan_imports<T: Config>(
-		&self,
-		import_fn_banlist: &[&[u8]],
-	) -> Result<Option<&MemoryType>, &'static str> {
+	pub fn scan_imports<T: Config>(&self) -> Result<Option<&MemoryType>, &'static str> {
 		let module = &self.0;
 		let import_entries = module.import_section().map(|is| is.entries()).unwrap_or(&[]);
 		let mut imported_mem_type = None;
@@ -258,10 +252,6 @@ impl ContractModule {
 						import.field().as_bytes() == b"seal_call_chain_extension"
 					{
 						return Err("module uses chain extensions but chain extensions are disabled")
-					}
-
-					if import_fn_banlist.iter().any(|f| import.field().as_bytes() == *f) {
-						return Err("module imports a banned function")
 					}
 				},
 				External::Memory(ref memory_type) => {
@@ -282,13 +272,9 @@ impl ContractModule {
 
 		Ok(imported_mem_type)
 	}
-
-	fn into_wasm_code(self) -> Result<Vec<u8>, &'static str> {
-		elements::serialize(self.0).map_err(|_| "error serializing contract module")
-	}
 }
 #[cfg(any(test, feature = "runtime-benchmarks"))]
-pub fn get_memory_limits<T: Config>(
+fn get_memory_limits<T: Config>(
 	module: Option<&MemoryType>,
 	schedule: &Schedule<T>,
 ) -> Result<(u32, u32), &'static str> {
@@ -320,7 +306,7 @@ fn validate<E, T>(
 	schedule: &Schedule<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
-) -> Result<Vec<u8>, (DispatchError, &'static str)>
+) -> Result<(), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
@@ -357,10 +343,10 @@ where
 		(Error::<T>::CodeRejected.into(), "Validation of new code failed!")
 	})?;
 
-	let code = (|| {
+	(|| {
 		let contract_module = ContractModule::new(code)?;
 		contract_module.scan_exports()?;
-		contract_module.scan_imports::<T>(&[])?;
+		contract_module.scan_imports::<T>()?;
 		contract_module.ensure_no_internal_memory()?;
 		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
 		contract_module.ensure_global_variable_limit(schedule.limits.globals)?;
@@ -369,8 +355,7 @@ where
 		contract_module.ensure_br_table_size_limit(schedule.limits.br_table_size)?;
 		// Extract memory limits from the module.
 		// This also checks that module's memory import satisfies the schedule.
-		let code = contract_module.into_wasm_code()?;
-		Ok(code)
+		Ok(())
 	})()
 	.map_err(|msg: &str| {
 		log::debug!(target: LOG_TARGET, "New code rejected: {}", msg);
@@ -397,7 +382,7 @@ where
 			(Error::<T>::CodeRejected.into(), "New code rejected on wasmi instantiation!")
 		})?;
 	}
-	Ok(code)
+	Ok(())
 }
 
 /// Validates the given binary `code` is a valid Wasm module satisfying following constraints:
@@ -418,13 +403,7 @@ where
 	E: Environment<()>,
 	T: Config,
 {
-	let checked_code = validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
-	let err = |_| (<Error<T>>::CodeTooLarge.into(), "Validation enlarged the code size!");
-	let checked_code: CodeVec<T> = checked_code.try_into().map_err(err)?;
-	ensure!(
-		code == checked_code,
-		(<Error<T>>::CodeRejected.into(), "Validation altered the code!")
-	);
+	validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
 
 	// Calculate deposit for storing contract code and `code_info` in two different storage items.
 	let bytes_added = code.len().saturating_add(<CodeInfo<T>>::max_encoded_len()) as u32;
@@ -454,7 +433,7 @@ pub mod benchmarking {
 		owner: AccountIdOf<T>,
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let contract_module = ContractModule::new(&code)?;
-		let _ = get_memory_limits(contract_module.scan_imports::<T>(&[])?, schedule)?;
+		let _ = get_memory_limits(contract_module.scan_imports::<T>()?, schedule)?;
 		let code_hash = T::Hashing::hash(&code);
 		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
@@ -919,6 +898,19 @@ mod tests {
 			)
 			"#,
 			Ok(_)
+		);
+
+		prepare_test!(
+			wrong_signature,
+			r#"
+			(module
+				(import "seal0" "input" (func (param i64)))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("New code rejected on wasmi instantiation!")
 		);
 
 		prepare_test!(

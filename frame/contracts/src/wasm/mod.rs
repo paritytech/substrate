@@ -261,7 +261,7 @@ impl<T: Config> WasmBlob<T> {
 	}
 
 	/// Query wasmi for memory limits specified for the import in Wasm module.
-	pub fn get_memory_limits(
+	fn get_memory_limits(
 		imports: wasmi::ModuleImportsIter,
 		schedule: &Schedule<T>,
 	) -> Result<(u32, u32), &'static str> {
