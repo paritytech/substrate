@@ -79,7 +79,7 @@ pub struct VersionedRuntimeUpgrade<const FROM: u16, const TO: u16, Inner, Pallet
 /// Implementation of the `OnRuntimeUpgrade` trait for `VersionedRuntimeUpgrade`.
 ///
 /// Its main function is to perform the runtime upgrade in `on_runtime_upgrade` only if the on-chain
-/// version of the pallets storage matches `From`, and after the upgrade set the on-chian storage to
+/// version of the pallets storage matches `From`, and after the upgrade set the on-chain storage to
 /// `To`. If the versions do not match, it writes a log notifying the developer that the migration
 /// is a noop.
 #[cfg(feature = "experimental")]
