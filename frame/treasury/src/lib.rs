@@ -168,23 +168,23 @@ pub type SpendIndex = u32;
 
 /// Trait describing factory functions for dispatchables' parameters
 #[cfg(feature = "runtime-benchmarks")]
-pub trait BenchmarkHelper<AssetKind, Beneficiary> {
+pub trait ParametersFactory<AssetKind, Beneficiary> {
 	/// Factory function for an asset kind
 	fn create_asset_kind(seed: u32) -> AssetKind;
 	/// Factory function for a beneficiary
 	fn create_beneficiary(seed: [u8; 32]) -> Beneficiary;
 }
 #[cfg(feature = "runtime-benchmarks")]
-impl<AssetKind, Beneficiary> BenchmarkHelper<AssetKind, Beneficiary> for ()
+impl<AssetKind, Beneficiary> ParametersFactory<AssetKind, Beneficiary> for ()
 where
 	AssetKind: From<u32>,
 	Beneficiary: From<[u8; 32]>,
 {
-	fn create_asset_kind(seed: u32) -> AssetKind {
-		seed.into()
+	fn create_asset_kind(id: u32) -> AssetKind {
+		id.into()
 	}
-	fn create_beneficiary(seed: [u8; 32]) -> Beneficiary {
-		seed.into()
+	fn create_beneficiary(id: [u8; 32]) -> Beneficiary {
+		id.into()
 	}
 }
 
@@ -290,7 +290,7 @@ pub mod pallet {
 
 		/// Helper type for benchmarks.
 		#[cfg(feature = "runtime-benchmarks")]
-		type BenchmarkHelper: BenchmarkHelper<Self::AssetKind, Self::Beneficiary>;
+		type BenchmarkHelper: ParametersFactory<Self::AssetKind, Self::Beneficiary>;
 	}
 
 	/// Number of proposals that have been made.

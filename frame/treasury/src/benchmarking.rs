@@ -65,14 +65,23 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
+// Create the pre-requisite information needed to create a treasury `spend`.
+fn setup_spend<T: Config<I>, I: 'static>(
+) -> (T::AssetKind, AssetBalanceOf<T, I>, T::Beneficiary, BeneficiaryLookupOf<T, I>) {
+	let asset_kind = T::BenchmarkHelper::create_asset_kind(SEED);
+	let beneficiary = T::BenchmarkHelper::create_beneficiary([SEED.try_into().unwrap(); 32]);
+	let beneficiary_lookup = T::BeneficiaryLookup::unlookup(beneficiary.clone());
+	(asset_kind, 100u32.into(), beneficiary, beneficiary_lookup)
+}
+
 benchmarks_instance_pallet! {
 	// This benchmark is short-circuited if `SpendOrigin` cannot provide
 	// a successful origin, in which case `spend` is un-callable and can use weight=0.
-	spend {
+	spend_local {
 		let (_, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		let origin = T::SpendOrigin::try_successful_origin();
 		let beneficiary = T::Lookup::lookup(beneficiary_lookup.clone()).unwrap();
-		let call = Call::<T, I>::spend { amount: value, beneficiary: beneficiary_lookup };
+		let call = Call::<T, I>::spend_local { amount: value, beneficiary: beneficiary_lookup };
 	}: {
 		if let Ok(origin) = origin.clone() {
 			call.dispatch_bypass_filter(origin)?;
@@ -136,6 +145,22 @@ benchmarks_instance_pallet! {
 		create_approved_proposals::<T, _>(p)?;
 	}: {
 		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+	}
+
+	spend {
+		let origin =
+			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let (asset_kind, amount, beneficiary, beneficiary_lookup) = setup_spend::<T, _>();
+	}: _<T::RuntimeOrigin>(origin, asset_kind.clone(), amount, beneficiary_lookup)
+	verify {
+		let expire_at =
+			frame_system::Pallet::<T>::block_number().saturating_add(T::PayoutPeriod::get());
+		assert_last_event::<T, I>(Event::AssetSpendApproved {
+			index: 0,
+			asset_kind,
+			amount,
+			beneficiary,
+			expire_at}.into());
 	}
 
 	impl_benchmark_test_suite!(Treasury, crate::tests::new_test_ext(), crate::tests::Test);
