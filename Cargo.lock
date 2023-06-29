@@ -10683,6 +10683,7 @@ dependencies = [
  "sp-state-machine",
  "sp-tracing",
  "sp-version",
+ "static_assertions",
  "substrate-test-runtime-client",
  "trybuild",
 ]
