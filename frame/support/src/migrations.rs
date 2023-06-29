@@ -43,7 +43,7 @@ use crate::traits::OnRuntimeUpgrade;
 /// - `Pallet`: The Pallet being upgraded.
 /// - `Weight`: The runtime's RuntimeDbWeight implementation.
 ///
-/// When a [`VersionedRuntimeUpgrades`] `on_runtime_upgrade`, `pre_upgrade`, or `post_upgrade`
+/// When a [`VersionedRuntimeUpgrade`] `on_runtime_upgrade`, `pre_upgrade`, or `post_upgrade`
 /// method is called, the on-chain version of the pallet is compared to `From`. If they match, the
 /// `Inner` equivalent is called and the pallets on-chain version is set to `To` after the
 /// migration. Otherwise, a warning is logged notifying the developer that the upgrade was a noop
@@ -76,7 +76,7 @@ pub struct VersionedRuntimeUpgrade<const FROM: u16, const TO: u16, Inner, Pallet
 /// This enum is used rather than an Option to make the API clearer to the developer.
 #[cfg(feature = "experimental")]
 #[derive(codec::Encode, codec::Decode)]
-enum VersionedPostUpgradeData {
+pub enum VersionedPostUpgradeData {
 	/// The migration ran, inner vec contains pre_upgrade data.
 	MigrationExecuted(Vec<u8>),
 	/// This migration is a noop, do not run post_upgrade checks.
