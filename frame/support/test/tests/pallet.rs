@@ -1574,7 +1574,7 @@ fn metadata() {
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
-			docs: maybe_docs(expected_pallet_doc),
+			docs: expected_pallet_doc,
 		},
 		PalletMetadata {
 			index: 2,
@@ -1624,7 +1624,7 @@ fn metadata() {
 			event: None,
 			constants: vec![],
 			error: None,
-			docs: vec![],
+			docs: vec![" Test that the supertrait check works when we pass some parameter to the `frame_system::Config`."],
 		},
 		#[cfg(feature = "frame-feature-testing-2")]
 		PalletMetadata {
@@ -1635,7 +1635,7 @@ fn metadata() {
 			event: None,
 			constants: vec![],
 			error: None,
-			docs: vec![],
+			docs: vec![" Test that the supertrait check works when we pass some parameter to the `frame_system::Config`."],
 		},
 	];
 
