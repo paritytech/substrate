@@ -84,19 +84,17 @@ use std::{
 /// the API of this behaviour and towards the peerset manager is aggregated in
 /// the following way:
 ///
-///   1. The enabled/disabled status is the same across all connections, as
-///      decided by the peerset manager.
-///   2. `send_packet` and `write_notification` always send all data over
-///      the same connection to preserve the ordering provided by the transport,
-///      as long as that connection is open. If it closes, a second open
-///      connection may take over, if one exists, but that case should be no
-///      different than a single connection failing and being re-established
-///      in terms of potential reordering and dropped messages. Messages can
-///      be received on any connection.
-///   3. The behaviour reports `NotificationsOut::CustomProtocolOpen` when the
-///      first connection reports `NotifsHandlerOut::OpenResultOk`.
-///   4. The behaviour reports `NotificationsOut::CustomProtocolClosed` when the
-///      last connection reports `NotifsHandlerOut::ClosedResult`.
+///   1. The enabled/disabled status is the same across all connections, as decided by the peerset
+///      manager.
+///   2. `send_packet` and `write_notification` always send all data over the same connection to
+///      preserve the ordering provided by the transport, as long as that connection is open. If it
+///      closes, a second open connection may take over, if one exists, but that case should be no
+///      different than a single connection failing and being re-established in terms of potential
+///      reordering and dropped messages. Messages can be received on any connection.
+///   3. The behaviour reports `NotificationsOut::CustomProtocolOpen` when the first connection
+///      reports `NotifsHandlerOut::OpenResultOk`.
+///   4. The behaviour reports `NotificationsOut::CustomProtocolClosed` when the last connection
+///      reports `NotifsHandlerOut::ClosedResult`.
 ///
 /// In this way, the number of actual established connections to the peer is
 /// an implementation detail of this behaviour. Note that, in practice and at

@@ -26,7 +26,6 @@ pallet-asset-conversion = { version = "4.0.0-dev", path = "../../../frame/asset-
 pallet-assets = { version = "4.0.0-dev", path = "../../../frame/assets" }
 pallet-asset-conversion-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-conversion-tx-payment" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment" }
-pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-client-db = { version = "0.10.0-dev", features = ["rocksdb"], path = "../../../client/db" }
