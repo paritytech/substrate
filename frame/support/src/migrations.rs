@@ -32,7 +32,7 @@ use crate::traits::OnRuntimeUpgrade;
 
 /// Make it easier to write versioned runtime upgrades.
 ///
-/// VersionedRuntimeUpgrade allows developers to write migrations without worrying about checking
+/// [`VersionedRuntimeUpgrade`] allows developers to write migrations without worrying about checking
 /// and setting storage versions. Instead, the developer wraps their migration in this struct which
 /// takes care of version handling using best practices.
 ///
