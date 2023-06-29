@@ -28,7 +28,6 @@ sp-trie = { version = "22.0.0", default-features = false, optional = true, path 
 sp-externalities = { version = "0.19.0", default-features = false, path = "../externalities" }
 sp-tracing = { version = "10.0.0", default-features = false, path = "../tracing" }
 log = { version = "0.4.17", optional = true }
-futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
 secp256k1 = { version = "0.24.0", features = ["recovery", "global-context"], optional = true }
 tracing = { version = "0.1.29", default-features = false }
 tracing-core = { version = "0.1.28", default-features = false}
@@ -59,7 +58,6 @@ std = [
 	"tracing/std",
 	"tracing-core/std",
 	"log",
-	"futures",
 	"ed25519-dalek",
 	"ed25519",
 ]
