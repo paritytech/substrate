@@ -240,7 +240,7 @@ pub trait SteppedMigration {
 	/// provided as convenience for a caller. A cursor of `None` implies that the migration is at
 	/// its end. TODO: Think about iterator `fuse` requirement.
 	fn step(
-		cursor: &Option<Self::Cursor>,
+		cursor: Option<Self::Cursor>,
 		meter: &mut WeightMeter,
 	) -> Result<Option<Self::Cursor>, SteppedMigrationError>;
 
@@ -249,7 +249,7 @@ pub trait SteppedMigration {
 		mut cursor: Option<Self::Cursor>,
 		meter: &mut WeightMeter,
 	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
-		with_transaction_opaque_err(move || match Self::step(&cursor, meter) {
+		with_transaction_opaque_err(move || match Self::step(cursor, meter) {
 			Ok(new_cursor) => {
 				cursor = new_cursor;
 				sp_api::TransactionOutcome::Commit(Ok(cursor))
@@ -331,134 +331,115 @@ impl MultiStepMigrator for () {
 	}
 }
 
-impl<Left: SteppedMigration, Right: SteppedMigration> SteppedMigration for (Left, Right) {
-	type Cursor = Either<Option<Left::Cursor>, Option<Right::Cursor>>;
-	type Identifier = (Left::Identifier, Right::Identifier);
-
-	fn id() -> Self::Identifier {
-		(Left::id(), Right::id())
-	}
-
-	/// # SECURITY
-	///
-	/// Never returns `Some(Right(None))` as cursor.
-	fn step(
-		cursor: &Option<Self::Cursor>,
-		meter: &mut WeightMeter,
-	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
-		let new_cursor = match cursor {
-			None => Some(Either::Left(Left::step(&None, meter)?)),
-			Some(Either::Left(inner @ Some(_))) => Some(Either::Left(Left::step(&inner, meter)?)),
-			// Left None, need to go right now.
-			Some(Either::Right(inner)) => {
-				match Right::step(&inner, meter)? {
-					None => None,
-					new_inner @ Some(_) => Some(Either::Right(new_inner)),
-				}
-			}
-			_ => todo!(),
-		};
-		Ok(new_cursor)
-	}
-}
-
 /// Multiple [`SteppedMigration`].
 pub trait SteppedMigrations {
-	type Cursor: codec::FullCodec + codec::MaxEncodedLen;
-	type Identifier: codec::FullCodec + codec::MaxEncodedLen;
-
 	fn len() -> u32;
 
-	fn nth_id(n: u32) -> Option<Self::Identifier>;
+	fn nth_id(n: u32) -> Option<Vec<u8>>;
 
 	fn nth_step(
 		n: u32,
-		cursor: &Option<Self::Cursor>,
+		cursor: Option<Vec<u8>>,
 		meter: &mut WeightMeter,
-	) -> Option<Result<Option<Self::Cursor>, SteppedMigrationError>>;
+	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>>;
 
 	fn nth_transactional_step(
 		n: u32,
-		cursor: Option<Self::Cursor>,
+		cursor: Option<Vec<u8>>,
 		meter: &mut WeightMeter,
-	) -> Option<Result<Option<Self::Cursor>, SteppedMigrationError>>;
+	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>>;
 }
 
-pub trait NonAggregatedMigration {}
-
-impl<Cursor: codec::FullCodec + codec::MaxEncodedLen, Identifier: codec::FullCodec + codec::MaxEncodedLen, T: SteppedMigration<Cursor=Cursor, Identifier=Identifier> + NonAggregatedMigration> SteppedMigrations for T {
-	type Cursor = Cursor;
-	type Identifier = Identifier;
-
+impl<T: SteppedMigration> SteppedMigrations for T {
 	fn len() -> u32 {
 		1
 	}
 
-	fn nth_id(n: u32) -> Option<Self::Identifier> {
-		match n {
-			0 => Some(T::id()),
-			_ => None,
-		}
+	fn nth_id(_: u32) -> Option<Vec<u8>> {
+		Some(T::id().encode())
 	}
 
 	fn nth_step(
-		n: u32,
-		cursor: &Option<Self::Cursor>,
+		_: u32,
+		cursor: Option<Vec<u8>>,
 		meter: &mut WeightMeter,
-	) -> Option<Result<Option<Self::Cursor>, SteppedMigrationError>> {
-		match n {
-			0 => Some(T::step(cursor, meter)),
-			_ => None,
-		}
+	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>> {
+		Some(
+			T::step(cursor.map(|c| Decode::decode(&mut &c[..]).unwrap()), meter)
+				.map(|v| v.map(|v| v.encode())),
+		)
 	}
 
 	fn nth_transactional_step(
-		n: u32,
-		cursor: Option<Self::Cursor>,
+		_: u32,
+		cursor: Option<Vec<u8>>,
 		meter: &mut WeightMeter,
-	) -> Option<Result<Option<Self::Cursor>, SteppedMigrationError>> {
-		match n {
-			0 => Some(T::transactional_step(cursor, meter)),
-			_ => None,
-		}
+	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>> {
+		Some(
+			T::transactional_step(cursor.map(|c| Decode::decode(&mut &c[..]).unwrap()), meter)
+				.map(|v| v.map(|v| v.encode())),
+		)
 	}
 }
 
-impl<Left: SteppedMigrations<Cursor=Cursor, Identifier=Identifier>, Right: SteppedMigrations<Cursor=Cursor, Identifier=Identifier>, Cursor: codec::FullCodec + codec::MaxEncodedLen + Clone, Identifier: codec::FullCodec + codec::MaxEncodedLen> SteppedMigrations for (Left, Right) {
-	type Cursor = Cursor;
-	type Identifier = Identifier;
-
+#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
+impl SteppedMigrations for Tuple {
 	fn len() -> u32 {
-		Left::len() + Right::len()
+		let mut i = 0;
+
+		for_tuples!( #( i += Tuple::len(); )* );
+
+		i
 	}
 
-	fn nth_id(n: u32) -> Option<Self::Identifier> {
-		match Left::nth_id(n) {
-			None if n > 0 => Right::nth_id(n - 1),
-			other => other,
-		}
+	fn nth_id(n: u32) -> Option<Vec<u8>> {
+		let mut i = 0;
+
+		for_tuples!( #(
+			if (i + Tuple::len()) > n {
+				return Tuple::nth_id(n - i)
+			}
+
+			i += Tuple::len();
+		)* );
+
+		None
 	}
 
 	fn nth_step(
 		n: u32,
-		cursor: &Option<Self::Cursor>,
+		cursor: Option<Vec<u8>>,
 		meter: &mut WeightMeter,
-	) -> Option<Result<Option<Self::Cursor>, SteppedMigrationError>> {
-		match Left::nth_step(n, cursor, meter) {
-			None if n > 0 => Right::nth_step(n - 1, cursor, meter),
-			other => other,
-		}
+	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>> {
+		let mut i = 0;
+
+		for_tuples!( #(
+			if (i + Tuple::len()) > n {
+				return Tuple::nth_step(n - i, cursor, meter)
+			}
+
+			i += Tuple::len();
+		)* );
+
+		None
 	}
 
 	fn nth_transactional_step(
 		n: u32,
-		cursor: Option<Self::Cursor>,
+		cursor: Option<Vec<u8>>,
 		meter: &mut WeightMeter,
-	) -> Option<Result<Option<Self::Cursor>, SteppedMigrationError>> {
-		match Left::nth_transactional_step(n, cursor.clone(), meter) {
-			None if n > 0 => Right::nth_transactional_step(n - 1, cursor, meter),
-			other => other,
-		}
+	) -> Option<Result<Option<Vec<u8>>, SteppedMigrationError>> {
+		let mut i = 0;
+
+		for_tuples! ( #(
+			if (i + Tuple::len()) > n {
+				return Tuple::nth_transactional_step(n - i, cursor, meter)
+			}
+
+			i += Tuple::len();
+		)* );
+
+		None
 	}
 }
 
@@ -478,7 +459,7 @@ impl SteppedMigration for M0 {
 	}
 
 	fn step(
-		_cursor: &Option<Self::Cursor>,
+		_cursor: Option<Self::Cursor>,
 		_meter: &mut WeightMeter,
 	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
 		log::info!("M0");
@@ -496,7 +477,7 @@ impl SteppedMigration for M1 {
 	}
 
 	fn step(
-		_cursor: &Option<Self::Cursor>,
+		_cursor: Option<Self::Cursor>,
 		_meter: &mut WeightMeter,
 	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
 		log::info!("M1");
@@ -514,18 +495,13 @@ impl SteppedMigration for M2 {
 	}
 
 	fn step(
-		_cursor: &Option<Self::Cursor>,
+		_cursor: Option<Self::Cursor>,
 		_meter: &mut WeightMeter,
 	) -> Result<Option<Self::Cursor>, SteppedMigrationError> {
 		log::info!("M2");
 		Ok(None)
 	}
 }
-
-// mark
-impl NonAggregatedMigration for M0 {}
-impl NonAggregatedMigration for M1 {}
-impl NonAggregatedMigration for M2 {}
 
 #[test]
 fn templates_work() {
@@ -539,11 +515,15 @@ fn templates_work() {
 
 	// Check the IDs. The index specific functions all return an Option,
 	// to account for the out-of-range case.
-	assert_eq!(<Triple as SteppedMigrations>::nth_id(0), Some(0));
-	assert_eq!(<Triple as SteppedMigrations>::nth_id(1), Some(1));
-	assert_eq!(<Triple as SteppedMigrations>::nth_id(2), Some(2));
+	assert_eq!(<Triple as SteppedMigrations>::nth_id(0), Some(0u8.encode()));
+	assert_eq!(<Triple as SteppedMigrations>::nth_id(1), Some(1u8.encode()));
+	assert_eq!(<Triple as SteppedMigrations>::nth_id(2), Some(2u8.encode()));
 
-	for n in 0 .. 3 {
-		<Triple as SteppedMigrations>::nth_step(n, &Default::default(), &mut WeightMeter::max_limit());
+	for n in 0..3 {
+		<Triple as SteppedMigrations>::nth_step(
+			n,
+			Default::default(),
+			&mut WeightMeter::max_limit(),
+		);
 	}
 }
