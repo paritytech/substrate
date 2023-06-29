@@ -64,7 +64,7 @@ use crate::traits::OnRuntimeUpgrade;
 /// 	VersionedRuntimeUpgrade<
 /// 		5, // From on-chain version 5
 /// 		7, // To on-chain version 7
-/// 		parachains_configuration::migration::v6::MigrateToV6<Runtime>,
+/// 		parachains_configuration::migration::v6::MigrateToV7<Runtime>,
 /// 		Configuration,
 /// 		RocksDbWeight,
 /// 	>,
