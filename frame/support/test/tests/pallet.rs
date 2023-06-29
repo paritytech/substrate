@@ -36,7 +36,10 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::{DispatchError, ModuleError};
+use sp_runtime::{
+	traits::{Extrinsic as ExtrinsicT, SignaturePayload as SignaturePayloadT},
+	DispatchError, ModuleError,
+};
 
 parameter_types! {
 	/// Used to control if the storage version should be updated.
@@ -1701,6 +1704,28 @@ fn metadata_ir_pallet_runtime_docs() {
 }
 
 #[test]
+fn extrinsic_metadata_ir_types() {
+	let ir = Runtime::metadata_ir().extrinsic;
+
+	assert_eq!(meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureAddress>(), ir.address_ty);
+	assert_eq!(meta_type::<u64>(), ir.address_ty);
+
+	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Call>(), ir.call_ty);
+	assert_eq!(meta_type::<RuntimeCall>(), ir.call_ty);
+
+	assert_eq!(
+		meta_type::<
+			<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::Signature,
+		>(),
+		ir.signature_ty
+	);
+	assert_eq!(meta_type::<()>(), ir.signature_ty);
+
+	assert_eq!(meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureExtra>(), ir.extra_ty);
+	assert_eq!(meta_type::<frame_system::CheckNonZeroSender<Runtime>>(), ir.extra_ty);
+}
+
+#[test]
 fn test_pallet_runtime_docs() {
 	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
 	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
@@ -1713,7 +1738,6 @@ fn test_pallet_info_access() {
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::name(), "System");
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::name(), "Example");
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::name(), "Example2");
-
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 2);
