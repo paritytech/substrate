@@ -1300,7 +1300,8 @@ fn migrate_from_pallet_version_to_storage_version() {
 
 #[test]
 fn metadata() {
-	use frame_support::metadata::*;
+	use codec::Decode;
+	use frame_support::metadata::{v15::*, *};
 
 	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
 		if cfg!(feature = "no-metadata-docs") {
@@ -1309,6 +1310,9 @@ fn metadata() {
 			doc
 		}
 	}
+
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected_pallet_doc = vec![" Pallet documentation", readme, readme];
 
 	let pallets = vec![
 		PalletMetadata {
@@ -1570,6 +1574,7 @@ fn metadata() {
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
+			docs: maybe_docs(expected_pallet_doc),
 		},
 		PalletMetadata {
 			index: 2,
@@ -1608,6 +1613,7 @@ fn metadata() {
 			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
 			constants: vec![],
 			error: None,
+			docs: vec![],
 		},
 		#[cfg(feature = "frame-feature-testing")]
 		PalletMetadata {
@@ -1618,6 +1624,7 @@ fn metadata() {
 			event: None,
 			constants: vec![],
 			error: None,
+			docs: vec![],
 		},
 		#[cfg(feature = "frame-feature-testing-2")]
 		PalletMetadata {
@@ -1628,6 +1635,7 @@ fn metadata() {
 			event: None,
 			constants: vec![],
 			error: None,
+			docs: vec![],
 		},
 	];
 
@@ -1642,24 +1650,48 @@ fn metadata() {
 	}
 
 	let extrinsic = ExtrinsicMetadata {
-		ty: meta_type::<UncheckedExtrinsic>(),
 		version: 4,
 		signed_extensions: vec![SignedExtensionMetadata {
 			identifier: "UnitSignedExtension",
 			ty: meta_type::<()>(),
 			additional_signed: meta_type::<()>(),
 		}],
+		address_ty: meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureAddress>(),
+		call_ty: meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Call>(),
+		signature_ty: meta_type::<
+			<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::Signature
+		>(),
+		extra_ty: meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureExtra>(),
 	};
 
-	let expected_metadata: RuntimeMetadataPrefixed =
-		RuntimeMetadataLastVersion::new(pallets, extrinsic, meta_type::<Runtime>()).into();
+	let outer_enums = OuterEnums {
+		call_enum_ty: meta_type::<RuntimeCall>(),
+		event_enum_ty: meta_type::<RuntimeEvent>(),
+		error_enum_ty: meta_type::<RuntimeError>(),
+	};
+
+	let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(
+		pallets,
+		extrinsic,
+		meta_type::<Runtime>(),
+		vec![],
+		outer_enums,
+		CustomMetadata { map: Default::default() },
+	)
+	.into();
 	let expected_metadata = match expected_metadata.1 {
-		RuntimeMetadata::V14(metadata) => metadata,
+		RuntimeMetadata::V15(metadata) => metadata,
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
-	let actual_metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V14(metadata) => metadata,
+	let bytes = &Runtime::metadata_at_version(LATEST_METADATA_VERSION)
+		.expect("Metadata must be present; qed");
+
+	let actual_metadata: RuntimeMetadataPrefixed =
+		Decode::decode(&mut &bytes[..]).expect("Metadata encoded properly; qed");
+
+	let actual_metadata = match actual_metadata.1 {
+		RuntimeMetadata::V15(metadata) => metadata,
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
@@ -1671,8 +1703,9 @@ fn metadata_at_version() {
 	use frame_support::metadata::*;
 	use sp_core::Decode;
 
+	// Metadata always returns the V14.3
 	let metadata = Runtime::metadata();
-	let at_metadata = match Runtime::metadata_at_version(LATEST_METADATA_VERSION) {
+	let at_metadata = match Runtime::metadata_at_version(14) {
 		Some(opaque) => {
 			let bytes = &*opaque;
 			let metadata: RuntimeMetadataPrefixed = Decode::decode(&mut &bytes[..]).unwrap();
