@@ -116,7 +116,7 @@ impl SomeAssociation2 for u64 {
 #[doc = include_str!("../../README.md")]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, storage::types::CountedStorageNMap};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::DispatchResult;
 
@@ -366,6 +366,27 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn nmap)]
+	pub type CountedNMap<T> = CountedStorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn nmap2)]
+	pub type CountedNMap2<T> = CountedStorageNMap<
+		Key = (NMapKey<Twox64Concat, u16>, NMapKey<Blake2_128Concat, u32>),
+		Value = u64,
+		MaxValues = ConstU32<11>,
+	>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn nmap3)]
+	pub type CountedNMap3<T> = CountedStorageNMap<
+		_,
+		(NMapKey<Blake2_128Concat, u8>, NMapKey<Twox64Concat, u16>),
+		u128,
+		ResultQuery<Error<T>::NonExistentStorageValue>,
+	>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn conditional_value)]
 	#[cfg(feature = "frame-feature-testing")]
 	pub type ConditionalValue<T> = StorageValue<_, u32>;
@@ -438,7 +459,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_storage_layer { .. }) {
-				return Ok(ValidTransaction::default())
+				return Ok(ValidTransaction::default());
 			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 		}
@@ -1628,9 +1649,9 @@ fn metadata() {
 		},
 	];
 
-	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs.is_empty() &&
-		pallets[0].error.as_ref().unwrap().ty.type_info().docs.is_empty() &&
-		pallets[0].calls.as_ref().unwrap().ty.type_info().docs.is_empty();
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs.is_empty()
+		&& pallets[0].error.as_ref().unwrap().ty.type_info().docs.is_empty()
+		&& pallets[0].calls.as_ref().unwrap().ty.type_info().docs.is_empty();
 
 	if cfg!(feature = "no-metadata-docs") {
 		assert!(empty_doc)
@@ -2108,8 +2129,8 @@ fn post_runtime_upgrade_detects_storage_version_issues() {
 		Example::on_genesis();
 		// The version isn't changed, we should detect it.
 		assert!(
-			Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap_err() ==
-				"On chain and current storage version do not match. Missing runtime upgrade?"
+			Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap_err()
+				== "On chain and current storage version do not match. Missing runtime upgrade?"
 					.into()
 		);
 	});
