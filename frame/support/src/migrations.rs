@@ -385,11 +385,7 @@ impl<T: SteppedMigration> SteppedMigrations for T {
 #[impl_trait_for_tuples::impl_for_tuples(1, 30)]
 impl SteppedMigrations for Tuple {
 	fn len() -> u32 {
-		let mut i = 0;
-
-		for_tuples!( #( i += Tuple::len(); )* );
-
-		i
+		for_tuples!( #( Tuple::len() )+* )
 	}
 
 	fn nth_id(n: u32) -> Option<Vec<u8>> {
