@@ -2994,7 +2994,7 @@ mod tests {
 
 		notif.on_swarm_event(FromSwarm::DialFailure(libp2p::swarm::behaviour::DialFailure {
 			peer_id: Some(peer),
-			error: &libp2p::swarm::DialError::Banned,
+			error: &libp2p::swarm::DialError::Aborted,
 			connection_id: ConnectionId::new_unchecked(1337),
 		}));
 
@@ -3531,7 +3531,7 @@ mod tests {
 		let now = Instant::now();
 		notif.on_swarm_event(FromSwarm::DialFailure(libp2p::swarm::behaviour::DialFailure {
 			peer_id: Some(peer),
-			error: &libp2p::swarm::DialError::Banned,
+			error: &libp2p::swarm::DialError::Aborted,
 			connection_id: ConnectionId::new_unchecked(0),
 		}));
 

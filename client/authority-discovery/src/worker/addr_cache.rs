@@ -178,7 +178,7 @@ fn addresses_to_peer_ids(addresses: &HashSet<Multiaddr>) -> HashSet<PeerId> {
 mod tests {
 	use super::*;
 
-	use libp2p::multihash::{self, Multihash};
+	use libp2p::multihash::Multihash;
 	use multihash_codetable::Code;
 	use quickcheck::{Arbitrary, Gen, QuickCheck, TestResult};
 
