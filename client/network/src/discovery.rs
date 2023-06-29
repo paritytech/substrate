@@ -663,6 +663,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			},
 			FromSwarm::NewListenAddr(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::NewListenAddr(e));
+
+				if let Some(ref mut mdns) = self.mdns {
+					mdns.on_swarm_event(FromSwarm::NewListenAddr(e));
+				}
 			},
 		}
 	}
