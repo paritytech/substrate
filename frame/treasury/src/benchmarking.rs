@@ -25,7 +25,7 @@ use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
-	traits::{EnsureOrigin, OnInitialize},
+	traits::{tokens::PaymentStatus, EnsureOrigin, OnInitialize},
 };
 use frame_system::RawOrigin;
 
@@ -65,11 +65,12 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
-// Create the pre-requisite information needed to create a treasury `spend`.
-fn setup_spend<T: Config<I>, I: 'static>(
+// Create the arguments for the `spend` dispatchable.
+fn create_spend_arguments<T: Config<I>, I: 'static>(
+	seed: u32,
 ) -> (T::AssetKind, AssetBalanceOf<T, I>, T::Beneficiary, BeneficiaryLookupOf<T, I>) {
-	let asset_kind = T::BenchmarkHelper::create_asset_kind(SEED);
-	let beneficiary = T::BenchmarkHelper::create_beneficiary([SEED.try_into().unwrap(); 32]);
+	let asset_kind = T::BenchmarkHelper::create_asset_kind(seed);
+	let beneficiary = T::BenchmarkHelper::create_beneficiary([seed.try_into().unwrap(); 32]);
 	let beneficiary_lookup = T::BeneficiaryLookup::unlookup(beneficiary.clone());
 	(asset_kind, 100u32.into(), beneficiary, beneficiary_lookup)
 }
@@ -150,7 +151,7 @@ benchmarks_instance_pallet! {
 	spend {
 		let origin =
 			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let (asset_kind, amount, beneficiary, beneficiary_lookup) = setup_spend::<T, _>();
+		let (asset_kind, amount, beneficiary, beneficiary_lookup) = create_spend_arguments::<T, _>(SEED);
 	}: _<T::RuntimeOrigin>(origin, asset_kind.clone(), amount, beneficiary_lookup)
 	verify {
 		let expire_at =
@@ -161,6 +162,64 @@ benchmarks_instance_pallet! {
 			amount,
 			beneficiary,
 			expire_at}.into());
+	}
+
+	payout {
+		let origin =
+			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let (asset_kind, amount, beneficiary, beneficiary_lookup) = create_spend_arguments::<T, _>(SEED);
+		Treasury::<T, _>::spend(
+			origin,
+			asset_kind.clone(),
+			amount,
+			beneficiary_lookup,
+		)?;
+		T::Paymaster::ensure_successful(&beneficiary, asset_kind, amount);
+		let caller: T::AccountId = account("caller", 0, SEED);
+	}: _(RawOrigin::Signed(caller.clone()), 0u32)
+	verify {
+		let id = match Spends::<T, I>::get(0).unwrap().status {
+			PaymentState::Attempted { id, .. } => {
+				assert_ne!(T::Paymaster::check_payment(id), PaymentStatus::Failure);
+				id
+			}
+			_ => panic!("No payout attempt made"),
+		};
+		assert_last_event::<T, I>(Event::Paid {
+			index: 0,
+			payment_id: id,}.into());
+		assert!(Treasury::<T, _>::payout(RawOrigin::Signed(caller).into(), 0u32).is_err());
+	}
+
+	check_status {
+		let origin =
+			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let (asset_kind, amount, beneficiary, beneficiary_lookup) = create_spend_arguments::<T, _>(SEED);
+		Treasury::<T, _>::spend(
+			origin,
+			asset_kind.clone(),
+			amount,
+			beneficiary_lookup,
+		)?;
+		T::Paymaster::ensure_successful(&beneficiary, asset_kind, amount);
+		let caller: T::AccountId = account("caller", 0, SEED);
+		Treasury::<T, _>::payout(
+			RawOrigin::Signed(caller.clone()).into(),
+			0u32,
+		)?;
+		let id = match Spends::<T, I>::get(0).unwrap().status {
+			PaymentState::Attempted { id, .. } => {
+				T::Paymaster::ensure_concluded(id);
+				assert_eq!(T::Paymaster::check_payment(id), PaymentStatus::Success);
+				id
+			}
+			_ => panic!("No payout attempt made"),
+		};
+	}: _(RawOrigin::Signed(caller.clone()), 0u32)
+	verify {
+		assert_last_event::<T, I>(Event::PaymentSucceed {
+			index: 0,
+			payment_id: id,}.into());
 	}
 
 	impl_benchmark_test_suite!(Treasury, crate::tests::new_test_ext(), crate::tests::Test);

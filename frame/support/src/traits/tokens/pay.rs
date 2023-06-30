@@ -114,7 +114,7 @@ pub struct PayAssetFromAccount<F, A>(sp_std::marker::PhantomData<(F, A)>);
 impl<A, F> frame_support::traits::tokens::Pay for PayAssetFromAccount<F, A>
 where
 	A: TypedGet,
-	F: fungibles::Mutate<A::Type>,
+	F: fungibles::Mutate<A::Type> + fungibles::Create<A::Type>,
 {
 	type Balance = F::Balance;
 	type Beneficiary = A::Type;
@@ -134,6 +134,7 @@ where
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_successful(_: &Self::Beneficiary, asset: Self::AssetKind, amount: Self::Balance) {
+		<F as fungibles::Create<_>>::create(asset.clone(), A::get(), true, amount).unwrap();
 		<F as fungibles::Mutate<_>>::mint_into(asset, &A::get(), amount).unwrap();
 	}
 	#[cfg(feature = "runtime-benchmarks")]
