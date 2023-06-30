@@ -11035,6 +11035,7 @@ dependencies = [
  "substrate-bip39",
  "thiserror",
  "tiny-bip39",
+ "tracing",
  "w3f-bls",
  "zeroize",
 ]

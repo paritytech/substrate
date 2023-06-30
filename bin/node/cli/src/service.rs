@@ -281,9 +281,10 @@ pub fn new_partial(
 					finality_provider: finality_proof_provider.clone(),
 				},
 				statement_store: rpc_statement_store.clone(),
+				backend: rpc_backend.clone(),
 			};
 
-			node_rpc::create_full(deps, rpc_backend.clone()).map_err(Into::into)
+			node_rpc::create_full(deps).map_err(Into::into)
 		};
 
 		(rpc_extensions_builder, shared_voter_state2)
