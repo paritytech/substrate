@@ -116,7 +116,7 @@ impl SomeAssociation2 for u64 {
 #[doc = include_str!("../../README.md")]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, storage::types::CountedStorageNMap};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::DispatchResult;
 

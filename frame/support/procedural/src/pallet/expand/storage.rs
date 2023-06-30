@@ -632,40 +632,74 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 
 		let cfg_attrs = &storage_def.cfg_attrs;
 
-		let maybe_counter = if let Metadata::CountedMap { .. } = storage_def.metadata {
-			let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
-			let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
-
-			quote::quote_spanned!(storage_def.attr_span =>
-				#(#cfg_attrs)*
-				#[doc(hidden)]
-				#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
-					core::marker::PhantomData<(#type_use_gen,)>
-				);
-				#(#cfg_attrs)*
-				impl<#type_impl_gen> #frame_support::traits::StorageInstance
-					for #counter_prefix_struct_ident<#type_use_gen>
-					#config_where_clause
-				{
-					fn pallet_prefix() -> &'static str {
-						<
-							<T as #frame_system::Config>::PalletInfo
-							as #frame_support::traits::PalletInfo
-						>::name::<Pallet<#type_use_gen>>()
-							.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
+		let maybe_counter = match storage_def.metadata {
+			Metadata::CountedMap { .. } => {
+				let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
+				let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
+	
+				quote::quote_spanned!(storage_def.attr_span =>
+					#(#cfg_attrs)*
+					#[doc(hidden)]
+					#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
+						core::marker::PhantomData<(#type_use_gen,)>
+					);
+					#(#cfg_attrs)*
+					impl<#type_impl_gen> #frame_support::traits::StorageInstance
+						for #counter_prefix_struct_ident<#type_use_gen>
+						#config_where_clause
+					{
+						fn pallet_prefix() -> &'static str {
+							<
+								<T as #frame_system::Config>::PalletInfo
+								as #frame_support::traits::PalletInfo
+							>::name::<Pallet<#type_use_gen>>()
+								.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
+						}
+						const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
 					}
-					const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
-				}
-				#(#cfg_attrs)*
-				impl<#type_impl_gen> #frame_support::storage::types::CountedStorageMapInstance
-					for #prefix_struct_ident<#type_use_gen>
-					#config_where_clause
-				{
-					type CounterPrefix = #counter_prefix_struct_ident<#type_use_gen>;
-				}
-			)
-		} else {
-			proc_macro2::TokenStream::default()
+					#(#cfg_attrs)*
+					impl<#type_impl_gen> #frame_support::storage::types::CountedStorageMapInstance
+						for #prefix_struct_ident<#type_use_gen>
+						#config_where_clause
+					{
+						type CounterPrefix = #counter_prefix_struct_ident<#type_use_gen>;
+					}
+				)
+			},
+			Metadata::CountedNMap { .. } => {
+				let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
+				let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
+	
+				quote::quote_spanned!(storage_def.attr_span =>
+					#(#cfg_attrs)*
+					#[doc(hidden)]
+					#prefix_struct_vis struct #counter_prefix_struct_ident<#type_use_gen>(
+						core::marker::PhantomData<(#type_use_gen,)>
+					);
+					#(#cfg_attrs)*
+					impl<#type_impl_gen> #frame_support::traits::StorageInstance
+						for #counter_prefix_struct_ident<#type_use_gen>
+						#config_where_clause
+					{
+						fn pallet_prefix() -> &'static str {
+							<
+								<T as #frame_system::Config>::PalletInfo
+								as #frame_support::traits::PalletInfo
+							>::name::<Pallet<#type_use_gen>>()
+								.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
+						}
+						const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
+					}
+					#(#cfg_attrs)*
+					impl<#type_impl_gen> #frame_support::storage::types::CountedStorageNMapInstance
+						for #prefix_struct_ident<#type_use_gen>
+						#config_where_clause
+					{
+						type CounterPrefix = #counter_prefix_struct_ident<#type_use_gen>;
+					}
+				)
+			},
+			_ => proc_macro2::TokenStream::default(),
 		};
 
 		quote::quote_spanned!(storage_def.attr_span =>

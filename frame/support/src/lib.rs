@@ -694,7 +694,7 @@ pub use frame_support_procedural::crate_to_crate_version;
 #[macro_export]
 macro_rules! fail {
 	( $y:expr ) => {{
-		return Err($y.into())
+		return Err($y.into());
 	}};
 }
 
@@ -1548,8 +1548,8 @@ pub mod pallet_prelude {
 		storage::{
 			bounded_vec::BoundedVec,
 			types::{
-				CountedStorageMap, Key as NMapKey, OptionQuery, ResultQuery, StorageDoubleMap,
-				StorageMap, StorageNMap, StorageValue, ValueQuery,
+				CountedStorageMap, CountedStorageNMap, Key as NMapKey, OptionQuery, ResultQuery,
+				StorageDoubleMap, StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
 		},
 		traits::{
