@@ -594,8 +594,8 @@ pub mod pallet {
 				} else {
 					return Err(<Error<T>>::ContractNotFound.into())
 				};
-				<WasmBlob<T>>::add_user(code_hash)?;
-				<WasmBlob<T>>::remove_user(contract.code_hash);
+				<WasmBlob<T>>::increment_refcount(code_hash)?;
+				<WasmBlob<T>>::decrement_refcount(contract.code_hash);
 				Self::deposit_event(
 					vec![T::Hashing::hash_of(&dest), code_hash, contract.code_hash],
 					Event::ContractCodeUpdated {

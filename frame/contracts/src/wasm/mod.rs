@@ -385,36 +385,6 @@ impl<T: Config> WasmBlob<T> {
 		Ok(code)
 	}
 
-	/// Decrement the reference count of a stored code by one.
-	///
-	/// # Note
-	///
-	/// A contract whose reference count dropped to zero isn't automatically removed. A
-	/// `remove_code` transaction must be submitted by the original uploader to do so.
-	fn decrement_refcount(code_hash: CodeHash<T>) {
-		<CodeInfoOf<T>>::mutate(code_hash, |existing| {
-			if let Some(info) = existing {
-				info.refcount = info.refcount.saturating_sub(1);
-			}
-		});
-	}
-
-	/// Increment the reference count of a of a stored code by one.
-	///
-	/// # Errors
-	///
-	/// [`Error::CodeNotFound`] is returned if no stored code found having the specified
-	/// `code_hash`.
-	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
-		<CodeInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
-			if let Some(info) = existing {
-				info.refcount = info.refcount.saturating_add(1);
-				Ok(())
-			} else {
-				Err(Error::<T>::CodeNotFound.into())
-			}
-		})
-	}
 	/// See [`Self::from_code_unchecked`].
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_unchecked(
@@ -466,12 +436,23 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		Ok(Self { code, code_info, code_hash })
 	}
 
-	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
-		Self::increment_refcount(code_hash)
+	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+		<CodeInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
+			if let Some(info) = existing {
+				info.refcount = info.refcount.saturating_add(1);
+				Ok(())
+			} else {
+				Err(Error::<T>::CodeNotFound.into())
+			}
+		})
 	}
 
-	fn remove_user(code_hash: CodeHash<T>) {
-		Self::decrement_refcount(code_hash)
+	fn decrement_refcount(code_hash: CodeHash<T>) {
+		<CodeInfoOf<T>>::mutate(code_hash, |existing| {
+			if let Some(info) = existing {
+				info.refcount = info.refcount.saturating_sub(1);
+			}
+		});
 	}
 
 	fn execute<E: Ext<T = T>>(

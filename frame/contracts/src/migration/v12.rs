@@ -141,7 +141,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 			log::debug!(target: LOG_TARGET, "Storage removed: 1 item, {} bytes", &code_len,);
 
 			// Storage usage prices could change over time, and accounts who uploaded their
-			// conctracts code before the storage deposits where introduced, had not been ever
+			// contracts code before the storage deposits where introduced, had not been ever
 			// charged with any deposit for that (see migration v6).
 			//
 			// This is why deposit to be refunded here is calculated as follows:
