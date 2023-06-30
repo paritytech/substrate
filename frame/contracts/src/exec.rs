@@ -848,11 +848,8 @@ where
 	fn run(&mut self, executable: E, input_data: Vec<u8>) -> Result<ExecReturnValue, ExecError> {
 		let frame = self.top_frame();
 		let entry_point = frame.entry_point;
-		let delegated_code_hash = if frame.delegate_caller.is_some() {
-			Some(*executable.code_hash())
-		} else {
-			None
-		};
+		let delegated_code_hash =
+			if frame.delegate_caller.is_some() { Some(*executable.code_hash()) } else { None };
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
