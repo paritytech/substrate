@@ -1352,10 +1352,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								"Deciding status cannot begin before confirming stage."
 						)
 					}
-
-					if let Some(alarm) = status.alarm {
-						ensure!(alarm.0 <= status.submitted.saturating_add(T::UndecidingTimeout::get()), "The alarm cannot be set more than `UndecidingTimeout` away from the submission block.")
-					}
 				},
 				_ => {},
 			}
