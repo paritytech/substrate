@@ -188,8 +188,7 @@ where
 	}
 }
 
-// TODO remove dev_mode
-#[frame_support::pallet(dev_mode)]
+#[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::{
@@ -558,6 +557,7 @@ pub mod pallet {
 		/// NOTE: For record-keeping purposes, the proposer is deemed to be equivalent to the
 		/// beneficiary.
 		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::spend_local())]
 		pub fn spend_local(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T, I>,
@@ -645,8 +645,8 @@ pub mod pallet {
 		/// - `asset_kind`: An indicator of the specific asset class to be spent.
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The beneficiary of the spend.
-		// TODO weight
 		#[pallet::call_index(5)]
+		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
 			origin: OriginFor<T>,
 			asset_kind: T::AssetKind,
@@ -712,8 +712,8 @@ pub mod pallet {
 		///
 		/// - `origin`: Must be `Signed`.
 		/// - `index`: The spend index.
-		// TODO weight
 		#[pallet::call_index(6)]
+		#[pallet::weight(T::WeightInfo::payout())]
 		pub fn payout(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
 			ensure_signed(origin)?;
 			let mut spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
@@ -743,8 +743,8 @@ pub mod pallet {
 		///
 		/// - `origin`: Must be `Signed`.
 		/// - `index`: The spend index.
-		// TODO weight
 		#[pallet::call_index(7)]
+		#[pallet::weight(T::WeightInfo::check_status())]
 		pub fn check_status(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
 			ensure_signed(origin)?;
 			let mut spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
