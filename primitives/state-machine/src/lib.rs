@@ -36,6 +36,8 @@ mod testing;
 mod trie_backend;
 mod trie_backend_essence;
 
+pub use trie_backend::TrieCacheProvider;
+
 #[cfg(feature = "std")]
 pub use std_reexport::*;
 

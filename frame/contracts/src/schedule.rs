@@ -145,21 +145,20 @@ impl Limits {
 /// There there is one field for each wasm instruction that describes the weight to
 /// execute one instruction of that name. There are a few exceptions:
 ///
-/// 1. If there is a i64 and a i32 variant of an instruction we use the weight
-///    of the former for both.
-/// 2. The following instructions are free of charge because they merely structure the
-///    wasm module and cannot be spammed without making the module invalid (and rejected):
-///    End, Unreachable, Return, Else
-/// 3. The following instructions cannot be benchmarked because they are removed by any
-///    real world execution engine as a preprocessing step and therefore don't yield a
-///    meaningful benchmark result. However, in contrast to the instructions mentioned
-///    in 2. they can be spammed. We price them with the same weight as the "default"
-///    instruction (i64.const): Block, Loop, Nop
-/// 4. We price both i64.const and drop as InstructionWeights.i64const / 2. The reason
-///    for that is that we cannot benchmark either of them on its own but we need their
-///    individual values to derive (by subtraction) the weight of all other instructions
-///    that use them as supporting instructions. Supporting means mainly pushing arguments
-///    and dropping return values in order to maintain a valid module.
+/// 1. If there is a i64 and a i32 variant of an instruction we use the weight of the former for
+///    both.
+/// 2. The following instructions are free of charge because they merely structure the wasm module
+///    and cannot be spammed without making the module invalid (and rejected): End, Unreachable,
+///    Return, Else
+/// 3. The following instructions cannot be benchmarked because they are removed by any real world
+///    execution engine as a preprocessing step and therefore don't yield a meaningful benchmark
+///    result. However, in contrast to the instructions mentioned in 2. they can be spammed. We
+///    price them with the same weight as the "default" instruction (i64.const): Block, Loop, Nop
+/// 4. We price both i64.const and drop as InstructionWeights.i64const / 2. The reason for that is
+///    that we cannot benchmark either of them on its own but we need their individual values to
+///    derive (by subtraction) the weight of all other instructions that use them as supporting
+///    instructions. Supporting means mainly pushing arguments and dropping return values in order
+///    to maintain a valid module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]

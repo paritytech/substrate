@@ -101,12 +101,11 @@ impl From<ExtrinsicMetadataIR> for ExtrinsicMetadata {
 	fn from(ir: ExtrinsicMetadataIR) -> Self {
 		ExtrinsicMetadata {
 			version: ir.version,
+			address_ty: ir.address_ty,
+			call_ty: ir.call_ty,
+			signature_ty: ir.signature_ty,
+			extra_ty: ir.extra_ty,
 			signed_extensions: ir.signed_extensions.into_iter().map(Into::into).collect(),
-			// Note: These fields are populated by complementary PR: https://github.com/paritytech/substrate/pull/14123.
-			address_ty: ir.ty,
-			call_ty: ir.ty,
-			signature_ty: ir.ty,
-			extra_ty: ir.ty,
 		}
 	}
 }
