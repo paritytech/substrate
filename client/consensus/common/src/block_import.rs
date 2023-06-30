@@ -20,7 +20,7 @@
 
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{Block as BlockT, HashFor, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, HashingFor, Header as HeaderT, NumberFor},
 	DigestItem, Justification, Justifications,
 };
 use std::{any::Any, borrow::Cow, collections::HashMap, sync::Arc};
@@ -121,7 +121,7 @@ pub struct BlockCheckParams<Block: BlockT> {
 /// Precomputed storage.
 pub enum StorageChanges<Block: BlockT, Transaction> {
 	/// Changes coming from block execution.
-	Changes(sp_state_machine::StorageChanges<Transaction, HashFor<Block>>),
+	Changes(sp_state_machine::StorageChanges<Transaction, HashingFor<Block>>),
 	/// Whole new state.
 	Import(ImportedState<Block>),
 }
