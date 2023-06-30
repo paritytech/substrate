@@ -1349,7 +1349,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						ensure!(
 							deciding.since <
 								deciding.confirming.unwrap_or(T::BlockNumber::max_value()),
-								"Deciding status cannot begin before confirming stage."
+							"Deciding status cannot begin before confirming stage."
 						)
 					}
 				},
