@@ -49,8 +49,8 @@ pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNam
 pub mod utils {
 	use futures::{channel::oneshot, Future, FutureExt, Stream, StreamExt};
 	use jsonrpsee::{
-		IntoSubscriptionCloseResponse, PendingSubscriptionSink, SendTimeoutError,
-		SubscriptionCloseResponse, SubscriptionMessage, SubscriptionSink,
+		types::SubscriptionId, IntoSubscriptionCloseResponse, PendingSubscriptionSink,
+		SendTimeoutError, SubscriptionCloseResponse, SubscriptionMessage, SubscriptionSink,
 	};
 	use sp_runtime::Serialize;
 
@@ -99,7 +99,7 @@ pub mod utils {
 
 					maybe_item = stream.next() => {
 						let msg = match maybe_item {
-							Some(item) => crate::utils::to_sub_message(&item),
+							Some(item) => crate::utils::to_sub_message_v2(sink.method_name(), sink.subscription_id(), &item),
 							None => break SubscriptionResponse::Closed,
 						};
 
@@ -150,8 +150,17 @@ pub mod utils {
 	/// # Panics
 	///
 	/// This function panics if the `Serialize` fails and is treated a bug.
-	pub fn to_sub_message(val: &impl Serialize) -> SubscriptionMessage {
-		SubscriptionMessage::from_json(val).expect("JSON serialization infallible; qed")
+	pub fn to_sub_message_v2(
+		method: &str,
+		sub_id: SubscriptionId,
+		result: &impl Serialize,
+	) -> SubscriptionMessage {
+		SubscriptionMessage::new(method, sub_id, result)
+			.expect("JSON serialization infallible; qed")
+	}
+
+	pub fn to_sub_message(result: &impl Serialize) -> SubscriptionMessage {
+		SubscriptionMessage::from_json(result).expect("JSON serialization infallible; qed")
 	}
 
 	/// Spawn a subscription task and wait until it completes.

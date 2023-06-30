@@ -57,7 +57,7 @@ pub const RPC_DEFAULT_MAX_RESPONSE_SIZE_MB: u32 = 15;
 pub const RPC_DEFAULT_MAX_CONNECTIONS: u32 = 100;
 /// The default number of messages the RPC server
 /// is allowed to keep in memory per connection.
-pub const RPC_DEFAULT_MESSAGE_CAPACITY_PER_CONN: u32 = 1024;
+pub const RPC_DEFAULT_MESSAGE_CAPACITY_PER_CONN: u32 = 64;
 
 /// Default configuration values used by Substrate
 ///

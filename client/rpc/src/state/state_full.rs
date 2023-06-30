@@ -424,27 +424,6 @@ where
 			},
 		};
 
-		let client = self.client.clone();
-
-		// Initial values
-		//
-		// This may read from the DB that's why is used `spawn_blocking` here.
-		// let Ok(initial) = tokio::task::spawn_blocking(move || {
-		//     stream::iter(keys.map(|keys| {
-		//         let block = client.info().best_hash;
-		//         let changes = keys
-		//         .into_iter()
-		//         .map(|key| {
-		//             let v = client.storage(block, &key).ok().flatten();
-		//             (key, v)
-		//         })
-		//         .collect();
-		//         StorageChangeSet { block, changes }
-		//     }))
-		// }).await else {
-		//     return;
-		// };
-
 		let initial = stream::iter(keys.map(|keys| {
 			let block = self.client.info().best_hash;
 			let changes = keys
