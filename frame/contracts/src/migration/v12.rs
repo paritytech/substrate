@@ -123,28 +123,22 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 	fn step(&mut self) -> (IsFinished, Weight) {
 		let mut iter = if let Some(last_key) = self.last_code_hash.take() {
-			PristineCode::<T>::iter_from(PristineCode::<T>::hashed_key_for(last_key))
+			old::OwnerInfoOf::<T>::iter_from(old::OwnerInfoOf::<T>::hashed_key_for(last_key))
 		} else {
-			PristineCode::<T>::iter()
+			old::OwnerInfoOf::<T>::iter()
 		};
-		if let Some((hash, code)) = iter.next() {
-			let old = old::OwnerInfoOf::<T>::take(hash)
-				.expect(format!("OwnerInfo for code_hash {:?} not found!", hash).as_str());
-
+		if let Some((hash, old_info)) = iter.next() {
 			log::debug!(target: LOG_TARGET, "Migrating OwnerInfo for code_hash {:?}", hash);
 
 			let module = old::CodeStorage::<T>::take(hash)
 				.expect(format!("No PrefabWasmModule found for code_hash: {:?}", hash).as_str());
 
+			let code_len = module.code.len();
 			// We print this to measure the impact of the migration.
 			// Storage removed: deleted PrefabWasmModule's encoded len.
 			// Storage added: determinism field encoded len (as all other CodeInfo fields are the
 			// same as in the deleted OwnerInfo).
-			log::debug!(
-				target: LOG_TARGET,
-				"Storage removed: 1 item, {} bytes",
-				module.encoded_size().saturating_sub(Determinism::max_encoded_len())
-			);
+			log::debug!(target: LOG_TARGET, "Storage removed: 1 item, {} bytes", &code_len,);
 
 			// Storage usage prices could change over time, and accounts who uploaded their
 			// conctracts code before the storage deposits where introduced, had not been ever
@@ -162,16 +156,16 @@ impl<T: Config> MigrationStep for Migration<T> {
 			let price_per_item = T::DepositPerItem::get();
 			let bytes_before = module
 				.encoded_size()
-				.saturating_add(code.len())
+				.saturating_add(code_len)
 				.saturating_add(old::OwnerInfo::<T>::max_encoded_len()) as u32;
 			let items_before = 3u32;
 			let deposit_expected_before = price_per_byte
 				.saturating_mul(bytes_before.into())
 				.saturating_add(price_per_item.saturating_mul(items_before.into()));
-			let ratio = FixedU128::checked_from_rational(old.deposit, deposit_expected_before)
+			let ratio = FixedU128::checked_from_rational(old_info.deposit, deposit_expected_before)
 				.unwrap_or_default()
 				.min(FixedU128::from_u32(1));
-			let bytes_after = code.len().saturating_add(CodeInfo::<T>::max_encoded_len()) as u32;
+			let bytes_after = code_len.saturating_add(CodeInfo::<T>::max_encoded_len()) as u32;
 			let items_after = 2u32;
 			let deposit_expected_after = price_per_byte
 				.saturating_mul(bytes_after.into())
@@ -180,12 +174,12 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 			let info = CodeInfo::<T> {
 				determinism: module.determinism,
-				owner: old.owner,
+				owner: old_info.owner,
 				deposit,
-				refcount: old.refcount,
+				refcount: old_info.refcount,
 			};
 
-			let amount = old.deposit.saturating_sub(info.deposit);
+			let amount = old_info.deposit.saturating_sub(info.deposit);
 			if !amount.is_zero() {
 				T::Currency::unreserve(&info.owner, amount);
 				log::debug!(
@@ -199,14 +193,14 @@ impl<T: Config> MigrationStep for Migration<T> {
 					target: LOG_TARGET,
 					"new deposit: {:?} >= old deposit: {:?}",
 					&info.deposit,
-					&old.deposit
+					&old_info.deposit
 				);
 			}
 			CodeInfoOf::<T>::insert(hash, info);
 
 			self.last_code_hash = Some(hash);
 
-			(IsFinished::No, T::WeightInfo::v12_migration_step(code.len() as u32))
+			(IsFinished::No, T::WeightInfo::v12_migration_step(code_len as u32))
 		} else {
 			log::debug!(target: LOG_TARGET, "No more OwnerInfo to migrate");
 			(IsFinished::Yes, T::WeightInfo::v12_migration_step(0))
