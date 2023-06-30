@@ -145,7 +145,9 @@ pub fn expand_runtime_metadata(
 			}
 
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
-				#scrate::metadata_ir::into_latest(#runtime::metadata_ir())
+				// Note: this always returns the V14 version. The runtime API function
+				// must be deprecated.
+				#scrate::metadata_ir::into_v14(#runtime::metadata_ir())
 			}
 
 			pub fn metadata_at_version(version: u32) -> Option<#scrate::OpaqueMetadata> {
