@@ -366,11 +366,11 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn nmap)]
+	#[pallet::getter(fn counted_nmap)]
 	pub type CountedNMap<T> = CountedStorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn nmap2)]
+	#[pallet::getter(fn counted_nmap2)]
 	pub type CountedNMap2<T> = CountedStorageNMap<
 		Key = (NMapKey<Twox64Concat, u16>, NMapKey<Blake2_128Concat, u32>),
 		Value = u64,
@@ -378,7 +378,7 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn nmap3)]
+	#[pallet::getter(fn counted_nmap3)]
 	pub type CountedNMap3<T> = CountedStorageNMap<
 		_,
 		(NMapKey<Blake2_128Concat, u8>, NMapKey<Twox64Concat, u16>),
@@ -408,6 +408,15 @@ pub mod pallet {
 	#[pallet::getter(fn conditional_nmap)]
 	pub type ConditionalNMap<T> =
 		StorageNMap<_, (storage::Key<Blake2_128Concat, u8>, storage::Key<Twox64Concat, u16>), u32>;
+
+	#[cfg(feature = "frame-feature-testing")]
+	#[pallet::storage]
+	#[pallet::getter(fn conditional_counted_nmap)]
+	pub type ConditionalCountedNMap<T> = CountedStorageNMap<
+		_,
+		(storage::Key<Blake2_128Concat, u8>, storage::Key<Twox64Concat, u16>),
+		u32,
+	>;
 
 	#[pallet::storage]
 	#[pallet::storage_prefix = "RenamedCountedMap"]
