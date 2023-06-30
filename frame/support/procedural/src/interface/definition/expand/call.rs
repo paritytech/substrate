@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::definition::{parse::Def, SelectorType};
+use crate::interface::definition::parse::Def;
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
@@ -23,7 +23,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 	let (span, where_clause, calls) = def.interface.calls();
 
 	let frame_support = &def.frame_support;
-	let sp_core = &def.sp_core;
+	let frame_system = &def.frame_system;
 	let call_ident = syn::Ident::new("Call", span);
 
 	let fn_name = calls.iter().map(|method| &method.name).collect::<Vec<_>>();
@@ -41,7 +41,6 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 
 	let type_impl_gen = quote::quote_spanned!(span => Runtime: #interface_trait_name);
 	let type_use_gen = quote::quote_spanned!(span => Runtime);
-	let type_decl_gen = quote::quote_spanned!(span => Runtime);
 
 	let fn_weight = calls.iter().map(|method| &method.weight);
 	let fn_doc = calls.iter().map(|method| &method.docs).collect::<Vec<_>>();
@@ -106,43 +105,6 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 			})
 			.collect::<Vec<_>>()
 	});
-
-	let select_def = calls
-		.iter()
-		.map(|method| match method.selector.as_ref() {
-			Some(selector_type) => match selector_type {
-				SelectorType::Default { .. } => {
-					quote::quote!(
-						let select = #frame_support::interface::Select::new(selectable, Box::new(DefaultSelector::<#type_use_gen>::new()));
-					)
-				},
-				SelectorType::Named { name, .. } => {
-					let name = name.clone();
-					quote::quote_spanned!(method.attr_span =>
-						let select = #frame_support::interface::Select::new(selectable, Box::new(#name::<#type_use_gen>::new()));
-					)
-				},
-			},
-			None => {
-				quote::quote!(
-					let select = #frame_support::interface::Select::new(selectable, Box::new(#frame_support::interface::EmptySelector::new()));
-					select.select()?;
-				)
-			},
-		})
-		.collect::<Vec<_>>();
-
-	let first_args_def = calls
-		.iter()
-		.map(|method| match method.selector.as_ref() {
-			Some(selector_type) => {
-				quote::quote!(origin, select,)
-			},
-			None => {
-				quote::quote!(origin,)
-			},
-		})
-		.collect::<Vec<_>>();
 
 	// Extracts #[allow] attributes, necessary so that we don't run into compiler warnings
 	let maybe_allow_attrs = calls
@@ -264,17 +226,16 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 		}
 
 
-		impl<#type_impl_gen> #frame_support::interface::Call
+		impl<#type_impl_gen> #frame_support::traits::UnfilteredDispatchable
 			for #call_ident<#type_use_gen>
 			#where_clause
 		{
-			type RuntimeOrigin = <#type_use_gen as #frame_support::interface::Core>::RuntimeOrigin;
+			type RuntimeOrigin = <#type_use_gen as #frame_system::Config>::RuntimeOrigin;
 
-			fn call(
+			fn dispatch_bypass_filter(
 				self,
 				origin: Self::RuntimeOrigin,
-				selectable: sp_core::H256,
-			) -> #frame_support::interface::CallResult {
+			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
 				#frame_support::dispatch_context::run_in_context(|| {
 					match self {
 						#(
@@ -284,8 +245,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 								);
 
 								#maybe_allow_attrs
-								#select_def
-								<#type_use_gen as #interface_trait_name>::#fn_name(#first_args_def #( #args_name, )* )
+								<#type_use_gen as #interface_trait_name>::#fn_name(origin, #( #args_name, )* )
 									.map(Into::into).map_err(Into::into)
 							},
 						)*

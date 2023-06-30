@@ -28,7 +28,7 @@ pub fn interface(
 		let msg = "Invalid interface macro call: unexpected attribute. Macro call must be \
 				bare, such as `#[frame_support::interface]` or `#[interface]`.";
 		let span = proc_macro2::TokenStream::from(attr).span();
-		return syn::Error::new(span, msg).to_compile_error().into()
+		return syn::Error::new(span, msg).to_compile_error().into();
 	}
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
@@ -36,12 +36,6 @@ pub fn interface(
 		Ok(def) => expand::expand(def).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
-}
-
-#[derive(Debug, Clone)]
-pub enum SelectorType {
-	Default { return_ty: Box<syn::Type> },
-	Named { name: syn::Ident, return_ty: Box<syn::Type> },
 }
 
 pub fn call_entry(
@@ -52,7 +46,7 @@ pub fn call_entry(
 		let msg = "Invalid interface macro call: unexpected attribute. Macro call must be \
 				bare, such as `#[frame_support::call_entry]` or `#[call_entry]`.";
 		let span = proc_macro2::TokenStream::from(attr).span();
-		return syn::Error::new(span, msg).to_compile_error().into()
+		return syn::Error::new(span, msg).to_compile_error().into();
 	}
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
@@ -70,7 +64,7 @@ pub fn view_entry(
 		let msg = "Invalid interface macro call: unexpected attribute. Macro call must be \
 				bare, such as `#[frame_support::call_entry]` or `#[call_entry]`.";
 		let span = proc_macro2::TokenStream::from(attr).span();
-		return syn::Error::new(span, msg).to_compile_error().into()
+		return syn::Error::new(span, msg).to_compile_error().into();
 	}
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);

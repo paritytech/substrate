@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use quote::ToTokens;
-use syn::parse_quote::ParseQuote;
 
 pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 	let indices = def.variants.iter().map(|var| var.index).collect::<Vec<_>>();
@@ -38,7 +37,7 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 
 	let impl_item = quote::quote_spanned!(def.span =>
 		impl #frame_support::interface::View for #enum_name {
-			fn view(self, selectable: #sp_core::H256) -> #frame_support::interface::ViewResult<Vec<u8>> {
+			fn view(self) -> #frame_support::interface::ViewResult<Vec<u8>> {
 				todo!()
 			}
 		}

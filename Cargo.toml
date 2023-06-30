@@ -130,6 +130,7 @@ members = [
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
 	"frame/insecure-randomness-collective-flip",
+	"frame/interface",
 	"frame/ranked-collective",
 	"frame/recovery",
 	"frame/referenda",

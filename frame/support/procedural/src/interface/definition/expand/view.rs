@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::interface::definition::{parse::Def, SelectorType};
+use crate::interface::definition::parse::Def;
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
@@ -23,7 +23,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 	let (span, where_clause, views) = def.interface.views();
 
 	let frame_support = &def.frame_support;
-	let sp_core = &def.sp_core;
+	let _sp_core = &def.sp_core;
 	let view_ident = syn::Ident::new("View", span);
 
 	let fn_name = views.iter().map(|method| &method.name).collect::<Vec<_>>();
@@ -41,7 +41,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 
 	let type_impl_gen = quote::quote_spanned!(span => Runtime: #interface_trait_name);
 	let type_use_gen = quote::quote_spanned!(span => Runtime);
-	let type_decl_gen = quote::quote_spanned!(span => Runtime);
+	let _type_decl_gen = quote::quote_spanned!(span => Runtime);
 
 	let fn_doc = views.iter().map(|method| &method.docs).collect::<Vec<_>>();
 
@@ -84,7 +84,7 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 	};
 
 	let args_name_pattern = make_args_name_pattern(None);
-	let args_name_pattern_ref = make_args_name_pattern(Some(quote::quote!(ref)));
+	let _args_name_pattern_ref = make_args_name_pattern(Some(quote::quote!(ref)));
 	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
 
 	let args_type = views
@@ -105,43 +105,6 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 			})
 			.collect::<Vec<_>>()
 	});
-
-	let select_def = views
-		.iter()
-		.map(|method| match method.selector.as_ref() {
-			Some(selector_type) => match selector_type {
-				SelectorType::Default { .. } => {
-					quote::quote!(
-						let select = #frame_support::interface::Select::new(selectable, Box::new(DefaultSelector::<#type_use_gen>::new()));
-					)
-				},
-				SelectorType::Named { name, .. } => {
-					let name = name.clone();
-					quote::quote_spanned!(method.attr_span =>
-						let select = #frame_support::interface::Select::new(selectable, Box::new(#name::<#type_use_gen>::new()));
-					)
-				},
-			},
-			None => {
-				quote::quote!(
-					let select = #frame_support::interface::Select::new(selectable, Box::new(#frame_support::interface::EmptySelector::new()));
-					select.select()?;
-				)
-			},
-		})
-		.collect::<Vec<_>>();
-
-	let first_args_def = views
-		.iter()
-		.map(|method| match method.selector.as_ref() {
-			Some(_selector_type) => {
-				quote::quote!(select,)
-			},
-			None => {
-				quote::quote!()
-			},
-		})
-		.collect::<Vec<_>>();
 
 	// Extracts #[allow] attributes, necessary so that we don't run into compiler warnings
 	let maybe_allow_attrs = views
@@ -213,7 +176,6 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 		{
 			fn view(
 				self,
-				selectable: sp_core::H256,
 			) -> #frame_support::interface::ViewResult<Vec<u8>> {
 					match self {
 						#(
@@ -223,13 +185,11 @@ pub fn expand(def: &Def) -> proc_macro2::TokenStream {
 								);
 
 								#maybe_allow_attrs
-								#select_def
-								<#type_use_gen as #interface_trait_name>::#fn_name(#first_args_def #( #args_name, )* )
+								<#type_use_gen as #interface_trait_name>::#fn_name(#( #args_name, )* )
 									.map(|ty| #frame_support::codec::Encode::encode(&ty)).map_err(Into::into)
 							},
 						)*
 						Self::__Ignore(_, _) => {
-							let _ = selectable; // Use selectable for empty view enum
 							unreachable!("__PhantomItem cannot be used.");
 						},
 					}

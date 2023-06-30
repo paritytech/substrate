@@ -16,13 +16,13 @@
 // limitations under the License.
 
 use quote::ToTokens;
-use syn::parse_quote::ParseQuote;
 
 pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 	let indices = def.variants.iter().map(|var| var.index).collect::<Vec<_>>();
 	let name = def.variants.iter().map(|var| var.name.clone()).collect::<Vec<_>>();
-	let inner_types = def.variants.iter().map(|var| var.inner.clone()).collect::<Vec<_>>();
+	let _inner_types = def.variants.iter().map(|var| var.inner.clone()).collect::<Vec<_>>();
 	let frame_support = def.frame_support;
+	let frame_system = def.frame_system;
 	let sp_core = def.sp_core;
 	let enum_name = def.item.ident.clone();
 	let runtime = def.runtime.clone();
@@ -46,16 +46,30 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 		}
 
 
-		impl #frame_support::interface::Call for #enum_name {
-			type RuntimeOrigin = <#runtime as #frame_support::interface::Core>::RuntimeOrigin;
+		impl #frame_support::traits::UnfilteredDispatchable
+			for #enum_name
+		{
+			type RuntimeOrigin = <#runtime as #frame_system::Config>::RuntimeOrigin;
 
-			fn call(self, origin: Self::RuntimeOrigin, selectable: #sp_core::H256) -> #frame_support::interface::CallResult {
-				todo!()
+			fn dispatch_bypass_filter(
+				self,
+				origin: Self::RuntimeOrigin,
+			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
+				#frame_support::dispatch_context::run_in_context(|| {
+					match self {
+						#(
+							Self::#name(interface) => {
+								#frame_support::sp_tracing::enter_span!(
+									#frame_support::sp_tracing::trace_span!(stringify!(#name))
+								);
+
+								#frame_support::traits::UnfilteredDispatchable::dispatch_bypass_filter(interface, origin)
+									.map(Into::into).map_err(Into::into)
+							},
+						)*
+					}
+				})
 			}
-		}
-
-		impl #frame_support::interface::Core for #enum_name {
-			type RuntimeOrigin = <#runtime as #frame_support::interface::Core>::RuntimeOrigin;
 		}
 
 

@@ -25,8 +25,6 @@ pub fn expand_outer_event(
 	runtime: &Ident,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
-	// TODO: If events are ready from interfaces then do this here.
-	_interface: Option<syn::TypePath>,
 ) -> syn::Result<TokenStream> {
 	let mut event_variants = TokenStream::new();
 	let mut event_conversions = TokenStream::new();

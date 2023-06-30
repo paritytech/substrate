@@ -31,6 +31,7 @@ pub struct Def {
 	pub error: Option<ErrorDef>,
 	pub event: Option<EventDef>,
 	pub frame_support: syn::Ident,
+	pub frame_system: syn::Ident,
 	pub sp_core: syn::Ident,
 }
 
@@ -47,6 +48,7 @@ impl Def {
 			.1;
 
 		let frame_support = generate_crate_access_2018("frame-support")?;
+		let frame_system = generate_crate_access_2018("frame-system")?;
 		let sp_core = generate_crate_access_2018("sp-core")?;
 		let mut interface = None;
 		let mut error = None;
@@ -57,9 +59,15 @@ impl Def {
 				crate::interface::helper::take_first_item_interface_attr(item)?;
 
 			match interface_attr {
-				Some(InterfaceAttr::Definition(span)) if interface.is_none() =>
-					interface =
-						Some(InterfaceDef::try_from(span, index, item, frame_support.clone())?),
+				Some(InterfaceAttr::Definition(span)) if interface.is_none() => {
+					interface = Some(InterfaceDef::try_from(
+						span,
+						index,
+						item,
+						frame_support.clone(),
+						frame_system.clone(),
+					)?)
+				},
 				Some(InterfaceAttr::Event(span)) if event.is_none() => {
 					event = Some(EventDef::try_from(span, index, item)?);
 				},
@@ -68,7 +76,7 @@ impl Def {
 				},
 				Some(attr) => {
 					let msg = "Invalid duplicated attribute";
-					return Err(syn::Error::new(attr.span(), msg))
+					return Err(syn::Error::new(attr.span(), msg));
 				},
 				None => (),
 			}
@@ -80,7 +88,7 @@ impl Def {
 			syn::Error::new(item_span, msg)
 		})?;
 
-		Ok(Def { item, interface, error, event, frame_support, sp_core })
+		Ok(Def { item, interface, error, event, frame_support, frame_system, sp_core })
 	}
 }
 

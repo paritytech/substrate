@@ -72,14 +72,11 @@ impl Def {
 				None => {
 					let msg = "Invalid view_entry variant, no `#[view_entry::index($expr)]` \
 					 attributes used on variant. Explicit index must be provided.";
-					return Err(syn::Error::new(variant.span(), msg))
+					return Err(syn::Error::new(variant.span(), msg));
 				},
-				Some(index) =>
-					if let ViewEntryAttr::Index(_, idx) = index {
-						idx
-					} else {
-						unreachable!("Ensured by logic above.")
-					},
+				Some(index) => match index {
+					ViewEntryAttr::Index(_, idx) => idx,
+				},
 			};
 
 			assert!(indices.insert(variant.ident.clone(), call_idx).is_none());
@@ -88,18 +85,19 @@ impl Def {
 				syn::Fields::Unit | syn::Fields::Named(..) => {
 					let msg = "Invalid view_entry variant, only unnamed variants are allowed.` \
 					 attributes used on variant. Explicit index must be provided.";
-					return Err(syn::Error::new(variant.span(), msg))
+					return Err(syn::Error::new(variant.span(), msg));
 				},
-				syn::Fields::Unnamed(unnamed) =>
-					match unnamed.unnamed.len().cmp(&1) {
-						Ordering::Equal =>
-							unnamed.unnamed.first().expect("Is one. Qed.").ty.clone(),
-						Ordering::Greater | Ordering::Less => {
-							let msg = format!("Invalid view_entry variant, only a single unnamed field is allowed.` \
-					 			Try using the following: {}($ty).", variant.ident);
-							return Err(syn::Error::new(variant.span(), msg))
-						},
+				syn::Fields::Unnamed(unnamed) => match unnamed.unnamed.len().cmp(&1) {
+					Ordering::Equal => unnamed.unnamed.first().expect("Is one. Qed.").ty.clone(),
+					Ordering::Greater | Ordering::Less => {
+						let msg = format!(
+							"Invalid view_entry variant, only a single unnamed field is allowed.` \
+					 			Try using the following: {}($ty).",
+							variant.ident
+						);
+						return Err(syn::Error::new(variant.span(), msg));
 					},
+				},
 			};
 
 			variants.push(VariantDef {
@@ -149,7 +147,7 @@ impl syn::parse::Parse for ViewEntryAttr {
 			let index = call_index_content.parse::<syn::LitInt>()?;
 			if !index.suffix().is_empty() {
 				let msg = "Number literal must not have a suffix";
-				return Err(syn::Error::new(index.span(), msg))
+				return Err(syn::Error::new(index.span(), msg));
 			}
 			Ok(ViewEntryAttr::Index(span, index.base10_parse()?))
 		} else {

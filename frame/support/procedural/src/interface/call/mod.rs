@@ -25,10 +25,10 @@ pub fn call_entry(
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
 	let runtime = if attr.is_empty() {
-		let msg = "Invalid interface macro call: unexpected attribute. Macro call must be \
-				bare, such as `#[frame_support::call_entry($ident)]` or `#[call_entry($ident)]`.";
+		let msg = "Invalid interface macro call: unexpected attribute. Macro call must contain \
+				runtime identifier, such as `#[frame_support::call_entry($ident)]` or `#[call_entry($ident)]`.";
 		let span = proc_macro2::TokenStream::from(attr).span();
-		return syn::Error::new(span, msg).to_compile_error().into()
+		return syn::Error::new(span, msg).to_compile_error().into();
 	} else {
 		syn::parse_macro_input!(attr as syn::Ident)
 	};

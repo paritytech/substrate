@@ -25,7 +25,7 @@ impl ErrorDef {
 	) -> syn::Result<Self> {
 		Err(syn::Error::new(
 			attr_span,
-			"Invalid #[interface::event]. Interface events not yet supported.",
+			"Invalid #[interface::error]. Interface errors not yet supported.",
 		))
 	}
 }
