@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate as pallet_template;
-use frame_support::derive_impl;
+use frame_support::{derive_impl, sp_runtime::BuildStorage};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
