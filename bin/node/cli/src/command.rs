@@ -117,7 +117,7 @@ pub fn run() -> Result<()> {
 							)
 						}
 
-						cmd.run::<Block, ExecutorDispatch>(config)
+						cmd.run::<Block, sp_statement_store::runtime_api::HostFunctions>(config)
 					},
 					BenchmarkCmd::Block(cmd) => {
 						// ensure that we keep the task manager alive

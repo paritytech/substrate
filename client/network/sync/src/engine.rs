@@ -36,22 +36,16 @@ use prometheus_endpoint::{
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network::{
-	config::{
-		FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
-	},
+	config::{FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId},
 	utils::LruHashSet,
 	NotificationsSink, ProtocolName, ReputationChange,
 };
 use sc_network_common::{
 	role::Roles,
 	sync::{
-		message::{
-			generic::{BlockData, BlockResponse},
-			BlockAnnounce, BlockAnnouncesHandshake, BlockState,
-		},
+		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockState},
 		warp::WarpSyncParams,
 		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncEvent,
-		SyncMode,
 	},
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -290,12 +284,7 @@ where
 		warp_sync_protocol_name: Option<ProtocolName>,
 		rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
 	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
-		let mode = match net_config.network_config.sync_mode {
-			SyncOperationMode::Full => SyncMode::Full,
-			SyncOperationMode::Fast { skip_proofs, storage_chain_mode } =>
-				SyncMode::LightState { skip_proofs, storage_chain_mode },
-			SyncOperationMode::Warp => SyncMode::Warp,
-		};
+		let mode = net_config.network_config.sync_mode;
 		let max_parallel_downloads = net_config.network_config.max_parallel_downloads;
 		let max_blocks_per_request = if net_config.network_config.max_blocks_per_request >
 			crate::MAX_BLOCKS_IN_RESPONSE as u32
@@ -469,8 +458,8 @@ where
 		&mut self,
 		validation_result: PollBlockAnnounceValidation<B::Header>,
 	) {
-		let (header, _is_best, who) = match validation_result {
-			PollBlockAnnounceValidation::Skip => return,
+		match validation_result {
+			PollBlockAnnounceValidation::Skip => {},
 			PollBlockAnnounceValidation::Nothing { is_best: _, who, announce } => {
 				self.update_peer_info(&who);
 
@@ -479,19 +468,6 @@ where
 						self.block_announce_data_cache.put(announce.header.hash(), data);
 					}
 				}
-
-				return
-			},
-			PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
-				self.update_peer_info(&who);
-
-				if let Some(data) = announce.data {
-					if !data.is_empty() {
-						self.block_announce_data_cache.put(announce.header.hash(), data);
-					}
-				}
-
-				(announce.header, is_best, who)
 			},
 			PollBlockAnnounceValidation::Failure { who, disconnect } => {
 				if disconnect {
@@ -500,31 +476,8 @@ where
 				}
 
 				self.network_service.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
-				return
 			},
-		};
-
-		// to import header from announced block let's construct response to request that normally
-		// would have been sent over network (but it is not in our case)
-		let blocks_to_import = self.chain_sync.on_block_data(
-			&who,
-			None,
-			BlockResponse {
-				id: 0,
-				blocks: vec![BlockData {
-					hash: header.hash(),
-					header: Some(header),
-					body: None,
-					indexed_body: None,
-					receipt: None,
-					message_queue: None,
-					justification: None,
-					justifications: None,
-				}],
-			},
-		);
-
-		self.chain_sync.process_block_response_data(blocks_to_import);
+		}
 	}
 
 	/// Push a block announce validation.

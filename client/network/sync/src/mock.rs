@@ -59,7 +59,6 @@ mockall::mock! {
 			request: Option<BlockRequest<Block>>,
 			response: BlockResponse<Block>,
 		) -> Result<OnBlockData<Block>, BadPeer>;
-		fn process_block_response_data(&mut self, blocks_to_import: Result<OnBlockData<Block>, BadPeer>);
 		fn on_block_justification(
 			&mut self,
 			who: PeerId,
