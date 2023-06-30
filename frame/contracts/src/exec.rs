@@ -849,7 +849,7 @@ where
 		let frame = self.top_frame();
 		let entry_point = frame.entry_point;
 		let delegated_code_hash = if frame.delegate_caller.is_some() {
-			Some(executable.code_hash().clone())
+			Some(*executable.code_hash())
 		} else {
 			None
 		};
