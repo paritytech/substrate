@@ -36,7 +36,10 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::{DispatchError, ModuleError};
+use sp_runtime::{
+	traits::{Extrinsic as ExtrinsicT, SignaturePayload as SignaturePayloadT},
+	DispatchError, ModuleError,
+};
 
 parameter_types! {
 	/// Used to control if the storage version should be updated.
@@ -44,7 +47,7 @@ parameter_types! {
 }
 
 /// Latest stable metadata version used for testing.
-const LATEST_METADATA_VERSION: u32 = 14;
+const LATEST_METADATA_VERSION: u32 = 15;
 
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
@@ -1302,7 +1305,8 @@ fn migrate_from_pallet_version_to_storage_version() {
 
 #[test]
 fn metadata() {
-	use frame_support::metadata::*;
+	use codec::Decode;
+	use frame_support::metadata::{v15::*, *};
 
 	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
 		if cfg!(feature = "no-metadata-docs") {
@@ -1311,6 +1315,9 @@ fn metadata() {
 			doc
 		}
 	}
+
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected_pallet_doc = vec![" Pallet documentation", readme, readme];
 
 	let pallets = vec![
 		PalletMetadata {
@@ -1572,6 +1579,7 @@ fn metadata() {
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
+			docs: expected_pallet_doc,
 		},
 		PalletMetadata {
 			index: 2,
@@ -1610,6 +1618,7 @@ fn metadata() {
 			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
 			constants: vec![],
 			error: None,
+			docs: vec![],
 		},
 		#[cfg(feature = "frame-feature-testing")]
 		PalletMetadata {
@@ -1620,6 +1629,7 @@ fn metadata() {
 			event: None,
 			constants: vec![],
 			error: None,
+			docs: vec![" Test that the supertrait check works when we pass some parameter to the `frame_system::Config`."],
 		},
 		#[cfg(feature = "frame-feature-testing-2")]
 		PalletMetadata {
@@ -1630,6 +1640,7 @@ fn metadata() {
 			event: None,
 			constants: vec![],
 			error: None,
+			docs: vec![" Test that the supertrait check works when we pass some parameter to the `frame_system::Config`."],
 		},
 	];
 
@@ -1644,24 +1655,48 @@ fn metadata() {
 	}
 
 	let extrinsic = ExtrinsicMetadata {
-		ty: meta_type::<UncheckedExtrinsic>(),
 		version: 4,
 		signed_extensions: vec![SignedExtensionMetadata {
 			identifier: "UnitSignedExtension",
 			ty: meta_type::<()>(),
 			additional_signed: meta_type::<()>(),
 		}],
+		address_ty: meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureAddress>(),
+		call_ty: meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Call>(),
+		signature_ty: meta_type::<
+			<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::Signature
+		>(),
+		extra_ty: meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureExtra>(),
 	};
 
-	let expected_metadata: RuntimeMetadataPrefixed =
-		RuntimeMetadataLastVersion::new(pallets, extrinsic, meta_type::<Runtime>()).into();
+	let outer_enums = OuterEnums {
+		call_enum_ty: meta_type::<RuntimeCall>(),
+		event_enum_ty: meta_type::<RuntimeEvent>(),
+		error_enum_ty: meta_type::<RuntimeError>(),
+	};
+
+	let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(
+		pallets,
+		extrinsic,
+		meta_type::<Runtime>(),
+		vec![],
+		outer_enums,
+		CustomMetadata { map: Default::default() },
+	)
+	.into();
 	let expected_metadata = match expected_metadata.1 {
-		RuntimeMetadata::V14(metadata) => metadata,
+		RuntimeMetadata::V15(metadata) => metadata,
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
-	let actual_metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V14(metadata) => metadata,
+	let bytes = &Runtime::metadata_at_version(LATEST_METADATA_VERSION)
+		.expect("Metadata must be present; qed");
+
+	let actual_metadata: RuntimeMetadataPrefixed =
+		Decode::decode(&mut &bytes[..]).expect("Metadata encoded properly; qed");
+
+	let actual_metadata = match actual_metadata.1 {
+		RuntimeMetadata::V15(metadata) => metadata,
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
@@ -1673,8 +1708,9 @@ fn metadata_at_version() {
 	use frame_support::metadata::*;
 	use sp_core::Decode;
 
+	// Metadata always returns the V14.3
 	let metadata = Runtime::metadata();
-	let at_metadata = match Runtime::metadata_at_version(LATEST_METADATA_VERSION) {
+	let at_metadata = match Runtime::metadata_at_version(14) {
 		Some(opaque) => {
 			let bytes = &*opaque;
 			let metadata: RuntimeMetadataPrefixed = Decode::decode(&mut &bytes[..]).unwrap();
@@ -1688,7 +1724,7 @@ fn metadata_at_version() {
 
 #[test]
 fn metadata_versions() {
-	assert_eq!(vec![LATEST_METADATA_VERSION, u32::MAX], Runtime::metadata_versions());
+	assert_eq!(vec![14, LATEST_METADATA_VERSION], Runtime::metadata_versions());
 }
 
 #[test]
@@ -1706,6 +1742,28 @@ fn metadata_ir_pallet_runtime_docs() {
 }
 
 #[test]
+fn extrinsic_metadata_ir_types() {
+	let ir = Runtime::metadata_ir().extrinsic;
+
+	assert_eq!(meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureAddress>(), ir.address_ty);
+	assert_eq!(meta_type::<u64>(), ir.address_ty);
+
+	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Call>(), ir.call_ty);
+	assert_eq!(meta_type::<RuntimeCall>(), ir.call_ty);
+
+	assert_eq!(
+		meta_type::<
+			<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::Signature,
+		>(),
+		ir.signature_ty
+	);
+	assert_eq!(meta_type::<()>(), ir.signature_ty);
+
+	assert_eq!(meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureExtra>(), ir.extra_ty);
+	assert_eq!(meta_type::<frame_system::CheckNonZeroSender<Runtime>>(), ir.extra_ty);
+}
+
+#[test]
 fn test_pallet_runtime_docs() {
 	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
 	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
@@ -1718,7 +1776,6 @@ fn test_pallet_info_access() {
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::name(), "System");
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::name(), "Example");
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::name(), "Example2");
-
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 2);

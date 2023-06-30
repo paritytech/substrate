@@ -1,4 +1,4 @@
-error: expected one of: `Pallet`, `Call`, `Storage`, `Event`, `Config`, `Origin`, `Inherent`, `ValidateUnsigned`, `FreezeReason`, `HoldReason`, `LockId`, `SlashReason`
+error: expected one of: `Pallet`, `Call`, `Storage`, `Event`, `Error`, `Config`, `Origin`, `Inherent`, `ValidateUnsigned`, `FreezeReason`, `HoldReason`, `LockId`, `SlashReason`
  --> $DIR/invalid_module_details_keyword.rs:9:20
   |
 9 |         system: System::{enum},

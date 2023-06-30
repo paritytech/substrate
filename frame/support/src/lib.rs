@@ -2716,13 +2716,13 @@ pub mod pallet_prelude {
 ///     - query the metadata using the `state_getMetadata` RPC and curl, or use `subsee -p
 ///       <PALLET_NAME> > meta.json`
 /// 2. Generate the template upgrade for the pallet provided by `decl_storage` with the
-///     environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
-///     my_pallet`. This template can be used as it contains all information for storages,
-///     genesis config and genesis build.
+///    environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
+///    my_pallet`. This template can be used as it contains all information for storages,
+///    genesis config and genesis build.
 /// 3. Reorganize the pallet to have the trait `Config`, `decl_*` macros,
-///     [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
-///     [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
-///     file. Suggested order:
+///    [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
+///    [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
+///    file. Suggested order:
 ///     * `Config`,
 ///     * `decl_module`,
 ///     * `decl_event`,
@@ -2782,8 +2782,8 @@ pub mod pallet_prelude {
 /// 8. **migrate error**: rewrite it with attribute
 ///    [`#[pallet::error]`](#error-palleterror-optional).
 /// 9. **migrate storage**: `decl_storage` provide an upgrade template (see 3.). All storages,
-///     genesis config, genesis build and default implementation of genesis config can be
-///     taken from it directly.
+///    genesis config, genesis build and default implementation of genesis config can be taken
+///    from it directly.
 ///
 ///     Otherwise here is the manual process:
 ///
@@ -2904,9 +2904,9 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, composite_enum, config, constant,
 		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
-		generate_store, genesis_build, genesis_config, getter, hooks, inherent, no_default, origin,
-		storage, storage_prefix, storage_version, type_value, unbounded, validate_unsigned, weight,
-		whitelist_storage,
+		generate_store, genesis_build, genesis_config, getter, hooks, import_section, inherent,
+		no_default, origin, pallet_section, storage, storage_prefix, storage_version, type_value,
+		unbounded, validate_unsigned, weight, whitelist_storage,
 	};
 }
 

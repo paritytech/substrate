@@ -656,7 +656,7 @@ impl<T: Config> Pallet<T> {
 		//
 		// At index `idx`:
 		// 1. A (ImOnline) public key to be used by a validator at index `idx` to send im-online
-		//          heartbeats.
+		//    heartbeats.
 		let authorities = Keys::<T>::get();
 
 		// local keystore

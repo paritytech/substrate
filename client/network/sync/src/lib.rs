@@ -1003,19 +1003,6 @@ where
 		Ok(self.validate_and_queue_blocks(new_blocks, gap))
 	}
 
-	fn process_block_response_data(&mut self, blocks_to_import: Result<OnBlockData<B>, BadPeer>) {
-		match blocks_to_import {
-			Ok(OnBlockData::Import(origin, blocks)) => self.import_blocks(origin, blocks),
-			Ok(OnBlockData::Request(peer, req)) => self.send_block_request(peer, req),
-			Ok(OnBlockData::Continue) => {},
-			Err(BadPeer(id, repu)) => {
-				self.network_service
-					.disconnect_peer(id, self.block_announce_protocol_name.clone());
-				self.network_service.report_peer(id, repu);
-			},
-		}
-	}
-
 	fn on_block_justification(
 		&mut self,
 		who: PeerId,
@@ -1499,7 +1486,6 @@ where
 		match self.mode {
 			SyncMode::Full =>
 				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
-			SyncMode::Light => BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
 			SyncMode::LightState { storage_chain_mode: false, .. } | SyncMode::Warp =>
 				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
 			SyncMode::LightState { storage_chain_mode: true, .. } =>
@@ -1512,7 +1498,6 @@ where
 	fn skip_execution(&self) -> bool {
 		match self.mode {
 			SyncMode::Full => false,
-			SyncMode::Light => true,
 			SyncMode::LightState { .. } => true,
 			SyncMode::Warp => true,
 		}
@@ -1757,18 +1742,6 @@ where
 				announce.header,
 			);
 			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
-		}
-
-		let requires_additional_data = self.mode != SyncMode::Light || !known_parent;
-		if !requires_additional_data {
-			trace!(
-				target: "sync",
-				"Importing new header announced from {}: {} {:?}",
-				who,
-				hash,
-				announce.header,
-			);
-			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
 		if self.status().state == SyncState::Idle {
