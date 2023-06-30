@@ -22,9 +22,7 @@ wasm-timer = "0.2.5"
 prometheus = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
-sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
-sc-network-common = { version = "0.10.0-dev", path = "../../network/common" }
 sc-network-gossip = { version = "0.10.0-dev", path = "../../network-gossip" }
 sc-network-sync = { version = "0.10.0-dev", path = "../../network/sync" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
