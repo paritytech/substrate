@@ -140,3 +140,25 @@ where
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_concluded(_: Self::Id) {}
 }
+
+impl Pay for () {
+	type Balance = u32;
+	type Beneficiary = ();
+	type AssetKind = ();
+	type Id = ();
+	type Error = ();
+	fn pay(
+		_: &Self::Beneficiary,
+		_: Self::AssetKind,
+		_: Self::Balance,
+	) -> Result<Self::Id, Self::Error> {
+		Err(())
+	}
+	fn check_payment(_: Self::Id) -> PaymentStatus {
+		PaymentStatus::Failure
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_successful(_: &Self::Beneficiary, _: Self::AssetKind, _: Self::Balance) {}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_concluded(_: Self::Id) {}
+}

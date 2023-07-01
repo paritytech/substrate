@@ -32,7 +32,7 @@ use frame_support::{
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	storage::StoragePrefixedMap,
-	traits::{ConstU32, ConstU64, SortedMembers, StorageVersion},
+	traits::{tokens::PayFromAccount, ConstU32, ConstU64, SortedMembers, StorageVersion},
 	PalletId,
 };
 
@@ -131,7 +131,10 @@ parameter_types! {
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
+	pub TreasuryAccount: u128 = TreasuryPalletId::get().into_account_truncating();
+	pub TreasuryAccount2: u128 = TreasuryPalletId2::get().into_account_truncating();
 }
+
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
@@ -149,6 +152,12 @@ impl pallet_treasury::Config for Test {
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = ();
+	type PayoutPeriod = ConstU64<10>;
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -168,6 +177,12 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount2>;
+	type BalanceConverter = ();
+	type PayoutPeriod = ConstU64<10>;
 }
 
 parameter_types! {

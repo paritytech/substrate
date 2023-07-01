@@ -101,7 +101,7 @@ pub use sp_runtime::BuildStorage;
 pub mod impls;
 #[cfg(not(feature = "runtime-benchmarks"))]
 use impls::AllianceIdentityVerifier;
-use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor, IdentityBalanceConversion};
+use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -1135,7 +1135,7 @@ impl pallet_treasury::Config for Runtime {
 	type Beneficiary = AccountId;
 	type BeneficiaryLookup = Indices;
 	type Paymaster = PayAssetFromAccount<Assets, TreasuryAccount>;
-	type BalanceConverter = IdentityBalanceConversion;
+	type BalanceConverter = ();
 	type PayoutPeriod = SpendPayoutPeriod;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();

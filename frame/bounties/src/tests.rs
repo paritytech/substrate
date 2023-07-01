@@ -26,14 +26,14 @@ use frame_support::{
 	assert_noop, assert_ok,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	traits::{tokens::PayFromAccount, ConstU32, ConstU64, OnInitialize},
 	PalletId,
 };
 
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	traits::{AccountIdConversion, BadOrigin, BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill, Storage,
 };
 
@@ -112,6 +112,8 @@ parameter_types! {
 	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
 	pub static SpendLimit: Balance = u64::MAX;
 	pub static SpendLimit1: Balance = u64::MAX;
+	pub TreasuryAccount: u128 = TreasuryPalletId::get().into_account_truncating();
+	pub TreasuryAccount2: u128 = TreasuryPalletId2::get().into_account_truncating();
 }
 
 impl pallet_treasury::Config for Test {
@@ -131,6 +133,12 @@ impl pallet_treasury::Config for Test {
 	type SpendFunds = Bounties;
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = ();
+	type PayoutPeriod = ConstU64<10>;
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -150,6 +158,12 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type SpendFunds = Bounties1;
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit1>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount2>;
+	type BalanceConverter = ();
+	type PayoutPeriod = ConstU64<10>;
 }
 
 parameter_types! {

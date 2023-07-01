@@ -21,7 +21,6 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		fungibles::{Balanced, Credit},
-		tokens::ConversionFromAssetBalance,
 		Currency, OnUnbalanced,
 	},
 };
@@ -108,19 +107,6 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 
 	fn proposal_of(proposal_hash: Hash) -> Option<RuntimeCall> {
 		AllianceMotion::proposal_of(proposal_hash)
-	}
-}
-
-/// A structure that performs identity conversion from asset balance value into balance.
-pub struct IdentityBalanceConversion;
-impl<AssetBalance, AssetId, OutBalance>
-	ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> for IdentityBalanceConversion
-where
-	AssetBalance: Into<OutBalance>,
-{
-	type Error = ();
-	fn from_asset_balance(balance: AssetBalance, _: AssetId) -> Result<OutBalance, Self::Error> {
-		Ok(balance.into())
 	}
 }
 

@@ -262,6 +262,19 @@ pub trait ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> {
 	) -> Result<OutBalance, Self::Error>;
 }
 
+/// Implements the [ConversionFromAssetBalance] trait for a tuple type, enabling a 1:1 conversion of
+/// the asset balance value to the balance.
+impl<AssetBalance, AssetId, OutBalance>
+	ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> for ()
+where
+	AssetBalance: Into<OutBalance>,
+{
+	type Error = ();
+	fn from_asset_balance(balance: AssetBalance, _: AssetId) -> Result<OutBalance, Self::Error> {
+		Ok(balance.into())
+	}
+}
+
 /// Trait to handle NFT locking mechanism to ensure interactions with the asset can be implemented
 /// downstream to extend logic of Uniques/Nfts current functionality.
 pub trait Locker<CollectionId, ItemId> {

@@ -26,7 +26,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
-	traits::{ConstU32, ConstU64, OnInitialize},
+	traits::{tokens::PayFromAccount, ConstU32, ConstU64, OnInitialize},
 	weights::Weight,
 	PalletId,
 };
@@ -112,6 +112,7 @@ parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub TreasuryAccount: u128 = TreasuryPalletId::get().into_account_truncating();
 	pub const SpendLimit: Balance = u64::MAX;
 }
 
@@ -132,6 +133,12 @@ impl pallet_treasury::Config for Test {
 	type SpendFunds = Bounties;
 	type MaxApprovals = ConstU32<100>;
 	type SpendOrigin = frame_system::EnsureRootWithSuccess<Self::AccountId, SpendLimit>;
+	type AssetKind = ();
+	type Beneficiary = Self::AccountId;
+	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+	type BalanceConverter = ();
+	type PayoutPeriod = ConstU64<10>;
 }
 parameter_types! {
 	// This will be 50% of the bounty fee.
