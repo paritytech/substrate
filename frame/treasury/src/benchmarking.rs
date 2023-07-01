@@ -21,9 +21,11 @@
 
 use super::{Pallet as Treasury, *};
 
-use frame_benchmarking::v1::{account, benchmarks_instance_pallet, BenchmarkError};
+use frame_benchmarking::{
+	v1::{account, BenchmarkError},
+	v2::*,
+};
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
 	ensure,
 	traits::{tokens::PaymentStatus, EnsureOrigin, OnInitialize},
 };
@@ -75,151 +77,182 @@ fn create_spend_arguments<T: Config<I>, I: 'static>(
 	(asset_kind, 100u32.into(), beneficiary, beneficiary_lookup)
 }
 
-benchmarks_instance_pallet! {
+#[instance_benchmarks]
+mod benchmarks {
+	use super::*;
+
 	// This benchmark is short-circuited if `SpendOrigin` cannot provide
 	// a successful origin, in which case `spend` is un-callable and can use weight=0.
-	spend_local {
+	#[benchmark]
+	fn spend_local() -> Result<(), BenchmarkError> {
 		let (_, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
-		let origin = T::SpendOrigin::try_successful_origin();
+		let origin =
+			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let beneficiary = T::Lookup::lookup(beneficiary_lookup.clone()).unwrap();
-		let call = Call::<T, I>::spend_local { amount: value, beneficiary: beneficiary_lookup };
-	}: {
-		if let Ok(origin) = origin.clone() {
-			call.dispatch_bypass_filter(origin)?;
-		}
-	}
-	verify {
-		if origin.is_ok() {
-			assert_last_event::<T, I>(Event::SpendApproved { proposal_index: 0, amount: value, beneficiary }.into())
-		}
+
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, value, beneficiary_lookup);
+
+		assert_last_event::<T, I>(
+			Event::SpendApproved { proposal_index: 0, amount: value, beneficiary }.into(),
+		);
+		Ok(())
 	}
 
-	propose_spend {
+	#[benchmark]
+	fn propose_spend() -> Result<(), BenchmarkError> {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
-	}: _(RawOrigin::Signed(caller), value, beneficiary_lookup)
 
-	reject_proposal {
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), value, beneficiary_lookup);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn reject_proposal() -> Result<(), BenchmarkError> {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
-			beneficiary_lookup
+			beneficiary_lookup,
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 		let reject_origin =
 			T::RejectOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-	}: _<T::RuntimeOrigin>(reject_origin, proposal_id)
 
-	approve_proposal {
-		let p in 0 .. T::MaxApprovals::get() - 1;
+		#[extrinsic_call]
+		_(reject_origin as T::RuntimeOrigin, proposal_id);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn approve_proposal(
+		p: Linear<0, { T::MaxApprovals::get() - 1 }>,
+	) -> Result<(), BenchmarkError> {
 		create_approved_proposals::<T, _>(p)?;
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
-			beneficiary_lookup
+			beneficiary_lookup,
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 		let approve_origin =
 			T::ApproveOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-	}: _<T::RuntimeOrigin>(approve_origin, proposal_id)
 
-	remove_approval {
+		#[extrinsic_call]
+		_(approve_origin as T::RuntimeOrigin, proposal_id);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn remove_approval() -> Result<(), BenchmarkError> {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		Treasury::<T, _>::propose_spend(
 			RawOrigin::Signed(caller).into(),
 			value,
-			beneficiary_lookup
+			beneficiary_lookup,
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
 		let reject_origin =
 			T::RejectOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-	}: _<T::RuntimeOrigin>(reject_origin, proposal_id)
 
-	on_initialize_proposals {
-		let p in 0 .. T::MaxApprovals::get();
+		#[extrinsic_call]
+		_(reject_origin as T::RuntimeOrigin, proposal_id);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn on_initialize_proposals(
+		p: Linear<0, { T::MaxApprovals::get() - 1 }>,
+	) -> Result<(), BenchmarkError> {
 		setup_pot_account::<T, _>();
 		create_approved_proposals::<T, _>(p)?;
-	}: {
-		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+
+		#[block]
+		{
+			Treasury::<T, _>::on_initialize(0u32.into());
+		}
+
+		Ok(())
 	}
 
-	spend {
+	#[benchmark]
+	fn spend() -> Result<(), BenchmarkError> {
 		let origin =
 			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let (asset_kind, amount, beneficiary, beneficiary_lookup) = create_spend_arguments::<T, _>(SEED);
-	}: _<T::RuntimeOrigin>(origin, asset_kind.clone(), amount, beneficiary_lookup)
-	verify {
+		let (asset_kind, amount, beneficiary, beneficiary_lookup) =
+			create_spend_arguments::<T, _>(SEED);
+
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, asset_kind.clone(), amount, beneficiary_lookup);
+
 		let expire_at =
 			frame_system::Pallet::<T>::block_number().saturating_add(T::PayoutPeriod::get());
-		assert_last_event::<T, I>(Event::AssetSpendApproved {
-			index: 0,
-			asset_kind,
-			amount,
-			beneficiary,
-			expire_at}.into());
+		assert_last_event::<T, I>(
+			Event::AssetSpendApproved { index: 0, asset_kind, amount, beneficiary, expire_at }
+				.into(),
+		);
+		Ok(())
 	}
 
-	payout {
+	#[benchmark]
+	fn payout() -> Result<(), BenchmarkError> {
 		let origin =
 			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let (asset_kind, amount, beneficiary, beneficiary_lookup) = create_spend_arguments::<T, _>(SEED);
-		Treasury::<T, _>::spend(
-			origin,
-			asset_kind.clone(),
-			amount,
-			beneficiary_lookup,
-		)?;
+		let (asset_kind, amount, beneficiary, beneficiary_lookup) =
+			create_spend_arguments::<T, _>(SEED);
+		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup)?;
 		T::Paymaster::ensure_successful(&beneficiary, asset_kind, amount);
 		let caller: T::AccountId = account("caller", 0, SEED);
-	}: _(RawOrigin::Signed(caller.clone()), 0u32)
-	verify {
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller.clone()), 0u32);
+
 		let id = match Spends::<T, I>::get(0).unwrap().status {
 			PaymentState::Attempted { id, .. } => {
 				assert_ne!(T::Paymaster::check_payment(id), PaymentStatus::Failure);
 				id
-			}
+			},
 			_ => panic!("No payout attempt made"),
 		};
-		assert_last_event::<T, I>(Event::Paid {
-			index: 0,
-			payment_id: id,}.into());
+		assert_last_event::<T, I>(Event::Paid { index: 0, payment_id: id }.into());
 		assert!(Treasury::<T, _>::payout(RawOrigin::Signed(caller).into(), 0u32).is_err());
+		Ok(())
 	}
 
-	check_status {
+	#[benchmark]
+	fn check_status() -> Result<(), BenchmarkError> {
 		let origin =
 			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-		let (asset_kind, amount, beneficiary, beneficiary_lookup) = create_spend_arguments::<T, _>(SEED);
-		Treasury::<T, _>::spend(
-			origin,
-			asset_kind.clone(),
-			amount,
-			beneficiary_lookup,
-		)?;
+		let (asset_kind, amount, beneficiary, beneficiary_lookup) =
+			create_spend_arguments::<T, _>(SEED);
+		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup)?;
 		T::Paymaster::ensure_successful(&beneficiary, asset_kind, amount);
 		let caller: T::AccountId = account("caller", 0, SEED);
-		Treasury::<T, _>::payout(
-			RawOrigin::Signed(caller.clone()).into(),
-			0u32,
-		)?;
+		Treasury::<T, _>::payout(RawOrigin::Signed(caller.clone()).into(), 0u32)?;
 		let id = match Spends::<T, I>::get(0).unwrap().status {
 			PaymentState::Attempted { id, .. } => {
 				T::Paymaster::ensure_concluded(id);
 				assert_eq!(T::Paymaster::check_payment(id), PaymentStatus::Success);
 				id
-			}
+			},
 			_ => panic!("No payout attempt made"),
 		};
-	}: _(RawOrigin::Signed(caller.clone()), 0u32)
-	verify {
-		assert_last_event::<T, I>(Event::PaymentSucceed {
-			index: 0,
-			payment_id: id,}.into());
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller.clone()), 0u32);
+
+		assert_last_event::<T, I>(Event::PaymentSucceed { index: 0, payment_id: id }.into());
+		Ok(())
 	}
 
 	impl_benchmark_test_suite!(Treasury, crate::tests::new_test_ext(), crate::tests::Test);
