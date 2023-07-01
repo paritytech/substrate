@@ -1198,46 +1198,29 @@ mod tests {
 	mod genesis_builder_tests {
 		use super::*;
 		use crate::genesismap::GenesisStorageBuilder;
-		use sc_executor::{error::Result, NativeElseWasmExecutor, WasmExecutor};
+		use sc_executor::{error::Result, WasmExecutor};
+		use sc_executor_common::runtime_blob::RuntimeBlob;
 		use serde_json::json;
 		use sp_application_crypto::Ss58Codec;
-		use sp_core::traits::{CallContext, CodeExecutor, Externalities, RuntimeCode};
+		use sp_core::traits::Externalities;
 		use sp_genesis_builder::Result as BuildResult;
 		use sp_state_machine::BasicExternalities;
 		use std::{fs, io::Write};
 		use storage_key_generator::hex;
 
-		pub struct LocalExecutorDispatch;
-
-		impl sc_executor::NativeExecutionDispatch for LocalExecutorDispatch {
-			type ExtendHostFunctions = ();
-
-			fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-				api::dispatch(method, data)
-			}
-
-			fn native_version() -> sc_executor::NativeVersion {
-				native_version()
-			}
-		}
-
 		pub fn executor_call(
-			// t: &mut TestExternalities<BlakeTwo256>,
-			t: &mut dyn Externalities,
+			ext: &mut dyn Externalities,
 			method: &str,
 			data: &[u8],
-		) -> (Result<Vec<u8>>, bool) {
-			let code = wasm_binary_unwrap();
-			let runtime_code = RuntimeCode {
-				code_fetcher: &sp_core::traits::WrappedRuntimeCode(code.into()),
-				hash: sp_core::blake2_256(&code).to_vec(),
-				heap_pages: Some(1024),
-			};
-			let use_native = false;
-			NativeElseWasmExecutor::<LocalExecutorDispatch>::new_with_wasm_executor(
-				WasmExecutor::builder().build(),
+		) -> Result<Vec<u8>> {
+			let executor = WasmExecutor::<sp_io::SubstrateHostFunctions>::builder().build();
+			executor.uncached_call(
+				RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
+				ext,
+				true,
+				method,
+				data,
 			)
-			.call(t, &runtime_code, method, data, use_native, CallContext::Offchain)
 		}
 
 		#[test]
@@ -1247,7 +1230,6 @@ mod tests {
 			let mut t = BasicExternalities::new_empty();
 
 			executor_call(&mut t, "GenesisBuilder_build_config", &default_minimal_json.encode())
-				.0
 				.unwrap();
 
 			let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
@@ -1297,9 +1279,7 @@ mod tests {
 		fn default_config_as_json_works() {
 			sp_tracing::try_init_simple();
 			let mut t = BasicExternalities::new_empty();
-			let r = executor_call(&mut t, "GenesisBuilder_create_default_config", &vec![])
-				.0
-				.unwrap();
+			let r = executor_call(&mut t, "GenesisBuilder_create_default_config", &vec![]).unwrap();
 			let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
 			let json = String::from_utf8(r.into()).expect("returned value is json. qed.");
 
@@ -1313,7 +1293,7 @@ mod tests {
 			let j = include_str!("test_json/default_genesis_config.json");
 
 			let mut t = BasicExternalities::new_empty();
-			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
+			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).unwrap();
 			let r = BuildResult::decode(&mut &r[..]);
 			assert!(r.is_ok());
 
@@ -1332,7 +1312,7 @@ mod tests {
 			sp_tracing::try_init_simple();
 			let j = include_str!("test_json/default_genesis_config_invalid.json");
 			let mut t = BasicExternalities::new_empty();
-			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
+			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).unwrap();
 			let r = BuildResult::decode(&mut &r[..]).unwrap();
 			log::info!("result: {:#?}", r);
 			assert_eq!(r, Err(
@@ -1348,7 +1328,7 @@ mod tests {
 			let j = include_str!("test_json/default_genesis_config_incomplete.json");
 
 			let mut t = BasicExternalities::new_empty();
-			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).0.unwrap();
+			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).unwrap();
 			let r =
 				core::result::Result::<(), sp_runtime::RuntimeString>::decode(&mut &r[..]).unwrap();
 			assert_eq!(
@@ -1383,9 +1363,7 @@ mod tests {
 			sp_tracing::try_init_simple();
 
 			let mut t = BasicExternalities::new_empty();
-			let r = executor_call(&mut t, "GenesisBuilder_create_default_config", &vec![])
-				.0
-				.unwrap();
+			let r = executor_call(&mut t, "GenesisBuilder_create_default_config", &vec![]).unwrap();
 			let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
 			let mut default_config: serde_json::Value =
 				serde_json::from_slice(&r[..]).expect("returned value is json. qed.");
@@ -1418,7 +1396,6 @@ mod tests {
 				"GenesisBuilder_build_config",
 				&default_config.to_string().encode(),
 			)
-			.0
 			.unwrap();
 
 			// Ensure that custom values are in the genesis storage:
