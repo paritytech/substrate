@@ -23,8 +23,11 @@ sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+
 # TODO mOVE TO TEST
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../frame/executive" }
 
 [dev-dependencies]
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
@@ -41,6 +44,7 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-core/std",
+	"sp-api/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

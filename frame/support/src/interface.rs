@@ -19,9 +19,10 @@ use crate::{
 	dispatch::{CallMetadata, DispatchInfo, DispatchResultWithPostInfo, PostDispatchInfo},
 	traits::{EnqueueMessage, GetCallMetadata, UnfilteredDispatchable},
 };
-use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use codec::{Codec, Decode, Encode, Error, Input, MaxEncodedLen};
 use frame_support::dispatch::DispatchErrorWithPostInfo;
 use frame_support::Parameter;
+use scale_info::{Type, TypeInfo};
 use sp_core::{RuntimeDebug, H256};
 use sp_runtime::traits::Member;
 use sp_runtime::{
@@ -30,7 +31,9 @@ use sp_runtime::{
 	DispatchError, DispatchResultWithInfo, InterfaceError, ModuleError,
 	MAX_MODULE_ERROR_ENCODED_SIZE,
 };
-use std::marker::PhantomData;
+use sp_std::fmt::Debug;
+use sp_std::marker::PhantomData;
+use std::fmt::Formatter;
 
 /// Runtime API that provides view access
 sp_api::decl_runtime_apis! {
@@ -97,17 +100,63 @@ pub trait View {
 }
 
 pub trait Selector {
-	type Selectable: Parameter + Member;
+	type Selectable: Parameter + Member + MaxEncodedLen;
 	type Selected;
 
 	fn select(selectable: Self::Selectable) -> SelectorResult<Self::Selected>;
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, RuntimeDebug)]
 pub struct Select<T: Selector> {
 	from: T::Selectable,
-	#[codec(skip)]
 	_phantom: PhantomData<T>,
+}
+
+impl<T: Selector> Debug for Select<T> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		self.from.fmt(f)
+	}
+}
+
+impl<T: Selector> Clone for Select<T> {
+	fn clone(&self) -> Self {
+		Select { from: self.from.clone(), _phantom: Default::default() }
+	}
+}
+
+impl<T: Selector> Encode for Select<T> {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.from.using_encoded(f)
+	}
+}
+
+impl<T: Selector> Decode for Select<T> {
+	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+		let from: T::Selectable = Decode::decode(input)?;
+
+		Ok(Select { from, _phantom: Default::default() })
+	}
+}
+
+impl<T: Selector> MaxEncodedLen for Select<T> {
+	fn max_encoded_len() -> usize {
+		T::Selectable::max_encoded_len()
+	}
+}
+
+impl<T: Selector> PartialEq for Select<T> {
+	fn eq(&self, other: &Self) -> bool {
+		self.from == other.from
+	}
+}
+
+impl<T: Selector> Eq for Select<T> {}
+
+impl<T: Selector> TypeInfo for Select<T> {
+	type Identity = T::Selectable;
+
+	fn type_info() -> Type {
+		T::Selectable::type_info()
+	}
 }
 
 impl<T: Selector> Select<T> {

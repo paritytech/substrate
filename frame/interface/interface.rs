@@ -12,8 +12,8 @@ mod mock {
     use frame_system::{EnsureRoot, EnsureSignedBy};
     use sp_core::H256;
     use sp_runtime::{testing::Header, traits::{BadOrigin, BlakeTwo256, IdentityLookup}};
-    type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-    type Block = frame_system::mocking::MockBlock<Test>;
+    type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
+    type Block = frame_system::mocking::MockBlock<MockRuntime>;
     type Balance = u64;
     type AccountId = u64;
     enum CurrencyId {
@@ -67,7 +67,7 @@ mod mock {
                 ) -> ViewResult<Vec<(CurrencySelectable, BalanceSelectable)>>;
                 fn transfer(
                     origin: Self::RuntimeOrigin,
-                    currency: Select<SelectCurrency>,
+                    currency: Self::SelectCurrency,
                     recv: Select<Self::SelectAccount>,
                     amount: Select<Self::SelectBalance>,
                 ) -> CallResult;
@@ -98,29 +98,29 @@ mod mock {
                 #[codec(index = 0u8)]
                 transfer {
                     #[allow(missing_docs)]
-                    currency: Select<SelectCurrency>,
+                    currency: Runtime::SelectCurrency,
                     #[allow(missing_docs)]
-                    recv: Select<Self::SelectAccount>,
+                    recv: Select<Runtime::SelectAccount>,
                     #[allow(missing_docs)]
-                    amount: Select<Self::SelectBalance>,
+                    amount: Select<Runtime::SelectBalance>,
                 },
                 #[codec(index = 3u8)]
                 burn {
                     #[allow(missing_docs)]
                     currency: Select<SelectCurrency>,
                     #[allow(missing_docs)]
-                    from: Select<Self::SelectAccount>,
+                    from: Select<Runtime::SelectAccount>,
                     #[allow(missing_docs)]
-                    amount: Select<Self::SelectBalance>,
+                    amount: Select<Runtime::SelectBalance>,
                 },
                 #[codec(index = 1u8)]
                 approve {
                     #[allow(missing_docs)]
                     currency: Select<RestrictedCurrency>,
                     #[allow(missing_docs)]
-                    recv: Select<Self::SelectAccount>,
+                    recv: Select<Runtime::SelectAccount>,
                     #[allow(missing_docs)]
-                    amount: Select<Self::SelectBalance>,
+                    amount: Select<Runtime::SelectBalance>,
                 },
             }
             const _: () = {
@@ -287,9 +287,9 @@ mod mock {
                                 == 0u8 as ::core::primitive::u8 => {
                                 ::core::result::Result::Ok(Call::<Runtime>::transfer {
                                     currency: {
-                                        let __codec_res_edqy = <Select<
-                                            SelectCurrency,
-                                        > as ::codec::Decode>::decode(__codec_input_edqy);
+                                        let __codec_res_edqy = <Runtime::SelectCurrency as ::codec::Decode>::decode(
+                                            __codec_input_edqy,
+                                        );
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
                                                 return ::core::result::Result::Err(
@@ -303,7 +303,7 @@ mod mock {
                                     },
                                     recv: {
                                         let __codec_res_edqy = <Select<
-                                            Self::SelectAccount,
+                                            Runtime::SelectAccount,
                                         > as ::codec::Decode>::decode(__codec_input_edqy);
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
@@ -318,7 +318,7 @@ mod mock {
                                     },
                                     amount: {
                                         let __codec_res_edqy = <Select<
-                                            Self::SelectBalance,
+                                            Runtime::SelectBalance,
                                         > as ::codec::Decode>::decode(__codec_input_edqy);
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
@@ -353,7 +353,7 @@ mod mock {
                                     },
                                     from: {
                                         let __codec_res_edqy = <Select<
-                                            Self::SelectAccount,
+                                            Runtime::SelectAccount,
                                         > as ::codec::Decode>::decode(__codec_input_edqy);
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
@@ -368,7 +368,7 @@ mod mock {
                                     },
                                     amount: {
                                         let __codec_res_edqy = <Select<
-                                            Self::SelectBalance,
+                                            Runtime::SelectBalance,
                                         > as ::codec::Decode>::decode(__codec_input_edqy);
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
@@ -403,7 +403,7 @@ mod mock {
                                     },
                                     recv: {
                                         let __codec_res_edqy = <Select<
-                                            Self::SelectAccount,
+                                            Runtime::SelectAccount,
                                         > as ::codec::Decode>::decode(__codec_input_edqy);
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
@@ -418,7 +418,7 @@ mod mock {
                                     },
                                     amount: {
                                         let __codec_res_edqy = <Select<
-                                            Self::SelectBalance,
+                                            Runtime::SelectBalance,
                                         > as ::codec::Decode>::decode(__codec_input_edqy);
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
@@ -451,6 +451,13 @@ mod mock {
                     frame_support::sp_std::marker::PhantomData<
                         (Runtime),
                     >: ::scale_info::TypeInfo + 'static,
+                    Runtime::SelectCurrency: ::scale_info::TypeInfo + 'static,
+                    Select<Runtime::SelectAccount>: ::scale_info::TypeInfo + 'static,
+                    Select<Runtime::SelectBalance>: ::scale_info::TypeInfo + 'static,
+                    Select<Runtime::SelectAccount>: ::scale_info::TypeInfo + 'static,
+                    Select<Runtime::SelectBalance>: ::scale_info::TypeInfo + 'static,
+                    Select<Runtime::SelectAccount>: ::scale_info::TypeInfo + 'static,
+                    Select<Runtime::SelectBalance>: ::scale_info::TypeInfo + 'static,
                     Runtime: Pip20 + 'static,
                 {
                     type Identity = Self;
@@ -484,21 +491,21 @@ mod mock {
                                                     ::scale_info::build::Fields::named()
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<SelectCurrency>>()
+                                                                .ty::<Runtime::SelectCurrency>()
                                                                 .name("currency")
-                                                                .type_name("Select<SelectCurrency>")
+                                                                .type_name("Runtime::SelectCurrency")
                                                         })
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<Self::SelectAccount>>()
+                                                                .ty::<Select<Runtime::SelectAccount>>()
                                                                 .name("recv")
-                                                                .type_name("Select<Self::SelectAccount>")
+                                                                .type_name("Select<Runtime::SelectAccount>")
                                                         })
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<Self::SelectBalance>>()
+                                                                .ty::<Select<Runtime::SelectBalance>>()
                                                                 .name("amount")
-                                                                .type_name("Select<Self::SelectBalance>")
+                                                                .type_name("Select<Runtime::SelectBalance>")
                                                         }),
                                                 )
                                         },
@@ -518,15 +525,15 @@ mod mock {
                                                         })
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<Self::SelectAccount>>()
+                                                                .ty::<Select<Runtime::SelectAccount>>()
                                                                 .name("from")
-                                                                .type_name("Select<Self::SelectAccount>")
+                                                                .type_name("Select<Runtime::SelectAccount>")
                                                         })
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<Self::SelectBalance>>()
+                                                                .ty::<Select<Runtime::SelectBalance>>()
                                                                 .name("amount")
-                                                                .type_name("Select<Self::SelectBalance>")
+                                                                .type_name("Select<Runtime::SelectBalance>")
                                                         }),
                                                 )
                                         },
@@ -546,15 +553,15 @@ mod mock {
                                                         })
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<Self::SelectAccount>>()
+                                                                .ty::<Select<Runtime::SelectAccount>>()
                                                                 .name("recv")
-                                                                .type_name("Select<Self::SelectAccount>")
+                                                                .type_name("Select<Runtime::SelectAccount>")
                                                         })
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<Self::SelectBalance>>()
+                                                                .ty::<Select<Runtime::SelectBalance>>()
                                                                 .name("amount")
-                                                                .type_name("Select<Self::SelectBalance>")
+                                                                .type_name("Select<Runtime::SelectBalance>")
                                                         }),
                                                 )
                                         },
@@ -566,9 +573,9 @@ mod mock {
             impl<Runtime: Pip20> Call<Runtime> {
                 ///Create a call with the variant `transfer`.
                 pub fn new_call_variant_transfer(
-                    currency: Select<SelectCurrency>,
-                    recv: Select<Self::SelectAccount>,
-                    amount: Select<Self::SelectBalance>,
+                    currency: Runtime::SelectCurrency,
+                    recv: Select<Runtime::SelectAccount>,
+                    amount: Select<Runtime::SelectBalance>,
                 ) -> Self {
                     Self::transfer {
                         currency,
@@ -579,8 +586,8 @@ mod mock {
                 ///Create a call with the variant `burn`.
                 pub fn new_call_variant_burn(
                     currency: Select<SelectCurrency>,
-                    from: Select<Self::SelectAccount>,
-                    amount: Select<Self::SelectBalance>,
+                    from: Select<Runtime::SelectAccount>,
+                    amount: Select<Runtime::SelectBalance>,
                 ) -> Self {
                     Self::burn {
                         currency,
@@ -591,8 +598,8 @@ mod mock {
                 ///Create a call with the variant `approve`.
                 pub fn new_call_variant_approve(
                     currency: Select<RestrictedCurrency>,
-                    recv: Select<Self::SelectAccount>,
-                    amount: Select<Self::SelectBalance>,
+                    recv: Select<Runtime::SelectAccount>,
+                    amount: Select<Runtime::SelectBalance>,
                 ) -> Self {
                     Self::approve {
                         currency,
@@ -609,9 +616,9 @@ mod mock {
                             let __pallet_base_weight = 0;
                             let __pallet_weight = <dyn frame_support::dispatch::WeighData<
                                 (
-                                    &Select<SelectCurrency>,
-                                    &Select<Self::SelectAccount>,
-                                    &Select<Self::SelectBalance>,
+                                    &Runtime::SelectCurrency,
+                                    &Select<Runtime::SelectAccount>,
+                                    &Select<Runtime::SelectBalance>,
                                 ),
                             >>::weigh_data(
                                 &__pallet_base_weight,
@@ -619,9 +626,9 @@ mod mock {
                             );
                             let __pallet_class = <dyn frame_support::dispatch::ClassifyDispatch<
                                 (
-                                    &Select<SelectCurrency>,
-                                    &Select<Self::SelectAccount>,
-                                    &Select<Self::SelectBalance>,
+                                    &Runtime::SelectCurrency,
+                                    &Select<Runtime::SelectAccount>,
+                                    &Select<Runtime::SelectBalance>,
                                 ),
                             >>::classify_dispatch(
                                 &__pallet_base_weight,
@@ -629,9 +636,9 @@ mod mock {
                             );
                             let __pallet_pays_fee = <dyn frame_support::dispatch::PaysFee<
                                 (
-                                    &Select<SelectCurrency>,
-                                    &Select<Self::SelectAccount>,
-                                    &Select<Self::SelectBalance>,
+                                    &Runtime::SelectCurrency,
+                                    &Select<Runtime::SelectAccount>,
+                                    &Select<Runtime::SelectBalance>,
                                 ),
                             >>::pays_fee(
                                 &__pallet_base_weight,
@@ -648,8 +655,8 @@ mod mock {
                             let __pallet_weight = <dyn frame_support::dispatch::WeighData<
                                 (
                                     &Select<SelectCurrency>,
-                                    &Select<Self::SelectAccount>,
-                                    &Select<Self::SelectBalance>,
+                                    &Select<Runtime::SelectAccount>,
+                                    &Select<Runtime::SelectBalance>,
                                 ),
                             >>::weigh_data(
                                 &__pallet_base_weight,
@@ -658,8 +665,8 @@ mod mock {
                             let __pallet_class = <dyn frame_support::dispatch::ClassifyDispatch<
                                 (
                                     &Select<SelectCurrency>,
-                                    &Select<Self::SelectAccount>,
-                                    &Select<Self::SelectBalance>,
+                                    &Select<Runtime::SelectAccount>,
+                                    &Select<Runtime::SelectBalance>,
                                 ),
                             >>::classify_dispatch(
                                 &__pallet_base_weight,
@@ -668,8 +675,8 @@ mod mock {
                             let __pallet_pays_fee = <dyn frame_support::dispatch::PaysFee<
                                 (
                                     &Select<SelectCurrency>,
-                                    &Select<Self::SelectAccount>,
-                                    &Select<Self::SelectBalance>,
+                                    &Select<Runtime::SelectAccount>,
+                                    &Select<Runtime::SelectBalance>,
                                 ),
                             >>::pays_fee(
                                 &__pallet_base_weight,
@@ -686,8 +693,8 @@ mod mock {
                             let __pallet_weight = <dyn frame_support::dispatch::WeighData<
                                 (
                                     &Select<RestrictedCurrency>,
-                                    &Select<Self::SelectAccount>,
-                                    &Select<Self::SelectBalance>,
+                                    &Select<Runtime::SelectAccount>,
+                                    &Select<Runtime::SelectBalance>,
                                 ),
                             >>::weigh_data(
                                 &__pallet_base_weight,
@@ -696,8 +703,8 @@ mod mock {
                             let __pallet_class = <dyn frame_support::dispatch::ClassifyDispatch<
                                 (
                                     &Select<RestrictedCurrency>,
-                                    &Select<Self::SelectAccount>,
-                                    &Select<Self::SelectBalance>,
+                                    &Select<Runtime::SelectAccount>,
+                                    &Select<Runtime::SelectBalance>,
                                 ),
                             >>::classify_dispatch(
                                 &__pallet_base_weight,
@@ -706,8 +713,8 @@ mod mock {
                             let __pallet_pays_fee = <dyn frame_support::dispatch::PaysFee<
                                 (
                                     &Select<RestrictedCurrency>,
-                                    &Select<Self::SelectAccount>,
-                                    &Select<Self::SelectBalance>,
+                                    &Select<Runtime::SelectAccount>,
+                                    &Select<Runtime::SelectBalance>,
                                 ),
                             >>::pays_fee(
                                 &__pallet_base_weight,
@@ -956,12 +963,12 @@ mod mock {
                 #[codec(index = 0u8)]
                 free_balance {
                     #[allow(missing_docs)]
-                    currency: Select<Self::SelectCurrency>,
+                    currency: Select<Runtime::SelectCurrency>,
                     #[allow(missing_docs)]
-                    who: Select<Self::SelectAccount>,
+                    who: Select<Runtime::SelectAccount>,
                 },
                 #[codec(index = 1u8)]
-                balances { #[allow(missing_docs)] who: Select<Self::SelectAccount> },
+                balances { #[allow(missing_docs)] who: Select<Runtime::SelectAccount> },
             }
             const _: () = {
                 impl<Runtime: Pip20> core::fmt::Debug for View<Runtime> {
@@ -1088,7 +1095,7 @@ mod mock {
                                 ::core::result::Result::Ok(View::<Runtime>::free_balance {
                                     currency: {
                                         let __codec_res_edqy = <Select<
-                                            Self::SelectCurrency,
+                                            Runtime::SelectCurrency,
                                         > as ::codec::Decode>::decode(__codec_input_edqy);
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
@@ -1103,7 +1110,7 @@ mod mock {
                                     },
                                     who: {
                                         let __codec_res_edqy = <Select<
-                                            Self::SelectAccount,
+                                            Runtime::SelectAccount,
                                         > as ::codec::Decode>::decode(__codec_input_edqy);
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
@@ -1123,7 +1130,7 @@ mod mock {
                                 ::core::result::Result::Ok(View::<Runtime>::balances {
                                     who: {
                                         let __codec_res_edqy = <Select<
-                                            Self::SelectAccount,
+                                            Runtime::SelectAccount,
                                         > as ::codec::Decode>::decode(__codec_input_edqy);
                                         match __codec_res_edqy {
                                             ::core::result::Result::Err(e) => {
@@ -1156,6 +1163,9 @@ mod mock {
                     frame_support::sp_std::marker::PhantomData<
                         (Runtime),
                     >: ::scale_info::TypeInfo + 'static,
+                    Select<Runtime::SelectCurrency>: ::scale_info::TypeInfo + 'static,
+                    Select<Runtime::SelectAccount>: ::scale_info::TypeInfo + 'static,
+                    Select<Runtime::SelectAccount>: ::scale_info::TypeInfo + 'static,
                     Runtime: Pip20 + 'static,
                 {
                     type Identity = Self;
@@ -1189,15 +1199,15 @@ mod mock {
                                                     ::scale_info::build::Fields::named()
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<Self::SelectCurrency>>()
+                                                                .ty::<Select<Runtime::SelectCurrency>>()
                                                                 .name("currency")
-                                                                .type_name("Select<Self::SelectCurrency>")
+                                                                .type_name("Select<Runtime::SelectCurrency>")
                                                         })
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<Self::SelectAccount>>()
+                                                                .ty::<Select<Runtime::SelectAccount>>()
                                                                 .name("who")
-                                                                .type_name("Select<Self::SelectAccount>")
+                                                                .type_name("Select<Runtime::SelectAccount>")
                                                         }),
                                                 )
                                         },
@@ -1211,9 +1221,9 @@ mod mock {
                                                     ::scale_info::build::Fields::named()
                                                         .field(|f| {
                                                             f
-                                                                .ty::<Select<Self::SelectAccount>>()
+                                                                .ty::<Select<Runtime::SelectAccount>>()
                                                                 .name("who")
-                                                                .type_name("Select<Self::SelectAccount>")
+                                                                .type_name("Select<Runtime::SelectAccount>")
                                                         }),
                                                 )
                                         },
@@ -1225,8 +1235,8 @@ mod mock {
             impl<Runtime: Pip20> View<Runtime> {
                 ///Create a view with the variant `free_balance`.
                 pub fn new_view_variant_free_balance(
-                    currency: Select<Self::SelectCurrency>,
-                    who: Select<Self::SelectAccount>,
+                    currency: Select<Runtime::SelectCurrency>,
+                    who: Select<Runtime::SelectAccount>,
                 ) -> Self {
                     Self::free_balance {
                         currency,
@@ -1235,7 +1245,7 @@ mod mock {
                 }
                 ///Create a view with the variant `balances`.
                 pub fn new_view_variant_balances(
-                    who: Select<Self::SelectAccount>,
+                    who: Select<Runtime::SelectAccount>,
                 ) -> Self {
                     Self::balances { who }
                 }
@@ -1370,16 +1380,503 @@ mod mock {
             }
         }
         pub mod pip42 {
+            use frame_support::interface;
             use frame_support::interface::CallResult;
             use sp_core::Get;
             use sp_runtime::BoundedVec;
-            #[interface::definition]
             pub trait Pip42: frame_system::Config {
                 type MaxRemark: Get<u32>;
-                #[interface::call]
-                #[interface::call_index(0)]
-                #[interface::weight(0)]
-                fn remark(bytes: BoundedVec<u8, Self::MaxRemark>) -> CallResult;
+                fn remark(
+                    origin: Self::RuntimeOrigin,
+                    bytes: BoundedVec<u8, Self::MaxRemark>,
+                ) -> CallResult;
+            }
+            #[codec(encode_bound())]
+            #[codec(decode_bound())]
+            #[scale_info(skip_type_params(Runtime), capture_docs = "always")]
+            #[allow(non_camel_case_types)]
+            pub enum Call<Runtime: Pip42> {
+                #[doc(hidden)]
+                #[codec(skip)]
+                __Ignore(
+                    frame_support::sp_std::marker::PhantomData<(Runtime)>,
+                    frame_support::Never,
+                ),
+                #[codec(index = 0u8)]
+                remark {
+                    #[allow(missing_docs)]
+                    bytes: BoundedVec<u8, Runtime::MaxRemark>,
+                },
+            }
+            const _: () = {
+                impl<Runtime: Pip42> core::fmt::Debug for Call<Runtime> {
+                    fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        match *self {
+                            Self::__Ignore(ref _0, ref _1) => {
+                                fmt.debug_tuple("Call::__Ignore")
+                                    .field(&_0)
+                                    .field(&_1)
+                                    .finish()
+                            }
+                            Self::remark { ref bytes } => {
+                                fmt.debug_struct("Call::remark")
+                                    .field("bytes", &bytes)
+                                    .finish()
+                            }
+                        }
+                    }
+                }
+            };
+            const _: () = {
+                impl<Runtime: Pip42> core::clone::Clone for Call<Runtime> {
+                    fn clone(&self) -> Self {
+                        match self {
+                            Self::__Ignore(ref _0, ref _1) => {
+                                Self::__Ignore(
+                                    core::clone::Clone::clone(_0),
+                                    core::clone::Clone::clone(_1),
+                                )
+                            }
+                            Self::remark { ref bytes } => {
+                                Self::remark {
+                                    bytes: core::clone::Clone::clone(bytes),
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            const _: () = {
+                impl<Runtime: Pip42> core::cmp::Eq for Call<Runtime> {}
+            };
+            const _: () = {
+                impl<Runtime: Pip42> core::cmp::PartialEq for Call<Runtime> {
+                    fn eq(&self, other: &Self) -> bool {
+                        match (self, other) {
+                            (
+                                Self::__Ignore(_0, _1),
+                                Self::__Ignore(_0_other, _1_other),
+                            ) => true && _0 == _0_other && _1 == _1_other,
+                            (Self::remark { bytes }, Self::remark { bytes: _0 }) => {
+                                true && bytes == _0
+                            }
+                            (Self::__Ignore { .. }, Self::remark { .. }) => false,
+                            (Self::remark { .. }, Self::__Ignore { .. }) => false,
+                        }
+                    }
+                }
+            };
+            #[allow(deprecated)]
+            const _: () = {
+                #[allow(non_camel_case_types)]
+                #[automatically_derived]
+                impl<Runtime: Pip42> ::codec::Encode for Call<Runtime> {
+                    fn encode_to<
+                        __CodecOutputEdqy: ::codec::Output + ?::core::marker::Sized,
+                    >(&self, __codec_dest_edqy: &mut __CodecOutputEdqy) {
+                        match *self {
+                            Call::remark { ref bytes } => {
+                                __codec_dest_edqy.push_byte(0u8 as ::core::primitive::u8);
+                                ::codec::Encode::encode_to(bytes, __codec_dest_edqy);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                #[automatically_derived]
+                impl<Runtime: Pip42> ::codec::EncodeLike for Call<Runtime> {}
+            };
+            #[allow(deprecated)]
+            const _: () = {
+                #[allow(non_camel_case_types)]
+                #[automatically_derived]
+                impl<Runtime: Pip42> ::codec::Decode for Call<Runtime> {
+                    fn decode<__CodecInputEdqy: ::codec::Input>(
+                        __codec_input_edqy: &mut __CodecInputEdqy,
+                    ) -> ::core::result::Result<Self, ::codec::Error> {
+                        match __codec_input_edqy
+                            .read_byte()
+                            .map_err(|e| {
+                                e
+                                    .chain(
+                                        "Could not decode `Call`, failed to read variant byte",
+                                    )
+                            })?
+                        {
+                            __codec_x_edqy if __codec_x_edqy
+                                == 0u8 as ::core::primitive::u8 => {
+                                ::core::result::Result::Ok(Call::<Runtime>::remark {
+                                    bytes: {
+                                        let __codec_res_edqy = <BoundedVec<
+                                            u8,
+                                            Runtime::MaxRemark,
+                                        > as ::codec::Decode>::decode(__codec_input_edqy);
+                                        match __codec_res_edqy {
+                                            ::core::result::Result::Err(e) => {
+                                                return ::core::result::Result::Err(
+                                                    e.chain("Could not decode `Call::remark::bytes`"),
+                                                );
+                                            }
+                                            ::core::result::Result::Ok(__codec_res_edqy) => {
+                                                __codec_res_edqy
+                                            }
+                                        }
+                                    },
+                                })
+                            }
+                            _ => {
+                                ::core::result::Result::Err(
+                                    <_ as ::core::convert::Into<
+                                        _,
+                                    >>::into("Could not decode `Call`, variant doesn't exist"),
+                                )
+                            }
+                        }
+                    }
+                }
+            };
+            #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+            const _: () = {
+                impl<Runtime: Pip42> ::scale_info::TypeInfo for Call<Runtime>
+                where
+                    frame_support::sp_std::marker::PhantomData<
+                        (Runtime),
+                    >: ::scale_info::TypeInfo + 'static,
+                    BoundedVec<u8, Runtime::MaxRemark>: ::scale_info::TypeInfo + 'static,
+                    Runtime: Pip42 + 'static,
+                {
+                    type Identity = Self;
+                    fn type_info() -> ::scale_info::Type {
+                        ::scale_info::Type::builder()
+                            .path(
+                                ::scale_info::Path::new(
+                                    "Call",
+                                    "pallet_interface::mock::interfaces::pip42",
+                                ),
+                            )
+                            .type_params(
+                                <[_]>::into_vec(
+                                    #[rustc_box]
+                                    ::alloc::boxed::Box::new([
+                                        ::scale_info::TypeParameter::new(
+                                            "Runtime",
+                                            ::core::option::Option::None,
+                                        ),
+                                    ]),
+                                ),
+                            )
+                            .variant(
+                                ::scale_info::build::Variants::new()
+                                    .variant(
+                                        "remark",
+                                        |v| {
+                                            v
+                                                .index(0u8 as ::core::primitive::u8)
+                                                .fields(
+                                                    ::scale_info::build::Fields::named()
+                                                        .field(|f| {
+                                                            f
+                                                                .ty::<BoundedVec<u8, Runtime::MaxRemark>>()
+                                                                .name("bytes")
+                                                                .type_name("BoundedVec<u8, Runtime::MaxRemark>")
+                                                        }),
+                                                )
+                                        },
+                                    ),
+                            )
+                    }
+                }
+            };
+            impl<Runtime: Pip42> Call<Runtime> {
+                ///Create a call with the variant `remark`.
+                pub fn new_call_variant_remark(
+                    bytes: BoundedVec<u8, Runtime::MaxRemark>,
+                ) -> Self {
+                    Self::remark { bytes }
+                }
+            }
+            impl<Runtime: Pip42> frame_support::dispatch::GetDispatchInfo
+            for Call<Runtime> {
+                fn get_dispatch_info(&self) -> frame_support::dispatch::DispatchInfo {
+                    match *self {
+                        Self::remark { ref bytes } => {
+                            let __pallet_base_weight = 0;
+                            let __pallet_weight = <dyn frame_support::dispatch::WeighData<
+                                (&BoundedVec<u8, Runtime::MaxRemark>,),
+                            >>::weigh_data(&__pallet_base_weight, (bytes,));
+                            let __pallet_class = <dyn frame_support::dispatch::ClassifyDispatch<
+                                (&BoundedVec<u8, Runtime::MaxRemark>,),
+                            >>::classify_dispatch(&__pallet_base_weight, (bytes,));
+                            let __pallet_pays_fee = <dyn frame_support::dispatch::PaysFee<
+                                (&BoundedVec<u8, Runtime::MaxRemark>,),
+                            >>::pays_fee(&__pallet_base_weight, (bytes,));
+                            frame_support::dispatch::DispatchInfo {
+                                weight: __pallet_weight,
+                                class: __pallet_class,
+                                pays_fee: __pallet_pays_fee,
+                            }
+                        }
+                        Self::__Ignore(_, _) => {
+                            ::core::panicking::panic_fmt(
+                                format_args!(
+                                    "internal error: entered unreachable code: {0}",
+                                    format_args!("__Ignore cannot be used")
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+            #[allow(deprecated)]
+            impl<Runtime: Pip42> frame_support::weights::GetDispatchInfo
+            for Call<Runtime> {}
+            impl<Runtime: Pip42> frame_support::dispatch::GetCallName for Call<Runtime> {
+                fn get_call_name(&self) -> &'static str {
+                    match *self {
+                        Self::remark { .. } => "remark",
+                        Self::__Ignore(_, _) => {
+                            ::core::panicking::panic_fmt(
+                                format_args!(
+                                    "internal error: entered unreachable code: {0}",
+                                    format_args!("__PhantomItem cannot be used.")
+                                ),
+                            );
+                        }
+                    }
+                }
+                fn get_call_names() -> &'static [&'static str] {
+                    &["remark"]
+                }
+            }
+            impl<Runtime: Pip42> frame_support::traits::UnfilteredDispatchable
+            for Call<Runtime> {
+                type RuntimeOrigin = <Runtime as frame_system::Config>::RuntimeOrigin;
+                fn dispatch_bypass_filter(
+                    self,
+                    origin: Self::RuntimeOrigin,
+                ) -> frame_support::dispatch::DispatchResultWithPostInfo {
+                    frame_support::dispatch_context::run_in_context(|| {
+                        match self {
+                            Self::remark { bytes } => {
+                                let __within_span__ = {
+                                    use ::tracing::__macro_support::Callsite as _;
+                                    static CALLSITE: ::tracing::callsite::DefaultCallsite = {
+                                        static META: ::tracing::Metadata<'static> = {
+                                            ::tracing_core::metadata::Metadata::new(
+                                                "remark",
+                                                "pallet_interface::mock::interfaces::pip42",
+                                                ::tracing::Level::TRACE,
+                                                Some("frame/interface/src/mock.rs"),
+                                                Some(126u32),
+                                                Some("pallet_interface::mock::interfaces::pip42"),
+                                                ::tracing_core::field::FieldSet::new(
+                                                    &[],
+                                                    ::tracing_core::callsite::Identifier(&CALLSITE),
+                                                ),
+                                                ::tracing::metadata::Kind::SPAN,
+                                            )
+                                        };
+                                        ::tracing::callsite::DefaultCallsite::new(&META)
+                                    };
+                                    let mut interest = ::tracing::subscriber::Interest::never();
+                                    if ::tracing::Level::TRACE
+                                        <= ::tracing::level_filters::STATIC_MAX_LEVEL
+                                        && ::tracing::Level::TRACE
+                                            <= ::tracing::level_filters::LevelFilter::current()
+                                        && {
+                                            interest = CALLSITE.interest();
+                                            !interest.is_never()
+                                        }
+                                        && ::tracing::__macro_support::__is_enabled(
+                                            CALLSITE.metadata(),
+                                            interest,
+                                        )
+                                    {
+                                        let meta = CALLSITE.metadata();
+                                        ::tracing::Span::new(
+                                            meta,
+                                            &{ meta.fields().value_set(&[]) },
+                                        )
+                                    } else {
+                                        let span = ::tracing::__macro_support::__disabled_span(
+                                            CALLSITE.metadata(),
+                                        );
+                                        {};
+                                        span
+                                    }
+                                };
+                                let __tracing_guard__ = __within_span__.enter();
+                                <Runtime as Pip42>::remark(origin, bytes)
+                                    .map(Into::into)
+                                    .map_err(Into::into)
+                            }
+                            Self::__Ignore(_, _) => {
+                                let _ = origin;
+                                {
+                                    ::core::panicking::panic_fmt(
+                                        format_args!(
+                                            "internal error: entered unreachable code: {0}",
+                                            format_args!("__PhantomItem cannot be used.")
+                                        ),
+                                    );
+                                };
+                            }
+                        }
+                    })
+                }
+            }
+            impl<Runtime: Pip42> Call<Runtime> {
+                #[doc(hidden)]
+                pub fn call_functions() -> frame_support::metadata::PalletCallMetadata {
+                    frame_support::scale_info::meta_type::<Call<Runtime>>().into()
+                }
+            }
+            #[codec(encode_bound())]
+            #[codec(decode_bound())]
+            #[scale_info(skip_type_params(Runtime), capture_docs = "always")]
+            #[allow(non_camel_case_types)]
+            pub enum View<Runtime: Pip42> {
+                #[doc(hidden)]
+                #[codec(skip)]
+                __Ignore(
+                    frame_support::sp_std::marker::PhantomData<(Runtime)>,
+                    frame_support::Never,
+                ),
+            }
+            const _: () = {
+                impl<Runtime: Pip42> core::fmt::Debug for View<Runtime> {
+                    fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        match *self {
+                            Self::__Ignore(ref _0, ref _1) => {
+                                fmt.debug_tuple("View::__Ignore")
+                                    .field(&_0)
+                                    .field(&_1)
+                                    .finish()
+                            }
+                        }
+                    }
+                }
+            };
+            const _: () = {
+                impl<Runtime: Pip42> core::clone::Clone for View<Runtime> {
+                    fn clone(&self) -> Self {
+                        match self {
+                            Self::__Ignore(ref _0, ref _1) => {
+                                Self::__Ignore(
+                                    core::clone::Clone::clone(_0),
+                                    core::clone::Clone::clone(_1),
+                                )
+                            }
+                        }
+                    }
+                }
+            };
+            const _: () = {
+                impl<Runtime: Pip42> core::cmp::Eq for View<Runtime> {}
+            };
+            const _: () = {
+                impl<Runtime: Pip42> core::cmp::PartialEq for View<Runtime> {
+                    fn eq(&self, other: &Self) -> bool {
+                        match (self, other) {
+                            (
+                                Self::__Ignore(_0, _1),
+                                Self::__Ignore(_0_other, _1_other),
+                            ) => true && _0 == _0_other && _1 == _1_other,
+                        }
+                    }
+                }
+            };
+            #[allow(deprecated)]
+            const _: () = {
+                #[allow(non_camel_case_types)]
+                #[automatically_derived]
+                impl<Runtime: Pip42> ::codec::Encode for View<Runtime> {}
+                #[automatically_derived]
+                impl<Runtime: Pip42> ::codec::EncodeLike for View<Runtime> {}
+            };
+            #[allow(deprecated)]
+            const _: () = {
+                #[allow(non_camel_case_types)]
+                #[automatically_derived]
+                impl<Runtime: Pip42> ::codec::Decode for View<Runtime> {
+                    fn decode<__CodecInputEdqy: ::codec::Input>(
+                        __codec_input_edqy: &mut __CodecInputEdqy,
+                    ) -> ::core::result::Result<Self, ::codec::Error> {
+                        match __codec_input_edqy
+                            .read_byte()
+                            .map_err(|e| {
+                                e
+                                    .chain(
+                                        "Could not decode `View`, failed to read variant byte",
+                                    )
+                            })?
+                        {
+                            _ => {
+                                ::core::result::Result::Err(
+                                    <_ as ::core::convert::Into<
+                                        _,
+                                    >>::into("Could not decode `View`, variant doesn't exist"),
+                                )
+                            }
+                        }
+                    }
+                }
+            };
+            #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+            const _: () = {
+                impl<Runtime: Pip42> ::scale_info::TypeInfo for View<Runtime>
+                where
+                    frame_support::sp_std::marker::PhantomData<
+                        (Runtime),
+                    >: ::scale_info::TypeInfo + 'static,
+                    Runtime: Pip42 + 'static,
+                {
+                    type Identity = Self;
+                    fn type_info() -> ::scale_info::Type {
+                        ::scale_info::Type::builder()
+                            .path(
+                                ::scale_info::Path::new(
+                                    "View",
+                                    "pallet_interface::mock::interfaces::pip42",
+                                ),
+                            )
+                            .type_params(
+                                <[_]>::into_vec(
+                                    #[rustc_box]
+                                    ::alloc::boxed::Box::new([
+                                        ::scale_info::TypeParameter::new(
+                                            "Runtime",
+                                            ::core::option::Option::None,
+                                        ),
+                                    ]),
+                                ),
+                            )
+                            .variant(::scale_info::build::Variants::new())
+                    }
+                }
+            };
+            impl<Runtime: Pip42> View<Runtime> {}
+            impl<Runtime: Pip42> frame_support::interface::View for View<Runtime> {
+                fn view(self) -> frame_support::interface::ViewResult<Vec<u8>> {
+                    match self {
+                        Self::__Ignore(_, _) => {
+                            {
+                                ::core::panicking::panic_fmt(
+                                    format_args!(
+                                        "internal error: entered unreachable code: {0}",
+                                        format_args!("__PhantomItem cannot be used.")
+                                    ),
+                                );
+                            };
+                        }
+                    }
+                }
+            }
+            impl<Runtime: Pip42> View<Runtime> {
+                #[doc(hidden)]
+                pub fn call_functions() -> frame_support::metadata::PalletCallMetadata {
+                    frame_support::scale_info::meta_type::<View<Runtime>>().into()
+                }
             }
         }
     }
@@ -3538,6 +4035,290 @@ mod mock {
             ::core::panicking::panic("not yet implemented")
         }
     }
+    pub enum InterfaceCall {
+        #[codec(index = 20u8)]
+        Pip20(interfaces::pip20::Call<MockRuntime>),
+        #[codec(index = 42u8)]
+        Pip42(interfaces::pip42::Call<MockRuntime>),
+    }
+    #[allow(deprecated)]
+    const _: () = {
+        #[automatically_derived]
+        impl ::codec::Decode for InterfaceCall {
+            fn decode<__CodecInputEdqy: ::codec::Input>(
+                __codec_input_edqy: &mut __CodecInputEdqy,
+            ) -> ::core::result::Result<Self, ::codec::Error> {
+                match __codec_input_edqy
+                    .read_byte()
+                    .map_err(|e| {
+                        e
+                            .chain(
+                                "Could not decode `InterfaceCall`, failed to read variant byte",
+                            )
+                    })?
+                {
+                    __codec_x_edqy if __codec_x_edqy == 20u8 as ::core::primitive::u8 => {
+                        ::core::result::Result::Ok(
+                            InterfaceCall::Pip20({
+                                let __codec_res_edqy = <interfaces::pip20::Call<
+                                    MockRuntime,
+                                > as ::codec::Decode>::decode(__codec_input_edqy);
+                                match __codec_res_edqy {
+                                    ::core::result::Result::Err(e) => {
+                                        return ::core::result::Result::Err(
+                                            e.chain("Could not decode `InterfaceCall::Pip20.0`"),
+                                        );
+                                    }
+                                    ::core::result::Result::Ok(__codec_res_edqy) => {
+                                        __codec_res_edqy
+                                    }
+                                }
+                            }),
+                        )
+                    }
+                    __codec_x_edqy if __codec_x_edqy == 42u8 as ::core::primitive::u8 => {
+                        ::core::result::Result::Ok(
+                            InterfaceCall::Pip42({
+                                let __codec_res_edqy = <interfaces::pip42::Call<
+                                    MockRuntime,
+                                > as ::codec::Decode>::decode(__codec_input_edqy);
+                                match __codec_res_edqy {
+                                    ::core::result::Result::Err(e) => {
+                                        return ::core::result::Result::Err(
+                                            e.chain("Could not decode `InterfaceCall::Pip42.0`"),
+                                        );
+                                    }
+                                    ::core::result::Result::Ok(__codec_res_edqy) => {
+                                        __codec_res_edqy
+                                    }
+                                }
+                            }),
+                        )
+                    }
+                    _ => {
+                        ::core::result::Result::Err(
+                            <_ as ::core::convert::Into<
+                                _,
+                            >>::into(
+                                "Could not decode `InterfaceCall`, variant doesn't exist",
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+    };
+    #[allow(deprecated)]
+    const _: () = {
+        #[automatically_derived]
+        impl ::codec::Encode for InterfaceCall {
+            fn encode_to<__CodecOutputEdqy: ::codec::Output + ?::core::marker::Sized>(
+                &self,
+                __codec_dest_edqy: &mut __CodecOutputEdqy,
+            ) {
+                match *self {
+                    InterfaceCall::Pip20(ref aa) => {
+                        __codec_dest_edqy.push_byte(20u8 as ::core::primitive::u8);
+                        ::codec::Encode::encode_to(aa, __codec_dest_edqy);
+                    }
+                    InterfaceCall::Pip42(ref aa) => {
+                        __codec_dest_edqy.push_byte(42u8 as ::core::primitive::u8);
+                        ::codec::Encode::encode_to(aa, __codec_dest_edqy);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        #[automatically_derived]
+        impl ::codec::EncodeLike for InterfaceCall {}
+    };
+    #[automatically_derived]
+    impl ::core::clone::Clone for InterfaceCall {
+        #[inline]
+        fn clone(&self) -> InterfaceCall {
+            match self {
+                InterfaceCall::Pip20(__self_0) => {
+                    InterfaceCall::Pip20(::core::clone::Clone::clone(__self_0))
+                }
+                InterfaceCall::Pip42(__self_0) => {
+                    InterfaceCall::Pip42(::core::clone::Clone::clone(__self_0))
+                }
+            }
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::StructuralPartialEq for InterfaceCall {}
+    #[automatically_derived]
+    impl ::core::cmp::PartialEq for InterfaceCall {
+        #[inline]
+        fn eq(&self, other: &InterfaceCall) -> bool {
+            let __self_tag = ::core::intrinsics::discriminant_value(self);
+            let __arg1_tag = ::core::intrinsics::discriminant_value(other);
+            __self_tag == __arg1_tag
+                && match (self, other) {
+                    (InterfaceCall::Pip20(__self_0), InterfaceCall::Pip20(__arg1_0)) => {
+                        *__self_0 == *__arg1_0
+                    }
+                    (InterfaceCall::Pip42(__self_0), InterfaceCall::Pip42(__arg1_0)) => {
+                        *__self_0 == *__arg1_0
+                    }
+                    _ => unsafe { ::core::intrinsics::unreachable() }
+                }
+        }
+    }
+    #[automatically_derived]
+    impl ::core::marker::StructuralEq for InterfaceCall {}
+    #[automatically_derived]
+    impl ::core::cmp::Eq for InterfaceCall {
+        #[inline]
+        #[doc(hidden)]
+        #[no_coverage]
+        fn assert_receiver_is_total_eq(&self) -> () {
+            let _: ::core::cmp::AssertParamIsEq<interfaces::pip20::Call<MockRuntime>>;
+            let _: ::core::cmp::AssertParamIsEq<interfaces::pip42::Call<MockRuntime>>;
+        }
+    }
+    impl frame_support::dispatch::GetDispatchInfo for InterfaceCall {
+        fn get_dispatch_info(&self) -> frame_support::dispatch::DispatchInfo {
+            ::core::panicking::panic("not yet implemented")
+        }
+    }
+    impl frame_support::traits::UnfilteredDispatchable for InterfaceCall {
+        type RuntimeOrigin = <MockRuntime as frame_system::Config>::RuntimeOrigin;
+        fn dispatch_bypass_filter(
+            self,
+            origin: Self::RuntimeOrigin,
+        ) -> frame_support::dispatch::DispatchResultWithPostInfo {
+            frame_support::dispatch_context::run_in_context(|| {
+                match self {
+                    Self::Pip20(interface) => {
+                        let __within_span__ = {
+                            use ::tracing::__macro_support::Callsite as _;
+                            static CALLSITE: ::tracing::callsite::DefaultCallsite = {
+                                static META: ::tracing::Metadata<'static> = {
+                                    ::tracing_core::metadata::Metadata::new(
+                                        "Pip20",
+                                        "pallet_interface::mock",
+                                        ::tracing::Level::TRACE,
+                                        Some("frame/interface/src/mock.rs"),
+                                        Some(290u32),
+                                        Some("pallet_interface::mock"),
+                                        ::tracing_core::field::FieldSet::new(
+                                            &[],
+                                            ::tracing_core::callsite::Identifier(&CALLSITE),
+                                        ),
+                                        ::tracing::metadata::Kind::SPAN,
+                                    )
+                                };
+                                ::tracing::callsite::DefaultCallsite::new(&META)
+                            };
+                            let mut interest = ::tracing::subscriber::Interest::never();
+                            if ::tracing::Level::TRACE
+                                <= ::tracing::level_filters::STATIC_MAX_LEVEL
+                                && ::tracing::Level::TRACE
+                                    <= ::tracing::level_filters::LevelFilter::current()
+                                && {
+                                    interest = CALLSITE.interest();
+                                    !interest.is_never()
+                                }
+                                && ::tracing::__macro_support::__is_enabled(
+                                    CALLSITE.metadata(),
+                                    interest,
+                                )
+                            {
+                                let meta = CALLSITE.metadata();
+                                ::tracing::Span::new(
+                                    meta,
+                                    &{ meta.fields().value_set(&[]) },
+                                )
+                            } else {
+                                let span = ::tracing::__macro_support::__disabled_span(
+                                    CALLSITE.metadata(),
+                                );
+                                {};
+                                span
+                            }
+                        };
+                        let __tracing_guard__ = __within_span__.enter();
+                        frame_support::traits::UnfilteredDispatchable::dispatch_bypass_filter(
+                                interface,
+                                origin,
+                            )
+                            .map(Into::into)
+                            .map_err(Into::into)
+                    }
+                    Self::Pip42(interface) => {
+                        let __within_span__ = {
+                            use ::tracing::__macro_support::Callsite as _;
+                            static CALLSITE: ::tracing::callsite::DefaultCallsite = {
+                                static META: ::tracing::Metadata<'static> = {
+                                    ::tracing_core::metadata::Metadata::new(
+                                        "Pip42",
+                                        "pallet_interface::mock",
+                                        ::tracing::Level::TRACE,
+                                        Some("frame/interface/src/mock.rs"),
+                                        Some(290u32),
+                                        Some("pallet_interface::mock"),
+                                        ::tracing_core::field::FieldSet::new(
+                                            &[],
+                                            ::tracing_core::callsite::Identifier(&CALLSITE),
+                                        ),
+                                        ::tracing::metadata::Kind::SPAN,
+                                    )
+                                };
+                                ::tracing::callsite::DefaultCallsite::new(&META)
+                            };
+                            let mut interest = ::tracing::subscriber::Interest::never();
+                            if ::tracing::Level::TRACE
+                                <= ::tracing::level_filters::STATIC_MAX_LEVEL
+                                && ::tracing::Level::TRACE
+                                    <= ::tracing::level_filters::LevelFilter::current()
+                                && {
+                                    interest = CALLSITE.interest();
+                                    !interest.is_never()
+                                }
+                                && ::tracing::__macro_support::__is_enabled(
+                                    CALLSITE.metadata(),
+                                    interest,
+                                )
+                            {
+                                let meta = CALLSITE.metadata();
+                                ::tracing::Span::new(
+                                    meta,
+                                    &{ meta.fields().value_set(&[]) },
+                                )
+                            } else {
+                                let span = ::tracing::__macro_support::__disabled_span(
+                                    CALLSITE.metadata(),
+                                );
+                                {};
+                                span
+                            }
+                        };
+                        let __tracing_guard__ = __within_span__.enter();
+                        frame_support::traits::UnfilteredDispatchable::dispatch_bypass_filter(
+                                interface,
+                                origin,
+                            )
+                            .map(Into::into)
+                            .map_err(Into::into)
+                    }
+                }
+            })
+        }
+    }
+    impl frame_support::traits::GetCallMetadata for InterfaceCall {
+        fn get_module_names() -> &'static [&'static str] {
+            ::core::panicking::panic("not yet implemented")
+        }
+        fn get_call_names(module: &str) -> &'static [&'static str] {
+            ::core::panicking::panic("not yet implemented")
+        }
+        fn get_call_metadata(&self) -> frame_support::traits::CallMetadata {
+            ::core::panicking::panic("not yet implemented")
+        }
+    }
+    const _: () = {};
     pub enum InterfaceView {
         #[codec(index = 20u8)]
         Pip20(interfaces::pip20::View<MockRuntime>),
@@ -3651,4 +4432,607 @@ mod mock {
         }
     }
     const _: () = {};
+    /// Executive: handles dispatch to the various modules.
+    pub type Executive = frame_executive::Executive<
+        Runtime,
+        Block,
+        frame_system::ChainContext<Runtime>,
+        Runtime,
+        AllPalletsWithSystem,
+        (),
+    >;
+    #[doc(hidden)]
+    mod sp_api_hidden_includes_IMPL_RUNTIME_APIS {
+        pub extern crate sp_api as sp_api;
+    }
+    pub struct RuntimeApi {}
+    /// Implements all runtime apis for the client side.
+    #[cfg(any(feature = "std", test))]
+    pub struct RuntimeApiImpl<
+        Block: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT,
+        C: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt<Block>
+            + 'static,
+    > {
+        call: &'static C,
+        commit_on_success: std::cell::RefCell<bool>,
+        changes: std::cell::RefCell<
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::OverlayedChanges,
+        >,
+        storage_transaction_cache: std::cell::RefCell<
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::StorageTransactionCache<
+                Block,
+                C::StateBackend,
+            >,
+        >,
+        recorder: std::option::Option<
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ProofRecorder<Block>,
+        >,
+    }
+    #[cfg(any(feature = "std", test))]
+    impl<
+        Block: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT,
+        C: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt<Block>,
+    > self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ApiExt<Block>
+    for RuntimeApiImpl<Block, C> {
+        type StateBackend = C::StateBackend;
+        fn execute_in_transaction<
+            F: FnOnce(
+                    &Self,
+                ) -> self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::TransactionOutcome<
+                        R,
+                    >,
+            R,
+        >(&self, call: F) -> R
+        where
+            Self: Sized,
+        {
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::OverlayedChanges::start_transaction(
+                &mut std::cell::RefCell::borrow_mut(&self.changes),
+            );
+            *std::cell::RefCell::borrow_mut(&self.commit_on_success) = false;
+            let res = call(self);
+            *std::cell::RefCell::borrow_mut(&self.commit_on_success) = true;
+            self.commit_or_rollback(
+                match res {
+                    self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::TransactionOutcome::Commit(
+                        _,
+                    ) => true,
+                    _ => false,
+                },
+            );
+            res.into_inner()
+        }
+        fn has_api<
+            A: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeApiInfo
+                + ?Sized,
+        >(
+            &self,
+            at: <Block as self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT>::Hash,
+        ) -> std::result::Result<
+            bool,
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ApiError,
+        >
+        where
+            Self: Sized,
+        {
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                Block,
+            >::runtime_version_at(self.call, at)
+                .map(|v| self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeVersion::has_api_with(
+                    &v,
+                    &A::ID,
+                    |v| v == A::VERSION,
+                ))
+        }
+        fn has_api_with<
+            A: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeApiInfo
+                + ?Sized,
+            P: Fn(u32) -> bool,
+        >(
+            &self,
+            at: <Block as self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT>::Hash,
+            pred: P,
+        ) -> std::result::Result<
+            bool,
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ApiError,
+        >
+        where
+            Self: Sized,
+        {
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                Block,
+            >::runtime_version_at(self.call, at)
+                .map(|v| self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeVersion::has_api_with(
+                    &v,
+                    &A::ID,
+                    pred,
+                ))
+        }
+        fn api_version<
+            A: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeApiInfo
+                + ?Sized,
+        >(
+            &self,
+            at: <Block as self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT>::Hash,
+        ) -> std::result::Result<
+            Option<u32>,
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ApiError,
+        >
+        where
+            Self: Sized,
+        {
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                Block,
+            >::runtime_version_at(self.call, at)
+                .map(|v| self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeVersion::api_version(
+                    &v,
+                    &A::ID,
+                ))
+        }
+        fn record_proof(&mut self) {
+            self.recorder = std::option::Option::Some(std::default::Default::default());
+        }
+        fn proof_recorder(
+            &self,
+        ) -> std::option::Option<
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ProofRecorder<Block>,
+        > {
+            std::clone::Clone::clone(&self.recorder)
+        }
+        fn extract_proof(
+            &mut self,
+        ) -> std::option::Option<
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::StorageProof,
+        > {
+            let recorder = std::option::Option::take(&mut self.recorder);
+            std::option::Option::map(
+                recorder,
+                |recorder| {
+                    self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ProofRecorder::<
+                        Block,
+                    >::drain_storage_proof(recorder)
+                },
+            )
+        }
+        fn into_storage_changes(
+            &self,
+            backend: &Self::StateBackend,
+            parent_hash: Block::Hash,
+        ) -> core::result::Result<
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::StorageChanges<
+                C::StateBackend,
+                Block,
+            >,
+            String,
+        >
+        where
+            Self: Sized,
+        {
+            let state_version = self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                Block,
+            >::runtime_version_at(self.call, std::clone::Clone::clone(&parent_hash))
+                .map(|v| self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeVersion::state_version(
+                    &v,
+                ))
+                .map_err(|e| {
+                    let res = ::alloc::fmt::format(
+                        format_args!("Failed to get state version: {0}", e),
+                    );
+                    res
+                })?;
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::OverlayedChanges::into_storage_changes(
+                std::cell::RefCell::take(&self.changes),
+                backend,
+                core::cell::RefCell::take(&self.storage_transaction_cache),
+                state_version,
+            )
+        }
+    }
+    #[cfg(any(feature = "std", test))]
+    impl<
+        Block: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT,
+        C,
+    > self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ConstructRuntimeApi<
+        Block,
+        C,
+    > for RuntimeApi
+    where
+        C: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt<Block>
+            + 'static,
+    {
+        type RuntimeApi = RuntimeApiImpl<Block, C>;
+        fn construct_runtime_api<'a>(
+            call: &'a C,
+        ) -> self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ApiRef<
+            'a,
+            Self::RuntimeApi,
+        > {
+            RuntimeApiImpl {
+                call: unsafe { std::mem::transmute(call) },
+                commit_on_success: true.into(),
+                changes: std::default::Default::default(),
+                recorder: std::default::Default::default(),
+                storage_transaction_cache: std::default::Default::default(),
+            }
+                .into()
+        }
+    }
+    #[cfg(any(feature = "std", test))]
+    impl<
+        Block: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT,
+        C: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt<Block>,
+    > RuntimeApiImpl<Block, C> {
+        fn commit_or_rollback(&self, commit: bool) {
+            let proof = "\
+					We only close a transaction when we opened one ourself.
+					Other parts of the runtime that make use of transactions (state-machine)
+					also balance their transactions. The runtime cannot close client initiated
+					transactions; qed";
+            if *std::cell::RefCell::borrow(&self.commit_on_success) {
+                let res = if commit {
+                    self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::OverlayedChanges::commit_transaction(
+                        &mut std::cell::RefCell::borrow_mut(&self.changes),
+                    )
+                } else {
+                    self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::OverlayedChanges::rollback_transaction(
+                        &mut std::cell::RefCell::borrow_mut(&self.changes),
+                    )
+                };
+                std::result::Result::expect(res, proof);
+            }
+        }
+    }
+    impl sp_api::runtime_decl_for_Core::Core<Block> for MockRuntime {
+        fn version() -> RuntimeVersion {
+            VERSION
+        }
+        fn execute_block(block: Block) {
+            Executive::execute_block(block)
+        }
+        fn initialize_block(header: &<Block as sp_runtime::traits::Block>::Header) {
+            Executive::initialize_block(header)
+        }
+    }
+    impl sp_api::runtime_decl_for_Metadata::Metadata<Block> for MockRuntime {
+        fn metadata() -> OpaqueMetadata {
+            sp_core::OpaqueMetadata::new(MockRuntime::metadata().into())
+        }
+    }
+    impl frame_support::interface::runtime_decl_for_Interface::Interface<
+        Block,
+        InterfaceView,
+    > for MockRuntime {
+        fn view(view: InterfaceView) -> ViewResult<Vec<u8>> {
+            view.view()
+        }
+    }
+    #[cfg(any(feature = "std", test))]
+    impl<
+        __SR_API_BLOCK__: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT
+            + std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+        RuntimeApiImplCall: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt<
+                __SR_API_BLOCK__,
+            > + 'static,
+    > sp_api::Core<__SR_API_BLOCK__>
+    for RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>
+    where
+        RuntimeApiImplCall::StateBackend: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::StateBackend<
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::HashFor<
+                __SR_API_BLOCK__,
+            >,
+        >,
+        &'static RuntimeApiImplCall: Send,
+        RuntimeVersion: std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+        __SR_API_BLOCK__: std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+        <__SR_API_BLOCK__ as sp_runtime::traits::Block>::Header: std::panic::UnwindSafe
+            + std::panic::RefUnwindSafe,
+        __SR_API_BLOCK__::Header: std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+    {
+        fn __runtime_api_internal_call_api_at(
+            &self,
+            at: <__SR_API_BLOCK__ as self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT>::Hash,
+            context: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ExecutionContext,
+            params: std::vec::Vec<u8>,
+            fn_name: &dyn Fn(
+                self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeVersion,
+            ) -> &'static str,
+        ) -> std::result::Result<
+            std::vec::Vec<u8>,
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ApiError,
+        > {
+            if *std::cell::RefCell::borrow(&self.commit_on_success) {
+                self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::OverlayedChanges::start_transaction(
+                    &mut std::cell::RefCell::borrow_mut(&self.changes),
+                );
+            }
+            let res = (|| {
+                let version = self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                    __SR_API_BLOCK__,
+                >::runtime_version_at(self.call, at)?;
+                let params = self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAtParams {
+                    at,
+                    function: (*fn_name)(version),
+                    arguments: params,
+                    overlayed_changes: &self.changes,
+                    storage_transaction_cache: &self.storage_transaction_cache,
+                    context,
+                    recorder: &self.recorder,
+                };
+                self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                    __SR_API_BLOCK__,
+                >::call_api_at(self.call, params)
+            })();
+            self.commit_or_rollback(std::result::Result::is_ok(&res));
+            res
+        }
+    }
+    #[cfg(any(feature = "std", test))]
+    impl<
+        __SR_API_BLOCK__: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT
+            + std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+        RuntimeApiImplCall: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt<
+                __SR_API_BLOCK__,
+            > + 'static,
+    > sp_api::Metadata<__SR_API_BLOCK__>
+    for RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>
+    where
+        RuntimeApiImplCall::StateBackend: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::StateBackend<
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::HashFor<
+                __SR_API_BLOCK__,
+            >,
+        >,
+        &'static RuntimeApiImplCall: Send,
+        OpaqueMetadata: std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+        __SR_API_BLOCK__::Header: std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+    {
+        fn __runtime_api_internal_call_api_at(
+            &self,
+            at: <__SR_API_BLOCK__ as self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT>::Hash,
+            context: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ExecutionContext,
+            params: std::vec::Vec<u8>,
+            fn_name: &dyn Fn(
+                self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeVersion,
+            ) -> &'static str,
+        ) -> std::result::Result<
+            std::vec::Vec<u8>,
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ApiError,
+        > {
+            if *std::cell::RefCell::borrow(&self.commit_on_success) {
+                self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::OverlayedChanges::start_transaction(
+                    &mut std::cell::RefCell::borrow_mut(&self.changes),
+                );
+            }
+            let res = (|| {
+                let version = self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                    __SR_API_BLOCK__,
+                >::runtime_version_at(self.call, at)?;
+                let params = self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAtParams {
+                    at,
+                    function: (*fn_name)(version),
+                    arguments: params,
+                    overlayed_changes: &self.changes,
+                    storage_transaction_cache: &self.storage_transaction_cache,
+                    context,
+                    recorder: &self.recorder,
+                };
+                self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                    __SR_API_BLOCK__,
+                >::call_api_at(self.call, params)
+            })();
+            self.commit_or_rollback(std::result::Result::is_ok(&res));
+            res
+        }
+    }
+    #[cfg(any(feature = "std", test))]
+    impl<
+        __SR_API_BLOCK__: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT
+            + std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+        RuntimeApiImplCall: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt<
+                __SR_API_BLOCK__,
+            > + 'static,
+    > frame_support::interface::Interface<__SR_API_BLOCK__, InterfaceView>
+    for RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>
+    where
+        RuntimeApiImplCall::StateBackend: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::StateBackend<
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::HashFor<
+                __SR_API_BLOCK__,
+            >,
+        >,
+        &'static RuntimeApiImplCall: Send,
+        InterfaceView: std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+        ViewResult<Vec<u8>>: std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+        __SR_API_BLOCK__::Header: std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+    {
+        fn __runtime_api_internal_call_api_at(
+            &self,
+            at: <__SR_API_BLOCK__ as self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::BlockT>::Hash,
+            context: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ExecutionContext,
+            params: std::vec::Vec<u8>,
+            fn_name: &dyn Fn(
+                self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::RuntimeVersion,
+            ) -> &'static str,
+        ) -> std::result::Result<
+            std::vec::Vec<u8>,
+            self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ApiError,
+        > {
+            if *std::cell::RefCell::borrow(&self.commit_on_success) {
+                self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::OverlayedChanges::start_transaction(
+                    &mut std::cell::RefCell::borrow_mut(&self.changes),
+                );
+            }
+            let res = (|| {
+                let version = self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                    __SR_API_BLOCK__,
+                >::runtime_version_at(self.call, at)?;
+                let params = self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAtParams {
+                    at,
+                    function: (*fn_name)(version),
+                    arguments: params,
+                    overlayed_changes: &self.changes,
+                    storage_transaction_cache: &self.storage_transaction_cache,
+                    context,
+                    recorder: &self.recorder,
+                };
+                self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::CallApiAt::<
+                    __SR_API_BLOCK__,
+                >::call_api_at(self.call, params)
+            })();
+            self.commit_or_rollback(std::result::Result::is_ok(&res));
+            res
+        }
+    }
+    const RUNTIME_API_VERSIONS: self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::ApisVec = ::sp_version::sp_std::borrow::Cow::Borrowed(
+        &[
+            (sp_api::runtime_decl_for_Core::ID, sp_api::runtime_decl_for_Core::VERSION),
+            (
+                sp_api::runtime_decl_for_Metadata::ID,
+                sp_api::runtime_decl_for_Metadata::VERSION,
+            ),
+            (
+                frame_support::interface::runtime_decl_for_Interface::ID,
+                frame_support::interface::runtime_decl_for_Interface::VERSION,
+            ),
+        ],
+    );
+    const _: () = {};
+    const _: () = {};
+    const _: () = {};
+    pub mod api {
+        use super::*;
+        #[cfg(feature = "std")]
+        pub fn dispatch(
+            method: &str,
+            mut __sp_api__input_data: &[u8],
+        ) -> Option<Vec<u8>> {
+            match method {
+                "Core_version" => {
+                    Some(
+                        self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::Encode::encode(
+                            &{
+                                let (): () = match self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::DecodeLimit::decode_all_with_depth_limit(
+                                    self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::MAX_EXTRINSIC_DEPTH,
+                                    &mut __sp_api__input_data,
+                                ) {
+                                    Ok(res) => res,
+                                    Err(e) => {
+                                        ::core::panicking::panic_fmt(
+                                            format_args!(
+                                                "Bad input data provided to {0}: {1}", "version", e
+                                            ),
+                                        );
+                                    }
+                                };
+                                #[allow(deprecated)]
+                                <MockRuntime as sp_api::runtime_decl_for_Core::Core<
+                                    Block,
+                                >>::version()
+                            },
+                        ),
+                    )
+                }
+                "Core_execute_block" => {
+                    Some(
+                        self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::Encode::encode(
+                            &{
+                                let (block): (Block) = match self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::DecodeLimit::decode_all_with_depth_limit(
+                                    self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::MAX_EXTRINSIC_DEPTH,
+                                    &mut __sp_api__input_data,
+                                ) {
+                                    Ok(res) => res,
+                                    Err(e) => {
+                                        ::core::panicking::panic_fmt(
+                                            format_args!(
+                                                "Bad input data provided to {0}: {1}", "execute_block", e
+                                            ),
+                                        );
+                                    }
+                                };
+                                #[allow(deprecated)]
+                                <MockRuntime as sp_api::runtime_decl_for_Core::Core<
+                                    Block,
+                                >>::execute_block(block)
+                            },
+                        ),
+                    )
+                }
+                "Core_initialize_block" => {
+                    Some(
+                        self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::Encode::encode(
+                            &{
+                                let (header): (<Block as sp_runtime::traits::Block>::Header) = match self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::DecodeLimit::decode_all_with_depth_limit(
+                                    self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::MAX_EXTRINSIC_DEPTH,
+                                    &mut __sp_api__input_data,
+                                ) {
+                                    Ok(res) => res,
+                                    Err(e) => {
+                                        ::core::panicking::panic_fmt(
+                                            format_args!(
+                                                "Bad input data provided to {0}: {1}", "initialize_block", e
+                                            ),
+                                        );
+                                    }
+                                };
+                                #[allow(deprecated)]
+                                <MockRuntime as sp_api::runtime_decl_for_Core::Core<
+                                    Block,
+                                >>::initialize_block(&header)
+                            },
+                        ),
+                    )
+                }
+                "Metadata_metadata" => {
+                    Some(
+                        self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::Encode::encode(
+                            &{
+                                let (): () = match self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::DecodeLimit::decode_all_with_depth_limit(
+                                    self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::MAX_EXTRINSIC_DEPTH,
+                                    &mut __sp_api__input_data,
+                                ) {
+                                    Ok(res) => res,
+                                    Err(e) => {
+                                        ::core::panicking::panic_fmt(
+                                            format_args!(
+                                                "Bad input data provided to {0}: {1}", "metadata", e
+                                            ),
+                                        );
+                                    }
+                                };
+                                #[allow(deprecated)]
+                                <MockRuntime as sp_api::runtime_decl_for_Metadata::Metadata<
+                                    Block,
+                                >>::metadata()
+                            },
+                        ),
+                    )
+                }
+                "Interface_view" => {
+                    Some(
+                        self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::Encode::encode(
+                            &{
+                                let (view): (InterfaceView) = match self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::DecodeLimit::decode_all_with_depth_limit(
+                                    self::sp_api_hidden_includes_IMPL_RUNTIME_APIS::sp_api::MAX_EXTRINSIC_DEPTH,
+                                    &mut __sp_api__input_data,
+                                ) {
+                                    Ok(res) => res,
+                                    Err(e) => {
+                                        ::core::panicking::panic_fmt(
+                                            format_args!(
+                                                "Bad input data provided to {0}: {1}", "view", e
+                                            ),
+                                        );
+                                    }
+                                };
+                                #[allow(deprecated)]
+                                <MockRuntime as frame_support::interface::runtime_decl_for_Interface::Interface<
+                                    Block,
+                                    InterfaceView,
+                                >>::view(view)
+                            },
+                        ),
+                    )
+                }
+                _ => None,
+            }
+        }
+    }
 }

@@ -33,9 +33,14 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 		.zip(indices)
 		.for_each(|(var, index)| var.attrs.push(syn::parse_quote!(#[codec(index = #index)])));
 
-	def.item.attrs.push(
-		syn::parse_quote!(#[derive(#frame_support::codec::Decode, #frame_support::codec::Encode, Clone, PartialEq, Eq)]),
-	);
+	def.item.attrs.push(syn::parse_quote!(#[derive(
+			#frame_support::RuntimeDebugNoBound,
+			#frame_support::CloneNoBound,
+			#frame_support::EqNoBound,
+			#frame_support::PartialEqNoBound,
+			#frame_support::codec::Encode,
+			#frame_support::codec::Decode,
+			#frame_support::scale_info::TypeInfo,)]));
 
 	let impl_item = quote::quote_spanned!(def.span =>
 
@@ -104,20 +109,3 @@ pub fn expand(mut def: super::parse::Def) -> proc_macro2::TokenStream {
 		#impl_item
 	)
 }
-
-/*
-#[frame_support::call_entry]
-pub enum CallInterface<Runtime> {
-	#[call_entry::index(20)]
-	Pip20(pip20::Call<Runtime>),
-}
-
-impl<Runtime> GetDispatchInfo for CallInterface<Runtime>{
-}
-
-impl<Runtime> Call for CallInterface<Runtime>{
-}
-
-impl<Runtime> GetCallMetadata for CallInterface<Runtime>{
-}
- */

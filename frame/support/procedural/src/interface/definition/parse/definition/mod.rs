@@ -21,6 +21,7 @@ mod view;
 use crate::interface::definition::parse::definition::{call::SingleCallDef, view::SingleViewDef};
 use quote::ToTokens;
 use syn::spanned::Spanned;
+use syn::{AngleBracketedGenericArguments, GenericArgument, PathArguments};
 
 pub struct InterfaceDef {
 	index: usize,
@@ -216,6 +217,14 @@ fn adapt_type_to_generic_if_self(ty: Box<syn::Type>) -> Box<syn::Type> {
 		if segment.ident == "Self" {
 			let rt_ident = syn::Ident::new("Runtime", proc_macro2::Span::call_site());
 			segment.ident = rt_ident;
+		}
+
+		if let PathArguments::AngleBracketed(generic) = &mut segment.arguments {
+			for argument in &mut generic.args {
+				if let GenericArgument::Type(ty) = argument {
+					*ty = *adapt_type_to_generic_if_self(Box::new(ty.clone()));
+				}
+			}
 		}
 	}
 

@@ -32,7 +32,7 @@ impl Def {
 	pub fn try_from(mut item: syn::ItemEnum, runtime: syn::Ident) -> syn::Result<Self> {
 		let item_span = item.span();
 		let frame_support = generate_crate_access_2018("frame-support")?;
-		let frame_system = generate_crate_access_2018("frame-support")?;
+		let frame_system = generate_crate_access_2018("frame-system")?;
 		let sp_core = generate_crate_access_2018("sp-core")?;
 
 		// TODO: Check if other high-level attributes of #[call_entry::*] are present and error out

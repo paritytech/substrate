@@ -15,7 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use crate as pallet_interface;
-use codec::{Decode, Encode};
+use crate::mock::interfaces::pip20::{BalanceSelectable, CurrencySelectable};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::dispatch::TypeInfo;
 use frame_support::interface::{CallResult, Select, Selector, SelectorResult, ViewResult};
 use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
@@ -27,15 +29,26 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	RuntimeDebug,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
+type Block = frame_system::mocking::MockBlock<MockRuntime>;
 
 type Balance = u64;
 type AccountId = u64;
 
-enum CurrencyId {
+#[derive(
+	Encode,
+	Decode,
+	codec::MaxEncodedLen,
+	sp_core::RuntimeDebug,
+	scale_info::TypeInfo,
+	Clone,
+	PartialEq,
+	Eq,
+)]
+pub enum CurrencyId {
 	Native,
 	Other,
 }
@@ -58,25 +71,25 @@ mod interfaces {
 		#[interface::definition]
 		pub trait Pip20: frame_system::Config {
 			/// A means for converting between from a [u8; 32] to the native chains account id.
-			type SelectAccount: Selector<Selectable = AccountIdSelectable, Selected = Self::AccountId>
-				+ Parameter
-				+ Member;
+			type SelectAccount: Selector<
+				Selectable = AccountIdSelectable,
+				Selected = Self::AccountId,
+			>;
 
 			/// The chains native currency type.
 			type Currency: Parameter + Member;
 
 			/// A means for converting between from a `H256` to the chains native currency.
-			type SelectCurrency: Selector<Selectable = CurrencySelectable, Selected = Self::Currency>
-				+ Parameter
-				+ Member;
+			type SelectCurrency: Selector<
+				Selectable = CurrencySelectable,
+				Selected = Self::Currency,
+			>;
 
 			/// The chains native balance type.
 			type Balance: Parameter + Member;
 
 			/// A means for converting between from a u128 to the chains native balance.
-			type SelectBalance: Selector<Selectable = BalanceSelectable, Selected = Self::Balance>
-				+ Parameter
-				+ Member;
+			type SelectBalance: Selector<Selectable = BalanceSelectable, Selected = Self::Balance>;
 
 			#[interface::view]
 			#[interface::view_index(0)]
@@ -96,7 +109,7 @@ mod interfaces {
 			#[interface::weight(0)]
 			fn transfer(
 				origin: Self::RuntimeOrigin,
-				currency: Select<SelectCurrency>,
+				currency: Select<Self::SelectCurrency>,
 				recv: Select<Self::SelectAccount>,
 				amount: Select<Self::SelectBalance>,
 			) -> CallResult;
@@ -106,7 +119,7 @@ mod interfaces {
 			#[interface::weight(0)]
 			fn burn(
 				origin: Self::RuntimeOrigin,
-				currency: Select<SelectCurrency>,
+				currency: Select<Self::SelectCurrency>,
 				from: Select<Self::SelectAccount>,
 				amount: Select<Self::SelectBalance>,
 			) -> CallResult;
@@ -116,7 +129,7 @@ mod interfaces {
 			#[interface::weight(0)]
 			fn approve(
 				origin: Self::RuntimeOrigin,
-				currency: Select<RestrictedCurrency>,
+				currency: Select<Self::SelectCurrency>,
 				recv: Select<Self::SelectAccount>,
 				amount: Select<Self::SelectBalance>,
 			) -> CallResult;
@@ -156,7 +169,7 @@ frame_support::construct_runtime!(
 		// NOTE: The interface pallet should live at the same index
 		//       for all chains, if this should make the lives of wallets, etc.
 		//       easier.
-		Interface: pallet_interface::{Pallet, Call} = 255
+		Interface: pallet_interface::{Pallet, Call, Event<T>} = 255
 	}
 );
 
@@ -187,12 +200,24 @@ impl frame_system::Config for MockRuntime {
 	type MaxConsumers = ConstU32<16>;
 }
 
+impl pallet_balances::Config for MockRuntime {
+	type Balance = Balance;
+	type DustRemoval = ();
+	type RuntimeEvent = RuntimeEvent;
+	type ExistentialDeposit = ConstU64<1>;
+	type AccountStore = System;
+	type WeightInfo = ();
+	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+}
+
 impl pallet_interface::Config for MockRuntime {
 	type RuntimeEvent = RuntimeEvent;
 	type Interface = InterfaceCall;
 }
 
-struct AccountSelector;
+pub struct AccountSelector;
 impl Selector for AccountSelector {
 	type Selectable = interfaces::pip20::AccountIdSelectable;
 	type Selected = AccountId;
@@ -202,9 +227,9 @@ impl Selector for AccountSelector {
 	}
 }
 
-struct CurrencySelector;
+pub struct CurrencySelector;
 impl Selector for CurrencySelector {
-	type Selectable = interfaces::pip20::CurrencyIdSelectable;
+	type Selectable = interfaces::pip20::CurrencySelectable;
 	type Selected = CurrencyId;
 
 	fn select(selectable: Self::Selectable) -> SelectorResult<Self::Selected> {
@@ -212,7 +237,7 @@ impl Selector for CurrencySelector {
 	}
 }
 
-struct BalanceSelector;
+pub struct BalanceSelector;
 impl Selector for BalanceSelector {
 	type Selectable = interfaces::pip20::BalanceSelectable;
 	type Selected = Balance;
@@ -241,19 +266,19 @@ impl interfaces::pip20::Pip20 for MockRuntime {
 	fn free_balance(
 		currency: Select<Self::SelectCurrency>,
 		who: Select<Self::SelectAccount>,
-	) -> ViewResult<BalanceSelector> {
+	) -> ViewResult<BalanceSelectable> {
 		todo!()
 	}
 
 	fn balances(
 		who: Select<Self::SelectAccount>,
-	) -> ViewResult<Vec<(CurrencySelector, BalanceSelector)>> {
+	) -> ViewResult<Vec<(CurrencySelectable, BalanceSelectable)>> {
 		todo!()
 	}
 
 	fn transfer(
 		origin: Self::RuntimeOrigin,
-		currency: Select<SelectCurrency>,
+		currency: Select<Self::SelectCurrency>,
 		recv: Select<Self::SelectAccount>,
 		amount: Select<Self::SelectBalance>,
 	) -> CallResult {
@@ -282,12 +307,13 @@ impl interfaces::pip20::Pip20 for MockRuntime {
 impl interfaces::pip42::Pip42 for MockRuntime {
 	type MaxRemark = ConstU32<64>;
 
-	fn remark(bytes: BoundedVec<u8, Self::MaxRemark>) -> CallResult {
+	fn remark(origin: Self::RuntimeOrigin, bytes: BoundedVec<u8, Self::MaxRemark>) -> CallResult {
 		todo!()
 	}
 }
 
 #[frame_support::call_entry(MockRuntime)]
+//#[derive(Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, PartialEq, Eq)]
 pub enum InterfaceCall {
 	#[call_entry::index(20)]
 	Pip20(interfaces::pip20::Call<MockRuntime>),
@@ -301,33 +327,44 @@ pub enum InterfaceView {
 	Pip20(interfaces::pip20::View<MockRuntime>),
 }
 
-impl_runtime_apis! {
+/// Executive: handles dispatch to the various modules.
+pub type Executive = frame_executive::Executive<
+	MockRuntime,
+	Block,
+	frame_system::ChainContext<MockRuntime>,
+	MockRuntime,
+	AllPalletsWithSystem,
+	// We don't run migrations on the development runtime
+	(),
+>;
+
+sp_api::impl_runtime_apis! {
 	impl sp_api::Core<Block> for MockRuntime {
-		fn version() -> RuntimeVersion {
-			VERSION
+		fn version() -> sp_api::RuntimeVersion {
+			todo!()
 		}
 
 		fn execute_block(block: Block) {
-			Executive::execute_block(block)
+			todo!()
 		}
 
-		fn initialize_block(header: &<Block as BlockT>::Header) {
-			Executive::initialize_block(header)
+		fn initialize_block(header: &<Block as sp_runtime::traits::Block>::Header) {
+			todo!()
 		}
 	}
 
 	impl sp_api::Metadata<Block> for MockRuntime {
-		fn metadata() -> OpaqueMetadata {
-			OpaqueMetadata::new(MockRuntime::metadata().into())
+		fn metadata() -> sp_core::OpaqueMetadata {
+			sp_core::OpaqueMetadata::new(MockRuntime::metadata().into())
 		}
 	}
 
 	// NOTE:  This is the location where we use the `enum InterfaceView` that
 	//        is annotated with the `#[frame_support::view_entry]`
 	//        macro.
-	impl frame_support::interface::Interface<InterfaceView> for MockRuntime {
-		fn view(view: View) -> ViewResult<Vec<u8>> {
-			view.view()
+	impl frame_support::interface::Interface<Block, InterfaceView> for MockRuntime {
+		fn view(view: InterfaceView) -> ViewResult<Vec<u8>> {
+			frame_support::interface::View::view(view)
 		}
 	}
 }
