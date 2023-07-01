@@ -30,7 +30,6 @@ sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../epochs" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
-sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-application-crypto = { version = "23.0.0", path = "../../../primitives/application-crypto" }
