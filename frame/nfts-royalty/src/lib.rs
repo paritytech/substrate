@@ -399,9 +399,15 @@ pub mod pallet {
 
 			let collection_royalty =
 				<CollectionRoyalty<T>>::take(collection_id).ok_or(Error::<T>::NoRoyaltyExists)?;
-			
-			ensure!(collection_royalty.royalty_admin == caller, Error::<T>::NoPermission);
 
+			ensure!(
+				collection_royalty
+					.recipients
+					.iter()
+					.any(|recipient| recipient.royalty_recipient == caller),
+				Error::<T>::NoPermission
+			);
+			
 			CollectionRoyalty::<T>::insert(
 				collection_id,
 				RoyaltyConfig::<T::AccountId, BalanceOf<T>, T::MaxRecipients> {
@@ -441,7 +447,14 @@ pub mod pallet {
 
 			let item_royalty = <ItemRoyalty<T>>::take((collection_id, item_id))
 				.ok_or(Error::<T>::NoRoyaltyExists)?;
-			ensure!(item_royalty.royalty_admin == caller, Error::<T>::NoPermission);
+			
+			ensure!(
+				item_royalty
+					.recipients
+					.iter()
+					.any(|recipient| recipient.royalty_recipient == caller),
+				Error::<T>::NoPermission
+			);
 
 			ItemRoyalty::<T>::insert(
 				(collection_id, item_id),
