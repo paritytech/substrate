@@ -40,9 +40,11 @@ impl<
 {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-		if !can_migrate::<T, I>() {
-			log::warn!(target: TARGET, "pallet_society::MigrateToV2: Already migrated");
-		}
+		ensure!(can_migrate::<T, I>(), "pallet_society: already upgraded");
+
+		let current = Pallet::<T, I>::current_storage_version();
+		let onchain = Pallet::<T, I>::on_chain_storage_version();
+		ensure!(onchain == 0 && current == 2, "pallet_society: invalid version");
 
 		Ok((old::Candidates::<T, I>::get(), old::Members::<T, I>::get()).encode())
 	}
@@ -90,7 +92,7 @@ impl<
 		assert_eq!(members, old_members);
 
 		ensure!(
-			Pallet::<T, I>::on_chain_storage_version() >= 2,
+			Pallet::<T, I>::on_chain_storage_version() == 2,
 			"The onchain version must be updated after the migration."
 		);
 
