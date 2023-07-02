@@ -127,7 +127,6 @@ pub mod pallet {
 		type PerByteFee: Get<BalanceOf<Self>>;
 	}
 
-	/* Placeholder for defining custom storage items. */
 
 	/// Name Commitments
 	#[pallet::storage]
