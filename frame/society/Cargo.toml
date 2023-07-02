@@ -24,7 +24,7 @@ sp-io = { version = "23.0.0", default-features = false, path = "../../primitives
 sp-arithmetic = { version = "16.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support", features=["experimental"] }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]

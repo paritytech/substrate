@@ -19,7 +19,10 @@
 
 use super::*;
 use codec::{Decode, Encode};
-use frame_support::traits::{Instance, OnRuntimeUpgrade};
+use frame_support::{
+	migrations::VersionedRuntimeUpgrade,
+	traits::{Instance, OnRuntimeUpgrade},
+};
 
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
@@ -28,7 +31,7 @@ use sp_runtime::TryRuntimeError;
 const TARGET: &'static str = "runtime::society::migration";
 
 /// This migration moves all the state to v2 of Society.
-pub struct MigrateToV2<T: Config<I>, I: 'static, PastPayouts>(
+pub struct VersionUncheckedMigrateToV2<T: Config<I>, I: 'static, PastPayouts>(
 	sp_std::marker::PhantomData<(T, I, PastPayouts)>,
 );
 
@@ -36,7 +39,7 @@ impl<
 		T: Config<I>,
 		I: Instance + 'static,
 		PastPayouts: Get<Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)>>,
-	> OnRuntimeUpgrade for MigrateToV2<T, I, PastPayouts>
+	> OnRuntimeUpgrade for VersionUncheckedMigrateToV2<T, I, PastPayouts>
 {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
@@ -100,6 +103,14 @@ impl<
 		Ok(())
 	}
 }
+
+pub type VersionCheckedMigrateToV2<Runtime, Pallet, I, PastPayouts> = VersionedRuntimeUpgrade<
+	0,
+	2,
+	VersionUncheckedMigrateToV2<Runtime, I, PastPayouts>,
+	Pallet,
+	<Runtime as frame_system::Config>::DbWeight,
+>;
 
 pub(crate) mod old {
 	use super::*;
@@ -202,10 +213,9 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 	for (who, record) in members.iter() {
 		assert_eq!(MemberByIndex::<T, I>::get(record.index).as_ref(), Some(who));
 	}
-	// TODO: This panics if uncommented -- FIXME
-	// if let Some(founder) = Founder::<T, I>::get() {
-	// 	assert_eq!(Members::<T, I>::get(founder).expect("founder is member").index, 0);
-	// }
+	if let Some(founder) = Founder::<T, I>::get() {
+		assert_eq!(Members::<T, I>::get(founder).expect("founder is member").index, 0);
+	}
 	if let Some(head) = Head::<T, I>::get() {
 		assert!(Members::<T, I>::contains_key(head));
 	}
@@ -288,6 +298,27 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 		let record = MemberRecord { index: member_count, rank: 0, strikes, vouching };
 		Members::<T, I>::insert(&member, record);
 		MemberByIndex::<T, I>::insert(member_count, &member);
+
+		// The founder must be the first member in Society V2. If we find the founder not in index
+		// zero, we swap it with the first member.
+		if member == Founder::<T, I>::get().expect("founder is always set; qed") && member_count > 0
+		{
+			let member_to_swap = MemberByIndex::<T, I>::get(0)
+				.expect("member_count > 0, we must have at least 1 member; qed");
+			// Swap the founder with the first member in MemberByIndex.
+			MemberByIndex::<T, I>::swap(0, member_count);
+			// Update the indicies of the swapped member MemberRecords.
+			Members::<T, I>::mutate(&member, |m| {
+				if let Some(member) = m {
+					member.index = 0;
+				}
+			});
+			Members::<T, I>::mutate(&member_to_swap, |m| {
+				if let Some(member) = m {
+					member.index = member_count;
+				}
+			});
+		}
 		member_count.saturating_inc();
 	}
 	MemberCount::<T, I>::put(member_count);
