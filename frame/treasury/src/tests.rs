@@ -216,8 +216,9 @@ impl Config for Test {
 	type Paymaster = TestPay;
 	type BalanceConverter = MulBy<ConstU64<2>>;
 	type PayoutPeriod = SpendPayoutPeriod;
-	#[cfg(feature = "runtime-benchmarks")]
-	type BenchmarkHelper = ();
+	pallet_treasury::runtime_benchmarks_enabled! {
+		type BenchmarkHelper = ();
+	}
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
