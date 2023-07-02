@@ -54,6 +54,7 @@ std = [
 	"sp-version/std",
 	"test-pallet/std",
 ]
+experimental = ["frame-support/experimental"]
 try-runtime = [
 	"frame-support/try-runtime",
 	"frame-system/try-runtime",

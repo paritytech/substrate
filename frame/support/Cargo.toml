@@ -79,6 +79,7 @@ runtime-benchmarks = [
 try-runtime = [
 	"sp-debug-derive/force-debug"
 ]
+experimental = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
 # in the metadata.
 no-metadata-docs = ["frame-support-procedural/no-metadata-docs", "sp-api/no-metadata-docs"]
