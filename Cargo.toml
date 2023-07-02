@@ -123,6 +123,7 @@ members = [
 	"frame/membership",
 	"frame/merkle-mountain-range",
 	"frame/multisig",
+	"frame/name-service",
 	"frame/nicks",
 	"frame/node-authorization",
 	"frame/offences",

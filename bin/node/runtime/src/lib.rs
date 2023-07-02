@@ -1197,6 +1197,49 @@ impl pallet_message_queue::Config for Runtime {
 }
 
 parameter_types! {
+	pub const BiddingPeriod: BlockNumber = 1 * DAYS;
+	pub const ClaimPeriod: BlockNumber = 1 * DAYS;
+	pub const OwnershipPeriod: BlockNumber = 365 * DAYS;
+	pub const MinBid: Balance = 10 * DOLLARS;
+}
+
+parameter_types! {
+	pub const CommitmentDeposit: Balance = 1 * DOLLARS;
+	pub const SubNodeDeposit: Balance = 1 * DOLLARS;
+	pub const TierThreeLetters: Balance = 640 * DOLLARS;
+	pub const TierFourLetters: Balance = 160 * DOLLARS;
+	pub const TierDefault: Balance = 5 * DOLLARS;
+	pub const MinimumCommitmentPeriod: BlockNumber = 1 * MINUTES;
+	pub const CommitmentAlivePeriod: BlockNumber = 1 * DAYS;
+	pub const RegistrationFeePerBlock: Balance = 1 * DOLLARS / (365 * DAYS as Balance);
+	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
+	pub const MaxCommitmentAge: BlockNumber = 10 * MINUTES;
+	pub const MaxNameLength: u32 = 2048; // 2048 is the standard URL limit
+	pub const MaxTextLength: u32 = 2048;
+	pub const PerByteFee: Balance = 1 * CENTS;
+}
+
+impl pallet_name_service::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type BlockNumberToBalance = ConvertInto;
+	type MinCommitmentAge = MinCommitmentAge;
+	type MaxCommitmentAge = MaxCommitmentAge;
+	type MaxNameLength = MaxNameLength;
+	type RegistrationFeeHandler = ();
+	type CommitmentDeposit = CommitmentDeposit;
+	type SubNodeDeposit = SubNodeDeposit;
+	type TierThreeLetters = TierThreeLetters;
+	type TierFourLetters = TierFourLetters;
+	type TierDefault = TierDefault;
+	type RegistrationFeePerBlock = RegistrationFeePerBlock;
+	type RegistrationManager = EnsureRoot<Self::AccountId>;
+	type MaxTextLength = MaxTextLength;
+	type PerByteFee = PerByteFee;
+	type NameServiceResolver = pallet_name_service::Pallet<Self>;
+}
+
+parameter_types! {
 	pub const ChildBountyValueMinimum: Balance = 1 * DOLLARS;
 }
 
@@ -1943,6 +1986,7 @@ construct_runtime!(
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
 		Statement: pallet_statement,
+		NameService: pallet_name_service,
 	}
 );
 
@@ -2044,6 +2088,7 @@ mod benches {
 		[pallet_message_queue, MessageQueue]
 		[pallet_mmr, Mmr]
 		[pallet_multisig, Multisig]
+		[pallet_name_service, NameService]
 		[pallet_nomination_pools, NominationPoolsBench::<Runtime>]
 		[pallet_offences, OffencesBench::<Runtime>]
 		[pallet_preimage, Preimage]
