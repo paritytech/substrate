@@ -561,10 +561,6 @@ pub mod pallet {
 				Error::<T>::NoPermission
 			);
 
-			// let maybe_check_owner = T::ForceOrigin::try_origin(origin)
-			// 	.map(|_| None)
-			// 	.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-
 			// Check whether the collection still exists, if so do not allow to remove the royalty
 			ensure!(
 				!T::Nfts::collections().any(|id| id == collection_id),
