@@ -540,7 +540,7 @@ pub mod pallet {
 		/// This will also redeem the deposit initially paid for creating the NFT collection royalty.
 		/// If the royalty was set with `ForceOrigin` then no deposit will be redeemed.
 		///
-		/// Origin must be Signed.
+		/// Origin must be Signed and must be the depositor or the `ForceOrigin`.
 		///
 		/// - `collection`: The NFT `collection` that no longer exists and has an associated royalty.
 		///
@@ -586,7 +586,7 @@ pub mod pallet {
 		/// This will also redeem the deposit initially paid for creating the item royalty.
 		/// If the royalty was set with `ForceOrigin` then no deposit will be redeemed.
 		///
-		/// Origin must be Signed and must be the owner of `ItemRoyalty` or the `ForceOrigin`.
+		/// Origin must be Signed and must be the depositor of `ItemRoyalty` or the `ForceOrigin`.
 		///
 		/// - `collection_id`: The `collection_id` that the item belongs to.
 		/// - `item_id`: The NFT `item` that no longer exists and has an associated royalty.
