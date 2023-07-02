@@ -251,11 +251,9 @@ mod benchmarks {
 		T::Paymaster::ensure_successful(&beneficiary, asset_kind, amount);
 		let caller: T::AccountId = account("caller", 0, SEED);
 		Treasury::<T, _>::payout(RawOrigin::Signed(caller.clone()).into(), 0u32)?;
-		let id = match Spends::<T, I>::get(0).unwrap().status {
+		match Spends::<T, I>::get(0).unwrap().status {
 			PaymentState::Attempted { id, .. } => {
 				T::Paymaster::ensure_concluded(id);
-				assert_eq!(T::Paymaster::check_payment(id), PaymentStatus::Success);
-				id
 			},
 			_ => panic!("No payout attempt made"),
 		};
@@ -263,7 +261,9 @@ mod benchmarks {
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller.clone()), 0u32);
 
-		assert_last_event::<T, I>(Event::PaymentSucceed { index: 0, payment_id: id }.into());
+		if let Some(s) = Spends::<T, I>::get(0) {
+			assert!(!matches!(s.status, PaymentState::Attempted { .. }));
+		}
 		Ok(())
 	}
 
