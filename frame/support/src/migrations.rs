@@ -146,7 +146,7 @@ impl<
 		}
 	}
 
-	/// Executes post_upgrade if the migration just ran.
+	/// Executes `Inner::post_upgrade` if the migration just ran.
 	///
 	/// pre_upgrade passes [`VersionedPostUpgradeData::MigrationExecuted`] to post_upgrade if
 	/// the migration ran, and [`VersionedPostUpgradeData::Noop`] otherwise.
