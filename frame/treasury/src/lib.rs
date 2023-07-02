@@ -166,28 +166,6 @@ pub struct SpendStatus<AssetKind, AssetBalance, Beneficiary, BlockNumber, Paymen
 /// Index of an approved treasury spend.
 pub type SpendIndex = u32;
 
-/// Trait describing factory functions for dispatchables' parameters
-#[cfg(feature = "runtime-benchmarks")]
-pub trait ParametersFactory<AssetKind, Beneficiary> {
-	/// Factory function for an asset kind
-	fn create_asset_kind(seed: u32) -> AssetKind;
-	/// Factory function for a beneficiary
-	fn create_beneficiary(seed: [u8; 32]) -> Beneficiary;
-}
-#[cfg(feature = "runtime-benchmarks")]
-impl<AssetKind, Beneficiary> ParametersFactory<AssetKind, Beneficiary> for ()
-where
-	AssetKind: From<u32>,
-	Beneficiary: From<[u8; 32]>,
-{
-	fn create_asset_kind(id: u32) -> AssetKind {
-		id.into()
-	}
-	fn create_beneficiary(id: [u8; 32]) -> Beneficiary {
-		id.into()
-	}
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -286,10 +264,6 @@ pub mod pallet {
 		/// The period during which an approved treasury spend has to be claimed.
 		#[pallet::constant]
 		type PayoutPeriod: Get<Self::BlockNumber>;
-
-		/// Helper type for benchmarks.
-		#[cfg(feature = "runtime-benchmarks")]
-		type BenchmarkHelper: ParametersFactory<Self::AssetKind, Self::Beneficiary>;
 	}
 
 	/// Number of proposals that have been made.

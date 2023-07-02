@@ -30,6 +30,8 @@ use frame_support::{
 	traits::{tokens::PaymentStatus, EnsureOrigin, OnInitialize},
 };
 use frame_system::RawOrigin;
+use sp_core::crypto::FromEntropy;
+use sp_runtime::traits::TrailingZeroInput;
 
 const SEED: u32 = 0;
 
@@ -70,14 +72,24 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 // Create the arguments for the `spend` dispatchable.
 fn create_spend_arguments<T: Config<I>, I: 'static>(
 	seed: u32,
-) -> (T::AssetKind, AssetBalanceOf<T, I>, T::Beneficiary, BeneficiaryLookupOf<T, I>) {
-	let asset_kind = T::BenchmarkHelper::create_asset_kind(seed);
-	let beneficiary = T::BenchmarkHelper::create_beneficiary([seed.try_into().unwrap(); 32]);
+) -> (T::AssetKind, AssetBalanceOf<T, I>, T::Beneficiary, BeneficiaryLookupOf<T, I>)
+where
+	<T as Config<I>>::AssetKind: FromEntropy,
+	<T as Config<I>>::Beneficiary: FromEntropy,
+{
+	let asset_kind = T::AssetKind::from_entropy(&mut seed.encode().as_slice()).unwrap();
+	let beneficiary =
+		T::Beneficiary::from_entropy(&mut TrailingZeroInput::new(seed.encode().as_slice()))
+			.unwrap();
 	let beneficiary_lookup = T::BeneficiaryLookup::unlookup(beneficiary.clone());
 	(asset_kind, 100u32.into(), beneficiary, beneficiary_lookup)
 }
 
-#[instance_benchmarks]
+#[instance_benchmarks(
+	where
+		<T as Config<I>>::AssetKind: FromEntropy,
+		<T as Config<I>>::Beneficiary: FromEntropy
+	)]
 mod benchmarks {
 	use super::*;
 

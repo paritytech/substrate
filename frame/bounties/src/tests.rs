@@ -139,9 +139,6 @@ impl pallet_treasury::Config for Test {
 	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
 	type BalanceConverter = ();
 	type PayoutPeriod = ConstU64<10>;
-	pallet_treasury::runtime_benchmarks_enabled! {
-		type BenchmarkHelper = ();
-	}
 }
 
 impl pallet_treasury::Config<Instance1> for Test {
@@ -167,9 +164,6 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type Paymaster = PayFromAccount<Balances, TreasuryAccount2>;
 	type BalanceConverter = ();
 	type PayoutPeriod = ConstU64<10>;
-	pallet_treasury::runtime_benchmarks_enabled! {
-		type BenchmarkHelper = ();
-	}
 }
 
 parameter_types! {
