@@ -131,7 +131,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		SessionIndex,
-		Vec<u8>, // Vec<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>
+		Vec<u8>, // Encoded `Vec<SessionReportOf<Self>>`.
 		ValueQuery,
 	>;
 
