@@ -153,11 +153,7 @@ impl<T: Config> Pallet<T> {
 	/// For example, if the `current_session_index` is 10 and `MaxSessionReportAge` is 6,
 	/// this clears all reports for `obsolete_session_index` 4.
 	fn clear_obsolete_reports(current_session_index: SessionIndex) {
-		if current_session_index <= T::MaxSessionReportAge::get() {
-			return
-		}
-
-		let obsolete_session_index = current_session_index - T::MaxSessionReportAge::get();
+		let Some(obsolete_session_index) = current_session_index.checked_sub(T::MaxSessionReportAge::get()) else { return };
 
 		let session_reports = SessionReports::<T>::take(obsolete_session_index);
 		let session_reports =
