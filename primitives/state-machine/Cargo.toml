@@ -30,7 +30,7 @@ sp-trie = { version = "22.0.0", default-features = false, path = "../trie" }
 trie-db = { version = "0.27.1", default-features = false }
 
 [dev-dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 pretty_assertions = "1.2.1"
 rand = "0.8.5"
 sp-runtime = { version = "24.0.0", path = "../runtime" }

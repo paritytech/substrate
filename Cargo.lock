@@ -513,12 +513,6 @@ dependencies = [
 
 [[package]]
 name = "array-bytes"
-version = "4.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f52f63c5c1316a16a4b35eaac8b76a98248961a533f061684cb2a7cb0eafb6c6"
-
-[[package]]
-name = "array-bytes"
 version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d9b1c5a481ec30a5abd8dfbd94ab5cf1bb4e9a66be7f1b3b322f2f1170c200fd"
@@ -822,7 +816,7 @@ dependencies = [
 name = "binary-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "env_logger 0.9.3",
  "hash-db",
  "log",
@@ -2613,7 +2607,7 @@ checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 name = "frame-benchmarking"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "frame-support",
  "frame-support-procedural",
  "frame-system",
@@ -2641,7 +2635,7 @@ name = "frame-benchmarking-cli"
 version = "4.0.0-dev"
 dependencies = [
  "Inflector",
- "array-bytes 4.2.0",
+ "array-bytes",
  "chrono",
  "clap 4.3.2",
  "comfy-table",
@@ -2752,7 +2746,7 @@ dependencies = [
 name = "frame-executive"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "frame-support",
  "frame-system",
  "frame-try-runtime",
@@ -2808,7 +2802,7 @@ dependencies = [
 name = "frame-support"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "assert_matches",
  "bitflags",
  "environmental",
@@ -5352,7 +5346,7 @@ dependencies = [
 name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "clap 4.3.2",
  "derive_more",
  "fs_extra",
@@ -5388,7 +5382,7 @@ dependencies = [
 name = "node-cli"
 version = "3.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "assert_cmd",
  "clap 4.3.2",
  "clap_complete",
@@ -5954,7 +5948,7 @@ dependencies = [
 name = "pallet-alliance"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -6251,7 +6245,7 @@ dependencies = [
 name = "pallet-beefy-mmr"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "binary-merkle-tree",
  "frame-support",
  "frame-system",
@@ -6328,7 +6322,7 @@ dependencies = [
 name = "pallet-contracts"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "assert_matches",
  "bitflags",
  "env_logger 0.9.3",
@@ -6832,7 +6826,7 @@ dependencies = [
 name = "pallet-mmr"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "env_logger 0.9.3",
  "frame-benchmarking",
  "frame-support",
@@ -7564,7 +7558,7 @@ dependencies = [
 name = "pallet-transaction-storage"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -9050,7 +9044,7 @@ dependencies = [
 name = "sc-cli"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "chrono",
  "clap 4.3.2",
  "fdlimit",
@@ -9120,7 +9114,7 @@ dependencies = [
 name = "sc-client-db"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "criterion",
  "hash-db",
  "kitchensink-runtime",
@@ -9286,7 +9280,7 @@ dependencies = [
 name = "sc-consensus-beefy"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "async-channel",
  "async-trait",
  "fnv",
@@ -9362,7 +9356,7 @@ name = "sc-consensus-grandpa"
 version = "0.10.0-dev"
 dependencies = [
  "ahash 0.8.3",
- "array-bytes 4.2.0",
+ "array-bytes",
  "assert_matches",
  "async-trait",
  "dyn-clone",
@@ -9516,7 +9510,7 @@ dependencies = [
 name = "sc-executor"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "assert_matches",
  "criterion",
  "env_logger 0.9.3",
@@ -9603,7 +9597,7 @@ dependencies = [
 name = "sc-keystore"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "parking_lot 0.12.1",
  "serde_json",
  "sp-application-crypto",
@@ -9617,7 +9611,7 @@ dependencies = [
 name = "sc-network"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "assert_matches",
  "async-channel",
  "async-trait",
@@ -9732,7 +9726,7 @@ dependencies = [
 name = "sc-network-light"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "async-channel",
  "futures",
  "libp2p-identity",
@@ -9752,7 +9746,7 @@ dependencies = [
 name = "sc-network-statement"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "async-channel",
  "futures",
  "libp2p",
@@ -9769,7 +9763,7 @@ dependencies = [
 name = "sc-network-sync"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "async-channel",
  "async-trait",
  "fork-tree",
@@ -9838,7 +9832,7 @@ dependencies = [
 name = "sc-network-transactions"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "futures",
  "libp2p",
  "log",
@@ -9855,7 +9849,7 @@ dependencies = [
 name = "sc-offchain"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "bytes",
  "fnv",
  "futures",
@@ -9970,7 +9964,7 @@ dependencies = [
 name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "assert_matches",
  "futures",
  "futures-util",
@@ -10083,7 +10077,7 @@ dependencies = [
 name = "sc-service-test"
 version = "2.0.0"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "async-channel",
  "fdlimit",
  "futures",
@@ -10255,7 +10249,7 @@ dependencies = [
 name = "sc-transaction-pool"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "assert_matches",
  "async-trait",
  "criterion",
@@ -11072,7 +11066,7 @@ dependencies = [
 name = "sp-consensus-beefy"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "lazy_static",
  "parity-scale-codec",
  "scale-info",
@@ -11131,7 +11125,7 @@ dependencies = [
 name = "sp-core"
 version = "21.0.0"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "bitflags",
  "blake2",
  "bounded-collections",
@@ -11343,7 +11337,7 @@ dependencies = [
 name = "sp-mmr-primitives"
 version = "4.0.0-dev"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "ckb-merkle-mountain-range",
  "log",
  "parity-scale-codec",
@@ -11539,7 +11533,7 @@ dependencies = [
 name = "sp-state-machine"
 version = "0.28.0"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "assert_matches",
  "hash-db",
  "log",
@@ -11654,7 +11648,7 @@ name = "sp-trie"
 version = "22.0.0"
 dependencies = [
  "ahash 0.8.3",
- "array-bytes 4.2.0",
+ "array-bytes",
  "criterion",
  "hash-db",
  "hashbrown 0.13.2",
@@ -12011,7 +12005,7 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.1"
 dependencies = [
- "array-bytes 4.2.0",
+ "array-bytes",
  "async-trait",
  "futures",
  "parity-scale-codec",
@@ -12036,7 +12030,7 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
- "array-bytes 6.1.0",
+ "array-bytes",
  "frame-executive",
  "frame-support",
  "frame-system",
