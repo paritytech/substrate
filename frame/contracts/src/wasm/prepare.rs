@@ -500,7 +500,6 @@ mod tests {
 					&schedule,
 					ALICE,
 					Determinism::Enforced,
-					TryInstantiate::Instantiate,
 				);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
 			}

@@ -696,6 +696,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
+			let code_len = code.len() as u32;
 
 			let CodeUploadReturnValue { code_hash, deposit } = Self::bare_upload_code(
 				origin.clone(),
@@ -725,7 +726,7 @@ pub mod pallet {
 
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(data_len, salt_len),
+				T::WeightInfo::instantiate_with_code(code_len, data_len, salt_len),
 			)
 		}
 
@@ -1375,25 +1376,53 @@ impl<T: Config> Pallet<T> {
 		} else {
 			None
 		};
+		// collect events if CollectEvents is UnsafeCollect
+		let events = || {
+			if collect_events == CollectEvents::UnsafeCollect {
+				Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+			} else {
+				None
+			}
+		};
+
+		let mut try_upload = |code| -> Result<_, DispatchError> {
+			let schedule = T::Schedule::get();
+			let module =
+				WasmBlob::from_code(code, &schedule, origin.clone(), Determinism::Enforced)
+					.map_err(|(err, msg)| {
+						debug_message.as_mut().map(|d| d.try_extend(msg.bytes()));
+						err
+					})?;
+
+			let deposit = module.open_deposit(&module.code_info());
+			if let Some(storage_deposit_limit) = storage_deposit_limit {
+				ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
+			}
+			let result = CodeUploadReturnValue { code_hash: *module.code_hash(), deposit };
+			module.store()?;
+			Ok(result)
+		};
 
 		let (code_hash, storage_deposit_limit): (CodeHash<T>, Option<BalanceOf<T>>) = match code {
 			Code::Upload(code) => {
-				let result = Self::bare_upload_code(
-					origin.clone(),
-					code,
-					storage_deposit_limit.clone().map(Into::into),
-					Determinism::Enforced,
-				);
+				// let result = Self::bare_upload_code(
+				// 	origin.clone(),
+				// 	code,
+				// 	storage_deposit_limit.clone().map(Into::into),
+				// 	Determinism::Enforced,
+				// );
 
-				let Ok(CodeUploadReturnValue { code_hash, deposit }) = result else {
-					return ContractResult {
-						gas_consumed: Zero::zero(),
-						gas_required: Zero::zero(),
-						storage_deposit: Default::default(),
-						debug_message: Vec::new(),
-						result: Err(Error::<T>::MigrationInProgress.into()),
-						events: None,
-					}
+				let (code_hash, deposit) = match try_upload(code) {
+					Ok(CodeUploadReturnValue { code_hash, deposit }) => (code_hash, deposit),
+					Err(error) =>
+						return ContractResult {
+							gas_consumed: Zero::zero(),
+							gas_required: Zero::zero(),
+							storage_deposit: Default::default(),
+							debug_message: debug_message.unwrap_or(Default::default()).into(),
+							result: Err(error),
+							events: events(),
+						},
 				};
 
 				let storage_deposit_limit = storage_deposit_limit.map(|limit| {
@@ -1416,12 +1445,6 @@ impl<T: Config> Pallet<T> {
 		};
 
 		let output = InstantiateInput::<T> { code_hash, salt }.run_guarded(common);
-		// collect events if CollectEvents is UnsafeCollect
-		let events = if collect_events == CollectEvents::UnsafeCollect {
-			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
-		} else {
-			None
-		};
 		ContractInstantiateResult {
 			result: output
 				.result
@@ -1431,7 +1454,7 @@ impl<T: Config> Pallet<T> {
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
-			events,
+			events: events(),
 		}
 	}
 
