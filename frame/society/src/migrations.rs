@@ -253,9 +253,9 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 pub fn from_original<T: Config<I>, I: Instance + 'static>(
 	past_payouts: &mut [(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)],
 ) -> Weight {
-	// First check that this is the original state layout. This is easy since the original layout
-	// contained the Members value, and this value no longer exists in the new layout.
-	if !old::Members::<T, I>::exists() {
+	// First check that this is the original state layout. This is easy since the new layout
+	// contains a new Members value, which did not exist in the old layout.
+	if Members::<T, I>::iter().next().is_some() {
 		log::warn!(target: TARGET, "Skipping MigrateToV2 migration since it appears unapplicable");
 		// Already migrated or no data to migrate: Bail.
 		return T::DbWeight::get().reads(1)
