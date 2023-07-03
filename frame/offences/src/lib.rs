@@ -120,8 +120,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// A map that stores all reports along with
-	/// their kind and time slot info for a `SessionIndex`.
+	/// A map that stores all reports along with their kind & time slot info for a `SessionIndex`.
 	///
 	/// On start of a new session, all reports with a session index older than
 	/// `MaxSessionReportAge` are removed.
@@ -191,8 +190,7 @@ where
 		let current_session_index = T::SessionInfoProvider::current_session_index();
 
 		ensure!(
-			current_session_index <= T::MaxSessionReportAge::get() ||
-			session_index >= current_session_index - T::MaxSessionReportAge::get(),
+			session_index >= current_session_index.saturating_sub(T::MaxSessionReportAge::get()),
 			OffenceError::ObsoleteReport
 		);
 
