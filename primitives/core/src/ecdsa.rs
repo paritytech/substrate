@@ -21,7 +21,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime_interface::pass_by::PassByInner;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use crate::crypto::Ss58Codec;
 use crate::crypto::{
 	ByteArray, CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom,
@@ -40,8 +40,10 @@ use secp256k1::{
 	ecdsa::{RecoverableSignature, RecoveryId},
 	Message, PublicKey, SecretKey,
 };
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+use sp_std::alloc::{format, string::String};
 #[cfg(feature = "full_crypto")]
 use sp_std::vec::Vec;
 
@@ -70,6 +72,14 @@ type Seed = [u8; 32];
 	Ord,
 )]
 pub struct Public(pub [u8; 33]);
+
+impl crate::crypto::FromEntropy for Public {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		let mut result = Self([0u8; 33]);
+		input.read(&mut result.0[..])?;
+		Ok(result)
+	}
+}
 
 impl Public {
 	/// A new instance from the given 33-byte `data`.
@@ -164,7 +174,7 @@ impl sp_std::fmt::Debug for Public {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl Serialize for Public {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -174,7 +184,7 @@ impl Serialize for Public {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for Public {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
@@ -204,7 +214,7 @@ impl TryFrom<&[u8]> for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl Serialize for Signature {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -214,7 +224,7 @@ impl Serialize for Signature {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'de> Deserialize<'de> for Signature {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where

@@ -41,14 +41,10 @@ pub use codec;
 pub use frame_metadata as metadata;
 #[doc(hidden)]
 pub use log;
-#[cfg(feature = "std")]
-#[doc(hidden)]
-pub use once_cell;
 #[doc(hidden)]
 pub use paste;
 #[doc(hidden)]
 pub use scale_info;
-#[cfg(feature = "std")]
 pub use serde;
 pub use sp_api::metadata_ir;
 pub use sp_core::{OpaqueMetadata, Void};
@@ -210,6 +206,8 @@ impl TypeId for PalletId {
 /// # fn main() {}
 /// ```
 pub use frame_support_procedural::storage_alias;
+
+pub use frame_support_procedural::derive_impl;
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
@@ -818,9 +816,12 @@ macro_rules! assert_error_encoded_size {
 	} => {};
 }
 
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde::{Deserialize, Serialize};
+
+#[doc(hidden)]
+#[cfg(not(no_std))]
+pub use macro_magic;
 
 #[cfg(test)]
 pub mod tests {
@@ -843,7 +844,7 @@ pub mod tests {
 		use crate::pallet_prelude::*;
 
 		#[pallet::pallet]
-		pub struct Pallet<T>(PhantomData<T>);
+		pub struct Pallet<T>(_);
 
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
@@ -980,7 +981,7 @@ pub mod tests {
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		GenesisConfig::default().build_storage().unwrap().into()
+		RuntimeGenesisConfig::default().build_storage().unwrap().into()
 	}
 
 	trait Sorted {
@@ -1520,10 +1521,19 @@ pub mod tests {
 	}
 }
 
+/// Prelude to be used for pallet testing, for ease of use.
+#[cfg(feature = "std")]
+pub mod testing_prelude {
+	pub use super::{
+		assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_error_encoded_size,
+		assert_noop, assert_ok, assert_storage_noop, bounded_btree_map, bounded_vec,
+		parameter_types, traits::Get,
+	};
+	pub use sp_arithmetic::assert_eq_error_rate;
+}
+
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	#[cfg(feature = "std")]
-	pub use crate::traits::GenesisBuild;
 	pub use crate::{
 		dispatch::{
 			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter,
@@ -1540,15 +1550,17 @@ pub mod pallet_prelude {
 			},
 		},
 		traits::{
-			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
-			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
+			ConstU32, EnsureOrigin, GenesisBuild, Get, GetDefault, GetStorageVersion, Hooks,
+			IsType, PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
 	pub use frame_support::pallet_macros::*;
+	pub use frame_support_procedural::register_default_impl;
 	pub use scale_info::TypeInfo;
+	pub use sp_inherents::MakeFatalError;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{
@@ -2696,13 +2708,13 @@ pub mod pallet_prelude {
 ///     - query the metadata using the `state_getMetadata` RPC and curl, or use `subsee -p
 ///       <PALLET_NAME> > meta.json`
 /// 2. Generate the template upgrade for the pallet provided by `decl_storage` with the
-///     environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
-///     my_pallet`. This template can be used as it contains all information for storages,
-///     genesis config and genesis build.
+///    environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
+///    my_pallet`. This template can be used as it contains all information for storages,
+///    genesis config and genesis build.
 /// 3. Reorganize the pallet to have the trait `Config`, `decl_*` macros,
-///     [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
-///     [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
-///     file. Suggested order:
+///    [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
+///    [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
+///    file. Suggested order:
 ///     * `Config`,
 ///     * `decl_module`,
 ///     * `decl_event`,
@@ -2762,8 +2774,8 @@ pub mod pallet_prelude {
 /// 8. **migrate error**: rewrite it with attribute
 ///    [`#[pallet::error]`](#error-palleterror-optional).
 /// 9. **migrate storage**: `decl_storage` provide an upgrade template (see 3.). All storages,
-///     genesis config, genesis build and default implementation of genesis config can be
-///     taken from it directly.
+///    genesis config, genesis build and default implementation of genesis config can be taken
+///    from it directly.
 ///
 ///     Otherwise here is the manual process:
 ///
@@ -2884,11 +2896,14 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, composite_enum, config, constant,
 		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
-		generate_store, genesis_build, genesis_config, getter, hooks, inherent, origin, storage,
-		storage_prefix, storage_version, type_value, unbounded, validate_unsigned, weight,
-		whitelist_storage,
+		generate_store, genesis_build, genesis_config, getter, hooks, import_section, inherent,
+		no_default, origin, pallet_section, storage, storage_prefix, storage_version, type_value,
+		unbounded, validate_unsigned, weight, whitelist_storage,
 	};
 }
+
+#[doc(inline)]
+pub use frame_support_procedural::register_default_impl;
 
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);

@@ -54,7 +54,6 @@ impl CheckBlockCmd {
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		C: BlockBackend<B> + HeaderBackend<B> + Send + Sync + 'static,
 		IQ: sc_service::ImportQueue<B> + 'static,
-		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: Debug,
 		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{

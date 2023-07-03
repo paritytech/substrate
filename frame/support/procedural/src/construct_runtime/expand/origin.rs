@@ -418,6 +418,34 @@ fn expand_origin_pallet_conversions(
 				}
 			}
 		}
+
+		#attr
+		impl<'a> TryFrom<&'a OriginCaller> for &'a #pallet_origin {
+			type Error = ();
+			fn try_from(
+				x: &'a OriginCaller,
+			) -> #scrate::sp_std::result::Result<&'a #pallet_origin, ()> {
+				if let OriginCaller::#variant_name(l) = x {
+					Ok(&l)
+				} else {
+					Err(())
+				}
+			}
+		}
+
+		#attr
+		impl<'a> TryFrom<&'a RuntimeOrigin> for &'a #pallet_origin {
+			type Error = ();
+			fn try_from(
+				x: &'a RuntimeOrigin,
+			) -> #scrate::sp_std::result::Result<&'a #pallet_origin, ()> {
+				if let OriginCaller::#variant_name(l) = &x.caller {
+					Ok(&l)
+				} else {
+					Err(())
+				}
+			}
+		}
 	}
 }
 

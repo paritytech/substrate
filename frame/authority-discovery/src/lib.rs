@@ -59,7 +59,7 @@ pub mod pallet {
 	pub(super) type NextKeys<T: Config> =
 		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
-	#[cfg_attr(feature = "std", derive(Default))]
+	#[derive(Default)]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
 		pub keys: Vec<AuthorityId>,
