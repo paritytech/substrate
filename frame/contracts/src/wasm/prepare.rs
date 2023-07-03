@@ -169,17 +169,15 @@ impl LoadedModule {
 	///
 	/// This method fails if:
 	///
+	/// - Memory import not found in the module.
 	/// - Tables or globals found among imports.
 	/// - `call_chain_extension` host function is imported, while chain extensions are disabled.
-	/// - Memory import required but found in the module.
 	///
 	/// NOTE that only single memory instance is allowed for contract modules, which is enforced by
-	/// this check run with `require_memory_import: true` combined with multi_memory proposal
-	/// disabled in the engine.
+	/// this check combined with multi_memory proposal gets disabled in the engine.
 	pub fn scan_imports<T: Config>(
 		&self,
 		schedule: &Schedule<T>,
-		require_memory_import: bool,
 	) -> Result<(u32, u32), &'static str> {
 		let module = &self.module;
 		let imports = module.imports();
@@ -233,11 +231,7 @@ impl LoadedModule {
 			}
 		}
 
-		// If we don't require module to have a memory import,
-		// then we return (0,0) for the module not having such an import.
-		// Any access to it will lead to out of bounds trap.
-		if !require_memory_import { memory_limits.or(Default::default()) } else { memory_limits }
-			.ok_or("No memory import found in the module")
+		memory_limits.ok_or("No memory import found in the module")
 	}
 }
 
@@ -247,8 +241,6 @@ impl LoadedModule {
 /// 1. General engine-side validation makes sure the module is consistent and does not contain
 ///    forbidden WebAssembly features.
 /// 2. Additional checks which are specific to smart contracts eligible for this pallet.
-///
-/// We need to fo this check only once when uploading a new code.
 fn validate<E, T>(
 	code: &[u8],
 	schedule: &Schedule<T>,
@@ -263,11 +255,9 @@ where
 		// We check that the module is generally valid,
 		// and does not have restricted WebAssembly features, here.
 		let contract_module = LoadedModule::new::<T>(code, determinism, None)?;
-		// Checks that module satisfies constraints required for contracts.
+		// The we check that module satisfies constraints the pallet puts on contracts.
 		contract_module.scan_exports()?;
-		// We check module imports contstraints including the memory import which is obligatory to
-		// have for the newly uploaded contracts.
-		contract_module.scan_imports::<T>(schedule, true)?;
+		contract_module.scan_imports::<T>(schedule)?;
 		Ok(())
 	})()
 	.map_err(|msg: &str| {
@@ -349,7 +339,7 @@ pub mod benchmarking {
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let determinism = Determinism::Enforced;
 		let contract_module = LoadedModule::new::<T>(&code, determinism, None)?;
-		let _ = contract_module.scan_imports::<T>(schedule, true)?;
+		let _ = contract_module.scan_imports::<T>(schedule)?;
 		let code: CodeVec<T> = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
 			owner,
