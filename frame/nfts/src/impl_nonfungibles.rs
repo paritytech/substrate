@@ -135,6 +135,18 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
+impl<T: Config<I>, I: 'static> InspectRole<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+	fn is_issuer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
+		Self::has_role(collection, who, CollectionRole::Issuer)
+	}
+	fn is_admin(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
+		Self::has_role(collection, who, CollectionRole::Admin)
+	}
+	fn is_freezer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
+		Self::has_role(collection, who, CollectionRole::Freezer)
+	}
+}
+
 impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfigFor<T, I>>
 	for Pallet<T, I>
 {

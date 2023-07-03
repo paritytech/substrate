@@ -126,7 +126,7 @@ where
 			.max(min_converted_fee);
 		let can_withdraw =
 			<T::Fungibles as Inspect<T::AccountId>>::can_withdraw(asset_id, who, converted_fee);
-		if !matches!(can_withdraw, WithdrawConsequence::Success) {
+		if can_withdraw != WithdrawConsequence::Success {
 			return Err(InvalidTransaction::Payment.into())
 		}
 		<T::Fungibles as Balanced<T::AccountId>>::withdraw(
