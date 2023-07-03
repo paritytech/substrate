@@ -62,11 +62,15 @@ impl Version {
 			return None
 		}
 
-		let date_parts = version.split(" ").nth(3).map(|date| {
-			date.split("-")
-				.filter_map(|v| v.trim().strip_suffix(")").unwrap_or(v).parse().ok())
-				.collect::<Vec<u32>>()
-		}).unwrap_or_default();
+		let date_parts = version
+			.split(" ")
+			.nth(3)
+			.map(|date| {
+				date.split("-")
+					.filter_map(|v| v.trim().strip_suffix(")").unwrap_or(v).parse().ok())
+					.collect::<Vec<u32>>()
+			})
+			.unwrap_or_default();
 
 		Some(Version {
 			major: version_parts[0],
