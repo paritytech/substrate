@@ -198,7 +198,7 @@ pub(crate) mod old {
 }
 
 pub fn can_migrate<T: Config<I>, I: Instance + 'static>() -> bool {
-	old::Members::<T, I>::exists()
+	Members::<T, I>::iter().next().is_none()
 }
 
 /// Will panic if there are any inconsistencies in the pallet's state or old keys remaining.
