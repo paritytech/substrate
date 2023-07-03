@@ -146,12 +146,14 @@ pub mod pallet {
 		/// The royalty recipient of an NFT collection has changed.
 		CollectionRoyaltyRecipientChanged {
 			nft_collection: T::NftCollectionId,
+			old_royalty_recipient: T::AccountId,
 			new_royalty_recipient: T::AccountId,
 		},
 		/// The royalty recipient of an NFT item has changed.
 		ItemRoyaltyRecipientChanged {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
+			old_royalty_recipient: T::AccountId,
 			new_royalty_recipient: T::AccountId,
 		},
 		/// The royalty percentage and recipients for an NFT item has been set.
@@ -159,7 +161,6 @@ pub mod pallet {
 			nft_collection: T::NftCollectionId,
 			nft: T::NftItemId,
 			royalty_percentage: Permill,
-			royalty_admin: T::AccountId,
 			royalty_recipients:
 				BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
 		},
@@ -167,7 +168,6 @@ pub mod pallet {
 		CollectionRoyaltySet {
 			nft_collection: T::NftCollectionId,
 			royalty_percentage: Permill,
-			royalty_admin: T::AccountId,
 			royalty_recipients:
 				BoundedVec<RoyaltyDetails<T::AccountId>, T::MaxRecipients>,
 		},
@@ -216,7 +216,6 @@ pub mod pallet {
 		///
 		/// - `collection_id`: The NFT collection to set the royalty for.
 		/// - `royalty_percentage`: Royalty percentage to be set.
-		/// - `royalty_recipient_admin`: The admin of the royalty recipients.
 		/// - `recipients`: The list of royalty recipients.
 		///
 		/// `CollectionRoyaltyDeposit` funds of sender are reserved.
@@ -228,7 +227,6 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection_id: T::NftCollectionId,
 			royalty_percentage: Permill,
-			royalty_recipient_admin: T::AccountId,
 			recipients: Vec<RoyaltyDetails<T::AccountId>>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
@@ -271,7 +269,6 @@ pub mod pallet {
 				collection_id,
 				RoyaltyConfig::<T::AccountId, BalanceOf<T>, T::MaxRecipients> {
 					royalty_percentage,
-					royalty_admin: royalty_recipient_admin.clone(),
 					depositor: maybe_check_owner.clone(),
 					deposit: T::CollectionRoyaltyDeposit::get(),
 					recipients: royalties_recipients.clone(),
@@ -281,7 +278,6 @@ pub mod pallet {
 			Self::deposit_event(Event::CollectionRoyaltySet {
 				nft_collection: collection_id,
 				royalty_percentage,
-				royalty_admin: royalty_recipient_admin,
 				royalty_recipients: royalties_recipients,
 			});
 
@@ -296,7 +292,6 @@ pub mod pallet {
 		/// - `collection`: The NFT collection of the NFT item.
 		/// - `item`: The NFT item to set the royalty for.
 		/// - `royalty_percentage`: Royalty percentage to be set.
-		/// - `royalty_recipient_admin`: The admin of the royalty recipients.
 		/// - `recipients`: The list of royalty recipients.
 		///
 		/// `ItemRoyaltyDeposit` funds of sender are reserved.
@@ -309,7 +304,6 @@ pub mod pallet {
 			collection_id: T::NftCollectionId,
 			item_id: T::NftItemId,
 			royalty_percentage: Permill,
-			royalty_recipient_admin: T::AccountId,
 			recipients: Vec<RoyaltyDetails<T::AccountId>>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
@@ -361,7 +355,6 @@ pub mod pallet {
 				(collection_id, item_id),
 				RoyaltyConfig::<T::AccountId, BalanceOf<T>, T::MaxRecipients> {
 					royalty_percentage,
-					royalty_admin: royalty_recipient_admin.clone(),
 					depositor: maybe_check_owner.clone(),
 					deposit: T::ItemRoyaltyDeposit::get(),
 					recipients: royalties_recipients.clone(),
@@ -372,7 +365,6 @@ pub mod pallet {
 				nft_collection: collection_id,
 				nft: item_id,
 				royalty_percentage,
-				royalty_admin: royalty_recipient_admin,
 				royalty_recipients: royalties_recipients,
 			});
 
@@ -400,26 +392,25 @@ pub mod pallet {
 			let collection_royalty =
 				<CollectionRoyalty<T>>::take(collection_id).ok_or(Error::<T>::NoRoyaltyExists)?;
 
-			ensure!(
-				collection_royalty
-					.recipients
-					.iter()
-					.any(|recipient| recipient.royalty_recipient == caller),
-				Error::<T>::NoPermission
-			);
-			
+			let mut recipients = collection_royalty.recipients.clone();
+			let index = recipients
+				.iter()
+				.position(|recipient| recipient.royalty_recipient == caller)
+				.ok_or(Error::<T>::NoPermission)?;
+			recipients[index].royalty_recipient = new_royalty_recipient.clone();
+
 			CollectionRoyalty::<T>::insert(
 				collection_id,
 				RoyaltyConfig::<T::AccountId, BalanceOf<T>, T::MaxRecipients> {
 					royalty_percentage: collection_royalty.royalty_percentage,
-					royalty_admin: new_royalty_recipient.clone(),
 					depositor: collection_royalty.depositor,
 					deposit: collection_royalty.deposit,
-					recipients: collection_royalty.recipients,
+					recipients,
 				},
 			);
 			Self::deposit_event(Event::CollectionRoyaltyRecipientChanged {
 				nft_collection: collection_id,
+				old_royalty_recipient: caller,
 				new_royalty_recipient,
 			});
 
@@ -448,27 +439,26 @@ pub mod pallet {
 			let item_royalty = <ItemRoyalty<T>>::take((collection_id, item_id))
 				.ok_or(Error::<T>::NoRoyaltyExists)?;
 			
-			ensure!(
-				item_royalty
-					.recipients
-					.iter()
-					.any(|recipient| recipient.royalty_recipient == caller),
-				Error::<T>::NoPermission
-			);
+			let mut recipients = item_royalty.recipients.clone();
+			let index = recipients
+				.iter()
+				.position(|recipient| recipient.royalty_recipient == caller)
+				.ok_or(Error::<T>::NoPermission)?;
+			recipients[index].royalty_recipient = new_royalty_recipient.clone();
 
 			ItemRoyalty::<T>::insert(
 				(collection_id, item_id),
 				RoyaltyConfig::<T::AccountId, BalanceOf<T>, T::MaxRecipients> {
 					royalty_percentage: item_royalty.royalty_percentage,
-					royalty_admin: new_royalty_recipient.clone(),
 					depositor: item_royalty.depositor,
 					deposit: item_royalty.deposit,
-					recipients: item_royalty.recipients,
+					recipients,
 				},
 			);
 			Self::deposit_event(Event::ItemRoyaltyRecipientChanged {
 				nft_collection: collection_id,
 				nft: item_id,
+				old_royalty_recipient: caller,
 				new_royalty_recipient,
 			});
 

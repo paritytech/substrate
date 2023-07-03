@@ -46,9 +46,6 @@ pub struct RoyaltyConfig<AccountId, BalanceOf, MaxRecipients: Get<u32>> {
 	/// Royalty percentage for item.
 	pub royalty_percentage: Permill,
 
-	/// Admin of the royalty.
-	pub royalty_admin: AccountId,
-
 	/// List of accounts that the royalty will go to and its correspondent 
 	/// percentage of the royalties.
 	pub recipients: BoundedVec<RoyaltyDetails<AccountId>, MaxRecipients>,

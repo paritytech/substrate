@@ -83,7 +83,6 @@ fn set_collection_royalty_should_work() {
 			RuntimeOrigin::signed(account(1)),
 			0,
 			Permill::from_percent(5),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -92,7 +91,6 @@ fn set_collection_royalty_should_work() {
 		// Read royalty pallet's storage.
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
@@ -107,7 +105,6 @@ fn set_collection_royalty_should_work() {
 			NftsRoyaltyEvent::CollectionRoyaltySet {
 				nft_collection: 0,
 				royalty_percentage: Permill::from_percent(5),
-				royalty_admin: account(1),
 				royalty_recipients: nft_with_royalty.recipients
 			}
 		);
@@ -122,7 +119,6 @@ fn set_collection_royalty_fail_item_not_exist() {
 				RuntimeOrigin::signed(account(1)),
 				0,
 				Permill::from_percent(5),
-				account(1),
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
 					royalty_recipient_percentage: Permill::from_percent(100),
@@ -142,7 +138,6 @@ fn set_collection_royalty_fail_no_permission() {
 				RuntimeOrigin::signed(account(2)),
 				0,
 				Permill::from_percent(5),
-				account(2),
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
 					royalty_recipient_percentage: Permill::from_percent(100),
@@ -163,7 +158,6 @@ fn set_collection_royalty_fail_ovewrite() {
 			RuntimeOrigin::signed(account(1)),
 			0,
 			Permill::from_percent(5),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -174,7 +168,6 @@ fn set_collection_royalty_fail_ovewrite() {
 				RuntimeOrigin::signed(account(1)),
 				0,
 				Permill::from_percent(15),
-				account(1),
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
 					royalty_recipient_percentage: Permill::from_percent(100),
@@ -194,7 +187,6 @@ fn set_collection_royalty_fail_limit_recipients() {
 				RuntimeOrigin::signed(account(1)),
 				0,
 				Permill::from_percent(5),
-				account(1),
 				vec![
 					RoyaltyDetails {
 						royalty_recipient: account(1),
@@ -229,7 +221,6 @@ fn set_collection_royalty_fail_invalid_percentages() {
 				RuntimeOrigin::signed(account(1)),
 				0,
 				Permill::from_percent(5),
-				account(1),
 				vec![
 					RoyaltyDetails {
 						royalty_recipient: account(1),
@@ -262,7 +253,6 @@ fn set_item_royalty_should_work() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -276,7 +266,6 @@ fn set_item_royalty_should_work() {
 		// Read royalty pallet's storage.
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, mint_id)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
@@ -292,7 +281,6 @@ fn set_item_royalty_should_work() {
 				nft_collection: 0,
 				nft: mint_id,
 				royalty_percentage: Permill::from_percent(5),
-				royalty_admin: account(1),
 				royalty_recipients: nft_with_royalty.recipients
 			}
 		);
@@ -308,7 +296,6 @@ fn set_item_royalty_fail_item_not_exist() {
 				0,
 				42,
 				Permill::from_percent(5),
-				account(1),
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
 					royalty_recipient_percentage: Permill::from_percent(100),
@@ -330,7 +317,6 @@ fn set_item_royalty_fail_not_collection_owner() {
 				0,
 				mint_id,
 				Permill::from_percent(5),
-				account(2),
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
 					royalty_recipient_percentage: Permill::from_percent(100),
@@ -355,7 +341,6 @@ fn set_item_royalty_fail_not_item_owner() {
 				0,
 				item_id,
 				Permill::from_percent(5),
-				account(1),
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
 					royalty_recipient_percentage: Permill::from_percent(100),
@@ -378,7 +363,6 @@ fn set_item_royalty_fail_ovewrite() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -390,7 +374,6 @@ fn set_item_royalty_fail_ovewrite() {
 				0,
 				mint_id,
 				Permill::from_percent(15),
-				account(1),
 				vec![RoyaltyDetails {
 					royalty_recipient: account(1),
 					royalty_recipient_percentage: Permill::from_percent(100),
@@ -413,7 +396,6 @@ fn set_item_royalty_fail_limit_recipients() {
 				0,
 				mint_id,
 				Permill::from_percent(5),
-				account(1),
 				vec![
 					RoyaltyDetails {
 						royalty_recipient: account(1),
@@ -450,7 +432,6 @@ fn set_item_royalty_fail_invalid_percentages() {
 				0,
 				mint_id,
 				Permill::from_percent(5),
-				account(1),
 				vec![
 					RoyaltyDetails {
 						royalty_recipient: account(1),
@@ -481,7 +462,6 @@ fn transfer_collection_royalty_should_work() {
 			RuntimeOrigin::signed(account(1)),
 			0,
 			Permill::from_percent(5),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -490,7 +470,6 @@ fn transfer_collection_royalty_should_work() {
 		// Read royalty pallet's storage.
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
@@ -504,16 +483,16 @@ fn transfer_collection_royalty_should_work() {
 		// Read royalty pallet's storage.
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(2));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
+		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(2));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 		// Check if the event has been emitted.
 		assert_eq!(
 			last_event(),
 			NftsRoyaltyEvent::CollectionRoyaltyRecipientChanged {
 				nft_collection: 0,
+				old_royalty_recipient: account(1),
 				new_royalty_recipient: account(2),
 			}
 		);
@@ -530,7 +509,6 @@ fn transfer_collection_royalty_should_fail_if_not_a_royalty_recipient() {
 			RuntimeOrigin::signed(account(1)),
 			0,
 			Permill::from_percent(5),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -539,7 +517,6 @@ fn transfer_collection_royalty_should_fail_if_not_a_royalty_recipient() {
 		// Read royalty pallet's storage.
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
@@ -556,7 +533,6 @@ fn transfer_collection_royalty_should_fail_if_not_a_royalty_recipient() {
 		// Read royalty pallet's storage to check that the royalty has not changed.
 		let nft_with_royalty = CollectionRoyalty::<Test>::get(0).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
@@ -576,7 +552,6 @@ fn transfer_item_royalty_should_work() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -585,7 +560,6 @@ fn transfer_item_royalty_should_work() {
 		// Read royalty pallet's storage.
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
@@ -600,10 +574,9 @@ fn transfer_item_royalty_should_work() {
 		// Read royalty pallet's storage.
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(2));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
-		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
+		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(2));
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient_percentage, Permill::from_percent(100));
 		// Check if the event has been emitted.
 		assert_eq!(
@@ -611,6 +584,7 @@ fn transfer_item_royalty_should_work() {
 			NftsRoyaltyEvent::ItemRoyaltyRecipientChanged {
 				nft_collection: 0,
 				nft: 42,
+				old_royalty_recipient: account(1),
 				new_royalty_recipient: account(2),
 			}
 		);
@@ -629,7 +603,6 @@ fn transfer_item_royalty_should_fail_if_not_a_royalty_recipient() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -638,7 +611,6 @@ fn transfer_item_royalty_should_fail_if_not_a_royalty_recipient() {
 		// Read royalty pallet's storage.
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
@@ -656,7 +628,6 @@ fn transfer_item_royalty_should_fail_if_not_a_royalty_recipient() {
 		// Read royalty pallet's storage to check that the royalty has not changed.
 		let nft_with_royalty = ItemRoyalty::<Test>::get((0, 42)).unwrap();
 		assert_eq!(nft_with_royalty.royalty_percentage, Permill::from_percent(5));
-		assert_eq!(nft_with_royalty.royalty_admin, account(1));
 		assert_eq!(nft_with_royalty.depositor, Some(account(1)));
 		assert_eq!(nft_with_royalty.deposit, 1);
 		assert_eq!(nft_with_royalty.recipients[0].royalty_recipient, account(1));
@@ -677,7 +648,6 @@ fn buy_should_work() {
 			0,
 			mint_id,
 			Permill::from_percent(10),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -716,7 +686,6 @@ fn buy_should_work_on_item_royalty_with_collection_royalty() {
 			RuntimeOrigin::signed(account(1)),
 			0,
 			Permill::from_percent(20),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -729,7 +698,6 @@ fn buy_should_work_on_item_royalty_with_collection_royalty() {
 			0,
 			mint_id,
 			Permill::from_percent(10),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -770,7 +738,6 @@ fn buy_should_work_on_collection_royalty_without_item() {
 			RuntimeOrigin::signed(account(1)),
 			0,
 			Permill::from_percent(10),
-			account(1),
 			vec![RoyaltyDetails {
 				royalty_recipient: account(1),
 				royalty_recipient_percentage: Permill::from_percent(100),
@@ -812,7 +779,6 @@ fn buy_should_work_with_multiple_recipients_at_collection_level() {
 			0,
 			mint_id,
 			Permill::from_percent(10),
-			account(1),
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
@@ -866,7 +832,6 @@ fn buy_should_work_with_multiple_recipients_at_item_level() {
 			0,
 			mint_id,
 			Permill::from_percent(10),
-			account(1),
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
@@ -886,7 +851,6 @@ fn buy_should_work_with_multiple_recipients_at_item_level() {
 			RuntimeOrigin::signed(account(1)),
 			0,
 			Permill::from_percent(10),
-			account(1),
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
@@ -965,7 +929,6 @@ fn error_if_buy_item_not_on_sale() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			account(1),
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
@@ -992,7 +955,6 @@ fn remove_collection_royalty_should_work() {
 			RuntimeOrigin::signed(account(1)),
 			0,
 			Permill::from_percent(5),
-			account(1),
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
@@ -1040,7 +1002,6 @@ fn remove_collection_royalty_fail_if_collection_still_exists() {
 			RuntimeOrigin::signed(account(1)),
 			0,
 			Permill::from_percent(5),
-			account(1),
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
@@ -1072,7 +1033,6 @@ fn remove_item_royalty_should_work() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			account(1),
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
@@ -1124,7 +1084,6 @@ fn remove_item_royalty_should_fail_if_item_still_exists() {
 			0,
 			mint_id,
 			Permill::from_percent(5),
-			account(1),
 			vec![
 				RoyaltyDetails {
 					royalty_recipient: account(1),
