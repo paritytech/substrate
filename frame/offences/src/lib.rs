@@ -94,7 +94,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxSessionReportAge: Get<EraIndex>;
 
-		/// A trait that provides information about the current session
+		/// A trait that provides information about the current session.
 		type SessionInfoProvider: SessionInfoProvider;
 	}
 
