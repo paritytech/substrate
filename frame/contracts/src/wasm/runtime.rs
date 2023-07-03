@@ -2819,7 +2819,6 @@ pub mod env {
 	///
 	/// The nonce is incremented for each successful contract instantiation. This is a
 	/// sensible default salt for contract instantiations.
-	#[unstable]
 	fn instantiation_nonce(ctx: _, _memory: _) -> Result<u64, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::InstantationNonce)?;
 		Ok(ctx.ext.nonce())
