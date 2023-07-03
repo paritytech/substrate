@@ -1405,13 +1405,6 @@ impl<T: Config> Pallet<T> {
 
 		let (code_hash, storage_deposit_limit): (CodeHash<T>, Option<BalanceOf<T>>) = match code {
 			Code::Upload(code) => {
-				// let result = Self::bare_upload_code(
-				// 	origin.clone(),
-				// 	code,
-				// 	storage_deposit_limit.clone().map(Into::into),
-				// 	Determinism::Enforced,
-				// );
-
 				let (code_hash, deposit) = match try_upload(code) {
 					Ok(CodeUploadReturnValue { code_hash, deposit }) => (code_hash, deposit),
 					Err(error) =>
