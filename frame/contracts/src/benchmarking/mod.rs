@@ -37,9 +37,10 @@ use crate::{
 use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::{
-	pallet_prelude::StorageVersion, traits::fungible::InspectHold, weights::Weight,
+	self, pallet_prelude::StorageVersion, traits::fungible::InspectHold, weights::Weight,
 };
 use frame_system::RawOrigin;
+use pallet_balances;
 use sp_runtime::{
 	traits::{Bounded, Hash},
 	Perbill,
@@ -68,8 +69,9 @@ struct Contract<T: Config> {
 	value: BalanceOf<T>,
 }
 
-impl<T: Config> Contract<T>
+impl<T> Contract<T>
 where
+	T: Config + pallet_balances::Config,
 	<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 	BalanceOf<T>: FixedPointOperand,
 {
@@ -205,6 +207,7 @@ benchmarks! {
 	where_clause { where
 		<BalanceOf<T> as codec::HasCompact>::Type: Clone + Eq + PartialEq + sp_std::fmt::Debug + scale_info::TypeInfo + codec::Encode,
 		BalanceOf<T>: FixedPointOperand,
+		T: Config + pallet_balances::Config,
 	}
 
 	// The base weight consumed on processing contracts deletion queue.
@@ -255,8 +258,8 @@ benchmarks! {
 			whitelisted_caller(), WasmModule::dummy(), vec![],
 		)?;
 
-		v10::store_old_contract_info::<T>(contract.account_id.clone(), contract.info()?);
-		let mut m = v10::Migration::<T>::default();
+		v10::store_old_contract_info::<T, pallet_balances::Pallet<T>>(contract.account_id.clone(), contract.info()?);
+		let mut m = v10::Migration::<T, pallet_balances::Pallet<T>>::default();
 	}: {
 		m.step();
 	}

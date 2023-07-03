@@ -39,6 +39,7 @@ environmental = { version = "1.1.4", default-features = false }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true, default-features = false }
 pallet-contracts-primitives = { version = "24.0.0", default-features = false, path = "primitives" }
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
@@ -55,8 +56,8 @@ pretty_assertions = "1"
 wat = "1"
 
 # Substrate Dependencies
-pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-insecure-randomness-collective-flip = { version = "4.0.0-dev", path = "../insecure-randomness-collective-flip" }
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
 pallet-proxy = { version = "4.0.0-dev", path = "../proxy" }
@@ -83,10 +84,12 @@ std = [
 	"rand/std",
 	"wasmparser/std",
 	"environmental/std",
+	"pallet-balances/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"rand",
 	"rand_pcg",
+	"pallet-balances",
 ]
 try-runtime = ["frame-support/try-runtime"]

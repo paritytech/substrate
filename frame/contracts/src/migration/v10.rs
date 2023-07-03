@@ -43,26 +43,20 @@ use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Perbill, Saturating};
 use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
 
-pub mod old {
+mod old {
 	use super::*;
 
 	pub type BalanceOf<T, Currency> = <Currency as frame_support::traits::Currency<
 		<T as frame_system::Config>::AccountId,
 	>>::Balance;
 
-	/// Old Currency type traits
-	///
-	/// This trait holds what the old [`T::Currency`] type required before is was replaced by the
-	/// `fungible` traits.
-	pub trait CurrencyOf<T: Config>:
-		ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = BalanceOf<T, Self>>
-	{
-	}
-
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
-	pub struct ContractInfo<T: Config, Currency: CurrencyOf<T>> {
+	pub struct ContractInfo<T: Config, Currency>
+	where
+		Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>
+			+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, Currency>>,
+	{
 		pub trie_id: TrieId,
 		pub code_hash: CodeHash<T>,
 		pub storage_bytes: u32,
@@ -73,7 +67,7 @@ pub mod old {
 	}
 
 	#[storage_alias]
-	pub type ContractInfoOf<T: Config, Currency: CurrencyOf<T>> = StorageMap<
+	pub type ContractInfoOf<T: Config, Currency> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
 		<T as frame_system::Config>::AccountId,
@@ -82,10 +76,14 @@ pub mod old {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_contract_info<T: Config, Currency: old::CurrencyOf<T>>(
+pub fn store_old_contract_info<T: Config, Currency>(
 	account: T::AccountId,
 	info: crate::ContractInfo<T>,
-) {
+) where
+	Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>
+		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, Currency>>
+		+ 'static,
+{
 	let info = old::ContractInfo {
 		trie_id: info.trie_id,
 		code_hash: info.code_hash,
@@ -112,7 +110,11 @@ impl<T: Config> Deref for DepositAccount<T> {
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
-pub struct ContractInfo<T: Config, Currency: old::CurrencyOf<T>> {
+pub struct ContractInfo<T: Config, Currency>
+where
+	Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>
+		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, Currency>>,
+{
 	pub trie_id: TrieId,
 	deposit_account: DepositAccount<T>,
 	pub code_hash: CodeHash<T>,
@@ -124,7 +126,11 @@ pub struct ContractInfo<T: Config, Currency: old::CurrencyOf<T>> {
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
-pub struct Migration<T: Config, Currency: old::CurrencyOf<T>> {
+pub struct Migration<T: Config, Currency>
+where
+	Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>
+		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, Currency>>,
+{
 	last_key: Option<BoundedVec<u8, ConstU32<256>>>,
 	_phantom: PhantomData<(T, Currency)>,
 }
@@ -137,7 +143,11 @@ type ContractInfoOf<T: Config, Currency: old::CurrencyOf<T>> = StorageMap<
 	ContractInfo<T, Currency>,
 >;
 
-impl<T: Config, Currency: old::CurrencyOf<T> + 'static> Migrate for Migration<T, Currency> {
+impl<T: Config, Currency: 'static> Migrate for Migration<T, Currency>
+where
+	Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>
+		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, Currency>>,
+{
 	const VERSION: u16 = 10;
 
 	fn max_step_weight() -> Weight {
