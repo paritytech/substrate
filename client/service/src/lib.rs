@@ -237,7 +237,7 @@ pub async fn build_system_rpc_future<
 		// Answer incoming RPC requests.
 		let Some(req) = rpc_rx.next().await else {
 			debug!("RPC requests stream has terminated, shutting down the system RPC future.");
-			return;
+			return
 		};
 
 		match req {

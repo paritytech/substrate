@@ -233,7 +233,7 @@ pub fn new_partial(
 		&config.data_path,
 		Default::default(),
 		client.clone(),
-		keystore_container.keystore(),
+		keystore_container.local_keystore(),
 		config.prometheus_registry(),
 		&task_manager.spawn_handle(),
 	)

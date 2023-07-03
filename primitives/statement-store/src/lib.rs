@@ -63,12 +63,17 @@ mod sr25519 {
 	pub type Public = app_sr25519::Public;
 }
 
-mod ed25519 {
+/// Statement-store specific ed25519 crypto primitives.
+pub mod ed25519 {
 	mod app_ed25519 {
 		use sp_application_crypto::{app_crypto, ed25519, key_types::STATEMENT};
 		app_crypto!(ed25519, STATEMENT);
 	}
+	/// Statement-store specific ed25519 public key.
 	pub type Public = app_ed25519::Public;
+	/// Statement-store specific ed25519 key pair.
+	#[cfg(feature = "std")]
+	pub type Pair = app_ed25519::Pair;
 }
 
 mod ecdsa {

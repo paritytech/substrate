@@ -179,6 +179,13 @@ macro_rules! app_crypto_pair {
 		impl $crate::AppPair for Pair {
 			type Generic = $pair;
 		}
+
+		impl Pair {
+			/// Convert into wrapped generic key pair type.
+			pub fn into_inner(self) -> $pair {
+				self.0
+			}
+		}
 	};
 }
 

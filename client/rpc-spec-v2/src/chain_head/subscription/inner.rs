@@ -328,9 +328,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 
 	/// Remove the subscription ID with associated pinned blocks.
 	pub fn remove_subscription(&mut self, sub_id: &str) {
-		let Some(mut sub) = self.subs.remove(sub_id) else {
-			return
-		};
+		let Some(mut sub) = self.subs.remove(sub_id) else { return };
 
 		// The `Stop` event can be generated only once.
 		sub.stop();

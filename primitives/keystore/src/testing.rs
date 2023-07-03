@@ -286,20 +286,6 @@ impl Keystore for MemoryKeystore {
 			.iter()
 			.all(|(k, t)| self.keys.read().get(t).and_then(|s| s.get(k)).is_some())
 	}
-
-	fn with_ed25519_key(
-		&self,
-		key_type: KeyTypeId,
-		public: &ed25519::Public,
-		f: &mut dyn FnMut(&ed25519::Pair),
-	) -> std::result::Result<bool, Error> {
-		Ok(if let Some(pair) = self.pair::<ed25519::Pair>(key_type, public) {
-			f(&pair);
-			true
-		} else {
-			false
-		})
-	}
 }
 
 impl Into<KeystorePtr> for MemoryKeystore {

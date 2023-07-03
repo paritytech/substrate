@@ -196,21 +196,6 @@ impl Keystore for LocalKeystore {
 		self.sign::<ed25519::Pair>(key_type, public, msg)
 	}
 
-	fn with_ed25519_key(
-		&self,
-		key_type: KeyTypeId,
-		public: &ed25519::Public,
-		f: &mut dyn FnMut(&ed25519::Pair),
-	) -> std::result::Result<bool, TraitError> {
-		let pair = self.0.read().key_pair_by_type::<ed25519::Pair>(public, key_type)?;
-		Ok(if let Some(pair) = pair {
-			f(&pair);
-			true
-		} else {
-			false
-		})
-	}
-
 	fn ecdsa_public_keys(&self, key_type: KeyTypeId) -> Vec<ecdsa::Public> {
 		self.public_keys::<ecdsa::Pair>(key_type)
 	}
