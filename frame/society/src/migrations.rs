@@ -257,7 +257,7 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 	// contains a new Members value, which did not exist in the old layout.
 	if Members::<T, I>::iter().next().is_some() {
 		log::warn!(target: TARGET, "Skipping MigrateToV2 migration since it appears unapplicable");
-		// Already migrated or no data to migrate: Bail.
+		// Already migrated or no data to migrate: Bail .
 		return T::DbWeight::get().reads(1)
 	}
 
