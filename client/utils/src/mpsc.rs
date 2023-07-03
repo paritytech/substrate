@@ -18,10 +18,8 @@
 
 //! Code to meter unbounded channels.
 
-pub use async_channel::{TryRecvError, TrySendError};
-
 use crate::metrics::UNBOUNDED_CHANNELS_COUNTER;
-use async_channel::{Receiver, Sender};
+use async_channel::{Receiver, Sender, TryRecvError, TrySendError};
 use futures::{
 	stream::{FusedStream, Stream},
 	task::{Context, Poll},
