@@ -225,7 +225,11 @@ impl<T: Config> WasmBlob<T> {
 		.map_err(|_| "can't define host functions to Linker")?;
 
 		// Query wasmi for memory limits specified in the module's import entry.
-		let memory_limits = contract.scan_imports::<T>(schedule)?;
+		// We allow already stored modules not to have a memory import, for backwards compatibility.
+		// If a stored module doesn't have it, it defaults to (0,0), and any access to it will lead
+		// to out of bounds trap. However, for the newly uploaded ones we do require to have a
+		// memory import.
+		let memory_limits = contract.scan_imports::<T>(schedule, false)?;
 		// Here we allocate this memory in the _store_. It allocates _inital_ value, but allows it
 		// to grow up to maximum number of memory pages, if neccesary.
 		let qed = "We checked the limits versus our Schedule,

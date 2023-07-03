@@ -32,10 +32,6 @@ use codec::MaxEncodedLen;
 use sp_runtime::{traits::Hash, DispatchError};
 #[cfg(any(test, feature = "runtime-benchmarks"))]
 use sp_std::prelude::Vec;
-#[cfg(any(test, feature = "runtime-benchmarks"))]
-use wasm_instrument::parity_wasm::elements::{
-	self, External, Internal, MemoryType, Type, ValueType,
-};
 use wasmi::{
 	core::ValueType as WasmiValueType, Config as WasmiConfig, Engine, ExternType,
 	FuelConsumptionMode, Module, StackLimits,
@@ -70,7 +66,7 @@ pub struct LoadedModule {
 impl LoadedModule {
 	/// Creates a new instance of `LoadedModule`.
 	///
-	/// The inner Wasm module is checked not the have restricted WebAssembly proposals.
+	/// The inner Wasm module is checked not to have restricted WebAssembly proposals.
 	/// Returns `Err` if the `code` cannot be deserialized or if it contains an invalid module.
 	pub fn new<T>(
 		code: &[u8],
@@ -182,6 +178,7 @@ impl LoadedModule {
 	pub fn scan_imports<T: Config>(
 		&self,
 		schedule: &Schedule<T>,
+		require_memory_import: bool,
 	) -> Result<(u32, u32), &'static str> {
 		let module = &self.module;
 		let imports = module.imports();
@@ -235,32 +232,11 @@ impl LoadedModule {
 			}
 		}
 
-		memory_limits.ok_or("No memory import found in the module")
-	}
-}
-
-#[cfg(any(test, feature = "runtime-benchmarks"))]
-fn get_memory_limits<T: Config>(
-	module: Option<&MemoryType>,
-	schedule: &Schedule<T>,
-) -> Result<(u32, u32), &'static str> {
-	if let Some(memory_type) = module {
-		// Inspect the module to extract the initial and maximum page count.
-		let limits = memory_type.limits();
-		match (limits.initial(), limits.maximum()) {
-			(initial, Some(maximum)) if initial > maximum =>
-				Err("Requested initial number of memory pages should not exceed the requested maximum"),
-			(_, Some(maximum)) if maximum > schedule.limits.memory_pages =>
-				Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule."),
-			(initial, Some(maximum)) => Ok((initial, maximum)),
-			(initial, None) => {
-				Ok((initial, schedule.limits.memory_pages))
-			},
-		}
-	} else {
-		// None memory imported in the Wasm module,
-		// any access to it will lead to out of bounds trap.
-		Ok((0, 0))
+		// If we don't require module to have a memory import,
+		// then we return (0,0) for the module not having such an import.
+		// Any access to it will lead to out of bounds trap.
+		if !require_memory_import { memory_limits.or(Default::default()) } else { memory_limits }
+			.ok_or("No memory import found in the module")
 	}
 }
 
@@ -270,6 +246,8 @@ fn get_memory_limits<T: Config>(
 /// 1. General engine-side validation makes sure the module is consistent and does not contain
 ///    forbidden WebAssembly features.
 /// 2. Additional checks which are specific to smart contracts eligible for this pallet.
+///
+/// We need to fo this check only once when uploading a new code.
 fn validate<E, T>(
 	code: &[u8],
 	schedule: &Schedule<T>,
@@ -286,7 +264,9 @@ where
 		let contract_module = LoadedModule::new::<T>(code, determinism, None)?;
 		// Checks that module satisfies constraints required for contracts.
 		contract_module.scan_exports()?;
-		contract_module.scan_imports::<T>(schedule)?;
+		// We check module imports contstraints including the memory import which is obligatory to
+		// have for the newly uploaded contracts.
+		contract_module.scan_imports::<T>(schedule, true)?;
 		Ok(())
 	})()
 	.map_err(|msg: &str| {
@@ -322,7 +302,8 @@ where
 /// Validates the given binary `code` is a valid Wasm module satisfying following constraints:
 ///
 /// - The module doesn't export any memory.
-/// - The module imports memory, which limits lay within the limits permitted by the `schedule`.
+/// - The module does imports memory, which limits lay within the limits permitted by the
+///   `schedule`.
 /// - All imported functions from the external environment match defined by `env` module.
 ///
 /// Also constructs contract `code_info` by calculating the storage deposit.
@@ -367,8 +348,8 @@ pub mod benchmarking {
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let determinism = Determinism::Enforced;
 		let contract_module = LoadedModule::new::<T>(&code, determinism, None)?;
-		let _ = contract_module.scan_imports::<T>(schedule)?;
-		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
+		let _ = contract_module.scan_imports::<T>(schedule, true)?;
+		let code: CodeVec<T> = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
 			owner,
 			// this is a helper function for benchmarking which skips deposit collection
@@ -376,8 +357,9 @@ pub mod benchmarking {
 			refcount: 0,
 			determinism,
 		};
+		let code_hash = T::Hashing::hash(&code);
 
-		Ok(WasmBlob { code, code_info, code_hash: Default::default() })
+		Ok(WasmBlob { code, code_info, code_hash })
 	}
 }
 
