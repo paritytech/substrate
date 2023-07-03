@@ -5915,6 +5915,13 @@ mod commission {
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
+			// Cannot set max commission above GlobalMaxCommission
+			assert_noop!(Pools::set_commission_max(
+				RuntimeOrigin::signed(900),
+				1,
+				Perbill::from_percent(100)
+			), Error::<Runtime>::CommissionExceedsGlobalMaximum);
+
 			// Set a max commission commission pool 1 to 80%
 			assert_ok!(Pools::set_commission_max(
 				RuntimeOrigin::signed(900),
