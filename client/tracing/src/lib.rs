@@ -329,8 +329,9 @@ where
 
 	fn on_event(&self, event: &Event<'_>, ctx: Context<S>) {
 		if !self.check_target(event.metadata().target(), &event.metadata().level()) {
-			return;
+			return
 		}
+
 		let parent_id = event.parent().cloned().or_else(|| {
 			if event.is_contextual() {
 				ctx.lookup_current().map(|span| span.id())
@@ -349,7 +350,6 @@ where
 			parent_id,
 		};
 		self.dispatch_event(TraceHandlerEvents::Event(trace_event));
-	}
 	}
 
 	fn on_enter(&self, span: &Id, ctx: Context<S>) {
