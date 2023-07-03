@@ -3755,6 +3755,19 @@ fn instantiate_with_zero_balance_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: deposit_expected,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![code_hash],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
 						account: deposit_account.clone(),
 					}),
@@ -3800,19 +3813,6 @@ fn instantiate_with_zero_balance_works() {
 						amount: min_balance,
 					}),
 					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: deposit_expected,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3865,6 +3865,19 @@ fn instantiate_with_below_existential_deposit_works() {
 		assert_eq!(
 			System::events(),
 			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: deposit_expected,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![code_hash],
+				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
@@ -3921,19 +3934,6 @@ fn instantiate_with_below_existential_deposit_works() {
 						amount: 50,
 					}),
 					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: deposit_expected,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -5591,7 +5591,7 @@ fn root_cannot_instantiate_with_code() {
 				vec![],
 				vec![],
 			),
-			DispatchError::RootNotAllowed,
+			DispatchError::BadOrigin
 		);
 	});
 }
