@@ -34,16 +34,30 @@ pub trait ECDSAExt {
 
 impl ECDSAExt for Public {
 	fn to_eth_address(&self) -> Result<[u8; 20], ()> {
-		use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
+		use secp256k1::PublicKey;
 
-		PublicKey::from_sec1_bytes(self.as_slice()).map_err(drop).and_then(|pub_key| {
+		PublicKey::from_slice(self.as_slice()).map_err(drop).and_then(|pub_key| {
 			// uncompress the key
-			let uncompressed = pub_key.to_encoded_point(false);
+			let uncompressed = pub_key.serialize_uncompressed();
 			// convert to ETH address
-			<[u8; 20]>::try_from(
-				sp_io::hashing::keccak_256(&uncompressed.as_bytes()[1..])[12..].as_ref(),
-			)
-			.map_err(drop)
+			<[u8; 20]>::try_from(sp_io::hashing::keccak_256(&uncompressed[1..])[12..].as_ref())
+				.map_err(drop)
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_core::{ecdsa, Pair};
+
+	#[test]
+	fn to_eth_address_works() {
+		let pair = ecdsa::Pair::from_string("//Alice//password", None).unwrap();
+		let eth_address = pair.public().to_eth_address().unwrap();
+		assert_eq!(
+			array_bytes::bytes2hex("0x", &eth_address),
+			"0xdc1cce4263956850a3c8eb349dc6fc3f7792cb27"
+		);
 	}
 }

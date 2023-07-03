@@ -16,12 +16,12 @@
 // limitations under the License.
 
 //! Don't rely on reserved balances keeping an account alive
-//! See <https://github.com/paritytech/substrate/pull/13370>.
+//! See <https://github.com/paritytech/substrate/pull/13369>.
 
 use crate::{
 	address::AddressGenerator,
 	exec::AccountIdOf,
-	migration::{IsFinished, Migrate},
+	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
 	CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
@@ -41,7 +41,7 @@ use sp_core::hexdisplay::HexDisplay;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Perbill, Saturating};
-use sp_std::{marker::PhantomData, ops::Deref, prelude::*};
+use sp_std::{ops::Deref, prelude::*};
 
 mod old {
 	use super::*;
@@ -131,7 +131,7 @@ where
 	Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>
 		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, Currency>>,
 {
-	last_key: Option<BoundedVec<u8, ConstU32<256>>>,
+	last_account: Option<T::AccountId>,
 	_phantom: PhantomData<(T, Currency)>,
 }
 
@@ -143,7 +143,7 @@ type ContractInfoOf<T: Config, Currency: old::CurrencyOf<T>> = StorageMap<
 	ContractInfo<T, Currency>,
 >;
 
-impl<T: Config, Currency: 'static> Migrate for Migration<T, Currency>
+impl<T: Config, Currency: 'static> MigrationStep for Migration<T, Currency>
 where
 	Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>
 		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, Currency>>,
@@ -155,8 +155,10 @@ where
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let mut iter = if let Some(last_key) = self.last_key.take() {
-			old::ContractInfoOf::<T, Currency>::iter_from(last_key.to_vec())
+		let mut iter = if let Some(last_account) = self.last_account.take() {
+			old::ContractInfoOf::<T, Currency>::iter_from(old::ContractInfoOf::<T>::hashed_key_for(
+				last_account,
+			))
 		} else {
 			old::ContractInfoOf::<T, Currency>::iter()
 		};
@@ -166,9 +168,6 @@ where
 				<T as frame_system::Config>::AccountId,
 			>>::minimum_balance();
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
-
-			// Store last key for next migration step
-			self.last_key = Some(iter.last_raw_key().to_vec().try_into().unwrap());
 
 			// Get the new deposit account address
 			let deposit_account: DepositAccount<T> =
@@ -213,14 +212,18 @@ where
 			})
 			// If it fails we fallback to minting the ED.
 			.unwrap_or_else(|err| {
-				log::error!(target: LOG_TARGET, "Failed to transfer ED, reason: {:?}", err);
+				log::error!(
+					target: LOG_TARGET,
+					"Failed to transfer the base deposit, reason: {:?}",
+					err
+				);
 				Currency::deposit_creating(&deposit_account, min_balance);
 				min_balance
 			});
 
 			// Calculate the new base_deposit to store in the contract:
-			// Ideally: it should be the same as the old one
-			// Ideally, it should be at least 2xED (for the contract and deposit account).
+			// Ideally, it should be the same as the old one
+			// Ideally, it should be at least 2xED (for the contract and deposit accounts).
 			// It can't be more than the `new_deposit`.
 			let new_base_deposit = min(
 				max(contract.storage_base_deposit, min_balance.saturating_add(min_balance)),
@@ -255,6 +258,10 @@ where
 			};
 
 			ContractInfoOf::<T, Currency>::insert(&account, new_contract_info);
+
+			// Store last key for next migration step
+			self.last_account = Some(account);
+
 			(IsFinished::No, T::WeightInfo::v10_migration_step())
 		} else {
 			log::debug!(target: LOG_TARGET, "Done Migrating contract info");
@@ -275,7 +282,7 @@ where
 		let sample = <Vec<(T::AccountId, old::ContractInfo<T, Currency>)> as Decode>::decode(
 			&mut &state[..],
 		)
-		.unwrap();
+		.expect("pre_upgrade_step provides a valid state; qed");
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
 		for (account, old_contract) in sample {
