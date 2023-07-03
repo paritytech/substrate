@@ -311,11 +311,15 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 			Members::<T, I>::mutate(&member, |m| {
 				if let Some(member) = m {
 					member.index = 0;
+				} else {
+					log::error!("Member somehow disapeared from storage after it was inserted")
 				}
 			});
 			Members::<T, I>::mutate(&member_to_swap, |m| {
 				if let Some(member) = m {
 					member.index = member_count;
+				} else {
+					log::error!("Member somehow disapeared from storage after it was queried")
 				}
 			});
 		}
