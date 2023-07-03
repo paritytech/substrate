@@ -41,20 +41,6 @@ use wasmi::{
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
 pub const IMPORT_MODULE_MEMORY: &str = "env";
 
-/// Determines whether a module should be instantiated during preparation.
-pub enum TryInstantiate {
-	/// Do the instantiation to make sure that the module is valid.
-	///
-	/// This should be used if a module is only uploaded but not executed. We need
-	/// to make sure that it can be actually instantiated.
-	Instantiate,
-	/// Skip the instantiation during preparation.
-	///
-	/// This makes sense when the preparation takes place as part of an instantiation. Then
-	/// this instantiation would fail the whole transaction and an extra check is not
-	/// necessary.
-	Skip,
-}
 
 /// The inner deserialized module is valid and contains only allowed WebAssembly features.
 /// This is checked by loading it into wasmi interpreter `engine`.
@@ -237,7 +223,6 @@ fn validate<E, T>(
 	code: &[u8],
 	schedule: &Schedule<T>,
 	determinism: Determinism,
-	try_instantiate: TryInstantiate,
 ) -> Result<(), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
@@ -261,23 +246,21 @@ where
 	//
 	// - It doesn't use any unknown imports.
 	// - It doesn't explode the wasmi bytecode generation.
-	if matches!(try_instantiate, TryInstantiate::Instantiate) {
-		// We don't actually ever run any code so we can get away with a minimal stack which
-		// reduces the amount of memory that needs to be zeroed.
-		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
-		WasmBlob::<T>::instantiate::<E, _>(
-			&code,
-			(),
-			schedule,
-			determinism,
-			stack_limits,
-			AllowDeprecatedInterface::No,
-		)
-		.map_err(|err| {
-			log::debug!(target: LOG_TARGET, "{}", err);
-			(Error::<T>::CodeRejected.into(), "New code rejected on wasmi instantiation!")
-		})?;
-	}
+	// We don't actually ever run any code so we can get away with a minimal stack which
+	// reduces the amount of memory that needs to be zeroed.
+	let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
+	WasmBlob::<T>::instantiate::<E, _>(
+		&code,
+		(),
+		schedule,
+		determinism,
+		stack_limits,
+		AllowDeprecatedInterface::No,
+	)
+	.map_err(|err| {
+		log::debug!(target: LOG_TARGET, "{}", err);
+		(Error::<T>::CodeRejected.into(), "New code rejected on wasmi instantiation!")
+	})?;
 
 	Ok(())
 }
@@ -295,13 +278,12 @@ pub fn prepare<E, T>(
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
 	determinism: Determinism,
-	try_instantiate: TryInstantiate,
 ) -> Result<WasmBlob<T>, (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
 {
-	validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
+	validate::<E, T>(code.as_ref(), schedule, determinism)?;
 
 	// Calculate deposit for storing contract code and `code_info` in two different storage items.
 	let bytes_added = code.len().saturating_add(<CodeInfo<T>>::max_encoded_len()) as u32;
