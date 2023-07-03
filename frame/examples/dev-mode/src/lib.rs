@@ -60,7 +60,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::call_index(0)]
+		/// No need to define a `call_index` attribute here because of `dev_mode`.
 		/// No need to define a `weight` attribute here because of `dev_mode`.
 		pub fn add_dummy(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
@@ -78,7 +78,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::call_index(1)]
+		/// No need to define a `call_index` attribute here because of `dev_mode`.
 		/// No need to define a `weight` attribute here because of `dev_mode`.
 		pub fn set_bar(
 			origin: OriginFor<T>,
