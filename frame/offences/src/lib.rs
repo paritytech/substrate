@@ -22,7 +22,8 @@
 //! - [`Reports`]: A storage map of a report hash to its details
 //! - [`ConcurrentReportsIndex`]: A storage double map that stores a vector of reports
 //! 	for a specific [`Kind`] and [`OpaqueTimeSlot`]
-//! - [`SessionReports`]: A storage map that keeps a vector of active reports for a [`SessionIndex`].
+//! - [`SessionReports`]: A storage map that keeps a vector of active reports for a
+//!   [`SessionIndex`].
 //!
 //! When a new offence is reported using [`ReportOffence::report_offence`], its `session_index` is
 //! first compared against the current `session_index`.
@@ -45,7 +46,7 @@ mod tests;
 
 use codec::Encode;
 use core::marker::PhantomData;
-use frame_support::{traits::Get, weights::Weight, ensure};
+use frame_support::{ensure, traits::Get, weights::Weight};
 use sp_runtime::{traits::Hash, Perbill};
 use sp_session::{SessionChangeListener, SessionInfoProvider};
 use sp_staking::{
@@ -127,13 +128,8 @@ pub mod pallet {
 	///
 	/// Note that `time_slot` is encoded and stored as an opaque type.
 	#[pallet::storage]
-	pub type SessionReports<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		SessionIndex,
-		Vec<SessionReportOf<T>>,
-		ValueQuery,
-	>;
+	pub type SessionReports<T: Config> =
+		StorageMap<_, Twox64Concat, SessionIndex, Vec<SessionReportOf<T>>, ValueQuery>;
 
 	/// Events type.
 	#[pallet::event]
