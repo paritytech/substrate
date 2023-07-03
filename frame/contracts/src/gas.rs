@@ -195,10 +195,11 @@ impl<T: Config> GasMeter<T> {
 	///
 	/// Returns the updated `gas_left` `Weight` value from the meter.
 	/// Normally this would never fail, as engine should fail first when out of gas.
-	pub fn sync_fuel(&mut self, wasmi_fuel: u64) -> Result<Weight, DispatchError> {
-		let wasmi_fuel = wasmi_fuel.saturating_sub(self.engine_consumed);
+	pub fn charge_fuel(&mut self, wasmi_fuel_total: u64) -> Result<Weight, DispatchError> {
+		// Take the part consumed since the last update.
+		let wasmi_fuel = wasmi_fuel_total.saturating_sub(self.engine_consumed);
 		if !wasmi_fuel.is_zero() {
-			self.engine_consumed += wasmi_fuel;
+			self.engine_consumed = wasmi_fuel_total;
 			let reftime_consumed =
 				wasmi_fuel.saturating_mul(T::Schedule::get().instruction_weights.base as u64);
 			let ref_time_left = self

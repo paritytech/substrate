@@ -1,6 +1,6 @@
 use frame_support::construct_runtime;
-use sp_runtime::{generic, traits::BlakeTwo256};
 use sp_core::sr25519;
+use sp_runtime::{generic, traits::BlakeTwo256};
 
 #[frame_support::pallet]
 mod pallet {

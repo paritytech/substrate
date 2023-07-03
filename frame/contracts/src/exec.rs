@@ -334,17 +334,21 @@ pub trait Executable<T: Config>: Sized {
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError>;
 
-	/// Increment the refcount of a code in-storage by one.
-	///
-	/// This is needed when the code is not set via instantiate but `seal_set_code_hash`.
+	/// Increment the reference count of a of a stored code by one.
 	///
 	/// # Errors
 	///
-	/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
-	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError>;
+	/// [`Error::CodeNotFound`] is returned if no stored code found having the specified
+	/// `code_hash`.
+	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError>;
 
-	/// Decrement the refcount by one if the code exists.
-	fn remove_user(code_hash: CodeHash<T>);
+	/// Decrement the reference count of a stored code by one.
+	///
+	/// # Note
+	///
+	/// A contract whose reference count dropped to zero isn't automatically removed. A
+	/// `remove_code` transaction must be submitted by the original uploader to do so.
+	fn decrement_refcount(code_hash: CodeHash<T>);
 
 	/// Execute the specified exported function and return the result.
 	///
@@ -363,7 +367,7 @@ pub trait Executable<T: Config>: Sized {
 	) -> ExecResult;
 
 	/// The code hash of the executable.
-	fn code_hash(&self) -> CodeHash<T>;
+	fn code_hash(&self) -> &CodeHash<T>;
 
 	/// Size of the contract code in bytes.
 	fn code_len(&self) -> u32;
@@ -764,7 +768,7 @@ where
 						input_data,
 						salt,
 					);
-					let contract = ContractInfo::new(&account_id, nonce, executable.code_hash())?;
+					let contract = ContractInfo::new(&account_id, nonce, *executable.code_hash())?;
 					(
 						account_id,
 						contract,
@@ -845,7 +849,7 @@ where
 		let frame = self.top_frame();
 		let entry_point = frame.entry_point;
 		let delegated_code_hash =
-			if frame.delegate_caller.is_some() { Some(executable.code_hash()) } else { None };
+			if frame.delegate_caller.is_some() { Some(*executable.code_hash()) } else { None };
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
@@ -1255,7 +1259,7 @@ where
 		)?;
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
-		E::remove_user(info.code_hash);
+		E::decrement_refcount(info.code_hash);
 		Contracts::<T>::deposit_event(
 			vec![T::Hashing::hash_of(&frame.account_id), T::Hashing::hash_of(&beneficiary)],
 			Event::Terminated {
@@ -1430,9 +1434,9 @@ where
 		if !E::from_storage(hash, &mut frame.nested_gas)?.is_deterministic() {
 			return Err(<Error<T>>::Indeterministic.into())
 		}
-		E::add_user(hash)?;
+		E::increment_refcount(hash)?;
 		let prev_hash = frame.contract_info().code_hash;
-		E::remove_user(prev_hash);
+		E::decrement_refcount(prev_hash);
 		frame.contract_info().code_hash = hash;
 		Contracts::<Self::T>::deposit_event(
 			vec![T::Hashing::hash_of(&frame.account_id), hash, prev_hash],
@@ -1602,11 +1606,11 @@ mod tests {
 			})
 		}
 
-		fn add_user(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
+		fn increment_refcount(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
 			MockLoader::increment_refcount(code_hash)
 		}
 
-		fn remove_user(code_hash: CodeHash<Test>) {
+		fn decrement_refcount(code_hash: CodeHash<Test>) {
 			MockLoader::decrement_refcount(code_hash);
 		}
 
@@ -1617,7 +1621,7 @@ mod tests {
 			input_data: Vec<u8>,
 		) -> ExecResult {
 			if let &Constructor = function {
-				Self::add_user(self.code_hash).unwrap();
+				Self::increment_refcount(self.code_hash).unwrap();
 			}
 			if function == &self.func_type {
 				(self.func)(MockCtx { ext, input_data }, &self)
@@ -1626,8 +1630,8 @@ mod tests {
 			}
 		}
 
-		fn code_hash(&self) -> CodeHash<Test> {
-			self.code_hash
+		fn code_hash(&self) -> &CodeHash<Test> {
+			&self.code_hash
 		}
 
 		fn code_len(&self) -> u32 {

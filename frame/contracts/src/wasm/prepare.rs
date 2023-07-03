@@ -22,21 +22,28 @@
 use crate::{
 	chain_extension::ChainExtension,
 	storage::meter::Diff,
-	wasm::{runtime::AllowDeprecatedInterface, CodeInfo, Determinism, Environment, WasmBlob},
+	wasm::{
+		runtime::AllowDeprecatedInterface, CodeInfo, Determinism, Environment, WasmBlob,
+		BYTES_PER_PAGE,
+	},
 	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
 use codec::MaxEncodedLen;
-use sp_runtime::DispatchError;
-use sp_std::prelude::*;
+use sp_runtime::{traits::Hash, DispatchError};
+#[cfg(any(test, feature = "runtime-benchmarks"))]
+use sp_std::prelude::Vec;
+#[cfg(any(test, feature = "runtime-benchmarks"))]
+use wasm_instrument::parity_wasm::elements::{
+	self, External, Internal, MemoryType, Type, ValueType,
+};
 use wasmi::{
-	core::ValueType, Config as WasmiConfig, Engine, ExternType, FuelConsumptionMode, Module,
-	StackLimits,
+	core::ValueType as WasmiValueType, Config as WasmiConfig, Engine, ExternType,
+	FuelConsumptionMode, Module, StackLimits,
 };
 
 /// Imported memory must be located inside this module. The reason for hardcoding is that current
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
 pub const IMPORT_MODULE_MEMORY: &str = "env";
-const BYTES_PER_PAGE: usize = 64 * 1024;
 
 /// Determines whether a module should be instantiated during preparation.
 pub enum TryInstantiate {
@@ -135,7 +142,7 @@ impl LoadedModule {
 					// Both "call" and "deploy" have the () -> () function type.
 					// We still support () -> (i32) for backwards compatibility.
 					if !(ft.params().is_empty() &&
-						(ft.results().is_empty() || ft.results() == [ValueType::I32]))
+						(ft.results().is_empty() || ft.results() == [WasmiValueType::I32]))
 					{
 						return Err("entry point has wrong signature")
 					}
@@ -158,24 +165,22 @@ impl LoadedModule {
 
 	/// Scan an import section if any.
 	///
-	/// This makes sure that the import section looks as we expect it from a contract.
-	/// Makes sure the limits of the memory type declared by the contract comply with the Schedule.
-	/// Returns the checked memory limits back to caller.
+	/// This makes sure that:
+	/// - The import section looks as we expect it from a contract.
+	/// - The limits of the memory type declared by the contract comply with the Schedule.
 	///
-	/// `import_fn_banlist`: list of function names that are disallowed to be imported.
+	/// Returns the checked memory limits back to caller.
 	///
 	/// This method fails if:
 	///
-	/// - banned function found among imports,
-	/// - tables or globals found among imports,
-	/// - call_chain_extension host function is imported, while chain extensions are disabled,
-	/// - no valid memory import found in the module,
+	/// - Tables or globals found among imports.
+	/// - `call_chain_extension` host function is imported, while chain extensions are disabled.
+	/// - No valid memory import found in the module.
 	///
 	/// NOTE that only single memory instance is allowed for contract modules, which is enforced by
-	/// this check combined with multi_memory proposal disabling in the engine.
+	/// this check combined with multi_memory proposal disabled in the engine.
 	pub fn scan_imports<T: Config>(
 		&self,
-		import_fn_banlist: &[&[u8]],
 		schedule: &Schedule<T>,
 	) -> Result<(u32, u32), &'static str> {
 		let module = &self.module;
@@ -194,9 +199,6 @@ impl LoadedModule {
 						import.name().as_bytes() == b"call_chain_extension"
 					{
 						return Err("Module uses chain extensions but chain extensions are disabled")
-					}
-					if import_fn_banlist.iter().any(|f| import.name().as_bytes() == *f) {
-						return Err("Module imports a banned function")
 					}
 				},
 				ExternType::Memory(mt) => {
@@ -237,6 +239,31 @@ impl LoadedModule {
 	}
 }
 
+#[cfg(any(test, feature = "runtime-benchmarks"))]
+fn get_memory_limits<T: Config>(
+	module: Option<&MemoryType>,
+	schedule: &Schedule<T>,
+) -> Result<(u32, u32), &'static str> {
+	if let Some(memory_type) = module {
+		// Inspect the module to extract the initial and maximum page count.
+		let limits = memory_type.limits();
+		match (limits.initial(), limits.maximum()) {
+			(initial, Some(maximum)) if initial > maximum =>
+				Err("Requested initial number of memory pages should not exceed the requested maximum"),
+			(_, Some(maximum)) if maximum > schedule.limits.memory_pages =>
+				Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule."),
+			(initial, Some(maximum)) => Ok((initial, maximum)),
+			(initial, None) => {
+				Ok((initial, schedule.limits.memory_pages))
+			},
+		}
+	} else {
+		// None memory imported in the Wasm module,
+		// any access to it will lead to out of bounds trap.
+		Ok((0, 0))
+	}
+}
+
 /// Check that given `code` satisfies constraints required for the contract Wasm module.
 /// This includes two groups of checks:
 ///
@@ -259,7 +286,7 @@ where
 		let contract_module = LoadedModule::new::<T>(code, determinism, None)?;
 		// Checks that module satisfies constraints required for contracts.
 		contract_module.scan_exports()?;
-		contract_module.scan_imports::<T>(&[], schedule)?;
+		contract_module.scan_imports::<T>(schedule)?;
 		Ok(())
 	})()
 	.map_err(|msg: &str| {
@@ -318,8 +345,9 @@ where
 		.update_contract::<T>(None)
 		.charge_or_zero();
 	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0 };
+	let code_hash = T::Hashing::hash(&code);
 
-	Ok(WasmBlob { code, code_info })
+	Ok(WasmBlob { code, code_info, code_hash })
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking and testing.
@@ -339,7 +367,7 @@ pub mod benchmarking {
 	) -> Result<WasmBlob<T>, DispatchError> {
 		let determinism = Determinism::Enforced;
 		let contract_module = LoadedModule::new::<T>(&code, determinism, None)?;
-		let _ = contract_module.scan_imports::<T>(&[], schedule)?;
+		let _ = contract_module.scan_imports::<T>(schedule)?;
 		let code = code.try_into().map_err(|_| <Error<T>>::CodeTooLarge)?;
 		let code_info = CodeInfo {
 			owner,
@@ -348,7 +376,8 @@ pub mod benchmarking {
 			refcount: 0,
 			determinism,
 		};
-		Ok(WasmBlob { code, code_info })
+
+		Ok(WasmBlob { code, code_info, code_hash: Default::default() })
 	}
 }
 
@@ -637,6 +666,20 @@ mod tests {
 			)
 			"#,
 			Ok(_)
+		);
+
+		prepare_test!(
+			wrong_signature,
+			r#"
+			(module
+				(import "seal0" "input" (func (param i64)))
+				(import "env" "memory" (memory 1 1))
+
+				(func (export "call"))
+				(func (export "deploy"))
+			)
+			"#,
+			Err("New code rejected on wasmi instantiation!")
 		);
 
 		prepare_test!(

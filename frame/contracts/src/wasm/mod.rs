@@ -50,9 +50,11 @@ use frame_support::{
 	traits::ReservableCurrency,
 };
 use sp_core::Get;
-use sp_runtime::{traits::Hash, RuntimeDebug};
+use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 use wasmi::{Instance, Linker, Memory, MemoryType, StackLimits, Store};
+
+const BYTES_PER_PAGE: usize = 64 * 1024;
 
 /// Validated Wasm module ready for execution.
 /// This data structure is immutable once created and stored.
@@ -63,7 +65,10 @@ pub struct WasmBlob<T: Config> {
 	code: CodeVec<T>,
 	// This isn't needed for contract execution and is not stored alongside it.
 	#[codec(skip)]
-	pub code_info: CodeInfo<T>,
+	code_info: CodeInfo<T>,
+	// This is for not calculating the hash every time we need it.
+	#[codec(skip)]
+	code_hash: CodeHash<T>,
 }
 
 /// Contract code related data, such as:
@@ -179,9 +184,13 @@ impl<T: Config> WasmBlob<T> {
 	/// Returns whether there is a deposit to be paid for this module.
 	///
 	/// Returns `0` if the module is already in storage and hence no deposit will
-	/// be charged when storing it.
-	pub fn open_deposit(&self, code_info: CodeInfo<T>) -> BalanceOf<T> {
-		Self::load_code_info(self.code_hash()).map_or(code_info.deposit, |_| 0u32.into())
+	/// be charged for storing it.
+	pub fn open_deposit(&self, code_info: &CodeInfo<T>) -> BalanceOf<T> {
+		if <CodeInfoOf<T>>::contains_key(self.code_hash()) {
+			0u32.into()
+		} else {
+			code_info.deposit
+		}
 	}
 
 	/// Creates and returns an instance of the supplied code.
@@ -216,7 +225,7 @@ impl<T: Config> WasmBlob<T> {
 		.map_err(|_| "can't define host functions to Linker")?;
 
 		// Query wasmi for memory limits specified in the module's import entry.
-		let memory_limits = contract.scan_imports::<T>(&[], schedule)?;
+		let memory_limits = contract.scan_imports::<T>(schedule)?;
 		// Here we allocate this memory in the _store_. It allocates _inital_ value, but allows it
 		// to grow up to maximum number of memory pages, if neccesary.
 		let qed = "We checked the limits versus our Schedule,
@@ -241,12 +250,17 @@ impl<T: Config> WasmBlob<T> {
 		Ok((store, memory, instance))
 	}
 
+	/// Getter method for the code_info.
+	pub fn code_info(&self) -> &CodeInfo<T> {
+		&self.code_info
+	}
+
 	/// Put the module blob into storage.
 	///
 	/// Increments the reference count of the in-storage `WasmBlob`, if it already exists in
 	/// storage.
 	fn store_code(mut module: Self, instantiated: bool) -> DispatchResult {
-		let code_hash = &module.code_hash();
+		let code_hash = &module.code_hash().clone();
 		<CodeInfoOf<T>>::mutate(code_hash, |stored_code_info| {
 			match stored_code_info {
 				// Instantiate existing contract.
@@ -317,47 +331,6 @@ impl<T: Config> WasmBlob<T> {
 		Ok(code)
 	}
 
-	/// Decrement the reference count of a stored code by one.
-	///
-	/// # Note
-	///
-	/// A contract whose reference count dropped to zero isn't automatically removed. A
-	/// `remove_code` transaction must be submitted by the original uploader to do so.
-	fn decrement_refcount(code_hash: CodeHash<T>) {
-		<CodeInfoOf<T>>::mutate(code_hash, |existing| {
-			if let Some(info) = existing {
-				info.refcount = info.refcount.saturating_sub(1);
-			}
-		});
-	}
-
-	/// Increment the reference count of a of a stored code by one.
-	///
-	/// # Errors
-	///
-	/// [`Error::CodeNotFound`] is returned if no stored code found having the specified
-	/// `code_hash`.
-	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
-		<CodeInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
-			if let Some(info) = existing {
-				info.refcount = info.refcount.saturating_add(1);
-				Ok(())
-			} else {
-				Err(Error::<T>::CodeNotFound.into())
-			}
-		})
-	}
-
-	/// Load code_info for the code_hash.
-	///
-	/// # Errors
-	///
-	/// [`Error::CodeInfoNotFound`] is returned if no stored code_info found for the specified
-	/// `code_hash`.
-	fn load_code_info(code_hash: CodeHash<T>) -> Result<CodeInfo<T>, DispatchError> {
-		<CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeInfoNotFound.into())
-	}
-
 	/// See [`Self::from_code_unchecked`].
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn store_code_unchecked(
@@ -400,22 +373,32 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
 		let code = Self::load_code(code_hash, gas_meter)?;
-		let code_hash = T::Hashing::hash(&code);
 		// We store `code_info` at the same time as contract code,
 		// therefore this query shouldn't really fail.
 		// We consider its failure equal to `CodeNotFound`, as contract code without
 		// `code_info` is unusable in this pallet.
 		let code_info = <CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
 
-		Ok(Self { code, code_info })
+		Ok(Self { code, code_info, code_hash })
 	}
 
-	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
-		Self::increment_refcount(code_hash)
+	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError> {
+		<CodeInfoOf<T>>::mutate(code_hash, |existing| -> Result<(), DispatchError> {
+			if let Some(info) = existing {
+				info.refcount = info.refcount.saturating_add(1);
+				Ok(())
+			} else {
+				Err(Error::<T>::CodeNotFound.into())
+			}
+		})
 	}
 
-	fn remove_user(code_hash: CodeHash<T>) {
-		Self::decrement_refcount(code_hash)
+	fn decrement_refcount(code_hash: CodeHash<T>) {
+		<CodeInfoOf<T>>::mutate(code_hash, |existing| {
+			if let Some(info) = existing {
+				info.refcount = info.refcount.saturating_sub(1);
+			}
+		});
 	}
 
 	fn execute<E: Ext<T = T>>(
@@ -476,13 +459,13 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		let engine_consumed_total = store.fuel_consumed().expect("Fuel metering is enabled; qed");
 		// Sync this frame's gas meter with the engine's one.
 		let gas_meter = store.data_mut().ext().gas_meter_mut();
-		gas_meter.sync_fuel(engine_consumed_total)?;
+		gas_meter.charge_fuel(engine_consumed_total)?;
 
 		store.into_data().to_execution_result(result)
 	}
 
-	fn code_hash(&self) -> CodeHash<T> {
-		T::Hashing::hash(&self.code)
+	fn code_hash(&self) -> &CodeHash<T> {
+		&self.code_hash
 	}
 
 	fn code_len(&self) -> u32 {

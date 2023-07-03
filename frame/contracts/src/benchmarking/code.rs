@@ -31,8 +31,8 @@ use sp_std::{borrow::ToOwned, prelude::*};
 use wasm_instrument::parity_wasm::{
 	builder,
 	elements::{
-		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions,
-		Module, Section, ValueType,
+		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
+		Section, ValueType,
 	},
 };
 
@@ -367,40 +367,14 @@ pub mod body {
 	/// When generating contract code by repeating a Wasm sequence, it's sometimes necessary
 	/// to change those instructions on each repetition. The variants of this enum describe
 	/// various ways in which this can happen.
-	// Not all variants are used in the current benchmarks,
-	// but they could be used in future benchmarks. Hence keeping them with the attribute.
-	#[allow(dead_code)]
 	pub enum DynInstr {
 		/// Insert the associated instruction.
 		Regular(Instruction),
 		/// Insert a I32Const with incrementing value for each insertion.
 		/// (start_at, increment_by)
 		Counter(u32, u32),
-		/// Insert a I32Const with a random value in [low, high) not divisible by two.
-		/// (low, high)
-		RandomUnaligned(u32, u32),
-		/// Insert a I32Const with a random value in [low, high).
-		/// (low, high)
-		RandomI32(i32, i32),
-		/// Insert the specified amount of I32Const with a random value.
-		RandomI32Repeated(usize),
 		/// Insert the specified amount of I64Const with a random value.
 		RandomI64Repeated(usize),
-		/// Insert a GetLocal with a random offset in [low, high).
-		/// (low, high)
-		RandomGetLocal(u32, u32),
-		/// Insert a SetLocal with a random offset in [low, high).
-		/// (low, high)
-		RandomSetLocal(u32, u32),
-		/// Insert a TeeLocal with a random offset in [low, high).
-		/// (low, high)
-		RandomTeeLocal(u32, u32),
-		/// Insert a GetGlobal with a random offset in [low, high).
-		/// (low, high)
-		RandomGetGlobal(u32, u32),
-		/// Insert a SetGlobal with a random offset in [low, high).
-		/// (low, high)
-		RandomSetGlobal(u32, u32),
 	}
 
 	pub fn plain(instructions: Vec<Instruction>) -> FuncBody {
@@ -437,43 +411,12 @@ pub mod body {
 					*offset += *increment_by;
 					vec![Instruction::I32Const(current as i32)]
 				},
-				DynInstr::RandomUnaligned(low, high) => {
-					let unaligned = rng.gen_range(*low..*high) | 1;
-					vec![Instruction::I32Const(unaligned as i32)]
-				},
-				DynInstr::RandomI32(low, high) => {
-					vec![Instruction::I32Const(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomI32Repeated(num) =>
-					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I32Const).collect(),
 				DynInstr::RandomI64Repeated(num) =>
 					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I64Const).collect(),
-				DynInstr::RandomGetLocal(low, high) => {
-					vec![Instruction::GetLocal(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomSetLocal(low, high) => {
-					vec![Instruction::SetLocal(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomTeeLocal(low, high) => {
-					vec![Instruction::TeeLocal(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomGetGlobal(low, high) => {
-					vec![Instruction::GetGlobal(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomSetGlobal(low, high) => {
-					vec![Instruction::SetGlobal(rng.gen_range(*low..*high))]
-				},
 			})
 			.chain(sp_std::iter::once(Instruction::End))
 			.collect();
 		FuncBody::new(Vec::new(), Instructions::new(body))
-	}
-
-	/// Replace the locals of the supplied `body` with `num` i64 locals.
-	#[allow(dead_code)]
-	pub fn inject_locals(body: &mut FuncBody, num: u32) {
-		use self::elements::Local;
-		*body.locals_mut() = vec![Local::new(num, ValueType::I64)];
 	}
 }
 

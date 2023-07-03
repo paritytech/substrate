@@ -681,7 +681,7 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 						__caller__.fuel_consumed().expect("Fuel metering is enabled; qed");
 					let gas_meter = __caller__.data_mut().ext().gas_meter_mut();
 					gas_meter
-						.sync_fuel(engine_consumed_total)
+						.charge_fuel(engine_consumed_total)
 						.map_err(TrapReason::from)
 						.map_err(#into_host)?
 						.ref_time()
@@ -722,10 +722,8 @@ fn expand_functions(def: &EnvDef, expand_blocks: bool, host_state: TokenStream2)
 				#allow_unused
 				linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
  					#sync_gas_before
-					let result = {
-					   let mut func = #inner;
-					   func().map_err(#into_host).map(::core::convert::Into::into)
-					};
+					let mut func = #inner;
+					let result = func().map_err(#into_host).map(::core::convert::Into::into);
 					#sync_gas_after
 					result
 				}))?;
