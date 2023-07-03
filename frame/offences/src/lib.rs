@@ -121,7 +121,7 @@ pub mod pallet {
 	>;
 
 	/// A map that stores all reports along with
-	/// their kind and time slot info for a`SessionIndex`.
+	/// their kind and time slot info for a `SessionIndex`.
 	///
 	/// On start of a new session, all reports with a session index older than
 	/// `MaxSessionReportAge` are removed.
