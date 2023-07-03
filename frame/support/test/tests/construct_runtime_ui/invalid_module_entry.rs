@@ -7,7 +7,7 @@ construct_runtime! {
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{Pallet},
-		Balance: balances::{Error},
+		Balance: balances::{Unexpected},
 	}
 }
 
