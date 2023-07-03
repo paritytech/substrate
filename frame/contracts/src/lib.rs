@@ -698,11 +698,12 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 
-			let CodeUploadReturnValue { code_hash, deposit } = Self::bare_upload_code(
+			let CodeUploadReturnValue { code_hash, deposit } = Self::try_upload_code(
 				origin.clone(),
 				code,
 				storage_deposit_limit.clone().map(Into::into),
 				Determinism::Enforced,
+				None,
 			)?;
 
 			let data_len = data.len() as u32;
@@ -1387,27 +1388,17 @@ impl<T: Config> Pallet<T> {
 			}
 		};
 
-		let mut try_upload = |code| -> Result<_, DispatchError> {
-			let schedule = T::Schedule::get();
-			let module =
-				WasmBlob::from_code(code, &schedule, origin.clone(), Determinism::Enforced)
-					.map_err(|(err, msg)| {
-						debug_message.as_mut().map(|d| d.try_extend(msg.bytes()));
-						err
-					})?;
-
-			let deposit = module.open_deposit(&module.code_info());
-			if let Some(storage_deposit_limit) = storage_deposit_limit {
-				ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
-			}
-			let result = CodeUploadReturnValue { code_hash: *module.code_hash(), deposit };
-			module.store()?;
-			Ok(result)
-		};
-
 		let (code_hash, storage_deposit_limit): (CodeHash<T>, Option<BalanceOf<T>>) = match code {
 			Code::Upload(code) => {
-				let (code_hash, deposit) = match try_upload(code) {
+				let result = Self::try_upload_code(
+					origin.clone(),
+					code,
+					storage_deposit_limit.clone().map(Into::into),
+					Determinism::Enforced,
+					debug_message.as_mut(),
+				);
+
+				let (code_hash, deposit) = match result {
 					Ok(CodeUploadReturnValue { code_hash, deposit }) => (code_hash, deposit),
 					Err(error) =>
 						return ContractResult {
@@ -1464,9 +1455,22 @@ impl<T: Config> Pallet<T> {
 		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		Migration::<T>::ensure_migrated()?;
+		Self::try_upload_code(origin, code, storage_deposit_limit, determinism, None)
+	}
+
+	fn try_upload_code(
+		origin: T::AccountId,
+		code: Vec<u8>,
+		storage_deposit_limit: Option<BalanceOf<T>>,
+		determinism: Determinism,
+		mut debug_message: Option<&mut DebugBufferVec<T>>,
+	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
 		let module =
-			WasmBlob::from_code(code, &schedule, origin, determinism).map_err(|(err, _)| err)?;
+			WasmBlob::from_code(code, &schedule, origin, determinism).map_err(|(err, msg)| {
+				debug_message.as_mut().map(|d| d.try_extend(msg.bytes()));
+				err
+			})?;
 		let deposit = module.open_deposit(&module.code_info());
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
