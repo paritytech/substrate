@@ -619,7 +619,7 @@ pub mod pallet {
 		/// Propose and approve a spend of treasury funds.
 		///
 		/// An approved spend must be claimed via the `payout` dispatchable within the
-		/// [`T::PayoutPeriod`].
+		/// [`Config::PayoutPeriod`].
 		///
 		/// - `origin`: Must be `T::SpendOrigin` with the `Success` value being at least `amount`.
 		/// - `asset_kind`: An indicator of the specific asset class to be spent.
@@ -686,7 +686,7 @@ pub mod pallet {
 
 		/// Claim a spend.
 		///
-		/// To claim a spend, it must be done within the [`T::PayoutPeriod`] after approval.
+		/// To claim a spend, it must be done within the [`Config::PayoutPeriod`] after approval.
 		/// In case of a payout failure, the spend status should be updated with the `check_status`
 		/// before retrying with the current function.
 		///
