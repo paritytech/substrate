@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "frame-metadata")]
-use crate::runtime_metadata::generate_decl_runtime_metadata;
 use crate::{
 	common::{
 		API_VERSION_ATTRIBUTE, BLOCK_GENERIC_IDENT, CHANGED_IN_ATTRIBUTE, CORE_TRAIT_ATTRIBUTE,
@@ -196,7 +194,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 		let id = generate_runtime_api_id(&decl.ident.to_string());
 
 		#[cfg(feature = "frame-metadata")]
-		let metadata = generate_decl_runtime_metadata(&decl);
+		let metadata = crate::runtime_metadata::generate_decl_runtime_metadata(&decl);
 		#[cfg(not(feature = "frame-metadata"))]
 		let metadata = quote!();
 

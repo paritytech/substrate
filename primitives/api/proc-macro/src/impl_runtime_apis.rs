@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "frame-metadata")]
-use crate::runtime_metadata::generate_impl_runtime_metadata;
 use crate::{
 	common::API_VERSION_ATTRIBUTE,
 	utils::{
@@ -690,7 +688,7 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
 
 	#[cfg(feature = "frame-metadata")]
-	let runtime_metadata = generate_impl_runtime_metadata(api_impls)?;
+	let runtime_metadata = crate::runtime_metadata::generate_impl_runtime_metadata(api_impls)?;
 	#[cfg(not(feature = "frame-metadata"))]
 	let runtime_metadata = quote!();
 
