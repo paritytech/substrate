@@ -171,10 +171,11 @@ impl LoadedModule {
 	///
 	/// - Tables or globals found among imports.
 	/// - `call_chain_extension` host function is imported, while chain extensions are disabled.
-	/// - No valid memory import found in the module.
+	/// - Memory import required but found in the module.
 	///
 	/// NOTE that only single memory instance is allowed for contract modules, which is enforced by
-	/// this check combined with multi_memory proposal disabled in the engine.
+	/// this check run with `require_memory_import: true` combined with multi_memory proposal
+	/// disabled in the engine.
 	pub fn scan_imports<T: Config>(
 		&self,
 		schedule: &Schedule<T>,
