@@ -23,20 +23,18 @@ use frame_support::{
 	assert_ok,
 	storage::bounded_vec::BoundedVec,
 	traits::{
-		fungible::{Inspect as InspectFungible, Unbalanced},
+		fungible::{Inspect as InspectFungible, Mutate as MutateFungible, Unbalanced},
 		fungibles::{Create, Inspect, Mutate},
 	},
 };
 use frame_system::RawOrigin as SystemOrigin;
-use sp_runtime::traits::{Bounded, StaticLookup};
+use sp_runtime::traits::StaticLookup;
 use sp_std::prelude::*;
 
 use crate::Pallet as AssetConversion;
 
 const INITIAL_ASSET_BALANCE: u128 = 1_000_000_000_000;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
-type BalanceOf<T> =
-	<<T as Config>::Currency as InspectFungible<<T as frame_system::Config>::AccountId>>::Balance;
 
 fn get_lp_token_id<T: Config>() -> T::PoolAssetId
 where
@@ -55,7 +53,7 @@ where
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	if let Ok(asset_id) = T::MultiAssetIdConverter::try_convert(asset) {
-		assert_ok!(T::Currency::write_balance(&caller, BalanceOf::<T>::max_value()));
+		T::Currency::set_balance(&caller, u32::MAX.into());
 		assert_ok!(T::Assets::create(asset_id.clone(), caller.clone(), true, 1.into()));
 		assert_ok!(T::Assets::mint_into(asset_id, &caller, INITIAL_ASSET_BALANCE.into()));
 	}
