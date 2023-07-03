@@ -78,8 +78,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// No need to define a `call_index` attribute here because of `dev_mode`.
-		/// No need to define a `weight` attribute here because of `dev_mode`.
+		// No need to define a `call_index` attribute here because of `dev_mode`.
+		// No need to define a `weight` attribute here because of `dev_mode`.
 		pub fn set_bar(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
