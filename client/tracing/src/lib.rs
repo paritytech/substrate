@@ -328,26 +328,28 @@ where
 	}
 
 	fn on_event(&self, event: &Event<'_>, ctx: Context<S>) {
-		if self.check_target(event.metadata().target(), &event.metadata().level()) {
-			let parent_id = event.parent().cloned().or_else(|| {
-				if event.is_contextual() {
-					ctx.lookup_current().map(|span| span.id())
-				} else {
-					None
-				}
-			});
-
-			let mut values = Values::default();
-			event.record(&mut values);
-			let trace_event = TraceEvent {
-				name: event.metadata().name().to_owned(),
-				target: event.metadata().target().to_owned(),
-				level: *event.metadata().level(),
-				values,
-				parent_id,
-			};
-			self.dispatch_event(TraceHandlerEvents::Event(trace_event));
+		if !self.check_target(event.metadata().target(), &event.metadata().level()) {
+			return;
 		}
+		let parent_id = event.parent().cloned().or_else(|| {
+			if event.is_contextual() {
+				ctx.lookup_current().map(|span| span.id())
+			} else {
+				None
+			}
+		});
+
+		let mut values = Values::default();
+		event.record(&mut values);
+		let trace_event = TraceEvent {
+			name: event.metadata().name().to_owned(),
+			target: event.metadata().target().to_owned(),
+			level: *event.metadata().level(),
+			values,
+			parent_id,
+		};
+		self.dispatch_event(TraceHandlerEvents::Event(trace_event));
+	}
 	}
 
 	fn on_enter(&self, span: &Id, ctx: Context<S>) {
