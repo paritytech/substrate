@@ -31,7 +31,26 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 use sp_core::crypto::FromEntropy;
-use sp_runtime::traits::TrailingZeroInput;
+
+/// Trait describing factory functions for dispatchables' parameters
+pub trait ArgumentsFactory<AssetKind, Beneficiary> {
+	/// Factory function for an asset kind
+	fn create_asset_kind(seed: u32) -> AssetKind;
+	/// Factory function for a beneficiary
+	fn create_beneficiary(seed: [u8; 32]) -> Beneficiary;
+}
+impl<AssetKind, Beneficiary> ArgumentsFactory<AssetKind, Beneficiary> for ()
+where
+	AssetKind: FromEntropy,
+	Beneficiary: FromEntropy,
+{
+	fn create_asset_kind(seed: u32) -> AssetKind {
+		AssetKind::from_entropy(&mut seed.encode().as_slice()).unwrap()
+	}
+	fn create_beneficiary(seed: [u8; 32]) -> Beneficiary {
+		Beneficiary::from_entropy(&mut seed.as_slice()).unwrap()
+	}
+}
 
 const SEED: u32 = 0;
 
@@ -72,24 +91,14 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 // Create the arguments for the `spend` dispatchable.
 fn create_spend_arguments<T: Config<I>, I: 'static>(
 	seed: u32,
-) -> (T::AssetKind, AssetBalanceOf<T, I>, T::Beneficiary, BeneficiaryLookupOf<T, I>)
-where
-	<T as Config<I>>::AssetKind: FromEntropy,
-	<T as Config<I>>::Beneficiary: FromEntropy,
-{
-	let asset_kind = T::AssetKind::from_entropy(&mut seed.encode().as_slice()).unwrap();
-	let beneficiary =
-		T::Beneficiary::from_entropy(&mut TrailingZeroInput::new(seed.encode().as_slice()))
-			.unwrap();
+) -> (T::AssetKind, AssetBalanceOf<T, I>, T::Beneficiary, BeneficiaryLookupOf<T, I>) {
+	let asset_kind = T::BenchmarkHelper::create_asset_kind(seed);
+	let beneficiary = T::BenchmarkHelper::create_beneficiary([seed.try_into().unwrap(); 32]);
 	let beneficiary_lookup = T::BeneficiaryLookup::unlookup(beneficiary.clone());
 	(asset_kind, 100u32.into(), beneficiary, beneficiary_lookup)
 }
 
-#[instance_benchmarks(
-	where
-		<T as Config<I>>::AssetKind: FromEntropy,
-		<T as Config<I>>::Beneficiary: FromEntropy
-	)]
+#[instance_benchmarks]
 mod benchmarks {
 	use super::*;
 

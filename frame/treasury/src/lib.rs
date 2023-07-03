@@ -62,6 +62,8 @@ mod benchmarking;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+#[cfg(feature = "runtime-benchmarks")]
+pub use benchmarking::ArgumentsFactory;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -264,6 +266,10 @@ pub mod pallet {
 		/// The period during which an approved treasury spend has to be claimed.
 		#[pallet::constant]
 		type PayoutPeriod: Get<Self::BlockNumber>;
+
+		/// Helper type for benchmarks.
+		#[cfg(feature = "runtime-benchmarks")]
+		type BenchmarkHelper: ArgumentsFactory<Self::AssetKind, Self::Beneficiary>;
 	}
 
 	/// Number of proposals that have been made.
