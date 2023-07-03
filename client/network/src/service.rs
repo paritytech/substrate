@@ -36,7 +36,6 @@ use crate::{
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	peerset::PeersetHandle,
 	protocol::{self, NotifsHandlerError, Protocol, Ready},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
@@ -74,6 +73,7 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 
 use sc_network_common::ExHashT;
+use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 

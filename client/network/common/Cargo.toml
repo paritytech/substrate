@@ -24,6 +24,7 @@ codec = { package = "parity-scale-codec", version = "3.6.1", features = [
 futures = "0.3.21"
 libp2p-identity = { version = "0.1.2", features = ["peerid"] }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
+sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
 sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }

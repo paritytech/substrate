@@ -16,11 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use libp2p::PeerId;
+use libp2p_identity::PeerId;
 use log::trace;
 use parking_lot::Mutex;
 use partial_sort::PartialSort;
-use sc_network_common::types::ReputationChange;
 use std::{
 	cmp::{Ord, Ordering, PartialOrd},
 	collections::{hash_map::Entry, HashMap, HashSet},
@@ -30,10 +29,7 @@ use std::{
 };
 use wasm_timer::Delay;
 
-use crate::protocol_controller::ProtocolHandle;
-
-/// Log target for this file.
-pub const LOG_TARGET: &str = "peerset";
+use crate::{protocol_controller::ProtocolHandle, ReputationChange, LOG_TARGET};
 
 /// We don't accept nodes whose reputation is under this value.
 pub const BANNED_THRESHOLD: i32 = 82 * (i32::MIN / 100);

@@ -243,10 +243,7 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod peer_store;
-mod peerset;
 mod protocol;
-mod protocol_controller;
 mod service;
 
 pub mod config;
@@ -270,7 +267,6 @@ pub use sc_network_common::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
 		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
-	types::ReputationChange,
 };
 pub use service::{
 	signature::Signature,
@@ -284,6 +280,8 @@ pub use service::{
 	OutboundFailure, PublicKey,
 };
 pub use types::ProtocolName;
+
+pub use sc_peerset::ReputationChange;
 
 /// The maximum allowed number of established connections per peer.
 ///

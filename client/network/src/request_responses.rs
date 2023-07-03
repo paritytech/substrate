@@ -34,9 +34,7 @@
 //! - If provided, a ["requests processing"](ProtocolConfig::inbound_queue) channel
 //! is used to handle incoming requests.
 
-use crate::{
-	peer_store::BANNED_THRESHOLD, peerset::PeersetHandle, types::ProtocolName, ReputationChange,
-};
+use crate::{types::ProtocolName, ReputationChange};
 
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
@@ -50,6 +48,8 @@ use libp2p::{
 	},
 	PeerId,
 };
+
+use sc_peerset::{PeersetHandle, BANNED_THRESHOLD};
 
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -1040,7 +1040,6 @@ impl Codec for GenericCodec {
 mod tests {
 	use super::*;
 
-	use crate::peerset::{Peerset, PeersetConfig, SetConfig};
 	use futures::{channel::oneshot, executor::LocalPool, task::Spawn};
 	use libp2p::{
 		core::{
@@ -1052,6 +1051,7 @@ mod tests {
 		swarm::{Executor, Swarm, SwarmBuilder, SwarmEvent},
 		Multiaddr,
 	};
+	use sc_peerset::{Peerset, PeersetConfig, SetConfig};
 	use std::{iter, time::Duration};
 
 	struct TokioExecutor(tokio::runtime::Runtime);

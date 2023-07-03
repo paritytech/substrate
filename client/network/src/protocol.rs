@@ -20,7 +20,6 @@ use crate::{
 	config::{self, NonReservedPeerMode},
 	error,
 	types::ProtocolName,
-	ReputationChange,
 };
 
 use bytes::Bytes;
@@ -62,13 +61,13 @@ pub mod message;
 pub(crate) const BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE: u64 = 16 * 1024 * 1024;
 
 /// Identifier of the peerset for the block announces protocol.
-const HARDCODED_PEERSETS_SYNC: crate::peerset::SetId = crate::peerset::SetId::from(0);
+const HARDCODED_PEERSETS_SYNC: sc_peerset::SetId = sc_peerset::SetId::from(0);
 /// Number of hardcoded peersets (the constants right above). Any set whose identifier is equal or
 /// superior to this value corresponds to a user-defined protocol.
 const NUM_HARDCODED_PEERSETS: usize = 1;
 
 mod rep {
-	use crate::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 	/// We received a message that failed to decode.
 	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
 }
@@ -79,7 +78,7 @@ type PendingSyncSubstreamValidation =
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT> {
 	/// Used to report reputation changes.
-	peerset_handle: crate::peerset::PeersetHandle,
+	peerset_handle: sc_peerset::PeersetHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: Notifications,
 	/// List of notifications protocols that have been registered.
@@ -90,7 +89,7 @@ pub struct Protocol<B: BlockT> {
 	/// event to the outer layers, we also shouldn't propagate this "substream closed" event. To
 	/// solve this, an entry is added to this map whenever an invalid handshake is received.
 	/// Entries are removed when the corresponding "substream closed" is later received.
-	bad_handshake_substreams: HashSet<(PeerId, crate::peerset::SetId)>,
+	bad_handshake_substreams: HashSet<(PeerId, sc_peerset::SetId)>,
 	/// Connected peers.
 	peers: HashMap<PeerId, Roles>,
 	sync_substream_validations: FuturesUnordered<PendingSyncSubstreamValidation>,
@@ -106,7 +105,7 @@ impl<B: BlockT> Protocol<B> {
 		notification_protocols: Vec<config::NonDefaultSetConfig>,
 		block_announces_protocol: config::NonDefaultSetConfig,
 		tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
-	) -> error::Result<(Self, crate::peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
+	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let mut known_addresses = Vec::new();
 
 		let (peerset, peerset_handle) = {
@@ -128,7 +127,7 @@ impl<B: BlockT> Protocol<B> {
 			}
 
 			// Set number 0 is used for block announces.
-			sets.push(crate::peerset::SetConfig {
+			sets.push(sc_peerset::SetConfig {
 				in_peers: network_config.default_peers_set.in_peers,
 				out_peers: network_config.default_peers_set.out_peers,
 				bootnodes,
@@ -147,7 +146,7 @@ impl<B: BlockT> Protocol<B> {
 				let reserved_only =
 					set_cfg.set_config.non_reserved_mode == NonReservedPeerMode::Deny;
 
-				sets.push(crate::peerset::SetConfig {
+				sets.push(sc_peerset::SetConfig {
 					in_peers: set_cfg.set_config.in_peers,
 					out_peers: set_cfg.set_config.out_peers,
 					bootnodes: Vec::new(),
@@ -156,7 +155,7 @@ impl<B: BlockT> Protocol<B> {
 				});
 			}
 
-			crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig { sets })
+			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
 		let behaviour = {
@@ -211,7 +210,7 @@ impl<B: BlockT> Protocol<B> {
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: ProtocolName) {
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name)
 		{
-			self.behaviour.disconnect_peer(peer_id, crate::peerset::SetId::from(position));
+			self.behaviour.disconnect_peer(peer_id, sc_peerset::SetId::from(position));
 			self.peers.remove(peer_id);
 		} else {
 			warn!(target: "sub-libp2p", "disconnect_peer() with invalid protocol name")
@@ -229,7 +228,7 @@ impl<B: BlockT> Protocol<B> {
 	}
 
 	/// Adjusts the reputation of a node.
-	pub fn report_peer(&self, who: PeerId, reputation: ReputationChange) {
+	pub fn report_peer(&self, who: PeerId, reputation: sc_peerset::ReputationChange) {
 		self.peerset_handle.report_peer(who, reputation)
 	}
 
@@ -237,7 +236,7 @@ impl<B: BlockT> Protocol<B> {
 	pub fn set_notification_handshake(&mut self, protocol: ProtocolName, handshake: Vec<u8>) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.behaviour
-				.set_notif_protocol_handshake(crate::peerset::SetId::from(index), handshake);
+				.set_notif_protocol_handshake(sc_peerset::SetId::from(index), handshake);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -275,8 +274,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Sets the list of reserved peers for the given protocol/peerset.
 	pub fn set_reserved_peerset_peers(&self, protocol: ProtocolName, peers: HashSet<PeerId>) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle
-				.set_reserved_peers(crate::peerset::SetId::from(index), peers);
+			self.peerset_handle.set_reserved_peers(sc_peerset::SetId::from(index), peers);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -289,8 +287,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle
-				.remove_reserved_peer(crate::peerset::SetId::from(index), peer);
+			self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -303,7 +300,7 @@ impl<B: BlockT> Protocol<B> {
 	/// Adds a `PeerId` to the list of reserved peers.
 	pub fn add_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.add_reserved_peer(crate::peerset::SetId::from(index), peer);
+			self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
