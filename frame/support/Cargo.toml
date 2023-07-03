@@ -17,7 +17,7 @@ serde = { version = "1.0.163", default-features = false, features = ["alloc", "d
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 frame-metadata = { version = "16.0.0", default-features = false, features = ["current"] }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api", features = [ "frame-metadata" ] }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
