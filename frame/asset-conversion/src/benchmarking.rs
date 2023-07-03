@@ -28,6 +28,7 @@ use frame_support::{
 	},
 };
 use frame_system::RawOrigin as SystemOrigin;
+use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::StaticLookup;
 use sp_std::prelude::*;
 
@@ -53,7 +54,8 @@ where
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	if let Ok(asset_id) = T::MultiAssetIdConverter::try_convert(asset) {
-		T::Currency::set_balance(&caller, u32::MAX.into());
+		let ed = T::Currency::minimum_balance();
+		T::Currency::set_balance(&caller, ed.saturating_mul(10_000u32.into()));
 		assert_ok!(T::Assets::create(asset_id.clone(), caller.clone(), true, 1.into()));
 		assert_ok!(T::Assets::mint_into(asset_id, &caller, INITIAL_ASSET_BALANCE.into()));
 	}
