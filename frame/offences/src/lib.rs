@@ -43,7 +43,7 @@ pub mod migration;
 mod mock;
 mod tests;
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use core::marker::PhantomData;
 use frame_support::{traits::Get, weights::Weight, ensure};
 use sp_runtime::{traits::Hash, Perbill};
@@ -131,7 +131,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		SessionIndex,
-		Vec<u8>, // Encoded `Vec<SessionReportOf<Self>>`.
+		Vec<SessionReportOf<T>>,
 		ValueQuery,
 	>;
 
@@ -156,9 +156,6 @@ impl<T: Config> Pallet<T> {
 		let Some(obsolete_session_index) = current_session_index.checked_sub(T::MaxSessionReportAge::get()) else { return };
 
 		let session_reports = SessionReports::<T>::take(obsolete_session_index);
-		let session_reports =
-			Vec::<SessionReportOf<T>>::decode(&mut &session_reports[..])
-				.unwrap_or_default();
 
 		for (kind, time_slot, report_id) in &session_reports {
 			ConcurrentReportsIndex::<T>::remove(kind, time_slot);
@@ -307,7 +304,7 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	fn load(time_slot: &O::TimeSlot, session_index: SessionIndex) -> Self {
 		let opaque_time_slot = time_slot.encode();
 
-		let session_reports = get_session_reports::<T>(session_index);
+		let session_reports = SessionReports::<T>::get(session_index);
 		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
 
 		Self {
@@ -330,17 +327,11 @@ impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 
 	/// Dump the indexes to the storage.
 	fn save(self) {
-		SessionReports::<T>::set(self.session_index, self.session_reports.encode());
+		SessionReports::<T>::set(self.session_index, self.session_reports);
 		<ConcurrentReportsIndex<T>>::insert(
 			&O::ID,
 			&self.opaque_time_slot,
 			&self.concurrent_reports,
 		);
 	}
-}
-
-fn get_session_reports<T: Config>(session_index: SessionIndex) -> Vec<SessionReportOf<T>> {
-	let session_reports = SessionReports::<T>::get(session_index);
-	Vec::<SessionReportOf<T>>::decode(&mut &session_reports[..])
-		.unwrap_or_default()
 }

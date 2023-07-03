@@ -321,13 +321,13 @@ fn should_properly_store_offences() {
 		Offences::report_offence(vec![], offence4).unwrap();
 
 		// then
-		let prev_session_reports = get_session_reports::<Runtime>(SESSION_INDEX - 1);
+		let prev_session_reports = SessionReports::<Runtime>::get(SESSION_INDEX - 1);
 		assert_eq!(
 			prev_session_reports,
 			vec![(KIND, (time_slot - 1).encode(), report_id(time_slot - 1, 3)),]
 		);
 
-		let session_reports = get_session_reports::<Runtime>(SESSION_INDEX);
+		let session_reports =  SessionReports::<Runtime>::get(SESSION_INDEX);
 		assert_eq!(
 			session_reports,
 			vec![
@@ -336,7 +336,7 @@ fn should_properly_store_offences() {
 			]
 		);
 
-		let next_session_reports = get_session_reports::<Runtime>(SESSION_INDEX + 1);
+		let next_session_reports =  SessionReports::<Runtime>::get(SESSION_INDEX + 1);
 		assert_eq!(
 			next_session_reports,
 			vec![
@@ -400,10 +400,10 @@ fn should_properly_clear_obsolete_offences() {
 		assert_eq!(offence_reports(KIND, time_slot - 1), vec![]);
 
 		// then
-		let obsolete_session_reports = get_session_reports::<Runtime>(SESSION_INDEX - 1);
+		let obsolete_session_reports = SessionReports::<Runtime>::get(SESSION_INDEX - 1);
 		assert_eq!(obsolete_session_reports, vec![]);
 
-		let session_reports = get_session_reports::<Runtime>(SESSION_INDEX + 1);
+		let session_reports = SessionReports::<Runtime>::get(SESSION_INDEX + 1);
 		assert_eq!(
 			session_reports,
 			vec![
