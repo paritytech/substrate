@@ -27,12 +27,9 @@ pub use crate::wasm::runtime::api_doc;
 #[cfg(test)]
 pub use tests::MockExt;
 
-pub use crate::wasm::{
-	prepare::TryInstantiate,
-	runtime::{
-		AllowDeprecatedInterface, AllowUnstableInterface, CallFlags, Environment, ReturnCode,
-		Runtime, RuntimeCosts,
-	},
+pub use crate::wasm::runtime::{
+	AllowDeprecatedInterface, AllowUnstableInterface, CallFlags, Environment, ReturnCode, Runtime,
+	RuntimeCosts,
 };
 
 use crate::{
@@ -157,14 +154,12 @@ impl<T: Config> WasmBlob<T> {
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 		determinism: Determinism,
-		try_instantiate: TryInstantiate,
 	) -> Result<Self, (DispatchError, &'static str)> {
 		prepare::prepare::<runtime::Env, T>(
 			code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 			schedule,
 			owner,
 			determinism,
-			try_instantiate,
 		)
 	}
 

@@ -105,7 +105,7 @@ use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
-	wasm::{CodeInfo, TryInstantiate, WasmBlob},
+	wasm::{CodeInfo, WasmBlob},
 };
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
@@ -695,27 +695,37 @@ pub mod pallet {
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			Migration::<T>::ensure_migrated()?;
-			let code_len = code.len() as u32;
+			let origin = ensure_signed(origin)?;
+
+			let CodeUploadReturnValue { code_hash, deposit } = Self::bare_upload_code(
+				origin.clone(),
+				code,
+				storage_deposit_limit.clone().map(Into::into),
+				Determinism::Enforced,
+			)?;
+
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin: Origin::from_runtime_origin(origin)?,
+				origin: Origin::from_account_id(origin),
 				value,
 				data,
 				gas_limit,
-				storage_deposit_limit: storage_deposit_limit.map(Into::into),
+				storage_deposit_limit: storage_deposit_limit
+					.map(|limit| limit.into().saturating_sub(deposit)),
 				debug_message: None,
 			};
-			let mut output =
-				InstantiateInput::<T> { code: Code::Upload(code), salt }.run_guarded(common);
+
+			let mut output = InstantiateInput::<T> { code_hash, salt }.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
+
 			output.gas_meter.into_dispatch_result(
-				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len, data_len, salt_len),
+				output.result.map(|(_address, output)| output),
+				T::WeightInfo::instantiate(data_len, salt_len),
 			)
 		}
 
@@ -748,8 +758,7 @@ pub mod pallet {
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
-			let mut output =
-				InstantiateInput::<T> { code: Code::Existing(code_hash), salt }.run_guarded(common);
+			let mut output = InstantiateInput::<T> { code_hash, salt }.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -1052,7 +1061,7 @@ struct CallInput<T: Config> {
 
 /// Input specific to a contract instantiation invocation.
 struct InstantiateInput<T: Config> {
-	code: Code<CodeHash<T>>,
+	code_hash: CodeHash<T>,
 	salt: Vec<u8>,
 }
 
@@ -1222,7 +1231,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 
 	fn run(
 		&self,
-		mut common: CommonInput<T>,
+		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
 		let mut storage_deposit = Default::default();
@@ -1231,37 +1240,10 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 			let InstantiateInput { salt, .. } = self;
 			let CommonInput { origin: contract_origin, .. } = common;
 			let origin = contract_origin.account_id()?;
-			let (extra_deposit, executable) = match &self.code {
-				Code::Upload(binary) => {
-					let executable = WasmBlob::from_code(
-						binary.clone(),
-						&schedule,
-						origin.clone(),
-						Determinism::Enforced,
-						TryInstantiate::Skip,
-					)
-					.map_err(|(err, msg)| {
-						common
-							.debug_message
-							.as_mut()
-							.map(|buffer| buffer.try_extend(&mut msg.bytes()));
-						err
-					})?;
-					// The open deposit will be charged during execution when the
-					// uploaded module does not already exist. This deposit is not part of the
-					// storage meter because it is not transferred to the contract but
-					// reserved on the uploading account.
-					(executable.open_deposit(&executable.code_info()), executable)
-				},
-				Code::Existing(hash) =>
-					(Default::default(), WasmBlob::from_storage(*hash, &mut gas_meter)?),
-			};
+			let executable = WasmBlob::from_storage(self.code_hash, &mut gas_meter)?;
 			let contract_origin = Origin::from_account_id(origin.clone());
-			let mut storage_meter = StorageMeter::new(
-				&contract_origin,
-				common.storage_deposit_limit,
-				common.value.saturating_add(extra_deposit),
-			)?;
+			let mut storage_meter =
+				StorageMeter::new(&contract_origin, common.storage_deposit_limit, common.value)?;
 			let CommonInput { value, data, debug_message, .. } = common;
 			let result = ExecStack::<T, WasmBlob<T>>::run_instantiate(
 				origin.clone(),
@@ -1275,9 +1257,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				debug_message,
 			);
 
-			storage_deposit = storage_meter
-				.try_into_deposit(&contract_origin)?
-				.saturating_add(&StorageDeposit::Charge(extra_deposit));
+			storage_deposit = storage_meter.try_into_deposit(&contract_origin)?;
 			result
 		};
 		InternalOutput { result: try_exec(), gas_meter, storage_deposit }
@@ -1395,6 +1375,37 @@ impl<T: Config> Pallet<T> {
 		} else {
 			None
 		};
+
+		let (code_hash, storage_deposit_limit): (CodeHash<T>, Option<BalanceOf<T>>) = match code {
+			Code::Upload(code) => {
+				let result = Self::bare_upload_code(
+					origin.clone(),
+					code,
+					storage_deposit_limit.clone().map(Into::into),
+					Determinism::Enforced,
+				);
+
+				let Ok(CodeUploadReturnValue { code_hash, deposit }) = result else {
+					return ContractResult {
+						gas_consumed: Zero::zero(),
+						gas_required: Zero::zero(),
+						storage_deposit: Default::default(),
+						debug_message: Vec::new(),
+						result: Err(Error::<T>::MigrationInProgress.into()),
+						events: None,
+					}
+				};
+
+				let storage_deposit_limit = storage_deposit_limit.map(|limit| {
+					let limit: BalanceOf<T> = limit.into();
+					limit.saturating_sub(deposit)
+				});
+
+				(code_hash, storage_deposit_limit)
+			},
+			Code::Existing(code_hash) => (code_hash, storage_deposit_limit),
+		};
+
 		let common = CommonInput {
 			origin: Origin::from_account_id(origin),
 			value,
@@ -1403,7 +1414,8 @@ impl<T: Config> Pallet<T> {
 			storage_deposit_limit,
 			debug_message: debug_message.as_mut(),
 		};
-		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
+
+		let output = InstantiateInput::<T> { code_hash, salt }.run_guarded(common);
 		// collect events if CollectEvents is UnsafeCollect
 		let events = if collect_events == CollectEvents::UnsafeCollect {
 			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
@@ -1436,8 +1448,7 @@ impl<T: Config> Pallet<T> {
 		Migration::<T>::ensure_migrated()?;
 		let schedule = T::Schedule::get();
 		let module =
-			WasmBlob::from_code(code, &schedule, origin, determinism, TryInstantiate::Instantiate)
-				.map_err(|(err, _)| err)?;
+			WasmBlob::from_code(code, &schedule, origin, determinism).map_err(|(err, _)| err)?;
 		let deposit = module.open_deposit(&module.code_info());
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
