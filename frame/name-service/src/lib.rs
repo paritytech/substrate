@@ -139,12 +139,8 @@ pub mod pallet {
 
 	/// Name Registrations
 	#[pallet::storage]
-	pub(super) type Registrations<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		NameHash,
-		Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>,
-	>;
+	pub(super) type Registrations<T: Config> =
+	CountedStorageMap<_, Twox64Concat, NameHash, Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
 
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
