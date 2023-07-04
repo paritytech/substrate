@@ -64,7 +64,7 @@ use libp2p::{
 	swarm::{
 		behaviour::{
 			toggle::{Toggle, ToggleConnectionHandler},
-			DialFailure, FromSwarm, NewExternalAddrCandidate,
+			DialFailure, ExternalAddrConfirmed, FromSwarm,
 		},
 		ConnectionDenied, ConnectionId, DialError, NetworkBehaviour, PollParameters,
 		StreamProtocol, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
@@ -641,7 +641,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			FromSwarm::ExpiredListenAddr(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
 			},
-			FromSwarm::NewExternalAddrCandidate(e @ NewExternalAddrCandidate { addr }) => {
+			FromSwarm::NewExternalAddrCandidate(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::NewExternalAddrCandidate(e));
+			},
+			FromSwarm::AddressChange(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::AddressChange(e));
+			},
+			FromSwarm::NewListenAddr(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::NewListenAddr(e));
+			},
+			FromSwarm::ExternalAddrConfirmed(e @ ExternalAddrConfirmed { addr }) => {
 				let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id));
 
 				if Self::can_add_to_dht(addr) {
@@ -656,16 +665,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					}
 				}
 
-				self.kademlia.on_swarm_event(FromSwarm::NewExternalAddrCandidate(e));
-			},
-			FromSwarm::AddressChange(e) => {
-				self.kademlia.on_swarm_event(FromSwarm::AddressChange(e));
-			},
-			FromSwarm::NewListenAddr(e) => {
-				self.kademlia.on_swarm_event(FromSwarm::NewListenAddr(e));
-			},
-			FromSwarm::ExternalAddrConfirmed(addr) => {
-				self.kademlia.on_swarm_event(FromSwarm::ExternalAddrConfirmed(addr));
+				self.kademlia.on_swarm_event(FromSwarm::ExternalAddrConfirmed(e));
 			},
 		}
 	}

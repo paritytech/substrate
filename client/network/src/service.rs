@@ -1392,7 +1392,12 @@ where
 				peer_id,
 				info:
 					IdentifyInfo {
-						protocol_version, agent_version, mut listen_addrs, protocols, ..
+						protocol_version,
+						agent_version,
+						mut listen_addrs,
+						protocols,
+						observed_addr,
+						..
 					},
 			}) => {
 				if listen_addrs.len() > 30 {
@@ -1409,6 +1414,9 @@ where
 						.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
 				}
 				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
+				// Confirm the reported address manually since they are no longer trusted by default
+				// (libp2p >= 0.52)
+				self.network_service.add_external_address(observed_addr);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id)) => {
 				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
