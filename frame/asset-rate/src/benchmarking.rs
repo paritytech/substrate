@@ -20,9 +20,24 @@
 use super::*;
 use crate::{pallet as pallet_asset_rate, Pallet as AssetRate};
 
+use codec::Encode;
 use frame_benchmarking::v2::*;
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
+use sp_core::crypto::FromEntropy;
+
+/// Trait describing the factory function for AssetKind parameter
+pub trait AssetKindFactory<AssetKind> {
+	fn create_asset_kind(seed: u32) -> AssetKind;
+}
+impl<AssetKind> AssetKindFactory<AssetKind> for ()
+where
+	AssetKind: FromEntropy,
+{
+	fn create_asset_kind(seed: u32) -> AssetKind {
+		AssetKind::from_entropy(&mut seed.encode().as_slice()).unwrap()
+	}
+}
 
 const ASSET_ID: u32 = 1;
 
@@ -30,13 +45,13 @@ fn default_conversion_rate() -> FixedU128 {
 	FixedU128::from_u32(1u32)
 }
 
-#[benchmarks(where <T as Config>::AssetKind: From<u32>)]
+#[benchmarks]
 mod benchmarks {
 	use super::*;
 
 	#[benchmark]
 	fn create() -> Result<(), BenchmarkError> {
-		let asset_kind: T::AssetKind = ASSET_ID.into();
+		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(ASSET_ID);
 		#[extrinsic_call]
 		_(RawOrigin::Root, asset_kind.clone(), default_conversion_rate());
 
@@ -49,7 +64,8 @@ mod benchmarks {
 
 	#[benchmark]
 	fn update() -> Result<(), BenchmarkError> {
-		let asset_kind: T::AssetKind = ASSET_ID.into();
+		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(ASSET_ID);
+		let asset_id: T::AssetId = 
 		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
 			asset_kind.clone(),
@@ -68,10 +84,10 @@ mod benchmarks {
 
 	#[benchmark]
 	fn remove() -> Result<(), BenchmarkError> {
-		let asset_kind: T::AssetKind = ASSET_ID.into();
+		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(ASSET_ID);
 		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
-			ASSET_ID.into(),
+			asset_id.clone(),
 			default_conversion_rate()
 		));
 

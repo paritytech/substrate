@@ -69,12 +69,14 @@ pub use pallet::*;
 pub use weights::WeightInfo;
 
 #[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+#[cfg(feature = "runtime-benchmarks")]
+pub use benchmarking::AssetKindFactory;
 
 // Type alias for `frame_system`'s account id.
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -117,6 +119,10 @@ pub mod pallet {
 
 		/// The type for asset kinds for which the conversion rate to native balance is set.
 		type AssetKind: Parameter + MaxEncodedLen;
+
+		/// Helper type for benchmarks.
+		#[cfg(feature = "runtime-benchmarks")]
+		type BenchmarkHelper: crate::AssetKindFactory<Self::AssetId>;
 	}
 
 	/// Maps an asset to its fixed point representation in the native balance.

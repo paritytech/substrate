@@ -92,6 +92,8 @@ impl pallet_asset_rate::Config for Test {
 	type Balance = u64;
 	type Currency = Balances;
 	type AssetKind = u32;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 // Build genesis storage according to the mock runtime.
