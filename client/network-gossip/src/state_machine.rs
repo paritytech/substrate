@@ -524,8 +524,8 @@ impl Metrics {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
+	use libp2p::multiaddr::Multiaddr;
 	use sc_network::{
 		config::MultiaddrWithPeerId, event::Event, NetworkBlock, NetworkEventStream,
 		NetworkNotification, NetworkPeers, NotificationSenderError,
