@@ -78,7 +78,7 @@ pub struct VersionedRuntimeUpgrade<const FROM: u16, const TO: u16, Inner, Pallet
 #[derive(codec::Encode, codec::Decode)]
 pub enum VersionedPostUpgradeData {
 	/// The migration ran, inner vec contains pre_upgrade data.
-	MigrationExecuted(Vec<u8>),
+	MigrationExecuted(sp_std::vec::Vec<u8>),
 	/// This migration is a noop, do not run post_upgrade checks.
 	Noop,
 }
