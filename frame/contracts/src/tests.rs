@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use self::test_utils::{ensure_stored, expected_deposit, hash};
-use crate as pallet_contracts;
 use crate::{
+	self as pallet_contracts,
 	chain_extension::{
 		ChainExtension, Environment, Ext, InitState, RegisteredChainExtension,
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
@@ -45,6 +45,7 @@ use frame_support::{
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system::{EventRecord, Phase};
+use pallet_contracts_primitives::CodeUploadReturnValue;
 use pretty_assertions::{assert_eq, assert_ne};
 use sp_core::ByteArray;
 use sp_io::hashing::blake2_256;
@@ -52,7 +53,7 @@ use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
-	AccountId32, TokenError,
+	AccountId32, Perbill, TokenError,
 };
 use std::ops::Deref;
 
@@ -91,8 +92,8 @@ macro_rules! assert_refcount {
 pub mod test_utils {
 	use super::{Balances, DepositPerByte, DepositPerItem, Hash, SysConfig, Test};
 	use crate::{
-		exec::AccountIdOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf,
-		Nonce, PristineCode,
+		exec::AccountIdOf, BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo,
+		ContractInfoOf, Nonce, PristineCode,
 	};
 	use codec::{Encode, MaxEncodedLen};
 	use frame_support::traits::Currency;
@@ -118,6 +119,9 @@ pub mod test_utils {
 	}
 	pub fn get_contract_checked(addr: &AccountIdOf<Test>) -> Option<ContractInfo<Test>> {
 		ContractInfoOf::<Test>::get(addr)
+	}
+	pub fn get_code_deposit(code_hash: &CodeHash<Test>) -> BalanceOf<Test> {
+		crate::CodeInfoOf::<Test>::get(code_hash).unwrap().deposit()
 	}
 	pub fn hash<S: Encode>(s: &S) -> <<Test as SysConfig>::Hashing as Hash>::Output {
 		<<Test as SysConfig>::Hashing as Hash>::hash_of(s)
@@ -385,6 +389,9 @@ parameter_types! {
 	};
 	pub static DepositPerByte: BalanceOf<Test> = 1;
 	pub const DepositPerItem: BalanceOf<Test> = 2;
+	pub static MaxDelegateDependencies: u32 = 32;
+
+	pub static CodeHashLockupDepositPercent: Perbill = Perbill::from_percent(0);
 	// We need this one set high enough for running benchmarks.
 	pub static DefaultDepositLimit: BalanceOf<Test> = 10_000_000;
 }
@@ -451,6 +458,8 @@ impl Config for Test {
 	type UnsafeUnstableInterface = UnstableInterface;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
 	type Migrations = (NoopMigration<1>, NoopMigration<2>);
+	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
+	type MaxDelegateDependencies = MaxDelegateDependencies;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -710,7 +719,7 @@ fn instantiate_and_call_and_deposit_event() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: deposit_account.clone(),
-						free_balance: 131,
+						free_balance: 132,
 					}),
 					topics: vec![],
 				},
@@ -719,7 +728,7 @@ fn instantiate_and_call_and_deposit_event() {
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: deposit_account.clone(),
-						amount: 131,
+						amount: 132,
 					}),
 					topics: vec![],
 				},
@@ -1192,7 +1201,7 @@ fn deploy_and_call_other_contract() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: deposit_account.clone(),
-						free_balance: 131,
+						free_balance: 132,
 					}),
 					topics: vec![],
 				},
@@ -1201,7 +1210,7 @@ fn deploy_and_call_other_contract() {
 					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: deposit_account.clone(),
-						amount: 131,
+						amount: 132,
 					}),
 					topics: vec![],
 				},
@@ -5311,6 +5320,241 @@ fn delegate_call_indeterministic_code() {
 			.result
 		);
 	});
+}
+
+#[test]
+fn add_remove_delegate_dependency_works() {
+	// set hah lock up deposit to 30%, to test deposit calculation.
+	CODE_HASH_LOCKUP_DEPOSIT_PERCENT.with(|c| *c.borrow_mut() = Perbill::from_percent(30));
+	MAX_DELEGATE_DEPENDENCIES.with(|c| *c.borrow_mut() = 1);
+
+	let (wasm_caller, self_code_hash) =
+		compile_module::<Test>("add_remove_delegate_dependency").unwrap();
+	let (wasm_callee, code_hash) = compile_module::<Test>("dummy").unwrap();
+	let (wasm_other, other_code_hash) = compile_module::<Test>("call").unwrap();
+
+	// Define inputs with various actions to test adding / removing delegate_dependencies.
+	// See the contract for more details.
+	let noop_input = (0u32, code_hash);
+	let add_delegate_dependency_input = (1u32, code_hash);
+	let remove_delegate_dependency_input = (2u32, code_hash);
+	let terminate_input = (3u32, code_hash);
+
+	// Instantiate the caller contract with the given input.
+	let instantiate = |input: &(u32, H256)| {
+		Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm_caller.clone()),
+			input.encode(),
+			vec![],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+	};
+
+	// Call contract with the given input.
+	let call = |addr_caller: &AccountId32, input: &(u32, H256)| {
+		<Pallet<Test>>::bare_call(
+			ALICE,
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			input.encode(),
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
+			Determinism::Enforced,
+		)
+	};
+
+	const ED: u64 = 2000;
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		// Instantiate with add_delegate_dependency should fail since the code is not yet on chain.
+		assert_err!(
+			instantiate(&add_delegate_dependency_input).result,
+			Error::<Test>::CodeNotFound
+		);
+
+		// Upload the delegated code.
+		let CodeUploadReturnValue { deposit, .. } =
+			Contracts::bare_upload_code(ALICE, wasm_callee.clone(), None, Determinism::Enforced)
+				.unwrap();
+
+		// Instantiate should now works.
+		let addr_caller = instantiate(&add_delegate_dependency_input).result.unwrap().account_id;
+
+		// There should be a dependency and a deposit.
+		let contract = test_utils::get_contract(&addr_caller);
+
+		let dependency_deposit = &CodeHashLockupDepositPercent::get().mul_ceil(deposit);
+		assert_eq!(contract.delegate_dependencies().get(&code_hash), Some(dependency_deposit));
+		assert_eq!(test_utils::get_balance(contract.deposit_account()), ED + dependency_deposit);
+
+		// Removing the code should fail, since we have added a dependency.
+		assert_err!(
+			Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash),
+			<Error<Test>>::CodeInUse
+		);
+
+		// Adding an already existing dependency should fail.
+		assert_err!(
+			call(&addr_caller, &add_delegate_dependency_input).result,
+			Error::<Test>::DelegateDependencyAlreadyExists
+		);
+
+		// Adding a dependency to self should fail.
+		assert_err!(
+			call(&addr_caller, &(1u32, self_code_hash)).result,
+			Error::<Test>::CannotAddSelfAsDelegateDependency
+		);
+
+		// Adding more than the maximum allowed delegate_dependencies should fail.
+		Contracts::bare_upload_code(ALICE, wasm_other, None, Determinism::Enforced).unwrap();
+		assert_err!(
+			call(&addr_caller, &(1u32, other_code_hash)).result,
+			Error::<Test>::MaxDelegateDependenciesReached
+		);
+
+		// Removing dependency should work.
+		assert_ok!(call(&addr_caller, &remove_delegate_dependency_input).result);
+
+		// Dependency should be removed, and deposit should be returned.
+		let contract = test_utils::get_contract(&addr_caller);
+		assert!(contract.delegate_dependencies().is_empty());
+		assert_eq!(test_utils::get_balance(contract.deposit_account()), ED);
+
+		// Removing an unexisting dependency should fail.
+		assert_err!(
+			call(&addr_caller, &remove_delegate_dependency_input).result,
+			Error::<Test>::DelegateDependencyNotFound
+		);
+
+		// Adding a depedendency with a storage limit too low should fail.
+		DEFAULT_DEPOSIT_LIMIT.with(|c| *c.borrow_mut() = dependency_deposit - 1);
+		assert_err!(
+			call(&addr_caller, &add_delegate_dependency_input).result,
+			Error::<Test>::StorageDepositLimitExhausted
+		);
+
+		// Since we removed the dependency we should now be able to remove the code.
+		assert_ok!(Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash));
+
+		// Calling should fail since the delegated contract is not on chain anymore.
+		assert_err!(call(&addr_caller, &noop_input).result, Error::<Test>::ContractTrapped);
+
+		// Restore initial deposit limit and add the dependency back.
+		DEFAULT_DEPOSIT_LIMIT.with(|c| *c.borrow_mut() = 10_000_000);
+		Contracts::bare_upload_code(ALICE, wasm_callee, None, Determinism::Enforced).unwrap();
+		call(&addr_caller, &add_delegate_dependency_input).result.unwrap();
+
+		// Call terninate should work, and return the deposit.
+		let balance_before = test_utils::get_balance(&ALICE);
+		assert_ok!(call(&addr_caller, &terminate_input).result);
+		assert_eq!(test_utils::get_balance(&ALICE), balance_before + 2 * ED + dependency_deposit);
+
+		// Terminate should also remove the dependency, so we can remove the code.
+		assert_ok!(Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash));
+	});
+}
+
+#[test]
+fn native_dependency_deposit_works() {
+	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
+	let (dummy_wasm, dummy_code_hash) = compile_module::<Test>("dummy").unwrap();
+
+	// Set hah lock up deposit to 30%, to test deposit calculation.
+	CODE_HASH_LOCKUP_DEPOSIT_PERCENT.with(|c| *c.borrow_mut() = Perbill::from_percent(30));
+
+	// Set a low existential deposit so that the base storage deposit is based on the contract
+	// storage deposit rather than the existential deposit.
+	const ED: u64 = 10;
+
+	// Test with both existing and uploaded code
+	for code in [Code::Upload(wasm.clone()), Code::Existing(code_hash)] {
+		ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let lockup_deposit_percent = CodeHashLockupDepositPercent::get();
+			let per_byte = DepositPerByte::get();
+			let per_item = DepositPerItem::get();
+
+			// Upload the dummy contract,
+			Contracts::upload_code(
+				RuntimeOrigin::signed(ALICE),
+				dummy_wasm.clone(),
+				None,
+				Determinism::Enforced,
+			)
+			.unwrap();
+
+			// Upload set_code_hash contracts if using Code::Existing.
+			let add_upload_deposit = match code {
+				Code::Existing(_) => {
+					Contracts::upload_code(
+						RuntimeOrigin::signed(ALICE),
+						wasm.clone(),
+						None,
+						Determinism::Enforced,
+					)
+					.unwrap();
+					false
+				},
+				Code::Upload(_) => true,
+			};
+
+			// Instantiate the set_code_hash contract.
+			let res = Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				code,
+				vec![],
+				vec![],
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+			);
+
+			let addr = res.result.unwrap().account_id;
+			let info = ContractInfoOf::<Test>::get(&addr).unwrap();
+			let info_len = info.encoded_size() as u64;
+			let base_deposit = ED + per_byte * info_len + per_item * 1;
+			let upload_deposit = test_utils::get_code_deposit(&code_hash);
+			let extra_deposit = add_upload_deposit.then(|| upload_deposit).unwrap_or_default();
+
+			// Check initial storage_deposit
+			// The base deposit should be: ED + info_len * per_byte + 1 * per_item + 30% * deposit
+			let deposit =
+				extra_deposit + base_deposit + lockup_deposit_percent.mul_ceil(upload_deposit);
+
+			assert_eq!(res.storage_deposit.charge_or_zero(), deposit);
+
+			// call set_code_hash
+			<Pallet<Test>>::bare_call(
+				ALICE,
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				dummy_code_hash.encode(),
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+				Determinism::Enforced,
+			)
+			.result
+			.unwrap();
+
+			// Check updated storage_deposit
+			let code_deposit = test_utils::get_code_deposit(&dummy_code_hash);
+			let deposit = base_deposit + lockup_deposit_percent.mul_ceil(code_deposit);
+			assert_eq!(test_utils::get_contract(&addr).storage_base_deposit(), deposit);
+			assert_eq!(test_utils::get_balance(&info.deposit_account()), deposit - ED);
+		});
+	}
 }
 
 #[test]

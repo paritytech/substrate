@@ -18,14 +18,16 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
-	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, DebugBufferVec, Determinism, Error,
-	Event, Nonce, Origin, Pallet as Contracts, Schedule, System, LOG_TARGET,
+	BalanceOf, CodeHash, CodeInfoOf, Config, ContractInfo, ContractInfoOf, DebugBufferVec,
+	Determinism, Error, Event, Nonce, Origin, Pallet as Contracts, Schedule, System, WasmBlob,
+	LOG_TARGET,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
 	dispatch::{
 		fmt::Debug, DispatchError, DispatchResult, DispatchResultWithPostInfo, Dispatchable,
 	},
+	ensure,
 	storage::{with_transaction, TransactionOutcome},
 	traits::{
 		tokens::{Fortitude::Polite, Preservation::Expendable},
@@ -35,11 +37,12 @@ use frame_support::{
 	Blake2_128Concat, BoundedVec, StorageHasher,
 };
 use frame_system::RawOrigin;
-use pallet_contracts_primitives::ExecReturnValue;
+use pallet_contracts_primitives::{ExecReturnValue, StorageDeposit};
 use smallvec::{Array, SmallVec};
 use sp_core::{
 	ecdsa::Public as ECDSAPublic,
 	sr25519::{Public as SR25519Public, Signature as SR25519Signature},
+	Get,
 };
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
 use sp_runtime::traits::{Convert, Hash, Zero};
@@ -309,6 +312,30 @@ pub trait Ext: sealing::Sealed {
 
 	/// Returns a nonce that is incremented for every instantiated contract.
 	fn nonce(&mut self) -> u64;
+
+	/// Add a delegate dependency to `delegate_dependencies`.
+	///
+	/// This ensure that the delegated contract is not removed while it is still in use. This will
+	/// increase the reference count of the code hash, and charge a fraction (see
+	/// `CodeHashLockupDepositPercent`) of the code deposit.
+	///
+	/// Returns an error if we have reached the maximum number of delegate_dependencies, or the
+	/// delegate_dependency already exists.
+	fn add_delegate_dependency(
+		&mut self,
+		code_hash: CodeHash<Self::T>,
+	) -> Result<(), DispatchError>;
+
+	/// Remove a delegate dependency from `delegate_dependencies`.
+	///
+	/// This is the counterpart of `add_delegate_dependency`. This method will decrease the
+	/// reference count And refund the deposit that was charged by `add_delegate_dependency`.
+	///
+	/// Returns an error if the dependency does not exist.
+	fn remove_delegate_dependency(
+		&mut self,
+		code_hash: &CodeHash<Self::T>,
+	) -> Result<(), DispatchError>;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -1260,6 +1287,14 @@ where
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::decrement_refcount(info.code_hash);
+
+		for (code_hash, deposit) in info.delegate_dependencies() {
+			E::decrement_refcount(*code_hash);
+			frame
+				.nested_storage
+				.charge_deposit(info.deposit_account().clone(), StorageDeposit::Refund(*deposit));
+		}
+
 		Contracts::<T>::deposit_event(
 			vec![T::Hashing::hash_of(&frame.account_id), T::Hashing::hash_of(&beneficiary)],
 			Event::Terminated {
@@ -1434,10 +1469,27 @@ where
 		if !E::from_storage(hash, &mut frame.nested_gas)?.is_deterministic() {
 			return Err(<Error<T>>::Indeterministic.into())
 		}
+
+		let info = frame.contract_info();
+
+		let prev_hash = info.code_hash;
+		info.code_hash = hash;
+
+		let code_info = CodeInfoOf::<T>::get(hash).ok_or(Error::<T>::CodeNotFound)?;
+
+		let old_base_deposit = info.storage_base_deposit();
+		let new_base_deposit = info.update_base_deposit(code_info.deposit());
+		let deposit = if new_base_deposit > old_base_deposit {
+			StorageDeposit::Charge(new_base_deposit - old_base_deposit)
+		} else {
+			StorageDeposit::Refund(old_base_deposit - new_base_deposit)
+		};
+
+		let deposit_account = info.deposit_account().clone();
+		frame.nested_storage.charge_deposit(deposit_account, deposit);
+
 		E::increment_refcount(hash)?;
-		let prev_hash = frame.contract_info().code_hash;
 		E::decrement_refcount(prev_hash);
-		frame.contract_info().code_hash = hash;
 		Contracts::<Self::T>::deposit_event(
 			vec![T::Hashing::hash_of(&frame.account_id), hash, prev_hash],
 			Event::ContractCodeUpdated {
@@ -1468,6 +1520,41 @@ where
 			self.nonce = Some(current);
 			current
 		}
+	}
+
+	fn add_delegate_dependency(
+		&mut self,
+		code_hash: CodeHash<Self::T>,
+	) -> Result<(), DispatchError> {
+		let frame = self.top_frame_mut();
+		let info = frame.contract_info.get(&frame.account_id);
+		ensure!(code_hash != info.code_hash, Error::<T>::CannotAddSelfAsDelegateDependency);
+
+		let code_info = CodeInfoOf::<T>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
+		let deposit = T::CodeHashLockupDepositPercent::get().mul_ceil(code_info.deposit());
+
+		info.add_delegate_dependency(code_hash, deposit)?;
+		<WasmBlob<T>>::increment_refcount(code_hash)?;
+		frame
+			.nested_storage
+			.charge_deposit(info.deposit_account().clone(), StorageDeposit::Charge(deposit));
+		Ok(())
+	}
+
+	fn remove_delegate_dependency(
+		&mut self,
+		code_hash: &CodeHash<Self::T>,
+	) -> Result<(), DispatchError> {
+		let frame = self.top_frame_mut();
+		let info = frame.contract_info.get(&frame.account_id);
+
+		let deposit = info.remove_delegate_dependency(code_hash)?;
+		<WasmBlob<T>>::decrement_refcount(*code_hash);
+
+		frame
+			.nested_storage
+			.charge_deposit(info.deposit_account().clone(), StorageDeposit::Refund(deposit));
+		Ok(())
 	}
 }
 
