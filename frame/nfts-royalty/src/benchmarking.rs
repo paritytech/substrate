@@ -77,11 +77,26 @@ mod benchmarks {
 		(caller, 0.into())
 	}
 
+	fn set_price<T: Config>(collection_id: T::NftCollectionId, nft_id: T::NftItemId) -> T::AccountId
+	where
+		T::NftCollectionId: From<u32>,
+		T::NftItemId: From<u32>,
+		T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
+		+ Buy<T::AccountId, ItemPrice<T>>,
+	{
+		let caller: T::AccountId = whitelisted_caller();
+		let price_buy = ItemPrice::<T>::from(50u32);
+
+		assert_ok!(T::Nfts::set_price(&collection_id, &nft_id, &caller, Some(price_buy), None));
+
+		caller
+	}
+
 	#[benchmark]
 	fn set_collection_royalty() {
 		let caller: T::AccountId = whitelisted_caller();
 
-		let (collection_owner, collection_id) = create_nft_collection::<T>();
+		let (_collection_owner, collection_id) = create_nft_collection::<T>();
 
 		let list_recipients = vec![
 			RoyaltyDetails {
@@ -113,7 +128,7 @@ mod benchmarks {
 
 		let (_collection_owner, collection_id) = create_nft_collection::<T>();
 		let item_id = 0.into();
-		let item_owner = mint_nft::<T>(collection_id, item_id);
+		let _item_owner = mint_nft::<T>(collection_id, item_id);
 
 		let list_recipients = vec![
 			RoyaltyDetails {
@@ -143,7 +158,7 @@ mod benchmarks {
 	fn transfer_collection_royalty_recipient() {
 		let caller: T::AccountId = whitelisted_caller();
 
-		let (collection_owner, collection_id) = create_nft_collection::<T>();
+		let (_collection_owner, collection_id) = create_nft_collection::<T>();
 		let list_recipients = vec![
 			RoyaltyDetails {
 				royalty_recipient: caller.clone(),
@@ -186,7 +201,7 @@ mod benchmarks {
 
 		let (_collection_owner, collection_id) = create_nft_collection::<T>();
 		let item_id = 0.into();
-		let item_owner = mint_nft::<T>(collection_id, item_id);
+		let _item_owner = mint_nft::<T>(collection_id, item_id);
 
 		let list_recipients = vec![
 			RoyaltyDetails {
@@ -228,55 +243,56 @@ mod benchmarks {
 		assert_eq!(item_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
 	}
 
-	// #[benchmark]
-	// fn buy() {
-	// 	let caller: T::AccountId = whitelisted_caller();
+	#[benchmark]
+	fn buy() {
+		let caller: T::AccountId = whitelisted_caller();
 
-	// 	let (_collection_owner, collection_id) = create_nft_collection::<T>();
-	// 	let item_id = 0.into();
-	// 	let item_owner = mint_nft::<T>(collection_id, item_id);
+		let (_collection_owner, collection_id) = create_nft_collection::<T>();
+		let item_id = 0.into();
+		let _item_owner = mint_nft::<T>(collection_id, item_id);
 
-	// 	T::Nfts::set_price(&caller, collection_id,item_id, Some(100), None);
+		let sender = set_price::<T>(collection_id, item_id);
 
-	// 	let list_recipients = vec![
-	// 		RoyaltyDetails {
-	// 			royalty_recipient: caller.clone(),
-	// 			royalty_recipient_percentage: Permill::from_percent(50),
-	// 		},
-	// 	];
+		let list_recipients = vec![
+			RoyaltyDetails {
+				royalty_recipient: sender.clone(),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},
+		];
 
-	// 	assert_ok!(NftsRoyalty::<T>::set_item_royalty(
-	// 		RawOrigin::Signed(caller.clone()).into(),
-	// 		collection_id,
-	// 		item_id,
-	// 		Permill::from_percent(10),
-	// 		item_owner.clone(),
-	// 		list_recipients.clone()
-	// 	));
+		assert_ok!(NftsRoyalty::<T>::set_item_royalty(
+			RawOrigin::Signed(caller.clone()).into(),
+			collection_id,
+			item_id,
+			Permill::from_percent(10),
+			list_recipients.clone()
+		));
 
-	// 	let new_recipient = account::<T::AccountId>("member A", 2, 2);
-	// 	#[extrinsic_call]
-	// 	buy(
-	// 		RawOrigin::Signed(new_recipient),
-	// 		collection_id,
-	// 		item_id,
-	// 		50.into(),
-	// 	);
+		let new_recipient = account::<T::AccountId>("member A", 2, 2);
+		let price_bid = ItemPrice::<T>::from(60u32);
+		T::Currency::make_free_balance_be(&new_recipient, T::Currency::minimum_balance() * 1000u32.into());
+		#[extrinsic_call]
+		buy(
+			RawOrigin::Signed(new_recipient),
+			collection_id,
+			item_id,
+			price_bid,
+		);
 
-	// 	let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
-	// 	let item_royalty_from_storage = ItemRoyalty::<T>::get((collection_id, item_id)).unwrap();
+		let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
+		let item_royalty_from_storage = ItemRoyalty::<T>::get((collection_id, item_id)).unwrap();
 
-	// 	assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
-	// 	assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
-	//  assert_eq!(item_royalty_from_storage.depositor, Some(caller.clone()));
-	// 	assert_eq!(item_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
-	// }
+		assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
+		assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
+		assert_eq!(item_royalty_from_storage.depositor, Some(caller.clone()));
+		assert_eq!(item_royalty_from_storage.deposit, T::CollectionRoyaltyDeposit::get());
+	}
 
 	#[benchmark]
 	fn remove_collection_royalty() {
 		let caller: T::AccountId = whitelisted_caller();
 
-		let (collection_owner, collection_id) = create_nft_collection::<T>();
+		let (_collection_owner, collection_id) = create_nft_collection::<T>();
 		let list_recipients = vec![
 			RoyaltyDetails {
 				royalty_recipient: caller.clone(),
@@ -312,7 +328,7 @@ mod benchmarks {
 
 		let (_collection_owner, collection_id) = create_nft_collection::<T>();
 		let item_id = 0.into();
-		let item_owner = mint_nft::<T>(collection_id, item_id);
+		let _item_owner = mint_nft::<T>(collection_id, item_id);
 
 		let list_recipients = vec![
 			RoyaltyDetails {
