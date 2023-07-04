@@ -649,6 +649,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			},
 			FromSwarm::NewListenAddr(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::NewListenAddr(e));
+
+				if let Some(ref mut mdns) = self.mdns {
+					mdns.on_swarm_event(FromSwarm::NewListenAddr(e));
+				}
+
 			},
 			FromSwarm::ExternalAddrConfirmed(e @ ExternalAddrConfirmed { addr }) => {
 				let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id));
