@@ -103,14 +103,14 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>
 			+ LockableCurrency<
 				Self::AccountId,
-				Moment = frame_system::pallet_prelude::BlockNumberFor<Self>,
+				Moment = BlockNumberFor<Self>,
 			> + fungible::Inspect<Self::AccountId>;
 
 		/// The implementation of the logic which conducts polls.
 		type Polls: Polling<
 			TallyOf<Self, I>,
 			Votes = BalanceOf<Self, I>,
-			Moment = frame_system::pallet_prelude::BlockNumberFor<Self>,
+			Moment = BlockNumberFor<Self>,
 		>;
 
 		/// The maximum amount of tokens which may be used for voting. May just be
@@ -130,7 +130,7 @@ pub mod pallet {
 		/// It should be no shorter than enactment period to ensure that in the case of an approval,
 		/// those successful voters are locked into the consequences that their votes entail.
 		#[pallet::constant]
-		type VoteLockingPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type VoteLockingPeriod: Get<BlockNumberFor<Self>>;
 	}
 
 	/// All voting for a particular voter in a particular voting class. We store the balance for the

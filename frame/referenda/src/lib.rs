@@ -163,11 +163,11 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
 		type Scheduler: ScheduleAnon<
-				frame_system::pallet_prelude::BlockNumberFor<Self>,
+				BlockNumberFor<Self>,
 				CallOf<Self, I>,
 				PalletsOriginOf<Self>,
 			> + ScheduleNamed<
-				frame_system::pallet_prelude::BlockNumberFor<Self>,
+				BlockNumberFor<Self>,
 				CallOf<Self, I>,
 				PalletsOriginOf<Self>,
 			>;
@@ -209,13 +209,13 @@ pub mod pallet {
 		/// The number of blocks after submission that a referendum must begin being decided by.
 		/// Once this passes, then anyone may cancel the referendum.
 		#[pallet::constant]
-		type UndecidingTimeout: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type UndecidingTimeout: Get<BlockNumberFor<Self>>;
 
 		/// Quantization level for the referendum wakeup scheduler. A higher number will result in
 		/// fewer storage reads/writes needed for smaller voters, but also result in delays to the
 		/// automatic referendum status changes. Explicit servicing instructions are unaffected.
 		#[pallet::constant]
-		type AlarmInterval: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type AlarmInterval: Get<BlockNumberFor<Self>>;
 
 		// The other stuff.
 		/// Information concerning the different referendum tracks.
@@ -224,16 +224,16 @@ pub mod pallet {
 				Vec<(
 					<Self::Tracks as TracksInfo<
 						BalanceOf<Self, I>,
-						frame_system::pallet_prelude::BlockNumberFor<Self>,
+						BlockNumberFor<Self>,
 					>>::Id,
 					TrackInfo<
 						BalanceOf<Self, I>,
-						frame_system::pallet_prelude::BlockNumberFor<Self>,
+						BlockNumberFor<Self>,
 					>,
 				)>,
 			> + TracksInfo<
 				BalanceOf<Self, I>,
-				frame_system::pallet_prelude::BlockNumberFor<Self>,
+				BlockNumberFor<Self>,
 				RuntimeOrigin = <Self::RuntimeOrigin as OriginTrait>::PalletsOrigin,
 			>;
 

@@ -115,7 +115,7 @@ pub mod pallet {
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
 			(
-				EquivocationProof<Self::Hash, frame_system::pallet_prelude::BlockNumberFor<Self>>,
+				EquivocationProof<Self::Hash, BlockNumberFor<Self>>,
 				Self::KeyOwnerProof,
 			),
 		>;

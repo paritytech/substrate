@@ -164,7 +164,7 @@ pub mod pallet {
 
 		/// Convert the block number into a balance.
 		type BlockNumberToBalance: Convert<
-			frame_system::pallet_prelude::BlockNumberFor<Self>,
+			BlockNumberFor<Self>,
 			BalanceOf<Self>,
 		>;
 

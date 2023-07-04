@@ -163,7 +163,7 @@ pub mod pallet {
 		/// (from an offchain context).
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
-			(EquivocationProof<frame_system::pallet_prelude::HeaderFor<Self>>, Self::KeyOwnerProof),
+			(EquivocationProof<HeaderFor<Self>>, Self::KeyOwnerProof),
 		>;
 	}
 
@@ -812,8 +812,7 @@ impl<T: Config> Pallet<T> {
 
 			// how many slots were skipped between current and last block
 			let lateness = current_slot.saturating_sub(CurrentSlot::<T>::get() + 1);
-			let lateness =
-				frame_system::pallet_prelude::BlockNumberFor::<T>::from(*lateness as u32);
+			let lateness = BlockNumberFor::<T>::from(*lateness as u32);
 
 			Lateness::<T>::put(lateness);
 			CurrentSlot::<T>::put(current_slot);

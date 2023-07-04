@@ -227,7 +227,7 @@ pub mod pallet {
 
 		/// The Scheduler.
 		type Scheduler: ScheduleNamed<
-			frame_system::pallet_prelude::BlockNumberFor<Self>,
+			BlockNumberFor<Self>,
 			CallOf<Self>,
 			Self::PalletsOrigin,
 		>;
@@ -239,7 +239,7 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>
 			+ LockableCurrency<
 				Self::AccountId,
-				Moment = frame_system::pallet_prelude::BlockNumberFor<Self>,
+				Moment = BlockNumberFor<Self>,
 			>;
 
 		/// The period between a proposal being approved and enacted.
@@ -248,22 +248,22 @@ pub mod pallet {
 		/// voting stakers have an opportunity to remove themselves from the system in the case
 		/// where they are on the losing side of a vote.
 		#[pallet::constant]
-		type EnactmentPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type EnactmentPeriod: Get<BlockNumberFor<Self>>;
 
 		/// How often (in blocks) new public referenda are launched.
 		#[pallet::constant]
-		type LaunchPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type LaunchPeriod: Get<BlockNumberFor<Self>>;
 
 		/// How often (in blocks) to check for new votes.
 		#[pallet::constant]
-		type VotingPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type VotingPeriod: Get<BlockNumberFor<Self>>;
 
 		/// The minimum period of vote locking.
 		///
 		/// It should be no shorter than enactment period to ensure that in the case of an approval,
 		/// those successful voters are locked into the consequences that their votes entail.
 		#[pallet::constant]
-		type VoteLockingPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type VoteLockingPeriod: Get<BlockNumberFor<Self>>;
 
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
 		#[pallet::constant]
@@ -277,11 +277,11 @@ pub mod pallet {
 
 		/// Minimum voting period allowed for a fast-track referendum.
 		#[pallet::constant]
-		type FastTrackVotingPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type FastTrackVotingPeriod: Get<BlockNumberFor<Self>>;
 
 		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 		#[pallet::constant]
-		type CooloffPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type CooloffPeriod: Get<BlockNumberFor<Self>>;
 
 		/// The maximum number of votes for an account.
 		///

@@ -126,14 +126,14 @@ pub mod pallet {
 		/// The number of blocks between sequential payout cycles is the sum of this and
 		/// `PayoutPeriod`.
 		#[pallet::constant]
-		type RegistrationPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type RegistrationPeriod: Get<BlockNumberFor<Self>>;
 
 		/// The number of blocks within a cycle which accounts have to claim the payout.
 		///
 		/// The number of blocks between sequential payout cycles is the sum of this and
 		/// `RegistrationPeriod`.
 		#[pallet::constant]
-		type PayoutPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type PayoutPeriod: Get<BlockNumberFor<Self>>;
 
 		/// The total budget per cycle.
 		///

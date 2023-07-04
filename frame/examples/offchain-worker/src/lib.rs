@@ -137,14 +137,14 @@ pub mod pallet {
 		/// every `GRACE_PERIOD` blocks. We use Local Storage to coordinate
 		/// sending between distinct runs of this offchain worker.
 		#[pallet::constant]
-		type GracePeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type GracePeriod: Get<BlockNumberFor<Self>>;
 
 		/// Number of blocks of cooldown after unsigned transaction is included.
 		///
 		/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval`
 		/// blocks.
 		#[pallet::constant]
-		type UnsignedInterval: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type UnsignedInterval: Get<BlockNumberFor<Self>>;
 
 		/// A configuration for base priority of unsigned transactions.
 		///

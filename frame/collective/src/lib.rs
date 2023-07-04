@@ -201,7 +201,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The time-out for council motions.
-		type MotionDuration: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type MotionDuration: Get<BlockNumberFor<Self>>;
 
 		/// Maximum number of proposals allowed to be active in parallel.
 		type MaxProposals: Get<ProposalIndex>;

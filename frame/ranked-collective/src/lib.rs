@@ -394,7 +394,7 @@ pub mod pallet {
 		type Polls: Polling<
 			TallyOf<Self, I>,
 			Votes = Votes,
-			Moment = frame_system::pallet_prelude::BlockNumberFor<Self>,
+			Moment = BlockNumberFor<Self>,
 		>;
 
 		/// Convert the tally class into the minimum rank required to vote on the poll. If

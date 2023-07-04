@@ -175,7 +175,7 @@ pub mod pallet {
 
 		/// Period between successive spends.
 		#[pallet::constant]
-		type SpendPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type SpendPeriod: Get<BlockNumberFor<Self>>;
 
 		/// Percentage of spare funds (if any) that are burnt per spend period.
 		#[pallet::constant]

@@ -486,7 +486,7 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// Something that provides randomness in the runtime.
-		type Randomness: Randomness<Self::Hash, frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
 
 		/// The maximum number of strikes before a member gets funds slashed.
 		#[pallet::constant]
@@ -499,23 +499,23 @@ pub mod pallet {
 		/// The number of blocks on which new candidates should be voted on. Together with
 		/// `ClaimPeriod`, this sums to the number of blocks between candidate intake periods.
 		#[pallet::constant]
-		type VotingPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type VotingPeriod: Get<BlockNumberFor<Self>>;
 
 		/// The number of blocks on which new candidates can claim their membership and be the
 		/// named head.
 		#[pallet::constant]
-		type ClaimPeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type ClaimPeriod: Get<BlockNumberFor<Self>>;
 
 		/// The maximum duration of the payout lock.
 		#[pallet::constant]
-		type MaxLockDuration: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type MaxLockDuration: Get<BlockNumberFor<Self>>;
 
 		/// The origin that is allowed to call `found`.
 		type FounderSetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The number of blocks between membership challenges.
 		#[pallet::constant]
-		type ChallengePeriod: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type ChallengePeriod: Get<BlockNumberFor<Self>>;
 
 		/// The maximum number of payouts a member may have waiting unclaimed.
 		#[pallet::constant]

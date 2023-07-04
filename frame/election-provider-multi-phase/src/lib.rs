@@ -585,10 +585,10 @@ pub mod pallet {
 
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
-		type UnsignedPhase: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type UnsignedPhase: Get<BlockNumberFor<Self>>;
 		/// Duration of the signed phase.
 		#[pallet::constant]
-		type SignedPhase: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type SignedPhase: Get<BlockNumberFor<Self>>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
@@ -605,7 +605,7 @@ pub mod pallet {
 		/// For example, if it is 5, that means that at least 5 blocks will elapse between attempts
 		/// to submit the worker's solution.
 		#[pallet::constant]
-		type OffchainRepeat: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type OffchainRepeat: Get<BlockNumberFor<Self>>;
 
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		#[pallet::constant]
@@ -685,13 +685,13 @@ pub mod pallet {
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Self>,
+			BlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// Configuration for the fallback.
 		type Fallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Self>,
+			BlockNumber = BlockNumberFor<Self>,
 			DataProvider = Self::DataProvider,
 			MaxWinners = Self::MaxWinners,
 		>;
@@ -702,7 +702,7 @@ pub mod pallet {
 		/// BoundedExecution<_>` if the test-net is not expected to have thousands of nominators.
 		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = frame_system::pallet_prelude::BlockNumberFor<Self>,
+			BlockNumber = BlockNumberFor<Self>,
 			DataProvider = Self::DataProvider,
 			MaxWinners = Self::MaxWinners,
 		>;

@@ -144,7 +144,7 @@ pub mod pallet {
 
 		/// The period for which a tip remains open after is has achieved threshold tippers.
 		#[pallet::constant]
-		type TipCountdown: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type TipCountdown: Get<BlockNumberFor<Self>>;
 
 		/// The percent of the final tip which goes to the original reporter of the tip.
 		#[pallet::constant]

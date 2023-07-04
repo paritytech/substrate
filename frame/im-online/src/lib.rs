@@ -288,7 +288,7 @@ pub mod pallet {
 		/// avoids sending them at the very beginning of the session, assuming there is a
 		/// chance the authority will produce a block and they won't be necessary.
 		type NextSessionRotation: EstimateNextSessionRotation<
-			frame_system::pallet_prelude::BlockNumberFor<Self>,
+			BlockNumberFor<Self>,
 		>;
 
 		/// A type that gives us the ability to submit unresponsiveness offence reports.

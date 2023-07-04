@@ -170,7 +170,7 @@ pub mod pallet {
 		/// Every `Period` blocks the `Members` are filled with the highest scoring
 		/// members in the `Pool`.
 		#[pallet::constant]
-		type Period: Get<frame_system::pallet_prelude::BlockNumberFor<Self>>;
+		type Period: Get<BlockNumberFor<Self>>;
 
 		/// The receiver of the signal for when the membership has been initialized.
 		/// This happens pre-genesis and will usually be the same as `MembershipChanged`.
