@@ -28,7 +28,7 @@ use futures::{
 	channel::mpsc::{channel, Receiver, Sender},
 	prelude::*,
 };
-use libp2p::PeerId;
+use libp2p_identity::PeerId;
 use log::trace;
 use prometheus_endpoint::Registry;
 use sp_runtime::traits::Block as BlockT;
@@ -336,7 +336,7 @@ mod tests {
 		executor::{block_on, block_on_stream},
 		future::poll_fn,
 	};
-	use libp2p::multiaddr::Multiaddr;
+	use multiaddr::Multiaddr;
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network::{
 		config::MultiaddrWithPeerId, NetworkBlock, NetworkEventStream, NetworkNotification,

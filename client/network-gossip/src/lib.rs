@@ -67,10 +67,8 @@ pub use self::{
 	validator::{DiscardAll, MessageIntent, ValidationResult, Validator, ValidatorContext},
 };
 
-use libp2p::{
-	multiaddr::{Multiaddr, Protocol},
-	PeerId,
-};
+use libp2p_identity::PeerId;
+use multiaddr::{Multiaddr, Protocol};
 use sc_network::{
 	types::ProtocolName, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 };

@@ -19,7 +19,7 @@
 use crate::{MessageIntent, Network, ValidationResult, Validator, ValidatorContext};
 
 use ahash::AHashSet;
-use libp2p::PeerId;
+use libp2p_identity::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network::types::ProtocolName;
@@ -525,7 +525,7 @@ impl Metrics {
 mod tests {
 	use super::*;
 	use futures::prelude::*;
-	use libp2p::multiaddr::Multiaddr;
+	use multiaddr::Multiaddr;
 	use sc_network::{
 		config::MultiaddrWithPeerId, event::Event, NetworkBlock, NetworkEventStream,
 		NetworkNotification, NetworkPeers, NotificationSenderError,
