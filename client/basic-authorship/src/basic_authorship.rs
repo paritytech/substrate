@@ -353,7 +353,7 @@ where
 		let end_reason = match block_builder.executive_mode {
 			RuntimeExecutiveMode::Normal =>
 				self.apply_extrinsics(&mut block_builder, deadline, block_size_limit).await?,
-			RuntimeExecutiveMode::Minimal => EndProposingReason::ExtrinsicsForbidden,
+			RuntimeExecutiveMode::Minimal => EndProposingReason::TransactionsForbidden,
 		};
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();

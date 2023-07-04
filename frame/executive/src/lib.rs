@@ -583,7 +583,7 @@ impl<
 		mode: RuntimeExecutiveMode,
 	) {
 		extrinsics.into_iter().for_each(|e| {
-			if let Err(e) = Self::apply_extrinsic_in_mode(e.clone(), mode) {
+			if let Err(e) = Self::apply_extrinsic_with_mode(e.clone(), mode) {
 				let err: &'static str = e.into();
 				panic!("{}", err)
 			}
@@ -635,11 +635,11 @@ impl<
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
-		Self::apply_extrinsic_in_mode(uxt, RuntimeExecutiveMode::Normal)
+		Self::apply_extrinsic_with_mode(uxt, RuntimeExecutiveModeQuery::get())
 	}
 
 	/// Same as `apply_extrinsic` but gets the `mode` directly passed in.
-	pub fn apply_extrinsic_in_mode(
+	pub fn apply_extrinsic_with_mode(
 		uxt: Block::Extrinsic,
 		mode: RuntimeExecutiveMode,
 	) -> ApplyExtrinsicResult {
