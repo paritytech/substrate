@@ -609,7 +609,7 @@ pub mod pallet {
 
 		/// Can only be called by the `RegistrationManager` origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
-		#[pallet::call_index(17)]
+		#[pallet::call_index(16)]
 		#[pallet::weight(0)]
 		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
