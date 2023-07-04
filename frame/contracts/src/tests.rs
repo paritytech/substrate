@@ -2055,7 +2055,7 @@ fn disabled_chain_extension_errors_on_call() {
 		TestExtension::disable();
 		assert_err_ignore_postinfo!(
 			Contracts::call(RuntimeOrigin::signed(ALICE), addr.clone(), 0, GAS_LIMIT, None, vec![],),
-			Error::<Test>::NoChainExtension,
+			Error::<Test>::CodeRejected,
 		);
 	});
 }
@@ -4419,10 +4419,10 @@ fn code_rejected_error_works() {
 		assert_err!(result.result, <Error<Test>>::CodeRejected);
 		assert_eq!(
 			std::str::from_utf8(&result.debug_message).unwrap(),
-			"Validation of new code failed!"
+			"Can't load the module into wasmi!"
 		);
 
-		let (wasm, _) = compile_module::<Test>("invalid_contract").unwrap();
+		let (wasm, _) = compile_module::<Test>("invalid_contract_no_call").unwrap();
 		assert_noop!(
 			Contracts::upload_code(
 				RuntimeOrigin::signed(ALICE),
@@ -4448,6 +4448,34 @@ fn code_rejected_error_works() {
 		assert_eq!(
 			std::str::from_utf8(&result.debug_message).unwrap(),
 			"call function isn't exported"
+		);
+
+		let (wasm, _) = compile_module::<Test>("invalid_contract_no_memory").unwrap();
+		assert_noop!(
+			Contracts::upload_code(
+				RuntimeOrigin::signed(ALICE),
+				wasm.clone(),
+				None,
+				Determinism::Enforced
+			),
+			<Error<Test>>::CodeRejected,
+		);
+
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			DebugInfo::UnsafeDebug,
+			CollectEvents::Skip,
+		);
+		assert_err!(result.result, <Error<Test>>::CodeRejected);
+		assert_eq!(
+			std::str::from_utf8(&result.debug_message).unwrap(),
+			"No memory import found in the module"
 		);
 	});
 }
@@ -5117,6 +5145,7 @@ fn cannot_instantiate_indeterministic_code() {
 			None,
 			Determinism::Relaxed,
 		));
+
 		assert_err_ignore_postinfo!(
 			Contracts::instantiate(
 				RuntimeOrigin::signed(ALICE),
