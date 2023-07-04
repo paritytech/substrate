@@ -75,8 +75,8 @@
 //!   allowed to code owner.
 //! * [`Pallet::set_code`] - Changes the code of an existing contract. Only allowed to `Root`
 //!   origin.
-//! * [`Pallet::migrate`] - Runs migration steps of curent multi-block migration in priority, before
-//!   [`Hooks::on_idle`][frame_support::traits::Hooks::on_idle] activates.
+//! * [`Pallet::migrate`] - Runs migration steps of current multi-block migration in priority,
+//!   before [`Hooks::on_idle`][frame_support::traits::Hooks::on_idle] activates.
 //!
 //! ## Usage
 //!
