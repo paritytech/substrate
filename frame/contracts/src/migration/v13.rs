@@ -19,17 +19,17 @@
 //! See <https://github.com/paritytech/substrate/pull/14079>.
 
 use crate::{
-	migration::{IsFinished, Migrate},
+	migration::{IsFinished, MigrationStep},
 	storage::DepositAccount,
 	weights::WeightInfo,
 	BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
-use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound, IterableStorageMap};
+use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
 use sp_runtime::BoundedBTreeMap;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::prelude::*;
 
 mod old {
 	use crate::storage::DepositAccount;
@@ -39,14 +39,14 @@ mod old {
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
 	pub struct ContractInfo<T: Config> {
-		trie_id: TrieId,
-		deposit_account: DepositAccount<T>,
-		code_hash: CodeHash<T>,
-		storage_bytes: u32,
-		storage_items: u32,
-		storage_byte_deposit: BalanceOf<T>,
-		storage_item_deposit: BalanceOf<T>,
-		storage_base_deposit: BalanceOf<T>,
+		pub trie_id: TrieId,
+		pub deposit_account: DepositAccount<T>,
+		pub code_hash: CodeHash<T>,
+		pub storage_bytes: u32,
+		pub storage_items: u32,
+		pub storage_byte_deposit: BalanceOf<T>,
+		pub storage_item_deposit: BalanceOf<T>,
+		pub storage_base_deposit: BalanceOf<T>,
 	}
 
 	#[storage_alias]
@@ -80,16 +80,15 @@ pub type ContractInfoOf<T: Config> =
 #[derive(Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 pub struct ContractInfo<T: Config> {
-	pub trie_id: TrieId,
-	pub deposit_account: DepositAccount<T>,
-	pub code_hash: CodeHash<T>,
-	pub storage_bytes: u32,
-	pub storage_items: u32,
-	pub storage_byte_deposit: BalanceOf<T>,
-	pub storage_item_deposit: BalanceOf<T>,
-	pub storage_base_deposit: BalanceOf<T>,
-	pub delegate_dependencies:
-		BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies>,
+	trie_id: TrieId,
+	deposit_account: DepositAccount<T>,
+	code_hash: CodeHash<T>,
+	storage_bytes: u32,
+	storage_items: u32,
+	storage_byte_deposit: BalanceOf<T>,
+	storage_item_deposit: BalanceOf<T>,
+	storage_base_deposit: BalanceOf<T>,
+	delegate_dependencies: BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies>,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
@@ -97,7 +96,7 @@ pub struct Migration<T: Config> {
 	last_account: Option<T::AccountId>,
 }
 
-impl<T: Config> Migrate for Migration<T> {
+impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 13;
 
 	fn max_step_weight() -> Weight {
@@ -106,9 +105,11 @@ impl<T: Config> Migrate for Migration<T> {
 
 	fn step(&mut self) -> (IsFinished, Weight) {
 		let mut iter = if let Some(last_account) = self.last_account.take() {
-			old::CodeStorage::<T>::iter_from(old::CodeStorage::<T>::hashed_key_for(last_account))
+			old::ContractInfoOf::<T>::iter_from(old::ContractInfoOf::<T>::hashed_key_for(
+				last_account,
+			))
 		} else {
-			old::CodeStorage::<T>::iter()
+			old::ContractInfoOf::<T>::iter()
 		};
 
 		if let Some((key, old)) = iter.next() {
@@ -124,7 +125,7 @@ impl<T: Config> Migrate for Migration<T> {
 				storage_base_deposit: old.storage_base_deposit,
 				delegate_dependencies: Default::default(),
 			};
-			ContractInfo::<T>::insert(key, module);
+			ContractInfoOf::<T>::insert(key.clone(), info);
 			self.last_account = Some(key);
 			(IsFinished::No, T::WeightInfo::v13_migration_step())
 		} else {
