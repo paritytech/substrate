@@ -15,7 +15,81 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A simple name service that can be used to give accounts friendly names.
+//! ## Name Service: Register Friendly Account Aliases and Metadata
+//!
+//! # Index
+//!
+//! * [Key terms](#key-terms)
+//! * [Goals](#goals)
+//! * [Limitations](#limitations)
+//! * [Usage](#usage)
+//!
+//! The name service pallet provides a means to register names and subdomains, also termed nodes,
+//! via a commit reveal scheme. Names can act as aliases to addresses for a particular para ID, and
+//! can be used by UIs to transfer tokens between accounts in a more user-friendly manner.
+//!
+//! ## Key Terms
+//!
+//! * commitment: A hash that represents a commitment to purchase a name registration. Any account
+//!   //! can register a commitment by providing an owner address and a commitment hash - a
+//!   bake2_256 hash of the desired name and a secret.
+//! * node: Either a to-level name hash or a subnode record that exists in the service registry.
+//! * name hash: A blake2_256 hash representation of a registered name.
+//! * subnode: A subdomain of a registered name hash. Subnodes of a name can be registered
+//!   recursively, so the depth a subnode can be registered is unbounded.
+//! * registrar: Handles registration and deregistration of top-level names. It also allows the
+//!   transfer of ownership of top-level names.
+//! * resolver: Handles the mapping of a name registration to the metadata that can be assigned to
+//!   it. An address (alongside the Para ID), text and unhashed name of the node.
+//!
+//! ## Goals
+//!
+//! The name service pallet is designed to allow account interactions to go through registered,
+//! human-readable names. The targeted usage of the name service is to allow transferring of funds
+//! to accounts using registered names as the recipient of the transfer, instead of their public
+//! key.
+//!
+//!  The pallet aims to be para-agnostic; any Para ID can be registered with the name service, and
+//! provided alongside an address that is being set in the resolver. To register an address with a
+//! corresponding para, that para ID must be registered with the name service.
+//!
+//! The name service in its current form aims to provide critical chain data to allow the usage of
+//! human-readable names as address aliases, and assumes that UIs will handle the routing of
+//! transfers using these names.
+//!
+//! ## Limitations
+//!
+//! The name service does not handle routing transfers between paras, and assumes the UI will handle
+//! the resolution of public keys from name service nodes, and handle any teleporting required to
+//! transfer funds using the name service.. A future version of the name service could explore such
+//! functionality.
+//!
+//! ## Usage
+//!
+//! ### Registering a top-level name
+//!
+//! Using a commit and reveal scheme, names can be registered on the name service, and de-registered
+//! provided that no derived subnodes exist in the registry.
+//!
+//! ### Registering a subnode
+//!
+//! Subnodes can be recursively registered on the system. Ownership can be transferred between these
+//! subnodes, so they do not necessarily need to be tied with the owner of parent nodes.
+//!
+//! ### Renewing
+//!
+//! Node ownership can be extended by providing a new expiry block. The fee corresponding to the new
+//! expiry will be deducted from a provided fee-payer account.
+//!
+//! ### Transferring Ownership
+//!
+//! Nodes can be transferred to a new owner. Transferring a node to a new owner will also transfer
+//! the node deposit to the new owner.
+//!
+//! ### Using Resolvers
+//!
+//! An address, human-readable name and text can be registered under a node. The address will be the
+//! underlying account that the node is aliasing when used for transferring tokens.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -36,8 +110,8 @@ mod types;
 mod weights;
 
 pub use pallet::*;
-pub use weights::WeightInfo;
 pub use resolver::NameServiceResolver;
+pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -127,7 +201,6 @@ pub mod pallet {
 		type PerByteFee: Get<BalanceOf<Self>>;
 	}
 
-
 	/// Name Commitments
 	#[pallet::storage]
 	pub(super) type Commitments<T: Config> = StorageMap<
@@ -139,8 +212,12 @@ pub mod pallet {
 
 	/// Name Registrations
 	#[pallet::storage]
-	pub(super) type Registrations<T: Config> =
-	CountedStorageMap<_, Twox64Concat, NameHash, Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>>;
+	pub(super) type Registrations<T: Config> = CountedStorageMap<
+		_,
+		Twox64Concat,
+		NameHash,
+		Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+	>;
 
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
@@ -261,8 +338,8 @@ pub mod pallet {
 		/// a commitment, the sender will reserve a deposit until the name is revealed or the
 		/// commitment is removed.
 		///
-		/// The commitment hash should be the `bake2_256(name: <u8, MaxNameLength>, secret: u64)`, which
-		/// allows the sender to keep name being registered secret until it is revealed.
+		/// The commitment hash should be the `bake2_256(name: <u8, MaxNameLength>, secret: u64)`,
+		/// which allows the sender to keep name being registered secret until it is revealed.
 		///
 		/// The `name` must be at least 3 characters long.
 		///
@@ -297,7 +374,8 @@ pub mod pallet {
 			length: T::BlockNumber,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let name_bounded: BoundedVec<u8, T::MaxNameLength> = BoundedVec::try_from(name).map_err(|_| Error::<T>::NameTooLong)?;
+			let name_bounded: BoundedVec<u8, T::MaxNameLength> =
+				BoundedVec::try_from(name).map_err(|_| Error::<T>::NameTooLong)?;
 			Self::do_reveal(sender, name_bounded.to_vec(), secret, length)?;
 			Ok(())
 		}
@@ -403,7 +481,8 @@ pub mod pallet {
 			label: Vec<u8>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let label_bounded: BoundedVec<u8, T::MaxNameLength> = BoundedVec::try_from(label).map_err(|_| Error::<T>::NameTooLong)?;
+			let label_bounded: BoundedVec<u8, T::MaxNameLength> =
+				BoundedVec::try_from(label).map_err(|_| Error::<T>::NameTooLong)?;
 			Self::do_set_subnode_record(sender, parent_hash, &label_bounded)?;
 			Ok(())
 		}
@@ -470,9 +549,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name_hash: NameHash,
 			name: Vec<u8>,
-		) -> DispatchResult {			
+		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let name_bounded: BoundedVec<u8, T::MaxNameLength> = BoundedVec::try_from(name).map_err(|_| Error::<T>::NameTooLong)?;
+			let name_bounded: BoundedVec<u8, T::MaxNameLength> =
+				BoundedVec::try_from(name).map_err(|_| Error::<T>::NameTooLong)?;
 			ensure!(Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationNotFound);
 			T::NameServiceResolver::set_name(name_hash, name_bounded, sender)?;
 			Ok(())
@@ -486,8 +566,9 @@ pub mod pallet {
 			text: Vec<u8>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let text_bounded: BoundedVec<u8, T::MaxTextLength>= BoundedVec::try_from(text).map_err(|_| Error::<T>::TextTooLong)?;
-			
+			let text_bounded: BoundedVec<u8, T::MaxTextLength> =
+				BoundedVec::try_from(text).map_err(|_| Error::<T>::TextTooLong)?;
+
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotController);
