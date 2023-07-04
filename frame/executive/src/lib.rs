@@ -121,6 +121,7 @@ mod tests;
 
 use codec::{Codec, Encode};
 use frame_support::{
+	defensive,
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
 	pallet_prelude::InvalidTransaction,
 	traits::{
@@ -129,6 +130,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
+use sp_core::Get;
 use sp_runtime::{
 	generic::Digest,
 	traits::{
@@ -136,7 +138,7 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, BlockAfterInherentsMode,
+	ApplyExtrinsicResult, RuntimeExecutiveMode,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -168,6 +170,7 @@ pub struct Executive<
 	UnsignedValidator,
 	AllPalletsWithSystem,
 	OnRuntimeUpgrade = (),
+	RuntimeExecutiveModeQuery = (),
 >(
 	PhantomData<(
 		System,
@@ -176,6 +179,7 @@ pub struct Executive<
 		UnsignedValidator,
 		AllPalletsWithSystem,
 		OnRuntimeUpgrade,
+		RuntimeExecutiveModeQuery,
 	)>,
 );
 
@@ -190,9 +194,17 @@ impl<
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
+		RuntimeExecutiveModeQuery: Get<RuntimeExecutiveMode>,
 	> ExecuteBlock<Block>
-	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
+	for Executive<
+		System,
+		Block,
+		Context,
+		UnsignedValidator,
+		AllPalletsWithSystem,
+		COnRuntimeUpgrade,
+		RuntimeExecutiveModeQuery,
+	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -208,6 +220,7 @@ where
 			UnsignedValidator,
 			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
+			RuntimeExecutiveModeQuery,
 		>::execute_block(block);
 	}
 }
@@ -225,8 +238,17 @@ impl<
 			+ OffchainWorker<System::BlockNumber>
 			+ frame_support::traits::TryState<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
+		RuntimeExecutiveModeQuery: Get<RuntimeExecutiveMode>,
+	>
+	Executive<
+		System,
+		Block,
+		Context,
+		UnsignedValidator,
+		AllPalletsWithSystem,
+		COnRuntimeUpgrade,
+		RuntimeExecutiveModeQuery,
+	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -257,7 +279,7 @@ where
 			select,
 		);
 
-		Self::initialize_block(block.header());
+		let mode = Self::initialize_block(block.header());
 		let num_inherents = Self::initial_checks(&block) as usize;
 
 		let (header, extrinsics) = block.deconstruct();
@@ -287,33 +309,32 @@ where
 		for e in extrinsics.iter().take(num_inherents) {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
 				frame_support::log::error!(
-					target: LOG_TARGET, "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					target: LOG_TARGET, "extrinsic {:?} failed due to {:?}. Aborting the rest of the block execution.",
 					e,
 					err,
 				);
 				break
 			}
 		}
-		match Self::after_inherents() {
-			BlockAfterInherentsMode::ExtrinsicsAllowed => {
-				// Apply all extrinsics:
-				for e in extrinsics.iter().skip(num_inherents) {
-					if let Err(err) = try_apply_extrinsic(e.clone()) {
-						frame_support::log::error!(
-							target: LOG_TARGET, "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
-							e,
-							err,
-						);
-						break
-					}
+
+		Self::after_inherents();
+		if mode == RuntimeExecutiveMode::Normal {
+			// Apply transactions:
+			for e in extrinsics.iter().skip(num_inherents) {
+				if let Err(err) = try_apply_extrinsic(e.clone()) {
+					frame_support::log::error!(
+						target: LOG_TARGET, "extrinsics {:?} failed due to {:?}. Aborting the rest of the block execution.",
+						e,
+						err,
+					);
+					break
 				}
-			},
-			BlockAfterInherentsMode::ExtrinsicsForbidden => (),
+			}
 		}
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
-		// TODO MBMs will conditionally run this.
+		// TODO MBMs will skip this.
 		Self::on_idle_hook(*header.number());
 
 		Self::on_finalize_hook(*header.number());
@@ -401,8 +422,17 @@ impl<
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
+		RuntimeExecutiveModeQuery: Get<RuntimeExecutiveMode>,
+	>
+	Executive<
+		System,
+		Block,
+		Context,
+		UnsignedValidator,
+		AllPalletsWithSystem,
+		COnRuntimeUpgrade,
+		RuntimeExecutiveModeQuery,
+	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
@@ -416,11 +446,13 @@ where
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize_block(header: &System::Header) {
+	pub fn initialize_block(header: &System::Header) -> RuntimeExecutiveMode {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(header);
 		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
+
+		RuntimeExecutiveModeQuery::get()
 	}
 
 	fn extract_pre_digest(header: &System::Header) -> Digest {
@@ -503,27 +535,24 @@ where
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
 			// Execute `on_runtime_upgrade` and `on_initialize`.
-			Self::initialize_block(block.header());
-
-			let num_inherents = Self::initial_checks(&block) as usize;
-			let (header, applyables) = block.deconstruct();
+			let mode = Self::initialize_block(block.header());
+			let inherents = Self::initial_checks(&block) as usize;
+			let (header, extrinsics) = block.deconstruct();
 
 			// Process inherents (if any).
-			Self::execute_applyables(applyables.iter().take(num_inherents));
-
-			match Self::after_inherents() {
-				BlockAfterInherentsMode::ExtrinsicsForbidden => {
-					if num_inherents < applyables.len() {
-						panic!("Extrinsics are not allowed in this block");
-					}
-				},
-				BlockAfterInherentsMode::ExtrinsicsAllowed => {
-					Self::execute_applyables(applyables.iter().skip(num_inherents));
-				},
+			Self::apply_extrinsics(extrinsics.iter().take(inherents), mode);
+			Self::after_inherents();
+			if mode == RuntimeExecutiveMode::Minimal {
+				if inherents < extrinsics.len() {
+					// Note: It would be possible to not explicitly panic here since the state-root check should already catch any mismatch, but this makes it easier to debug.
+					panic!("Only inherents are allowed in 'Minimal' blocks");
+				}
 			}
+			// Process transactions (if any).
+			Self::apply_extrinsics(extrinsics.iter().skip(inherents), mode);
 
 			<frame_system::Pallet<System>>::note_finished_extrinsics();
-			// TODO MBMs will conditionally run this.
+			// TODO MBMs will skip this.
 			Self::on_idle_hook(*header.number());
 
 			Self::on_finalize_hook(*header.number());
@@ -532,25 +561,19 @@ where
 	}
 
 	/// Execute code after inherents but before extrinsic application.
-	///
-	/// This is always called by the block builder. It returns whether extrinsics are allowed to be
-	/// included in the block or not.
-	pub fn after_inherents() -> BlockAfterInherentsMode {
-		// TODO add a proper condition here, but now we need this for mocking in tests.
+	pub fn after_inherents() {
+		// TODO run either MBMs or `poll` depending on the mode:
 		//  <https://github.com/paritytech/substrate/pull/14275>
 		//  <https://github.com/paritytech/substrate/pull/14279>
-		#[cfg(all(feature = "std", test))]
-		if sp_io::storage::exists(&b":extrinsics_forbidden"[..]) {
-			return BlockAfterInherentsMode::ExtrinsicsForbidden
-		}
-
-		BlockAfterInherentsMode::ExtrinsicsAllowed
 	}
 
-	/// Execute given applyables (extrinsics or intrinsics).
-	fn execute_applyables<'a>(applyables: impl Iterator<Item = &'a Block::Extrinsic>) {
-		applyables.into_iter().for_each(|e| {
-			if let Err(e) = Self::apply_extrinsic(e.clone()) {
+	/// Execute given extrinsics.
+	fn apply_extrinsics<'a>(
+		extrinsics: impl Iterator<Item = &'a Block::Extrinsic>,
+		mode: RuntimeExecutiveMode,
+	) {
+		extrinsics.into_iter().for_each(|e| {
+			if let Err(e) = Self::apply_extrinsic_in_mode(e.clone(), mode) {
 				let err: &'static str = e.into();
 				panic!("{}", err)
 			}
@@ -602,6 +625,14 @@ where
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
+		Self::apply_extrinsic_in_mode(uxt, RuntimeExecutiveMode::Normal)
+	}
+
+	/// Same as `apply_extrinsic` but gets the `mode` directly passed in.
+	pub fn apply_extrinsic_in_mode(
+		uxt: Block::Extrinsic,
+		mode: RuntimeExecutiveMode,
+	) -> ApplyExtrinsicResult {
 		sp_io::init_tracing();
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
@@ -625,8 +656,13 @@ where
 		//
 		// The entire block should be discarded if an inherent fails to apply. Otherwise
 		// it may open an attack vector.
-		if r.is_err() && dispatch_info.class == DispatchClass::Mandatory {
+		let mandatory = dispatch_info.class == DispatchClass::Mandatory;
+		if r.is_err() && mandatory {
 			return Err(InvalidTransaction::BadMandatory.into())
+		}
+		if mode == RuntimeExecutiveMode::Minimal && !mandatory {
+			defensive!("Only 'Mandatory' extrinsics should be present in a 'Minimal' block");
+			return Err(InvalidTransaction::NotMandatory.into())
 		}
 
 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);

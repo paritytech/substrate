@@ -36,7 +36,7 @@ use sp_core::ExecutionContext;
 use sp_runtime::{
 	legacy,
 	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
-	BlockAfterInherentsMode, Digest,
+	Digest, RuntimeExecutiveMode,
 };
 
 use sc_client_api::backend;
@@ -139,6 +139,8 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	backend: &'a B,
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
+	/// The executive mode of the block that is currently being built.
+	pub executive_mode: RuntimeExecutiveMode,
 }
 
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
@@ -178,7 +180,7 @@ where
 			api.record_proof();
 		}
 
-		api.initialize_block_with_context(
+		let executive_mode = api.initialize_block_with_context(
 			parent_hash,
 			ExecutionContext::BlockConstruction,
 			&header,
@@ -195,19 +197,15 @@ where
 			version,
 			backend,
 			estimated_header_size,
+			executive_mode,
 		})
 	}
 
 	/// Called after inherents but before extrinsics have been applied.
-	pub fn after_inherents(&self) -> Result<BlockAfterInherentsMode, Error> {
-		if self.version >= 7 {
-			self.api
-				.after_inherents_with_context(self.parent_hash, ExecutionContext::BlockConstruction)
-				.map_err(Into::into)
-		} else {
-			// Not yet available; this is fine.
-			Ok(BlockAfterInherentsMode::ExtrinsicsAllowed)
-		}
+	pub fn after_inherents(&self) -> Result<(), Error> {
+		self.api
+			.after_inherents_with_context(self.parent_hash, ExecutionContext::BlockConstruction)
+			.map_err(Into::into)
 	}
 
 	/// Push onto the block's list of extrinsics.

@@ -944,13 +944,36 @@ impl<R> TransactionOutcome<R> {
 	}
 }
 
-/// The mode of a block after inherents were applied.
+/// Confines the logic that can be executed in a block.
+///
+/// The runtime may refuse to import blocks that violate these requirements.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
-pub enum BlockAfterInherentsMode {
-	/// No extrinsics should be pushed to the block - not even mandatory ones.
-	ExtrinsicsForbidden,
-	/// Can push extrinsics to the block.
-	ExtrinsicsAllowed,
+pub enum RuntimeExecutiveMode {
+	/// All logic is allowed to run.
+	///
+	/// For example:
+	/// - Extrinsics with dispatch class `Normal`.
+	/// - `on_idle` hook.
+	Normal,
+	/// Only _really necessary_ logic is allowed to run.
+	///
+	/// Explicitly forbidden are:
+	/// - Extrinsics with dispatch classes `Normal` and `Operational`.
+	/// - `on_idle` and `poll` hooks.
+	///
+	/// Explicitly allowed are:
+	/// - Mandatory inherents and extrinsics (i.e. via OCW).
+	/// - `on_initialize` and `on_finalize` hooks.
+	/// - Storage migrations.
+	///
+	/// Everything in between is to be judged by the runtime.
+	Minimal,
+}
+
+impl Default for RuntimeExecutiveMode {
+	fn default() -> Self {
+		Self::Normal
+	}
 }
 
 #[cfg(test)]

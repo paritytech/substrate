@@ -286,7 +286,13 @@ type Executive = super::Executive<
 	Runtime,
 	AllPalletsWithSystem,
 	CustomOnRuntimeUpgrade,
+	MockedMode,
 >;
+
+frame_support::parameter_types! {
+	/// Provides the runtime-mode to frame-executive.
+	pub static MockedMode: RuntimeExecutiveMode = RuntimeExecutiveMode::Normal;
+}
 
 fn extra(nonce: u64, fee: Balance) -> SignedExtra {
 	(
@@ -978,9 +984,9 @@ fn inherents_ok_while_exts_forbidden_works() {
 	});
 }
 
-/// Panics when a block contains extrinsics although `after_inherents` forbids them.
+/// Refuses to import blocks with transactions during MBMs.
 #[test]
-#[should_panic = "Extrinsics are not allowed in this block"]
+#[should_panic = "Only inherents are allowed in 'Minimal' blocks"]
 fn extrinsic_while_exts_forbidden_errors() {
 	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
@@ -1002,7 +1008,34 @@ fn extrinsic_while_exts_forbidden_errors() {
 
 	new_test_ext(1).execute_with(|| {
 		// Tell `after_inherents` to forbid extrinsics:
-		sp_io::storage::set(&b":extrinsics_forbidden"[..], &[]);
+		MockedMode::set(RuntimeExecutiveMode::Minimal);
+		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
+	});
+}
+
+/// Same as above but imports.
+#[test]
+fn extrinsic_while_exts_allowed_works() {
+	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
+
+	let header = new_test_ext(1).execute_with(|| {
+		Executive::initialize_block(&Header::new(
+			1,
+			H256::default(),
+			H256::default(),
+			[69u8; 32].into(),
+			Digest::default(),
+		));
+
+		Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
+		Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
+
+		Executive::finalize_block()
+	});
+
+	new_test_ext(1).execute_with(|| {
+		// Tell `after_inherents` to forbid extrinsics:
 		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 	});
 }
@@ -1040,6 +1073,7 @@ fn try_execute_block_works() {
 	});
 }
 
+/// Check that `ensure_inherents_are_first` reports the correct indices.
 #[test]
 fn ensure_inherents_are_first_works() {
 	let in1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);

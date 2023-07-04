@@ -39,7 +39,7 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
-	BlockAfterInherentsMode, Digest, Percent, SaturatedConversion,
+	Digest, Percent, RuntimeExecutiveMode, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -345,14 +345,15 @@ where
 		let mut block_builder =
 			self.client.new_block_at(self.parent_hash, inherent_digests, PR::ENABLED)?;
 
+		// The executive mode does not influence the execution of inherents:
 		self.apply_inherents(&mut block_builder, inherent_data)?;
 
 		let block_timer = time::Instant::now();
-		let mode = block_builder.after_inherents()?;
-		let end_reason = match mode {
-			BlockAfterInherentsMode::ExtrinsicsAllowed =>
+		block_builder.after_inherents()?;
+		let end_reason = match block_builder.executive_mode {
+			RuntimeExecutiveMode::Normal =>
 				self.apply_extrinsics(&mut block_builder, deadline, block_size_limit).await?,
-			BlockAfterInherentsMode::ExtrinsicsForbidden => EndProposingReason::ExtrinsicsForbidden,
+			RuntimeExecutiveMode::Minimal => EndProposingReason::ExtrinsicsForbidden,
 		};
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
@@ -546,12 +547,7 @@ where
 		});
 
 		let extrinsics_summary = if extrinsics.is_empty() {
-			if end_reason == EndProposingReason::ExtrinsicsForbidden {
-				"extrinsics forbidden"
-			} else {
-				"no extrinsics"
-			}
-			.to_string()
+			"no extrinsics".to_string()
 		} else {
 			format!(
 				"extrinsics ({}): [{}]",

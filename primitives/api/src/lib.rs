@@ -93,7 +93,7 @@ pub use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Hash as HashT, HashFor, Header as HeaderT, NumberFor},
 	transaction_validity::TransactionValidity,
-	RuntimeString, TransactionOutcome,
+	RuntimeExecutiveMode, RuntimeString, TransactionOutcome,
 };
 #[doc(hidden)]
 #[cfg(feature = "std")]
@@ -715,7 +715,7 @@ pub fn deserialize_runtime_api_info(bytes: [u8; RUNTIME_API_INFO_SIZE]) -> ([u8;
 decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
-	#[api_version(4)]
+	#[api_version(5)]
 	pub trait Core {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
@@ -723,7 +723,7 @@ decl_runtime_apis! {
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
 		#[renamed("initialise_block", 2)]
-		fn initialize_block(header: &<Block as BlockT>::Header);
+		fn initialize_block(header: &<Block as BlockT>::Header) -> RuntimeExecutiveMode;
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
