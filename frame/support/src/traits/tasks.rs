@@ -36,7 +36,7 @@ pub trait Task: Sized + FullCodec {
 
 	/// Returns the `task_index` (analogous to `call_index`, but for tasks) of this `Task`
 	/// variant.
-	fn task_index(&self) -> usize;
+	const fn task_index(&self) -> usize;
 
 	/// Performs the work for this particular `Task` variant.
 	fn run(&self) -> Result<(), DispatchError>;
