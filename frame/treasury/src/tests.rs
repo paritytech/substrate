@@ -192,7 +192,7 @@ impl<N: Get<u64>> ConversionFromAssetBalance<u64, u32, u64> for MulBy<N> {
 		return balance.checked_mul(N::get()).ok_or(())
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(_: AssetId) {}
+	fn ensure_successful(_: u32) {}
 }
 
 impl Config for Test {
