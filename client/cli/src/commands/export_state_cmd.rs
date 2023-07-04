@@ -59,7 +59,6 @@ impl ExportStateCmd {
 		B: BlockT,
 		C: UsageProvider<B> + StorageProvider<B, BA> + HeaderBackend<B>,
 		BA: sc_client_api::backend::Backend<B>,
-		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: Debug,
 		<<B::Header as HeaderT>::Number as FromStr>::Err: Debug,
 	{

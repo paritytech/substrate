@@ -631,7 +631,7 @@ fn call_subtype_conversion() {
 
 #[test]
 fn test_metadata() {
-	use frame_support::metadata::*;
+	use frame_support::metadata::{v14::*, *};
 	use scale_info::meta_type;
 
 	let pallets = vec![
