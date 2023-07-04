@@ -51,17 +51,6 @@ pub type BoundedNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLength>;
 pub type BoundedTextOf<T> = BoundedVec<u8, <T as Config>::MaxTextLength>;
 pub type BoundedSuffixOf<T> = BoundedVec<u8, <T as Config>::MaxSuffixLength>;
 
-/// Possible operations on optional config values of this pallet.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
-pub enum OptionalConfigOp<T: Codec + Debug> {
-	/// Don't change.
-	Noop,
-	/// Set the given value.
-	Set(T),
-	/// Remove from storage.
-	Remove,
-}
-
 /// Possible operations on config values of this pallet.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
 pub enum ConfigOp<T: Codec + Debug> {
@@ -69,6 +58,8 @@ pub enum ConfigOp<T: Codec + Debug> {
 	Noop,
 	/// Set the given value.
 	Set(T),
+	/// Remove from storage.
+	Remove,
 }
 
 #[derive(
