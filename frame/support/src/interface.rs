@@ -28,8 +28,7 @@ use sp_runtime::traits::Member;
 use sp_runtime::{
 	traits,
 	traits::{Dispatchable, Zero},
-	DispatchError, DispatchResultWithInfo, InterfaceError, ModuleError,
-	MAX_MODULE_ERROR_ENCODED_SIZE,
+	DispatchError, DispatchResultWithInfo, ModuleError, MAX_MODULE_ERROR_ENCODED_SIZE,
 };
 use sp_std::fmt::Debug;
 use sp_std::marker::PhantomData;
