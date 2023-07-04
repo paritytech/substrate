@@ -1707,17 +1707,6 @@ where
 					}
 				}
 			},
-			// #[allow(deprecated)]
-			// SwarmEvent::BannedPeer { peer_id, endpoint } => {
-			// 	debug!(
-			// 		target: "sub-libp2p",
-			// 		"Libp2p => BannedPeer({}). Connected via {:?}.",
-			// 		peer_id, endpoint,
-			// 	);
-			// 	if let Some(metrics) = self.metrics.as_ref() {
-			// 		metrics.incoming_connections_errors_total.with_label_values(&["banned"]).inc();
-			// 	}
-			// },
 			SwarmEvent::ListenerClosed { reason, addresses, .. } => {
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.listeners_local_addresses.sub(addresses.len() as u64);
