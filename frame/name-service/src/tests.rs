@@ -19,13 +19,12 @@
 
 #![cfg(test)]
 
-use super::{mock::*, *};
+use super::*;
+use crate::mock::*;
+use frame_support::{assert_noop, assert_ok};
+
 use codec::Encode;
-use frame_support::{
-	assert_noop, assert_ok,
-	traits::{Get, OnFinalize, OnInitialize},
-};
-use sp_std::prelude::*;
+// use sp_std::prelude::*;
 // use sp_runtime::traits::One;
 use sp_io::hashing::blake2_256;
 
@@ -68,7 +67,7 @@ fn alice_register_bob_senario_setup() -> (Vec<u8>, [u8; 32]) {
 	let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
 	let length = 10;
 
-	let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
+	let min_commitment: u64 = <<Test as Config>::MinCommitmentAge as Get<u64>>::get();
 
 	assert_eq!(Balances::free_balance(&sender), 100);
 	assert_eq!(Balances::free_balance(&owner), 200);
@@ -152,7 +151,7 @@ fn reveal_works() {
 		let commitment_hash = blake2_256(&encoded_bytes);
 		let length = 10;
 		let name_hash = sp_io::hashing::blake2_256(&name);
-		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
+		let min_commitment: u64 = <<Test as Config>::MinCommitmentAge as Get<u64>>::get();
 
 		assert_eq!(Balances::free_balance(&1), 100);
 		assert_ok!(NameService::commit(RuntimeOrigin::signed(sender), owner, commitment_hash));
@@ -195,7 +194,7 @@ fn reveal_handles_errors() {
 		let length = 10;
 		let name = "alice".as_bytes().to_vec();
 		let commitment_hash = blake2_256(&(&name, secret).encode());
-		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
+		let min_commitment: u64 = <<Test as Config>::MinCommitmentAge as Get<u64>>::get();
 
 		assert_eq!(Balances::free_balance(&1), 100);
 
@@ -229,7 +228,7 @@ fn reveal_handles_errors() {
 		);
 
 		// Cannot reveal a name that is too long.
-		let max_len: u32 = <Test as crate::Config>::MaxNameLength::get();
+		let max_len: u32 = <<Test as Config>::MaxNameLength as Get<u32>>::get();
 		let name = vec![0; max_len as usize + 1];
 		let commitment_hash = blake2_256(&(&name, secret).encode());
 		assert_ok!(NameService::commit(RuntimeOrigin::signed(sender), owner, commitment_hash));
@@ -274,7 +273,7 @@ fn reveal_ensure_active_registration_not_registered_again() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Balances::free_balance(&3), 300);
 		assert_eq!(Balances::free_balance(&4), 400);
-		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
+		let min_commitment: u64 = <<Test as Config>::MinCommitmentAge as Get<u64>>::get();
 		let (name, name_hash) = alice_register_bob_senario_setup();
 
 		// second registration
@@ -364,7 +363,7 @@ fn transfer_handles_errors() {
 		let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
 		let length = 1;
 		let name_hash = sp_io::hashing::blake2_256(&name);
-		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
+		let min_commitment: u64 = <<Test as Config>::MinCommitmentAge as Get<u64>>::get();
 
 		// Registration not found
 		assert_noop!(

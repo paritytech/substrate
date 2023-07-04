@@ -92,6 +92,14 @@
 //! underlying account that the node is aliasing when used for transferring tokens.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+use codec::Codec;
+use frame_support::{
+	ensure,
+	pallet_prelude::{MaxEncodedLen, *},
+	traits::Get,
+};
+use scale_info::TypeInfo;
+use sp_std::{fmt::Debug, vec::Vec};
 
 #[cfg(test)]
 mod mock;
@@ -113,16 +121,21 @@ pub use pallet::*;
 pub use resolver::NameServiceResolver;
 pub use weights::WeightInfo;
 
+// Possible operations on para registration for this pallet.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
+pub enum ConfigOp<T: Codec + Debug> {
+	/// Set the given value.
+	Set(T),
+	/// Remove from storage.
+	Remove,
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use crate::{resolver::NameServiceResolver, types::*};
-	use frame_support::{
-		pallet_prelude::*,
-		traits::{OnUnbalanced, ReservableCurrency},
-		BoundedVec,
-	};
-	use frame_system::pallet_prelude::*;
+	use frame_support::traits::{OnUnbalanced, ReservableCurrency, StorageVersion};
+	use frame_system::{ensure_signed, pallet_prelude::*};
 	use sp_runtime::traits::{Convert, Zero};
 	use sp_std::vec::Vec;
 
