@@ -356,6 +356,17 @@ impl<T: Config<I>, I: 'static> Buy<T::AccountId, ItemPrice<T,I>> for Pallet<T, I
 	) -> DispatchResult {
 		Self::do_buy_item(*collection, *item, buyer.clone(), *bid_price)
 	}
+
+	fn set_price(
+		collection: &Self::CollectionId,
+		item: &Self::ItemId,
+		sender: &T::AccountId,
+		price: Option<ItemPrice<T,I>>,
+		whitelisted_buyer: Option<T::AccountId>
+	) -> DispatchResult {
+		Self::do_set_price(*collection, *item, sender.clone(), price, whitelisted_buyer)
+	}
+
 	fn item_price(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
