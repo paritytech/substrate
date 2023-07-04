@@ -122,7 +122,7 @@ fn fractionalize_should_work() {
 			beneficiary: account(2),
 		}));
 
-		// owner can't burn a fractionalized NFT
+		// owner can't burn an already fractionalized NFT
 		assert_noop!(
 			Nfts::burn(RuntimeOrigin::signed(account(1)), nft_collection_id, nft_id),
 			DispatchError::Module(ModuleError {
