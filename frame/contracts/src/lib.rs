@@ -1363,7 +1363,7 @@ impl<T: Config> Pallet<T> {
 		origin: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Weight,
-		storage_deposit_limit: Option<BalanceOf<T>>,
+		mut storage_deposit_limit: Option<BalanceOf<T>>,
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
@@ -1386,7 +1386,7 @@ impl<T: Config> Pallet<T> {
 			}
 		};
 
-		let (code_hash, storage_deposit_limit): (CodeHash<T>, Option<BalanceOf<T>>) = match code {
+		let (code_hash, upload_deposit): (CodeHash<T>, BalanceOf<T>) = match code {
 			Code::Upload(code) => {
 				let result = Self::try_upload_code(
 					origin.clone(),
@@ -1409,14 +1409,11 @@ impl<T: Config> Pallet<T> {
 						},
 				};
 
-				let storage_deposit_limit = storage_deposit_limit.map(|limit| {
-					let limit: BalanceOf<T> = limit.into();
-					limit.saturating_sub(deposit)
-				});
-
-				(code_hash, storage_deposit_limit)
+				storage_deposit_limit =
+					storage_deposit_limit.map(|l| l.saturating_sub(deposit.into()));
+				(code_hash, deposit)
 			},
-			Code::Existing(code_hash) => (code_hash, storage_deposit_limit),
+			Code::Existing(code_hash) => (code_hash, Default::default()),
 		};
 
 		let common = CommonInput {
@@ -1436,7 +1433,9 @@ impl<T: Config> Pallet<T> {
 				.map_err(|e| e.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
-			storage_deposit: output.storage_deposit,
+			storage_deposit: output
+				.storage_deposit
+				.saturating_add(&StorageDeposit::Charge(upload_deposit)),
 			debug_message: debug_message.unwrap_or_default().to_vec(),
 			events: events(),
 		}
