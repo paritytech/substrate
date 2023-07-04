@@ -55,14 +55,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.take()
 				.map_or(ItemMetadataDeposit { account: None, amount: Zero::zero() }, |m| m.deposit);
 
-			let mut deposit = Zero::zero();
-			if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) && !is_root
-			{
-				deposit = T::DepositPerByte::get()
-					.saturating_mul(((data.len()) as u32).into())
-					.saturating_add(T::MetadataDepositBase::get());
-			}
-
+			let deposit = Self::calc_metadata_deposit(&data, is_root, &collection_config);
 			let depositor = maybe_depositor.clone().unwrap_or(collection_details.owner.clone());
 			let old_depositor = old_deposit.account.unwrap_or(collection_details.owner.clone());
 
@@ -213,5 +206,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		metadata: Vec<u8>,
 	) -> Result<BoundedVec<u8, T::StringLimit>, DispatchError> {
 		Ok(BoundedVec::try_from(metadata).map_err(|_| Error::<T, I>::IncorrectMetadata)?)
+	}
+
+	/// Calculate the metadata deposit for the provided data.
+	pub fn calc_metadata_deposit(
+		data: &[u8],
+		is_root_caller: bool,
+		collection_config: &CollectionConfigFor<T, I>,
+	) -> DepositBalanceOf<T, I> {
+		let mut deposit = Zero::zero();
+		if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
+			!is_root_caller
+		{
+			deposit = T::DepositPerByte::get()
+				.saturating_mul(((data.len()) as u32).into())
+				.saturating_add(T::MetadataDepositBase::get());
+		}
+		deposit
 	}
 }

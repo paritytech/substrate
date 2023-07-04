@@ -803,7 +803,7 @@ pub mod pallet {
 				mint_to.clone(),
 				item_config,
 				|collection_details, collection_config| {
-					let mint_settings = collection_config.mint_settings;
+					let mint_settings = &collection_config.mint_settings;
 					let now = frame_system::Pallet::<T>::block_number();
 
 					if let Some(start_block) = mint_settings.start_block {
@@ -872,6 +872,18 @@ pub mod pallet {
 							price,
 							ExistenceRequirement::KeepAlive,
 						)?;
+					}
+
+					if let Some(item_metadata) = &mint_settings.default_item_metadata {
+						collection_details.item_metadatas.saturating_inc();
+
+						let deposit =
+							Self::calc_metadata_deposit(item_metadata, false, collection_config);
+						let metadata = ItemMetadata {
+							deposit: ItemMetadataDeposit { account: Some(caller), amount: deposit },
+							data: item_metadata.clone(),
+						};
+						ItemMetadataOf::<T, I>::insert(&collection, &item, metadata);
 					}
 
 					Ok(())
@@ -1659,11 +1671,7 @@ pub mod pallet {
 		pub fn update_mint_settings(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			mint_settings: MintSettings<
-				BalanceOf<T, I>,
-				<T as SystemConfig>::BlockNumber,
-				T::CollectionId,
-			>,
+			mint_settings: MintSettingsOf<T, I>,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)

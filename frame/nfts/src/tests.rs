@@ -454,6 +454,32 @@ fn mint_should_work() {
 }
 
 #[test]
+fn mint_with_default_metadata() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&account(2), 100);
+		assert_ok!(Nfts::force_create(
+			RuntimeOrigin::root(),
+			account(1),
+			CollectionConfig {
+				settings: CollectionSettings::all_enabled(),
+				max_supply: None,
+				mint_settings: MintSettings {
+					mint_type: MintType::Public,
+					default_item_metadata: Some(bvec![0, 1]),
+					..Default::default()
+				},
+			}
+		));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(account(2)), 0, 42, account(2), None));
+		assert!(ItemMetadataOf::<Test>::contains_key(0, 42));
+		assert_eq!(Collection::<Test>::get(0).unwrap().item_metadatas, 1);
+
+		let metadata = ItemMetadataOf::<Test>::get(0, 42).unwrap();
+		assert_eq!(metadata.deposit, ItemMetadataDeposit { account: Some(account(2)), amount: 3 });
+	});
+}
+
+#[test]
 fn transfer_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Nfts::force_create(

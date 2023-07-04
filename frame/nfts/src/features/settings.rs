@@ -59,11 +59,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn do_update_mint_settings(
 		maybe_check_origin: Option<T::AccountId>,
 		collection: T::CollectionId,
-		mint_settings: MintSettings<
-			BalanceOf<T, I>,
-			<T as SystemConfig>::BlockNumber,
-			T::CollectionId,
-		>,
+		mint_settings: MintSettingsOf<T, I>,
 	) -> DispatchResult {
 		if let Some(check_origin) = &maybe_check_origin {
 			ensure!(

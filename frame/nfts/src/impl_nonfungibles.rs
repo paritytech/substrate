@@ -169,7 +169,7 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 			collection,
 			who.clone(),
 			admin.clone(),
-			*config,
+			config.clone(),
 			T::CollectionDeposit::get(),
 			Event::Created { collection, creator: who.clone(), owner: admin.clone() },
 		)?;

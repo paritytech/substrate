@@ -209,7 +209,12 @@ fn make_collection_config<T: Config<I>, I: 'static>(
 	CollectionConfig {
 		settings: CollectionSettings::from_disabled(disable_settings),
 		max_supply: None,
-		mint_settings: MintSettings::default(),
+		mint_settings: MintSettings {
+			default_item_metadata: Some(
+				vec![0; T::StringLimit::get() as usize].try_into().unwrap(),
+			),
+			..Default::default()
+		},
 	}
 }
 
@@ -645,12 +650,14 @@ benchmarks_instance_pallet! {
 
 	update_mint_settings {
 		let (collection, caller, _) = create_collection::<T, I>();
+		let default_item_metadata: BoundedVec<_, _> = vec![0u8; T::StringLimit::get() as usize].try_into().unwrap();
 		let mint_settings = MintSettings {
 			mint_type: MintType::HolderOf(T::Helper::collection(0)),
 			start_block: Some(One::one()),
 			end_block: Some(One::one()),
 			price: Some(ItemPrice::<T, I>::from(1u32)),
 			default_item_settings: ItemSettings::all_enabled(),
+			default_item_metadata: Some(default_item_metadata),
 		};
 	}: _(SystemOrigin::Signed(caller.clone()), collection, mint_settings)
 	verify {

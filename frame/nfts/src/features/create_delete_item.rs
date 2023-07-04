@@ -26,7 +26,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		mint_to: T::AccountId,
 		item_config: ItemConfig,
 		with_details_and_config: impl FnOnce(
-			&CollectionDetailsFor<T, I>,
+			&mut CollectionDetailsFor<T, I>,
 			&CollectionConfigFor<T, I>,
 		) -> DispatchResult,
 	) -> DispatchResult {
