@@ -20,36 +20,6 @@
 use crate::{types::*, *};
 use frame_support::traits::ReservableCurrency;
 
-pub trait NameServiceResolver<T: Config> {
-	/// Get the native address associated with this name hash.
-	fn get_address(name_hash: NameHash) -> Option<(T::AccountId, u32)>;
-	/// Set the native address associated with this name hash.
-	fn set_address(
-		name_hash: NameHash,
-		address: T::AccountId,
-		para_id: u32,
-		depositor: T::AccountId,
-	) -> DispatchResult;
-
-	/// Get the unhashed name associated with this name hash.
-	fn get_name(name_hash: NameHash) -> Option<BoundedNameOf<T>>;
-	/// Set the unhashed name associated with this name hash.
-	fn set_name(
-		name_hash: NameHash,
-		name: BoundedNameOf<T>,
-		depositor: T::AccountId,
-	) -> DispatchResult;
-
-	/// Get the arbitrary text associated with this name hash.
-	fn get_text(name_hash: NameHash) -> Option<BoundedTextOf<T>>;
-	/// Set the arbitrary text associated with this name hash.
-	fn set_text(
-		name_hash: NameHash,
-		text: BoundedTextOf<T>,
-		depositor: T::AccountId,
-	) -> DispatchResult;
-}
-
 impl<T: Config> NameServiceResolver<T> for Pallet<T> {
 	/// Get the native address associated with this name hash.
 	fn get_address(name_hash: NameHash) -> Option<(T::AccountId, u32)> {

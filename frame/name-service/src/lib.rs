@@ -97,7 +97,6 @@ use sp_std::vec::Vec;
 
 pub use crate::types::*;
 pub use pallet::*;
-pub use resolver::NameServiceResolver;
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -119,7 +118,6 @@ mod weights;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use crate::resolver::NameServiceResolver;
 	use frame_support::traits::{OnUnbalanced, ReservableCurrency, StorageVersion};
 	use frame_system::{ensure_signed, pallet_prelude::*};
 	use sp_runtime::traits::{Convert, Zero};

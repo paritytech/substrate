@@ -51,15 +51,24 @@ pub type BoundedNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLength>;
 pub type BoundedTextOf<T> = BoundedVec<u8, <T as Config>::MaxTextLength>;
 pub type BoundedSuffixOf<T> = BoundedVec<u8, <T as Config>::MaxSuffixLength>;
 
-/// Possible operations on the configuration values of this pallet.
+/// Possible operations on optional config values of this pallet.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
-pub enum ConfigOp<T: Codec + Debug> {
+pub enum OptionalConfigOp<T: Codec + Debug> {
 	/// Don't change.
 	Noop,
 	/// Set the given value.
 	Set(T),
 	/// Remove from storage.
 	Remove,
+}
+
+/// Possible operations on config values of this pallet.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
+pub enum ConfigOp<T: Codec + Debug> {
+	/// Don't change.
+	Noop,
+	/// Set the given value.
+	Set(T),
 }
 
 #[derive(
@@ -111,4 +120,34 @@ pub struct BytesStorage<AccountId, Balance, BoundedBytes> {
 	pub bytes: BoundedBytes,
 	pub depositor: AccountId,
 	pub deposit: Balance,
+}
+
+pub trait NameServiceResolver<T: Config> {
+	/// Get the native address associated with this name hash.
+	fn get_address(name_hash: NameHash) -> Option<(T::AccountId, u32)>;
+	/// Set the native address associated with this name hash.
+	fn set_address(
+		name_hash: NameHash,
+		address: T::AccountId,
+		para_id: u32,
+		depositor: T::AccountId,
+	) -> DispatchResult;
+
+	/// Get the unhashed name associated with this name hash.
+	fn get_name(name_hash: NameHash) -> Option<BoundedNameOf<T>>;
+	/// Set the unhashed name associated with this name hash.
+	fn set_name(
+		name_hash: NameHash,
+		name: BoundedNameOf<T>,
+		depositor: T::AccountId,
+	) -> DispatchResult;
+
+	/// Get the arbitrary text associated with this name hash.
+	fn get_text(name_hash: NameHash) -> Option<BoundedTextOf<T>>;
+	/// Set the arbitrary text associated with this name hash.
+	fn set_text(
+		name_hash: NameHash,
+		text: BoundedTextOf<T>,
+		depositor: T::AccountId,
+	) -> DispatchResult;
 }
