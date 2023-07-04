@@ -122,7 +122,7 @@ pub mod pallet {
 
 		/// Helper type for benchmarks.
 		#[cfg(feature = "runtime-benchmarks")]
-		type BenchmarkHelper: crate::AssetKindFactory<Self::AssetId>;
+		type BenchmarkHelper: crate::AssetKindFactory<Self::AssetKind>;
 	}
 
 	/// Maps an asset to its fixed point representation in the native balance.

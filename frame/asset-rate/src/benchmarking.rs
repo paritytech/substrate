@@ -65,7 +65,7 @@ mod benchmarks {
 	#[benchmark]
 	fn update() -> Result<(), BenchmarkError> {
 		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(SEED);
-		let asset_id: T::AssetId = assert_ok!(AssetRate::<T>::create(
+		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
 			asset_kind.clone(),
 			default_conversion_rate()
@@ -86,7 +86,7 @@ mod benchmarks {
 		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(SEED);
 		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
-			asset_id.clone(),
+			asset_kind.clone(),
 			default_conversion_rate()
 		));
 
