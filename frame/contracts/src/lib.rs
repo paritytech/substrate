@@ -1391,7 +1391,7 @@ impl<T: Config> Pallet<T> {
 				let result = Self::try_upload_code(
 					origin.clone(),
 					code,
-					storage_deposit_limit.clone().map(Into::into),
+					storage_deposit_limit.map(Into::into),
 					Determinism::Enforced,
 					debug_message.as_mut(),
 				);
