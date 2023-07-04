@@ -257,7 +257,7 @@ benchmarks! {
 		m.step();
 	}
 
-	// This benchmarks the v13 migration step.
+	// This benchmarks the v13 migration step (Add delegate_dependencies field).
 	#[pov_mode = Measured]
 	v13_migration_step {
 		let contract = <Contract<T>>::with_caller(

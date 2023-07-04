@@ -292,7 +292,7 @@ pub mod pallet {
 		type DepositPerItem: Get<BalanceOf<Self>>;
 
 		/// The percentage of the storage deposit that should be held for using a code hash.
-		/// Instantiating a contract, or calling `add_delegate_dependency` (for contract delegation)
+		/// Instantiating a contract, or calling [`chain_extension::Ext::add_delegate_dependency`]
 		/// protects the code from being removed, In order to prevent abuse these actions are
 		/// protected with a percentage of the code deposit.
 		#[pallet::constant]
@@ -314,7 +314,7 @@ pub mod pallet {
 		type MaxStorageKeyLen: Get<u32>;
 
 		/// The maximum number of delegate_dependencies that a contract can lock with
-		/// `add_delegate_dependency`.
+		/// [`chain_extension::Ext::add_delegate_dependency`].
 		#[pallet::constant]
 		type MaxDelegateDependencies: Get<u32>;
 

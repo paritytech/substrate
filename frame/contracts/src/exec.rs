@@ -313,25 +313,30 @@ pub trait Ext: sealing::Sealed {
 	/// Returns a nonce that is incremented for every instantiated contract.
 	fn nonce(&mut self) -> u64;
 
-	/// Add a delegate dependency to `delegate_dependencies`.
+	/// Adds a delegate dependency to [`ContractInfo`]'s `delegate_dependencies` field.
 	///
-	/// This ensure that the delegated contract is not removed while it is still in use. This will
-	/// increase the reference count of the code hash, and charge a fraction (see
-	/// `CodeHashLockupDepositPercent`) of the code deposit.
+	/// This ensures that the delegated contract is not removed while it is still in use. It
+	/// increases the reference count of the code hash and charges a fraction (see
+	/// [`Config::CodeHashLockupDepositPercent`]) of the code deposit.
 	///
-	/// Returns an error if we have reached the maximum number of delegate_dependencies, or the
-	/// delegate_dependency already exists.
+	/// # Errors
+	///
+	/// - [`Error::<T>::MaxDelegateDependenciesReached`]
+	/// - [`Error::<T>::CannotAddSelfAsDelegateDependency`]
+	/// - [`Error::<T>::DelegateDependencyAlreadyExists`]
 	fn add_delegate_dependency(
 		&mut self,
 		code_hash: CodeHash<Self::T>,
 	) -> Result<(), DispatchError>;
 
-	/// Remove a delegate dependency from `delegate_dependencies`.
+	/// Removes a delegate dependency from [`ContractInfo`]'s `delegate_dependencies` field.
 	///
-	/// This is the counterpart of `add_delegate_dependency`. This method will decrease the
-	/// reference count And refund the deposit that was charged by `add_delegate_dependency`.
+	/// This is the counterpart of [`Self::add_delegate_dependency`]. It decreases the reference
+	/// count and refunds the deposit that was charged by [`Self::add_delegate_dependency`].
 	///
-	/// Returns an error if the dependency does not exist.
+	/// # Errors
+	///
+	/// - [`Error::<T>::DelegateDependencyNotFound`]
 	fn remove_delegate_dependency(
 		&mut self,
 		code_hash: &CodeHash<Self::T>,

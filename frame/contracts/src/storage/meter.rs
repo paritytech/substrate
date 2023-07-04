@@ -406,11 +406,11 @@ where
 		};
 	}
 
-	/// Add a deposit charge
+	/// Adds a deposit charge.
 	///
-	/// Use this method instead of `charge` when the charge is not the result of a storage change.
-	/// This is the case when a delegate dependency is added or removed, or when the code_hash is
-	/// updated.
+	/// Use this method instead of [`Self::charge`] when the charge is not the result of a storage
+	/// change. This is the case when a `delegate_dependency` is added or removed, or when the
+	/// `code_hash` is updated.
 	pub fn charge_deposit(&mut self, deposit_account: DepositAccount<T>, amount: DepositOf<T>) {
 		self.total_deposit = self.total_deposit.saturating_add(&amount);
 		self.charges.push(Charge { deposit_account, amount, terminated: false });

@@ -5388,7 +5388,7 @@ fn delegate_call_indeterministic_code() {
 
 #[test]
 fn add_remove_delegate_dependency_works() {
-	// set hah lock up deposit to 30%, to test deposit calculation.
+	// set hash lock up deposit to 30%, to test deposit calculation.
 	CODE_HASH_LOCKUP_DEPOSIT_PERCENT.with(|c| *c.borrow_mut() = Perbill::from_percent(30));
 	MAX_DELEGATE_DEPENDENCIES.with(|c| *c.borrow_mut() = 1);
 
@@ -5531,7 +5531,7 @@ fn native_dependency_deposit_works() {
 	let (wasm, code_hash) = compile_module::<Test>("set_code_hash").unwrap();
 	let (dummy_wasm, dummy_code_hash) = compile_module::<Test>("dummy").unwrap();
 
-	// Set hah lock up deposit to 30%, to test deposit calculation.
+	// Set hash lock up deposit to 30%, to test deposit calculation.
 	CODE_HASH_LOCKUP_DEPOSIT_PERCENT.with(|c| *c.borrow_mut() = Perbill::from_percent(30));
 
 	// Set a low existential deposit so that the base storage deposit is based on the contract

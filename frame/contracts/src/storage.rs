@@ -216,7 +216,7 @@ impl<T: Config> ContractInfo<T> {
 		})
 	}
 
-	/// Set and returns the contract base deposit.
+	/// Sets and returns the contract base deposit.
 	/// `upload_deposit` is the balance of the deposit paid for uploading the contract.
 	pub fn update_base_deposit(&mut self, upload_deposit: BalanceOf<T>) -> BalanceOf<T> {
 		let ed = Pallet::<T>::min_balance();
@@ -239,7 +239,7 @@ impl<T: Config> ContractInfo<T> {
 		deposit
 	}
 
-	/// Add a new delegate dependency to the contract.
+	/// Adds a new delegate dependency to the contract.
 	/// The `amount` is the amount of funds that will be reserved for the dependency.
 	///
 	/// Returns an error if the maximum number of delegate_dependencies is reached or if
@@ -256,7 +256,7 @@ impl<T: Config> ContractInfo<T> {
 			.map_err(Into::into)
 	}
 
-	/// Remove a delegate dependency from the contract.
+	/// Removes a delegate dependency from the contract.
 	///
 	/// Returns an error if the entry doesn't exist.
 	pub fn remove_delegate_dependency(
