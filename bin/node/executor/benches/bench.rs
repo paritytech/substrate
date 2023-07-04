@@ -19,8 +19,8 @@ use codec::{Decode, Encode};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use frame_support::Hashable;
 use kitchensink_runtime::{
-	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, GenesisConfig, Header,
-	RuntimeCall, UncheckedExtrinsic,
+	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, Header, RuntimeCall,
+	RuntimeGenesisConfig, UncheckedExtrinsic,
 };
 use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
@@ -67,7 +67,7 @@ fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 	node_testing::keyring::sign(xt, SPEC_VERSION, TRANSACTION_VERSION, GENESIS_HASH)
 }
 
-fn new_test_ext(genesis_config: &GenesisConfig) -> TestExternalities<BlakeTwo256> {
+fn new_test_ext(genesis_config: &RuntimeGenesisConfig) -> TestExternalities<BlakeTwo256> {
 	let mut test_ext = TestExternalities::new_with_code(
 		compact_code_unwrap(),
 		genesis_config.build_storage().unwrap(),
@@ -157,7 +157,7 @@ fn construct_block<E: Externalities>(
 }
 
 fn test_blocks(
-	genesis_config: &GenesisConfig,
+	genesis_config: &RuntimeGenesisConfig,
 	executor: &NativeElseWasmExecutor<ExecutorDispatch>,
 ) -> Vec<(Vec<u8>, Hash)> {
 	let mut test_ext = new_test_ext(genesis_config);
