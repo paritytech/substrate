@@ -28,14 +28,15 @@ use frame_support::{
 	},
 };
 use frame_system::RawOrigin as SystemOrigin;
-use sp_arithmetic::traits::Saturating;
-use sp_runtime::traits::StaticLookup;
+use sp_runtime::traits::{Bounded, StaticLookup};
 use sp_std::prelude::*;
 
 use crate::Pallet as AssetConversion;
 
 const INITIAL_ASSET_BALANCE: u128 = 1_000_000_000_000;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+type BalanceOf<T> =
+	<<T as Config>::Currency as InspectFungible<<T as frame_system::Config>::AccountId>>::Balance;
 
 fn get_lp_token_id<T: Config>() -> T::PoolAssetId
 where
@@ -54,8 +55,10 @@ where
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	if let Ok(asset_id) = T::MultiAssetIdConverter::try_convert(asset) {
-		let ed = T::Currency::minimum_balance();
-		T::Currency::set_balance(&caller, ed.saturating_mul(10_000u32.into()));
+		T::Currency::set_balance(
+			&caller,
+			BalanceOf::<T>::max_value().checked_div(&1000u32.into()).unwrap_or_default(),
+		);
 		assert_ok!(T::Assets::create(asset_id.clone(), caller.clone(), true, 1.into()));
 		assert_ok!(T::Assets::mint_into(asset_id, &caller, INITIAL_ASSET_BALANCE.into()));
 	}
