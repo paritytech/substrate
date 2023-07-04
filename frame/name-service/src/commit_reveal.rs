@@ -93,7 +93,6 @@ impl<T: Config> Pallet<T> {
 
 		let commitment_hash = Self::commitment_hash(&name, secret);
 		let commitment = Self::get_commitment(commitment_hash)?;
-
 		let block_number = frame_system::Pallet::<T>::block_number();
 
 		ensure!(

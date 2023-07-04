@@ -25,9 +25,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	traits::{Get, OnFinalize, OnInitialize},
 };
-use sp_std::{
-	prelude::*,
-};
+use sp_std::prelude::*;
 // use sp_runtime::traits::One;
 use sp_io::hashing::blake2_256;
 
@@ -647,7 +645,11 @@ fn set_subnode_record_handles_errors() {
 
 		// parent hash has not yet been registered
 		assert_noop!(
-			NameService::set_subnode_record(RuntimeOrigin::signed(owner), parent_hash, label.clone()),
+			NameService::set_subnode_record(
+				RuntimeOrigin::signed(owner),
+				parent_hash,
+				label.clone()
+			),
 			Error::<Test>::RegistrationNotFound
 		);
 		let (_, parent_hash) = alice_register_bob_senario_setup();
@@ -662,7 +664,11 @@ fn set_subnode_record_handles_errors() {
 		);
 		// not the owner of parent hash
 		assert_noop!(
-			NameService::set_subnode_record(RuntimeOrigin::signed(not_owner), parent_hash, label.clone()),
+			NameService::set_subnode_record(
+				RuntimeOrigin::signed(not_owner),
+				parent_hash,
+				label.clone()
+			),
 			Error::<Test>::NotController
 		);
 		// register subnode for further testing
@@ -787,7 +793,11 @@ fn deregister_subnode_owner_works() {
 
 		// initial registration, subnode registration and address set for further testing
 		let (_, parent_hash) = alice_register_bob_senario_setup();
-		assert_ok!(NameService::set_subnode_record(RuntimeOrigin::signed(owner), parent_hash, label));
+		assert_ok!(NameService::set_subnode_record(
+			RuntimeOrigin::signed(owner),
+			parent_hash,
+			label
+		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
 		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address));
@@ -795,7 +805,11 @@ fn deregister_subnode_owner_works() {
 		assert_eq!(Balances::free_balance(owner), 198);
 
 		// perform deregistration of subnode by owner
-		assert_ok!(NameService::deregister_subnode(RuntimeOrigin::signed(owner), parent_hash, label_hash));
+		assert_ok!(NameService::deregister_subnode(
+			RuntimeOrigin::signed(owner),
+			parent_hash,
+			label_hash
+		));
 
 		// registration no longer present
 		assert!(!Registrations::<Test>::contains_key(name_hash));
@@ -817,7 +831,11 @@ fn deregister_subnode_non_owner_works() {
 
 		// initial registration, subnode registration and address set for further testing
 		let (_, parent_hash) = alice_register_bob_senario_setup();
-		assert_ok!(NameService::set_subnode_record(RuntimeOrigin::signed(owner), parent_hash, label));
+		assert_ok!(NameService::set_subnode_record(
+			RuntimeOrigin::signed(owner),
+			parent_hash,
+			label
+		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
 		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address));
@@ -865,7 +883,11 @@ fn deregister_subnode_handles_errors() {
 		);
 
 		// subnode registration and address set for further testing
-		assert_ok!(NameService::set_subnode_record(RuntimeOrigin::signed(owner), parent_hash, label));
+		assert_ok!(NameService::set_subnode_record(
+			RuntimeOrigin::signed(owner),
+			parent_hash,
+			label
+		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
 		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address));
@@ -874,7 +896,11 @@ fn deregister_subnode_handles_errors() {
 
 		// non-owner cannot de-register if parent has not been deregistered
 		assert_noop!(
-			NameService::deregister_subnode(RuntimeOrigin::signed(not_owner), parent_hash, label_hash),
+			NameService::deregister_subnode(
+				RuntimeOrigin::signed(not_owner),
+				parent_hash,
+				label_hash
+			),
 			Error::<Test>::RegistrationNotExpired
 		);
 	});
