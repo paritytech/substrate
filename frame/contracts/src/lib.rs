@@ -1110,7 +1110,7 @@ struct InternalOutput<T: Config, O> {
 
 /// Helper trait to wrap contract execution entry points into a single function
 /// [`Invokable::run_guarded`].
-trait Invokable<T: Config> {
+trait Invokable<T: Config>: Sized {
 	/// What is returned as a result of a successful invocation.
 	type Output;
 
@@ -1122,7 +1122,7 @@ trait Invokable<T: Config> {
 	///
 	/// We enforce a re-entrancy guard here by initializing and checking a boolean flag through a
 	/// global reference.
-	fn run_guarded(&self, common: CommonInput<T>) -> InternalOutput<T, Self::Output> {
+	fn run_guarded(self, common: CommonInput<T>) -> InternalOutput<T, Self::Output> {
 		// Set up a global reference to the boolean flag used for the re-entrancy guard.
 		environmental!(executing_contract: bool);
 
@@ -1170,11 +1170,8 @@ trait Invokable<T: Config> {
 	/// contract or a instantiation of a new one.
 	///
 	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
-	fn run(
-		&self,
-		common: CommonInput<T>,
-		gas_meter: GasMeter<T>,
-	) -> InternalOutput<T, Self::Output>;
+	fn run(self, common: CommonInput<T>, gas_meter: GasMeter<T>)
+		-> InternalOutput<T, Self::Output>;
 
 	/// This method ensures that the given `origin` is allowed to invoke the current `Invokable`.
 	///
@@ -1186,7 +1183,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 	type Output = ExecReturnValue;
 
 	fn run(
-		&self,
+		self,
 		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
@@ -1212,7 +1209,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 			value,
 			data.clone(),
 			debug_message,
-			*determinism,
+			determinism,
 		);
 
 		match storage_meter.try_into_deposit(&origin) {
@@ -1234,7 +1231,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 	type Output = (AccountIdOf<T>, ExecReturnValue);
 
 	fn run(
-		&self,
+		self,
 		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
