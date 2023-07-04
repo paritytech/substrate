@@ -17,14 +17,16 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::prelude::*;
-use libp2p_identity::PeerId;
+use libp2p::PeerId;
 use rand::{
 	distributions::{Distribution, Uniform, WeightedIndex},
 	seq::IteratorRandom,
 };
-use sc_peerset::{
+
+use sc_network::peerset::{
 	DropReason, IncomingIndex, Message, Peerset, PeersetConfig, ReputationChange, SetConfig, SetId,
 };
+
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,

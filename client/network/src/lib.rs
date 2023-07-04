@@ -244,7 +244,6 @@
 
 mod behaviour;
 mod peer_store;
-mod peerset;
 mod protocol;
 mod protocol_controller;
 mod service;
@@ -255,6 +254,7 @@ pub mod error;
 pub mod event;
 pub mod network_state;
 pub mod peer_info;
+pub mod peerset;
 pub mod request_responses;
 pub mod transport;
 pub mod types;

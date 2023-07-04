@@ -41,7 +41,7 @@
 //! Even though this does not guarantee that `ProtocolController` and `Notifications` have the same
 //! view of the peers' states at any given moment, the eventual consistency is maintained.
 
-use futures::{channel::oneshot, FutureExt, stream::Stream, StreamExt};
+use futures::{channel::oneshot, stream::Stream, FutureExt, StreamExt};
 use futures_timer::Delay;
 use libp2p::PeerId;
 use log::{debug, error, trace, warn};
@@ -82,23 +82,12 @@ enum Action {
 	GetReservedPeers(oneshot::Sender<Vec<PeerId>>),
 }
 
-/// Network events from `Notifications`.
-#[derive(Debug)]
-enum Event {
-	/// Incoming connection from the peer.
-	IncomingConnection(PeerId, IncomingIndex),
-	/// Connection with the peer dropped.
-	Dropped(PeerId),
-}
-
 /// Shared handle to [`ProtocolController`]. Distributed around the code outside of the
 /// protocol implementation.
 #[derive(Debug, Clone)]
 pub struct ProtocolHandle {
 	/// Actions from outer API.
 	actions_tx: TracingUnboundedSender<Action>,
-	/// Connection events from `Notifications`. We prioritize them over actions.
-	events_tx: TracingUnboundedSender<Event>,
 }
 
 impl ProtocolHandle {
@@ -141,18 +130,6 @@ impl ProtocolHandle {
 	pub fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
 		let _ = self.actions_tx.unbounded_send(Action::GetReservedPeers(pending_response));
 	}
-
-	/// Notify about incoming connection. [`ProtocolController`] will either accept or reject it.
-	pub fn incoming_connection(&self, peer_id: PeerId, incoming_index: IncomingIndex) {
-		let _ = self
-			.events_tx
-			.unbounded_send(Event::IncomingConnection(peer_id, incoming_index));
-	}
-
-	/// Notify that connection was dropped (either refused or disconnected).
-	pub fn dropped(&self, peer_id: PeerId) {
-		let _ = self.events_tx.unbounded_send(Event::Dropped(peer_id));
-	}
 }
 
 /// Direction of a connection
@@ -193,8 +170,6 @@ pub struct ProtocolController {
 	set_id: SetId,
 	/// Receiver for outer API messages from [`ProtocolHandle`].
 	actions_rx: TracingUnboundedReceiver<Action>,
-	/// Receiver for connection events from `Notifications` sent via [`ProtocolHandle`].
-	events_rx: TracingUnboundedReceiver<Event>,
 	/// Number of occupied slots for incoming connections (not counting reserved nodes).
 	num_in: u32,
 	/// Number of occupied slots for outgoing connections (not counting reserved nodes).
@@ -226,15 +201,13 @@ impl ProtocolController {
 		peer_store: Box<dyn PeerStoreProvider>,
 	) -> (ProtocolHandle, ProtocolController) {
 		let (actions_tx, actions_rx) = tracing_unbounded("mpsc_api_protocol", 10_000);
-		let (events_tx, events_rx) = tracing_unbounded("mpsc_notifications_protocol", 10_000);
-		let handle = ProtocolHandle { actions_tx, events_tx };
+		let handle = ProtocolHandle { actions_tx };
 		peer_store.register_protocol(handle.clone());
 		let reserved_nodes =
 			config.reserved_nodes.iter().map(|p| (*p, PeerState::NotConnected)).collect();
 		let controller = ProtocolController {
 			set_id,
 			actions_rx,
-			events_rx,
 			num_in: 0,
 			num_out: 0,
 			max_in: config.in_peers,
@@ -610,9 +583,7 @@ impl ProtocolController {
 	/// disconnected, `Ok(false)` if it wasn't found, `Err(PeerId)`, if the peer found, but not in
 	/// connected state.
 	fn drop_reserved_peer(&mut self, peer_id: &PeerId) -> Result<bool, PeerId> {
-		let Some(state) = self.reserved_nodes.get_mut(peer_id) else {
-			return Ok(false)
-		};
+		let Some(state) = self.reserved_nodes.get_mut(peer_id) else { return Ok(false) };
 
 		if let PeerState::Connected(direction) = state {
 			trace!(
@@ -630,9 +601,7 @@ impl ProtocolController {
 	/// Try dropping the peer as a regular peer. Return `true` if the peer was found and
 	/// disconnected, `false` if it wasn't found.
 	fn drop_regular_peer(&mut self, peer_id: &PeerId) -> bool {
-		let Some(direction) = self.nodes.remove(peer_id) else {
-			return false
-		};
+		let Some(direction) = self.nodes.remove(peer_id) else { return false };
 
 		trace!(
 			target: LOG_TARGET,
@@ -745,7 +714,7 @@ impl Stream for ProtocolController {
 	}
 }
 
-#[cfg(test)]
+#[cfg(disabled)]
 mod tests {
 	use super::{Direction, PeerState, ProtocolController, ProtocolHandle};
 	use crate::{

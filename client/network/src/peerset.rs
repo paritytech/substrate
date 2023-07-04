@@ -32,19 +32,15 @@
 //! In addition, for each, set, the peerset also holds a list of reserved nodes towards which it
 //! will at all time try to maintain a connection with.
 
+pub use sc_network_common::types::ReputationChange;
+
 use crate::{
 	peer_store::{PeerStore, PeerStoreHandle, PeerStoreProvider},
 	protocol_controller::{ProtocolController, ProtocolHandle},
 };
 
-use futures::{
-	channel::oneshot,
-	future::{join_all, BoxFuture, JoinAll},
-	prelude::*,
-	stream::Stream,
-};
+use futures::{channel::oneshot, future::BoxFuture, prelude::*, stream::Stream};
 use log::debug;
-use sc_network_common::types::ReputationChange;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use serde_json::json;
 use std::{
@@ -55,6 +51,7 @@ use std::{
 
 use libp2p::PeerId;
 
+/// Log target for this file.
 pub const LOG_TARGET: &str = "peerset";
 
 #[derive(Debug)]
@@ -78,6 +75,7 @@ enum Action {
 pub struct SetId(usize);
 
 impl SetId {
+	/// Custom initializer for constant expressions.
 	pub const fn from(id: usize) -> Self {
 		Self(id)
 	}
@@ -233,10 +231,7 @@ pub struct Peerset {
 	/// Protocol handles.
 	protocol_handles: Vec<ProtocolHandle>,
 	/// Protocol controllers responsible for connections, per `SetId`.
-	protocol_controller_futures: JoinAll<BoxFuture<'static, ()>>,
-	/// Commands sent from protocol controllers to `Notifications`. The size of this vector never
-	/// changes.
-	from_controllers: TracingUnboundedReceiver<Message>,
+	protocol_controllers: Vec<ProtocolController>,
 	/// Receiver for messages from the `PeersetHandle` and from `to_self`.
 	from_handle: TracingUnboundedReceiver<Action>,
 }
@@ -247,20 +242,12 @@ impl Peerset {
 		let default_set_config = &config.sets[0];
 		let peer_store = PeerStore::new(default_set_config.bootnodes.clone());
 
-		let (to_notifications, from_controllers) =
-			tracing_unbounded("mpsc_protocol_controllers_to_notifications", 10_000);
-
 		let controllers = config
 			.sets
 			.into_iter()
 			.enumerate()
 			.map(|(set, set_config)| {
-				ProtocolController::new(
-					SetId::from(set),
-					set_config,
-					to_notifications.clone(),
-					Box::new(peer_store.handle()),
-				)
+				ProtocolController::new(SetId::from(set), set_config, Box::new(peer_store.handle()))
 			})
 			.collect::<Vec<_>>();
 
@@ -271,15 +258,11 @@ impl Peerset {
 
 		let handle = PeersetHandle { tx };
 
-		let protocol_controller_futures =
-			join_all(protocol_controllers.into_iter().map(|c| c.run().boxed()));
-
 		let peerset = Peerset {
 			peer_store_handle: peer_store.handle(),
 			peer_store_future: peer_store.run().boxed(),
 			protocol_handles,
-			protocol_controller_futures,
-			from_controllers,
+			protocol_controllers,
 			from_handle,
 		};
 
@@ -301,7 +284,7 @@ impl Peerset {
 	// message to the output channel with a `PeerId`, and that `incoming` gets called with the same
 	// `PeerId` before that message has been read by the user. In this situation we must not answer.
 	pub fn incoming(&mut self, set_id: SetId, peer_id: PeerId, index: IncomingIndex) {
-		self.protocol_handles[set_id.0].incoming_connection(peer_id, index);
+		self.protocol_controllers[set_id.0].incoming_connection(peer_id, index);
 	}
 
 	/// Indicate that we dropped an active connection with a peer, or that we failed to connect.
@@ -309,7 +292,7 @@ impl Peerset {
 	/// Must only be called after the PSM has either generated a `Connect` message with this
 	/// `PeerId`, or accepted an incoming connection with this `PeerId`.
 	pub fn dropped(&mut self, set_id: SetId, peer_id: PeerId, _reason: DropReason) {
-		self.protocol_handles[set_id.0].dropped(peer_id);
+		self.protocol_controllers[set_id.0].peer_dropped(peer_id);
 	}
 
 	/// Produces a JSON object containing the state of the peerset manager, for debugging purposes.
@@ -329,15 +312,17 @@ impl Stream for Peerset {
 	type Item = Message;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		if let Poll::Ready(msg) = self.from_controllers.poll_next_unpin(cx) {
-			if let Some(msg) = msg {
-				return Poll::Ready(Some(msg))
-			} else {
-				debug!(
-					target: LOG_TARGET,
-					"All `ProtocolController`s have terminated, terminating `Peerset`."
-				);
-				return Poll::Ready(None)
+		for protocol_controller in self.protocol_controllers.iter_mut() {
+			if let Poll::Ready(msg) = protocol_controller.poll_next_unpin(cx) {
+				if let Some(msg) = msg {
+					return Poll::Ready(Some(msg))
+				} else {
+					debug!(
+						target: LOG_TARGET,
+						"At least one `ProtocolController` has terminated, terminating `Peerset`."
+					);
+					return Poll::Ready(None)
+				}
 			}
 		}
 
@@ -368,14 +353,6 @@ impl Stream for Peerset {
 
 		if let Poll::Ready(()) = self.peer_store_future.poll_unpin(cx) {
 			debug!(target: LOG_TARGET, "`PeerStore` has terminated, terminating `PeerSet`.");
-			return Poll::Ready(None)
-		}
-
-		if let Poll::Ready(_) = self.protocol_controller_futures.poll_unpin(cx) {
-			debug!(
-				target: LOG_TARGET,
-				"All `ProtocolHandle`s have terminated, terminating `PeerSet`."
-			);
 			return Poll::Ready(None)
 		}
 
