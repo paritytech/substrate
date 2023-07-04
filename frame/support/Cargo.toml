@@ -38,7 +38,7 @@ impl-trait-for-tuples = "0.2.2"
 smallvec = "1.8.0"
 log = { version = "0.4.17", default-features = false }
 sp-core-hashing-proc-macro = { version = "9.0.0", path = "../../primitives/core/hashing/proc-macro" }
-secp256k1 = { version = "0.24.0", default-features = false }
+k256 = { version = "0.13.0", default-features = false, features = ["ecdsa"] }
 environmental = { version = "1.1.4", default-features = false }
 
 [dev-dependencies]
@@ -52,7 +52,7 @@ array-bytes = "4.1"
 default = ["std"]
 std = [
 	"sp-core/std",
-	"secp256k1/std",
+	"k256/std",
 	"serde/std",
 	"sp-api/std",
 	"sp-io/std",
