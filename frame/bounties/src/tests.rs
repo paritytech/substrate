@@ -33,7 +33,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{AccountIdConversion, BadOrigin, BlakeTwo256, IdentityLookup},
+	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill, Storage,
 };
 
@@ -112,8 +112,8 @@ parameter_types! {
 	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
 	pub static SpendLimit: Balance = u64::MAX;
 	pub static SpendLimit1: Balance = u64::MAX;
-	pub TreasuryAccount: u128 = TreasuryPalletId::get().into_account_truncating();
-	pub TreasuryAccount2: u128 = TreasuryPalletId2::get().into_account_truncating();
+	pub TreasuryAccount: u128 = Treasury::account_id();
+	pub TreasuryAccount1: u128 = Treasury1::account_id();
 }
 
 impl pallet_treasury::Config for Test {
@@ -163,7 +163,7 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type AssetKind = ();
 	type Beneficiary = Self::AccountId;
 	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
-	type Paymaster = PayFromAccount<Balances, TreasuryAccount2>;
+	type Paymaster = PayFromAccount<Balances, TreasuryAccount1>;
 	type BalanceConverter = ();
 	type PayoutPeriod = ConstU64<10>;
 	#[cfg(feature = "runtime-benchmarks")]
