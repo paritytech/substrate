@@ -18,9 +18,10 @@
 //! Types used in the Name Service pallet.
 
 use crate::*;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{traits::Currency, BoundedVec, RuntimeDebug};
 use scale_info::TypeInfo;
+use sp_std::fmt::Debug;
 
 // Allows easy access our Pallet's `Balance` and `NegativeImbalance` type.
 //
@@ -49,6 +50,17 @@ pub type CommitmentHash = [u8; 32];
 pub type BoundedNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLength>;
 pub type BoundedTextOf<T> = BoundedVec<u8, <T as Config>::MaxTextLength>;
 pub type BoundedSuffixOf<T> = BoundedVec<u8, <T as Config>::MaxSuffixLength>;
+
+/// Possible operations on the configuration values of this pallet.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
+pub enum ConfigOp<T: Codec + Debug> {
+	/// Don't change.
+	Noop,
+	/// Set the given value.
+	Set(T),
+	/// Remove from storage.
+	Remove,
+}
 
 #[derive(
 	Encode, Decode, DefaultNoBound, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone,

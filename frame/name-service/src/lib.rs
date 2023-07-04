@@ -597,6 +597,7 @@ pub mod pallet {
 		/// Inserts a suffix for a para ID.
 		///
 		/// Overwrites existing values if already present.
+		/// Can only be called by the `RegistrationManager` origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(15)]
 		#[pallet::weight(0)]
@@ -606,6 +607,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Can only be called by the `RegistrationManager` origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(17)]
 		#[pallet::weight(0)]
