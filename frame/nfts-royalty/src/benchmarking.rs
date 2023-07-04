@@ -95,14 +95,12 @@ mod benchmarks {
 			RawOrigin::Signed(caller.clone()),
 			collection_id,
 			Permill::from_percent(10),
-			collection_owner.clone(),
 			list_recipients.clone(),
 		);
 
 		let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
 		let collection_royalty_from_storage = CollectionRoyalty::<T>::get(collection_id).unwrap();
 
-		assert_eq!(collection_royalty_from_storage.royalty_admin, collection_owner);
 		assert_eq!(collection_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 		assert_eq!(collection_royalty_from_storage.recipients, bounded_vec);
 		assert_eq!(collection_royalty_from_storage.depositor, Some(caller.clone()));
@@ -130,13 +128,11 @@ mod benchmarks {
 			collection_id,
 			item_id,
 			Permill::from_percent(10),
-			item_owner.clone(),
 			list_recipients.clone()
 		);
 		let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
 		let item_royalty_from_storage = ItemRoyalty::<T>::get((collection_id, item_id)).unwrap();
 
-		assert_eq!(item_royalty_from_storage.royalty_admin, item_owner);
 		assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 		assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
 		assert_eq!(item_royalty_from_storage.depositor, Some(caller.clone()));
@@ -159,7 +155,6 @@ mod benchmarks {
 			RawOrigin::Signed(caller.clone()).into(),
 			collection_id,
 			Permill::from_percent(10),
-			collection_owner.clone(),
 			list_recipients.clone(),
 		));
 
@@ -170,10 +165,15 @@ mod benchmarks {
 			collection_id,
 			new_recipient.clone(),
 		);
-		let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
+		let new_list_recipients = vec![
+			RoyaltyDetails {
+				royalty_recipient: new_recipient.clone(),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},
+		];
+		let bounded_vec: BoundedVec<_, T::MaxRecipients> = new_list_recipients.try_into().unwrap();
 		let collection_royalty_from_storage = CollectionRoyalty::<T>::get(collection_id).unwrap();
 
-		assert_eq!(collection_royalty_from_storage.royalty_admin, new_recipient);
 		assert_eq!(collection_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 		assert_eq!(collection_royalty_from_storage.recipients, bounded_vec);
 		assert_eq!(collection_royalty_from_storage.depositor, Some(caller.clone()));
@@ -200,7 +200,6 @@ mod benchmarks {
 			collection_id,
 			item_id,
 			Permill::from_percent(10),
-			item_owner.clone(),
 			list_recipients.clone()
 		));
 
@@ -213,10 +212,16 @@ mod benchmarks {
 			new_recipient.clone(),
 		);
 
-		let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
+		let new_list_recipients = vec![
+			RoyaltyDetails {
+				royalty_recipient: new_recipient.clone(),
+				royalty_recipient_percentage: Permill::from_percent(100),
+			},
+		];
+
+		let bounded_vec: BoundedVec<_, T::MaxRecipients> = new_list_recipients.try_into().unwrap();
 		let item_royalty_from_storage = ItemRoyalty::<T>::get((collection_id, item_id)).unwrap();
 
-		assert_eq!(item_royalty_from_storage.royalty_admin, new_recipient);
 		assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 		assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
 		assert_eq!(item_royalty_from_storage.depositor, Some(caller.clone()));
@@ -261,7 +266,6 @@ mod benchmarks {
 	// 	let bounded_vec: BoundedVec<_, T::MaxRecipients> = list_recipients.try_into().unwrap();
 	// 	let item_royalty_from_storage = ItemRoyalty::<T>::get((collection_id, item_id)).unwrap();
 
-	// 	assert_eq!(item_royalty_from_storage.royalty_admin, new_recipient);
 	// 	assert_eq!(item_royalty_from_storage.royalty_percentage, Permill::from_percent(10));
 	// 	assert_eq!(item_royalty_from_storage.recipients, bounded_vec);
 	//  assert_eq!(item_royalty_from_storage.depositor, Some(caller.clone()));
@@ -284,7 +288,6 @@ mod benchmarks {
 			RawOrigin::Signed(caller.clone()).into(),
 			collection_id,
 			Permill::from_percent(10),
-			collection_owner.clone(),
 			list_recipients.clone(),
 		));
 
@@ -323,7 +326,6 @@ mod benchmarks {
 			collection_id,
 			item_id,
 			Permill::from_percent(10),
-			item_owner.clone(),
 			list_recipients.clone()
 		));
 
