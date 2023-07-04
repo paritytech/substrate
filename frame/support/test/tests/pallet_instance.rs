@@ -18,21 +18,23 @@
 use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, UnfilteredDispatchable},
 	pallet_prelude::ValueQuery,
+	parameter_types,
 	storage::unhashed,
 	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
+	weights::Weight,
 };
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
 use sp_runtime::{DispatchError, ModuleError};
+use sp_std::any::TypeId;
 
-#[frame_support::pallet]
+#[frame_support::pallet(dev_mode)]
 pub mod pallet {
-	use codec::MaxEncodedLen;
-	use frame_support::{pallet_prelude::*, parameter_types, scale_info};
+	use super::*;
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_std::any::TypeId;
 
 	type BalanceOf<T, I> = <T as Config<I>>::Balance;
 
@@ -346,8 +348,6 @@ frame_support::construct_runtime!(
 	}
 );
 
-use frame_support::weights::Weight;
-
 #[test]
 fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { foo: 3 };
@@ -417,6 +417,39 @@ fn error_expand() {
 			message: Some("InsufficientProposersBalance")
 		}),
 	);
+}
+
+#[test]
+fn module_error_outer_enum_expand() {
+	// assert that all variants of the Example pallet are included into the
+	// RuntimeError definition.
+	match RuntimeError::Example(pallet::Error::InsufficientProposersBalance) {
+		RuntimeError::Example(example) => match example {
+			pallet::Error::InsufficientProposersBalance => (),
+			pallet::Error::NonExistentStorageValue => (),
+			// Extra pattern added by `construct_runtime`.
+			pallet::Error::__Ignore(_, _) => (),
+		},
+		_ => (),
+	};
+}
+
+#[test]
+fn module_error_from_dispatch_error() {
+	let dispatch_err = DispatchError::Module(ModuleError {
+		index: 1,
+		error: [0; 4],
+		message: Some("InsufficientProposersBalance"),
+	});
+	let err = RuntimeError::from_dispatch_error(dispatch_err).unwrap();
+
+	match err {
+		RuntimeError::Example(pallet::Error::InsufficientProposersBalance) => (),
+		_ => panic!("Module error constructed incorrectly"),
+	};
+
+	// Only `ModuleError` is converted.
+	assert!(RuntimeError::from_dispatch_error(DispatchError::BadOrigin).is_none());
 }
 
 #[test]
@@ -690,7 +723,7 @@ fn pallet_on_genesis() {
 
 #[test]
 fn metadata() {
-	use frame_support::metadata::*;
+	use frame_support::metadata::{v14::*, *};
 
 	let system_pallet_metadata = PalletMetadata {
 		index: 0,

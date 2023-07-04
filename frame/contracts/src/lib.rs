@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Contract Pallet
+//! # Contracts Pallet
 //!
-//! The Contract module provides functionality for the runtime to deploy and execute WebAssembly
+//! The Contracts module provides functionality for the runtime to deploy and execute WebAssembly
 //! smart-contracts.
 //!
 //! - [`Config`]
@@ -30,7 +30,7 @@
 //! These "smart-contract accounts" have the ability to instantiate smart-contracts and make calls
 //! to other contract and non-contract accounts.
 //!
-//! The smart-contract code is stored once in a code cache, and later retrievable via its hash.
+//! The smart-contract code is stored once, and later retrievable via its hash.
 //! This means that multiple smart-contracts can be instantiated from the same hash, without
 //! replicating the code each time.
 //!
@@ -41,14 +41,14 @@
 //! Finally, when an account is reaped, its associated code and storage of the smart-contract
 //! account will also be deleted.
 //!
-//! ### Gas
+//! ### Weight
 //!
-//! Senders must specify a gas limit with every call, as all instructions invoked by the
-//! smart-contract require gas. Unused gas is refunded after the call, regardless of the execution
-//! outcome.
+//! Senders must specify a [`Weight`] limit with every call, as all instructions invoked by the
+//! smart-contract require weight. Unused weight is refunded after the call, regardless of the
+//! execution outcome.
 //!
-//! If the gas limit is reached, then all calls and state changes (including balance transfers) are
-//! only reverted at the current call's contract level. For example, if contract A calls B and B
+//! If the weight limit is reached, then all calls and state changes (including balance transfers)
+//! are only reverted at the current call's contract level. For example, if contract A calls B and B
 //! runs out of gas mid-call, then all of B's calls are reverted. Assuming correct error handling by
 //! contract A, A's other calls and state changes still persist.
 //!
@@ -63,76 +63,82 @@
 //!
 //! ### Dispatchable functions
 //!
-//! * [`Pallet::instantiate_with_code`] - Deploys a new contract from the supplied wasm binary,
+//! * [`Pallet::instantiate_with_code`] - Deploys a new contract from the supplied Wasm binary,
 //! optionally transferring
 //! some balance. This instantiates a new smart contract account with the supplied code and
 //! calls its constructor to initialize the contract.
 //! * [`Pallet::instantiate`] - The same as `instantiate_with_code` but instead of uploading new
 //! code an existing `code_hash` is supplied.
 //! * [`Pallet::call`] - Makes a call to an account, optionally transferring some balance.
+//! * [`Pallet::upload_code`] - Uploads new code without instantiating a contract from it.
+//! * [`Pallet::remove_code`] - Removes the stored code and refunds the deposit to its owner. Only
+//!   allowed to code owner.
+//! * [`Pallet::set_code`] - Changes the code of an existing contract. Only allowed to `Root`
+//!   origin.
+//! * [`Pallet::migrate`] - Runs migration steps of curent multi-block migration in priority, before
+//!   [`Hooks::on_idle`][frame_support::traits::Hooks::on_idle] activates.
 //!
 //! ## Usage
 //!
-//! The Contract module is a work in progress. The following examples show how this Contract module
-//! can be used to instantiate and call contracts.
-//!
-//! * [`ink`](https://github.com/paritytech/ink) is
-//! an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables writing
-//! WebAssembly based smart contracts in the Rust programming language.
+//! * [`ink!`](https://use.ink) is language that enables writing Wasm-based smart contracts in plain
+//!   Rust.
 
+#![allow(rustdoc::private_intra_doc_links)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "runtime-benchmarks", recursion_limit = "1024")]
 
-#[macro_use]
-mod gas;
 mod address;
 mod benchmarking;
 mod exec;
-mod migration;
+mod gas;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
+pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
 mod tests;
-
 use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
-	wasm::{OwnerInfo, PrefabWasmModule, TryInstantiate},
-	weights::WeightInfo,
+	wasm::{CodeInfo, TryInstantiate, WasmBlob},
 };
-use codec::{Codec, Encode, HasCompact};
+use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
 use frame_support::{
-	dispatch::{Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
+	dispatch::{
+		DispatchError, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo, RawOrigin,
+		WithPostDispatchInfo,
+	},
 	ensure,
+	error::BadOrigin,
 	traits::{
 		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
 		ReservableCurrency, Time,
 	},
-	weights::{OldWeight, Weight},
-	BoundedVec, WeakBoundedVec,
+	weights::Weight,
+	BoundedVec, RuntimeDebugNoBound,
 };
-use frame_system::Pallet as System;
+use frame_system::{ensure_signed, pallet_prelude::OriginFor, EventRecord, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
-	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
-	StorageDeposit,
+	ContractInstantiateResult, ContractResult, ExecReturnValue, GetStorageResult,
+	InstantiateReturnValue, StorageDeposit,
 };
 use scale_info::TypeInfo;
 use smallvec::Array;
-use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
-use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
+use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup, Zero};
+use sp_std::{fmt::Debug, prelude::*};
+pub use weights::WeightInfo;
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
 	exec::Frame,
-	migration::Migration,
+	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 	wasm::Determinism,
@@ -146,9 +152,16 @@ type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
-type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
+type EventRecordOf<T> =
+	EventRecord<<T as frame_system::Config>::RuntimeEvent, <T as frame_system::Config>::Hash>;
+
+/// The old weight type.
+///
+/// This is a copy of the [`frame_support::weights::OldWeight`] type since the contracts pallet
+/// needs to support it indefinitely.
+type OldWeight = u64;
 
 /// Used as a sentinel value when reading and writing contract memory.
 ///
@@ -158,6 +171,13 @@ type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 /// that this value makes sense for a memory location or length.
 const SENTINEL: u32 = u32::MAX;
 
+/// The target that is used for the log output emitted by this crate.
+///
+/// Hence you can use this target to selectively increase the log level for this crate.
+///
+/// Example: `RUST_LOG=runtime::contracts=debug my_code --dev`
+const LOG_TARGET: &str = "runtime::contracts";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -165,11 +185,16 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(9);
+	#[cfg(not(any(test, feature = "runtime-benchmarks")))]
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(12);
+
+	/// Hard coded storage version for running tests that depend on the current storage version.
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -253,6 +278,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type DepositPerByte: Get<BalanceOf<Self>>;
 
+		/// Fallback value to limit the storage deposit if it's not being set by the caller.
+		#[pallet::constant]
+		type DefaultDepositLimit: Get<BalanceOf<Self>>;
+
 		/// The amount of balance a caller has to pay for each storage item.
 		///
 		/// # Note
@@ -264,9 +293,7 @@ pub mod pallet {
 		/// The address generator used to generate the addresses of contracts.
 		type AddressGenerator: AddressGenerator<Self>;
 
-		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
-		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
-		/// a wasm binary below this maximum size.
+		/// The maximum length of a contract code in bytes.
 		///
 		/// The value should be chosen carefully taking into the account the overall memory limit
 		/// your runtime has, as well as the [maximum allowed callstack
@@ -293,18 +320,55 @@ pub mod pallet {
 		/// The maximum length of the debug buffer in bytes.
 		#[pallet::constant]
 		type MaxDebugBufferLen: Get<u32>;
+
+		/// The sequence of migration steps that will be applied during a migration.
+		///
+		/// # Examples
+		/// ```
+		/// use pallet_contracts::migration::{v9, v10, v11};
+		/// # struct Runtime {};
+		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// ```
+		///
+		/// If you have a single migration step, you can use a tuple with a single element:
+		/// ```
+		/// use pallet_contracts::migration::v9;
+		/// # struct Runtime {};
+		/// type Migrations = (v9::Migration<Runtime>,);
+		/// ```
+		type Migrations: MigrateSequence;
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
+		fn on_idle(_block: T::BlockNumber, mut remaining_weight: Weight) -> Weight {
+			use migration::MigrateResult::*;
+
+			loop {
+				let (result, weight) = Migration::<T>::migrate(remaining_weight);
+				remaining_weight.saturating_reduce(weight);
+
+				match result {
+					// There is not enough weight to perform a migration, or make any progress, we
+					// just return the remaining weight.
+					NoMigrationPerformed | InProgress { steps_done: 0 } => return remaining_weight,
+					// Migration is still in progress, we can start the next step.
+					InProgress { .. } => continue,
+					// Either no migration is in progress, or we are done with all migrations, we
+					// can do some more other work with the remaining weight.
+					Completed | NoMigrationInProgress => break,
+				}
+			}
+
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
 				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 		}
 
 		fn integrity_test() {
-			// Total runtime memory is expected to have 128Mb upper limit
-			const MAX_RUNTIME_MEM: u32 = 1024 * 1024 * 128;
+			Migration::<T>::integrity_test();
+
+			// Total runtime memory limit
+			let max_runtime_mem: u32 = T::Schedule::get().limits.runtime_memory;
 			// Memory limits for a single contract:
 			// Value stack size: 1Mb per contract, default defined in wasmi
 			const MAX_STACK_SIZE: u32 = 1024 * 1024;
@@ -316,19 +380,19 @@ pub mod pallet {
 
 			// Check that given configured `MaxCodeLen`, runtime heap memory limit can't be broken.
 			//
-			// In worst case, the decoded wasm contract code would be `x16` times larger than the
+			// In worst case, the decoded Wasm contract code would be `x16` times larger than the
 			// encoded one. This is because even a single-byte wasm instruction has 16-byte size in
 			// wasmi. This gives us `MaxCodeLen*16` safety margin.
 			//
-			// Next, the pallet keeps both the original and instrumented wasm blobs for each
-			// contract, hence we add up `MaxCodeLen*2` more to the safety margin.
+			// Next, the pallet keeps the Wasm blob for each
+			// contract, hence we add up `MaxCodeLen` to the safety margin.
 			//
 			// Finally, the inefficiencies of the freeing-bump allocator
 			// being used in the client for the runtime memory allocations, could lead to possible
 			// memory allocations for contract code grow up to `x4` times in some extreme cases,
-			// which gives us total multiplier of `18*4` for `MaxCodeLen`.
+			// which gives us total multiplier of `17*4` for `MaxCodeLen`.
 			//
-			// That being said, for every contract executed in runtime, at least `MaxCodeLen*18*4`
+			// That being said, for every contract executed in runtime, at least `MaxCodeLen*17*4`
 			// memory should be available. Note that maximum allowed heap memory and stack size per
 			// each contract (stack frame) should also be counted.
 			//
@@ -337,16 +401,16 @@ pub mod pallet {
 			//
 			// This gives us the following formula:
 			//
-			// `(MaxCodeLen * 18 * 4 + MAX_STACK_SIZE + max_heap_size) * max_call_depth <
-			// MAX_RUNTIME_MEM/2`
+			// `(MaxCodeLen * 17 * 4 + MAX_STACK_SIZE + max_heap_size) * max_call_depth <
+			// max_runtime_mem/2`
 			//
 			// Hence the upper limit for the `MaxCodeLen` can be defined as follows:
-			let code_len_limit = MAX_RUNTIME_MEM
+			let code_len_limit = max_runtime_mem
 				.saturating_div(2)
 				.saturating_div(max_call_depth)
 				.saturating_sub(max_heap_size)
 				.saturating_sub(MAX_STACK_SIZE)
-				.saturating_div(18 * 4);
+				.saturating_div(17 * 4);
 
 			assert!(
 				T::MaxCodeLen::get() < code_len_limit,
@@ -457,7 +521,7 @@ pub mod pallet {
 		///
 		/// If the code does not already exist a deposit is reserved from the caller
 		/// and unreserved only when [`Self::remove_code`] is called. The size of the reserve
-		/// depends on the instrumented size of the the supplied `code`.
+		/// depends on the size of the supplied `code`.
 		///
 		/// If the code already exists in storage it will still return `Ok` and upgrades
 		/// the in storage version to the current
@@ -481,6 +545,7 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			determinism: Determinism,
 		) -> DispatchResult {
+			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into), determinism)
 				.map(|_| ())
@@ -496,8 +561,9 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			code_hash: CodeHash<T>,
 		) -> DispatchResultWithPostInfo {
+			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
-			<PrefabWasmModule<T>>::remove(&origin, code_hash)?;
+			<WasmBlob<T>>::remove(&origin, code_hash)?;
 			// we waive the fee because removing unused code is beneficial
 			Ok(Pays::No.into())
 		}
@@ -519,6 +585,7 @@ pub mod pallet {
 			dest: AccountIdLookupOf<T>,
 			code_hash: CodeHash<T>,
 		) -> DispatchResult {
+			Migration::<T>::ensure_migrated()?;
 			ensure_root(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<ContractInfoOf<T>>::try_mutate(&dest, |contract| {
@@ -527,8 +594,8 @@ pub mod pallet {
 				} else {
 					return Err(<Error<T>>::ContractNotFound.into())
 				};
-				<PrefabWasmModule<T>>::add_user(code_hash)?;
-				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
+				<WasmBlob<T>>::increment_refcount(code_hash)?;
+				<WasmBlob<T>>::decrement_refcount(contract.code_hash);
 				Self::deposit_event(
 					vec![T::Hashing::hash_of(&dest), code_hash, contract.code_hash],
 					Event::ContractCodeUpdated {
@@ -568,17 +635,16 @@ pub mod pallet {
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let gas_limit: Weight = gas_limit.into();
-			let origin = ensure_signed(origin)?;
-			let dest = T::Lookup::lookup(dest)?;
+			Migration::<T>::ensure_migrated()?;
 			let common = CommonInput {
-				origin,
+				origin: Origin::from_runtime_origin(origin)?,
 				value,
 				data,
-				gas_limit,
+				gas_limit: gas_limit.into(),
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
+			let dest = T::Lookup::lookup(dest)?;
 			let mut output =
 				CallInput::<T> { dest, determinism: Determinism::Enforced }.run_guarded(common);
 			if let Ok(retval) = &output.result {
@@ -608,8 +674,7 @@ pub mod pallet {
 		///
 		/// Instantiation is executed as follows:
 		///
-		/// - The supplied `code` is instrumented, deployed, and a `code_hash` is created for that
-		///   code.
+		/// - The supplied `code` is deployed, and a `code_hash` is created for that code.
 		/// - If the `code_hash` already exists on the chain the underlying `code` will be shared.
 		/// - The destination address is computed based on the sender, code_hash and the salt.
 		/// - The smart-contract account is created at the computed address.
@@ -629,12 +694,12 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ensure_signed(origin)?;
+			Migration::<T>::ensure_migrated()?;
 			let code_len = code.len() as u32;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin,
+				origin: Origin::from_runtime_origin(origin)?,
 				value,
 				data,
 				gas_limit,
@@ -672,11 +737,11 @@ pub mod pallet {
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
-			let origin = ensure_signed(origin)?;
+			Migration::<T>::ensure_migrated()?;
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin,
+				origin: Origin::from_runtime_origin(origin)?,
 				value,
 				data,
 				gas_limit,
@@ -694,6 +759,33 @@ pub mod pallet {
 				output.result.map(|(_address, output)| output),
 				T::WeightInfo::instantiate(data_len, salt_len),
 			)
+		}
+
+		/// When a migration is in progress, this dispatchable can be used to run migration steps.
+		/// Calls that contribute to advancing the migration have their fees waived, as it's helpful
+		/// for the chain. Note that while the migration is in progress, the pallet will also
+		/// leverage the `on_idle` hooks to run migration steps.
+		#[pallet::call_index(9)]
+		#[pallet::weight(T::WeightInfo::migrate().saturating_add(*weight_limit))]
+		pub fn migrate(origin: OriginFor<T>, weight_limit: Weight) -> DispatchResultWithPostInfo {
+			use migration::MigrateResult::*;
+			ensure_signed(origin)?;
+
+			let weight_limit = weight_limit.saturating_add(T::WeightInfo::migrate());
+			let (result, weight) = Migration::<T>::migrate(weight_limit);
+
+			match result {
+				Completed =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
+				InProgress { steps_done, .. } if steps_done > 0 =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::No }),
+				InProgress { .. } =>
+					Ok(PostDispatchInfo { actual_weight: Some(weight), pays_fee: Pays::Yes }),
+				NoMigrationInProgress | NoMigrationPerformed => {
+					let err: DispatchError = <Error<T>>::NoMigrationPerformed.into();
+					Err(err.with_weight(T::WeightInfo::migrate()))
+				},
+			}
 		}
 	}
 
@@ -748,8 +840,8 @@ pub mod pallet {
 		/// calls. This is because on failure all storage changes including events are
 		/// rolled back.
 		Called {
-			/// The account that called the `contract`.
-			caller: T::AccountId,
+			/// The caller of the `contract`.
+			caller: Origin<T>,
 			/// The contract that was called.
 			contract: T::AccountId,
 		},
@@ -772,8 +864,8 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// A new schedule must have a greater version than the current one.
-		InvalidScheduleVersion,
+		/// Invalid schedule supplied, e.g. with zero weight of a basic operation.
+		InvalidSchedule,
 		/// Invalid combination of flags supplied to `seal_call` or `seal_delegate_call`.
 		InvalidCallFlags,
 		/// The executed contract exhausted its gas limit.
@@ -836,7 +928,7 @@ pub mod pallet {
 		/// or via RPC an `Ok` will be returned. In this case the caller needs to inspect the flags
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
-		/// The contract's code was found to be invalid during validation or instrumentation.
+		/// The contract's code was found to be invalid during validation.
 		///
 		/// The most likely cause of this is that an API was used which is not supported by the
 		/// node. This happens if an older node is used with a new version of ink!. Try updating
@@ -847,20 +939,19 @@ pub mod pallet {
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
+		/// A pending migration needs to complete before the extrinsic can be called.
+		MigrationInProgress,
+		/// Migrate dispatch call was attempted but no migration was performed.
+		NoMigrationPerformed,
 	}
 
-	/// A mapping from an original code hash to the original code, untouched by instrumentation.
+	/// A mapping from a contract's code hash to its code.
 	#[pallet::storage]
 	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeVec<T>>;
 
-	/// A mapping between an original code hash and instrumented wasm code, ready for execution.
+	/// A mapping from a contract's code hash to its code info.
 	#[pallet::storage]
-	pub(crate) type CodeStorage<T: Config> =
-		StorageMap<_, Identity, CodeHash<T>, PrefabWasmModule<T>>;
-
-	/// A mapping between an original code hash and its owner information.
-	#[pallet::storage]
-	pub(crate) type OwnerInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, OwnerInfo<T>>;
+	pub(crate) type CodeInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeInfo<T>>;
 
 	/// This is a **monotonic** counter incremented on contract instantiation.
 	///
@@ -906,11 +997,46 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type DeletionQueueCounter<T: Config> =
 		StorageValue<_, DeletionQueueManager<T>, ValueQuery>;
+
+	/// A migration can span across multiple blocks. This storage defines a cursor to track the
+	/// progress of the migration, enabling us to resume from the last completed position.
+	#[pallet::storage]
+	pub(crate) type MigrationInProgress<T: Config> =
+		StorageValue<_, migration::Cursor, OptionQuery>;
+}
+
+/// The type of origins supported by the contracts pallet.
+#[derive(Clone, Encode, Decode, PartialEq, TypeInfo, RuntimeDebugNoBound)]
+pub enum Origin<T: Config> {
+	Root,
+	Signed(T::AccountId),
+}
+
+impl<T: Config> Origin<T> {
+	/// Creates a new Signed Caller from an AccountId.
+	pub fn from_account_id(account_id: T::AccountId) -> Self {
+		Origin::Signed(account_id)
+	}
+	/// Creates a new Origin from a `RuntimeOrigin`.
+	pub fn from_runtime_origin(o: OriginFor<T>) -> Result<Self, DispatchError> {
+		match o.into() {
+			Ok(RawOrigin::Root) => Ok(Self::Root),
+			Ok(RawOrigin::Signed(t)) => Ok(Self::Signed(t)),
+			_ => Err(BadOrigin.into()),
+		}
+	}
+	/// Returns the AccountId of a Signed Origin or an error if the origin is Root.
+	pub fn account_id(&self) -> Result<&T::AccountId, DispatchError> {
+		match self {
+			Origin::Signed(id) => Ok(id),
+			Origin::Root => Err(DispatchError::RootNotAllowed),
+		}
+	}
 }
 
 /// Context of a contract invocation.
 struct CommonInput<'a, T: Config> {
-	origin: T::AccountId,
+	origin: Origin<T>,
 	value: BalanceOf<T>,
 	data: Vec<u8>,
 	gas_limit: Weight,
@@ -928,6 +1054,35 @@ struct CallInput<T: Config> {
 struct InstantiateInput<T: Config> {
 	code: Code<CodeHash<T>>,
 	salt: Vec<u8>,
+}
+
+/// Determines whether events should be collected during execution.
+#[derive(PartialEq)]
+pub enum CollectEvents {
+	/// Collect events.
+	///
+	/// # Note
+	///
+	/// Events should only be collected when called off-chain, as this would otherwise
+	/// collect all the Events emitted in the block so far and put them into the PoV.
+	///
+	/// **Never** use this mode for on-chain execution.
+	UnsafeCollect,
+	/// Skip event collection.
+	Skip,
+}
+
+/// Determines whether debug messages will be collected.
+#[derive(PartialEq)]
+pub enum DebugInfo {
+	/// Collect debug messages.
+	/// # Note
+	///
+	/// This should only ever be set to `UnsafeDebug` when executing as an RPC because
+	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
+	UnsafeDebug,
+	/// Skip collection of debug messages.
+	Skip,
 }
 
 /// Return type of private helper functions.
@@ -959,6 +1114,19 @@ trait Invokable<T: Config> {
 		environmental!(executing_contract: bool);
 
 		let gas_limit = common.gas_limit;
+
+		// Check whether the origin is allowed here. The logic of the access rules
+		// is in the `ensure_origin`, this could vary for different implementations of this
+		// trait. For example, some actions might not allow Root origin as they could require an
+		// AccountId associated with the origin.
+		if let Err(e) = self.ensure_origin(common.origin.clone()) {
+			return InternalOutput {
+				gas_meter: GasMeter::new(gas_limit),
+				storage_deposit: Default::default(),
+				result: Err(ExecError { error: e.into(), origin: ErrorOrigin::Caller }),
+			}
+		}
+
 		executing_contract::using_once(&mut false, || {
 			executing_contract::with(|f| {
 				// Fail if already entered contract execution
@@ -994,6 +1162,11 @@ trait Invokable<T: Config> {
 		common: CommonInput<T>,
 		gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output>;
+
+	/// This method ensures that the given `origin` is allowed to invoke the current `Invokable`.
+	///
+	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
+	fn ensure_origin(&self, origin: Origin<T>) -> Result<(), DispatchError>;
 }
 
 impl<T: Config> Invokable<T> for CallInput<T> {
@@ -1004,8 +1177,10 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
+		let CallInput { dest, determinism } = self;
+		let CommonInput { origin, value, data, debug_message, .. } = common;
 		let mut storage_meter =
-			match StorageMeter::new(&common.origin, common.storage_deposit_limit, common.value) {
+			match StorageMeter::new(&origin, common.storage_deposit_limit, common.value) {
 				Ok(meter) => meter,
 				Err(err) =>
 					return InternalOutput {
@@ -1015,9 +1190,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 					},
 			};
 		let schedule = T::Schedule::get();
-		let CallInput { dest, determinism } = self;
-		let CommonInput { origin, value, data, debug_message, .. } = common;
-		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
+		let result = ExecStack::<T, WasmBlob<T>>::run_call(
 			origin.clone(),
 			dest.clone(),
 			&mut gas_meter,
@@ -1028,7 +1201,19 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 			debug_message,
 			*determinism,
 		);
-		InternalOutput { gas_meter, storage_deposit: storage_meter.into_deposit(&origin), result }
+
+		match storage_meter.try_into_deposit(&origin) {
+			Ok(storage_deposit) => InternalOutput { gas_meter, storage_deposit, result },
+			Err(err) => InternalOutput {
+				gas_meter,
+				storage_deposit: Default::default(),
+				result: Err(err.into()),
+			},
+		}
+	}
+
+	fn ensure_origin(&self, _origin: Origin<T>) -> Result<(), DispatchError> {
+		Ok(())
 	}
 }
 
@@ -1043,12 +1228,15 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 		let mut storage_deposit = Default::default();
 		let try_exec = || {
 			let schedule = T::Schedule::get();
+			let InstantiateInput { salt, .. } = self;
+			let CommonInput { origin: contract_origin, .. } = common;
+			let origin = contract_origin.account_id()?;
 			let (extra_deposit, executable) = match &self.code {
 				Code::Upload(binary) => {
-					let executable = PrefabWasmModule::from_code(
+					let executable = WasmBlob::from_code(
 						binary.clone(),
 						&schedule,
-						common.origin.clone(),
+						origin.clone(),
 						Determinism::Enforced,
 						TryInstantiate::Skip,
 					)
@@ -1063,22 +1251,19 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 					// uploaded module does not already exist. This deposit is not part of the
 					// storage meter because it is not transferred to the contract but
 					// reserved on the uploading account.
-					(executable.open_deposit(), executable)
+					(executable.open_deposit(&executable.code_info()), executable)
 				},
-				Code::Existing(hash) => (
-					Default::default(),
-					PrefabWasmModule::from_storage(*hash, &schedule, &mut gas_meter)?,
-				),
+				Code::Existing(hash) =>
+					(Default::default(), WasmBlob::from_storage(*hash, &mut gas_meter)?),
 			};
+			let contract_origin = Origin::from_account_id(origin.clone());
 			let mut storage_meter = StorageMeter::new(
-				&common.origin,
+				&contract_origin,
 				common.storage_deposit_limit,
 				common.value.saturating_add(extra_deposit),
 			)?;
-
-			let InstantiateInput { salt, .. } = self;
-			let CommonInput { origin, value, data, debug_message, .. } = common;
-			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
+			let CommonInput { value, data, debug_message, .. } = common;
+			let result = ExecStack::<T, WasmBlob<T>>::run_instantiate(
 				origin.clone(),
 				executable,
 				&mut gas_meter,
@@ -1089,13 +1274,36 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				&salt,
 				debug_message,
 			);
+
 			storage_deposit = storage_meter
-				.into_deposit(&origin)
+				.try_into_deposit(&contract_origin)?
 				.saturating_add(&StorageDeposit::Charge(extra_deposit));
 			result
 		};
 		InternalOutput { result: try_exec(), gas_meter, storage_deposit }
 	}
+
+	fn ensure_origin(&self, origin: Origin<T>) -> Result<(), DispatchError> {
+		match origin {
+			Origin::Signed(_) => Ok(()),
+			Origin::Root => Err(DispatchError::RootNotAllowed),
+		}
+	}
+}
+
+macro_rules! ensure_no_migration_in_progress {
+	() => {
+		if Migration::<T>::in_progress() {
+			return ContractResult {
+				gas_consumed: Zero::zero(),
+				gas_required: Zero::zero(),
+				storage_deposit: Default::default(),
+				debug_message: Vec::new(),
+				result: Err(Error::<T>::MigrationInProgress.into()),
+				events: None,
+			}
+		}
+	};
 }
 
 impl<T: Config> Pallet<T> {
@@ -1106,11 +1314,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// # Note
 	///
-	/// `debug` should only ever be set to `true` when executing as an RPC because
-	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
-	/// If set to `true` it returns additional human readable debugging information.
+	/// If `debug` is set to `DebugInfo::UnsafeDebug` it returns additional human readable debugging
+	/// information.
 	///
-	/// It returns the execution result and the amount of used weight.
+	/// If `collect_events` is set to `CollectEvents::UnsafeCollect` it collects all the Events
+	/// emitted in the block so far and the ones emitted during the execution of this contract.
 	pub fn bare_call(
 		origin: T::AccountId,
 		dest: T::AccountId,
@@ -1118,10 +1326,18 @@ impl<T: Config> Pallet<T> {
 		gas_limit: Weight,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
-		debug: bool,
+		debug: DebugInfo,
+		collect_events: CollectEvents,
 		determinism: Determinism,
-	) -> ContractExecResult<BalanceOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
+		ensure_no_migration_in_progress!();
+
+		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
+			Some(DebugBufferVec::<T>::default())
+		} else {
+			None
+		};
+		let origin = Origin::from_account_id(origin);
 		let common = CommonInput {
 			origin,
 			value,
@@ -1131,12 +1347,19 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = CallInput::<T> { dest, determinism }.run_guarded(common);
+		let events = if matches!(collect_events, CollectEvents::UnsafeCollect) {
+			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+		} else {
+			None
+		};
+
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
+			events,
 		}
 	}
 
@@ -1149,9 +1372,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// # Note
 	///
-	/// `debug` should only ever be set to `true` when executing as an RPC because
-	/// it adds allocations and could be abused to drive the runtime into an OOM panic.
-	/// If set to `true` it returns additional human readable debugging information.
+	/// If `debug` is set to `DebugInfo::UnsafeDebug` it returns additional human readable debugging
+	/// information.
+	///
+	/// If `collect_events` is set to `CollectEvents::UnsafeCollect` it collects all the Events
+	/// emitted in the block so far.
 	pub fn bare_instantiate(
 		origin: T::AccountId,
 		value: BalanceOf<T>,
@@ -1160,11 +1385,18 @@ impl<T: Config> Pallet<T> {
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
-		debug: bool,
-	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>> {
-		let mut debug_message = if debug { Some(DebugBufferVec::<T>::default()) } else { None };
+		debug: DebugInfo,
+		collect_events: CollectEvents,
+	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
+		ensure_no_migration_in_progress!();
+
+		let mut debug_message = if debug == DebugInfo::UnsafeDebug {
+			Some(DebugBufferVec::<T>::default())
+		} else {
+			None
+		};
 		let common = CommonInput {
-			origin,
+			origin: Origin::from_account_id(origin),
 			value,
 			data,
 			gas_limit,
@@ -1172,6 +1404,12 @@ impl<T: Config> Pallet<T> {
 			debug_message: debug_message.as_mut(),
 		};
 		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
+		// collect events if CollectEvents is UnsafeCollect
+		let events = if collect_events == CollectEvents::UnsafeCollect {
+			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+		} else {
+			None
+		};
 		ContractInstantiateResult {
 			result: output
 				.result
@@ -1181,6 +1419,7 @@ impl<T: Config> Pallet<T> {
 			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default().to_vec(),
+			events,
 		}
 	}
 
@@ -1194,16 +1433,12 @@ impl<T: Config> Pallet<T> {
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
+		Migration::<T>::ensure_migrated()?;
 		let schedule = T::Schedule::get();
-		let module = PrefabWasmModule::from_code(
-			code,
-			&schedule,
-			origin,
-			determinism,
-			TryInstantiate::Instantiate,
-		)
-		.map_err(|(err, _)| err)?;
-		let deposit = module.open_deposit();
+		let module =
+			WasmBlob::from_code(code, &schedule, origin, determinism, TryInstantiate::Instantiate)
+				.map_err(|(err, _)| err)?;
+		let deposit = module.open_deposit(&module.code_info());
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
 		}
@@ -1214,6 +1449,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Query storage of a specified contract under a specified key.
 	pub fn get_storage(address: T::AccountId, key: Vec<u8>) -> GetStorageResult {
+		if Migration::<T>::in_progress() {
+			return Err(ContractAccessError::MigrationInProgress)
+		}
 		let contract_info =
 			ContractInfoOf::<T>::get(&address).ok_or(ContractAccessError::DoesntExist)?;
 
@@ -1243,24 +1481,15 @@ impl<T: Config> Pallet<T> {
 		ContractInfo::<T>::load_code_hash(account)
 	}
 
-	/// Store code for benchmarks which does not check nor instrument the code.
+	/// Store code for benchmarks which does not validate the code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn store_code_raw(
 		code: Vec<u8>,
 		owner: T::AccountId,
 	) -> frame_support::dispatch::DispatchResult {
 		let schedule = T::Schedule::get();
-		PrefabWasmModule::store_code_unchecked(code, &schedule, owner)?;
+		WasmBlob::store_code_unchecked(code, &schedule, owner)?;
 		Ok(())
-	}
-
-	/// This exists so that benchmarks can determine the weight of running an instrumentation.
-	#[cfg(feature = "runtime-benchmarks")]
-	fn reinstrument_module(
-		module: &mut PrefabWasmModule<T>,
-		schedule: &Schedule<T>,
-	) -> frame_support::dispatch::DispatchResult {
-		self::wasm::reinstrument(module, schedule).map(|_| ())
 	}
 
 	/// Deposit a pallet contracts event. Handles the conversion to the overarching event type.
@@ -1281,18 +1510,19 @@ impl<T: Config> Pallet<T> {
 	/// Used by backwards compatible extrinsics. We cannot just set the proof_size weight limit to
 	/// zero or an old `Call` will just fail with OutOfGas.
 	fn compat_weight_limit(gas_limit: OldWeight) -> Weight {
-		Weight::from_parts(gas_limit.0, u64::from(T::MaxCodeLen::get()) * 2)
+		Weight::from_parts(gas_limit, u64::from(T::MaxCodeLen::get()) * 2)
 	}
 }
 
 sp_api::decl_runtime_apis! {
 	/// The API used to dry-run contract interactions.
 	#[api_version(2)]
-	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash> where
+	pub trait ContractsApi<AccountId, Balance, BlockNumber, Hash, EventRecord> where
 		AccountId: Codec,
 		Balance: Codec,
 		BlockNumber: Codec,
 		Hash: Codec,
+		EventRecord: Codec,
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
@@ -1304,7 +1534,7 @@ sp_api::decl_runtime_apis! {
 			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
-		) -> ContractExecResult<Balance>;
+		) -> ContractExecResult<Balance, EventRecord>;
 
 		/// Instantiate a new contract.
 		///
@@ -1317,8 +1547,7 @@ sp_api::decl_runtime_apis! {
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId, Balance>;
-
+		) -> ContractInstantiateResult<AccountId, Balance, EventRecord>;
 
 		/// Upload new code without instantiating a contract from it.
 		///

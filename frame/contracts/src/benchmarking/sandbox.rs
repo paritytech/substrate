@@ -15,13 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// ! For instruction benchmarking we do no instantiate a full contract but merely the
-/// ! sandbox to execute the wasm code. This is because we do not need the full
+/// ! For instruction benchmarking we do not instantiate a full contract but merely the
+/// ! sandbox to execute the Wasm code. This is because we do not need the full
 /// ! environment that provides the seal interface as imported functions.
 use super::{code::WasmModule, Config};
-use crate::wasm::{
-	AllowDeprecatedInterface, AllowUnstableInterface, Environment, PrefabWasmModule,
-};
+use crate::wasm::{AllowDeprecatedInterface, AllowUnstableInterface, Environment, WasmBlob};
+use sp_core::Get;
 use wasmi::{errors::LinkerError, Func, Linker, StackLimits, Store};
 
 /// Minimal execution environment without any imported functions.
@@ -38,23 +37,24 @@ impl Sandbox {
 }
 
 impl<T: Config> From<&WasmModule<T>> for Sandbox {
-	/// Creates an instance from the supplied module and supplies as much memory
-	/// to the instance as the module declares as imported.
+	/// Creates an instance from the supplied module.
+	/// Sets the execution engine fuel level to `u64::MAX`.
 	fn from(module: &WasmModule<T>) -> Self {
-		let memory = module
-			.memory
-			.as_ref()
-			.map(|mem| (mem.min_pages, mem.max_pages))
-			.unwrap_or((0, 0));
-		let (store, _memory, instance) = PrefabWasmModule::<T>::instantiate::<EmptyEnv, _>(
+		let (mut store, _memory, instance) = WasmBlob::<T>::instantiate::<EmptyEnv, _>(
 			&module.code,
 			(),
-			memory,
+			&<T>::Schedule::get(),
 			StackLimits::default(),
 			// We are testing with an empty environment anyways
 			AllowDeprecatedInterface::No,
 		)
 		.expect("Failed to create benchmarking Sandbox instance");
+
+		// Set fuel for wasmi execution.
+		store
+			.add_fuel(u64::MAX)
+			.expect("We've set up engine to fuel consuming mode; qed");
+
 		let entry_point = instance.get_export(&store, "call").unwrap().into_func().unwrap();
 		Self { entry_point, store }
 	}

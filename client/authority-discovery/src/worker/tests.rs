@@ -31,7 +31,7 @@ use futures::{
 };
 use libp2p::{
 	core::multiaddr,
-	identity::{error::SigningError, Keypair},
+	identity::{Keypair, SigningError},
 	kad::record::Key as KademliaKey,
 	PeerId,
 };

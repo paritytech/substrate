@@ -1,0 +1,12 @@
+error: use of deprecated constant `pallet::warnings::ConstantWeight_0::_w`:
+               It is deprecated to use hard-coded constant as call weight.
+               Please instead benchmark all calls or put the pallet into `dev` mode.
+
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/13798>
+  --> tests/pallet_ui/call_weight_const_warning.rs:15:26
+   |
+15 |         #[pallet::weight(123_u64)]
+   |                          ^^^^^^^
+   |
+   = note: `-D deprecated` implied by `-D warnings`

@@ -34,6 +34,30 @@ pub const CALL: &<Test as frame_system::Config>::RuntimeCall =
 	&RuntimeCall::Balances(crate::Call::transfer_allow_death { dest: 0, value: 0 });
 
 #[test]
+fn set_lock_with_amount_zero_removes_lock() {
+	ExtBuilder::default()
+		.existential_deposit(1)
+		.monied(true)
+		.build_and_execute_with(|| {
+			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
+			Balances::set_lock(ID_1, &1, 0, WithdrawReasons::all());
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
+		});
+}
+
+#[test]
+fn set_lock_with_withdraw_reasons_empty_removes_lock() {
+	ExtBuilder::default()
+		.existential_deposit(1)
+		.monied(true)
+		.build_and_execute_with(|| {
+			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
+			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::empty());
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
+		});
+}
+
+#[test]
 fn basic_locking_should_work() {
 	ExtBuilder::default()
 		.existential_deposit(1)
@@ -1177,6 +1201,16 @@ fn named_reserve_should_work() {
 		assert_eq!(Balances::reserved_balance_named(&id_2, &1), 0);
 
 		assert_eq!(Balances::free_balance(&1), 52);
+	});
+}
+
+#[test]
+fn reserve_must_succeed_if_can_reserve_does() {
+	ExtBuilder::default().build_and_execute_with(|| {
+		let _ = Balances::deposit_creating(&1, 1);
+		let _ = Balances::deposit_creating(&2, 2);
+		assert!(Balances::can_reserve(&1, 1) == Balances::reserve(&1, 1).is_ok());
+		assert!(Balances::can_reserve(&2, 1) == Balances::reserve(&2, 1).is_ok());
 	});
 }
 

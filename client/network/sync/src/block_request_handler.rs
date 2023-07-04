@@ -17,13 +17,13 @@
 //! Helper for handling (i.e. answering) block requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::schema::v1::{block_request::FromBlock, BlockResponse, Direction};
+use crate::{
+	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
+	MAX_BLOCKS_IN_RESPONSE,
+};
 
 use codec::{Decode, Encode};
-use futures::{
-	channel::{mpsc, oneshot},
-	stream::StreamExt,
-};
+use futures::{channel::oneshot, stream::StreamExt};
 use libp2p::PeerId;
 use log::debug;
 use lru::LruCache;
@@ -50,12 +50,11 @@ use std::{
 };
 
 const LOG_TARGET: &str = "sync";
-const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
 const MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER: usize = 2;
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 
 	/// Reputation change when a peer sent us the same request multiple times.
 	pub const SAME_REQUEST: Rep = Rep::new_fatal("Same block request multiple times");
@@ -108,7 +107,7 @@ struct SeenRequestsKey<B: BlockT> {
 	support_multiple_justifications: bool,
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl<B: BlockT> Hash for SeenRequestsKey<B> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		self.peer.hash(state);
@@ -134,7 +133,7 @@ enum SeenRequestsValue {
 /// Handler for incoming block requests from a remote peer.
 pub struct BlockRequestHandler<B: BlockT, Client> {
 	client: Arc<Client>,
-	request_receiver: mpsc::Receiver<IncomingRequest>,
+	request_receiver: async_channel::Receiver<IncomingRequest>,
 	/// Maps from request to number of times we have seen this request.
 	///
 	/// This is used to check if a peer is spamming us with the same request.
@@ -155,7 +154,7 @@ where
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
 		// number of peers.
-		let (tx, request_receiver) = mpsc::channel(num_peer_hint);
+		let (tx, request_receiver) = async_channel::bounded(num_peer_hint);
 
 		let mut protocol_config = generate_protocol_config(
 			protocol_id,

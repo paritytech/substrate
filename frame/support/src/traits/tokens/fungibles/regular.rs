@@ -121,7 +121,7 @@ pub trait Inspect<AccountId>: Sized {
 
 /// Special dust type which can be type-safely converted into a `Credit`.
 #[must_use]
-pub struct Dust<A, T: Unbalanced<A>>(pub(crate) T::AssetId, pub(crate) T::Balance);
+pub struct Dust<A, T: Unbalanced<A>>(pub T::AssetId, pub T::Balance);
 
 impl<A, T: Balanced<A>> Dust<A, T> {
 	/// Convert `Dust` into an instance of `Credit`.
@@ -146,7 +146,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// This should not be reimplemented.
 	fn handle_raw_dust(asset: Self::AssetId, amount: Self::Balance) {
 		Self::handle_dust(Dust(
-			asset,
+			asset.clone(),
 			amount.min(Self::minimum_balance(asset).saturating_sub(One::one())),
 		))
 	}
@@ -193,13 +193,13 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		preservation: Preservation,
 		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
-		let old_balance = Self::balance(asset, who);
-		let free = Self::reducible_balance(asset, who, preservation, force);
+		let old_balance = Self::balance(asset.clone(), who);
+		let free = Self::reducible_balance(asset.clone(), who, preservation, force);
 		if let BestEffort = precision {
 			amount = amount.min(free);
 		}
 		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
-		if let Some(dust) = Self::write_balance(asset, who, new_balance)? {
+		if let Some(dust) = Self::write_balance(asset.clone(), who, new_balance)? {
 			Self::handle_dust(Dust(asset, dust));
 		}
 		Ok(old_balance.saturating_sub(new_balance))
@@ -217,13 +217,13 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
-		let old_balance = Self::balance(asset, who);
+		let old_balance = Self::balance(asset.clone(), who);
 		let new_balance = if let BestEffort = precision {
 			old_balance.saturating_add(amount)
 		} else {
 			old_balance.checked_add(&amount).ok_or(ArithmeticError::Overflow)?
 		};
-		if new_balance < Self::minimum_balance(asset) {
+		if new_balance < Self::minimum_balance(asset.clone()) {
 			// Attempt to increase from 0 to below minimum -> stays at zero.
 			if let BestEffort = precision {
 				Ok(Self::Balance::default())
@@ -234,7 +234,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 			if new_balance == old_balance {
 				Ok(Self::Balance::default())
 			} else {
-				if let Some(dust) = Self::write_balance(asset, who, new_balance)? {
+				if let Some(dust) = Self::write_balance(asset.clone(), who, new_balance)? {
 					Self::handle_dust(Dust(asset, dust));
 				}
 				Ok(new_balance.saturating_sub(old_balance))
@@ -258,11 +258,14 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		Self::total_issuance(asset)
+		Self::total_issuance(asset.clone())
 			.checked_add(&amount)
 			.ok_or(ArithmeticError::Overflow)?;
-		let actual = Self::increase_balance(asset, who, amount, Exact)?;
-		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_add(actual));
+		let actual = Self::increase_balance(asset.clone(), who, amount, Exact)?;
+		Self::set_total_issuance(
+			asset.clone(),
+			Self::total_issuance(asset.clone()).saturating_add(actual),
+		);
 		Self::done_mint_into(asset, who, amount);
 		Ok(actual)
 	}
@@ -277,13 +280,17 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		precision: Precision,
 		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
-		let actual = Self::reducible_balance(asset, who, Expendable, force).min(amount);
+		let actual = Self::reducible_balance(asset.clone(), who, Expendable, force).min(amount);
 		ensure!(actual == amount || precision == BestEffort, TokenError::FundsUnavailable);
-		Self::total_issuance(asset)
+		Self::total_issuance(asset.clone())
 			.checked_sub(&actual)
 			.ok_or(ArithmeticError::Overflow)?;
-		let actual = Self::decrease_balance(asset, who, actual, BestEffort, Expendable, force)?;
-		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(actual));
+		let actual =
+			Self::decrease_balance(asset.clone(), who, actual, BestEffort, Expendable, force)?;
+		Self::set_total_issuance(
+			asset.clone(),
+			Self::total_issuance(asset.clone()).saturating_sub(actual),
+		);
 		Self::done_burn_from(asset, who, actual);
 		Ok(actual)
 	}
@@ -303,13 +310,17 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		let actual = Self::reducible_balance(asset, who, Expendable, Polite).min(amount);
+		let actual = Self::reducible_balance(asset.clone(), who, Expendable, Polite).min(amount);
 		ensure!(actual == amount, TokenError::FundsUnavailable);
-		Self::total_issuance(asset)
+		Self::total_issuance(asset.clone())
 			.checked_sub(&actual)
 			.ok_or(ArithmeticError::Overflow)?;
-		let actual = Self::decrease_balance(asset, who, actual, BestEffort, Expendable, Polite)?;
-		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(actual));
+		let actual =
+			Self::decrease_balance(asset.clone(), who, actual, BestEffort, Expendable, Polite)?;
+		Self::set_total_issuance(
+			asset.clone(),
+			Self::total_issuance(asset.clone()).saturating_sub(actual),
+		);
 		Self::done_shelve(asset, who, actual);
 		Ok(actual)
 	}
@@ -329,11 +340,14 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		Self::total_issuance(asset)
+		Self::total_issuance(asset.clone())
 			.checked_add(&amount)
 			.ok_or(ArithmeticError::Overflow)?;
-		let actual = Self::increase_balance(asset, who, amount, Exact)?;
-		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_add(actual));
+		let actual = Self::increase_balance(asset.clone(), who, amount, Exact)?;
+		Self::set_total_issuance(
+			asset.clone(),
+			Self::total_issuance(asset.clone()).saturating_add(actual),
+		);
 		Self::done_restore(asset, who, amount);
 		Ok(actual)
 	}
@@ -346,13 +360,13 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		amount: Self::Balance,
 		preservation: Preservation,
 	) -> Result<Self::Balance, DispatchError> {
-		let _extra =
-			Self::can_withdraw(asset, source, amount).into_result(preservation != Expendable)?;
-		Self::can_deposit(asset, dest, amount, Extant).into_result()?;
-		Self::decrease_balance(asset, source, amount, BestEffort, preservation, Polite)?;
+		let _extra = Self::can_withdraw(asset.clone(), source, amount)
+			.into_result(preservation != Expendable)?;
+		Self::can_deposit(asset.clone(), dest, amount, Extant).into_result()?;
+		Self::decrease_balance(asset.clone(), source, amount, BestEffort, preservation, Polite)?;
 		// This should never fail as we checked `can_deposit` earlier. But we do a best-effort
 		// anyway.
-		let _ = Self::increase_balance(asset, dest, amount, BestEffort);
+		let _ = Self::increase_balance(asset.clone(), dest, amount, BestEffort);
 		Self::done_transfer(asset, source, dest, amount);
 		Ok(amount)
 	}
@@ -363,12 +377,11 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	///
 	/// Returns the new balance.
 	fn set_balance(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> Self::Balance {
-		let b = Self::balance(asset, who);
+		let b = Self::balance(asset.clone(), who);
 		if b > amount {
-			Self::burn_from(asset, who, b - amount, BestEffort, Force)
-				.map(|d| amount.saturating_sub(d))
+			Self::burn_from(asset, who, b - amount, BestEffort, Force).map(|d| b.saturating_sub(d))
 		} else {
-			Self::mint_into(asset, who, amount - b).map(|d| amount.saturating_add(d))
+			Self::mint_into(asset, who, amount - b).map(|d| b.saturating_add(d))
 		}
 		.unwrap_or(b)
 	}
@@ -392,7 +405,7 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Bal
 	for IncreaseIssuance<AccountId, U>
 {
 	fn handle(asset: U::AssetId, amount: U::Balance) {
-		U::set_total_issuance(asset, U::total_issuance(asset).saturating_add(amount))
+		U::set_total_issuance(asset.clone(), U::total_issuance(asset).saturating_add(amount))
 	}
 }
 
@@ -403,7 +416,7 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Bal
 	for DecreaseIssuance<AccountId, U>
 {
 	fn handle(asset: U::AssetId, amount: U::Balance) {
-		U::set_total_issuance(asset, U::total_issuance(asset).saturating_sub(amount))
+		U::set_total_issuance(asset.clone(), U::total_issuance(asset).saturating_sub(amount))
 	}
 }
 
@@ -424,11 +437,11 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// This is infallible, but doesn't guarantee that the entire `amount` is burnt, for example
 	/// in the case of underflow.
 	fn rescind(asset: Self::AssetId, amount: Self::Balance) -> Debt<AccountId, Self> {
-		let old = Self::total_issuance(asset);
+		let old = Self::total_issuance(asset.clone());
 		let new = old.saturating_sub(amount);
-		Self::set_total_issuance(asset, new);
+		Self::set_total_issuance(asset.clone(), new);
 		let delta = old - new;
-		Self::done_rescind(asset, delta);
+		Self::done_rescind(asset.clone(), delta);
 		Imbalance::<Self::AssetId, Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(
 			asset, delta,
 		)
@@ -441,11 +454,11 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// This is infallible, but doesn't guarantee that the entire `amount` is issued, for example
 	/// in the case of overflow.
 	fn issue(asset: Self::AssetId, amount: Self::Balance) -> Credit<AccountId, Self> {
-		let old = Self::total_issuance(asset);
+		let old = Self::total_issuance(asset.clone());
 		let new = old.saturating_add(amount);
-		Self::set_total_issuance(asset, new);
+		Self::set_total_issuance(asset.clone(), new);
 		let delta = new - old;
-		Self::done_issue(asset, delta);
+		Self::done_issue(asset.clone(), delta);
 		Imbalance::<Self::AssetId, Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(
 			asset, delta,
 		)
@@ -459,7 +472,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		asset: Self::AssetId,
 		amount: Self::Balance,
 	) -> (Debt<AccountId, Self>, Credit<AccountId, Self>) {
-		(Self::rescind(asset, amount), Self::issue(asset, amount))
+		(Self::rescind(asset.clone(), amount), Self::issue(asset, amount))
 	}
 
 	/// Mints `value` into the account of `who`, creating it as needed.
@@ -477,8 +490,8 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		value: Self::Balance,
 		precision: Precision,
 	) -> Result<Debt<AccountId, Self>, DispatchError> {
-		let increase = Self::increase_balance(asset, who, value, precision)?;
-		Self::done_deposit(asset, who, increase);
+		let increase = Self::increase_balance(asset.clone(), who, value, precision)?;
+		Self::done_deposit(asset.clone(), who, increase);
 		Ok(Imbalance::<Self::AssetId, Self::Balance, Self::OnDropDebt, Self::OnDropCredit>::new(
 			asset, increase,
 		))
@@ -505,8 +518,9 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		preservation: Preservation,
 		force: Fortitude,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
-		let decrease = Self::decrease_balance(asset, who, value, precision, preservation, force)?;
-		Self::done_withdraw(asset, who, decrease);
+		let decrease =
+			Self::decrease_balance(asset.clone(), who, value, precision, preservation, force)?;
+		Self::done_withdraw(asset.clone(), who, decrease);
 		Ok(Imbalance::<Self::AssetId, Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(
 			asset, decrease,
 		))
@@ -546,7 +560,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	) -> Result<Credit<AccountId, Self>, Debt<AccountId, Self>> {
 		let amount = debt.peek();
 		let asset = debt.asset();
-		let credit = match Self::withdraw(asset, who, amount, Exact, preservation, Polite) {
+		let credit = match Self::withdraw(asset.clone(), who, amount, Exact, preservation, Polite) {
 			Err(_) => return Err(debt),
 			Ok(d) => d,
 		};
@@ -568,4 +582,41 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	fn done_issue(_asset: Self::AssetId, _amount: Self::Balance) {}
 	fn done_deposit(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
 	fn done_withdraw(_asset: Self::AssetId, _who: &AccountId, _amount: Self::Balance) {}
+}
+
+/// Trait for providing methods to swap between the chain's native token and other asset classes.
+pub trait SwapNative<Origin, AccountId, Balance, AssetBalance, AssetId> {
+	/// Take an `asset_id` and swap some amount for `amount_out` of the chain's native asset. If an
+	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
+	/// too costly.
+	///
+	/// Withdraws `asset_id` from `sender`, deposits native asset to `send_to`, respecting
+	/// `keep_alive`.
+	///
+	/// If successful returns the amount of the `asset_id` taken to provide `amount_out`.
+	fn swap_tokens_for_exact_native(
+		sender: AccountId,
+		asset_id: AssetId,
+		amount_out: Balance,
+		amount_in_max: Option<AssetBalance>,
+		send_to: AccountId,
+		keep_alive: bool,
+	) -> Result<AssetBalance, DispatchError>;
+
+	/// Take an `asset_id` and swap `amount_in` of the chain's native asset for it. If an
+	/// `amount_out_min` is specified, it will return an error if it is unable to acquire the amount
+	/// desired.
+	///
+	/// Withdraws native asset from `sender`, deposits `asset_id` to `send_to`, respecting
+	/// `keep_alive`.
+	///
+	/// If successful, returns the amount of `asset_id` acquired for the `amount_in`.
+	fn swap_exact_native_for_tokens(
+		sender: AccountId,
+		asset_id: AssetId,
+		amount_in: Balance,
+		amount_out_min: Option<AssetBalance>,
+		send_to: AccountId,
+		keep_alive: bool,
+	) -> Result<AssetBalance, DispatchError>;
 }

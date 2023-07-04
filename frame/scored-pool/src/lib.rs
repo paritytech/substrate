@@ -70,7 +70,7 @@
 //!
 //! 	#[pallet::call]
 //! 	impl<T: Config> Pallet<T> {
-//! 		#[pallet::weight(0)]
+//! 		#[pallet::weight({0})]
 //! 		pub fn candidate(origin: OriginFor<T>) -> DispatchResult {
 //! 			let who = ensure_signed(origin)?;
 //!
@@ -249,16 +249,10 @@ pub mod pallet {
 	pub(crate) type MemberCount<T, I = ()> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub pool: PoolT<T, I>,
 		pub member_count: u32,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
-		fn default() -> Self {
-			Self { pool: Default::default(), member_count: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -311,7 +305,7 @@ pub mod pallet {
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn submit_candidacy(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(!<CandidateExists<T, I>>::contains_key(&who), Error::<T, I>::AlreadyInPool);
@@ -341,7 +335,7 @@ pub mod pallet {
 		/// The `index` parameter of this function must be set to
 		/// the index of the transactor in the `Pool`.
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn withdraw_candidacy(origin: OriginFor<T>, index: u32) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -360,7 +354,7 @@ pub mod pallet {
 		/// The `index` parameter of this function must be set to
 		/// the index of `dest` in the `Pool`.
 		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn kick(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -385,7 +379,7 @@ pub mod pallet {
 		/// The `index` parameter of this function must be set to
 		/// the index of the `dest` in the `Pool`.
 		#[pallet::call_index(3)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn score(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -425,7 +419,7 @@ pub mod pallet {
 		///
 		/// May only be called from root.
 		#[pallet::call_index(4)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn change_member_count(origin: OriginFor<T>, count: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::update_member_count(count).map_err(Into::into)

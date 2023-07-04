@@ -103,7 +103,7 @@ async fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		full_extensions(),
+		full_extensions(executor.clone()),
 	)?;
 
 	Ok(<T>::decode(&mut &*result)?)
@@ -121,7 +121,7 @@ async fn run<Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		full_extensions(),
+		full_extensions(executor.clone()),
 	)?;
 
 	let storage_changes = changes.drain_storage_changes(
@@ -211,7 +211,6 @@ pub(crate) async fn fast_forward<Block, HostFns, BBIP>(
 ) -> Result<()>
 where
 	Block: BlockT<Hash = H256> + DeserializeOwned,
-	Block::Hash: FromStr,
 	Block::Header: DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,

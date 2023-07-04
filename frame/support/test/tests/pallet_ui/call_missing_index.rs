@@ -15,6 +15,11 @@ mod pallet {
 		pub fn foo(_: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
+
+		#[pallet::weight(0)]
+		pub fn bar(_: OriginFor<T>) -> DispatchResult {
+			Ok(())
+		}
 	}
 }
 
