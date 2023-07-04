@@ -33,11 +33,10 @@
 use std::{fmt::Debug, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
 
 use futures::prelude::*;
-use log::{debug, trace};
 
 use codec::{Codec, Decode, Encode};
 
-use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
+use sc_client_api::{backend::AuxStore, BlockOf};
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, StateAction};
 use sc_consensus_slots::{
 	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SimpleSlotWorkerToSlotWorker,
@@ -45,20 +44,19 @@ use sc_consensus_slots::{
 };
 use sc_telemetry::TelemetryHandle;
 use sp_api::{Core, ProvideRuntimeApi};
-use sp_application_crypto::{AppKey, AppPublic};
-use sp_blockchain::{HeaderBackend, Result as CResult};
+use sp_application_crypto::AppPublic;
+use sp_blockchain::HeaderBackend;
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_slots::Slot;
-use sp_core::crypto::{ByteArray, Pair, Public};
+use sp_core::crypto::{Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::{
-	traits::{Block as BlockT, Header, Member, NumberFor, Zero},
-	DigestItem,
-};
+use sp_keystore::KeystorePtr;
+use sp_runtime::traits::{Block as BlockT, Header, Member, NumberFor};
 
 mod import_queue;
+pub mod standalone;
 
+pub use crate::standalone::{find_pre_digest, slot_duration};
 pub use import_queue::{
 	build_verifier, import_queue, AuraVerifier, BuildVerifierParams, CheckForEquivocation,
 	ImportQueueParams,
@@ -112,39 +110,6 @@ impl<N> Default for CompatibilityMode<N> {
 	}
 }
 
-/// Get the slot duration for Aura.
-pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
-where
-	A: Codec,
-	B: BlockT,
-	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
-	C::Api: AuraApi<B, A>,
-{
-	client
-		.runtime_api()
-		.slot_duration(client.usage_info().chain.best_hash)
-		.map_err(|err| err.into())
-}
-
-/// Get slot author for given block along with authorities.
-fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&AuthorityId<P>> {
-	if authorities.is_empty() {
-		return None
-	}
-
-	let idx = *slot % (authorities.len() as u64);
-	assert!(
-		idx <= usize::MAX as u64,
-		"It is impossible to have a vector with length beyond the address space; qed",
-	);
-
-	let current_author = authorities.get(idx as usize).expect(
-		"authorities not empty; index constrained to list length;this is a valid index; qed",
-	);
-
-	Some(current_author)
-}
-
 /// Parameters of [`start_aura`].
 pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, N> {
 	/// The duration of a slot.
@@ -168,7 +133,7 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, N> {
 	/// The backoff strategy when we miss slots.
 	pub backoff_authoring_blocks: Option<BS>,
 	/// The keystore used by the node.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -205,7 +170,7 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, Error>(
 		telemetry,
 		compatibility_mode,
 	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, NumberFor<B>>,
-) -> Result<impl Future<Output = ()>, sp_consensus::Error>
+) -> Result<impl Future<Output = ()>, ConsensusError>
 where
 	P: Pair + Send + Sync,
 	P::Public: AppPublic + Hash + Member + Encode + Decode,
@@ -222,7 +187,7 @@ where
 	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + 'static,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
 		client,
@@ -265,7 +230,7 @@ pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS, N> {
 	/// The backoff strategy when we miss slots.
 	pub backoff_authoring_blocks: Option<BS>,
 	/// The keystore used by the node.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -320,7 +285,7 @@ where
 	P::Public: AppPublic + Hash + Member + Encode + Decode,
 	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
@@ -346,7 +311,7 @@ struct AuraWorker<C, E, I, P, SO, L, BS, N> {
 	client: Arc<C>,
 	block_import: I,
 	env: E,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	sync_oracle: SO,
 	justification_sync_link: L,
 	force_authoring: bool,
@@ -374,13 +339,13 @@ where
 	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
-	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	Error: std::error::Error + Send + From<ConsensusError> + 'static,
 {
 	type BlockImport = I;
 	type SyncOracle = SO;
 	type JustificationSyncLink = L;
 	type CreateProposer =
-		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
+		Pin<Box<dyn Future<Output = Result<E::Proposer, ConsensusError>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type Claim = P::Public;
 	type AuxData = Vec<AuthorityId<P>>;
@@ -393,11 +358,7 @@ where
 		&mut self.block_import
 	}
 
-	fn aux_data(
-		&self,
-		header: &B::Header,
-		_slot: Slot,
-	) -> Result<Self::AuxData, sp_consensus::Error> {
+	fn aux_data(&self, header: &B::Header, _slot: Slot) -> Result<Self::AuxData, ConsensusError> {
 		authorities(
 			self.client.as_ref(),
 			header.hash(),
@@ -406,31 +367,21 @@ where
 		)
 	}
 
-	fn authorities_len(&self, epoch_data: &Self::AuxData) -> Option<usize> {
-		Some(epoch_data.len())
+	fn authorities_len(&self, authorities: &Self::AuxData) -> Option<usize> {
+		Some(authorities.len())
 	}
 
 	async fn claim_slot(
 		&self,
 		_header: &B::Header,
 		slot: Slot,
-		epoch_data: &Self::AuxData,
+		authorities: &Self::AuxData,
 	) -> Option<Self::Claim> {
-		let expected_author = slot_author::<P>(slot, epoch_data);
-		expected_author.and_then(|p| {
-			if SyncCryptoStore::has_keys(
-				&*self.keystore,
-				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
-			) {
-				Some(p.clone())
-			} else {
-				None
-			}
-		})
+		crate::standalone::claim_slot::<P>(slot, authorities, &self.keystore).await
 	}
 
 	fn pre_digest_data(&self, slot: Slot, _claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
-		vec![<DigestItem as CompatibleDigestItem<P::Signature>>::aura_pre_digest(slot)]
+		vec![crate::standalone::pre_digest::<P>(slot)]
 	}
 
 	async fn block_import_params(
@@ -440,35 +391,13 @@ where
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		public: Self::Claim,
-		_epoch: Self::AuxData,
+		_authorities: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
-		sp_consensus::Error,
+		ConsensusError,
 	> {
-		// sign the pre-sealed hash of the block and then
-		// add it to a digest item.
-		let public_type_pair = public.to_public_crypto_pair();
-		let public = public.to_raw_vec();
-		let signature = SyncCryptoStore::sign_with(
-			&*self.keystore,
-			<AuthorityId<P> as AppKey>::ID,
-			&public_type_pair,
-			header_hash.as_ref(),
-		)
-		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-		.ok_or_else(|| {
-			sp_consensus::Error::CannotSign(
-				public.clone(),
-				"Could not find key in keystore.".into(),
-			)
-		})?;
-		let signature = signature
-			.clone()
-			.try_into()
-			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-
 		let signature_digest_item =
-			<DigestItem as CompatibleDigestItem<P::Signature>>::aura_seal(signature);
+			crate::standalone::seal::<_, P>(header_hash, &public, &self.keystore)?;
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(signature_digest_item);
@@ -510,7 +439,7 @@ where
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
 		self.env
 			.init(block)
-			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)))
+			.map_err(|e| ConsensusError::ClientImport(format!("{:?}", e)))
 			.boxed()
 	}
 
@@ -530,11 +459,6 @@ where
 			self.logging_target(),
 		)
 	}
-}
-
-fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
-	debug!(target: LOG_TARGET, "{}", error);
-	error
 }
 
 /// Aura Errors
@@ -575,22 +499,13 @@ impl<B: BlockT> From<Error<B>> for String {
 	}
 }
 
-/// Get pre-digests from the header
-pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Slot, Error<B>> {
-	if header.number().is_zero() {
-		return Ok(0.into())
-	}
-
-	let mut pre_digest: Option<Slot> = None;
-	for log in header.digest().logs() {
-		trace!(target: LOG_TARGET, "Checking log {:?}", log);
-		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
-			(Some(_), true) => return Err(aura_err(Error::MultipleHeaders)),
-			(None, _) => trace!(target: LOG_TARGET, "Ignoring digest not meant for us"),
-			(s, false) => pre_digest = s,
+impl<B: BlockT> From<crate::standalone::PreDigestLookupError> for Error<B> {
+	fn from(e: crate::standalone::PreDigestLookupError) -> Self {
+		match e {
+			crate::standalone::PreDigestLookupError::MultipleHeaders => Error::MultipleHeaders,
+			crate::standalone::PreDigestLookupError::NoDigestFound => Error::NoDigestFound,
 		}
 	}
-	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound))
 }
 
 fn authorities<A, B, C>(
@@ -623,14 +538,14 @@ where
 							Default::default(),
 						),
 					)
-					.map_err(|_| sp_consensus::Error::InvalidAuthoritiesSet)?;
+					.map_err(|_| ConsensusError::InvalidAuthoritiesSet)?;
 			},
 	}
 
 	runtime_api
 		.authorities(parent_hash)
 		.ok()
-		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
+		.ok_or(ConsensusError::InvalidAuthoritiesSet)
 }
 
 #[cfg(test)]
@@ -643,11 +558,12 @@ mod tests {
 	use sc_consensus_slots::{BackoffAuthoringOnFinalizedHeadLagging, SimpleSlotWorker};
 	use sc_keystore::LocalKeystore;
 	use sc_network_test::{Block as TestBlock, *};
-	use sp_application_crypto::key_types::AURA;
+	use sp_application_crypto::{key_types::AURA, AppCrypto};
 	use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
 	use sp_keyring::sr25519::Keyring;
+	use sp_keystore::Keystore;
 	use sp_runtime::{
 		traits::{Block as BlockT, Header as _},
 		Digest,
@@ -798,7 +714,8 @@ mod tests {
 				LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore."),
 			);
 
-			SyncCryptoStore::sr25519_generate_new(&*keystore, AURA, Some(&key.to_seed()))
+			keystore
+				.sr25519_generate_new(AURA, Some(&key.to_seed()))
 				.expect("Creates authority key");
 			keystore_paths.push(keystore_path);
 
@@ -855,22 +772,6 @@ mod tests {
 		.await;
 	}
 
-	#[test]
-	fn authorities_call_works() {
-		let client = substrate_test_runtime_client::new();
-
-		assert_eq!(client.chain_info().best_number, 0);
-		assert_eq!(
-			authorities(&client, client.chain_info().best_hash, 1, &CompatibilityMode::None)
-				.unwrap(),
-			vec![
-				Keyring::Alice.public().into(),
-				Keyring::Bob.public().into(),
-				Keyring::Charlie.public().into()
-			]
-		);
-	}
-
 	#[tokio::test]
 	async fn current_node_authority_should_claim_slot() {
 		let net = AuraTestNet::new(4);
@@ -883,7 +784,8 @@ mod tests {
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
-		let public = SyncCryptoStore::sr25519_generate_new(&keystore, AuthorityPair::ID, None)
+		let public = keystore
+			.sr25519_generate_new(AuthorityPair::ID, None)
 			.expect("Key should be created");
 		authorities.push(public.into());
 
@@ -933,12 +835,9 @@ mod tests {
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
 		let keystore = LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore.");
-		SyncCryptoStore::sr25519_generate_new(
-			&keystore,
-			AuthorityPair::ID,
-			Some(&Keyring::Alice.to_seed()),
-		)
-		.expect("Key should be created");
+		keystore
+			.sr25519_generate_new(AuthorityPair::ID, Some(&Keyring::Alice.to_seed()))
+			.expect("Key should be created");
 
 		let net = Arc::new(Mutex::new(net));
 

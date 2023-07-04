@@ -87,6 +87,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 impl Config for Test {
@@ -98,7 +102,7 @@ impl Config for Test {
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = GenesisConfig {
+	let t = RuntimeGenesisConfig {
 		// We use default for brevity, but you can configure as desired if needed.
 		system: Default::default(),
 		balances: Default::default(),
@@ -188,6 +192,7 @@ fn weights_work() {
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
 	// TODO: account for proof size weight
 	assert!(info1.weight.ref_time() > 0);
+	assert_eq!(info1.weight, <Test as Config>::WeightInfo::accumulate_dummy());
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.

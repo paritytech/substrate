@@ -21,7 +21,7 @@ use crate::{
 	generic::CheckedExtrinsic,
 	traits::{
 		self, Checkable, Extrinsic, ExtrinsicMetadata, IdentifyAccount, MaybeDisplay, Member,
-		SignedExtension,
+		SignaturePayload, SignedExtension,
 	},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	OpaqueExtrinsic,
@@ -29,6 +29,8 @@ use crate::{
 use codec::{Compact, Decode, Encode, EncodeLike, Error, Input};
 use scale_info::{build::Fields, meta_type, Path, StaticTypeInfo, Type, TypeInfo, TypeParameter};
 use sp_io::hashing::blake2_256;
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+use sp_std::alloc::format;
 use sp_std::{fmt, prelude::*};
 
 /// Current version of the [`UncheckedExtrinsic`] encoded format.
@@ -37,6 +39,9 @@ use sp_std::{fmt, prelude::*};
 /// It ensures that if the representation is changed and the format is not known,
 /// the decoding fails.
 const EXTRINSIC_FORMAT_VERSION: u8 = 4;
+
+/// The `SingaturePayload` of `UncheckedExtrinsic`.
+type UncheckedSignaturePayload<Address, Signature, Extra> = (Address, Signature, Extra);
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
@@ -48,9 +53,17 @@ where
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,
 	/// if this is a signed extrinsic.
-	pub signature: Option<(Address, Signature, Extra)>,
+	pub signature: Option<UncheckedSignaturePayload<Address, Signature, Extra>>,
 	/// The function that should be called.
 	pub function: Call,
+}
+
+impl<Address: TypeInfo, Signature: TypeInfo, Extra: TypeInfo> SignaturePayload
+	for UncheckedSignaturePayload<Address, Signature, Extra>
+{
+	type SignatureAddress = Address;
+	type Signature = Signature;
+	type SignatureExtra = Extra;
 }
 
 /// Manual [`TypeInfo`] implementation because of custom encoding. The data is a valid encoded
@@ -101,12 +114,12 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 	}
 }
 
-impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<Address: TypeInfo, Call: TypeInfo, Signature: TypeInfo, Extra: SignedExtension + TypeInfo>
+	Extrinsic for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	type Call = Call;
 
-	type SignaturePayload = (Address, Signature, Extra);
+	type SignaturePayload = UncheckedSignaturePayload<Address, Signature, Extra>;
 
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
@@ -317,7 +330,7 @@ where
 {
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> serde::Serialize
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
@@ -329,7 +342,7 @@ impl<Address: Encode, Signature: Encode, Call: Encode, Extra: SignedExtension> s
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'a, Address: Decode, Signature: Decode, Call: Decode, Extra: SignedExtension>
 	serde::Deserialize<'a> for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {

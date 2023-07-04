@@ -61,7 +61,7 @@ pub mod generic {
 	use sc_client_api::StorageProof;
 	use sc_network_common::{
 		message::RequestId,
-		protocol::role::Roles,
+		role::Roles,
 		sync::message::{
 			generic::{BlockRequest, BlockResponse},
 			BlockAnnounce,

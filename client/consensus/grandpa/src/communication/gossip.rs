@@ -91,7 +91,7 @@ use parity_scale_codec::{Decode, Encode};
 use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 use rand::seq::SliceRandom;
 use sc_network::{PeerId, ReputationChange};
-use sc_network_common::protocol::role::ObservedRole;
+use sc_network_common::role::ObservedRole;
 use sc_network_gossip::{MessageIntent, ValidatorContext};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -820,7 +820,7 @@ impl<Block: BlockT> Inner<Block> {
 	fn note_set(&mut self, set_id: SetId, authorities: Vec<AuthorityId>) -> MaybeMessage<Block> {
 		let local_view = match self.local_view {
 			ref mut x @ None => x.get_or_insert(LocalView::new(set_id, Round(1))),
-			Some(ref mut v) =>
+			Some(ref mut v) => {
 				if v.set_id == set_id {
 					let diff_authorities = self.authorities.iter().collect::<HashSet<_>>() !=
 						authorities.iter().collect::<HashSet<_>>();
@@ -841,7 +841,8 @@ impl<Block: BlockT> Inner<Block> {
 					return None
 				} else {
 					v
-				},
+				}
+			},
 		};
 
 		local_view.update_set(set_id);

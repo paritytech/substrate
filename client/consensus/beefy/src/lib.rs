@@ -38,8 +38,7 @@ use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotifications, Finalizer};
 use sc_consensus::BlockImport;
-use sc_network::ProtocolName;
-use sc_network_common::service::NetworkRequest;
+use sc_network::{NetworkRequest, ProtocolName};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork, Syncing as GossipSyncing};
 use sp_api::{HeaderT, NumberFor, ProvideRuntimeApi};
 use sp_blockchain::{
@@ -48,12 +47,15 @@ use sp_blockchain::{
 use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_consensus_beefy::{
 	crypto::AuthorityId, BeefyApi, MmrRootHash, PayloadProvider, ValidatorSet, BEEFY_ENGINE_ID,
-	GENESIS_AUTHORITY_SET_ID,
 };
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::{Block, Zero};
-use std::{collections::VecDeque, marker::PhantomData, sync::Arc};
+use std::{
+	collections::{BTreeMap, VecDeque},
+	marker::PhantomData,
+	sync::Arc,
+};
 
 mod aux_schema;
 mod error;
@@ -198,7 +200,7 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R, S> {
 	/// Runtime Api Provider
 	pub runtime: Arc<R>,
 	/// Local key store
-	pub key_store: Option<SyncCryptoStorePtr>,
+	pub key_store: Option<KeystorePtr>,
 	/// BEEFY voter network params
 	pub network_params: BeefyNetworkParams<B, N, S>,
 	/// Minimal delta between blocks, BEEFY should vote for
@@ -248,9 +250,12 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	} = network_params;
 
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-	let gossip_validator =
-		Arc::new(communication::gossip::GossipValidator::new(known_peers.clone()));
-	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
+	// Default votes filter is to discard everything.
+	// Validator is updated later with correct starting round and set id.
+	let (gossip_validator, gossip_report_stream) =
+		communication::gossip::GossipValidator::new(known_peers.clone());
+	let gossip_validator = Arc::new(gossip_validator);
+	let mut gossip_engine = GossipEngine::new(
 		network.clone(),
 		sync.clone(),
 		gossip_protocol_name,
@@ -276,8 +281,14 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	let persisted_state =
 		match wait_for_runtime_pallet(&*runtime, &mut gossip_engine, &mut finality_notifications)
 			.await
-			.and_then(|best_grandpa| {
-				load_or_init_voter_state(&*backend, &*runtime, best_grandpa, min_block_delta)
+			.and_then(|(beefy_genesis, best_grandpa)| {
+				load_or_init_voter_state(
+					&*backend,
+					&*runtime,
+					beefy_genesis,
+					best_grandpa,
+					min_block_delta,
+				)
 			}) {
 			Ok(state) => state,
 			Err(e) => {
@@ -285,8 +296,16 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 				return
 			},
 		};
+	// Update the gossip validator with the right starting round and set id.
+	if let Err(e) = persisted_state
+		.gossip_filter_config()
+		.map(|f| gossip_validator.update_filter(f))
+	{
+		error!(target: LOG_TARGET, "Error: {:?}. Terminating.", e);
+		return
+	}
 
-	let worker_params = worker::WorkerParams {
+	let worker = worker::BeefyWorker {
 		backend,
 		payload_provider,
 		runtime,
@@ -294,17 +313,17 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 		key_store: key_store.into(),
 		gossip_engine,
 		gossip_validator,
+		gossip_report_stream,
 		on_demand_justifications,
 		links,
 		metrics,
+		pending_justifications: BTreeMap::new(),
 		persisted_state,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
-
-	futures::future::join(
-		worker.run(block_import_justif, finality_notifications),
-		on_demand_justifications_handler.run(),
+	futures::future::select(
+		Box::pin(worker.run(block_import_justif, finality_notifications)),
+		Box::pin(on_demand_justifications_handler.run()),
 	)
 	.await;
 }
@@ -312,6 +331,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 fn load_or_init_voter_state<B, BE, R>(
 	backend: &BE,
 	runtime: &R,
+	beefy_genesis: NumberFor<B>,
 	best_grandpa: <B as Block>::Header,
 	min_block_delta: u32,
 ) -> ClientResult<PersistedState<B>>
@@ -321,17 +341,22 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
-	// Initialize voter state from AUX DB or from pallet genesis.
-	if let Some(mut state) = crate::aux_schema::load_persistent(backend)? {
-		// Overwrite persisted state with current best GRANDPA block.
-		state.set_best_grandpa(best_grandpa);
-		// Overwrite persisted data with newly provided `min_block_delta`.
-		state.set_min_block_delta(min_block_delta);
-		info!(target: LOG_TARGET, "🥩 Loading BEEFY voter state from db: {:?}.", state);
-		Ok(state)
-	} else {
-		initialize_voter_state(backend, runtime, best_grandpa, min_block_delta)
-	}
+	// Initialize voter state from AUX DB if compatible.
+	crate::aux_schema::load_persistent(backend)?
+		// Verify state pallet genesis matches runtime.
+		.filter(|state| state.pallet_genesis() == beefy_genesis)
+		.and_then(|mut state| {
+			// Overwrite persisted state with current best GRANDPA block.
+			state.set_best_grandpa(best_grandpa.clone());
+			// Overwrite persisted data with newly provided `min_block_delta`.
+			state.set_min_block_delta(min_block_delta);
+			info!(target: LOG_TARGET, "🥩 Loading BEEFY voter state from db: {:?}.", state);
+			Some(Ok(state))
+		})
+		// No valid voter-state persisted, re-initialize from pallet genesis.
+		.unwrap_or_else(|| {
+			initialize_voter_state(backend, runtime, beefy_genesis, best_grandpa, min_block_delta)
+		})
 }
 
 // If no persisted state present, walk back the chain from first GRANDPA notification to either:
@@ -341,6 +366,7 @@ where
 fn initialize_voter_state<B, BE, R>(
 	backend: &BE,
 	runtime: &R,
+	beefy_genesis: NumberFor<B>,
 	best_grandpa: <B as Block>::Header,
 	min_block_delta: u32,
 ) -> ClientResult<PersistedState<B>>
@@ -355,6 +381,7 @@ where
 		.beefy_genesis(best_grandpa.hash())
 		.ok()
 		.flatten()
+		.filter(|genesis| *genesis == beefy_genesis)
 		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))?;
 	// Walk back the imported blocks and initialize voter either, at the last block with
 	// a BEEFY justification, or at pallet genesis block; voter will resume from there.
@@ -382,16 +409,20 @@ where
 				rounds.conclude(best_beefy);
 				sessions.push_front(rounds);
 			}
-			let state =
-				PersistedState::checked_new(best_grandpa, best_beefy, sessions, min_block_delta)
-					.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?;
+			let state = PersistedState::checked_new(
+				best_grandpa,
+				best_beefy,
+				sessions,
+				min_block_delta,
+				beefy_genesis,
+			)
+			.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?;
 			break state
 		}
 
 		if *header.number() == beefy_genesis {
 			// We've reached BEEFY genesis, initialize voter here.
-			let genesis_set =
-				expect_validator_set(runtime, header.hash()).and_then(genesis_set_sanity_check)?;
+			let genesis_set = expect_validator_set(runtime, header.hash())?;
 			info!(
 				target: LOG_TARGET,
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
@@ -401,8 +432,14 @@ where
 			);
 
 			sessions.push_front(Rounds::new(beefy_genesis, genesis_set));
-			break PersistedState::checked_new(best_grandpa, Zero::zero(), sessions, min_block_delta)
-				.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?
+			break PersistedState::checked_new(
+				best_grandpa,
+				Zero::zero(),
+				sessions,
+				min_block_delta,
+				beefy_genesis,
+			)
+			.ok_or_else(|| ClientError::Backend("Invalid BEEFY chain".into()))?
 		}
 
 		if let Some(active) = worker::find_authorities_change::<B>(&header) {
@@ -437,7 +474,7 @@ async fn wait_for_runtime_pallet<B, R>(
 	runtime: &R,
 	mut gossip_engine: &mut GossipEngine<B>,
 	finality: &mut Fuse<FinalityNotifications<B>>,
-) -> ClientResult<<B as Block>::Header>
+) -> ClientResult<(NumberFor<B>, <B as Block>::Header)>
 where
 	B: Block,
 	R: ProvideRuntimeApi<B>,
@@ -460,7 +497,7 @@ where
 							"🥩 BEEFY pallet available: block {:?} beefy genesis {:?}",
 							notif.header.number(), start
 						);
-						return Ok(notif.header)
+						return Ok((start, notif.header))
 					}
 				}
 			},
@@ -472,17 +509,6 @@ where
 	let err_msg = "🥩 Gossip engine has unexpectedly terminated.".into();
 	error!(target: LOG_TARGET, "{}", err_msg);
 	Err(ClientError::Backend(err_msg))
-}
-
-fn genesis_set_sanity_check(
-	active: ValidatorSet<AuthorityId>,
-) -> ClientResult<ValidatorSet<AuthorityId>> {
-	if active.id() == GENESIS_AUTHORITY_SET_ID {
-		Ok(active)
-	} else {
-		error!(target: LOG_TARGET, "🥩 Unexpected ID for genesis validator set {:?}.", active);
-		Err(ClientError::Backend("BEEFY Genesis sanity check failed.".into()))
-	}
 }
 
 fn expect_validator_set<B, R>(

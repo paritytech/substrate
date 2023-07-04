@@ -42,7 +42,7 @@ use futures::{
 	prelude::*,
 };
 use parking_lot::Mutex;
-use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
+use sc_network::{NetworkPeers, NetworkStateInfo};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::{offchain, traits::SpawnNamed, ExecutionContext};
 use sp_runtime::traits::{self, Header};
@@ -246,16 +246,16 @@ mod tests {
 	use libp2p::{Multiaddr, PeerId};
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName};
-	use sc_peerset::ReputationChange;
-	use sc_transaction_pool::{BasicPool, FullChainApi};
+	use sc_network::{config::MultiaddrWithPeerId, types::ProtocolName, ReputationChange};
+	use sc_transaction_pool::BasicPool;
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 	use sp_consensus::BlockOrigin;
-	use sp_runtime::generic::BlockId;
 	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
-		runtime::Block, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient,
-		TestClientBuilderExt,
+		runtime::{
+			substrate_test_pallet::pallet::Call as PalletCall, ExtrinsicBuilder, RuntimeCall,
+		},
+		ClientBlockImportExt, DefaultTestClientBuilderExt, TestClientBuilderExt,
 	};
 
 	struct TestNetwork();
@@ -331,35 +331,8 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_to_peers_set(
-			&self,
-			_protocol: ProtocolName,
-			_peers: HashSet<Multiaddr>,
-		) -> Result<(), String> {
-			unimplemented!();
-		}
-
-		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
-			unimplemented!();
-		}
-
 		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
-		}
-	}
-
-	struct TestPool(Arc<BasicPool<FullChainApi<TestClient, Block>, Block>>);
-
-	impl sc_transaction_pool_api::OffchainSubmitTransaction<Block> for TestPool {
-		fn submit_at(
-			&self,
-			at: &BlockId<Block>,
-			extrinsic: <Block as traits::Block>::Extrinsic,
-		) -> Result<(), ()> {
-			let source = sc_transaction_pool_api::TransactionSource::Local;
-			futures::executor::block_on(self.0.submit_one(&at, source, extrinsic))
-				.map(|_| ())
-				.map_err(|_| ())
 		}
 	}
 
@@ -369,13 +342,8 @@ mod tests {
 
 		let client = Arc::new(substrate_test_runtime_client::new());
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let pool = TestPool(BasicPool::new_full(
-			Default::default(),
-			true.into(),
-			None,
-			spawner,
-			client.clone(),
-		));
+		let pool =
+			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 		let network = Arc::new(TestNetwork());
 		let header = client.header(client.chain_info().genesis_hash).unwrap().unwrap();
 
@@ -384,8 +352,11 @@ mod tests {
 		futures::executor::block_on(offchain.on_block_imported(&header, network, false));
 
 		// then
-		assert_eq!(pool.0.status().ready, 1);
-		assert_eq!(pool.0.ready().next().unwrap().is_propagable(), false);
+		assert_eq!(pool.status().ready, 1);
+		assert!(matches!(
+			pool.ready().next().unwrap().data().function,
+			RuntimeCall::SubstrateTest(PalletCall::storage_change { .. })
+		));
 	}
 
 	#[test]
@@ -403,12 +374,8 @@ mod tests {
 		let key = &b"hello"[..];
 		let value = &b"world"[..];
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexSet(
-				key.to_vec(),
-				value.to_vec(),
-			))
-			.unwrap();
+		let ext = ExtrinsicBuilder::new_offchain_index_set(key.to_vec(), value.to_vec()).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
@@ -416,11 +383,8 @@ mod tests {
 		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
 
 		let mut block_builder = client.new_block(Default::default()).unwrap();
-		block_builder
-			.push(substrate_test_runtime_client::runtime::Extrinsic::OffchainIndexClear(
-				key.to_vec(),
-			))
-			.unwrap();
+		let ext = ExtrinsicBuilder::new_offchain_index_clear(key.to_vec()).nonce(1).build();
+		block_builder.push(ext).unwrap();
 
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();

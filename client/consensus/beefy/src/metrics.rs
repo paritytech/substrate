@@ -45,10 +45,6 @@ pub struct VoterMetrics {
 	pub beefy_lagging_sessions: Counter<U64>,
 	/// Number of times no Authority public key found in store
 	pub beefy_no_authority_found_in_store: Counter<U64>,
-	/// Number of currently buffered votes
-	pub beefy_buffered_votes: Gauge<U64>,
-	/// Number of votes dropped due to full buffers
-	pub beefy_buffered_votes_dropped: Counter<U64>,
 	/// Number of good votes successfully handled
 	pub beefy_good_votes_processed: Counter<U64>,
 	/// Number of equivocation votes received
@@ -65,8 +61,6 @@ pub struct VoterMetrics {
 	pub beefy_imported_justifications: Counter<U64>,
 	/// Number of justifications dropped due to full buffers
 	pub beefy_buffered_justifications_dropped: Counter<U64>,
-	/// Trying to set Best Beefy block to old block
-	pub beefy_best_block_set_last_failure: Gauge<U64>,
 }
 
 impl PrometheusRegister for VoterMetrics {
@@ -107,17 +101,6 @@ impl PrometheusRegister for VoterMetrics {
 				Counter::new(
 					"substrate_beefy_no_authority_found_in_store",
 					"Number of times no Authority public key found in store",
-				)?,
-				registry,
-			)?,
-			beefy_buffered_votes: register(
-				Gauge::new("substrate_beefy_buffered_votes", "Number of currently buffered votes")?,
-				registry,
-			)?,
-			beefy_buffered_votes_dropped: register(
-				Counter::new(
-					"substrate_beefy_buffered_votes_dropped",
-					"Number of votes dropped due to full buffers",
 				)?,
 				registry,
 			)?,
@@ -171,13 +154,6 @@ impl PrometheusRegister for VoterMetrics {
 				Counter::new(
 					"substrate_beefy_buffered_justifications_dropped",
 					"Number of justifications dropped due to full buffers",
-				)?,
-				registry,
-			)?,
-			beefy_best_block_set_last_failure: register(
-				Gauge::new(
-					"substrate_beefy_best_block_to_old_block",
-					"Trying to set Best Beefy block to old block",
 				)?,
 				registry,
 			)?,
@@ -252,8 +228,8 @@ impl PrometheusRegister for OnDemandIncomingRequestsMetrics {
 pub struct OnDemandOutgoingRequestsMetrics {
 	/// Number of times there was no good peer to request justification from
 	pub beefy_on_demand_justification_no_peer_to_request_from: Counter<U64>,
-	/// Number of on-demand justification peer hang up
-	pub beefy_on_demand_justification_peer_hang_up: Counter<U64>,
+	/// Number of on-demand justification peer refused valid requests
+	pub beefy_on_demand_justification_peer_refused: Counter<U64>,
 	/// Number of on-demand justification peer error
 	pub beefy_on_demand_justification_peer_error: Counter<U64>,
 	/// Number of on-demand justification invalid proof
@@ -273,10 +249,10 @@ impl PrometheusRegister for OnDemandOutgoingRequestsMetrics {
 				)?,
 				registry,
 			)?,
-			beefy_on_demand_justification_peer_hang_up: register(
+			beefy_on_demand_justification_peer_refused: register(
 				Counter::new(
-					"substrate_beefy_on_demand_justification_peer_hang_up",
-					"Number of on-demand justification peer hang up",
+					"beefy_on_demand_justification_peer_refused",
+					"Number of on-demand justification peer refused valid requests",
 				)?,
 				registry,
 			)?,

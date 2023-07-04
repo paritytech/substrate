@@ -37,7 +37,7 @@ pub struct ErrorDef {
 	/// The index of error item in pallet module.
 	pub index: usize,
 	/// Variants ident, optional field and doc literals (ordered as declaration order)
-	pub variants: Vec<(syn::Ident, Option<VariantField>, Vec<syn::Lit>)>,
+	pub variants: Vec<(syn::Ident, Option<VariantField>, Vec<syn::Expr>)>,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
 	/// The keyword error used (contains span).

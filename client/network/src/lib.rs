@@ -87,8 +87,6 @@
 //!
 //! The following multiplexing protocols are supported:
 //!
-//! - [Mplex](https://github.com/libp2p/specs/tree/master/mplex). Support for mplex will likely
-//! be deprecated in the future.
 //! - [Yamux](https://github.com/hashicorp/yamux/blob/master/spec.md).
 //!
 //! ## Substreams
@@ -245,41 +243,47 @@
 //! More precise usage details are still being worked on and will likely change in the future.
 
 mod behaviour;
-mod discovery;
-mod peer_info;
+mod peer_store;
+mod peerset;
 mod protocol;
-mod request_responses;
+mod protocol_controller;
 mod service;
-mod transport;
 
 pub mod config;
+pub mod discovery;
+pub mod error;
+pub mod event;
 pub mod network_state;
+pub mod peer_info;
+pub mod request_responses;
+pub mod transport;
+pub mod types;
+pub mod utils;
 
+pub use event::{DhtEvent, Event, SyncEvent};
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
+pub use request_responses::{Config, IfDisconnected, RequestFailure};
 pub use sc_network_common::{
-	protocol::{
-		event::{DhtEvent, Event},
-		role::ObservedRole,
-		ProtocolName,
-	},
-	request_responses::{IfDisconnected, RequestFailure},
-	service::{
-		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature,
-		SigningError,
-	},
+	role::ObservedRole,
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
 		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
+	types::ReputationChange,
 };
 pub use service::{
-	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
-	NotificationSenderReady, OutboundFailure, PublicKey,
+	signature::Signature,
+	traits::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
+		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
+		NotificationSenderError, NotificationSenderReady,
+	},
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, NotificationsSink,
+	OutboundFailure, PublicKey,
 };
-
-pub use sc_peerset::ReputationChange;
+pub use types::ProtocolName;
 
 /// The maximum allowed number of established connections per peer.
 ///

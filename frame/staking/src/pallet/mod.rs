@@ -68,7 +68,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -580,6 +579,7 @@ pub mod pallet {
 	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub validator_count: u32,
 		pub minimum_validator_count: u32,
@@ -593,25 +593,6 @@ pub mod pallet {
 		pub min_validator_bond: BalanceOf<T>,
 		pub max_validator_count: Option<u32>,
 		pub max_nominator_count: Option<u32>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			GenesisConfig {
-				validator_count: Default::default(),
-				minimum_validator_count: Default::default(),
-				invulnerables: Default::default(),
-				force_era: Default::default(),
-				slash_reward_fraction: Default::default(),
-				canceled_payout: Default::default(),
-				stakers: Default::default(),
-				min_nominator_bond: Default::default(),
-				min_validator_bond: Default::default(),
-				max_validator_count: None,
-				max_nominator_count: None,
-			}
-		}
 	}
 
 	#[pallet::genesis_build]
@@ -632,7 +613,7 @@ pub mod pallet {
 				MaxNominatorsCount::<T>::put(x);
 			}
 
-			for &(ref stash, ref controller, balance, ref status) in &self.stakers {
+			for &(ref stash, _, balance, ref status) in &self.stakers {
 				crate::log!(
 					trace,
 					"inserting genesis staker: {:?} => {:?} => {:?}",
@@ -646,17 +627,16 @@ pub mod pallet {
 				);
 				frame_support::assert_ok!(<Pallet<T>>::bond(
 					T::RuntimeOrigin::from(Some(stash.clone()).into()),
-					T::Lookup::unlookup(controller.clone()),
 					balance,
 					RewardDestination::Staked,
 				));
 				frame_support::assert_ok!(match status {
 					crate::StakerStatus::Validator => <Pallet<T>>::validate(
-						T::RuntimeOrigin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(stash.clone()).into()),
 						Default::default(),
 					),
 					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
-						T::RuntimeOrigin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(stash.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
 					_ => Ok(()),
@@ -825,7 +805,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(n: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
 			Self::do_try_state(n)
 		}
 	}
@@ -851,19 +831,17 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::bond())]
 		pub fn bond(
 			origin: OriginFor<T>,
-			controller: AccountIdLookupOf<T>,
 			#[pallet::compact] value: BalanceOf<T>,
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
+			let controller_to_be_deprecated = stash.clone();
 
 			if <Bonded<T>>::contains_key(&stash) {
 				return Err(Error::<T>::AlreadyBonded.into())
 			}
 
-			let controller = T::Lookup::lookup(controller)?;
-
-			if <Ledger<T>>::contains_key(&controller) {
+			if <Ledger<T>>::contains_key(&controller_to_be_deprecated) {
 				return Err(Error::<T>::AlreadyPaired.into())
 			}
 
@@ -876,7 +854,7 @@ pub mod pallet {
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
-			<Bonded<T>>::insert(&stash, &controller);
+			<Bonded<T>>::insert(&stash, &stash);
 			<Payee<T>>::insert(&stash, payee);
 
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
@@ -887,7 +865,7 @@ pub mod pallet {
 			let value = value.min(stash_balance);
 			Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
 			let item = StakingLedger {
-				stash,
+				stash: stash.clone(),
 				total: value,
 				active: value,
 				unlocking: Default::default(),
@@ -898,7 +876,7 @@ pub mod pallet {
 					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
-			Self::update_ledger(&controller, &item);
+			Self::update_ledger(&controller_to_be_deprecated, &item);
 			Ok(())
 		}
 
@@ -1028,9 +1006,7 @@ pub mod pallet {
 
 				// Note: in case there is no current era it is fine to bond one era more.
 				let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
-				if let Some(mut chunk) =
-					ledger.unlocking.last_mut().filter(|chunk| chunk.era == era)
-				{
+				if let Some(chunk) = ledger.unlocking.last_mut().filter(|chunk| chunk.era == era) {
 					// To keep the chunk count down, we only keep one chunk per era. Since
 					// `unlocking` is a FiFo queue, if a chunk exists for `era` we know that it will
 					// be the last one.
@@ -1064,14 +1040,23 @@ pub mod pallet {
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
 		///
-		/// This essentially frees up that balance to be used by the stash account to do
-		/// whatever it wants.
+		/// This essentially frees up that balance to be used by the stash account to do whatever
+		/// it wants.
 		///
 		/// The dispatch origin for this call must be _Signed_ by the controller.
 		///
 		/// Emits `Withdrawn`.
 		///
 		/// See also [`Call::unbond`].
+		///
+		/// ## Parameters
+		///
+		/// - `num_slashing_spans` indicates the number of metadata slashing spans to clear when
+		/// this call results in a complete removal of all the data related to the stash account.
+		/// In this case, the `num_slashing_spans` must be larger or equal to the number of
+		/// slashing spans associated with the stash account in the [`SlashingSpans`] storage type,
+		/// otherwise the call will fail. The call weight is directly propotional to
+		/// `num_slashing_spans`.
 		///
 		/// ## Complexity
 		/// O(S) where S is the number of slashing spans to remove
@@ -1238,7 +1223,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// (Re-)set the controller of a stash.
+		/// (Re-)sets the controller of a stash to the stash itself. This function previously
+		/// accepted a `controller` argument to set the controller to an account other than the
+		/// stash itself. This functionality has now been removed, now only setting the controller
+		/// to the stash, if it is not already.
 		///
 		/// Effects will be felt instantly (as soon as this function is completed successfully).
 		///
@@ -1251,20 +1239,17 @@ pub mod pallet {
 		/// - Writes are limited to the `origin` account key.
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::set_controller())]
-		pub fn set_controller(
-			origin: OriginFor<T>,
-			controller: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn set_controller(origin: OriginFor<T>) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
-			let controller = T::Lookup::lookup(controller)?;
-			if <Ledger<T>>::contains_key(&controller) {
+
+			if <Ledger<T>>::contains_key(&stash) {
 				return Err(Error::<T>::AlreadyPaired.into())
 			}
-			if controller != old_controller {
-				<Bonded<T>>::insert(&stash, &controller);
+			if old_controller != stash {
+				<Bonded<T>>::insert(&stash, &stash);
 				if let Some(l) = <Ledger<T>>::take(&old_controller) {
-					<Ledger<T>>::insert(&controller, l);
+					<Ledger<T>>::insert(&stash, l);
 				}
 			}
 			Ok(())
@@ -1401,6 +1386,11 @@ pub mod pallet {
 		/// Force a current staker to become completely unstaked, immediately.
 		///
 		/// The dispatch origin must be Root.
+		///
+		/// ## Parameters
+		///
+		/// - `num_slashing_spans`: Refer to comments on [`Call::withdraw_unbonded`] for more
+		/// details.
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
 		pub fn force_unstake(
@@ -1452,7 +1442,7 @@ pub mod pallet {
 			ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
 			ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
 
-			let mut unapplied = <Self as Store>::UnappliedSlashes::get(&era);
+			let mut unapplied = UnappliedSlashes::<T>::get(&era);
 			let last_item = slash_indices[slash_indices.len() - 1];
 			ensure!((last_item as usize) < unapplied.len(), Error::<T>::InvalidSlashIndex);
 
@@ -1461,7 +1451,7 @@ pub mod pallet {
 				unapplied.remove(index);
 			}
 
-			<Self as Store>::UnappliedSlashes::insert(&era, &unapplied);
+			UnappliedSlashes::<T>::insert(&era, &unapplied);
 			Ok(())
 		}
 
@@ -1541,6 +1531,11 @@ pub mod pallet {
 		/// It can be called by anyone, as long as `stash` meets the above requirements.
 		///
 		/// Refunds the transaction fees upon successful execution.
+		///
+		/// ## Parameters
+		///
+		/// - `num_slashing_spans`: Refer to comments on [`Call::withdraw_unbonded`] for more
+		/// details.
 		#[pallet::call_index(20)]
 		#[pallet::weight(T::WeightInfo::reap_stash(*num_slashing_spans))]
 		pub fn reap_stash(

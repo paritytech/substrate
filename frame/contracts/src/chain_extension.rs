@@ -66,8 +66,8 @@
 //!
 //! # Example
 //!
-//! The ink! repository maintains an
-//! [end-to-end example](https://github.com/paritytech/ink/tree/master/examples/rand-extension)
+//! The ink-examples repository maintains an
+//! [end-to-end example](https://github.com/paritytech/ink-examples/tree/main/rand-extension)
 //! on how to use a chain extension in order to provide new features to ink! contracts.
 
 use crate::{
@@ -138,7 +138,7 @@ pub trait ChainExtension<C: Config> {
 ///
 /// # Note
 ///
-/// Currently, we support tuples of up to ten registred chain extensions. If more chain extensions
+/// Currently, we support tuples of up to ten registered chain extensions. If more chain extensions
 /// are needed consider opening an issue.
 pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 	/// The extensions globally unique identifier.

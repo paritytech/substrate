@@ -27,13 +27,13 @@ pub use sc_client_api::{
 	BadBlocks, ForkBlocks,
 };
 pub use sc_client_db::{self, Backend, BlocksPruning};
-pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
+pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod, WasmExecutor};
 pub use sc_service::{client, RpcHandlers};
 pub use sp_consensus;
 pub use sp_keyring::{
 	ed25519::Keyring as Ed25519Keyring, sr25519::Keyring as Sr25519Keyring, AccountKeyring,
 };
-pub use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+pub use sp_keystore::{Keystore, KeystorePtr};
 pub use sp_runtime::{Storage, StorageChild};
 pub use sp_state_machine::ExecutionStrategy;
 
@@ -42,7 +42,11 @@ use sc_client_api::BlockchainEvents;
 use sc_service::client::{ClientConfig, LocalCallExecutor};
 use serde::Deserialize;
 use sp_core::{storage::ChildInfo, testing::TaskExecutor};
-use sp_runtime::{codec::Encode, traits::Block as BlockT, OpaqueExtrinsic};
+use sp_runtime::{
+	codec::Encode,
+	traits::{Block as BlockT, Header},
+	OpaqueExtrinsic,
+};
 use std::{
 	collections::{HashMap, HashSet},
 	pin::Pin,
@@ -70,7 +74,7 @@ pub struct TestClientBuilder<Block: BlockT, ExecutorDispatch, Backend: 'static, 
 	child_storage_extension: HashMap<Vec<u8>, StorageChild>,
 	backend: Arc<Backend>,
 	_executor: std::marker::PhantomData<ExecutorDispatch>,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	fork_blocks: ForkBlocks<Block>,
 	bad_blocks: BadBlocks<Block>,
 	enable_offchain_indexing_api: bool,
@@ -128,7 +132,7 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	}
 
 	/// Set the keystore that should be used by the externalities.
-	pub fn set_keystore(mut self, keystore: SyncCryptoStorePtr) -> Self {
+	pub fn set_keystore(mut self, keystore: KeystorePtr) -> Self {
 		self.keystore = Some(keystore);
 		self
 	}
@@ -286,17 +290,17 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor.into().unwrap_or_else(|| {
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
+			NativeElseWasmExecutor::new_with_wasm_executor(WasmExecutor::builder().build())
 		});
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),
-			executor,
-			Box::new(sp_core::testing::TaskExecutor::new()),
+			executor.clone(),
 			Default::default(),
 			ExecutionExtensions::new(
 				self.execution_strategies.clone(),
 				self.keystore.clone(),
 				sc_offchain::OffchainDb::factory_from_backend(&*self.backend),
+				Arc::new(executor),
 			),
 		)
 		.expect("Creates LocalCallExecutor");
@@ -410,7 +414,7 @@ where
 		Box::pin(async move {
 			while let Some(notification) = import_notification_stream.next().await {
 				if notification.is_new_best {
-					blocks.insert(notification.hash);
+					blocks.insert(*notification.header.number());
 					if blocks.len() == count {
 						break
 					}

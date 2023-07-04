@@ -54,7 +54,7 @@ pub const DEFAULT_WASMTIME_INSTANTIATION_STRATEGY: WasmtimeInstantiationStrategy
 #[derive(Debug, Clone, Copy, ValueEnum)]
 #[value(rename_all = "kebab-case")]
 pub enum WasmExecutionMethod {
-	/// Uses an interpreter.
+	/// Uses an interpreter which now is deprecated.
 	#[clap(name = "interpreted-i-know-what-i-do")]
 	Interpreted,
 	/// Uses a compiled runtime.
@@ -74,23 +74,26 @@ impl std::fmt::Display for WasmExecutionMethod {
 /// into an execution method which can be used internally.
 pub fn execution_method_from_cli(
 	execution_method: WasmExecutionMethod,
-	_instantiation_strategy: WasmtimeInstantiationStrategy,
+	instantiation_strategy: WasmtimeInstantiationStrategy,
 ) -> sc_service::config::WasmExecutionMethod {
-	match execution_method {
-		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
-		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
-			instantiation_strategy: match _instantiation_strategy {
-				WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
-					sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
-				WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite =>
-					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite,
-				WasmtimeInstantiationStrategy::Pooling =>
-					sc_service::config::WasmtimeInstantiationStrategy::Pooling,
-				WasmtimeInstantiationStrategy::RecreateInstance =>
-					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstance,
-				WasmtimeInstantiationStrategy::LegacyInstanceReuse =>
-					sc_service::config::WasmtimeInstantiationStrategy::LegacyInstanceReuse,
-			},
+	if let WasmExecutionMethod::Interpreted = execution_method {
+		log::warn!(
+			"`interpreted-i-know-what-i-do` is deprecated and will be removed in the future. Defaults to `compiled` execution mode."
+		);
+	}
+
+	sc_service::config::WasmExecutionMethod::Compiled {
+		instantiation_strategy: match instantiation_strategy {
+			WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
+				sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+			WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite =>
+				sc_service::config::WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite,
+			WasmtimeInstantiationStrategy::Pooling =>
+				sc_service::config::WasmtimeInstantiationStrategy::Pooling,
+			WasmtimeInstantiationStrategy::RecreateInstance =>
+				sc_service::config::WasmtimeInstantiationStrategy::RecreateInstance,
+			WasmtimeInstantiationStrategy::LegacyInstanceReuse =>
+				sc_service::config::WasmtimeInstantiationStrategy::LegacyInstanceReuse,
 		},
 	}
 }
@@ -251,19 +254,19 @@ pub enum SyncMode {
 	Warp,
 }
 
-impl Into<sc_network_common::config::SyncMode> for SyncMode {
-	fn into(self) -> sc_network_common::config::SyncMode {
+impl Into<sc_network::config::SyncMode> for SyncMode {
+	fn into(self) -> sc_network::config::SyncMode {
 		match self {
-			SyncMode::Full => sc_network_common::config::SyncMode::Full,
-			SyncMode::Fast => sc_network_common::config::SyncMode::Fast {
+			SyncMode::Full => sc_network::config::SyncMode::Full,
+			SyncMode::Fast => sc_network::config::SyncMode::LightState {
 				skip_proofs: false,
 				storage_chain_mode: false,
 			},
-			SyncMode::FastUnsafe => sc_network_common::config::SyncMode::Fast {
+			SyncMode::FastUnsafe => sc_network::config::SyncMode::LightState {
 				skip_proofs: true,
 				storage_chain_mode: false,
 			},
-			SyncMode::Warp => sc_network_common::config::SyncMode::Warp,
+			SyncMode::Warp => sc_network::config::SyncMode::Warp,
 		}
 	}
 }

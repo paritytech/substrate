@@ -23,10 +23,11 @@ use frame_support::{
 	},
 	dispatch_context::with_context,
 	pallet_prelude::{StorageInfoTrait, ValueQuery},
+	parameter_types,
 	storage::unhashed,
 	traits::{
-		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
-		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
+		ConstU32, GetCallIndex, GetCallName, GetStorageVersion, OnFinalize, OnGenesis,
+		OnInitialize, OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
 	weights::{RuntimeDbWeight, Weight},
 };
@@ -35,7 +36,18 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::{DispatchError, ModuleError};
+use sp_runtime::{
+	traits::{Extrinsic as ExtrinsicT, SignaturePayload as SignaturePayloadT},
+	DispatchError, ModuleError,
+};
+
+parameter_types! {
+	/// Used to control if the storage version should be updated.
+	storage UpdateStorageVersion: bool = false;
+}
+
+/// Latest stable metadata version used for testing.
+const LATEST_METADATA_VERSION: u32 = 15;
 
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
@@ -101,6 +113,10 @@ impl SomeAssociation2 for u64 {
 }
 
 #[frame_support::pallet]
+/// Pallet documentation
+// Comments should not be included in the pallet documentation
+#[pallet_doc("../../README.md")]
+#[doc = include_str!("../../README.md")]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
@@ -158,7 +174,6 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -212,7 +227,7 @@ pub mod pallet {
 
 		/// Doc comment put in metadata
 		#[pallet::call_index(1)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn foo_storage_layer(
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
@@ -225,15 +240,21 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		#[pallet::call_index(4)]
+		#[pallet::weight({1})]
+		pub fn foo_index_out_of_order(_origin: OriginFor<T>) -> DispatchResult {
+			Ok(())
+		}
+
 		// Test for DispatchResult return type
 		#[pallet::call_index(2)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn foo_no_post_info(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
 
 		#[pallet::call_index(3)]
-		#[pallet::weight(1)]
+		#[pallet::weight({1})]
 		pub fn check_for_dispatch_context(_origin: OriginFor<T>) -> DispatchResult {
 			with_context::<(), _>(|_| ()).ok_or_else(|| DispatchError::Unavailable)
 		}
@@ -464,6 +485,11 @@ pub mod pallet {
 		}
 	}
 
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		Staking,
+	}
+
 	#[derive(codec::Encode, sp_runtime::RuntimeDebug)]
 	#[cfg_attr(feature = "std", derive(codec::Decode))]
 	pub enum InherentError {
@@ -483,9 +509,11 @@ pub mod pallet {
 // and that a pallet with the attribute without_storage_info is correctly handled.
 #[frame_support::pallet]
 pub mod pallet2 {
-	use super::{SomeAssociation1, SomeType1};
+	use super::{SomeAssociation1, SomeType1, UpdateStorageVersion};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config
@@ -496,7 +524,7 @@ pub mod pallet2 {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
@@ -514,6 +542,11 @@ pub mod pallet2 {
 		}
 		fn on_runtime_upgrade() -> Weight {
 			Self::deposit_event(Event::Something(31));
+
+			if UpdateStorageVersion::get() {
+				Self::current_storage_version().put::<Self>();
+			}
+
 			Weight::zero()
 		}
 	}
@@ -558,6 +591,16 @@ pub mod pallet2 {
 		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		fn build(&self) {}
+	}
+
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		Governance,
+	}
+
+	#[pallet::composite_enum]
+	pub enum SlashReason {
+		Equivocation,
 	}
 }
 
@@ -657,7 +700,8 @@ impl pallet5::Config for Runtime {
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+pub type UncheckedExtrinsic =
+	sp_runtime::testing::TestXt<RuntimeCall, frame_system::CheckNonZeroSender<Runtime>>;
 
 frame_support::construct_runtime!(
 	pub struct Runtime where
@@ -723,8 +767,25 @@ fn call_expand() {
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
 		pallet::Call::<Runtime>::get_call_names(),
-		&["foo", "foo_storage_layer", "foo_no_post_info", "check_for_dispatch_context"],
+		&[
+			"foo",
+			"foo_storage_layer",
+			"foo_index_out_of_order",
+			"foo_no_post_info",
+			"check_for_dispatch_context"
+		],
 	);
+
+	assert_eq!(call_foo.get_call_index(), 0u8);
+	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 4u8, 2u8, 3u8])
+}
+
+#[test]
+fn call_expand_index() {
+	let call_foo = pallet::Call::<Runtime>::foo_index_out_of_order {};
+
+	assert_eq!(call_foo.get_call_index(), 4u8);
+	assert_eq!(pallet::Call::<Runtime>::get_call_indices(), &[0u8, 1u8, 4u8, 2u8, 3u8])
 }
 
 #[test]
@@ -756,20 +817,17 @@ fn instance_expand() {
 
 #[test]
 fn inherent_expand() {
-	use frame_support::{
-		inherent::{BlockT, InherentData},
-		traits::EnsureInherentsAreFirst,
-	};
+	use frame_support::{inherent::InherentData, traits::EnsureInherentsAreFirst};
 	use sp_core::Hasher;
 	use sp_runtime::{
-		traits::{BlakeTwo256, Header},
+		traits::{BlakeTwo256, Block as _, Header},
 		Digest,
 	};
 
 	let inherents = InherentData::new().create_extrinsics();
 
 	let expected = vec![UncheckedExtrinsic {
-		function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+		call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 		signature: None,
 	}];
 	assert_eq!(expected, inherents);
@@ -784,11 +842,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -806,11 +864,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 0, bar: 0 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 0, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -827,7 +885,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+			call: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 			signature: None,
 		}],
 	);
@@ -845,8 +903,8 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
-			signature: Some((1, (), ())),
+			call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+			signature: Some((1, Default::default())),
 		}],
 	);
 
@@ -864,11 +922,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				call: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 		],
@@ -886,15 +944,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				call: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -912,15 +970,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
-				signature: Some((1, (), ())),
+				call: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				signature: Some((1, Default::default())),
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				call: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -947,12 +1005,20 @@ fn validate_unsigned_expand() {
 }
 
 #[test]
-fn trait_store_expand() {
-	TestExternalities::default().execute_with(|| {
-		<pallet::Pallet<Runtime> as pallet::Store>::Value::get();
-		<pallet::Pallet<Runtime> as pallet::Store>::Map::get(1);
-		<pallet::Pallet<Runtime> as pallet::Store>::DoubleMap::get(1, 2);
-	})
+fn composite_expand() {
+	use codec::Encode;
+
+	let hold_reason: RuntimeHoldReason = pallet::HoldReason::Staking.into();
+	let hold_reason2: RuntimeHoldReason = pallet2::HoldReason::Governance.into();
+	let slash_reason: RuntimeSlashReason = pallet2::SlashReason::Equivocation.into();
+
+	assert_eq!(hold_reason, RuntimeHoldReason::Example(pallet::HoldReason::Staking));
+	assert_eq!(hold_reason2, RuntimeHoldReason::Example2(pallet2::HoldReason::Governance));
+	assert_eq!(slash_reason, RuntimeSlashReason::Example2(pallet2::SlashReason::Equivocation));
+
+	assert_eq!(hold_reason.encode(), [1, 0]);
+	assert_eq!(hold_reason2.encode(), [2, 0]);
+	assert_eq!(slash_reason.encode(), [2, 0]);
 }
 
 #[test]
@@ -1227,14 +1293,15 @@ fn migrate_from_pallet_version_to_storage_version() {
 		assert!(sp_io::storage::get(&pallet_version_key(System::name())).is_none());
 
 		assert_eq!(Example::on_chain_storage_version(), pallet::STORAGE_VERSION);
-		assert_eq!(Example2::on_chain_storage_version(), StorageVersion::new(0));
+		assert_eq!(Example2::on_chain_storage_version(), pallet2::STORAGE_VERSION);
 		assert_eq!(System::on_chain_storage_version(), StorageVersion::new(0));
 	});
 }
 
 #[test]
 fn metadata() {
-	use frame_support::metadata::*;
+	use codec::Decode;
+	use frame_support::metadata::{v15::*, *};
 
 	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
 		if cfg!(feature = "no-metadata-docs") {
@@ -1243,6 +1310,9 @@ fn metadata() {
 			doc
 		}
 	}
+
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected_pallet_doc = vec![" Pallet documentation", readme, readme];
 
 	let pallets = vec![
 		PalletMetadata {
@@ -1504,6 +1574,7 @@ fn metadata() {
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
+			docs: expected_pallet_doc,
 		},
 		PalletMetadata {
 			index: 2,
@@ -1542,6 +1613,7 @@ fn metadata() {
 			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
 			constants: vec![],
 			error: None,
+			docs: vec![],
 		},
 		#[cfg(feature = "frame-feature-testing")]
 		PalletMetadata {
@@ -1552,6 +1624,7 @@ fn metadata() {
 			event: None,
 			constants: vec![],
 			error: None,
+			docs: vec![" Test that the supertrait check works when we pass some parameter to the `frame_system::Config`."],
 		},
 		#[cfg(feature = "frame-feature-testing-2")]
 		PalletMetadata {
@@ -1562,12 +1635,13 @@ fn metadata() {
 			event: None,
 			constants: vec![],
 			error: None,
+			docs: vec![" Test that the supertrait check works when we pass some parameter to the `frame_system::Config`."],
 		},
 	];
 
-	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs().is_empty() &&
-		pallets[0].error.as_ref().unwrap().ty.type_info().docs().is_empty() &&
-		pallets[0].calls.as_ref().unwrap().ty.type_info().docs().is_empty();
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs.is_empty() &&
+		pallets[0].error.as_ref().unwrap().ty.type_info().docs.is_empty() &&
+		pallets[0].calls.as_ref().unwrap().ty.type_info().docs.is_empty();
 
 	if cfg!(feature = "no-metadata-docs") {
 		assert!(empty_doc)
@@ -1576,24 +1650,48 @@ fn metadata() {
 	}
 
 	let extrinsic = ExtrinsicMetadata {
-		ty: meta_type::<UncheckedExtrinsic>(),
 		version: 4,
 		signed_extensions: vec![SignedExtensionMetadata {
 			identifier: "UnitSignedExtension",
 			ty: meta_type::<()>(),
 			additional_signed: meta_type::<()>(),
 		}],
+		address_ty: meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureAddress>(),
+		call_ty: meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Call>(),
+		signature_ty: meta_type::<
+			<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::Signature
+		>(),
+		extra_ty: meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureExtra>(),
 	};
 
-	let expected_metadata: RuntimeMetadataPrefixed =
-		RuntimeMetadataLastVersion::new(pallets, extrinsic, meta_type::<Runtime>()).into();
+	let outer_enums = OuterEnums {
+		call_enum_ty: meta_type::<RuntimeCall>(),
+		event_enum_ty: meta_type::<RuntimeEvent>(),
+		error_enum_ty: meta_type::<RuntimeError>(),
+	};
+
+	let expected_metadata: RuntimeMetadataPrefixed = RuntimeMetadataLastVersion::new(
+		pallets,
+		extrinsic,
+		meta_type::<Runtime>(),
+		vec![],
+		outer_enums,
+		CustomMetadata { map: Default::default() },
+	)
+	.into();
 	let expected_metadata = match expected_metadata.1 {
-		RuntimeMetadata::V14(metadata) => metadata,
+		RuntimeMetadata::V15(metadata) => metadata,
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
-	let actual_metadata = match Runtime::metadata().1 {
-		RuntimeMetadata::V14(metadata) => metadata,
+	let bytes = &Runtime::metadata_at_version(LATEST_METADATA_VERSION)
+		.expect("Metadata must be present; qed");
+
+	let actual_metadata: RuntimeMetadataPrefixed =
+		Decode::decode(&mut &bytes[..]).expect("Metadata encoded properly; qed");
+
+	let actual_metadata = match actual_metadata.1 {
+		RuntimeMetadata::V15(metadata) => metadata,
 		_ => panic!("metadata has been bumped, test needs to be updated"),
 	};
 
@@ -1601,11 +1699,78 @@ fn metadata() {
 }
 
 #[test]
+fn metadata_at_version() {
+	use frame_support::metadata::*;
+	use sp_core::Decode;
+
+	// Metadata always returns the V14.3
+	let metadata = Runtime::metadata();
+	let at_metadata = match Runtime::metadata_at_version(14) {
+		Some(opaque) => {
+			let bytes = &*opaque;
+			let metadata: RuntimeMetadataPrefixed = Decode::decode(&mut &bytes[..]).unwrap();
+			metadata
+		},
+		_ => panic!("metadata has been bumped, test needs to be updated"),
+	};
+
+	assert_eq!(metadata, at_metadata);
+}
+
+#[test]
+fn metadata_versions() {
+	assert_eq!(vec![14, LATEST_METADATA_VERSION], Runtime::metadata_versions());
+}
+
+#[test]
+fn metadata_ir_pallet_runtime_docs() {
+	let ir = Runtime::metadata_ir();
+	let pallet = ir
+		.pallets
+		.iter()
+		.find(|pallet| pallet.name == "Example")
+		.expect("Pallet should be present");
+
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected = vec![" Pallet documentation", readme, readme];
+	assert_eq!(pallet.docs, expected);
+}
+
+#[test]
+fn extrinsic_metadata_ir_types() {
+	let ir = Runtime::metadata_ir().extrinsic;
+
+	assert_eq!(meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureAddress>(), ir.address_ty);
+	assert_eq!(meta_type::<u64>(), ir.address_ty);
+
+	assert_eq!(meta_type::<<UncheckedExtrinsic as ExtrinsicT>::Call>(), ir.call_ty);
+	assert_eq!(meta_type::<RuntimeCall>(), ir.call_ty);
+
+	assert_eq!(
+		meta_type::<
+			<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::Signature,
+		>(),
+		ir.signature_ty
+	);
+	assert_eq!(meta_type::<()>(), ir.signature_ty);
+
+	assert_eq!(meta_type::<<<UncheckedExtrinsic as ExtrinsicT>::SignaturePayload as SignaturePayloadT>::SignatureExtra>(), ir.extra_ty);
+	assert_eq!(meta_type::<frame_system::CheckNonZeroSender<Runtime>>(), ir.extra_ty);
+}
+
+#[test]
+fn test_pallet_runtime_docs() {
+	let docs = crate::pallet::Pallet::<Runtime>::pallet_documentation_metadata();
+	let readme = "Support code for the runtime.\n\nLicense: Apache-2.0";
+	let expected = vec![" Pallet documentation", readme, readme];
+	assert_eq!(docs, expected);
+}
+
+#[test]
 fn test_pallet_info_access() {
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::name(), "System");
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::name(), "Example");
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::name(), "Example2");
-
 	assert_eq!(<System as frame_support::traits::PalletInfoAccess>::index(), 0);
 	assert_eq!(<Example as frame_support::traits::PalletInfoAccess>::index(), 1);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 2);
@@ -1942,6 +2107,100 @@ fn test_storage_alias() {
 			pallet2::SomeCountedStorageMap::<Runtime>::storage_info()
 		);
 	})
+}
+
+#[cfg(feature = "try-runtime")]
+#[test]
+fn post_runtime_upgrade_detects_storage_version_issues() {
+	use frame_support::traits::UpgradeCheckSelect;
+
+	struct CustomUpgrade;
+
+	impl OnRuntimeUpgrade for CustomUpgrade {
+		fn on_runtime_upgrade() -> Weight {
+			Example2::current_storage_version().put::<Example2>();
+
+			Default::default()
+		}
+	}
+
+	struct CustomUpgradePallet4;
+
+	impl OnRuntimeUpgrade for CustomUpgradePallet4 {
+		fn on_runtime_upgrade() -> Weight {
+			StorageVersion::new(100).put::<Example4>();
+
+			Default::default()
+		}
+	}
+
+	type Executive = frame_executive::Executive<
+		Runtime,
+		Block,
+		frame_system::ChainContext<Runtime>,
+		Runtime,
+		AllPalletsWithSystem,
+	>;
+
+	type ExecutiveWithUpgrade = frame_executive::Executive<
+		Runtime,
+		Block,
+		frame_system::ChainContext<Runtime>,
+		Runtime,
+		AllPalletsWithSystem,
+		CustomUpgrade,
+	>;
+
+	type ExecutiveWithUpgradePallet4 = frame_executive::Executive<
+		Runtime,
+		Block,
+		frame_system::ChainContext<Runtime>,
+		Runtime,
+		AllPalletsWithSystem,
+		CustomUpgradePallet4,
+	>;
+
+	TestExternalities::default().execute_with(|| {
+		// Call `on_genesis` to put the storage version of `Example` into the storage.
+		Example::on_genesis();
+		// The version isn't changed, we should detect it.
+		assert!(
+			Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap_err() ==
+				"On chain and current storage version do not match. Missing runtime upgrade?"
+					.into()
+		);
+	});
+
+	TestExternalities::default().execute_with(|| {
+		// Call `on_genesis` to put the storage version of `Example` into the storage.
+		Example::on_genesis();
+		// We set the new storage version in the pallet and that should be detected.
+		UpdateStorageVersion::set(&true);
+		Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap();
+	});
+
+	TestExternalities::default().execute_with(|| {
+		// Call `on_genesis` to put the storage version of `Example` into the storage.
+		Example::on_genesis();
+		// We set the new storage version in the custom upgrade and that should be detected.
+		ExecutiveWithUpgrade::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap();
+	});
+
+	TestExternalities::default().execute_with(|| {
+		// Call `on_genesis` to put the storage version of `Example` into the storage.
+		Example::on_genesis();
+		// We need to set the correct storage version for `Example2`
+		UpdateStorageVersion::set(&true);
+
+		// `CustomUpgradePallet4` will set a storage version for `Example4` while this doesn't has
+		// any storage version "enabled".
+		assert!(
+			ExecutiveWithUpgradePallet4::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost)
+				.unwrap_err() == "On chain storage version set, while the pallet \
+				doesn't have the `#[pallet::storage_version(VERSION)]` attribute."
+				.into()
+		);
+	});
 }
 
 #[test]

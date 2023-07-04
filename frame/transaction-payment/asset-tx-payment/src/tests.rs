@@ -28,7 +28,7 @@ use pallet_balances::Call as BalancesCall;
 use sp_runtime::traits::StaticLookup;
 
 const CALL: &<Runtime as frame_system::Config>::RuntimeCall =
-	&RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+	&RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 2, value: 69 });
 
 pub struct ExtBuilder {
 	balance_factor: u64,
