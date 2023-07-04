@@ -39,14 +39,14 @@ mod old {
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	#[scale_info(skip_type_params(T))]
 	pub struct ContractInfo<T: Config> {
-		pub trie_id: TrieId,
-		pub deposit_account: DepositAccount<T>,
-		pub code_hash: CodeHash<T>,
-		pub storage_bytes: u32,
-		pub storage_items: u32,
-		pub storage_byte_deposit: BalanceOf<T>,
-		pub storage_item_deposit: BalanceOf<T>,
-		pub storage_base_deposit: BalanceOf<T>,
+		trie_id: TrieId,
+		deposit_account: DepositAccount<T>,
+		code_hash: CodeHash<T>,
+		storage_bytes: u32,
+		storage_items: u32,
+		storage_byte_deposit: BalanceOf<T>,
+		storage_item_deposit: BalanceOf<T>,
+		storage_base_deposit: BalanceOf<T>,
 	}
 
 	#[storage_alias]
@@ -94,42 +94,42 @@ pub struct ContractInfo<T: Config> {
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
-	last_key: Option<BoundedVec<u8, ConstU32<256>>>,
-	_phantom: PhantomData<T>,
+	last_account: Option<T::AccountId>,
 }
 
 impl<T: Config> Migrate for Migration<T> {
-	const VERSION: u16 = 12;
+	const VERSION: u16 = 13;
 
 	fn max_step_weight() -> Weight {
-		T::WeightInfo::v10_migration_step()
+		T::WeightInfo::v13_migration_step()
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let last_key = self.last_key.take().map(|k| k.into());
-
-		log::debug!(target: LOG_TARGET, "Migrating contract code {:?}", last_key);
-		self.last_key =
-			ContractInfoOf::<T>::translate_next(last_key, |_key, old: old::ContractInfo<T>| {
-				Some(ContractInfo {
-					trie_id: old.trie_id,
-					deposit_account: old.deposit_account,
-					code_hash: old.code_hash,
-					storage_bytes: old.storage_bytes,
-					storage_items: old.storage_items,
-					storage_byte_deposit: old.storage_byte_deposit,
-					storage_item_deposit: old.storage_item_deposit,
-					storage_base_deposit: old.storage_base_deposit,
-					delegate_dependencies: Default::default(),
-				})
-			})
-			.and_then(|key| key.try_into().ok());
-
-		if self.last_key.is_some() {
-			(IsFinished::No, T::WeightInfo::v12_migration_step())
+		let mut iter = if let Some(last_account) = self.last_account.take() {
+			old::CodeStorage::<T>::iter_from(old::CodeStorage::<T>::hashed_key_for(last_account))
 		} else {
-			log::debug!(target: LOG_TARGET, "No more contracts code to migrate");
-			(IsFinished::Yes, T::WeightInfo::v12_migration_step())
+			old::CodeStorage::<T>::iter()
+		};
+
+		if let Some((key, old)) = iter.next() {
+			log::debug!(target: LOG_TARGET, "Migrating contract {:?}", key);
+			let info = ContractInfo {
+				trie_id: old.trie_id,
+				deposit_account: old.deposit_account,
+				code_hash: old.code_hash,
+				storage_bytes: old.storage_bytes,
+				storage_items: old.storage_items,
+				storage_byte_deposit: old.storage_byte_deposit,
+				storage_item_deposit: old.storage_item_deposit,
+				storage_base_deposit: old.storage_base_deposit,
+				delegate_dependencies: Default::default(),
+			};
+			ContractInfo::<T>::insert(key, module);
+			self.last_account = Some(key);
+			(IsFinished::No, T::WeightInfo::v13_migration_step())
+		} else {
+			log::debug!(target: LOG_TARGET, "No more contracts to migrate");
+			(IsFinished::Yes, T::WeightInfo::v13_migration_step())
 		}
 	}
 }
