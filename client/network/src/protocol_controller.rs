@@ -41,16 +41,18 @@
 //! Even though this does not guarantee that `ProtocolController` and `Notifications` have the same
 //! view of the peers' states at any given moment, the eventual consistency is maintained.
 
-use futures::{channel::oneshot, future::Either, FutureExt, StreamExt};
+use futures::{channel::oneshot, FutureExt, stream::Stream, StreamExt};
+use futures_timer::Delay;
 use libp2p::PeerId;
 use log::{debug, error, trace, warn};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_arithmetic::traits::SaturatedConversion;
 use std::{
-	collections::{HashMap, HashSet},
-	time::{Duration, Instant},
+	collections::{HashMap, HashSet, VecDeque},
+	pin::Pin,
+	task::{Context, Poll},
+	time::Duration,
 };
-use wasm_timer::Delay;
 
 use crate::{
 	peer_store::PeerStoreProvider,
@@ -59,6 +61,9 @@ use crate::{
 
 /// Log target for this file.
 pub const LOG_TARGET: &str = "peerset";
+
+/// Slot allocation interval.
+const SLOT_ALLOC_INTERVAL: Duration = Duration::new(1, 0);
 
 /// External API actions.
 #[derive(Debug)]
@@ -205,9 +210,9 @@ pub struct ProtocolController {
 	/// Connect only to reserved nodes.
 	reserved_only: bool,
 	/// Next time to allocate slots. This is done once per second.
-	next_periodic_alloc_slots: Instant,
+	next_periodic_alloc_slots: Delay,
 	/// Outgoing channel for messages to `Notifications`.
-	to_notifications: TracingUnboundedSender<Message>,
+	out_messages: VecDeque<Message>,
 	/// `PeerStore` handle for checking peer reputation values and getting connection candidates
 	/// with highest reputation.
 	peer_store: Box<dyn PeerStoreProvider>,
@@ -218,7 +223,6 @@ impl ProtocolController {
 	pub fn new(
 		set_id: SetId,
 		config: SetConfig,
-		to_notifications: TracingUnboundedSender<Message>,
 		peer_store: Box<dyn PeerStoreProvider>,
 	) -> (ProtocolHandle, ProtocolController) {
 		let (actions_tx, actions_rx) = tracing_unbounded("mpsc_api_protocol", 10_000);
@@ -238,58 +242,11 @@ impl ProtocolController {
 			nodes: HashMap::new(),
 			reserved_nodes,
 			reserved_only: config.reserved_only,
-			next_periodic_alloc_slots: Instant::now(),
-			to_notifications,
+			next_periodic_alloc_slots: Delay::new(Duration::ZERO),
+			out_messages: VecDeque::new(),
 			peer_store,
 		};
 		(handle, controller)
-	}
-
-	/// Drive [`ProtocolController`]. This function returns when all instances of
-	/// [`ProtocolHandle`] are dropped.
-	pub async fn run(mut self) {
-		while self.next_action().await {}
-	}
-
-	/// Perform one action. Returns `true` if it should be called again.
-	///
-	/// Intended for tests only. Use `run` for driving [`ProtocolController`].
-	pub async fn next_action(&mut self) -> bool {
-		let either = loop {
-			let mut next_alloc_slots = Delay::new_at(self.next_periodic_alloc_slots).fuse();
-
-			// See the module doc for why we use `select_biased!`.
-			futures::select_biased! {
-				event = self.events_rx.next() => match event {
-					Some(event) => break Either::Left(event),
-					None => return false,
-				},
-				action = self.actions_rx.next() => match action {
-					Some(action) => break Either::Right(action),
-					None => return false,
-				},
-				_ = next_alloc_slots => {
-					self.alloc_slots();
-					self.next_periodic_alloc_slots = Instant::now() + Duration::new(1, 0);
-				},
-			}
-		};
-
-		match either {
-			Either::Left(event) => self.process_event(event),
-			Either::Right(action) => self.process_action(action),
-		}
-
-		true
-	}
-
-	/// Process connection event.
-	fn process_event(&mut self, event: Event) {
-		match event {
-			Event::IncomingConnection(peer_id, index) =>
-				self.on_incoming_connection(peer_id, index),
-			Event::Dropped(peer_id) => self.on_peer_dropped(peer_id),
-		}
 	}
 
 	/// Process action command.
@@ -315,7 +272,7 @@ impl ProtocolController {
 			self.max_in,
 		);
 
-		let _ = self.to_notifications.unbounded_send(Message::Accept(incoming_index));
+		let _ = self.out_messages.push_back(Message::Accept(incoming_index));
 	}
 
 	/// Send "reject" message to `Notifications`.
@@ -328,7 +285,7 @@ impl ProtocolController {
 			self.max_in,
 		);
 
-		let _ = self.to_notifications.unbounded_send(Message::Reject(incoming_index));
+		let _ = self.out_messages.push_back(Message::Reject(incoming_index));
 	}
 
 	/// Send "connect" message to `Notifications`.
@@ -341,9 +298,7 @@ impl ProtocolController {
 			self.max_out,
 		);
 
-		let _ = self
-			.to_notifications
-			.unbounded_send(Message::Connect { set_id: self.set_id, peer_id });
+		let _ = self.out_messages.push_back(Message::Connect { set_id: self.set_id, peer_id });
 	}
 
 	/// Send "drop" message to `Notifications`.
@@ -358,9 +313,7 @@ impl ProtocolController {
 			self.max_out,
 		);
 
-		let _ = self
-			.to_notifications
-			.unbounded_send(Message::Drop { set_id: self.set_id, peer_id });
+		let _ = self.out_messages.push_back(Message::Drop { set_id: self.set_id, peer_id });
 	}
 
 	/// Report peer disconnect event to `PeerStore` for it to update peer's reputation accordingly.
@@ -554,17 +507,16 @@ impl ProtocolController {
 	}
 
 	/// Indicate that we received an incoming connection. Must be answered either with
-	/// a corresponding `Accept` or `Reject`, except if we were already connected to this peer.
+	/// a corresponding `Accept` or `Reject`.
 	///
 	/// Note that this mechanism is orthogonal to `Connect`/`Drop`. Accepting an incoming
 	/// connection implicitly means `Connect`, but incoming connections aren't cancelled by
 	/// `dropped`.
-	// Implementation note: because of concurrency issues, `ProtocolController` has an imperfect
-	// view of the peers' states, and may issue commands for a peer after `Notifications` received
-	// an incoming request for that peer. In this case, `Notifications` ignores all the commands
-	// until it receives a response for the incoming request to `ProtocolController`, so we must
-	// ensure we handle this incoming request correctly.
-	fn on_incoming_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
+	// Implementation note: because of concurrency issues, `ProtocolController` may issue commands
+	// for a peer after `Notifications` received an incoming request for that peer. In this case,
+	// `Notifications` ignores all the commands until it receives a response for the incoming
+	// request to `ProtocolController`, so we must ensure we handle this incoming request correctly.
+	pub fn incoming_connection(&mut self, peer_id: PeerId, incoming_index: IncomingIndex) {
 		trace!(
 			target: LOG_TARGET,
 			"Incoming connection from peer {peer_id} ({incoming_index:?}) on {:?}.",
@@ -628,10 +580,10 @@ impl ProtocolController {
 	}
 
 	/// Indicate that a connection with the peer was dropped.
-	fn on_peer_dropped(&mut self, peer_id: PeerId) {
-		self.on_peer_dropped_inner(peer_id).unwrap_or_else(|peer_id| {
-			// We do not assert here, because due to asynchronous nature of communication
-			// between `ProtocolController` and `Notifications` we can receive `Action::Dropped`
+	pub fn peer_dropped(&mut self, peer_id: PeerId) {
+		self.peer_dropped_inner(peer_id).unwrap_or_else(|peer_id| {
+			// We do not assert here, because due to buffering of messages between
+			// `ProtocolController` and `Notifications` we might receive `Action::Dropped`
 			// for a peer we already disconnected ourself.
 			trace!(
 				target: LOG_TARGET,
@@ -643,7 +595,7 @@ impl ProtocolController {
 
 	/// Indicate that a connection with the peer was dropped.
 	/// Returns `Err(PeerId)` if the peer wasn't connected or is not known to us.
-	fn on_peer_dropped_inner(&mut self, peer_id: PeerId) -> Result<(), PeerId> {
+	fn peer_dropped_inner(&mut self, peer_id: PeerId) -> Result<(), PeerId> {
 		if self.drop_reserved_peer(&peer_id)? || self.drop_regular_peer(&peer_id) {
 			// The peer found and disconnected.
 			self.report_disconnect(peer_id);
@@ -764,6 +716,32 @@ impl ProtocolController {
 			self.nodes.insert(peer_id, Direction::Outbound);
 			self.start_connection(peer_id);
 		})
+	}
+}
+
+impl Stream for ProtocolController {
+	type Item = Message;
+
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+		if let Some(message) = self.out_messages.pop_front() {
+			return Poll::Ready(Some(message))
+		}
+
+		if self.next_periodic_alloc_slots.poll_unpin(cx).is_ready() {
+			self.alloc_slots();
+			self.next_periodic_alloc_slots = Delay::new(SLOT_ALLOC_INTERVAL);
+		}
+
+		while let Poll::Ready(action) = self.actions_rx.poll_next_unpin(cx) {
+			if let Some(action) = action {
+				self.process_action(action);
+			} else {
+				debug!("`ProtocolHandle` has terminated, terminating `ProtocolController`");
+				return Poll::Ready(None)
+			}
+		}
+
+		Poll::Pending
 	}
 }
 
