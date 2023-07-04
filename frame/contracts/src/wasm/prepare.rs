@@ -73,12 +73,6 @@ impl LoadedModule {
 		determinism: Determinism,
 		stack_limits: Option<StackLimits>,
 	) -> Result<Self, &'static str> {
-		// Do not enable any features here. Any additional feature needs to be carefully
-		// checked for potential security issues. For example, enabling multi value could lead
-		// to a DoS vector: It breaks our assumption that branch instructions are of constant time.
-		// Depending on the implementation they can linearly depend on the amount of values returned
-		// from a block.
-		//
 		// NOTE: wasmi does not support unstable WebAssembly features. The module is implicitly
 		// checked for not having those ones when creating `wasmi::Module` below.
 		let mut config = WasmiConfig::default();
@@ -91,8 +85,6 @@ impl LoadedModule {
 			.wasm_tail_call(false)
 			.wasm_extended_const(false)
 			.wasm_saturating_float_to_int(false)
-			// This is not our only defense: All instructions explicitly need to have weights
-			// assigned or the deployment will fail. We have none assigned for float instructions.
 			.floats(matches!(determinism, Determinism::Relaxed))
 			.consume_fuel(true)
 			.fuel_consumption_mode(FuelConsumptionMode::Eager);
@@ -103,7 +95,7 @@ impl LoadedModule {
 
 		let engine = Engine::new(&config);
 		let module =
-			Module::new(&engine, code.clone()).map_err(|_| "Can't load the module to wasmi!")?;
+			Module::new(&engine, code.clone()).map_err(|_| "Can't load the module into wasmi!")?;
 
 		// Return a `LoadedModule` instance with
 		// __valid__ module.
@@ -445,7 +437,7 @@ mod tests {
 			)
 			(func (export "deploy"))
 		)"#,
-		Err("Can't load the module to wasmi!")
+		Err("Can't load the module into wasmi!")
 	);
 
 	mod memories {
@@ -499,7 +491,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Can't load the module to wasmi!")
+			Err("Can't load the module into wasmi!")
 		);
 
 		prepare_test!(
@@ -552,7 +544,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Can't load the module to wasmi!")
+			Err("Can't load the module into wasmi!")
 		);
 
 		prepare_test!(
@@ -791,7 +783,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Can't load the module to wasmi!")
+			Err("Can't load the module into wasmi!")
 		);
 
 		prepare_test!(
@@ -803,7 +795,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Can't load the module to wasmi!")
+			Err("Can't load the module into wasmi!")
 		);
 
 		prepare_test!(
@@ -815,7 +807,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Can't load the module to wasmi!")
+			Err("Can't load the module into wasmi!")
 		);
 
 		prepare_test!(
@@ -827,7 +819,7 @@ mod tests {
 				(func (export "deploy"))
 			)
 			"#,
-			Err("Can't load the module to wasmi!")
+			Err("Can't load the module into wasmi!")
 		);
 	}
 }

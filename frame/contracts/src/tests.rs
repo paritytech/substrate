@@ -4419,7 +4419,7 @@ fn code_rejected_error_works() {
 		assert_err!(result.result, <Error<Test>>::CodeRejected);
 		assert_eq!(
 			std::str::from_utf8(&result.debug_message).unwrap(),
-			"Can't load the module to wasmi!"
+			"Can't load the module into wasmi!"
 		);
 
 		let (wasm, _) = compile_module::<Test>("invalid_contract_no_call").unwrap();
