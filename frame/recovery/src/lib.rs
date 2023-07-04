@@ -48,34 +48,30 @@
 //! ### Recovery Life Cycle
 //!
 //! The intended life cycle of a successful recovery takes the following steps:
-//! 1. The account owner calls `create_recovery` to set up a recovery configuration
-//!    for their account.
-//! 2. At some later time, the account owner loses access to their account and wants
-//!    to recover it. Likely, they will need to create a new account and fund it with
-//!    enough balance to support the transaction fees and the deposit for the
-//!    recovery process.
-//! 3. Using this new account, they call `initiate_recovery`.
-//! 4. Then the account owner would contact their configured friends to vouch for
-//!    the recovery attempt. The account owner would provide their old account id
-//!    and the new account id, and friends would call `vouch_recovery` with those
-//!    parameters.
-//! 5. Once a threshold number of friends have vouched for the recovery attempt,
-//!    the account owner needs to wait until the delay period has passed, starting
-//!    when they initiated the recovery process.
-//! 6. Now the account owner is able to call `claim_recovery`, which subsequently
-//!    allows them to call `as_recovered` and directly make calls on-behalf-of the lost
+//! 1. The account owner calls `create_recovery` to set up a recovery configuration for their
 //!    account.
-//! 7. Using the now recovered account, the account owner can call `close_recovery`
-//!    on the recovery process they opened, reclaiming the recovery deposit they
-//!    placed.
+//! 2. At some later time, the account owner loses access to their account and wants to recover it.
+//!    Likely, they will need to create a new account and fund it with enough balance to support the
+//!    transaction fees and the deposit for the recovery process.
+//! 3. Using this new account, they call `initiate_recovery`.
+//! 4. Then the account owner would contact their configured friends to vouch for the recovery
+//!    attempt. The account owner would provide their old account id and the new account id, and
+//!    friends would call `vouch_recovery` with those parameters.
+//! 5. Once a threshold number of friends have vouched for the recovery attempt, the account owner
+//!    needs to wait until the delay period has passed, starting when they initiated the recovery
+//!    process.
+//! 6. Now the account owner is able to call `claim_recovery`, which subsequently allows them to
+//!    call `as_recovered` and directly make calls on-behalf-of the lost account.
+//! 7. Using the now recovered account, the account owner can call `close_recovery` on the recovery
+//!    process they opened, reclaiming the recovery deposit they placed.
 //! 8. Then the account owner should then call `remove_recovery` to remove the recovery
-//!    configuration on the recovered account and reclaim the recovery configuration
-//!    deposit they placed.
-//! 9. Using `as_recovered`, the account owner is able to call any other pallets
-//!    to clean up their state and reclaim any reserved or locked funds. They
-//!    can then transfer all funds from the recovered account to the new account.
-//! 10. When the recovered account becomes reaped (i.e. its free and reserved
-//!     balance drops to zero), the final recovery link is removed.
+//!    configuration on the recovered account and reclaim the recovery configuration deposit they
+//!    placed.
+//! 9. Using `as_recovered`, the account owner is able to call any other pallets to clean up their
+//!    state and reclaim any reserved or locked funds. They can then transfer all funds from the
+//!    recovered account to the new account.
+//! 10. When the recovered account becomes reaped (i.e. its free and reserved balance drops to
+//!     zero), the final recovery link is removed.
 //!
 //! ### Malicious Recovery Attempts
 //!

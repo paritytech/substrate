@@ -468,6 +468,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By default, dev
 ///   mode pallets will assume a weight of zero (`0`) if a weight is not specified. This is
 ///   equivalent to specifying `#[weight(0)]` on all calls that do not specify a weight.
+/// * Call index no longer needs to be specified on every `#[pallet::call]` declaration. By default,
+///   dev mode pallets will assume a call index based on the order of the call.
 /// * All storages are marked as unbounded, meaning you do not need to implement `MaxEncodedLen` on
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.

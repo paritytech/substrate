@@ -30,6 +30,7 @@ criterion = "0.4.0"
 futures = "0.3.21"
 log = "0.4.17"
 sp-core = { version = "21.0.0", path = "../../core" }
+static_assertions = "1.1.0"
 
 [[bench]]
 name = "bench"

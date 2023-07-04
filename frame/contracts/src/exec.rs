@@ -135,7 +135,7 @@ pub trait Ext: sealing::Sealed {
 
 	/// Call (possibly transferring some amount of funds) into the specified account.
 	///
-	/// Returns the original code size of the called contract.
+	/// Returns the code size of the called contract.
 	fn call(
 		&mut self,
 		gas_limit: Weight,
@@ -148,7 +148,7 @@ pub trait Ext: sealing::Sealed {
 
 	/// Execute code in the current frame.
 	///
-	/// Returns the original code size of the called contract.
+	/// Returns the code size of the called contract.
 	fn delegate_call(
 		&mut self,
 		code: CodeHash<Self::T>,
@@ -159,7 +159,7 @@ pub trait Ext: sealing::Sealed {
 	///
 	/// Returns the original code size of the called contract.
 	/// The newly created account will be associated with `code`. `value` specifies the amount of
-	/// value transferred from this to the newly created account.
+	/// value transferred from the caller to the newly created account.
 	fn instantiate(
 		&mut self,
 		gas_limit: Weight,
@@ -263,8 +263,11 @@ pub trait Ext: sealing::Sealed {
 	/// Get a reference to the schedule used by the current call.
 	fn schedule(&self) -> &Schedule<Self::T>;
 
+	/// Get an immutable reference to the nested gas meter.
+	fn gas_meter(&self) -> &GasMeter<Self::T>;
+
 	/// Get a mutable reference to the nested gas meter.
-	fn gas_meter(&mut self) -> &mut GasMeter<Self::T>;
+	fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T>;
 
 	/// Append a string to the debug buffer.
 	///
@@ -325,24 +328,27 @@ pub trait Executable<T: Config>: Sized {
 	/// Load the executable from storage.
 	///
 	/// # Note
-	/// Charges size base load and instrumentation weight from the gas meter.
+	/// Charges size base load weight from the gas meter.
 	fn from_storage(
 		code_hash: CodeHash<T>,
-		schedule: &Schedule<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError>;
 
-	/// Increment the refcount of a code in-storage by one.
-	///
-	/// This is needed when the code is not set via instantiate but `seal_set_code_hash`.
+	/// Increment the reference count of a of a stored code by one.
 	///
 	/// # Errors
 	///
-	/// [`Error::CodeNotFound`] is returned if the specified `code_hash` does not exist.
-	fn add_user(code_hash: CodeHash<T>) -> Result<(), DispatchError>;
+	/// [`Error::CodeNotFound`] is returned if no stored code found having the specified
+	/// `code_hash`.
+	fn increment_refcount(code_hash: CodeHash<T>) -> Result<(), DispatchError>;
 
-	/// Decrement the refcount by one if the code exists.
-	fn remove_user(code_hash: CodeHash<T>);
+	/// Decrement the reference count of a stored code by one.
+	///
+	/// # Note
+	///
+	/// A contract whose reference count dropped to zero isn't automatically removed. A
+	/// `remove_code` transaction must be submitted by the original uploader to do so.
+	fn decrement_refcount(code_hash: CodeHash<T>);
 
 	/// Execute the specified exported function and return the result.
 	///
@@ -363,7 +369,7 @@ pub trait Executable<T: Config>: Sized {
 	/// The code hash of the executable.
 	fn code_hash(&self) -> &CodeHash<T>;
 
-	/// Size of the instrumented code in bytes.
+	/// Size of the contract code in bytes.
 	fn code_len(&self) -> u32;
 
 	/// The code does not contain any instructions which could lead to indeterminism.
@@ -703,9 +709,9 @@ where
 			Weight::zero(),
 			storage_meter,
 			BalanceOf::<T>::zero(),
-			schedule,
 			determinism,
 		)?;
+
 		let stack = Self {
 			origin,
 			schedule,
@@ -735,7 +741,6 @@ where
 		gas_limit: Weight,
 		storage_meter: &mut storage::meter::GenericMeter<T, S>,
 		deposit_limit: BalanceOf<T>,
-		schedule: &Schedule<T>,
 		determinism: Determinism,
 	) -> Result<(Frame<T>, E, Option<u64>), ExecError> {
 		let (account_id, contract_info, executable, delegate_caller, entry_point, nonce) =
@@ -751,7 +756,7 @@ where
 						if let Some(DelegatedCall { executable, caller }) = delegated_call {
 							(executable, Some(caller))
 						} else {
-							(E::from_storage(contract.code_hash, schedule, gas_meter)?, None)
+							(E::from_storage(contract.code_hash, gas_meter)?, None)
 						};
 
 					(dest, contract, executable, delegate_caller, ExportedFunction::Call, None)
@@ -759,7 +764,7 @@ where
 				FrameArgs::Instantiate { sender, nonce, executable, salt, input_data } => {
 					let account_id = Contracts::<T>::contract_address(
 						&sender,
-						executable.code_hash(),
+						&executable.code_hash(),
 						input_data,
 						salt,
 					);
@@ -831,7 +836,6 @@ where
 			gas_limit,
 			nested_storage,
 			deposit_limit,
-			self.schedule,
 			self.determinism,
 		)?;
 		self.frames.push(frame);
@@ -864,7 +868,7 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
-			// Call into the wasm blob.
+			// Call into the Wasm blob.
 			let output = executable
 				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
@@ -1193,7 +1197,7 @@ where
 		code_hash: CodeHash<Self::T>,
 		input_data: Vec<u8>,
 	) -> Result<ExecReturnValue, ExecError> {
-		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
+		let executable = E::from_storage(code_hash, self.gas_meter_mut())?;
 		let top_frame = self.top_frame_mut();
 		let contract_info = top_frame.contract_info().clone();
 		let account_id = top_frame.account_id.clone();
@@ -1220,7 +1224,7 @@ where
 		input_data: Vec<u8>,
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
-		let executable = E::from_storage(code_hash, self.schedule, self.gas_meter())?;
+		let executable = E::from_storage(code_hash, self.gas_meter_mut())?;
 		let nonce = self.next_nonce();
 		let executable = self.push_frame(
 			FrameArgs::Instantiate {
@@ -1255,7 +1259,7 @@ where
 		)?;
 		info.queue_trie_for_deletion();
 		ContractInfoOf::<T>::remove(&frame.account_id);
-		E::remove_user(info.code_hash);
+		E::decrement_refcount(info.code_hash);
 		Contracts::<T>::deposit_event(
 			vec![T::Hashing::hash_of(&frame.account_id), T::Hashing::hash_of(&beneficiary)],
 			Event::Terminated {
@@ -1372,7 +1376,11 @@ where
 		self.schedule
 	}
 
-	fn gas_meter(&mut self) -> &mut GasMeter<Self::T> {
+	fn gas_meter(&self) -> &GasMeter<Self::T> {
+		&self.top_frame().nested_gas
+	}
+
+	fn gas_meter_mut(&mut self) -> &mut GasMeter<Self::T> {
 		&mut self.top_frame_mut().nested_gas
 	}
 
@@ -1423,12 +1431,12 @@ where
 
 	fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
 		let frame = top_frame_mut!(self);
-		if !E::from_storage(hash, self.schedule, &mut frame.nested_gas)?.is_deterministic() {
+		if !E::from_storage(hash, &mut frame.nested_gas)?.is_deterministic() {
 			return Err(<Error<T>>::Indeterministic.into())
 		}
-		E::add_user(hash)?;
+		E::increment_refcount(hash)?;
 		let prev_hash = frame.contract_info().code_hash;
-		E::remove_user(prev_hash);
+		E::decrement_refcount(prev_hash);
 		frame.contract_info().code_hash = hash;
 		Contracts::<Self::T>::deposit_event(
 			vec![T::Hashing::hash_of(&frame.account_id), hash, prev_hash],
@@ -1591,7 +1599,6 @@ mod tests {
 	impl Executable<Test> for MockExecutable {
 		fn from_storage(
 			code_hash: CodeHash<Test>,
-			_schedule: &Schedule<Test>,
 			_gas_meter: &mut GasMeter<Test>,
 		) -> Result<Self, DispatchError> {
 			Loader::mutate(|loader| {
@@ -1599,11 +1606,11 @@ mod tests {
 			})
 		}
 
-		fn add_user(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
+		fn increment_refcount(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
 			MockLoader::increment_refcount(code_hash)
 		}
 
-		fn remove_user(code_hash: CodeHash<Test>) {
+		fn decrement_refcount(code_hash: CodeHash<Test>) {
 			MockLoader::decrement_refcount(code_hash);
 		}
 
@@ -1614,7 +1621,7 @@ mod tests {
 			input_data: Vec<u8>,
 		) -> ExecResult {
 			if let &Constructor = function {
-				Self::add_user(self.code_hash).unwrap();
+				Self::increment_refcount(self.code_hash).unwrap();
 			}
 			if function == &self.func_type {
 				(self.func)(MockCtx { ext, input_data }, &self)
@@ -1952,8 +1959,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(input_data_ch, &schedule, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(input_data_ch, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 10_000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
@@ -2366,8 +2372,7 @@ mod tests {
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(dummy_ch, &mut gas_meter).unwrap();
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
 				storage::meter::Meter::new(&contract_origin, Some(0), 0).unwrap();
@@ -2399,8 +2404,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(dummy_ch, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
@@ -2445,8 +2449,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(dummy_ch, &schedule, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(dummy_ch, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 1000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
@@ -2614,8 +2617,7 @@ mod tests {
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable =
-				MockExecutable::from_storage(terminate_ch, &schedule, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(terminate_ch, &mut gas_meter).unwrap();
 			set_balance(&ALICE, 10_000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
@@ -2717,7 +2719,7 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let executable = MockExecutable::from_storage(code, &schedule, &mut gas_meter).unwrap();
+			let executable = MockExecutable::from_storage(code, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 10_000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
@@ -3141,14 +3143,13 @@ mod tests {
 			let schedule = <Test as Config>::Schedule::get();
 			let min_balance = <Test as Config>::Currency::minimum_balance();
 			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-			let fail_executable =
-				MockExecutable::from_storage(fail_code, &schedule, &mut gas_meter).unwrap();
+			let fail_executable = MockExecutable::from_storage(fail_code, &mut gas_meter).unwrap();
 			let success_executable =
-				MockExecutable::from_storage(success_code, &schedule, &mut gas_meter).unwrap();
+				MockExecutable::from_storage(success_code, &mut gas_meter).unwrap();
 			let succ_fail_executable =
-				MockExecutable::from_storage(succ_fail_code, &schedule, &mut gas_meter).unwrap();
+				MockExecutable::from_storage(succ_fail_code, &mut gas_meter).unwrap();
 			let succ_succ_executable =
-				MockExecutable::from_storage(succ_succ_code, &schedule, &mut gas_meter).unwrap();
+				MockExecutable::from_storage(succ_succ_code, &mut gas_meter).unwrap();
 			set_balance(&ALICE, min_balance * 10_000);
 			let contract_origin = Origin::from_account_id(ALICE);
 			let mut storage_meter =
