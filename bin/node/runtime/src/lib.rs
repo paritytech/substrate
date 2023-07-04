@@ -1135,7 +1135,7 @@ impl pallet_treasury::Config for Runtime {
 	type Beneficiary = AccountId;
 	type BeneficiaryLookup = Indices;
 	type Paymaster = PayAssetFromAccount<Assets, TreasuryAccount>;
-	type BalanceConverter = ();
+	type BalanceConverter = AssetRate;
 	type PayoutPeriod = SpendPayoutPeriod;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();

@@ -27,7 +27,10 @@ use frame_benchmarking::{
 };
 use frame_support::{
 	ensure,
-	traits::{tokens::PaymentStatus, EnsureOrigin, OnInitialize},
+	traits::{
+		tokens::{ConversionFromAssetBalance, PaymentStatus},
+		EnsureOrigin, OnInitialize,
+	},
 };
 use frame_system::RawOrigin;
 use sp_core::crypto::FromEntropy;
@@ -212,6 +215,7 @@ mod benchmarks {
 			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let (asset_kind, amount, beneficiary, beneficiary_lookup) =
 			create_spend_arguments::<T, _>(SEED);
+		T::BalanceConverter::ensure_successful(asset_kind.clone());
 
 		#[extrinsic_call]
 		_(origin as T::RuntimeOrigin, asset_kind.clone(), amount, beneficiary_lookup);
@@ -231,6 +235,7 @@ mod benchmarks {
 			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let (asset_kind, amount, beneficiary, beneficiary_lookup) =
 			create_spend_arguments::<T, _>(SEED);
+		T::BalanceConverter::ensure_successful(asset_kind.clone());
 		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup)?;
 		T::Paymaster::ensure_successful(&beneficiary, asset_kind, amount);
 		let caller: T::AccountId = account("caller", 0, SEED);
@@ -256,6 +261,7 @@ mod benchmarks {
 			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		let (asset_kind, amount, beneficiary, beneficiary_lookup) =
 			create_spend_arguments::<T, _>(SEED);
+		T::BalanceConverter::ensure_successful(asset_kind.clone());
 		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup)?;
 		T::Paymaster::ensure_successful(&beneficiary, asset_kind, amount);
 		let caller: T::AccountId = account("caller", 0, SEED);

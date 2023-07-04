@@ -242,4 +242,8 @@ where
 			.ok_or(pallet::Error::<T>::UnknownAssetId.into())?;
 		Ok(rate.saturating_mul_int(balance))
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_successful(asset_id: AssetIdOf<T>) {
+		pallet::ConversionRateToNative::<T>::set(asset_id.clone(), Some(1.into()));
+	}
 }

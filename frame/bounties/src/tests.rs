@@ -26,7 +26,10 @@ use frame_support::{
 	assert_noop, assert_ok,
 	pallet_prelude::GenesisBuild,
 	parameter_types,
-	traits::{tokens::PayFromAccount, ConstU32, ConstU64, OnInitialize},
+	traits::{
+		tokens::{PayFromAccount, UnityAssetBalanceConversion},
+		ConstU32, ConstU64, OnInitialize,
+	},
 	PalletId,
 };
 
@@ -137,7 +140,7 @@ impl pallet_treasury::Config for Test {
 	type Beneficiary = Self::AccountId;
 	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
 	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
-	type BalanceConverter = ();
+	type BalanceConverter = UnityAssetBalanceConversion;
 	type PayoutPeriod = ConstU64<10>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
@@ -164,7 +167,7 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type Beneficiary = Self::AccountId;
 	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
 	type Paymaster = PayFromAccount<Balances, TreasuryAccount1>;
-	type BalanceConverter = ();
+	type BalanceConverter = UnityAssetBalanceConversion;
 	type PayoutPeriod = ConstU64<10>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
