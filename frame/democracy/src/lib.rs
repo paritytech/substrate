@@ -226,21 +226,14 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The Scheduler.
-		type Scheduler: ScheduleNamed<
-			BlockNumberFor<Self>,
-			CallOf<Self>,
-			Self::PalletsOrigin,
-		>;
+		type Scheduler: ScheduleNamed<BlockNumberFor<Self>, CallOf<Self>, Self::PalletsOrigin>;
 
 		/// The Preimage provider.
 		type Preimages: QueryPreimage + StorePreimage;
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<
-				Self::AccountId,
-				Moment = BlockNumberFor<Self>,
-			>;
+			+ LockableCurrency<Self::AccountId, Moment = BlockNumberFor<Self>>;
 
 		/// The period between a proposal being approved and enacted.
 		///

@@ -114,10 +114,7 @@ pub mod pallet {
 		/// (from an offchain context).
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
-			(
-				EquivocationProof<Self::Hash, BlockNumberFor<Self>>,
-				Self::KeyOwnerProof,
-			),
+			(EquivocationProof<Self::Hash, BlockNumberFor<Self>>, Self::KeyOwnerProof),
 		>;
 	}
 

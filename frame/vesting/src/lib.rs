@@ -163,10 +163,7 @@ pub mod pallet {
 		type Currency: LockableCurrency<Self::AccountId>;
 
 		/// Convert the block number into a balance.
-		type BlockNumberToBalance: Convert<
-			BlockNumberFor<Self>,
-			BalanceOf<Self>,
-		>;
+		type BlockNumberToBalance: Convert<BlockNumberFor<Self>, BalanceOf<Self>>;
 
 		/// The minimum amount transferred to call `vested_transfer`.
 		#[pallet::constant]

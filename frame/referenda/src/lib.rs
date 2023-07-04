@@ -162,15 +162,8 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
-		type Scheduler: ScheduleAnon<
-				BlockNumberFor<Self>,
-				CallOf<Self, I>,
-				PalletsOriginOf<Self>,
-			> + ScheduleNamed<
-				BlockNumberFor<Self>,
-				CallOf<Self, I>,
-				PalletsOriginOf<Self>,
-			>;
+		type Scheduler: ScheduleAnon<BlockNumberFor<Self>, CallOf<Self, I>, PalletsOriginOf<Self>>
+			+ ScheduleNamed<BlockNumberFor<Self>, CallOf<Self, I>, PalletsOriginOf<Self>>;
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
@@ -222,14 +215,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type Tracks: Get<
 				Vec<(
-					<Self::Tracks as TracksInfo<
-						BalanceOf<Self, I>,
-						BlockNumberFor<Self>,
-					>>::Id,
-					TrackInfo<
-						BalanceOf<Self, I>,
-						BlockNumberFor<Self>,
-					>,
+					<Self::Tracks as TracksInfo<BalanceOf<Self, I>, BlockNumberFor<Self>>>::Id,
+					TrackInfo<BalanceOf<Self, I>, BlockNumberFor<Self>>,
 				)>,
 			> + TracksInfo<
 				BalanceOf<Self, I>,

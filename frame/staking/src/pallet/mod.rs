@@ -200,9 +200,7 @@ pub mod pallet {
 
 		/// Something that can estimate the next session change, accurately or as a best effort
 		/// guess.
-		type NextNewSession: EstimateNextNewSession<
-			BlockNumberFor<Self>,
-		>;
+		type NextNewSession: EstimateNextNewSession<BlockNumberFor<Self>>;
 
 		/// The maximum number of nominators rewarded for each validator.
 		///

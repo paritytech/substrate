@@ -101,10 +101,8 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 		/// Currency type with which voting happens.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<
-				Self::AccountId,
-				Moment = BlockNumberFor<Self>,
-			> + fungible::Inspect<Self::AccountId>;
+			+ LockableCurrency<Self::AccountId, Moment = BlockNumberFor<Self>>
+			+ fungible::Inspect<Self::AccountId>;
 
 		/// The implementation of the logic which conducts polls.
 		type Polls: Polling<

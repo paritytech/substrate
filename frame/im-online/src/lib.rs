@@ -287,9 +287,7 @@ pub mod pallet {
 		/// rough time when we should start considering sending heartbeats, since the workers
 		/// avoids sending them at the very beginning of the session, assuming there is a
 		/// chance the authority will produce a block and they won't be necessary.
-		type NextSessionRotation: EstimateNextSessionRotation<
-			BlockNumberFor<Self>,
-		>;
+		type NextSessionRotation: EstimateNextSessionRotation<BlockNumberFor<Self>>;
 
 		/// A type that gives us the ability to submit unresponsiveness offence reports.
 		type ReportUnresponsiveness: ReportOffence<

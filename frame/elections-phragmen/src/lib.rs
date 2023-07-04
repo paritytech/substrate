@@ -203,10 +203,8 @@ pub mod pallet {
 		type PalletId: Get<LockIdentifier>;
 
 		/// The currency that people are electing with.
-		type Currency: LockableCurrency<
-				Self::AccountId,
-				Moment = BlockNumberFor<Self>,
-			> + ReservableCurrency<Self::AccountId>;
+		type Currency: LockableCurrency<Self::AccountId, Moment = BlockNumberFor<Self>>
+			+ ReservableCurrency<Self::AccountId>;
 
 		/// What to do when the members change.
 		type ChangeMembers: ChangeMembers<Self::AccountId>;
