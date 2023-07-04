@@ -750,6 +750,10 @@ impl<T: Config> Commission<T> {
 			Some((commission, payee)) => {
 				ensure!(!self.throttling(commission), Error::<T>::CommissionChangeThrottled);
 				ensure!(
+					commission <= &GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()),
+					Error::<T>::CommissionExceedsGlobalMaximum
+				);
+				ensure!(
 					self.max.map_or(true, |m| commission <= &m),
 					Error::<T>::CommissionExceedsMaximum
 				);
@@ -773,6 +777,10 @@ impl<T: Config> Commission<T> {
 	/// updated to the new maximum. This will also register a `throttle_from` update.
 	/// A `PoolCommissionUpdated` event is triggered if `current.0` is updated.
 	fn try_update_max(&mut self, pool_id: PoolId, new_max: Perbill) -> DispatchResult {
+		ensure!(
+			new_max <= GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()),
+			Error::<T>::CommissionExceedsGlobalMaximum
+		);
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
 				return Err(Error::<T>::MaxCommissionRestricted.into())
@@ -1824,6 +1832,8 @@ pub mod pallet {
 		MaxCommissionRestricted,
 		/// The supplied commission exceeds the max allowed commission.
 		CommissionExceedsMaximum,
+		/// The supplied commission exceeds global maximum commission.
+		CommissionExceedsGlobalMaximum,
 		/// Not enough blocks have surpassed since the last commission update.
 		CommissionChangeThrottled,
 		/// The submitted changes to commission change rate are not allowed.
