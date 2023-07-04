@@ -272,10 +272,10 @@ where
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"[verify_proof]: (a, b) {:?}, {:?} => {:?} ({:?}) hash",
-			array_bytes::bytes2hex("", &a.as_ref()),
-			array_bytes::bytes2hex("", &b.as_ref()),
-			array_bytes::bytes2hex("", &hash.as_ref()),
-			array_bytes::bytes2hex("", &combined.as_ref())
+			array_bytes::bytes2hex("", a),
+			array_bytes::bytes2hex("", b),
+			array_bytes::bytes2hex("", hash),
+			array_bytes::bytes2hex("", &combined)
 		);
 		position /= 2;
 		width = ((width - 1) / 2) + 1;
@@ -373,7 +373,7 @@ mod tests {
 	fn should_generate_single_root() {
 		// given
 		let _ = env_logger::try_init();
-		let data = vec![array_bytes::hex2array_unchecked::<20>(
+		let data = vec![array_bytes::hex2array_unchecked::<_, 20>(
 			"E04CC55ebEE1cBCE552f250e85c57B70B2E2625b",
 		)];
 
@@ -392,8 +392,8 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let data = vec![
-			array_bytes::hex2array_unchecked::<20>("E04CC55ebEE1cBCE552f250e85c57B70B2E2625b"),
-			array_bytes::hex2array_unchecked::<20>("25451A4de12dcCc2D166922fA938E900fCc4ED24"),
+			array_bytes::hex2array_unchecked::<_, 20>("E04CC55ebEE1cBCE552f250e85c57B70B2E2625b"),
+			array_bytes::hex2array_unchecked::<_, 20>("25451A4de12dcCc2D166922fA938E900fCc4ED24"),
 		];
 
 		// when
@@ -805,7 +805,7 @@ mod tests {
 				],
 				number_of_leaves: data.len(),
 				leaf_index: data.len() - 1,
-				leaf: array_bytes::hex2array_unchecked::<20>(
+				leaf: array_bytes::hex2array_unchecked::<_, 20>(
 					"c26B34D375533fFc4c5276282Fa5D660F3d8cbcB"
 				)
 				.to_vec(),

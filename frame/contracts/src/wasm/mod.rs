@@ -299,7 +299,7 @@ impl<T: Config> WasmBlob<T> {
 			)
 		}
 		if maximum > schedule.limits.memory_pages {
-			return Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.")
+			return Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.");
 		}
 		Ok((initial, maximum))
 	}
@@ -2233,7 +2233,7 @@ mod tests {
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
 				data: (
-					array_bytes::hex2array_unchecked::<32>(
+					array_bytes::hex2array_unchecked::<_, 32>(
 						"000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
 					),
 					42u64,
