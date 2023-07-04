@@ -19,7 +19,7 @@
 //!
 //! # Index
 //!
-//! * [Key terms](#key-terms)
+//! * [Key Terms](#key-terms)
 //! * [Goals](#goals)
 //! * [Limitations](#limitations)
 //! * [Usage](#usage)
