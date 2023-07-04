@@ -58,6 +58,7 @@
 
 pub mod v10;
 pub mod v11;
+pub mod v12;
 pub mod v9;
 
 use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
@@ -173,7 +174,7 @@ mod private {
 /// Defines a sequence of migrations.
 ///
 /// The sequence must be defined by a tuple of migrations, each of which must implement the
-/// `Migrate` trait. Migrations must be ordered by their versions with no gaps.
+/// `MigrationStep` trait. Migrations must be ordered by their versions with no gaps.
 pub trait MigrateSequence: private::Sealed {
 	/// Returns the range of versions that this migrations sequence can handle.
 	/// Migrations must be ordered by their versions with no gaps.

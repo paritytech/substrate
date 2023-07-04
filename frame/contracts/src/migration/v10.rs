@@ -179,7 +179,11 @@ impl<T: Config> MigrationStep for Migration<T> {
 			})
 			// If it fails we fallback to minting the ED.
 			.unwrap_or_else(|err| {
-				log::error!(target: LOG_TARGET, "Failed to transfer the base deposit, reason: {:?}", err);
+				log::error!(
+					target: LOG_TARGET,
+					"Failed to transfer the base deposit, reason: {:?}",
+					err
+				);
 				T::Currency::deposit_creating(&deposit_account, min_balance);
 				min_balance
 			});

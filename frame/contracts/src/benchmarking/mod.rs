@@ -30,7 +30,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{v10, v11, v9, MigrationStep},
+	migration::{v10, v11, v12, v9, MigrationStep},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -38,12 +38,9 @@ use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::{pallet_prelude::StorageVersion, weights::Weight};
 use frame_system::RawOrigin;
-use sp_runtime::{
-	traits::{Bounded, Hash},
-	Perbill,
-};
+use sp_runtime::traits::{Bounded, Hash};
 use sp_std::prelude::*;
-use wasm_instrument::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
+use wasm_instrument::parity_wasm::elements::{BlockType, Instruction, ValueType};
 
 /// How many runs we do per API benchmark.
 ///
@@ -162,16 +159,12 @@ where
 
 	/// Returns `true` iff all storage entries related to code storage exist.
 	fn code_exists(hash: &CodeHash<T>) -> bool {
-		<PristineCode<T>>::contains_key(hash) &&
-			<CodeStorage<T>>::contains_key(&hash) &&
-			<OwnerInfoOf<T>>::contains_key(&hash)
+		<PristineCode<T>>::contains_key(hash) && <CodeInfoOf<T>>::contains_key(&hash)
 	}
 
 	/// Returns `true` iff no storage entry related to code storage exist.
 	fn code_removed(hash: &CodeHash<T>) -> bool {
-		!<PristineCode<T>>::contains_key(hash) &&
-			!<CodeStorage<T>>::contains_key(&hash) &&
-			!<OwnerInfoOf<T>>::contains_key(&hash)
+		!<PristineCode<T>>::contains_key(hash) && !<CodeInfoOf<T>>::contains_key(&hash)
 	}
 }
 
@@ -219,22 +212,7 @@ benchmarks! {
 		ContractInfo::<T>::process_deletion_queue_batch(Weight::MAX)
 	}
 
-	// This benchmarks the additional weight that is charged when a contract is executed the
-	// first time after a new schedule was deployed: For every new schedule a contract needs
-	// to re-run the instrumentation once.
-	#[pov_mode = Measured]
-	reinstrument {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
-		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
-		Contracts::<T>::store_code_raw(code, whitelisted_caller())?;
-		let schedule = T::Schedule::get();
-		let mut gas_meter = GasMeter::new(Weight::MAX);
-		let mut module = PrefabWasmModule::from_storage(hash, &schedule, &mut gas_meter)?;
-	}: {
-		Contracts::<T>::reinstrument_module(&mut module, &schedule)?;
-	}
-
-	// This benchmarks the v9 migration step. (update codeStorage)
+	// This benchmarks the v9 migration step (update codeStorage).
 	#[pov_mode = Measured]
 	v9_migration_step {
 		let c in 0 .. T::MaxCodeLen::get();
@@ -244,7 +222,7 @@ benchmarks! {
 		m.step();
 	}
 
-	// This benchmarks the v10 migration step. (use dedicated deposit_account)
+	// This benchmarks the v10 migration step (use dedicated deposit_account).
 	#[pov_mode = Measured]
 	v10_migration_step {
 		let contract = <Contract<T>>::with_caller(
@@ -257,12 +235,24 @@ benchmarks! {
 		m.step();
 	}
 
-	// This benchmarks the v11 migration step.
+	// This benchmarks the v11 migration step (Don't rely on reserved balances keeping an account alive).
 	#[pov_mode = Measured]
 	v11_migration_step {
 		let k in 0 .. 1024;
 		v11::fill_old_queue::<T>(k as usize);
 		let mut m = v11::Migration::<T>::default();
+	}: {
+		m.step();
+	}
+
+	// This benchmarks the v12 migration step (Move `OwnerInfo` to `CodeInfo`,
+	// add `determinism` field to the latter, clear `CodeStorage`
+	// and repay deposits).
+	#[pov_mode = Measured]
+	v12_migration_step {
+		let c in 0 .. T::MaxCodeLen::get();
+		v12::store_old_dummy_code::<T>(c as usize, account::<T::AccountId>("account", 0, 0));
+		let mut m = v12::Migration::<T>::default();
 	}: {
 		m.step();
 	}
@@ -348,14 +338,9 @@ benchmarks! {
 	// `c`: Size of the code in bytes.
 	// `i`: Size of the input in bytes.
 	// `s`: Size of the salt in bytes.
-	//
-	// # Note
-	//
-	// We cannot let `c` grow to the maximum code size because the code is not allowed
-	// to be larger than the maximum size **after instrumentation**.
 	#[pov_mode = Measured]
 	instantiate_with_code {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let c in 0 .. T::MaxCodeLen::get();
 		let i in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let input = vec![42u8; i as usize];
@@ -445,14 +430,9 @@ benchmarks! {
 	// This constructs a contract that is maximal expensive to instrument.
 	// It creates a maximum number of metering blocks per byte.
 	// `c`: Size of the code in bytes.
-	//
-	// # Note
-	//
-	// We cannot let `c` grow to the maximum code size because the code is not allowed
-	// to be larger than the maximum size **after instrumentation**.
 	#[pov_mode = Measured]
 	upload_code {
-		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
+		let c in 0 .. T::MaxCodeLen::get();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
@@ -466,7 +446,7 @@ benchmarks! {
 
 	// Removing code does not depend on the size of the contract because all the information
 	// needed to verify the removal claim (refcount, owner) is stored in a separate storage
-	// item (`OwnerInfoOf`).
+	// item (`CodeInfoOf`).
 	#[pov_mode = Measured]
 	remove_code {
 		let caller = whitelisted_caller();
@@ -734,27 +714,6 @@ benchmarks! {
 		});
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
-
-	#[pov_mode = Measured]
-	seal_gas {
-		let r in 0 .. API_BENCHMARK_RUNS;
-		let code = WasmModule::<T>::from(ModuleDefinition {
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "gas",
-				params: vec![ValueType::I64],
-				return_type: None,
-			}],
-			call_body: Some(body::repeated(r, &[
-				Instruction::I64Const(42),
-				Instruction::Call(0),
-			])),
-			.. Default::default()
-		});
-		let instance = Contract::<T>::new(code, vec![])?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	#[pov_mode = Measured]
@@ -1051,7 +1010,7 @@ benchmarks! {
 		// or maximum allowed debug buffer size, whichever is less.
 		let i in 0 .. (T::Schedule::get().limits.memory_pages * 64 * 1024).min(T::MaxDebugBufferLen::get());
 		// We benchmark versus messages containing printable ASCII codes.
-		// About 1Kb goes to the instrumented contract code instructions,
+		// About 1Kb goes to the contract code instructions,
 		// whereas all the space left we use for the initialization of the debug messages data.
 		let message = (0 .. T::MaxCodeLen::get() - 1024).zip((32..127).cycle()).map(|i| i.1).collect::<Vec<_>>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -2445,15 +2404,10 @@ benchmarks! {
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
 	// We make the assumption that pushing a constant and dropping a value takes roughly
-	// the same amount of time. We follow that `t.load` and `drop` both have the weight
-	// of this benchmark / 2. We need to make this assumption because there is no way
-	// to measure them on their own using a valid wasm module. We need their individual
-	// values to derive the weight of individual instructions (by subtraction) from
-	// benchmarks that include those for parameter pushing and return type dropping.
-	// We call the weight of `t.load` and `drop`: `w_param`.
+	// the same amount of time. We call this weight `w_base`.
 	// The weight that would result from the respective benchmark we call: `w_bench`.
 	//
-	// w_i{32,64}const = w_drop = w_bench / 2
+	// w_base = w_i{32,64}const = w_drop = w_bench / 2
 	#[pov_mode = Ignored]
 	instr_i64const {
 		let r in 0 .. INSTR_BENCHMARK_RUNS;
@@ -2464,765 +2418,6 @@ benchmarks! {
 			])),
 			.. Default::default()
 		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_i{32,64}load = w_bench - 2 * w_param
-	#[pov_mode = Ignored]
-	instr_i64load {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			call_body: Some(body::repeated_dyn(r, vec![
-				RandomUnaligned(0, code::max_pages::<T>() * 64 * 1024 - 8),
-				Regular(Instruction::I64Load(3, 0)),
-				Regular(Instruction::Drop),
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_i{32,64}store{...} = w_bench - 2 * w_param
-	#[pov_mode = Ignored]
-	instr_i64store {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			call_body: Some(body::repeated_dyn(r, vec![
-				RandomUnaligned(0, code::max_pages::<T>() * 64 * 1024 - 8),
-				RandomI64Repeated(1),
-				Regular(Instruction::I64Store(3, 0)),
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_select = w_bench - 4 * w_param
-	#[pov_mode = Ignored]
-	instr_select {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::repeated_dyn(r, vec![
-				RandomI64Repeated(1),
-				RandomI64Repeated(1),
-				RandomI32(0, 2),
-				Regular(Instruction::Select),
-				Regular(Instruction::Drop),
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_if = w_bench - 3 * w_param
-	#[pov_mode = Ignored]
-	instr_if {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::repeated_dyn(r, vec![
-				RandomI32(0, 2),
-				Regular(Instruction::If(BlockType::Value(ValueType::I64))),
-				RandomI64Repeated(1),
-				Regular(Instruction::Else),
-				RandomI64Repeated(1),
-				Regular(Instruction::End),
-				Regular(Instruction::Drop),
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_br = w_bench - 2 * w_param
-	// Block instructions are not counted.
-	#[pov_mode = Ignored]
-	instr_br {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::repeated_dyn(r, vec![
-				Regular(Instruction::Block(BlockType::NoResult)),
-				Regular(Instruction::Block(BlockType::NoResult)),
-				Regular(Instruction::Block(BlockType::NoResult)),
-				Regular(Instruction::Br(1)),
-				RandomI64Repeated(1),
-				Regular(Instruction::Drop),
-				Regular(Instruction::End),
-				RandomI64Repeated(1),
-				Regular(Instruction::Drop),
-				Regular(Instruction::End),
-				RandomI64Repeated(1),
-				Regular(Instruction::Drop),
-				Regular(Instruction::End),
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_br_if = w_bench - 3 * w_param
-	// Block instructions are not counted.
-	#[pov_mode = Ignored]
-	instr_br_if {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::repeated_dyn(r, vec![
-				Regular(Instruction::Block(BlockType::NoResult)),
-				Regular(Instruction::Block(BlockType::NoResult)),
-				Regular(Instruction::Block(BlockType::NoResult)),
-				Regular(Instruction::I32Const(1)),
-				Regular(Instruction::BrIf(1)),
-				RandomI64Repeated(1),
-				Regular(Instruction::Drop),
-				Regular(Instruction::End),
-				RandomI64Repeated(1),
-				Regular(Instruction::Drop),
-				Regular(Instruction::End),
-				RandomI64Repeated(1),
-				Regular(Instruction::Drop),
-				Regular(Instruction::End),
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_br_table = w_bench - 3 * w_param
-	// Block instructions are not counted.
-	#[pov_mode = Ignored]
-	instr_br_table {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let table = Box::new(BrTableData {
-			table: Box::new([1, 1, 1]),
-			default: 1,
-		});
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::repeated_dyn(r, vec![
-				Regular(Instruction::Block(BlockType::NoResult)),
-				Regular(Instruction::Block(BlockType::NoResult)),
-				Regular(Instruction::Block(BlockType::NoResult)),
-				RandomI32(0, 4),
-				Regular(Instruction::BrTable(table)),
-				RandomI64Repeated(1),
-				Regular(Instruction::Drop),
-				Regular(Instruction::End),
-				RandomI64Repeated(1),
-				Regular(Instruction::Drop),
-				Regular(Instruction::End),
-				RandomI64Repeated(1),
-				Regular(Instruction::Drop),
-				Regular(Instruction::End),
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_br_table_per_entry = w_bench
-	#[pov_mode = Ignored]
-	instr_br_table_per_entry {
-		let e in 1 .. T::Schedule::get().limits.br_table_size;
-		let entry: Vec<u32> = [0, 1].iter()
-			.cloned()
-			.cycle()
-			.take((e / 2) as usize).collect();
-		let table = Box::new(BrTableData {
-			table: entry.into_boxed_slice(),
-			default: 0,
-		});
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::plain(vec![
-				Instruction::Block(BlockType::NoResult),
-				Instruction::Block(BlockType::NoResult),
-				Instruction::Block(BlockType::NoResult),
-				Instruction::I32Const((e / 2) as i32),
-				Instruction::BrTable(table),
-				Instruction::I64Const(42),
-				Instruction::Drop,
-				Instruction::End,
-				Instruction::I64Const(42),
-				Instruction::Drop,
-				Instruction::End,
-				Instruction::I64Const(42),
-				Instruction::Drop,
-				Instruction::End,
-				Instruction::End,
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_call = w_bench - 2 * w_param
-	#[pov_mode = Ignored]
-	instr_call {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			// We need to make use of the stack here in order to trigger stack height
-			// instrumentation.
-			aux_body: Some(body::plain(vec![
-				Instruction::I64Const(42),
-				Instruction::Drop,
-				Instruction::End,
-			])),
-			call_body: Some(body::repeated(r, &[
-				Instruction::Call(2), // call aux
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_call_indrect = w_bench - 3 * w_param
-	#[pov_mode = Ignored]
-	instr_call_indirect {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let num_elements = T::Schedule::get().limits.table_size;
-		use self::code::TableSegment;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			// We need to make use of the stack here in order to trigger stack height
-			// instrumentation.
-			aux_body: Some(body::plain(vec![
-				Instruction::I64Const(42),
-				Instruction::Drop,
-				Instruction::End,
-			])),
-			call_body: Some(body::repeated_dyn(r, vec![
-				RandomI32(0, num_elements as i32),
-				Regular(Instruction::CallIndirect(0, 0)), // we only have one sig: 0
-			])),
-			table: Some(TableSegment {
-				num_elements,
-				function_index: 2, // aux
-			}),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_per_local = w_bench
-	#[pov_mode = Ignored]
-	instr_call_per_local {
-		let l in 0 .. T::Schedule::get().limits.locals;
-		let mut aux_body = body::plain(vec![
-			Instruction::End,
-		]);
-		body::inject_locals(&mut aux_body, l);
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			aux_body: Some(aux_body),
-			call_body: Some(body::plain(vec![
-				Instruction::Call(2), // call aux
-				Instruction::End,
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_local_get = w_bench - 1 * w_param
-	#[pov_mode = Ignored]
-	instr_local_get {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let max_locals = T::Schedule::get().limits.locals;
-		let mut call_body = body::repeated_dyn(r, vec![
-			RandomGetLocal(0, max_locals),
-			Regular(Instruction::Drop),
-		]);
-		body::inject_locals(&mut call_body, max_locals);
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(call_body),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_local_set = w_bench - 1 * w_param
-	#[pov_mode = Ignored]
-	instr_local_set {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let max_locals = T::Schedule::get().limits.locals;
-		let mut call_body = body::repeated_dyn(r, vec![
-			RandomI64Repeated(1),
-			RandomSetLocal(0, max_locals),
-		]);
-		body::inject_locals(&mut call_body, max_locals);
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(call_body),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_local_tee = w_bench - 2 * w_param
-	#[pov_mode = Ignored]
-	instr_local_tee {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let max_locals = T::Schedule::get().limits.locals;
-		let mut call_body = body::repeated_dyn(r, vec![
-			RandomI64Repeated(1),
-			RandomTeeLocal(0, max_locals),
-			Regular(Instruction::Drop),
-		]);
-		body::inject_locals(&mut call_body, max_locals);
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(call_body),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_global_get = w_bench - 1 * w_param
-	#[pov_mode = Ignored]
-	instr_global_get {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let max_globals = T::Schedule::get().limits.globals;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::repeated_dyn(r, vec![
-				RandomGetGlobal(0, max_globals),
-				Regular(Instruction::Drop),
-			])),
-			num_globals: max_globals,
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_global_set = w_bench - 1 * w_param
-	#[pov_mode = Ignored]
-	instr_global_set {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let max_globals = T::Schedule::get().limits.globals;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::repeated_dyn(r, vec![
-				RandomI64Repeated(1),
-				RandomSetGlobal(0, max_globals),
-			])),
-			num_globals: max_globals,
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_memory_get = w_bench - 1 * w_param
-	#[pov_mode = Ignored]
-	instr_memory_current {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory::max::<T>()),
-			call_body: Some(body::repeated(r, &[
-				Instruction::CurrentMemory(0),
-				Instruction::Drop
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// w_memory_grow = w_bench - 2 * w_param
-	// We can only allow allocate as much memory as it is allowed in a contract.
-	// Therefore the repeat count is limited by the maximum memory any contract can have.
-	// Using a contract with more memory will skew the benchmark because the runtime of grow
-	// depends on how much memory is already allocated.
-	#[pov_mode = Ignored]
-	instr_memory_grow {
-		let r in 0 .. ImportedMemory::max::<T>().max_pages;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			memory: Some(ImportedMemory {
-				min_pages: 0,
-				max_pages: ImportedMemory::max::<T>().max_pages,
-			}),
-			call_body: Some(body::repeated(r, &[
-				Instruction::I32Const(1),
-				Instruction::GrowMemory(0),
-				Instruction::Drop,
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	// Unary numeric instructions.
-	// All use w = w_bench - 2 * w_param.
-
-	#[pov_mode = Ignored]
-	instr_i64clz {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
-			Instruction::I64Clz,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64ctz {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
-			Instruction::I64Ctz,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64popcnt {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
-			Instruction::I64Popcnt,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64eqz {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
-			Instruction::I64Eqz,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64extendsi32 {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::repeated_dyn(r, vec![
-				RandomI32Repeated(1),
-				Regular(Instruction::I64ExtendSI32),
-				Regular(Instruction::Drop),
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64extendui32 {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
-			call_body: Some(body::repeated_dyn(r, vec![
-				RandomI32Repeated(1),
-				Regular(Instruction::I64ExtendUI32),
-				Regular(Instruction::Drop),
-			])),
-			.. Default::default()
-		}));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i32wrapi64 {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::unary_instr(
-			Instruction::I32WrapI64,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	// Binary numeric instructions.
-	// All use w = w_bench - 3 * w_param.
-
-	#[pov_mode = Ignored]
-	instr_i64eq {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Eq,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64ne {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Ne,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64lts {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64LtS,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64ltu {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64LtU,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64gts {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64GtS,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64gtu {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64GtU,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64les {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64LeS,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64leu {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64LeU,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64ges {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64GeS,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64geu {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64GeU,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64add {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Add,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64sub {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Sub,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64mul {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Mul,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64divs {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64DivS,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64divu {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64DivU,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64rems {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64RemS,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64remu {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64RemU,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64and {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64And,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64or {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Or,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64xor {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Xor,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64shl {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Shl,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64shrs {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64ShrS,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64shru {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64ShrU,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64rotl {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Rotl,
-			r,
-		));
-	}: {
-		sbox.invoke();
-	}
-
-	#[pov_mode = Ignored]
-	instr_i64rotr {
-		let r in 0 .. INSTR_BENCHMARK_RUNS;
-		let mut sbox = Sandbox::from(&WasmModule::<T>::binary_instr(
-			Instruction::I64Rotr,
-			r,
-		));
 	}: {
 		sbox.invoke();
 	}
@@ -3250,21 +2445,16 @@ benchmarks! {
 	}: {}
 
 	// Execute one erc20 transfer using the ink! erc20 example contract.
-	//
-	// `g` is used to enable gas instrumentation to compare the performance impact of
-	// that instrumentation at runtime.
 	#[extra]
 	#[pov_mode = Measured]
 	ink_erc20_transfer {
-		let g in 0 .. 1;
-		let gas_metering = g != 0;
 		let code = load_benchmark!("ink_erc20");
 		let data = {
 			let new: ([u8; 4], BalanceOf<T>) = ([0x9b, 0xae, 0x9d, 0x5e], 1000u32.into());
 			new.encode()
 		};
 		let instance = Contract::<T>::new(
-			WasmModule::instrumented(code, gas_metering), data,
+			WasmModule::from_code(code), data,
 		)?;
 		let data = {
 			let transfer: ([u8; 4], AccountIdOf<T>, BalanceOf<T>) = (
@@ -3290,14 +2480,9 @@ benchmarks! {
 	}
 
 	// Execute one erc20 transfer using the open zeppelin erc20 contract compiled with solang.
-	//
-	// `g` is used to enable gas instrumentation to compare the performance impact of
-	// that instrumentation at runtime.
 	#[extra]
 	#[pov_mode = Measured]
 	solang_erc20_transfer {
-		let g in 0 .. 1;
-		let gas_metering = g != 0;
 		let code = include_bytes!("../../benchmarks/solang_erc20.wasm");
 		let caller = account::<T::AccountId>("instantiator", 0, 0);
 		let mut balance = [0u8; 32];
@@ -3313,7 +2498,7 @@ benchmarks! {
 			new.encode()
 		};
 		let instance = Contract::<T>::with_caller(
-			caller, WasmModule::instrumented(code, gas_metering), data,
+			caller, WasmModule::from_code(code), data,
 		)?;
 		balance[0] = 1;
 		let data = {
