@@ -599,7 +599,7 @@ pub mod pallet {
 			para_id: u32,
 			suffix: BoundedSuffixOf<T>,
 		) -> DispatchResult {
-			let _ = ensure_root(origin)?;
+			T::RegistrationManager::ensure_origin(origin)?;
 			ensure!(
 				ParaRegistrations::<T>::get(&para_id).is_none(),
 				Error::<T>::ParaRegistrationExists
@@ -612,7 +612,7 @@ pub mod pallet {
 		#[pallet::call_index(16)]
 		#[pallet::weight(0)]
 		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
-			let _ = ensure_root(origin)?;
+			T::RegistrationManager::ensure_origin(origin)?;
 			ensure!(
 				!ParaRegistrations::<T>::get(&para_id).is_none(),
 				Error::<T>::ParaRegistrationNotFound
