@@ -51,9 +51,7 @@ use pallet_staking::StakerStatus;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-#[use_attr]
 use frame_support::derive_impl;
-use frame_support::macro_magic::use_attr;
 
 use crate::{log, log_current_time};
 
@@ -580,7 +578,7 @@ impl ExtBuilder {
 
 		#[cfg(feature = "try-runtime")]
 		ext.execute_with(|| {
-			let bm = System::block_number();
+			let bn = System::block_number();
 
 			assert_ok!(<MultiPhase as Hooks<u64>>::try_state(bn));
 			assert_ok!(<Staking as Hooks<u64>>::try_state(bn));
@@ -629,17 +627,21 @@ pub fn roll_to_with_ocw(n: BlockNumber, pool: Arc<RwLock<PoolState>>, delay_solu
 		ElectionProviderMultiPhase::offchain_worker(b);
 
 		if !delay_solution && pool.read().transactions.len() > 0 {
-			// build and submit extrinsics queued in the pool by ocw.
-			let encoded = pool.read().transactions[0].clone();
-			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
-			let call = match extrinsic.call {
-				RuntimeCall::ElectionProviderMultiPhase(call @ Call::submit_unsigned { .. }) =>
-					call,
-				_ => panic!(
-					"unexpected error when decoding the submit_unsigned extrinsic from the pool."
-				),
-			};
-			crate::assert_ok!(call.dispatch_bypass_filter(RuntimeOrigin::none()));
+			// decode submit_unsigned callable that may be queued in the pool by ocw. skip all
+			// other extrinsics in the pool.
+			for encoded in &pool.read().transactions {
+				let extrinsic = Extrinsic::decode(&mut &encoded[..]).unwrap();
+
+				let _ = match extrinsic.call {
+					RuntimeCall::ElectionProviderMultiPhase(
+						call @ Call::submit_unsigned { .. },
+					) => {
+						// call submit_unsigned callable in OCW pool.
+						crate::assert_ok!(call.dispatch_bypass_filter(RuntimeOrigin::none()));
+					},
+					_ => (),
+				};
+			}
 
 			pool.try_write().unwrap().transactions.clear();
 		}
