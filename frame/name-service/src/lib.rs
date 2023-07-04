@@ -171,6 +171,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxTextLength: Get<u32>;
 
+		// Maximum length for a para registration suffix.
+		#[pallet::constant]
+		type MaxSuffixLength: Get<u32>;
+
 		/// The deposit a user needs to place to keep their subnodes in storage.
 		#[pallet::constant]
 		type SubNodeDeposit: Get<BalanceOf<Self>>;
@@ -200,6 +204,13 @@ pub mod pallet {
 		/// The deposit taken per byte of storage used.
 		type PerByteFee: Get<BalanceOf<Self>>;
 	}
+
+	/// Para ID Registrations.
+	///
+	/// A Para ID needs to be provided alongside a suffix to represent their address domain.
+	#[pallet::storage]
+	pub(super) type ParaRegistrations<T: Config> =
+		CountedStorageMap<_, Twox64Concat, u32, BoundedSuffixOf<T>>;
 
 	/// Name Commitments
 	#[pallet::storage]
@@ -300,6 +311,10 @@ pub mod pallet {
 		ExpiryInvalid,
 		/// The name provided does not match the expected hash.
 		BadName,
+		/// The para ID has already been registered.
+		ParaRegistrationExists,
+		/// The para ID was not found.
+		ParaRegistrationNotFound,
 	}
 
 	// Your Pallet's callable functions.
@@ -575,6 +590,36 @@ pub mod pallet {
 			T::NameServiceResolver::set_text(name_hash, text_bounded, sender)?;
 			Ok(())
 		}
+
+		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
+		#[pallet::call_index(15)]
+		#[pallet::weight(0)]
+		pub fn register_para(
+			origin: OriginFor<T>,
+			para_id: u32,
+			suffix: BoundedSuffixOf<T>,
+		) -> DispatchResult {
+			let _ = ensure_root(origin)?;
+			ensure!(
+				ParaRegistrations::<T>::get(&para_id).is_none(),
+				Error::<T>::ParaRegistrationExists
+			);
+			ParaRegistrations::<T>::insert(para_id, suffix);
+			Ok(())
+		}
+
+		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
+		#[pallet::call_index(16)]
+		#[pallet::weight(0)]
+		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
+			let _ = ensure_root(origin)?;
+			ensure!(
+				!ParaRegistrations::<T>::get(&para_id).is_none(),
+				Error::<T>::ParaRegistrationNotFound
+			);
+			ParaRegistrations::<T>::remove(para_id);
+			Ok(())
+		}
 	}
 
 	#[pallet::hooks]
@@ -586,6 +631,7 @@ pub mod pallet {
 			);
 			assert!(T::MaxNameLength::get() > 0, "Max name length cannot be zero");
 			assert!(T::MaxTextLength::get() > 0, "Max text length cannot be zero");
+			assert!(T::MaxSuffixLength::get() > 0, "Max suffix length cannot be zero");
 			assert!(
 				T::TierThreeLetters::get() > BalanceOf::<T>::zero(),
 				"Three letter tier fee must be larger than four letter tier fee"

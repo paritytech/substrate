@@ -1216,6 +1216,7 @@ parameter_types! {
 	pub const MaxCommitmentAge: BlockNumber = 10 * MINUTES;
 	pub const MaxNameLength: u32 = 2048; // 2048 is the standard URL limit
 	pub const MaxTextLength: u32 = 2048;
+	pub const MaxSuffixLength: u32 = 4;
 	pub const PerByteFee: Balance = 1 * CENTS;
 }
 
@@ -1235,6 +1236,7 @@ impl pallet_name_service::Config for Runtime {
 	type RegistrationFeePerBlock = RegistrationFeePerBlock;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;
 	type MaxTextLength = MaxTextLength;
+	type MaxSuffixLength = MaxSuffixLength;
 	type PerByteFee = PerByteFee;
 	type NameServiceResolver = pallet_name_service::Pallet<Self>;
 }

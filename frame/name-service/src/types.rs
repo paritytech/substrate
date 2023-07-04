@@ -48,6 +48,7 @@ pub type CommitmentHash = [u8; 32];
 
 pub type BoundedNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLength>;
 pub type BoundedTextOf<T> = BoundedVec<u8, <T as Config>::MaxTextLength>;
+pub type BoundedSuffixOf<T> = BoundedVec<u8, <T as Config>::MaxSuffixLength>;
 
 /// The commitment a user makes before registering the name.
 #[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug)]

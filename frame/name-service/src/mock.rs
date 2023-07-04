@@ -116,6 +116,7 @@ impl Config for Test {
 	// 2048 is the standard URL limit
 	type MaxNameLength = ConstU32<2048>;
 	type MaxTextLength = ConstU32<2048>;
+	type MaxSuffixLength = ConstU32<4>;
 	type RegistrationFeePerBlock = ConstU64<1>;
 	type TierDefault = ConstU64<1>;
 	type RegistrationManager = EnsureRoot<Self::AccountId>;
