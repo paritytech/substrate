@@ -1124,6 +1124,7 @@ impl<Block: BlockT> Backend<Block> {
 		Self::from_database(db as Arc<_>, canonicalization_delay, &db_config, needs_init)
 	}
 
+	/// Reset the shared trie cache.
 	#[cfg(feature = "test-helpers")]
 	pub fn reset_trie_cache(&self) {
 		if let Some(cache) = &self.shared_trie_cache {
