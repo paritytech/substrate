@@ -137,7 +137,7 @@ impl Justifications {
 	/// not inserted.
 	pub fn append(&mut self, justification: Justification) -> bool {
 		if self.get(justification.0).is_some() {
-			return false
+			return false;
 		}
 		self.0.push(justification);
 		true
@@ -214,7 +214,7 @@ impl BuildStorage for sp_core::storage::Storage {
 			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
 				if !map.child_info.try_update(&other_map.child_info) {
-					return Err("Incompatible child info update".to_string())
+					return Err("Incompatible child info update".to_string());
 				}
 			} else {
 				storage.children_default.insert(k, other_map.clone());
@@ -415,9 +415,10 @@ impl Verify for MultiSignature {
 			(Self::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
 				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
-					Ok(pubkey) =>
-						&sp_io::hashing::blake2_256(pubkey.as_ref()) ==
-							<dyn AsRef<[u8; 32]>>::as_ref(who),
+					Ok(pubkey) => {
+						&sp_io::hashing::blake2_256(pubkey.as_ref())
+							== <dyn AsRef<[u8; 32]>>::as_ref(who)
+					},
 					_ => false,
 				}
 			},
@@ -436,8 +437,8 @@ impl Verify for AnySignature {
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
-			.unwrap_or(false) ||
-			ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+			.unwrap_or(false)
+			|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 				.map(|s| match ed25519::Public::from_slice(signer.as_ref()) {
 					Err(()) => false,
 					Ok(signer) => s.verify(msg, &signer),
@@ -518,64 +519,6 @@ impl From<TransactionalError> for DispatchError {
 	}
 }
 
-/// The "high-level" error enum of interfaces
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum InterfaceError {
-	/// It was not possible to match
-	/// the selectable.
-	NoMatchingSelectable,
-	/// Interface calls which do not
-	/// make use of selectables
-	/// will throw this, if the
-	/// selectable is not H256::zero()
-	ExpectedEmptySelectable,
-	/// Interface definitions can
-	/// define their own "ModuleError"
-	/// which works equal to
-	/// pallet errors.
-	Interface(ModuleError),
-}
-
-impl From<ModuleError> for InterfaceError {
-	fn from(m: ModuleError) -> Self {
-		Self::Interface(m)
-	}
-}
-
-impl From<InterfaceError> for &'static str {
-	fn from(e: InterfaceError) -> &'static str {
-		match e {
-			InterfaceError::NoMatchingSelectable => "NoMatchingSelectable",
-			InterfaceError::ExpectedEmptySelectable => "ExpectedEmptySelectable",
-			InterfaceError::Interface(ModuleError { message, .. }) =>
-				message.unwrap_or("Unknown module error"),
-		}
-	}
-}
-
-impl From<InterfaceError> for DispatchError {
-	fn from(value: InterfaceError) -> Self {
-		Self::Interface(value)
-	}
-}
-
-impl traits::Printable for InterfaceError {
-	fn print(&self) {
-		match self {
-			Self::NoMatchingSelectable => "NoMatchingSelectable".print(),
-			Self::ExpectedEmptySelectable => "ExpectedEmptySelectable".print(),
-			Self::Interface(ModuleError { index, error, message }) => {
-				index.print();
-				error.print();
-				if let Some(msg) = message {
-					msg.print();
-				}
-			},
-		}
-	}
-}
-
 /// Reason why a dispatch call failed.
 #[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -592,8 +535,6 @@ pub enum DispatchError {
 	BadOrigin,
 	/// A custom error in a module.
 	Module(ModuleError),
-	/// An interface error
-	Interface(InterfaceError),
 	/// At least one consumer is remaining so the account cannot be destroyed.
 	ConsumerRemaining,
 	/// There are no providers so the account cannot be created.
@@ -632,8 +573,9 @@ impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
 		match self {
-			DispatchError::Module(ModuleError { index, error, message: Some(_) }) =>
-				DispatchError::Module(ModuleError { index, error, message: None }),
+			DispatchError::Module(ModuleError { index, error, message: Some(_) }) => {
+				DispatchError::Module(ModuleError { index, error, message: None })
+			},
 			m => m,
 		}
 	}
@@ -720,7 +662,6 @@ impl From<DispatchError> for &'static str {
 			Other(msg) => msg,
 			CannotLookup => "Cannot lookup",
 			BadOrigin => "Bad origin",
-			Interface(interface_error) => interface_error.into(),
 			Module(ModuleError { message, .. }) => message.unwrap_or("Unknown module error"),
 			ConsumerRemaining => "Consumer remaining",
 			NoProviders => "No providers",
@@ -752,7 +693,6 @@ impl traits::Printable for DispatchError {
 			Other(err) => err.print(),
 			CannotLookup => "Cannot lookup".print(),
 			BadOrigin => "Bad origin".print(),
-			Interface(e) => e.print(),
 			Module(ModuleError { index, error, message }) => {
 				index.print();
 				error.print();
@@ -876,8 +816,8 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
-			($x >= $crate::Saturating::saturating_sub($y, $error)) &&
-				($x <= $crate::Saturating::saturating_add($y, $error)),
+			($x >= $crate::Saturating::saturating_sub($y, $error))
+				&& ($x <= $crate::Saturating::saturating_add($y, $error)),
 			"{:?} != {:?} (with error rate {:?})",
 			$x,
 			$y,
