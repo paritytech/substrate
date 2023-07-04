@@ -379,6 +379,12 @@ impl<
 			);
 		}
 
+		frame_support::log::info!(
+			target: LOG_TARGET,
+			"try-runtime: Block #{:?} successfully executed",
+			header.number(),
+		);
+
 		Ok(frame_system::Pallet::<System>::block_weight().total())
 	}
 

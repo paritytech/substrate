@@ -24,18 +24,15 @@
 //! we define this simple definition of a contract that can be passed to `create_code` that
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
-use crate::{Config, Determinism};
+use crate::Config;
 use frame_support::traits::Get;
 use sp_runtime::traits::Hash;
 use sp_std::{borrow::ToOwned, prelude::*};
-use wasm_instrument::{
-	gas_metering,
-	parity_wasm::{
-		builder,
-		elements::{
-			self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
-			Section, ValueType,
-		},
+use wasm_instrument::parity_wasm::{
+	builder,
+	elements::{
+		self, BlockType, CustomSection, External, FuncBody, Instruction, Instructions, Module,
+		Section, ValueType,
 	},
 };
 
@@ -240,15 +237,9 @@ impl<T: Config> From<ModuleDefinition> for WasmModule<T> {
 }
 
 impl<T: Config> WasmModule<T> {
-	/// Uses the supplied wasm module and instruments it when requested.
-	pub fn instrumented(code: &[u8], inject_gas: bool) -> Self {
-		let module = {
-			let mut module = Module::from_bytes(code).unwrap();
-			if inject_gas {
-				module = inject_gas_metering::<T>(module);
-			}
-			module
-		};
+	/// Uses the supplied wasm module.
+	pub fn from_code(code: &[u8]) -> Self {
+		let module = Module::from_bytes(code).unwrap();
 		let limits = *module
 			.import_section()
 			.unwrap()
@@ -366,37 +357,13 @@ impl<T: Config> WasmModule<T> {
 		}
 		.into()
 	}
-
-	pub fn unary_instr(instr: Instruction, repeat: u32) -> Self {
-		use body::DynInstr::{RandomI64Repeated, Regular};
-		ModuleDefinition {
-			call_body: Some(body::repeated_dyn(
-				repeat,
-				vec![RandomI64Repeated(1), Regular(instr), Regular(Instruction::Drop)],
-			)),
-			..Default::default()
-		}
-		.into()
-	}
-
-	pub fn binary_instr(instr: Instruction, repeat: u32) -> Self {
-		use body::DynInstr::{RandomI64Repeated, Regular};
-		ModuleDefinition {
-			call_body: Some(body::repeated_dyn(
-				repeat,
-				vec![RandomI64Repeated(2), Regular(instr), Regular(Instruction::Drop)],
-			)),
-			..Default::default()
-		}
-		.into()
-	}
 }
 
 /// Mechanisms to generate a function body that can be used inside a `ModuleDefinition`.
 pub mod body {
 	use super::*;
 
-	/// When generating contract code by repeating a wasm sequence, it's sometimes necessary
+	/// When generating contract code by repeating a Wasm sequence, it's sometimes necessary
 	/// to change those instructions on each repetition. The variants of this enum describe
 	/// various ways in which this can happen.
 	pub enum DynInstr {
@@ -405,31 +372,8 @@ pub mod body {
 		/// Insert a I32Const with incrementing value for each insertion.
 		/// (start_at, increment_by)
 		Counter(u32, u32),
-		/// Insert a I32Const with a random value in [low, high) not divisible by two.
-		/// (low, high)
-		RandomUnaligned(u32, u32),
-		/// Insert a I32Const with a random value in [low, high).
-		/// (low, high)
-		RandomI32(i32, i32),
-		/// Insert the specified amount of I32Const with a random value.
-		RandomI32Repeated(usize),
 		/// Insert the specified amount of I64Const with a random value.
 		RandomI64Repeated(usize),
-		/// Insert a GetLocal with a random offset in [low, high).
-		/// (low, high)
-		RandomGetLocal(u32, u32),
-		/// Insert a SetLocal with a random offset in [low, high).
-		/// (low, high)
-		RandomSetLocal(u32, u32),
-		/// Insert a TeeLocal with a random offset in [low, high).
-		/// (low, high)
-		RandomTeeLocal(u32, u32),
-		/// Insert a GetGlobal with a random offset in [low, high).
-		/// (low, high)
-		RandomGetGlobal(u32, u32),
-		/// Insert a SetGlobal with a random offset in [low, high).
-		/// (low, high)
-		RandomSetGlobal(u32, u32),
 	}
 
 	pub fn plain(instructions: Vec<Instruction>) -> FuncBody {
@@ -466,53 +410,16 @@ pub mod body {
 					*offset += *increment_by;
 					vec![Instruction::I32Const(current as i32)]
 				},
-				DynInstr::RandomUnaligned(low, high) => {
-					let unaligned = rng.gen_range(*low..*high) | 1;
-					vec![Instruction::I32Const(unaligned as i32)]
-				},
-				DynInstr::RandomI32(low, high) => {
-					vec![Instruction::I32Const(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomI32Repeated(num) =>
-					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I32Const).collect(),
 				DynInstr::RandomI64Repeated(num) =>
 					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I64Const).collect(),
-				DynInstr::RandomGetLocal(low, high) => {
-					vec![Instruction::GetLocal(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomSetLocal(low, high) => {
-					vec![Instruction::SetLocal(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomTeeLocal(low, high) => {
-					vec![Instruction::TeeLocal(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomGetGlobal(low, high) => {
-					vec![Instruction::GetGlobal(rng.gen_range(*low..*high))]
-				},
-				DynInstr::RandomSetGlobal(low, high) => {
-					vec![Instruction::SetGlobal(rng.gen_range(*low..*high))]
-				},
 			})
 			.chain(sp_std::iter::once(Instruction::End))
 			.collect();
 		FuncBody::new(Vec::new(), Instructions::new(body))
-	}
-
-	/// Replace the locals of the supplied `body` with `num` i64 locals.
-	pub fn inject_locals(body: &mut FuncBody, num: u32) {
-		use self::elements::Local;
-		*body.locals_mut() = vec![Local::new(num, ValueType::I64)];
 	}
 }
 
 /// The maximum amount of pages any contract is allowed to have according to the current `Schedule`.
 pub fn max_pages<T: Config>() -> u32 {
 	T::Schedule::get().limits.memory_pages
-}
-
-fn inject_gas_metering<T: Config>(module: Module) -> Module {
-	let schedule = T::Schedule::get();
-	let gas_rules = schedule.rules(Determinism::Enforced);
-	let backend = gas_metering::host_function::Injector::new("seal0", "gas");
-	gas_metering::inject(module, backend, &gas_rules).unwrap()
 }

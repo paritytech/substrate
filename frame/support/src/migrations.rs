@@ -15,8 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "try-runtime")]
-use crate::storage::unhashed::contains_prefixed_key;
 use crate::{
 	traits::{GetStorageVersion, NoStorageVersionSet, PalletInfoAccess, StorageVersion},
 	weights::{RuntimeDbWeight, Weight},
@@ -25,8 +23,147 @@ use impl_trait_for_tuples::impl_for_tuples;
 use sp_core::Get;
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
 use sp_std::marker::PhantomData;
+
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
+
+#[cfg(feature = "experimental")]
+use crate::traits::OnRuntimeUpgrade;
+
+/// Make it easier to write versioned runtime upgrades.
+///
+/// [`VersionedRuntimeUpgrade`] allows developers to write migrations without worrying about
+/// checking and setting storage versions. Instead, the developer wraps their migration in this
+/// struct which takes care of version handling using best practices.
+///
+/// It takes 5 type parameters:
+/// - `From`: The version being upgraded from.
+/// - `To`: The version being upgraded to.
+/// - `Inner`: An implementation of `OnRuntimeUpgrade`.
+/// - `Pallet`: The Pallet being upgraded.
+/// - `Weight`: The runtime's RuntimeDbWeight implementation.
+///
+/// When a [`VersionedRuntimeUpgrade`] `on_runtime_upgrade`, `pre_upgrade`, or `post_upgrade`
+/// method is called, the on-chain version of the pallet is compared to `From`. If they match, the
+/// `Inner` equivalent is called and the pallets on-chain version is set to `To` after the
+/// migration. Otherwise, a warning is logged notifying the developer that the upgrade was a noop
+/// and should probably be removed.
+///
+/// ### Examples
+/// ```ignore
+/// // In file defining migrations
+/// pub struct VersionUncheckedMigrateV5ToV6<T>(sp_std::marker::PhantomData<T>);
+/// impl<T: Config> OnRuntimeUpgrade for VersionUncheckedMigrateV5ToV6<T> {
+/// 	// OnRuntimeUpgrade implementation...
+/// }
+///
+/// pub type VersionCheckedMigrateV5ToV6<Runtime, Pallet, DbWeight> =
+/// 	VersionedRuntimeUpgrade<5, 6, VersionUncheckedMigrateV5ToV6<Runtime>, Pallet, DbWeight>;
+///
+/// // Migrations tuple to pass to the Executive pallet:
+/// pub type Migrations = (
+/// 	// other migrations...
+/// 	VersionCheckedMigrateV5ToV6<Runtime, Balances, RuntimeDbWeight>,
+/// 	// other migrations...
+/// );
+/// ```
+#[cfg(feature = "experimental")]
+pub struct VersionedRuntimeUpgrade<const FROM: u16, const TO: u16, Inner, Pallet, Weight> {
+	_marker: PhantomData<(Inner, Pallet, Weight)>,
+}
+
+/// A helper enum to wrap the pre_upgrade bytes like an Option before passing them to post_upgrade.
+/// This enum is used rather than an Option to make the API clearer to the developer.
+#[cfg(feature = "experimental")]
+#[derive(codec::Encode, codec::Decode)]
+pub enum VersionedPostUpgradeData {
+	/// The migration ran, inner vec contains pre_upgrade data.
+	MigrationExecuted(Vec<u8>),
+	/// This migration is a noop, do not run post_upgrade checks.
+	Noop,
+}
+
+/// Implementation of the `OnRuntimeUpgrade` trait for `VersionedRuntimeUpgrade`.
+///
+/// Its main function is to perform the runtime upgrade in `on_runtime_upgrade` only if the on-chain
+/// version of the pallets storage matches `From`, and after the upgrade set the on-chain storage to
+/// `To`. If the versions do not match, it writes a log notifying the developer that the migration
+/// is a noop.
+#[cfg(feature = "experimental")]
+impl<
+		const FROM: u16,
+		const TO: u16,
+		Inner: OnRuntimeUpgrade,
+		Pallet: GetStorageVersion<CurrentStorageVersion = StorageVersion> + PalletInfoAccess,
+		DbWeight: Get<RuntimeDbWeight>,
+	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<FROM, TO, Inner, Pallet, DbWeight>
+{
+	/// Executes pre_upgrade if the migration will run, and wraps the pre_upgrade bytes in
+	/// [`VersionedPostUpgradeData`] before passing them to post_upgrade, so it knows whether the
+	/// migration ran or not.
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		use codec::Encode;
+		let on_chain_version = Pallet::on_chain_storage_version();
+		if on_chain_version == FROM {
+			Ok(VersionedPostUpgradeData::MigrationExecuted(Inner::pre_upgrade()?).encode())
+		} else {
+			Ok(VersionedPostUpgradeData::Noop.encode())
+		}
+	}
+
+	/// Executes the versioned runtime upgrade.
+	///
+	/// First checks if the pallets on-chain storage version matches the version of this upgrade. If
+	/// it matches, it calls `Inner::on_runtime_upgrade`, updates the on-chain version, and returns
+	/// the weight. If it does not match, it writes a log notifying the developer that the migration
+	/// is a noop.
+	fn on_runtime_upgrade() -> Weight {
+		let on_chain_version = Pallet::on_chain_storage_version();
+		if on_chain_version == FROM {
+			log::info!(
+				"Running {} VersionedOnRuntimeUpgrade: version {:?} to {:?}.",
+				Pallet::name(),
+				FROM,
+				TO
+			);
+
+			// Execute the migration
+			let weight = Inner::on_runtime_upgrade();
+
+			// Update the on-chain version
+			StorageVersion::new(TO).put::<Pallet>();
+
+			weight.saturating_add(DbWeight::get().reads_writes(1, 1))
+		} else {
+			log::warn!(
+				"{} VersionedOnRuntimeUpgrade for version {:?} skipped because current on-chain version is {:?}.",
+				Pallet::name(),
+				FROM,
+				on_chain_version
+			);
+			DbWeight::get().reads(1)
+		}
+	}
+
+	/// Executes `Inner::post_upgrade` if the migration just ran.
+	///
+	/// pre_upgrade passes [`VersionedPostUpgradeData::MigrationExecuted`] to post_upgrade if
+	/// the migration ran, and [`VersionedPostUpgradeData::Noop`] otherwise.
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade(
+		versioned_post_upgrade_data_bytes: Vec<u8>,
+	) -> Result<(), sp_runtime::TryRuntimeError> {
+		use codec::DecodeAll;
+		match <VersionedPostUpgradeData>::decode_all(&mut &versioned_post_upgrade_data_bytes[..])
+			.map_err(|_| "VersionedRuntimeUpgrade post_upgrade failed to decode PreUpgradeData")?
+		{
+			VersionedPostUpgradeData::MigrationExecuted(inner_bytes) =>
+				Inner::post_upgrade(inner_bytes),
+			VersionedPostUpgradeData::Noop => Ok(()),
+		}
+	}
+}
 
 /// Can store the current pallet version in storage.
 pub trait StoreCurrentStorageVersion<T: GetStorageVersion + PalletInfoAccess> {
@@ -185,6 +322,8 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+		use crate::storage::unhashed::contains_prefixed_key;
+
 		let hashed_prefix = twox_128(P::get().as_bytes());
 		match contains_prefixed_key(&hashed_prefix) {
 			true => log::info!("Found {} keys pre-removal 👀", P::get()),
@@ -198,6 +337,8 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+		use crate::storage::unhashed::contains_prefixed_key;
+
 		let hashed_prefix = twox_128(P::get().as_bytes());
 		match contains_prefixed_key(&hashed_prefix) {
 			true => {
