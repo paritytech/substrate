@@ -156,9 +156,9 @@ where
 
 	fn step(&mut self) -> (IsFinished, Weight) {
 		let mut iter = if let Some(last_account) = self.last_account.take() {
-			old::ContractInfoOf::<T, Currency>::iter_from(old::ContractInfoOf::<T>::hashed_key_for(
-				last_account,
-			))
+			old::ContractInfoOf::<T, Currency>::iter_from(
+				old::ContractInfoOf::<T, Currency>::hashed_key_for(last_account),
+			)
 		} else {
 			old::ContractInfoOf::<T, Currency>::iter()
 		};
