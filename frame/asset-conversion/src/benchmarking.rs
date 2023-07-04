@@ -29,7 +29,7 @@ use frame_support::{
 };
 use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::{Bounded, StaticLookup};
-use sp_std::prelude::*;
+use sp_std::{ops::Div, prelude::*};
 
 use crate::Pallet as AssetConversion;
 
@@ -55,10 +55,7 @@ where
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	if let Ok(asset_id) = T::MultiAssetIdConverter::try_convert(asset) {
-		T::Currency::set_balance(
-			&caller,
-			BalanceOf::<T>::max_value().checked_div(&1000u32.into()).unwrap_or_default(),
-		);
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value().div(1000u32.into()));
 		assert_ok!(T::Assets::create(asset_id.clone(), caller.clone(), true, 1.into()));
 		assert_ok!(T::Assets::mint_into(asset_id, &caller, INITIAL_ASSET_BALANCE.into()));
 	}
