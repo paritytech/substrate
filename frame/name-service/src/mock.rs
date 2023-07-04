@@ -33,8 +33,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Identity, IdentityLookup},
 };
 
-use frame_system::EnsureRoot;
-
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -119,7 +117,6 @@ impl Config for Test {
 	type MaxSuffixLength = ConstU32<4>;
 	type RegistrationFeePerBlock = ConstU64<1>;
 	type TierDefault = ConstU64<1>;
-	type RegistrationManager = EnsureRoot<Self::AccountId>;
 	type NameServiceResolver = NameService;
 	type PerByteFee = ConstU64<1>;
 	type WeightInfo = ();

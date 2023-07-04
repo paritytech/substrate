@@ -192,9 +192,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type RegistrationFeePerBlock: Get<BalanceOf<Self>>;
 
-		/// The origin that has super-user access to manage all name registrations.
-		type RegistrationManager: EnsureOrigin<Self::RuntimeOrigin>;
-
 		/// An interface to access the name service resolver.
 		type NameServiceResolver: NameServiceResolver<Self>;
 
@@ -319,7 +316,7 @@ pub mod pallet {
 		/// Force the registration of a name hash. It will overwrite any existing name registration,
 		/// returning the deposit to the original owner.
 		///
-		/// Can only be called by the `RegistrationManager` origin.
+		/// Can only be called by the `root` origin.
 		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn force_register(
@@ -328,7 +325,7 @@ pub mod pallet {
 			who: T::AccountId,
 			maybe_expiry: Option<T::BlockNumber>,
 		) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
+			ensure_root(origin)?;
 			Self::do_register(name_hash, who.clone(), who, maybe_expiry, None)?;
 			Ok(())
 		}
@@ -336,11 +333,11 @@ pub mod pallet {
 		/// Force the de-registration of a name hash. It will delete any existing name registration,
 		/// returning the deposit to the original owner.
 		///
-		/// Can only be called by the `RegistrationManager` origin.
+		/// Can only be called by the `root` origin.
 		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
+			ensure_root(origin)?;
 			Self::do_deregister(name_hash);
 			Ok(())
 		}
@@ -595,22 +592,22 @@ pub mod pallet {
 		/// Inserts a suffix for a para ID.
 		///
 		/// Overwrites existing values if already present.
-		/// Can only be called by the `RegistrationManager` origin.
+		/// Can only be called by the `root` origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(15)]
 		#[pallet::weight(0)]
 		pub fn register_para(origin: OriginFor<T>, para: ParaRegistration<T>) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
+			ensure_root(origin)?;
 			ParaRegistrations::<T>::insert(para.id, para.suffix);
 			Ok(())
 		}
 
-		/// Can only be called by the `RegistrationManager` origin.
+		/// Can only be called by the `root` origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(16)]
 		#[pallet::weight(0)]
 		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
-			T::RegistrationManager::ensure_origin(origin)?;
+			ensure_root(origin)?;
 			ensure!(
 				ParaRegistrations::<T>::contains_key(para_id),
 				Error::<T>::ParaRegistrationNotFound

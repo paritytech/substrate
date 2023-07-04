@@ -1234,7 +1234,6 @@ impl pallet_name_service::Config for Runtime {
 	type TierFourLetters = TierFourLetters;
 	type TierDefault = TierDefault;
 	type RegistrationFeePerBlock = RegistrationFeePerBlock;
-	type RegistrationManager = EnsureRoot<Self::AccountId>;
 	type MaxTextLength = MaxTextLength;
 	type MaxSuffixLength = MaxSuffixLength;
 	type PerByteFee = PerByteFee;
