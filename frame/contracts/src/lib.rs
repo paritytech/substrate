@@ -726,7 +726,7 @@ pub mod pallet {
 			}
 
 			output.gas_meter.into_dispatch_result(
-				output.result.map(|(_address, output)| output),
+				output.result.map(|(_address, result)| result),
 				T::WeightInfo::instantiate_with_code(code_len, data_len, salt_len),
 			)
 		}
