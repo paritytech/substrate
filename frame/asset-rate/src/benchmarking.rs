@@ -39,7 +39,7 @@ where
 	}
 }
 
-const ASSET_ID: u32 = 1;
+const SEED: u32 = 1;
 
 fn default_conversion_rate() -> FixedU128 {
 	FixedU128::from_u32(1u32)
@@ -51,7 +51,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn create() -> Result<(), BenchmarkError> {
-		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(ASSET_ID);
+		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(SEED);
 		#[extrinsic_call]
 		_(RawOrigin::Root, asset_kind.clone(), default_conversion_rate());
 
@@ -64,9 +64,8 @@ mod benchmarks {
 
 	#[benchmark]
 	fn update() -> Result<(), BenchmarkError> {
-		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(ASSET_ID);
-		let asset_id: T::AssetId = 
-		assert_ok!(AssetRate::<T>::create(
+		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(SEED);
+		let asset_id: T::AssetId = assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
 			asset_kind.clone(),
 			default_conversion_rate()
@@ -84,7 +83,7 @@ mod benchmarks {
 
 	#[benchmark]
 	fn remove() -> Result<(), BenchmarkError> {
-		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(ASSET_ID);
+		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(SEED);
 		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
 			asset_id.clone(),
