@@ -139,7 +139,6 @@ impl<H> WasmExecutorBuilder<H> {
 		self
 	}
 
-	
 	/// Create the wasm executor and follow/ignore onchain heap pages value.
 	///
 	/// By default this the onchain heap pages value is followed.
