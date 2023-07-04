@@ -169,10 +169,12 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let definition = syn::parse_macro_input!(input as RuntimeDeclaration);
 
 	let res = match definition {
-		RuntimeDeclaration::Implicit(implicit_def) =>
-			construct_runtime_intermediary_expansion(input_copy.into(), implicit_def),
-		RuntimeDeclaration::Explicit(explicit_decl) =>
-			construct_runtime_final_expansion(explicit_decl),
+		RuntimeDeclaration::Implicit(implicit_def) => {
+			construct_runtime_intermediary_expansion(input_copy.into(), implicit_def)
+		},
+		RuntimeDeclaration::Explicit(explicit_decl) => {
+			construct_runtime_final_expansion(explicit_decl)
+		},
 	};
 
 	res.unwrap_or_else(|e| e.to_compile_error()).into()
@@ -213,7 +215,7 @@ fn construct_runtime_final_expansion(
 ) -> Result<TokenStream2> {
 	let ExplicitRuntimeDeclaration {
 		name,
-		where_section: WhereSection { block, node_block, unchecked_extrinsic, interface },
+		where_section: WhereSection { block, node_block, unchecked_extrinsic },
 		pallets,
 		pallets_token,
 	} = definition;
@@ -230,7 +232,7 @@ fn construct_runtime_final_expansion(
 		return Err(syn::Error::new(
 			system_pallet.name.span(),
 			"`System` pallet declaration is feature gated, please remove any `#[cfg]` attributes",
-		))
+		));
 	}
 
 	let features = pallets
@@ -252,14 +254,6 @@ fn construct_runtime_final_expansion(
 	let hidden_crate_name = "construct_runtime";
 	let scrate = generate_crate_access(hidden_crate_name, "frame-support");
 	let scrate_decl = generate_hidden_includes(hidden_crate_name, "frame-support");
-
-	// If interface is set, then index 255 MUST NOT be used
-	if interface.is_some() && pallets.iter().any(|pallet| pallet.index == 255) {
-		return Err(syn::Error::new(
-			name.span(),
-			"Where clause defines interface, but index 255 is not free in Runtime.",
-		))
-	}
 
 	let outer_event = expand::expand_outer_event(&name, &pallets, &scrate)?;
 	let outer_origin = expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;

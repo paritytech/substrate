@@ -112,7 +112,6 @@ pub struct WhereSection {
 	pub block: syn::TypePath,
 	pub node_block: syn::TypePath,
 	pub unchecked_extrinsic: syn::TypePath,
-	pub interface: Option<syn::TypePath>,
 }
 
 impl Parse for WhereSection {
@@ -134,9 +133,6 @@ impl Parse for WhereSection {
 		let node_block = remove_kind(input, WhereKind::NodeBlock, &mut definitions)?.value;
 		let unchecked_extrinsic =
 			remove_kind(input, WhereKind::UncheckedExtrinsic, &mut definitions)?.value;
-		let interface = remove_kind(input, WhereKind::Interface, &mut definitions)
-			.ok()
-			.map(|def| def.value);
 
 		if let Some(WhereDefinition { ref kind_span, ref kind, .. }) = definitions.first() {
 			let msg = format!(
@@ -145,7 +141,7 @@ impl Parse for WhereSection {
 			);
 			return Err(Error::new(*kind_span, msg));
 		}
-		Ok(Self { block, node_block, unchecked_extrinsic, interface })
+		Ok(Self { block, node_block, unchecked_extrinsic })
 	}
 }
 
@@ -154,7 +150,6 @@ pub enum WhereKind {
 	Block,
 	NodeBlock,
 	UncheckedExtrinsic,
-	Interface,
 }
 
 #[derive(Debug)]
