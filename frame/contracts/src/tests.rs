@@ -27,9 +27,9 @@ use crate::{
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CollectEvents, Config, ContractInfo, ContractInfoOf, DebugInfo,
-	DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, NoopMigration,
-	Origin, Pallet, PristineCode, Schedule,
+	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
+	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress,
+	NoopMigration, Origin, Pallet, PristineCode, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -104,6 +104,7 @@ pub mod test_utils {
 			*counter
 		});
 		set_balance(address, <Test as Config>::Currency::minimum_balance() * 10);
+		<CodeInfoOf<Test>>::insert(code_hash, CodeInfo::new(address.clone()));
 		let contract = <ContractInfo<Test>>::new(&address, nonce, code_hash).unwrap();
 		<ContractInfoOf<Test>>::insert(address, contract);
 	}
@@ -472,15 +473,26 @@ pub const GAS_LIMIT: Weight = Weight::from_parts(100_000_000_000, 3 * 1024 * 102
 pub struct ExtBuilder {
 	existential_deposit: u64,
 	storage_version: Option<StorageVersion>,
+	code_hashes: Vec<CodeHash<Test>>,
 }
+
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { existential_deposit: ExistentialDeposit::get(), storage_version: None }
+		Self {
+			existential_deposit: ExistentialDeposit::get(),
+			storage_version: None,
+			code_hashes: vec![],
+		}
 	}
 }
+
 impl ExtBuilder {
 	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
 		self.existential_deposit = existential_deposit;
+		self
+	}
+	pub fn with_code_hashes(mut self, code_hashes: Vec<CodeHash<Test>>) -> Self {
+		self.code_hashes = code_hashes;
 		self
 	}
 	pub fn set_associated_consts(&self) {
@@ -509,6 +521,11 @@ impl ExtBuilder {
 				storage_version.put::<Pallet<Test>>();
 			}
 			System::set_block_number(1)
+		});
+		ext.execute_with(|| {
+			for code_hash in self.code_hashes {
+				CodeInfoOf::<Test>::insert(code_hash, crate::CodeInfo::new(ALICE));
+			}
 		});
 		ext
 	}
@@ -5538,7 +5555,7 @@ fn native_dependency_deposit_works() {
 			)
 			.unwrap();
 
-			// Upload set_code_hash contracts if using Code::Existing.
+			// Upload `set_code_hash` contracts if using Code::Existing.
 			let add_upload_deposit = match code {
 				Code::Existing(_) => {
 					Contracts::upload_code(

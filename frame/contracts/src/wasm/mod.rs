@@ -303,6 +303,16 @@ impl<T: Config> CodeInfo<T> {
 		self.refcount
 	}
 
+	#[cfg(test)]
+	pub fn new(owner: T::AccountId) -> Self {
+		CodeInfo {
+			owner,
+			deposit: Default::default(),
+			refcount: 0,
+			determinism: Determinism::Enforced,
+		}
+	}
+
 	/// Returns the deposit of the module.
 	pub fn deposit(&self) -> BalanceOf<T> {
 		self.deposit
