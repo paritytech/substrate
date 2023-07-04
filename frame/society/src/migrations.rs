@@ -104,12 +104,12 @@ impl<
 	}
 }
 
-pub type VersionCheckedMigrateToV2<Runtime, Pallet, I, PastPayouts> = VersionedRuntimeUpgrade<
+pub type VersionCheckedMigrateToV2<T, I, PastPayouts> = VersionedRuntimeUpgrade<
 	0,
 	2,
-	VersionUncheckedMigrateToV2<Runtime, I, PastPayouts>,
-	Pallet,
-	<Runtime as frame_system::Config>::DbWeight,
+	VersionUncheckedMigrateToV2<T, I, PastPayouts>,
+	crate::pallet::Pallet<T, I>,
+	<T as frame_system::Config>::DbWeight,
 >;
 
 pub(crate) mod old {
@@ -255,7 +255,7 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 ) -> Weight {
 	// First check that this is the original state layout. This is easy since the new layout
 	// contains a new Members value, which did not exist in the old layout.
-	if Members::<T, I>::iter().next().is_some() {
+	if !can_migrate::<T, I>() {
 		log::warn!(target: TARGET, "Skipping MigrateToV2 migration since it appears unapplicable");
 		// Already migrated or no data to migrate: Bail.
 		return T::DbWeight::get().reads(1)
