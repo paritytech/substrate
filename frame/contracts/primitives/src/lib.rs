@@ -160,6 +160,7 @@ pub enum Code<Hash> {
 	/// The code hash of an on-chain wasm blob.
 	Existing(Hash),
 }
+
 /// The amount of balance that was either charged or refunded in order to pay for storage.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, Clone, TypeInfo)]
 pub enum StorageDeposit<Balance> {

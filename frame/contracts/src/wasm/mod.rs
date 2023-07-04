@@ -165,8 +165,8 @@ impl<T: Config> WasmBlob<T> {
 	///
 	/// Otherwise the code is stored when [`<Self as Executable>::execute`][`Executable::execute`]
 	/// is called.
-	pub fn store(self) -> DispatchResult {
-		Self::store_code(self, false)
+	pub fn store(&mut self) -> DispatchResult {
+		self.store_code(false)
 	}
 
 	/// Remove the code from storage and refund the deposit to its owner.
@@ -254,8 +254,8 @@ impl<T: Config> WasmBlob<T> {
 	///
 	/// Increments the reference count of the in-storage `WasmBlob`, if it already exists in
 	/// storage.
-	fn store_code(mut module: Self, instantiated: bool) -> DispatchResult {
-		let code_hash = &module.code_hash().clone();
+	fn store_code(&mut self, instantiated: bool) -> DispatchResult {
+		let code_hash = self.code_hash().clone();
 		<CodeInfoOf<T>>::mutate(code_hash, |stored_code_info| {
 			match stored_code_info {
 				// Instantiate existing contract.
@@ -279,15 +279,12 @@ impl<T: Config> WasmBlob<T> {
 				None => {
 					// This `None` case happens only in freshly uploaded modules. This means that
 					// the `owner` is always the origin of the current transaction.
-					T::Currency::reserve(&module.code_info.owner, module.code_info.deposit)
+					T::Currency::reserve(&self.code_info.owner, self.code_info.deposit)
 						.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
-					module.code_info.refcount = if instantiated { 1 } else { 0 };
-					<PristineCode<T>>::insert(code_hash, module.code);
-					*stored_code_info = Some(module.code_info);
-					<Pallet<T>>::deposit_event(
-						vec![*code_hash],
-						Event::CodeStored { code_hash: *code_hash },
-					);
+					self.code_info.refcount = if instantiated { 1 } else { 0 };
+					<PristineCode<T>>::insert(code_hash, &self.code);
+					*stored_code_info = Some(self.code_info.clone());
+					<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeStored { code_hash });
 					Ok(())
 				},
 			}
@@ -397,7 +394,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 	}
 
 	fn execute<E: Ext<T = T>>(
-		self,
+		mut self,
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
@@ -447,7 +444,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 
 		// We store before executing so that the code hash is available in the constructor.
 		if let &ExportedFunction::Constructor = function {
-			Self::store_code(self, true)?;
+			self.store_code(true)?;
 		}
 
 		let result = exported_func.call(&mut store, &[], &mut []);

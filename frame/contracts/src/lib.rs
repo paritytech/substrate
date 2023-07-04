@@ -1465,7 +1465,7 @@ impl<T: Config> Pallet<T> {
 		mut debug_message: Option<&mut DebugBufferVec<T>>,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module =
+		let mut module =
 			WasmBlob::from_code(code, &schedule, origin, determinism).map_err(|(err, msg)| {
 				debug_message.as_mut().map(|d| d.try_extend(msg.bytes()));
 				err
