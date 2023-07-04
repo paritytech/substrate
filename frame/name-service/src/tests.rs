@@ -453,11 +453,11 @@ fn set_address_works() {
 		let addr_to_set = 1;
 
 		// set address to `1`
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(2), name_hash, addr_to_set));
+		assert_ok!(NameService::set_address(RuntimeOrigin::signed(2), name_hash, addr_to_set, 1));
 		// record was saved
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 		// address is correct
-		assert_eq!(AddressResolver::<Test>::get(name_hash).unwrap(), addr_to_set);
+		assert_eq!(AddressResolver::<Test>::get(name_hash).unwrap(), (addr_to_set, 1));
 	});
 }
 
@@ -470,7 +470,7 @@ fn set_address_handles_errors() {
 
 		// Registration not found
 		assert_noop!(
-			NameService::set_address(RuntimeOrigin::signed(non_owner), some_name_hash, 2),
+			NameService::set_address(RuntimeOrigin::signed(non_owner), some_name_hash, 2, 1),
 			Error::<Test>::RegistrationNotFound
 		);
 
@@ -479,12 +479,12 @@ fn set_address_handles_errors() {
 
 		// Not registration owner
 		assert_noop!(
-			NameService::set_address(RuntimeOrigin::signed(non_owner), name_hash, 3),
+			NameService::set_address(RuntimeOrigin::signed(non_owner), name_hash, 3, 1),
 			Error::<Test>::NotController,
 		);
 
 		// set address
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, 3));
+		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, 3, 1));
 	});
 }
 
@@ -500,7 +500,7 @@ fn deregister_works_owner() {
 		assert_eq!(registration.deposit, None);
 
 		// set address
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, owner));
+		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, owner, 1));
 
 		// deregister before expiry
 		add_blocks(1000);
@@ -603,7 +603,7 @@ fn force_deregister_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
 		// set some address to deregister
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(2), name_hash, 4));
+		assert_ok!(NameService::set_address(RuntimeOrigin::signed(2), name_hash, 4, 1));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 
 		// force the deregistration of `name_hash`
@@ -800,7 +800,7 @@ fn deregister_subnode_owner_works() {
 		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address));
+		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address, 1));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 198);
 
@@ -838,7 +838,7 @@ fn deregister_subnode_non_owner_works() {
 		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address));
+		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address, 1));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 198);
 
@@ -890,7 +890,7 @@ fn deregister_subnode_handles_errors() {
 		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address));
+		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address, 1));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 198);
 

@@ -22,11 +22,12 @@ use frame_support::{pallet_prelude::*, traits::ReservableCurrency};
 
 pub trait NameServiceResolver<T: Config> {
 	/// Get the native address associated with this name hash.
-	fn get_address(name_hash: NameHash) -> Option<T::AccountId>;
+	fn get_address(name_hash: NameHash) -> Option<(T::AccountId, u32)>;
 	/// Set the native address associated with this name hash.
 	fn set_address(
 		name_hash: NameHash,
 		address: T::AccountId,
+		para_id: u32,
 		depositor: T::AccountId,
 	) -> DispatchResult;
 
@@ -51,18 +52,20 @@ pub trait NameServiceResolver<T: Config> {
 
 impl<T: Config> NameServiceResolver<T> for Pallet<T> {
 	/// Get the native address associated with this name hash.
-	fn get_address(name_hash: NameHash) -> Option<T::AccountId> {
+	fn get_address(name_hash: NameHash) -> Option<(T::AccountId, u32)> {
 		AddressResolver::<T>::get(name_hash)
 	}
 	/// Set the native address associated with this name hash.
 	///
 	/// We allow a user to set this value without paying any additional deposits.
+	/// NOTE: do we want additional deposit here?. already deposited for the name hash itself.
 	fn set_address(
 		name_hash: NameHash,
 		address: T::AccountId,
+		para_id: u32,
 		_depositor: T::AccountId,
 	) -> DispatchResult {
-		AddressResolver::<T>::insert(name_hash, address.clone());
+		AddressResolver::<T>::insert(name_hash, (address.clone(), para_id));
 		Self::deposit_event(Event::<T>::AddressSet { name_hash, address });
 		Ok(())
 	}

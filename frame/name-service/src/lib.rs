@@ -230,10 +230,11 @@ pub mod pallet {
 		Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>,
 	>;
 
-	/// This resolver maps name hashes to an account
+	/// This resolver maps name hashes to a tuple of the account and `para_id` associated with the
+	/// account.
 	#[pallet::storage]
 	pub(super) type AddressResolver<T: Config> =
-		StorageMap<_, Blake2_128Concat, NameHash, T::AccountId>;
+		StorageMap<_, Blake2_128Concat, NameHash, (T::AccountId, u32)>;
 
 	/// This resolver maps name hashes to an account
 	#[pallet::storage]
@@ -543,12 +544,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name_hash: NameHash,
 			address: T::AccountId,
+			para_id: u32,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
+			ensure!(
+				ParaRegistrations::<T>::contains_key(para_id),
+				Error::<T>::ParaRegistrationNotFound
+			);
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotController);
-			T::NameServiceResolver::set_address(name_hash, address, sender)?;
+			T::NameServiceResolver::set_address(name_hash, address, para_id, sender)?;
 			Ok(())
 		}
 
@@ -601,7 +607,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
 			ensure!(
-				ParaRegistrations::<T>::get(&para_id).is_none(),
+				!ParaRegistrations::<T>::contains_key(para_id),
 				Error::<T>::ParaRegistrationExists
 			);
 			ParaRegistrations::<T>::insert(para_id, suffix);
@@ -614,7 +620,7 @@ pub mod pallet {
 		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
 			ensure!(
-				!ParaRegistrations::<T>::get(&para_id).is_none(),
+				ParaRegistrations::<T>::contains_key(para_id),
 				Error::<T>::ParaRegistrationNotFound
 			);
 			ParaRegistrations::<T>::remove(para_id);

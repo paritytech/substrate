@@ -20,12 +20,12 @@
 #![cfg(test)]
 
 use super::*;
-
 use crate as pallet_name_service;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
 	weights::Weight,
+	BoundedVec,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -135,7 +135,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	.unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
+	ext.execute_with(|| {
+		System::set_block_number(1);
+		let suffix: BoundedVec<u8, _> = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+		ParaRegistrations::<Test>::insert(1, suffix);
+	});
 	ext
 }
 
