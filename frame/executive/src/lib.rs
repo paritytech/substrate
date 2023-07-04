@@ -305,7 +305,7 @@ impl<
 			Ok(r.map(|_| ()).map_err(|e| e.error))
 		};
 
-		// Apply all inherents:
+		// Apply inherents:
 		for e in extrinsics.iter().take(num_inherents) {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
 				frame_support::log::error!(
@@ -318,17 +318,20 @@ impl<
 		}
 
 		Self::after_inherents();
-		if mode == RuntimeExecutiveMode::Normal {
-			// Apply transactions:
-			for e in extrinsics.iter().skip(num_inherents) {
-				if let Err(err) = try_apply_extrinsic(e.clone()) {
-					frame_support::log::error!(
-						target: LOG_TARGET, "extrinsics {:?} failed due to {:?}. Aborting the rest of the block execution.",
-						e,
-						err,
-					);
-					break
-				}
+		if mode == RuntimeExecutiveMode::Minimal {
+			if num_inherents < extrinsics.len() {
+				return Err(InvalidTransaction::NotMandatory.into())
+			}
+		}
+		// Apply transactions:
+		for e in extrinsics.iter().skip(num_inherents) {
+			if let Err(err) = try_apply_extrinsic(e.clone()) {
+				frame_support::log::error!(
+					target: LOG_TARGET, "extrinsics {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					e,
+					err,
+				);
+				break
 			}
 		}
 
@@ -544,7 +547,8 @@ impl<
 			Self::after_inherents();
 			if mode == RuntimeExecutiveMode::Minimal {
 				if inherents < extrinsics.len() {
-					// Note: It would be possible to not explicitly panic here since the state-root check should already catch any mismatch, but this makes it easier to debug.
+					// Note: It would be possible to not explicitly panic here since the state-root
+					// check should already catch any mismatch, but this makes it easier to debug.
 					panic!("Only inherents are allowed in 'Minimal' blocks");
 				}
 			}
@@ -589,7 +593,7 @@ impl<
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
 		let block_number = <frame_system::Pallet<System>>::block_number();
 
-		// TODO MBMs will conditionally run this.
+		// TODO MBMs will conditionally skip this.
 		Self::on_idle_hook(block_number);
 
 		Self::on_finalize_hook(block_number);

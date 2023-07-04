@@ -1073,13 +1073,50 @@ fn try_execute_block_works() {
 	});
 }
 
+/// Same as `extrinsic_while_exts_forbidden_errors` but using the try-runtime function.
+#[test]
+#[cfg(feature = "try-runtime")]
+#[should_panic = "Only inherents are allowed in 'Minimal' blocks"]
+fn try_execute_ext_forbidden_errors() {
+	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
+	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
+
+	let header = new_test_ext(1).execute_with(|| {
+		// Let's build some fake block.
+		Executive::initialize_block(&Header::new(
+			1,
+			H256::default(),
+			H256::default(),
+			[69u8; 32].into(),
+			Digest::default(),
+		));
+
+		Executive::apply_extrinsic(xt1.clone()).unwrap().unwrap();
+		Executive::apply_extrinsic(xt2.clone()).unwrap().unwrap();
+
+		Executive::finalize_block()
+	});
+
+	new_test_ext(1).execute_with(|| {
+		// Tell `after_inherents` to forbid extrinsics:
+		MockedMode::set(RuntimeExecutiveMode::Minimal);
+		Executive::try_execute_block(
+			Block::new(header, vec![xt1, xt2]),
+			true,
+			true,
+			frame_try_runtime::TryStateSelect::All,
+		)
+		.unwrap();
+	});
+}
+
 /// Check that `ensure_inherents_are_first` reports the correct indices.
 #[test]
 fn ensure_inherents_are_first_works() {
 	let in1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
 
-	// Header is not checked.
+	// Mocked empty header:
 	let header = new_test_ext(1).execute_with(|| Executive::finalize_block());
 
 	new_test_ext(1).execute_with(|| {

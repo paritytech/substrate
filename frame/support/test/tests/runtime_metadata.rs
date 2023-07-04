@@ -206,7 +206,7 @@ fn runtime_metadata() {
 						name: "header",
 						ty: meta_type::<&<Block as BlockT>::Header>(),
 					}],
-					output: meta_type::<()>(),
+					output: meta_type::<sp_runtime::RuntimeExecutiveMode>(),
 					docs: maybe_docs(vec![" Initialize a block with the given header."]),
 				},
 			],
