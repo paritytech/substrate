@@ -1485,7 +1485,6 @@ impl<T: Config> Pallet<T> {
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
 		}
-		// let result = CodeUploadReturnValue { code_hash: *module.code_hash(), deposit };
 		module.store()?;
 		Ok((module, deposit))
 	}
