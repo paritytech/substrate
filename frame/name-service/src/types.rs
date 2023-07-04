@@ -50,6 +50,17 @@ pub type BoundedNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLength>;
 pub type BoundedTextOf<T> = BoundedVec<u8, <T as Config>::MaxTextLength>;
 pub type BoundedSuffixOf<T> = BoundedVec<u8, <T as Config>::MaxSuffixLength>;
 
+#[derive(
+	Encode, Decode, DefaultNoBound, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone,
+)]
+#[scale_info(skip_type_params(T))]
+pub struct ParaRegistration<T: Config> {
+	// The para ID.
+	pub id: u32,
+	/// The suffix for the para ID.
+	pub suffix: BoundedSuffixOf<T>,
+}
+
 /// The commitment a user makes before registering the name.
 #[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct Commitment<AccountId, Balance, BlockNumber> {

@@ -18,7 +18,7 @@
 //! Handles the mapping of a name registration to an name record.
 
 use crate::{types::*, *};
-use frame_support::{pallet_prelude::*, traits::ReservableCurrency};
+use frame_support::traits::ReservableCurrency;
 
 pub trait NameServiceResolver<T: Config> {
 	/// Get the native address associated with this name hash.

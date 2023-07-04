@@ -18,9 +18,8 @@
 //! Handles the commit and reveal part of the registration process.
 
 use crate::{types::*, *};
-use frame_support::{
-	pallet_prelude::*,
-	traits::{Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons},
+use frame_support::traits::{
+	Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons,
 };
 use sp_runtime::traits::{Saturating, Zero};
 use sp_std::prelude::*;

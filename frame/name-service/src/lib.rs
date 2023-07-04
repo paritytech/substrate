@@ -92,14 +92,13 @@
 //! underlying account that the node is aliasing when used for transferring tokens.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-use codec::Codec;
-use frame_support::{
-	ensure,
-	pallet_prelude::{MaxEncodedLen, *},
-	traits::Get,
-};
-use scale_info::TypeInfo;
-use sp_std::{fmt::Debug, vec::Vec};
+use frame_support::{ensure, pallet_prelude::*, traits::Get, DefaultNoBound};
+use sp_std::vec::Vec;
+
+pub use crate::types::*;
+pub use pallet::*;
+pub use resolver::NameServiceResolver;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod mock;
@@ -117,23 +116,10 @@ mod subnodes;
 mod types;
 mod weights;
 
-pub use pallet::*;
-pub use resolver::NameServiceResolver;
-pub use weights::WeightInfo;
-
-// Possible operations on para registration for this pallet.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, PartialEq, Clone)]
-pub enum ConfigOp<T: Codec + Debug> {
-	/// Set the given value.
-	Set(T),
-	/// Remove from storage.
-	Remove,
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use crate::{resolver::NameServiceResolver, types::*};
+	use crate::resolver::NameServiceResolver;
 	use frame_support::traits::{OnUnbalanced, ReservableCurrency, StorageVersion};
 	use frame_system::{ensure_signed, pallet_prelude::*};
 	use sp_runtime::traits::{Convert, Zero};
@@ -325,8 +311,6 @@ pub mod pallet {
 		ExpiryInvalid,
 		/// The name provided does not match the expected hash.
 		BadName,
-		/// The para ID has already been registered.
-		ParaRegistrationExists,
 		/// The para ID was not found.
 		ParaRegistrationNotFound,
 	}
@@ -610,25 +594,20 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Inserts a suffix for a para ID.
+		///
+		/// Overwrites existing values if already present.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(15)]
 		#[pallet::weight(0)]
-		pub fn register_para(
-			origin: OriginFor<T>,
-			para_id: u32,
-			suffix: BoundedSuffixOf<T>,
-		) -> DispatchResult {
+		pub fn register_para(origin: OriginFor<T>, para: ParaRegistration<T>) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;
-			ensure!(
-				!ParaRegistrations::<T>::contains_key(para_id),
-				Error::<T>::ParaRegistrationExists
-			);
-			ParaRegistrations::<T>::insert(para_id, suffix);
+			ParaRegistrations::<T>::insert(para.id, para.suffix);
 			Ok(())
 		}
 
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
-		#[pallet::call_index(16)]
+		#[pallet::call_index(17)]
 		#[pallet::weight(0)]
 		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
 			T::RegistrationManager::ensure_origin(origin)?;

@@ -18,10 +18,7 @@
 //! Handles basic registration and deregistration of names.
 
 use crate::{types::*, *};
-use frame_support::{
-	pallet_prelude::*,
-	traits::{BalanceStatus, ReservableCurrency},
-};
+use frame_support::traits::{BalanceStatus, ReservableCurrency};
 use sp_runtime::traits::Zero;
 
 impl<T: Config> Pallet<T> {
