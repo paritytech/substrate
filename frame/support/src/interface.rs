@@ -19,7 +19,7 @@ use crate::{
 	dispatch::{CallMetadata, DispatchInfo, DispatchResultWithPostInfo, PostDispatchInfo},
 	traits::{EnqueueMessage, GetCallMetadata, UnfilteredDispatchable},
 };
-use codec::{Codec, Decode, Encode, Error, Input, MaxEncodedLen};
+use codec::{Codec, Decode, Encode, Error, Input, MaxEncodedLen, Output};
 use frame_support::dispatch::DispatchErrorWithPostInfo;
 use frame_support::Parameter;
 use scale_info::{Type, TypeInfo};
@@ -123,8 +123,24 @@ impl<T: Selector> Clone for Select<T> {
 }
 
 impl<T: Selector> Encode for Select<T> {
+	fn size_hint(&self) -> usize {
+		self.from.size_hint()
+	}
+
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.from.using_encoded(f)
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		self.from.encode()
+	}
+
+	fn encode_to<O: Output + ?Sized>(&self, dest: &mut O) {
+		self.from.encode_to(dest)
+	}
+
+	fn encoded_size(&self) -> usize {
+		self.from.encoded_size()
 	}
 }
 
