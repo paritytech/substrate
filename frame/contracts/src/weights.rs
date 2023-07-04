@@ -126,6 +126,16 @@ pub trait WeightInfo {
 	fn seal_account_reentrance_count(r: u32, ) -> Weight;
 	fn seal_instantiation_nonce(r: u32, ) -> Weight;
 	fn instr_i64const(r: u32, ) -> Weight;
+	fn add_delegate_dependency(_r: u32,) -> Weight {
+		return Weight::zero()
+	}
+	fn remove_delegate_dependency(_r: u32,) -> Weight {
+		return Weight::zero()
+	}
+	fn v13_migration_step() -> Weight {
+		return Weight::zero()
+	}
+
 }
 
 /// Weights for pallet_contracts using the Substrate node and recommended hardware.

@@ -19,9 +19,10 @@
 
 use crate::{
 	storage::{ContractInfo, DepositAccount},
-	BalanceOf, Config, Error, Inspect, Origin, Pallet, System,
+	BalanceOf, CodeInfoOf, Config, Error, Inspect, Origin, Pallet, StorageDeposit as Deposit,
+	System,
 };
-use codec::Encode;
+
 use frame_support::{
 	dispatch::{fmt::Debug, DispatchError},
 	ensure,
@@ -31,7 +32,6 @@ use frame_support::{
 	},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
-use pallet_contracts_primitives::StorageDeposit as Deposit;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	FixedPointNumber, FixedU128,
@@ -406,6 +406,16 @@ where
 		};
 	}
 
+	/// Add a deposit charge
+	///
+	/// Use this method instead of `charge` when the charge is not the result of a storage change.
+	/// This is the case when a delegate dependency is added or removed, or when the code_hash is
+	/// updated.
+	pub fn charge_deposit(&mut self, deposit_account: DepositAccount<T>, amount: DepositOf<T>) {
+		self.total_deposit = self.total_deposit.saturating_add(&amount);
+		self.charges.push(Charge { deposit_account, amount, terminated: false });
+	}
+
 	/// Charge from `origin` a storage deposit for contract instantiation.
 	///
 	/// This immediately transfers the balance in order to create the account.
@@ -416,24 +426,19 @@ where
 		info: &mut ContractInfo<T>,
 	) -> Result<DepositOf<T>, DispatchError> {
 		debug_assert!(self.is_alive());
-
 		let ed = Pallet::<T>::min_balance();
-		let mut deposit =
-			Diff { bytes_added: info.encoded_size() as u32, items_added: 1, ..Default::default() }
-				.update_contract::<T>(None);
 
-		// Instantiate needs to transfer at least the minimum balance in order to pull the
-		// deposit account into existence.
-		// We also add another `ed` here which goes to the contract's own account into existence.
-		deposit = deposit.max(Deposit::Charge(ed)).saturating_add(&Deposit::Charge(ed));
-		if deposit.charge_or_zero() > self.limit {
+		let code_info = CodeInfoOf::<T>::get(info.code_hash).ok_or(Error::<T>::CodeNotFound)?;
+		let deposit = info.update_base_deposit(code_info.deposit());
+		if deposit > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
+
+		let deposit = Deposit::Charge(deposit);
 
 		// We do not increase `own_contribution` because this will be charged later when the
 		// contract execution does conclude and hence would lead to a double charge.
 		self.total_deposit = deposit.clone();
-		info.storage_base_deposit = deposit.charge_or_zero();
 
 		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
 		// However, we need to charge immediately so that the account is created before
@@ -664,6 +669,7 @@ mod tests {
 			storage_byte_deposit: info.bytes_deposit,
 			storage_item_deposit: info.items_deposit,
 			storage_base_deposit: Default::default(),
+			delegate_dependencies: Default::default(),
 		}
 	}
 

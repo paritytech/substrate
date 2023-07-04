@@ -267,6 +267,10 @@ pub enum RuntimeCosts {
 	AccountEntranceCount,
 	/// Weight of calling `instantiation_nonce`
 	InstantationNonce,
+	/// Weight of calling `add_delegate_dependency`
+	AddDelegateDependency,
+	/// Weight of calling `remove_delegate_dependency`
+	RemoveDelegateDependency,
 }
 
 impl RuntimeCosts {
@@ -348,6 +352,8 @@ impl RuntimeCosts {
 			ReentrantCount => s.reentrance_count,
 			AccountEntranceCount => s.account_reentrance_count,
 			InstantationNonce => s.instantiation_nonce,
+			AddDelegateDependency => s.add_delegate_dependency,
+			RemoveDelegateDependency => s.remove_delegate_dependency,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -2820,5 +2826,29 @@ pub mod env {
 	fn instantiation_nonce(ctx: _, _memory: _) -> Result<u64, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::InstantationNonce)?;
 		Ok(ctx.ext.nonce())
+	}
+
+	#[unstable]
+	fn add_delegate_dependency(
+		ctx: _,
+		memory: _,
+		code_hash_ptr: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::AddDelegateDependency)?;
+		let code_hash = ctx.read_sandbox_memory_as(memory, code_hash_ptr)?;
+		ctx.ext.add_delegate_dependency(code_hash)?;
+		Ok(ReturnCode::Success)
+	}
+
+	#[unstable]
+	fn remove_delegate_dependency(
+		ctx: _,
+		memory: _,
+		code_hash_ptr: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::RemoveDelegateDependency)?;
+		let code_hash = ctx.read_sandbox_memory_as(memory, code_hash_ptr)?;
+		ctx.ext.remove_delegate_dependency(&code_hash)?;
+		Ok(ReturnCode::Success)
 	}
 }
