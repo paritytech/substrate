@@ -22,7 +22,6 @@ use frame_support::{
 	traits::ConstU32,
 };
 use scale_info::{form::MetaForm, meta_type};
-use sp_runtime::traits::Block as BlockT;
 
 pub type BlockNumber = u64;
 pub type Index = u64;
@@ -105,9 +104,6 @@ sp_api::impl_runtime_apis! {
 			unimplemented!()
 		}
 		fn execute_block(_: Block) {
-			unimplemented!()
-		}
-		fn initialize_block(_: &<Block as BlockT>::Header) -> sp_runtime::RuntimeExecutiveMode {
 			unimplemented!()
 		}
 	}
@@ -199,15 +195,6 @@ fn runtime_metadata() {
 					}],
 					output: meta_type::<()>(),
 					docs: maybe_docs(vec![" Execute the given block."]),
-				},
-				RuntimeApiMethodMetadataIR {
-					name: "initialize_block",
-					inputs: vec![RuntimeApiMethodParamMetadataIR::<MetaForm> {
-						name: "header",
-						ty: meta_type::<&<Block as BlockT>::Header>(),
-					}],
-					output: meta_type::<sp_runtime::RuntimeExecutiveMode>(),
-					docs: maybe_docs(vec![" Initialize a block with the given header."]),
 				},
 			],
 			docs: maybe_docs(vec![

@@ -24,8 +24,9 @@ use log::trace;
 
 use codec::Codec;
 
+use sc_block_builder::BlockBuilderApi;
 use sc_client_api::{backend::AuxStore, UsageProvider};
-use sp_api::{Core, ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::{AppCrypto, AppPublic};
 use sp_blockchain::Result as CResult;
 use sp_consensus::Error as ConsensusError;
@@ -201,7 +202,7 @@ where
 	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B>,
-	C::Api: AuraApi<B, A>,
+	C::Api: AuraApi<B, A> + BlockBuilderApi<B>,
 {
 	let runtime_api = client.runtime_api();
 

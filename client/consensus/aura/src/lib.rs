@@ -36,6 +36,7 @@ use futures::prelude::*;
 
 use codec::{Codec, Decode, Encode};
 
+use sc_block_builder::BlockBuilderApi;
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, StateAction};
 use sc_consensus_slots::{
@@ -43,7 +44,7 @@ use sc_consensus_slots::{
 	SlotInfo, StorageChanges,
 };
 use sc_telemetry::TelemetryHandle;
-use sp_api::{Core, ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppPublic;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
@@ -177,7 +178,7 @@ where
 	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>>,
+	C::Api: AuraApi<B, AuthorityId<P>> + BlockBuilderApi<B>,
 	SC: SelectChain<B>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
@@ -278,7 +279,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>>,
+	C::Api: AuraApi<B, AuthorityId<P>> + BlockBuilderApi<B>,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	P: Pair + Send + Sync,
@@ -329,7 +330,7 @@ impl<B, C, E, I, P, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + HeaderBackend<B> + Sync,
-	C::Api: AuraApi<B, AuthorityId<P>>,
+	C::Api: AuraApi<B, AuthorityId<P>> + BlockBuilderApi<B>,
 	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
@@ -518,7 +519,7 @@ where
 	A: Codec + Debug,
 	B: BlockT,
 	C: ProvideRuntimeApi<B>,
-	C::Api: AuraApi<B, A>,
+	C::Api: AuraApi<B, A> + BlockBuilderApi<B>,
 {
 	let runtime_api = client.runtime_api();
 

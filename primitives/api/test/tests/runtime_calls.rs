@@ -17,7 +17,8 @@
 
 use std::panic::UnwindSafe;
 
-use sp_api::{ApiExt, Core, ProvideRuntimeApi};
+use sc_block_builder::BlockBuilderApi;
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_runtime::{
 	traits::{HashFor, Header as HeaderT},
 	TransactionOutcome,

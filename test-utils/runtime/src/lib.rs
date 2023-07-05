@@ -485,11 +485,6 @@ impl_runtime_apis! {
 			log::trace!(target: LOG_TARGET, "execute_block: {block:#?}");
 			Executive::execute_block(block);
 		}
-
-		fn initialize_block(header: &<Block as BlockT>::Header) -> sp_runtime::RuntimeExecutiveMode {
-			log::trace!(target: LOG_TARGET, "initialize_block: {header:#?}");
-			Executive::initialize_block(header)
-		}
 	}
 
 	impl sp_api::Metadata<Block> for Runtime {
@@ -520,6 +515,11 @@ impl_runtime_apis! {
 	impl sp_block_builder::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 			Executive::apply_extrinsic(extrinsic)
+		}
+
+		fn initialize_block(header: &<Block as BlockT>::Header) -> sp_runtime::RuntimeExecutiveMode {
+			log::trace!(target: LOG_TARGET, "initialize_block: {header:#?}");
+			Executive::initialize_block(header)
 		}
 
 		fn finalize_block() -> <Block as BlockT>::Header {

@@ -722,9 +722,6 @@ decl_runtime_apis! {
 		fn version() -> RuntimeVersion;
 		/// Execute the given block.
 		fn execute_block(block: Block);
-		/// Initialize a block with the given header.
-		#[renamed("initialise_block", 2)]
-		fn initialize_block(header: &<Block as BlockT>::Header) -> RuntimeExecutiveMode;
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
