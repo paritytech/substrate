@@ -201,13 +201,17 @@ where
 
 	/// Called after inherents but before extrinsics have been applied.
 	pub fn after_inherents(&self, mode: RuntimeExecutiveMode) -> Result<(), Error> {
-		self.api
-			.after_inherents_with_context(
-				self.parent_hash,
-				ExecutionContext::BlockConstruction,
-				mode,
-			)
-			.map_err(Into::into)
+		if self.version >= 7 {
+			self.api
+				.after_inherents_with_context(
+					self.parent_hash,
+					ExecutionContext::BlockConstruction,
+					mode,
+				)
+				.map_err(Into::into)
+		} else {
+			Ok(())
+		}
 	}
 
 	/// Push onto the block's list of extrinsics.
