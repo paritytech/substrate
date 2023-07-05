@@ -28,15 +28,14 @@ use sp_std::iter::Iterator;
 pub trait Task: Sized + FullCodec {
 	type Enumeration: Iterator<Item = Self>;
 
+	/// A unique value representing this `Task`. Analogous to `call_index`, but for tasks.
+	const TASK_INDEX: usize;
+
 	/// Inspects the pallet's state and enumerates tasks of this type.
 	fn enumerate() -> Self::Enumeration;
 
 	/// Checks if a particular instance of this `Task` variant is a valid piece of work.
 	fn is_valid(&self) -> bool;
-
-	/// Returns the `task_index` (analogous to `call_index`, but for tasks) of this `Task`
-	/// variant.
-	const fn task_index(&self) -> usize;
 
 	/// Performs the work for this particular `Task` variant.
 	fn run(&self) -> Result<(), DispatchError>;
