@@ -449,10 +449,16 @@ fn renew_handles_errors() {
 fn set_address_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
+		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
 		let addr_to_set = 1;
 
 		// set address to `1`
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(2), name_hash, addr_to_set, 1));
+		assert_ok!(NameService::set_address(
+			RuntimeOrigin::signed(2),
+			name_hash,
+			addr_to_set,
+			suffix
+		));
 		// record was saved
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 		// address is correct
@@ -466,10 +472,16 @@ fn set_address_handles_errors() {
 		let non_owner = 1;
 		let owner = 2;
 		let some_name_hash = NameService::name_hash("alice".as_bytes());
+		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
 
 		// Registration not found
 		assert_noop!(
-			NameService::set_address(RuntimeOrigin::signed(non_owner), some_name_hash, 2, 1),
+			NameService::set_address(
+				RuntimeOrigin::signed(non_owner),
+				some_name_hash,
+				2,
+				suffix.clone()
+			),
 			Error::<Test>::RegistrationNotFound
 		);
 
@@ -478,12 +490,17 @@ fn set_address_handles_errors() {
 
 		// Not registration owner
 		assert_noop!(
-			NameService::set_address(RuntimeOrigin::signed(non_owner), name_hash, 3, 1),
+			NameService::set_address(
+				RuntimeOrigin::signed(non_owner),
+				name_hash,
+				3,
+				suffix.clone()
+			),
 			Error::<Test>::NotController,
 		);
 
 		// set address
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, 3, 1));
+		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, 3, suffix));
 	});
 }
 
@@ -492,6 +509,7 @@ fn deregister_works_owner() {
 	new_test_ext().execute_with(|| {
 		let owner = 2;
 		let (_, name_hash) = alice_register_bob_senario_setup();
+		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
 
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
 		assert_eq!(registration.owner, 2);
@@ -499,7 +517,12 @@ fn deregister_works_owner() {
 		assert_eq!(registration.deposit, None);
 
 		// set address
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, owner, 1));
+		assert_ok!(NameService::set_address(
+			RuntimeOrigin::signed(owner),
+			name_hash,
+			owner,
+			suffix
+		));
 
 		// deregister before expiry
 		add_blocks(1000);
@@ -601,8 +624,10 @@ fn force_register_no_expiry_works() {
 fn force_deregister_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
+		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+
 		// set some address to deregister
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(2), name_hash, 4, 1));
+		assert_ok!(NameService::set_address(RuntimeOrigin::signed(2), name_hash, 4, suffix));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 
 		// force the deregistration of `name_hash`
@@ -798,8 +823,15 @@ fn deregister_subnode_owner_works() {
 			label
 		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
+		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address, 1));
+		assert_ok!(NameService::set_address(
+			RuntimeOrigin::signed(owner),
+			name_hash,
+			address,
+			suffix
+		));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 190);
 
@@ -837,7 +869,15 @@ fn deregister_subnode_non_owner_works() {
 		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address, 1));
+
+		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+		assert_ok!(NameService::set_address(
+			RuntimeOrigin::signed(owner),
+			name_hash,
+			address,
+			suffix
+		));
+
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 190);
 
@@ -888,8 +928,15 @@ fn deregister_subnode_handles_errors() {
 			label
 		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
+		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address, 1));
+		assert_ok!(NameService::set_address(
+			RuntimeOrigin::signed(owner),
+			name_hash,
+			address,
+			suffix
+		));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
 		assert_eq!(Balances::free_balance(owner), 190);
 

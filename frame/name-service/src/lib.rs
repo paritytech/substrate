@@ -179,6 +179,13 @@ pub mod pallet {
 	pub(super) type ParaRegistrations<T: Config> =
 		CountedStorageMap<_, Twox64Concat, u32, BoundedSuffixOf<T>>;
 
+	/// A reverse lookup from a suffix the para id owner.
+	///
+	/// This is used to resolve suffixes to para IDs.
+	#[pallet::storage]
+	pub type ReverseParaRegistrationsLookup<T: Config> =
+		CountedStorageMap<_, Twox64Concat, BoundedSuffixOf<T>, u32, OptionQuery>;
+
 	/// The deposit a user needs to make in order to commit to a name registration. A value of
 	/// A value of `None` will disable commitments and therefore the registration of new names.
 	#[pallet::storage]
@@ -327,6 +334,8 @@ pub mod pallet {
 		CommitmentsDisabled,
 		/// Subnode deposits have been disabled and subnodes cannot be registered.
 		SubNodesDisabled,
+		/// This suffix already exists in storage.
+		SuffixExists,
 		/// This commitment hash already exists in storage.
 		CommitmentExists,
 		/// The commitment cannot yet be removed. Has not expired.
@@ -356,7 +365,7 @@ pub mod pallet {
 		/// The name provided does not match the expected hash.
 		BadName,
 		/// The para ID was not found.
-		ParaRegistrationNotFound,
+		ParaNotFound,
 	}
 
 	// Your Pallet's callable functions.
@@ -585,16 +594,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name_hash: NameHash,
 			address: T::AccountId,
-			para_id: u32,
+			suffix: BoundedSuffixOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			ensure!(
-				ParaRegistrations::<T>::contains_key(para_id),
-				Error::<T>::ParaRegistrationNotFound
-			);
+			// resolve the para_id with the provided `suffix`.
+			let para_id = ReverseParaRegistrationsLookup::<T>::get(&suffix)
+				.ok_or(Error::<T>::ParaNotFound)?;
+
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
 			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotController);
+
 			T::NameServiceResolver::set_address(name_hash, address, para_id, sender)?;
 			Ok(())
 		}
@@ -604,7 +614,6 @@ pub mod pallet {
 		///
 		/// This is a permissionless function that anyone can call who is willing to place a deposit
 		/// to store this data on chain.
-
 		#[pallet::call_index(13)]
 		#[pallet::weight(0)]
 		pub fn set_name(
@@ -647,7 +656,12 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn register_para(origin: OriginFor<T>, para: ParaRegistration<T>) -> DispatchResult {
 			ensure_root(origin)?;
-			ParaRegistrations::<T>::insert(para.id, para.suffix);
+			ensure!(
+				!ReverseParaRegistrationsLookup::<T>::contains_key(&para.suffix),
+				Error::<T>::SuffixExists
+			);
+			ParaRegistrations::<T>::insert(para.id, para.suffix.clone());
+			ReverseParaRegistrationsLookup::<T>::insert(para.suffix, para.id);
 			Ok(())
 		}
 
@@ -657,11 +671,10 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
-			ensure!(
-				ParaRegistrations::<T>::contains_key(para_id),
-				Error::<T>::ParaRegistrationNotFound
-			);
+			let suffix = ParaRegistrations::<T>::get(para_id).ok_or(Error::<T>::ParaNotFound)?;
+
 			ParaRegistrations::<T>::remove(para_id);
+			ReverseParaRegistrationsLookup::<T>::remove(&suffix);
 			Ok(())
 		}
 

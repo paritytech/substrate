@@ -141,7 +141,9 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	ext.execute_with(|| {
 		System::set_block_number(1);
 		let suffix: BoundedVec<u8, _> = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
-		ParaRegistrations::<Test>::insert(1, suffix);
+		let para_id = 1;
+		ParaRegistrations::<Test>::insert(para_id, suffix.clone());
+		ReverseParaRegistrationsLookup::<Test>::insert(suffix, para_id);
 	});
 	ext
 }
