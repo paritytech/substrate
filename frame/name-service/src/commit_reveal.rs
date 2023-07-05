@@ -65,14 +65,17 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::CommitmentExists);
 
-		let block_number = frame_system::Pallet::<T>::block_number();
-		let deposit = T::CommitmentDeposit::get();
+		let maybe_deposit = CommitmentDeposit::<T>::get();
+		ensure!(maybe_deposit.is_some(), Error::<T>::CommitmentsDisabled);
+
+		let deposit =
+			maybe_deposit.expect("commitment deposit has already been verified to exist, qed.");
 
 		T::Currency::reserve(&depositor, deposit)?;
 
 		let commitment = Commitment {
 			owner: owner.clone(),
-			when: block_number,
+			when: frame_system::Pallet::<T>::block_number(),
 			depositor: depositor.clone(),
 			deposit,
 		};

@@ -148,10 +148,6 @@ pub mod pallet {
 		/// The account where registration fees are paid to.
 		type RegistrationFeeHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
-		/// The deposit a user needs to make in order to commit to a name registration.
-		#[pallet::constant]
-		type CommitmentDeposit: Get<BalanceOf<Self>>;
-
 		/// The amount of blocks a user needs to wait after a Commitment before revealing.
 		#[pallet::constant]
 		type MinCommitmentAge: Get<Self::BlockNumber>;
@@ -206,6 +202,11 @@ pub mod pallet {
 	pub(super) type ParaRegistrations<T: Config> =
 		CountedStorageMap<_, Twox64Concat, u32, BoundedSuffixOf<T>>;
 
+	/// The deposit a user needs to make in order to commit to a name registration. A value of
+	/// `None` will disable commitments and therefore the registration of new names.
+	#[pallet::storage]
+	pub type CommitmentDeposit<T: Config> = StorageValue<_, BalanceOf<T>, OptionQuery>;
+
 	/// Name Commitments
 	#[pallet::storage]
 	pub(super) type Commitments<T: Config> = StorageMap<
@@ -248,6 +249,26 @@ pub mod pallet {
 		BytesStorage<T::AccountId, BalanceOf<T>, BoundedTextOf<T>>,
 	>;
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub commitment_deposit: Option<BalanceOf<T>>,
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { commitment_deposit: None }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			if let Some(commitment_deposit) = self.commitment_deposit {
+				CommitmentDeposit::<T>::put(commitment_deposit);
+			}
+		}
+	}
+
 	// Your Pallet's events.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
@@ -278,6 +299,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// It has not passed the minimum waiting period to reveal a commitment.
 		TooEarlyToReveal,
+		/// Commitment deposits have been disabled.
+		CommitmentsDisabled,
 		/// This commitment hash already exists in storage.
 		CommitmentExists,
 		/// The commitment cannot yet be removed. Has not expired.
@@ -613,6 +636,34 @@ pub mod pallet {
 				Error::<T>::ParaRegistrationNotFound
 			);
 			ParaRegistrations::<T>::remove(para_id);
+			Ok(())
+		}
+
+		/// Update configurations for the name service. The origin for this call must be
+		/// Root.
+		///
+		/// # Arguments
+		///
+		/// * `commitment_deposit` - Set [`CommitmentDeposit`].
+		#[pallet::call_index(17)]
+		#[pallet::weight(0)]
+		pub fn set_configs(
+			origin: OriginFor<T>,
+			commitment_deposit: ConfigOp<BalanceOf<T>>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			macro_rules! config_op_exp {
+				($storage:ty, $op:ident) => {
+					match $op {
+						ConfigOp::Noop => (),
+						ConfigOp::Set(v) => <$storage>::put(v),
+						ConfigOp::Remove => <$storage>::kill(),
+					}
+				};
+			}
+
+			config_op_exp!(CommitmentDeposit::<T>, commitment_deposit);
 			Ok(())
 		}
 	}

@@ -1204,7 +1204,6 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub const CommitmentDeposit: Balance = 1 * DOLLARS;
 	pub const SubNodeDeposit: Balance = 1 * DOLLARS;
 	pub const TierThreeLetters: Balance = 640 * DOLLARS;
 	pub const TierFourLetters: Balance = 160 * DOLLARS;
@@ -1228,7 +1227,6 @@ impl pallet_name_service::Config for Runtime {
 	type MaxCommitmentAge = MaxCommitmentAge;
 	type MaxNameLength = MaxNameLength;
 	type RegistrationFeeHandler = ();
-	type CommitmentDeposit = CommitmentDeposit;
 	type SubNodeDeposit = SubNodeDeposit;
 	type TierThreeLetters = TierThreeLetters;
 	type TierFourLetters = TierFourLetters;
