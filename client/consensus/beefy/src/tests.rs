@@ -22,6 +22,7 @@ use crate::{
 	aux_schema::{load_persistent, tests::verify_persisted_version},
 	beefy_block_import_and_links,
 	communication::{
+		fisherman::BeefyFisherman,
 		gossip::{
 			proofs_topic, tests::sign_commitment, votes_topic, GossipFilterCfg, GossipMessage,
 			GossipValidator,
@@ -47,7 +48,7 @@ use sc_network_test::{
 };
 use sc_utils::notification::NotificationReceiver;
 use serde::{Deserialize, Serialize};
-use sp_api::{ApiRef, ProvideRuntimeApi};
+use sp_api::{ApiRef, BlockT, ProvideRuntimeApi};
 use sp_application_crypto::key_types::BEEFY as BEEFY_KEY_TYPE;
 use sp_consensus::BlockOrigin;
 use sp_consensus_beefy::{
@@ -244,6 +245,22 @@ impl TestNetFactory for BeefyTestNet {
 	}
 }
 
+pub(crate) struct DummyFisherman<B> {
+	pub _phantom: PhantomData<B>,
+}
+
+impl<B: BlockT> BeefyFisherman<B> for DummyFisherman<B> {
+	fn check_proof(&self, _: BeefyVersionedFinalityProof<B>) -> Result<(), sp_blockchain::Error> {
+		Ok(())
+	}
+	fn check_vote(
+		&self,
+		_: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
+	) -> Result<(), sp_blockchain::Error> {
+		Ok(())
+	}
+}
+
 #[derive(Clone)]
 pub(crate) struct TestApi {
 	pub beefy_genesis: u64,
@@ -364,8 +381,9 @@ async fn voter_init_setup(
 	api: &TestApi,
 ) -> sp_blockchain::Result<PersistedState<Block>> {
 	let backend = net.peer(0).client().as_backend();
+	let fisherman = DummyFisherman { _phantom: PhantomData };
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-	let (gossip_validator, _) = GossipValidator::new(known_peers);
+	let (gossip_validator, _) = GossipValidator::new(known_peers, fisherman);
 	let gossip_validator = Arc::new(gossip_validator);
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
@@ -386,7 +404,7 @@ fn initialize_beefy<API>(
 	min_block_delta: u32,
 ) -> impl Future<Output = ()>
 where
-	API: ProvideRuntimeApi<Block> + Sync + Send,
+	API: ProvideRuntimeApi<Block> + Sync + Send +'static,
 	API::Api: BeefyApi<Block, AuthorityId> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
 {
 	let tasks = FuturesUnordered::new();
@@ -1310,9 +1328,10 @@ async fn gossipped_finality_proofs() {
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 
 	let charlie = &net.peers[2];
+	let fisherman = DummyFisherman { _phantom: PhantomData::<Block> };
 	let known_peers = Arc::new(Mutex::new(KnownPeers::<Block>::new()));
 	// Charlie will run just the gossip engine and not the full voter.
-	let (gossip_validator, _) = GossipValidator::new(known_peers);
+	let (gossip_validator, _) = GossipValidator::new(known_peers, fisherman);
 	let charlie_gossip_validator = Arc::new(gossip_validator);
 	charlie_gossip_validator.update_filter(GossipFilterCfg::<Block> {
 		start: 1,

@@ -18,6 +18,7 @@
 
 use crate::{
 	communication::{
+		fisherman::BeefyFisherman,
 		gossip::{proofs_topic, votes_topic, GossipFilterCfg, GossipMessage, GossipValidator},
 		peers::PeerReport,
 		request_response::outgoing_requests_engine::{OnDemandJustificationsEngine, ResponseInfo},
@@ -314,7 +315,7 @@ impl<B: Block> PersistedState<B> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S, F> {
 	// utilities
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
@@ -324,7 +325,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S> {
 
 	// communication
 	pub gossip_engine: GossipEngine<B>,
-	pub gossip_validator: Arc<GossipValidator<B>>,
+	pub gossip_validator: Arc<GossipValidator<B, F>>,
 	pub gossip_report_stream: TracingUnboundedReceiver<PeerReport>,
 	pub on_demand_justifications: OnDemandJustificationsEngine<B>,
 
@@ -341,7 +342,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, RuntimeApi, S> {
 	pub persisted_state: PersistedState<B>,
 }
 
-impl<B, BE, P, R, S> BeefyWorker<B, BE, P, R, S>
+impl<B, BE, P, R, S, F> BeefyWorker<B, BE, P, R, S, F>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
@@ -349,6 +350,7 @@ where
 	S: SyncOracle,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B, AuthorityId>,
+	F: BeefyFisherman<B>,
 {
 	fn best_grandpa_block(&self) -> NumberFor<B> {
 		*self.persisted_state.voting_oracle.best_grandpa_block_header.number()
@@ -1041,7 +1043,10 @@ where
 pub(crate) mod tests {
 	use super::*;
 	use crate::{
-		communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
+		communication::{
+			fisherman::Fisherman,
+			notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
+		},
 		tests::{
 			create_beefy_keystore, get_beefy_streams, make_beefy_ids, BeefyPeer, BeefyTestNet,
 			TestApi,
@@ -1060,6 +1065,7 @@ pub(crate) mod tests {
 		mmr::MmrRootProvider, Keyring, Payload, SignedCommitment,
 	};
 	use sp_runtime::traits::One;
+	use std::marker::PhantomData;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Digest, DigestItem, Header},
 		Backend,
@@ -1100,6 +1106,7 @@ pub(crate) mod tests {
 		MmrRootProvider<Block, TestApi>,
 		TestApi,
 		Arc<SyncingService<Block>>,
+		Fisherman<Block, Backend, TestApi, MmrRootProvider<Block, TestApi>>,
 	> {
 		let keystore = create_beefy_keystore(*key);
 
@@ -1125,8 +1132,16 @@ pub(crate) mod tests {
 		let api = Arc::new(TestApi::with_validator_set(&genesis_validator_set));
 		let network = peer.network_service().clone();
 		let sync = peer.sync_service().clone();
+		let payload_provider = MmrRootProvider::new(api.clone());
+		let fisherman = Fisherman {
+			backend: backend.clone(),
+			runtime: api.clone(),
+			payload_provider: payload_provider.clone(),
+			_phantom: PhantomData,
+		};
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-		let (gossip_validator, gossip_report_stream) = GossipValidator::new(known_peers.clone());
+		let (gossip_validator, gossip_report_stream) =
+			GossipValidator::new(known_peers.clone(), fisherman);
 		let gossip_validator = Arc::new(gossip_validator);
 		let gossip_engine = GossipEngine::new(
 			network.clone(),
@@ -1157,7 +1172,6 @@ pub(crate) mod tests {
 			beefy_genesis,
 		)
 		.unwrap();
-		let payload_provider = MmrRootProvider::new(api.clone());
 		BeefyWorker {
 			backend,
 			payload_provider,

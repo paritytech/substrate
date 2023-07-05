@@ -32,6 +32,7 @@ use wasm_timer::Instant;
 use crate::{
 	communication::{
 		benefit, cost,
+		fisherman::BeefyFisherman,
 		peers::{KnownPeers, PeerReport},
 	},
 	justification::{
@@ -225,26 +226,29 @@ impl<B: Block> Filter<B> {
 /// Allows messages for 'rounds >= last concluded' to flow, everything else gets
 /// rejected/expired.
 ///
+/// Messages for active and expired rounds are validated for expected payloads and attempts
+/// to create forks before head of GRANDPA are reported.
+///
 ///All messaging is handled in a single BEEFY global topic.
-pub(crate) struct GossipValidator<B>
-where
-	B: Block,
-{
+pub(crate) struct GossipValidator<B: Block, F> {
 	votes_topic: B::Hash,
 	justifs_topic: B::Hash,
 	gossip_filter: RwLock<Filter<B>>,
 	next_rebroadcast: Mutex<Instant>,
 	known_peers: Arc<Mutex<KnownPeers<B>>>,
 	report_sender: TracingUnboundedSender<PeerReport>,
+	fisherman: F,
 }
 
-impl<B> GossipValidator<B>
+impl<B, F> GossipValidator<B, F>
 where
 	B: Block,
+	F: BeefyFisherman<B>,
 {
 	pub(crate) fn new(
 		known_peers: Arc<Mutex<KnownPeers<B>>>,
-	) -> (GossipValidator<B>, TracingUnboundedReceiver<PeerReport>) {
+		fisherman: F,
+	) -> (GossipValidator<B, F>, TracingUnboundedReceiver<PeerReport>) {
 		let (tx, rx) = tracing_unbounded("mpsc_beefy_gossip_validator", 10_000);
 		let val = GossipValidator {
 			votes_topic: votes_topic::<B>(),
@@ -253,6 +257,7 @@ where
 			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
 			known_peers,
 			report_sender: tx,
+			fisherman,
 		};
 		(val, rx)
 	}
@@ -287,9 +292,14 @@ where
 			let filter = self.gossip_filter.read();
 
 			match filter.consider_vote(round, set_id) {
-				Consider::RejectPast => return Action::Discard(cost::OUTDATED_MESSAGE),
 				Consider::RejectFuture => return Action::Discard(cost::FUTURE_MESSAGE),
 				Consider::RejectOutOfScope => return Action::Discard(cost::OUT_OF_SCOPE_MESSAGE),
+				Consider::RejectPast => {
+					// We know `vote` is for some past (finalized) block. Have fisherman check
+					// for equivocations. Best-effort, ignore errors such as state pruned.
+					let _ = self.fisherman.check_vote(vote);
+					return Action::Discard(cost::OUTDATED_MESSAGE)
+				},
 				Consider::Accept => {},
 			}
 
@@ -331,9 +341,14 @@ where
 		let guard = self.gossip_filter.read();
 		// Verify general usefulness of the justification.
 		match guard.consider_finality_proof(round, set_id) {
-			Consider::RejectPast => return Action::Discard(cost::OUTDATED_MESSAGE),
 			Consider::RejectFuture => return Action::Discard(cost::FUTURE_MESSAGE),
 			Consider::RejectOutOfScope => return Action::Discard(cost::OUT_OF_SCOPE_MESSAGE),
+			Consider::RejectPast => {
+				// We know `proof` is for some past (finalized) block. Have fisherman check
+				// for equivocations. Best-effort, ignore errors such as state pruned.
+				let _ = self.fisherman.check_proof(proof);
+				return Action::Discard(cost::OUTDATED_MESSAGE)
+			},
 			Consider::Accept => {},
 		}
 		// Verify justification signatures.
@@ -359,9 +374,10 @@ where
 	}
 }
 
-impl<B> Validator<B> for GossipValidator<B>
+impl<B, F> Validator<B> for GossipValidator<B, F>
 where
 	B: Block,
+	F: BeefyFisherman<B>,
 {
 	fn peer_disconnected(&self, _context: &mut dyn ValidatorContext<B>, who: &PeerId) {
 		self.known_peers.lock().remove(who);
@@ -474,7 +490,7 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
 	use super::*;
-	use crate::keystore::BeefyKeystore;
+	use crate::{keystore::BeefyKeystore, tests::DummyFisherman};
 	use sc_network_test::Block;
 	use sp_application_crypto::key_types::BEEFY as BEEFY_KEY_TYPE;
 	use sp_consensus_beefy::{
@@ -482,6 +498,7 @@ pub(crate) mod tests {
 		SignedCommitment, VoteMessage,
 	};
 	use sp_keystore::{testing::MemoryKeystore, Keystore};
+	use std::marker::PhantomData;
 
 	#[test]
 	fn known_votes_insert_remove() {
@@ -577,8 +594,9 @@ pub(crate) mod tests {
 	fn should_validate_messages() {
 		let keys = vec![Keyring::Alice.public()];
 		let validator_set = ValidatorSet::<AuthorityId>::new(keys.clone(), 0).unwrap();
+		let fisherman = DummyFisherman { _phantom: PhantomData::<Block> };
 		let (gv, mut report_stream) =
-			GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
+			GossipValidator::new(Arc::new(Mutex::new(KnownPeers::new())), fisherman);
 		let sender = PeerId::random();
 		let mut context = TestContext;
 
@@ -705,7 +723,8 @@ pub(crate) mod tests {
 	fn messages_allowed_and_expired() {
 		let keys = vec![Keyring::Alice.public()];
 		let validator_set = ValidatorSet::<AuthorityId>::new(keys.clone(), 0).unwrap();
-		let (gv, _) = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
+		let fisherman = DummyFisherman { _phantom: PhantomData::<Block> };
+		let (gv, _) = GossipValidator::new(Arc::new(Mutex::new(KnownPeers::new())), fisherman);
 		gv.update_filter(GossipFilterCfg { start: 0, end: 10, validator_set: &validator_set });
 		let sender = sc_network::PeerId::random();
 		let topic = Default::default();
@@ -782,7 +801,8 @@ pub(crate) mod tests {
 	fn messages_rebroadcast() {
 		let keys = vec![Keyring::Alice.public()];
 		let validator_set = ValidatorSet::<AuthorityId>::new(keys.clone(), 0).unwrap();
-		let (gv, _) = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
+		let fisherman = DummyFisherman { _phantom: PhantomData::<Block> };
+		let (gv, _) = GossipValidator::new(Arc::new(Mutex::new(KnownPeers::new())), fisherman);
 		gv.update_filter(GossipFilterCfg { start: 0, end: 10, validator_set: &validator_set });
 		let sender = sc_network::PeerId::random();
 		let topic = Default::default();

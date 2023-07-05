@@ -162,6 +162,12 @@ mod mmr_root_provider {
 		_phantom: PhantomData<B>,
 	}
 
+	impl<B, R> Clone for MmrRootProvider<B, R> {
+		fn clone(&self) -> Self {
+			Self { runtime: self.runtime.clone(), _phantom: PhantomData }
+		}
+	}
+
 	impl<B, R> MmrRootProvider<B, R>
 	where
 		B: Block,
@@ -184,7 +190,7 @@ mod mmr_root_provider {
 	impl<B: Block, R> PayloadProvider<B> for MmrRootProvider<B, R>
 	where
 		B: Block,
-		R: ProvideRuntimeApi<B>,
+		R: ProvideRuntimeApi<B> + Send + Sync + 'static,
 		R::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
 	{
 		fn payload(&self, header: &B::Header) -> Option<Payload> {

@@ -75,7 +75,7 @@ impl Payload {
 }
 
 /// Trait for custom BEEFY payload providers.
-pub trait PayloadProvider<B: Block> {
+pub trait PayloadProvider<B: Block>: Clone + Send + Sync + 'static {
 	/// Provide BEEFY payload if available for `header`.
 	fn payload(&self, header: &B::Header) -> Option<Payload>;
 }

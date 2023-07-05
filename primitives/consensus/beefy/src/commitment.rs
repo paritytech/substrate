@@ -247,6 +247,21 @@ impl<N, S> From<SignedCommitment<N, S>> for VersionedFinalityProof<N, S> {
 	}
 }
 
+impl<N, S> VersionedFinalityProof<N, S> {
+	/// Provide reference to inner `Payload`.
+	pub fn payload(&self) -> &Payload {
+		match self {
+			VersionedFinalityProof::V1(inner) => &inner.commitment.payload,
+		}
+	}
+	/// Block number this proof is for.
+	pub fn number(&self) -> &N {
+		match self {
+			VersionedFinalityProof::V1(inner) => &inner.commitment.block_number,
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 
