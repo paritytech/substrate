@@ -529,7 +529,7 @@ impl<'a, H: Hasher> TrieCache<'a, H> {
 	/// `storage_root` is the new storage root that was obtained after finishing all operations
 	/// using the [`TrieDBMut`](trie_db::TrieDBMut).
 	pub fn merge_into(self, local: &LocalTrieCache<H>, storage_root: H::Out) {
-		let cache = if let ValueCache::Fresh(cache) = self.value_cache { cache } else { return };
+		let ValueCache::Fresh(cache) = self.value_cache else { return };
 
 		if !cache.is_empty() {
 			let mut value_cache = local.value_cache.lock();
