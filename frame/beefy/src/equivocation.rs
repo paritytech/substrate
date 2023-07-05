@@ -125,6 +125,7 @@ where
 pub struct EquivocationReportSystem<T, R, P, L>(sp_std::marker::PhantomData<(T, R, P, L)>);
 
 /// Equivocation evidence convenience alias.
+// TODO: use an enum that takes either `EquivocationProof` or `InvalidForkVoteProof`
 pub type EquivocationEvidenceFor<T> = (
 	EquivocationProof<
 		BlockNumberFor<T>,

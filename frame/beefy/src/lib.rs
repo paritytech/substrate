@@ -63,6 +63,7 @@ const LOG_TARGET: &str = "runtime::beefy";
 pub mod pallet {
 	use super::*;
 	use frame_system::pallet_prelude::BlockNumberFor;
+	use sp_consensus_beefy::InvalidForkVoteProof;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -111,6 +112,8 @@ pub mod pallet {
 		/// Defines methods to publish, check and process an equivocation offence.
 		type EquivocationReportSystem: OffenceReportSystem<
 			Option<Self::AccountId>,
+			// TODO: make below an enum that takes either `EquivocationProof` or
+			// `InvalidForkVoteProof`
 			EquivocationEvidenceFor<Self>,
 		>;
 	}
@@ -263,6 +266,66 @@ pub mod pallet {
 				None,
 				(*equivocation_proof, key_owner_proof),
 			)?;
+			Ok(Pays::No.into())
+		}
+
+		/// Report voter voting on invalid fork. This method will verify the
+		/// invalid fork proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		#[pallet::call_index(2)]
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		pub fn report_invalid_fork_vote(
+			origin: OriginFor<T>,
+			invalid_fork_proof: Box<
+				InvalidForkVoteProof<
+					BlockNumberFor<T>,
+					T::BeefyId,
+					<T::BeefyId as RuntimeAppPublic>::Signature,
+				>,
+			>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			let reporter = ensure_signed(origin)?;
+
+			// TODO:
+			// T::EquivocationReportSystem::process_evidence(
+			// 	Some(reporter),
+			// 	(*invalid_fork_proof, key_owner_proof),
+			// )?;
+			// Waive the fee since the report is valid and beneficial
+			Ok(Pays::No.into())
+		}
+
+		/// Report voter voting on invalid fork. This method will verify the
+		/// invalid fork proof and validate the given key ownership proof
+		/// against the extracted offender. If both are valid, the offence
+		/// will be reported.
+		///
+		/// This extrinsic must be called unsigned and it is expected that only
+		/// block authors will call it (validated in `ValidateUnsigned`), as such
+		/// if the block author is defined it will be defined as the equivocation
+		/// reporter.
+		#[pallet::call_index(3)]
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		pub fn report_invalid_fork_vote_unsigned(
+			origin: OriginFor<T>,
+			invalid_fork_proof: Box<
+				InvalidForkVoteProof<
+					BlockNumberFor<T>,
+					T::BeefyId,
+					<T::BeefyId as RuntimeAppPublic>::Signature,
+				>,
+			>,
+			key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+
+			// TODO:
+			// T::EquivocationReportSystem::process_evidence(
+			// 	None,
+			// 	(*invalid_fork_proof, key_owner_proof),
+			// )?;
 			Ok(Pays::No.into())
 		}
 	}
