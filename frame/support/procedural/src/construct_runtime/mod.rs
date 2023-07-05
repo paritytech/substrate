@@ -408,7 +408,7 @@ fn construct_runtime_final_expansion(
 			proc_macro_warning::Warning::new_deprecated("WhereSection")
 				.old("use where section")
 				.new("use `frame_system::Config` to set the `Block` type and remove this section")
-				.help_links(&["https://github.com/paritytech/substrate/pull/14193"])
+				.help_links(&["https://github.com/paritytech/substrate/pull/14437"])
 				.span(where_section.span)
 				.build(),
 		)
