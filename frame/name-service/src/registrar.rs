@@ -27,11 +27,6 @@ impl<T: Config> Pallet<T> {
 		&registration.owner == user
 	}
 
-	/// Check if an account is a controller or owner of this name registration.
-	pub fn is_controller(registration: &RegistrationOf<T>, user: &T::AccountId) -> bool {
-		&registration.controller == user || Self::is_owner(registration, user)
-	}
-
 	/// Returns whether a provided rgistration has expired.
 	pub fn is_expired(registration: &RegistrationOf<T>) -> bool {
 		if let Some(expiry) = registration.expiry {
@@ -56,7 +51,6 @@ impl<T: Config> Pallet<T> {
 	pub fn do_register(
 		name_hash: NameHash,
 		owner: T::AccountId,
-		controller: T::AccountId,
 		maybe_expiration: Option<T::BlockNumber>,
 		maybe_deposit: Option<BalanceOf<T>>,
 	) -> DispatchResult {
@@ -71,12 +65,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Registrations::<T>::insert(
 			name_hash,
-			Registration {
-				owner: owner.clone(),
-				controller,
-				expiry: maybe_expiration,
-				deposit: maybe_deposit,
-			},
+			Registration { owner: owner.clone(), expiry: maybe_expiration, deposit: maybe_deposit },
 		);
 		Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner });
 		Ok(())

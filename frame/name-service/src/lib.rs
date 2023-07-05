@@ -380,8 +380,6 @@ pub mod pallet {
 		NameTooLong,
 		/// The text was longer than the configured limit.
 		TextTooLong,
-		/// The account is not the name controller.
-		NotController,
 		/// The account is not the name owner.
 		NotOwner,
 		/// Cannot renew this registration.
@@ -410,7 +408,7 @@ pub mod pallet {
 			maybe_expiry: Option<T::BlockNumber>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			Self::do_register(name_hash, who.clone(), who, maybe_expiry, None)?;
+			Self::do_register(name_hash, who, maybe_expiry, None)?;
 			Ok(())
 		}
 
@@ -501,31 +499,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the controller for a name registration.
-		///
-		/// Can only be called by the existing controller or owner.
-		#[pallet::call_index(6)]
-		#[pallet::weight(0)]
-		pub fn set_controller(
-			origin: OriginFor<T>,
-			name_hash: NameHash,
-			to: T::AccountId,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-
-			Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
-				let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
-				ensure!(Self::is_controller(&r, &sender), Error::<T>::NotController);
-				r.controller = to.clone();
-				Self::deposit_event(Event::<T>::NewOwner { from: sender, to });
-				Ok(())
-			})
-		}
-
 		/// Allows any sender to extend the registration of an existing name.
 		///
 		/// By doing so, the sender will pay the non-refundable registration extension fee.
-		#[pallet::call_index(7)]
+		#[pallet::call_index(6)]
 		#[pallet::weight(0)]
 		pub fn renew(
 			origin: OriginFor<T>,
@@ -543,7 +520,7 @@ pub mod pallet {
 		///
 		/// If the registration is expired, then anyone can call this function to make the name
 		/// available.
-		#[pallet::call_index(8)]
+		#[pallet::call_index(7)]
 		#[pallet::weight(0)]
 		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -561,7 +538,7 @@ pub mod pallet {
 		///
 		/// Validates the length of the provided label, returning an error if it surpasses the max
 		/// supported name length.
-		#[pallet::call_index(9)]
+		#[pallet::call_index(8)]
 		#[pallet::weight(0)]
 		pub fn set_subnode_record(
 			origin: OriginFor<T>,
@@ -583,7 +560,7 @@ pub mod pallet {
 		/// NOTES:
 		/// * If subnode is expired, deregistering this subnode becomes permissionless.
 		/// * Only the owner can deregister the node if the expiry block has not yet passed.
-		#[pallet::call_index(10)]
+		#[pallet::call_index(9)]
 		#[pallet::weight(0)]
 		pub fn deregister_subnode(
 			origin: OriginFor<T>,
@@ -608,7 +585,7 @@ pub mod pallet {
 		/// Sets an owner for a subnode record.
 		///
 		/// Only the current owner can re-assign ownership of the subnode.
-		#[pallet::call_index(11)]
+		#[pallet::call_index(10)]
 		#[pallet::weight(0)]
 		pub fn set_subnode_owner(
 			origin: OriginFor<T>,
@@ -626,7 +603,7 @@ pub mod pallet {
 		/// This call sets an address the name hash is aliasing, as well as the `para_id` associated
 		/// with it, which is determined by the `suffix` parameter, with the latter dictating which
 		/// para the address belongs to.
-		#[pallet::call_index(12)]
+		#[pallet::call_index(11)]
 		#[pallet::weight(0)]
 		pub fn set_address(
 			origin: OriginFor<T>,
@@ -641,7 +618,7 @@ pub mod pallet {
 
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotController);
+			ensure!(Self::is_owner(&registration, &sender), Error::<T>::NotOwner);
 
 			T::NameServiceResolver::set_address(name_hash, address, para_id, sender)?;
 			Ok(())
@@ -652,7 +629,7 @@ pub mod pallet {
 		///
 		/// This is a permissionless function that anyone can call who is willing to place a deposit
 		/// to store this data on chain.
-		#[pallet::call_index(13)]
+		#[pallet::call_index(12)]
 		#[pallet::weight(0)]
 		pub fn set_name(
 			origin: OriginFor<T>,
@@ -673,7 +650,7 @@ pub mod pallet {
 		///
 		/// Simply adds additional metadata to the node. No routing or aliasing is done with this
 		/// value.
-		#[pallet::call_index(14)]
+		#[pallet::call_index(13)]
 		#[pallet::weight(0)]
 		pub fn set_text(
 			origin: OriginFor<T>,
@@ -686,7 +663,7 @@ pub mod pallet {
 
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
-			ensure!(Self::is_controller(&registration, &sender), Error::<T>::NotController);
+			ensure!(Self::is_owner(&registration, &sender), Error::<T>::NotOwner);
 			T::NameServiceResolver::set_text(name_hash, text_bounded, sender)?;
 			Ok(())
 		}
@@ -696,7 +673,7 @@ pub mod pallet {
 		/// Overwrites existing values if already present.
 		/// Can only be called by the Root origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
-		#[pallet::call_index(15)]
+		#[pallet::call_index(14)]
 		#[pallet::weight(0)]
 		pub fn register_para(origin: OriginFor<T>, para: ParaRegistration<T>) -> DispatchResult {
 			ensure_root(origin)?;
@@ -715,7 +692,7 @@ pub mod pallet {
 
 		/// Can only be called by the Root origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
-		#[pallet::call_index(16)]
+		#[pallet::call_index(15)]
 		#[pallet::weight(0)]
 		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
@@ -739,7 +716,7 @@ pub mod pallet {
 		/// * `tier_default` - Set [`TierDefault`].
 		/// * `registration_fee_per_block` - Set [`RegistrationFeePerBlock`].
 		/// * `per_byte_fee` - Set [`PerByteFee`].
-		#[pallet::call_index(17)]
+		#[pallet::call_index(16)]
 		#[pallet::weight(0)]
 		pub fn set_configs(
 			origin: OriginFor<T>,

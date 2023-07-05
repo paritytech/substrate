@@ -129,13 +129,7 @@ impl<T: Config> Pallet<T> {
 		T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
 		let expiry = block_number.saturating_add(length);
-		Self::do_register(
-			name_hash,
-			commitment.owner.clone(),
-			commitment.owner.clone(),
-			Some(expiry),
-			None,
-		)?;
+		Self::do_register(name_hash, commitment.owner.clone(), Some(expiry), None)?;
 		Self::do_remove_commitment(&commitment_hash, &commitment);
 		Ok(())
 	}

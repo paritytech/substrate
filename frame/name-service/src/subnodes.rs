@@ -29,7 +29,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Creates a new subdomain given a raw label.
 	///
-	/// Can only be called by the controller or owner of a parent domain.
+	/// Can only be called by the owner of a parent domain.
 	pub fn do_set_subnode_record(
 		sender: T::AccountId,
 		parent_hash: NameHash,
@@ -44,14 +44,14 @@ impl<T: Config> Pallet<T> {
 			maybe_deposit.expect("subnode deposit has already been verified to exist, qed.");
 
 		let parent_registration = Self::get_registration(parent_hash)?;
-		ensure!(Self::is_controller(&parent_registration, &sender), Error::<T>::NotController);
+		ensure!(Self::is_owner(&parent_registration, &sender), Error::<T>::NotOwner);
 
 		let label_hash = sp_io::hashing::blake2_256(&label);
 		let name_hash = Self::subnode_hash(parent_hash, label_hash);
 
 		ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
 		let expiration = None;
-		Self::do_register(name_hash, sender.clone(), sender, expiration, Some(deposit))?;
+		Self::do_register(name_hash, sender, expiration, Some(deposit))?;
 		Ok(())
 	}
 

@@ -94,9 +94,6 @@ pub struct Registration<AccountId, Balance, BlockNumber> {
 	/// The owner of a name registration. This user has full control over the name
 	/// at all times.
 	pub owner: AccountId,
-	/// The controller of a name registration. They have access to update the resolver
-	/// information and register new subdomains.
-	pub controller: AccountId,
 	/// The expiration date of a name registration, after which, the registration can be
 	/// dissolved and reclaimed by someone else.
 	pub expiry: Option<BlockNumber>,

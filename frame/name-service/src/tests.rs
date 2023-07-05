@@ -297,46 +297,6 @@ fn reveal_ensure_active_registration_not_registered_again() {
 }
 
 #[test]
-fn set_controller_works() {
-	new_test_ext().execute_with(|| {
-		let (_, name_hash) = alice_register_bob_senario_setup();
-
-		// check current controller (2)
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().controller, 2);
-
-		// transfer to new owner (4)
-		let new_owner = 4;
-		assert_ok!(NameService::set_controller(RuntimeOrigin::signed(2), name_hash, new_owner));
-
-		// check new owner
-		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().controller, new_owner);
-	});
-}
-
-#[test]
-fn set_controller_handles_errors() {
-	new_test_ext().execute_with(|| {
-		let controller = 2;
-		let other = 3;
-		let (name_hash, _) = alice_register_bob_scenario_name_and_hash();
-
-		// Registration not found
-		assert_noop!(
-			NameService::set_controller(RuntimeOrigin::signed(controller), name_hash, other),
-			Error::<Test>::RegistrationNotFound
-		);
-
-		let (_, _) = alice_register_bob_senario_setup();
-
-		// Not controller or owner of registration
-		assert_noop!(
-			NameService::set_controller(RuntimeOrigin::signed(other), name_hash, other),
-			Error::<Test>::NotController
-		);
-	});
-}
-
-#[test]
 fn transfer_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
@@ -496,7 +456,7 @@ fn set_address_handles_errors() {
 				3,
 				suffix.clone()
 			),
-			Error::<Test>::NotController,
+			Error::<Test>::NotOwner,
 		);
 
 		// set address
@@ -693,7 +653,7 @@ fn set_subnode_record_handles_errors() {
 				parent_hash,
 				label.clone()
 			),
-			Error::<Test>::NotController
+			Error::<Test>::NotOwner
 		);
 		// register subnode for further testing
 		assert_ok!(NameService::set_subnode_record(
