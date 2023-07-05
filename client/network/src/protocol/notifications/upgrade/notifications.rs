@@ -114,6 +114,13 @@ pub struct NotificationsOutSubstream<TSubstream> {
 	socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
 }
 
+#[cfg(test)]
+impl<TSubstream> NotificationsOutSubstream<TSubstream> {
+	pub fn new(socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>) -> Self {
+		Self { socket }
+	}
+}
+
 impl NotificationsIn {
 	/// Builds a new potential upgrade.
 	pub fn new(
@@ -196,13 +203,13 @@ impl<TSubstream> NotificationsInSubstream<TSubstream>
 where
 	TSubstream: AsyncRead + AsyncWrite + Unpin,
 {
-	// #[cfg(test)]
-	// pub fn new(
-	// 	socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
-	// 	handshake: NotificationsInSubstreamHandshake,
-	// ) -> Self {
-	// 	Self { socket, handshake }
-	// }
+	#[cfg(test)]
+	pub fn new(
+		socket: Framed<TSubstream, UviBytes<io::Cursor<Vec<u8>>>>,
+		handshake: NotificationsInSubstreamHandshake,
+	) -> Self {
+		Self { socket, handshake }
+	}
 
 	/// Sends the handshake in order to inform the remote that we accept the substream.
 	pub fn send_handshake(&mut self, message: impl Into<Vec<u8>>) {
