@@ -288,7 +288,6 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// #           unimplemented!()
 /// #       }
 /// #       fn execute_block(_block: Block) {}
-/// #       fn initialize_block(_header: &<Block as BlockT>::Header) {}
 /// #   }
 ///
 ///     impl self::Balance<Block> for Runtime {
