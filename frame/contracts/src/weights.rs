@@ -135,6 +135,9 @@ pub trait WeightInfo {
 	fn v13_migration_step() -> Weight {
 		return Weight::zero()
 	}
+	fn migration_noop_step() -> Weight {
+		return Weight::zero()
+	}
 
 }
 
