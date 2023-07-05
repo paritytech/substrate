@@ -28,11 +28,11 @@ impl<T: Config> Pallet<T> {
 			// put an exorbitant fee.
 			BalanceOf::<T>::max_value()
 		} else if name_length == 3 {
-			T::TierThreeLetters::get()
+			TierThreeLetters::<T>::get()
 		} else if name_length == 4 {
-			T::TierFourLetters::get()
+			TierFourLetters::<T>::get()
 		} else {
-			T::TierDefault::get()
+			TierDefault::<T>::get()
 		};
 
 		let fee_length = Self::length_fee(length);

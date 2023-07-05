@@ -168,18 +168,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxSuffixLength: Get<u32>;
 
-		/// Registration fee for registering a 3-letter name.
-		#[pallet::constant]
-		type TierThreeLetters: Get<BalanceOf<Self>>;
-
-		/// Registration fee for registering a 4-letter name.
-		#[pallet::constant]
-		type TierFourLetters: Get<BalanceOf<Self>>;
-
-		/// Default registration fee for 5+ letter names.
-		#[pallet::constant]
-		type TierDefault: Get<BalanceOf<Self>>;
-
 		/// Registration fee per block.
 		#[pallet::constant]
 		type RegistrationFeePerBlock: Get<BalanceOf<Self>>;
@@ -207,6 +195,18 @@ pub mod pallet {
 	/// A value of `None` will disable subnode registrations.
 	#[pallet::storage]
 	pub type SubNodeDeposit<T: Config> = StorageValue<_, BalanceOf<T>, OptionQuery>;
+
+	/// Registration fee for registering a 3-letter name.
+	#[pallet::storage]
+	pub type TierThreeLetters<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	/// Registration fee for registering a 4-letter name.
+	#[pallet::storage]
+	pub type TierFourLetters<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	/// Default registration fee for 5+ letter names.
+	#[pallet::storage]
+	pub type TierDefault<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	/// Name Commitments
 	#[pallet::storage]
@@ -254,17 +254,29 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub commitment_deposit: Option<BalanceOf<T>>,
 		pub subnode_deposit: Option<BalanceOf<T>>,
+		pub tier_three_letters: BalanceOf<T>,
+		pub tier_four_letters: BalanceOf<T>,
+		pub tier_default: BalanceOf<T>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { commitment_deposit: None, subnode_deposit: None }
+			Self {
+				commitment_deposit: None,
+				subnode_deposit: None,
+				tier_three_letters: <BalanceOf<T>>::from(1000_u32),
+				tier_four_letters: <BalanceOf<T>>::from(100_u32),
+				tier_default: <BalanceOf<T>>::from(10_u32),
+			}
 		}
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			TierThreeLetters::<T>::put(self.tier_three_letters);
+			TierFourLetters::<T>::put(self.tier_four_letters);
+			TierDefault::<T>::put(self.tier_default);
 			if let Some(commitment_deposit) = self.commitment_deposit {
 				CommitmentDeposit::<T>::put(commitment_deposit);
 			}
@@ -653,12 +665,18 @@ pub mod pallet {
 		///
 		/// * `commitment_deposit` - Set [`CommitmentDeposit`].
 		/// * `subnode_deposit` - Set [`SubNodeDeposit`].
+		/// * `tier_three_letters` - Set [`TierThreeLetters`].
+		/// * `tier_four_letters` - Set [`TierFourLetters`].
+		/// * `tier_default` - Set [`TierDefault`].
 		#[pallet::call_index(17)]
 		#[pallet::weight(0)]
 		pub fn set_configs(
 			origin: OriginFor<T>,
 			commitment_deposit: ConfigOp<BalanceOf<T>>,
 			subnode_deposit: ConfigOp<BalanceOf<T>>,
+			tier_three_letters: ConfigOp<BalanceOf<T>>,
+			tier_four_letters: ConfigOp<BalanceOf<T>>,
+			tier_default: ConfigOp<BalanceOf<T>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -674,6 +692,9 @@ pub mod pallet {
 
 			config_op_exp!(CommitmentDeposit::<T>, commitment_deposit);
 			config_op_exp!(SubNodeDeposit::<T>, subnode_deposit);
+			config_op_exp!(TierThreeLetters::<T>, tier_three_letters);
+			config_op_exp!(TierFourLetters::<T>, tier_four_letters);
+			config_op_exp!(TierDefault::<T>, tier_default);
 
 			Ok(())
 		}
@@ -689,14 +710,6 @@ pub mod pallet {
 			assert!(T::MaxNameLength::get() > 0, "Max name length cannot be zero");
 			assert!(T::MaxTextLength::get() > 0, "Max text length cannot be zero");
 			assert!(T::MaxSuffixLength::get() > 0, "Max suffix length cannot be zero");
-			assert!(
-				T::TierThreeLetters::get() > BalanceOf::<T>::zero(),
-				"Three letter tier fee must be larger than four letter tier fee"
-			);
-			assert!(
-				T::TierFourLetters::get() > BalanceOf::<T>::zero(),
-				"Four letter tier fee must be larger than default tier fee"
-			);
 		}
 	}
 }

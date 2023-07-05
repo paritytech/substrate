@@ -1204,9 +1204,6 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub const TierThreeLetters: Balance = 640 * DOLLARS;
-	pub const TierFourLetters: Balance = 160 * DOLLARS;
-	pub const TierDefault: Balance = 5 * DOLLARS;
 	pub const MinimumCommitmentPeriod: BlockNumber = 1 * MINUTES;
 	pub const CommitmentAlivePeriod: BlockNumber = 1 * DAYS;
 	pub const RegistrationFeePerBlock: Balance = 1 * DOLLARS / (365 * DAYS as Balance);
@@ -1226,9 +1223,6 @@ impl pallet_name_service::Config for Runtime {
 	type MaxCommitmentAge = MaxCommitmentAge;
 	type MaxNameLength = MaxNameLength;
 	type RegistrationFeeHandler = ();
-	type TierThreeLetters = TierThreeLetters;
-	type TierFourLetters = TierFourLetters;
-	type TierDefault = TierDefault;
 	type RegistrationFeePerBlock = RegistrationFeePerBlock;
 	type MaxTextLength = MaxTextLength;
 	type MaxSuffixLength = MaxSuffixLength;

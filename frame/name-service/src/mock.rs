@@ -107,8 +107,6 @@ impl Config for Test {
 	type BlockNumberToBalance = Identity;
 	// TODO: make a custom handler and test behavior
 	type RegistrationFeeHandler = ();
-	type TierThreeLetters = ConstU64<7>;
-	type TierFourLetters = ConstU64<3>;
 	type MinCommitmentAge = ConstU64<10>;
 	type MaxCommitmentAge = ConstU64<10>;
 	// 2048 is the standard URL limit
@@ -116,7 +114,6 @@ impl Config for Test {
 	type MaxTextLength = ConstU32<2048>;
 	type MaxSuffixLength = ConstU32<4>;
 	type RegistrationFeePerBlock = ConstU64<1>;
-	type TierDefault = ConstU64<1>;
 	type NameServiceResolver = NameService;
 	type PerByteFee = ConstU64<1>;
 	type WeightInfo = ();
@@ -128,6 +125,9 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let _ = crate::GenesisConfig::<Test> {
 		commitment_deposit: CommitmentDepositConfig::get(),
 		subnode_deposit: SubNodeDepositConfig::get(),
+		tier_three_letters: 7,
+		tier_four_letters: 3,
+		tier_default: 1,
 	}
 	.assimilate_storage(&mut t);
 
