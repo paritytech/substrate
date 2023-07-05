@@ -19,7 +19,9 @@
 /// ! sandbox to execute the Wasm code. This is because we do not need the full
 /// ! environment that provides the seal interface as imported functions.
 use super::{code::WasmModule, Config};
-use crate::wasm::{AllowDeprecatedInterface, AllowUnstableInterface, Environment, WasmBlob};
+use crate::wasm::{
+	AllowDeprecatedInterface, AllowUnstableInterface, Determinism, Environment, WasmBlob,
+};
 use sp_core::Get;
 use wasmi::{errors::LinkerError, Func, Linker, StackLimits, Store};
 
@@ -44,6 +46,7 @@ impl<T: Config> From<&WasmModule<T>> for Sandbox {
 			&module.code,
 			(),
 			&<T>::Schedule::get(),
+			Determinism::Relaxed,
 			StackLimits::default(),
 			// We are testing with an empty environment anyways
 			AllowDeprecatedInterface::No,
