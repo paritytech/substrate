@@ -1065,6 +1065,7 @@ struct CallInput<T: Config> {
 	determinism: Determinism,
 }
 
+/// Reference to an existing code hash or a new wasm module.
 enum WasmCode<T: Config> {
 	Wasm(WasmBlob<T>),
 	CodeHash(CodeHash<T>),
@@ -1468,6 +1469,7 @@ impl<T: Config> Pallet<T> {
 		Ok(CodeUploadReturnValue { code_hash: *module.code_hash(), deposit })
 	}
 
+	/// Upload new code and returns the wasm blob and deposit amount paid.
 	fn try_upload_code(
 		origin: T::AccountId,
 		code: Vec<u8>,
@@ -1481,11 +1483,11 @@ impl<T: Config> Pallet<T> {
 				debug_message.as_mut().map(|d| d.try_extend(msg.bytes()));
 				err
 			})?;
-		let deposit = module.open_deposit(&module.code_info());
+		let deposit = module.store_code()?;
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
 		}
-		module.store()?;
+
 		Ok((module, deposit))
 	}
 
@@ -1530,7 +1532,7 @@ impl<T: Config> Pallet<T> {
 		owner: T::AccountId,
 	) -> frame_support::dispatch::DispatchResult {
 		let schedule = T::Schedule::get();
-		WasmBlob::store_code_unchecked(code, &schedule, owner)?;
+		WasmBlob::<T>::from_code_unchecked(code, &schedule, owner)?.store_code()?;
 		Ok(())
 	}
 
