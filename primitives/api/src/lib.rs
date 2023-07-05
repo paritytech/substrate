@@ -261,7 +261,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// ```rust
 /// use sp_version::create_runtime_str;
 /// #
-/// # use sp_runtime::traits::Block as BlockT;
+/// # use sp_runtime::{RuntimeExecutiveMode, traits::Block as BlockT};
 /// # use sp_test_primitives::Block;
 /// #
 /// # /// The declaration of the `Runtime` type is done by the `construct_runtime!` macro
@@ -288,7 +288,9 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// #           unimplemented!()
 /// #       }
 /// #       fn execute_block(_block: Block) {}
-/// #       fn initialize_block(_header: &<Block as BlockT>::Header) {}
+/// #       fn initialize_block(_header: &<Block as BlockT>::Header) -> RuntimeExecutiveMode {
+/// #           unimplemented!()
+/// #       }
 /// #   }
 ///
 ///     impl self::Balance<Block> for Runtime {
