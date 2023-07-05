@@ -33,6 +33,7 @@ use syn::spanned::Spanned;
 
 mod keyword {
 	syn::custom_keyword!(dev_mode);
+	syn::custom_keyword!(bundle);
 }
 
 pub fn pallet(
@@ -40,9 +41,12 @@ pub fn pallet(
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
 	let mut dev_mode = false;
+	let mut bundle = false;
 	if !attr.is_empty() {
 		if let Ok(_) = syn::parse::<keyword::dev_mode>(attr.clone()) {
 			dev_mode = true;
+		} else if let Ok(_) = syn::parse::<keyword::bundle>(attr.clone()) {
+			bundle = true;
 		} else {
 			let msg = "Invalid pallet macro call: unexpected attribute. Macro call must be \
 				bare, such as `#[frame_support::pallet]` or `#[pallet]`, or must specify the \
@@ -55,7 +59,7 @@ pub fn pallet(
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
 	match parse::Def::try_from(item, dev_mode) {
-		Ok(def) => expand::expand(def).into(),
+		Ok(def) => expand::expand(def, bundle).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
 }

@@ -29,7 +29,7 @@ use syn::spanned::Spanned;
 ///
 /// * Generate enum call and implement various trait on it.
 /// * Implement Callable and call_function on `Pallet`
-pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
+pub fn expand_call(def: &mut Def, bundle: bool) -> proc_macro2::TokenStream {
 	let (span, where_clause, methods, docs) = match def.call.as_ref() {
 		Some(call) => {
 			let span = call.attr_span;
@@ -244,6 +244,34 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 				.map_or(proc_macro2::TokenStream::new(), |attr| attr.to_token_stream())
 		})
 		.collect::<Vec<_>>();
+
+	if bundle { 
+		return quote::quote_spanned!(span =>
+			mod warnings {
+				#(
+					#call_index_warnings
+				)*
+				#(
+					#weight_warnings
+				)*
+			}
+	
+			#[doc(hidden)]
+			pub mod __substrate_call_check {
+				#[macro_export]
+				#[doc(hidden)]
+				macro_rules! #macro_ident {
+					($pallet_name:ident) => {
+						#maybe_compile_error
+					};
+				}
+	
+				#[doc(hidden)]
+				pub use #macro_ident as is_call_part_defined;
+			}
+		);
+	}
+
 
 	quote::quote_spanned!(span =>
 		mod warnings {

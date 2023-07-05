@@ -21,6 +21,7 @@
 
 mod benchmark;
 mod clone_no_bound;
+mod construct_bundle;
 mod construct_runtime;
 mod crate_version;
 mod debug_no_bound;
@@ -304,6 +305,11 @@ fn counter_prefix(prefix: &str) -> String {
 	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
+}
+
+#[proc_macro]
+pub fn construct_bundle(input: TokenStream) -> TokenStream {
+	construct_bundle::construct_bundle(input)
 }
 
 /// Construct a runtime, with the given name and the given pallets.

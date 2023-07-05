@@ -52,13 +52,13 @@ pub fn merge_where_clauses(clauses: &[&Option<syn::WhereClause>]) -> Option<syn:
 /// * add some bounds and variants to type defined,
 /// * create some new types,
 /// * impl stuff on them.
-pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
+pub fn expand(mut def: Def, bundle: bool) -> proc_macro2::TokenStream {
 	// Remove the `pallet_doc` attribute first.
 	let metadata_docs = documentation::expand_documentation(&mut def);
 	let constants = constants::expand_constants(&mut def);
 	let pallet_struct = pallet_struct::expand_pallet_struct(&mut def);
 	let config = config::expand_config(&mut def);
-	let call = call::expand_call(&mut def);
+	let call = call::expand_call(&mut def, bundle);
 	let error = error::expand_error(&mut def);
 	let event = event::expand_event(&mut def);
 	let storages = storage::expand_storages(&mut def);
