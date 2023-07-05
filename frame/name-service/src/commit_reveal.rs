@@ -58,6 +58,12 @@ impl<T: Config> Pallet<T> {
 		&commitment.when.saturating_add(T::MaxCommitmentAge::get()) < block_number
 	}
 
+	/// Handles a new commitment for a name hash.
+	///
+	/// When `MinCommitmentAge` blocks have passed, any user can submit `reveal` with the
+	/// `name` and `secret` parameters, and the registration will be completed.
+	///
+	/// See `fn reveal`.
 	pub fn do_commit(
 		depositor: T::AccountId,
 		owner: T::AccountId,
@@ -85,6 +91,13 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	/// Handles a reveal of a commitment and the registration of a name hash upon a successful
+	/// reveal.
+	///
+	/// The registration fee is calculated using the length of the name and the length of the
+	/// registration.
+	///
+	/// The corresponding commitment is removed from storage after registration.
 	pub fn do_reveal(
 		fee_payer: T::AccountId,
 		name: Vec<u8>,
@@ -103,11 +116,9 @@ impl<T: Config> Pallet<T> {
 		);
 
 		let name_hash = sp_io::hashing::blake2_256(&name);
-
 		ensure!(Self::get_registration(name_hash).is_err(), Error::<T>::RegistrationExists);
 
 		let fee = Self::registration_fee(name.clone(), length);
-
 		let imbalance = T::Currency::withdraw(
 			&fee_payer,
 			fee,
@@ -118,9 +129,6 @@ impl<T: Config> Pallet<T> {
 		T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
 		let expiry = block_number.saturating_add(length);
-
-		// TODO AUDIT WARNING: Can return an error after `withdraw` happens. Needs to be
-		// transactional or refactored.
 		Self::do_register(
 			name_hash,
 			commitment.owner.clone(),
@@ -128,11 +136,16 @@ impl<T: Config> Pallet<T> {
 			Some(expiry),
 			None,
 		)?;
-
 		Self::do_remove_commitment(&commitment_hash, &commitment);
 		Ok(())
 	}
 
+	/// Handles extending a name hash.
+	///
+	/// The fee payer must have enough balance to cover the renewal fees.
+	/// NOTES:
+	/// * Cannot provide an earlier expiry block and receive refunds - only future expiry blocks are
+	///   valid.
 	pub fn do_renew(
 		fee_payer: T::AccountId,
 		name_hash: NameHash,

@@ -39,11 +39,13 @@ impl<T: Config> Pallet<T> {
 		fee_reg.saturating_add(fee_length)
 	}
 
+	/// Gets the length fee based on the number of blocks provided.
 	pub fn length_fee(length: T::BlockNumber) -> BalanceOf<T> {
 		let length_as_balance: BalanceOf<T> = T::BlockNumberToBalance::convert(length);
 		RegistrationFeePerBlock::<T>::get().saturating_mul(length_as_balance)
 	}
 
+	/// Gets the bytes fee based on how many bytes are provided.
 	pub fn bytes_to_fee(bytes: &[u8]) -> BalanceOf<T> {
 		PerByteFee::<T>::get().saturating_mul((bytes.len() as u32).into())
 	}

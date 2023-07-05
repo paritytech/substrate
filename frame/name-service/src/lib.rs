@@ -374,7 +374,7 @@ pub mod pallet {
 		/// Force the registration of a name hash. It will overwrite any existing name registration,
 		/// returning the deposit to the original owner.
 		///
-		/// Can only be called by the `root` origin.
+		/// Can only be called by the Root origin.
 		#[pallet::call_index(0)]
 		#[pallet::weight(0)]
 		pub fn force_register(
@@ -391,7 +391,7 @@ pub mod pallet {
 		/// Force the de-registration of a name hash. It will delete any existing name registration,
 		/// returning the deposit to the original owner.
 		///
-		/// Can only be called by the `root` origin.
+		/// Can only be called by the Root origin.
 		#[pallet::call_index(1)]
 		#[pallet::weight(0)]
 		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
@@ -408,11 +408,6 @@ pub mod pallet {
 		/// which allows the sender to keep name being registered secret until it is revealed.
 		///
 		/// The `name` must be at least 3 characters long.
-		///
-		/// When `MinCommitmentAge` blocks have passed, any user can submit `reveal` with the
-		/// `name` and `secret` parameters, and the registration will be completed.
-		///
-		/// See `fn reveal`.
 		#[pallet::call_index(2)]
 		#[pallet::weight(0)]
 		pub fn commit(
@@ -428,9 +423,6 @@ pub mod pallet {
 		/// Allow a sender to reveal a previously committed name registration on behalf of the
 		/// committed `owner`. By revealing the name, the sender will pay a non-refundable
 		/// registration fee.
-		///
-		/// The registration fee is calculated using the length of the name and the length of the
-		/// registration.
 		#[pallet::call_index(3)]
 		#[pallet::weight(0)]
 		pub fn reveal(
@@ -539,6 +531,10 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Register a subnode (subdomain) record.
+		///
+		/// Validates the length of the provided label, returning an error if it surpasses the max
+		/// supported name length.
 		#[pallet::call_index(9)]
 		#[pallet::weight(0)]
 		pub fn set_subnode_record(
@@ -553,6 +549,14 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Deregister a subnode (subdomain) record.
+		///
+		/// Validates the subnode registration existance, ownership and expiry before executing
+		/// deregistration.
+		///
+		/// NOTES:
+		/// * If subnode is expired, deregistering this subnode becomes permissionless.
+		/// * Only the owner can deregister the node if the expiry block has not yet passed.
 		#[pallet::call_index(10)]
 		#[pallet::weight(0)]
 		pub fn deregister_subnode(
@@ -575,6 +579,9 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Sets an owner for a subnode record.
+		///
+		/// Only the current owner can re-assign ownership of the subnode.
 		#[pallet::call_index(11)]
 		#[pallet::weight(0)]
 		pub fn set_subnode_owner(
@@ -588,6 +595,11 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Sets an address of a registered node.
+		///
+		/// This call sets an address the name hash is aliasing, as well as the `para_id` associated
+		/// with it, which is determined by the `suffix` parameter, with the latter dictating which
+		/// para the address belongs to.
 		#[pallet::call_index(12)]
 		#[pallet::weight(0)]
 		pub fn set_address(
@@ -629,6 +641,12 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Set text record for a node.
+		///
+		/// Allows arbitrary text to be associated with the node.
+		///
+		/// Simply adds additional metadata to the node. No routing or aliasing is done with this
+		/// value.
 		#[pallet::call_index(14)]
 		#[pallet::weight(0)]
 		pub fn set_text(
@@ -650,7 +668,7 @@ pub mod pallet {
 		/// Inserts a suffix for a para ID.
 		///
 		/// Overwrites existing values if already present.
-		/// Can only be called by the `root` origin.
+		/// Can only be called by the Root origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(15)]
 		#[pallet::weight(0)]
@@ -665,7 +683,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Can only be called by the `root` origin.
+		/// Can only be called by the Root origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(16)]
 		#[pallet::weight(0)]

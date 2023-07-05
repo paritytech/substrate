@@ -32,6 +32,7 @@ impl<T: Config> Pallet<T> {
 		&registration.controller == user || Self::is_owner(registration, user)
 	}
 
+	/// Returns whether a provided rgistration has expired.
 	pub fn is_expired(registration: &RegistrationOf<T>) -> bool {
 		if let Some(expiry) = registration.expiry {
 			return expiry < frame_system::Pallet::<T>::block_number()
@@ -40,14 +41,18 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Gets the registration of a name hash, or returns an error if none exist.
 	pub fn get_registration(name_hash: NameHash) -> Result<RegistrationOf<T>, DispatchError> {
 		Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound.into())
 	}
 
-	/// A function that handles registration of a name hash.
+	/// Handling of a name hash registration.
 	///
-	/// Does not check for an existing registration before overwriting, but does
-	/// free any existing deposit if one does exist.
+	/// Notes:
+	/// * Does not check for an existing registration before overwriting, but does free any existing
+	///   deposit if one exists.
+	/// * Does not assume any expiry is being set, and does not force an expiry.
+	/// * Does not assume any deposit is being reserved, and does not force a deposit.
 	pub fn do_register(
 		name_hash: NameHash,
 		owner: T::AccountId,
@@ -58,26 +63,31 @@ impl<T: Config> Pallet<T> {
 		if let Some(deposit) = maybe_deposit {
 			T::Currency::reserve(&owner, deposit)?;
 		}
-
 		if let Some(old_registration) = Registrations::<T>::take(name_hash) {
 			if let Some(old_deposit) = old_registration.deposit {
 				let res = T::Currency::unreserve(&old_registration.owner, old_deposit);
 				debug_assert!(res.is_zero());
 			}
 		}
-
-		let registration = Registration {
-			owner: owner.clone(),
-			controller,
-			expiry: maybe_expiration,
-			deposit: maybe_deposit,
-		};
-
-		Registrations::<T>::insert(name_hash, registration);
+		Registrations::<T>::insert(
+			name_hash,
+			Registration {
+				owner: owner.clone(),
+				controller,
+				expiry: maybe_expiration,
+				deposit: maybe_deposit,
+			},
+		);
 		Self::deposit_event(Event::<T>::NameRegistered { name_hash, owner });
 		Ok(())
 	}
 
+	/// Handling of a name hash de-registration.
+	///
+	/// Notes:
+	/// * Does not assume the registration exists, and does not return an error if no registration
+	///   exists.
+	/// * Ensures records pertaining to the hash are removed from all resolvers.
 	pub fn do_deregister(name_hash: NameHash) {
 		if let Some(registration) = Registrations::<T>::take(name_hash) {
 			if let Some(deposit) = registration.deposit {
@@ -85,7 +95,6 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(res.is_zero());
 			}
 		}
-
 		// Clean up all resolvers.
 		AddressResolver::<T>::remove(name_hash);
 		if let Some(name) = NameResolver::<T>::take(name_hash) {
@@ -100,9 +109,9 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::<T>::AddressDeregistered { name_hash });
 	}
 
-	/// Transfer ownership of a name registration without any checks.
+	/// Transfer ownership of a name registration without any ownership checks.
 	///
-	/// Will also transfer any deposited amount to the new owner.
+	/// Transfers any deposited amount of the name hash to the new owner.
 	pub fn do_transfer_ownership(name_hash: NameHash, new_owner: T::AccountId) -> DispatchResult {
 		Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 			let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
