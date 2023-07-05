@@ -1125,7 +1125,6 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	/// Reset the shared trie cache.
-	#[cfg(feature = "test-helpers")]
 	pub fn reset_trie_cache(&self) {
 		if let Some(cache) = &self.shared_trie_cache {
 			cache.reset();
