@@ -1,4 +1,3 @@
-use sp_runtime::traits::Block as BlockT;
 use substrate_test_runtime_client::runtime::Block;
 
 struct Runtime {}
@@ -25,9 +24,6 @@ sp_api::impl_runtime_apis! {
 			unimplemented!()
 		}
 		fn execute_block(_: Block) {
-			unimplemented!()
-		}
-		fn initialize_block(_: &<Block as BlockT>::Header) -> sp_runtime::RuntimeExecutiveMode {
 			unimplemented!()
 		}
 	}
