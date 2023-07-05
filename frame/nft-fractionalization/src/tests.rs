@@ -122,6 +122,33 @@ fn fractionalize_should_work() {
 			beneficiary: account(2),
 		}));
 
+		// owner can't burn an already fractionalized NFT
+		assert_noop!(
+			Nfts::burn(RuntimeOrigin::signed(account(1)), nft_collection_id, nft_id),
+			DispatchError::Module(ModuleError {
+				index: 4,
+				error: [12, 0, 0, 0],
+				message: Some("ItemLocked")
+			})
+		);
+
+		// can't fractionalize twice
+		assert_noop!(
+			NftFractionalization::fractionalize(
+				RuntimeOrigin::signed(account(1)),
+				nft_collection_id,
+				nft_id,
+				asset_id + 1,
+				account(2),
+				fractions,
+			),
+			DispatchError::Module(ModuleError {
+				index: 4,
+				error: [12, 0, 0, 0],
+				message: Some("ItemLocked")
+			})
+		);
+
 		let nft_id = nft_id + 1;
 		assert_noop!(
 			NftFractionalization::fractionalize(
