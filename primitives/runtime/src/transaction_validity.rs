@@ -115,8 +115,7 @@ impl From<InvalidTransaction> for &'static str {
 				"Transaction dispatch is mandatory; transactions must not be validated.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 			InvalidTransaction::BadSigner => "Invalid signing address",
-			InvalidTransaction::NonMandatory =>
-				"Non-mandatory extrinsic was applied in a mandatory-only block",
+			InvalidTransaction::NonMandatory => "Non-mandatory extrinsic was applied in a mandatory-only block",
 		}
 	}
 }

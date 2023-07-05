@@ -29,7 +29,6 @@ use futures::{
 use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;
-use sc_block_builder::BlockBuilderApi;
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderMetadata, TreeRoute};
@@ -120,7 +119,7 @@ where
 		+ HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
-	Client::Api: TaggedTransactionQueue<Block> + sc_block_builder::BlockBuilderApi<Block>,
+	Client::Api: TaggedTransactionQueue<Block>,
 {
 	type Block = Block;
 	type Error = error::Error;
@@ -222,7 +221,7 @@ where
 		+ HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
-	Client::Api: TaggedTransactionQueue<Block> + BlockBuilderApi<Block>,
+	Client::Api: TaggedTransactionQueue<Block>,
 {
 	sp_tracing::within_span!(sp_tracing::Level::TRACE, "validate_transaction";
 	{
@@ -239,6 +238,8 @@ where
 					format!("Could not find `TaggedTransactionQueue` api for block `{:?}`.", at)
 				))
 		}?;
+
+		use sp_api::Core;
 
 		sp_tracing::within_span!(
 			sp_tracing::Level::TRACE, "runtime::validate_transaction";
@@ -285,7 +286,7 @@ where
 		+ HeaderBackend<Block>
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
-	Client::Api: TaggedTransactionQueue<Block> + sc_block_builder::BlockBuilderApi<Block>,
+	Client::Api: TaggedTransactionQueue<Block>,
 {
 	/// Validates a transaction by calling into the runtime, same as
 	/// `validate_transaction` but blocks the current thread when performing

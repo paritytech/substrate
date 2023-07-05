@@ -288,6 +288,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// #           unimplemented!()
 /// #       }
 /// #       fn execute_block(_block: Block) {}
+/// #       fn initialize_block(_header: &<Block as BlockT>::Header) {}
 /// #   }
 ///
 ///     impl self::Balance<Block> for Runtime {
@@ -721,6 +722,9 @@ decl_runtime_apis! {
 		fn version() -> RuntimeVersion;
 		/// Execute the given block.
 		fn execute_block(block: Block);
+		/// Initialize a block with the given header.
+		#[renamed("initialise_block", 2)]
+		fn initialize_block(header: &<Block as BlockT>::Header) -> RuntimeExecutiveMode;
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.

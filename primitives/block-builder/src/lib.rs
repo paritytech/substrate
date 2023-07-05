@@ -37,9 +37,6 @@ sp_api::decl_runtime_apis! {
 			extrinsic: <Block as BlockT>::Extrinsic,
 		) -> sp_runtime::legacy::byte_sized_error::ApplyExtrinsicResult;
 
-		/// Initialize a block with the given header.
-		fn initialize_block(header: &<Block as BlockT>::Header) -> RuntimeExecutiveMode;
-
 		/// Finish the current block.
 		#[renamed("finalise_block", 3)]
 		fn finalize_block() -> <Block as BlockT>::Header;

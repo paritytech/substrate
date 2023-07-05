@@ -115,7 +115,7 @@ fn construct_block<E: Externalities>(
 		.call(
 			ext,
 			&runtime_code,
-			"BlockBuilder_initialize_block",
+			"Core_initialize_block",
 			&header.encode(),
 			true,
 			CallContext::Offchain,

@@ -193,13 +193,9 @@ fn panic_execution_with_foreign_code_gives_error() {
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69_u128.encode());
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
-	let r = executor_call(
-		&mut t,
-		"BlockBuilder_initialize_block",
-		&vec![].and(&from_block_number(1u32)),
-		true,
-	)
-	.0;
+	let r =
+		executor_call(&mut t, "Core_initialize_block", &vec![].and(&from_block_number(1u32)), true)
+			.0;
 	assert!(r.is_ok());
 	let v = executor_call(&mut t, "BlockBuilder_apply_extrinsic", &vec![].and(&xt()), true)
 		.0
@@ -223,13 +219,9 @@ fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 	t.insert(<pallet_balances::TotalIssuance<Runtime>>::hashed_key().to_vec(), 69u128.encode());
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
-	let r = executor_call(
-		&mut t,
-		"BlockBuilder_initialize_block",
-		&vec![].and(&from_block_number(1u32)),
-		true,
-	)
-	.0;
+	let r =
+		executor_call(&mut t, "Core_initialize_block", &vec![].and(&from_block_number(1u32)), true)
+			.0;
 	assert!(r.is_ok());
 	let v = executor_call(&mut t, "BlockBuilder_apply_extrinsic", &vec![].and(&xt()), true)
 		.0
@@ -264,13 +256,9 @@ fn successful_execution_with_native_equivalent_code_gives_ok() {
 	);
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
-	let r = executor_call(
-		&mut t,
-		"BlockBuilder_initialize_block",
-		&vec![].and(&from_block_number(1u32)),
-		true,
-	)
-	.0;
+	let r =
+		executor_call(&mut t, "Core_initialize_block", &vec![].and(&from_block_number(1u32)), true)
+			.0;
 	assert!(r.is_ok());
 
 	let fees = t.execute_with(|| transfer_fee(&xt()));
@@ -310,13 +298,9 @@ fn successful_execution_with_foreign_code_gives_ok() {
 	);
 	t.insert(<frame_system::BlockHash<Runtime>>::hashed_key_for(0), vec![0u8; 32]);
 
-	let r = executor_call(
-		&mut t,
-		"BlockBuilder_initialize_block",
-		&vec![].and(&from_block_number(1u32)),
-		true,
-	)
-	.0;
+	let r =
+		executor_call(&mut t, "Core_initialize_block", &vec![].and(&from_block_number(1u32)), true)
+			.0;
 	assert!(r.is_ok());
 
 	let fees = t.execute_with(|| transfer_fee(&xt()));
@@ -793,7 +777,7 @@ fn panic_execution_gives_error() {
 
 	let r = executor_call(
 		&mut t,
-		"BlockBuilder_initialize_block",
+		"Core_initialize_block",
 		&vec![].and(&from_block_number(1u32)),
 		false,
 	)
@@ -834,7 +818,7 @@ fn successful_execution_gives_ok() {
 
 	let r = executor_call(
 		&mut t,
-		"BlockBuilder_initialize_block",
+		"Core_initialize_block",
 		&vec![].and(&from_block_number(1u32)),
 		false,
 	)

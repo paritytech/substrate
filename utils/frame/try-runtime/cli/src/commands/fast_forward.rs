@@ -174,8 +174,7 @@ async fn next_empty_block<
 	);
 	let mut extrinsics = <Vec<Block::Extrinsic>>::new();
 
-	run::<Block, _>(externalities, executor, "BlockBuilder_initialize_block", &header.encode())
-		.await?;
+	run::<Block, _>(externalities, executor, "Core_initialize_block", &header.encode()).await?;
 
 	if let Some(ref inherent_data) = maybe_inherent_data {
 		extrinsics = dry_run::<Vec<Block::Extrinsic>, Block, _>(
