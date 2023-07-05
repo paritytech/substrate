@@ -28,10 +28,9 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 	let genesis_build = def.genesis_build.as_ref().expect("Checked by def parser");
 
 	let frame_support = &def.frame_support;
-	let type_impl_gen = &def.type_impl_generics(genesis_build.attr_span);
+	let type_impl_gen = &genesis_config.gen_kind.type_impl_gen(genesis_build.attr_span);
 	let gen_cfg_ident = &genesis_config.genesis_config;
-
-	let gen_cfg_use_gen = genesis_config.gen_kind.type_use_gen(genesis_build.attr_span);
+	let gen_cfg_use_gen = &genesis_config.gen_kind.type_use_gen(genesis_build.attr_span);
 
 	let where_clause = &genesis_build.where_clause;
 
