@@ -151,9 +151,13 @@ fn transaction_fee_is_correct() {
 		function: RuntimeCall::Balances(default_transfer_call()),
 	});
 
-	let r =
-		executor_call(&mut t, "Core_initialize_block", &vec![].and(&from_block_number(1u32)), true)
-			.0;
+	let r = executor_call(
+		&mut t,
+		"BlockBuilder_initialize_block",
+		&vec![].and(&from_block_number(1u32)),
+		true,
+	)
+	.0;
 
 	assert!(r.is_ok());
 	let r = executor_call(&mut t, "BlockBuilder_apply_extrinsic", &vec![].and(&xt.clone()), true).0;

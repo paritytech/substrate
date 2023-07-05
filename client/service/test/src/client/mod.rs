@@ -88,7 +88,7 @@ fn construct_block(
 		backend,
 		&mut overlay,
 		&new_native_or_wasm_executor(),
-		"Core_initialize_block",
+		"BlockBuilder_initialize_block",
 		&header.encode(),
 		Default::default(),
 		&runtime_code,

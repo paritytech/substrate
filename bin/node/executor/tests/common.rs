@@ -168,7 +168,9 @@ pub fn construct_block(
 	};
 
 	// execute the block to get the real header.
-	executor_call(env, "Core_initialize_block", &header.encode(), true).0.unwrap();
+	executor_call(env, "BlockBuilder_initialize_block", &header.encode(), true)
+		.0
+		.unwrap();
 
 	for extrinsic in extrinsics.iter() {
 		// Try to apply the `extrinsic`. It should be valid, in the sense that it passes
