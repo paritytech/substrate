@@ -168,10 +168,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxSuffixLength: Get<u32>;
 
-		/// The deposit a user needs to place to keep their subnodes in storage.
-		#[pallet::constant]
-		type SubNodeDeposit: Get<BalanceOf<Self>>;
-
 		/// Registration fee for registering a 3-letter name.
 		#[pallet::constant]
 		type TierThreeLetters: Get<BalanceOf<Self>>;
@@ -203,9 +199,14 @@ pub mod pallet {
 		CountedStorageMap<_, Twox64Concat, u32, BoundedSuffixOf<T>>;
 
 	/// The deposit a user needs to make in order to commit to a name registration. A value of
-	/// `None` will disable commitments and therefore the registration of new names.
+	/// A value of `None` will disable commitments and therefore the registration of new names.
 	#[pallet::storage]
 	pub type CommitmentDeposit<T: Config> = StorageValue<_, BalanceOf<T>, OptionQuery>;
+
+	/// The deposit a user needs to place to keep their subnodes in storage.
+	/// A value of `None` will disable subnode registrations.
+	#[pallet::storage]
+	pub type SubNodeDeposit<T: Config> = StorageValue<_, BalanceOf<T>, OptionQuery>;
 
 	/// Name Commitments
 	#[pallet::storage]
@@ -252,11 +253,12 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub commitment_deposit: Option<BalanceOf<T>>,
+		pub subnode_deposit: Option<BalanceOf<T>>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { commitment_deposit: None }
+			Self { commitment_deposit: None, subnode_deposit: None }
 		}
 	}
 
@@ -265,6 +267,9 @@ pub mod pallet {
 		fn build(&self) {
 			if let Some(commitment_deposit) = self.commitment_deposit {
 				CommitmentDeposit::<T>::put(commitment_deposit);
+			}
+			if let Some(subnode_deposit) = self.subnode_deposit {
+				SubNodeDeposit::<T>::put(subnode_deposit);
 			}
 		}
 	}
@@ -299,8 +304,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// It has not passed the minimum waiting period to reveal a commitment.
 		TooEarlyToReveal,
-		/// Commitment deposits have been disabled.
+		/// Commitment deposits have been disabled and commitments cannot be registered.
 		CommitmentsDisabled,
+		/// Subnode deposits have been disabled and subnodes cannot be registered.
+		SubNodesDisabled,
 		/// This commitment hash already exists in storage.
 		CommitmentExists,
 		/// The commitment cannot yet be removed. Has not expired.
@@ -645,11 +652,13 @@ pub mod pallet {
 		/// # Arguments
 		///
 		/// * `commitment_deposit` - Set [`CommitmentDeposit`].
+		/// * `subnode_deposit` - Set [`SubNodeDeposit`].
 		#[pallet::call_index(17)]
 		#[pallet::weight(0)]
 		pub fn set_configs(
 			origin: OriginFor<T>,
 			commitment_deposit: ConfigOp<BalanceOf<T>>,
+			subnode_deposit: ConfigOp<BalanceOf<T>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -664,6 +673,8 @@ pub mod pallet {
 			}
 
 			config_op_exp!(CommitmentDeposit::<T>, commitment_deposit);
+			config_op_exp!(SubNodeDeposit::<T>, subnode_deposit);
+
 			Ok(())
 		}
 	}

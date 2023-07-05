@@ -37,6 +37,12 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		ensure!(!label.len().is_zero(), Error::<T>::NameTooShort);
 
+		let maybe_deposit = CommitmentDeposit::<T>::get();
+		ensure!(maybe_deposit.is_some(), Error::<T>::SubNodesDisabled);
+
+		let deposit =
+			maybe_deposit.expect("subnode deposit has already been verified to exist, qed.");
+
 		let parent_registration = Self::get_registration(parent_hash)?;
 		ensure!(Self::is_controller(&parent_registration, &sender), Error::<T>::NotController);
 
@@ -45,7 +51,6 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
 		let expiration = None;
-		let deposit = T::SubNodeDeposit::get();
 		Self::do_register(name_hash, sender.clone(), sender, expiration, Some(deposit))?;
 		Ok(())
 	}

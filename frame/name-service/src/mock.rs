@@ -54,6 +54,7 @@ type AccountId = u64;
 
 parameter_types! {
 	pub static CommitmentDepositConfig: Option<Balance> = Some(10);
+	pub static SubNodeDepositConfig: Option<Balance> = Some(10);
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
 }
@@ -106,7 +107,6 @@ impl Config for Test {
 	type BlockNumberToBalance = Identity;
 	// TODO: make a custom handler and test behavior
 	type RegistrationFeeHandler = ();
-	type SubNodeDeposit = ConstU64<2>;
 	type TierThreeLetters = ConstU64<7>;
 	type TierFourLetters = ConstU64<3>;
 	type MinCommitmentAge = ConstU64<10>;
@@ -125,8 +125,11 @@ impl Config for Test {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let _ = crate::GenesisConfig::<Test> { commitment_deposit: CommitmentDepositConfig::get() }
-		.assimilate_storage(&mut t);
+	let _ = crate::GenesisConfig::<Test> {
+		commitment_deposit: CommitmentDepositConfig::get(),
+		subnode_deposit: SubNodeDepositConfig::get(),
+	}
+	.assimilate_storage(&mut t);
 
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 100), (2, 200), (3, 300), (4, 400), (5, 500), (6, 600)],

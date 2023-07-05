@@ -630,7 +630,7 @@ fn set_subnode_record_works() {
 
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_eq!(Balances::free_balance(&2), 198);
+		assert_eq!(Balances::free_balance(&2), 190);
 	});
 }
 
@@ -683,7 +683,7 @@ fn set_subnode_record_handles_errors() {
 		);
 
 		// drain owner's balance to existential and attempt to register another label
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(owner), 0, 197));
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(owner), 0, 189));
 		assert_eq!(Balances::free_balance(2), 1);
 
 		// not enough balance to register another subnode
@@ -801,7 +801,7 @@ fn deregister_subnode_owner_works() {
 		assert!(Registrations::<Test>::contains_key(name_hash));
 		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address, 1));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
-		assert_eq!(Balances::free_balance(owner), 198);
+		assert_eq!(Balances::free_balance(owner), 190);
 
 		// perform deregistration of subnode by owner
 		assert_ok!(NameService::deregister_subnode(
@@ -839,7 +839,7 @@ fn deregister_subnode_non_owner_works() {
 		assert!(Registrations::<Test>::contains_key(name_hash));
 		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address, 1));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
-		assert_eq!(Balances::free_balance(owner), 198);
+		assert_eq!(Balances::free_balance(owner), 190);
 
 		// run to TLD expiry
 		add_blocks(1000 + 1);
@@ -891,7 +891,7 @@ fn deregister_subnode_handles_errors() {
 		assert!(Registrations::<Test>::contains_key(name_hash));
 		assert_ok!(NameService::set_address(RuntimeOrigin::signed(owner), name_hash, address, 1));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
-		assert_eq!(Balances::free_balance(owner), 198);
+		assert_eq!(Balances::free_balance(owner), 190);
 
 		// non-owner cannot de-register if parent has not been deregistered
 		assert_noop!(
