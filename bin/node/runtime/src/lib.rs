@@ -1206,13 +1206,11 @@ parameter_types! {
 parameter_types! {
 	pub const MinimumCommitmentPeriod: BlockNumber = 1 * MINUTES;
 	pub const CommitmentAlivePeriod: BlockNumber = 1 * DAYS;
-	pub const RegistrationFeePerBlock: Balance = 1 * DOLLARS / (365 * DAYS as Balance);
 	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
 	pub const MaxCommitmentAge: BlockNumber = 10 * MINUTES;
 	pub const MaxNameLength: u32 = 2048; // 2048 is the standard URL limit
 	pub const MaxTextLength: u32 = 2048;
 	pub const MaxSuffixLength: u32 = 4;
-	pub const PerByteFee: Balance = 1 * CENTS;
 }
 
 impl pallet_name_service::Config for Runtime {
@@ -1223,10 +1221,8 @@ impl pallet_name_service::Config for Runtime {
 	type MaxCommitmentAge = MaxCommitmentAge;
 	type MaxNameLength = MaxNameLength;
 	type RegistrationFeeHandler = ();
-	type RegistrationFeePerBlock = RegistrationFeePerBlock;
 	type MaxTextLength = MaxTextLength;
 	type MaxSuffixLength = MaxSuffixLength;
-	type PerByteFee = PerByteFee;
 	type NameServiceResolver = pallet_name_service::Pallet<Self>;
 }
 

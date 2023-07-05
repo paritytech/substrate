@@ -168,15 +168,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxSuffixLength: Get<u32>;
 
-		/// Registration fee per block.
-		#[pallet::constant]
-		type RegistrationFeePerBlock: Get<BalanceOf<Self>>;
-
 		/// An interface to access the name service resolver.
 		type NameServiceResolver: NameServiceResolver<Self>;
-
-		/// The deposit taken per byte of storage used.
-		type PerByteFee: Get<BalanceOf<Self>>;
 	}
 
 	/// Para ID Registrations.
@@ -207,6 +200,14 @@ pub mod pallet {
 	/// Default registration fee for 5+ letter names.
 	#[pallet::storage]
 	pub type TierDefault<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	/// Registration fee per block.
+	#[pallet::storage]
+	pub type RegistrationFeePerBlock<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+
+	/// The deposit taken per byte of storage used.
+	#[pallet::storage]
+	pub type PerByteFee<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
 	/// Name Commitments
 	#[pallet::storage]
@@ -257,6 +258,8 @@ pub mod pallet {
 		pub tier_three_letters: BalanceOf<T>,
 		pub tier_four_letters: BalanceOf<T>,
 		pub tier_default: BalanceOf<T>,
+		pub registration_fee_per_block: BalanceOf<T>,
+		pub per_byte_fee: BalanceOf<T>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -267,6 +270,8 @@ pub mod pallet {
 				tier_three_letters: Zero::zero(),
 				tier_four_letters: Zero::zero(),
 				tier_default: Zero::zero(),
+				registration_fee_per_block: <BalanceOf<T>>::from(1u32),
+				per_byte_fee: <BalanceOf<T>>::from(1u32),
 			}
 		}
 	}
@@ -274,15 +279,17 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			TierThreeLetters::<T>::put(self.tier_three_letters);
-			TierFourLetters::<T>::put(self.tier_four_letters);
-			TierDefault::<T>::put(self.tier_default);
 			if let Some(commitment_deposit) = self.commitment_deposit {
 				CommitmentDeposit::<T>::put(commitment_deposit);
 			}
 			if let Some(subnode_deposit) = self.subnode_deposit {
 				SubNodeDeposit::<T>::put(subnode_deposit);
 			}
+			TierThreeLetters::<T>::put(self.tier_three_letters);
+			TierFourLetters::<T>::put(self.tier_four_letters);
+			TierDefault::<T>::put(self.tier_default);
+			RegistrationFeePerBlock::<T>::put(self.registration_fee_per_block);
+			PerByteFee::<T>::put(self.per_byte_fee);
 		}
 	}
 
@@ -668,6 +675,8 @@ pub mod pallet {
 		/// * `tier_three_letters` - Set [`TierThreeLetters`].
 		/// * `tier_four_letters` - Set [`TierFourLetters`].
 		/// * `tier_default` - Set [`TierDefault`].
+		/// * `registration_fee_per_block` - Set [`RegistrationFeePerBlock`].
+		/// * `per_byte_fee` - Set [`PerByteFee`].
 		#[pallet::call_index(17)]
 		#[pallet::weight(0)]
 		pub fn set_configs(
@@ -677,6 +686,8 @@ pub mod pallet {
 			tier_three_letters: ConfigOp<BalanceOf<T>>,
 			tier_four_letters: ConfigOp<BalanceOf<T>>,
 			tier_default: ConfigOp<BalanceOf<T>>,
+			registration_fee_per_block: ConfigOp<BalanceOf<T>>,
+			per_byte_fee: ConfigOp<BalanceOf<T>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -695,6 +706,8 @@ pub mod pallet {
 			config_op_exp!(TierThreeLetters::<T>, tier_three_letters);
 			config_op_exp!(TierFourLetters::<T>, tier_four_letters);
 			config_op_exp!(TierDefault::<T>, tier_default);
+			config_op_exp!(RegistrationFeePerBlock::<T>, registration_fee_per_block);
+			config_op_exp!(PerByteFee::<T>, per_byte_fee);
 
 			Ok(())
 		}
@@ -703,10 +716,6 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
-			assert!(
-				T::RegistrationFeePerBlock::get() > BalanceOf::<T>::zero(),
-				"Registration fee per block cannot be zero"
-			);
 			assert!(T::MaxNameLength::get() > 0, "Max name length cannot be zero");
 			assert!(T::MaxTextLength::get() > 0, "Max text length cannot be zero");
 			assert!(T::MaxSuffixLength::get() > 0, "Max suffix length cannot be zero");
