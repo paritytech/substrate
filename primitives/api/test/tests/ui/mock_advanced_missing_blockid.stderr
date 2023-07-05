@@ -1,5 +1,0 @@
-error: If using the `advanced` attribute, it is required that the function takes at least one argument, the `BlockId`.
-  --> $DIR/mock_advanced_missing_blockid.rs:15:3
-   |
-15 |         fn test(&self) -> Result<sp_core::NativeOrEncoded<()>, ApiError> {
-   |         ^^

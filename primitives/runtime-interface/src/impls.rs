@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,14 +17,15 @@
 
 //! Provides implementations for the runtime interface traits.
 
-use crate::{
-	RIType, Pointer, pass_by::{PassBy, Codec, Inner, PassByInner, Enum},
-	util::{unpack_ptr_and_len, pack_ptr_and_len},
-};
 #[cfg(feature = "std")]
 use crate::host::*;
 #[cfg(not(feature = "std"))]
 use crate::wasm::*;
+use crate::{
+	pass_by::{Codec, Enum, Inner, PassBy, PassByInner},
+	util::{pack_ptr_and_len, unpack_ptr_and_len},
+	Pointer, RIType,
+};
 
 #[cfg(all(not(feature = "std"), not(feature = "disable_target_static_assertions")))]
 use static_assertions::assert_eq_size;
@@ -32,7 +33,7 @@ use static_assertions::assert_eq_size;
 #[cfg(feature = "std")]
 use sp_wasm_interface::{FunctionContext, Result};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 
 use sp_std::{any::TypeId, mem, vec::Vec};
 
@@ -94,36 +95,36 @@ macro_rules! impl_traits_for_primitives {
 }
 
 impl_traits_for_primitives! {
-	u8, u8,
-	u16, u16,
+	u8, u32,
+	u16, u32,
 	u32, u32,
 	u64, u64,
-	i8, i8,
-	i16, i16,
+	i8, i32,
+	i16, i32,
 	i32, i32,
 	i64, i64,
 }
 
-/// `bool` is passed as `u8`.
+/// `bool` is passed as `u32`.
 ///
 /// - `1`: true
 /// - `0`: false
 impl RIType for bool {
-	type FFIType = u8;
+	type FFIType = u32;
 }
 
 #[cfg(not(feature = "std"))]
 impl IntoFFIValue for bool {
 	type Owned = ();
 
-	fn into_ffi_value(&self) -> WrappedFFIValue<u8> {
+	fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
 		if *self { 1 } else { 0 }.into()
 	}
 }
 
 #[cfg(not(feature = "std"))]
 impl FromFFIValue for bool {
-	fn from_ffi_value(arg: u8) -> bool {
+	fn from_ffi_value(arg: u32) -> bool {
 		arg == 1
 	}
 }
@@ -132,14 +133,14 @@ impl FromFFIValue for bool {
 impl FromFFIValue for bool {
 	type SelfInstance = bool;
 
-	fn from_ffi_value(_: &mut dyn FunctionContext, arg: u8) -> Result<bool> {
+	fn from_ffi_value(_: &mut dyn FunctionContext, arg: u32) -> Result<bool> {
 		Ok(arg == 1)
 	}
 }
 
 #[cfg(feature = "std")]
 impl IntoFFIValue for bool {
-	fn into_ffi_value(self, _: &mut dyn FunctionContext) -> Result<u8> {
+	fn into_ffi_value(self, _: &mut dyn FunctionContext) -> Result<u32> {
 		Ok(if self { 1 } else { 0 })
 	}
 }
@@ -195,7 +196,7 @@ impl<T: 'static + Decode> FromFFIValue for Vec<T> {
 		let len = len as usize;
 
 		if len == 0 {
-			return Vec::new();
+			return Vec::new()
 		}
 
 		let data = unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) };
@@ -230,7 +231,8 @@ impl<T: 'static + Decode> FromFFIValue for [T] {
 		if TypeId::of::<T>() == TypeId::of::<u8>() {
 			Ok(unsafe { mem::transmute(vec) })
 		} else {
-			Ok(Vec::<T>::decode(&mut &vec[..]).expect("Wasm to host values are encoded correctly; qed"))
+			Ok(Vec::<T>::decode(&mut &vec[..])
+				.expect("Wasm to host values are encoded correctly; qed"))
 		}
 	}
 }
@@ -247,13 +249,11 @@ impl IntoPreallocatedFFIValue for [u8] {
 		let (ptr, len) = unpack_ptr_and_len(allocated);
 
 		if (len as usize) < self_instance.len() {
-			Err(
-				format!(
-					"Preallocated buffer is not big enough (given {} vs needed {})!",
-					len,
-					self_instance.len()
-				)
-			)
+			Err(format!(
+				"Preallocated buffer is not big enough (given {} vs needed {})!",
+				len,
+				self_instance.len()
+			))
 		} else {
 			context.write_memory(Pointer::new(ptr), &self_instance)
 		}
@@ -276,85 +276,65 @@ impl<T: 'static + Encode> IntoFFIValue for [T] {
 	}
 }
 
-/// Implement the traits for the `[u8; N]` arrays, where `N` is the input to this macro.
-macro_rules! impl_traits_for_arrays {
-	(
-		$(
-			$n:expr
-		),*
-		$(,)?
-	) => {
-		$(
-			/// The type is passed as `u32`.
-			///
-			/// The `u32` is the pointer to the array.
-			impl RIType for [u8; $n] {
-				type FFIType = u32;
-			}
+/// The type is passed as `u32`.
+///
+/// The `u32` is the pointer to the array.
+impl<const N: usize> RIType for [u8; N] {
+	type FFIType = u32;
+}
 
-			#[cfg(not(feature = "std"))]
-			impl IntoFFIValue for [u8; $n] {
-				type Owned = ();
+#[cfg(not(feature = "std"))]
+impl<const N: usize> IntoFFIValue for [u8; N] {
+	type Owned = ();
 
-				fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
-					(self.as_ptr() as u32).into()
-				}
-			}
-
-			#[cfg(not(feature = "std"))]
-			impl FromFFIValue for [u8; $n] {
-				fn from_ffi_value(arg: u32) -> [u8; $n] {
-					let mut res = [0u8; $n];
-					let data = unsafe { Vec::from_raw_parts(arg as *mut u8, $n, $n) };
-
-					res.copy_from_slice(&data);
-
-					res
-				}
-			}
-
-			#[cfg(feature = "std")]
-			impl FromFFIValue for [u8; $n] {
-				type SelfInstance = [u8; $n];
-
-				fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<[u8; $n]> {
-					let data = context.read_memory(Pointer::new(arg), $n)?;
-					let mut res = [0u8; $n];
-					res.copy_from_slice(&data);
-					Ok(res)
-				}
-			}
-
-			#[cfg(feature = "std")]
-			impl IntoFFIValue for [u8; $n] {
-				fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u32> {
-					let addr = context.allocate_memory($n)?;
-					context.write_memory(addr, &self)?;
-					Ok(addr.into())
-				}
-			}
-
-			#[cfg(feature = "std")]
-			impl IntoPreallocatedFFIValue for [u8; $n] {
-				type SelfInstance = [u8; $n];
-
-				fn into_preallocated_ffi_value(
-					self_instance: Self::SelfInstance,
-					context: &mut dyn FunctionContext,
-					allocated: u32,
-				) -> Result<()> {
-					context.write_memory(Pointer::new(allocated), &self_instance)
-				}
-			}
-		)*
+	fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
+		(self.as_ptr() as u32).into()
 	}
 }
 
-impl_traits_for_arrays! {
-	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-	27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
-	51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74,
-	75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96,
+#[cfg(not(feature = "std"))]
+impl<const N: usize> FromFFIValue for [u8; N] {
+	fn from_ffi_value(arg: u32) -> [u8; N] {
+		let mut res = [0u8; N];
+		let data = unsafe { Vec::from_raw_parts(arg as *mut u8, N, N) };
+
+		res.copy_from_slice(&data);
+
+		res
+	}
+}
+
+#[cfg(feature = "std")]
+impl<const N: usize> FromFFIValue for [u8; N] {
+	type SelfInstance = [u8; N];
+
+	fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<[u8; N]> {
+		let mut res = [0u8; N];
+		context.read_memory_into(Pointer::new(arg), &mut res)?;
+		Ok(res)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<const N: usize> IntoFFIValue for [u8; N] {
+	fn into_ffi_value(self, context: &mut dyn FunctionContext) -> Result<u32> {
+		let addr = context.allocate_memory(N as u32)?;
+		context.write_memory(addr, &self)?;
+		Ok(addr.into())
+	}
+}
+
+#[cfg(feature = "std")]
+impl<const N: usize> IntoPreallocatedFFIValue for [u8; N] {
+	type SelfInstance = [u8; N];
+
+	fn into_preallocated_ffi_value(
+		self_instance: Self::SelfInstance,
+		context: &mut dyn FunctionContext,
+		allocated: u32,
+	) -> Result<()> {
+		context.write_memory(Pointer::new(allocated), &self_instance)
+	}
 }
 
 impl<T: codec::Codec, E: codec::Codec> PassBy for sp_std::result::Result<T, E> {
@@ -367,7 +347,10 @@ impl<T: codec::Codec> PassBy for Option<T> {
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 #[tuple_types_no_default_trait_bound]
-impl PassBy for Tuple where Self: codec::Codec {
+impl PassBy for Tuple
+where
+	Self: codec::Codec,
+{
 	type PassBy = Codec<Self>;
 }
 
@@ -511,9 +494,8 @@ macro_rules! for_u128_i128 {
 			type SelfInstance = $type;
 
 			fn from_ffi_value(context: &mut dyn FunctionContext, arg: u32) -> Result<$type> {
-				let data = context.read_memory(Pointer::new(arg), mem::size_of::<$type>() as u32)?;
 				let mut res = [0u8; mem::size_of::<$type>()];
-				res.copy_from_slice(&data);
+				context.read_memory_into(Pointer::new(arg), &mut res)?;
 				Ok(<$type>::from_le_bytes(res))
 			}
 		}
@@ -526,7 +508,7 @@ macro_rules! for_u128_i128 {
 				Ok(addr.into())
 			}
 		}
-	}
+	};
 }
 
 for_u128_i128!(u128);
@@ -541,5 +523,13 @@ impl PassBy for sp_wasm_interface::Value {
 }
 
 impl PassBy for sp_storage::TrackedStorageKey {
+	type PassBy = Codec<Self>;
+}
+
+impl PassBy for sp_storage::StateVersion {
+	type PassBy = Enum<Self>;
+}
+
+impl PassBy for sp_externalities::MultiRemovalResults {
 	type PassBy = Codec<Self>;
 }

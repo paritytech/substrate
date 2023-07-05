@@ -1,28 +1,34 @@
-error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Config>::Bar`
-  --> $DIR/call_argument_invalid_bound.rs:20:37
-   |
-20 |         fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                           ^
-   |
-help: consider further restricting this bound
-   |
-17 |     #[pallet::call + std::cmp::PartialEq]
-   |                    ^^^^^^^^^^^^^^^^^^^^^
+error: use of deprecated constant `pallet::warnings::ConstantWeight_0::_w`:
+               It is deprecated to use hard-coded constant as call weight.
+               Please instead benchmark all calls or put the pallet into `dev` mode.
 
-error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
-  --> $DIR/call_argument_invalid_bound.rs:20:37
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/13798>
+  --> tests/pallet_ui/call_argument_invalid_bound.rs:19:20
    |
-20 |         fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                           ^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
+19 |         #[pallet::weight(0)]
+   |                          ^
    |
-   = note: required by `clone`
+   = note: `-D deprecated` implied by `-D warnings`
 
 error[E0277]: `<T as pallet::Config>::Bar` doesn't implement `std::fmt::Debug`
-  --> $DIR/call_argument_invalid_bound.rs:20:37
+  --> tests/pallet_ui/call_argument_invalid_bound.rs:21:36
    |
-20 |         fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
-   |                                           ^ `<T as pallet::Config>::Bar` cannot be formatted using `{:?}` because it doesn't implement `std::fmt::Debug`
+21 |         pub fn foo(origin: OriginFor<T>, _bar: T::Bar) -> DispatchResultWithPostInfo {
+   |                                          ^^^^ `<T as pallet::Config>::Bar` cannot be formatted using `{:?}` because it doesn't implement `std::fmt::Debug`
    |
    = help: the trait `std::fmt::Debug` is not implemented for `<T as pallet::Config>::Bar`
-   = note: required because of the requirements on the impl of `std::fmt::Debug` for `&<T as pallet::Config>::Bar`
-   = note: required for the cast to the object type `dyn std::fmt::Debug`
+   = note: required for `&<T as pallet::Config>::Bar` to implement `std::fmt::Debug`
+   = note: required for the cast from `&<T as pallet::Config>::Bar` to the object type `dyn std::fmt::Debug`
+
+error[E0277]: the trait bound `<T as pallet::Config>::Bar: Clone` is not satisfied
+  --> tests/pallet_ui/call_argument_invalid_bound.rs:21:36
+   |
+21 |         pub fn foo(origin: OriginFor<T>, _bar: T::Bar) -> DispatchResultWithPostInfo {
+   |                                          ^^^^ the trait `Clone` is not implemented for `<T as pallet::Config>::Bar`
+
+error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Config>::Bar`
+  --> tests/pallet_ui/call_argument_invalid_bound.rs:21:36
+   |
+21 |         pub fn foo(origin: OriginFor<T>, _bar: T::Bar) -> DispatchResultWithPostInfo {
+   |                                          ^^^^

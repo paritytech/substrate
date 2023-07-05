@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,23 +20,21 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::{Slot, InherentDataProviderExt};
-use sp_consensus::{Error, SelectChain};
-use sp_inherents::{InherentData, CreateInherentDataProviders, InherentDataProvider};
+use super::{InherentDataProviderExt, Slot, LOG_TARGET};
+use sp_consensus::SelectChain;
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
-use std::time::{Duration, Instant};
 use futures_timer::Delay;
+use std::time::{Duration, Instant};
 
 /// Returns current duration since unix epoch.
 pub fn duration_now() -> Duration {
 	use std::time::SystemTime;
 	let now = SystemTime::now();
-	now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|e| panic!(
-		"Current time {:?} is before unix epoch. Something is wrong: {:?}",
-		now,
-		e,
-	))
+	now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_else(|e| {
+		panic!("Current time {:?} is before unix epoch. Something is wrong: {:?}", now, e)
+	})
 }
 
 /// Returns the duration until the next slot from now.
@@ -52,12 +50,10 @@ pub fn time_until_next_slot(slot_duration: Duration) -> Duration {
 pub struct SlotInfo<B: BlockT> {
 	/// The slot number as found in the inherent data.
 	pub slot: Slot,
-	/// Current timestamp as found in the inherent data.
-	pub timestamp: sp_timestamp::Timestamp,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
-	/// The inherent data.
-	pub inherent_data: InherentData,
+	/// The inherent data provider.
+	pub create_inherent_data: Box<dyn InherentDataProvider>,
 	/// Slot duration.
 	pub duration: Duration,
 	/// The chain header this slot is based on.
@@ -74,16 +70,14 @@ impl<B: BlockT> SlotInfo<B> {
 	/// `ends_at` is calculated using `timestamp` and `duration`.
 	pub fn new(
 		slot: Slot,
-		timestamp: sp_timestamp::Timestamp,
-		inherent_data: InherentData,
+		create_inherent_data: Box<dyn InherentDataProvider>,
 		duration: Duration,
 		chain_head: B::Header,
 		block_size_limit: Option<usize>,
 	) -> Self {
 		Self {
 			slot,
-			timestamp,
-			inherent_data,
+			create_inherent_data,
 			duration,
 			chain_head,
 			block_size_limit,
@@ -93,105 +87,100 @@ impl<B: BlockT> SlotInfo<B> {
 }
 
 /// A stream that returns every time there is a new slot.
-pub(crate) struct Slots<Block, C, IDP> {
+pub(crate) struct Slots<Block, SC, IDP> {
 	last_slot: Slot,
 	slot_duration: Duration,
-	inner_delay: Option<Delay>,
+	until_next_slot: Option<Delay>,
 	create_inherent_data_providers: IDP,
-	client: C,
+	select_chain: SC,
 	_phantom: std::marker::PhantomData<Block>,
 }
 
-impl<Block, C, IDP> Slots<Block, C, IDP> {
+impl<Block, SC, IDP> Slots<Block, SC, IDP> {
 	/// Create a new `Slots` stream.
 	pub fn new(
 		slot_duration: Duration,
 		create_inherent_data_providers: IDP,
-		client: C,
+		select_chain: SC,
 	) -> Self {
 		Slots {
 			last_slot: 0.into(),
 			slot_duration,
-			inner_delay: None,
+			until_next_slot: None,
 			create_inherent_data_providers,
-			client,
+			select_chain,
 			_phantom: Default::default(),
 		}
 	}
 }
 
-impl<Block, C, IDP> Slots<Block, C, IDP>
+impl<Block, SC, IDP> Slots<Block, SC, IDP>
 where
 	Block: BlockT,
-	C: SelectChain<Block>,
-	IDP: CreateInherentDataProviders<Block, ()>,
+	SC: SelectChain<Block>,
+	IDP: CreateInherentDataProviders<Block, ()> + 'static,
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
 	/// Returns a future that fires when the next slot starts.
-	pub async fn next_slot(&mut self) -> Result<SlotInfo<Block>, Error> {
+	pub async fn next_slot(&mut self) -> SlotInfo<Block> {
 		loop {
-			self.inner_delay = match self.inner_delay.take() {
-				None => {
-					// schedule wait.
+			// Wait for slot timeout
+			self.until_next_slot
+				.take()
+				.unwrap_or_else(|| {
+					// Schedule first timeout.
 					let wait_dur = time_until_next_slot(self.slot_duration);
-					Some(Delay::new(wait_dur))
-				}
-				Some(d) => Some(d),
-			};
+					Delay::new(wait_dur)
+				})
+				.await;
 
-			if let Some(inner_delay) = self.inner_delay.take() {
-				inner_delay.await;
-			}
-			// timeout has fired.
+			// Schedule delay for next slot.
+			let wait_dur = time_until_next_slot(self.slot_duration);
+			self.until_next_slot = Some(Delay::new(wait_dur));
 
-			let ends_in = time_until_next_slot(self.slot_duration);
-
-			// reschedule delay for next slot.
-			self.inner_delay = Some(Delay::new(ends_in));
-
-			let ends_at = Instant::now() + ends_in;
-
-			let chain_head = match self.client.best_chain() {
+			let chain_head = match self.select_chain.best_chain().await {
 				Ok(x) => x,
 				Err(e) => {
 					log::warn!(
-						target: "slots",
-						"Unable to author block in slot. No best block header: {:?}",
+						target: LOG_TARGET,
+						"Unable to author block in slot. No best block header: {}",
 						e,
 					);
-					// Let's try at the next slot..
-					self.inner_delay.take();
-					continue;
-				}
+					// Let's retry at the next slot.
+					continue
+				},
 			};
 
-			let inherent_data_providers = self.create_inherent_data_providers
+			let inherent_data_providers = match self
+				.create_inherent_data_providers
 				.create_inherent_data_providers(chain_head.hash(), ())
-				.await?;
+				.await
+			{
+				Ok(x) => x,
+				Err(e) => {
+					log::warn!(
+						target: LOG_TARGET,
+						"Unable to author block in slot. Failure creating inherent data provider: {}",
+						e,
+					);
+					// Let's retry at the next slot.
+					continue
+				},
+			};
 
-			if Instant::now() > ends_at {
-				log::warn!(
-					target: "slots",
-					"Creating inherent data providers took more time than we had left for the slot.",
-				);
-			}
-
-			let timestamp = inherent_data_providers.timestamp();
 			let slot = inherent_data_providers.slot();
-			let inherent_data = inherent_data_providers.create_inherent_data()?;
 
-			// never yield the same slot twice.
+			// Never yield the same slot twice.
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Ok(SlotInfo::new(
+				break SlotInfo::new(
 					slot,
-					timestamp,
-					inherent_data,
+					Box::new(inherent_data_providers),
 					self.slot_duration,
 					chain_head,
 					None,
-				))
+				)
 			}
 		}
 	}

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package authority_discovery_v1;
+
+// First we need to serialize the addresses in order to be able to sign them.
+message AuthorityAddresses {
+	repeated bytes addresses = 1;
+}
+
+// Then we need to serialize addresses and signature to send them over the wire.
+message SignedAuthorityAddresses {
+	bytes addresses = 1;
+	bytes signature = 2;
+}

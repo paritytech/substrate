@@ -1,0 +1,76 @@
+{{header}}
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {{version}}
+//! DATE: {{date}}
+//! HOSTNAME: `{{hostname}}`, CPU: `{{cpuname}}`
+//!
+//! SHORT-NAME: `{{short_name}}`, LONG-NAME: `{{long_name}}`, RUNTIME: `{{runtime_name}}`
+//! WARMUPS: `{{params.bench.warmup}}`, REPEAT: `{{params.bench.repeat}}`
+//! WEIGHT-PATH: `{{params.weight.weight_path}}`
+//! WEIGHT-METRIC: `{{params.weight.weight_metric}}`, WEIGHT-MUL: `{{params.weight.weight_mul}}`, WEIGHT-ADD: `{{params.weight.weight_add}}`
+
+// Executed Command:
+{{#each args as |arg|}}
+//   {{arg}}
+{{/each}}
+
+use sp_core::parameter_types;
+use sp_weights::{constants::WEIGHT_REF_TIME_PER_NANOS, Weight};
+
+parameter_types! {
+	{{#if (eq short_name "block")}}
+	/// Time to execute an empty block.
+	{{else}}
+	/// Time to execute a NO-OP extrinsic, for example `System::remark`.
+	{{/if}}
+	/// Calculated by multiplying the *{{params.weight.weight_metric}}* with `{{params.weight.weight_mul}}` and adding `{{params.weight.weight_add}}`.
+	///
+	/// Stats nanoseconds:
+	///   Min, Max: {{underscore stats.min}}, {{underscore stats.max}}
+	///   Average:  {{underscore stats.avg}}
+	///   Median:   {{underscore stats.median}}
+	///   Std-Dev:  {{stats.stddev}}
+	///
+	/// Percentiles nanoseconds:
+	///   99th: {{underscore stats.p99}}
+	///   95th: {{underscore stats.p95}}
+	///   75th: {{underscore stats.p75}}
+	pub const {{long_name}}Weight: Weight =
+		Weight::from_parts(WEIGHT_REF_TIME_PER_NANOS.saturating_mul({{underscore weight}}), 0);
+}
+
+#[cfg(test)]
+mod test_weights {
+	use sp_weights::constants;
+
+	/// Checks that the weight exists and is sane.
+	// NOTE: If this test fails but you are sure that the generated values are fine,
+	// you can delete it.
+	#[test]
+	fn sane() {
+		let w = super::{{long_name}}Weight::get();
+
+		{{#if (eq short_name "block")}}
+		// At least 100 µs.
+		assert!(
+			w.ref_time() >= 100u64 * constants::WEIGHT_REF_TIME_PER_MICROS,
+			"Weight should be at least 100 µs."
+		);
+		// At most 50 ms.
+		assert!(
+			w.ref_time() <= 50u64 * constants::WEIGHT_REF_TIME_PER_MILLIS,
+			"Weight should be at most 50 ms."
+		);
+		{{else}}
+		// At least 10 µs.
+		assert!(
+			w.ref_time() >= 10u64 * constants::WEIGHT_REF_TIME_PER_MICROS,
+			"Weight should be at least 10 µs."
+		);
+		// At most 1 ms.
+		assert!(
+			w.ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
+			"Weight should be at most 1 ms."
+		);
+		{{/if}}
+	}
+}

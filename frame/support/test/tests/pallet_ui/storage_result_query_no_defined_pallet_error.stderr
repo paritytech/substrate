@@ -1,0 +1,5 @@
+error: Invalid pallet::storage, unexpected number of path segments for the generics in ResultQuery, expected a path with at least 2 segments, found 1
+  --> tests/pallet_ui/storage_result_query_no_defined_pallet_error.rs:12:56
+   |
+12 |     type Foo<T: Config> = StorageValue<_, u8, ResultQuery<NonExistentValue>>;
+   |                                                           ^^^^^^^^^^^^^^^^

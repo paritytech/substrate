@@ -9,6 +9,11 @@ trim_trailing_whitespace=true
 max_line_length=100
 insert_final_newline=true
 
+[*.md]
+max_line_length=80
+indent_style=space
+indent_size=2
+
 [*.yml]
 indent_style=space
 indent_size=2

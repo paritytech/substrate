@@ -1,0 +1,95 @@
+{{header}}
+//! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {{version}}
+//! DATE: {{date}}
+//! HOSTNAME: `{{hostname}}`, CPU: `{{cpuname}}`
+//!
+//! DATABASE: `{{db_name}}`, RUNTIME: `{{runtime_name}}`
+//! BLOCK-NUM: `{{block_number}}`
+//! SKIP-WRITE: `{{params.skip_write}}`, SKIP-READ: `{{params.skip_read}}`, WARMUPS: `{{params.warmups}}`
+//! STATE-VERSION: `V{{params.state_version}}`, STATE-CACHE-SIZE: `{{params.state_cache_size}}`
+//! WEIGHT-PATH: `{{params.weight_params.weight_path}}`
+//! METRIC: `{{params.weight_params.weight_metric}}`, WEIGHT-MUL: `{{params.weight_params.weight_mul}}`, WEIGHT-ADD: `{{params.weight_params.weight_add}}`
+
+// Executed Command:
+{{#each args as |arg|}}
+//   {{arg}}
+{{/each}}
+
+/// Storage DB weights for the `{{runtime_name}}` runtime and `{{db_name}}`.
+pub mod constants {
+	use frame_support::weights::constants;
+	use sp_core::parameter_types;
+	use sp_weights::RuntimeDbWeight;
+
+	parameter_types! {
+		{{#if (eq db_name "ParityDb")}}
+		/// `ParityDB` can be enabled with a feature flag, but is still experimental. These weights
+		/// are available for brave runtime engineers who may want to try this out as default.
+		{{else}}
+		/// By default, Substrate uses `RocksDB`, so this will be the weight used throughout
+		/// the runtime.
+		{{/if}}
+		pub const {{db_name}}Weight: RuntimeDbWeight = RuntimeDbWeight {
+			/// Time to read one storage item.
+			/// Calculated by multiplying the *{{params.weight_params.weight_metric}}* of all values with `{{params.weight_params.weight_mul}}` and adding `{{params.weight_params.weight_add}}`.
+			///
+			/// Stats nanoseconds:
+			///   Min, Max: {{underscore read.0.min}}, {{underscore read.0.max}}
+			///   Average:  {{underscore read.0.avg}}
+			///   Median:   {{underscore read.0.median}}
+			///   Std-Dev:  {{read.0.stddev}}
+			///
+			/// Percentiles nanoseconds:
+			///   99th: {{underscore read.0.p99}}
+			///   95th: {{underscore read.0.p95}}
+			///   75th: {{underscore read.0.p75}}
+			read: {{underscore read_weight}} * constants::WEIGHT_REF_TIME_PER_NANOS,
+
+			/// Time to write one storage item.
+			/// Calculated by multiplying the *{{params.weight_params.weight_metric}}* of all values with `{{params.weight_params.weight_mul}}` and adding `{{params.weight_params.weight_add}}`.
+			///
+			/// Stats nanoseconds:
+			///   Min, Max: {{underscore write.0.min}}, {{underscore write.0.max}}
+			///   Average:  {{underscore write.0.avg}}
+			///   Median:   {{underscore write.0.median}}
+			///   Std-Dev:  {{write.0.stddev}}
+			///
+			/// Percentiles nanoseconds:
+			///   99th: {{underscore write.0.p99}}
+			///   95th: {{underscore write.0.p95}}
+			///   75th: {{underscore write.0.p75}}
+			write: {{underscore write_weight}} * constants::WEIGHT_REF_TIME_PER_NANOS,
+		};
+	}
+
+	#[cfg(test)]
+	mod test_db_weights {
+		use super::constants::{{db_name}}Weight as W;
+		use sp_weights::constants;
+
+		/// Checks that all weights exist and have sane values.
+		// NOTE: If this test fails but you are sure that the generated values are fine,
+		// you can delete it.
+		#[test]
+		fn bound() {
+			// At least 1 µs.
+			assert!(
+				W::get().reads(1).ref_time() >= constants::WEIGHT_REF_TIME_PER_MICROS,
+				"Read weight should be at least 1 µs."
+			);
+			assert!(
+				W::get().writes(1).ref_time() >= constants::WEIGHT_REF_TIME_PER_MICROS,
+				"Write weight should be at least 1 µs."
+			);
+			// At most 1 ms.
+			assert!(
+				W::get().reads(1).ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
+				"Read weight should be at most 1 ms."
+			);
+			assert!(
+				W::get().writes(1).ref_time() <= constants::WEIGHT_REF_TIME_PER_MILLIS,
+				"Write weight should be at most 1 ms."
+			);
+		}
+	}
+}

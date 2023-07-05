@@ -1,0 +1,33 @@
+[package]
+name = "pallet-nomination-pools-fuzzer"
+version = "2.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Fuzzer for fixed point arithmetic primitives."
+documentation = "https://docs.rs/sp-arithmetic-fuzzer"
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+honggfuzz = "0.5.54"
+
+pallet-nomination-pools = { path = "..", features = ["fuzzing"] }
+
+frame-system = { path = "../../system" }
+frame-support = { path = "../../support" }
+
+sp-runtime = { path = "../../../primitives/runtime" }
+sp-io = { path = "../../../primitives/io" }
+sp-tracing = { path = "../../../primitives/tracing" }
+
+rand = { version = "0.8.5", features = ["small_rng"] }
+log = "0.4.17"
+
+[[bin]]
+name = "call"
+path = "src/call.rs"

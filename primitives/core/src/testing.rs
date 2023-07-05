@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,8 +23,12 @@ use crate::crypto::KeyTypeId;
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
 pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
-/// Key type for generic Sr 25519 key.
+/// Key type for generic ECDSA key.
 pub const ECDSA: KeyTypeId = KeyTypeId(*b"ecds");
+/// Key type for generic BLS12-377 key.
+pub const BLS377: KeyTypeId = KeyTypeId(*b"bls7");
+/// Key type for generic BLS12-381 key.
+pub const BLS381: KeyTypeId = KeyTypeId(*b"bls8");
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the
 /// wasm executor. This is useful for tests where you need to call a function in wasm.
@@ -90,7 +94,7 @@ macro_rules! wasm_export_functions {
 					&mut &input[..],
 				).expect("Input data is correctly encoded");
 
-				$( $fn_impl )*
+				(|| { $( $fn_impl )* })()
 			}
 
 			$crate::to_substrate_wasm_fn_return_value(&())
@@ -118,7 +122,7 @@ macro_rules! wasm_export_functions {
 					&mut &input[..],
 				).expect("Input data is correctly encoded");
 
-				$( $fn_impl )*
+				(|| { $( $fn_impl )* })()
 			};
 
 			$crate::to_substrate_wasm_fn_return_value(&output)
@@ -144,21 +148,48 @@ impl TaskExecutor {
 }
 
 #[cfg(feature = "std")]
+impl Default for TaskExecutor {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+#[cfg(feature = "std")]
 impl crate::traits::SpawnNamed for TaskExecutor {
-	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_blocking(
+		&self,
+		_name: &'static str,
+		_group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.0.spawn_ok(future);
 	}
-	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn(
+		&self,
+		_name: &'static str,
+		_group: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.0.spawn_ok(future);
 	}
 }
 
 #[cfg(feature = "std")]
 impl crate::traits::SpawnEssentialNamed for TaskExecutor {
-	fn spawn_essential_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_essential_blocking(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.0.spawn_ok(future);
 	}
-	fn spawn_essential(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_essential(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.0.spawn_ok(future);
 	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_core::RuntimeDebug;
 use sp_std::vec::Vec;
 
@@ -32,6 +32,14 @@ pub enum RuntimeString {
 	Owned(Vec<u8>),
 }
 
+impl scale_info::TypeInfo for RuntimeString {
+	type Identity = str;
+
+	fn type_info() -> scale_info::Type {
+		Self::Identity::type_info()
+	}
+}
+
 /// Convenience macro to use the format! interface to get a `RuntimeString::Owned`
 #[macro_export]
 macro_rules! format_runtime_string {
@@ -46,7 +54,6 @@ macro_rules! format_runtime_string {
 		}
 	}};
 }
-
 
 impl From<&'static str> for RuntimeString {
 	fn from(data: &'static str) -> Self {
@@ -85,6 +92,18 @@ impl AsRef<[u8]> for RuntimeString {
 	}
 }
 
+#[cfg(feature = "std")]
+impl std::ops::Deref for RuntimeString {
+	type Target = str;
+
+	fn deref(&self) -> &str {
+		match self {
+			Self::Borrowed(val) => val,
+			Self::Owned(val) => val,
+		}
+	}
+}
+
 impl Encode for RuntimeString {
 	fn encode(&self) -> Vec<u8> {
 		match self {
@@ -110,7 +129,7 @@ impl std::fmt::Display for RuntimeString {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl serde::Serialize for RuntimeString {
 	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
 		match self {
@@ -120,15 +139,17 @@ impl serde::Serialize for RuntimeString {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for RuntimeString {
 	fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-		String::deserialize(de).map(Self::Owned)
+		Ok(Self::Owned(serde::Deserialize::deserialize(de)?))
 	}
 }
 
 /// Create a const [`RuntimeString`].
 #[macro_export]
 macro_rules! create_runtime_str {
-	( $y:expr ) => {{ $crate::RuntimeString::Borrowed($y) }}
+	( $y:expr ) => {{
+		$crate::RuntimeString::Borrowed($y)
+	}};
 }

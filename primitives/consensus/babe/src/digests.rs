@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,29 +19,29 @@
 
 use super::{
 	AllowedSlots, AuthorityId, AuthorityIndex, AuthoritySignature, BabeAuthorityWeight,
-	BabeEpochConfiguration, Slot, BABE_ENGINE_ID,
+	BabeEpochConfiguration, Randomness, Slot, BABE_ENGINE_ID,
 };
-use codec::{Codec, Decode, Encode};
-use sp_std::vec::Vec;
-use sp_runtime::{DigestItem, RuntimeDebug};
 
-use sp_consensus_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
+use sp_core::sr25519::vrf::VrfSignature;
+use sp_runtime::{DigestItem, RuntimeDebug};
+use sp_std::vec::Vec;
+
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 
 /// Raw BABE primary slot assignment pre-digest.
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct PrimaryPreDigest {
 	/// Authority index
 	pub authority_index: super::AuthorityIndex,
 	/// Slot
 	pub slot: Slot,
-	/// VRF output
-	pub vrf_output: VRFOutput,
-	/// VRF proof
-	pub vrf_proof: VRFProof,
+	/// VRF signature
+	pub vrf_signature: VrfSignature,
 }
 
 /// BABE secondary slot assignment pre-digest.
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct SecondaryPlainPreDigest {
 	/// Authority index
 	///
@@ -55,22 +55,20 @@ pub struct SecondaryPlainPreDigest {
 }
 
 /// BABE secondary deterministic slot assignment with VRF outputs.
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct SecondaryVRFPreDigest {
 	/// Authority index
 	pub authority_index: super::AuthorityIndex,
 	/// Slot
 	pub slot: Slot,
-	/// VRF output
-	pub vrf_output: VRFOutput,
-	/// VRF proof
-	pub vrf_proof: VRFProof,
+	/// VRF signature
+	pub vrf_signature: VrfSignature,
 }
 
 /// A BABE pre-runtime digest. This contains all data required to validate a
 /// block and for the BABE runtime module. Slots can be assigned to a primary
 /// (VRF based) and to a secondary (slot number based).
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum PreDigest {
 	/// A primary VRF-based slot assignment.
 	#[codec(index = 1)]
@@ -102,6 +100,11 @@ impl PreDigest {
 		}
 	}
 
+	/// Returns true if this pre-digest is for a primary slot assignment.
+	pub fn is_primary(&self) -> bool {
+		matches!(self, PreDigest::Primary(..))
+	}
+
 	/// Returns the weight _added_ by this digest, not the cumulative weight
 	/// of the chain.
 	pub fn added_weight(&self) -> crate::BabeBlockWeight {
@@ -111,11 +114,11 @@ impl PreDigest {
 		}
 	}
 
-	/// Returns the VRF output, if it exists.
-	pub fn vrf_output(&self) -> Option<&VRFOutput> {
+	/// Returns the VRF output and proof, if they exist.
+	pub fn vrf_signature(&self) -> Option<&VrfSignature> {
 		match self {
-			PreDigest::Primary(primary) => Some(&primary.vrf_output),
-			PreDigest::SecondaryVRF(secondary) => Some(&secondary.vrf_output),
+			PreDigest::Primary(primary) => Some(&primary.vrf_signature),
+			PreDigest::SecondaryVRF(secondary) => Some(&secondary.vrf_signature),
 			PreDigest::SecondaryPlain(_) => None,
 		}
 	}
@@ -134,7 +137,9 @@ pub struct NextEpochDescriptor {
 
 /// Information about the next epoch config, if changed. This is broadcast in the first
 /// block of the epoch, and applies using the same rules as `NextEpochDescriptor`.
-#[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(
+	Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo,
+)]
 pub enum NextConfigDescriptor {
 	/// Version 1.
 	#[codec(index = 1)]
@@ -143,14 +148,13 @@ pub enum NextConfigDescriptor {
 		c: (u64, u64),
 		/// Value of `allowed_slots` in `BabeEpochConfiguration`.
 		allowed_slots: AllowedSlots,
-	}
+	},
 }
 
 impl From<NextConfigDescriptor> for BabeEpochConfiguration {
 	fn from(desc: NextConfigDescriptor) -> Self {
 		match desc {
-			NextConfigDescriptor::V1 { c, allowed_slots } =>
-				Self { c, allowed_slots },
+			NextConfigDescriptor::V1 { c, allowed_slots } => Self { c, allowed_slots },
 		}
 	}
 }
@@ -176,9 +180,7 @@ pub trait CompatibleDigestItem: Sized {
 	fn as_next_config_descriptor(&self) -> Option<NextConfigDescriptor>;
 }
 
-impl<Hash> CompatibleDigestItem for DigestItem<Hash> where
-	Hash: Send + Sync + Eq + Clone + Codec + 'static
-{
+impl CompatibleDigestItem for DigestItem {
 	fn babe_pre_digest(digest: PreDigest) -> Self {
 		DigestItem::PreRuntime(BABE_ENGINE_ID, digest.encode())
 	}

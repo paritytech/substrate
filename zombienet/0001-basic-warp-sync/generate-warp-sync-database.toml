@@ -1,0 +1,17 @@
+# this file is not intended to be executed in CI stage
+[relaychain]
+default_image = "docker.io/parity/substrate:latest"
+default_command = "substrate"
+
+# refer to ./README.md for more details on how to create snapshot and spec
+chain = "gen-db"
+chain_spec_path = "chain-spec.json"
+
+
+  [[relaychain.nodes]]
+  name = "alice"
+  validator = true
+
+  [[relaychain.nodes]]
+  name = "bob"
+  validator = true

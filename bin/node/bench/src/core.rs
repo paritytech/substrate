@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,8 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{fmt, borrow::{Cow, ToOwned}};
 use serde::Serialize;
+use std::{
+	borrow::{Cow, ToOwned},
+	fmt,
+};
 
 pub struct Path(Vec<String>);
 
@@ -33,7 +36,11 @@ impl Path {
 	}
 
 	pub fn full(&self) -> String {
-		self.0.iter().fold(String::new(), |mut val, next| { val.push_str("::"); val.push_str(next); val })
+		self.0.iter().fold(String::new(), |mut val, next| {
+			val.push_str("::");
+			val.push_str(next);
+			val
+		})
 	}
 
 	pub fn has(&self, path: &str) -> bool {
@@ -65,24 +72,13 @@ pub struct NsFormatter(pub u64);
 impl fmt::Display for NsFormatter {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let v = self.0;
-
-		if v < 100 {
-			return write!(f, "{} ns", v)
+		match v {
+			v if v < 100 => write!(f, "{} ns", v),
+			v if v < 100_000 => write!(f, "{:.1} µs", v as f64 / 1000.0),
+			v if v < 1_000_000 => write!(f, "{:.4} ms", v as f64 / 1_000_000.0),
+			v if v < 100_000_000 => write!(f, "{:.1} ms", v as f64 / 1_000_000.0),
+			_ => write!(f, "{:.4} s", v as f64 / 1_000_000_000.0),
 		}
-
-		if self.0 < 100_000 {
-			return write!(f, "{:.1} µs", v as f64 / 1000.0)
-		}
-
-		if self.0 < 1_000_000 {
-			return write!(f, "{:.4} ms", v as f64 / 1_000_000.0)
-		}
-
-		if self.0 < 100_000_000 {
-			return write!(f, "{:.1} ms", v as f64 / 1_000_000.0)
-		}
-
-		write!(f, "{:.4} s", v as f64 / 1_000_000_000.0)
 	}
 }
 
@@ -115,10 +111,7 @@ impl fmt::Display for BenchmarkOutput {
 	}
 }
 
-pub fn run_benchmark(
-	benchmark: Box<dyn BenchmarkDescription>,
-	mode: Mode,
-) -> BenchmarkOutput {
+pub fn run_benchmark(benchmark: Box<dyn BenchmarkDescription>, mode: Mode) -> BenchmarkOutput {
 	let name = benchmark.name().to_owned();
 	let mut benchmark = benchmark.setup();
 
@@ -133,11 +126,7 @@ pub fn run_benchmark(
 	let raw_average = (durations.iter().sum::<u128>() / (durations.len() as u128)) as u64;
 	let average = (durations.iter().skip(10).take(30).sum::<u128>() / 30) as u64;
 
-	BenchmarkOutput {
-		name: name.into(),
-		raw_average,
-		average,
-	}
+	BenchmarkOutput { name: name.into(), raw_average, average }
 }
 
 macro_rules! matrix(

@@ -1,0 +1,5 @@
+error: expected `weight` or `call_index`
+  --> tests/pallet_ui/call_invalid_attr.rs:14:13
+   |
+14 |         #[pallet::weird_attr]
+   |                   ^^^^^^^^^^

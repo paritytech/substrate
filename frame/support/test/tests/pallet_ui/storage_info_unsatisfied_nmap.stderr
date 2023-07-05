@@ -1,0 +1,18 @@
+error[E0277]: the trait bound `Bar: MaxEncodedLen` is not satisfied
+  --> tests/pallet_ui/storage_info_unsatisfied_nmap.rs:12:12
+   |
+12 |     #[pallet::pallet]
+   |               ^^^^^^ the trait `MaxEncodedLen` is not implemented for `Bar`
+   |
+   = help: the following other types implement trait `MaxEncodedLen`:
+             ()
+             (TupleElement0, TupleElement1)
+             (TupleElement0, TupleElement1, TupleElement2)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6, TupleElement7)
+           and $N others
+   = note: required for `Key<frame_support::Twox64Concat, Bar>` to implement `KeyGeneratorMaxEncodedLen`
+   = note: required for `frame_support::pallet_prelude::StorageNMap<_GeneratedPrefixForStorageFoo<T>, Key<frame_support::Twox64Concat, Bar>, u32>` to implement `StorageInfoTrait`

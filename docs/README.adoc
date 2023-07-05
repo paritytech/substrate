@@ -190,7 +190,7 @@ You will also need to install the following packages:
 
  - Linux:
 [source, shell]
-sudo apt install cmake pkg-config libssl-dev git clang libclang-dev
+sudo apt install cmake pkg-config libssl-dev git clang libclang-dev llvm
 
 - Linux on ARM:
 `rust-lld` is required for linking wasm, but is missing on non Tier 1 platforms.
@@ -250,6 +250,20 @@ If you are trying to set up Substrate on Windows, you should do the following:
 
 7. Finally, you need to install `cmake`: https://cmake.org/download/
 
+==== Docker
+
+You can use https://github.com/paritytech/scripts/tree/master/dockerfiles/ci-linux[Parity CI docker image] with all necessary dependencies to build Substrate:
+
+[source, shell]
+----
+#run it in the folder with the Substrate source code
+docker run --rm -it -w /shellhere/substrate \
+                    -v $(pwd):/shellhere/substrate \
+                    paritytech/ci-linux:production <cargo commands>
+----
+
+You can find necessary cargo commands in <<shared-steps,shared steps>>
+
 ==== Shared Steps
 
 Then, grab the Substrate source code:
@@ -283,7 +297,7 @@ Detailed logs may be shown by running the node with the following environment va
 
 If you want to see the multi-node consensus algorithm in action locally, then you can create a local testnet with two validator nodes for Alice and Bob, who are the initial authorities of the genesis chain specification that have been endowed with a testnet DOTs. We'll give each node a name and expose them so they are listed on link:https://telemetry.polkadot.io/#/Local%20Testnet[Telemetry]. You'll need two terminal windows open.
 
-We'll start Alice's Substrate node first on default TCP port 30333 with her chain database stored locally at `/tmp/alice`. The Bootnode ID of her node is `QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR`, which is generated from the `--node-key` value that we specify below:
+We'll start Alice's Substrate node first on default TCP port 30333 with their chain database stored locally at `/tmp/alice`. The Bootnode ID of Alice's node is `QmRpheLN4JWdAnY7HGJfWFNbfkQCb6tFf4vvA6hgjMZKrR`, which is generated from the `--node-key` value that we specify below:
 
 [source, shell]
 cargo run --release \-- \
@@ -294,7 +308,7 @@ cargo run --release \-- \
   --telemetry-url 'ws://telemetry.polkadot.io:1024 0' \
   --validator
 
-In the second terminal, we'll run the following to start Bob's Substrate node on a different TCP port of 30334, and with his chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect his node to Alice's Bootnode ID on TCP port 30333:
+In the second terminal, we'll run the following to start Bob's Substrate node on a different TCP port of 30334, and with their chain database stored locally at `/tmp/bob`. We'll specify a value for the `--bootnodes` option that will connect Bob's node to Alice's Bootnode ID on TCP port 30333:
 
 [source, shell]
 cargo run --release \-- \
@@ -431,7 +445,7 @@ pallet-assets, pallet-balances, pallet-consensus, pallet-contracts, pallet-counc
 frame-executive,  pallet-session, pallet-staking, pallet-timestamp, pallet-treasury
 * Node
 [source, shell]
-node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime
+node-cli, node-consensus, node-executor, node-network, node-primitives, kitchensink-runtime
 * Subkey
 [source, shell]
 subkey

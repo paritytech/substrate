@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,7 +32,6 @@ pub fn convert_hash<H1: Default + AsMut<[u8]>, H2: AsRef<[u8]>>(src: &H2) -> H1 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_serializer as ser;
 
 	#[test]
 	fn test_h160() {
@@ -43,40 +42,79 @@ mod tests {
 			(H160::from_low_u64_be(16), "0x0000000000000000000000000000000000000010"),
 			(H160::from_low_u64_be(1_000), "0x00000000000000000000000000000000000003e8"),
 			(H160::from_low_u64_be(100_000), "0x00000000000000000000000000000000000186a0"),
-			(H160::from_low_u64_be(u64::max_value()), "0x000000000000000000000000ffffffffffffffff"),
+			(H160::from_low_u64_be(u64::MAX), "0x000000000000000000000000ffffffffffffffff"),
 		];
 
 		for (number, expected) in tests {
-			assert_eq!(format!("{:?}", expected), ser::to_string_pretty(&number));
-			assert_eq!(number, ser::from_str(&format!("{:?}", expected)).unwrap());
+			assert_eq!(
+				format!("{:?}", expected),
+				serde_json::to_string_pretty(&number).expect("Json pretty print failed")
+			);
+			assert_eq!(number, serde_json::from_str(&format!("{:?}", expected)).unwrap());
 		}
 	}
 
 	#[test]
 	fn test_h256() {
 		let tests = vec![
-			(Default::default(), "0x0000000000000000000000000000000000000000000000000000000000000000"),
-			(H256::from_low_u64_be(2), "0x0000000000000000000000000000000000000000000000000000000000000002"),
-			(H256::from_low_u64_be(15), "0x000000000000000000000000000000000000000000000000000000000000000f"),
-			(H256::from_low_u64_be(16), "0x0000000000000000000000000000000000000000000000000000000000000010"),
-			(H256::from_low_u64_be(1_000), "0x00000000000000000000000000000000000000000000000000000000000003e8"),
-			(H256::from_low_u64_be(100_000), "0x00000000000000000000000000000000000000000000000000000000000186a0"),
-			(H256::from_low_u64_be(u64::max_value()), "0x000000000000000000000000000000000000000000000000ffffffffffffffff"),
+			(
+				Default::default(),
+				"0x0000000000000000000000000000000000000000000000000000000000000000",
+			),
+			(
+				H256::from_low_u64_be(2),
+				"0x0000000000000000000000000000000000000000000000000000000000000002",
+			),
+			(
+				H256::from_low_u64_be(15),
+				"0x000000000000000000000000000000000000000000000000000000000000000f",
+			),
+			(
+				H256::from_low_u64_be(16),
+				"0x0000000000000000000000000000000000000000000000000000000000000010",
+			),
+			(
+				H256::from_low_u64_be(1_000),
+				"0x00000000000000000000000000000000000000000000000000000000000003e8",
+			),
+			(
+				H256::from_low_u64_be(100_000),
+				"0x00000000000000000000000000000000000000000000000000000000000186a0",
+			),
+			(
+				H256::from_low_u64_be(u64::MAX),
+				"0x000000000000000000000000000000000000000000000000ffffffffffffffff",
+			),
 		];
 
 		for (number, expected) in tests {
-			assert_eq!(format!("{:?}", expected), ser::to_string_pretty(&number));
-			assert_eq!(number, ser::from_str(&format!("{:?}", expected)).unwrap());
+			assert_eq!(
+				format!("{:?}", expected),
+				serde_json::to_string_pretty(&number).expect("Json pretty print failed")
+			);
+			assert_eq!(number, serde_json::from_str(&format!("{:?}", expected)).unwrap());
 		}
 	}
 
 	#[test]
 	fn test_invalid() {
-		assert!(ser::from_str::<H256>("\"0x000000000000000000000000000000000000000000000000000000000000000\"").unwrap_err().is_data());
-		assert!(ser::from_str::<H256>("\"0x000000000000000000000000000000000000000000000000000000000000000g\"").unwrap_err().is_data());
-		assert!(ser::from_str::<H256>("\"0x00000000000000000000000000000000000000000000000000000000000000000\"").unwrap_err().is_data());
-		assert!(ser::from_str::<H256>("\"\"").unwrap_err().is_data());
-		assert!(ser::from_str::<H256>("\"0\"").unwrap_err().is_data());
-		assert!(ser::from_str::<H256>("\"10\"").unwrap_err().is_data());
+		assert!(serde_json::from_str::<H256>(
+			"\"0x000000000000000000000000000000000000000000000000000000000000000\""
+		)
+		.unwrap_err()
+		.is_data());
+		assert!(serde_json::from_str::<H256>(
+			"\"0x000000000000000000000000000000000000000000000000000000000000000g\""
+		)
+		.unwrap_err()
+		.is_data());
+		assert!(serde_json::from_str::<H256>(
+			"\"0x00000000000000000000000000000000000000000000000000000000000000000\""
+		)
+		.unwrap_err()
+		.is_data());
+		assert!(serde_json::from_str::<H256>("\"\"").unwrap_err().is_data());
+		assert!(serde_json::from_str::<H256>("\"0\"").unwrap_err().is_data());
+		assert!(serde_json::from_str::<H256>("\"10\"").unwrap_err().is_data());
 	}
 }

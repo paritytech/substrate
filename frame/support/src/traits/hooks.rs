@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,13 @@
 
 //! Traits for hooking tasks to events in a blockchain's lifecycle.
 
-use sp_arithmetic::traits::Saturating;
-use sp_runtime::traits::MaybeSerializeDeserialize;
+use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
+use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_std::prelude::*;
+
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 /// The block initialization trait.
 ///
@@ -33,13 +37,17 @@ pub trait OnInitialize<BlockNumber> {
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
 	/// including inherent extrinsics. Hence for instance, if you runtime includes
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+	fn on_initialize(_n: BlockNumber) -> Weight {
+		Weight::zero()
+	}
 }
 
-#[impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
-	fn on_initialize(n: BlockNumber) -> crate::weights::Weight {
-		let mut weight = 0;
+	fn on_initialize(n: BlockNumber) -> Weight {
+		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
 		weight
 	}
@@ -48,7 +56,9 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 /// The block finalization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is ending.
-#[impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	///
@@ -69,22 +79,28 @@ pub trait OnIdle<BlockNumber> {
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
 	/// in a block are applied but before `on_finalize` is executed.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight
-	) -> crate::weights::Weight {
-		0
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
+		Weight::zero()
 	}
 }
 
-#[impl_for_tuples(30)]
-impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
-	fn on_idle(n: BlockNumber,  remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
-		let mut weight = 0;
-		for_tuples!( #(
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
+	fn on_idle(n: BlockNumber, remaining_weight: Weight) -> Weight {
+		let on_idle_functions: &[fn(BlockNumber, Weight) -> Weight] =
+			&[for_tuples!( #( Tuple::on_idle ),* )];
+		let mut weight = Weight::zero();
+		let len = on_idle_functions.len();
+		let start_index = n % (len as u32).into();
+		let start_index = start_index.try_into().ok().expect(
+			"`start_index % len` always fits into `usize`, because `len` can be in maximum `usize::MAX`; qed"
+		);
+		for on_idle_fn in on_idle_functions.iter().cycle().skip(start_index).take(len) {
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
-			weight = weight.saturating_add(Tuple::on_idle(n.clone(),  adjusted_remaining_weight));
-		)* );
+			weight = weight.saturating_add(on_idle_fn(n, adjusted_remaining_weight));
+		}
 		weight
 	}
 }
@@ -94,59 +110,13 @@ impl<BlockNumber: Clone> OnIdle<BlockNumber> for Tuple {
 /// Implementing this trait for a pallet let's you express operations that should
 /// happen at genesis. It will be called in an externalities provided environment and
 /// will see the genesis state after all pallets have written their genesis state.
-#[impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnGenesis {
 	/// Something that should happen at genesis.
 	fn on_genesis() {}
 }
-
-/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgradeHelpersExt::storage_key`].
-#[cfg(feature = "try-runtime")]
-pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
-
-/// Some helper functions for [`OnRuntimeUpgrade`] during `try-runtime` testing.
-#[cfg(feature = "try-runtime")]
-pub trait OnRuntimeUpgradeHelpersExt {
-	/// Generate a storage key unique to this runtime upgrade.
-	///
-	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
-	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
-	#[cfg(feature = "try-runtime")]
-	fn storage_key(ident: &str) -> [u8; 32] {
-		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
-		let ident = sp_io::hashing::twox_128(ident.as_bytes());
-
-		let mut final_key = [0u8; 32];
-		final_key[..16].copy_from_slice(&prefix);
-		final_key[16..].copy_from_slice(&ident);
-
-		final_key
-	}
-
-	/// Get temporary storage data written by [`Self::set_temp_storage`].
-	///
-	/// Returns `None` if either the data is unavailable or un-decodable.
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
-	#[cfg(feature = "try-runtime")]
-	fn get_temp_storage<T: codec::Decode>(at: &str) -> Option<T> {
-		sp_io::storage::get(&Self::storage_key(at))
-			.and_then(|bytes| codec::Decode::decode(&mut &*bytes).ok())
-	}
-
-	/// Write some temporary data to a specific storage that can be read (potentially in
-	/// post-upgrade hook) via [`Self::get_temp_storage`].
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being written
-	/// to.
-	#[cfg(feature = "try-runtime")]
-	fn set_temp_storage<T: codec::Encode>(data: T, at: &str) {
-		sp_io::storage::set(&Self::storage_key(at), &data.encode());
-	}
-}
-
-#[cfg(feature = "try-runtime")]
-impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
 
 /// The runtime upgrade trait.
 ///
@@ -162,44 +132,124 @@ pub trait OnRuntimeUpgrade {
 	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
+	fn on_runtime_upgrade() -> Weight {
+		Weight::zero()
+	}
+
+	/// Same as `on_runtime_upgrade`, but perform the optional `pre_upgrade` and `post_upgrade` as
+	/// well.
+	#[cfg(feature = "try-runtime")]
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
+		let maybe_state = if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
+			let state = Self::pre_upgrade()?;
+			Some(state)
+		} else {
+			None
+		};
+
+		let weight = Self::on_runtime_upgrade();
+
+		if let Some(state) = maybe_state {
+			let _guard = frame_support::StorageNoopGuard::default();
+			// we want to panic if any checks fail right here right now.
+			Self::post_upgrade(state)?
+		}
+
+		Ok(weight)
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
+	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
+	/// which will be passed to `post_upgrade` after upgrading for post-check. An empty vector
+	/// should be returned if there is no such need.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	///
+	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
+	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> { Ok(()) }
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+		Ok(Vec::new())
+	}
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
+	/// The `state` parameter is the `Vec<u8>` returned by `pre_upgrade` before upgrading, which
+	/// can be used for post-check. NOTE: if `pre_upgrade` is not implemented an empty vector will
+	/// be passed in, in such case `post_upgrade` should ignore it.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	///
+	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
+	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> { Ok(()) }
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
+		Ok(())
+	}
 }
 
-#[impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		let mut weight = 0;
+	fn on_runtime_upgrade() -> Weight {
+		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
 	}
 
+	/// We are executing pre- and post-checks sequentially in order to be able to test several
+	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
+	/// hooks for tuples are a noop.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::pre_upgrade()); )* );
-		result
-	}
+	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
+		let mut weight = Weight::zero();
 
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );
-		result
+		let mut errors = Vec::new();
+
+		for_tuples!(#(
+			match Tuple::try_on_runtime_upgrade(checks) {
+				Ok(weight) => { weight.saturating_add(weight); },
+				Err(err) => { errors.push(err); },
+			}
+		)*);
+
+		if errors.len() == 1 {
+			return Err(errors[0])
+		} else if !errors.is_empty() {
+			log::error!(
+				target: "try-runtime",
+				"Detected multiple errors while executing `try_on_runtime_upgrade`:",
+			);
+
+			errors.iter().for_each(|err| {
+				log::error!(
+					target: "try-runtime",
+					"{:?}",
+					err
+				);
+			});
+
+			return Err("Detected multiple errors while executing `try_on_runtime_upgrade`, check the logs!".into())
+		}
+
+		Ok(weight)
 	}
+}
+
+/// Type that provide some integrity tests.
+///
+/// This implemented for modules by `decl_module`.
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+pub trait IntegrityTest {
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
 }
 
 /// The pallet hooks trait. Implementing this lets you express some logic to execute.
@@ -208,21 +258,25 @@ pub trait Hooks<BlockNumber> {
 	fn on_finalize(_n: BlockNumber) {}
 
 	/// This will be run when the block is being finalized (before `on_finalize`).
-	/// Implement to have something happen using the remaining weight.
-	/// Will not fire if the remaining weight is 0.
-	/// Return the weight used, the hook will subtract it from current weight used
-	/// and pass the result to the next `on_idle` hook if it exists.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight
-	) -> crate::weights::Weight {
-		0
+	///
+	/// Implement to have something happen using the remaining weight. Will not fire if the
+	/// remaining weight is 0.
+	///
+	/// Each pallet's `on_idle` is chosen to be the first to execute in a round-robin fashion
+	/// indexed by the block number.
+	///
+	/// Return the weight used, the caller will use this to calculate the remaining weight and then
+	/// call the next pallet `on_idle` hook if there is still weight left.
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
+		Weight::zero()
 	}
 
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
+	fn on_initialize(_n: BlockNumber) -> Weight {
+		Weight::zero()
+	}
 
 	/// Perform a module upgrade.
 	///
@@ -234,25 +288,51 @@ pub trait Hooks<BlockNumber> {
 	/// # Warning
 	///
 	/// This function will be called before we initialized any runtime state, aka `on_initialize`
-	/// wasn't called yet. So, information like the block number and any other
-	/// block local data are not accessible.
+	/// wasn't called yet. So, information like the block number and any other block local data are
+	/// not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight { 0 }
+	///
+	/// While this function can be freely implemented, using `on_runtime_upgrade` from inside the
+	/// pallet is discouraged and might get deprecated in the future. Alternatively, export the same
+	/// logic as a free-function from your pallet, and pass it to `type Executive` from the
+	/// top-level runtime.
+	fn on_runtime_upgrade() -> Weight {
+		Weight::zero()
+	}
+
+	/// Execute the sanity checks of this pallet, per block.
+	///
+	/// It should focus on certain checks to ensure that the state is sensible. This is never
+	/// executed in a consensus code-path, therefore it can consume as much weight as it needs.
+	///
+	/// This hook should not alter any storage.
+	#[cfg(feature = "try-runtime")]
+	fn try_state(_n: BlockNumber) -> Result<(), TryRuntimeError> {
+		Ok(())
+	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
+	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
+	/// which will be passed to `post_upgrade` after upgrading for post-check. An empty vector
+	/// should be returned if there is no such need.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
+	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+		Ok(Vec::new())
 	}
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
+	/// The `state` parameter is the `Vec<u8>` returned by `pre_upgrade` before upgrading, which
+	/// can be used for post-check. NOTE: if `pre_upgrade` is not implemented an empty vector will
+	/// be passed in, in such case `post_upgrade` should ignore it.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
 	}
 
@@ -281,13 +361,13 @@ pub trait Hooks<BlockNumber> {
 
 /// A trait to define the build function of a genesis config, T and I are placeholder for pallet
 /// trait and pallet instance.
-#[cfg(feature = "std")]
-pub trait GenesisBuild<T, I=()>: Default + MaybeSerializeDeserialize {
+pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeDeserialize {
 	/// The build function is called within an externalities allowing storage APIs.
 	/// Thus one can write to storage using regular pallet storages.
 	fn build(&self);
 
 	/// Build the storage using `build` inside default storage.
+	#[cfg(feature = "std")]
 	fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
 		let mut storage = Default::default();
 		self.assimilate_storage(&mut storage)?;
@@ -295,6 +375,7 @@ pub trait GenesisBuild<T, I=()>: Default + MaybeSerializeDeserialize {
 	}
 
 	/// Assimilate the storage for this module into pre-existing overlays.
+	#[cfg(feature = "std")]
 	fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
 		sp_state_machine::BasicExternalities::execute_with_storage(storage, || {
 			self.build();
@@ -304,7 +385,9 @@ pub trait GenesisBuild<T, I=()>: Default + MaybeSerializeDeserialize {
 }
 
 /// A trait which is called when the timestamp is set in the runtime.
-#[impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnTimestampSet<Moment> {
 	/// Called when the timestamp is set.
 	fn on_timestamp_set(moment: Moment);
@@ -313,37 +396,136 @@ pub trait OnTimestampSet<Moment> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::traits::metadata::PalletVersion;
+	use sp_io::TestExternalities;
+
+	#[cfg(feature = "try-runtime")]
+	#[test]
+	fn on_runtime_upgrade_pre_post_executed_tuple() {
+		crate::parameter_types! {
+			pub static Pre: Vec<&'static str> = Default::default();
+			pub static Post: Vec<&'static str> = Default::default();
+		}
+
+		macro_rules! impl_test_type {
+			($name:ident) => {
+				struct $name;
+				impl OnRuntimeUpgrade for $name {
+					fn on_runtime_upgrade() -> Weight {
+						Default::default()
+					}
+
+					#[cfg(feature = "try-runtime")]
+					fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+						Pre::mutate(|s| s.push(stringify!($name)));
+						Ok(Vec::new())
+					}
+
+					#[cfg(feature = "try-runtime")]
+					fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
+						Post::mutate(|s| s.push(stringify!($name)));
+						Ok(())
+					}
+				}
+			};
+		}
+
+		impl_test_type!(Foo);
+		impl_test_type!(Bar);
+		impl_test_type!(Baz);
+
+		TestExternalities::default().execute_with(|| {
+			Foo::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo"]);
+			assert_eq!(Post::take(), vec!["Foo"]);
+
+			<(Foo, Bar, Baz)>::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
+			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+
+			<((Foo, Bar), Baz)>::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
+			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+
+			<(Foo, (Bar, Baz))>::try_on_runtime_upgrade(true).unwrap();
+			assert_eq!(Pre::take(), vec!["Foo", "Bar", "Baz"]);
+			assert_eq!(Post::take(), vec!["Foo", "Bar", "Baz"]);
+		});
+	}
 
 	#[test]
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
 		struct Test;
+
 		impl OnInitialize<u8> for Test {
-			fn on_initialize(_n: u8) -> crate::weights::Weight {
-				10
+			fn on_initialize(_n: u8) -> Weight {
+				Weight::from_parts(10, 0)
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
-			fn on_runtime_upgrade() -> crate::weights::Weight {
-				20
+			fn on_runtime_upgrade() -> Weight {
+				Weight::from_parts(20, 0)
 			}
 		}
 
-		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
-		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_parts(20, 0));
+			assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_parts(40, 0));
+		});
 	}
 
 	#[test]
-	fn check_pallet_version_ordering() {
-		let version = PalletVersion::new(1, 0, 0);
-		assert!(version > PalletVersion::new(0, 1, 2));
-		assert!(version == PalletVersion::new(1, 0, 0));
-		assert!(version < PalletVersion::new(1, 0, 1));
-		assert!(version < PalletVersion::new(1, 1, 0));
+	fn on_idle_round_robin_works() {
+		static mut ON_IDLE_INVOCATION_ORDER: sp_std::vec::Vec<&str> = sp_std::vec::Vec::new();
 
-		let version = PalletVersion::new(2, 50, 50);
-		assert!(version < PalletVersion::new(2, 50, 51));
-		assert!(version > PalletVersion::new(2, 49, 51));
-		assert!(version < PalletVersion::new(3, 49, 51));
+		struct Test1;
+		struct Test2;
+		struct Test3;
+		type TestTuple = (Test1, Test2, Test3);
+		impl OnIdle<u32> for Test1 {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
+				unsafe {
+					ON_IDLE_INVOCATION_ORDER.push("Test1");
+				}
+				Weight::zero()
+			}
+		}
+		impl OnIdle<u32> for Test2 {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
+				unsafe {
+					ON_IDLE_INVOCATION_ORDER.push("Test2");
+				}
+				Weight::zero()
+			}
+		}
+		impl OnIdle<u32> for Test3 {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
+				unsafe {
+					ON_IDLE_INVOCATION_ORDER.push("Test3");
+				}
+				Weight::zero()
+			}
+		}
+
+		unsafe {
+			TestTuple::on_idle(0, Weight::zero());
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
+			ON_IDLE_INVOCATION_ORDER.clear();
+
+			TestTuple::on_idle(1, Weight::zero());
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
+			ON_IDLE_INVOCATION_ORDER.clear();
+
+			TestTuple::on_idle(2, Weight::zero());
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test3", "Test1", "Test2"].to_vec());
+			ON_IDLE_INVOCATION_ORDER.clear();
+
+			TestTuple::on_idle(3, Weight::zero());
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
+			ON_IDLE_INVOCATION_ORDER.clear();
+
+			TestTuple::on_idle(4, Weight::zero());
+			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
+			ON_IDLE_INVOCATION_ORDER.clear();
+		}
 	}
 }

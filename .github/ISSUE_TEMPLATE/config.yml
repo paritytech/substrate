@@ -1,0 +1,7 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Support & Troubleshooting with the Substrate Stack Exchange Community
+    url: https://substrate.stackexchange.com
+    about: |
+      For general problems with Substrate or related technologies, please search here first
+      for solutions, by keyword and tags. If you discover no solution, please then ask and questions in our community! We highly encourage everyone also share their understanding by answering questions for others.

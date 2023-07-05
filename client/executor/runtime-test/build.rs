@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,22 +16,28 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use substrate_wasm_builder::WasmBuilder;
-
 fn main() {
 	// regular build
-	WasmBuilder::new()
-		.with_current_project()
-		.export_heap_base()
-		.import_memory()
-		.build();
+	#[cfg(feature = "std")]
+	{
+		substrate_wasm_builder::WasmBuilder::new()
+			.with_current_project()
+			.export_heap_base()
+			.import_memory()
+			.disable_runtime_version_section_check()
+			.build();
+	}
 
 	// and building with tracing activated
-	WasmBuilder::new()
-		.with_current_project()
-		.export_heap_base()
-		.import_memory()
-		.set_file_name("wasm_binary_with_tracing.rs")
-		.append_to_rust_flags(r#"--cfg feature="with-tracing""#)
-		.build();
+	#[cfg(feature = "std")]
+	{
+		substrate_wasm_builder::WasmBuilder::new()
+			.with_current_project()
+			.export_heap_base()
+			.import_memory()
+			.set_file_name("wasm_binary_with_tracing.rs")
+			.append_to_rust_flags(r#"--cfg feature="with-tracing""#)
+			.disable_runtime_version_section_check()
+			.build();
+	}
 }

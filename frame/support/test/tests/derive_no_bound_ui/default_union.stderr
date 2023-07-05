@@ -1,0 +1,5 @@
+error: Union type not supported by `derive(DefaultNoBound)`
+ --> tests/derive_no_bound_ui/default_union.rs:2:1
+  |
+2 | union Foo {
+  | ^^^^^

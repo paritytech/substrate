@@ -1,26 +1,28 @@
-error[E0369]: binary operation `==` cannot be applied to type `&Bar`
-  --> $DIR/call_argument_invalid_bound_3.rs:22:37
-   |
-22 |         fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
-   |                                           ^^^
-   |
-   = note: an implementation of `std::cmp::PartialEq` might be missing for `&Bar`
+error: use of deprecated constant `pallet::warnings::ConstantWeight_0::_w`:
+               It is deprecated to use hard-coded constant as call weight.
+               Please instead benchmark all calls or put the pallet into `dev` mode.
 
-error[E0277]: the trait bound `Bar: Clone` is not satisfied
-  --> $DIR/call_argument_invalid_bound_3.rs:22:37
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/13798>
+  --> tests/pallet_ui/call_argument_invalid_bound_3.rs:21:20
    |
-22 |         fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
-   |                                           ^^^ the trait `Clone` is not implemented for `Bar`
+21 |         #[pallet::weight(0)]
+   |                          ^
    |
-   = note: required by `clone`
+   = note: `-D deprecated` implied by `-D warnings`
 
 error[E0277]: `Bar` doesn't implement `std::fmt::Debug`
-  --> $DIR/call_argument_invalid_bound_3.rs:22:37
+  --> tests/pallet_ui/call_argument_invalid_bound_3.rs:23:36
    |
-22 |         fn foo(origin: OriginFor<T>, bar: Bar) -> DispatchResultWithPostInfo {
-   |                                           ^^^ `Bar` cannot be formatted using `{:?}`
+23 |         pub fn foo(origin: OriginFor<T>, _bar: Bar) -> DispatchResultWithPostInfo {
+   |                                          ^^^^ `Bar` cannot be formatted using `{:?}`
    |
    = help: the trait `std::fmt::Debug` is not implemented for `Bar`
-   = note: add `#[derive(Debug)]` or manually implement `std::fmt::Debug`
-   = note: required because of the requirements on the impl of `std::fmt::Debug` for `&Bar`
-   = note: required for the cast to the object type `dyn std::fmt::Debug`
+   = note: add `#[derive(Debug)]` to `Bar` or manually `impl std::fmt::Debug for Bar`
+   = note: required for `&Bar` to implement `std::fmt::Debug`
+   = note: required for the cast from `&Bar` to the object type `dyn std::fmt::Debug`
+help: consider annotating `Bar` with `#[derive(Debug)]`
+   |
+17 +     #[derive(Debug)]
+18 |     struct Bar;
+   |

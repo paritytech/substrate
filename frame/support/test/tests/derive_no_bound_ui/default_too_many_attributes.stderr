@@ -1,0 +1,21 @@
+error: multiple declared defaults
+ --> tests/derive_no_bound_ui/default_too_many_attributes.rs:5:10
+  |
+5 | #[derive(frame_support::DefaultNoBound)]
+  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the derive macro `frame_support::DefaultNoBound` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: first default
+ --> tests/derive_no_bound_ui/default_too_many_attributes.rs:7:2
+  |
+7 | /     #[default]
+8 | |     Bar(T::C),
+  | |_____________^
+
+error: additional default
+  --> tests/derive_no_bound_ui/default_too_many_attributes.rs:9:2
+   |
+9  | /     #[default]
+10 | |     Baz,
+   | |_______^

@@ -1,11 +1,5 @@
-error: Invalid usage of `#[pallet::constant]`, syntax must be `type $SomeIdent: Get<$SomeType>;`
+error: Invalid usage of `#[pallet::constant]`: `Get<T>` trait bound not found
  --> $DIR/trait_constant_invalid_bound.rs:9:3
   |
 9 |         type U;
   |         ^^^^
-
-error: expected `:`
- --> $DIR/trait_constant_invalid_bound.rs:9:9
-  |
-9 |         type U;
-  |               ^

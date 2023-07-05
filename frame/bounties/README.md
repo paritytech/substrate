@@ -2,28 +2,38 @@
 
 ## Bounty
 
-**Note :: This pallet is tightly coupled with pallet-treasury**
+> NOTE: This pallet is tightly coupled with pallet-treasury.
 
-A Bounty Spending is a reward for a specified body of work - or specified set of objectives - that
-needs to be executed for a predefined Treasury amount to be paid out. A curator is assigned after
-the bounty is approved and funded by Council, to be delegated with the responsibility of assigning a
-payout address once the specified set of objectives is completed.
+A Bounty Spending is a reward for a specified body of work - or specified set of objectives -
+that needs to be executed for a predefined Treasury amount to be paid out. A curator is assigned
+after the bounty is approved and funded by Council, to be delegated with the responsibility of
+assigning a payout address once the specified set of objectives is completed.
 
-After the Council has activated a bounty, it delegates the work that requires expertise to a curator
-in exchange of a deposit. Once the curator accepts the bounty, they get to close the active bounty.
-Closing the active bounty enacts a delayed payout to the payout address, the curator fee and the
-return of the curator deposit. The delay allows for intervention through regular democracy. The
-Council gets to unassign the curator, resulting in a new curator election. The Council also gets to
-cancel the bounty if deemed necessary before assigning a curator or once the bounty is active or
-payout is pending, resulting in the slash of the curator's deposit.
+After the Council has activated a bounty, it delegates the work that requires expertise to a
+curator in exchange of a deposit. Once the curator accepts the bounty, they get to close the
+active bounty. Closing the active bounty enacts a delayed payout to the payout address, the
+curator fee and the return of the curator deposit. The delay allows for intervention through
+regular democracy. The Council gets to unassign the curator, resulting in a new curator
+election. The Council also gets to cancel the bounty if deemed necessary before assigning a
+curator or once the bounty is active or payout is pending, resulting in the slash of the
+curator's deposit.
+
+This pallet may opt into using a [`ChildBountyManager`] that enables bounties to be split into
+sub-bounties, as children of anh established bounty (called the parent in the context of it's
+children).
+
+> NOTE: The parent bounty cannot be closed if it has a non-zero number of it has active child
+> bounties associated with it.
 
 ### Terminology
 
-- **Bounty spending proposal:** A proposal to reward a predefined body of work upon completion by
-  the Treasury.
+Bounty:
+
+- **Bounty spending proposal:** A proposal to reward a predefined body of work upon completion
+  by the Treasury.
 - **Proposer:** An account proposing a bounty spending.
-- **Curator:** An account managing the bounty and assigning a payout address receiving the reward
-  for the completion of work.
+- **Curator:** An account managing the bounty and assigning a payout address receiving the
+  reward for the completion of work.
 - **Deposit:** The amount held on deposit for placing a bounty proposal plus the amount held on
   deposit per byte within the bounty description.
 - **Curator deposit:** The payment from a candidate willing to curate an approved bounty. The
@@ -31,7 +41,8 @@ payout is pending, resulting in the slash of the curator's deposit.
 - **Bounty value:** The total amount that should be paid to the Payout Address if the bounty is
   rewarded.
 - **Payout address:** The account to which the total or part of the bounty is assigned to.
-- **Payout Delay:** The delay period for which a bounty beneficiary needs to wait before claiming.
+- **Payout Delay:** The delay period for which a bounty beneficiary needs to wait before
+  claiming.
 - **Curator fee:** The reserved upfront payment for a curator for work related to the bounty.
 
 ## Interface
@@ -39,6 +50,7 @@ payout is pending, resulting in the slash of the curator's deposit.
 ### Dispatchable Functions
 
 Bounty protocol:
+
 - `propose_bounty` - Propose a specific treasury amount to be earmarked for a predefined set of
   tasks and stake the required deposit.
 - `approve_bounty` - Accept a specific treasury amount to be earmarked for a predefined body of

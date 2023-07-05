@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package authority_discovery_v2;
+
+// First we need to serialize the addresses in order to be able to sign them.
+message AuthorityRecord {
+	// Possibly multiple `MultiAddress`es through which the node can be 
+	repeated bytes addresses = 1;
+}
+
+message PeerSignature {
+	bytes signature = 1;
+	bytes public_key = 2;
+}
+
+// Then we need to serialize the authority record and signature to send them over the wire.
+message SignedAuthorityRecord {
+	bytes record = 1;
+	bytes auth_signature = 2;
+	// Even if there are multiple `record.addresses`, all of them have the same peer id.
+    // Old versions are missing this field. It is optional in order to provide compatibility both ways.
+	PeerSignature peer_signature = 3;
+}

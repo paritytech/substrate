@@ -1,5 +1,0 @@
-error: Invalid pallet::error, unexpected fields, must be `Unit`
-  --> $DIR/error_no_fieldless.rs:20:5
-   |
-20 |         U8(u8),
-   |           ^^^^

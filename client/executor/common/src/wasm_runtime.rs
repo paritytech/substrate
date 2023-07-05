@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,6 +20,15 @@
 
 use crate::error::Error;
 use sp_wasm_interface::Value;
+
+pub use sc_allocator::AllocationStats;
+
+/// Default heap allocation strategy.
+pub const DEFAULT_HEAP_ALLOC_STRATEGY: HeapAllocStrategy =
+	HeapAllocStrategy::Static { extra_pages: DEFAULT_HEAP_ALLOC_PAGES };
+
+/// Default heap allocation pages.
+pub const DEFAULT_HEAP_ALLOC_PAGES: u32 = 2048;
 
 /// A method to be used to find the entrypoint when calling into the runtime
 ///
@@ -78,19 +87,68 @@ pub trait WasmInstance: Send {
 	/// Before execution, instance is reset.
 	///
 	/// Returns the encoded result on success.
-	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error>;
+	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error> {
+		self.call_with_allocation_stats(method, data).0
+	}
+
+	/// Call a method on this WASM instance.
+	///
+	/// Before execution, instance is reset.
+	///
+	/// Returns the encoded result on success.
+	fn call_with_allocation_stats(
+		&mut self,
+		method: InvokeMethod,
+		data: &[u8],
+	) -> (Result<Vec<u8>, Error>, Option<AllocationStats>);
 
 	/// Call an exported method on this WASM instance.
 	///
 	/// Before execution, instance is reset.
 	///
 	/// Returns the encoded result on success.
-	fn call_export(&self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
+	fn call_export(&mut self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
 		self.call(method.into(), data)
 	}
 
 	/// Get the value from a global with the given `name`.
 	///
 	/// This method is only suitable for getting immutable globals.
-	fn get_global_const(&self, name: &str) -> Result<Option<Value>, Error>;
+	fn get_global_const(&mut self, name: &str) -> Result<Option<Value>, Error>;
+
+	/// **Testing Only**. This function returns the base address of the linear memory.
+	///
+	/// This is meant to be the starting address of the memory mapped area for the linear memory.
+	///
+	/// This function is intended only for a specific test that measures physical memory
+	/// consumption.
+	fn linear_memory_base_ptr(&self) -> Option<*const u8> {
+		None
+	}
+}
+
+/// Defines the heap pages allocation strategy the wasm runtime should use.
+///
+/// A heap page is defined as 64KiB of memory.
+#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
+pub enum HeapAllocStrategy {
+	/// Allocate a static number of heap pages.
+	///
+	/// The total number of allocated heap pages is the initial number of heap pages requested by
+	/// the wasm file plus the `extra_pages`.
+	Static {
+		/// The number of pages that will be added on top of the initial heap pages requested by
+		/// the wasm file.
+		extra_pages: u32,
+	},
+	/// Allocate the initial heap pages as requested by the wasm file and then allow it to grow
+	/// dynamically.
+	Dynamic {
+		/// The absolute maximum size of the linear memory (in pages).
+		///
+		/// When `Some(_)` the linear memory will be allowed to grow up to this limit.
+		/// When `None` the linear memory will be allowed to grow up to the maximum limit supported
+		/// by WASM (4GB).
+		maximum_pages: Option<u32>,
+	},
 }

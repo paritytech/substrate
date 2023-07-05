@@ -1,0 +1,67 @@
+// Schema definition for light client messages.
+
+syntax = "proto2";
+
+package api.v1.light;
+
+// Enumerate all possible light client request messages.
+message Request {
+	oneof request {
+		RemoteCallRequest remote_call_request = 1;
+		RemoteReadRequest remote_read_request = 2;
+		RemoteReadChildRequest remote_read_child_request = 4;
+		// Note: ids 3 and 5 were used in the past. It would be preferable to not re-use them.
+	}
+}
+
+// Enumerate all possible light client response messages.
+message Response {
+	oneof response {
+		RemoteCallResponse remote_call_response = 1;
+		RemoteReadResponse remote_read_response = 2;
+		// Note: ids 3 and 4 were used in the past. It would be preferable to not re-use them.
+	}
+}
+
+// Remote call request.
+message RemoteCallRequest {
+	// Block at which to perform call.
+	required bytes block = 2;
+	// Method name.
+	required string method = 3;
+	// Call data.
+	required bytes data = 4;
+}
+
+// Remote call response.
+message RemoteCallResponse {
+	// Execution proof. If missing, indicates that the remote couldn't answer, for example because
+	// the block is pruned.
+	optional bytes proof = 2;
+}
+
+// Remote storage read request.
+message RemoteReadRequest {
+	// Block at which to perform call.
+	required bytes block = 2;
+	// Storage keys.
+	repeated bytes keys = 3;
+}
+
+// Remote read response.
+message RemoteReadResponse {
+	// Read proof. If missing, indicates that the remote couldn't answer, for example because
+	// the block is pruned.
+	optional bytes proof = 2;
+}
+
+// Remote storage read child request.
+message RemoteReadChildRequest {
+	// Block at which to perform call.
+	required bytes block = 2;
+	// Child Storage key, this is relative
+	// to the child type storage location.
+	required bytes storage_key = 3;
+	// Storage keys.
+	repeated bytes keys = 6;
+}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,12 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{CargoCommandVersioned, CargoCommand, write_file_if_changed};
+use crate::{write_file_if_changed, CargoCommand, CargoCommandVersioned};
 
 use std::{fs, path::Path};
 
-use tempfile::tempdir;
 use ansi_term::Color;
+use tempfile::tempdir;
 
 /// Print an error message.
 fn print_error_message(message: &str) -> String {
@@ -35,10 +35,13 @@ fn print_error_message(message: &str) -> String {
 ///
 /// Returns the versioned cargo command on success.
 pub(crate) fn check() -> Result<CargoCommandVersioned, String> {
-	let cargo_command = crate::get_nightly_cargo();
+	let cargo_command = crate::get_cargo_command();
 
-	if !cargo_command.is_nightly() {
-		return Err(print_error_message("Rust nightly not installed, please install it!"))
+	if !cargo_command.supports_substrate_wasm_env() {
+		return Err(print_error_message(
+			"Cannot compile the WASM runtime: no compatible Rust compiler found!\n\
+			 Install at least Rust 1.68.0 or a recent nightly version.",
+		))
 	}
 
 	check_wasm_toolchain_installed(cargo_command)
@@ -58,7 +61,7 @@ fn create_check_toolchain_project(project_dir: &Path) {
 			[package]
 			name = "wasm-test"
 			version = "1.0.0"
-			edition = "2018"
+			edition = "2021"
 			build = "build.rs"
 
 			[lib]
@@ -95,7 +98,7 @@ fn create_check_toolchain_project(project_dir: &Path) {
 					rustc_version.unwrap_or_else(|| "unknown rustc version".into()),
 				);
 			}
-		"#
+		"#,
 	);
 	// Just prints the `RURSTC_VERSION` environment variable that is being created by the
 	// `build.rs` script.
@@ -105,7 +108,7 @@ fn create_check_toolchain_project(project_dir: &Path) {
 			fn main() {
 				println!("{}", env!("RUSTC_VERSION"));
 			}
-		"#
+		"#,
 	);
 }
 
@@ -120,42 +123,58 @@ fn check_wasm_toolchain_installed(
 	let manifest_path = temp.path().join("Cargo.toml").display().to_string();
 
 	let mut build_cmd = cargo_command.command();
-	build_cmd.args(&["build", "--target=wasm32-unknown-unknown", "--manifest-path", &manifest_path]);
+	// Chdir to temp to avoid including project's .cargo/config.toml
+	// by accident - it can happen in some CI environments.
+	build_cmd.current_dir(&temp);
+	build_cmd.args(&[
+		"build",
+		"--target=wasm32-unknown-unknown",
+		"--manifest-path",
+		&manifest_path,
+	]);
 
 	if super::color_output_enabled() {
 		build_cmd.arg("--color=always");
 	}
 
 	let mut run_cmd = cargo_command.command();
+	// Chdir to temp to avoid including project's .cargo/config.toml
+	// by accident - it can happen in some CI environments.
+	run_cmd.current_dir(&temp);
 	run_cmd.args(&["run", "--manifest-path", &manifest_path]);
 
-	build_cmd
-		.output()
-		.map_err(|_| err_msg.clone())
-		.and_then(|s|
-			if s.status.success() {
-				let version = run_cmd.output().ok().and_then(|o| String::from_utf8(o.stdout).ok());
-				Ok(CargoCommandVersioned::new(
-					cargo_command,
-					version.unwrap_or_else(|| "unknown rustc version".into()),
-				))
-			} else {
-				match String::from_utf8(s.stderr) {
-					Ok(ref err) if err.contains("linker `rust-lld` not found") => {
-						Err(print_error_message("`rust-lld` not found, please install it!"))
-					},
-					Ok(ref err) => Err(
-						format!(
-							"{}\n\n{}\n{}\n{}{}\n",
-							err_msg,
-							Color::Yellow.bold().paint("Further error information:"),
-							Color::Yellow.bold().paint("-".repeat(60)),
-							err,
-							Color::Yellow.bold().paint("-".repeat(60)),
-						)
-					),
-					Err(_) => Err(err_msg),
-				}
+	// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock
+	build_cmd.env_remove("CARGO_TARGET_DIR");
+	run_cmd.env_remove("CARGO_TARGET_DIR");
+
+	// Make sure the host's flags aren't used here, e.g. if an alternative linker is specified
+	// in the RUSTFLAGS then the check we do here will break unless we clear these.
+	build_cmd.env_remove("CARGO_ENCODED_RUSTFLAGS");
+	run_cmd.env_remove("CARGO_ENCODED_RUSTFLAGS");
+	build_cmd.env_remove("RUSTFLAGS");
+	run_cmd.env_remove("RUSTFLAGS");
+
+	build_cmd.output().map_err(|_| err_msg.clone()).and_then(|s| {
+		if s.status.success() {
+			let version = run_cmd.output().ok().and_then(|o| String::from_utf8(o.stdout).ok());
+			Ok(CargoCommandVersioned::new(
+				cargo_command,
+				version.unwrap_or_else(|| "unknown rustc version".into()),
+			))
+		} else {
+			match String::from_utf8(s.stderr) {
+				Ok(ref err) if err.contains("linker `rust-lld` not found") =>
+					Err(print_error_message("`rust-lld` not found, please install it!")),
+				Ok(ref err) => Err(format!(
+					"{}\n\n{}\n{}\n{}{}\n",
+					err_msg,
+					Color::Yellow.bold().paint("Further error information:"),
+					Color::Yellow.bold().paint("-".repeat(60)),
+					err,
+					Color::Yellow.bold().paint("-".repeat(60)),
+				)),
+				Err(_) => Err(err_msg),
 			}
-		)
+		}
+	})
 }

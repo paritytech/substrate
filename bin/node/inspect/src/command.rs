@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,38 +18,39 @@
 
 //! Command ran by the CLI
 
-use crate::cli::{InspectCmd, InspectSubCmd};
-use crate::Inspector;
+use crate::{
+	cli::{InspectCmd, InspectSubCmd},
+	Inspector,
+};
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
-use sc_service::{new_full_client, Configuration, NativeExecutionDispatch};
+use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::Block;
-use std::str::FromStr;
 
 impl InspectCmd {
 	/// Run the inspect command, passing the inspector.
-	pub fn run<B, RA, EX>(&self, config: Configuration) -> Result<()>
+	pub fn run<B, RA, D>(&self, config: Configuration) -> Result<()>
 	where
 		B: Block,
-		B::Hash: FromStr,
 		RA: Send + Sync + 'static,
-		EX: NativeExecutionDispatch + 'static,
+		D: NativeExecutionDispatch + 'static,
 	{
-		let client = new_full_client::<B, RA, EX>(&config, None)?;
+		let executor = sc_service::new_native_or_wasm_executor::<D>(&config);
+		let client = sc_service::new_full_client::<B, RA, _>(&config, None, executor)?;
 		let inspect = Inspector::<B>::new(client);
 
 		match &self.command {
 			InspectSubCmd::Block { input } => {
 				let input = input.parse()?;
-				let res = inspect.block(input).map_err(|e| format!("{}", e))?;
-				println!("{}", res);
+				let res = inspect.block(input).map_err(|e| e.to_string())?;
+				println!("{res}");
 				Ok(())
-			}
+			},
 			InspectSubCmd::Extrinsic { input } => {
 				let input = input.parse()?;
-				let res = inspect.extrinsic(input).map_err(|e| format!("{}", e))?;
-				println!("{}", res);
+				let res = inspect.extrinsic(input).map_err(|e| e.to_string())?;
+				println!("{res}");
 				Ok(())
-			}
+			},
 		}
 	}
 }

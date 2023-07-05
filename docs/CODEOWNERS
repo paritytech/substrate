@@ -19,45 +19,56 @@
 # - The latest matching rule, if multiple, takes precedence.
 
 # CI
-/.maintain/ @paritytech/ci
 /.github/ @paritytech/ci
 /.gitlab-ci.yml @paritytech/ci
+/scripts/ci/ @paritytech/ci
 
-# Block production
-/client/basic-authorship/ @NikVolf
+# WASM executor, low-level client <-> WASM interface and other WASM-related code
+/client/allocator/ @koute
+/client/executor/ @koute
+/primitives/panic-handler/ @koute
+/primitives/runtime-interface/ @koute
+/primitives/wasm-interface/ @koute
+/utils/wasm-builder/ @koute
 
-# Sandboxing capability of Substrate Runtime
-/primitives/sr-sandbox/ @pepyakin
-/primitives/core/src/sandbox.rs @pepyakin
+# Systems-related bits and bobs on the client side
+/client/sysinfo/ @koute
+/client/tracing/ @koute
 
-# Transaction pool
-/client/transaction-pool/ @NikVolf
-/primitives/transaction-pool/ @NikVolf
+# Documentation audit
+/primitives/runtime @paritytech/docs-audit
+/primitives/arithmetic @paritytech/docs-audit
+# /primitives/core (to be added later)
+# /primitives/io (to be added later)
 
-# Offchain
-/client/offchain/ @tomusdrw
-/primitives/offchain/ @tomusdrw
+# FRAME
+/frame/ @paritytech/frame-coders @paritytech/docs-audit
+/frame/nfts/ @jsidorenko @paritytech/docs-audit
+/frame/state-trie-migration/ @paritytech/frame-coders @cheme
+/frame/uniques/ @jsidorenko @paritytech/docs-audit
 
 # GRANDPA, BABE, consensus stuff
+/client/consensus/babe/ @andresilva
+/client/consensus/grandpa/ @andresilva
+/client/consensus/pow/ @sorpaas
+/client/consensus/slots/ @andresilva
 /frame/babe/ @andresilva
 /frame/grandpa/ @andresilva
-/client/finality-grandpa/ @andresilva
-/client/consensus/babe/ @andresilva
-/client/consensus/slots/ @andresilva
-/client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
+# BEEFY, MMR
+/frame/beefy/ @acatangiu
+/frame/beefy-mmr/ @acatangiu
+/frame/merkle-mountain-range/ @acatangiu
+/primitives/merkle-mountain-range/ @acatangiu
+
 # Contracts
-/frame/contracts/ @athei
+/frame/contracts/ @athei @paritytech/docs-audit
 
 # NPoS and election
-/frame/staking/ @kianenigma
-/frame/elections/ @kianenigma
-/frame/elections-phragmen/ @kianenigma
-/primitives/npos-elections/ @kianenigma
-
-# Fixed point arithmetic
-/primitives/sp-arithmetic/ @kianenigma
-
-# Transaction weight stuff
-/frame/support/src/weights.rs @shawntabrizi
+/frame/election-provider-multi-phase/ @paritytech/staking-core @paritytech/docs-audit
+/frame/election-provider-support/ @paritytech/staking-core @paritytech/docs-audit
+/frame/elections-phragmen/ @paritytech/staking-core @paritytech/docs-audit
+/frame/nomination-pools/ @paritytech/staking-core @paritytech/docs-audit
+/frame/staking/ @paritytech/staking-core @paritytech/docs-audit
+/primitives/npos-elections/ @paritytech/staking-core @paritytech/docs-audit
