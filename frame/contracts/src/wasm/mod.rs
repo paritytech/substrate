@@ -225,11 +225,6 @@ impl<T: Config> WasmBlob<T> {
 		Ok((store, memory, instance))
 	}
 
-	/// Getter method for the code_info.
-	pub fn code_info(&self) -> &CodeInfo<T> {
-		&self.code_info
-	}
-
 	/// Put the module blob into storage, and returns the deposit collected for the storage.
 	pub fn store_code(&mut self) -> Result<BalanceOf<T>, Error<T>> {
 		let code_hash = self.code_hash().clone();
