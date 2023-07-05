@@ -382,7 +382,7 @@ pub mod pallet {
 		NotOwner,
 		/// Cannot renew this registration.
 		RegistrationHasNoExpiry,
-		/// Renew expiry time is not in the future
+		/// Renew expiry time is not in the future.
 		ExpiryInvalid,
 		/// The name provided does not match the expected hash.
 		BadName,
