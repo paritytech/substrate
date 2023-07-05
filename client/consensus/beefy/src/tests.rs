@@ -29,6 +29,7 @@ use crate::{
 		},
 		request_response::{on_demand_justifications_protocol_config, BeefyJustifsRequestHandler},
 	},
+	error::Error,
 	gossip_protocol_name,
 	justification::*,
 	load_or_init_voter_state, wait_for_runtime_pallet, BeefyRPCLinks, BeefyVoterLinks, KnownPeers,
@@ -250,13 +251,13 @@ pub(crate) struct DummyFisherman<B> {
 }
 
 impl<B: BlockT> BeefyFisherman<B> for DummyFisherman<B> {
-	fn check_proof(&self, _: BeefyVersionedFinalityProof<B>) -> Result<(), sp_blockchain::Error> {
+	fn check_proof(&self, _: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
 		Ok(())
 	}
 	fn check_vote(
 		&self,
 		_: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
-	) -> Result<(), sp_blockchain::Error> {
+	) -> Result<(), Error> {
 		Ok(())
 	}
 }
