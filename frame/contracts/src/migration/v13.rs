@@ -27,8 +27,6 @@ use crate::{
 use codec::{Decode, Encode};
 use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
 use sp_runtime::BoundedBTreeMap;
-#[cfg(feature = "try-runtime")]
-use sp_runtime::TryRuntimeError;
 use sp_std::prelude::*;
 
 mod old {
