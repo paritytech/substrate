@@ -44,23 +44,17 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	);
 
-	if genesis_config.gen_kind.is_generic() {
 		quote::quote_spanned!(genesis_build.attr_span =>
 			#[cfg(feature = "std")]
 			impl<#type_impl_gen> #frame_support::sp_runtime::BuildStorage
 				for #gen_cfg_ident<#gen_cfg_use_gen> #where_clause
 			{
-				#assimilate_storage_fn
+				fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> std::result::Result<(), std::string::String> {
+			#frame_support::BasicExternalities::execute_with_storage(storage, || {
+				self.build();
+				Ok(())
+			})
+		}
 			}
 		)
-	} else {
-		quote::quote_spanned!(genesis_build.attr_span =>
-			#[cfg(feature = "std")]
-			impl #frame_support::sp_runtime::BuildStorage
-				for #gen_cfg_ident
-			{
-				#assimilate_storage_fn
-			}
-		)
-	}
 }
