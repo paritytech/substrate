@@ -230,7 +230,7 @@ impl<T: Config> WasmBlob<T> {
 		&self.code_info
 	}
 
-	/// Put the module blob into storage, and returns the deposit paid for the storage.
+	/// Put the module blob into storage, and returns the deposit collected for the storage.
 	pub fn store_code(&mut self) -> Result<BalanceOf<T>, Error<T>> {
 		let code_hash = self.code_hash().clone();
 		<CodeInfoOf<T>>::mutate(code_hash, |stored_code_info| {
@@ -255,7 +255,7 @@ impl<T: Config> WasmBlob<T> {
 		})
 	}
 
-	/// Increments the reference count of the in-storage `WasmBlob`
+	/// Increments the reference count of the in-storage `WasmBlob`.
 	fn increment_refcount(&mut self) -> DispatchResult {
 		let code_hash = self.code_hash().clone();
 		<CodeInfoOf<T>>::mutate(code_hash, |stored_code_info| match stored_code_info {
