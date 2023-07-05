@@ -551,6 +551,12 @@ pub fn benchmarks(
 						#krate::well_known_keys::EXTRINSIC_INDEX.into()
 					);
 					whitelist.push(extrinsic_index);
+					// Whitelist the `:intrablock_entropy`.
+					let intrablock_entropy = #krate::TrackedStorageKey::new(
+						#krate::well_known_keys::INTRABLOCK_ENTROPY.into()
+					);
+					whitelist.push(intrablock_entropy);
+
 					#krate::benchmarking::set_whitelist(whitelist.clone());
 					let mut results: #krate::Vec<#krate::BenchmarkResult> = #krate::Vec::new();
 

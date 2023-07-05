@@ -23,13 +23,13 @@ use frame_support::{
 	assert_ok,
 	storage::bounded_vec::BoundedVec,
 	traits::{
-		fungible::{Inspect as InspectFungible, Unbalanced},
+		fungible::{Inspect as InspectFungible, Mutate as MutateFungible, Unbalanced},
 		fungibles::{Create, Inspect, Mutate},
 	},
 };
 use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::{Bounded, StaticLookup};
-use sp_std::prelude::*;
+use sp_std::{ops::Div, prelude::*};
 
 use crate::Pallet as AssetConversion;
 
@@ -55,7 +55,7 @@ where
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	if let Ok(asset_id) = T::MultiAssetIdConverter::try_convert(asset) {
-		assert_ok!(T::Currency::write_balance(&caller, BalanceOf::<T>::max_value()));
+		T::Currency::set_balance(&caller, BalanceOf::<T>::max_value().div(1000u32.into()));
 		assert_ok!(T::Assets::create(asset_id.clone(), caller.clone(), true, 1.into()));
 		assert_ok!(T::Assets::mint_into(asset_id, &caller, INITIAL_ASSET_BALANCE.into()));
 	}
