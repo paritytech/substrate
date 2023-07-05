@@ -264,9 +264,9 @@ pub mod pallet {
 			Self {
 				commitment_deposit: None,
 				subnode_deposit: None,
-				tier_three_letters: <BalanceOf<T>>::from(1000_u32),
-				tier_four_letters: <BalanceOf<T>>::from(100_u32),
-				tier_default: <BalanceOf<T>>::from(10_u32),
+				tier_three_letters: Zero::zero(),
+				tier_four_letters: Zero::zero(),
+				tier_default: Zero::zero(),
 			}
 		}
 	}
