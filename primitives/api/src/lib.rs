@@ -90,6 +90,7 @@ use sp_core::OpaqueMetadata;
 #[cfg(feature = "std")]
 pub use sp_externalities::{Extension, Extensions};
 #[doc(hidden)]
+#[cfg(feature = "frame-metadata")]
 pub use sp_metadata_ir::{self as metadata_ir, frame_metadata as metadata};
 #[doc(hidden)]
 #[cfg(feature = "std")]

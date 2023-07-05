@@ -5915,6 +5915,16 @@ mod commission {
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
+			// Cannot set max commission above GlobalMaxCommission
+			assert_noop!(
+				Pools::set_commission_max(
+					RuntimeOrigin::signed(900),
+					1,
+					Perbill::from_percent(100)
+				),
+				Error::<Runtime>::CommissionExceedsGlobalMaximum
+			);
+
 			// Set a max commission commission pool 1 to 80%
 			assert_ok!(Pools::set_commission_max(
 				RuntimeOrigin::signed(900),
@@ -6591,7 +6601,7 @@ mod commission {
 	}
 
 	#[test]
-	fn global_max_prevents_100_percent_commission_payout() {
+	fn global_max_caps_max_commission_payout() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Note: GlobalMaxCommission is set at 90%.
 
@@ -6601,23 +6611,30 @@ mod commission {
 			// top up the commission payee account to existential deposit
 			let _ = Balances::deposit_creating(&2, 5);
 
-			// Set a commission pool 1 to 100%, with a payee set to `2`
-			assert_ok!(Pools::set_commission(
-				RuntimeOrigin::signed(900),
-				bonded_pool.id,
-				Some((Perbill::from_percent(100), 2)),
-			));
+			// Set a commission pool 1 to 100% fails.
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					bonded_pool.id,
+					Some((Perbill::from_percent(100), 2)),
+				),
+				Error::<Runtime>::CommissionExceedsGlobalMaximum
+			);
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PoolCommissionUpdated {
-						pool_id: 1,
-						current: Some((Perbill::from_percent(100), 2))
-					}
 				]
 			);
+
+			// Set pool commission to 90% and then set global max commission to 80%.
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				bonded_pool.id,
+				Some((Perbill::from_percent(90), 2)),
+			));
+			GlobalMaxCommission::<Runtime>::set(Some(Perbill::from_percent(80)));
 
 			// The pool earns 10 points
 			deposit_rewards(10);
@@ -6630,11 +6647,17 @@ mod commission {
 				&mut reward_pool
 			));
 
-			// Confirm the commission was only 9 points out of 10 points, and the payout was 1 out
-			// of 10 points, reflecting the 90% global max commission.
+			// Confirm the commission was only 8 points out of 10 points, and the payout was 2 out
+			// of 10 points, reflecting the 80% global max commission.
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1 },]
+				vec![
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						current: Some((Perbill::from_percent(90), 2))
+					},
+					Event::PaidOut { member: 10, pool_id: 1, payout: 2 },
+				]
 			);
 		})
 	}
