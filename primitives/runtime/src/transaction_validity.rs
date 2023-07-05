@@ -83,7 +83,7 @@ pub enum InvalidTransaction {
 	/// The sending address is disabled or known to be invalid.
 	BadSigner,
 	/// Only mandatory logic is allowed but it was attempted to execute non-mandatory logic.
-	NotMandatory,
+	NonMandatory,
 }
 
 impl InvalidTransaction {
@@ -115,7 +115,7 @@ impl From<InvalidTransaction> for &'static str {
 				"Transaction dispatch is mandatory; transactions must not be validated.",
 			InvalidTransaction::Custom(_) => "InvalidTransaction custom error",
 			InvalidTransaction::BadSigner => "Invalid signing address",
-			InvalidTransaction::NotMandatory => "Only mandatory logic is allowed",
+			InvalidTransaction::NonMandatory => "Non-mandatory extrinsic was applied in a mandatory-only block",
 		}
 	}
 }

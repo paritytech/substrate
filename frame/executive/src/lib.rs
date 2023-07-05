@@ -309,7 +309,7 @@ impl<
 		for e in extrinsics.iter().take(num_inherents) {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
 				frame_support::log::error!(
-					target: LOG_TARGET, "extrinsic {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					target: LOG_TARGET, "inherent {:?} failed due to {:?}. Aborting the rest of the block execution.",
 					e,
 					err,
 				);
@@ -317,17 +317,17 @@ impl<
 			}
 		}
 
-		Self::after_inherents();
+		Self::after_inherents(mode);
 		if mode == RuntimeExecutiveMode::Minimal {
 			if num_inherents < extrinsics.len() {
-				return Err(InvalidTransaction::NotMandatory.into())
+				return Err(InvalidTransaction::NonMandatory.into())
 			}
 		}
 		// Apply transactions:
 		for e in extrinsics.iter().skip(num_inherents) {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
 				frame_support::log::error!(
-					target: LOG_TARGET, "extrinsics {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					target: LOG_TARGET, "transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
 					e,
 					err,
 				);
@@ -545,21 +545,21 @@ impl<
 			sp_tracing::info_span!("execute_block", ?block);
 			// Execute `on_runtime_upgrade` and `on_initialize`.
 			let mode = Self::initialize_block(block.header());
-			let inherents = Self::initial_checks(&block) as usize;
+			let num_inherents = Self::initial_checks(&block) as usize;
 			let (header, extrinsics) = block.deconstruct();
 
 			// Process inherents (if any).
-			Self::apply_extrinsics(extrinsics.iter().take(inherents), mode);
-			Self::after_inherents();
+			Self::apply_extrinsics(extrinsics.iter().take(num_inherents), mode);
+			Self::after_inherents(mode);
 			if mode == RuntimeExecutiveMode::Minimal {
-				if inherents < extrinsics.len() {
+				if num_inherents < extrinsics.len() {
 					// Note: It would be possible to not explicitly panic here since the state-root
 					// check should already catch any mismatch, but this makes it easier to debug.
 					panic!("Only inherents are allowed in 'Minimal' blocks");
 				}
 			}
 			// Process transactions (if any).
-			Self::apply_extrinsics(extrinsics.iter().skip(inherents), mode);
+			Self::apply_extrinsics(extrinsics.iter().skip(num_inherents), mode);
 
 			<frame_system::Pallet<System>>::note_finished_extrinsics();
 			// TODO MBMs will skip this.
@@ -571,7 +571,7 @@ impl<
 	}
 
 	/// Execute code after inherents but before extrinsic application.
-	pub fn after_inherents() {
+	pub fn after_inherents(_mode: RuntimeExecutiveMode) {
 		// TODO run either MBMs or `poll` depending on the mode:
 		//  <https://github.com/paritytech/substrate/pull/14275>
 		//  <https://github.com/paritytech/substrate/pull/14279>
@@ -672,7 +672,7 @@ impl<
 		}
 		if mode == RuntimeExecutiveMode::Minimal && !mandatory {
 			defensive!("Only 'Mandatory' extrinsics should be present in a 'Minimal' block");
-			return Err(InvalidTransaction::NotMandatory.into())
+			return Err(InvalidTransaction::NonMandatory.into())
 		}
 
 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);

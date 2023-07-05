@@ -2121,8 +2121,8 @@ impl_runtime_apis! {
 			data.check_extrinsics(&block)
 		}
 
-		fn after_inherents() {
-			Executive::after_inherents()
+		fn after_inherents(mode: sp_runtime::RuntimeExecutiveMode) {
+			Executive::after_inherents(mode)
 		}
 	}
 

@@ -202,9 +202,13 @@ where
 	}
 
 	/// Called after inherents but before extrinsics have been applied.
-	pub fn after_inherents(&self) -> Result<(), Error> {
+	pub fn after_inherents(&self, mode: RuntimeExecutiveMode) -> Result<(), Error> {
 		self.api
-			.after_inherents_with_context(self.parent_hash, ExecutionContext::BlockConstruction)
+			.after_inherents_with_context(
+				self.parent_hash,
+				ExecutionContext::BlockConstruction,
+				mode,
+			)
 			.map_err(Into::into)
 	}
 

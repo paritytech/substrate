@@ -209,7 +209,7 @@ pub fn expand_outer_inherent(
 					};
 
 					if is_inherent {
-						if num_inherents != i{
+						if num_inherents != i {
 							return Err(i as u32);
 						}
 

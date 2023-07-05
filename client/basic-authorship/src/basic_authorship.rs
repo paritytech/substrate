@@ -349,10 +349,10 @@ where
 		self.apply_inherents(&mut block_builder, inherent_data)?;
 
 		let block_timer = time::Instant::now();
-		block_builder.after_inherents()?;
+		block_builder.after_inherents(block_builder.executive_mode)?;
 		let end_reason = match block_builder.executive_mode {
 			RuntimeExecutiveMode::Normal =>
-				self.apply_extrinsics(&mut block_builder, deadline, block_size_limit).await?,
+				self.apply_transactions(&mut block_builder, deadline, block_size_limit).await?,
 			RuntimeExecutiveMode::Minimal => EndProposingReason::TransactionsForbidden,
 		};
 
@@ -404,8 +404,8 @@ where
 		Ok(())
 	}
 
-	/// Apply as many extrinsics as possible to the block.
-	async fn apply_extrinsics(
+	/// Apply as many transactions as possible to the block.
+	async fn apply_transactions(
 		&self,
 		block_builder: &mut sc_block_builder::BlockBuilder<'_, Block, C, B>,
 		deadline: time::Instant,
