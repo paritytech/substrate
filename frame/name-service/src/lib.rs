@@ -326,6 +326,10 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
+		/// A para has registered.
+		ParaRegistered { para_id: u32, suffix: BoundedSuffixOf<T> },
+		/// A para has deregistered.
+		ParaDeregistered { para_id: u32 },
 		/// A new `Commitment` has taken place.
 		Committed { depositor: T::AccountId, owner: T::AccountId, hash: CommitmentHash },
 		/// A new `Registration` has taken added.
@@ -701,7 +705,11 @@ pub mod pallet {
 				Error::<T>::SuffixExists
 			);
 			ParaRegistrations::<T>::insert(para.id, para.suffix.clone());
-			ReverseParaRegistrationsLookup::<T>::insert(para.suffix, para.id);
+			ReverseParaRegistrationsLookup::<T>::insert(para.suffix.clone(), para.id.clone());
+			Self::deposit_event(Event::<T>::ParaRegistered {
+				para_id: para.id,
+				suffix: para.suffix,
+			});
 			Ok(())
 		}
 
@@ -713,8 +721,9 @@ pub mod pallet {
 			ensure_root(origin)?;
 			let suffix = ParaRegistrations::<T>::get(para_id).ok_or(Error::<T>::ParaNotFound)?;
 
-			ParaRegistrations::<T>::remove(para_id);
+			ParaRegistrations::<T>::remove(&para_id);
 			ReverseParaRegistrationsLookup::<T>::remove(&suffix);
+			Self::deposit_event(Event::<T>::ParaDeregistered { para_id });
 			Ok(())
 		}
 
