@@ -314,7 +314,7 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 				} else {
 					frame_support::defensive!(
 						"Member somehow disapeared from storage after it was inserted"
-					)
+					);
 				}
 			});
 			Members::<T, I>::mutate(&member_to_swap, |m| {
@@ -323,7 +323,7 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 				} else {
 					frame_support::defensive!(
 						"Member somehow disapeared from storage after it was queried"
-					)
+					);
 				}
 			});
 		}
