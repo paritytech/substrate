@@ -21,6 +21,7 @@
 pub mod notification;
 pub mod request_response;
 
+pub(crate) mod fisherman;
 pub(crate) mod gossip;
 pub(crate) mod peers;
 
