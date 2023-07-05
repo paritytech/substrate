@@ -41,7 +41,6 @@ use wasmi::{
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
 pub const IMPORT_MODULE_MEMORY: &str = "env";
 
-
 /// The inner deserialized module is valid and contains only allowed WebAssembly features.
 /// This is checked by loading it into wasmi interpreter `engine`.
 pub struct LoadedModule {
