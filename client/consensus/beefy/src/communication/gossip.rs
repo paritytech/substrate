@@ -298,6 +298,10 @@ where
 					// We know `vote` is for some past (finalized) block. Have fisherman check
 					// for equivocations. Best-effort, ignore errors such as state pruned.
 					let _ = self.fisherman.check_vote(vote);
+					// TODO: maybe raise cost reputation when seeing votes that are intentional
+					// spam: votes that trigger fisherman reports, but don't go through either
+					// because signer is/was not authority or similar reasons.
+					// The idea is to more quickly disconnect neighbors which are attempting DoS.
 					return Action::Discard(cost::OUTDATED_MESSAGE)
 				},
 				Consider::Accept => {},
@@ -347,6 +351,10 @@ where
 				// We know `proof` is for some past (finalized) block. Have fisherman check
 				// for equivocations. Best-effort, ignore errors such as state pruned.
 				let _ = self.fisherman.check_proof(proof);
+				// TODO: maybe raise cost reputation when seeing votes that are intentional
+				// spam: votes that trigger fisherman reports, but don't go through either because
+				// signer is/was not authority or similar reasons.
+				// The idea is to more quickly disconnect neighbors which are attempting DoS.
 				return Action::Discard(cost::OUTDATED_MESSAGE)
 			},
 			Consider::Accept => {},
