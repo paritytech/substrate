@@ -262,7 +262,7 @@ pub mod pallet {
 	pub(super) type AddressResolver<T: Config> =
 		StorageMap<_, Blake2_128Concat, NameHash, (T::AccountId, u32)>;
 
-	/// This resolver maps name hashes to an account
+	/// This resolver maps name hashes to the human-readable name of the hash.
 	#[pallet::storage]
 	pub(super) type NameResolver<T: Config> = StorageMap<
 		_,
@@ -271,7 +271,7 @@ pub mod pallet {
 		BytesStorage<T::AccountId, BalanceOf<T>, BoundedNameOf<T>>,
 	>;
 
-	/// This resolver maps name hashes to an account
+	/// This resolver maps name hashes to arbitrary human-readable text record.
 	#[pallet::storage]
 	pub(super) type TextResolver<T: Config> = StorageMap<
 		_,
