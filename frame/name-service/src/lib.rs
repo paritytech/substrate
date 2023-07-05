@@ -88,8 +88,30 @@
 //!
 //! ### Using Resolvers
 //!
-//! An address, human-readable name and text can be registered under a node. The address will be the
-//! underlying account that the node is aliasing when used for transferring tokens.
+//! An address, human-readable name and text can be registered under a node.
+//!
+//! ### Setting an Address
+//!
+//! * [`Call::set_address`]
+//!
+//! The address acts as the underlying account that the node is aliasing when used for transferring
+//! tokens. Along with the address itself, a suffix is also provided, which aliases the registered
+//! para id. The para id is stored in the resolver alongside the address.
+//!
+//! ### Setting a Name
+//!
+//! * [`Call::set_name`]
+//!
+//! Setting the name of a node is a permissionless call. The provided name must match what was
+//! originally registered, e.g. hash(name) must equal name_hash. Doing so provides a human-readable
+//! representation of the hash, and acts as a verification method for UIs for the name hash.
+//!
+//! ### Setting Text
+//!
+//! * [`Call::set_text`]
+//!
+//! The owner of a name hash can also set an ambiguous text record to give any miscellaneous text
+//! data they want to store alongside the name.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::{ensure, pallet_prelude::*, traits::Get, DefaultNoBound};
