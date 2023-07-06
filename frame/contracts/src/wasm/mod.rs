@@ -271,8 +271,8 @@ impl<T: Config> WasmBlob<T> {
 		code_hash: CodeHash<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<(CodeVec<T>, CodeInfo<T>), DispatchError> {
-		gas_meter.charge(CodeLoadToken(code_info.code_len))?;
 		let code_info = <CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
+		gas_meter.charge(CodeLoadToken(code_info.code_len))?;
 		let code = <PristineCode<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
 		let code_len = code.len() as u32;
 		gas_meter.adjust_gas(charged, CodeLoadToken(code_len));
