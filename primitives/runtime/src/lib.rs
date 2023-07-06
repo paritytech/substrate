@@ -955,14 +955,14 @@ pub enum RuntimeExecutiveMode {
 	/// - Extrinsics with dispatch class `Normal`.
 	/// - `on_idle` hook.
 	Normal,
-	/// Only _really necessary_ logic is allowed to run.
+	/// Only _necessary_ logic is allowed to run.
 	///
 	/// Explicitly forbidden are:
 	/// - Extrinsics with dispatch classes `Normal` and `Operational`.
 	/// - `on_idle` and `poll` hooks.
 	///
 	/// Explicitly allowed are:
-	/// - Mandatory inherents and extrinsics (i.e. via OCW).
+	/// - Mandatory extrinsics (i.e. via OCW).
 	/// - `on_initialize` and `on_finalize` hooks.
 	/// - Storage migrations.
 	///

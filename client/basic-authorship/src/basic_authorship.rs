@@ -345,7 +345,6 @@ where
 		let mut block_builder =
 			self.client.new_block_at(self.parent_hash, inherent_digests, PR::ENABLED)?;
 
-		// The executive mode does not influence the execution of inherents:
 		self.apply_inherents(&mut block_builder, inherent_data)?;
 
 		let block_timer = time::Instant::now();

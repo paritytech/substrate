@@ -228,13 +228,7 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	(), // no migrations
-	MockedRuntimeExecutiveMode,
 >;
-
-parameter_types! {
-	pub storage MockedRuntimeExecutiveMode: sp_runtime::RuntimeExecutiveMode = Default::default();
-}
 
 #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct CheckSubstrateCall;

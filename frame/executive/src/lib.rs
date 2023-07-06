@@ -318,10 +318,8 @@ impl<
 		}
 
 		Self::after_inherents(mode);
-		if mode == RuntimeExecutiveMode::Minimal {
-			if num_inherents < extrinsics.len() {
-				return Err(InvalidTransaction::NonMandatory.into())
-			}
+		if mode == RuntimeExecutiveMode::Minimal && extrinsics.len() > num_inherents {
+			return Err(InvalidTransaction::NonMandatory.into())
 		}
 		// Apply transactions:
 		for e in extrinsics.iter().skip(num_inherents) {
@@ -551,12 +549,10 @@ impl<
 			// Process inherents (if any).
 			Self::apply_extrinsics(extrinsics.iter().take(num_inherents), mode);
 			Self::after_inherents(mode);
-			if mode == RuntimeExecutiveMode::Minimal {
-				if num_inherents < extrinsics.len() {
-					// Note: It would be possible to not explicitly panic here since the state-root
-					// check should already catch any mismatch, but this makes it easier to debug.
-					panic!("Only inherents are allowed in 'Minimal' blocks");
-				}
+			if mode == RuntimeExecutiveMode::Minimal && extrinsics.len() > num_inherents {
+				// Note: It would be possible to not explicitly panic here since the state-root
+				// check should already catch any mismatch, but this makes it easier to debug.
+				panic!("Only inherents are allowed in 'Minimal' blocks");
 			}
 			// Process transactions (if any).
 			Self::apply_extrinsics(extrinsics.iter().skip(num_inherents), mode);
