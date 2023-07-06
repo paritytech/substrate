@@ -92,6 +92,8 @@ pub struct CodeInfo<T: Config> {
 	/// to be run on-chain. Specifically, such a code can never be instantiated into a contract
 	/// and can just be used through a delegate call.
 	determinism: Determinism,
+	/// length of the code in bytes.
+	code_len: u32,
 }
 
 /// Defines the required determinism level of a wasm blob when either running or uploading code.
