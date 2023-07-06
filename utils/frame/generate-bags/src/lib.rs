@@ -70,7 +70,7 @@ fn existential_weight<T: pallet_staking::Config>(
 	total_issuance: u128,
 	minimum_balance: u128,
 ) -> VoteWeight {
-	use frame_support::traits::CurrencyToVote;
+	use sp_staking::currency_to_vote::CurrencyToVote;
 
 	T::CurrencyToVote::to_vote(
 		minimum_balance

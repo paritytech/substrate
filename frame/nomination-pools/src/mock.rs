@@ -47,6 +47,7 @@ impl StakingMock {
 impl sp_staking::StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
+	type CurrencyToVote = sp_staking::currency_to_vote::SaturatingCurrencyToVote;
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		StakingMinBond::get()

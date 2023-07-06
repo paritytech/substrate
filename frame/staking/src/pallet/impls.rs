@@ -26,8 +26,8 @@ use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
-		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
+		Currency, Defensive, DefensiveResult, EstimateNextNewSession, Get, Imbalance,
+		LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -76,6 +76,7 @@ impl<T: Config> Pallet<T> {
 		stash: &T::AccountId,
 		issuance: BalanceOf<T>,
 	) -> VoteWeight {
+		use sp_staking::currency_to_vote::CurrencyToVote;
 		T::CurrencyToVote::to_vote(Self::slashable_balance_of(stash), issuance)
 	}
 
@@ -618,6 +619,7 @@ impl<T: Config> Pallet<T> {
 	) -> BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), MaxWinnersOf<T>> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
+			use sp_staking::currency_to_vote::CurrencyToVote;
 			T::CurrencyToVote::to_currency(e, total_issuance)
 		};
 
@@ -1568,10 +1570,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	}
 }
 
-// NOTE: in this entire impl block, the assumption is that `who` is a stash account.
 impl<T: Config> StakingInterface for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = BalanceOf<T>;
+	type CurrencyToVote = T::CurrencyToVote;
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		MinNominatorBond::<T>::get()
