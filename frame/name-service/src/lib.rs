@@ -135,7 +135,7 @@ mod registrar;
 mod resolver;
 mod subnodes;
 mod types;
-mod weights;
+pub mod weights;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -433,7 +433,7 @@ pub mod pallet {
 		///
 		/// The `name` must be at least 3 characters long.
 		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::commit())]
 		pub fn commit(
 			origin: OriginFor<T>,
 			owner: T::AccountId,
@@ -448,7 +448,7 @@ pub mod pallet {
 		/// committed `owner`. By revealing the name, the sender will pay a non-refundable
 		/// registration fee.
 		#[pallet::call_index(3)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::reveal(name.len() as u32))]
 		pub fn reveal(
 			origin: OriginFor<T>,
 			name: Vec<u8>,
