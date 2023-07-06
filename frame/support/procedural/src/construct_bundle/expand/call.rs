@@ -36,7 +36,7 @@ pub fn expand_outer_dispatch(
 
 	let pallets_with_call = pallet_decls.iter().filter(|decl| decl.exists_part("Call"));
 
-	let type_impl_gen = quote!(T: frame_system::Config);
+	let type_impl_gen = quote!(T: Config);
 	let type_use_gen = quote!(T);
 
 	for pallet_declaration in pallets_with_call {
@@ -58,7 +58,7 @@ pub fn expand_outer_dispatch(
 			#[codec(index = #index)]
 			#name( #scrate::dispatch::CallableCallFor<#name<T>, Pallet<T>> ),
 		});
-		variant_patterns.push(quote!(Call::T::#name(call)));
+		variant_patterns.push(quote!(Call::<T>::#name(call)));
 		pallet_names.push(name);
 		pallet_attrs.push(attr);
 		query_call_part_macros.push(quote! {
@@ -88,7 +88,7 @@ pub fn expand_outer_dispatch(
 				#scrate::sp_std::marker::PhantomData<(T,)>,
 				#scrate::Never,
 			),
-			// #variant_defs
+			#variant_defs
 		}
 
 		impl<#type_impl_gen> #scrate::dispatch::Callable<T> for Pallet<T>
@@ -97,23 +97,23 @@ pub fn expand_outer_dispatch(
 		}
 
 				
-		// impl<#type_impl_gen> #scrate::dispatch::Callable<Pallet<T>> for Template<#type_use_gen>
-		// {
-		// 	type RuntimeCall = pallet_template::Call<Pallet<T>>;
-		// }
+		impl<#type_impl_gen> #scrate::dispatch::Callable<Pallet<T>> for pallet_template::Pallet<T>
+		{
+			type RuntimeCall = pallet_template::Call<Pallet<T>>;
+		}
 		
-		// impl<#type_impl_gen> #scrate::dispatch::Callable<Pallet<T>> for Template2<#type_use_gen>
-		// {
-		// 	type RuntimeCall = pallet_template_2::Call<Pallet<T>>;
-		// }
+		impl<#type_impl_gen> #scrate::dispatch::Callable<Pallet<T>> for pallet_template_2::Pallet<T>
+		{
+			type RuntimeCall = pallet_template_2::Call<Pallet<T>>;
+		}
 
 		impl<#type_impl_gen> #scrate::dispatch::GetDispatchInfo for Call<T> {
 			fn get_dispatch_info(&self) -> #scrate::dispatch::DispatchInfo {
 				match self {
-					// #(
-					// 	#pallet_attrs
-					// 	#variant_patterns => call.get_dispatch_info(),
-					// )*
+					#(
+						#pallet_attrs
+						#variant_patterns => call.get_dispatch_info(),
+					)*
 					Self::__Ignore(_, _) => unreachable!("__Ignore cannot be used"),
 				}
 			}
@@ -126,10 +126,10 @@ pub fn expand_outer_dispatch(
 		{
 			fn get_call_name(&self) -> &'static str {
 				match self {
-					// #(
-					// 	#pallet_attrs
-					// 	#variant_patterns => call.get_call_name(),
-					// )*
+					#(
+						#pallet_attrs
+						#variant_patterns => call.get_call_name(),
+					)*
 					Self::__Ignore(_, _) => unreachable!("__PhantomItem cannot be used."),
 				}
 			}
@@ -144,10 +144,10 @@ pub fn expand_outer_dispatch(
 		{
 			fn get_call_index(&self) -> u8 {
 				match self {
-					// #(
-					// 	#pallet_attrs
-					// 	#variant_patterns => call.get_call_index(),
-					// )*
+					#(
+						#pallet_attrs
+						#variant_patterns => call.get_call_index(),
+					)*
 					Self::__Ignore(_, _) => unreachable!("__PhantomItem cannot be used."),
 				}
 			}
@@ -162,65 +162,64 @@ pub fn expand_outer_dispatch(
 			fn get_call_metadata(&self) -> #scrate::dispatch::CallMetadata {
 				use #scrate::dispatch::GetCallName;
 				match self {
-					// #(
-					// 	#pallet_attrs
-					// 	#variant_patterns => {
-					// 		let function_name = call.get_call_name();
-					// 		let pallet_name = stringify!(#pallet_names);
-					// 		#scrate::dispatch::CallMetadata { function_name, pallet_name }
-					// 	}
-					// )*
+					#(
+						#pallet_attrs
+						#variant_patterns => {
+							let function_name = call.get_call_name();
+							let pallet_name = stringify!(#pallet_names);
+							#scrate::dispatch::CallMetadata { function_name, pallet_name }
+						}
+					)*
 					_ => unreachable!(),
 				}
 			}
 
 			fn get_module_names() -> &'static [&'static str] {
-				// &[#(
-				// 	#pallet_attrs
-				// 	stringify!(#pallet_names),
-				// )*]
-				&[]
+				&[#(
+					#pallet_attrs
+					stringify!(#pallet_names),
+				)*]
 			}
 
 			fn get_call_names(module: &str) -> &'static [&'static str] {
 				use #scrate::dispatch::{Callable, GetCallName};
 				match module {
-					// #(
-					// 	#pallet_attrs
-					// 	stringify!(#pallet_names) =>
-					// 		<<#pallet_names as Callable<#runtime>>::RuntimeCall
-					// 			as GetCallName>::get_call_names(),
-					// )*
+					#(
+						#pallet_attrs
+						stringify!(#pallet_names) =>
+							<<#pallet_names<T> as Callable<Pallet<T>>>::RuntimeCall
+								as GetCallName>::get_call_names(),
+					)*
 					_ => unreachable!(),
 				}
 			}
 		}
 
-		impl<T: frame_system::Config> #scrate::dispatch::Dispatchable for Call<T> {
-			type RuntimeOrigin = frame_system::pallet_prelude::OriginFor<T>;
-			type Config = Call<T>;
-			type Info = #scrate::dispatch::DispatchInfo;
-			type PostInfo = #scrate::dispatch::PostDispatchInfo;
-			fn dispatch(self, origin: Self::RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
-				// if !<Self::RuntimeOrigin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
-				// 	return #scrate::sp_std::result::Result::Err(
-				// 		#system_path::Error::<#runtime>::CallFiltered.into()
-				// 	);
-				// }
+		// impl<#type_impl_gen> #scrate::dispatch::Dispatchable for Call<T> {
+		// 	type RuntimeOrigin = frame_system::pallet_prelude::OriginFor<T>;
+		// 	type Config = Call<T>;
+		// 	type Info = #scrate::dispatch::DispatchInfo;
+		// 	type PostInfo = #scrate::dispatch::PostDispatchInfo;
+		// 	fn dispatch(self, origin: Self::RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
+		// 		// if !<Self::RuntimeOrigin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
+		// 		// 	return #scrate::sp_std::result::Result::Err(
+		// 		// 		#system_path::Error::<#runtime>::CallFiltered.into()
+		// 		// 	);
+		// 		// }
 
-				#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
-			}
-		}
+		// 		#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
+		// 	}
+		// }
 
 		impl<#type_impl_gen> #scrate::traits::UnfilteredDispatchable for Call<T> {
 			type RuntimeOrigin = frame_system::pallet_prelude::OriginFor<T>;
 			fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
 				match self {
-					// #(
-					// 	#pallet_attrs
-					// 	#variant_patterns =>
-					// 		#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin),
-					// )*
+					#(
+						#pallet_attrs
+						#variant_patterns =>
+							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin),
+					)*
 					Self::__Ignore(_, _) => {
 						let _ = origin; // Use origin for empty Call enum
 						unreachable!("__PhantomItem cannot be used.");
