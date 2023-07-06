@@ -39,6 +39,9 @@ use crate::{
 	protocol_controller::{ProtocolController, ProtocolHandle},
 };
 
+#[cfg(test)]
+use crate::protocol_controller::Direction;
+
 use futures::{channel::oneshot, future::BoxFuture, prelude::*, stream::Stream};
 use log::debug;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -308,6 +311,11 @@ impl Peerset {
 	/// Returns the number of peers that we have discovered.
 	pub fn num_discovered_peers(&self) -> usize {
 		self.peer_store_handle.num_known_peers()
+	}
+
+	#[cfg(test)]
+	pub fn connected_peers(&self, set_id: SetId) -> impl Iterator<Item = (&PeerId, &Direction)> {
+		self.protocol_controllers[usize::from(set_id)].connected_peers()
 	}
 }
 

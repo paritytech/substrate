@@ -133,8 +133,9 @@ impl ProtocolHandle {
 }
 
 /// Direction of a connection
+// The only reason this struct is `pub` is for consistency check in `peerset_fuzz.rs`.
 #[derive(Clone, Copy, Debug)]
-enum Direction {
+pub enum Direction {
 	Inbound,
 	Outbound,
 }
@@ -711,6 +712,19 @@ impl Stream for ProtocolController {
 		}
 
 		Poll::Pending
+	}
+}
+
+#[cfg(test)]
+impl ProtocolController {
+	/// Return all connected nodes for testing purposes.
+	pub(crate) fn connected_peers(&self) -> impl Iterator<Item = (&PeerId, &Direction)> {
+		self.nodes.iter().chain(self.reserved_nodes.iter().filter_map(
+			|(peer, state)| match state {
+				PeerState::Connected(direction) => Some((peer, direction)),
+				PeerState::NotConnected => None,
+			},
+		))
 	}
 }
 

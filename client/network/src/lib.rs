@@ -248,6 +248,9 @@ mod protocol;
 mod protocol_controller;
 mod service;
 
+#[cfg(test)]
+mod peerset_fuzz;
+
 pub mod config;
 pub mod discovery;
 pub mod error;

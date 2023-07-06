@@ -20,8 +20,6 @@
 #[cfg(test)]
 mod block_import;
 #[cfg(test)]
-mod peerset;
-#[cfg(test)]
 mod service;
 #[cfg(test)]
 mod sync;
