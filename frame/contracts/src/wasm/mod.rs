@@ -225,7 +225,7 @@ impl<T: Config> WasmBlob<T> {
 		Ok((store, memory, instance))
 	}
 
-	/// Put the module blob into storage, and returns the deposit collected for the storage.
+	/// Puts the module blob into storage, and returns the deposit collected for the storage.
 	pub fn store_code(&mut self) -> Result<BalanceOf<T>, Error<T>> {
 		let code_hash = *self.code_hash();
 		<CodeInfoOf<T>>::mutate(code_hash, |stored_code_info| {
