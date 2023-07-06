@@ -39,23 +39,37 @@ fn run_to_block<T: Config>(n: T::BlockNumber) {
 	}
 }
 
+fn register_name_hash<T: Config>(owner: T::AccountId, name: Vec<u8>) -> (NameHash, T::AccountId) {
+	let caller = whitelisted_caller();
+	let secret = 3_u64;
+	let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+	let commitment_hash: CommitmentHash = NameService::<T>::commitment_hash(&name, secret.clone());
+	let origin = RawOrigin::Signed(caller.clone());
+
+	NameService::<T>::commit(
+		origin.clone().into(), 
+		owner.clone(), 
+		commitment_hash.clone()
+	).expect("Commit succeeds.");
+
+	run_to_block::<T>(System::<T>::block_number() + 100u32.into());
+
+	NameService::<T>::reveal(
+		origin.into(), 
+		name.clone(), 
+		secret, 
+		100u32.into()
+	).expect("Reveal succeeds");
+
+	(NameService::<T>::name_hash(&name), owner)
+}
+
 benchmarks! {
 	force_register {
-		let balance = BalanceOf::<T>::max_value();
-		let caller = whitelisted_caller();
-		let _ = T::Currency::make_free_balance_be(&caller, balance);
-		let name = vec![0; T::MaxNameLength::get() as usize];
-
-		// commit & reveal name to be overwritten
-		let secret = 3_u64;
-		let commitment_hash: CommitmentHash = NameService::<T>::commitment_hash(&name, secret);
-		let owner: T::AccountId = account("recipient", 0, 1u32);
-		let origin = RawOrigin::Signed(caller.clone());
-		NameService::<T>::commit(origin.clone().into(), owner.clone(), commitment_hash.clone()).expect("Must commit");
-		run_to_block::<T>(100u32.into());
-		NameService::<T>::reveal(origin.into(), name.clone(), secret, 100u32.into()).expect("Must reveal");
-
-		let name_hash = NameService::<T>::name_hash(&name);
+		let (name_hash, owner) = register_name_hash::<T>(
+			account("recipient", 0, 1u32),
+			vec![0; T::MaxNameLength::get() as usize]
+		);
 		let new_owner: T::AccountId = account("new_recipient", 0, 2u32);
 	}: _(
 		RawOrigin::Root,
@@ -64,8 +78,9 @@ benchmarks! {
 		Some(T::BlockNumber::max_value())
 	)
 	verify {
-		let node = Registrations::<T>::get(name_hash).unwrap();
-		assert_eq!(node, Registration {
+		assert_eq!(
+			Registrations::<T>::get(name_hash).unwrap(), 
+			Registration {
 			owner: new_owner.clone(),
 			expiry: Some(T::BlockNumber::max_value()),
 			deposit: None,
