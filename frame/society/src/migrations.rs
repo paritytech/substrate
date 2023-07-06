@@ -19,10 +19,7 @@
 
 use super::*;
 use codec::{Decode, Encode};
-use frame_support::{
-	defensive,
-	traits::{Defensive, DefensiveOption, Instance, OnRuntimeUpgrade},
-};
+use frame_support::traits::{Defensive, DefensiveOption, Instance, OnRuntimeUpgrade};
 
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
@@ -62,7 +59,7 @@ impl<
 			);
 			from_original::<T, I>(&mut PastPayouts::get()).defensive_unwrap_or(Weight::MAX)
 		} else {
-			defensive!("Unexpected onchain version: {:?}. Expected 0.");
+			log::warn!("Unexpected onchain version: {:?} (expected 0)", onchain);
 			T::DbWeight::get().reads(1)
 		}
 	}
