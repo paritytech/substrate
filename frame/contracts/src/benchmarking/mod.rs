@@ -39,15 +39,12 @@ use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	self,
 	pallet_prelude::StorageVersion,
-	traits::{fungible::InspectHold, ConstU64},
+	traits::{fungible::InspectHold, ReservableCurrency},
 	weights::Weight,
 };
 use frame_system::RawOrigin;
 use pallet_balances;
-use sp_runtime::{
-	traits::{Bounded, Hash},
-	Perbill,
-};
+use sp_runtime::traits::{Bounded, Hash};
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{BlockType, Instruction, ValueType};
 
@@ -265,7 +262,22 @@ benchmarks! {
 	v12_migration_step {
 		let c in 0 .. T::MaxCodeLen::get();
 		v12::store_old_dummy_code::<T, pallet_balances::Pallet<T>>(c as usize, account::<T::AccountId>("account", 0, 0));
-		let mut m = v12::Migration::<T, pallet_balances::Pallet<T>, BalanceOf<T>, BalanceOf<T>>::default();
+
+		struct OldDepositPerItem<T, Currency>(PhantomData<(T,Currency)>);
+
+		type OldDepositPerByte<T, Currency> = OldDepositPerItem<T, Currency>;
+
+		impl<T, Currency> Get<v12::old::BalanceOf<T, Currency>> for OldDepositPerItem<T, Currency>
+		where
+			T: Config,
+			Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
+		{
+			fn get() -> v12::old::BalanceOf<T, Currency> {
+				v12::old::BalanceOf::<T, Currency>::default()
+			}
+		}
+
+		let mut m = v12::Migration::<T, pallet_balances::Pallet<T>, OldDepositPerItem<T, pallet_balances::Pallet<T>>, OldDepositPerByte<T, pallet_balances::Pallet<T>>>::default();
 	}: {
 		m.step();
 	}

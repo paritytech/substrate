@@ -111,7 +111,9 @@ pub trait ChainExtension<C: Config> {
 	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
-	fn call<E: Ext<T = C>>(&mut self, env: Environment<E, InitState>) -> Result<RetVal> where BalanceOf<C>: FixedPointOperand;
+	fn call<E: Ext<T = C>>(&mut self, env: Environment<E, InitState>) -> Result<RetVal>
+	where
+		BalanceOf<C>: FixedPointOperand;
 
 	/// Determines whether chain extensions are enabled for this chain.
 	///
@@ -147,7 +149,10 @@ pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 #[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
 impl<C: Config> ChainExtension<C> for Tuple {
-	fn call<E: Ext<T = C>>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal> where BalanceOf<C>: FixedPointOperand {
+	fn call<E: Ext<T = C>>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal>
+	where
+		BalanceOf<C>: FixedPointOperand,
+	{
 		for_tuples!(
 			#(
 				if (Tuple::ID == env.ext_id()) && Tuple::enabled() {
@@ -198,7 +203,10 @@ where
 }
 
 /// Functions that are available in every state of this type.
-impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S> where BalanceOf<E::T>: FixedPointOperand{
+impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S>
+where
+	BalanceOf<E::T>: FixedPointOperand,
+{
 	/// The function id within the `id` passed by a contract.
 	///
 	/// It returns the two least significant bytes of the `id` passed by a contract as the other
@@ -253,7 +261,10 @@ impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S> where BalanceOf<E::T>: 
 ///
 /// Those are the functions that determine how the arguments to the chain extensions
 /// should be consumed.
-impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> where BalanceOf<E::T>: FixedPointOperand {
+impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState>
+where
+	BalanceOf<E::T>: FixedPointOperand,
+{
 	/// Creates a new environment for consumption by a chain extension.
 	///
 	/// It is only available to this crate because only the wasm runtime module needs to
@@ -293,7 +304,10 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> where BalanceOf<E::T>: Fi
 }
 
 /// Functions to use the input arguments as integers.
-impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S> where BalanceOf<E::T>: FixedPointOperand{
+impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S>
+where
+	BalanceOf<E::T>: FixedPointOperand,
+{
 	/// The `input_ptr` argument.
 	pub fn val0(&self) -> u32 {
 		self.inner.input_ptr
@@ -306,7 +320,10 @@ impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S> where BalanceOf<E::T>:
 }
 
 /// Functions to use the output arguments as integers.
-impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S> where BalanceOf<E::T>: FixedPointOperand{
+impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S>
+where
+	BalanceOf<E::T>: FixedPointOperand,
+{
 	/// The `output_ptr` argument.
 	pub fn val2(&self) -> u32 {
 		self.inner.output_ptr
@@ -319,7 +336,10 @@ impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S> where BalanceOf<E::T>
 }
 
 /// Functions to use the input arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> where BalanceOf<E::T>: FixedPointOperand{
+impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S>
+where
+	BalanceOf<E::T>: FixedPointOperand,
+{
 	/// Reads `min(max_len, in_len)` from contract memory.
 	///
 	/// This does **not** charge any weight. The caller must make sure that the an
@@ -391,7 +411,10 @@ impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> where BalanceOf<E::T>: 
 }
 
 /// Functions to use the output arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S> where BalanceOf<E::T>: FixedPointOperand{
+impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S>
+where
+	BalanceOf<E::T>: FixedPointOperand,
+{
 	/// Write the supplied buffer to contract memory.
 	///
 	/// If the contract supplied buffer is smaller than the passed `buffer` an `Err` is returned.

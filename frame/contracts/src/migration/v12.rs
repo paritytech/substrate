@@ -38,7 +38,7 @@ use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, FixedPointNumber, FixedU128, Saturating};
 use sp_std::prelude::*;
 
-mod old {
+pub mod old {
 	use super::*;
 
 	pub type BalanceOf<T, Currency> = <Currency as frame_support::traits::Currency<
@@ -110,7 +110,8 @@ pub type PristineCode<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, 
 pub fn store_old_dummy_code<T: Config, Currency>(len: usize, account: T::AccountId)
 where
 	Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, Currency>>,
+		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, Currency>>
+		+ 'static,
 {
 	use sp_runtime::traits::Hash;
 
