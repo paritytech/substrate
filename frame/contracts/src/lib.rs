@@ -707,8 +707,8 @@ pub mod pallet {
 			)?;
 
 			// Reduces the storage deposit limit by the amount that was reserved for the upload.
-			let storage_deposit_limit = storage_deposit_limit
-					.map(|limit| limit.into().saturating_sub(upload_deposit));
+			let storage_deposit_limit =
+				storage_deposit_limit.map(|limit| limit.into().saturating_sub(upload_deposit));
 
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;

@@ -4587,10 +4587,28 @@ fn set_code_hash() {
 
 #[test]
 fn storage_deposit_limit_is_enforced() {
+	let ed = 200;
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
-	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Setting insufficient storage_deposit should fail.
+		assert_err!(
+			Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				Some((2 * ed + 3 - 1).into()), // expected deposit is 2 * ed + 3 for the call
+				Code::Upload(wasm.clone()),
+				vec![],
+				vec![],
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+			)
+			.result,
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
