@@ -80,6 +80,7 @@ pub struct CodeInfo<T: Config> {
 	#[codec(compact)]
 	refcount: u64,
 	determinism: Determinism,
+	code_len: u32,
 }
 
 #[storage_alias]
@@ -177,6 +178,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 				owner: old_info.owner,
 				deposit,
 				refcount: old_info.refcount,
+				code_len: code_len as u32,
 			};
 
 			let amount = old_info.deposit.saturating_sub(info.deposit);
