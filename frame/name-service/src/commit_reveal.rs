@@ -19,7 +19,8 @@
 
 use crate::{types::*, *};
 use frame_support::traits::{
-	Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency, WithdrawReasons,
+	BalanceStatus, Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency,
+	WithdrawReasons,
 };
 use sp_runtime::traits::{Saturating, Zero};
 use sp_std::prelude::*;
@@ -131,7 +132,17 @@ impl<T: Config> Pallet<T> {
 
 		let expiry = block_number.saturating_add(length);
 		Self::do_register(name_hash, commitment.owner.clone(), Some(expiry), None)?;
-		Self::do_remove_commitment(&commitment_hash, &commitment);
+		Commitments::<T>::remove(commitment_hash);
+
+		// Move commitment deposit to owner if commitment depositor is different from owner.
+		if commitment.owner != commitment.depositor {
+			T::Currency::repatriate_reserved(
+				&commitment.depositor,
+				&commitment.owner,
+				commitment.deposit,
+				BalanceStatus::Reserved,
+			)?;
+		}
 		Ok(())
 	}
 

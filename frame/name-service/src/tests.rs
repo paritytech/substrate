@@ -74,7 +74,7 @@ fn alice_register_bob_senario_setup() -> (Vec<u8>, [u8; 32]) {
 	assert_ok!(NameService::commit(RuntimeOrigin::signed(sender), owner, commitment_hash));
 	add_blocks(min_commitment + 1);
 	assert_ok!(NameService::reveal(RuntimeOrigin::signed(sender), name.clone(), secret, length));
-	assert_eq!(Balances::free_balance(&sender), 89);
+	assert_eq!(Balances::free_balance(&sender), 79);
 	assert_eq!(Balances::free_balance(&owner), 200);
 	(name, name_hash)
 }
@@ -176,9 +176,7 @@ fn reveal_works() {
 		// 10 + 1 + 10  = 21
 		// commitment deposit returned
 		// 21 - 10 = 11
-		// deduct from initial deposit
-		// 100 - 11 = 89
-		assert_eq!(Balances::free_balance(&1), 89);
+		assert_eq!(Balances::free_balance(&1), 79);
 
 		// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&encoded_bytes));
 		// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&commitment_hash));
@@ -207,7 +205,7 @@ fn reveal_handles_errors() {
 		assert_ok!(NameService::commit(RuntimeOrigin::signed(sender), owner, commitment_hash));
 		let commitment = Commitments::<Test>::get(commitment_hash).unwrap();
 		assert_eq!(commitment.when, 1);
-		add_blocks(min_commitment);
+		add_blocks(min_commitment - 1);
 
 		// Reveal is too early
 		assert_noop!(
@@ -220,7 +218,7 @@ fn reveal_handles_errors() {
 		let commitment_hash = blake2_256(&(&name, secret).encode());
 		assert_ok!(NameService::commit(RuntimeOrigin::signed(sender), owner, commitment_hash));
 
-		add_blocks(min_commitment + 1);
+		add_blocks(min_commitment);
 
 		assert_noop!(
 			NameService::reveal(RuntimeOrigin::signed(2), name.clone(), secret, length),
@@ -233,7 +231,7 @@ fn reveal_handles_errors() {
 		let commitment_hash = blake2_256(&(&name, secret).encode());
 		assert_ok!(NameService::commit(RuntimeOrigin::signed(sender), owner, commitment_hash));
 
-		add_blocks(min_commitment + 1);
+		add_blocks(min_commitment);
 
 		assert_noop!(
 			NameService::reveal(RuntimeOrigin::signed(2), name.clone(), secret, length),
@@ -356,9 +354,9 @@ fn renew_works() {
 		// `1` extends for 1 block
 		let new_expiry = registration.expiry.unwrap() + 1;
 
-		assert_eq!(Balances::free_balance(&1), 89);
+		assert_eq!(Balances::free_balance(&1), 79);
 		assert_ok!(NameService::renew(RuntimeOrigin::signed(1), name_hash, new_expiry));
-		assert_eq!(Balances::free_balance(&1), 88);
+		assert_eq!(Balances::free_balance(&1), 78);
 		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().expiry.unwrap(), 23);
 
 		// `2` extends for 5 blocks
@@ -377,7 +375,7 @@ fn renew_handles_errors() {
 		let (_, name_hash) = alice_register_bob_senario_setup();
 
 		// insufficient balance to renew
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(1), 0, 88));
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(1), 0, 78));
 		assert_eq!(Balances::free_balance(1), 1);
 
 		// explicitly running to block 15 to check ExpiryInvalid
