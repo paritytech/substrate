@@ -1469,7 +1469,7 @@ impl<T: Config> Pallet<T> {
 		Ok(CodeUploadReturnValue { code_hash: *module.code_hash(), deposit })
 	}
 
-	/// Upload new code and returns the wasm blob and deposit amount collected.
+	/// Uploads new code and returns the Wasm blob and collect the deposit amount.
 	fn try_upload_code(
 		origin: T::AccountId,
 		code: Vec<u8>,
