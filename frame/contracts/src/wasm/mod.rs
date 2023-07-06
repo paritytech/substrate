@@ -2180,7 +2180,7 @@ mod tests {
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
 				data: (
-					array_bytes::hex2array_unchecked::<32>(
+					array_bytes::hex2array_unchecked::<_, 32>(
 						"000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
 					),
 					42u64,
