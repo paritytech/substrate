@@ -250,26 +250,6 @@ impl<T: Config> WasmBlob<T> {
 		})
 	}
 
-	/// Increments the reference count of the in-storage `WasmBlob`.
-	fn increment_refcount(&mut self) -> DispatchResult {
-		let code_hash = *self.code_hash();
-		<CodeInfoOf<T>>::mutate(code_hash, |stored_code_info| match stored_code_info {
-			Some(stored_code_info) => {
-				stored_code_info.refcount = stored_code_info.refcount.checked_add(1).expect(
-					"
-					 refcount is 64bit. Generating this overflow would require to store
-					 _at least_ 18 exabyte of data assuming that a contract consumes only
-					 one byte of data. Any node would run out of storage space before hitting
-					 this overflow;
-					 qed
-					",
-				);
-				Ok(())
-			},
-			None => Err(<Error<T>>::CodeNotFound.into()),
-		})
-	}
-
 	/// Try to remove code together with all associated information.
 	fn try_remove_code(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
 		<CodeInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
@@ -362,7 +342,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 	}
 
 	fn execute<E: Ext<T = T>>(
-		mut self,
+		self,
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
@@ -411,7 +391,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 			})?;
 
 		if let &ExportedFunction::Constructor = function {
-			self.increment_refcount()?;
+			WasmBlob::<T>::increment_refcount(self.code_hash)?;
 		}
 
 		let result = exported_func.call(&mut store, &[], &mut []);
