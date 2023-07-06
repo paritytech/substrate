@@ -232,6 +232,8 @@ pub struct Peerset {
 	protocol_handles: Vec<ProtocolHandle>,
 	/// Protocol controllers responsible for connections, per `SetId`.
 	protocol_controllers: Vec<ProtocolController>,
+	/// Index of the `ProtocolController` to poll next.
+	poll_index: usize,
 	/// Receiver for messages from the `PeersetHandle` and from `to_self`.
 	from_handle: TracingUnboundedReceiver<Action>,
 }
@@ -263,6 +265,7 @@ impl Peerset {
 			peer_store_future: peer_store.run().boxed(),
 			protocol_handles,
 			protocol_controllers,
+			poll_index: 0,
 			from_handle,
 		};
 
@@ -312,8 +315,15 @@ impl Stream for Peerset {
 	type Item = Message;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-		for protocol_controller in self.protocol_controllers.iter_mut() {
-			if let Poll::Ready(msg) = protocol_controller.poll_next_unpin(cx) {
+		// In order to make polling of protocol controllers more fair, we start iterating
+		// from the next one on every subsequent invocation.
+		let start = self.poll_index;
+		let num_protocols = self.protocol_controllers.len();
+		self.poll_index = (self.poll_index + 1) % num_protocols;
+
+		for offset in 0..num_protocols {
+			let i = (start + offset) % num_protocols;
+			if let Poll::Ready(msg) = self.protocol_controllers[i].poll_next_unpin(cx) {
 				if let Some(msg) = msg {
 					return Poll::Ready(Some(msg))
 				} else {
