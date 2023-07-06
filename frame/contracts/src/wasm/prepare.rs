@@ -245,7 +245,8 @@ where
 	//
 	// - It doesn't use any unknown imports.
 	// - It doesn't explode the wasmi bytecode generation.
-	// We don't actually ever run any code so we can get away with a minimal stack which
+	//
+	// We don't actually ever execute this instance so we can get away with a minimal stack which
 	// reduces the amount of memory that needs to be zeroed.
 	let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
 	WasmBlob::<T>::instantiate::<E, _>(
