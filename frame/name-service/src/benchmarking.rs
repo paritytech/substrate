@@ -196,10 +196,10 @@ benchmarks! {
 		let name = vec![0; T::MaxNameLength::get() as usize];
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		let commitment_hash: CommitmentHash = NameService::<T>::commitment_hash(&name, 3_u64);
-		
+
 		let _ = NameService::<T>::commit(
-			RawOrigin::Signed(caller.clone()).into(), 
-			caller.clone(), 
+			RawOrigin::Signed(caller.clone()).into(),
+			caller.clone(),
 			commitment_hash.clone()
 		).expect("Commit succeeds.");
 		run_to_block::<T>(System::<T>::block_number() + 200u32.into());
