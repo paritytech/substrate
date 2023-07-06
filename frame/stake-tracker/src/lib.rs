@@ -95,7 +95,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> OnStakingUpdate<T::Staking> for Pallet<T> {
+impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_stake_update(who: &T::AccountId, _prev_stake: Option<Stake<BalanceOf<T>>>) {
 		if let Ok(current_stake) = T::Staking::stake(who) {
 			let current_active = current_stake.active;

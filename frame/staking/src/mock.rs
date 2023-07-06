@@ -280,17 +280,6 @@ impl OnUnbalanced<PositiveImbalanceOf<Test>> for MockReward {
 	}
 }
 
-pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
-impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
-	fn on_slash(
-		_pool_account: &AccountId,
-		slashed_bonded: Balance,
-		slashed_chunks: &BTreeMap<EraIndex, Balance>,
-	) {
-		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
-	}
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StakingEvent {
 	StakeUpdate(AccountId, Option<Stake<Balance>>),
@@ -308,7 +297,7 @@ parameter_types! {
 }
 
 pub struct EventListenerMock;
-impl OnStakingUpdate<Staking> for EventListenerMock {
+impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 	fn on_stake_update(who: &AccountId, prev_stake: Option<Stake<Balance>>) {
 		EmittedEvents::mutate(|x| x.push(StakeUpdate(*who, prev_stake)))
 	}
@@ -340,6 +329,15 @@ impl OnStakingUpdate<Staking> for EventListenerMock {
 	fn on_unstake(who: &AccountId) {
 		EmittedEvents::mutate(|x| x.push(Unstake(*who)));
 	}
+
+	// TODO: add event for slashing
+	fn on_slash(
+		_pool_account: &AccountId,
+		slashed_bonded: Balance,
+		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+	) {
+		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
+	}
 }
 
 impl crate::pallet::pallet::Config for Test {
@@ -367,7 +365,6 @@ impl crate::pallet::pallet::Config for Test {
 	type TargetList = UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
-	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 	type EventListeners = (StakeTracker, EventListenerMock);

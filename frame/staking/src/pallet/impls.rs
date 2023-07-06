@@ -1647,7 +1647,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		let is_validator = Validators::<T>::contains_key(&who);
 		let is_nominator = Nominators::<T>::get(&who);
 
-		use sp_staking::StakerStatus;
 		match (is_validator, is_nominator.is_some()) {
 			(false, false) => Ok(StakerStatus::Idle),
 			(true, false) => Ok(StakerStatus::Validator),

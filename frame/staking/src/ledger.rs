@@ -1,8 +1,7 @@
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
 	traits::{Defensive, Get, LockableCurrency, WithdrawReasons},
-	BoundedVec, CloneNoBound, DebugNoBound, EqNoBound, PartialEqNoBound, RuntimeDebug,
-	RuntimeDebugNoBound,
+	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Zero, Perquintill, Rounding, Saturating};
@@ -52,7 +51,7 @@ pub struct StakingLedger<T: Config> {
 }
 
 #[cfg(test)]
-#[derive(DebugNoBound, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(frame_support::DebugNoBound, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct StakingLedgerInspect<T: Config> {
 	pub stash: T::AccountId,
 	#[codec(compact)]
@@ -245,7 +244,6 @@ impl<T: Config> StakingLedger<T> {
 		}
 
 		use sp_runtime::PerThing as _;
-		use sp_staking::OnStakerSlash as _;
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
 
@@ -350,7 +348,7 @@ impl<T: Config> StakingLedger<T> {
 		// clean unlocking chunks that are set to zero.
 		self.unlocking.retain(|c| !c.value.is_zero());
 
-		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
+		T::EventListeners::on_slash(&self.stash, self.active, &slashed_unlocking);
 		pre_slash_total.saturating_sub(self.total)
 	}
 }

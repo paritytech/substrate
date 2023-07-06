@@ -51,7 +51,7 @@ pub enum StakerStatus<AccountId> {
 
 /// Trait describing something that implements a hook for any operations to perform when a staker is
 /// slashed.
-#[deprecated]
+#[deprecated(note = "Use `OnStakingUpdate` instead.")]
 pub trait OnStakerSlash<AccountId, Balance> {
 	/// A hook for any operations to perform when a staker is slashed.
 	///
@@ -66,12 +66,6 @@ pub trait OnStakerSlash<AccountId, Balance> {
 		slashed_active: Balance,
 		slashed_unlocking: &BTreeMap<EraIndex, Balance>,
 	);
-}
-
-impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
-	fn on_slash(_: &AccountId, _: Balance, _: &BTreeMap<EraIndex, Balance>) {
-		// Nothing to do here
-	}
 }
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
@@ -99,46 +93,59 @@ pub struct Stake<Balance> {
 /// pre-action data that is needed needs to be passed to interface methods. The rest of the data can
 /// be retrieved by using `StakingInterface`.
 #[impl_trait_for_tuples::impl_for_tuples(10)]
-pub trait OnStakingUpdate<I: StakingInterface> {
+pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Fired when the stake amount of someone updates.
 	///
 	/// This is effectively any changes to the bond amount, such as bonding more funds, and
 	/// unbonding.
-	fn on_stake_update(who: &I::AccountId, prev_stake: Option<Stake<I::Balance>>);
+	fn on_stake_update(_who: &AccountId, _prev_stake: Option<Stake<Balance>>) {}
 
 	/// Fired when someone sets their intention to nominate.
 	///
 	/// This should never be fired for for existing nominators.
-	fn on_nominator_add(who: &I::AccountId);
+	fn on_nominator_add(_who: &AccountId) {}
 
 	/// Fired when an existing nominator updates their nominations.
 	///
 	/// Note that this is not fired when a nominator changes their stake. For that,
 	/// `on_stake_update` should be used, followed by querying whether `who` was a validator or a
 	/// nominator.
-	fn on_nominator_update(who: &I::AccountId, prev_nominations: Vec<I::AccountId>);
+	fn on_nominator_update(_who: &AccountId, _prev_nominations: Vec<AccountId>) {}
 
 	/// Fired when someone removes their intention to nominate, either due to chill or validating.
 	///
 	/// The set of nominations at the time of removal is provided as it can no longer be fetched in
 	/// any way.
-	fn on_nominator_remove(who: &I::AccountId, nominations: Vec<I::AccountId>);
+	fn on_nominator_remove(_who: &AccountId, _nominations: Vec<AccountId>) {}
 
 	/// Fired when someone sets their intention to validate.
 	///
 	/// Note validator preference changes are not communicated, but could be added if needed.
-	fn on_validator_add(who: &I::AccountId);
+	fn on_validator_add(_who: &AccountId) {}
 
 	/// Fired when an existing validator updates their preferences.
 	///
 	/// Note validator preference changes are not communicated, but could be added if needed.
-	fn on_validator_update(who: &I::AccountId);
+	fn on_validator_update(_who: &AccountId) {}
 
 	/// Fired when someone removes their intention to validate, either due to chill or nominating.
-	fn on_validator_remove(who: &I::AccountId);
+	fn on_validator_remove(_who: &AccountId) {}
 
-	/// fired when someone is fully unstaked.
-	fn on_unstake(who: &I::AccountId);
+	/// Fired when someone is fully unstaked.
+	fn on_unstake(_who: &AccountId) {}
+
+	/// Fired when a staker is slashed.
+	///
+	/// * `stash` - The stash of the staker whom the slash was applied to.
+	/// * `slashed_active` - The new bonded balance of the staker after the slash was applied.
+	/// * `slashed_unlocking` - A map of slashed eras, and the balance of that unlocking chunk after
+	///   the slash is applied. Any era not present in the map is not affected at all.
+	fn on_slash(
+		_stash: &AccountId,
+		_slashed_active: Balance,
+		_slashed_unlocking: &BTreeMap<EraIndex, Balance>,
+	) {
+	}
 }
 
 /// A generic representation of a staking implementation.
