@@ -134,7 +134,6 @@ fn generate_chain_spec(
 			sudo_account,
 			Some(endowed_accounts),
 		))
-		.with_boot_nodes(Default::default())
 		.with_extensions(Default::default())
 		.with_code(kitchensink_runtime::wasm_binary_unwrap())
 		.build()
