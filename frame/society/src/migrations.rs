@@ -21,7 +21,7 @@ use super::*;
 use codec::{Decode, Encode};
 use frame_support::{
 	defensive,
-	traits::{DefensiveOption, Instance, OnRuntimeUpgrade},
+	traits::{Defensive, DefensiveOption, Instance, OnRuntimeUpgrade},
 };
 
 #[cfg(feature = "try-runtime")]
@@ -60,16 +60,7 @@ impl<
 				"Running migration against onchain version {:?}",
 				onchain
 			);
-			match from_original::<T, I>(&mut PastPayouts::get()) {
-				Ok(weight) => {
-					crate::STORAGE_VERSION.put::<Pallet<T, I>>();
-					weight
-				},
-				Err(msg) => {
-					defensive!(msg);
-					T::DbWeight::get().reads(1)
-				},
-			}
+			from_original::<T, I>(&mut PastPayouts::get()).defensive_unwrap_or(Weight::MAX)
 		} else {
 			defensive!("Unexpected onchain version: {:?}. Expected 0.");
 			T::DbWeight::get().reads(1)
