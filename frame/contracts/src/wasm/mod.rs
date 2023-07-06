@@ -302,7 +302,7 @@ impl<T: Config> WasmBlob<T> {
 			)
 		}
 		if maximum > schedule.limits.memory_pages {
-			return Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.")
+			return Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.");
 		}
 		Ok((initial, maximum))
 	}

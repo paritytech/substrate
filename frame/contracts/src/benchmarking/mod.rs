@@ -261,7 +261,10 @@ benchmarks! {
 	#[pov_mode = Measured]
 	v12_migration_step {
 		let c in 0 .. T::MaxCodeLen::get();
-		v12::store_old_dummy_code::<T, pallet_balances::Pallet<T>>(c as usize, account::<T::AccountId>("account", 0, 0));
+		v12::store_old_dummy_code::<
+			T,
+			pallet_balances::Pallet<T>
+		>(c as usize, account::<T::AccountId>("account", 0, 0));
 
 		struct OldDepositPerItem<T, Currency>(PhantomData<(T,Currency)>);
 
@@ -277,7 +280,12 @@ benchmarks! {
 			}
 		}
 
-		let mut m = v12::Migration::<T, pallet_balances::Pallet<T>, OldDepositPerItem<T, pallet_balances::Pallet<T>>, OldDepositPerByte<T, pallet_balances::Pallet<T>>>::default();
+		let mut m = v12::Migration::<
+			T,
+			pallet_balances::Pallet<T>,
+			OldDepositPerItem<T, pallet_balances::Pallet<T>>,
+			OldDepositPerByte<T, pallet_balances::Pallet<T>>
+		>::default();
 	}: {
 		m.step();
 	}
