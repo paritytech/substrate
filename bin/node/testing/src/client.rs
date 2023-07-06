@@ -45,7 +45,7 @@ pub struct GenesisParameters;
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		crate::genesis::config(None).build_storage().unwrap()
+		crate::genesis::config().build_storage().unwrap()
 	}
 }
 

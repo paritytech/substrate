@@ -29,13 +29,13 @@ use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use sp_runtime::Perbill;
 
 /// Create genesis runtime configuration for tests.
-pub fn config(code: Option<&[u8]>) -> RuntimeGenesisConfig {
-	config_endowed(code, Default::default())
+pub fn config() -> RuntimeGenesisConfig {
+	config_endowed(Default::default())
 }
 
 /// Create genesis runtime configuration for tests with some extra
 /// endowed accounts.
-pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> RuntimeGenesisConfig {
+pub fn config_endowed(extra_endowed: Vec<AccountId>) -> RuntimeGenesisConfig {
 	let mut endowed = vec![
 		(alice(), 111 * DOLLARS),
 		(bob(), 100 * DOLLARS),
@@ -48,10 +48,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Run
 	endowed.extend(extra_endowed.into_iter().map(|endowed| (endowed, 100 * DOLLARS)));
 
 	RuntimeGenesisConfig {
-		system: SystemConfig {
-			code: code.map(|x| x.to_vec()).unwrap_or_else(|| wasm_binary_unwrap().to_vec()),
-			..Default::default()
-		},
+		system: Default::default(),
 		indices: IndicesConfig { indices: vec![] },
 		balances: BalancesConfig { balances: endowed },
 		session: SessionConfig {
