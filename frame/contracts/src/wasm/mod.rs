@@ -234,7 +234,7 @@ impl<T: Config> WasmBlob<T> {
 				Some(_) => Ok(Default::default()),
 				// Upload a new contract code.
 				// We need to store the code and its code_info, and collect the deposit.
-				// This `None` case happens only in freshly uploaded modules. This means that
+				// This `None` case happens only with freshly uploaded modules. This means that
 				// the `owner` is always the origin of the current transaction.
 				None => {
 					let deposit = self.code_info.deposit;
