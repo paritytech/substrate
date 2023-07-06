@@ -35,10 +35,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies
-array-bytes = "6.1"
+array-bytes = { version = "6.1" }
 clap = { version = "4.2.5", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.6.1" }
 serde = { version = "1.0.163", features = ["derive"] }
+serde_json = { version = "1.0.85", features = ["arbitrary_precision"] }
 jsonrpsee = { version = "0.16.2", features = ["server"] }
 futures = "0.3.21"
 log = "0.4.17"
@@ -104,7 +105,6 @@ sc-cli = { version = "0.10.0-dev", optional = true, path = "../../../client/cli"
 frame-benchmarking-cli = { version = "4.0.0-dev", optional = true, path = "../../../utils/frame/benchmarking-cli" }
 node-inspect = { version = "0.9.0-dev", optional = true, path = "../inspect" }
 try-runtime-cli = { version = "0.10.0-dev", optional = true, path = "../../../utils/frame/try-runtime/cli" }
-serde_json = "1.0.85"
 
 [dev-dependencies]
 sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
@@ -120,7 +120,6 @@ futures = "0.3.21"
 tempfile = "3.1.0"
 assert_cmd = "2.0.2"
 nix = { version = "0.26.1", features = ["signal"] }
-serde_json = "1.0"
 regex = "1.6.0"
 platforms = "3.0"
 soketto = "0.7.1"
