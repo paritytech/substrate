@@ -95,26 +95,6 @@ impl ChainSpecBuilder {
 	}
 }
 
-fn genesis_constructor(
-	authority_seeds: &[String],
-	nominator_accounts: &[AccountId],
-	endowed_accounts: &[AccountId],
-	sudo_account: &AccountId,
-) -> chain_spec::RuntimeGenesisConfig {
-	let authorities = authority_seeds
-		.iter()
-		.map(AsRef::as_ref)
-		.map(chain_spec::authority_keys_from_seed)
-		.collect::<Vec<_>>();
-
-	chain_spec::testnet_genesis(
-		authorities,
-		nominator_accounts.to_vec(),
-		sudo_account.clone(),
-		Some(endowed_accounts.to_vec()),
-	)
-}
-
 fn generate_chain_spec(
 	authority_seeds: Vec<String>,
 	nominator_accounts: Vec<String>,
@@ -138,27 +118,27 @@ fn generate_chain_spec(
 
 	let sudo_account = parse_account(sudo_account)?;
 
-	let chain_spec = chain_spec::ChainSpec::from_genesis(
-		"Custom",
-		"custom",
-		sc_chain_spec::ChainType::Live,
-		move || {
-			genesis_constructor(
-				&authority_seeds,
-				&nominator_accounts,
-				&endowed_accounts,
-				&sudo_account,
-			)
-		},
-		vec![],
-		None,
-		None,
-		None,
-		None,
-		Default::default(),
-	);
+	let authorities = authority_seeds
+		.iter()
+		.map(AsRef::as_ref)
+		.map(chain_spec::authority_keys_from_seed)
+		.collect::<Vec<_>>();
 
-	chain_spec.as_json(false)
+	chain_spec::ChainSpec::builder()
+		.with_name("Custom")
+		.with_id("custom")
+		.with_chain_type(sc_chain_spec::ChainType::Live)
+		.with_genesis_patch(chain_spec::testnet_genesis(
+			authorities,
+			nominator_accounts,
+			sudo_account,
+			Some(endowed_accounts),
+		))
+		.with_boot_nodes(Default::default())
+		.with_extensions(Default::default())
+		.with_code(kitchensink_runtime::wasm_binary_unwrap())
+		.build()
+		.as_json(false)
 }
 
 fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> Result<(), String> {
