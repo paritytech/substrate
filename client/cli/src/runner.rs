@@ -262,6 +262,7 @@ mod tests {
 					None,
 					None,
 					NoExtension::None,
+					Default::default(),
 				)),
 				wasm_method: Default::default(),
 				wasm_runtime_overrides: None,
