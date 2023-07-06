@@ -33,7 +33,6 @@ use frame_support::{
 	ord_parameter_types,
 	pallet_prelude::Get,
 	parameter_types,
-	tests::RuntimeGenesisConfig,
 	traits::{
 		fungible::ItemOf,
 		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
@@ -70,7 +69,7 @@ use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 // #[cfg(feature = "genesis-builder")]
-use frame_support::genesis_builder_helper::GenesisBuilderHelper;
+use frame_support::genesis_builder_helper::{build_config, create_default_config};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -2603,11 +2602,11 @@ impl_runtime_apis! {
 
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
 		fn create_default_config() -> Vec<u8> {
-			GenesisBuilderHelper::<RuntimeGenesisConfig>::create_default_config()
+			create_default_config::<RuntimeGenesisConfig>()
 		}
 
 		fn build_config(config: Vec<u8>) -> sp_genesis_builder::Result {
-			GenesisBuilderHelper::<RuntimeGenesisConfig>::build_config(config)
+			build_config::<RuntimeGenesisConfig>(config)
 		}
 	}
 }
