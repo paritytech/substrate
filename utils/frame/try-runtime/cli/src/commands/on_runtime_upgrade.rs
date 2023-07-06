@@ -32,9 +32,10 @@ pub struct OnRuntimeUpgradeCmd {
 
 	/// Select which optional checks to perform. Selects all when no value is given.
 	///
-	/// - `none`: Perform no checks (default when the arg is not present).
-	/// - `all`: Perform all checks (default when the arg is present).
-	/// - `pre-and-post`: Perform pre- and post-upgrade checks.
+	/// - `none`: Perform no checks.
+	/// - `all`: Perform all checks (default when --checks is present with no value).
+	/// - `pre-and-post`: Perform pre- and post-upgrade checks (default when the arg is not
+	///   present).
 	/// - `try-state`: Perform the try-state checks.
 	///
 	/// Performing any checks will potentially invalidate the measured PoV/Weight.
@@ -54,7 +55,6 @@ pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 	Block::Header: serde::de::DeserializeOwned,
 	NumberFor<Block>: FromStr,

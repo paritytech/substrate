@@ -603,7 +603,7 @@ impl BenchKeyring {
 	}
 
 	/// Generate genesis with accounts from this keyring endowed with some balance.
-	pub fn generate_genesis(&self) -> kitchensink_runtime::GenesisConfig {
+	pub fn generate_genesis(&self) -> kitchensink_runtime::RuntimeGenesisConfig {
 		crate::genesis::config_endowed(
 			Some(kitchensink_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),

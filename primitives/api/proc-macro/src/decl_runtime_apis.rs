@@ -20,7 +20,6 @@ use crate::{
 		API_VERSION_ATTRIBUTE, BLOCK_GENERIC_IDENT, CHANGED_IN_ATTRIBUTE, CORE_TRAIT_ATTRIBUTE,
 		RENAMED_ATTRIBUTE, SUPPORTED_ATTRIBUTE_NAMES,
 	},
-	runtime_metadata::generate_decl_runtime_metadata,
 	utils::{
 		extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side,
 		generate_crate_access, generate_runtime_mod_name_for_trait, parse_runtime_api_version,
@@ -86,32 +85,6 @@ fn remove_supported_attributes(attrs: &mut Vec<Attribute>) -> HashMap<&'static s
 	});
 
 	result
-}
-
-/// Visits the ast and checks if `Block` ident is used somewhere.
-struct IsUsingBlock {
-	result: bool,
-}
-
-impl<'ast> Visit<'ast> for IsUsingBlock {
-	fn visit_ident(&mut self, i: &'ast Ident) {
-		if i == BLOCK_GENERIC_IDENT {
-			self.result = true;
-		}
-	}
-}
-
-/// Replace all occurrences of `Block` with `NodeBlock`
-struct ReplaceBlockWithNodeBlock {}
-
-impl Fold for ReplaceBlockWithNodeBlock {
-	fn fold_ident(&mut self, input: Ident) -> Ident {
-		if input == BLOCK_GENERIC_IDENT {
-			Ident::new("NodeBlock", Span::call_site())
-		} else {
-			input
-		}
-	}
 }
 
 /// Versioned API traits are used to catch missing methods when implementing a specific version of a
@@ -214,12 +187,16 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 		let mut decl = decl.clone();
 		let decl_span = decl.span();
 		extend_generics_with_block(&mut decl.generics);
-		let metadata = generate_decl_runtime_metadata(&decl);
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
 		let found_attributes = remove_supported_attributes(&mut decl.attrs);
 		let api_version =
 			get_api_version(&found_attributes).map(|v| generate_runtime_api_version(v as u32))?;
 		let id = generate_runtime_api_id(&decl.ident.to_string());
+
+		#[cfg(feature = "frame-metadata")]
+		let metadata = crate::runtime_metadata::generate_decl_runtime_metadata(&decl);
+		#[cfg(not(feature = "frame-metadata"))]
+		let metadata = quote!();
 
 		let trait_api_version = get_api_version(&found_attributes)?;
 
@@ -539,8 +516,6 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 			input.supertraits.push(parse_quote!( #crate_::Core<#block_ident> ));
 		}
 
-		// The client side trait is only required when compiling with the feature `std` or `test`.
-		input.attrs.push(parse_quote!( #[cfg(any(feature = "std", test))] ));
 		input.items = self.fold_item_trait_items(input.items, input.generics.params.len());
 
 		fold::fold_item_trait(self, input)
@@ -584,12 +559,13 @@ fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 	});
 
 	quote!(
-		#[cfg(any(feature = "std", test))]
-		impl < #( #impl_generics, )* > #crate_::RuntimeApiInfo
-			for dyn #trait_name < #( #ty_generics, )* >
-		{
-			#id
-			#version
+		#crate_::std_enabled! {
+			impl < #( #impl_generics, )* > #crate_::RuntimeApiInfo
+				for dyn #trait_name < #( #ty_generics, )* >
+			{
+				#id
+				#version
+			}
 		}
 	)
 }
@@ -636,7 +612,11 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 		let runtime_info = api_version.map(|v| generate_runtime_info_impl(&decl, v))?;
 
-		result.push(quote!( #decl #runtime_info #( #errors )* ));
+		result.push(quote!(
+			#crate_::std_enabled! { #decl }
+			#runtime_info
+			#( #errors )*
+		));
 	}
 
 	Ok(quote!( #( #result )* ))

@@ -17,27 +17,27 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+frame-support = { default-features = false, path = "../support" }
+frame-system = { default-features = false, path = "../system" }
 
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { default-features = false, path = "../../primitives/io" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+sp-std = { default-features = false, path = "../../primitives/std" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 
 frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
 
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-benchmarking = { default-features = false, optional = true, path = "../benchmarking" }
 
 [dev-dependencies]
-substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
-sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
+substrate-test-utils = { path = "../../test-utils" }
+sp-tracing = { path = "../../primitives/tracing" }
 pallet-staking = { path = "../staking" }
 pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }
-sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
-pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list" }
-frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
+sp-npos-elections = { path = "../../primitives/npos-elections" }
+pallet-bags-list = { path = "../bags-list" }
+frame-election-provider-support = { path = "../election-provider-support" }
 
 [features]
 default = ["std"]

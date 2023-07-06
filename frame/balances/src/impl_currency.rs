@@ -846,17 +846,18 @@ where
 
 	type MaxLocks = T::MaxLocks;
 
-	// Set a lock on the balance of `who`.
-	// Is a no-op if lock amount is zero or `reasons` `is_none()`.
+	// Set or alter a lock on the balance of `who`.
 	fn set_lock(
 		id: LockIdentifier,
 		who: &T::AccountId,
 		amount: T::Balance,
 		reasons: WithdrawReasons,
 	) {
-		if amount.is_zero() || reasons.is_empty() {
+		if reasons.is_empty() || amount.is_zero() {
+			Self::remove_lock(id, who);
 			return
 		}
+
 		let mut new_lock = Some(BalanceLock { id, amount, reasons: reasons.into() });
 		let mut locks = Self::locks(who)
 			.into_iter()

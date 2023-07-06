@@ -9,7 +9,7 @@ use sp_runtime::{traits::Zero, Perquintill, Rounding, Saturating};
 use sp_staking::{EraIndex, OnStakingUpdate};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-use crate::{log, BalanceOf, Config, Ledger, STAKING_ID};
+use crate::{log, pallet::STAKING_ID, BalanceOf, Config, Ledger};
 
 /// The ledger of a (bonded) stash.
 #[derive(
@@ -74,6 +74,7 @@ impl<T: Config> PartialEq<StakingLedgerInspect<T>> for StakingLedger<T> {
 	}
 }
 
+#[cfg(test)]
 impl<T: Config> codec::EncodeLike<StakingLedger<T>> for StakingLedgerInspect<T> {}
 
 impl<T: Config> Into<sp_staking::Stake<BalanceOf<T>>> for StakingLedger<T> {

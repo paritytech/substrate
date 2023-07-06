@@ -59,6 +59,9 @@ use frame_system::ensure_signed;
 use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
 use sp_std::prelude::*;
 
+#[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
+use sp_runtime::TryRuntimeError;
+
 #[cfg(any(feature = "runtime-benchmarks", test))]
 mod benchmarks;
 
@@ -267,7 +270,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}
@@ -275,7 +278,7 @@ pub mod pallet {
 
 #[cfg(any(test, feature = "try-runtime", feature = "fuzz"))]
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_try_state() -> Result<(), &'static str> {
+	pub fn do_try_state() -> Result<(), TryRuntimeError> {
 		List::<T, I>::do_try_state()
 	}
 }
@@ -349,33 +352,38 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::remove(id)
 	}
 
-	frame_election_provider_support::runtime_benchmarks_or_test_enabled! {
-		fn unsafe_clear() {
-			// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_clear.
-			// I.e. because it can lead to many storage accesses.
-			// So it is ok to call it as caller must ensure the conditions.
-			List::<T, I>::unsafe_clear()
-		}
+	#[cfg(feature = "try-runtime")]
+	fn try_state() -> Result<(), TryRuntimeError> {
+		Self::do_try_state()
+	}
 
-		fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
-			use frame_support::traits::Get as _;
-			let thresholds = T::BagThresholds::get();
-			let node = list::Node::<T, I>::get(who).unwrap();
-			let current_bag_idx = thresholds
-				.iter()
-				.chain(sp_std::iter::once(&T::Score::max_value()))
-				.position(|w| w == &node.bag_upper)
-				.unwrap();
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn unsafe_clear() {
+		// NOTE: This call is unsafe for the same reason as SortedListProvider::unsafe_clear.
+		// I.e. because it can lead to many storage accesses.
+		// So it is ok to call it as caller must ensure the conditions.
+		List::<T, I>::unsafe_clear()
+	}
 
-			if is_increase {
-				let next_threshold_idx = current_bag_idx + 1;
-				assert!(thresholds.len() > next_threshold_idx);
-				thresholds[next_threshold_idx]
-			} else {
-				assert!(current_bag_idx != 0);
-				let prev_threshold_idx = current_bag_idx - 1;
-				thresholds[prev_threshold_idx]
-			}
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn score_update_worst_case(who: &T::AccountId, is_increase: bool) -> Self::Score {
+		use frame_support::traits::Get as _;
+		let thresholds = T::BagThresholds::get();
+		let node = list::Node::<T, I>::get(who).unwrap();
+		let current_bag_idx = thresholds
+			.iter()
+			.chain(sp_std::iter::once(&T::Score::max_value()))
+			.position(|w| w == &node.bag_upper)
+			.unwrap();
+
+		if is_increase {
+			let next_threshold_idx = current_bag_idx + 1;
+			assert!(thresholds.len() > next_threshold_idx);
+			thresholds[next_threshold_idx]
+		} else {
+			assert!(current_bag_idx != 0);
+			let prev_threshold_idx = current_bag_idx - 1;
+			thresholds[prev_threshold_idx]
 		}
 	}
 

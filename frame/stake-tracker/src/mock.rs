@@ -92,9 +92,9 @@ impl pallet_balances::Config for Runtime {
 	type MaxLocks = frame_support::traits::ConstU32<1024>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
-	type HoldIdentifier = ();
 	type FreezeIdentifier = ();
 	type MaxHolds = ();
+	type RuntimeHoldReason = ();
 	type MaxFreezes = ();
 }
 
