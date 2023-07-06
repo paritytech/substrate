@@ -175,20 +175,29 @@ where
 		let estimated_header_size = header.encoded_size();
 
 		let mut api = api.runtime_api();
+		let version = api
+			.api_version::<dyn BlockBuilderApi<Block>>(parent_hash)?
+			.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
 
 		if record_proof.yes() {
 			api.record_proof();
 		}
 
-		let executive_mode = api.initialize_block_with_context(
-			parent_hash,
-			ExecutionContext::BlockConstruction,
-			&header,
-		)?;
-
-		let version = api
-			.api_version::<dyn BlockBuilderApi<Block>>(parent_hash)?
-			.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
+		let executive_mode = if version >= 5 {
+			api.initialize_block_with_context(
+				parent_hash,
+				ExecutionContext::BlockConstruction,
+				&header,
+			)?
+		} else {
+			#[allow(deprecated)]
+			api.initialize_block_before_version_5_with_context(
+				parent_hash,
+				ExecutionContext::BlockConstruction,
+				&header,
+			)?;
+			RuntimeExecutiveMode::Normal
+		};
 
 		Ok(Self {
 			parent_hash,

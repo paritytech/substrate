@@ -725,6 +725,9 @@ decl_runtime_apis! {
 		/// Execute the given block.
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
+		#[changed_in(5)]
+		fn initialize_block(header: &<Block as BlockT>::Header);
+		/// Initialize a block with the given header and return the runtime executive mode.
 		#[renamed("initialise_block", 2)]
 		fn initialize_block(header: &<Block as BlockT>::Header) -> RuntimeExecutiveMode;
 	}
