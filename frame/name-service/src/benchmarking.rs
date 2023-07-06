@@ -50,6 +50,7 @@ fn register_para<T: Config>() -> (BoundedSuffixOf<T>, u32) {
 fn register_name_hash<T: Config>(
 	owner: T::AccountId,
 	name: Vec<u8>,
+	do_reveal: bool,
 ) -> (NameHash, T::AccountId, T::AccountId) {
 	let caller = whitelisted_caller();
 	let secret = 3_u64;
@@ -62,10 +63,11 @@ fn register_name_hash<T: Config>(
 	let _ = NameService::<T>::commit(origin.clone().into(), owner.clone(), commitment_hash.clone())
 		.expect("Commit succeeds.");
 
-	run_to_block::<T>(System::<T>::block_number() + 100u32.into());
-
-	let _ = NameService::<T>::reveal(origin.into(), name.clone(), secret, 100u32.into())
-		.expect("Reveal succeeds");
+	if do_reveal == true {
+		run_to_block::<T>(System::<T>::block_number() + 100u32.into());
+		let _ = NameService::<T>::reveal(origin.into(), name.clone(), secret, 100u32.into())
+			.expect("Reveal succeeds");
+	}
 
 	(NameService::<T>::name_hash(&name), owner, caller)
 }
@@ -74,7 +76,8 @@ benchmarks! {
 	force_register {
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			account("recipient", 0, 1u32),
-			vec![0; T::MaxNameLength::get() as usize]
+			vec![0; T::MaxNameLength::get() as usize],
+			true
 		);
 		let new_owner: T::AccountId = account("new_recipient", 0, 2u32);
 	}: _(
@@ -99,7 +102,8 @@ benchmarks! {
 		let (suffix, para_id) = register_para::<T>();
 		let (name_hash, owner, caller) = register_name_hash::<T>(
 			recipient.clone(),
-			vec![0; T::MaxNameLength::get() as usize]
+			vec![0; T::MaxNameLength::get() as usize],
+			true
 		);
 
 		let origin = RawOrigin::Signed(owner.clone());
@@ -183,8 +187,25 @@ benchmarks! {
 		// fees have been deducted from fee payer.
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&caller),
-			BalanceOf::<T>::max_value()-100u32.into()
+			BalanceOf::<T>::max_value() - 100u32.into()
 		);
+	}
+
+	remove_commitment {
+		let caller = whitelisted_caller();
+		let name = vec![0; T::MaxNameLength::get() as usize];
+		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		let commitment_hash: CommitmentHash = NameService::<T>::commitment_hash(&name, 3_u64);
+		
+		let _ = NameService::<T>::commit(
+			RawOrigin::Signed(caller.clone()).into(), 
+			caller.clone(), 
+			commitment_hash.clone()
+		).expect("Commit succeeds.");
+		run_to_block::<T>(System::<T>::block_number() + 200u32.into());
+	}: _(RawOrigin::Signed(caller.clone()), commitment_hash.clone())
+	verify {
+		assert!(!Commitments::<T>::contains_key(commitment_hash));
 	}
 
 	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);

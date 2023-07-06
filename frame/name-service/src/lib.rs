@@ -466,7 +466,7 @@ pub mod pallet {
 		///
 		/// By doing so, the commitment deposit is returned to the original depositor.
 		#[pallet::call_index(4)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::remove_commitment())]
 		pub fn remove_commitment(
 			origin: OriginFor<T>,
 			commitment_hash: CommitmentHash,

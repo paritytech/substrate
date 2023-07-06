@@ -4,6 +4,7 @@
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
 //! DATE: 2023-07-06, STEPS: `50`, REPEAT: `20`, LOW RANGE: `[]`, HIGH RANGE: `[]`
 //! WORST CASE MAP SIZE: `1000000`
+//! HOSTNAME: `Rosss-MacBook-Pro-2.local`, CPU: `<UNKNOWN>`
 //! EXECUTION: Some(Wasm), WASM-EXECUTION: Compiled, CHAIN: None, DB CACHE: 1024
 
 // Executed Command:
@@ -42,6 +43,7 @@ pub trait WeightInfo {
 	fn force_deregister() -> Weight;
 	fn commit() -> Weight;
 	fn reveal(l: u32, ) -> Weight;
+	fn remove_commitment() -> Weight;
 }
 
 /// Weights for pallet_name_service using the Substrate node and recommended hardware.
@@ -56,7 +58,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `403`
 		//  Estimated: `3559`
 		// Minimum execution time: 22_000_000 picoseconds.
-		Weight::from_parts(22_000_000, 3559)
+		Weight::from_parts(23_000_000, 3559)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
@@ -76,8 +78,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `4912`
 		//  Estimated: `5611`
-		// Minimum execution time: 70_000_000 picoseconds.
-		Weight::from_parts(71_000_000, 5611)
+		// Minimum execution time: 66_000_000 picoseconds.
+		Weight::from_parts(69_000_000, 5611)
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(6_u64))
 	}
@@ -89,8 +91,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `319`
 		//  Estimated: `3597`
-		// Minimum execution time: 35_000_000 picoseconds.
-		Weight::from_parts(36_000_000, 3597)
+		// Minimum execution time: 36_000_000 picoseconds.
+		Weight::from_parts(37_000_000, 3597)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -111,13 +113,24 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `516`
 		//  Estimated: `3597 + l * (450 ±0)`
-		// Minimum execution time: 67_000_000 picoseconds.
-		Weight::from_parts(68_320_890, 3597)
-			// Standard Error: 66
-			.saturating_add(Weight::from_parts(1_878, 0).saturating_mul(l.into()))
+		// Minimum execution time: 66_000_000 picoseconds.
+		Weight::from_parts(67_626_621, 3597)
+			// Standard Error: 37
+			.saturating_add(Weight::from_parts(2_327, 0).saturating_mul(l.into()))
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 			.saturating_add(Weight::from_parts(0, 450).saturating_mul(l.into()))
+	}
+	/// Storage: NameService Commitments (r:1 w:1)
+	/// Proof: NameService Commitments (max_values: None, max_size: Some(132), added: 2607, mode: MaxEncodedLen)
+	fn remove_commitment() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `436`
+		//  Estimated: `3597`
+		// Minimum execution time: 28_000_000 picoseconds.
+		Weight::from_parts(30_000_000, 3597)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
 }
 
@@ -132,7 +145,7 @@ impl WeightInfo for () {
 		//  Measured:  `403`
 		//  Estimated: `3559`
 		// Minimum execution time: 22_000_000 picoseconds.
-		Weight::from_parts(22_000_000, 3559)
+		Weight::from_parts(23_000_000, 3559)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
 	}
@@ -152,8 +165,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `4912`
 		//  Estimated: `5611`
-		// Minimum execution time: 70_000_000 picoseconds.
-		Weight::from_parts(71_000_000, 5611)
+		// Minimum execution time: 66_000_000 picoseconds.
+		Weight::from_parts(69_000_000, 5611)
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(6_u64))
 	}
@@ -165,8 +178,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `319`
 		//  Estimated: `3597`
-		// Minimum execution time: 35_000_000 picoseconds.
-		Weight::from_parts(36_000_000, 3597)
+		// Minimum execution time: 36_000_000 picoseconds.
+		Weight::from_parts(37_000_000, 3597)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -187,12 +200,23 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `516`
 		//  Estimated: `3597 + l * (450 ±0)`
-		// Minimum execution time: 67_000_000 picoseconds.
-		Weight::from_parts(68_320_890, 3597)
-			// Standard Error: 66
-			.saturating_add(Weight::from_parts(1_878, 0).saturating_mul(l.into()))
+		// Minimum execution time: 66_000_000 picoseconds.
+		Weight::from_parts(67_626_621, 3597)
+			// Standard Error: 37
+			.saturating_add(Weight::from_parts(2_327, 0).saturating_mul(l.into()))
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))
 			.saturating_add(Weight::from_parts(0, 450).saturating_mul(l.into()))
+	}
+	/// Storage: NameService Commitments (r:1 w:1)
+	/// Proof: NameService Commitments (max_values: None, max_size: Some(132), added: 2607, mode: MaxEncodedLen)
+	fn remove_commitment() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `436`
+		//  Estimated: `3597`
+		// Minimum execution time: 28_000_000 picoseconds.
+		Weight::from_parts(30_000_000, 3597)
+			.saturating_add(RocksDbWeight::get().reads(1_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
 }
