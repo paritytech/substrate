@@ -400,7 +400,7 @@ pub mod pallet {
 		///
 		/// Can only be called by the Root origin.
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::force_register())]
 		pub fn force_register(
 			origin: OriginFor<T>,
 			name_hash: NameHash,

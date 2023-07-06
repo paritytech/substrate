@@ -31,8 +31,6 @@ use crate::Pallet as NameService;
 
 type CurrencyOf<T> = <T as Config>::Currency;
 
-const SEED: u32 = 1;
-
 fn run_to_block<T: Config>(n: T::BlockNumber) {
 	while System::<T>::block_number() < n {
 		NameService::<T>::on_finalize(System::<T>::block_number());
@@ -42,16 +40,47 @@ fn run_to_block<T: Config>(n: T::BlockNumber) {
 }
 
 benchmarks! {
+	force_register {
+		let balance = BalanceOf::<T>::max_value();
+		let caller = whitelisted_caller();
+		let _ = T::Currency::make_free_balance_be(&caller, balance);
+		let name = vec![0; T::MaxNameLength::get() as usize];
+
+		// commit & reveal name to be overwritten
+		let secret = 3_u64;
+		let commitment_hash: CommitmentHash = NameService::<T>::commitment_hash(&name, secret);
+		let owner: T::AccountId = account("recipient", 0, 1u32);
+		let origin = RawOrigin::Signed(caller.clone());
+		NameService::<T>::commit(origin.clone().into(), owner.clone(), commitment_hash.clone()).expect("Must commit");
+		run_to_block::<T>(100u32.into());
+		NameService::<T>::reveal(origin.into(), name.clone(), secret, 100u32.into()).expect("Must reveal");
+
+		let name_hash = NameService::<T>::name_hash(&name);
+		let new_owner: T::AccountId = account("new_recipient", 0, 2u32);
+	}: _(
+		RawOrigin::Root,
+		name_hash.clone(),
+		new_owner.clone(),
+		Some(T::BlockNumber::max_value())
+	)
+	verify {
+		let node = Registrations::<T>::get(name_hash).unwrap();
+		assert_eq!(node, Registration {
+			owner: new_owner.clone(),
+			expiry: Some(T::BlockNumber::max_value()),
+			deposit: None,
+		});
+	}
+
 	commit {
 		let balance = BalanceOf::<T>::max_value();
 		let caller = whitelisted_caller();
 		let _ = T::Currency::make_free_balance_be(&caller, balance);
 
-		let l in 3..T::MaxNameLength::get();
-		let name = vec![0; l as usize];
+		let name = vec![0; T::MaxNameLength::get() as usize];
 		let secret = 3_u64;
 		let hash = NameService::<T>::commitment_hash(&name, secret.clone());
-		let owner: T::AccountId = account("recipient", 0, SEED);
+		let owner: T::AccountId = account("recipient", 0, 1u32);
 
 	}: _(RawOrigin::Signed(caller.clone()), owner, hash.clone())
 	verify {
@@ -72,22 +101,30 @@ benchmarks! {
 
 		// Commit
 		let hash: CommitmentHash = NameService::<T>::commitment_hash(&name, secret);
-		let owner: T::AccountId = account("recipient", 0, SEED);
+		let owner: T::AccountId = account("recipient", 0, 1u32);
 		let origin = RawOrigin::Signed(caller.clone());
 		NameService::<T>::commit(origin.into(), owner.clone(), hash.clone()).expect("Must commit");
 		let run_to: T::BlockNumber = 100u32.into();
 		run_to_block::<T>(run_to);
 
-	}: _(RawOrigin::Signed(caller.clone()), name.to_vec(), secret, 100u32.into())
+	}: _(RawOrigin::Signed(caller.clone()), name.to_vec(), secret, 100u32.into()
+	)
 	verify {
 		// commitment has been removed.
 		assert!(!Commitments::<T>::contains_key(hash));
 		// registered name is now stored.
-		assert_eq!(Registrations::<T>::get(NameService::<T>::name_hash(&name)).unwrap(), Registration {
-			owner: owner.clone(), expiry: Some(200u32.into()), deposit: None
+		assert_eq!(
+			Registrations::<T>::get(NameService::<T>::name_hash(&name)).unwrap(),
+			Registration {
+			owner: owner.clone(),
+			expiry: Some(200u32.into()),
+			deposit: None,
 		});
 		// fees have been deducted from fee payer.
-		assert_eq!(CurrencyOf::<T>::free_balance(&caller), BalanceOf::<T>::max_value()-100u32.into());
+		assert_eq!(
+			CurrencyOf::<T>::free_balance(&caller),
+			BalanceOf::<T>::max_value()-100u32.into()
+		);
 	}
 
 	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);
