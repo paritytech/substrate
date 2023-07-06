@@ -21,7 +21,6 @@ use super::*;
 use codec::{Decode, Encode};
 use frame_support::{
 	defensive,
-	migrations::VersionedRuntimeUpgrade,
 	traits::{DefensiveOption, Instance, OnRuntimeUpgrade},
 };
 
@@ -109,14 +108,16 @@ impl<
 }
 
 /// [`VersionUncheckedMigrateToV2`] wrapped in [`VersionedRuntimeUpgrade`], ensuring the migration
-/// is only performed when required.
-pub type VersionCheckedMigrateToV2<T, I, PastPayouts> = VersionedRuntimeUpgrade<
-	0,
-	2,
-	VersionUncheckedMigrateToV2<T, I, PastPayouts>,
-	crate::pallet::Pallet<T, I>,
-	<T as frame_system::Config>::DbWeight,
->;
+/// is only performed when on-chain version is 0.
+#[cfg(feature = "experimental")]
+pub type VersionCheckedMigrateToV2<T, I, PastPayouts> =
+	frame_support::migrations::VersionedRuntimeUpgrade<
+		0,
+		2,
+		VersionUncheckedMigrateToV2<T, I, PastPayouts>,
+		crate::pallet::Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>;
 
 pub(crate) mod old {
 	use super::*;
