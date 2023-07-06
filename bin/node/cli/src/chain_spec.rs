@@ -191,13 +191,11 @@ fn staging_testnet_config_genesis() -> serde_json::Value {
 
 /// Staging testnet config.
 pub fn staging_testnet_config() -> ChainSpec {
-	let boot_nodes = vec![];
 	ChainSpec::builder()
 		.with_name("Staging Testnet")
 		.with_id("staging_testnet")
 		.with_chain_type(ChainType::Live)
 		.with_genesis_patch(staging_testnet_config_genesis())
-		.with_boot_nodes(boot_nodes)
 		.with_telemetry_endpoints(
 			TelemetryEndpoints::new(vec![(STAGING_TELEMETRY_URL.to_string(), 0)])
 				.expect("Staging telemetry url is valid; qed"),
@@ -400,7 +398,6 @@ pub fn development_config() -> ChainSpec {
 		.with_id("dev")
 		.with_chain_type(ChainType::Development)
 		.with_genesis_patch(development_config_genesis_json())
-		.with_boot_nodes(vec![])
 		.with_extensions(Default::default())
 		.with_code(wasm_binary_unwrap())
 		.build()
@@ -422,7 +419,6 @@ pub fn local_testnet_config() -> ChainSpec {
 		.with_id("local_testnet")
 		.with_chain_type(ChainType::Local)
 		.with_genesis_patch(local_testnet_genesis())
-		.with_boot_nodes(vec![])
 		.with_extensions(Default::default())
 		.with_code(wasm_binary_unwrap())
 		.build()
