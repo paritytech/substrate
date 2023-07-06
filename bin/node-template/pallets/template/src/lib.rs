@@ -71,16 +71,16 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::do_something())]
 		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/main-docs/build/origins/
-			let who = ensure_signed(origin)?;
+			// // Check that the extrinsic was signed and get the signer.
+			// // This function will return an error if the extrinsic is not signed.
+			// // https://docs.substrate.io/main-docs/build/origins/
+			// let who = ensure_signed(origin)?;
 
-			// Update storage.
-			<Something<T>>::put(something);
+			// // Update storage.
+			// <Something<T>>::put(something);
 
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored { something, who });
+			// // Emit an event.
+			// Self::deposit_event(Event::SomethingStored { something, who });
 			// Return a successful DispatchResultWithPostInfo
 			Ok(())
 		}
