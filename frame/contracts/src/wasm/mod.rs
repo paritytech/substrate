@@ -144,9 +144,6 @@ impl<T: Config> Token<T> for CodeLoadToken {
 
 impl<T: Config> WasmBlob<T> {
 	/// Create the module by checking the `code`.
-	///
-	/// This does **not** store the module. For this one need to either call [`Self::store`]
-	/// or [`<Self as Executable>::execute`][`Executable::execute`].
 	pub fn from_code(
 		code: Vec<u8>,
 		schedule: &Schedule<T>,

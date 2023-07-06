@@ -698,13 +698,17 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
 
-			let (module, deposit) = Self::try_upload_code(
+			let (module, upload_deposit) = Self::try_upload_code(
 				origin.clone(),
 				code,
 				storage_deposit_limit.clone().map(Into::into),
 				Determinism::Enforced,
 				None,
 			)?;
+
+			// Reduces the storage deposit limit by the amount that was reserved for the upload.
+			let storage_deposit_limit = storage_deposit_limit
+					.map(|limit| limit.into().saturating_sub(upload_deposit));
 
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
@@ -713,8 +717,7 @@ pub mod pallet {
 				value,
 				data,
 				gas_limit,
-				storage_deposit_limit: storage_deposit_limit
-					.map(|limit| limit.into().saturating_sub(deposit)),
+				storage_deposit_limit,
 				debug_message: None,
 			};
 
