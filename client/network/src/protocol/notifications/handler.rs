@@ -1012,6 +1012,8 @@ pub mod tests {
 		}
 	}
 
+	// FIXME: find a way to rewrite these tests.
+
 	// /// Create new [`NotifsHandler`].
 	// fn notifs_handler() -> NotifsHandler {
 	// 	let proto = Protocol {
