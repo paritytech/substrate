@@ -122,7 +122,7 @@ impl<T: Config> From<ModuleDefinition> for WasmModule<T> {
 		// internal functions start at that offset.
 		let func_offset = u32::try_from(def.imported_functions.len()).unwrap();
 
-		// Every contract must export "deploy" and "call" functions
+		// Every contract must export "deploy" and "call" functions.
 		let mut contract = builder::module()
 			// deploy function (first internal function)
 			.function()
@@ -163,15 +163,16 @@ impl<T: Config> From<ModuleDefinition> for WasmModule<T> {
 		}
 
 		// Grant access to linear memory.
-		if let Some(memory) = &def.memory {
-			contract = contract
-				.import()
-				.module("env")
-				.field("memory")
-				.external()
-				.memory(memory.min_pages, Some(memory.max_pages))
-				.build();
-		}
+		// Every contract module is required to have an imported memory.
+		// If no memory is specified in the passed ModuleDefenition, then
+		// default to (1, 1).
+		let (init, max) = if let Some(memory) = &def.memory {
+			(memory.min_pages, Some(memory.max_pages))
+		} else {
+			(1, Some(1))
+		};
+
+		contract = contract.import().path("env", "memory").external().memory(init, max).build();
 
 		// Import supervisor functions. They start with idx 0.
 		for func in def.imported_functions {

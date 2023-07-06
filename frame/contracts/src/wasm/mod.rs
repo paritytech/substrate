@@ -38,7 +38,7 @@ pub use crate::wasm::{
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::{GasMeter, Token},
-	wasm::prepare::IMPORT_MODULE_MEMORY,
+	wasm::prepare::LoadedModule,
 	weights::WeightInfo,
 	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeInfoOf, CodeVec, Config, Error, Event, Pallet,
 	PristineCode, Schedule, Weight, LOG_TARGET,
@@ -52,10 +52,8 @@ use frame_support::{
 use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
-use wasmi::{
-	Config as WasmiConfig, Engine, ExternType, FuelConsumptionMode, Instance, Linker, Memory,
-	MemoryType, Module, StackLimits, Store,
-};
+use wasmi::{Instance, Linker, Memory, MemoryType, StackLimits, Store};
+
 const BYTES_PER_PAGE: usize = 64 * 1024;
 
 /// Validated Wasm module ready for execution.
@@ -204,26 +202,16 @@ impl<T: Config> WasmBlob<T> {
 		code: &[u8],
 		host_state: H,
 		schedule: &Schedule<T>,
+		determinism: Determinism,
 		stack_limits: StackLimits,
 		allow_deprecated: AllowDeprecatedInterface,
 	) -> Result<(Store<H>, Memory, Instance), &'static str>
 	where
 		E: Environment<H>,
 	{
-		let mut config = WasmiConfig::default();
-		config
-			.set_stack_limits(stack_limits)
-			.wasm_multi_value(false)
-			.wasm_mutable_global(false)
-			.wasm_sign_extension(false)
-			.wasm_saturating_float_to_int(false)
-			.consume_fuel(true)
-			.fuel_consumption_mode(FuelConsumptionMode::Eager);
-
-		let engine = Engine::new(&config);
-		let module = Module::new(&engine, code.clone()).map_err(|_| "can't decode Wasm module")?;
-		let mut store = Store::new(&engine, host_state);
-		let mut linker = Linker::new(&engine);
+		let contract = LoadedModule::new::<T>(&code, determinism, Some(stack_limits))?;
+		let mut store = Store::new(&contract.engine, host_state);
+		let mut linker = Linker::new(&contract.engine);
 		E::define(
 			&mut store,
 			&mut linker,
@@ -235,8 +223,9 @@ impl<T: Config> WasmBlob<T> {
 			allow_deprecated,
 		)
 		.map_err(|_| "can't define host functions to Linker")?;
+
 		// Query wasmi for memory limits specified in the module's import entry.
-		let memory_limits = Self::get_memory_limits(module.imports(), schedule)?;
+		let memory_limits = contract.scan_imports::<T>(schedule)?;
 		// Here we allocate this memory in the _store_. It allocates _inital_ value, but allows it
 		// to grow up to maximum number of memory pages, if neccesary.
 		let qed = "We checked the limits versus our Schedule,
@@ -247,61 +236,18 @@ impl<T: Config> WasmBlob<T> {
 			MemoryType::new(memory_limits.0, Some(memory_limits.1)).expect(qed),
 		)
 		.expect(qed);
+
 		linker
 			.define("env", "memory", memory)
 			.expect("We just created the Linker. It has no definitions with this name; qed");
 
 		let instance = linker
-			.instantiate(&mut store, &module)
+			.instantiate(&mut store, &contract.module)
 			.map_err(|_| "can't instantiate module with provided definitions")?
 			.ensure_no_start(&mut store)
 			.map_err(|_| "start function is forbidden but found in the module")?;
 
 		Ok((store, memory, instance))
-	}
-
-	/// Query wasmi for memory limits specified for the import in Wasm module.
-	fn get_memory_limits(
-		imports: wasmi::ModuleImportsIter,
-		schedule: &Schedule<T>,
-	) -> Result<(u32, u32), &'static str> {
-		let mut mem_type = None;
-		for import in imports {
-			match *import.ty() {
-				ExternType::Memory(mt) => {
-					if import.module() != IMPORT_MODULE_MEMORY {
-						return Err("Invalid module for imported memory")
-					}
-					if import.name() != "memory" {
-						return Err("Memory import must have the field name 'memory'")
-					}
-					mem_type = Some(mt);
-					break
-				},
-				_ => continue,
-			}
-		}
-		// We don't need to check here if module memory limits satisfy the schedule,
-		// as this was already done during the code uploading.
-		// If none memory imported then set its limits to (0,0).
-		// Any access to it will then lead to out of bounds trap.
-		let (initial, maximum) = mem_type.map_or(Default::default(), |mt| {
-			(
-				mt.initial_pages().to_bytes().unwrap_or(0).saturating_div(BYTES_PER_PAGE) as u32,
-				mt.maximum_pages().map_or(schedule.limits.memory_pages, |p| {
-					p.to_bytes().unwrap_or(0).saturating_div(BYTES_PER_PAGE) as u32
-				}),
-			)
-		});
-		if initial > maximum {
-			return Err(
-				"Requested initial number of memory pages should not exceed the requested maximum",
-			)
-		}
-		if maximum > schedule.limits.memory_pages {
-			return Err("Maximum number of memory pages should not exceed the maximum configured in the Schedule.")
-		}
-		Ok((initial, maximum))
 	}
 
 	/// Getter method for the code_info.
@@ -469,6 +415,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 			code,
 			runtime,
 			&schedule,
+			self.code_info.determinism,
 			StackLimits::default(),
 			match function {
 				ExportedFunction::Call => AllowDeprecatedInterface::Yes,
@@ -3314,6 +3261,8 @@ mod tests {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "instantiation_nonce" (func $nonce (result i64)))
+	(import "env" "memory" (memory 1 1))
+
 	(func $assert (param i32)
 		(block $ok
 			(br_if $ok
@@ -3344,6 +3293,8 @@ mod tests {
 		const CANNOT_DEPLOY_UNSTABLE: &str = r#"
 (module
 	(import "seal0" "reentrance_count" (func $reentrance_count (result i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3364,6 +3315,8 @@ mod tests {
 		const CODE_RANDOM_0: &str = r#"
 (module
 	(import "seal0" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3371,6 +3324,8 @@ mod tests {
 		const CODE_RANDOM_1: &str = r#"
 (module
 	(import "seal1" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3378,6 +3333,8 @@ mod tests {
 		const CODE_RANDOM_2: &str = r#"
 (module
 	(import "seal0" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
@@ -3385,6 +3342,8 @@ mod tests {
 		const CODE_RANDOM_3: &str = r#"
 (module
 	(import "seal1" "random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
 	(func (export "call"))
 	(func (export "deploy"))
 )
