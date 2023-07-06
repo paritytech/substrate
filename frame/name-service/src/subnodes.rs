@@ -37,7 +37,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		ensure!(!label.len().is_zero(), Error::<T>::NameTooShort);
 
-		let maybe_deposit = CommitmentDeposit::<T>::get();
+		let maybe_deposit = SubNodeDeposit::<T>::get();
 		ensure!(maybe_deposit.is_some(), Error::<T>::SubNodesDisabled);
 
 		let deposit =
