@@ -417,7 +417,7 @@ pub mod pallet {
 		///
 		/// Can only be called by the Root origin.
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::force_deregister())]
 		pub fn force_deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_deregister(name_hash);
