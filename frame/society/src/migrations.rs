@@ -72,11 +72,7 @@ impl<
 				},
 			}
 		} else {
-			log::warn!(
-				target: TARGET,
-				"Migration is a noop. onchain version: {:?}",
-				onchain
-			);
+			defensive!("Unexpected onchain version: {:?}. Expected 0.");
 			T::DbWeight::get().reads(1)
 		}
 	}
