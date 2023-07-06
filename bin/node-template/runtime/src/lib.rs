@@ -276,6 +276,12 @@ impl pallet_bundle::Config for Runtime {
 	type WeightInfo = pallet_bundle::weights::SubstrateWeight<Runtime>;
 }
 
+// impl From<frame_system::Event<pallet_bundle::Pallet<Runtime>>> for RuntimeEvent {
+// 	fn from(x: frame_system::Event<pallet_bundle::Pallet<Runtime>>) -> Self {
+// 		RuntimeEvent::System(x)
+// 	}
+// }
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub struct Runtime

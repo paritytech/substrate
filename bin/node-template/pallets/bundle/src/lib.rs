@@ -24,17 +24,18 @@ pub mod pallet {
 	use frame_support::{pallet_prelude::*, Parameter, dispatch::GetDispatchInfo};
 	use frame_system::pallet_prelude::*;
 	use frame_support::dispatch::CallableCallFor;
+	use frame_support::dispatch::fmt::Debug;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
-		type RuntimeEvent: Parameter + Sync + Send + From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+	pub trait Config: frame_system::Config + TypeInfo + Sync + Send {
+		// /// Because this pallet emits events, it depends on the runtime's definition of an event.
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 			// + From<pallet_template::Event<Bundle<Self>>> + From<pallet_template_2::Event<Bundle<Self>>>
-			// + From<frame_system::Event<Bundle<Self>>>;
+			// + From<frame_system::Event<Self>>;
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
 
@@ -53,15 +54,15 @@ pub mod pallet {
 	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
 	pub type Something3<T> = StorageValue<_, u32>;
 
-	// Pallets use events to inform users when important changes are made.
-	// https://docs.substrate.io/main-docs/build/events-errors/
-	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored { something: u32, who: T::AccountId },
-	}
+	// // Pallets use events to inform users when important changes are made.
+	// // https://docs.substrate.io/main-docs/build/events-errors/
+	// #[pallet::event]
+	// #[pallet::generate_deposit(pub(super) fn deposit_event)]
+	// pub enum Event<T: Config> {
+	// 	/// Event documentation should end with an array that provides descriptive names for event
+	// 	/// parameters. [something, who]
+	// 	SomethingStored { something: u32, who: T::AccountId },
+	// }
 
 	// Errors inform users that something went wrong.
 	#[pallet::error]
@@ -70,6 +71,90 @@ pub mod pallet {
 		NoneValue,
 		/// Errors should have helpful documentation associated with them.
 		StorageOverflow,
+	}
+
+	// #[derive(
+	// 	Clone, PartialEq, Eq,
+	// 	frame_support::codec::Encode,
+	// 	frame_support::codec::Decode,
+	// 	frame_support::scale_info::TypeInfo,
+	// 	frame_support::RuntimeDebug,
+	// )]
+	#[pallet::event]
+	// #[derive(
+	// 	frame_support::CloneNoBound,
+	// 	frame_support::EqNoBound,
+	// 	frame_support::PartialEqNoBound,
+	// 	frame_support::RuntimeDebugNoBound,
+	// 	frame_support::codec::Encode,
+	// 	frame_support::codec::Decode,
+	// 	frame_support::scale_info::TypeInfo,
+	// )]
+	#[allow(non_camel_case_types)]
+	pub enum Event<T: Config> {
+		// #[doc(hidden)]
+		// #[codec(skip)]
+		// __Ignore(
+		// 	frame_support::sp_std::marker::PhantomData<T>,
+		// 	frame_support::Never,
+		// ),
+		#[codec(index = 0u8)]
+    	System(frame_system::Event<Pallet<T>>),
+		#[codec(index = 1u8)]
+    	Template(pallet_template::Event<Pallet<T>>),
+		#[codec(index = 2u8)]
+    	Template_2(pallet_template_2::Event<Pallet<T>>),
+	}
+
+	impl<T: Config> From<frame_system::Event<Pallet<T>>> for Event<T> {
+		fn from(x: frame_system::Event<Pallet<T>>) -> Self {
+			Self::System(x)
+		}
+	}
+	
+	impl<T: Config> TryInto<frame_system::Event<Pallet<T>>> for Event<T> {
+		type Error = ();
+
+		fn try_into(self) -> frame_support::sp_std::result::Result<frame_system::Event<Pallet<T>>, Self::Error> {
+			match self {
+				Self::System(evt) => Ok(evt),
+				_ => Err(()),
+			}
+		}
+	}
+
+	impl<T: Config> From<pallet_template::Event<Pallet<T>>> for Event<T> {
+		fn from(x: pallet_template::Event<Pallet<T>>) -> Self {
+			Self::Template(x)
+		}
+	}
+	
+	impl<T: Config> TryInto<pallet_template::Event<Pallet<T>>> for Event<T> {
+		type Error = ();
+
+		fn try_into(self) -> frame_support::sp_std::result::Result<pallet_template::Event<Pallet<T>>, Self::Error> {
+			match self {
+				Self::Template(evt) => Ok(evt),
+				_ => Err(()),
+			}
+		}
+	}
+
+	impl<T: Config> From<pallet_template_2::Event<Pallet<T>>> for Event<T> {
+		fn from(x: pallet_template_2::Event<Pallet<T>>) -> Self {
+			Self::Template_2(x)
+		}
+	}
+	
+	impl<T: Config> TryInto<pallet_template_2::Event<Pallet<T>>> for Event<T> {
+		type Error = ();
+
+		fn try_into(self) -> frame_support::sp_std::result::Result<pallet_template_2::Event<Pallet<T>>, Self::Error> {
+			match self {
+				Self::Template_2(evt) => Ok(evt),
+				_ => Err(()),
+			}
+		}
 	}
 
 	#[pallet::call]
@@ -83,7 +168,7 @@ pub mod pallet {
 		}
 	);
 
-	impl<T: Config> frame_system::Config for Bundle<T> {
+	impl<T: Config> frame_system::Config for Pallet<T> {
 		type BaseCallFilter = <T as frame_system::Config>::BaseCallFilter;
 		type BlockWeights = <T as frame_system::Config>::BlockWeights;
 		type BlockLength = <T as frame_system::Config>::BlockLength;
@@ -97,7 +182,7 @@ pub mod pallet {
 		type AccountId = <T as frame_system::Config>::AccountId;
 		type Lookup = <T as frame_system::Config>::Lookup;
 		type Header = <T as frame_system::Config>::Header;
-		type RuntimeEvent = <T as Config>::RuntimeEvent;
+		type RuntimeEvent = Event<T>;
 		type BlockHashCount = <T as frame_system::Config>::BlockHashCount;
 		type Version = <T as frame_system::Config>::Version;
 		type PalletInfo = <T as frame_system::Config>::PalletInfo;
@@ -110,13 +195,18 @@ pub mod pallet {
 		type MaxConsumers = <T as frame_system::Config>::MaxConsumers;
 	}
 
-	impl<T: Config> pallet_template::Config for Bundle<T> {
-		type RuntimeEvent = <T as pallet::Config>::RuntimeEvent;
+	impl<T: Config> pallet_template::Config for Pallet<T> {
+		type RuntimeEvent = Event<T>;
 		type WeightInfo = pallet_template::weights::SubstrateWeight<T>;
 	}
 
-	impl<T: Config> pallet_template_2::Config for Bundle<T> {
-		type RuntimeEvent = <T as pallet::Config>::RuntimeEvent;
+	impl<T: Config> pallet_template_2::Config for Pallet<T> {
+		type RuntimeEvent = Event<T>;
 		type WeightInfo = pallet_template_2::weights::SubstrateWeight<T>;
 	}
+
+	// impl<T: Config> Config for Pallet<T> {
+	// 	type RuntimeEvent = Event<T>;
+	// 	type WeightInfo = weights::SubstrateWeight<T>;
+	// }
 }

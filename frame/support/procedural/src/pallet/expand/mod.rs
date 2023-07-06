@@ -60,7 +60,7 @@ pub fn expand(mut def: Def, bundle: bool) -> proc_macro2::TokenStream {
 	let config = config::expand_config(&mut def);
 	let call = call::expand_call(&mut def, bundle);
 	let error = error::expand_error(&mut def);
-	let event = event::expand_event(&mut def);
+	let event = event::expand_event(&mut def, bundle);
 	let storages = storage::expand_storages(&mut def);
 	let inherents = inherent::expand_inherents(&mut def);
 	let instances = instances::expand_instances(&mut def);

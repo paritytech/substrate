@@ -26,7 +26,7 @@ use syn::{spanned::Spanned, Ident};
 /// * Add __Ignore variant on Event
 /// * Impl various trait on Event including metadata
 /// * if deposit_event is defined, implement deposit_event on module.
-pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
+pub fn expand_event(def: &mut Def, bundle: bool) -> proc_macro2::TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
 
 	let (event, macro_ident) = if let Some(event) = &def.event {
@@ -150,6 +150,22 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	} else {
 		Default::default()
 	};
+
+	// if bundle {
+	// 	return quote::quote_spanned!(event.attr_span =>
+	// 		#[doc(hidden)]
+	// 		pub mod __substrate_event_check {
+	// 			#[macro_export]
+	// 			#[doc(hidden)]
+	// 			macro_rules! #macro_ident {
+	// 				($pallet_name:ident) => {};
+	// 			}
+	
+	// 			#[doc(hidden)]
+	// 			pub use #macro_ident as is_event_part_defined;
+	// 		}
+	// 	);
+	// }
 
 	quote::quote_spanned!(event.attr_span =>
 		#[doc(hidden)]

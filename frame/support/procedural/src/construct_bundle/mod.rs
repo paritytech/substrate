@@ -378,7 +378,7 @@ fn construct_runtime_final_expansion(
 	let scrate_decl = generate_hidden_includes(hidden_crate_name, "frame-support");
 
 	// let outer_event =
-		// expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Event)?;
+	// 	expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Event)?;
 	// let outer_error =
 	// 	expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Error)?;
 
@@ -407,6 +407,7 @@ fn construct_runtime_final_expansion(
 
 	let res = quote!(
 		#scrate_decl
+		
 
 		// // Prevent UncheckedExtrinsic to print unused warning.
 		// const _: () = {
@@ -414,11 +415,11 @@ fn construct_runtime_final_expansion(
 		// 	type __hidden_use_of_unchecked_extrinsic = #unchecked_extrinsic;
 		// };
 
-		#[derive(
-			Clone, Copy, PartialEq, Eq, #scrate::sp_runtime::RuntimeDebug,
-			#scrate::scale_info::TypeInfo
-		)]
-		pub struct #name<T>(PhantomData<T>);
+		// #[derive(
+		// 	Clone, Copy, PartialEq, Eq, #scrate::sp_runtime::RuntimeDebug,
+		// 	#scrate::scale_info::TypeInfo
+		// )]
+		// pub struct #name<T>(PhantomData<T>);
 		// impl #scrate::sp_runtime::traits::GetNodeBlockType for #name {
 		// 	type NodeBlock = #node_block;
 		// }
@@ -505,7 +506,7 @@ fn decl_all_pallets<'a>(
 	for pallet_declaration in pallet_declarations {
 		let type_name = &pallet_declaration.name;
 		let pallet = &pallet_declaration.path;
-		let mut generics = vec![quote!(#runtime<T>)];
+		let mut generics = vec![quote!(T)];
 		generics.extend(pallet_declaration.instance.iter().map(|name| quote!(#pallet::#name)));
 		// let mut attrs = Vec::new();
 		// for cfg in &pallet_declaration.cfg_pattern {

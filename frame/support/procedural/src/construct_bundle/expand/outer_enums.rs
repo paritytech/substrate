@@ -167,7 +167,13 @@ pub fn expand_outer_enum(
 			#scrate::RuntimeDebug,
 		)]
 		#[allow(non_camel_case_types)]
-		pub enum #enum_name_ident {
+		pub enum Event<T: Config> {
+			#[doc(hidden)]
+			#[codec(skip)]
+			__Ignore(
+				#scrate::sp_std::marker::PhantomData<(T)>,
+				#scrate::Never,
+			),
 			#enum_variants
 		}
 
@@ -211,7 +217,7 @@ fn expand_enum_variant(
 		None if part_is_generic => quote! {
 			#attr
 			#[codec(index = #index)]
-			#variant_name(#path::#enum_ty<#runtime>),
+			#variant_name(#path::#enum_ty<T>),
 		},
 		None => quote! {
 			#attr
