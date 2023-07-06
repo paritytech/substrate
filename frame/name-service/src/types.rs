@@ -74,7 +74,7 @@ pub struct ParaRegistration<T: Config> {
 }
 
 /// The commitment a user makes before registering the name.
-#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug, PartialEq)]
+#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct Commitment<AccountId, Balance, BlockNumber> {
 	/// Who will retain ownership of the claimed domain.
 	///
@@ -89,7 +89,7 @@ pub struct Commitment<AccountId, Balance, BlockNumber> {
 }
 
 /// The name registration information for any parent or subnode.
-#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, RuntimeDebug, PartialEq)]
+#[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct Registration<AccountId, Balance, BlockNumber> {
 	/// The owner of a name registration. This user has full control over the name
 	/// at all times.
