@@ -1228,12 +1228,6 @@ pub mod pallet {
 		/// Effects will be felt instantly (as soon as this function is completed successfully).
 		///
 		/// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
-		///
-		/// ## Complexity
-		/// O(1)
-		/// - Independent of the arguments. Insignificant complexity.
-		/// - Contains a limited number of reads.
-		/// - Writes are limited to the `origin` account key.
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::set_controller())]
 		pub fn set_controller(origin: OriginFor<T>) -> DispatchResult {
