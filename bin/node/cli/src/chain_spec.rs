@@ -366,9 +366,9 @@ pub fn testnet_genesis(
 			..Default::default()
 		},
 		name_service: NameServiceConfig {
-			commitment_deposit: 10 * DOLLARS,
-			subnode_deposit: 10 * DOLLARS,
-			..Default.default()
+			commitment_deposit: Some(10 * DOLLARS),
+			subnode_deposit: Some(10 * DOLLARS),
+			..Default::default()
 		},
 		glutton: GluttonConfig {
 			compute: Default::default(),

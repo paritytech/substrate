@@ -1198,9 +1198,7 @@ impl pallet_message_queue::Config for Runtime {
 
 parameter_types! {
 	pub const BiddingPeriod: BlockNumber = 1 * DAYS;
-	pub const ClaimPeriod: BlockNumber = 1 * DAYS;
 	pub const OwnershipPeriod: BlockNumber = 365 * DAYS;
-	pub const MinBid: Balance = 10 * DOLLARS;
 }
 
 parameter_types! {
@@ -1224,6 +1222,7 @@ impl pallet_name_service::Config for Runtime {
 	type MaxTextLength = MaxTextLength;
 	type MaxSuffixLength = MaxSuffixLength;
 	type NameServiceResolver = pallet_name_service::Pallet<Self>;
+	type WeightInfo = pallet_name_service::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
