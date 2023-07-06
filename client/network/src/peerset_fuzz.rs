@@ -477,7 +477,7 @@ impl ConnectionFuzzer {
 		self.known_nodes.iter().for_each(|(peer_id, state)| {
 			if !matches!(state, State::Disconnected) {
 				more_nodes = true;
-				log::error!("Untracked connection: {peer_id}, direction {state:?}).");
+				log::error!("Untracked connection: {peer_id}, direction {state:?}.");
 			}
 		});
 
