@@ -79,14 +79,15 @@ impl<T: Config> Pallet<T> {
 
 		T::Currency::reserve(&depositor, deposit)?;
 
-		let commitment = Commitment {
-			owner: owner.clone(),
-			when: frame_system::Pallet::<T>::block_number(),
-			depositor: depositor.clone(),
-			deposit,
-		};
-
-		Commitments::<T>::insert(commitment_hash, commitment);
+		Commitments::<T>::insert(
+			commitment_hash,
+			Commitment {
+				owner: owner.clone(),
+				when: frame_system::Pallet::<T>::block_number(),
+				depositor: depositor.clone(),
+				deposit,
+			},
+		);
 		Self::deposit_event(Event::<T>::Committed { depositor, owner, hash: commitment_hash });
 		Ok(())
 	}

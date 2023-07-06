@@ -22,13 +22,14 @@
 
 use super::{types::*, *};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::traits::{Currency, Get, OnFinalize, OnInitialize};
-use frame_system::{pallet_prelude::OriginFor, Pallet as System, RawOrigin};
-use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, One, Saturating};
+use frame_support::traits::{Currency, Get};
+use frame_system::{Pallet as System, RawOrigin};
+use sp_runtime::traits::{Bounded, One};
 use sp_std::vec;
-
+// use sp_io::hashing::blake2_256;
 use crate::Pallet as NameService;
+
+type CurrencyOf<T> = <T as Config>::Currency;
 
 const SEED: u32 = 1;
 
@@ -39,9 +40,6 @@ fn run_to_block<T: Config>(n: T::BlockNumber) {
 		NameService::<T>::on_initialize(System::<T>::block_number());
 	}
 }
-/*
-fn commit_setup<T: Config>() -> (caller: OriginFor<T>, acc: T::AccountId, hash: CommitmentHash {
-}*/
 
 benchmarks! {
 	commit {
@@ -52,7 +50,16 @@ benchmarks! {
 		let hash: CommitmentHash = Default::default();
 		let acc: T::AccountId = account("recipient", 0, SEED);
 
-	}: _(RawOrigin::Signed(caller), acc, hash)
+	}: _(RawOrigin::Signed(caller.clone()), acc, hash.clone())
+	verify {
+		// commitment exists and is correct.
+		assert_eq!(Commitments::<T>::get(hash), Some(Commitment {
+			owner: caller.clone(),
+			when: 1u32.into(),
+			depositor: caller,
+			deposit: 1u32.into(),
+		}));
+	}
 
 	reveal {
 		let l in 3..T::MaxNameLength::get();
@@ -67,15 +74,25 @@ benchmarks! {
 
 		// Commit
 		let hash: CommitmentHash = NameService::<T>::commitment_hash(&name, secret);
-		let acc: T::AccountId = account("recipient", 0, SEED);
+		let owner: T::AccountId = account("recipient", 0, SEED);
 		let origin = RawOrigin::Signed(caller.clone());
-		NameService::<T>::commit(origin.into(), acc, hash).expect("Must commit");
+		NameService::<T>::commit(origin.into(), owner.clone(), hash.clone()).expect("Must commit");
 
-		let periods: T::BlockNumber = Default::default();
+		let length: T::BlockNumber = Default::default();
 		let run_to: T::BlockNumber = 100u32.into();
 		run_to_block::<T>(run_to);
 
-	}: _(RawOrigin::Signed(caller), name.to_vec(), secret, periods)
+	}: _(RawOrigin::Signed(caller.clone()), name.to_vec(), secret, length.clone())
+	verify {
+		// commitment has been removed.
+		assert!(!Commitments::<T>::contains_key(hash));
+		// registered name is now stored.
+		assert_eq!(Registrations::<T>::get(NameService::<T>::name_hash(&name)).unwrap(), Registration {
+			owner: owner.clone(), expiry: Some(length), deposit: Some(1u32.into())
+		});
+		// deposit has been deducted from fee payer.
+		assert_eq!(CurrencyOf::<T>::free_balance(&caller), BalanceOf::<T>::max_value() - 1u32.into());
+	}
 
 	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);
 }
