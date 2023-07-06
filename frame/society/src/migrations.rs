@@ -20,8 +20,9 @@
 use super::*;
 use codec::{Decode, Encode};
 use frame_support::{
+	defensive,
 	migrations::VersionedRuntimeUpgrade,
-	traits::{Instance, OnRuntimeUpgrade},
+	traits::{DefensiveOption, Instance, OnRuntimeUpgrade},
 };
 
 #[cfg(feature = "try-runtime")]
@@ -60,9 +61,16 @@ impl<
 				"Running migration against onchain version {:?}",
 				onchain
 			);
-			let weight = from_original::<T, I>(&mut PastPayouts::get());
-			crate::STORAGE_VERSION.put::<Pallet<T, I>>();
-			weight
+			match from_original::<T, I>(&mut PastPayouts::get()) {
+				Ok(weight) => {
+					crate::STORAGE_VERSION.put::<Pallet<T, I>>();
+					weight
+				},
+				Err(msg) => {
+					defensive!(msg);
+					T::DbWeight::get().reads(1)
+				},
+			}
 		} else {
 			log::warn!(
 				target: TARGET,
@@ -104,6 +112,8 @@ impl<
 	}
 }
 
+/// [`VersionUncheckedMigrateToV2`] wrapped in [`VersionedRuntimeUpgrade`], ensuring the migration
+/// is only performed when required.
 pub type VersionCheckedMigrateToV2<T, I, PastPayouts> = VersionedRuntimeUpgrade<
 	0,
 	2,
@@ -252,13 +262,13 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 
 pub fn from_original<T: Config<I>, I: Instance + 'static>(
 	past_payouts: &mut [(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)],
-) -> Weight {
+) -> Result<Weight, &'static str> {
 	// First check that this is the original state layout. This is easy since the new layout
 	// contains a new Members value, which did not exist in the old layout.
 	if !can_migrate::<T, I>() {
 		log::warn!(target: TARGET, "Skipping MigrateToV2 migration since it appears unapplicable");
 		// Already migrated or no data to migrate: Bail.
-		return T::DbWeight::get().reads(1)
+		return Ok(T::DbWeight::get().reads(1))
 	}
 
 	// Migrate Bids from old::Bids (just a trunctation).
@@ -301,10 +311,11 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 
 		// The founder must be the first member in Society V2. If we find the founder not in index
 		// zero, we swap it with the first member.
-		if member == Founder::<T, I>::get().expect("founder is always set; qed") && member_count > 0
+		if member == Founder::<T, I>::get().defensive_ok_or("founder must always be set")? &&
+			member_count > 0
 		{
 			let member_to_swap = MemberByIndex::<T, I>::get(0)
-				.expect("member_count > 0, we must have at least 1 member; qed");
+				.defensive_ok_or("member_count > 0, we must have at least 1 member")?;
 			// Swap the founder with the first member in MemberByIndex.
 			MemberByIndex::<T, I>::swap(0, member_count);
 			// Update the indicies of the swapped member MemberRecords.
@@ -363,7 +374,7 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 	old::Defender::<T, I>::kill();
 	let _ = old::DefenderVotes::<T, I>::clear(u32::MAX, None);
 
-	T::BlockWeights::get().max_block
+	Ok(T::BlockWeights::get().max_block)
 }
 
 pub fn from_raw_past_payouts<T: Config<I>, I: Instance + 'static>(
