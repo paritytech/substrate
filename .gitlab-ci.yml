@@ -310,30 +310,29 @@ build-rustdoc:
     # - chown -R nonroot:nonroot ./crate-docs
     # - echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > ./crate-docs/index.html
     # - rusty-cachier cache upload
-# include:
-#   # check jobs
-#   - scripts/ci/gitlab/pipeline/check.yml
-#   # tests jobs
-#   - scripts/ci/gitlab/pipeline/test.yml
-#   # build jobs
-#   - scripts/ci/gitlab/pipeline/build.yml
-#   # publish jobs
-#   - scripts/ci/gitlab/pipeline/publish.yml
-#   # zombienet jobs
-#   - scripts/ci/gitlab/pipeline/zombienet.yml
-#   # The crate-publishing pipeline requires a customized `interruptible` configuration. Unfortunately
-#   # `interruptible` can't currently be dynamically set based on variables as per:
-#   # - https://gitlab.com/gitlab-org/gitlab/-/issues/38349
-#   # - https://gitlab.com/gitlab-org/gitlab/-/issues/194023
-#   # Thus we work around that limitation by using conditional includes.
-#   # For crate-publishing pipelines: run it with defaults + `interruptible: false`. The WHOLE
-#   # pipeline is made uninterruptible to ensure that test jobs also get a chance to run to
-#   # completion, because the publishing jobs depends on them AS INTENDED: crates should not be
-#   # published before their source code is checked.
-#   - project: parity/infrastructure/ci_cd/shared
-#     ref: v0.2
-#     file: /common/timestamp.yml
-
+include:
+  #   # check jobs
+  #   - scripts/ci/gitlab/pipeline/check.yml
+  #   # tests jobs
+  #   - scripts/ci/gitlab/pipeline/test.yml
+  #   # build jobs
+  #   - scripts/ci/gitlab/pipeline/build.yml
+  #   # publish jobs
+  #   - scripts/ci/gitlab/pipeline/publish.yml
+  #   # zombienet jobs
+  #   - scripts/ci/gitlab/pipeline/zombienet.yml
+  #   # The crate-publishing pipeline requires a customized `interruptible` configuration. Unfortunately
+  #   # `interruptible` can't currently be dynamically set based on variables as per:
+  #   # - https://gitlab.com/gitlab-org/gitlab/-/issues/38349
+  #   # - https://gitlab.com/gitlab-org/gitlab/-/issues/194023
+  #   # Thus we work around that limitation by using conditional includes.
+  #   # For crate-publishing pipelines: run it with defaults + `interruptible: false`. The WHOLE
+  #   # pipeline is made uninterruptible to ensure that test jobs also get a chance to run to
+  #   # completion, because the publishing jobs depends on them AS INTENDED: crates should not be
+  #   # published before their source code is checked.
+  - project: parity/infrastructure/ci_cd/shared
+    ref: v0.2
+    file: /common/timestamp.yml
 #### stage:                        notify
 
 # This job notifies rusty-cachier about the latest commit with the cache.
