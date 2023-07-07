@@ -1425,7 +1425,7 @@ mod tests {
 		type PalletId = ElectionsPhragmenPalletId;
 		type RuntimeEvent = RuntimeEvent;
 		type Currency = Balances;
-		type CurrencyToVote = sp_staking::currency_to_vote::SaturatingCurrencyToVote;
+		type CurrencyToVote = ();
 		type ChangeMembers = TestChangeMembers;
 		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;
