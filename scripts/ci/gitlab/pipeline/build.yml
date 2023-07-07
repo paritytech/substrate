@@ -156,12 +156,12 @@ build-rustdoc:
     DOC_INDEX_PAGE: "sc_service/index.html" # default redirected page
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
-  artifacts:
-    name: "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
-    when: on_success
-    expire_in: 7 days
-    paths:
-      - ./crate-docs/
+  # artifacts:
+  #   name: "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
+  #   when: on_success
+  #   expire_in: 7 days
+  #   paths:
+  #     - ./crate-docs/
   # DAG: this is artificial dependency
   needs:
     - job: cargo-clippy
@@ -169,9 +169,10 @@ build-rustdoc:
   script:
     - rusty-cachier snapshot create
     - time cargo doc --locked --workspace --all-features --verbose --no-deps
-    - rm -f $CARGO_TARGET_DIR/doc/.lock
-    - mv $CARGO_TARGET_DIR/doc ./crate-docs
-    # FIXME: remove me after CI image gets nonroot
-    - chown -R nonroot:nonroot ./crate-docs
-    - echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > ./crate-docs/index.html
-    - rusty-cachier cache upload
+    - git status
+    # - rm -f $CARGO_TARGET_DIR/doc/.lock
+    # - mv $CARGO_TARGET_DIR/doc ./crate-docs
+    # # FIXME: remove me after CI image gets nonroot
+    # - chown -R nonroot:nonroot ./crate-docs
+    # - echo "<meta http-equiv=refresh content=0;url=${DOC_INDEX_PAGE}>" > ./crate-docs/index.html
+    # - rusty-cachier cache upload
