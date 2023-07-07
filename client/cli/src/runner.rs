@@ -187,22 +187,17 @@ pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
 			.path()
 			.map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
 	);
-	info!("⛓  Native runtime: {}", C::native_runtime_version(&config.chain_spec));
 }
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use sc_network::config::NetworkConfiguration;
+	use sc_service::{Arc, ChainType, GenericChainSpec, NoExtension};
 	use std::{
 		path::PathBuf,
 		sync::atomic::{AtomicU64, Ordering},
 	};
-
-	use sc_network::config::NetworkConfiguration;
-	use sc_service::{Arc, ChainType, GenericChainSpec, NoExtension};
-	use sp_runtime::create_runtime_str;
-	use sp_version::create_apis_vec;
-
-	use super::*;
 
 	struct Cli;
 
@@ -236,23 +231,6 @@ mod tests {
 			_: &str,
 		) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
 			Err("nope".into())
-		}
-
-		fn native_runtime_version(
-			_: &Box<dyn sc_service::ChainSpec>,
-		) -> &'static sp_version::RuntimeVersion {
-			const VERSION: sp_version::RuntimeVersion = sp_version::RuntimeVersion {
-				spec_name: create_runtime_str!("spec"),
-				impl_name: create_runtime_str!("name"),
-				authoring_version: 0,
-				spec_version: 0,
-				impl_version: 0,
-				apis: create_apis_vec!([]),
-				transaction_version: 2,
-				state_version: 0,
-			};
-
-			&VERSION
 		}
 	}
 
