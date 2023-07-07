@@ -123,20 +123,20 @@ benchmarks! {
 
 		let origin = RawOrigin::Signed(owner.clone());
 
-		let _ = NameService::<T>::set_address(
+		NameService::<T>::set_address(
 			origin.clone().into(),
 			name_hash.clone(),
 			recipient,
 			suffix
 		).expect("Setting address succeeds.");
 
-		let _ = NameService::<T>::set_name(
+		NameService::<T>::set_name(
 			origin.clone().into(),
 			name_hash.clone(),
 			vec![0; T::MaxNameLength::get() as usize].into()
 		).expect("Setting name succeeds.");
 
-		let _ = NameService::<T>::set_text(
+		NameService::<T>::set_text(
 			origin.clone().into(),
 			name_hash.clone(),
 			vec![0; T::MaxTextLength::get() as usize].into()
@@ -254,6 +254,43 @@ benchmarks! {
 			expiry: Some(T::BlockNumber::max_value()),
 			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
 		});
+	}
+
+	deregister {
+		let recipient: T::AccountId = account("recipient", 0, 1u32);
+
+		let (suffix, para_id) = register_para::<T>();
+		let (name_hash, owner, _) = register_name_hash::<T>(
+			recipient.clone(),
+			vec![0; T::MaxNameLength::get() as usize],
+			true
+		);
+		let origin = RawOrigin::Signed(owner.clone());
+		NameService::<T>::set_address(
+			origin.clone().into(),
+			name_hash.clone(),
+			recipient,
+			suffix
+		).expect("Setting address succeeds.");
+
+		NameService::<T>::set_name(
+			origin.clone().into(),
+			name_hash.clone(),
+			vec![0; T::MaxNameLength::get() as usize].into()
+		).expect("Setting name succeeds.");
+
+		NameService::<T>::set_text(
+			origin.clone().into(),
+			name_hash.clone(),
+			vec![0; T::MaxTextLength::get() as usize].into()
+		).expect("Setting text succeeds.");
+
+	}:_(RawOrigin::Signed(owner.clone()), name_hash.clone())
+	verify {
+		assert!(!Registrations::<T>::contains_key(name_hash));
+		assert!(!AddressResolver::<T>::contains_key(name_hash));
+		assert!(!NameResolver::<T>::contains_key(name_hash));
+		assert!(!TextResolver::<T>::contains_key(name_hash));
 	}
 
 	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);

@@ -46,6 +46,7 @@ pub trait WeightInfo {
 	fn remove_commitment() -> Weight;
 	fn transfer() -> Weight;
 	fn renew() -> Weight;
+	fn deregister() -> Weight;
 }
 
 /// Weights for pallet_name_service using the Substrate node and recommended hardware.
@@ -82,8 +83,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `4928`
 		//  Estimated: `5611`
-		// Minimum execution time: 81_000_000 picoseconds.
-		Weight::from_parts(83_000_000, 5611)
+		// Minimum execution time: 80_000_000 picoseconds.
+		Weight::from_parts(81_000_000, 5611)
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(6_u64))
 	}
@@ -95,8 +96,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `319`
 		//  Estimated: `3597`
-		// Minimum execution time: 36_000_000 picoseconds.
-		Weight::from_parts(37_000_000, 3597)
+		// Minimum execution time: 35_000_000 picoseconds.
+		Weight::from_parts(36_000_000, 3597)
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -119,10 +120,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `619`
 		//  Estimated: `3597 + l * (450 ±0)`
-		// Minimum execution time: 80_000_000 picoseconds.
-		Weight::from_parts(83_546_910, 3597)
-			// Standard Error: 50
-			.saturating_add(Weight::from_parts(2_473, 0).saturating_mul(l.into()))
+		// Minimum execution time: 79_000_000 picoseconds.
+		Weight::from_parts(82_536_770, 3597)
+			// Standard Error: 46
+			.saturating_add(Weight::from_parts(2_549, 0).saturating_mul(l.into()))
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 			.saturating_add(Weight::from_parts(0, 450).saturating_mul(l.into()))
@@ -134,7 +135,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `436`
 		//  Estimated: `3597`
 		// Minimum execution time: 29_000_000 picoseconds.
-		Weight::from_parts(31_000_000, 3597)
+		Weight::from_parts(30_000_000, 3597)
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -144,10 +145,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn transfer() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `708`
+		//  Measured:  `662`
 		//  Estimated: `6196`
-		// Minimum execution time: 53_000_000 picoseconds.
-		Weight::from_parts(54_000_000, 6196)
+		// Minimum execution time: 51_000_000 picoseconds.
+		Weight::from_parts(53_000_000, 6196)
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
@@ -159,12 +160,33 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn renew() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `646`
+		//  Measured:  `562`
 		//  Estimated: `3593`
-		// Minimum execution time: 42_000_000 picoseconds.
-		Weight::from_parts(43_000_000, 3593)
+		// Minimum execution time: 39_000_000 picoseconds.
+		Weight::from_parts(40_000_000, 3593)
 			.saturating_add(T::DbWeight::get().reads(3_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
+	}
+	/// Storage: NameService Registrations (r:1 w:1)
+	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForRegistrations (r:1 w:1)
+	/// Proof: NameService CounterForRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// Storage: NameService NameResolver (r:1 w:1)
+	/// Proof: NameService NameResolver (max_values: None, max_size: Some(2146), added: 4621, mode: MaxEncodedLen)
+	/// Storage: NameService TextResolver (r:1 w:1)
+	/// Proof: NameService TextResolver (max_values: None, max_size: Some(2146), added: 4621, mode: MaxEncodedLen)
+	/// Storage: NameService AddressResolver (r:0 w:1)
+	/// Proof: NameService AddressResolver (max_values: None, max_size: Some(84), added: 2559, mode: MaxEncodedLen)
+	fn deregister() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `4928`
+		//  Estimated: `5611`
+		// Minimum execution time: 82_000_000 picoseconds.
+		Weight::from_parts(83_000_000, 5611)
+			.saturating_add(T::DbWeight::get().reads(5_u64))
+			.saturating_add(T::DbWeight::get().writes(6_u64))
 	}
 }
 
@@ -201,8 +223,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `4928`
 		//  Estimated: `5611`
-		// Minimum execution time: 81_000_000 picoseconds.
-		Weight::from_parts(83_000_000, 5611)
+		// Minimum execution time: 80_000_000 picoseconds.
+		Weight::from_parts(81_000_000, 5611)
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(6_u64))
 	}
@@ -214,8 +236,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `319`
 		//  Estimated: `3597`
-		// Minimum execution time: 36_000_000 picoseconds.
-		Weight::from_parts(37_000_000, 3597)
+		// Minimum execution time: 35_000_000 picoseconds.
+		Weight::from_parts(36_000_000, 3597)
 			.saturating_add(RocksDbWeight::get().reads(2_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -238,10 +260,10 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `619`
 		//  Estimated: `3597 + l * (450 ±0)`
-		// Minimum execution time: 80_000_000 picoseconds.
-		Weight::from_parts(83_546_910, 3597)
-			// Standard Error: 50
-			.saturating_add(Weight::from_parts(2_473, 0).saturating_mul(l.into()))
+		// Minimum execution time: 79_000_000 picoseconds.
+		Weight::from_parts(82_536_770, 3597)
+			// Standard Error: 46
+			.saturating_add(Weight::from_parts(2_549, 0).saturating_mul(l.into()))
 			.saturating_add(RocksDbWeight::get().reads(6_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 			.saturating_add(Weight::from_parts(0, 450).saturating_mul(l.into()))
@@ -253,7 +275,7 @@ impl WeightInfo for () {
 		//  Measured:  `436`
 		//  Estimated: `3597`
 		// Minimum execution time: 29_000_000 picoseconds.
-		Weight::from_parts(31_000_000, 3597)
+		Weight::from_parts(30_000_000, 3597)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -263,10 +285,10 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn transfer() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `708`
+		//  Measured:  `662`
 		//  Estimated: `6196`
-		// Minimum execution time: 53_000_000 picoseconds.
-		Weight::from_parts(54_000_000, 6196)
+		// Minimum execution time: 51_000_000 picoseconds.
+		Weight::from_parts(53_000_000, 6196)
 			.saturating_add(RocksDbWeight::get().reads(3_u64))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))
 	}
@@ -278,11 +300,32 @@ impl WeightInfo for () {
 	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
 	fn renew() -> Weight {
 		// Proof Size summary in bytes:
-		//  Measured:  `646`
+		//  Measured:  `562`
 		//  Estimated: `3593`
-		// Minimum execution time: 42_000_000 picoseconds.
-		Weight::from_parts(43_000_000, 3593)
+		// Minimum execution time: 39_000_000 picoseconds.
+		Weight::from_parts(40_000_000, 3593)
 			.saturating_add(RocksDbWeight::get().reads(3_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
+	}
+	/// Storage: NameService Registrations (r:1 w:1)
+	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForRegistrations (r:1 w:1)
+	/// Proof: NameService CounterForRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// Storage: NameService NameResolver (r:1 w:1)
+	/// Proof: NameService NameResolver (max_values: None, max_size: Some(2146), added: 4621, mode: MaxEncodedLen)
+	/// Storage: NameService TextResolver (r:1 w:1)
+	/// Proof: NameService TextResolver (max_values: None, max_size: Some(2146), added: 4621, mode: MaxEncodedLen)
+	/// Storage: NameService AddressResolver (r:0 w:1)
+	/// Proof: NameService AddressResolver (max_values: None, max_size: Some(84), added: 2559, mode: MaxEncodedLen)
+	fn deregister() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `4928`
+		//  Estimated: `5611`
+		// Minimum execution time: 82_000_000 picoseconds.
+		Weight::from_parts(83_000_000, 5611)
+			.saturating_add(RocksDbWeight::get().reads(5_u64))
+			.saturating_add(RocksDbWeight::get().writes(6_u64))
 	}
 }

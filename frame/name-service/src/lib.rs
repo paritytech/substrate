@@ -521,7 +521,7 @@ pub mod pallet {
 		/// If the registration is expired, then anyone can call this function to make the name
 		/// available.
 		#[pallet::call_index(7)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>, name_hash: NameHash) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let registration =
