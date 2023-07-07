@@ -1060,6 +1060,11 @@ macro_rules! impl_benchmark {
 					$crate::well_known_keys::EXTRINSIC_INDEX.into()
 				);
 				whitelist.push(extrinsic_index);
+				// Whitelist the `:intrablock_entropy`.
+				let intrablock_entropy = $crate::TrackedStorageKey::new(
+					$crate::well_known_keys::INTRABLOCK_ENTROPY.into()
+				);
+				whitelist.push(intrablock_entropy);
 
 				$crate::benchmarking::set_whitelist(whitelist.clone());
 
