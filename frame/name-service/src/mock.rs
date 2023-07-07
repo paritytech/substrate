@@ -53,8 +53,8 @@ type Balance = u64;
 type AccountId = u64;
 
 parameter_types! {
-	pub static CommitmentDepositConfig: Option<Balance> = Some(10);
-	pub static SubNodeDepositConfig: Option<Balance> = Some(10);
+	pub static CommitmentDepositConfig: Option<Balance> = Some(1);
+	pub static SubNodeDepositConfig: Option<Balance> = Some(1);
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
 }

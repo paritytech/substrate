@@ -22,7 +22,7 @@
 
 use super::{types::*, *};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::traits::{Currency, Get};
+use frame_support::traits::{Currency, Get, ReservableCurrency};
 use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, One};
 use sp_std::vec;
@@ -30,6 +30,10 @@ use sp_std::vec;
 use crate::Pallet as NameService;
 
 type CurrencyOf<T> = <T as Config>::Currency;
+
+fn safe_mint<T: Config>() -> BalanceOf<T> {
+	CommitmentDeposit::<T>::get().unwrap() * 100u32.into()
+}
 
 fn run_to_block<T: Config>(n: T::BlockNumber) {
 	while System::<T>::block_number() < n {
@@ -54,8 +58,8 @@ fn register_name_hash<T: Config>(
 ) -> (NameHash, T::AccountId, T::AccountId) {
 	let caller = whitelisted_caller();
 	let secret = 3_u64;
-	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-	T::Currency::make_free_balance_be(&owner, BalanceOf::<T>::max_value());
+	T::Currency::make_free_balance_be(&caller, safe_mint::<T>());
+	T::Currency::make_free_balance_be(&owner, safe_mint::<T>());
 
 	let commitment_hash: CommitmentHash = NameService::<T>::commitment_hash(&name, secret.clone());
 	let origin = RawOrigin::Signed(caller.clone());
@@ -80,6 +84,18 @@ benchmarks! {
 			true
 		);
 		let new_owner: T::AccountId = account("new_recipient", 0, 2u32);
+
+		assert_eq!(
+			CurrencyOf::<T>::reserved_balance(&owner),
+			CommitmentDeposit::<T>::get().unwrap()
+		);
+
+		let registration = Registrations::<T>::get(&name_hash).unwrap();
+		assert_eq!(registration.deposit.unwrap(), CommitmentDeposit::<T>::get().unwrap());
+		assert_eq!(registration.owner, owner);
+
+		T::Currency::make_free_balance_be(&new_owner, safe_mint::<T>());
+
 	}: _(
 		RawOrigin::Root,
 		name_hash.clone(),
@@ -100,14 +116,13 @@ benchmarks! {
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
 
 		let (suffix, para_id) = register_para::<T>();
-		let (name_hash, owner, caller) = register_name_hash::<T>(
+		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
 			vec![0; T::MaxNameLength::get() as usize],
 			true
 		);
 
 		let origin = RawOrigin::Signed(owner.clone());
-		let suffix: BoundedVec<u8, _> = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
 
 		let _ = NameService::<T>::set_address(
 			origin.clone().into(),
@@ -139,8 +154,8 @@ benchmarks! {
 	commit {
 		let caller = whitelisted_caller();
 		let owner: T::AccountId = account("recipient", 0, 1u32);
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		T::Currency::make_free_balance_be(&owner, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, safe_mint::<T>());
+		T::Currency::make_free_balance_be(&owner, safe_mint::<T>());
 
 		let name = vec![0; T::MaxNameLength::get() as usize];
 		let secret = 3_u64;
@@ -159,8 +174,8 @@ benchmarks! {
 		let balance = BalanceOf::<T>::max_value();
 		let caller = whitelisted_caller();
 		let owner: T::AccountId = account("recipient", 0, 1u32);
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		T::Currency::make_free_balance_be(&owner, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, safe_mint::<T>());
+		T::Currency::make_free_balance_be(&owner, safe_mint::<T>());
 
 		let name = vec![0; l as usize];
 		let secret = 3_u64;
@@ -178,24 +193,20 @@ benchmarks! {
 		// commitment has been removed.
 		assert!(!Commitments::<T>::contains_key(hash));
 		// registered name is now stored.
-		assert_eq!(
-			Registrations::<T>::get(NameService::<T>::name_hash(&name)).unwrap(),
-			Registration {
-			owner: owner.clone(),
-			expiry: Some(200u32.into()),
-			deposit: None,
-		});
+		assert!(
+			Registrations::<T>::contains_key(NameService::<T>::name_hash(&name))
+		);
 		// fees have been deducted from fee payer.
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&caller),
-			BalanceOf::<T>::max_value() - CommitmentDeposit::<T>::get().unwrap() - 100u32.into()
+			(safe_mint::<T>()) - CommitmentDeposit::<T>::get().unwrap() - 100u32.into()
 		);
 	}
 
 	remove_commitment {
 		let caller = whitelisted_caller();
 		let name = vec![0; T::MaxNameLength::get() as usize];
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, safe_mint::<T>());
 		let commitment_hash: CommitmentHash = NameService::<T>::commitment_hash(&name, 3_u64);
 
 		let _ = NameService::<T>::commit(

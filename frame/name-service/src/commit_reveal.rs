@@ -135,13 +135,18 @@ impl<T: Config> Pallet<T> {
 			T::Currency::repatriate_reserved(
 				&commitment.depositor,
 				&commitment.owner,
-				commitment.deposit,
+				commitment.deposit.clone(),
 				BalanceStatus::Reserved,
 			)?;
 		}
 
 		let expiry = block_number.saturating_add(length);
-		Self::do_register(name_hash, commitment.owner.clone(), Some(expiry), None)?;
+		Self::do_register(
+			name_hash,
+			commitment.owner.clone(),
+			Some(expiry),
+			Some(commitment.deposit),
+		)?;
 		Commitments::<T>::remove(commitment_hash);
 
 		Ok(())

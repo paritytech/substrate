@@ -46,10 +46,10 @@ impl<T: Config> Pallet<T> {
 	/// Returns an error if the owner does not have enough to reserve the deposit.
 	pub fn reserve_deposit(
 		maybe_deposit: Option<BalanceOf<T>>,
-		owner: &T::AccountId,
+		who: &T::AccountId,
 	) -> DispatchResult {
 		if let Some(deposit) = maybe_deposit {
-			T::Currency::reserve(&owner, deposit)?;
+			T::Currency::reserve(&who, deposit)?;
 		}
 		Ok(())
 	}
