@@ -71,9 +71,9 @@ pub struct ContractInfo<T: Config> {
 	storage_base_deposit: BalanceOf<T>,
 	/// Map of code hashes and deposit balances.
 	///
-	/// A Code hash of a delegate contracts dependencies added to the map can not be removed from
-	/// the chain state and can be safely used for delegate calls. The deposit is the deposit held
-	/// for adding the dependency, it is refunded on removal.
+	/// Tracks the code hash and deposit held for adding delegate dependencies. Dependencies added
+	/// to the map can not be removed from the chain state and can be safely used for delegate
+	/// calls.
 	delegate_dependencies: BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies>,
 }
 
