@@ -142,7 +142,7 @@ pub struct MultiaddrWithPeerId {
 impl MultiaddrWithPeerId {
 	/// Concatenates the multiaddress and peer ID into one multiaddress containing both.
 	pub fn concat(&self) -> Multiaddr {
-		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id));
+		let proto = multiaddr::Protocol::P2p(self.peer_id);
 		self.multiaddr.clone().with(proto)
 	}
 }
