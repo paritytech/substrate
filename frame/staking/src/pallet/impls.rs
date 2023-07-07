@@ -38,6 +38,7 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::{
+	currency_to_vote::CurrencyToVote,
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	EraIndex, SessionIndex, Stake, StakingInterface,
 };
@@ -76,7 +77,6 @@ impl<T: Config> Pallet<T> {
 		stash: &T::AccountId,
 		issuance: BalanceOf<T>,
 	) -> VoteWeight {
-		use sp_staking::currency_to_vote::CurrencyToVote;
 		T::CurrencyToVote::to_vote(Self::slashable_balance_of(stash), issuance)
 	}
 
@@ -619,7 +619,6 @@ impl<T: Config> Pallet<T> {
 	) -> BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), MaxWinnersOf<T>> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
-			use sp_staking::currency_to_vote::CurrencyToVote;
 			T::CurrencyToVote::to_currency(e, total_issuance)
 		};
 
