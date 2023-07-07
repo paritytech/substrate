@@ -240,8 +240,8 @@ pub mod pallet {
 		type MaxApprovals: Get<u32>;
 
 		/// The origin required for approving spends from the treasury outside of the proposal
-		/// process. The `Success` value is the maximum amount that this origin is allowed to
-		/// spend at a time.
+		/// process. The `Success` value is the maximum amount in a native asset that this origin
+		/// is allowed to spend at a time.
 		type SpendOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = BalanceOf<Self, I>>;
 
 		/// Type parameter representing the asset kinds to be spent from the treasury.
@@ -256,7 +256,9 @@ pub mod pallet {
 		/// Type for processing spends of [Self::AssetKind] in favor of [`Self::Beneficiary`].
 		type Paymaster: Pay<Beneficiary = Self::Beneficiary, AssetKind = Self::AssetKind>;
 
-		/// Type to convert the balance of an [`Self::AssetKind`] to balance of the native asset.
+		/// Type for converting the balance of an [Self::AssetKind] to the balance of the native
+		/// asset, solely for the purpose of asserting the result against the maximum allowed spend
+		/// amount of the [`Self::SpendOrigin`].
 		type BalanceConverter: ConversionFromAssetBalance<
 			<Self::Paymaster as Pay>::Balance,
 			Self::AssetKind,
@@ -621,7 +623,8 @@ pub mod pallet {
 		/// An approved spend must be claimed via the `payout` dispatchable within the
 		/// [`Config::PayoutPeriod`].
 		///
-		/// - `origin`: Must be `T::SpendOrigin` with the `Success` value being at least `amount`.
+		/// - `origin`: Must be `T::SpendOrigin` with the `Success` value being at least `amount` of
+		///   `asset_kind` in the native asset.
 		/// - `asset_kind`: An indicator of the specific asset class to be spent.
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The beneficiary of the spend.

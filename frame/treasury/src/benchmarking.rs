@@ -35,13 +35,15 @@ use frame_support::{
 use frame_system::RawOrigin;
 use sp_core::crypto::FromEntropy;
 
-/// Trait describing factory functions for dispatchables' parameters
+/// Trait describing factory functions for dispatchables' parameters.
 pub trait ArgumentsFactory<AssetKind, Beneficiary> {
-	/// Factory function for an asset kind
+	/// Factory function for an asset kind.
 	fn create_asset_kind(seed: u32) -> AssetKind;
-	/// Factory function for a beneficiary
+	/// Factory function for a beneficiary.
 	fn create_beneficiary(seed: [u8; 32]) -> Beneficiary;
 }
+
+/// Implementation that expects the parameters implement the [`FromEntropy`] trait.
 impl<AssetKind, Beneficiary> ArgumentsFactory<AssetKind, Beneficiary> for ()
 where
 	AssetKind: FromEntropy,

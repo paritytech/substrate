@@ -632,6 +632,7 @@ impl sp_std::str::FromStr for AccountId32 {
 	}
 }
 
+/// Creates an [`AccountId32`] from the input, which should contain at least 32 bytes.
 impl FromEntropy for AccountId32 {
 	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
 		Ok(AccountId32::new(FromEntropy::from_entropy(input)?))
@@ -1177,6 +1178,7 @@ impl FromEntropy for bool {
 	}
 }
 
+/// Create the unit type for any given input.
 impl FromEntropy for () {
 	fn from_entropy(_: &mut impl codec::Input) -> Result<Self, codec::Error> {
 		Ok(())
