@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 prost-build = "0.11"
 
 [dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 async-channel = "1.8.0"
 async-trait = "0.1.58"
 codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }
