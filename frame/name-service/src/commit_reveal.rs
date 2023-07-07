@@ -130,18 +130,18 @@ impl<T: Config> Pallet<T> {
 
 		T::RegistrationFeeHandler::on_unbalanced(imbalance);
 
-		let expiry = block_number.saturating_add(length);
-		Self::do_register(name_hash, commitment.owner.clone(), Some(expiry), None)?;
-		Commitments::<T>::remove(commitment_hash);
-
 		// Move commitment deposit to owner if commitment depositor is different from owner.
 		if commitment.owner != commitment.depositor {
 			T::Currency::repatriate_reserved(
 				&commitment.depositor,
 				&commitment.owner,
-				commitment.deposit,
+				commitment.deposit.clone(),
 				BalanceStatus::Reserved,
 			)?;
+
+			let expiry = block_number.saturating_add(length);
+			Self::do_register(name_hash, commitment.owner, Some(expiry), Some(commitment.deposit))?;
+			Commitments::<T>::remove(commitment_hash);
 		}
 		Ok(())
 	}
