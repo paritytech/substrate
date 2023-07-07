@@ -110,12 +110,20 @@ impl pallet_aura::Config for Test {
 	type AllowMultipleBlocksPerSlot = AllowMultipleBlocksPerSlot;
 }
 
-pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+fn build_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
+	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_aura::GenesisConfig::<Test> {
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
 	}
-	.assimilate_storage(&mut t)
+	.assimilate_storage(&mut storage)
 	.unwrap();
-	t.into()
+	storage.into()
+}
+
+pub fn build_ext_and_execute_test(authorities: Vec<u64>, test: impl FnOnce() -> ()) {
+	let mut ext = build_ext(authorities);
+	ext.execute_with(|| {
+		test();
+		Aura::do_try_state().expect("Storage invariants should hold")
+	});
 }
