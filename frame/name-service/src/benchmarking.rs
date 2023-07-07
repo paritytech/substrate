@@ -21,13 +21,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use super::{types::*, *};
+use crate::Pallet as NameService;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get, ReservableCurrency};
 use frame_system::{Pallet as System, RawOrigin};
+use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, One};
 use sp_std::vec;
-// use sp_io::hashing::blake2_256;
-use crate::Pallet as NameService;
 
 type CurrencyOf<T> = <T as Config>::Currency;
 
@@ -304,7 +304,7 @@ benchmarks! {
 		let label = vec![0; l as usize];
 	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), label.clone())
 	verify {
-		let label_hash = sp_io::hashing::blake2_256(&label);
+		let label_hash = blake2_256(&label);
 		let subnode_hash = NameService::<T>::subnode_hash(name_hash, label_hash);
 
 		assert_eq!(
@@ -326,7 +326,7 @@ benchmarks! {
 		);
 
 		let label = vec![0; T::MaxNameLength::get() as usize];
-		let label_hash = sp_io::hashing::blake2_256(&label);
+		let label_hash = blake2_256(&label);
 		let origin = RawOrigin::Signed(owner.clone());
 		NameService::<T>::set_subnode_record(
 			origin.clone().into(),
@@ -374,7 +374,7 @@ benchmarks! {
 			true
 		);
 		let label = vec![0; T::MaxNameLength::get() as usize];
-		let label_hash = sp_io::hashing::blake2_256(&label);
+		let label_hash = blake2_256(&label);
 		let origin = RawOrigin::Signed(owner.clone());
 		NameService::<T>::set_subnode_record(
 			origin.clone().into(),
