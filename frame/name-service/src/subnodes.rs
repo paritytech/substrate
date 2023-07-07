@@ -51,6 +51,7 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
 		let expiration = None;
+		Self::reserve_deposit(Some(deposit), &sender)?;
 		Self::do_register(name_hash, sender, expiration, Some(deposit))?;
 		Ok(())
 	}

@@ -165,7 +165,7 @@ fn reveal_works() {
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
 
 		assert_eq!(registration.owner, owner);
-		assert_eq!(registration.deposit, None);
+		assert_eq!(registration.deposit, Some(10));
 
 		// expiry = current block number + length
 		// 12 + (10)
@@ -472,7 +472,7 @@ fn deregister_works_owner() {
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
 		assert_eq!(registration.owner, 2);
 		assert_eq!(registration.expiry, Some(22));
-		assert_eq!(registration.deposit, None);
+		assert_eq!(registration.deposit, Some(10));
 
 		// set address
 		assert_ok!(NameService::set_address(
@@ -503,7 +503,7 @@ fn deregister_works_non_owner() {
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
 		assert_eq!(registration.owner, 2);
 		assert_eq!(registration.expiry, Some(22));
-		assert_eq!(registration.deposit, None);
+		assert_eq!(registration.deposit, Some(10));
 
 		// go to expiry - 1
 		add_blocks(10);
@@ -857,7 +857,7 @@ fn deregister_subnode_non_owner_works() {
 		// resolver address no longer present
 		assert!(!AddressResolver::<Test>::contains_key(name_hash));
 		// deposit should have been returned to subnode owner
-		assert_eq!(Balances::free_balance(owner), 200);
+		assert_eq!(Balances::free_balance(owner), 210);
 	});
 }
 

@@ -54,8 +54,8 @@ fn register_name_hash<T: Config>(
 ) -> (NameHash, T::AccountId, T::AccountId) {
 	let caller = whitelisted_caller();
 	let secret = 3_u64;
-	let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-	let _ = T::Currency::make_free_balance_be(&owner, BalanceOf::<T>::max_value());
+	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+	T::Currency::make_free_balance_be(&owner, BalanceOf::<T>::max_value());
 
 	let commitment_hash: CommitmentHash = NameService::<T>::commitment_hash(&name, secret.clone());
 	let origin = RawOrigin::Signed(caller.clone());
@@ -137,14 +137,14 @@ benchmarks! {
 	}
 
 	commit {
-		let balance = BalanceOf::<T>::max_value();
 		let caller = whitelisted_caller();
-		let _ = T::Currency::make_free_balance_be(&caller, balance);
+		let owner: T::AccountId = account("recipient", 0, 1u32);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&owner, BalanceOf::<T>::max_value());
 
 		let name = vec![0; T::MaxNameLength::get() as usize];
 		let secret = 3_u64;
 		let hash = NameService::<T>::commitment_hash(&name, secret.clone());
-		let owner: T::AccountId = account("recipient", 0, 1u32);
 
 	}: _(RawOrigin::Signed(caller.clone()), owner, hash.clone())
 	verify {
@@ -158,14 +158,15 @@ benchmarks! {
 		// Fund the account
 		let balance = BalanceOf::<T>::max_value();
 		let caller = whitelisted_caller();
-		let _ = T::Currency::make_free_balance_be(&caller, balance);
+		let owner: T::AccountId = account("recipient", 0, 1u32);
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&owner, BalanceOf::<T>::max_value());
 
 		let name = vec![0; l as usize];
 		let secret = 3_u64;
 
 		// Commit
 		let hash: CommitmentHash = NameService::<T>::commitment_hash(&name, secret);
-		let owner: T::AccountId = account("recipient", 0, 1u32);
 		let origin = RawOrigin::Signed(caller.clone());
 		NameService::<T>::commit(origin.into(), owner.clone(), hash.clone()).expect("Must commit");
 		let run_to: T::BlockNumber = 100u32.into();
@@ -187,14 +188,14 @@ benchmarks! {
 		// fees have been deducted from fee payer.
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&caller),
-			BalanceOf::<T>::max_value() - 100u32.into()
+			BalanceOf::<T>::max_value() - CommitmentDeposit::<T>::get().unwrap() - 100u32.into()
 		);
 	}
 
 	remove_commitment {
 		let caller = whitelisted_caller();
 		let name = vec![0; T::MaxNameLength::get() as usize];
-		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		let commitment_hash: CommitmentHash = NameService::<T>::commitment_hash(&name, 3_u64);
 
 		let _ = NameService::<T>::commit(
