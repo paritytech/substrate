@@ -258,7 +258,6 @@ benchmarks! {
 
 	deregister {
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-
 		let (suffix, para_id) = register_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
@@ -291,6 +290,33 @@ benchmarks! {
 		assert!(!AddressResolver::<T>::contains_key(name_hash));
 		assert!(!NameResolver::<T>::contains_key(name_hash));
 		assert!(!TextResolver::<T>::contains_key(name_hash));
+	}
+
+	set_subnode_record {
+		let l in 3..T::MaxNameLength::get();
+
+		let recipient: T::AccountId = account("recipient", 0, 1u32);
+		let (suffix, para_id) = register_para::<T>();
+		let (name_hash, owner, _) = register_name_hash::<T>(
+			recipient.clone(),
+			vec![0; T::MaxNameLength::get() as usize],
+			true
+		);
+		let label = vec![0; l as usize];
+
+		let origin = RawOrigin::Signed(owner.clone());
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), label.clone())
+	verify {
+		let label_hash = sp_io::hashing::blake2_256(&label);
+		let name_hash = NameService::<T>::subnode_hash(name_hash, label_hash);
+
+		assert_eq!(
+			Registrations::<T>::get(name_hash).unwrap(),
+			Registration {
+			owner: owner,
+			expiry: None,
+			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
+		});
 	}
 
 	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);

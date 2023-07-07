@@ -539,7 +539,7 @@ pub mod pallet {
 		/// Validates the length of the provided label, returning an error if it surpasses the max
 		/// supported name length.
 		#[pallet::call_index(8)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_subnode_record(label.len() as u32))]
 		pub fn set_subnode_record(
 			origin: OriginFor<T>,
 			parent_hash: NameHash,
