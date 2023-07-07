@@ -682,7 +682,7 @@ pub mod pallet {
 				Error::<T>::SuffixExists
 			);
 			ParaRegistrations::<T>::insert(para.id, para.suffix.clone());
-			ReverseParaRegistrationsLookup::<T>::insert(para.suffix.clone(), para.id.clone());
+			ReverseParaRegistrationsLookup::<T>::insert(para.suffix.clone(), para.id);
 			Self::deposit_event(Event::<T>::ParaRegistered {
 				para_id: para.id,
 				suffix: para.suffix,

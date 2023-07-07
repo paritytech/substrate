@@ -135,7 +135,7 @@ impl<T: Config> Pallet<T> {
 			T::Currency::repatriate_reserved(
 				&commitment.depositor,
 				&commitment.owner,
-				commitment.deposit.clone(),
+				commitment.deposit,
 				BalanceStatus::Reserved,
 			)?;
 		}
