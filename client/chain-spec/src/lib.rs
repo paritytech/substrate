@@ -181,7 +181,7 @@ mod genesis_block;
 mod genesis_config_builder;
 
 pub use self::{
-	chain_spec::{ChainSpec as GenericChainSpec, NoExtension},
+	chain_spec::{ChainSpec as GenericChainSpec, ChainSpecBuilder, NoExtension},
 	extension::{get_extension, get_extension_mut, Extension, Fork, Forks, GetExtension, Group},
 	genesis_block::{
 		construct_genesis_block, resolve_state_version_from_wasm, BuildGenesisBlock,
