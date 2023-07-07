@@ -40,8 +40,6 @@ impl<
 {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-		ensure!(can_migrate::<T, I>(), "pallet_society: already upgraded");
-
 		let current = Pallet::<T, I>::current_storage_version();
 		let onchain = Pallet::<T, I>::on_chain_storage_version();
 		ensure!(onchain == 0 && current == 2, "pallet_society: invalid version");
@@ -193,10 +191,6 @@ pub(crate) mod old {
 		StorageMap<Pallet<T, I>, Twox64Concat, <T as frame_system::Config>::AccountId, Vote>;
 }
 
-pub fn can_migrate<T: Config<I>, I: Instance + 'static>() -> bool {
-	Members::<T, I>::iter().next().is_none()
-}
-
 /// Will panic if there are any inconsistencies in the pallet's state or old keys remaining.
 pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 	// Check all members are valid data.
@@ -249,14 +243,6 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 pub fn from_original<T: Config<I>, I: Instance + 'static>(
 	past_payouts: &mut [(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)],
 ) -> Result<Weight, &'static str> {
-	// First check that this is the original state layout. This is easy since the new layout
-	// contains a new Members value, which did not exist in the old layout.
-	if !can_migrate::<T, I>() {
-		log::warn!(target: TARGET, "Skipping MigrateToV2 migration since it appears unapplicable");
-		// Already migrated or no data to migrate: Bail.
-		return Ok(T::DbWeight::get().reads(1))
-	}
-
 	// Migrate Bids from old::Bids (just a trunctation).
 	Bids::<T, I>::put(BoundedVec::<_, T::MaxBids>::truncate_from(old::Bids::<T, I>::take()));
 
