@@ -302,7 +302,7 @@ build-rustdoc:
   #     artifacts: false
   script:
     - rusty-cachier snapshot create
-    - time cargo doc --locked --workspace --all-features --verbose --no-deps
+    - time cargo doc --locked --workspace --all-features --no-deps
     - git status
     # - rm -f $CARGO_TARGET_DIR/doc/.lock
     # - mv $CARGO_TARGET_DIR/doc ./crate-docs
