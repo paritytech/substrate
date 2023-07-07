@@ -56,6 +56,10 @@ pub trait WeightInfo {
 	fn v10_migration_step() -> Weight;
 	fn v11_migration_step(k: u32, ) -> Weight;
 	fn v12_migration_step(c: u32, ) -> Weight;
+	fn v13_migration_step() -> Weight { Weight::zero()}
+	fn migration_noop_step() -> Weight { Weight::zero()}
+	fn add_delegate_dependency(_c: u32, ) -> Weight { Weight::zero() }
+	fn remove_delegate_dependency(_c: u32, ) -> Weight { Weight::zero() }
 	fn migration_noop() -> Weight;
 	fn migrate() -> Weight;
 	fn on_runtime_upgrade_noop() -> Weight;
