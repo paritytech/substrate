@@ -562,32 +562,7 @@ macro_rules! benchmarks_iter {
 			( $( $pov_name: $( $storage = $pov_mode )*; )* )
 		);
 	};
-	// add verify block to _() format
-	(
-		{ $($bench_module:ident, $new_test_ext:expr, $test:path $(, $( $args:tt )* )?)? }
-		{ $( $instance:ident: $instance_bound:tt )? }
-		{ $( $where_clause:tt )* }
-		( $( $names:tt )* )
-		( $( $names_extra:tt )* )
-		( $( $names_skip_meta:tt )* )
-		( $( $pov_name:ident: $( $storage:path = $pov_mode:ident )*; )* )
-		$name:ident { $( $code:tt )* }: _ $(<$origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
-		$( $rest:tt )*
-	) => {
-		$crate::benchmarks_iter! {
-			{ $($bench_module, $new_test_ext, $test $(, $( $args )* )?)? }
-			{ $( $instance: $instance_bound )? }
-			{ $( $where_clause )* }
-			( $( $names )* )
-			( $( $names_extra )* )
-			( $( $names_skip_meta )* )
-			( $( $pov_name: $( $storage = $pov_mode )*; )* )
-			$name { $( $code )* }: _ $(<$origin_type>)? ( $origin $( , $arg )* )
-			verify { }
-			$( $rest )*
-		}
-	};
-	// add verify block to name() format
+	// add verify block to _() and name() format
 	(
 		{ $($bench_module:ident, $new_test_ext:expr, $test:path $(, $( $args:tt )* )?)? }
 		{ $( $instance:ident: $instance_bound:tt )? }
