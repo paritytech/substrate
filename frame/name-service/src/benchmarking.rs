@@ -84,6 +84,7 @@ benchmarks! {
 			true
 		);
 		let new_owner: T::AccountId = account("new_recipient", 0, 2u32);
+		T::Currency::make_free_balance_be(&new_owner, safe_mint::<T>());
 
 		assert_eq!(
 			CurrencyOf::<T>::reserved_balance(&owner),
@@ -93,8 +94,6 @@ benchmarks! {
 		let registration = Registrations::<T>::get(&name_hash).unwrap();
 		assert_eq!(registration.deposit.unwrap(), CommitmentDeposit::<T>::get().unwrap());
 		assert_eq!(registration.owner, owner);
-
-		T::Currency::make_free_balance_be(&new_owner, safe_mint::<T>());
 
 	}: _(
 		RawOrigin::Root,
@@ -218,6 +217,43 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), commitment_hash.clone())
 	verify {
 		assert!(!Commitments::<T>::contains_key(commitment_hash));
+	}
+
+	transfer {
+		let (name_hash, owner, _) = register_name_hash::<T>(
+			account("recipient", 0, 1u32),
+			vec![0; T::MaxNameLength::get() as usize],
+			true
+		);
+		let new_owner: T::AccountId = account("new_recipient", 0, 2u32);
+		T::Currency::make_free_balance_be(&new_owner, safe_mint::<T>());
+
+	}: _(RawOrigin::Signed(owner.clone()), new_owner.clone(), name_hash.clone())
+	verify {
+		assert_eq!(
+			Registrations::<T>::get(name_hash).unwrap(),
+			Registration {
+			owner: new_owner,
+			expiry: Some(200u32.into()),
+			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
+		});
+	}
+
+	renew {
+		let (name_hash, owner, _) = register_name_hash::<T>(
+			account("recipient", 0, 1u32),
+			vec![0; T::MaxNameLength::get() as usize],
+			true
+		);
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), T::BlockNumber::max_value())
+	verify {
+		assert_eq!(
+			Registrations::<T>::get(name_hash).unwrap(),
+			Registration {
+			owner: owner,
+			expiry: Some(T::BlockNumber::max_value()),
+			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
+		});
 	}
 
 	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);

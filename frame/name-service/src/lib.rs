@@ -486,7 +486,7 @@ pub mod pallet {
 		///
 		/// Can only be called by the existing owner of the name registration.
 		#[pallet::call_index(5)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
 			new_owner: T::AccountId,
@@ -503,7 +503,7 @@ pub mod pallet {
 		///
 		/// By doing so, the sender will pay the non-refundable registration extension fee.
 		#[pallet::call_index(6)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::renew())]
 		pub fn renew(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
