@@ -549,7 +549,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// `slash_era` is the era in which the slash (which is being enacted now) actually happened.
 	///
-	/// This calls `Config::OnStakingEvents::on_slash` with information as to how the slash was
+	/// This calls `Config::OnStakingUpdate::on_slash` with information as to how the slash was
 	/// applied.
 	pub fn slash(
 		&mut self,

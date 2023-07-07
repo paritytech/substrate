@@ -326,7 +326,7 @@
 //!
 //! This section assumes that the slash computation is executed by
 //! `pallet_staking::StakingLedger::slash`, which passes the information to this pallet via
-//! [`sp_staking::OnStakingEvents::on_slash`].
+//! [`sp_staking::OnStakingUpdate::on_slash`].
 //!
 //! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool while
 //! it was backing a validator that equivocated are punished. Without these measures a member could
