@@ -341,10 +341,6 @@
 //! in addition to the unbonding pools. For maintenance simplicity these are not implemented.
 //! Related: <https://github.com/paritytech/substrate/issues/10860>
 //!
-//! **Relevant methods:**
-//!
-//! * [`Pallet::on_slash`]
-//!
 //! ### Limitations
 //!
 //! * PoolMembers cannot vote with their staked funds because they are transferred into the pools
