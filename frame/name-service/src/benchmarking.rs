@@ -18,7 +18,6 @@
 //! Benchmarks for the name service pallet.
 
 #![cfg(feature = "runtime-benchmarks")]
-#![cfg_attr(not(feature = "std"), no_std)]
 
 use super::{types::*, *};
 use crate::Pallet as NameService;
