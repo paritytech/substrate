@@ -68,20 +68,31 @@
 //!
 //! ### Registering a top-level name
 //!
-//! Using a commit and reveal scheme, names can be registered on the name service, and de-registered
-//! provided that no derived subnodes exist in the registry.
+//! Using a commit [`Call::commit`] and reveal [`Call::reveal`] scheme, names can be registered on
+//! the name service, and de-registered [`Call::deregister`] provided that no derived subnodes exist
+//! in the registry.
+//!
+//! A commitment has up to `MaxCommitmentAge` blocks to be revealed before it expires. The
+//! commitment can be removed by anyone after after the expiry block, or by the original depositor
+//! before the expiry block, using [`Call::remove_commitment`].
 //!
 //! ### Registering a subnode
 //!
-//! Subnodes can be recursively registered on the system. Ownership can be transferred between these
-//! subnodes, so they do not necessarily need to be tied with the owner of parent nodes.
+//! Subnodes can be recursively registered [`Call:set_subnode_record`] on the system. Ownership can
+//! be transferred between these subnodes, so they do not necessarily need to be tied with the owner
+//! of parent nodes. Owners can degregister subnodes [`Call::deregister_subnode`], or anyone can if
+//! the parent node has expired.
 //!
 //! ### Renewing
+//!
+//! //! * [`Call::renew`]
 //!
 //! Node ownership can be extended by providing a new expiry block. The fee corresponding to the new
 //! expiry will be deducted from a provided fee-payer account.
 //!
 //! ### Transferring Ownership
+//!
+//! * [`Call::transfer`]
 //!
 //! Nodes can be transferred to a new owner. Transferring a node to a new owner will also transfer
 //! the node deposit to the new owner.
@@ -112,6 +123,19 @@
 //!
 //! The owner of a name hash can also set an ambiguous text record to give any miscellaneous text
 //! data they want to store alongside the name.
+//!
+//! ### Para Registration
+//!
+//! * [`Call::register_para`]
+//!
+//! Para IDs must be registered with the name service before addresses can be set for them. Para
+//! registration can only be done by the root origin, and intended to be voted in by governance.
+//!
+//! ### Para Deregistration
+//!
+//! * [`Call::deregister_para`]
+//!
+//! Para IDs can also be deregistered by the root origin, and intended to be voted in by governance.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::{ensure, pallet_prelude::*, traits::Get, DefaultNoBound};
@@ -570,8 +594,8 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let subnode_hash = Self::subnode_hash(parent_hash, label_hash);
 			let subnode_registration = Self::get_registration(subnode_hash)?;
-			// The owner isn't calling, we check that the parent registration doesn't exist, which
-			// mean this subnode is still valid.
+			// The owner isn't calling, We check that the parent registration exists, which means
+			// this subnode is still valid.
 			if !Self::is_owner(&subnode_registration, &sender) {
 				ensure!(
 					Self::get_registration(parent_hash).is_err(),
