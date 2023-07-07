@@ -561,7 +561,7 @@ pub mod pallet {
 		/// * If subnode is expired, deregistering this subnode becomes permissionless.
 		/// * Only the owner can deregister the node if the expiry block has not yet passed.
 		#[pallet::call_index(9)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::deregister_subnode())]
 		pub fn deregister_subnode(
 			origin: OriginFor<T>,
 			parent_hash: NameHash,
@@ -586,7 +586,7 @@ pub mod pallet {
 		///
 		/// Only the current owner can re-assign ownership of the subnode.
 		#[pallet::call_index(10)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_subnode_owner())]
 		pub fn set_subnode_owner(
 			origin: OriginFor<T>,
 			parent_hash: NameHash,

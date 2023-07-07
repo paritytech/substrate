@@ -303,17 +303,94 @@ benchmarks! {
 			true
 		);
 		let label = vec![0; l as usize];
-
-		let origin = RawOrigin::Signed(owner.clone());
 	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), label.clone())
 	verify {
 		let label_hash = sp_io::hashing::blake2_256(&label);
-		let name_hash = NameService::<T>::subnode_hash(name_hash, label_hash);
+		let subnode_hash = NameService::<T>::subnode_hash(name_hash, label_hash);
 
 		assert_eq!(
-			Registrations::<T>::get(name_hash).unwrap(),
+			Registrations::<T>::get(subnode_hash).unwrap(),
 			Registration {
 			owner: owner,
+			expiry: None,
+			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
+		});
+	}
+
+	deregister_subnode {
+		let recipient: T::AccountId = account("recipient", 0, 1u32);
+		let (suffix, para_id) = register_para::<T>();
+		let (name_hash, owner, _) = register_name_hash::<T>(
+			recipient.clone(),
+			vec![0; T::MaxNameLength::get() as usize],
+			true
+		);
+
+		let label = vec![0; T::MaxNameLength::get() as usize];
+		let label_hash = sp_io::hashing::blake2_256(&label);
+		let origin = RawOrigin::Signed(owner.clone());
+		NameService::<T>::set_subnode_record(
+			origin.clone().into(),
+			name_hash.clone(),
+			label.clone(),
+		).expect("Setting subnode record succeeds.");
+
+		NameService::<T>::set_address(
+			origin.clone().into(),
+			name_hash.clone(),
+			recipient,
+			suffix
+		).expect("Setting address succeeds.");
+
+		NameService::<T>::set_name(
+			origin.clone().into(),
+			name_hash.clone(),
+			vec![0; T::MaxNameLength::get() as usize].into()
+		).expect("Setting name succeeds.");
+
+		NameService::<T>::set_text(
+			origin.clone().into(),
+			name_hash.clone(),
+			vec![0; T::MaxTextLength::get() as usize].into()
+		).expect("Setting text succeeds.");
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), label_hash.clone())
+	verify {
+		let subnode_hash = NameService::<T>::subnode_hash(name_hash, label_hash);
+
+		assert!(!Registrations::<T>::contains_key(subnode_hash));
+		assert!(!AddressResolver::<T>::contains_key(subnode_hash));
+		assert!(!NameResolver::<T>::contains_key(subnode_hash));
+		assert!(!TextResolver::<T>::contains_key(subnode_hash));
+	}
+
+	set_subnode_owner {
+		let new_owner: T::AccountId = account("new_recipient", 0, 2u32);
+		T::Currency::make_free_balance_be(&new_owner, safe_mint::<T>());
+
+		let recipient: T::AccountId = account("recipient", 0, 1u32);
+		let (suffix, para_id) = register_para::<T>();
+		let (name_hash, owner, _) = register_name_hash::<T>(
+			recipient.clone(),
+			vec![0; T::MaxNameLength::get() as usize],
+			true
+		);
+		let label = vec![0; T::MaxNameLength::get() as usize];
+		let label_hash = sp_io::hashing::blake2_256(&label);
+		let origin = RawOrigin::Signed(owner.clone());
+		NameService::<T>::set_subnode_record(
+			origin.clone().into(),
+			name_hash.clone(),
+			label.clone(),
+		).expect("Setting subnode record succeeds.");
+
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), label_hash.clone(), new_owner.clone())
+	verify {
+		let subnode_hash = NameService::<T>::subnode_hash(name_hash, label_hash);
+
+		assert_eq!(
+			Registrations::<T>::get(subnode_hash).unwrap(),
+			Registration {
+			owner: new_owner,
 			expiry: None,
 			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
 		});
