@@ -24,7 +24,7 @@ sp-trie = { version = "22.0.0", default-features = false, optional = true, path 
 hash-db = { version = "0.16.0", optional = true }
 thiserror = { version = "1.0.30", optional = true }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-sp-metadata-ir = { version = "0.1.0", default-features = false, path = "../metadata-ir" }
+sp-metadata-ir = { version = "0.1.0", default-features = false, optional = true, path = "../metadata-ir" }
 log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]
@@ -44,9 +44,9 @@ std = [
 	"thiserror",
 	"log/std",
 	"scale-info/std",
-	"sp-metadata-ir/std",
+	"sp-metadata-ir?/std",
 ]
-# Special feature to disable logging completly.
+# Special feature to disable logging completely.
 #
 # By default `sp-api` initializes the `RuntimeLogger` for each runtime api function. However,
 # logging functionality increases the code size. It is recommended to enable this feature when
@@ -56,3 +56,7 @@ std = [
 disable-logging = ["log/max_level_off"]
 # Do not report the documentation in the metadata.
 no-metadata-docs = ["sp-api-proc-macro/no-metadata-docs"]
+frame-metadata = [
+	"sp-metadata-ir",
+	"sp-api-proc-macro/frame-metadata"
+]
