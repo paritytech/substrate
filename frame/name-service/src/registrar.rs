@@ -41,19 +41,6 @@ impl<T: Config> Pallet<T> {
 		Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound.into())
 	}
 
-	/// Reserves a deposit if one is given.
-	///
-	/// Returns an error if the owner does not have enough to reserve the deposit.
-	pub fn reserve_deposit(
-		maybe_deposit: Option<BalanceOf<T>>,
-		owner: &T::AccountId,
-	) -> DispatchResult {
-		if let Some(deposit) = maybe_deposit {
-			T::Currency::reserve(&owner, deposit)?;
-		}
-		Ok(())
-	}
-
 	/// Handling of a name hash registration.
 	///
 	/// Notes:
@@ -67,6 +54,9 @@ impl<T: Config> Pallet<T> {
 		maybe_expiration: Option<T::BlockNumber>,
 		maybe_deposit: Option<BalanceOf<T>>,
 	) -> DispatchResult {
+		if let Some(deposit) = maybe_deposit {
+			T::Currency::reserve(&owner, deposit)?;
+		}
 		if let Some(old_registration) = Registrations::<T>::take(name_hash) {
 			if let Some(old_deposit) = old_registration.deposit {
 				let res = T::Currency::unreserve(&old_registration.owner, old_deposit);

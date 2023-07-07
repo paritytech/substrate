@@ -50,11 +50,8 @@ impl<T: Config> Pallet<T> {
 		let name_hash = Self::subnode_hash(parent_hash, label_hash);
 
 		ensure!(!Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationExists);
-		
-		let deposit = Some(deposit);
 		let expiration = None;
-		Self::reserve_deposit(deposit.clone(), &sender)?;
-		Self::do_register(name_hash, sender, expiration, deposit)?;
+		Self::do_register(name_hash, sender, expiration, Some(deposit))?;
 		Ok(())
 	}
 
