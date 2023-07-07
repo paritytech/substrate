@@ -48,7 +48,7 @@ variables:
   CARGO_INCREMENTAL: 0
   DOCKER_OS: "debian:bullseye"
   ARCH: "x86_64"
-  CI_IMAGE: "paritytech/ci-linux:production"
+  CI_IMAGE: "paritytech/ci-unified:bullseye-1.70.0-2023-05-23"
   BUILDAH_IMAGE: "quay.io/buildah/stable:v1.29"
   BUILDAH_COMMAND: "buildah --storage-driver overlay2"
   RELENG_SCRIPTS_BRANCH: "master"
