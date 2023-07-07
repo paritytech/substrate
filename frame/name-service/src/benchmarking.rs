@@ -113,7 +113,6 @@ benchmarks! {
 
 	force_deregister {
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-
 		let (suffix, para_id) = register_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
@@ -394,6 +393,74 @@ benchmarks! {
 			expiry: None,
 			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
 		});
+	}
+
+	set_address {
+		let recipient: T::AccountId = account("recipient", 0, 1u32);
+		let (suffix, para_id) = register_para::<T>();
+		let (name_hash, owner, _) = register_name_hash::<T>(
+			recipient.clone(),
+			vec![0; T::MaxNameLength::get() as usize],
+			true
+		);
+
+		let origin = RawOrigin::Signed(owner.clone());
+
+		NameService::<T>::set_address(
+			origin.clone().into(),
+			name_hash.clone(),
+			recipient.clone(),
+			suffix.clone()
+		).expect("Setting address succeeds.");
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), recipient.clone(), suffix)
+	verify {
+		assert_eq!(
+			AddressResolver::<T>::get(name_hash).unwrap(),
+			(recipient, para_id)
+		);
+	}
+
+	set_name {
+		let l in 3..T::MaxNameLength::get();
+		let name = vec![0; l as usize];
+
+		let recipient: T::AccountId = account("recipient", 0, 1u32);
+		let (suffix, para_id) = register_para::<T>();
+		let (name_hash, owner, _) = register_name_hash::<T>(
+			recipient.clone(),
+			name.clone(),
+			true
+		);
+
+		let origin = RawOrigin::Signed(owner.clone());
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), name.clone())
+	verify {
+		assert_eq!(
+			NameService::<T>::name_hash(&NameResolver::<T>::get(name_hash).unwrap().bytes),
+			name_hash
+		);
+	}
+
+	set_text {
+		let l in 3..T::MaxTextLength::get();
+		let name = vec![0; T::MaxNameLength::get() as usize];
+		let text = vec![0; l as usize];
+
+		let recipient: T::AccountId = account("recipient", 0, 1u32);
+		let (suffix, para_id) = register_para::<T>();
+		let (name_hash, owner, _) = register_name_hash::<T>(
+			recipient.clone(),
+			name.clone(),
+			true
+		);
+
+		let origin = RawOrigin::Signed(owner.clone());
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), text.clone())
+	verify {
+		assert_eq!(
+			TextResolver::<T>::get(name_hash).unwrap().bytes,
+			text
+		);
 	}
 
 	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);

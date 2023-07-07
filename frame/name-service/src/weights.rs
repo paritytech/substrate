@@ -50,6 +50,9 @@ pub trait WeightInfo {
 	fn set_subnode_record(l: u32, ) -> Weight;
 	fn deregister_subnode() -> Weight;
 	fn set_subnode_owner() -> Weight;
+	fn set_address() -> Weight;
+	fn set_name(l: u32, ) -> Weight;
+	fn set_text(l: u32, ) -> Weight;
 }
 
 /// Weights for pallet_name_service using the Substrate node and recommended hardware.
@@ -87,7 +90,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `4928`
 		//  Estimated: `5611`
 		// Minimum execution time: 80_000_000 picoseconds.
-		Weight::from_parts(82_000_000, 5611)
+		Weight::from_parts(81_000_000, 5611)
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(6_u64))
 	}
@@ -123,10 +126,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `619`
 		//  Estimated: `3597 + l * (450 ±0)`
-		// Minimum execution time: 79_000_000 picoseconds.
-		Weight::from_parts(83_022_371, 3597)
-			// Standard Error: 65
-			.saturating_add(Weight::from_parts(2_124, 0).saturating_mul(l.into()))
+		// Minimum execution time: 80_000_000 picoseconds.
+		Weight::from_parts(83_153_702, 3597)
+			// Standard Error: 88
+			.saturating_add(Weight::from_parts(2_511, 0).saturating_mul(l.into()))
 			.saturating_add(T::DbWeight::get().reads(6_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 			.saturating_add(Weight::from_parts(0, 450).saturating_mul(l.into()))
@@ -137,7 +140,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `436`
 		//  Estimated: `3597`
-		// Minimum execution time: 29_000_000 picoseconds.
+		// Minimum execution time: 30_000_000 picoseconds.
 		Weight::from_parts(30_000_000, 3597)
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
@@ -186,7 +189,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `4928`
 		//  Estimated: `5611`
-		// Minimum execution time: 83_000_000 picoseconds.
+		// Minimum execution time: 82_000_000 picoseconds.
 		Weight::from_parts(84_000_000, 5611)
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(6_u64))
@@ -205,9 +208,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		//  Measured:  `642`
 		//  Estimated: `6128`
 		// Minimum execution time: 46_000_000 picoseconds.
-		Weight::from_parts(47_856_696, 6128)
-			// Standard Error: 68
-			.saturating_add(Weight::from_parts(1_043, 0).saturating_mul(l.into()))
+		Weight::from_parts(47_417_869, 6128)
+			// Standard Error: 85
+			.saturating_add(Weight::from_parts(1_955, 0).saturating_mul(l.into()))
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
@@ -227,8 +230,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `822`
 		//  Estimated: `5611`
-		// Minimum execution time: 47_000_000 picoseconds.
-		Weight::from_parts(48_000_000, 5611)
+		// Minimum execution time: 49_000_000 picoseconds.
+		Weight::from_parts(49_000_000, 5611)
 			.saturating_add(T::DbWeight::get().reads(5_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
@@ -240,10 +243,65 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size summary in bytes:
 		//  Measured:  `810`
 		//  Estimated: `6196`
-		// Minimum execution time: 52_000_000 picoseconds.
-		Weight::from_parts(53_000_000, 6196)
+		// Minimum execution time: 53_000_000 picoseconds.
+		Weight::from_parts(55_000_000, 6196)
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
+	}
+	/// Storage: NameService ReverseParaRegistrationsLookup (r:1 w:0)
+	/// Proof: NameService ReverseParaRegistrationsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService Registrations (r:1 w:0)
+	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
+	/// Storage: NameService AddressResolver (r:0 w:1)
+	/// Proof: NameService AddressResolver (max_values: None, max_size: Some(84), added: 2559, mode: MaxEncodedLen)
+	fn set_address() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `549`
+		//  Estimated: `3559`
+		// Minimum execution time: 20_000_000 picoseconds.
+		Weight::from_parts(21_000_000, 3559)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+	/// Storage: NameService Registrations (r:1 w:0)
+	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
+	/// Storage: NameService NameResolver (r:1 w:1)
+	/// Proof: NameService NameResolver (max_values: None, max_size: Some(2146), added: 4621, mode: MaxEncodedLen)
+	/// Storage: NameService PerByteFee (r:1 w:0)
+	/// Proof: NameService PerByteFee (max_values: Some(1), max_size: Some(16), added: 511, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// The range of component `l` is `[3, 2048]`.
+	fn set_name(l: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `547`
+		//  Estimated: `5611`
+		// Minimum execution time: 38_000_000 picoseconds.
+		Weight::from_parts(39_893_784, 5611)
+			// Standard Error: 94
+			.saturating_add(Weight::from_parts(1_596, 0).saturating_mul(l.into()))
+			.saturating_add(T::DbWeight::get().reads(4_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
+	}
+	/// Storage: NameService Registrations (r:1 w:0)
+	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
+	/// Storage: NameService PerByteFee (r:1 w:0)
+	/// Proof: NameService PerByteFee (max_values: Some(1), max_size: Some(16), added: 511, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// Storage: NameService TextResolver (r:1 w:1)
+	/// Proof: NameService TextResolver (max_values: None, max_size: Some(2146), added: 4621, mode: MaxEncodedLen)
+	/// The range of component `l` is `[3, 2048]`.
+	fn set_text(l: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `571`
+		//  Estimated: `5611`
+		// Minimum execution time: 40_000_000 picoseconds.
+		Weight::from_parts(41_799_076, 5611)
+			// Standard Error: 83
+			.saturating_add(Weight::from_parts(691, 0).saturating_mul(l.into()))
+			.saturating_add(T::DbWeight::get().reads(4_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
 	}
 }
 
@@ -281,7 +339,7 @@ impl WeightInfo for () {
 		//  Measured:  `4928`
 		//  Estimated: `5611`
 		// Minimum execution time: 80_000_000 picoseconds.
-		Weight::from_parts(82_000_000, 5611)
+		Weight::from_parts(81_000_000, 5611)
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(6_u64))
 	}
@@ -317,10 +375,10 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `619`
 		//  Estimated: `3597 + l * (450 ±0)`
-		// Minimum execution time: 79_000_000 picoseconds.
-		Weight::from_parts(83_022_371, 3597)
-			// Standard Error: 65
-			.saturating_add(Weight::from_parts(2_124, 0).saturating_mul(l.into()))
+		// Minimum execution time: 80_000_000 picoseconds.
+		Weight::from_parts(83_153_702, 3597)
+			// Standard Error: 88
+			.saturating_add(Weight::from_parts(2_511, 0).saturating_mul(l.into()))
 			.saturating_add(RocksDbWeight::get().reads(6_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 			.saturating_add(Weight::from_parts(0, 450).saturating_mul(l.into()))
@@ -331,7 +389,7 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `436`
 		//  Estimated: `3597`
-		// Minimum execution time: 29_000_000 picoseconds.
+		// Minimum execution time: 30_000_000 picoseconds.
 		Weight::from_parts(30_000_000, 3597)
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
@@ -380,7 +438,7 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `4928`
 		//  Estimated: `5611`
-		// Minimum execution time: 83_000_000 picoseconds.
+		// Minimum execution time: 82_000_000 picoseconds.
 		Weight::from_parts(84_000_000, 5611)
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(6_u64))
@@ -399,9 +457,9 @@ impl WeightInfo for () {
 		//  Measured:  `642`
 		//  Estimated: `6128`
 		// Minimum execution time: 46_000_000 picoseconds.
-		Weight::from_parts(47_856_696, 6128)
-			// Standard Error: 68
-			.saturating_add(Weight::from_parts(1_043, 0).saturating_mul(l.into()))
+		Weight::from_parts(47_417_869, 6128)
+			// Standard Error: 85
+			.saturating_add(Weight::from_parts(1_955, 0).saturating_mul(l.into()))
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))
 	}
@@ -421,8 +479,8 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `822`
 		//  Estimated: `5611`
-		// Minimum execution time: 47_000_000 picoseconds.
-		Weight::from_parts(48_000_000, 5611)
+		// Minimum execution time: 49_000_000 picoseconds.
+		Weight::from_parts(49_000_000, 5611)
 			.saturating_add(RocksDbWeight::get().reads(5_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
@@ -434,9 +492,64 @@ impl WeightInfo for () {
 		// Proof Size summary in bytes:
 		//  Measured:  `810`
 		//  Estimated: `6196`
-		// Minimum execution time: 52_000_000 picoseconds.
-		Weight::from_parts(53_000_000, 6196)
+		// Minimum execution time: 53_000_000 picoseconds.
+		Weight::from_parts(55_000_000, 6196)
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))
+	}
+	/// Storage: NameService ReverseParaRegistrationsLookup (r:1 w:0)
+	/// Proof: NameService ReverseParaRegistrationsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService Registrations (r:1 w:0)
+	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
+	/// Storage: NameService AddressResolver (r:0 w:1)
+	/// Proof: NameService AddressResolver (max_values: None, max_size: Some(84), added: 2559, mode: MaxEncodedLen)
+	fn set_address() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `549`
+		//  Estimated: `3559`
+		// Minimum execution time: 20_000_000 picoseconds.
+		Weight::from_parts(21_000_000, 3559)
+			.saturating_add(RocksDbWeight::get().reads(2_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+	/// Storage: NameService Registrations (r:1 w:0)
+	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
+	/// Storage: NameService NameResolver (r:1 w:1)
+	/// Proof: NameService NameResolver (max_values: None, max_size: Some(2146), added: 4621, mode: MaxEncodedLen)
+	/// Storage: NameService PerByteFee (r:1 w:0)
+	/// Proof: NameService PerByteFee (max_values: Some(1), max_size: Some(16), added: 511, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// The range of component `l` is `[3, 2048]`.
+	fn set_name(l: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `547`
+		//  Estimated: `5611`
+		// Minimum execution time: 38_000_000 picoseconds.
+		Weight::from_parts(39_893_784, 5611)
+			// Standard Error: 94
+			.saturating_add(Weight::from_parts(1_596, 0).saturating_mul(l.into()))
+			.saturating_add(RocksDbWeight::get().reads(4_u64))
+			.saturating_add(RocksDbWeight::get().writes(2_u64))
+	}
+	/// Storage: NameService Registrations (r:1 w:0)
+	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
+	/// Storage: NameService PerByteFee (r:1 w:0)
+	/// Proof: NameService PerByteFee (max_values: Some(1), max_size: Some(16), added: 511, mode: MaxEncodedLen)
+	/// Storage: System Account (r:1 w:1)
+	/// Proof: System Account (max_values: None, max_size: Some(128), added: 2603, mode: MaxEncodedLen)
+	/// Storage: NameService TextResolver (r:1 w:1)
+	/// Proof: NameService TextResolver (max_values: None, max_size: Some(2146), added: 4621, mode: MaxEncodedLen)
+	/// The range of component `l` is `[3, 2048]`.
+	fn set_text(l: u32, ) -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `571`
+		//  Estimated: `5611`
+		// Minimum execution time: 40_000_000 picoseconds.
+		Weight::from_parts(41_799_076, 5611)
+			// Standard Error: 83
+			.saturating_add(Weight::from_parts(691, 0).saturating_mul(l.into()))
+			.saturating_add(RocksDbWeight::get().reads(4_u64))
+			.saturating_add(RocksDbWeight::get().writes(2_u64))
 	}
 }

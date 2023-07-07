@@ -604,7 +604,7 @@ pub mod pallet {
 		/// with it, which is determined by the `suffix` parameter, with the latter dictating which
 		/// para the address belongs to.
 		#[pallet::call_index(11)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_address())]
 		pub fn set_address(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
@@ -630,7 +630,7 @@ pub mod pallet {
 		/// This is a permissionless function that anyone can call who is willing to place a deposit
 		/// to store this data on chain.
 		#[pallet::call_index(12)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_name(name.len() as u32))]
 		pub fn set_name(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
@@ -651,7 +651,7 @@ pub mod pallet {
 		/// Simply adds additional metadata to the node. No routing or aliasing is done with this
 		/// value.
 		#[pallet::call_index(13)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_text(text.len() as u32))]
 		pub fn set_text(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
