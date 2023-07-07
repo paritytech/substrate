@@ -43,9 +43,9 @@ fn run_to_block<T: Config>(n: T::BlockNumber) {
 	}
 }
 
-fn register_para<T: Config>() -> (BoundedSuffixOf<T>, u32) {
-	let suffix: BoundedVec<u8, _> = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
-	let para_id = 1;
+fn register_new_para<T: Config>() -> (BoundedSuffixOf<T>, u32) {
+	let suffix: BoundedVec<u8, _> = BoundedVec::try_from("1234".as_bytes().to_vec()).unwrap();
+	let para_id = u32::max_value();
 	ParaRegistrations::<T>::insert(para_id, suffix.clone());
 	ReverseParaRegistrationsLookup::<T>::insert(suffix.clone(), para_id);
 	(suffix, para_id)
@@ -113,7 +113,7 @@ benchmarks! {
 
 	force_deregister {
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-		let (suffix, para_id) = register_para::<T>();
+		let (suffix, para_id) = register_new_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
 			vec![0; T::MaxNameLength::get() as usize],
@@ -257,7 +257,7 @@ benchmarks! {
 
 	deregister {
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-		let (suffix, para_id) = register_para::<T>();
+		let (suffix, para_id) = register_new_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
 			vec![0; T::MaxNameLength::get() as usize],
@@ -295,7 +295,7 @@ benchmarks! {
 		let l in 3..T::MaxNameLength::get();
 
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-		let (suffix, para_id) = register_para::<T>();
+		let (suffix, para_id) = register_new_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
 			vec![0; T::MaxNameLength::get() as usize],
@@ -318,7 +318,7 @@ benchmarks! {
 
 	deregister_subnode {
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-		let (suffix, para_id) = register_para::<T>();
+		let (suffix, para_id) = register_new_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
 			vec![0; T::MaxNameLength::get() as usize],
@@ -367,7 +367,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&new_owner, safe_mint::<T>());
 
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-		let (suffix, para_id) = register_para::<T>();
+		let (suffix, para_id) = register_new_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
 			vec![0; T::MaxNameLength::get() as usize],
@@ -397,7 +397,7 @@ benchmarks! {
 
 	set_address {
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-		let (suffix, para_id) = register_para::<T>();
+		let (suffix, para_id) = register_new_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
 			vec![0; T::MaxNameLength::get() as usize],
@@ -425,7 +425,7 @@ benchmarks! {
 		let name = vec![0; l as usize];
 
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-		let (suffix, para_id) = register_para::<T>();
+		let (suffix, para_id) = register_new_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
 			name.clone(),
@@ -447,7 +447,7 @@ benchmarks! {
 		let text = vec![0; l as usize];
 
 		let recipient: T::AccountId = account("recipient", 0, 1u32);
-		let (suffix, para_id) = register_para::<T>();
+		let (suffix, para_id) = register_new_para::<T>();
 		let (name_hash, owner, _) = register_name_hash::<T>(
 			recipient.clone(),
 			name.clone(),
@@ -461,6 +461,45 @@ benchmarks! {
 			TextResolver::<T>::get(name_hash).unwrap().bytes,
 			text
 		);
+	}
+
+	set_configs {
+	}:_(
+		RawOrigin::Root,
+		ConfigOp::Set(BalanceOf::<T>::max_value()),
+		ConfigOp::Set(BalanceOf::<T>::max_value()),
+		ConfigOp::Set(BalanceOf::<T>::max_value()),
+		ConfigOp::Set(BalanceOf::<T>::max_value()),
+		ConfigOp::Set(BalanceOf::<T>::max_value()),
+		ConfigOp::Set(BalanceOf::<T>::max_value()),
+		ConfigOp::Set(BalanceOf::<T>::max_value())
+	) verify {
+		assert_eq!(CommitmentDeposit::<T>::get(), Some(BalanceOf::<T>::max_value()));
+		assert_eq!(SubNodeDeposit::<T>::get(), Some(BalanceOf::<T>::max_value()));
+		assert_eq!(TierThreeLetters::<T>::get(), BalanceOf::<T>::max_value());
+		assert_eq!(TierFourLetters::<T>::get(), BalanceOf::<T>::max_value());
+		assert_eq!(TierDefault::<T>::get(), BalanceOf::<T>::max_value());
+		assert_eq!(RegistrationFeePerBlock::<T>::get(), BalanceOf::<T>::max_value());
+		assert_eq!(PerByteFee::<T>::get(), BalanceOf::<T>::max_value());
+	}
+
+	register_para {
+		let suffix: BoundedVec<u8, _> = BoundedVec::try_from("1234".as_bytes().to_vec()).unwrap();
+		let para_id = u32::max_value();
+	}:_(RawOrigin::Root, ParaRegistration {
+		id: para_id,
+		suffix: suffix.clone(),
+	})
+	verify {
+		assert_eq!(ParaRegistrations::<T>::get(para_id).unwrap(), suffix.clone());
+		assert_eq!(ReverseParaRegistrationsLookup::<T>::get(suffix.clone()).unwrap(), para_id);
+	}
+
+	deregister_para {
+		let (suffix, para_id) = register_new_para::<T>();
+	}: _(RawOrigin::Root, u32::max_value())
+	verify {
+		assert!(!ParaRegistrations::<T>::contains_key(para_id));
 	}
 
 	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);

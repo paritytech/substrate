@@ -674,7 +674,7 @@ pub mod pallet {
 		/// Can only be called by the Root origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(14)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::register_para())]
 		pub fn register_para(origin: OriginFor<T>, para: ParaRegistration<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			ensure!(
@@ -693,7 +693,7 @@ pub mod pallet {
 		/// Can only be called by the Root origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(15)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::deregister_para())]
 		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
 			let suffix = ParaRegistrations::<T>::get(para_id).ok_or(Error::<T>::ParaNotFound)?;
@@ -717,7 +717,7 @@ pub mod pallet {
 		/// * `registration_fee_per_block` - Set [`RegistrationFeePerBlock`].
 		/// * `per_byte_fee` - Set [`PerByteFee`].
 		#[pallet::call_index(16)]
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_configs())]
 		pub fn set_configs(
 			origin: OriginFor<T>,
 			commitment_deposit: ConfigOp<BalanceOf<T>>,
