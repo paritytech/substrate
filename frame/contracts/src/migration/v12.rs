@@ -253,12 +253,12 @@ where
 	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
 		let len = 100;
 		log::debug!(target: LOG_TARGET, "Taking sample of {} OwnerInfo(s)", len);
-		let sample: Vec<_> = old::OwnerInfoOf::<T>::iter()
+		let sample: Vec<_> = old::OwnerInfoOf::<T, Currency>::iter()
 			.take(len)
 			.map(|(k, v)| {
 				let module = old::CodeStorage::<T>::get(k)
 					.expect("No PrefabWasmModule found for code_hash: {:?}");
-				let info: CodeInfo<T> = CodeInfo {
+				let info: CodeInfo<T, Currency> = CodeInfo {
 					determinism: module.determinism,
 					deposit: v.deposit,
 					refcount: v.refcount,
@@ -270,22 +270,22 @@ where
 
 		let storage: u32 =
 			old::CodeStorage::<T>::iter().map(|(_k, v)| v.encoded_size() as u32).sum();
-		let mut deposit: BalanceOf<T> = Default::default();
-		old::OwnerInfoOf::<T>::iter().for_each(|(_k, v)| deposit += v.deposit);
+		let mut deposit: old::BalanceOf<T, Currency> = Default::default();
+		old::OwnerInfoOf::<T, Currency>::iter().for_each(|(_k, v)| deposit += v.deposit);
 
 		Ok((sample, deposit, storage).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let state = <(Vec<(CodeHash<T>, CodeInfo<T>)>, BalanceOf<T>, u32) as Decode>::decode(
+		let state = <(Vec<(CodeHash<T>, CodeInfo<T, Currency>)>, old::BalanceOf<T, Currency>, u32) as Decode>::decode(
 			&mut &state[..],
 		)
 		.unwrap();
 
 		log::debug!(target: LOG_TARGET, "Validating state of {} Codeinfo(s)", state.0.len());
 		for (hash, old) in state.0 {
-			let info = CodeInfoOf::<T>::get(&hash)
+			let info = CodeInfoOf::<T, Currency>::get(&hash)
 				.expect(format!("CodeInfo for code_hash {:?} not found!", hash).as_str());
 			ensure!(info.determinism == old.determinism, "invalid determinism");
 			ensure!(info.owner == old.owner, "invalid owner");
@@ -301,7 +301,7 @@ where
 		} else {
 			log::debug!(target: LOG_TARGET, "CodeStorage is empty.");
 		}
-		if let Some((k, _)) = old::OwnerInfoOf::<T>::iter().next() {
+		if let Some((k, _)) = old::OwnerInfoOf::<T, Currency>::iter().next() {
 			log::warn!(
 				target: LOG_TARGET,
 				"OwnerInfoOf is still NOT empty, found code_hash: {:?}",
@@ -311,10 +311,10 @@ where
 			log::debug!(target: LOG_TARGET, "OwnerInfoOf is empty.");
 		}
 
-		let mut deposit: BalanceOf<T> = Default::default();
+		let mut deposit: old::BalanceOf<T, Currency> = Default::default();
 		let mut items = 0u32;
 		let mut storage_info = 0u32;
-		CodeInfoOf::<T>::iter().for_each(|(_k, v)| {
+		CodeInfoOf::<T, Currency>::iter().for_each(|(_k, v)| {
 			deposit += v.deposit;
 			items += 1;
 			storage_info += v.encoded_size() as u32;

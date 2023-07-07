@@ -49,6 +49,7 @@ use frame_support::{
 	ensure,
 	traits::{fungible::MutateHold, tokens::Precision::BestEffort},
 };
+use sp_api::HashT;
 use sp_core::Get;
 use sp_runtime::{FixedPointOperand, RuntimeDebug, TokenError};
 use sp_std::prelude::*;
@@ -298,6 +299,14 @@ impl<T: Config> WasmBlob<T> {
 						_ => e,
 					})?;
 
+					<Pallet<T>>::deposit_event(
+						vec![T::Hashing::hash_of(&module.code_info.owner)],
+						Event::StorageDepositHeld {
+							who: module.code_info.owner.clone(),
+							amount: module.code_info.deposit,
+						},
+					);
+
 					module.code_info.refcount = if instantiated { 1 } else { 0 };
 					<PristineCode<T>>::insert(code_hash, module.code);
 					*stored_code_info = Some(module.code_info);
@@ -323,6 +332,15 @@ impl<T: Config> WasmBlob<T> {
 					code_info.deposit,
 					BestEffort,
 				);
+
+				<Pallet<T>>::deposit_event(
+					vec![T::Hashing::hash_of(&code_info.owner)],
+					Event::StorageDepositReleased {
+						who: code_info.owner.clone(),
+						amount: code_info.deposit,
+					},
+				);
+
 				*existing = None;
 				<PristineCode<T>>::remove(&code_hash);
 				<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeRemoved { code_hash });

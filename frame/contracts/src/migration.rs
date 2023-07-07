@@ -33,7 +33,8 @@
 //! ```
 //! use pallet_contracts::migration::{v9, v10, v11};
 //! # pub enum Runtime {};
-//! type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+//! # struct OldCurrency;
+//! type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime, OldCurrency>, v11::Migration<Runtime>);
 //! ```
 //!
 //! ## Notes:

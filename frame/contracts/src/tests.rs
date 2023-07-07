@@ -3506,7 +3506,7 @@ fn upload_code_works() {
 						who: ALICE,
 						amount: deposit_expected,
 					}),
-					topics: vec![hash(&ALICE), hash(&deposit_expected)],
+					topics: vec![hash(&ALICE)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3580,8 +3580,6 @@ fn remove_code_works() {
 		// Drop previous events
 		initialize_block(2);
 
-		let deposit_amount = 173;
-
 		assert_ok!(Contracts::upload_code(
 			RuntimeOrigin::signed(ALICE),
 			wasm,
@@ -3601,7 +3599,7 @@ fn remove_code_works() {
 						who: ALICE,
 						amount: deposit_expected,
 					}),
-					topics: vec![hash(&ALICE), hash(&deposit_amount)],
+					topics: vec![hash(&ALICE)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3616,7 +3614,7 @@ fn remove_code_works() {
 							amount: deposit_expected,
 						}
 					),
-					topics: vec![hash(&ALICE), hash(&deposit_expected)],
+					topics: vec![hash(&ALICE)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3637,8 +3635,6 @@ fn remove_code_wrong_origin() {
 
 		// Drop previous events
 		initialize_block(2);
-
-		let deposit_amount = 173;
 
 		assert_ok!(Contracts::upload_code(
 			RuntimeOrigin::signed(ALICE),
@@ -3663,7 +3659,7 @@ fn remove_code_wrong_origin() {
 						who: ALICE,
 						amount: deposit_expected,
 					}),
-					topics: vec![hash(&ALICE), hash(&deposit_amount)],
+					topics: vec![hash(&ALICE)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3732,8 +3728,6 @@ fn instantiate_with_zero_balance_works() {
 
 		// Drop previous events
 		initialize_block(2);
-
-		let deposit_amount = 173;
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -3818,7 +3812,7 @@ fn instantiate_with_zero_balance_works() {
 						who: ALICE,
 						amount: deposit_expected,
 					}),
-					topics: vec![hash(&ALICE), hash(&deposit_amount)],
+					topics: vec![hash(&ALICE)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3847,8 +3841,6 @@ fn instantiate_with_below_existential_deposit_works() {
 
 		// Drop previous events
 		initialize_block(2);
-
-		let deposit_amount = 173;
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -3941,7 +3933,7 @@ fn instantiate_with_below_existential_deposit_works() {
 						who: ALICE,
 						amount: deposit_expected,
 					}),
-					topics: vec![hash(&ALICE), hash(&deposit_amount)],
+					topics: vec![hash(&ALICE)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
