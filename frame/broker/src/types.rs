@@ -1,23 +1,23 @@
 use codec::{Encode, Decode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
-use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign};
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 // TODO: Use BitArr instead; for this, we'll need to ensure Codec is impl'ed for `BitArr`.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CorePart([u8; 10]);
 impl CorePart {
-	pub fn all_unset() -> Self {
-		return Self([0u8; 10])
+	pub fn void() -> Self {
+		Self([0u8; 10])
 	}
-	pub fn all_set() -> Self {
-		return Self([255u8; 10])
+	pub fn complete() -> Self {
+		Self([255u8; 10])
+	}
+	pub fn is_void(&self) -> bool {
+		&self.0 == &[0u8; 10]
 	}
 	pub fn is_complete(&self) -> bool {
-		return &self.0 == &[255u8; 10]
-	}
-	pub fn is_empty(&self) -> bool {
-		return &self.0 == &[0u8; 10]
+		&self.0 == &[255u8; 10]
 	}
 	pub fn count_zeros(&self) -> u32 {
 		self.0.iter().map(|i| i.count_zeros()).sum()
@@ -75,5 +75,15 @@ impl BitXorAssign<Self> for CorePart {
 		for i in 0..10 {
 			self.0[i].bitxor_assign(rhs.0[i]);
 		}
+	}
+}
+impl Not for CorePart {
+	type Output = Self;
+	fn not(self) -> Self {
+		let mut result = [0u8; 10];
+		for i in 0..10 {
+			result[i] = self.0[i].not();
+		}
+		Self(result)
 	}
 }

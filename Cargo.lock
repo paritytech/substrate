@@ -6417,6 +6417,7 @@ dependencies = [
  "frame-system 4.0.0-dev (git+https://github.com/paritytech/substrate)",
  "parity-scale-codec",
  "scale-info",
+ "sp-arithmetic 16.0.0 (git+https://github.com/paritytech/substrate)",
  "sp-core 21.0.0 (git+https://github.com/paritytech/substrate)",
  "sp-io 23.0.0 (git+https://github.com/paritytech/substrate)",
  "sp-runtime 24.0.0 (git+https://github.com/paritytech/substrate)",
