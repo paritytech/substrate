@@ -161,6 +161,8 @@ pub struct SpendStatus<AssetKind, AssetBalance, Beneficiary, BlockNumber, Paymen
 	beneficiary: Beneficiary,
 	/// The block number from which the spend can be claimed.
 	valid_from: BlockNumber,
+	/// The block number by which the spend has to be claimed.
+	expire_at: BlockNumber,
 	/// The status of the payout/claim.
 	status: PaymentState<PaymentId>,
 }
@@ -382,6 +384,7 @@ pub mod pallet {
 			amount: AssetBalanceOf<T, I>,
 			beneficiary: T::Beneficiary,
 			valid_from: T::BlockNumber,
+			expire_at: T::BlockNumber,
 		},
 		/// An approved spend was voided.
 		AssetSpendVoided { index: SpendIndex },
@@ -671,6 +674,7 @@ pub mod pallet {
 
 			let index = SpendCount::<T, I>::get();
 			let valid_from = valid_from.unwrap_or(frame_system::Pallet::<T>::block_number());
+			let expire_at = valid_from.saturating_add(T::PayoutPeriod::get());
 			Spends::<T, I>::insert(
 				index,
 				SpendStatus {
@@ -678,6 +682,7 @@ pub mod pallet {
 					amount,
 					beneficiary: beneficiary.clone(),
 					valid_from,
+					expire_at,
 					status: PaymentState::Pending,
 				},
 			);
@@ -689,6 +694,7 @@ pub mod pallet {
 				amount,
 				beneficiary,
 				valid_from,
+				expire_at,
 			});
 			Ok(())
 		}
@@ -708,10 +714,7 @@ pub mod pallet {
 			let mut spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(now >= spend.valid_from, Error::<T, I>::EarlyPayout);
-			ensure!(
-				spend.valid_from.saturating_add(T::PayoutPeriod::get()) > now,
-				Error::<T, I>::SpendExpired
-			);
+			ensure!(spend.expire_at > now, Error::<T, I>::SpendExpired);
 			ensure!(
 				matches!(spend.status, PaymentState::Pending | PaymentState::Failed),
 				Error::<T, I>::AlreadyAttempted

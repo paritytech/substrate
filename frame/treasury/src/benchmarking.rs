@@ -223,9 +223,17 @@ mod benchmarks {
 		_(origin as T::RuntimeOrigin, asset_kind.clone(), amount, beneficiary_lookup, None);
 
 		let valid_from = frame_system::Pallet::<T>::block_number();
+		let expire_at = valid_from.saturating_add(T::PayoutPeriod::get());
 		assert_last_event::<T, I>(
-			Event::AssetSpendApproved { index: 0, asset_kind, amount, beneficiary, valid_from }
-				.into(),
+			Event::AssetSpendApproved {
+				index: 0,
+				asset_kind,
+				amount,
+				beneficiary,
+				valid_from,
+				expire_at,
+			}
+			.into(),
 		);
 		Ok(())
 	}

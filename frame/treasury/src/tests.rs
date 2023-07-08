@@ -671,6 +671,7 @@ fn spend_works() {
 				amount: 2,
 				beneficiary: 6,
 				valid_from: 1,
+				expire_at: 6,
 				status: PaymentState::Pending,
 			}
 		);
@@ -681,6 +682,7 @@ fn spend_works() {
 				amount: 2,
 				beneficiary: 6,
 				valid_from: 1,
+				expire_at: 6,
 			}
 			.into(),
 		);
