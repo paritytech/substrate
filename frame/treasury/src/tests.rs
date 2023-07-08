@@ -217,6 +217,7 @@ impl Config for Test {
 	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
 	type Paymaster = TestPay;
 	type BalanceConverter = MulBy<ConstU64<2>>;
+	type VoidOrigin = frame_system::EnsureRoot<u128>;
 	type PayoutPeriod = SpendPayoutPeriod;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
@@ -596,12 +597,14 @@ fn spending_in_batch_respects_max_total() {
 				RuntimeCall::from(TreasuryCall::spend {
 					asset_kind: 1,
 					amount: 1,
-					beneficiary: 100
+					beneficiary: 100,
+					valid_from: None,
 				}),
 				RuntimeCall::from(TreasuryCall::spend {
 					asset_kind: 1,
 					amount: 1,
-					beneficiary: 101
+					beneficiary: 101,
+					valid_from: None,
 				})
 			]
 		})
@@ -613,12 +616,14 @@ fn spending_in_batch_respects_max_total() {
 					RuntimeCall::from(TreasuryCall::spend {
 						asset_kind: 1,
 						amount: 2,
-						beneficiary: 100
+						beneficiary: 100,
+						valid_from: None,
 					}),
 					RuntimeCall::from(TreasuryCall::spend {
 						asset_kind: 1,
 						amount: 2,
-						beneficiary: 101
+						beneficiary: 101,
+						valid_from: None,
 					})
 				]
 			})
@@ -631,20 +636,20 @@ fn spending_in_batch_respects_max_total() {
 #[test]
 fn spend_origin_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 1, 6));
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 1, 6, None));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(10), 1, 3, 6),
+			Treasury::spend(RuntimeOrigin::signed(10), 1, 3, 6, None),
 			Error::<Test, _>::InsufficientPermission
 		);
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(11), 1, 5, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(11), 1, 5, 6, None));
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(11), 1, 6, 6),
+			Treasury::spend(RuntimeOrigin::signed(11), 1, 6, 6, None),
 			Error::<Test, _>::InsufficientPermission
 		);
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(12), 1, 10, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(12), 1, 10, 6, None));
 		assert_noop!(
-			Treasury::spend(RuntimeOrigin::signed(12), 1, 11, 6),
+			Treasury::spend(RuntimeOrigin::signed(12), 1, 11, 6, None),
 			Error::<Test, _>::InsufficientPermission
 		);
 
@@ -657,7 +662,7 @@ fn spend_origin_works() {
 fn spend_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
 
 		assert_eq!(SpendCount::<Test, _>::get(), 1);
 		assert_eq!(
@@ -666,7 +671,7 @@ fn spend_works() {
 				asset_kind: 1,
 				amount: 2,
 				beneficiary: 6,
-				expire_at: 6,
+				valid_from: 1,
 				status: PaymentState::Pending,
 			}
 		);
@@ -676,7 +681,7 @@ fn spend_works() {
 				asset_kind: 1,
 				amount: 2,
 				beneficiary: 6,
-				expire_at: 6,
+				valid_from: 1,
 			}
 			.into(),
 		);
@@ -687,7 +692,7 @@ fn spend_works() {
 fn spend_expires() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
 		System::set_block_number(6);
 		assert_noop!(Treasury::payout(RuntimeOrigin::signed(1), 0), Error::<Test, _>::SpendExpired);
 	});
@@ -697,7 +702,7 @@ fn spend_expires() {
 fn payout_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
 		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 0));
 		assert_eq!(paid(6, 1), 2);
 		assert_eq!(SpendCount::<Test, _>::get(), 1);
@@ -720,7 +725,7 @@ fn payout_works() {
 fn payout_retry_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6));
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
 		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 0));
 		assert_eq!(paid(6, 1), 2);
 		let spend = Spends::<Test, _>::get(0).unwrap();
@@ -743,5 +748,43 @@ fn payout_retry_works() {
 		// the payout can be retried now
 		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 0));
 		assert_eq!(paid(6, 1), 2);
+	});
+}
+
+#[test]
+fn spend_valid_from_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(<Test as Config>::PayoutPeriod::get(), 5);
+		System::set_block_number(1);
+		// spend valid from block `2`.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, Some(2)));
+		assert_noop!(Treasury::payout(RuntimeOrigin::signed(1), 0), Error::<Test, _>::EarlyPayout);
+		System::set_block_number(2);
+		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 0));
+
+		System::set_block_number(5);
+		// spend valid from block `0`.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, Some(0)));
+		// spend expired.
+		assert_noop!(Treasury::payout(RuntimeOrigin::signed(1), 1), Error::<Test, _>::SpendExpired);
+	});
+}
+
+#[test]
+fn void_spend_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		// spend cannot be voided if already attempted.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, Some(1)));
+		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 0));
+		assert_noop!(
+			Treasury::void_spend(RuntimeOrigin::root(), 0),
+			Error::<Test, _>::AlreadyAttempted
+		);
+
+		// void spend.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, Some(10)));
+		assert_ok!(Treasury::void_spend(RuntimeOrigin::root(), 1));
+		assert_eq!(Spends::<Test, _>::get(1), None);
 	});
 }

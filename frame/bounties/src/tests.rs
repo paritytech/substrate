@@ -141,6 +141,7 @@ impl pallet_treasury::Config for Test {
 	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
 	type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
 	type BalanceConverter = UnityAssetBalanceConversion;
+	type VoidOrigin = frame_system::EnsureRoot<u128>;
 	type PayoutPeriod = ConstU64<10>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
@@ -168,6 +169,7 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
 	type Paymaster = PayFromAccount<Balances, TreasuryAccount1>;
 	type BalanceConverter = UnityAssetBalanceConversion;
+	type VoidOrigin = frame_system::EnsureRoot<u128>;
 	type PayoutPeriod = ConstU64<10>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();

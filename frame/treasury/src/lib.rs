@@ -159,8 +159,8 @@ pub struct SpendStatus<AssetKind, AssetBalance, Beneficiary, BlockNumber, Paymen
 	amount: AssetBalance,
 	/// The beneficiary of the spend.
 	beneficiary: Beneficiary,
-	/// The block number by which the spend has to be claimed.
-	expire_at: BlockNumber,
+	/// The block number from which the spend can be claimed.
+	valid_from: BlockNumber,
 	/// The status of the payout/claim.
 	status: PaymentState<PaymentId>,
 }
@@ -264,6 +264,9 @@ pub mod pallet {
 			Self::AssetKind,
 			BalanceOf<Self, I>,
 		>;
+
+		/// Origin from which an approved spend can be voided.
+		type VoidOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The period during which an approved treasury spend has to be claimed.
 		#[pallet::constant]
@@ -381,8 +384,10 @@ pub mod pallet {
 			asset_kind: T::AssetKind,
 			amount: AssetBalanceOf<T, I>,
 			beneficiary: T::Beneficiary,
-			expire_at: T::BlockNumber,
+			valid_from: T::BlockNumber,
 		},
+		/// An approved spend was voided.
+		AssetSpendVoided { index: SpendIndex },
 		/// A payment happened.
 		Paid { index: SpendIndex, payment_id: <T::Paymaster as Pay>::Id },
 		/// A payment succeed, the spend removed from the storage.
@@ -409,6 +414,8 @@ pub mod pallet {
 		FailedToConvertBalance,
 		/// The spend has expired and cannot be claimed.
 		SpendExpired,
+		/// The spend is not yet eligible for payout.
+		EarlyPayout,
 		/// The payment has already been attempted.
 		AlreadyAttempted,
 		/// There was some issue with the mechanism of payment.
@@ -628,6 +635,8 @@ pub mod pallet {
 		/// - `asset_kind`: An indicator of the specific asset class to be spent.
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The beneficiary of the spend.
+		/// - `valid_from`: The block number from which the spend can be claimed. If `None`, the
+		///   spend can be claimed immediately after approval.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
@@ -635,6 +644,7 @@ pub mod pallet {
 			asset_kind: T::AssetKind,
 			#[pallet::compact] amount: AssetBalanceOf<T, I>,
 			beneficiary: BeneficiaryLookupOf<T, I>,
+			valid_from: Option<T::BlockNumber>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 			let beneficiary = T::BeneficiaryLookup::lookup(beneficiary)?;
@@ -663,15 +673,14 @@ pub mod pallet {
 			.unwrap_or(Ok(()))?;
 
 			let index = SpendCount::<T, I>::get();
-			let expire_at =
-				frame_system::Pallet::<T>::block_number().saturating_add(T::PayoutPeriod::get());
+			let valid_from = valid_from.unwrap_or(frame_system::Pallet::<T>::block_number());
 			Spends::<T, I>::insert(
 				index,
 				SpendStatus {
 					asset_kind: asset_kind.clone(),
 					amount,
 					beneficiary: beneficiary.clone(),
-					expire_at,
+					valid_from,
 					status: PaymentState::Pending,
 				},
 			);
@@ -682,7 +691,7 @@ pub mod pallet {
 				asset_kind,
 				amount,
 				beneficiary,
-				expire_at,
+				valid_from,
 			});
 			Ok(())
 		}
@@ -700,8 +709,10 @@ pub mod pallet {
 		pub fn payout(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
 			ensure_signed(origin)?;
 			let mut spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
+			let now = frame_system::Pallet::<T>::block_number();
+			ensure!(now >= spend.valid_from, Error::<T, I>::EarlyPayout);
 			ensure!(
-				spend.expire_at > frame_system::Pallet::<T>::block_number(),
+				spend.valid_from.saturating_add(T::PayoutPeriod::get()) > now,
 				Error::<T, I>::SpendExpired
 			);
 			ensure!(
@@ -749,6 +760,25 @@ pub mod pallet {
 				},
 				_ => return Err(Error::<T, I>::Inconclusive.into()),
 			}
+			Ok(())
+		}
+
+		/// Void previously approved spend.
+		///
+		/// - `origin`: Must be `T::VoidOrigin`.
+		/// - `index`: The spend index.
+		#[pallet::call_index(8)]
+		#[pallet::weight(T::WeightInfo::void_spend())]
+		pub fn void_spend(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
+			T::VoidOrigin::ensure_origin(origin)?;
+			let spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
+			ensure!(
+				matches!(spend.status, PaymentState::Pending | PaymentState::Failed),
+				Error::<T, I>::AlreadyAttempted
+			);
+
+			Spends::<T, I>::remove(index);
+			Self::deposit_event(Event::<T, I>::AssetSpendVoided { index });
 			Ok(())
 		}
 	}

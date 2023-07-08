@@ -220,12 +220,11 @@ mod benchmarks {
 		T::BalanceConverter::ensure_successful(asset_kind.clone());
 
 		#[extrinsic_call]
-		_(origin as T::RuntimeOrigin, asset_kind.clone(), amount, beneficiary_lookup);
+		_(origin as T::RuntimeOrigin, asset_kind.clone(), amount, beneficiary_lookup, None);
 
-		let expire_at =
-			frame_system::Pallet::<T>::block_number().saturating_add(T::PayoutPeriod::get());
+		let valid_from = frame_system::Pallet::<T>::block_number();
 		assert_last_event::<T, I>(
-			Event::AssetSpendApproved { index: 0, asset_kind, amount, beneficiary, expire_at }
+			Event::AssetSpendApproved { index: 0, asset_kind, amount, beneficiary, valid_from }
 				.into(),
 		);
 		Ok(())
@@ -233,12 +232,11 @@ mod benchmarks {
 
 	#[benchmark]
 	fn payout() -> Result<(), BenchmarkError> {
-		let origin =
-			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let origin = T::SpendOrigin::try_successful_origin().map_err(|_| "No origin")?;
 		let (asset_kind, amount, beneficiary, beneficiary_lookup) =
 			create_spend_arguments::<T, _>(SEED);
 		T::BalanceConverter::ensure_successful(asset_kind.clone());
-		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup)?;
+		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup, None)?;
 		T::Paymaster::ensure_successful(&beneficiary, asset_kind, amount);
 		let caller: T::AccountId = account("caller", 0, SEED);
 
@@ -259,12 +257,11 @@ mod benchmarks {
 
 	#[benchmark]
 	fn check_status() -> Result<(), BenchmarkError> {
-		let origin =
-			T::SpendOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+		let origin = T::SpendOrigin::try_successful_origin().map_err(|_| "No origin")?;
 		let (asset_kind, amount, beneficiary, beneficiary_lookup) =
 			create_spend_arguments::<T, _>(SEED);
 		T::BalanceConverter::ensure_successful(asset_kind.clone());
-		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup)?;
+		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup, None)?;
 		T::Paymaster::ensure_successful(&beneficiary, asset_kind, amount);
 		let caller: T::AccountId = account("caller", 0, SEED);
 		Treasury::<T, _>::payout(RawOrigin::Signed(caller.clone()).into(), 0u32)?;
@@ -281,6 +278,23 @@ mod benchmarks {
 		if let Some(s) = Spends::<T, I>::get(0) {
 			assert!(!matches!(s.status, PaymentState::Attempted { .. }));
 		}
+		Ok(())
+	}
+
+	#[benchmark]
+	fn void_spend() -> Result<(), BenchmarkError> {
+		let origin = T::SpendOrigin::try_successful_origin().map_err(|_| "No origin")?;
+		let (asset_kind, amount, _, beneficiary_lookup) = create_spend_arguments::<T, _>(SEED);
+		T::BalanceConverter::ensure_successful(asset_kind.clone());
+		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup, None)?;
+		assert!(Spends::<T, I>::get(0).is_some());
+		let origin =
+			T::VoidOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, 0u32);
+
+		assert!(Spends::<T, I>::get(0).is_none());
 		Ok(())
 	}
 
