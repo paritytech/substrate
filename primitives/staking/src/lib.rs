@@ -83,7 +83,7 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 
 	/// Fired when someone sets their intention to nominate.
 	///
-	/// This should never be fired for for existing nominators.
+	/// This should never be fired for existing nominators.
 	fn on_nominator_add(_who: &AccountId) {}
 
 	/// Fired when an existing nominator updates their nominations.
