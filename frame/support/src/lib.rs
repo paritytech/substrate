@@ -1525,6 +1525,7 @@ pub mod tests {
 #[doc(hidden)]
 pub mod _private {
 	pub use sp_inherents;
+
 }
 
 /// Prelude to be used for pallet testing, for ease of use.
