@@ -113,7 +113,13 @@ pub fn expand_outer_inherent(
 								"Fatal error already reported, unexpected considering there is \
 								only one fatal error",
 							),
-						Err(Error::DecodingFailed(_, _)) | Err(Error::Application(_)) =>
+						Err(Error::DecodingFailed(_, _)) =>
+							log::error!(
+								target: LOG_TARGET,
+								"Unexpected error from `put_error` operation",
+							),
+						#[cfg(feature = "std")]
+						Err(Error::Application(_)) =>
 							log::error!(
 								target: LOG_TARGET,
 								"Unexpected error from `put_error` operation",
