@@ -17,15 +17,13 @@
 
 #![cfg(test)]
 
-use frame_support::{
-	parameter_types,
-	traits::{ConstU16, ConstU64, fungibles, fungible::ItemOf, tokens::{self, Preservation, Fortitude, Provenance, DepositConsequence, WithdrawConsequence}}
-};
-use sp_core::{H256, Get, ConstU32, TypedGet};
+use frame_support::traits::fungible::ItemOf;
+use sp_core::{H256, Get, ConstU64, ConstU16};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use crate::test_fungibles::TestFungibles;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -67,97 +65,6 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ConstU16<42>;
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
-}
-
-pub struct TestFungibles<Instance, AccountId, AssetId, MinimumBalance>(core::marker::PhantomData<(Instance, AccountId, AssetId, MinimumBalance)>);
-
-use std::collections::HashMap;
-
-parameter_types! {
-	static TestAssetOf: HashMap<(u32, Vec<u8>), Vec<u8>> = Default::default();
-	static TestBalanceOf: HashMap<(u32, Vec<u8>, Vec<u8>), Vec<u8>> = Default::default();
-}
-
-use codec::{Encode, Decode};
-impl<
-	Instance: Get<u32>,
-	AccountId: Encode,
-	AssetId: tokens::AssetId + Copy,
-	MinimumBalance: TypedGet,
-> fungibles::Inspect<AccountId> for TestFungibles<Instance, AccountId, AssetId, MinimumBalance>
-where
-	MinimumBalance::Type: tokens::Balance,
-
-{
-	type AssetId = AssetId;
-	type Balance = MinimumBalance::Type;
-
-	fn total_issuance(asset: Self::AssetId) -> Self::Balance {
-		TestAssetOf::get().get(&(Instance::get(), asset.encode()))
-		.and_then(|data| Decode::decode(&mut &data[..]).ok())
-		.unwrap_or_default()
-	}
-
-	fn active_issuance(asset: Self::AssetId) -> Self::Balance {
-		Self::total_issuance(asset)
-	}
-
-	/// The minimum balance any single account may have.
-	fn minimum_balance(asset: Self::AssetId) -> Self::Balance {
-		MinimumBalance::get()
-	}
-
-	fn total_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance {
-		TestBalanceOf::get().get(&(Instance::get(), asset.encode(), who.encode()))
-		.and_then(|data| Decode::decode(&mut &data[..]).ok())
-		.unwrap_or_default()
-	}
-
-	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance {
-		Self::total_balance(asset, who)
-	}
-
-	fn reducible_balance(
-		asset: Self::AssetId,
-		who: &AccountId,
-		_preservation: Preservation,
-		_force: Fortitude,
-	) -> Self::Balance {
-		Self::total_balance(asset, who)
-	}
-
-	fn can_deposit(
-		asset: Self::AssetId,
-		who: &AccountId,
-		amount: Self::Balance,
-		_provenance: Provenance,
-	) -> DepositConsequence {
-		if !Self::asset_exists(asset) {
-			return DepositConsequence::UnknownAsset;
-		}
-		if amount + Self::balance(asset, who) < Self::minimum_balance(asset) {
-			return DepositConsequence::BelowMinimum;
-		}
-		DepositConsequence::Success
-	}
-
-	fn can_withdraw(
-		asset: Self::AssetId,
-		who: &AccountId,
-		amount: Self::Balance,
-	) -> WithdrawConsequence<Self::Balance> {
-		if Self::reducible_balance(asset, who, Preservation::Expendable, Fortitude::Polite) < amount {
-			return WithdrawConsequence::BalanceLow;
-		}
-		if Self::total_balance(asset, who) < Self::minimum_balance(asset) + amount {
-			return WithdrawConsequence::WouldDie;
-		}
-		WithdrawConsequence::Success
-	}
-
-	fn asset_exists(asset: Self::AssetId) -> bool {
-		TestAssetOf::get().contains_key(&(Instance::get(), asset.encode()))
-	}
 }
 
 impl crate::Config for Test {

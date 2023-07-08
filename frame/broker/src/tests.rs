@@ -22,10 +22,7 @@ use frame_support::{assert_noop, assert_ok};
 
 #[test]
 fn bitvec_size() {
-	use bitvec::BitArr;
-	type CoreParts = BitArr!(for 80, in u8);
 	new_test_ext().execute_with(|| {
-		println!("{}", core::mem::size_of::<CoreParts>());
-		panic!();
+		
 	});
 }

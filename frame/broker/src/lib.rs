@@ -23,6 +23,8 @@ pub use pallet::*;
 mod mock;
 mod tests;
 mod benchmarking;
+mod test_fungibles;
+mod types;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -30,10 +32,10 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use bitvec::BitArr;
 	use frame_support::{pallet_prelude::*, traits::fungible::{self, Inspect, Mutate, MutateHold}};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::AccountId32;
+	use types::CorePart;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -52,8 +54,6 @@ pub mod pallet {
 
 	pub type Timeslice = u32;
 	pub type CoreIndex = u16;
-	// TODO: Use BitArr instead; for this, we'll need to ensure Codec is impl'ed for `BitArr`.
-	pub type CorePart = [u8; 10];
 	pub type RelayAccountId = AccountId32;
 	pub type Balance = u128;
 	pub type ParaId = u32;
@@ -149,7 +149,6 @@ pub mod pallet {
 		}
 	}
 
-	// Errors inform users that something went wrong.
 	#[pallet::error]
 	pub enum Error<T> {
 		UnknownRegion,
@@ -167,7 +166,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Logic for call `Self::change_value`.
 		pub(crate) fn do_transfer(region_id: RegionId, maybe_check_owner: Option<T::AccountId>, new_owner: T::AccountId) -> Result<(), Error<T>> {
 			let mut region = Regions::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
 
@@ -180,6 +178,18 @@ pub mod pallet {
 			Regions::<T>::insert(&region_id, &region);
 			Self::deposit_event(Event::Transferred { region_id, old_owner, owner: region.owner });
 
+			Ok(())
+		}
+
+		pub(crate) fn issue(
+			core: CoreIndex,
+			begin: Timeslice,
+			length: Timeslice,
+			owner: T::AccountId,
+		) -> Result<(), Error<T>> {
+			let id = RegionId { begin, core, part: CorePart::all_set() };
+			let record = RegionRecord { end: begin + length, owner };
+			Regions::<T>::insert(id, record);
 			Ok(())
 		}
 	}
