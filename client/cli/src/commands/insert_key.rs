@@ -125,10 +125,6 @@ mod tests {
 			"test".into()
 		}
 
-		fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static sp_version::RuntimeVersion {
-			unimplemented!("Not required in tests")
-		}
-
 		fn load_spec(&self, _: &str) -> std::result::Result<Box<dyn ChainSpec>, String> {
 			Ok(Box::new(GenericChainSpec::from_genesis(
 				"test",

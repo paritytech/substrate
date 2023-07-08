@@ -1,0 +1,46 @@
+[package]
+name = "pallet-asset-conversion-tx-payment"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Pallet to manage transaction payments in assets by converting them to native assets."
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+# Substrate dependencies
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = ".." }
+codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+
+[dev-dependencies]
+sp-core = { version = "21.0.0", default-features = false, path = "../../../primitives/core" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../../primitives/io" }
+sp-storage = { version = "13.0.0", default-features = false, path = "../../../primitives/storage" }
+pallet-assets = { version = "4.0.0-dev", path = "../../assets" }
+pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
+pallet-asset-conversion = { version = "4.0.0-dev", path = "../../asset-conversion" }
+
+[features]
+default = ["std"]
+std = [
+	"scale-info/std",
+	"codec/std",
+	"sp-std/std",
+	"sp-runtime/std",
+	"frame-support/std",
+	"frame-system/std",
+	"sp-io/std",
+	"sp-core/std",
+	"pallet-transaction-payment/std",
+]
+try-runtime = ["frame-support/try-runtime"]

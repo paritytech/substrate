@@ -23,7 +23,6 @@ sp-application-crypto = { version = "23.0.0", default-features = false, path = "
 sp-runtime-interface = { version = "17.0.0", default-features = false, path = "../runtime-interface" }
 sp-externalities = { version = "0.19.0", default-features = false, path = "../externalities" }
 thiserror = { version = "1.0", optional = true }
-log = { version = "0.4.17", optional = true }
 
 [features]
 default = ["std"]
@@ -37,7 +36,6 @@ std = [
 	"sp-api/std",
 	"sp-application-crypto/std",
 	"thiserror",
-	"log",
 ]
 serde = [
         "scale-info/serde",
