@@ -292,6 +292,27 @@ impl Default for CheckInherentsResult {
 	}
 }
 
+/// Errors that occur in context of [CheckInherentsResult::put_error].
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+#[allow(missing_docs)]
+pub enum CheckInherentsResultPutErrorError {
+	#[cfg_attr(
+		feature = "std",
+		error("Inherent data already exists for identifier: {}", "String::from_utf8_lossy(_0)")
+	)]
+	InherentDataExists(InherentIdentifier),
+	#[cfg_attr(
+		feature = "std",
+		error("Failed to decode inherent data for identifier: {}", "String::from_utf8_lossy(_1)")
+	)]
+	#[cfg_attr(
+		feature = "std",
+		error("There was already a fatal error reported and no other errors are allowed")
+	)]
+	FatalErrorReported,
+}
+
 impl CheckInherentsResult {
 	/// Create a new instance.
 	pub fn new() -> Self {
@@ -310,10 +331,10 @@ impl CheckInherentsResult {
 		&mut self,
 		identifier: InherentIdentifier,
 		error: &E,
-	) -> Result<(), Error> {
+	) -> Result<(), CheckInherentsResultPutErrorError> {
 		// Don't accept any other error
 		if self.fatal_error {
-			return Err(Error::FatalErrorReported)
+			return Err(CheckInherentsResultPutErrorError::FatalErrorReported)
 		}
 
 		if error.is_fatal_error() {
