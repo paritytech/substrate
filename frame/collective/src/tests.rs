@@ -21,7 +21,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::Pays,
 	parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
+	traits::{ConstU32, ConstU64, StorageVersion},
 };
 use frame_system::{EnsureRoot, EventRecord, Phase};
 use sp_core::{bounded_vec, H256};
@@ -255,14 +255,19 @@ fn set_members_with_prime_works() {
 		let members = vec![1, 2, 3];
 		assert_ok!(Collective::set_members(
 			RuntimeOrigin::root(),
-			members.clone(),
+			members.clone().try_into().unwrap(),
 			Some(3),
 			MaxMembers::get()
 		));
 		assert_eq!(Collective::members(), members.clone());
 		assert_eq!(Collective::prime(), Some(3));
 		assert_noop!(
-			Collective::set_members(RuntimeOrigin::root(), members, Some(4), MaxMembers::get()),
+			Collective::set_members(
+				RuntimeOrigin::root(),
+				members.try_into().unwrap(),
+				Some(4),
+				MaxMembers::get()
+			),
 			Error::<Test, Instance1>::PrimeAccountNotMember
 		);
 	});

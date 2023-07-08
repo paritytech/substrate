@@ -58,7 +58,7 @@ use frame_support::{
 		InitializeMembers, QueryPreimage, StorageVersion, StorePreimage,
 	},
 	weights::Weight,
-	BoundedVec, CloneNoBound, EqNoBound, Parameter, PartialEqNoBound,
+	BoundedVec, CloneNoBound, EqNoBound, PalletError, Parameter, PartialEqNoBound,
 };
 
 #[cfg(any(feature = "try-runtime", test))]
@@ -351,6 +351,17 @@ pub mod pallet {
 		WrongProposalLength,
 		/// Prime account is not a member
 		PrimeAccountNotMember,
+		/// The bound for votes was exceeded.
+		TooManyVotes,
+		/// Some error occurred that should never happen. This should be reported to the
+		/// maintainers.
+		Defensive(DefensiveError),
+	}
+
+	#[derive(Encode, Decode, PartialEq, TypeInfo, PalletError, RuntimeDebug)]
+	pub enum DefensiveError {
+		/// Preimage length cannot be deduced from type.
+		PreimageLen,
 	}
 
 	#[pallet::hooks]
@@ -660,6 +671,7 @@ fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// The active proposals.
+	#[cfg(any(feature = "std", feature = "runtime-benchmarks"))]
 	pub fn proposals() -> BoundedVec<Bounded<<T as Config<I>>::Proposal>, T::MaxProposals> {
 		Voting::<T, I>::iter()
 			.map(|(k, _v)| k)
@@ -735,13 +747,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		<ProposalCount<T, I>>::mutate(|i| *i += 1);
 		let votes = {
 			let end = frame_system::Pallet::<T>::block_number() + T::MotionDuration::get();
-			Votes {
-				index,
-				threshold,
-				ayes: vec![].try_into().expect("empty vec is always bounded; qed"),
-				nays: vec![].try_into().expect("empty vec is always bounded; qed"),
-				end,
-			}
+			Votes { index, threshold, ayes: Default::default(), nays: Default::default(), end }
 		};
 		<Voting<T, I>>::insert(&proposal_bounded, votes);
 
@@ -773,10 +779,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if approve {
 			if position_yes.is_none() {
-				voting
-					.ayes
-					.try_push(who.clone())
-					.expect("Proposal voting ayes can't overflow; qed");
+				voting.ayes.try_push(who.clone()).map_err(|_| Error::<T, I>::TooManyVotes)?;
 			} else {
 				return Err(Error::<T, I>::DuplicateVote.into())
 			}
@@ -785,10 +788,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		} else {
 			if position_no.is_none() {
-				voting
-					.nays
-					.try_push(who.clone())
-					.expect("Proposal voting nays can't overflow; qed");
+				voting.nays.try_push(who.clone()).map_err(|_| Error::<T, I>::TooManyVotes)?;
 			} else {
 				return Err(Error::<T, I>::DuplicateVote.into())
 			}
@@ -923,30 +923,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// read the length of the proposal by using peek
 		let (proposal, proposal_len) =
 			T::Preimages::peek(&proposal_bounded).map_err(|_| Error::<T, I>::ProposalMissing)?;
-		let proposal_len = proposal_len.unwrap_or_else(|| match proposal_bounded {
-			Bounded::Inline(data) => data.len() as u32,
-			_ => panic!("preimage should be inline, or len already given by peek; qed"),
-		});
+		let proposal_len = match proposal_len {
+			Some(len) => Ok(len),
+			None => match proposal_bounded {
+				Bounded::Inline(data) => Ok(data.len() as u32),
+				_ => Err(Error::<T, I>::Defensive(DefensiveError::PreimageLen)),
+			},
+		}?;
 		ensure!(proposal_len <= length_bound, Error::<T, I>::WrongProposalLength);
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		ensure!(proposal_weight.all_lte(weight_bound), Error::<T, I>::WrongProposalWeight);
 		Ok((proposal, proposal_len as usize))
 	}
 
-	/// Weight:
-	/// If `approved`:
-	/// - the weight of `proposal` preimage.
-	/// - two events deposited.
-	/// - two removals, one mutation.
-	/// - computation and i/o `O(P + L)` where:
-	///   - `P` is number of active proposals,
-	///   - `L` is the encoded length of `proposal` preimage.
-	///
-	/// If not `approved`:
-	/// - one event deposited.
-	/// Two removals, one mutation.
-	/// Computation and i/o `O(P)` where:
-	/// - `P` is number of active proposals
 	fn do_approve_proposal(
 		seats: MemberCount,
 		yes_votes: MemberCount,
@@ -1082,28 +1071,33 @@ impl<T: Config<I>, I: 'static> ChangeMembers<T::AccountId> for Pallet<T, I> {
 		// remove accounts from all current voting in motions.
 		let mut outgoing = outgoing.to_vec();
 		outgoing.sort();
-		for h in Self::proposals().into_iter() {
-			<Voting<T, I>>::mutate(h, |v| {
-				if let Some(mut votes) = v.take() {
-					votes.ayes = votes
-						.ayes
-						.into_iter()
-						.filter(|i| outgoing.binary_search(i).is_err())
-						.collect::<Vec<T::AccountId>>()
-						.try_into()
-						.expect("The filtered elements should be at most equal to the original length; qed");
-					votes.nays = votes
-						.nays
-						.into_iter()
-						.filter(|i| outgoing.binary_search(i).is_err())
-						.collect::<Vec<T::AccountId>>()
-						.try_into()
-						.expect("The filtered elements should be at most equal to the original length; qed");
-
-					*v = Some(votes);
-				}
-			});
-		}
+		<Voting<T, I>>::translate_values(
+			|mut votes: Votes<
+				T::AccountId,
+				frame_system::pallet_prelude::BlockNumberFor<T>,
+				T::MaxMembers,
+			>| {
+				votes.ayes = votes
+					.ayes
+					.into_iter()
+					.filter(|i| outgoing.binary_search(i).is_err())
+					.collect::<Vec<T::AccountId>>()
+					.try_into()
+					.expect(
+						"The filtered elements should be at most equal to the original length; qed",
+					);
+				votes.nays = votes
+					.nays
+					.into_iter()
+					.filter(|i| outgoing.binary_search(i).is_err())
+					.collect::<Vec<T::AccountId>>()
+					.try_into()
+					.expect(
+						"The filtered elements should be at most equal to the original length; qed",
+					);
+				Some(votes)
+			},
+		);
 		Members::<T, I>::put(
 			BoundedVec::try_from(new.to_vec()).expect("Members bound was already checked; qed"),
 		);

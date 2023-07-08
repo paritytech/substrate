@@ -55,7 +55,6 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"pallet-identity/std",
-	"pallet-preimage/std",
 ]
 runtime-benchmarks = [
 	"array-bytes",

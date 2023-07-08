@@ -27,7 +27,7 @@ use sp_std::convert::{TryFrom, TryInto};
 
 pub use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{EitherOfDiverse, GenesisBuild, QueryPreimage, SortedMembers, StorePreimage},
+	traits::{EitherOfDiverse, QueryPreimage, SortedMembers, StorePreimage},
 	BoundedVec,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};

@@ -40,7 +40,6 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
-    "pallet-preimage/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
