@@ -166,7 +166,7 @@ impl<T: Config> Pallet<T> {
 		Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 			let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
 
-			// cannot renew a domain that has no expiry
+			// cannot renew a name that has no expiry
 			let registered_expiry = r.expiry.ok_or(Error::<T>::RegistrationHasNoExpiry)?;
 			let block_number = frame_system::Pallet::<T>::block_number();
 			// The current expiry is the larger of the registered expiry and the current block

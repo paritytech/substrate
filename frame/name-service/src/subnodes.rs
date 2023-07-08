@@ -27,9 +27,9 @@ impl<T: Config> Pallet<T> {
 		return sp_io::hashing::blake2_256(&(parent_hash, label_hash).encode())
 	}
 
-	/// Creates a new subdomain given a raw label.
+	/// Creates a new subname given a raw label.
 	///
-	/// Can only be called by the owner of a parent domain.
+	/// Can only be called by the owner of a parent name.
 	pub fn do_set_subnode_record(
 		sender: T::AccountId,
 		parent_hash: NameHash,
@@ -56,9 +56,9 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Allow the owner of a parent domain to set a new owner for a subdomain.
+	/// Allow the owner of a parent name to set a new owner for a subname.
 	///
-	/// This will transfer the deposit of this subdomain from the old owner to the new one.
+	/// This will transfer the deposit of this subname from the old owner to the new one.
 	pub fn do_set_subnode_owner(
 		sender: T::AccountId,
 		parent_hash: NameHash,

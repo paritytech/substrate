@@ -76,7 +76,7 @@ pub struct Domain<T: Config> {
 /// The commitment a user makes before registering the name.
 #[derive(Encode, Decode, Default, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct Commitment<AccountId, Balance, BlockNumber> {
-	/// Who will retain ownership of the claimed domain.
+	/// Who will retain ownership of the claimed name.
 	///
 	/// This can be different than the person who made the commitment (depositor).
 	pub owner: AccountId,

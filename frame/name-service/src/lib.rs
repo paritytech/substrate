@@ -24,7 +24,7 @@
 //! * [Limitations](#limitations)
 //! * [Usage](#usage)
 //!
-//! The name service pallet provides a means to register names and subdomains, also termed nodes,
+//! The name service pallet provides a means to register names and subnames, also termed nodes,
 //! via a commit reveal scheme. Names can act as aliases to addresses for a particular para ID, and
 //! can be used by UIs to transfer tokens between accounts in a more user-friendly manner.
 //!
@@ -35,8 +35,8 @@
 //!   bake2_256 hash of the desired name and a secret.
 //! * node: Either a to-level name hash or a subnode record that exists in the service registry.
 //! * name hash: A blake2_256 hash representation of a registered name.
-//! * subnode: A subdomain of a registered name hash. Subnodes of a name can be registered
-//!   recursively, so the depth a subnode can be registered is unbounded.
+//! * subnode: A child of a registered name hash. Subnodes of a name can be registered recursively,
+//!   so the depth a subnode can be registered is unbounded.
 //! * registrar: Handles registration and deregistration of top-level names. It also allows the
 //!   transfer of ownership of top-level names.
 //! * resolver: Handles the mapping of a name registration to the metadata that can be assigned to
@@ -559,7 +559,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Register a subnode (subdomain) record.
+		/// Register a subnode (child) name record.
 		///
 		/// Validates the length of the provided label, returning an error if it surpasses the max
 		/// supported name length.
