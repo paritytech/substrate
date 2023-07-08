@@ -61,7 +61,7 @@ pub fn expand(mut def: Def, bundle: bool) -> proc_macro2::TokenStream {
 	let call = call::expand_call(&mut def, bundle);
 	let error = error::expand_error(&mut def);
 	let event = event::expand_event(&mut def, bundle);
-	let storages = storage::expand_storages(&mut def);
+	let storages = storage::expand_storages(&mut def, bundle);
 	let inherents = inherent::expand_inherents(&mut def);
 	let instances = instances::expand_instances(&mut def);
 	let store_trait = store_trait::expand_store_trait(&mut def);

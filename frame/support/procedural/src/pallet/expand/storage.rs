@@ -377,7 +377,7 @@ fn augment_final_docs(def: &mut Def) {
 /// * if generics are named: reorder the generic, remove their name, and add the missing ones.
 /// * Add `#[allow(type_alias_bounds)]` on storages type alias
 /// * generate metadatas
-pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
+pub fn expand_storages(def: &mut Def, bundle: bool) -> proc_macro2::TokenStream {
 	let on_empty_struct_metadata = match process_generics(def) {
 		Ok(idents) => idents,
 		Err(e) => return e.into_compile_error(),
@@ -614,8 +614,8 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 						<
 							<T as #frame_system::Config>::PalletInfo
 							as #frame_support::traits::PalletInfo
-						>::name::<Pallet<#type_use_gen>>()
-							.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
+						>::name::<Pallet<#type_use_gen>>().unwrap_or("Template2") 
+							// .expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
 					}
 					const STORAGE_PREFIX: &'static str = #counter_prefix_struct_const;
 				}
@@ -645,11 +645,16 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 				#config_where_clause
 			{
 				fn pallet_prefix() -> &'static str {
+					// <
+					// 	<T as #frame_system::Config>::PalletInfo
+					// 	as #frame_support::traits::PalletInfo
+					// >::name::<Pallet<#type_use_gen>>()
+					//  .expect("No name found for the pallet in the runtime! This usually
+					//  means that the pallet wasn't added to `construct_runtime!`.")
 					<
-						<T as #frame_system::Config>::PalletInfo
-						as #frame_support::traits::PalletInfo
-					>::name::<Pallet<#type_use_gen>>()
-						.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`.")
+					 <T as #frame_system::Config>::PalletInfo
+					 as #frame_support::traits::PalletInfo
+				 	>::name::<Pallet<#type_use_gen>>().unwrap_or("Template2") 
 				}
 				const STORAGE_PREFIX: &'static str = #prefix_struct_const;
 			}
@@ -724,11 +729,16 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			#[doc(hidden)]
 			pub fn storage_metadata() -> #frame_support::metadata_ir::PalletStorageMetadataIR {
 				#frame_support::metadata_ir::PalletStorageMetadataIR {
-					prefix: <
-						<T as #frame_system::Config>::PalletInfo as
-						#frame_support::traits::PalletInfo
-					>::name::<#pallet_ident<#type_use_gen>>()
-						.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`."),
+					prefix: 
+					<
+						<T as #frame_system::Config>::PalletInfo
+						as #frame_support::traits::PalletInfo
+					>::name::<Pallet<#type_use_gen>>().unwrap_or("Template2"),
+					// <
+					// 	<T as #frame_system::Config>::PalletInfo as
+					// 	#frame_support::traits::PalletInfo
+					// >::name::<#pallet_ident<#type_use_gen>>()
+					// 	.expect("No name found for the pallet in the runtime! This usually means that the pallet wasn't added to `construct_runtime!`."),
 					entries: {
 						#[allow(unused_mut)]
 						let mut entries = #frame_support::sp_std::vec![];
