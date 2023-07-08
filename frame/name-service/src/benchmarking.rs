@@ -45,8 +45,8 @@ fn run_to_block<T: Config>(n: T::BlockNumber) {
 fn register_new_para<T: Config>() -> (BoundedSuffixOf<T>, u32) {
 	let suffix: BoundedVec<u8, _> = BoundedVec::try_from("1234".as_bytes().to_vec()).unwrap();
 	let para_id = u32::max_value();
-	ParaRegistrations::<T>::insert(para_id, suffix.clone());
-	ReverseParaRegistrationsLookup::<T>::insert(suffix.clone(), para_id);
+	DomainRegistrations::<T>::insert(para_id, suffix.clone());
+	ReverseDomainsLookup::<T>::insert(suffix.clone(), para_id);
 	(suffix, para_id)
 }
 
@@ -482,23 +482,23 @@ benchmarks! {
 		assert_eq!(PerByteFee::<T>::get(), BalanceOf::<T>::max_value());
 	}
 
-	register_para {
+	register_domain {
 		let suffix: BoundedVec<u8, _> = BoundedVec::try_from("1234".as_bytes().to_vec()).unwrap();
 		let para_id = u32::max_value();
-	}:_(RawOrigin::Root, ParaRegistration {
+	}:_(RawOrigin::Root, Domain {
 		id: para_id,
 		suffix: suffix.clone(),
 	})
 	verify {
-		assert_eq!(ParaRegistrations::<T>::get(para_id).unwrap(), suffix.clone());
-		assert_eq!(ReverseParaRegistrationsLookup::<T>::get(suffix.clone()).unwrap(), para_id);
+		assert_eq!(DomainRegistrations::<T>::get(para_id).unwrap(), suffix.clone());
+		assert_eq!(ReverseDomainsLookup::<T>::get(suffix.clone()).unwrap(), para_id);
 	}
 
-	deregister_para {
+	deregister_domain {
 		let (suffix, para_id) = register_new_para::<T>();
 	}: _(RawOrigin::Root, u32::max_value())
 	verify {
-		assert!(!ParaRegistrations::<T>::contains_key(para_id));
+		assert!(!DomainRegistrations::<T>::contains_key(para_id));
 	}
 
 	impl_benchmark_test_suite!(NameService, crate::mock::new_test_ext(), crate::mock::Test);

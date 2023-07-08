@@ -124,18 +124,19 @@
 //! The owner of a name hash can also set an ambiguous text record to give any miscellaneous text
 //! data they want to store alongside the name.
 //!
-//! ### Para Registration
+//! ### Domain Registration
 //!
-//! * [`Call::register_para`]
+//! * [`Call::register_domain`]
 //!
-//! Para IDs must be registered with the name service before addresses can be set for them. Para
-//! registration can only be done by the root origin, and intended to be voted in by governance.
+//! Domains must be registered with the name service before addresses can be set the assigned
+//! `para_id` for them. Domain registration can only be done by the root origin, and intended to be
+//! voted in by governance.
 //!
-//! ### Para Deregistration
+//! ### Domain Deregistration
 //!
-//! * [`Call::deregister_para`]
+//! * [`Call::deregister_domain`]
 //!
-//! Para IDs can also be deregistered by the root origin, and intended to be voted in by governance.
+//! Domains can also be deregistered by the root origin, and intended to be voted in by governance.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 use frame_support::{ensure, pallet_prelude::*, traits::Get, DefaultNoBound};
@@ -218,18 +219,18 @@ pub mod pallet {
 		type NameServiceResolver: NameServiceResolver<Self>;
 	}
 
-	/// Para ID Registrations.
+	/// Domain Registrations.
 	///
-	/// A Para ID needs to be provided alongside a suffix to represent their address domain.
+	/// A Para ID needs to be provided alongside a suffix to represent the registered domain.
 	#[pallet::storage]
-	pub(super) type ParaRegistrations<T: Config> =
+	pub(super) type DomainRegistrations<T: Config> =
 		CountedStorageMap<_, Twox64Concat, u32, BoundedSuffixOf<T>>;
 
 	/// A reverse lookup from a suffix the para id owner.
 	///
 	/// This is used to resolve suffixes to para IDs.
 	#[pallet::storage]
-	pub type ReverseParaRegistrationsLookup<T: Config> =
+	pub type ReverseDomainsLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, BoundedSuffixOf<T>, u32, OptionQuery>;
 
 	/// The deposit a user needs to make in order to commit to a name registration. A value of
@@ -351,9 +352,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A para has registered.
-		ParaRegistered { para_id: u32, suffix: BoundedSuffixOf<T> },
+		DomainRegistered { para_id: u32, suffix: BoundedSuffixOf<T> },
 		/// A para has deregistered.
-		ParaDeregistered { para_id: u32 },
+		DomainDeregistered { para_id: u32 },
 		/// A new `Commitment` has taken place.
 		Committed { depositor: T::AccountId, owner: T::AccountId, hash: CommitmentHash },
 		/// A new `Registration` has taken added.
@@ -413,7 +414,7 @@ pub mod pallet {
 		/// The name provided does not match the expected hash.
 		BadName,
 		/// The para ID was not found.
-		ParaNotFound,
+		DomainNotFound,
 	}
 
 	// Your Pallet's callable functions.
@@ -637,8 +638,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			// resolve the para_id with the provided `suffix`.
-			let para_id = ReverseParaRegistrationsLookup::<T>::get(&suffix)
-				.ok_or(Error::<T>::ParaNotFound)?;
+			let para_id =
+				ReverseDomainsLookup::<T>::get(&suffix).ok_or(Error::<T>::DomainNotFound)?;
 
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;
@@ -698,16 +699,16 @@ pub mod pallet {
 		/// Can only be called by the Root origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(14)]
-		#[pallet::weight(T::WeightInfo::register_para())]
-		pub fn register_para(origin: OriginFor<T>, para: ParaRegistration<T>) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::register_domain())]
+		pub fn register_domain(origin: OriginFor<T>, para: Domain<T>) -> DispatchResult {
 			ensure_root(origin)?;
 			ensure!(
-				!ReverseParaRegistrationsLookup::<T>::contains_key(&para.suffix),
+				!ReverseDomainsLookup::<T>::contains_key(&para.suffix),
 				Error::<T>::SuffixExists
 			);
-			ParaRegistrations::<T>::insert(para.id, para.suffix.clone());
-			ReverseParaRegistrationsLookup::<T>::insert(para.suffix.clone(), para.id);
-			Self::deposit_event(Event::<T>::ParaRegistered {
+			DomainRegistrations::<T>::insert(para.id, para.suffix.clone());
+			ReverseDomainsLookup::<T>::insert(para.suffix.clone(), para.id);
+			Self::deposit_event(Event::<T>::DomainRegistered {
 				para_id: para.id,
 				suffix: para.suffix,
 			});
@@ -717,14 +718,15 @@ pub mod pallet {
 		/// Can only be called by the Root origin.
 		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(15)]
-		#[pallet::weight(T::WeightInfo::deregister_para())]
-		pub fn deregister_para(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::deregister_domain())]
+		pub fn deregister_domain(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
 			ensure_root(origin)?;
-			let suffix = ParaRegistrations::<T>::get(para_id).ok_or(Error::<T>::ParaNotFound)?;
+			let suffix =
+				DomainRegistrations::<T>::get(para_id).ok_or(Error::<T>::DomainNotFound)?;
 
-			ParaRegistrations::<T>::remove(&para_id);
-			ReverseParaRegistrationsLookup::<T>::remove(&suffix);
-			Self::deposit_event(Event::<T>::ParaDeregistered { para_id });
+			DomainRegistrations::<T>::remove(&para_id);
+			ReverseDomainsLookup::<T>::remove(&suffix);
+			Self::deposit_event(Event::<T>::DomainDeregistered { para_id });
 			Ok(())
 		}
 

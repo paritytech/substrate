@@ -54,8 +54,8 @@ pub trait WeightInfo {
 	fn set_name(l: u32, ) -> Weight;
 	fn set_text(l: u32, ) -> Weight;
 	fn set_configs() -> Weight;
-	fn register_para() -> Weight;
-	fn deregister_para() -> Weight;
+	fn register_domain() -> Weight;
+	fn deregister_domain() -> Weight;
 }
 
 /// Weights for pallet_name_service using the Substrate node and recommended hardware.
@@ -251,8 +251,8 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
-	/// Storage: NameService ReverseParaRegistrationsLookup (r:1 w:0)
-	/// Proof: NameService ReverseParaRegistrationsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService ReverseDomainsLookup (r:1 w:0)
+	/// Proof: NameService ReverseDomainsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
 	/// Storage: NameService Registrations (r:1 w:0)
 	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
 	/// Storage: NameService AddressResolver (r:0 w:1)
@@ -328,15 +328,15 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		Weight::from_parts(9_000_000, 0)
 			.saturating_add(T::DbWeight::get().writes(7_u64))
 	}
-	/// Storage: NameService ReverseParaRegistrationsLookup (r:1 w:1)
-	/// Proof: NameService ReverseParaRegistrationsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
-	/// Storage: NameService ParaRegistrations (r:1 w:1)
-	/// Proof: NameService ParaRegistrations (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
-	/// Storage: NameService CounterForParaRegistrations (r:1 w:1)
-	/// Proof: NameService CounterForParaRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	/// Storage: NameService CounterForReverseParaRegistrationsLookup (r:1 w:1)
-	/// Proof: NameService CounterForReverseParaRegistrationsLookup (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	fn register_para() -> Weight {
+	/// Storage: NameService ReverseDomainsLookup (r:1 w:1)
+	/// Proof: NameService ReverseDomainsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService DomainRegistrations (r:1 w:1)
+	/// Proof: NameService DomainRegistrations (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForDomainRegistrations (r:1 w:1)
+	/// Proof: NameService CounterForDomainRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForReverseDomainsLookup (r:1 w:1)
+	/// Proof: NameService CounterForReverseDomainsLookup (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	fn register_domain() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `358`
 		//  Estimated: `3482`
@@ -345,15 +345,15 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(4_u64))
 	}
-	/// Storage: NameService ParaRegistrations (r:1 w:1)
-	/// Proof: NameService ParaRegistrations (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
-	/// Storage: NameService CounterForParaRegistrations (r:1 w:1)
-	/// Proof: NameService CounterForParaRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	/// Storage: NameService ReverseParaRegistrationsLookup (r:1 w:1)
-	/// Proof: NameService ReverseParaRegistrationsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
-	/// Storage: NameService CounterForReverseParaRegistrationsLookup (r:1 w:1)
-	/// Proof: NameService CounterForReverseParaRegistrationsLookup (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	fn deregister_para() -> Weight {
+	/// Storage: NameService DomainRegistrations (r:1 w:1)
+	/// Proof: NameService DomainRegistrations (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForDomainRegistrations (r:1 w:1)
+	/// Proof: NameService CounterForDomainRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	/// Storage: NameService ReverseDomainsLookup (r:1 w:1)
+	/// Proof: NameService ReverseDomainsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForReverseDomainsLookup (r:1 w:1)
+	/// Proof: NameService CounterForReverseDomainsLookup (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	fn deregister_domain() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `479`
 		//  Estimated: `3482`
@@ -556,8 +556,8 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().writes(3_u64))
 	}
-	/// Storage: NameService ReverseParaRegistrationsLookup (r:1 w:0)
-	/// Proof: NameService ReverseParaRegistrationsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService ReverseDomainsLookup (r:1 w:0)
+	/// Proof: NameService ReverseDomainsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
 	/// Storage: NameService Registrations (r:1 w:0)
 	/// Proof: NameService Registrations (max_values: None, max_size: Some(94), added: 2569, mode: MaxEncodedLen)
 	/// Storage: NameService AddressResolver (r:0 w:1)
@@ -633,15 +633,15 @@ impl WeightInfo for () {
 		Weight::from_parts(9_000_000, 0)
 			.saturating_add(RocksDbWeight::get().writes(7_u64))
 	}
-	/// Storage: NameService ReverseParaRegistrationsLookup (r:1 w:1)
-	/// Proof: NameService ReverseParaRegistrationsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
-	/// Storage: NameService ParaRegistrations (r:1 w:1)
-	/// Proof: NameService ParaRegistrations (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
-	/// Storage: NameService CounterForParaRegistrations (r:1 w:1)
-	/// Proof: NameService CounterForParaRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	/// Storage: NameService CounterForReverseParaRegistrationsLookup (r:1 w:1)
-	/// Proof: NameService CounterForReverseParaRegistrationsLookup (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	fn register_para() -> Weight {
+	/// Storage: NameService ReverseDomainsLookup (r:1 w:1)
+	/// Proof: NameService ReverseDomainsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService DomainRegistrations (r:1 w:1)
+	/// Proof: NameService DomainRegistrations (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForDomainRegistrations (r:1 w:1)
+	/// Proof: NameService CounterForDomainRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForReverseDomainsLookup (r:1 w:1)
+	/// Proof: NameService CounterForReverseDomainsLookup (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	fn register_domain() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `358`
 		//  Estimated: `3482`
@@ -650,15 +650,15 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().writes(4_u64))
 	}
-	/// Storage: NameService ParaRegistrations (r:1 w:1)
-	/// Proof: NameService ParaRegistrations (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
-	/// Storage: NameService CounterForParaRegistrations (r:1 w:1)
-	/// Proof: NameService CounterForParaRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	/// Storage: NameService ReverseParaRegistrationsLookup (r:1 w:1)
-	/// Proof: NameService ReverseParaRegistrationsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
-	/// Storage: NameService CounterForReverseParaRegistrationsLookup (r:1 w:1)
-	/// Proof: NameService CounterForReverseParaRegistrationsLookup (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
-	fn deregister_para() -> Weight {
+	/// Storage: NameService DomainRegistrations (r:1 w:1)
+	/// Proof: NameService DomainRegistrations (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForDomainRegistrations (r:1 w:1)
+	/// Proof: NameService CounterForDomainRegistrations (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	/// Storage: NameService ReverseDomainsLookup (r:1 w:1)
+	/// Proof: NameService ReverseDomainsLookup (max_values: None, max_size: Some(17), added: 2492, mode: MaxEncodedLen)
+	/// Storage: NameService CounterForReverseDomainsLookup (r:1 w:1)
+	/// Proof: NameService CounterForReverseDomainsLookup (max_values: Some(1), max_size: Some(4), added: 499, mode: MaxEncodedLen)
+	fn deregister_domain() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `479`
 		//  Estimated: `3482`

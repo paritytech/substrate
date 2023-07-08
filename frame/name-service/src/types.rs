@@ -66,7 +66,7 @@ pub enum ConfigOp<T: Codec + Debug> {
 	Encode, Decode, DefaultNoBound, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone,
 )]
 #[scale_info(skip_type_params(T))]
-pub struct ParaRegistration<T: Config> {
+pub struct Domain<T: Config> {
 	// The para ID.
 	pub id: u32,
 	/// The suffix for the para ID.

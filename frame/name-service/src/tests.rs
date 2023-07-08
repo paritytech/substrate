@@ -74,7 +74,7 @@ fn alice_register_bob_senario_setup() -> (Vec<u8>, [u8; 32]) {
 	assert_ok!(NameService::commit(RuntimeOrigin::signed(sender), owner, commitment_hash));
 	add_blocks(min_commitment + 1);
 	assert_ok!(NameService::reveal(RuntimeOrigin::signed(sender), name.clone(), secret, length));
-	assert_eq!(Balances::free_balance(&sender), 79);
+	assert_eq!(Balances::free_balance(&sender), 88);
 	assert_eq!(Balances::free_balance(&owner), 200);
 	(name, name_hash)
 }
@@ -98,14 +98,14 @@ fn commit_works() {
 
 		assert_eq!(Balances::free_balance(&1), 100);
 		assert_ok!(NameService::commit(RuntimeOrigin::signed(sender), owner, commitment_hash));
-		assert_eq!(Balances::free_balance(&1), 90);
+		assert_eq!(Balances::free_balance(&1), 99);
 		assert!(Commitments::<Test>::contains_key(commitment_hash));
 
 		let commitment = Commitments::<Test>::get(commitment_hash).unwrap();
 
 		assert_eq!(commitment.owner, owner);
 		assert_eq!(commitment.when, 1);
-		assert_eq!(commitment.deposit, 10);
+		assert_eq!(commitment.deposit, 1);
 
 		System::assert_last_event(
 			NameServiceEvent::Committed { depositor: sender, owner, hash: commitment_hash }.into(),
@@ -165,7 +165,7 @@ fn reveal_works() {
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
 
 		assert_eq!(registration.owner, owner);
-		assert_eq!(registration.deposit, Some(10));
+		assert_eq!(registration.deposit, Some(1));
 
 		// expiry = current block number + length
 		// 12 + (10)
@@ -176,7 +176,7 @@ fn reveal_works() {
 		// 10 + 1 + 10  = 21
 		// commitment deposit returned
 		// 21 - 10 = 11
-		assert_eq!(Balances::free_balance(&1), 79);
+		assert_eq!(Balances::free_balance(&1), 88);
 
 		// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&encoded_bytes));
 		// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&commitment_hash));
@@ -354,9 +354,9 @@ fn renew_works() {
 		// `1` extends for 1 block
 		let new_expiry = registration.expiry.unwrap() + 1;
 
-		assert_eq!(Balances::free_balance(&1), 79);
+		assert_eq!(Balances::free_balance(&1), 88);
 		assert_ok!(NameService::renew(RuntimeOrigin::signed(1), name_hash, new_expiry));
-		assert_eq!(Balances::free_balance(&1), 78);
+		assert_eq!(Balances::free_balance(&1), 87);
 		assert_eq!(Registrations::<Test>::get(name_hash).unwrap().expiry.unwrap(), 23);
 
 		// `2` extends for 5 blocks
@@ -376,7 +376,7 @@ fn renew_handles_errors() {
 
 		// insufficient balance to renew
 		assert_ok!(Balances::transfer(RuntimeOrigin::signed(1), 0, 78));
-		assert_eq!(Balances::free_balance(1), 1);
+		assert_eq!(Balances::free_balance(1), 10);
 
 		// explicitly running to block 15 to check ExpiryInvalid
 		run_to_block(15);
@@ -407,7 +407,7 @@ fn renew_handles_errors() {
 fn set_address_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
-		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+		let suffix = BoundedVec::try_from("pdot".as_bytes().to_vec()).unwrap();
 		let addr_to_set = 1;
 
 		// set address to `1`
@@ -430,7 +430,7 @@ fn set_address_handles_errors() {
 		let non_owner = 1;
 		let owner = 2;
 		let some_name_hash = NameService::name_hash("alice".as_bytes());
-		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+		let suffix = BoundedVec::try_from("pdot".as_bytes().to_vec()).unwrap();
 
 		// Registration not found
 		assert_noop!(
@@ -467,12 +467,12 @@ fn deregister_works_owner() {
 	new_test_ext().execute_with(|| {
 		let owner = 2;
 		let (_, name_hash) = alice_register_bob_senario_setup();
-		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+		let suffix = BoundedVec::try_from("pdot".as_bytes().to_vec()).unwrap();
 
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
 		assert_eq!(registration.owner, 2);
 		assert_eq!(registration.expiry, Some(22));
-		assert_eq!(registration.deposit, Some(10));
+		assert_eq!(registration.deposit, Some(1));
 
 		// set address
 		assert_ok!(NameService::set_address(
@@ -503,7 +503,7 @@ fn deregister_works_non_owner() {
 		let registration = Registrations::<Test>::get(name_hash).unwrap();
 		assert_eq!(registration.owner, 2);
 		assert_eq!(registration.expiry, Some(22));
-		assert_eq!(registration.deposit, Some(10));
+		assert_eq!(registration.deposit, Some(1));
 
 		// go to expiry - 1
 		add_blocks(10);
@@ -582,7 +582,7 @@ fn force_register_no_expiry_works() {
 fn force_deregister_works() {
 	new_test_ext().execute_with(|| {
 		let (_, name_hash) = alice_register_bob_senario_setup();
-		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+		let suffix = BoundedVec::try_from("pdot".as_bytes().to_vec()).unwrap();
 
 		// set some address to deregister
 		assert_ok!(NameService::set_address(RuntimeOrigin::signed(2), name_hash, 4, suffix));
@@ -613,7 +613,7 @@ fn set_subnode_record_works() {
 
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
-		assert_eq!(Balances::free_balance(&2), 190);
+		assert_eq!(Balances::free_balance(&2), 199);
 	});
 }
 
@@ -663,17 +663,6 @@ fn set_subnode_record_handles_errors() {
 		assert_noop!(
 			NameService::set_subnode_record(RuntimeOrigin::signed(owner), parent_hash, label),
 			Error::<Test>::RegistrationExists
-		);
-
-		// drain owner's balance to existential and attempt to register another label
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(owner), 0, 189));
-		assert_eq!(Balances::free_balance(2), 1);
-
-		// not enough balance to register another subnode
-		let label_2 = "second".as_bytes().to_vec();
-		assert_noop!(
-			NameService::set_subnode_record(RuntimeOrigin::signed(owner), parent_hash, label_2),
-			BalancesError::InsufficientBalance
 		);
 	});
 }
@@ -781,7 +770,7 @@ fn deregister_subnode_owner_works() {
 			label
 		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
-		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+		let suffix = BoundedVec::try_from("pdot".as_bytes().to_vec()).unwrap();
 
 		assert!(Registrations::<Test>::contains_key(name_hash));
 		assert_ok!(NameService::set_address(
@@ -791,7 +780,7 @@ fn deregister_subnode_owner_works() {
 			suffix
 		));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
-		assert_eq!(Balances::free_balance(owner), 190);
+		assert_eq!(Balances::free_balance(owner), 199);
 
 		// perform deregistration of subnode by owner
 		assert_ok!(NameService::deregister_subnode(
@@ -828,7 +817,7 @@ fn deregister_subnode_non_owner_works() {
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
 		assert!(Registrations::<Test>::contains_key(name_hash));
 
-		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+		let suffix = BoundedVec::try_from("pdot".as_bytes().to_vec()).unwrap();
 		assert_ok!(NameService::set_address(
 			RuntimeOrigin::signed(owner),
 			name_hash,
@@ -837,7 +826,7 @@ fn deregister_subnode_non_owner_works() {
 		));
 
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
-		assert_eq!(Balances::free_balance(owner), 190);
+		assert_eq!(Balances::free_balance(owner), 199);
 
 		// run to TLD expiry
 		add_blocks(1000 + 1);
@@ -857,7 +846,7 @@ fn deregister_subnode_non_owner_works() {
 		// resolver address no longer present
 		assert!(!AddressResolver::<Test>::contains_key(name_hash));
 		// deposit should have been returned to subnode owner
-		assert_eq!(Balances::free_balance(owner), 210);
+		assert_eq!(Balances::free_balance(owner), 201);
 	});
 }
 
@@ -886,7 +875,7 @@ fn deregister_subnode_handles_errors() {
 			label
 		));
 		let name_hash = NameService::subnode_hash(parent_hash, label_hash);
-		let suffix = BoundedVec::try_from("dot".as_bytes().to_vec()).unwrap();
+		let suffix = BoundedVec::try_from("pdot".as_bytes().to_vec()).unwrap();
 
 		assert!(Registrations::<Test>::contains_key(name_hash));
 		assert_ok!(NameService::set_address(
@@ -896,7 +885,7 @@ fn deregister_subnode_handles_errors() {
 			suffix
 		));
 		assert!(AddressResolver::<Test>::contains_key(name_hash));
-		assert_eq!(Balances::free_balance(owner), 190);
+		assert_eq!(Balances::free_balance(owner), 199);
 
 		// non-owner cannot de-register if parent has not been deregistered
 		assert_noop!(

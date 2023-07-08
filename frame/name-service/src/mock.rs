@@ -142,8 +142,8 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		System::set_block_number(1);
 		let suffix: BoundedVec<u8, _> = BoundedVec::try_from("pdot".as_bytes().to_vec()).unwrap();
 		let para_id = 1;
-		ParaRegistrations::<Test>::insert(para_id, suffix.clone());
-		ReverseParaRegistrationsLookup::<Test>::insert(suffix, para_id);
+		DomainRegistrations::<Test>::insert(para_id, suffix.clone());
+		ReverseDomainsLookup::<Test>::insert(suffix, para_id);
 	});
 	ext
 }
