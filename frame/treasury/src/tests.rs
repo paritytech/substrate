@@ -217,7 +217,6 @@ impl Config for Test {
 	type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
 	type Paymaster = TestPay;
 	type BalanceConverter = MulBy<ConstU64<2>>;
-	type VoidOrigin = frame_system::EnsureRoot<u128>;
 	type PayoutPeriod = SpendPayoutPeriod;
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();

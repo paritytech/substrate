@@ -289,7 +289,7 @@ mod benchmarks {
 		Treasury::<T, _>::spend(origin, asset_kind.clone(), amount, beneficiary_lookup, None)?;
 		assert!(Spends::<T, I>::get(0).is_some());
 		let origin =
-			T::VoidOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::RejectOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
 		_(origin as T::RuntimeOrigin, 0u32);

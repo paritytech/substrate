@@ -265,9 +265,6 @@ pub mod pallet {
 			BalanceOf<Self, I>,
 		>;
 
-		/// Origin from which an approved spend can be voided.
-		type VoidOrigin: EnsureOrigin<Self::RuntimeOrigin>;
-
 		/// The period during which an approved treasury spend has to be claimed.
 		#[pallet::constant]
 		type PayoutPeriod: Get<Self::BlockNumber>;
@@ -765,12 +762,12 @@ pub mod pallet {
 
 		/// Void previously approved spend.
 		///
-		/// - `origin`: Must be `T::VoidOrigin`.
+		/// - `origin`: Must be `T::RejectOrigin`.
 		/// - `index`: The spend index.
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::void_spend())]
 		pub fn void_spend(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
-			T::VoidOrigin::ensure_origin(origin)?;
+			T::RejectOrigin::ensure_origin(origin)?;
 			let spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
 			ensure!(
 				matches!(spend.status, PaymentState::Pending | PaymentState::Failed),
