@@ -29,6 +29,13 @@ mod types;
 pub mod weights;
 pub use weights::WeightInfo;
 
+/* TODO:
+- Purchase and renewal
+- Advance notice & on_initialize
+- Initialization
+- Pool rewards
+*/
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -42,22 +49,27 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	pub type PartsOf57600 = u16;
+
+	#[derive(Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub enum CoreAssignment {
-		InstantaneousPool,
+		Idle,
+		Pool,
 		Task(ParaId),
 	}
+	pub type WholeCoreAssignment = Vec<(CoreAssignment, PartsOf57600)>;
+
 	pub trait CoretimeInterface {
 		type AccountId: Parameter;
 		type Balance;
-		type BlockNumber: AtLeast32BitUnsigned + TypeInfo + Encode;
+		type BlockNumber: AtLeast32BitUnsigned + Copy + TypeInfo + Encode;
 		fn latest() -> Self::BlockNumber;
 		fn request_core_count(count: CoreIndex);
-		fn request_revenue_at(when: Self::BlockNumber);
+		fn request_revenue_info_at(when: Self::BlockNumber);
 		fn credit_account(who: Self::AccountId, amount: Balance);
 		fn assign_core(
 			core: CoreIndex,
 			begin: Self::BlockNumber,
-			assignment: Vec<(CoreAssignment, PartsOf57600)>,
+			assignment: WholeCoreAssignment,
 			end_hint: Option<Self::BlockNumber>,
 		);
 		fn check_notify_core_count() -> Option<u16>;
@@ -69,7 +81,7 @@ pub mod pallet {
 		type BlockNumber = u32;
 		fn latest() -> Self::BlockNumber { 0 }
 		fn request_core_count(_count: CoreIndex) {}
-		fn request_revenue_at(_when: Self::BlockNumber) {}
+		fn request_revenue_info_at(_when: Self::BlockNumber) {}
 		fn credit_account(_who: Self::AccountId, _amount: Balance) {}
 		fn assign_core(
 			_core: CoreIndex,
@@ -134,18 +146,10 @@ pub mod pallet {
 	}
 	pub type RegionRecordOf<T> = RegionRecord<<T as frame_system::Config>::AccountId>;
 
-	// TODO: Use a more specialised 32-bit type which puts Off and InstaPool into unused 32-bit values.
-	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-	pub enum CoreTask {
-		Off,
-		Assigned(ParaId),
-		InstaPool,
-	}
-
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct ScheduleItem {
 		part: CorePart,
-		task: CoreTask,
+		assignment: CoreAssignment,
 	}
 	pub type Schedule = BoundedVec<ScheduleItem, ConstU32<80>>;
 
@@ -173,6 +177,13 @@ pub mod pallet {
 	}
 	pub type InstaPoolHistoryRecordOf<T> = InstaPoolHistoryRecord<BalanceOf<T>>;
 
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	pub struct StatusRecord {
+		core_count: CoreIndex,
+		pool_size: PartCount,
+		last_timeslice: Timeslice,
+	}
+
 	#[pallet::storage]
 	pub type Regions<T> = StorageMap<_, Blake2_128Concat, RegionId, RegionRecordOf<T>, OptionQuery>;
 
@@ -182,10 +193,10 @@ pub mod pallet {
 
 	/// The current workload of each core. This gets updated with workplan as timeslices pass.
 	#[pallet::storage]
-	pub type Workload<T> = StorageMap<_, Twox64Concat, CoreIndex, Schedule, OptionQuery>;
+	pub type Workload<T> = StorageMap<_, Twox64Concat, CoreIndex, Schedule, ValueQuery>;
 
 	#[pallet::storage]
-	pub type InstaPoolSize<T> = StorageValue<_, PartCount, ValueQuery>;
+	pub type Status<T> = StorageValue<_, StatusRecord, OptionQuery>;
 
 	#[pallet::storage]
 	pub type InstaPoolContribution<T> = StorageMap<_, Blake2_128Concat, ContributionRecordOf<T>, (), OptionQuery>;
@@ -263,6 +274,70 @@ pub mod pallet {
 			let last_scheduled = (latest + advance) / timeslice_period;
 			let mut next_scheduled: Timeslice = last_scheduled.saturated_into();
 			next_scheduled.saturating_add(1)
+		}
+
+		pub(crate) fn process_timeslice(timeslice: Timeslice) {
+			let mut status = match Status::<T>::get() {
+				Some(s) => s,
+				None => return,
+			};
+			Self::process_pool(timeslice, &mut status);
+			let rc_begin = RelayBlockNumberOf::<T>::from(timeslice) * T::TimeslicePeriod::get();
+			for core in 0..status.core_count {
+				Self::process_core_schedule(timeslice, rc_begin, core, &mut status);
+			}
+			Status::<T>::put(status);
+		}
+
+		fn process_pool(timeslice: Timeslice, status: &mut StatusRecord) {
+			let pool_io = InstaPoolIo::<T>::take(timeslice);
+			status.pool_size = (status.pool_size as i32).saturating_add(pool_io) as u32;
+			let record = InstaPoolHistoryRecord {
+				total_contributions: status.pool_size,
+				maybe_payout: None,
+			};
+			InstaPoolHistory::<T>::insert(timeslice, record);
+		}
+
+		/// Schedule cores for the given `timeslice`.
+		fn process_core_schedule(
+			timeslice: Timeslice,
+			rc_begin: RelayBlockNumberOf<T>,
+			core: CoreIndex,
+			status: &mut StatusRecord,
+		) {
+			let mut workplan = match Workplan::<T>::take((timeslice, core)) {
+				Some(w) => w,
+				None => return,
+			};
+			let workload = Workload::<T>::get(core);
+			let parts_used = workplan.iter().map(|i| i.part).fold(CorePart::void(), |a, i| a | i);
+			let mut workplan = workplan.into_inner();
+			workplan.extend(workload.into_iter().filter(|i| (i.part & parts_used).is_void()));
+			let workplan = Schedule::truncate_from(workplan);
+			Workload::<T>::insert(core, &workplan);
+
+			let mut total_used = 0;
+			let mut intermediate = workplan
+				.into_iter()
+				.map(|i| (i.assignment, i.part.count_ones() as u16 * (57_600 / 80)))
+				.inspect(|i| total_used += i.1)
+				.collect::<Vec<_>>();
+			if total_used < 80 {
+				intermediate.push((CoreAssignment::Idle, 80 - total_used));
+			}
+			intermediate.sort();
+			let mut assignment: WholeCoreAssignment = Vec::with_capacity(intermediate.len());
+			for i in intermediate.into_iter() {
+				if let Some(ref mut last) = assignment.last_mut() {
+					if last.0 == i.0 {
+						last.1 += i.1;
+						continue;
+					}
+				}
+				assignment.push(i);
+			}
+			T::Coretime::assign_core(core, rc_begin, assignment, None);
 		}
 
 		pub(crate) fn do_transfer(region_id: RegionId, maybe_check_owner: Option<T::AccountId>, new_owner: T::AccountId) -> Result<(), Error<T>> {
@@ -365,7 +440,7 @@ pub mod pallet {
 					.unwrap_or_default();
 				if workplan.try_push(ScheduleItem {
 					part: region_id.part,
-					task: CoreTask::Assigned(target),
+					assignment: CoreAssignment::Task(target),
 				}).is_ok() {
 					Workplan::<T>::insert(&workplan_key, &workplan);
 				}
@@ -385,7 +460,7 @@ pub mod pallet {
 					.unwrap_or_default();
 				if workplan.try_push(ScheduleItem {
 					part: region_id.part,
-					task: CoreTask::InstaPool,
+					assignment: CoreAssignment::Pool,
 				}).is_ok() {
 					Workplan::<T>::insert(&workplan_key, &workplan);
 					InstaPoolIo::<T>::mutate(region_id.begin, |a| *a += region_id.part.count_ones() as i32);
