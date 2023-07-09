@@ -701,20 +701,20 @@ pub struct Nominations<T: Config> {
 	pub suppressed: bool,
 }
 
-/// Extended view of Exposure comprising of `PagedExposureMetadata` and a single page of `ExposurePage`.
+/// Facade struct to encapsulate `PagedExposureMetadata` and a single page of `ExposurePage`.
 ///
 /// This is useful where we need to take into account the validator's own stake and total exposure
 /// in consideration, in addition to the individual nominators backing them.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, PartialEq, Eq)]
-struct ExposureExt<AccountId, Balance: HasCompact + codec::MaxEncodedLen> {
+struct PagedExposure<AccountId, Balance: HasCompact + codec::MaxEncodedLen> {
 	exposure_metadata: PagedExposureMetadata<Balance>,
 	exposure_page: ExposurePage<AccountId, Balance>,
 }
 
 impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEncodedLen>
-	ExposureExt<AccountId, Balance>
+	PagedExposure<AccountId, Balance>
 {
-	/// Create a new instance of `ExposureExt` from legacy clipped exposures.
+	/// Create a new instance of `PagedExposure` from legacy clipped exposures.
 	pub fn from_clipped(exposure: Exposure<AccountId, Balance>) -> Self {
 		Self {
 			exposure_metadata: PagedExposureMetadata {
@@ -1003,13 +1003,13 @@ impl<T: Config> EraInfo<T> {
 		era: EraIndex,
 		validator: &T::AccountId,
 		page: PageIndex,
-	) -> Option<ExposureExt<T::AccountId, BalanceOf<T>>> {
+	) -> Option<PagedExposure<T::AccountId, BalanceOf<T>>> {
 		let overview = <ErasStakersOverview<T>>::get(&era, validator);
 
 		// return clipped exposure if page zero and paged exposure does not exist
 		// exists for backward compatibility and can be removed as part of #13034
 		if overview.is_none() && page == 0 {
-			return Some(ExposureExt::from_clipped(<ErasStakersClipped<T>>::get(era, validator)))
+			return Some(PagedExposure::from_clipped(<ErasStakersClipped<T>>::get(era, validator)))
 		}
 
 		// no exposure for this validator
@@ -1027,7 +1027,7 @@ impl<T: Config> EraInfo<T> {
 		let exposure_page = <ErasStakersPaged<T>>::get((era, validator, page)).unwrap_or_default();
 
 		// build the exposure
-		Some(ExposureExt {
+		Some(PagedExposure {
 			exposure_metadata: PagedExposureMetadata { own: validator_stake, ..overview },
 			exposure_page,
 		})
