@@ -1039,7 +1039,7 @@ impl<T: Config> Pallet<T> {
 		Self::eras_stakers(era, &account)
 	}
 
-	pub fn api_era_page_count(era: EraIndex, account: T::AccountId) -> PageIndex {
+	pub fn api_eras_stakers_page_count(era: EraIndex, account: T::AccountId) -> PageIndex {
 		EraInfo::<T>::get_page_count(era, &account)
 	}
 }
