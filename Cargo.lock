@@ -3159,6 +3159,7 @@ dependencies = [
  "frame-system",
  "num-format",
  "pallet-staking",
+ "sp-staking",
 ]
 
 [[package]]
@@ -6528,6 +6529,7 @@ dependencies = [
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
+ "sp-staking",
  "sp-std",
  "sp-tracing",
  "substrate-test-utils",
@@ -11507,6 +11509,7 @@ dependencies = [
 name = "sp-staking"
 version = "4.0.0-dev"
 dependencies = [
+ "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
  "serde",
