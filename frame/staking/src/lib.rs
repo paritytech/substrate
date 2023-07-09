@@ -706,16 +706,22 @@ pub struct Nominations<T: Config> {
 /// This is useful where we need to take into account the validator's own stake and total exposure
 /// in consideration, in addition to the individual nominators backing them.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, PartialEq, Eq)]
-struct PagedExposure<AccountId, Balance: HasCompact + codec::MaxEncodedLen> {
+struct PagedExposure<AccountId, Balance: HasCompact + codec::MaxEncodedLen, MaxExposurePageSize> {
 	exposure_metadata: PagedExposureMetadata<Balance>,
-	exposure_page: ExposurePage<AccountId, Balance>,
+	exposure_page: ExposurePage<AccountId, Balance, MaxExposurePageSize>,
 }
 
-impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEncodedLen>
-	PagedExposure<AccountId, Balance>
+impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEncodedLen, MaxExposurePageSize>
+	PagedExposure<AccountId, Balance, MaxExposurePageSize>
 {
 	/// Create a new instance of `PagedExposure` from legacy clipped exposures.
 	pub fn from_clipped(exposure: Exposure<AccountId, Balance>) -> Self {
+
+		// exposure.others should never exceed MaxExposurePageSize. But if it does, just truncate.
+		defensive_assert!(exposure.others.len() <= MaxExposurePageSize::get() as usize);
+		let mut exposure_others = exposure.others();
+		exposure_others.truncate(MaxExposurePageSize::get());
+
 		Self {
 			exposure_metadata: PagedExposureMetadata {
 				total: exposure.total,
@@ -723,7 +729,7 @@ impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEn
 				nominator_count: exposure.others.len() as u32,
 				page_count: 1,
 			},
-			exposure_page: ExposurePage { page_total: exposure.total, others: exposure.others },
+			exposure_page: ExposurePage { page_total: exposure.total, others: exposure_others },
 		}
 	}
 
@@ -1003,7 +1009,7 @@ impl<T: Config> EraInfo<T> {
 		era: EraIndex,
 		validator: &T::AccountId,
 		page: PageIndex,
-	) -> Option<PagedExposure<T::AccountId, BalanceOf<T>>> {
+	) -> Option<PagedExposure<T::AccountId, BalanceOf<T>, T::MaxExposurePageSize>> {
 		let overview = <ErasStakersOverview<T>>::get(&era, validator);
 
 		// return clipped exposure if page zero and paged exposure does not exist
@@ -1154,7 +1160,7 @@ impl<T: Config> EraInfo<T> {
 			exposure
 		};
 
-		let (exposure_metadata, exposure_pages) = exposure.into_pages(page_size);
+		let (exposure_metadata, exposure_pages) = exposure.into_pages::<T::MaxExposurePageSize>(page_size);
 		defensive_assert!(exposure_pages.len() == required_page_count, "unexpected page count");
 
 		<ErasStakersOverview<T>>::insert(era, &validator, &exposure_metadata);

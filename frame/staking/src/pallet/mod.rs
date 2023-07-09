@@ -203,17 +203,25 @@ pub mod pallet {
 
 		/// The maximum size of each `T::ExposurePage`.
 		///
-		/// An `ExposurePage` is weakly bounded to a maximum of `MaxExposurePageSize`
-		/// nominators.
-		///
-		/// For older non-paged exposure, a reward payout was restricted to the top
-		/// `MaxExposurePageSize` nominators. This is to limit the i/o cost for the
-		/// nominator payout.
-		///
-		/// Note: `MaxExposurePageSize` is used to bound `ClaimedRewards` and is unsafe to reduce
-		/// without handling it in a migration.
+		/// An `ExposurePage` is strictly bounded to `MaxExposurePageSize` nominators and hence, it
+		/// is unsafe to reduce this value. To gracefully reduce this value, either 1) update
+		/// `ExposurePageSize` and wait for all `ExposurePage` with larger size than `ExposurePageSize`
+		/// to become stale in `HistoryDepth` eras or 2) migrate storage `ErasStakersPaged` to be
+		/// always bounded by `MaxExposurePageSize`.
 		#[pallet::constant]
 		type MaxExposurePageSize: Get<u16>;
+
+		/// The desired size of each `T::ExposurePage`. Any new `ExposurePage` will be created with
+		/// this size.
+		///
+		/// Note that if this value is reduced, old `ExposurePage`s will not be updated. This means
+		/// that the size of (older) `ExposurePage` may be larger than this value. We use
+		/// `MaxExposurePageSize` instead to bound `ExposurePage` to account for this.
+		///
+		/// A reward payout is restricted to only `MaxExposurePageSize` nominators per call. This is
+		/// to limit the i/o cost for the nominator payout.
+		#[pallet::constant]
+		type ExposurePageSize: Get<u16>;
 
 		/// Maximum number of exposure pages that can be stored for a single validator in an era.
 		///
@@ -221,6 +229,9 @@ pub mod pallet {
 		///
 		/// When this is set to 1, the reward payout behaviour is similar to how it used to work
 		/// before we had paged exposures.
+		///
+		/// Warning: This is used as a bound for `ClaimedRewards` and is unsafe to reduce without
+		/// handling it in a migration. Increasing it is fine.
 		#[pallet::constant]
 		type MaxExposurePageCount: Get<u16>;
 
@@ -499,7 +510,7 @@ pub mod pallet {
 			NMapKey<Twox64Concat, T::AccountId>,
 			NMapKey<Twox64Concat, PageIndex>,
 		),
-		ExposurePage<T::AccountId, BalanceOf<T>>,
+		ExposurePage<T::AccountId, BalanceOf<T>, T::MaxExposurePageSize>,
 		OptionQuery,
 	>;
 
@@ -518,7 +529,7 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		Vec<PageIndex>,
+		BoundedVec<PageIndex, T::MaxExposurePageCount>,
 		ValueQuery,
 	>;
 

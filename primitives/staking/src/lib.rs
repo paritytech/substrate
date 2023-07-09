@@ -20,13 +20,12 @@
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
 
+use std::fmt::Debug;
 use crate::currency_to_vote::CurrencyToVote;
 use codec::{Decode, Encode, FullCodec, HasCompact, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Zero},
-	DispatchError, DispatchResult, RuntimeDebug, Saturating,
-};
+use sp_core::Get;
+use sp_runtime::{traits::{AtLeast32BitUnsigned, Zero}, DispatchError, DispatchResult, RuntimeDebug, Saturating, BoundedVec};
 use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec, vec::Vec};
 
 pub mod offence;
@@ -290,6 +289,12 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	pub value: Balance,
 }
 
+impl<AccountId: Default, Balance: Default + HasCompact> Default for IndividualExposure<AccountId, Balance> {
+	fn default() -> Self {
+		Self { who: Default::default(), value: Default::default() }
+	}
+}
+
 /// A snapshot of the stake backing a single validator in the system.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct Exposure<AccountId, Balance: HasCompact> {
@@ -310,30 +315,31 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 }
 
 impl<
-		AccountId: Clone,
-		Balance: HasCompact + AtLeast32BitUnsigned + Copy + codec::MaxEncodedLen,
+		AccountId: Clone + Debug,
+		Balance: HasCompact + AtLeast32BitUnsigned + Copy + codec::MaxEncodedLen + Debug,
 	> Exposure<AccountId, Balance>
 {
 	/// Splits an `Exposure` into `PagedExposureMetadata` and multiple chunks of
 	/// `IndividualExposure` with each chunk having maximum of `page_size` elements.
-	pub fn into_pages(
+	pub fn into_pages<MaxExposurePageSize: Get<u32>>(
 		self,
 		page_size: PageIndex,
-	) -> (PagedExposureMetadata<Balance>, Vec<ExposurePage<AccountId, Balance>>) {
+	) -> (PagedExposureMetadata<Balance>, Vec<ExposurePage<AccountId, Balance, MaxExposurePageSize>>) {
 		let individual_chunks = self.others.chunks(page_size as usize);
-		let mut exposure_pages: Vec<ExposurePage<AccountId, Balance>> =
+		let mut exposure_pages: Vec<ExposurePage<AccountId, Balance, MaxExposurePageSize>> =
 			Vec::with_capacity(individual_chunks.len());
 
 		for chunk in individual_chunks {
 			let mut page_total: Balance = Zero::zero();
-			let mut others: Vec<IndividualExposure<AccountId, Balance>> =
-				Vec::with_capacity(chunk.len());
+			let mut others: BoundedVec<IndividualExposure<AccountId, Balance>, MaxExposurePageSize> =
+				BoundedVec::with_bounded_capacity(chunk.len());
+
 			for individual in chunk.iter() {
 				page_total.saturating_accrue(individual.value);
-				others.push(IndividualExposure {
+				others.try_push(IndividualExposure {
 					who: individual.who.clone(),
 					value: individual.value,
-				})
+				}).expect("ExposurePage size is bounded by MaxExposurePageSize")
 			}
 
 			exposure_pages.push(ExposurePage { page_total, others });
@@ -353,17 +359,17 @@ impl<
 
 /// A snapshot of the stake backing a single validator in the system.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct ExposurePage<AccountId, Balance: HasCompact> {
+pub struct ExposurePage<AccountId, Balance: HasCompact, MaxExposurePageSize: Get<u32>> {
 	/// The total balance of this chunk/page.
 	#[codec(compact)]
 	pub page_total: Balance,
 	/// The portions of nominators stashes that are exposed.
-	pub others: Vec<IndividualExposure<AccountId, Balance>>,
+	pub others: sp_core::bounded::BoundedVec<IndividualExposure<AccountId, Balance>, MaxExposurePageSize>,
 }
 
-impl<A, B: Default + HasCompact> Default for ExposurePage<A, B> {
+impl<A, B: Default + HasCompact, M: Get<u32>> Default for ExposurePage<A, B, M> {
 	fn default() -> Self {
-		ExposurePage { page_total: Default::default(), others: vec![] }
+		ExposurePage { page_total: Default::default(), others: Default::default() }
 	}
 }
 
