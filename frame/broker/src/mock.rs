@@ -17,7 +17,7 @@
 
 #![cfg(test)]
 
-use frame_support::{traits::fungible::ItemOf};
+use frame_support::{traits::fungible::{ItemOf, DecreaseIssuance}};
 use sp_core::{H256, Get, ConstU64, ConstU16, ConstU32};
 use sp_runtime::{
 	testing::Header,
@@ -70,7 +70,11 @@ impl frame_system::Config for Test {
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = ItemOf<TestFungibles<(), u64, (), ConstU64<0>, ()>, (), u64>;
+	type OnRevenue = ();
 	type TimeslicePeriod = ConstU32<80>;
+	type BulkPeriod = ConstU32<100>;
+	type MaxLeasedCores = ConstU32<5>;
+	type MaxReservedCores = ConstU32<5>;
 	type AdvanceNotice = ();
 	type Coretime = ();
 	type ConvertBalance = Identity;

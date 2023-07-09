@@ -39,10 +39,16 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::fungible::{self, Inspect, Mutate, MutateHold}};
+	use frame_support::{
+		pallet_prelude::{*, DispatchResult},
+		traits::{
+			tokens::{Precision::Exact, Preservation::Expendable, Fortitude::Polite},
+			fungible::{self, Credit, Inspect, Balanced, HandleImbalanceDrop}, OnUnbalanced
+		}
+	};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::{AccountId32, traits::{ConvertBack, Convert}, DispatchError};
-	use sp_arithmetic::traits::{AtLeast32BitUnsigned, SaturatedConversion, Saturating};
+	use sp_arithmetic::{traits::{Bounded, AtLeast32BitUnsigned, SaturatedConversion, Saturating, BaseArithmetic}, Perbill};
 	use types::CorePart;
 
 	#[pallet::pallet]
@@ -56,7 +62,7 @@ pub mod pallet {
 		Pool,
 		Task(ParaId),
 	}
-	pub type WholeCoreAssignment = Vec<(CoreAssignment, PartsOf57600)>;
+	pub type WholeCoreAssignment = BoundedVec<(CoreAssignment, PartsOf57600), ConstU32<80>>;
 
 	pub trait CoretimeInterface {
 		type AccountId: Parameter;
@@ -69,7 +75,7 @@ pub mod pallet {
 		fn assign_core(
 			core: CoreIndex,
 			begin: Self::BlockNumber,
-			assignment: WholeCoreAssignment,
+			assignment: Vec<(CoreAssignment, PartsOf57600)>,
 			end_hint: Option<Self::BlockNumber>,
 		);
 		fn check_notify_core_count() -> Option<u16>;
@@ -97,7 +103,9 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		type Currency: Inspect<Self::AccountId>;//Mutate<Self::AccountId> + MutateHold<Self::AccountId>;
+		type Currency: Balanced<Self::AccountId>;
+
+		type OnRevenue: OnUnbalanced<Credit<Self::AccountId, Self::Currency>>;
 
 		/// Number of Relay-chain blocks ahead of time which we fix and notify of core assignments.
 		#[pallet::constant]
@@ -106,6 +114,18 @@ pub mod pallet {
 		/// Number of Relay-chain blocks per timeslice.
 		#[pallet::constant]
 		type TimeslicePeriod: Get<RelayBlockNumberOf<Self>>;
+
+		/// Period, in timeslices, of the Bulk Coretime placed for sale.
+		#[pallet::constant]
+		type BulkPeriod: Get<Timeslice>;
+
+		/// Maximum number of legacy leases.
+		#[pallet::constant]
+		type MaxLeasedCores: Get<u32>;
+
+		/// Maximum number of system cores.
+		#[pallet::constant]
+		type MaxReservedCores: Get<u32>;
 
 		/// Reversible conversion from local balance to Relay-chain balance.
 		type ConvertBalance: Convert<BalanceOf<Self>, RelayBalanceOf<Self>> + ConvertBack<BalanceOf<Self>, RelayBalanceOf<Self>>;
@@ -140,11 +160,12 @@ pub mod pallet {
 	}
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-	pub struct RegionRecord<AccountId> {
+	pub struct RegionRecord<AccountId, Balance> {
 		end: Timeslice,
 		owner: AccountId,
+		paid: Option<Balance>,
 	}
-	pub type RegionRecordOf<T> = RegionRecord<<T as frame_system::Config>::AccountId>;
+	pub type RegionRecordOf<T> = RegionRecord<<T as frame_system::Config>::AccountId, BalanceOf<T>>;
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct ScheduleItem {
@@ -178,11 +199,85 @@ pub mod pallet {
 	pub type InstaPoolHistoryRecordOf<T> = InstaPoolHistoryRecord<BalanceOf<T>>;
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	pub struct AllowedRenewalRecord<Balance> {
+		begin: Timeslice,
+		price: Balance,
+		workload: Schedule,
+	}
+	pub type AllowedRenewalRecordOf<T> = AllowedRenewalRecord<BalanceOf<T>>;
+
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct StatusRecord {
 		core_count: CoreIndex,
 		pool_size: PartCount,
 		last_timeslice: Timeslice,
 	}
+
+	/*
+	SALE:
+	                    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2
+	0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7
+	--------------------------------------------------------
+	<  renewals  >
+	              <                   sale                 >
+	                            ... of which ...           >
+	              <       auction       ><   fixed-price   >
+	                                                        | <-------\
+    price fixed, unsold assigned to instapool, system cores reserved -/
+	*/
+
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	pub struct SaleStatusRecord<Balance, BlockNumber> {
+		sale_start: BlockNumber,
+		auction_length: BlockNumber,
+		start_price: Balance,
+		reserve_price: Balance,
+		region_begin: Timeslice,
+		region_length: Timeslice,
+		first_core: CoreIndex,
+		/// The number of cores we want to sell, ideally. Selling this amount would result in no
+		/// change to the reserve_price for the next sale.
+		ideal_cores_sold: CoreIndex,
+		/// Number of cores which are/have been offered for sale.
+		cores_offered: CoreIndex,
+		/// Number of cores which have been sold; never more than cores_offered.
+		cores_sold: CoreIndex,
+	}
+	pub type SaleStatusRecordOf<T> = SaleStatusRecord<
+		BalanceOf<T>,
+		<T as frame_system::Config>::BlockNumber,
+	>;
+
+	pub type ReservationsRecord<Max> = BoundedVec<Schedule, Max>;
+	pub type ReservationsRecordOf<T> = ReservationsRecord<<T as Config>::MaxReservedCores>;
+	pub type LeasesRecord<Max> = BoundedVec<(Timeslice, ParaId), Max>;
+	pub type LeasesRecordOf<T> = LeasesRecord<<T as Config>::MaxLeasedCores>;
+
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	pub struct SaleConfigRecord<BlockNumber> {
+		presale_length: BlockNumber,
+		auction_length: BlockNumber,
+		ideal_cores_sold: CoreIndex,
+		cores_offered: CoreIndex,
+	}
+	pub type SaleConfigRecordOf<T> = SaleConfigRecord<
+		<T as frame_system::Config>::BlockNumber,
+	>;
+
+	#[pallet::storage]
+	pub type Reservations<T> = StorageValue<_, ReservationsRecordOf<T>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type Leases<T> = StorageValue<_, LeasesRecordOf<T>, ValueQuery>;
+
+	#[pallet::storage]
+	pub type AllowedRenewals<T> = StorageMap<_, Twox64Concat, CoreIndex, AllowedRenewalRecordOf<T>, OptionQuery>;
+
+	#[pallet::storage]
+	pub type SaleConfig<T> = StorageValue<_, SaleConfigRecordOf<T>, OptionQuery>;
+
+	#[pallet::storage]
+	pub type SaleStatus<T> = StorageValue<_, SaleStatusRecordOf<T>, OptionQuery>;
 
 	#[pallet::storage]
 	pub type Regions<T> = StorageMap<_, Blake2_128Concat, RegionId, RegionRecordOf<T>, OptionQuery>;
@@ -247,6 +342,15 @@ pub mod pallet {
 		NullPivot,
 		CompletePivot,
 		CorruptWorkplan,
+		NoSales,
+		IndeterminablePrice,
+		Overpriced,
+		Unavailable,
+		SoldOut,
+		WrongTime,
+		NotAllowed,
+		Uninitialized,
+		TooEarly,
 	}
 
 	#[pallet::hooks]
@@ -266,7 +370,82 @@ pub mod pallet {
 		}
 	}
 
+	fn lerp<T: TryInto<u128>, S: TryInto<u128> + TryFrom<u128> + Bounded>(v: T, a: T, d: T, x: S, y: S) -> Option<S> {
+		use sp_arithmetic::{Rounding::NearestPrefUp, helpers_128bit::multiply_by_rational_with_rounding};
+		let v: u128 = v.try_into().ok()?;
+		let a: u128 = a.try_into().ok()?;
+		let d: u128 = d.try_into().ok()?;
+		let r: u128 = x.try_into().ok()?;
+		let s: u128 = y.try_into().ok()?;
+		let rsd = r.max(s) - r.min(s);
+		let td = multiply_by_rational_with_rounding(rsd, (v.max(a) - a).min(d), d, NearestPrefUp)?;
+		if r < s { r + td } else { r - td }.try_into().ok()
+	}
+
 	impl<T: Config> Pallet<T> {
+		/// Begin selling for the next sale period.
+		///
+		/// Triggered by Relay-chain block number/timeslice.
+		pub(crate) fn rotate_sale(reserve_price: BalanceOf<T>) -> Option<()> {
+			let config = SaleConfig::<T>::get()?;
+			let old_sale = SaleStatus::<T>::get()?;
+
+			let now = frame_system::Pallet::<T>::block_number();
+
+			// Calculate the start price for the sale after.
+			let start_price = old_sale.start_price;
+			let reserve_price = old_sale.reserve_price;
+
+			// Set workload for the reserved (system, probably) workloads.
+			let region_begin = old_sale.region_begin + old_sale.region_length;
+			let region_length = old_sale.region_length;
+
+			let mut first_core = 0;
+			for schedule in Reservations::<T>::get().into_iter() {
+				Workplan::<T>::insert((region_begin, first_core), schedule);
+				first_core.saturating_inc();
+			}
+
+			let mut leases = Leases::<T>::get();
+			// can morph to a renewable as long as it's > begin and < end.
+			leases.retain(|&(until, para)| {
+				let part = CorePart::complete();
+				let assignment = CoreAssignment::Task(para);
+				let schedule = BoundedVec::truncate_from(vec![ScheduleItem { part, assignment }]);
+				Workplan::<T>::insert((region_begin, first_core), &schedule);
+				let expiring = until >= region_begin;
+				if expiring {
+					// last time for this one - make it renewable.
+					let record = AllowedRenewalRecord {
+						begin: region_begin + region_length,
+						price: reserve_price,
+						workload: schedule,
+					};
+					AllowedRenewals::<T>::insert(first_core, record);
+				}
+				first_core.saturating_inc();
+				!expiring
+			});
+			Leases::<T>::put(&leases);
+
+			// Update SaleStatus
+			let new_sale = SaleStatusRecord {
+				sale_start: now.saturating_add(config.presale_length),
+				auction_length: config.auction_length,
+				start_price,
+				reserve_price,
+				region_begin,
+				region_length,
+				first_core,
+				ideal_cores_sold: config.ideal_cores_sold,
+				cores_offered: config.cores_offered,
+				cores_sold: 0,
+			};
+			SaleStatus::<T>::put(&new_sale);
+
+			Some(())
+		}
+
 		pub(crate) fn next_timeslice() -> Timeslice {
 			let latest = T::Coretime::latest();
 			let advance = T::AdvanceNotice::get();
@@ -327,7 +506,7 @@ pub mod pallet {
 				intermediate.push((CoreAssignment::Idle, 80 - total_used));
 			}
 			intermediate.sort();
-			let mut assignment: WholeCoreAssignment = Vec::with_capacity(intermediate.len());
+			let mut assignment: Vec<(CoreAssignment, PartsOf57600)> = Vec::with_capacity(intermediate.len());
 			for i in intermediate.into_iter() {
 				if let Some(ref mut last) = assignment.last_mut() {
 					if last.0 == i.0 {
@@ -340,7 +519,78 @@ pub mod pallet {
 			T::Coretime::assign_core(core, rc_begin, assignment, None);
 		}
 
-		pub(crate) fn do_transfer(region_id: RegionId, maybe_check_owner: Option<T::AccountId>, new_owner: T::AccountId) -> Result<(), Error<T>> {
+		fn charge(who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+			T::OnRevenue::on_unbalanced(T::Currency::withdraw(&who, amount, Exact, Expendable, Polite)?);
+			Ok(())
+		}
+
+		/// Must be called on a core in `AllowedRenewals` whose value is a timeslice equal to the
+		/// current sale status's `region_end`.
+		pub(crate) fn do_renew(who: &T::AccountId, core: CoreIndex) -> DispatchResult {
+			let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+			let record = AllowedRenewals::<T>::get(core).ok_or(Error::<T>::NotAllowed)?;
+			let mut sale = SaleStatus::<T>::get().ok_or(Error::<T>::NoSales)?;
+
+			ensure!(record.begin == sale.region_begin, Error::<T>::WrongTime);
+			ensure!(sale.first_core < status.core_count, Error::<T>::Unavailable);
+			ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
+
+			Self::charge(who, record.price)?;
+
+			let core = sale.first_core + sale.cores_sold;
+			sale.cores_sold.saturating_inc();
+
+			Workplan::<T>::insert((record.begin, core), &record.workload);
+
+			let begin = sale.region_begin + sale.region_length;
+			let price = record.price + record.price / 100u32.into() * 2u32.into();
+			let new_record = AllowedRenewalRecord { begin, price, .. record };
+			AllowedRenewals::<T>::insert(core, new_record);
+			SaleStatus::<T>::put(&sale);
+			Ok(())
+		}
+
+		pub(crate) fn do_purchase(who: T::AccountId, price_limit: BalanceOf<T>) -> DispatchResult {
+			let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+			let mut sale = SaleStatus::<T>::get().ok_or(Error::<T>::NoSales)?;
+			ensure!(sale.first_core < status.core_count, Error::<T>::Unavailable);
+			ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
+			let now = frame_system::Pallet::<T>::block_number();
+			ensure!(now > sale.sale_start, Error::<T>::TooEarly);
+			let current_price = lerp(
+				now,
+				sale.sale_start,
+				sale.auction_length,
+				sale.start_price,
+				sale.reserve_price,
+			).ok_or(Error::<T>::IndeterminablePrice)?;
+			ensure!(price_limit >= current_price, Error::<T>::Overpriced);
+
+			Self::charge(&who, current_price)?;
+			let core = sale.first_core + sale.cores_sold;
+			sale.cores_sold.saturating_inc();
+			SaleStatus::<T>::put(&sale);
+			Self::issue(core, sale.region_begin, sale.region_length, who, Some(current_price));
+			Ok(())
+		}
+
+		pub(crate) fn issue(
+			core: CoreIndex,
+			begin: Timeslice,
+			length: Timeslice,
+			owner: T::AccountId,
+			paid: Option<BalanceOf<T>>,
+		) {
+			let id = RegionId { begin, core, part: CorePart::complete() };
+			let record = RegionRecord { end: begin + length, owner, paid };
+			Regions::<T>::insert(id, record);
+		}
+
+		pub(crate) fn do_transfer(
+			region_id: RegionId,
+			maybe_check_owner: Option<T::AccountId>,
+			new_owner: T::AccountId,
+		) -> Result<(), Error<T>> {
 			let mut region = Regions::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
 
 			if let Some(check_owner) = maybe_check_owner {
@@ -369,6 +619,7 @@ pub mod pallet {
 			ensure!(pivot > region_id.begin, Error::<T>::PivotTooEarly);
 			ensure!(pivot < region.end, Error::<T>::PivotTooLate);
 
+			region.paid = None;
 			let new_region_id = RegionId { begin: pivot, ..region_id.clone() };
 			let new_region = RegionRecord { end: pivot, ..region.clone() };
 
@@ -444,6 +695,22 @@ pub mod pallet {
 				}).is_ok() {
 					Workplan::<T>::insert(&workplan_key, &workplan);
 				}
+				if region.end.saturating_sub(region_id.begin) == T::BulkPeriod::get() {
+					if workplan.iter()
+						.filter(|i| matches!(i.assignment, CoreAssignment::Task(..)))
+						.fold(CorePart::void(), |a, i| a | i.part)
+						.is_complete()
+					{
+						if let Some(price) = region.paid {
+							let record = AllowedRenewalRecord {
+								begin: region.end,
+								price,
+								workload: workplan,
+							};
+							AllowedRenewals::<T>::insert(region_id.core, &record);
+						}
+					}
+				}
 				Self::deposit_event(Event::Assigned { region_id, task: target });
 			}
 			Ok(())
@@ -476,18 +743,6 @@ pub mod pallet {
 				}
 				Self::deposit_event(Event::Pooled { region_id });
 			}
-			Ok(())
-		}
-
-		pub(crate) fn issue(
-			core: CoreIndex,
-			begin: Timeslice,
-			length: Timeslice,
-			owner: T::AccountId,
-		) -> Result<(), Error<T>> {
-			let id = RegionId { begin, core, part: CorePart::complete() };
-			let record = RegionRecord { end: begin + length, owner };
-			Regions::<T>::insert(id, record);
 			Ok(())
 		}
 	}
