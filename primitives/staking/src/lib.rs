@@ -280,7 +280,7 @@ pub trait StakingInterface {
 	fn set_current_era(era: EraIndex);
 }
 
-/// The amount of exposure (to slashing) than an individual nominator has.
+/// The amount of exposure for an era that an individual nominator has (susceptible to slashing).
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 	/// The stash account of the nominator in question.
