@@ -6182,7 +6182,7 @@ fn can_page_exposure() {
 		Exposure { total: total_stake, own: own_stake, others };
 
 	// when
-	let (exposure_overview, exposure_page): (
+	let (exposure_metadata, exposure_page): (
 		PagedExposureMetadata<Balance>,
 		Vec<ExposurePage<AccountId, Balance>>,
 	) = exposure.clone().into_pages(3);
@@ -6190,23 +6190,23 @@ fn can_page_exposure() {
 	// then
 	// 7 pages of nominators.
 	assert_eq!(exposure_page.len(), 7);
-	assert_eq!(exposure_overview.page_count, 7);
+	assert_eq!(exposure_metadata.page_count, 7);
 	// first page stake = 100 + 200 + 300
 	assert!(matches!(exposure_page[0], ExposurePage { page_total: 600, .. }));
 	// second page stake = 0 + 400 + 500 + 600
 	assert!(matches!(exposure_page[1], ExposurePage { page_total: 1500, .. }));
 	// verify overview has the total
-	assert_eq!(exposure_overview.total, 19_500);
+	assert_eq!(exposure_metadata.total, 19_500);
 	// verify total stake is same as in the original exposure.
 	assert_eq!(
 		exposure_page.iter().map(|a| a.page_total).reduce(|a, b| a + b).unwrap(),
-		19_500 - exposure_overview.own
+		19_500 - exposure_metadata.own
 	);
 	// verify own stake is correct
-	assert_eq!(exposure_overview.own, 500);
+	assert_eq!(exposure_metadata.own, 500);
 	// verify number of nominators are same as in the original exposure.
 	assert_eq!(exposure_page.iter().map(|a| a.others.len()).reduce(|a, b| a + b).unwrap(), 19);
-	assert_eq!(exposure_overview.nominator_count, 19);
+	assert_eq!(exposure_metadata.nominator_count, 19);
 }
 
 #[test]
@@ -6420,7 +6420,7 @@ fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout(
 		let actual_exposure_paged = EraInfo::<Test>::get_paged_exposure(1, &11, 0).unwrap();
 		assert_eq!(actual_exposure_paged.others(), &clipped_exposure);
 		assert_eq!(actual_exposure_paged.own(), 1000);
-		assert_eq!(actual_exposure_paged.exposure_overview.page_count, 1);
+		assert_eq!(actual_exposure_paged.exposure_metadata.page_count, 1);
 
 		let actual_exposure_full = EraInfo::<Test>::get_full_exposure(1, &11);
 		assert_eq!(actual_exposure_full.others, expected_individual_exposures);

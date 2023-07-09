@@ -707,7 +707,7 @@ pub struct Nominations<T: Config> {
 /// in consideration, in addition to the individual nominators backing them.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, PartialEq, Eq)]
 struct ExposureExt<AccountId, Balance: HasCompact + codec::MaxEncodedLen> {
-	exposure_overview: PagedExposureMetadata<Balance>,
+	exposure_metadata: PagedExposureMetadata<Balance>,
 	exposure_page: ExposurePage<AccountId, Balance>,
 }
 
@@ -717,7 +717,7 @@ impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEn
 	/// Create a new instance of `ExposureExt` from legacy clipped exposures.
 	pub fn from_clipped(exposure: Exposure<AccountId, Balance>) -> Self {
 		Self {
-			exposure_overview: PagedExposureMetadata {
+			exposure_metadata: PagedExposureMetadata {
 				total: exposure.total,
 				own: exposure.own,
 				nominator_count: exposure.others.len() as u32,
@@ -729,17 +729,17 @@ impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEn
 
 	/// Returns total exposure of this validator across pages
 	pub fn total(&self) -> Balance {
-		self.exposure_overview.total
+		self.exposure_metadata.total
 	}
 
 	/// Returns total exposure of this validator for the current page
 	pub fn page_total(&self) -> Balance {
-		self.exposure_page.page_total + self.exposure_overview.own
+		self.exposure_page.page_total + self.exposure_metadata.own
 	}
 
 	/// Returns validator's own stake that is exposed
 	pub fn own(&self) -> Balance {
-		self.exposure_overview.own
+		self.exposure_metadata.own
 	}
 
 	/// Returns the portions of nominators stashes that are exposed in this page.
@@ -1028,7 +1028,7 @@ impl<T: Config> EraInfo<T> {
 
 		// build the exposure
 		Some(ExposureExt {
-			exposure_overview: PagedExposureMetadata { own: validator_stake, ..overview },
+			exposure_metadata: PagedExposureMetadata { own: validator_stake, ..overview },
 			exposure_page,
 		})
 	}
@@ -1154,10 +1154,10 @@ impl<T: Config> EraInfo<T> {
 			exposure
 		};
 
-		let (exposure_overview, exposure_pages) = exposure.into_pages(page_size);
+		let (exposure_metadata, exposure_pages) = exposure.into_pages(page_size);
 		defensive_assert!(exposure_pages.len() == required_page_count, "unexpected page count");
 
-		<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
+		<ErasStakersOverview<T>>::insert(era, &validator, &exposure_metadata);
 		exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
 			<ErasStakersPaged<T>>::insert((era, &validator, page as PageIndex), &paged_exposure);
 		});
