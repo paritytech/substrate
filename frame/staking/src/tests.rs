@@ -3729,7 +3729,7 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 fn test_nominators_are_rewarded_for_all_exposure_page() {
 	ExtBuilder::default().build_and_execute(|| {
 		// enable multi paged rewards payout
-		allow_paged_rewards(3);
+		set_max_exposure_page_count(3);
 
 		// 3 pages of exposure
 		let nominator_count = 2 * MaxExposurePageSize::get() + 1;
@@ -3778,7 +3778,7 @@ fn test_multi_page_payout_stakers_by_page() {
 	// Test that payout_stakers work in general and that it pays the correct amount of reward.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// enable multi paged rewards payout
-		allow_paged_rewards(10);
+		set_max_exposure_page_count(10);
 
 		let balance = 1000;
 		// Track the exposure of the validator and all nominators.
@@ -3975,7 +3975,7 @@ fn test_multi_page_payout_stakers_backward_compatible() {
 	// Test that payout_stakers work in general and that it pays the correct amount of reward.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// enable multi paged rewards payout
-		allow_paged_rewards(10);
+		set_max_exposure_page_count(10);
 
 		let balance = 1000;
 		// Track the exposure of the validator and all nominators.
@@ -4238,7 +4238,7 @@ fn test_page_count_and_size() {
 		assert_eq!(previous_nominator_balance, 1000 + 36);
 
 		// increase max page size
-		allow_paged_rewards(10);
+		set_max_exposure_page_count(10);
 		mock::start_active_era(2);
 
 		assert_eq!(EraInfo::<Test>::get_page_count(2, &11), 2);
@@ -4284,7 +4284,7 @@ fn payout_stakers_handles_basic_errors() {
 	// Here we will test payouts handle all errors.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// enable multi paged rewards payout
-		allow_paged_rewards(2);
+		set_max_exposure_page_count(2);
 
 		// Consumed weight for all payout_stakers dispatches that fail
 		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
@@ -4419,7 +4419,7 @@ fn payout_stakers_handles_basic_errors() {
 fn test_commission_paid_across_pages() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// enable multi paged rewards payout
-		allow_paged_rewards(4);
+		set_max_exposure_page_count(4);
 
 		let balance = 1;
 		let commission = 50;
@@ -6336,7 +6336,7 @@ fn test_legacy_claimed_rewards_is_checked_at_reward_payout() {
 fn test_validator_exposure_is_backward_compatible_with_non_paged_rewards_payout() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// enable multi paged rewards payout
-		allow_paged_rewards(2);
+		set_max_exposure_page_count(2);
 
 		// case 1: exposure exist in clipped.
 		// set page cap to 10
