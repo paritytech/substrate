@@ -30,7 +30,6 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 /* TODO:
-- Purchase and renewal
 - Advance notice & on_initialize
 - Initialization
 - Pool rewards
@@ -48,7 +47,7 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::{AccountId32, traits::{ConvertBack, Convert}, DispatchError};
-	use sp_arithmetic::{traits::{Bounded, AtLeast32BitUnsigned, SaturatedConversion, Saturating, BaseArithmetic}, Perbill};
+	use sp_arithmetic::{traits::{Bounded, AtLeast32BitUnsigned, SaturatedConversion, Saturating, BaseArithmetic}, Perbill, PerThing};
 	use types::CorePart;
 
 	#[pallet::pallet]
@@ -383,18 +382,57 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		pub(crate) fn initialize(
+			reserve_price: BalanceOf<T>,
+		) {
+		}
+
+		fn next_price(
+			offered: CoreIndex,
+			ideal: CoreIndex,
+			sold: CoreIndex,
+			old: BalanceOf<T>,
+		) -> BalanceOf<T> {
+			if sold > ideal {
+				let extra = if offered > ideal {
+					Perbill::from_rational((sold - ideal) as u32, (offered - ideal) as u32)
+				} else {
+					Perbill::zero()
+				};
+				old + extra * old
+			} else {
+				let extra = if ideal > 0 {
+					Perbill::from_rational(sold as u32, ideal as u32).left_from_one()
+				} else {
+					Perbill::zero()
+				};
+				old - extra * old
+			}
+		}
+
 		/// Begin selling for the next sale period.
 		///
 		/// Triggered by Relay-chain block number/timeslice.
-		pub(crate) fn rotate_sale(reserve_price: BalanceOf<T>) -> Option<()> {
+		pub(crate) fn rotate_sale() -> Option<()> {
+			let status = Status::<T>::get()?;
 			let config = SaleConfig::<T>::get()?;
 			let old_sale = SaleStatus::<T>::get()?;
 
 			let now = frame_system::Pallet::<T>::block_number();
 
 			// Calculate the start price for the sale after.
-			let start_price = old_sale.start_price;
-			let reserve_price = old_sale.reserve_price;
+			let reserve_price = {
+				let core_count = status.core_count;
+				let max_retail = core_count.saturating_sub(old_sale.first_core);
+				let offered = old_sale.cores_offered.min(max_retail);
+				let ideal = old_sale.ideal_cores_sold.min(max_retail);
+				let sold = old_sale.cores_sold;
+				let old_price = old_sale.reserve_price;
+				Self::next_price(offered, ideal, sold, old_price)
+			};
+			let start_price = reserve_price * 2u32.into();
+
+			// TODO: commission system InstaPool cores.
 
 			// Set workload for the reserved (system, probably) workloads.
 			let region_begin = old_sale.region_begin + old_sale.region_length;
