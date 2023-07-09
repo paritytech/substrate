@@ -1526,7 +1526,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 					StorageEntryMetadata {
 						name: "CountedNMap2",
@@ -1547,7 +1547,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 					StorageEntryMetadata {
 						name: "CountedNMap3",
@@ -1568,7 +1568,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 					#[cfg(feature = "frame-feature-testing")]
 					StorageEntryMetadata {
@@ -1639,7 +1639,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 					StorageEntryMetadata {
 						name: "RenamedCountedMap",
