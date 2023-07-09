@@ -1620,6 +1620,7 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
+					#[cfg(feature = "frame-feature-testing")]
 					StorageEntryMetadata {
 						name: "ConditionalCountedNMap",
 						modifier: StorageEntryModifier::Optional,
@@ -1634,6 +1635,7 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
+					#[cfg(feature = "frame-feature-testing")]
 					StorageEntryMetadata {
 						name: "CounterForConditionalCountedNMap",
 						modifier: StorageEntryModifier::Default,
