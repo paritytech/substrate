@@ -40,7 +40,7 @@ pub type SessionIndex = u32;
 pub type EraIndex = u32;
 
 /// Counter for paged storage items.
-pub type PageIndex = u32;
+pub type PageIndex = u16;
 
 /// Representation of the status of a staker.
 #[derive(RuntimeDebug, TypeInfo)]
@@ -318,7 +318,7 @@ impl<
 	/// with each chunk having maximum of `page_size` elements.
 	pub fn into_pages(
 		self,
-		page_size: u32,
+		page_size: PageIndex,
 	) -> (ExposureOverview<Balance>, Vec<ExposurePage<AccountId, Balance>>) {
 		let individual_chunks = self.others.chunks(page_size as usize);
 		let mut exposure_pages: Vec<ExposurePage<AccountId, Balance>> =

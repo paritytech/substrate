@@ -213,7 +213,7 @@ pub mod pallet {
 		/// Note: `MaxExposurePageSize` is used to bound `ClaimedRewards` and is unsafe to reduce
 		/// without handling it in a migration.
 		#[pallet::constant]
-		type MaxExposurePageSize: Get<u32>;
+		type MaxExposurePageSize: Get<u16>;
 
 		/// Maximum number of exposure pages that can be stored for a single validator in an era.
 		///
@@ -222,7 +222,7 @@ pub mod pallet {
 		/// When this is set to 1, the reward payout behaviour is similar to how it used to work
 		/// before we had paged exposures.
 		#[pallet::constant]
-		type MaxExposurePageCount: Get<u32>;
+		type MaxExposurePageCount: Get<u16>;
 
 		/// The fraction of the validator set that is safe to be offending.
 		/// After the threshold is reached a new era will be forced.
@@ -1556,7 +1556,7 @@ pub mod pallet {
 		/// ## Complexity
 		/// - At most O(MaxExposurePageSize).
 		#[pallet::call_index(18)]
-		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get()))]
+		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get().into()))]
 		pub fn payout_stakers(
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,
@@ -1877,7 +1877,7 @@ pub mod pallet {
 		/// and so it should not be assumed the highest staker would be on the topmost page and vice
 		/// versa. If rewards are not claimed in [`Config::HistoryDepth`] eras, they are lost.
 		#[pallet::call_index(26)]
-		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get()))]
+		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get().into()))]
 		pub fn payout_stakers_by_page(
 			origin: OriginFor<T>,
 			validator_stash: T::AccountId,

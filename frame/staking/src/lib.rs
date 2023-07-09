@@ -1159,7 +1159,7 @@ impl<T: Config> EraInfo<T> {
 
 		<ErasStakersOverview<T>>::insert(era, &validator, &exposure_overview);
 		exposure_pages.iter().enumerate().for_each(|(page, paged_exposure)| {
-			<ErasStakersPaged<T>>::insert((era, &validator, page as u32), &paged_exposure);
+			<ErasStakersPaged<T>>::insert((era, &validator, page as PageIndex), &paged_exposure);
 		});
 	}
 

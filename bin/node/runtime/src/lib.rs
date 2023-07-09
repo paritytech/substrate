@@ -590,8 +590,8 @@ impl pallet_staking::Config for Runtime {
 	type SessionInterface = Self;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
-	type MaxExposurePageSize = ConstU32<256>;
-	type MaxExposurePageCount = ConstU32<1>;
+	type MaxExposurePageSize = frame_support::traits::ConstU16<256>;
+	type MaxExposurePageCount = frame_support::traits::ConstU16<1>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
@@ -2200,8 +2200,8 @@ impl_runtime_apis! {
 			Staking::api_nominations_quota(balance)
 		}
 
-		fn era_page_count(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::PageIndex {
-			Staking::api_era_page_count(era, account)
+		fn eras_stakers_page_count(era: sp_staking::EraIndex, account: AccountId) -> sp_staking::PageIndex {
+			Staking::api_eras_stakers_page_count(era, account)
 		}
 	}
 
