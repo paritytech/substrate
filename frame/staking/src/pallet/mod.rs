@@ -1541,20 +1541,11 @@ pub mod pallet {
 		/// The origin of this call must be _Signed_. Any account can call this function, even if
 		/// it is not one of the stakers.
 		///
-		/// This pays out the earliest exposure page not claimed for the era. If all pages are
-		/// claimed, it returns an error `InvalidPage`.
+		/// The reward payout could be paged in case there are too many nominators backing the
+		/// `validator_stash`. This call will payout unpaid pages in an ascending order. To claim a
+		/// specific page, use `payout_stakers_by_page`.`
 		///
-		/// If a validator has more than [`Config::MaxExposurePageSize`] nominators backing
-		/// them, then the list of nominators is paged, with each page being capped at
-		/// [`Config::MaxExposurePageSize`]. If a validator has more than one page of
-		/// nominators, the call needs to be made for each page separately in order for all the
-		/// nominators backing a validator receive the reward. The nominators are not sorted across
-		/// pages and so it should not be assumed the highest staker would be on the topmost page
-		/// and vice versa. If rewards are not claimed in [`Config::HistoryDepth`] eras, they are
-		/// lost.
-		///
-		/// ## Complexity
-		/// - At most O(MaxExposurePageSize).
+		/// If all pages are claimed, it returns an error `InvalidPage`.
 		#[pallet::call_index(18)]
 		#[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(T::MaxExposurePageSize::get().into()))]
 		pub fn payout_stakers(
