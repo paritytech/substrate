@@ -69,7 +69,7 @@ impl frame_system::Config for Test {
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Currency = ItemOf<TestFungibles<(), u64, (), ConstU64<0>>, (), u64>;
+	type Currency = ItemOf<TestFungibles<(), u64, (), ConstU64<0>, ()>, (), u64>;
 	type TimeslicePeriod = ConstU32<80>;
 	type AdvanceNotice = ();
 	type Coretime = ();

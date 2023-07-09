@@ -52,8 +52,10 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// restrictions on the minimum amount of the account. Note: This cannot bring the account into
 	/// an inconsistent state with regards any required existential deposit.
 	///
-	/// Always less than `total_balance_on_hold()`.
-	fn reducible_total_balance_on_hold(who: &AccountId, force: Fortitude) -> Self::Balance;
+	/// Never more than `total_balance_on_hold()`.
+	fn reducible_total_balance_on_hold(who: &AccountId, _force: Fortitude) -> Self::Balance {
+		Self::total_balance_on_hold(who)
+	}
 
 	/// Amount of funds on hold (for the given reason) of `who`.
 	fn balance_on_hold(reason: &Self::Reason, who: &AccountId) -> Self::Balance;
@@ -65,7 +67,9 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 	/// NOTE: This does not take into account changes which could be made to the account of `who`
 	/// (such as removing a provider reference) after this call is made. Any usage of this should
 	/// therefore ensure the account is already in the appropriate state prior to calling it.
-	fn hold_available(reason: &Self::Reason, who: &AccountId) -> bool;
+	fn hold_available(_reason: &Self::Reason, _who: &AccountId) -> bool {
+		true
+	}
 
 	/// Check to see if some `amount` of funds of `who` may be placed on hold with the given
 	/// `reason`. Reasons why this may not be true:
