@@ -1256,6 +1256,7 @@ pub mod pallet {
 
 	/// Current phase.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn current_phase)]
 	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
 
@@ -1263,6 +1264,7 @@ pub mod pallet {
 	///
 	/// Always sorted by score.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn queued_solution)]
 	pub type QueuedSolution<T: Config> =
 		StorageValue<_, ReadySolution<T::AccountId, T::MaxWinners>>;
@@ -1271,6 +1273,7 @@ pub mod pallet {
 	///
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn snapshot)]
 	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T::AccountId, VoterOf<T>>>;
 
@@ -1285,6 +1288,7 @@ pub mod pallet {
 	///
 	/// Only exists when [`Snapshot`] is present.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
@@ -1322,6 +1326,7 @@ pub mod pallet {
 	/// Twox note: the key of the map is an auto-incrementing index which users cannot inspect or
 	/// affect; we shouldn't need a cryptographically secure hasher.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub type SignedSubmissionsMap<T: Config> =
 		StorageMap<_, Twox64Concat, u32, SignedSubmissionOf<T>, OptionQuery>;
 
@@ -1341,7 +1346,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
-	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 }
