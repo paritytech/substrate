@@ -467,7 +467,7 @@ pub struct RoundSnapshot<AccountId, DataProvider> {
 /// This is stored automatically on-chain, and it contains the **size of the entire snapshot**.
 /// This is also used in dispatchables as weight witness data and should **only contain the size of
 /// the presented solution**, not the entire snapshot.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, Default, TypeInfo, MaxEncodedLen)]
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
@@ -1287,7 +1287,6 @@ pub mod pallet {
 	///
 	/// Only exists when [`Snapshot`] is present.
 	#[pallet::storage]
-	#[pallet::unbounded]
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
