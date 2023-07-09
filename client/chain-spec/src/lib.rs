@@ -187,6 +187,7 @@ pub use self::{
 		construct_genesis_block, resolve_state_version_from_wasm, BuildGenesisBlock,
 		GenesisBlockBuilder,
 	},
+	genesis_config_builder::GenesisConfigBuilderRuntimeCaller,
 };
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 

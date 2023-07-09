@@ -1,86 +1,137 @@
+use std::{borrow::Cow, str::FromStr};
+
 use codec::{Decode, Encode};
 use sc_executor::{error::Result, WasmExecutor};
-use sc_executor_common::runtime_blob::RuntimeBlob;
+// use sc_executor_common::runtime_blob::RuntimeBlob;
 use serde_json::{from_slice, Value};
-use sp_core::{storage::Storage, traits::Externalities};
+use sp_core::{
+	storage::Storage,
+	traits::{CallContext, CodeExecutor, Externalities, FetchRuntimeCode, RuntimeCode},
+};
 use sp_genesis_builder::Result as BuildResult;
 use sp_state_machine::BasicExternalities;
 
-// todo:
-// - tests: focus on errors
-// - reuse executor
-// - pub api + internal function
-
-fn executor_call(
-	ext: &mut dyn Externalities,
-	code: &[u8],
-	method: &str,
-	data: &[u8],
-) -> Result<Vec<u8>> {
-	WasmExecutor::<sp_io::SubstrateHostFunctions>::builder().build().uncached_call(
-		RuntimeBlob::uncompress_if_needed(code.into()).unwrap(),
-		ext,
-		true,
-		method,
-		data,
-	)
+pub struct GenesisConfigBuilderRuntimeCaller<'a> {
+	code: Cow<'a, [u8]>,
+	code_hash: Vec<u8>,
+	executor: WasmExecutor<sp_io::SubstrateHostFunctions>,
 }
 
-pub fn get_storage_for_config(code: &[u8], config: Value) -> core::result::Result<Storage, String> {
-	log::info!("get_storage_for_config: {:?}", config);
-	let mut ext = BasicExternalities::new_empty();
+impl<'a> FetchRuntimeCode for GenesisConfigBuilderRuntimeCaller<'a> {
+	fn fetch_runtime_code(&self) -> Option<Cow<[u8]>> {
+		Some(self.code.as_ref().into())
+	}
+}
 
-	let call_result =
-		executor_call(&mut ext, code, "GenesisBuilder_build_config", &config.to_string().encode())
+impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
+	pub fn new(code: &'a [u8]) -> Self {
+		GenesisConfigBuilderRuntimeCaller {
+			code: code.into(),
+			code_hash: sp_core::blake2_256(&code).to_vec(),
+			executor: WasmExecutor::<sp_io::SubstrateHostFunctions>::builder().build(),
+		}
+	}
+
+	fn call(&self, ext: &mut dyn Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>> {
+		self.executor
+			.call(
+				ext,
+				&RuntimeCode { heap_pages: None, code_fetcher: self, hash: self.code_hash.clone() },
+				method,
+				data,
+				false,
+				CallContext::Offchain,
+			)
+			.0
+	}
+}
+
+impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
+	pub fn get_default_config(&self) -> core::result::Result<Value, String> {
+		let mut t = BasicExternalities::new_empty();
+		let call_result = self
+			.call(&mut t, "GenesisBuilder_create_default_config", &vec![])
+			.map_err(|e| format!("wasm call error {e}"))?;
+		let default_config = Vec::<u8>::decode(&mut &call_result[..])
+			.map_err(|e| format!("scale codec error: {e}"))?;
+		Ok(from_slice(&default_config[..]).expect("returned value is json. qed."))
+	}
+
+	pub fn get_storage_for_config(&self, config: Value) -> core::result::Result<Storage, String> {
+		let mut ext = BasicExternalities::new_empty();
+
+		let call_result = self
+			.call(&mut ext, "GenesisBuilder_build_config", &config.to_string().encode())
 			.map_err(|e| format!("wasm call error {e}"))?;
 
-	log::info!("get_storage_for_config: call_restul {:?}", call_result);
-	log::info!("get_storage_for_config: ext {:?}", ext);
-	let build_result = BuildResult::decode(&mut &call_result[..])
-		.map_err(|e| format!("scale codec error: {e}"))?;
-	log::info!("get_storage_for_config: br {:?}", build_result);
+		let build_result = BuildResult::decode(&mut &call_result[..])
+			.map_err(|e| format!("scale codec error: {e}"))?;
 
-	Ok(build_result.map(|_| ext.into_storages())?)
+		Ok(build_result.map(|_| ext.into_storages())?)
+	}
+
+	pub fn get_storage_for_patch(&self, patch: Value) -> core::result::Result<Storage, String> {
+		let mut config = self.get_default_config()?;
+		json_patch::merge(&mut config, &patch);
+		self.get_storage_for_config(config)
+	}
 }
 
-pub fn get_storage_for_patch(code: &[u8], patch: Value) -> core::result::Result<Storage, String> {
-	log::info!("get_storage_for_patch: {:?}", patch);
-	let mut t = BasicExternalities::new_empty();
-	let call_result = executor_call(&mut t, code, "GenesisBuilder_create_default_config", &vec![])
-		.map_err(|e| format!("wasm call error {e}"))?;
+#[cfg(test)]
+mod tests {
+	use super::*;
+	pub use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
 
-	let default_config =
-		Vec::<u8>::decode(&mut &call_result[..]).map_err(|e| format!("scale codec error: {e}"))?;
+	#[test]
+	fn get_default_config_works() {
+		sp_tracing::try_init_simple();
+		let config =
+			GenesisConfigBuilderRuntimeCaller::new(substrate_test_runtime::wasm_binary_unwrap())
+				.get_default_config()
+				.unwrap();
+		let expected = r#"{"system":{},"babe":{"authorities":[],"epochConfig":null},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
+		assert_eq!(serde_json::from_str::<Value>(expected).unwrap(), config);
+	}
 
-	let mut config: Value = from_slice(&default_config[..]).expect("returned value is json. qed.");
+	#[test]
+	fn get_storage_for_patch_works() {
+		sp_tracing::try_init_simple();
 
-	json_patch::merge(&mut config, &patch);
-	get_storage_for_config(code, config)
+		let patch = serde_json::json!({
+			"babe": {
+				"epochConfig": {
+					"c": [
+						69,
+						696
+					],
+					"allowed_slots": "PrimaryAndSecondaryPlainSlots"
+				}
+			},
+		});
+
+		let storage =
+			GenesisConfigBuilderRuntimeCaller::new(substrate_test_runtime::wasm_binary_unwrap())
+				.get_storage_for_patch(patch)
+				.unwrap();
+
+		//Babe|Authorities
+		let value: Vec<u8> = storage
+			.top
+			.get(
+				&array_bytes::hex2bytes(
+					"1cb6f36e027abb2091cfb5110ab5087fdc6b171b77304263c292cc3ea5ed31ef",
+				)
+				.unwrap(),
+			)
+			.unwrap()
+			.clone();
+
+		assert_eq!(
+			BabeEpochConfiguration::decode(&mut &value[..]).unwrap(),
+			BabeEpochConfiguration {
+				c: (69, 696),
+				allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots
+			}
+		);
+	}
 }
-
-// pub fn get_default_config(code: &[u8]) -> core::result::Result<Storage, String> {
-// 	let mut t = BasicExternalities::new_empty();
-// 	let call_result = executor_call(&mut t, code, "GenesisBuilder_create_default_config", &vec![])
-// 		.map_err(|e| format!("wasm call error {e}"))?;
-
-// 	let default_config =
-// 		Vec::<u8>::decode(&mut &call_result[..]).map_err(|e| format!("scale codec error: {e}"))?;
-
-// 	let mut config: Value = from_slice(&default_config[..]).expect("returned value is json. qed.");
-
-// 	json_patch::merge(&mut config, &patch);
-// 	get_storage_for_config(code, config)
-// }
-
-// #[test]
-// fn build_config_from_json_works() {
-// 	sp_tracing::try_init_simple();
-// 	let j = include_str!("../../../test-utils/runtime/src/test_json/default_genesis_config.json");
-
-// 	let mut t = BasicExternalities::new_empty();
-// 	let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).unwrap();
-// 	let r = BuildResult::decode(&mut &r[..]);
-// 	assert!(r.is_ok());
-
-// 	// let mut _keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
-// }

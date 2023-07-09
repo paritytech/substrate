@@ -19,7 +19,10 @@
 //! Substrate chain configurations.
 #![warn(missing_docs)]
 
-use crate::{extension::GetExtension, ChainType, Properties, RuntimeGenesis};
+use crate::{
+	extension::GetExtension, ChainType, GenesisConfigBuilderRuntimeCaller as RuntimeCaller,
+	Properties, RuntimeGenesis,
+};
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{Deserialize, Serialize};
@@ -153,12 +156,12 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 			// it, but Substrate itself isn't capable of loading chain specs with just a hash at the
 			// moment.
 			Genesis::StateRootHash(_) => Err("Genesis storage in hash format not supported".into()),
-			Genesis::JsonFull(config) =>
-				crate::genesis_config_builder::get_storage_for_config(&self.code[..], config)?
-					.assimilate_storage(storage),
-			Genesis::JsonPatch(patch) =>
-				crate::genesis_config_builder::get_storage_for_patch(&self.code[..], patch)?
-					.assimilate_storage(storage),
+			Genesis::JsonFull(config) => RuntimeCaller::new(&self.code[..])
+				.get_storage_for_config(config)?
+				.assimilate_storage(storage),
+			Genesis::JsonPatch(patch) => RuntimeCaller::new(&self.code[..])
+				.get_storage_for_patch(patch)?
+				.assimilate_storage(storage),
 		}?;
 
 		Ok(())
@@ -559,10 +562,10 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	fn json_container(&self, raw: bool) -> Result<ChainSpecJsonContainer<G, E>, String> {
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::JsonPatch(patch)) => Genesis::Raw(RawGenesis::from(
-				crate::genesis_config_builder::get_storage_for_patch(&self.code[..], patch)?,
+				RuntimeCaller::new(&self.code[..]).get_storage_for_patch(patch)?,
 			)),
 			(true, Genesis::JsonFull(config)) => Genesis::Raw(RawGenesis::from(
-				crate::genesis_config_builder::get_storage_for_config(&self.code[..], config)?,
+				RuntimeCaller::new(&self.code[..]).get_storage_for_config(config)?,
 			)),
 			(true, Genesis::Runtime(g)) => {
 				let storage = g.build_storage()?;
@@ -890,6 +893,6 @@ mod tests {
 			}))
 			.build();
 
-      		assert!(output.as_json(true).unwrap_err().contains("Invalid JSON blob: unknown field `invalid_pallet`, expected one of `system`, `babe`, `substrateTest`, `balances`"));
+		assert!(output.as_json(true).unwrap_err().contains("Invalid JSON blob: unknown field `invalid_pallet`, expected one of `system`, `babe`, `substrateTest`, `balances`"));
 	}
 }
