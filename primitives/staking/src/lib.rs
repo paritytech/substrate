@@ -314,8 +314,8 @@ impl<
 		Balance: HasCompact + AtLeast32BitUnsigned + Copy + codec::MaxEncodedLen,
 	> Exposure<AccountId, Balance>
 {
-	/// Splits an `Exposure` into `PagedExposureMetadata` and multiple chunks of `IndividualExposure`
-	/// with each chunk having maximum of `page_size` elements.
+	/// Splits an `Exposure` into `PagedExposureMetadata` and multiple chunks of
+	/// `IndividualExposure` with each chunk having maximum of `page_size` elements.
 	pub fn into_pages(
 		self,
 		page_size: PageIndex,

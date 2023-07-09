@@ -320,7 +320,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, PagedExposureMetadata, ExposurePage, OnStakingUpdate, PageIndex, SessionIndex,
+	EraIndex, ExposurePage, OnStakingUpdate, PageIndex, PagedExposureMetadata, SessionIndex,
 };
 pub use sp_staking::{Exposure, IndividualExposure, StakerStatus};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
@@ -997,8 +997,8 @@ impl<T: Config> EraInfo<T> {
 
 	/// Get exposure for a validator at a given era and page.
 	///
-	/// This builds a paged exposure from `PagedExposureMetadata` and `ExposurePage` of the validator.
-	/// For older non-paged exposure, it returns the clipped exposure directly.
+	/// This builds a paged exposure from `PagedExposureMetadata` and `ExposurePage` of the
+	/// validator. For older non-paged exposure, it returns the clipped exposure directly.
 	pub(crate) fn get_paged_exposure(
 		era: EraIndex,
 		validator: &T::AccountId,
