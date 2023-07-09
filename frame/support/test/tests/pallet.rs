@@ -1166,6 +1166,30 @@ fn storage_expand() {
 			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
 		);
 
+		pallet::CountedNMap::<Runtime>::insert((&1,), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"CountedNMap")].concat();
+		k.extend(1u8.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
+		assert_eq!(pallet::CountedNMap::<Runtime>::count(), 1);
+
+		pallet::CountedNMap2::<Runtime>::insert((&1, &2), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"CountedNMap2")].concat();
+		k.extend(1u16.using_encoded(twox_64_concat));
+		k.extend(2u32.using_encoded(blake2_128_concat));
+		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
+		assert_eq!(pallet::CountedNMap2::<Runtime>::count(), 1);
+
+		pallet::CountedNMap3::<Runtime>::insert((&1, &2), &3);
+		let mut k = [twox_128(b"Example"), twox_128(b"CountedNMap3")].concat();
+		k.extend(1u8.using_encoded(blake2_128_concat));
+		k.extend(2u16.using_encoded(twox_64_concat));
+		assert_eq!(pallet::CountedNMap3::<Runtime>::count(), 1);
+		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
+		assert_eq!(
+			pallet::CountedNMap3::<Runtime>::get((2, 3)),
+			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
+		);
+
 		#[cfg(feature = "frame-feature-testing")]
 		{
 			pallet::ConditionalValue::<Runtime>::put(1);
@@ -1486,6 +1510,66 @@ fn metadata() {
 						default: vec![1, 1],
 						docs: vec![],
 					},
+					StorageEntryMetadata {
+						name: "CountedNMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<u8>(),
+							hashers: vec![StorageHasher::Blake2_128Concat],
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CounterForCountedNMap",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CountedNMap2",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<(u16, u32)>(),
+							hashers: vec![
+								StorageHasher::Twox64Concat,
+								StorageHasher::Blake2_128Concat,
+							],
+							value: meta_type::<u64>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CounterForCountedNMap2",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CountedNMap3",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<(u8, u16)>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+							value: meta_type::<u128>(),
+						},
+						default: vec![1, 1],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CounterForCountedNMap3",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
+						docs: vec![],
+					},
 					#[cfg(feature = "frame-feature-testing")]
 					StorageEntryMetadata {
 						name: "ConditionalValue",
@@ -1534,6 +1618,27 @@ fn metadata() {
 							value: meta_type::<u32>(),
 						},
 						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "ConditionalCountedNMap",
+						modifier: StorageEntryModifier::Optional,
+						ty: StorageEntryType::Map {
+							key: meta_type::<(u8, u16)>(),
+							hashers: vec![
+								StorageHasher::Blake2_128Concat,
+								StorageHasher::Twox64Concat,
+							],
+							value: meta_type::<u32>(),
+						},
+						default: vec![0],
+						docs: vec![],
+					},
+					StorageEntryMetadata {
+						name: "CounterForConditionalCountedNMap",
+						modifier: StorageEntryModifier::Default,
+						ty: StorageEntryType::Plain(meta_type::<u32>()),
+						default: vec![0, 0, 0, 0],
 						docs: vec![],
 					},
 					StorageEntryMetadata {
@@ -1902,6 +2007,48 @@ fn test_storage_info() {
 				max_values: None,
 				max_size: Some(16 + 1 + 8 + 2 + 16),
 			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"CountedNMap".to_vec(),
+				prefix: prefix(b"Example", b"CountedNMap").to_vec(),
+				max_values: None,
+				max_size: Some(16 + 1 + 4),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"CounterForCountedNMap".to_vec(),
+				prefix: prefix(b"Example", b"CounterForCountedNMap").to_vec(),
+				max_values: Some(1),
+				max_size: Some(4),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"CountedNMap2".to_vec(),
+				prefix: prefix(b"Example", b"CountedNMap2").to_vec(),
+				max_values: Some(11),
+				max_size: Some(8 + 2 + 16 + 4 + 8),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"CounterForCountedNMap2".to_vec(),
+				prefix: prefix(b"Example", b"CounterForCountedNMap2").to_vec(),
+				max_values: Some(1),
+				max_size: Some(4),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"CountedNMap3".to_vec(),
+				prefix: prefix(b"Example", b"CountedNMap3").to_vec(),
+				max_values: None,
+				max_size: Some(16 + 1 + 8 + 2 + 16),
+			},
+			StorageInfo {
+				pallet_name: b"Example".to_vec(),
+				storage_name: b"CounterForCountedNMap3".to_vec(),
+				prefix: prefix(b"Example", b"CounterForCountedNMap3").to_vec(),
+				max_values: Some(1),
+				max_size: Some(4),
+			},
 			#[cfg(feature = "frame-feature-testing")]
 			{
 				StorageInfo {
@@ -1940,6 +2087,26 @@ fn test_storage_info() {
 					prefix: prefix(b"Example", b"ConditionalNMap").to_vec(),
 					max_values: None,
 					max_size: Some(16 + 1 + 8 + 2 + 4),
+				}
+			},
+			#[cfg(feature = "frame-feature-testing")]
+			{
+				StorageInfo {
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"ConditionalCountedNMap".to_vec(),
+					prefix: prefix(b"Example", b"ConditionalCountedNMap").to_vec(),
+					max_values: None,
+					max_size: Some(16 + 1 + 8 + 2 + 4),
+				}
+			},
+			#[cfg(feature = "frame-feature-testing")]
+			{
+				StorageInfo {
+					pallet_name: b"Example".to_vec(),
+					storage_name: b"CounterForConditionalCountedNMap".to_vec(),
+					prefix: prefix(b"Example", b"CounterForConditionalCountedNMap").to_vec(),
+					max_values: Some(1),
+					max_size: Some(4),
 				}
 			},
 			StorageInfo {
