@@ -69,8 +69,18 @@ pub trait ProcessMessage {
 pub enum ExecuteOverweightError {
 	/// The referenced message was not found.
 	NotFound,
+	/// The message was already processed.
+	///
+	/// This can be treated as success condition.
+	AlreadyProcessed,
 	/// The available weight was insufficient to execute the message.
 	InsufficientWeight,
+	/// The queue is paused and no message can be executed from it.
+	///
+	/// This can change at any time and may resolve in the future by re-trying.
+	QueuePaused,
+	/// An unspecified error.
+	Other,
 }
 
 /// Can service queues and execute overweight messages.
@@ -218,5 +228,17 @@ where
 
 	fn footprint() -> Footprint {
 		E::footprint(O::get())
+	}
+}
+
+/// Provides information on paused queues.
+pub trait QueuePausedQuery<Origin> {
+	/// Whether this queue is paused.
+	fn is_paused(origin: &Origin) -> bool;
+}
+
+impl<Origin> QueuePausedQuery<Origin> for () {
+	fn is_paused(_: &Origin) -> bool {
+		false
 	}
 }

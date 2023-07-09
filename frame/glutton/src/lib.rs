@@ -270,7 +270,7 @@ pub mod pallet {
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_proof_size(meter: &mut WeightMeter) {
 			let Ok(n) = Self::calculate_proof_size_iters(&meter) else {
-				return;
+				return
 			};
 
 			meter.defensive_saturating_accrue(T::WeightInfo::waste_proof_size_some(n));
@@ -302,7 +302,7 @@ pub mod pallet {
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_ref_time(meter: &mut WeightMeter) {
 			let Ok(n) = Self::calculate_ref_time_iters(&meter) else {
-				return;
+				return
 			};
 			meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time_iter(n));
 

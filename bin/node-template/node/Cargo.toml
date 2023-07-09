@@ -26,13 +26,10 @@ sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-network = { version = "0.10.0-dev", path = "../../../client/network" }
 sc-service = { version = "0.10.0-dev", path = "../../../client/service" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../../client/telemetry" }
-sc-keystore = { version = "4.0.0-dev", path = "../../../client/keystore" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
-sc-statement-store = { version = "4.0.0-dev", path = "../../../client/statement-store" }
 sc-consensus-aura = { version = "0.10.0-dev", path = "../../../client/consensus/aura" }
 sp-consensus-aura = { version = "0.10.0-dev", path = "../../../primitives/consensus/aura" }
-sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-consensus-grandpa = { version = "0.10.0-dev", path = "../../../client/consensus/grandpa" }
 sp-consensus-grandpa = { version = "4.0.0-dev", path = "../../../primitives/consensus/grandpa" }
@@ -47,7 +44,6 @@ pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, 
 
 # These dependencies are used for the node template's RPCs
 jsonrpsee = { version = "0.16.2", features = ["server"] }
-sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../client/rpc-api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }

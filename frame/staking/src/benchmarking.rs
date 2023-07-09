@@ -26,13 +26,13 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
-	traits::{Currency, CurrencyToVote, Get, Imbalance},
+	traits::{Currency, Get, Imbalance},
 };
 use sp_runtime::{
 	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
 	Perbill, Percent,
 };
-use sp_staking::SessionIndex;
+use sp_staking::{currency_to_vote::CurrencyToVote, SessionIndex};
 use sp_std::prelude::*;
 
 pub use frame_benchmarking::v1::{

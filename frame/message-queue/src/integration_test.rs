@@ -23,7 +23,7 @@
 use crate::{
 	mock::{
 		new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo, NumMessagesProcessed,
-		SuspendedQueues,
+		YieldingQueues,
 	},
 	mock_helpers::MessageOrigin,
 	*,
@@ -96,6 +96,7 @@ impl Config for Test {
 	type MessageProcessor = CountingMessageProcessor;
 	type Size = u32;
 	type QueueChangeHandler = ();
+	type QueuePausedQuery = ();
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
 	type ServiceWeight = ServiceWeight;
@@ -207,7 +208,7 @@ fn stress_test_queue_suspension() {
 				to_resume,
 				per_queue.len()
 			);
-			SuspendedQueues::set(suspended.iter().map(|q| MessageOrigin::Everywhere(*q)).collect());
+			YieldingQueues::set(suspended.iter().map(|q| MessageOrigin::Everywhere(*q)).collect());
 
 			// Pick a fraction of all messages currently in queue and process them.
 			let resumed_messages =
@@ -229,7 +230,7 @@ fn stress_test_queue_suspension() {
 		process_all_messages(resumed_messages);
 		msgs_remaining -= resumed_messages;
 
-		let resumed = SuspendedQueues::take();
+		let resumed = YieldingQueues::take();
 		log::info!("Resumed all {} suspended queues", resumed.len());
 		log::info!("Processing all remaining {} messages", msgs_remaining);
 		process_all_messages(msgs_remaining);

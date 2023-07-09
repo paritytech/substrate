@@ -196,9 +196,7 @@ pub trait Backend<Block: BlockT>:
 		base_hash: Block::Hash,
 		import_lock: &RwLock<()>,
 	) -> Result<Option<Block::Hash>> {
-		let Some(base_header) = self.header(base_hash)? else {
-			return Ok(None)
-		};
+		let Some(base_header) = self.header(base_hash)? else { return Ok(None) };
 
 		let leaves = {
 			// ensure no blocks are imported during this code block.

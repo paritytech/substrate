@@ -22,7 +22,7 @@ use syn::{
 	ImplItem, ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
 };
 
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote};
 
 use proc_macro_crate::{crate_name, FoundCrate};
 
@@ -259,13 +259,14 @@ pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
 }
 
 /// Extract the documentation from the provided attributes.
+#[cfg(feature = "frame-metadata")]
 pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
+	use quote::ToTokens;
+
 	attrs
 		.iter()
 		.filter_map(|attr| {
-			let syn::Meta::NameValue(meta) = &attr.meta else {
-				return None
-			};
+			let syn::Meta::NameValue(meta) = &attr.meta else { return None };
 			let Ok(lit) = syn::parse2::<syn::Lit>(meta.value.to_token_stream()) else {
 				unreachable!("non-lit doc attribute values do not exist");
 			};
@@ -275,6 +276,7 @@ pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
 }
 
 /// Filters all attributes except the cfg ones.
+#[cfg(feature = "frame-metadata")]
 pub fn filter_cfg_attributes(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
 	attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect()
 }
