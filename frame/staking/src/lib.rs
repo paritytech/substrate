@@ -114,7 +114,7 @@
 //!
 //! Rewards must be claimed for each era before it gets too old by
 //! [`HistoryDepth`](`Config::HistoryDepth`) using the `payout_stakers` call. Any account can call
-//! `payout_stakers`, which pays the reward to the validator as well as its nominators. Only the
+//! `payout_stakers`, which pays the reward to the validator as well as its nominators. Only
 //! [`Config::MaxExposurePageSize`] nominator rewards can be claimed in a single call. When the
 //! number of nominators exceeds [`Config::MaxExposurePageSize`], then the nominators are stored in
 //! multiple pages of [`Config::MaxExposurePageSize`], each with up to a maximum of
