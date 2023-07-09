@@ -17,7 +17,8 @@
 
 #![cfg(test)]
 
-use frame_support::{traits::fungible::{ItemOf, DecreaseIssuance}};
+use crate::*;
+use frame_support::{parameter_types, traits::fungible::{ItemOf, DecreaseIssuance}};
 use sp_core::{H256, Get, ConstU64, ConstU16, ConstU32};
 use sp_runtime::{
 	testing::Header,
@@ -67,16 +68,51 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum CoretimeTraceItem {
+	AssignCore {
+		core: CoreIndex,
+		begin: u32,
+		assignment: Vec<(CoreAssignment, PartsOf57600)>,
+		end_hint: Option<u32>,
+	},
+}
+use CoretimeTraceItem::*;
+
+parameter_types!{
+	pub static CoretimeTrace: Vec<(u32, CoretimeTraceItem)> = Default::default();
+}
+
+impl CoretimeInterface for CoretimeTrace {
+	type AccountId = ();
+	type Balance = u64;
+	type BlockNumber = u32;
+	fn latest() -> Self::BlockNumber { System::block_number() as u32 }
+	fn request_core_count(_count: CoreIndex) {}
+	fn request_revenue_info_at(_when: Self::BlockNumber) {}
+	fn credit_account(_who: Self::AccountId, _amount: Balance) {}
+	fn assign_core(
+		core: CoreIndex,
+		begin: Self::BlockNumber,
+		assignment: Vec<(CoreAssignment, PartsOf57600)>,
+		end_hint: Option<Self::BlockNumber>,
+	) {
+		let mut v = CoretimeTrace::get();
+		v.push((Self::latest(), AssignCore { core, begin, assignment, end_hint }));
+		CoretimeTrace::set(v);
+	}
+	fn check_notify_core_count() -> Option<u16> { None }
+	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> { None }
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = ItemOf<TestFungibles<(), u64, (), ConstU64<0>, ()>, (), u64>;
 	type OnRevenue = ();
-	type TimeslicePeriod = ConstU32<80>;
-	type BulkPeriod = ConstU32<100>;
+	type TimeslicePeriod = ConstU32<2>;
 	type MaxLeasedCores = ConstU32<5>;
 	type MaxReservedCores = ConstU32<5>;
-	type AdvanceNotice = ();
-	type Coretime = ();
+	type Coretime = CoretimeTrace;
 	type ConvertBalance = Identity;
 	type WeightInfo = ();
 }

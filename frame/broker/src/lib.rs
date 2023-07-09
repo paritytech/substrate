@@ -47,7 +47,7 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::{AccountId32, traits::{ConvertBack, Convert}, DispatchError};
-	use sp_arithmetic::{traits::{Bounded, AtLeast32BitUnsigned, SaturatedConversion, Saturating, BaseArithmetic}, Perbill, PerThing};
+	use sp_arithmetic::{traits::{Zero, Bounded, AtLeast32BitUnsigned, SaturatedConversion, Saturating, BaseArithmetic}, Perbill, PerThing};
 	use types::CorePart;
 
 	#[pallet::pallet]
@@ -106,17 +106,9 @@ pub mod pallet {
 
 		type OnRevenue: OnUnbalanced<Credit<Self::AccountId, Self::Currency>>;
 
-		/// Number of Relay-chain blocks ahead of time which we fix and notify of core assignments.
-		#[pallet::constant]
-		type AdvanceNotice: Get<RelayBlockNumberOf<Self>>;
-
 		/// Number of Relay-chain blocks per timeslice.
 		#[pallet::constant]
 		type TimeslicePeriod: Get<RelayBlockNumberOf<Self>>;
-
-		/// Period, in timeslices, of the Bulk Coretime placed for sale.
-		#[pallet::constant]
-		type BulkPeriod: Get<Timeslice>;
 
 		/// Maximum number of legacy leases.
 		#[pallet::constant]
@@ -153,9 +145,9 @@ pub mod pallet {
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct RegionId {
-		begin: Timeslice,
-		core: CoreIndex,
-		part: CorePart,
+		pub begin: Timeslice,
+		pub core: CoreIndex,
+		pub part: CorePart,
 	}
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -168,8 +160,8 @@ pub mod pallet {
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct ScheduleItem {
-		part: CorePart,
-		assignment: CoreAssignment,
+		pub part: CorePart,
+		pub assignment: CoreAssignment,
 	}
 	pub type Schedule = BoundedVec<ScheduleItem, ConstU32<80>>;
 
@@ -209,6 +201,7 @@ pub mod pallet {
 	pub struct StatusRecord {
 		core_count: CoreIndex,
 		pool_size: PartCount,
+		advance_notice: Timeslice,
 		last_timeslice: Timeslice,
 	}
 
@@ -254,10 +247,11 @@ pub mod pallet {
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct SaleConfigRecord<BlockNumber> {
-		presale_length: BlockNumber,
-		auction_length: BlockNumber,
-		ideal_cores_sold: CoreIndex,
-		cores_offered: CoreIndex,
+		pub presale_length: BlockNumber,
+		pub auction_length: BlockNumber,
+		pub ideal_cores_sold: CoreIndex,
+		pub cores_offered: CoreIndex,
+		pub region_length: Timeslice,
 	}
 	pub type SaleConfigRecordOf<T> = SaleConfigRecord<
 		<T as frame_system::Config>::BlockNumber,
@@ -350,11 +344,14 @@ pub mod pallet {
 		NotAllowed,
 		Uninitialized,
 		TooEarly,
+		NothingToDo,
+		TooManyReservations,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
+			Self::do_tick();
 			Weight::zero()
 		}
 	}
@@ -382,12 +379,64 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub(crate) fn initialize(
-			reserve_price: BalanceOf<T>,
-		) {
+		pub(crate) fn do_configure(config: SaleConfigRecordOf<T>) -> DispatchResult {
+			SaleConfig::<T>::put(config);
+			Ok(())
 		}
 
-		fn next_price(
+		/// Attempt to tick things along. Will only do anything if the `Status.last_timeslice` is
+		/// less than `Self::last_timeslice`.
+		pub(crate) fn do_tick() -> DispatchResult {
+			let mut status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+
+			let processable_until = Self::current_schedulable_timeslice();
+			ensure!(status.last_timeslice < processable_until, Error::<T>::NothingToDo);
+			status.last_timeslice.saturating_inc();
+			Self::process_timeslice(status.last_timeslice, &mut status);
+
+			if let Some(sale) = SaleStatus::<T>::get() {
+				if status.last_timeslice >= sale.region_begin {
+					// Sale can be rotated.
+					Self::rotate_sale(status.last_timeslice, sale, &status);
+				}
+			}
+
+			Status::<T>::put(&status);
+			Ok(())
+		}
+
+		pub(crate) fn do_start_sales(
+			core_count: CoreIndex,
+			reserve_price: BalanceOf<T>,
+			advance_notice: Timeslice,
+		) -> DispatchResult {
+			let config = SaleConfig::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+			let current_schedulable_timeslice = Self::current_schedulable_timeslice();
+			let mut status = StatusRecord {
+				core_count,
+				pool_size: 0,
+				advance_notice,
+				last_timeslice: current_schedulable_timeslice,
+			};
+			let now = frame_system::Pallet::<T>::block_number();
+			let dummy_sale = SaleStatusRecord {
+				sale_start: now,
+				auction_length: Zero::zero(),
+				start_price: Zero::zero(),
+				reserve_price,
+				region_begin: current_schedulable_timeslice,
+				region_length: config.region_length,
+				first_core: 0,
+				ideal_cores_sold: 0,
+				cores_offered: 0,
+				cores_sold: 0,
+			};
+			Self::rotate_sale(current_schedulable_timeslice, dummy_sale, &status);
+			Status::<T>::put(status);
+			Ok(())
+		}
+
+		fn bump_price(
 			offered: CoreIndex,
 			ideal: CoreIndex,
 			sold: CoreIndex,
@@ -413,10 +462,8 @@ pub mod pallet {
 		/// Begin selling for the next sale period.
 		///
 		/// Triggered by Relay-chain block number/timeslice.
-		pub(crate) fn rotate_sale() -> Option<()> {
-			let status = Status::<T>::get()?;
+		pub(crate) fn rotate_sale(timeslice: Timeslice, old_sale: SaleStatusRecordOf<T>, status: &StatusRecord) -> Option<()> {
 			let config = SaleConfig::<T>::get()?;
-			let old_sale = SaleStatus::<T>::get()?;
 
 			let now = frame_system::Pallet::<T>::block_number();
 
@@ -428,7 +475,11 @@ pub mod pallet {
 				let ideal = old_sale.ideal_cores_sold.min(max_retail);
 				let sold = old_sale.cores_sold;
 				let old_price = old_sale.reserve_price;
-				Self::next_price(offered, ideal, sold, old_price)
+				if offered > 0 {
+					Self::bump_price(offered, ideal, sold, old_price)
+				} else {
+					old_price
+				}
 			};
 			let start_price = reserve_price * 2u32.into();
 
@@ -436,7 +487,7 @@ pub mod pallet {
 
 			// Set workload for the reserved (system, probably) workloads.
 			let region_begin = old_sale.region_begin + old_sale.region_length;
-			let region_length = old_sale.region_length;
+			let region_length = config.region_length;
 
 			let mut first_core = 0;
 			for schedule in Reservations::<T>::get().into_iter() {
@@ -484,26 +535,33 @@ pub mod pallet {
 			Some(())
 		}
 
-		pub(crate) fn next_timeslice() -> Timeslice {
-			let latest = T::Coretime::latest();
-			let advance = T::AdvanceNotice::get();
-			let timeslice_period = T::TimeslicePeriod::get();
-			let last_scheduled = (latest + advance) / timeslice_period;
-			let mut next_scheduled: Timeslice = last_scheduled.saturated_into();
-			next_scheduled.saturating_add(1)
+		pub(crate) fn do_reserve(schedule: Schedule) -> DispatchResult {
+			let mut r = Reservations::<T>::get();
+			r.try_push(schedule).map_err(|_| Error::<T>::TooManyReservations)?;
+			Reservations::<T>::put(r);
+			Ok(())
 		}
 
-		pub(crate) fn process_timeslice(timeslice: Timeslice) {
-			let mut status = match Status::<T>::get() {
-				Some(s) => s,
-				None => return,
-			};
-			Self::process_pool(timeslice, &mut status);
+		pub(crate) fn current_timeslice() -> Timeslice {
+			let latest = T::Coretime::latest();
+			let timeslice_period = T::TimeslicePeriod::get();
+			(latest / timeslice_period).saturated_into()
+		}
+
+		pub(crate) fn current_schedulable_timeslice() -> Timeslice {
+			Self::current_timeslice() + Status::<T>::get().map_or(0, |x| x.advance_notice)
+		}
+
+		pub(crate) fn next_schedulable_timeslice() -> Timeslice {
+			Self::current_schedulable_timeslice().saturating_add(1)
+		}
+
+		pub(crate) fn process_timeslice(timeslice: Timeslice, status: &mut StatusRecord) {
+			Self::process_pool(timeslice, status);
 			let rc_begin = RelayBlockNumberOf::<T>::from(timeslice) * T::TimeslicePeriod::get();
 			for core in 0..status.core_count {
-				Self::process_core_schedule(timeslice, rc_begin, core, &mut status);
+				Self::process_core_schedule(timeslice, rc_begin, core, status);
 			}
-			Status::<T>::put(status);
 		}
 
 		fn process_pool(timeslice: Timeslice, status: &mut StatusRecord) {
@@ -704,7 +762,7 @@ pub mod pallet {
 				ensure!(check_owner == region.owner, Error::<T>::NotOwner);
 			}
 
-			let next_timeslice = Self::next_timeslice();
+			let next_timeslice = Self::next_schedulable_timeslice();
 			if region_id.begin > next_timeslice {
 				region_id.begin = next_timeslice;
 			}
@@ -723,6 +781,7 @@ pub mod pallet {
 			maybe_check_owner: Option<T::AccountId>,
 			target: ParaId,
 		) -> Result<(), Error<T>> {
+			let config = SaleConfig::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			if let Some((region_id, region)) = Self::utilize(region_id, maybe_check_owner)? {
 				let workplan_key = (region_id.begin, region_id.core);
 				let mut workplan = Workplan::<T>::get(&workplan_key)
@@ -733,7 +792,7 @@ pub mod pallet {
 				}).is_ok() {
 					Workplan::<T>::insert(&workplan_key, &workplan);
 				}
-				if region.end.saturating_sub(region_id.begin) == T::BulkPeriod::get() {
+				if region.end.saturating_sub(region_id.begin) == config.region_length {
 					if workplan.iter()
 						.filter(|i| matches!(i.assignment, CoreAssignment::Task(..)))
 						.fold(CorePart::void(), |a, i| a | i.part)
