@@ -320,7 +320,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, ExposureOverview, ExposurePage, OnStakingUpdate, PageIndex, SessionIndex,
+	EraIndex, PagedExposureMetadata, ExposurePage, OnStakingUpdate, PageIndex, SessionIndex,
 };
 pub use sp_staking::{Exposure, IndividualExposure, StakerStatus};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
@@ -701,13 +701,13 @@ pub struct Nominations<T: Config> {
 	pub suppressed: bool,
 }
 
-/// Extended view of Exposure comprising of `ExposureOverview` and a single page of `ExposurePage`.
+/// Extended view of Exposure comprising of `PagedExposureMetadata` and a single page of `ExposurePage`.
 ///
 /// This is useful where we need to take into account the validator's own stake and total exposure
 /// in consideration, in addition to the individual nominators backing them.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo, PartialEq, Eq)]
 struct ExposureExt<AccountId, Balance: HasCompact + codec::MaxEncodedLen> {
-	exposure_overview: ExposureOverview<Balance>,
+	exposure_overview: PagedExposureMetadata<Balance>,
 	exposure_page: ExposurePage<AccountId, Balance>,
 }
 
@@ -717,7 +717,7 @@ impl<AccountId, Balance: HasCompact + Copy + AtLeast32BitUnsigned + codec::MaxEn
 	/// Create a new instance of `ExposureExt` from legacy clipped exposures.
 	pub fn from_clipped(exposure: Exposure<AccountId, Balance>) -> Self {
 		Self {
-			exposure_overview: ExposureOverview {
+			exposure_overview: PagedExposureMetadata {
 				total: exposure.total,
 				own: exposure.own,
 				nominator_count: exposure.others.len() as u32,
@@ -997,7 +997,7 @@ impl<T: Config> EraInfo<T> {
 
 	/// Get exposure for a validator at a given era and page.
 	///
-	/// This builds a paged exposure from `ExposureOverview` and `ExposurePage` of the validator.
+	/// This builds a paged exposure from `PagedExposureMetadata` and `ExposurePage` of the validator.
 	/// For older non-paged exposure, it returns the clipped exposure directly.
 	pub(crate) fn get_paged_exposure(
 		era: EraIndex,
@@ -1028,7 +1028,7 @@ impl<T: Config> EraInfo<T> {
 
 		// build the exposure
 		Some(ExposureExt {
-			exposure_overview: ExposureOverview { own: validator_stake, ..overview },
+			exposure_overview: PagedExposureMetadata { own: validator_stake, ..overview },
 			exposure_page,
 		})
 	}

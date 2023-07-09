@@ -6183,7 +6183,7 @@ fn can_page_exposure() {
 
 	// when
 	let (exposure_overview, exposure_page): (
-		ExposureOverview<Balance>,
+		PagedExposureMetadata<Balance>,
 		Vec<ExposurePage<AccountId, Balance>>,
 	) = exposure.clone().into_pages(3);
 

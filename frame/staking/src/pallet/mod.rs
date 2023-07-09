@@ -59,7 +59,7 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 pub mod pallet {
 	use frame_election_provider_support::ElectionDataProvider;
 
-	use crate::{BenchmarkingConfig, ExposureOverview};
+	use crate::{BenchmarkingConfig, PagedExposureMetadata};
 
 	use super::*;
 
@@ -451,7 +451,7 @@ pub mod pallet {
 		EraIndex,
 		Twox64Concat,
 		T::AccountId,
-		ExposureOverview<BalanceOf<T>>,
+		PagedExposureMetadata<BalanceOf<T>>,
 		OptionQuery,
 	>;
 

@@ -314,12 +314,12 @@ impl<
 		Balance: HasCompact + AtLeast32BitUnsigned + Copy + codec::MaxEncodedLen,
 	> Exposure<AccountId, Balance>
 {
-	/// Splits an `Exposure` into `ExposureOverview` and multiple chunks of `IndividualExposure`
+	/// Splits an `Exposure` into `PagedExposureMetadata` and multiple chunks of `IndividualExposure`
 	/// with each chunk having maximum of `page_size` elements.
 	pub fn into_pages(
 		self,
 		page_size: PageIndex,
-	) -> (ExposureOverview<Balance>, Vec<ExposurePage<AccountId, Balance>>) {
+	) -> (PagedExposureMetadata<Balance>, Vec<ExposurePage<AccountId, Balance>>) {
 		let individual_chunks = self.others.chunks(page_size as usize);
 		let mut exposure_pages: Vec<ExposurePage<AccountId, Balance>> =
 			Vec::with_capacity(individual_chunks.len());
@@ -340,7 +340,7 @@ impl<
 		}
 
 		(
-			ExposureOverview {
+			PagedExposureMetadata {
 				total: self.total,
 				own: self.own,
 				nominator_count: self.others.len() as u32,
@@ -367,10 +367,11 @@ impl<A, B: Default + HasCompact> Default for ExposurePage<A, B> {
 	}
 }
 
-/// An overview of stake backing a single validator.
+/// Metadata for Paged Exposure of a validator such as total stake across pages and page count.
 ///
-/// It, in combination with a list of `ExposurePage`s, can be used to reconstruct a full `Exposure`
-/// struct. This is useful for cases where we want to query a single page of `Exposure`s.
+/// In combination with the associated `ExposurePage`s, it can be used to reconstruct a full
+/// `Exposure` set of a validator. This is useful for cases where we want to query full set of
+/// `Exposure` as one page (for backward compatibility).
 #[derive(
 	PartialEq,
 	Eq,
@@ -384,7 +385,7 @@ impl<A, B: Default + HasCompact> Default for ExposurePage<A, B> {
 	Default,
 	MaxEncodedLen,
 )]
-pub struct ExposureOverview<Balance: HasCompact + codec::MaxEncodedLen> {
+pub struct PagedExposureMetadata<Balance: HasCompact + codec::MaxEncodedLen> {
 	/// The total balance backing this validator.
 	#[codec(compact)]
 	pub total: Balance,
