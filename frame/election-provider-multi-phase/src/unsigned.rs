@@ -702,7 +702,7 @@ impl<T: MinerConfig> Miner<T> {
 		raw_solution: RawSolution<SolutionOf<T>>,
 		compute: ElectionCompute,
 		desired_targets: u32,
-		snapshot: RoundSnapshot<T::AccountId, MinerVoterOf<T>>,
+		snapshot: RoundSnapshot<T::AccountId, MinerVoterOf<T>, T::MaxWinners, T::MaxWinners>,
 		current_round: u32,
 		minimum_untrusted_score: Option<ElectionScore>,
 	) -> Result<ReadySolution<T::AccountId, T::MaxWinners>, FeasibilityError> {
