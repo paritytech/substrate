@@ -155,21 +155,21 @@ node-bench-regression-guard:
       --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
   after_script: [""]
 
-cargo-check-try-runtime:
+cargo-check-try-runtime-and-experimental:
   stage: test
   extends:
     - .docker-env
     - .test-refs
   script:
     - rusty-cachier snapshot create
-    - time cargo check --locked --features try-runtime
+    - time cargo check --locked --features try-runtime,experimental
     - rusty-cachier cache upload
 
 test-deterministic-wasm:
   stage: test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
   needs:
-    - job: cargo-check-try-runtime
+    - job: cargo-check-try-runtime-and-experimental
       artifacts: false
   extends:
     - .docker-env
@@ -221,7 +221,7 @@ test-linux-stable:
       --locked
       --release
       --verbose
-      --features runtime-benchmarks,try-runtime
+      --features runtime-benchmarks,try-runtime,experimental
       --manifest-path ./bin/node/cli/Cargo.toml
       --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     # we need to update cache only from one job
@@ -258,8 +258,8 @@ test-frame-support:
   script:
     - rusty-cachier snapshot create
     - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
-    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime --manifest-path ./frame/support/test/Cargo.toml
-    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs,try-runtime --manifest-path ./frame/support/test/Cargo.toml
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml
+    - time cargo test --verbose --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs,try-runtime,experimental --manifest-path ./frame/support/test/Cargo.toml
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - cat /cargo_target_dir/debug/.fingerprint/memory_units-759eddf317490d2b/lib-memory_units.json || true
     - rusty-cachier cache upload

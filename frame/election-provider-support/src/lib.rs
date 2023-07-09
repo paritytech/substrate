@@ -508,10 +508,6 @@ pub trait SortedListProvider<AccountId> {
 	/// Get the score of `id`.
 	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error>;
 
-	/// Check internal state of list. Only meant for debugging.
-	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str>;
-
 	/// Hook for inserting a new id.
 	///
 	/// Implementation should return an error if duplicate item is being inserted.

@@ -335,11 +335,6 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::get_score(id)
 	}
 
-	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str> {
-		Self::do_try_state()
-	}
-
 	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
 		List::<T, I>::insert(id, score)
 	}

@@ -26,13 +26,13 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
-	traits::{Currency, CurrencyToVote, Get, Imbalance},
+	traits::{Currency, Get, Imbalance},
 };
 use sp_runtime::{
-	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
+	traits::{Bounded, One, Saturating, StaticLookup, TrailingZeroInput, Zero},
 	Perbill, Percent,
 };
-use sp_staking::SessionIndex;
+use sp_staking::{currency_to_vote::CurrencyToVote, SessionIndex};
 use sp_std::prelude::*;
 
 pub use frame_benchmarking::v1::{
@@ -685,14 +685,8 @@ benchmarks! {
 		let stash = scenario.origin_stash1;
 
 		add_slashing_spans::<T>(&stash, s);
-		let l = StakingLedger {
-			stash: stash.clone(),
-			active: T::Currency::minimum_balance() - One::one(),
-			total: T::Currency::minimum_balance() - One::one(),
-			unlocking: Default::default(),
-			claimed_rewards: Default::default(),
-		};
-		Ledger::<T>::insert(&controller, l);
+		let l = StakingLedger::<T>::new(stash.clone(), stash.clone(), T::Currency::minimum_balance() - One::one());
+		l.put_storage();
 
 		assert!(Bonded::<T>::contains_key(&stash));
 		assert!(T::VoterList::contains(&stash));

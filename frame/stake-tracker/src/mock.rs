@@ -181,7 +181,7 @@ pub(crate) fn set_validator_stake(who: AccountId, stake: Balance) {
 impl StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		unreachable!();

@@ -22,9 +22,8 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, DefensiveResult, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
-		UnixTime,
+		Currency, DefensiveResult, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
+		LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
 	},
 	weights::Weight,
 	BoundedVec,
@@ -111,7 +110,7 @@ pub mod pallet {
 		/// in 128.
 		/// Consequently, the backward convert is used convert the u128s from sp-elections back to a
 		/// [`BalanceOf`].
-		type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
+		type CurrencyToVote: sp_staking::currency_to_vote::CurrencyToVote<BalanceOf<Self>>;
 
 		/// Something that provides the election functionality.
 		type ElectionProvider: ElectionProvider<
@@ -243,10 +242,6 @@ pub mod pallet {
 		/// VALIDATOR.
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
-		/// Something that listens to staking updates and performs actions based on the data it
-		/// receives.
-		type EventListeners: sp_staking::OnStakingUpdate<Self::AccountId, BalanceOf<Self>>;
-
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can
 		/// have. Effectively determines how many unique eras a staker may be
 		/// unbonding in.
@@ -259,6 +254,12 @@ pub mod pallet {
 		/// this effect.
 		#[pallet::constant]
 		type MaxUnlockingChunks: Get<u32>;
+
+		/// Something that listens to staking updates and performs actions based on the data it
+		/// receives.
+		///
+		/// WARNING: this only reports slashing events for the time being.
+		type EventListeners: sp_staking::OnStakingUpdate<Self::AccountId, BalanceOf<Self>>;
 
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;

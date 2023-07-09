@@ -326,7 +326,7 @@
 //!
 //! This section assumes that the slash computation is executed by
 //! `pallet_staking::StakingLedger::slash`, which passes the information to this pallet via
-//! [`sp_staking::OnStakerSlash::on_slash`].
+//! [`sp_staking::OnStakingUpdate::on_slash`].
 //!
 //! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool while
 //! it was backing a validator that equivocated are punished. Without these measures a member could
@@ -340,10 +340,6 @@
 //! To be fair to joiners, this implementation also need joining pools, which are actively staking,
 //! in addition to the unbonding pools. For maintenance simplicity these are not implemented.
 //! Related: <https://github.com/paritytech/substrate/issues/10860>
-//!
-//! **Relevant methods:**
-//!
-//! * [`Pallet::on_slash`]
 //!
 //! ### Limitations
 //!

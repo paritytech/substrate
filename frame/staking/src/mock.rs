@@ -248,7 +248,6 @@ parameter_types! {
 	pub static HistoryDepth: u32 = 80;
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
-	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 	pub static MaxWinners: u32 = 100;
 }
 
@@ -294,6 +293,8 @@ pub enum StakingEvent {
 
 parameter_types! {
 	pub static EmittedEvents: Vec<StakingEvent> = Vec::new();
+	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) =
+		(Zero::zero(), BTreeMap::new());
 }
 
 pub struct EventListenerMock;
@@ -345,7 +346,7 @@ impl crate::pallet::pallet::Config for Test {
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RewardRemainder = RewardRemainderMock;
 	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
@@ -365,9 +366,9 @@ impl crate::pallet::pallet::Config for Test {
 	type TargetList = UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
+	type EventListeners = (StakeTracker, EventListenerMock);
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type EventListeners = (StakeTracker, EventListenerMock);
 }
 
 impl pallet_stake_tracker::Config for Test {

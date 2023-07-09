@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2023 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -85,5 +85,17 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B>
 
 	fn to_currency(value: u128, _: B) -> B {
 		B::unique_saturated_from(value)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> for () {
+	fn to_vote(value: B, issuance: B) -> u64 {
+		SaturatingCurrencyToVote::to_vote(value, issuance)
+	}
+
+	/// Convert u128 to balance.
+	fn to_currency(value: u128, issuance: B) -> B {
+		SaturatingCurrencyToVote::to_currency(value, issuance)
 	}
 }

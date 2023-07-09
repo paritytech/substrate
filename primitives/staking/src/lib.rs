@@ -49,25 +49,6 @@ pub enum StakerStatus<AccountId> {
 	Nominator(Vec<AccountId>),
 }
 
-/// Trait describing something that implements a hook for any operations to perform when a staker is
-/// slashed.
-#[deprecated(note = "Use `OnStakingUpdate` instead.")]
-pub trait OnStakerSlash<AccountId, Balance> {
-	/// A hook for any operations to perform when a staker is slashed.
-	///
-	/// # Arguments
-	///
-	/// * `stash` - The stash of the staker whom the slash was applied to.
-	/// * `slashed_active` - The new bonded balance of the staker after the slash was applied.
-	/// * `slashed_unlocking` - A map of slashed eras, and the balance of that unlocking chunk after
-	///   the slash is applied. Any era not present in the map is not affected at all.
-	fn on_slash(
-		stash: &AccountId,
-		slashed_active: Balance,
-		slashed_unlocking: &BTreeMap<EraIndex, Balance>,
-	);
-}
-
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
 #[derive(RuntimeDebug, Clone, Copy, Eq, PartialEq, Default)]
@@ -102,7 +83,7 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 
 	/// Fired when someone sets their intention to nominate.
 	///
-	/// This should never be fired for for existing nominators.
+	/// This should never be fired for existing nominators.
 	fn on_nominator_add(_who: &AccountId) {}
 
 	/// Fired when an existing nominator updates their nominations.

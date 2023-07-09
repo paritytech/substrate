@@ -42,10 +42,12 @@ mod tests;
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::{
 	defensive,
-	traits::{Currency, CurrencyToVote, Defensive},
+	traits::{Currency, Defensive},
 };
 pub use pallet::*;
-use sp_staking::{OnStakingUpdate, Stake, StakerStatus, StakingInterface};
+use sp_staking::{
+	currency_to_vote::CurrencyToVote, OnStakingUpdate, Stake, StakerStatus, StakingInterface,
+};
 
 use sp_std::{boxed::Box, vec::Vec};
 
@@ -189,7 +191,7 @@ impl<AccountId, Inner: SortedListProvider<AccountId>> SortedListProvider<Account
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn try_state() -> Result<(), &'static str> {
+	fn try_state() -> Result<(), sp_runtime::TryRuntimeError> {
 		Inner::try_state()
 	}
 
