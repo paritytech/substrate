@@ -276,8 +276,8 @@ impl pallet_staking::Config for Runtime {
 	type SessionInterface = Self;
 	type EraPayout = ();
 	type NextNewSession = Session;
-	type MaxExposurePageSize = frame_support::traits::ConstU16<256>;
-	type MaxExposurePageCount = frame_support::traits::ConstU16<1>;
+	type MaxExposurePageSize = ConstU32<256>;
+	type MaxExposurePageCount = ConstU32<1>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;

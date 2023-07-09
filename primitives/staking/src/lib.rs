@@ -40,7 +40,7 @@ pub type SessionIndex = u32;
 pub type EraIndex = u32;
 
 /// Counter for paged storage items.
-pub type PageIndex = u16;
+pub type PageIndex = u32;
 
 /// Representation of the status of a staker.
 #[derive(RuntimeDebug, TypeInfo)]

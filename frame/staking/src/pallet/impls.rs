@@ -272,7 +272,7 @@ impl<T: Config> Pallet<T> {
 		// Track the number of payout ops to nominators. Note:
 		// `WeightInfo::payout_stakers_alive_staked` always assumes at least a validator is paid
 		// out, so we do not need to count their payout op.
-		let mut nominator_payout_count: u16 = 0;
+		let mut nominator_payout_count: u32 = 0;
 
 		// Lets now calculate how this is split to the nominators.
 		// Reward only the clipped exposures. Note this is not necessarily sorted.
@@ -295,7 +295,7 @@ impl<T: Config> Pallet<T> {
 		T::Reward::on_unbalanced(total_imbalance);
 		debug_assert!(nominator_payout_count <= T::MaxExposurePageSize::get());
 
-		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count.into())).into())
+		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
 
 	/// Update the ledger for a controller.

@@ -234,8 +234,8 @@ parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
 	pub static HistoryDepth: u32 = 80;
-	pub static MaxExposurePageSize: u16 = 64;
-	pub static MaxExposurePageCount: u16 = 1;
+	pub static MaxExposurePageSize: u32 = 64;
+	pub static MaxExposurePageCount: u32 = 1;
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static MaxWinners: u32 = 100;

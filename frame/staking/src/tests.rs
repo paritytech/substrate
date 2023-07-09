@@ -4484,9 +4484,9 @@ fn payout_stakers_handles_weight_refund() {
 		assert!(max_nom_rewarded > half_max_nom_rewarded);
 
 		let max_nom_rewarded_weight =
-			<Test as Config>::WeightInfo::payout_stakers_alive_staked(max_nom_rewarded.into());
+			<Test as Config>::WeightInfo::payout_stakers_alive_staked(max_nom_rewarded);
 		let half_max_nom_rewarded_weight =
-			<Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded.into());
+			<Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded);
 		let zero_nom_payouts_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
 		assert!(zero_nom_payouts_weight.any_gt(Weight::zero()));
 		assert!(half_max_nom_rewarded_weight.any_gt(zero_nom_payouts_weight));
