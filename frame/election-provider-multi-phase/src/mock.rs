@@ -207,6 +207,13 @@ pub fn witness() -> SolutionOrSnapshotSize {
 		.unwrap_or_default()
 }
 
+pub fn queue_solution_and_elect(
+	solution: ReadySolution<AccountId, MaxWinners>,
+) -> Result<(), ElectionError<Runtime>> {
+	<QueuedSolution<Runtime>>::put(solution);
+	MultiPhase::do_elect().map(|_| ())
+}
+
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -301,6 +308,8 @@ parameter_types! {
 	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
+	pub static MinimumUntrustedScoreUpdateInterval: Option<u32> = Some(3);
+	pub static MinimumUntrustedScoreMargin: Percent = Percent::from_percent(50);
 
 	#[derive(Debug)]
 	pub static MaxWinners: u32 = 200;
@@ -413,6 +422,8 @@ impl crate::Config for Runtime {
 	type MaxWinners = MaxWinners;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+	type MinimumUntrustedScoreUpdateInterval = MinimumUntrustedScoreUpdateInterval;
+	type MinimumUntrustedScoreMargin = MinimumUntrustedScoreMargin;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
@@ -569,6 +580,14 @@ impl ExtBuilder {
 	}
 	pub fn signed_weight(self, weight: Weight) -> Self {
 		<SignedMaxWeight>::set(weight);
+		self
+	}
+	pub fn untrusted_score_interval(self, interval: Option<u32>) -> Self {
+		MinimumUntrustedScoreUpdateInterval::set(interval);
+		self
+	}
+	pub fn untrusted_score_margin(self, margin: Percent) -> Self {
+		MinimumUntrustedScoreMargin::set(margin);
 		self
 	}
 	pub fn build(self) -> sp_io::TestExternalities {

@@ -792,7 +792,7 @@ mod assignment_convert_normalize {
 mod score {
 	use super::*;
 	use crate::ElectionScore;
-	use sp_arithmetic::PerThing;
+	use sp_arithmetic::{traits::CheckedAdd, PerThing};
 
 	/// NOTE: in tests, we still use the legacy [u128; 3] since it is more compact. Each `u128`
 	/// corresponds to element at the respective field index of `ElectionScore`.
@@ -901,5 +901,65 @@ mod score {
 		// second element is less, rest don't matter. Note that this is swapped.
 		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 16]));
 		assert!(ElectionScore::from([10, 5, 15]) > ElectionScore::from([10, 5, 25]));
+	}
+
+	#[test]
+	fn checked_add_works() {
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).checked_add(&ElectionScore::from([20, 20, 20])),
+			Some(ElectionScore::from([30, 30, 30])),
+		);
+
+		assert_eq!(
+			ElectionScore::from([u128::MAX, 10, 10]).checked_add(&ElectionScore::from([1, 1, 1])),
+			None,
+		);
+		assert_eq!(
+			ElectionScore::from([10, u128::MAX, 10]).checked_add(&ElectionScore::from([1, 1, 1])),
+			None,
+		);
+		assert_eq!(
+			ElectionScore::from([10, 10, u128::MAX]).checked_add(&ElectionScore::from([1, 1, 1])),
+			None,
+		);
+	}
+
+	#[test]
+	fn checked_div_works() {
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).checked_div(10),
+			Some(ElectionScore::from([1, 1, 1])),
+		);
+		assert_eq!(ElectionScore::from([10, 10, 10]).checked_div(0), None,);
+	}
+
+	#[test]
+	fn fraction_of_works() {
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(50)),
+			ElectionScore::from([5, 5, 5])
+		);
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(100)),
+			ElectionScore::from([10, 10, 10])
+		);
+		// rounds up.
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(77)),
+			ElectionScore::from([8, 8, 8])
+		);
+		// rounds down.
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(74)),
+			ElectionScore::from([7, 7, 7])
+		);
+		assert_eq!(
+			ElectionScore::from([10, 10, 10]).fraction_of(Percent::from_percent(0)),
+			ElectionScore::default()
+		);
+		assert_eq!(
+			ElectionScore::default().fraction_of(Percent::from_percent(50)),
+			ElectionScore::default()
+		);
 	}
 }

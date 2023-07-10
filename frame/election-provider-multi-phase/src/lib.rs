@@ -162,6 +162,25 @@
 //! 2. any assignment is checked to match with [`RoundSnapshot::voters`].
 //! 3. the claimed score is valid, based on the fixed point arithmetic accuracy.
 //!
+//! ## Minimum Untrusted Score On-chain Update
+//!
+//! The [`MinimumUntrustedScore`] sets the lower bound of an accepted signed or unsigned
+//! solution. EPM features a mechanism to adjust the minimum untrusted score based on the previous
+//! `MinimumUntrustedScoreUpdateInterval` elections results automatically.
+//!
+//! Every time an election is finalized, a rolling-window untrusted minimum score stored in
+//! `[MinimumUntrustedScoreAvg]` is updated. If the untrusted score has been updated
+//! `MinimumUntrustedScoreUpdateInterval` times, the minimum untrusted score is set with the
+//! calculated average (minus a safety margin defined by `MinimumUntrustedScoreMargin`).
+//!
+//! The final minimum untrusted score set is the max score of the rolling window average and
+//! [`MinimumUntrustedScoreBackstop`], which sets a lower bound on the value that the minimum
+//! untrusted score may take. If `MinimumUntrustedScoreUpdateInterval` is set to 0 or None, the
+//! on-chain update mechanims is effectively disabled.
+//!
+//! If the untrusted minimum score interval changes in a runtime upgrade, the average state resets
+//! and it will start being calculated again in the next era.
+//!
 //! ## Accuracy
 //!
 //! The accuracy of the election is configured via [`SolutionAccuracyOf`] which is the accuracy that
@@ -237,7 +256,7 @@ use frame_election_provider_support::{
 use frame_support::{
 	dispatch::DispatchClass,
 	ensure,
-	traits::{Currency, DefensiveResult, Get, OnUnbalanced, ReservableCurrency},
+	traits::{Currency, Defensive, DefensiveResult, Get, OnUnbalanced, ReservableCurrency},
 	weights::Weight,
 	DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
@@ -245,7 +264,7 @@ use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
 	traits::{CheckedAdd, Zero},
-	UpperOf,
+	Percent, UpperOf,
 };
 use sp_npos_elections::{BoundedSupports, ElectionScore, IdentifierT, Supports, VoteWeight};
 use sp_runtime::{
@@ -676,6 +695,18 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
 
+		/// Number of successful elections that must pass before updating [`MinimumUntrustedScore`]
+		/// through the on-chain rolling base mechanism. If set to `None`, the on-chain update is
+		/// disabled.
+		#[pallet::constant]
+		type MinimumUntrustedScoreUpdateInterval: Get<Option<u32>>;
+
+		/// Margin when updating the minimum untrusted score on-chain. The final value will be
+		/// adjusted down based on this margin before the [`MinimumUntrustedScore`] is updated
+		/// on-chain.
+		#[pallet::constant]
+		type MinimumUntrustedScoreMargin: Get<Percent>;
+
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
@@ -959,13 +990,37 @@ pub mod pallet {
 		///
 		/// This check can be turned off by setting the value to `None`.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::DbWeight::get().writes(1))]
+		#[pallet::weight(T::DbWeight::get().writes(2))]
 		pub fn set_minimum_untrusted_score(
 			origin: OriginFor<T>,
 			maybe_next_score: Option<ElectionScore>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			<MinimumUntrustedScore<T>>::set(maybe_next_score);
+
+			// reset minimum untrusted score average.
+			<MinimumUntrustedScoreAvg<T>>::put((
+				0,
+				T::MinimumUntrustedScoreUpdateInterval::get().unwrap_or(0),
+				maybe_next_score.unwrap_or(ElectionScore::default()),
+			));
+
+			Ok(())
+		}
+
+		/// Set a new value for `MinimumUntrustedScoreBackstop`.
+		///
+		/// Dispatch origin must be aligned with `T::ForceOrigin`.
+		///
+		/// This check can be turned off by setting the value to `None`.
+		#[pallet::call_index(5)]
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		pub fn set_minimum_untrusted_score_backstop(
+			origin: OriginFor<T>,
+			maybe_score_backstop: Option<ElectionScore>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			<MinimumUntrustedScoreBackstop<T>>::set(maybe_score_backstop);
 			Ok(())
 		}
 
@@ -1156,6 +1211,8 @@ pub mod pallet {
 		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// There was a phase transition in a given round.
 		PhaseTransitioned { from: Phase<T::BlockNumber>, to: Phase<T::BlockNumber>, round: u32 },
+		/// A new minimum untrusted score has been set through the on-chain update mechanism.
+		NewMinimumUntrustedScore { score: ElectionScore },
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1334,6 +1391,23 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn minimum_untrusted_score)]
 	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
+
+	/// Rolling average of the [`MinimumUntrustedScore`] up to the previous
+	/// `MinimumUntrustedScoreUpdateInterval` elections.
+	///
+	/// The first index refers to how many successful elections have passed since the current
+	/// rolling average calculation started. The second item keeps track of the interval that the
+	/// current average has been calculated with, so that we can detect if the interval value has
+	/// changed and reset the average.
+	#[pallet::storage]
+	pub type MinimumUntrustedScoreAvg<T: Config> = StorageValue<_, (u32, u32, ElectionScore)>;
+
+	/// Lower bound of the value that the [`MinimumUntrustedScore`] may be updated to through the
+	/// on-chain mechanism.
+	///
+	/// Can be set via `set_minimum_untrusted_score_configs`.
+	#[pallet::storage]
+	pub type MinimumUntrustedScoreBackstop<T: Config> = StorageValue<_, ElectionScore>;
 
 	/// The current storage version.
 	///
@@ -1558,6 +1632,8 @@ impl<T: Config> Pallet<T> {
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
+				let _ = Self::try_update_minimum_untrusted_score(score).defensive();
+
 				supports
 			})
 			.map_err(|err| {
@@ -1567,6 +1643,75 @@ impl<T: Config> Pallet<T> {
 				}
 				err
 			})
+	}
+
+	/// Attempts to update the `MinimumUntrustedScore` if at least
+	/// `MinimumUntrustedScoreUpdateInterval` successful election have passed since the last
+	/// update. If not ready yet, update the minimum untrusted score rolling average in
+	/// the storage.
+	///
+	/// If the untrusted minimum score is updated, the new value is a percentage (defined by
+	/// `MinimumUntrustedScoreMargin`) of the rolling average of the previous election scores.
+	///
+	/// The new rolling average value is calculated by adding the weight of the new score (i.e.
+	/// score/interval) to the current rolling average. Once the rolling average includes `interval`
+	/// score weights, the new minimum untrusted score is set and the average state reset for next
+	/// era.
+	fn try_update_minimum_untrusted_score(score: ElectionScore) -> Result<(), &'static str> {
+		let update_interval = T::MinimumUntrustedScoreUpdateInterval::get().unwrap_or(0);
+		if update_interval == 0 {
+			// if update interval is not set, the on-chain update mechanism is disabled. return
+			// early.
+			return Ok(())
+		}
+
+		let (sliding_window_counter, stored_interval, rolling_avg_score) =
+			<MinimumUntrustedScoreAvg<T>>::get().unwrap_or((
+				0,
+				update_interval,
+				ElectionScore::default(),
+			));
+
+		// if the interval used to calculate the rolling average so far is different from what is
+		// set in `MinimumUntrustedScoreUpdateInterval`, reset the average and return early. This
+		// may happen when the update interval has been changed in a runtime upgrade.
+		if stored_interval != update_interval {
+			<MinimumUntrustedScoreAvg<T>>::put((0, update_interval, ElectionScore::default()));
+			return Ok(())
+		}
+
+		// update the rolling average score.
+		let score_weight = match score.checked_div(update_interval.into()) {
+			Some(d) => d,
+			// this error should not happen due to the check above, but since we are in
+			// `on_initialize` territory, we are extra careful and return early here. In practice
+			// the on-chain untrusted score update is disabled.
+			None => return Err("tried to divide score by zero, return early."),
+		};
+		let new_rolling_avg_score = rolling_avg_score.checked_add(&score_weight).unwrap_or(score);
+
+		// not yet time to update the minimum untrusted score. Update the score _average_ in
+		// storage and return.
+		if (sliding_window_counter + 1) < update_interval {
+			<MinimumUntrustedScoreAvg<T>>::put((
+				sliding_window_counter + 1,
+				update_interval,
+				new_rolling_avg_score,
+			));
+			return Ok(())
+		}
+
+		let minimum_untrusted_score = new_rolling_avg_score
+			.fraction_of(Percent::from_percent(100) - T::MinimumUntrustedScoreMargin::get())
+			.max(<MinimumUntrustedScoreBackstop<T>>::get().unwrap_or_default());
+
+		// reset average state and sets the new minimum untrusted score.
+		<MinimumUntrustedScoreAvg<T>>::put((0, update_interval, ElectionScore::default()));
+		<MinimumUntrustedScore<T>>::put(minimum_untrusted_score);
+
+		Self::deposit_event(Event::NewMinimumUntrustedScore { score: minimum_untrusted_score });
+
+		Ok(())
 	}
 
 	/// record the weight of the given `supports`.
@@ -1920,13 +2065,14 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
-			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
-			SignedMaxSubmissions, System, TargetIndex, Targets,
+			multi_phase_events, queue_solution_and_elect, raw_solution, roll_to, roll_to_signed,
+			roll_to_unsigned, AccountId, ExtBuilder, MinimumUntrustedScoreMargin,
+			MinimumUntrustedScoreUpdateInterval, MockWeightInfo, MockedWeightInfo, MultiPhase,
+			Runtime, RuntimeOrigin, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
-	use frame_support::{assert_noop, assert_ok};
+	use frame_support::{assert_err, assert_noop, assert_ok};
 	use sp_npos_elections::{BalancingConfig, Support};
 
 	#[test]
@@ -2635,6 +2781,277 @@ mod tests {
 				FeasibilityError::UntrustedScoreTooLow,
 			);
 		})
+	}
+
+	#[test]
+	fn untrusted_score_update_works() {
+		// untrusted score average does not update if election fails.
+		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
+			let untrusted_score = <MinimumUntrustedScore<Runtime>>::get();
+			let untrusted_score_avg = <MinimumUntrustedScoreAvg<Runtime>>::get();
+			assert_eq!(untrusted_score, None);
+			assert_eq!(untrusted_score_avg, None);
+
+			assert_err!(MultiPhase::elect(), ElectionError::Fallback("NoFallback."));
+
+			assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), untrusted_score);
+			assert_eq!(<MinimumUntrustedScoreAvg<Runtime>>::get(), untrusted_score_avg);
+		});
+
+		ExtBuilder::default().build_and_execute(|| {
+			// roll out of genesis block to inspect events.
+			roll_to(1);
+
+			assert_eq!(MinimumUntrustedScoreUpdateInterval::get(), Some(3));
+			let initial_untrusted_score = <MinimumUntrustedScore<Runtime>>::get();
+
+			// 1st successful election.
+			let score =
+				ElectionScore { minimal_stake: 100, sum_stake: 100, sum_stake_squared: 100 };
+			assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+
+			assert_eq!(
+				<MinimumUntrustedScoreAvg<Runtime>>::get(),
+				Some((
+					1,
+					3,
+					ElectionScore { minimal_stake: 33, sum_stake: 33, sum_stake_squared: 33 }
+				))
+			);
+			// untrusted score hasn't update yet.
+			assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), initial_untrusted_score);
+
+			// 2nd successful election.
+			let score =
+				ElectionScore { minimal_stake: 200, sum_stake: 200, sum_stake_squared: 200 };
+			assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+
+			assert_eq!(
+				<MinimumUntrustedScoreAvg<Runtime>>::get(),
+				Some((
+					2,
+					3,
+					ElectionScore { minimal_stake: 99, sum_stake: 99, sum_stake_squared: 99 }
+				))
+			);
+			// untrusted score hasn't update yet.
+			assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), initial_untrusted_score);
+
+			// 3rd successful election.
+			let score =
+				ElectionScore { minimal_stake: 300, sum_stake: 300, sum_stake_squared: 300 };
+			assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+
+			// minimum untrusted score was updated at the 3rd successful election. The untrusted
+			// score average is reset.
+			assert_eq!(
+				<MinimumUntrustedScoreAvg<Runtime>>::get(),
+				Some((0, 3, ElectionScore::default()))
+			);
+
+			// the average score after election with score [100, 200, 300] should be ~200 (+/-
+			// roundings). Since the untrusted score marginis 50%, the final minimum untrsuted
+			// score is ~100.
+			assert_eq!(MinimumUntrustedScoreMargin::get(), Percent::from_percent(50));
+			assert_eq!(
+				<MinimumUntrustedScore<Runtime>>::get(),
+				Some(ElectionScore { minimal_stake: 99, sum_stake: 99, sum_stake_squared: 99 })
+			);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::ElectionFinalized {
+						compute: ElectionCompute::OnChain,
+						score: ElectionScore {
+							minimal_stake: 100,
+							sum_stake: 100,
+							sum_stake_squared: 100
+						}
+					},
+					Event::ElectionFinalized {
+						compute: ElectionCompute::OnChain,
+						score: ElectionScore {
+							minimal_stake: 200,
+							sum_stake: 200,
+							sum_stake_squared: 200
+						}
+					},
+					Event::ElectionFinalized {
+						compute: ElectionCompute::OnChain,
+						score: ElectionScore {
+							minimal_stake: 300,
+							sum_stake: 300,
+							sum_stake_squared: 300
+						}
+					},
+					Event::NewMinimumUntrustedScore {
+						score: ElectionScore {
+							minimal_stake: 99,
+							sum_stake: 99,
+							sum_stake_squared: 99
+						}
+					},
+				]
+			);
+		})
+	}
+
+	#[test]
+	fn untrusted_score_interval_update_works() {
+		ExtBuilder::default().untrusted_score_interval(Some(5)).build_and_execute(|| {
+			assert_eq!(<MinimumUntrustedScoreUpdateInterval>::get(), Some(5));
+
+			assert_ok!(queue_solution_and_elect(ReadySolution { ..Default::default() }));
+			assert_ok!(queue_solution_and_elect(ReadySolution { ..Default::default() }));
+			assert_eq!(
+				<MinimumUntrustedScoreAvg<Runtime>>::get(),
+				Some((2, 5, ElectionScore::default())),
+			);
+
+			<MinimumUntrustedScoreUpdateInterval>::set(Some(10));
+
+			// after an interval update, the average score state reset. the new average will
+			// start being computed in the next election.
+			assert_ok!(queue_solution_and_elect(ReadySolution { ..Default::default() }));
+			assert_eq!(
+				<MinimumUntrustedScoreAvg<Runtime>>::get(),
+				Some((0, 10, ElectionScore::default())),
+			);
+		})
+	}
+
+	#[test]
+	fn untrusted_score_update_disabled_works() {
+		let initial_score = ElectionScore::default();
+
+		ExtBuilder::default()
+			.untrusted_score_interval(None)
+			.untrusted_score_margin(Percent::from_percent(0))
+			.build_and_execute(|| {
+				<MinimumUntrustedScore<Runtime>>::set(Some(initial_score));
+				assert_eq!(MinimumUntrustedScoreUpdateInterval::get(), None);
+
+				let score =
+					ElectionScore { minimal_stake: 200, sum_stake: 200, sum_stake_squared: 200 };
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+				// untrusted score was not updated since the onchain mechanism is disabled.
+				assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), Some(initial_score));
+
+				// set interval to 0, which is the same as if set to None.
+				MinimumUntrustedScoreUpdateInterval::set(Some(0));
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+				assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), Some(initial_score));
+
+				// enable onchain update mechanism and set to interval of 1 election.
+				MinimumUntrustedScoreUpdateInterval::set(Some(1));
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+
+				// minimum untrusted score now is the same as `score`, since the interval is 1
+				// election and the margin is set to 0.
+				assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), Some(score));
+			})
+	}
+
+	#[test]
+	fn untrusted_score_update_margin_works() {
+		let initial_score = ElectionScore::default();
+
+		ExtBuilder::default()
+			.untrusted_score_interval(Some(1))
+			.untrusted_score_margin(Percent::from_percent(10))
+			.build_and_execute(|| {
+				<MinimumUntrustedScore<Runtime>>::set(Some(initial_score));
+
+				let backstop_score =
+					ElectionScore { minimal_stake: 10, sum_stake: 10, sum_stake_squared: 10 };
+				<MinimumUntrustedScoreBackstop<Runtime>>::set(Some(backstop_score));
+
+				let score =
+					ElectionScore { minimal_stake: 200, sum_stake: 200, sum_stake_squared: 200 };
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+
+				// minimum untrusted score now is 90% * `score`.
+				assert_eq!(
+					<MinimumUntrustedScore<Runtime>>::get(),
+					Some(ElectionScore {
+						minimal_stake: Percent::from_percent(90) * score.minimal_stake,
+						sum_stake: Percent::from_percent(90) * score.sum_stake,
+						sum_stake_squared: Percent::from_percent(90) * score.sum_stake_squared,
+					})
+				);
+
+				// set margin to 50%.
+				MinimumUntrustedScoreMargin::set(Percent::from_percent(50));
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+
+				assert_eq!(
+					<MinimumUntrustedScore<Runtime>>::get(),
+					Some(ElectionScore {
+						minimal_stake: Percent::from_percent(50) * score.minimal_stake,
+						sum_stake: Percent::from_percent(50) * score.sum_stake,
+						sum_stake_squared: Percent::from_percent(50) * score.sum_stake_squared,
+					})
+				);
+
+				// set margin to 100%. This will effectively set the untrusted score to 0, but the
+				// backstop score is enabled and higher, so that is effectively the set value.
+				MinimumUntrustedScoreMargin::set(Percent::from_percent(100));
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+
+				assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), Some(backstop_score));
+			})
+	}
+
+	#[test]
+	fn untrusted_score_update_backstop_works() {
+		ExtBuilder::default()
+			.untrusted_score_interval(Some(1))
+			.untrusted_score_margin(Percent::from_percent(0))
+			.build_and_execute(|| {
+				// no backstop score.
+				assert_ok!(MultiPhase::set_minimum_untrusted_score_backstop(
+					RuntimeOrigin::root(),
+					None,
+				));
+				assert_eq!(<MinimumUntrustedScoreBackstop<Runtime>>::get(), None);
+
+				let score = ElectionScore { minimal_stake: 1, sum_stake: 0, sum_stake_squared: 0 };
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+				// minimum untrusted score is updated to any value since there is no backstop set.
+				assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), Some(score));
+
+				// reset minimum score avg.
+				<MinimumUntrustedScoreAvg<Runtime>>::kill();
+
+				let backstop_score =
+					ElectionScore { minimal_stake: 30, sum_stake: 20, sum_stake_squared: 10 };
+
+				assert_ok!(MultiPhase::set_minimum_untrusted_score_backstop(
+					RuntimeOrigin::root(),
+					Some(backstop_score)
+				));
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+				// since score < backstop_score, fallback into the backstop_score.
+				assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), Some(backstop_score));
+
+				// reset minimum score avg.
+				<MinimumUntrustedScoreAvg<Runtime>>::kill();
+
+				let score =
+					ElectionScore { minimal_stake: 29, sum_stake: 21, sum_stake_squared: 11 };
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+				// since score < backstop_score, fallback into the backstop_score.
+				assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), Some(backstop_score));
+
+				// reset minimum score avg.
+				<MinimumUntrustedScoreAvg<Runtime>>::kill();
+				let score =
+					ElectionScore { minimal_stake: 30, sum_stake: 21, sum_stake_squared: 11 };
+				assert_ok!(queue_solution_and_elect(ReadySolution { score, ..Default::default() }));
+				// now score is > than backstop, untrusted score is updated.
+				assert_eq!(<MinimumUntrustedScore<Runtime>>::get(), Some(score));
+			});
 	}
 
 	#[test]
