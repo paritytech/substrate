@@ -265,11 +265,13 @@ fn spend_local_origin_permissioning_works() {
 	});
 }
 
+#[docify::export]
 #[test]
 fn spend_local_origin_works() {
 	new_test_ext().execute_with(|| {
 		// Check that accumulate works when we have Some value in Dummy already.
 		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		// approve spend of some amount to beneficiary `6`.
 		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(10), 5, 6));
 		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(10), 5, 6));
 		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(10), 5, 6));
@@ -277,12 +279,13 @@ fn spend_local_origin_works() {
 		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(11), 10, 6));
 		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(12), 20, 6));
 		assert_ok!(Treasury::spend_local(RuntimeOrigin::signed(13), 50, 6));
-
+		// free balance of `6` is zero, spend period has not passed.
 		<Treasury as OnInitialize<u64>>::on_initialize(1);
 		assert_eq!(Balances::free_balance(6), 0);
-
+		// free balance of `6` is `100`, spend period has passed.
 		<Treasury as OnInitialize<u64>>::on_initialize(2);
 		assert_eq!(Balances::free_balance(6), 100);
+		// `100` spent, `1` burned.
 		assert_eq!(Treasury::pot(), 0);
 	});
 }
@@ -699,12 +702,16 @@ fn spend_expires() {
 	});
 }
 
+#[docify::export]
 #[test]
-fn payout_works() {
+fn spend_payout_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
+		// approve a `2` coins spend of asset `1` to beneficiary `6`, the spend valid from now.
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
+		// payout the spend.
 		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 0));
+		// beneficiary received `2` coins of asset `1`.
 		assert_eq!(paid(6, 1), 2);
 		assert_eq!(SpendCount::<Test, _>::get(), 1);
 		let spend = Spends::<Test, _>::get(0).unwrap();
@@ -715,9 +722,10 @@ fn payout_works() {
 		let payment_id = maybe_payment_id.expect("no payment attempt");
 		System::assert_last_event(Event::<Test, _>::Paid { index: 0, payment_id }.into());
 		set_status(payment_id, PaymentStatus::Success);
+		// the payment succeed.
 		assert_ok!(Treasury::check_status(RuntimeOrigin::signed(1), 0));
 		System::assert_last_event(Event::<Test, _>::PaymentSucceed { index: 0, payment_id }.into());
-		// cannot payout again
+		// cannot payout the same spend twice.
 		assert_noop!(Treasury::payout(RuntimeOrigin::signed(1), 0), Error::<Test, _>::InvalidIndex);
 	});
 }

@@ -15,46 +15,60 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! > Made with *Substrate*, for *Polkadot*.
+//!
+//! [![github]](https://github.com/paritytech/substrate/frame/fast-unstake) -
+//! [![polkadot]](https://polkadot.network)
+//!
+//! [polkadot]: https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&logo=polkadot&logoColor=white
+//! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
+//!
 //! # Treasury Pallet
 //!
 //! The Treasury pallet provides a "pot" of funds that can be managed by stakeholders in the system
 //! and a structure for making spending proposals from this pot.
 //!
-//! - [`Config`]
-//! - [`Call`]
-//!
 //! ## Overview
 //!
 //! The Treasury Pallet itself provides the pot to store funds, and a means for stakeholders to
-//! propose, approve, and deny expenditures. The chain will need to provide a method (e.g.
-//! inflation, fees) for collecting funds.
+//! propose and claim expenditures (aka spends). The chain will need to provide a method to approve
+//! spends (e.g. public referendum) and a method for collecting funds (e.g. inflation, fees).
 //!
-//! By way of example, the Council could vote to fund the Treasury with a portion of the block
+//! By way of example, stakeholders could vote to fund the Treasury with a portion of the block
 //! reward and use the funds to pay developers.
-//!
 //!
 //! ### Terminology
 //!
 //! - **Proposal:** A suggestion to allocate funds from the pot to a beneficiary.
 //! - **Beneficiary:** An account who will receive the funds from a proposal iff the proposal is
 //!   approved.
-//! - **Deposit:** Funds that a proposer must lock when making a proposal. The deposit will be
-//!   returned or slashed if the proposal is approved or rejected respectively.
 //! - **Pot:** Unspent funds accumulated by the treasury pallet.
+//! - **Spend** An approved proposal for transferring a specific amount of funds to a designated
+//!   beneficiary.
 //!
-//! ## Interface
+//! ### Example
 //!
-//! ### Dispatchable Functions
+//! 1. Multiple local spends approved by spend origins and received by a beneficiary.
+#![doc = docify::embed!("frame/treasury/src/tests.rs", spend_local_origin_works)]
 //!
-//! General spending/proposal protocol:
-//! - `propose_spend` - Make a spending proposal and stake the required deposit.
-//! - `reject_proposal` - Reject a proposal, slashing the deposit.
-//! - `approve_proposal` - Accept the proposal, returning the deposit.
-//! - `remove_approval` - Remove an approval, the deposit will no longer be returned.
+//! 2. Approve a spend of some asset kind and claim it.
+#![doc = docify::embed!("frame/treasury/src/tests.rs", spend_payout_works)]
 //!
-//! ## GenesisConfig
+//! ## Pallet API
 //!
-//! The Treasury pallet depends on the [`GenesisConfig`].
+//! See the [`pallet`] module for more information about the interfaces this pallet exposes,
+//! including its configuration trait, dispatchables, storage items, events and errors.
+//!
+//! ## Low Level / Implementation Details
+//!
+//! Spends can be initiated using either the `spend_local` or `spend` dispatchable. The
+//! `spend_local` dispatchable enables the creation of spends using the native currency of the
+//! chain, utilizing the funds stored in the pot. These spends are automatically paid out every
+//! [`pallet::Config::SpendPeriod`]. On the other hand, the `spend` dispatchable allows spending of
+//! any asset kind managed by the treasury, with payment facilitated by a designated
+//! [`pallet::Config::Paymaster`]. To claim these spends, the `payout` dispatchable should be called
+//! within some temporal bounds, starting from the moment they become valid and within one
+//! [`pallet::Config::PayoutPeriod`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -308,6 +322,7 @@ pub mod pallet {
 	pub(crate) type SpendCount<T, I = ()> = StorageValue<_, SpendIndex, ValueQuery>;
 
 	/// Spends that have been approved and being processed.
+	// Hasher: Twox safe since `SpendIndex` is an internal count based index.
 	#[pallet::storage]
 	pub type Spends<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
@@ -461,12 +476,22 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Put forward a suggestion for spending. A deposit proportional to the value
-		/// is reserved and slashed if the proposal is rejected. It is returned once the
-		/// proposal is awarded.
+		/// Put forward a suggestion for spending.
 		///
-		/// ## Complexity
+		/// ## Dispatch Origin
+		///
+		/// Must be signed.
+		///
+		/// ## Details
+		/// A deposit proportional to the value is reserved and slashed if the proposal is rejected.
+		/// It is returned once the proposal is awarded.
+		///
+		/// ### Complexity
 		/// - O(1)
+		///
+		/// ## Events
+		///
+		/// Emits [`Event::Proposed`] if successful.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose_spend())]
 		pub fn propose_spend(
@@ -489,12 +514,21 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Reject a proposed spend. The original deposit will be slashed.
+		/// Reject a proposed spend.
 		///
-		/// May only be called from `T::RejectOrigin`.
+		/// ## Dispatch Origin
 		///
-		/// ## Complexity
+		/// Must be [`Config::RejectOrigin`].
+		///
+		/// ## Details
+		/// The original deposit will be slashed.
+		///
+		/// ### Complexity
 		/// - O(1)
+		///
+		/// ## Events
+		///
+		/// Emits [`Event::Rejected`] if successful.
 		#[pallet::call_index(1)]
 		#[pallet::weight((T::WeightInfo::reject_proposal(), DispatchClass::Operational))]
 		pub fn reject_proposal(
@@ -516,13 +550,23 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
-		/// and the original deposit will be returned.
+		/// Approve a proposal.
 		///
-		/// May only be called from `T::ApproveOrigin`.
+		/// ## Dispatch Origin
 		///
-		/// ## Complexity
+		/// Must be [`Config::ApproveOrigin`].
+		///
+		/// ## Details
+		///
+		/// At a later time, the proposal will be allocated to the beneficiary and the original
+		/// deposit will be returned.
+		///
+		/// ### Complexity
 		///  - O(1).
+		///
+		/// ## Events
+		///
+		/// No events are emitted from this dispatch.
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::approve_proposal(T::MaxApprovals::get()), DispatchClass::Operational))]
 		pub fn approve_proposal(
@@ -539,12 +583,21 @@ pub mod pallet {
 
 		/// Propose and approve a spend of treasury funds.
 		///
-		/// - `origin`: Must be `SpendOrigin` with the `Success` value being at least `amount`.
+		/// ## Dispatch Origin
+		///
+		/// Must be [`Config::SpendOrigin`] with the `Success` value being at least `amount`.
+		///
+		/// ### Details
+		/// NOTE: For record-keeping purposes, the proposer is deemed to be equivalent to the
+		/// beneficiary.
+		///
+		/// ### Parameters
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The destination account for the transfer.
 		///
-		/// NOTE: For record-keeping purposes, the proposer is deemed to be equivalent to the
-		/// beneficiary.
+		/// ## Events
+		///
+		/// Emits [`Event::SpendApproved`] if successful.
 		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::spend_local())]
 		pub fn spend_local(
@@ -593,18 +646,26 @@ pub mod pallet {
 		}
 
 		/// Force a previously approved proposal to be removed from the approval queue.
+		///
+		/// ## Dispatch Origin
+		///
+		/// Must be [`Config::RejectOrigin`].
+		///
+		/// ## Details
+		///
 		/// The original deposit will no longer be returned.
 		///
-		/// May only be called from `T::RejectOrigin`.
+		/// ### Parameters
 		/// - `proposal_id`: The index of a proposal
 		///
-		/// ## Complexity
+		/// ### Complexity
 		/// - O(A) where `A` is the number of approvals
 		///
-		/// Errors:
-		/// - `ProposalNotApproved`: The `proposal_id` supplied was not found in the approval queue,
-		/// i.e., the proposal has not been approved. This could also mean the proposal does not
-		/// exist altogether, thus there is no way it would have been approved in the first place.
+		/// ### Errors
+		/// - [`Error::ProposalNotApproved`]: The `proposal_id` supplied was not found in the
+		///   approval queue, i.e., the proposal has not been approved. This could also mean the
+		///   proposal does not exist altogether, thus there is no way it would have been approved
+		///   in the first place.
 		#[pallet::call_index(4)]
 		#[pallet::weight((T::WeightInfo::remove_approval(), DispatchClass::Operational))]
 		pub fn remove_approval(
@@ -627,16 +688,28 @@ pub mod pallet {
 
 		/// Propose and approve a spend of treasury funds.
 		///
-		/// An approved spend must be claimed via the `payout` dispatchable within the
-		/// [`Config::PayoutPeriod`].
+		/// ## Dispatch Origin
 		///
-		/// - `origin`: Must be `T::SpendOrigin` with the `Success` value being at least `amount` of
-		///   `asset_kind` in the native asset.
+		/// Must be [`Config::SpendOrigin`] with the `Success` value being at least
+		/// `amount` of `asset_kind` in the native asset. The amount of `asset_kind` is converted
+		/// for assertion using the [`Config::BalanceConverter`].
+		///
+		/// ## Details
+		///
+		/// Create an approved spend for transferring a specific `amount` of `asset_kind` to a
+		/// designated beneficiary. The spend must be claimed using the `payout` dispatchable within
+		/// the [`Config::PayoutPeriod`].
+		///
+		/// ### Parameters
 		/// - `asset_kind`: An indicator of the specific asset class to be spent.
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The beneficiary of the spend.
 		/// - `valid_from`: The block number from which the spend can be claimed. If `None`, the
 		///   spend can be claimed immediately after approval.
+		///
+		/// ## Events
+		///
+		/// Emits [`Event::AssetSpendApproved`] if successful.
 		#[pallet::call_index(5)]
 		#[pallet::weight(T::WeightInfo::spend())]
 		pub fn spend(
@@ -701,12 +774,23 @@ pub mod pallet {
 
 		/// Claim a spend.
 		///
-		/// To claim a spend, it must be done within the [`Config::PayoutPeriod`] after approval.
-		/// In case of a payout failure, the spend status should be updated with the `check_status`
-		/// before retrying with the current function.
+		/// ## Dispatch Origin
 		///
-		/// - `origin`: Must be `Signed`.
+		/// Must be signed.
+		///
+		/// ## Details
+		///
+		/// Spends must be claimed within some temporal bounds. A spend may be claimed within one
+		/// [`Config::PayoutPeriod`] from the `valid_from` block.
+		/// In case of a payout failure, the spend status must be updated with the check_status
+		/// dispatchable before retrying with the current function.
+		///
+		/// ### Parameters
 		/// - `index`: The spend index.
+		///
+		/// ## Events
+		///
+		/// Emits [`Event::Paid`] if successful.
 		#[pallet::call_index(6)]
 		#[pallet::weight(T::WeightInfo::payout())]
 		pub fn payout(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
@@ -733,10 +817,22 @@ pub mod pallet {
 
 		/// Check the status of the spend.
 		///
-		/// The status check is a prerequisite for retrying a failed payout.
+		/// ## Dispatch Origin
 		///
-		/// - `origin`: Must be `Signed`.
+		/// Must be signed.
+		///
+		/// ## Details
+		///
+		/// The status check is a prerequisite for retrying a failed payout.
+		/// If the payout has succeed the spend is removed from the storage.
+		///
+		/// ### Parameters
 		/// - `index`: The spend index.
+		///
+		/// ## Events
+		///
+		/// Emits [`Event::PaymentFailed`] if the spend payout has failed.
+		/// Emits [`Event::PaymentSucceed`] if the spend payout has succeed.
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::check_status())]
 		pub fn check_status(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
@@ -765,8 +861,20 @@ pub mod pallet {
 
 		/// Void previously approved spend.
 		///
-		/// - `origin`: Must be `T::RejectOrigin`.
+		/// ## Dispatch Origin
+		///
+		/// Must be [`Config::RejectOrigin`].
+		///
+		/// ## Details
+		///
+		/// A spend void is only possible if the payout has not been attempted yet.
+		///
+		/// ### Parameters
 		/// - `index`: The spend index.
+		///
+		/// ## Events
+		///
+		/// Emits [`Event::AssetSpendVoided`] if successful.
 		#[pallet::call_index(8)]
 		#[pallet::weight(T::WeightInfo::void_spend())]
 		pub fn void_spend(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
