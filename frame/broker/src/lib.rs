@@ -64,7 +64,7 @@ pub mod pallet {
 		fn latest() -> Self::BlockNumber;
 		fn request_core_count(count: CoreIndex);
 		fn request_revenue_info_at(when: Self::BlockNumber);
-		fn credit_account(who: Self::AccountId, amount: Balance);
+		fn credit_account(who: Self::AccountId, amount: Self::Balance);
 		fn assign_core(
 			core: CoreIndex,
 			begin: Self::BlockNumber,
@@ -81,7 +81,7 @@ pub mod pallet {
 		fn latest() -> Self::BlockNumber { 0 }
 		fn request_core_count(_count: CoreIndex) {}
 		fn request_revenue_info_at(_when: Self::BlockNumber) {}
-		fn credit_account(_who: Self::AccountId, _amount: Balance) {}
+		fn credit_account(_who: Self::AccountId, _amount: Self::Balance) {}
 		fn assign_core(
 			_core: CoreIndex,
 			_begin: Self::BlockNumber,
@@ -446,18 +446,19 @@ pub mod pallet {
 		/// Attempt to tick things along. Will only do anything if the `Status.last_timeslice` is
 		/// less than `Self::last_timeslice`.
 		pub(crate) fn do_tick() -> DispatchResult {
-			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let mut status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
-
-			let processable_until = Self::current_schedulable_timeslice();
-			ensure!(status.last_timeslice < processable_until, Error::<T>::NothingToDo);
+			let current_timeslice = Self::current_timeslice();
+			ensure!(status.last_timeslice < current_timeslice, Error::<T>::NothingToDo);
 			status.last_timeslice.saturating_inc();
-			Self::process_timeslice(status.last_timeslice, &mut status, &config);
+			
+			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+			let commit_timeslice = status.last_timeslice + config.advance_notice;
+			Self::process_timeslice(commit_timeslice, &mut status, &config);
 
 			if let Some(sale) = SaleInfo::<T>::get() {
-				if status.last_timeslice >= sale.region_begin {
+				if commit_timeslice >= sale.region_begin {
 					// Sale can be rotated.
-					Self::rotate_sale(status.last_timeslice, sale, &status, &config);
+					Self::rotate_sale(commit_timeslice, sale, &status, &config);
 				}
 			}
 
@@ -519,7 +520,7 @@ pub mod pallet {
 		///
 		/// Triggered by Relay-chain block number/timeslice.
 		pub(crate) fn rotate_sale(
-			timeslice: Timeslice,
+			commit_timeslice: Timeslice,
 			old_sale: SaleInfoRecordOf<T>,
 			status: &StatusRecord,
 			config: &ConfigRecordOf<T>,

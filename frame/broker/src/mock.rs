@@ -90,7 +90,7 @@ impl CoretimeInterface for CoretimeTrace {
 	fn latest() -> Self::BlockNumber { System::block_number() as u32 }
 	fn request_core_count(_count: CoreIndex) {}
 	fn request_revenue_info_at(_when: Self::BlockNumber) {}
-	fn credit_account(_who: Self::AccountId, _amount: Balance) {}
+	fn credit_account(_who: Self::AccountId, _amount: Self::Balance) {}
 	fn assign_core(
 		core: CoreIndex,
 		begin: Self::BlockNumber,
