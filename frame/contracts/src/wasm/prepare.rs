@@ -286,11 +286,12 @@ where
 	validate::<E, T>(code.as_ref(), schedule, determinism)?;
 
 	// Calculate deposit for storing contract code and `code_info` in two different storage items.
-	let bytes_added = code.len().saturating_add(<CodeInfo<T>>::max_encoded_len()) as u32;
+	let code_len = code.len() as u32;
+	let bytes_added = code_len.saturating_add(<CodeInfo<T>>::max_encoded_len() as u32);
 	let deposit = Diff { bytes_added, items_added: 2, ..Default::default() }
 		.update_contract::<T>(None)
 		.charge_or_zero();
-	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0 };
+	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0, code_len };
 	let code_hash = T::Hashing::hash(&code);
 
 	Ok(WasmBlob { code, code_info, code_hash })
@@ -320,6 +321,7 @@ pub mod benchmarking {
 			// this is a helper function for benchmarking which skips deposit collection
 			deposit: Default::default(),
 			refcount: 0,
+			code_len: code.len() as u32,
 			determinism,
 		};
 		let code_hash = T::Hashing::hash(&code);
