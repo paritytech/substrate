@@ -1,0 +1,46 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@crate_index//:defs.bzl", "all_crate_deps", "aliases")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "sp-application-crypto",
+    version = "23.0.0",
+    srcs = glob(["src/**/*.rs"]),
+	aliases = {"@crate_index__parity-scale-codec-3.6.1//:parity_scale_codec": "codec"},
+	compile_data = glob(
+        include = ["**"],
+        exclude = [
+            "**/* *",
+            "BUILD",
+            "BUILD.bazel",
+            "WORKSPACE",
+            "WORKSPACE.bazel",
+        ],
+    ),
+	crate_root = "src/lib.rs",
+    edition = "2021",
+    crate_name = "sp_application_crypto",
+	crate_features = [
+		"std",
+		"full_crypto",
+		"sp-core/std",
+		"codec/std",
+		"scale-info/std",
+		"serde/std",
+		"sp-std/std",
+		"sp-io/std",
+		"serde",
+		"sp-core/serde",
+		"scale-info/serde",
+		"sp-core/full_crypto",
+		"sp-io/disable_panic_handler",
+		"sp-io/disable_oom",
+	],
+	deps = all_crate_deps(normal = True) + [
+		"//primitives/core:sp-core",
+		"//primitives/std:sp-std",
+		"//primitives/io:sp-io",
+	],
+	proc_macro_deps = all_crate_deps(proc_macro = True),
+)

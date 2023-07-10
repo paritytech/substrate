@@ -31,3 +31,6 @@ rustflags = [
   "-Aclippy::stable_sort_primitive",     # prefer stable sort
   "-Aclippy::extra-unused-type-parameters", # stylistic
 ]
+
+[net]
+git-fetch-with-cli = true

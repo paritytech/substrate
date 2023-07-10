@@ -1,0 +1,35 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@crate_index//:defs.bzl", "all_crate_deps", "aliases")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "sp-core-hashing",
+    version = "9.0.0",
+    srcs = glob(["src/**/*.rs"]),
+	compile_data = glob(
+        include = ["**"],
+        exclude = [
+            "**/* *",
+            "BUILD",
+            "BUILD.bazel",
+            "WORKSPACE",
+            "WORKSPACE.bazel",
+        ],
+    ),
+	crate_root = "src/lib.rs",
+    edition = "2021",
+    crate_name = "sp_core_hashing",
+	crate_features = [
+		"default",
+		"std",
+		"digest/std",
+		"blake2b_simd/std",
+		"byteorder/std",
+		"sha2/std",
+		"sha3/std",
+		"twox-hash/std",
+	],
+	deps = all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)

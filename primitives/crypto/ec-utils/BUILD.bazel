@@ -1,0 +1,52 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@crate_index//:defs.bzl", "all_crate_deps", "aliases")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "sp-crypto-ec-utils",
+    version = "0.4.0",
+    srcs = glob(["src/**/*.rs"]),
+	aliases = {"@crate_index__parity-scale-codec-3.6.1//:parity_scale_codec": "codec"},
+	compile_data = glob(
+        include = ["**"],
+        exclude = [
+            "**/* *",
+            "BUILD",
+            "BUILD.bazel",
+            "WORKSPACE",
+            "WORKSPACE.bazel",
+        ],
+    ),
+	crate_root = "src/lib.rs",
+    edition = "2021",
+    crate_name = "sp_crypto_ec_utils",
+	crate_features = [
+		"std",
+		"ark-serialize/std",
+		"ark-ff/std",
+		"ark-ec/std",
+		"ark-std/std",
+		"ark-bls12-377/std",
+		"ark-bls12-381/std",
+		"ark-bw6-761/std",
+		"ark-ed-on-bls12-381-bandersnatch/std",
+		"ark-ed-on-bls12-377/std",
+		"sp-std/std",
+		"codec/std",
+		"ark-scale/std",
+		"sp-runtime-interface/std",
+		"sp-io/std",
+		"ark-algebra-test-templates/std",
+		"sp-ark-bls12-377/std",
+		"sp-ark-bls12-381/std",
+		"sp-ark-bw6-761/std",
+		"sp-ark-ed-on-bls12-377/std",
+		"sp-ark-ed-on-bls12-381-bandersnatch/std",
+	],
+	deps = all_crate_deps(normal = True) + [
+		"//primitives/std:sp-std",
+		"//primitives/runtime-interface:sp-runtime-interface",
+	],
+	proc_macro_deps = all_crate_deps(proc_macro = True),
+)

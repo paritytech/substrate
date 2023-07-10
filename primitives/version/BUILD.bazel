@@ -1,0 +1,45 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@crate_index//:defs.bzl", "all_crate_deps", "aliases")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "sp-version",
+    version = "22.0.0",
+    srcs = glob(["src/**/*.rs"]),
+	aliases = {"@crate_index__parity-scale-codec-3.6.1//:parity_scale_codec": "codec"},
+	compile_data = glob(
+        include = ["**"],
+        exclude = [
+            "**/* *",
+            "BUILD",
+            "BUILD.bazel",
+            "WORKSPACE",
+            "WORKSPACE.bazel",
+        ],
+    ),
+	crate_root = "src/lib.rs",
+    edition = "2021",
+    crate_name = "sp_version",
+	crate_features = [
+		"std",
+		"codec/std",
+		"impl-serde/std",
+		"parity-wasm",
+		"scale-info/std",
+		"serde/std",
+		"sp-runtime/std",
+		"sp-std/std",
+		"thiserror",
+		"impl-serde",
+		"sp-runtime/serde",
+	],
+	deps = all_crate_deps(normal = True) + [
+		"//primitives/std:sp-std",
+		"//primitives/runtime:sp-runtime",
+	],
+	proc_macro_deps = all_crate_deps(proc_macro = True) + [
+		"//primitives/core/hashing/proc-macro:sp-core-hashing-proc-macro",
+		"//primitives/version/proc-macro:sp-version-proc-macro",
+	],
+)

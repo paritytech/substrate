@@ -1,0 +1,25 @@
+load("@rules_rust//rust:defs.bzl", "rust_proc_macro", "rust_test")
+load("@crate_index//:defs.bzl", "all_crate_deps")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_proc_macro(
+    name = "sp-version-proc-macro",
+    srcs = glob(["src/**/*.rs"]),
+	compile_data = glob(
+        include = ["**"],
+        exclude = [
+            "**/* *",
+            "BUILD",
+            "BUILD.bazel",
+            "WORKSPACE",
+            "WORKSPACE.bazel",
+        ],
+    ),
+	aliases = {"@crate_index__parity-scale-codec-3.6.1//:parity_scale_codec": "codec"},
+    edition = "2021",
+    crate_name = "sp_version_proc_macro",
+    version = "8.0.0",
+    deps = all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)

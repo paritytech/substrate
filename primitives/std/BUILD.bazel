@@ -1,0 +1,19 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@crate_index//:defs.bzl", "all_crate_deps")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "sp-std",
+    srcs = glob(["src/**/*.rs"]),
+	compile_data = glob(["*.rs"]),
+    edition = "2021",
+    crate_name = "sp_std",
+	crate_features = [
+		"default",
+		"std",
+	],
+    version = "8.0.0",
+    deps = all_crate_deps(normal = True),
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+)

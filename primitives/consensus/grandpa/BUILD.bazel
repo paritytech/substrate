@@ -1,0 +1,55 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@crate_index//:defs.bzl", "all_crate_deps", "aliases")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "sp-consensus-grandpa",
+    version = "4.0.0-dev",
+    srcs = glob(["src/**/*.rs"]),
+	aliases = {
+		"@crate_index__parity-scale-codec-3.6.1//:parity_scale_codec": "codec",
+		"@crate_index__finality-grandpa-0.16.2//:finality_grandpa": "grandpa",
+	},
+	compile_data = glob(
+        include = ["**"],
+        exclude = [
+            "**/* *",
+            "BUILD",
+            "BUILD.bazel",
+            "WORKSPACE",
+            "WORKSPACE.bazel",
+        ],
+    ),
+	crate_root = "src/lib.rs",
+    edition = "2021",
+    crate_name = "sp_consensus_grandpa",
+	crate_features = [
+		"std",
+		"codec/std",
+		"grandpa/std",
+		"log/std",
+		"scale-info/std",
+		"serde/std",
+		"sp-api/std",
+		"sp-application-crypto/std",
+		"sp-core/std",
+		"sp-keystore",
+		"sp-runtime/std",
+		"sp-std/std",
+		"serde",
+		"scale-info/serde",
+		"sp-application-crypto/serde",
+		"sp-core/serde",
+		"sp-runtime/serde",
+	],
+	deps = all_crate_deps(normal = True) + [
+		"//primitives/api:sp-api",
+		"//primitives/application-crypto:sp-application-crypto",
+		"//primitives/core:sp-core",
+		"//primitives/keystore:sp-keystore",
+		"//primitives/runtime:sp-runtime",
+		"//primitives/std:sp-std",
+	],
+	proc_macro_deps = all_crate_deps(proc_macro = True),
+)

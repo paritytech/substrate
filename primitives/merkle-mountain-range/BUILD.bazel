@@ -1,0 +1,52 @@
+load("@rules_rust//rust:defs.bzl", "rust_library")
+load("@crate_index//:defs.bzl", "all_crate_deps", "aliases")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_library(
+    name = "sp-mmr-primitives",
+    version = "4.0.0-dev",
+    srcs = glob(["src/**/*.rs"]),
+	aliases = {
+	"@crate_index__parity-scale-codec-3.6.1//:parity_scale_codec": "codec",
+	"@crate_index__ckb-merkle-mountain-range-0.5.2//:ckb_merkle_mountain_range": "mmr_lib",
+	},
+	compile_data = glob(
+        include = ["**"],
+        exclude = [
+            "**/* *",
+            "BUILD",
+            "BUILD.bazel",
+            "WORKSPACE",
+            "WORKSPACE.bazel",
+        ],
+    ),
+	crate_root = "src/lib.rs",
+    edition = "2021",
+    crate_name = "sp_mmr_primitives",
+	crate_features = [
+		"std",
+		"codec/std",
+		"log/std",
+		"mmr-lib/std",
+		"serde/std",
+		"sp-api/std",
+		"sp-core/std",
+		"sp-debug-derive/std",
+		"sp-runtime/std",
+		"sp-std/std",
+		"serde",
+		"scale-info/serde",
+		"sp-core/serde",
+		"sp-runtime/serde",
+	],
+	deps = all_crate_deps(normal = True) + [
+		"//primitives/api:sp-api",
+		"//primitives/core:sp-core",
+		"//primitives/runtime:sp-runtime",
+		"//primitives/std:sp-std",
+	],
+	proc_macro_deps = all_crate_deps(proc_macro = True) + [
+		"//primitives/debug-derive:sp-debug-derive"
+	],
+)
