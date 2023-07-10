@@ -223,6 +223,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 					deposit: v.deposit,
 					refcount: v.refcount,
 					owner: v.owner,
+					code_len: module.code.len(),
 				};
 				(k, info)
 			})
