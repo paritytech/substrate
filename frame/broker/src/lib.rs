@@ -191,6 +191,7 @@ pub mod pallet {
 		NoRevenue,
 		UnknownRevenue,
 		UnknownContribution,
+		InvalidContributions,
 	}
 
 	#[pallet::hooks]

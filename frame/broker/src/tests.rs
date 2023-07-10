@@ -18,7 +18,7 @@
 #![cfg(test)]
 
 use crate::{*, mock::*, core_part::*};
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, traits::fungible::Inspect};
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
 
@@ -28,6 +28,59 @@ fn basic_initialize_works() {
 		assert_ok!(Broker::do_start_sales(100));
 		assert_eq!(CoretimeTrace::get(), vec![]);
 		assert_eq!(Broker::current_timeslice(), 0);
+	});
+}
+
+#[test]
+fn instapool_payouts_work() {
+	TestExt::new().core_count(3).endow(1, 1000).execute_with(|| {
+		let item = ScheduleItem { assignment: Pool, part: CorePart::complete() };
+		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		assert_ok!(Broker::do_purchase(1, u64::max_value()));
+		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
+		let region = RegionId { begin, core: 1, part: CorePart::complete() };
+		assert_ok!(Broker::do_pool(region, None, 2));
+		assert_ok!(Broker::do_purchase_credit(1, 20, 1));
+		advance_to(8);
+		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 10));
+		advance_to(10);
+		while Broker::do_check_revenue().unwrap() {}
+		assert_eq!(pot(), 14);
+		assert_eq!(revenue(), 106);
+		assert_ok!(Broker::do_claim_revenue(region, 100));
+		assert_eq!(pot(), 10);
+		assert_eq!(<Test as Config>::Currency::total_balance(&2), 4);
+	});
+}
+
+#[test]
+fn instapool_partial_core_payouts_work() {
+	TestExt::new().core_count(2).endow(1, 1000).execute_with(|| {
+		let item = ScheduleItem { assignment: Pool, part: CorePart::complete() };
+		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		assert_ok!(Broker::do_purchase(1, u64::max_value()));
+		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
+		let region = RegionId { begin, core: 1, part: CorePart::complete() };
+		assert_ok!(Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)));
+		let region1 = RegionId { begin, core: 1, part: CorePart::from_chunk(0, 20) };
+		let region2 = RegionId { begin, core: 1, part: CorePart::from_chunk(20, 80) };
+		assert_ok!(Broker::do_pool(region1, None, 2));
+		assert_ok!(Broker::do_pool(region2, None, 3));
+		assert_ok!(Broker::do_purchase_credit(1, 40, 1));
+		advance_to(8);
+		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 40));
+		advance_to(10);
+		while Broker::do_check_revenue().unwrap() {}
+		assert_ok!(Broker::do_claim_revenue(region1, 100));
+		assert_ok!(Broker::do_claim_revenue(region2, 100));
+		assert_eq!(pot(), 0);
+		assert_eq!(revenue(), 120);
+		assert_eq!(<Test as Config>::Currency::total_balance(&2), 5);
+		assert_eq!(<Test as Config>::Currency::total_balance(&3), 15);
 	});
 }
 

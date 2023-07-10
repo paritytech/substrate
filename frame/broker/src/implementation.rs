@@ -27,7 +27,6 @@ impl<T: Config> Pallet<T> {
 
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let commit_timeslice = status.last_timeslice + config.advance_notice;
-		Self::process_timeslice(commit_timeslice, &mut status, &config);
 
 		if let Some(sale) = SaleInfo::<T>::get() {
 			if commit_timeslice >= sale.region_begin {
@@ -35,6 +34,8 @@ impl<T: Config> Pallet<T> {
 				Self::rotate_sale(sale, &config);
 			}
 		}
+
+		Self::process_timeslice(commit_timeslice, &mut status, &config);
 
 		Status::<T>::put(&status);
 		Ok(())
@@ -100,19 +101,37 @@ impl<T: Config> Pallet<T> {
 	) -> Option<()> {
 		let now = frame_system::Pallet::<T>::block_number();
 
+		let pool_item = ScheduleItem { assignment: CoreAssignment::Pool, part: CorePart::complete() };
+		let just_pool = Schedule::truncate_from(vec![pool_item]);
+
+		// Clean up the old sale - we need to use up any unused cores by putting them into the
+		// InstaPool.
+		let mut total_old_pooled: SignedPartCount = 0;
+		for i in old_sale.cores_sold..old_sale.cores_offered {
+			total_old_pooled.saturating_accrue(80);
+			Workplan::<T>::insert((old_sale.region_begin, old_sale.first_core + i), &just_pool);
+		}
+		InstaPoolIo::<T>::mutate(old_sale.region_begin, |r| {
+			r.total.saturating_accrue(total_old_pooled);
+			r.system.saturating_accrue(total_old_pooled);
+		});
+		InstaPoolIo::<T>::mutate(old_sale.region_end, |r| {
+			r.total.saturating_reduce(total_old_pooled);
+			r.system.saturating_reduce(total_old_pooled);
+		});
+
 		// Calculate the start price for the sale after.
-		let (reserve_price, unused) = {
+		let reserve_price = {
 			let core_count = config.core_count;
-			let max_retail = core_count.saturating_sub(old_sale.first_core);
-			let offered = old_sale.cores_offered.min(max_retail);
-			let ideal = old_sale.ideal_cores_sold.min(max_retail);
+			let offered = old_sale.cores_offered;
+			let ideal = old_sale.ideal_cores_sold;
 			let sold = old_sale.cores_sold;
 			let old_price = old_sale.reserve_price;
-			(if offered > 0 {
+			if offered > 0 {
 				Self::bump_price(offered, ideal, sold, old_price)
 			} else {
 				old_price
-			}, offered.saturating_sub(ideal))
+			}
 		};
 		let start_price = reserve_price * 2u32.into();
 
@@ -132,14 +151,6 @@ impl<T: Config> Pallet<T> {
 			Workplan::<T>::insert((region_begin, first_core), &schedule);
 			first_core.saturating_inc();
 		}
-		let pool_item = ScheduleItem { assignment: CoreAssignment::Pool, part: CorePart::complete() };
-		let just_pool = Schedule::truncate_from(vec![pool_item]);
-		for _ in 0..unused {
-			total_pooled.saturating_accrue(80);
-			Workplan::<T>::insert((region_begin, first_core), &just_pool);
-			first_core.saturating_inc();
-		}
-
 		InstaPoolIo::<T>::mutate(region_begin, |r| {
 			r.total.saturating_accrue(total_pooled);
 			r.system.saturating_accrue(total_pooled);
@@ -196,23 +207,25 @@ impl<T: Config> Pallet<T> {
 		T::PalletId::get().into_account_truncating()
 	}
 
-	pub(crate) fn do_check_revenue() -> DispatchResult {
+	pub(crate) fn do_check_revenue() -> Result<bool, DispatchError> {
 		if let Some((until, amount)) = T::Coretime::check_notify_revenue_info() {
 			let timeslice: Timeslice = (until / T::TimeslicePeriod::get()).saturated_into();
 			let mut amount = T::ConvertBalance::convert_back(amount);
 			if amount.is_zero() {
 				InstaPoolHistory::<T>::remove(timeslice);
-				return Ok(())
+				return Ok(true)
 			}
 			let mut pool_record = InstaPoolHistory::<T>::get(timeslice).unwrap_or_default();
 			ensure!(pool_record.maybe_payout.is_none(), Error::<T>::RevenueAlreadyKnown);
+			ensure!(pool_record.total_contributions >= pool_record.system_contributions, Error::<T>::InvalidContributions);
+			ensure!(pool_record.total_contributions > 0, Error::<T>::InvalidContributions);
 
 			// Payout system InstaPool Cores.
 			let system_payout = amount.saturating_mul(pool_record.system_contributions.into())
 				/ pool_record.total_contributions.into();
 			let _ = Self::charge(&Self::account_id(), system_payout);
-			pool_record.system_contributions = 0;
 			pool_record.total_contributions.saturating_reduce(pool_record.system_contributions);
+			pool_record.system_contributions = 0;
 			amount.saturating_reduce(system_payout);
 
 			if !amount.is_zero() && pool_record.total_contributions > 0 {
@@ -221,8 +234,9 @@ impl<T: Config> Pallet<T> {
 			} else {
 				InstaPoolHistory::<T>::remove(timeslice);
 			}
+			return Ok(true)
 		}
-		Ok(())
+		Ok(false)
 	}
 
 	pub(crate) fn do_purchase_credit(
@@ -237,31 +251,35 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// TODO: Consolidation of InstaPoolHistory records as long as contributors don't change.
-	pub(crate) fn do_claim_revenue(region: RegionId) -> DispatchResult {
-		let mut pool_record = InstaPoolHistory::<T>::get(region.begin).ok_or(Error::<T>::NoRevenue)?;
-		let total_payout = pool_record.maybe_payout.ok_or(Error::<T>::UnknownRevenue)?;
-		let mut contribution = InstaPoolContribution::<T>::take(region).ok_or(Error::<T>::UnknownContribution)?;
+	pub(crate) fn do_claim_revenue(mut region: RegionId, max_timeslices: Timeslice) -> DispatchResult {
+		let mut contribution = InstaPoolContribution::<T>::take(region)
+			.ok_or(Error::<T>::UnknownContribution)?;
 		let contributed_parts = region.part.count_ones();
 
-		contribution.length.saturating_dec();
+		let mut payout = BalanceOf::<T>::zero();
+		let last = region.begin + contribution.length.min(max_timeslices);
+		for r in region.begin..last {
+			let mut pool_record = match InstaPoolHistory::<T>::get(r) { Some(x) => x, None => continue };
+			let total_payout = match pool_record.maybe_payout { Some(x) => x, None => break };
+			region.begin = r;
+			contribution.length.saturating_dec();
+			payout.saturating_accrue(total_payout.saturating_mul(contributed_parts.into())
+				/ pool_record.total_contributions.into());
+			pool_record.total_contributions.saturating_reduce(contributed_parts);
+
+			let remaining_payout = total_payout.saturating_sub(payout);
+			if !remaining_payout.is_zero() && pool_record.total_contributions > 0 {
+				pool_record.maybe_payout = Some(remaining_payout);
+				InstaPoolHistory::<T>::insert(region.begin, &pool_record);
+			} else {
+				InstaPoolHistory::<T>::remove(region.begin);
+			}
+		};
+
 		if contribution.length > 0 {
-			let next_region = RegionId { begin: region.begin + 1, ..region };
-			InstaPoolContribution::<T>::insert(next_region, &contribution);
+			InstaPoolContribution::<T>::insert(region, &contribution);
 		}
-
-		let payout = total_payout.saturating_mul(contributed_parts.into())
-			/ pool_record.total_contributions.into();
 		T::Currency::transfer(&Self::account_id(), &contribution.payee, payout, Expendable).defensive_ok();
-
-		pool_record.total_contributions.saturating_reduce(contributed_parts);
-
-		let remaining_payout = total_payout.saturating_sub(payout);
-		if !remaining_payout.is_zero() && pool_record.total_contributions > 0 {
-			pool_record.maybe_payout = Some(remaining_payout);
-			InstaPoolHistory::<T>::insert(region.begin, &pool_record);
-		} else {
-			InstaPoolHistory::<T>::remove(region.begin);
-		}
 		Ok(())
 	}
 
@@ -289,7 +307,7 @@ impl<T: Config> Pallet<T> {
 	fn process_pool(timeslice: Timeslice, status: &mut StatusRecord) {
 		let pool_io = InstaPoolIo::<T>::take(timeslice);
 		status.pool_size = (status.pool_size as i32).saturating_add(pool_io.total) as u32;
-		status.system_pool_size = (status.pool_size as i32).saturating_add(pool_io.system) as u32;
+		status.system_pool_size = (status.system_pool_size as i32).saturating_add(pool_io.system) as u32;
 		let record = InstaPoolHistoryRecord {
 			total_contributions: status.pool_size,
 			system_contributions: status.system_pool_size,

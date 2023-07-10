@@ -19,7 +19,7 @@
 
 use crate::*;
 use sp_std::collections::btree_map::BTreeMap;
-use frame_support::{parameter_types, traits::{Hooks, fungible::{ItemOf, Mutate}}, assert_ok, PalletId};
+use frame_support::{parameter_types, traits::{Hooks, fungible::{ItemOf, Mutate, Inspect, Credit, Balanced}, OnUnbalanced}, assert_ok, PalletId, ensure};
 use sp_arithmetic::Perbill;
 use sp_core::{H256, ConstU64, ConstU16, ConstU32};
 use sp_runtime::{
@@ -129,6 +129,7 @@ impl CoretimeInterface for TestCoretimeProvider {
 impl TestCoretimeProvider {
 	pub fn spend_instantaneous(who: u64, price: u64) -> Result<(), ()> {
 		let mut c = CoretimeCredit::get();
+		ensure!(CoretimeInPool::get() > 0, ());
 		c.insert(who, c.get(&who).ok_or(())?.checked_sub(price).ok_or(())?);
 		CoretimeCredit::set(c);
 		CoretimeSpending::mutate(|v| v.push((Self::latest(), price)));
@@ -165,10 +166,17 @@ parameter_types! {
 	pub const TestBrokerId: PalletId = PalletId(*b"TsBroker");
 }
 
+pub struct IntoZero;
+impl OnUnbalanced<Credit<u64, <Test as Config>::Currency>> for IntoZero {
+	fn on_nonzero_unbalanced(credit: Credit<u64, <Test as Config>::Currency>) {
+		let _ = <<Test as Config>::Currency as Balanced<_>>::resolve(&0, credit);
+	}
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = ItemOf<TestFungibles<(), u64, (), ConstU64<0>, ()>, (), u64>;
-	type OnRevenue = ();
+	type OnRevenue = IntoZero;
 	type TimeslicePeriod = ConstU32<2>;
 	type MaxLeasedCores = ConstU32<5>;
 	type MaxReservedCores = ConstU32<5>;
@@ -184,6 +192,14 @@ pub fn advance_to(b: u64) {
 		TestCoretimeProvider::bump();
 		Broker::on_initialize(System::block_number());
 	}
+}
+
+pub fn pot() -> u64 {
+	<<Test as Config>::Currency as Inspect<_>>::total_balance(&Broker::account_id())
+}
+
+pub fn revenue() -> u64 {
+	<<Test as Config>::Currency as Inspect<_>>::total_balance(&0)
 }
 
 pub struct TestExt(ConfigRecordOf<Test>);
