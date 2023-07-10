@@ -1,9 +1,10 @@
 use super::*;
+use sp_runtime::traits::{Convert, ConvertBack, AccountIdConversion};
 use frame_support::{
 	pallet_prelude::{*, DispatchResult},
 	traits::{
 		tokens::{Precision::Exact, Preservation::Expendable, Fortitude::Polite},
-		fungible::Balanced, OnUnbalanced
+		fungible::{Mutate, Balanced}, OnUnbalanced, DefensiveResult,
 	}
 };
 use sp_arithmetic::{traits::{Zero, SaturatedConversion, Saturating}, Perbill, PerThing};
@@ -15,12 +16,14 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Attempt to tick things along. Will only do anything if the `Status.last_timeslice` is
-	/// less than `Self::last_timeslice`.
+	/// less than `Self::current_timeslice`.
 	pub(crate) fn do_tick() -> DispatchResult {
 		let mut status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let current_timeslice = Self::current_timeslice();
 		ensure!(status.last_timeslice < current_timeslice, Error::<T>::NothingToDo);
 		status.last_timeslice.saturating_inc();
+
+		T::Coretime::request_revenue_info_at(T::TimeslicePeriod::get() * status.last_timeslice.into());
 
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let commit_timeslice = status.last_timeslice + config.advance_notice;
@@ -44,8 +47,8 @@ impl<T: Config> Pallet<T> {
 		let status = StatusRecord {
 			pool_size: 0,
 			last_timeslice: Self::current_timeslice(),
+			system_pool_size: 0,
 		};
-		Status::<T>::put(&status);
 		let commit_timeslice = status.last_timeslice + config.advance_notice;
 		let now = frame_system::Pallet::<T>::block_number();
 		let dummy_sale = SaleInfoRecord {
@@ -61,6 +64,7 @@ impl<T: Config> Pallet<T> {
 			cores_sold: 0,
 		};
 		Self::rotate_sale(dummy_sale, &config);
+		Status::<T>::put(&status);
 		Ok(())
 	}
 
@@ -97,32 +101,53 @@ impl<T: Config> Pallet<T> {
 		let now = frame_system::Pallet::<T>::block_number();
 
 		// Calculate the start price for the sale after.
-		let reserve_price = {
+		let (reserve_price, unused) = {
 			let core_count = config.core_count;
 			let max_retail = core_count.saturating_sub(old_sale.first_core);
 			let offered = old_sale.cores_offered.min(max_retail);
 			let ideal = old_sale.ideal_cores_sold.min(max_retail);
 			let sold = old_sale.cores_sold;
 			let old_price = old_sale.reserve_price;
-			if offered > 0 {
+			(if offered > 0 {
 				Self::bump_price(offered, ideal, sold, old_price)
 			} else {
 				old_price
-			}
+			}, offered.saturating_sub(ideal))
 		};
 		let start_price = reserve_price * 2u32.into();
-
-		// TODO: commission system InstaPool cores.
 
 		// Set workload for the reserved (system, probably) workloads.
 		let region_begin = old_sale.region_end;
 		let region_end = region_begin + config.region_length;
 
 		let mut first_core = 0;
+		let mut total_pooled: SignedPartCount = 0;
 		for schedule in Reservations::<T>::get().into_iter() {
-			Workplan::<T>::insert((region_begin, first_core), schedule);
+			let parts: u32 = schedule.iter()
+				.filter(|i| matches!(i.assignment, CoreAssignment::Pool))
+				.map(|i| i.part.count_ones())
+				.sum();
+			total_pooled.saturating_accrue(parts as i32);
+
+			Workplan::<T>::insert((region_begin, first_core), &schedule);
 			first_core.saturating_inc();
 		}
+		let pool_item = ScheduleItem { assignment: CoreAssignment::Pool, part: CorePart::complete() };
+		let just_pool = Schedule::truncate_from(vec![pool_item]);
+		for _ in 0..unused {
+			total_pooled.saturating_accrue(80);
+			Workplan::<T>::insert((region_begin, first_core), &just_pool);
+			first_core.saturating_inc();
+		}
+
+		InstaPoolIo::<T>::mutate(region_begin, |r| {
+			r.total.saturating_accrue(total_pooled);
+			r.system.saturating_accrue(total_pooled);
+		});
+		InstaPoolIo::<T>::mutate(region_end, |r| {
+			r.total.saturating_reduce(total_pooled);
+			r.system.saturating_reduce(total_pooled);
+		});
 
 		let mut leases = Leases::<T>::get();
 		// can morph to a renewable as long as it's > begin and < end.
@@ -167,6 +192,79 @@ impl<T: Config> Pallet<T> {
 		Some(())
 	}
 
+	pub fn account_id() -> T::AccountId {
+		T::PalletId::get().into_account_truncating()
+	}
+
+	pub(crate) fn do_check_revenue() -> DispatchResult {
+		if let Some((until, amount)) = T::Coretime::check_notify_revenue_info() {
+			let timeslice: Timeslice = (until / T::TimeslicePeriod::get()).saturated_into();
+			let mut amount = T::ConvertBalance::convert_back(amount);
+			if amount.is_zero() {
+				InstaPoolHistory::<T>::remove(timeslice);
+				return Ok(())
+			}
+			let mut pool_record = InstaPoolHistory::<T>::get(timeslice).unwrap_or_default();
+			ensure!(pool_record.maybe_payout.is_none(), Error::<T>::RevenueAlreadyKnown);
+
+			// Payout system InstaPool Cores.
+			let system_payout = amount.saturating_mul(pool_record.system_contributions.into())
+				/ pool_record.total_contributions.into();
+			let _ = Self::charge(&Self::account_id(), system_payout);
+			pool_record.system_contributions = 0;
+			pool_record.total_contributions.saturating_reduce(pool_record.system_contributions);
+			amount.saturating_reduce(system_payout);
+
+			if !amount.is_zero() && pool_record.total_contributions > 0 {
+				pool_record.maybe_payout = Some(amount);
+				InstaPoolHistory::<T>::insert(timeslice, &pool_record);
+			} else {
+				InstaPoolHistory::<T>::remove(timeslice);
+			}
+		}
+		Ok(())
+	}
+
+	pub(crate) fn do_purchase_credit(
+		who: T::AccountId,
+		amount: BalanceOf<T>,
+		beneficiary: RelayAccountIdOf<T>,
+	) -> DispatchResult {
+		T::Currency::transfer(&who, &Self::account_id(), amount, Expendable)?;
+		let amount = T::ConvertBalance::convert(amount);
+		T::Coretime::credit_account(beneficiary, amount);
+		Ok(())
+	}
+
+	// TODO: Consolidation of InstaPoolHistory records as long as contributors don't change.
+	pub(crate) fn do_claim_revenue(region: RegionId) -> DispatchResult {
+		let mut pool_record = InstaPoolHistory::<T>::get(region.begin).ok_or(Error::<T>::NoRevenue)?;
+		let total_payout = pool_record.maybe_payout.ok_or(Error::<T>::UnknownRevenue)?;
+		let mut contribution = InstaPoolContribution::<T>::take(region).ok_or(Error::<T>::UnknownContribution)?;
+		let contributed_parts = region.part.count_ones();
+
+		contribution.length.saturating_dec();
+		if contribution.length > 0 {
+			let next_region = RegionId { begin: region.begin + 1, ..region };
+			InstaPoolContribution::<T>::insert(next_region, &contribution);
+		}
+
+		let payout = total_payout.saturating_mul(contributed_parts.into())
+			/ pool_record.total_contributions.into();
+		T::Currency::transfer(&Self::account_id(), &contribution.payee, payout, Expendable).defensive_ok();
+
+		pool_record.total_contributions.saturating_reduce(contributed_parts);
+
+		let remaining_payout = total_payout.saturating_sub(payout);
+		if !remaining_payout.is_zero() && pool_record.total_contributions > 0 {
+			pool_record.maybe_payout = Some(remaining_payout);
+			InstaPoolHistory::<T>::insert(region.begin, &pool_record);
+		} else {
+			InstaPoolHistory::<T>::remove(region.begin);
+		}
+		Ok(())
+	}
+	
 	pub(crate) fn do_reserve(schedule: Schedule) -> DispatchResult {
 		let mut r = Reservations::<T>::get();
 		r.try_push(schedule).map_err(|_| Error::<T>::TooManyReservations)?;
@@ -190,9 +288,11 @@ impl<T: Config> Pallet<T> {
 
 	fn process_pool(timeslice: Timeslice, status: &mut StatusRecord) {
 		let pool_io = InstaPoolIo::<T>::take(timeslice);
-		status.pool_size = (status.pool_size as i32).saturating_add(pool_io) as u32;
+		status.pool_size = (status.pool_size as i32).saturating_add(pool_io.total) as u32;
+		status.system_pool_size = (status.pool_size as i32).saturating_add(pool_io.system) as u32;
 		let record = InstaPoolHistoryRecord {
 			total_contributions: status.pool_size,
+			system_contributions: status.system_pool_size,
 			maybe_payout: None,
 		};
 		InstaPoolHistory::<T>::insert(timeslice, record);
@@ -452,16 +552,14 @@ impl<T: Config> Pallet<T> {
 				assignment: CoreAssignment::Pool,
 			}).is_ok() {
 				Workplan::<T>::insert(&workplan_key, &workplan);
-				InstaPoolIo::<T>::mutate(region_id.begin, |a| *a += region_id.part.count_ones() as i32);
-				InstaPoolIo::<T>::mutate(region.end, |a| *a -= region_id.part.count_ones() as i32);
-				let contrib = ContributionRecord {
-					begin: region_id.begin,
-					end: region.end,
-					core: region_id.core,
-					part: region_id.part,
-					payee: Contributor::Private(payee),
+				let size = region_id.part.count_ones() as i32;
+				InstaPoolIo::<T>::mutate(region_id.begin, |a| a.total.saturating_accrue(size));
+				InstaPoolIo::<T>::mutate(region.end, |a| a.total.saturating_reduce(size));
+				let record = ContributionRecord {
+					length: region.end.saturating_sub(region_id.begin),
+					payee,
 				};
-				InstaPoolContribution::<T>::insert(&contrib, ());
+				InstaPoolContribution::<T>::insert(&region_id, record);
 			}
 			Self::deposit_event(Event::Pooled { region_id });
 		}

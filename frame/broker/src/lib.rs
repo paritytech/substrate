@@ -43,7 +43,8 @@ pub mod pallet {
 	use super::*;
 	use frame_support::{
 		pallet_prelude::{*, DispatchResult},
-		traits::{fungible::{Credit, Balanced}, OnUnbalanced},
+		traits::{fungible::{Credit, Mutate, Balanced}, OnUnbalanced},
+		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::{ConvertBack, Convert};
@@ -59,7 +60,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Currency used to pay for Coretime.
-		type Currency: Balanced<Self::AccountId>;
+		type Currency: Mutate<Self::AccountId> + Balanced<Self::AccountId>;
 
 		/// What to do with any revenues collected from the sale of Coretime.
 		type OnRevenue: OnUnbalanced<Credit<Self::AccountId, Self::Currency>>;
@@ -71,6 +72,9 @@ pub mod pallet {
 		/// Reversible conversion from local balance to Relay-chain balance. This will typically be
 		/// the `Identity`, but provided just in case the chains use different representations.
 		type ConvertBalance: Convert<BalanceOf<Self>, RelayBalanceOf<Self>> + ConvertBack<BalanceOf<Self>, RelayBalanceOf<Self>>;
+
+		/// Identifier from which the internal Pot is generated.
+		type PalletId: Get<PalletId>;
 
 		/// Number of Relay-chain blocks per timeslice.
 		#[pallet::constant]
@@ -123,11 +127,11 @@ pub mod pallet {
 
 	/// Record of a single contribution to the Instantaneous Coretime Pool.
 	#[pallet::storage]
-	pub type InstaPoolContribution<T> = StorageMap<_, Blake2_128Concat, ContributionRecordOf<T>, (), OptionQuery>;
+	pub type InstaPoolContribution<T> = StorageMap<_, Blake2_128Concat, RegionId, ContributionRecordOf<T>, OptionQuery>;
 
 	/// Record of Coretime entering or leaving the Instantaneous Coretime Pool.
 	#[pallet::storage]
-	pub type InstaPoolIo<T> = StorageMap<_, Blake2_128Concat, Timeslice, SignedPartCount, ValueQuery>;
+	pub type InstaPoolIo<T> = StorageMap<_, Blake2_128Concat, Timeslice, PoolIoRecord, ValueQuery>;
 
 	/// Total InstaPool rewards for each Timeslice and the number of core parts which contributed.
 	#[pallet::storage]
@@ -183,6 +187,10 @@ pub mod pallet {
 		TooEarly,
 		NothingToDo,
 		TooManyReservations,
+		RevenueAlreadyKnown,
+		NoRevenue,
+		UnknownRevenue,
+		UnknownContribution,
 	}
 
 	#[pallet::hooks]

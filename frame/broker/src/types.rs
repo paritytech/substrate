@@ -10,6 +10,7 @@ use sp_runtime::BoundedVec;
 pub type BalanceOf<T> = <<T as Config>::Currency as Inspect<<T as SConfig>::AccountId>>::Balance;
 pub type RelayBalanceOf<T> = <<T as Config>::Coretime as CoretimeInterface>::Balance;
 pub type RelayBlockNumberOf<T> = <<T as Config>::Coretime as CoretimeInterface>::BlockNumber;
+pub type RelayAccountIdOf<T> = <<T as Config>::Coretime as CoretimeInterface>::AccountId;
 
 /// Relay-chain block number with a fixed divisor of Config::TimeslicePeriod.
 pub type Timeslice = u32;
@@ -52,42 +53,28 @@ pub struct ScheduleItem {
 }
 pub type Schedule = BoundedVec<ScheduleItem, ConstU32<80>>;
 
-/// Identity of a contributor to the Instantaneous Coretime Pool.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum Contributor<AccountId> {
-	/// The Polkadot system; revenue collected on its behalf goes to the `Config::OnRevenue`
-	/// handler.
-	System,
-	/// A private Bulk Coretime holder; revenue collected may be paid out to them.
-	Private(AccountId),
-}
-pub type ContributorOf<T> = Contributor<<T as SConfig>::AccountId>;
-
-/// The record of a Region which was contributed to the Instantaneous Coretime Pool. This helps
+/// The record body of a Region which was contributed to the Instantaneous Coretime Pool. This helps
 /// with making pro rata payments to contributors.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ContributionRecord<AccountId> {
-	/// The beginning of the Region contributed.
-	pub begin: Timeslice,
 	/// The end of the Region contributed.
-	pub end: Timeslice,
-	/// The index of the Polkadot Core contributed.
-	pub core: CoreIndex,
-	/// The regularity parts of the Polkadot Core contributed.
-	pub part: CorePart,
+	pub length: Timeslice,
 	/// The identity of the contributor.
-	pub payee: Contributor<AccountId>,
+	pub payee: AccountId,
 }
 pub type ContributionRecordOf<T> = ContributionRecord<<T as SConfig>::AccountId>;
 
 /// A per-timeslice bookkeeping record for tracking Instantaneous Coretime Pool activity and
 /// making proper payments to contributors.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Encode, Decode, Clone, Default, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct InstaPoolHistoryRecord<Balance> {
 	/// The total amount of Coretime (measured in Regularity Parts or 1/80th of a single block
 	/// of a Polkadot Core) contributed over a timeslice minus any contributions which have
 	/// already been paid out.
 	pub total_contributions: PartCount,
+	/// The total amount of Coretime (measured in Regularity Parts or 1/80th of a single block
+	/// of a Polkadot Core) contributed by the Polkadot System in this timeslice.
+	pub system_contributions: PartCount,
 	/// The payout remaining for the `total_contributions`, or `None` if the revenue is not yet
 	/// known.
 	pub maybe_payout: Option<Balance>,
@@ -109,13 +96,26 @@ pub type AllowedRenewalRecordOf<T> = AllowedRenewalRecord<BalanceOf<T>>;
 /// General status of the system.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct StatusRecord {
-	/// The current size of the Instantaneous Coretime Pool, measured in (measured in
-	/// Regularity Parts or 1/80th of a single block of a Polkadot Core).
+	/// The current size of the Instantaneous Coretime Pool, measured in
+	/// Regularity Parts or 1/80th of a single block of a Polkadot Core.
 	pub pool_size: PartCount,
+	/// The current amount of the Instantaneous Coretime Pool which is provided by the Polkadot
+	/// System, rather than provided as a result of privately operated Coretime.
+	pub system_pool_size: PartCount,
 	/// The last (Relay-chain) timeslice which we processed for (this processing is generally
 	/// done some number of timeslices in advance of actual Relay-chain execution to make up
 	/// for latencies and any needed Relay-side preparations).
 	pub last_timeslice: Timeslice,
+}
+
+/// A record of flux in the InstaPool.
+#[derive(Encode, Decode, Clone, Copy, Default, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct PoolIoRecord {
+	/// The total change of the pool, measured in Regularity Parts.
+	pub total: SignedPartCount,
+	/// The total change of the portion of the pool supplied by the Polkaot System,
+	/// measured in Regularity Parts.
+	pub system: SignedPartCount,
 }
 
 /// The status of a Bulk Coretime Sale.

@@ -18,7 +18,7 @@
 #![cfg(test)]
 
 use crate::*;
-use frame_support::{parameter_types, traits::{Hooks, fungible::{ItemOf, Mutate}}, assert_ok};
+use frame_support::{parameter_types, traits::{Hooks, fungible::{ItemOf, Mutate}}, assert_ok, PalletId};
 use sp_arithmetic::Perbill;
 use sp_core::{H256, ConstU64, ConstU16, ConstU32};
 use sp_runtime::{
@@ -106,6 +106,10 @@ impl CoretimeInterface for CoretimeTrace {
 	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> { None }
 }
 
+parameter_types! {
+	pub const TestBrokerId: PalletId = PalletId(*b"TsBroker");
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = ItemOf<TestFungibles<(), u64, (), ConstU64<0>, ()>, (), u64>;
@@ -116,6 +120,7 @@ impl crate::Config for Test {
 	type Coretime = CoretimeTrace;
 	type ConvertBalance = Identity;
 	type WeightInfo = ();
+	type PalletId = TestBrokerId;
 }
 
 pub fn advance_to(b: u64) {

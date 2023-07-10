@@ -17,11 +17,10 @@
 
 #![cfg(test)]
 
-use crate::{*, mock::*, core_part::*, test_fungibles::*};
+use crate::{*, mock::*, core_part::*};
 use frame_support::{assert_noop, assert_ok};
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
-use sp_arithmetic::Perbill;
 
 #[test]
 fn basic_initialize_works() {
