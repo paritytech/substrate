@@ -29,12 +29,6 @@ mod types;
 pub mod weights;
 pub use weights::WeightInfo;
 
-/* TODO:
-- Advance notice & on_initialize
-- Initialization
-- Pool rewards
-*/
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -59,7 +53,7 @@ pub mod pallet {
 	pub enum CoreAssignment {
 		Idle,
 		Pool,
-		Task(ParaId),
+		Task(TaskId),
 	}
 	pub type WholeCoreAssignment = BoundedVec<(CoreAssignment, PartsOf57600), ConstU32<80>>;
 
@@ -102,9 +96,22 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// Weight information for all calls of this pallet.
+		type WeightInfo: WeightInfo;
+
+		/// Currency used to pay for Coretime.
 		type Currency: Balanced<Self::AccountId>;
 
+		/// What to do with any revenues collected from the sale of Coretime.
 		type OnRevenue: OnUnbalanced<Credit<Self::AccountId, Self::Currency>>;
+
+		/// Relay chain's Coretime API used to interact with and instruct the low-level scheduling
+		/// system.
+		type Coretime: CoretimeInterface;
+
+		/// Reversible conversion from local balance to Relay-chain balance. This will typically be
+		/// the `Identity`, but provided just in case the chains use different representations.
+		type ConvertBalance: Convert<BalanceOf<Self>, RelayBalanceOf<Self>> + ConvertBack<BalanceOf<Self>, RelayBalanceOf<Self>>;
 
 		/// Number of Relay-chain blocks per timeslice.
 		#[pallet::constant]
@@ -117,82 +124,107 @@ pub mod pallet {
 		/// Maximum number of system cores.
 		#[pallet::constant]
 		type MaxReservedCores: Get<u32>;
-
-		/// Reversible conversion from local balance to Relay-chain balance.
-		type ConvertBalance: Convert<BalanceOf<Self>, RelayBalanceOf<Self>> + ConvertBack<BalanceOf<Self>, RelayBalanceOf<Self>>;
-
-		/// Relay chain's Coretime API
-		type Coretime: CoretimeInterface;
-
-		/// Weight information for all calls of this pallet.
-		type WeightInfo: WeightInfo;
 	}
 
 	pub type BalanceOf<T> = <<T as Config>::Currency as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 	pub type RelayBalanceOf<T> = <<T as Config>::Coretime as CoretimeInterface>::Balance;
 	pub type RelayBlockNumberOf<T> = <<T as Config>::Coretime as CoretimeInterface>::BlockNumber;
 
-	// Relay-chain block number divided by 80.
+	/// Relay-chain block number with a fixed divisor of Config::TimeslicePeriod.
 	pub type Timeslice = u32;
+	/// Index of a Polkadot Core.
 	pub type CoreIndex = u16;
-	pub type RelayAccountId = AccountId32;
-	pub type Balance = u128;
-	pub type ParaId = u32;
-	/// Counter for the total CoreParts which could be dedicated to a pool. `u32` so we don't ever
-	/// get an overflow.
+	/// A Task Id. In general this is called a ParachainId.
+	pub type TaskId = u32;
+	/// Counter for the total number of set bits over every core's `CorePart`. `u32` so we don't
+	/// ever get an overflow.
 	pub type PartCount = u32;
+	/// The same as `PartCount` but signed.
 	pub type SignedPartCount = i32;
 
+	/// Self-describing identity for a Region of Bulk Coretime.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct RegionId {
+		/// The timeslice at which this Region begins.
 		pub begin: Timeslice,
+		/// The index of the Polakdot Core on which this Region will be scheduled.
 		pub core: CoreIndex,
+		/// The regularity parts in which this Region will be scheduled.
 		pub part: CorePart,
 	}
 
+	/// The rest of the information describing a Region.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct RegionRecord<AccountId, Balance> {
+		/// The end of the Region.
 		end: Timeslice,
+		/// The owner of the Region.
 		owner: AccountId,
+		/// The amount paid to Polkadot for this Region.
 		paid: Option<Balance>,
 	}
 	pub type RegionRecordOf<T> = RegionRecord<<T as frame_system::Config>::AccountId, BalanceOf<T>>;
 
+	/// An distinct item which can be scheduled on a Polkadot Core.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct ScheduleItem {
+		/// The regularity parts in which this Item will be scheduled on the Core.
 		pub part: CorePart,
+		/// The job that the Core should be doing.
 		pub assignment: CoreAssignment,
 	}
 	pub type Schedule = BoundedVec<ScheduleItem, ConstU32<80>>;
 
+	/// Identity of a contributor to the Instantaneous Coretime Pool.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub enum Contributor<AccountId> {
+		/// The Polkadot system; revenue collected on its behalf goes to the `Config::OnRevenue`
+		/// handler.
 		System,
+		/// A private Bulk Coretime holder; revenue collected may be paid out to them.
 		Private(AccountId),
 	}
 	pub type ContributorOf<T> = Contributor<<T as frame_system::Config>::AccountId>;
 
+	/// The record of a Region which was contributed to the Instantaneous Coretime Pool. This helps
+	/// with making pro rata payments to contributors.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct ContributionRecord<AccountId> {
+		/// The beginning of the Region contributed.
 		begin: Timeslice,
+		/// The end of the Region contributed.
 		end: Timeslice,
+		/// The index of the Polkadot Core contributed.
 		core: CoreIndex,
+		/// The regularity parts of the Polkadot Core contributed.
 		part: CorePart,
+		/// The identity of the contributor.
 		payee: Contributor<AccountId>,
 	}
 	pub type ContributionRecordOf<T> = ContributionRecord<<T as frame_system::Config>::AccountId>;
 
+	/// A per-timeslice bookkeeping record for tracking Instantaneous Coretime Pool activity and
+	/// making proper payments to contributors.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct InstaPoolHistoryRecord<Balance> {
+		/// The total amount of Coretime (measured in Regularity Parts or 1/80th of a single block
+		/// of a Polkadot Core) contributed over a timeslice minus any contributions which have
+		/// already been paid out.
 		total_contributions: PartCount,
+		/// The payout remaining for the `total_contributions`, or `None` if the revenue is not yet
+		/// known.
 		maybe_payout: Option<Balance>,
 	}
 	pub type InstaPoolHistoryRecordOf<T> = InstaPoolHistoryRecord<BalanceOf<T>>;
 
+	/// A record of an allowed renewal.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct AllowedRenewalRecord<Balance> {
+		/// The timeslice denoting the beginning of the Region for which a renewal can secure.
 		begin: Timeslice,
+		/// The price for which the next renewal can be made.
 		price: Balance,
+		/// The workload which will be scheduled on the Core in the case a renewal is made.
 		workload: Schedule,
 	}
 	pub type AllowedRenewalRecordOf<T> = AllowedRenewalRecord<BalanceOf<T>>;
@@ -200,31 +232,33 @@ pub mod pallet {
 	/// General status of the system.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct StatusRecord {
+		/// The current size of the Instantaneous Coretime Pool, measured in (measured in
+		/// Regularity Parts or 1/80th of a single block of a Polkadot Core).
 		pool_size: PartCount,
+		/// The last (Relay-chain) timeslice which we processed for (this processing is generally
+		/// done some number of timeslices in advance of actual Relay-chain execution to make up
+		/// for latencies and any needed Relay-side preparations).
 		last_timeslice: Timeslice,
 	}
 
-	/*
-	SALE:
-	                    1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 2 2
-	0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7
-	--------------------------------------------------------
-	<  renewals  >
-	              <                   sale                 >
-	                            ... of which ...           >
-	              <       auction       ><   fixed-price   >
-	                                                        | <-------\
-    price fixed, unsold assigned to instapool, system cores reserved -/
-	*/
-
+	/// The status of a Bulk Coretime Sale.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-	pub struct SaleStatusRecord<Balance, BlockNumber> {
+	pub struct SaleInfoRecord<Balance, BlockNumber> {
+		/// The local block number at which the sale will/did start.
 		sale_start: BlockNumber,
+		/// The length in blocks of the Leadin Period (where the price is decreasing).
 		leadin_length: BlockNumber,
+		/// The price of Bulk Coretime at the beginning of the Leadin Period.
 		start_price: Balance,
+		/// The price of Bulk Coretime by the end of the Leadin Period.
 		reserve_price: Balance,
+		/// The first timeslice of the Regions which are being sold in this sale.
 		region_begin: Timeslice,
+		/// The timeslice on which the Regions which are being sold in the sale terminate. (i.e. One
+		/// after the last timeslice which the Regions control.)
 		region_end: Timeslice,
+		/// The index of the first core which is for sale. Core of Regions which are sold have
+		/// incrementing indices from this.
 		first_core: CoreIndex,
 		/// The number of cores we want to sell, ideally. Selling this amount would result in no
 		/// change to the reserve_price for the next sale.
@@ -234,45 +268,70 @@ pub mod pallet {
 		/// Number of cores which have been sold; never more than cores_offered.
 		cores_sold: CoreIndex,
 	}
-	pub type SaleStatusRecordOf<T> = SaleStatusRecord<
+	pub type SaleInfoRecordOf<T> = SaleInfoRecord<
 		BalanceOf<T>,
 		<T as frame_system::Config>::BlockNumber,
 	>;
 
+	/// Record for Polkadot Core reservations (generally tasked with the maintenance of System
+	/// Chains).
 	pub type ReservationsRecord<Max> = BoundedVec<Schedule, Max>;
 	pub type ReservationsRecordOf<T> = ReservationsRecord<<T as Config>::MaxReservedCores>;
-	pub type LeasesRecord<Max> = BoundedVec<(Timeslice, ParaId), Max>;
+	/// Record for Polkadot Core legacy leases.
+	pub type LeasesRecord<Max> = BoundedVec<(Timeslice, TaskId), Max>;
 	pub type LeasesRecordOf<T> = LeasesRecord<<T as Config>::MaxLeasedCores>;
 
+	/// Configuration of this pallet.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct ConfigRecord<BlockNumber> {
+		/// The total number of cores which can be assigned (one plus the maximum index which can
+		/// be used in `Coretime::assign`).
 		pub core_count: CoreIndex,
+		/// The number of timeslices in advance which scheduling should be fixed and the
+		/// `Coretime::assign` API used to inform the Relay-chain.
 		pub advance_notice: Timeslice,
+		/// The length in blocks of the Interlude Period for forthcoming sales.
 		pub interlude_length: BlockNumber,
+		/// The length in blocks of the Leadin Period for forthcoming sales.
 		pub leadin_length: BlockNumber,
-		pub ideal_bulk_proportion: Perbill,
-		pub limit_cores_offered: Option<CoreIndex>,
+		/// The length in timeslices of Regions which are up for sale in forthcoming sales.
 		pub region_length: Timeslice,
+		/// The proportion of cores available for sale which should be sold in order for the price
+		/// to remain the same in the next sale.
+		pub ideal_bulk_proportion: Perbill,
+		/// An artificial limit to the number of cores which are allowed to be sold. If `Some` then
+		/// no more cores will be sold than this.
+		pub limit_cores_offered: Option<CoreIndex>,
 	}
 	pub type ConfigRecordOf<T> = ConfigRecord<
 		<T as frame_system::Config>::BlockNumber,
 	>;
 
-	#[pallet::storage]
-	pub type Reservations<T> = StorageValue<_, ReservationsRecordOf<T>, ValueQuery>;
-
-	#[pallet::storage]
-	pub type Leases<T> = StorageValue<_, LeasesRecordOf<T>, ValueQuery>;
-
-	#[pallet::storage]
-	pub type AllowedRenewals<T> = StorageMap<_, Twox64Concat, CoreIndex, AllowedRenewalRecordOf<T>, OptionQuery>;
-
+	/// The current configuration of this pallet.
 	#[pallet::storage]
 	pub type Configuration<T> = StorageValue<_, ConfigRecordOf<T>, OptionQuery>;
 
+	/// The Polkadot Core reservations (generally tasked with the maintenance of System Chains).
 	#[pallet::storage]
-	pub type SaleStatus<T> = StorageValue<_, SaleStatusRecordOf<T>, OptionQuery>;
+	pub type Reservations<T> = StorageValue<_, ReservationsRecordOf<T>, ValueQuery>;
 
+	/// The Polkadot Core legacy leases.
+	#[pallet::storage]
+	pub type Leases<T> = StorageValue<_, LeasesRecordOf<T>, ValueQuery>;
+
+	/// The current status of miscellaneous subsystems of this pallet.
+	#[pallet::storage]
+	pub type Status<T> = StorageValue<_, StatusRecord, OptionQuery>;
+
+	/// The details of the current sale, including its properties and status.
+	#[pallet::storage]
+	pub type SaleInfo<T> = StorageValue<_, SaleInfoRecordOf<T>, OptionQuery>;
+
+	/// Records of allowed renewals.
+	#[pallet::storage]
+	pub type AllowedRenewals<T> = StorageMap<_, Twox64Concat, CoreIndex, AllowedRenewalRecordOf<T>, OptionQuery>;
+
+	/// The current (unassigned) Regions.
 	#[pallet::storage]
 	pub type Regions<T> = StorageMap<_, Blake2_128Concat, RegionId, RegionRecordOf<T>, OptionQuery>;
 
@@ -284,12 +343,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Workload<T> = StorageMap<_, Twox64Concat, CoreIndex, Schedule, ValueQuery>;
 
-	#[pallet::storage]
-	pub type Status<T> = StorageValue<_, StatusRecord, OptionQuery>;
-
+	/// Record of a single contribution to the Instantaneous Coretime Pool.
 	#[pallet::storage]
 	pub type InstaPoolContribution<T> = StorageMap<_, Blake2_128Concat, ContributionRecordOf<T>, (), OptionQuery>;
 
+	/// Record of Coretime entering or leaving the Instantaneous Coretime Pool.
 	#[pallet::storage]
 	pub type InstaPoolIo<T> = StorageMap<_, Blake2_128Concat, Timeslice, SignedPartCount, ValueQuery>;
 
@@ -316,7 +374,7 @@ pub mod pallet {
 		},
 		Assigned {
 			region_id: RegionId,
-			task: ParaId,
+			task: TaskId,
 		},
 		Dropped {
 			region_id: RegionId,
@@ -396,7 +454,7 @@ pub mod pallet {
 			status.last_timeslice.saturating_inc();
 			Self::process_timeslice(status.last_timeslice, &mut status, &config);
 
-			if let Some(sale) = SaleStatus::<T>::get() {
+			if let Some(sale) = SaleInfo::<T>::get() {
 				if status.last_timeslice >= sale.region_begin {
 					// Sale can be rotated.
 					Self::rotate_sale(status.last_timeslice, sale, &status, &config);
@@ -418,7 +476,7 @@ pub mod pallet {
 			};
 			Status::<T>::put(&status);
 			let now = frame_system::Pallet::<T>::block_number();
-			let dummy_sale = SaleStatusRecord {
+			let dummy_sale = SaleInfoRecord {
 				sale_start: now,
 				leadin_length: Zero::zero(),
 				start_price: Zero::zero(),
@@ -462,7 +520,7 @@ pub mod pallet {
 		/// Triggered by Relay-chain block number/timeslice.
 		pub(crate) fn rotate_sale(
 			timeslice: Timeslice,
-			old_sale: SaleStatusRecordOf<T>,
+			old_sale: SaleInfoRecordOf<T>,
 			status: &StatusRecord,
 			config: &ConfigRecordOf<T>,
 		) -> Option<()> {
@@ -521,8 +579,8 @@ pub mod pallet {
 			let max_possible_sales = config.core_count.saturating_sub(first_core);
 			let limit_cores_offered = config.limit_cores_offered.unwrap_or(CoreIndex::max_value());
 			let cores_offered = limit_cores_offered.min(max_possible_sales);
-			// Update SaleStatus
-			let new_sale = SaleStatusRecord {
+			// Update SaleInfo
+			let new_sale = SaleInfoRecord {
 				sale_start: now.saturating_add(config.interlude_length),
 				leadin_length: config.leadin_length,
 				start_price,
@@ -534,7 +592,7 @@ pub mod pallet {
 				cores_offered,
 				cores_sold: 0,
 			};
-			SaleStatus::<T>::put(&new_sale);
+			SaleInfo::<T>::put(&new_sale);
 
 			Some(())
 		}
@@ -630,7 +688,7 @@ pub mod pallet {
 			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let record = AllowedRenewals::<T>::get(core).ok_or(Error::<T>::NotAllowed)?;
-			let mut sale = SaleStatus::<T>::get().ok_or(Error::<T>::NoSales)?;
+			let mut sale = SaleInfo::<T>::get().ok_or(Error::<T>::NoSales)?;
 
 			ensure!(record.begin == sale.region_begin, Error::<T>::WrongTime);
 			ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
@@ -647,14 +705,14 @@ pub mod pallet {
 			let price = record.price + record.price / 100u32.into() * 2u32.into();
 			let new_record = AllowedRenewalRecord { begin, price, .. record };
 			AllowedRenewals::<T>::insert(core, new_record);
-			SaleStatus::<T>::put(&sale);
+			SaleInfo::<T>::put(&sale);
 			Ok(())
 		}
 
 		pub(crate) fn do_purchase(who: T::AccountId, price_limit: BalanceOf<T>) -> DispatchResult {
 			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
-			let mut sale = SaleStatus::<T>::get().ok_or(Error::<T>::NoSales)?;
+			let mut sale = SaleInfo::<T>::get().ok_or(Error::<T>::NoSales)?;
 			ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
 			ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
 			let now = frame_system::Pallet::<T>::block_number();
@@ -671,7 +729,7 @@ pub mod pallet {
 			Self::charge(&who, current_price)?;
 			let core = sale.first_core + sale.cores_sold;
 			sale.cores_sold.saturating_inc();
-			SaleStatus::<T>::put(&sale);
+			SaleInfo::<T>::put(&sale);
 			Self::issue(core, sale.region_begin, sale.region_end, who, Some(current_price));
 			Ok(())
 		}
@@ -785,7 +843,7 @@ pub mod pallet {
 		pub(crate) fn do_assign(
 			region_id: RegionId,
 			maybe_check_owner: Option<T::AccountId>,
-			target: ParaId,
+			target: TaskId,
 		) -> Result<(), Error<T>> {
 			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			if let Some((region_id, region)) = Self::utilize(region_id, maybe_check_owner)? {
