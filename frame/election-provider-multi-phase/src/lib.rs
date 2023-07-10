@@ -294,6 +294,10 @@ pub type SolutionAccuracyOf<T> =
 	<SolutionOf<<T as crate::Config>::MinerConfig> as NposSolution>::Accuracy;
 /// The fallback election type.
 pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProviderBase>::Error;
+/// The maximum electable targets, as seen by the miner config.
+pub type MaxElectableTargetsOf<T> = <T as MinerConfig>::MaxElectableTargets;
+/// The maximum electing voters, as seen by the miner config.
+pub type MaxElectingVotersOf<T> = <T as MinerConfig>::MaxElectingVoters;
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -454,13 +458,13 @@ where
 ///
 /// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, MaxEncodedLen, TypeInfo)]
-#[codec(mel_bound(skip_type_params(VotersBond, TargetsBound)))]
-#[scale_info(skip_type_params(VotersBound, TargetsBound))]
-pub struct RoundSnapshot<AccountId, DataProvider, VotersBound: Get<u32>, TargetsBound: Get<u32>> {
+#[codec(mel_bound(skip_type_params(V, T)))]
+#[scale_info(skip_type_params(V, T))]
+pub struct RoundSnapshot<AccountId, DataProvider, V: Get<u32>, T: Get<u32>> {
 	/// All of the voters.
-	pub voters: BoundedVec<DataProvider, VotersBound>,
+	pub voters: BoundedVec<DataProvider, V>,
 	/// All of the targets.
-	pub targets: BoundedVec<AccountId, TargetsBound>,
+	pub targets: BoundedVec<AccountId, T>,
 }
 
 /// Encodes the length of a solution or a snapshot.
@@ -620,6 +624,8 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			MaxVotesPerVoter = <Self::DataProvider as ElectionDataProvider>::MaxVotesPerVoter,
 			MaxWinners = Self::MaxWinners,
+			MaxElectingVoters = Self::MaxElectingVoters,
+			MaxElectableTargets = Self::MaxElectableTargets,
 		>;
 
 		/// Maximum number of signed submissions that can be queued.
@@ -1276,7 +1282,12 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot)]
 	pub type Snapshot<T: Config> = StorageValue<
 		_,
-		RoundSnapshot<T::AccountId, VoterOf<T>, T::MaxElectingVoters, T::MaxElectableTargets>,
+		RoundSnapshot<
+			T::AccountId,
+			VoterOf<T>,
+			MaxElectingVotersOf<T::MinerConfig>,
+			MaxElectableTargetsOf<T::MinerConfig>,
+		>,
 	>;
 
 	/// Desired number of targets to elect for this round.
@@ -1454,8 +1465,8 @@ impl<T: Config> Pallet<T> {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
-		// TODO: data provider must return a bounded vec. this is just to experiment at this level
-		// without having to touch the data provider trait and impl for now.
+		// TODO(gpestana): data provider must return a bounded vec. this is just to experiment at
+		// this level without having to touch the data provider trait and impl for now.
 		let targets: BoundedVec<_, T::MaxElectableTargets> = BoundedVec::truncate_from(targets);
 		let voters: BoundedVec<_, T::MaxElectingVoters> = BoundedVec::truncate_from(voters);
 
@@ -1482,7 +1493,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// 1. [`SnapshotMetadata`]
 	/// 2. [`RoundSnapshot`]
-	/// 3. [`DesiredTargets`]
+	/// 3. [`DesiredTargets`]1536
 	///
 	/// Returns `Ok(())` if operation is okay.
 	///

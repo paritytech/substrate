@@ -229,6 +229,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 impl MinerConfig for Runtime {
 	type AccountId = AccountId;
 	type Solution = MockNposSolution;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxVotesPerVoter =
 	<<Self as pallet_election_provider_multi_phase::Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter;
 	type MaxLength = MinerMaxLength;

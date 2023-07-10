@@ -151,8 +151,12 @@ pub fn trim_helpers() -> TrimHelpers {
 
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
+	// TODO(gpestana): change seq_phragmen inputs to bounded vec
+	let targets_unbounded: Vec<_> = targets.clone().into();
+	let voters_unbounded: Vec<_> = voters.clone().into();
+
 	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { mut assignments, .. } =
-		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
+		seq_phragmen(desired_targets as usize, targets_unbounded, voters_unbounded, None).unwrap();
 
 	// sort by decreasing order of stake
 	assignments.sort_by_key(|assignment| {
@@ -168,7 +172,12 @@ pub fn trim_helpers() -> TrimHelpers {
 		.collect::<Result<Vec<_>, _>>()
 		.expect("test assignments don't contain any voters with too many votes");
 
-	TrimHelpers { voters, assignments, encoded_size_of, voter_index: Box::new(voter_index) }
+	TrimHelpers {
+		voters: voters.to_vec(),
+		assignments,
+		encoded_size_of,
+		voter_index: Box::new(voter_index),
+	}
 }
 
 /// Spit out a verifiable raw solution.
@@ -177,6 +186,10 @@ pub fn trim_helpers() -> TrimHelpers {
 pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
+
+	// TODO(gpestana): change seq_phragmen inputs to bounded vec
+	let targets: Vec<_> = targets.into();
+	let voters: Vec<_> = voters.into();
 
 	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { winners: _, assignments } =
 		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
@@ -364,6 +377,8 @@ impl MinerConfig for Runtime {
 	type AccountId = AccountId;
 	type MaxLength = MinerMaxLength;
 	type MaxWeight = MinerMaxWeight;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxVotesPerVoter = <StakingMock as ElectionDataProvider>::MaxVotesPerVoter;
 	type MaxWinners = MaxWinners;
 	type Solution = TestNposSolution;
