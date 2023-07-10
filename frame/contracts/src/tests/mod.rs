@@ -3025,7 +3025,7 @@ fn gas_estimation_call_runtime() {
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = RuntimeCall::Dummy(pallet_dummy::Call::over_estimate_pre_charge {});
+		let call = RuntimeCall::Dummy(pallet_dummy::Call::overestimate_pre_charge {});
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_caller.clone(),

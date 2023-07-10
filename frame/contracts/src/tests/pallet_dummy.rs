@@ -17,11 +17,12 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Dummy call that over charge the predispatch weight, so we can test correct values of
-		/// [`ContractResult::gas_consumed`] and [`ContractResult::gas_required`] in tests.
+		/// Dummy function that overcharges the predispatch weight, allowing us to test the correct
+		/// values of [`ContractResult::gas_consumed`] and [`ContractResult::gas_required`] in
+		/// tests.
 		#[pallet::call_index(1)]
 		#[pallet::weight(Weight::from_parts(10_000_000, 0))]
-		pub fn over_estimate_pre_charge(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn overestimate_pre_charge(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			Ok(PostDispatchInfo {
 				actual_weight: Some(Weight::from_parts(100, 0)),
