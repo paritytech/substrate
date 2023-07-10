@@ -2980,6 +2980,94 @@ fn gas_estimation_nested_call_fixed_limit() {
 }
 
 #[test]
+fn gas_estimation_call_runtime() {
+	use codec::Decode;
+	let (caller_code, _caller_hash) = compile_module::<Test>("call_runtime").unwrap();
+	let (callee_code, _callee_hash) = compile_module::<Test>("dummy").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		let _ = Balances::deposit_creating(&CHARLIE, 1000 * min_balance);
+
+		let addr_caller = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(caller_code),
+			vec![],
+			vec![0],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		let addr_callee = Contracts::bare_instantiate(
+			ALICE,
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			Code::Upload(callee_code),
+			vec![],
+			vec![1],
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+		)
+		.result
+		.unwrap()
+		.account_id;
+
+		// Call something trivial with a huge gas limit so that we can observe the effects
+		// of pre-charging. This should create a difference between consumed and required.
+		let call = RuntimeCall::Contracts(crate::Call::call {
+			dest: addr_callee,
+			value: 0,
+			gas_limit: GAS_LIMIT / 3,
+			storage_deposit_limit: None,
+			data: vec![],
+		});
+
+		let call = RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
+			dest: addr_callee,
+			value: min_balance * 10,
+		});
+		let result = Contracts::bare_call(
+			ALICE,
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			call.encode(),
+			DebugInfo::Skip,
+			CollectEvents::Skip,
+			Determinism::Enforced,
+		);
+		// contract encodes the result of the dispatch runtime
+		let outcome = u32::decode(&mut result.result.unwrap().data.as_ref()).unwrap();
+		assert_eq!(outcome, 0);
+		assert!(result.gas_required.ref_time() > result.gas_consumed.ref_time());
+
+		// Make the same call using the required gas. Should succeed.
+		assert_ok!(
+			Contracts::bare_call(
+				ALICE,
+				addr_caller,
+				0,
+				result.gas_required,
+				None,
+				call.encode(),
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+				Determinism::Enforced,
+			)
+			.result
+		);
+	});
+}
+
+#[test]
 fn call_runtime_reentrancy_guarded() {
 	let (caller_code, _caller_hash) = compile_module::<Test>("call_runtime").unwrap();
 	let (callee_code, _callee_hash) = compile_module::<Test>("dummy").unwrap();
