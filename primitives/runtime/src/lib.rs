@@ -197,6 +197,16 @@ pub trait BuildStorage {
 	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String>;
 }
 
+#[cfg(feature = "std")]
+impl<F> BuildStorage for F
+	where
+		F: Fn() -> Result<(), String>,
+{
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
+		sp_state_machine::BasicExternalities::execute_with_storage(storage, || (*self)())
+	}
+}
+
 /// Something that can build the genesis storage of a module.
 #[cfg(feature = "std")]
 pub trait BuildModuleGenesisStorage<T, I>: Sized {
