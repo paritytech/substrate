@@ -346,6 +346,7 @@ pub mod pallet {
 		/// - O(1)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::propose_spend())]
+		#[allow(deprecated)]
 		#[deprecated(
 			note = "`propose_spend` will be removed in January 2024. Use `spend` instead."
 		)]
@@ -377,6 +378,7 @@ pub mod pallet {
 		/// - O(1)
 		#[pallet::call_index(1)]
 		#[pallet::weight((T::WeightInfo::reject_proposal(), DispatchClass::Operational))]
+		#[allow(deprecated)]
 		#[deprecated(
 			note = "`reject_proposal` will be removed in January 2024. Use `spend` instead."
 		)]
@@ -408,6 +410,7 @@ pub mod pallet {
 		///  - O(1).
 		#[pallet::call_index(2)]
 		#[pallet::weight((T::WeightInfo::approve_proposal(T::MaxApprovals::get()), DispatchClass::Operational))]
+		#[allow(deprecated)]
 		#[deprecated(
 			note = "`approve_proposal` will be removed in January 2024. Use `spend` instead."
 		)]
