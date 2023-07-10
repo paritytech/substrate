@@ -664,7 +664,7 @@ pub(crate) fn process_storage_results(
 				match key_info {
 					Some(key_info) => {
 						let comment = format!(
-							"Storage: {} {} (r:{} w:{})",
+							"Storage: `{}::{}` (r:{} w:{})",
 							String::from_utf8(key_info.pallet_name.clone())
 								.expect("encoded from string"),
 							String::from_utf8(key_info.storage_name.clone())
@@ -676,7 +676,7 @@ pub(crate) fn process_storage_results(
 					},
 					None => {
 						let comment = format!(
-							"Storage: unknown `0x{}` (r:{} w:{})",
+							"Storage: UNKNOWN KEY `0x{}` (r:{} w:{})",
 							HexDisplay::from(key),
 							reads,
 							writes,
@@ -698,7 +698,7 @@ pub(crate) fn process_storage_results(
 						) {
 							Some(new_pov) => {
 								let comment = format!(
-									"Proof: {} {} (max_values: {:?}, max_size: {:?}, added: {}, mode: {:?})",
+									"Proof: `{}::{}` (`max_values`: {:?}, `max_size`: {:?}, added: {}, mode: `{:?}`)",
 									String::from_utf8(key_info.pallet_name.clone())
 										.expect("encoded from string"),
 									String::from_utf8(key_info.storage_name.clone())
@@ -716,7 +716,7 @@ pub(crate) fn process_storage_results(
 								let item = String::from_utf8(key_info.storage_name.clone())
 									.expect("encoded from string");
 								let comment = format!(
-									"Proof Skipped: {} {} (max_values: {:?}, max_size: {:?}, mode: {:?})",
+									"Proof: `{}::{}` (`max_values`: {:?}, `max_size`: {:?}, mode: `{:?}`)",
 									pallet, item, key_info.max_values, key_info.max_size,
 									used_pov_mode,
 								);
@@ -726,7 +726,7 @@ pub(crate) fn process_storage_results(
 					},
 					None => {
 						let comment = format!(
-							"Proof Skipped: unknown `0x{}` (r:{} w:{})",
+							"Proof: UNKNOWN KEY `0x{}` (r:{} w:{})",
 							HexDisplay::from(key),
 							reads,
 							writes,

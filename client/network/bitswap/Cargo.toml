@@ -17,7 +17,7 @@ prost-build = "0.11"
 
 [dependencies]
 async-channel = "1.8.0"
-cid = "0.8.6"
+cid = "0.9.0"
 futures = "0.3.21"
 libp2p-identity = { version = "0.1.2", features = ["peerid"] }
 log = "0.4.17"
