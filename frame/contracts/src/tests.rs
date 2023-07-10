@@ -3029,10 +3029,10 @@ fn gas_estimation_call_runtime() {
 			data: vec![],
 		});
 
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
-			dest: addr_callee,
-			value: min_balance * 10,
-		});
+		// let call = RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
+		// 	dest: addr_callee,
+		// 	value: min_balance * 10,
+		// });
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_caller.clone(),
