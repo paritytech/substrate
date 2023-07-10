@@ -197,11 +197,10 @@ pub mod pallet {
 	}
 	pub type AllowedRenewalRecordOf<T> = AllowedRenewalRecord<BalanceOf<T>>;
 
+	/// General status of the system.
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct StatusRecord {
-		core_count: CoreIndex,
 		pool_size: PartCount,
-		advance_notice: Timeslice,
 		last_timeslice: Timeslice,
 	}
 
@@ -221,11 +220,11 @@ pub mod pallet {
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 	pub struct SaleStatusRecord<Balance, BlockNumber> {
 		sale_start: BlockNumber,
-		auction_length: BlockNumber,
+		leadin_length: BlockNumber,
 		start_price: Balance,
 		reserve_price: Balance,
 		region_begin: Timeslice,
-		region_length: Timeslice,
+		region_end: Timeslice,
 		first_core: CoreIndex,
 		/// The number of cores we want to sell, ideally. Selling this amount would result in no
 		/// change to the reserve_price for the next sale.
@@ -246,14 +245,16 @@ pub mod pallet {
 	pub type LeasesRecordOf<T> = LeasesRecord<<T as Config>::MaxLeasedCores>;
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-	pub struct SaleConfigRecord<BlockNumber> {
-		pub presale_length: BlockNumber,
-		pub auction_length: BlockNumber,
-		pub ideal_cores_sold: CoreIndex,
-		pub cores_offered: CoreIndex,
+	pub struct ConfigRecord<BlockNumber> {
+		pub core_count: CoreIndex,
+		pub advance_notice: Timeslice,
+		pub interlude_length: BlockNumber,
+		pub leadin_length: BlockNumber,
+		pub ideal_bulk_proportion: Perbill,
+		pub limit_cores_offered: Option<CoreIndex>,
 		pub region_length: Timeslice,
 	}
-	pub type SaleConfigRecordOf<T> = SaleConfigRecord<
+	pub type ConfigRecordOf<T> = ConfigRecord<
 		<T as frame_system::Config>::BlockNumber,
 	>;
 
@@ -267,7 +268,7 @@ pub mod pallet {
 	pub type AllowedRenewals<T> = StorageMap<_, Twox64Concat, CoreIndex, AllowedRenewalRecordOf<T>, OptionQuery>;
 
 	#[pallet::storage]
-	pub type SaleConfig<T> = StorageValue<_, SaleConfigRecordOf<T>, OptionQuery>;
+	pub type Configuration<T> = StorageValue<_, ConfigRecordOf<T>, OptionQuery>;
 
 	#[pallet::storage]
 	pub type SaleStatus<T> = StorageValue<_, SaleStatusRecordOf<T>, OptionQuery>;
@@ -379,25 +380,26 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub(crate) fn do_configure(config: SaleConfigRecordOf<T>) -> DispatchResult {
-			SaleConfig::<T>::put(config);
+		pub(crate) fn do_configure(config: ConfigRecordOf<T>) -> DispatchResult {
+			Configuration::<T>::put(config);
 			Ok(())
 		}
 
 		/// Attempt to tick things along. Will only do anything if the `Status.last_timeslice` is
 		/// less than `Self::last_timeslice`.
 		pub(crate) fn do_tick() -> DispatchResult {
+			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let mut status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 
 			let processable_until = Self::current_schedulable_timeslice();
 			ensure!(status.last_timeslice < processable_until, Error::<T>::NothingToDo);
 			status.last_timeslice.saturating_inc();
-			Self::process_timeslice(status.last_timeslice, &mut status);
+			Self::process_timeslice(status.last_timeslice, &mut status, &config);
 
 			if let Some(sale) = SaleStatus::<T>::get() {
 				if status.last_timeslice >= sale.region_begin {
 					// Sale can be rotated.
-					Self::rotate_sale(status.last_timeslice, sale, &status);
+					Self::rotate_sale(status.last_timeslice, sale, &status, &config);
 				}
 			}
 
@@ -406,33 +408,29 @@ pub mod pallet {
 		}
 
 		pub(crate) fn do_start_sales(
-			core_count: CoreIndex,
 			reserve_price: BalanceOf<T>,
-			advance_notice: Timeslice,
 		) -> DispatchResult {
-			let config = SaleConfig::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let current_schedulable_timeslice = Self::current_schedulable_timeslice();
-			let mut status = StatusRecord {
-				core_count,
+			let status = StatusRecord {
 				pool_size: 0,
-				advance_notice,
 				last_timeslice: current_schedulable_timeslice,
 			};
+			Status::<T>::put(&status);
 			let now = frame_system::Pallet::<T>::block_number();
 			let dummy_sale = SaleStatusRecord {
 				sale_start: now,
-				auction_length: Zero::zero(),
+				leadin_length: Zero::zero(),
 				start_price: Zero::zero(),
 				reserve_price,
 				region_begin: current_schedulable_timeslice,
-				region_length: config.region_length,
+				region_end: current_schedulable_timeslice + config.region_length,
 				first_core: 0,
 				ideal_cores_sold: 0,
 				cores_offered: 0,
 				cores_sold: 0,
 			};
-			Self::rotate_sale(current_schedulable_timeslice, dummy_sale, &status);
-			Status::<T>::put(status);
+			Self::rotate_sale(current_schedulable_timeslice, dummy_sale, &status, &config);
 			Ok(())
 		}
 
@@ -462,14 +460,17 @@ pub mod pallet {
 		/// Begin selling for the next sale period.
 		///
 		/// Triggered by Relay-chain block number/timeslice.
-		pub(crate) fn rotate_sale(timeslice: Timeslice, old_sale: SaleStatusRecordOf<T>, status: &StatusRecord) -> Option<()> {
-			let config = SaleConfig::<T>::get()?;
-
+		pub(crate) fn rotate_sale(
+			timeslice: Timeslice,
+			old_sale: SaleStatusRecordOf<T>,
+			status: &StatusRecord,
+			config: &ConfigRecordOf<T>,
+		) -> Option<()> {
 			let now = frame_system::Pallet::<T>::block_number();
 
 			// Calculate the start price for the sale after.
 			let reserve_price = {
-				let core_count = status.core_count;
+				let core_count = config.core_count;
 				let max_retail = core_count.saturating_sub(old_sale.first_core);
 				let offered = old_sale.cores_offered.min(max_retail);
 				let ideal = old_sale.ideal_cores_sold.min(max_retail);
@@ -486,8 +487,8 @@ pub mod pallet {
 			// TODO: commission system InstaPool cores.
 
 			// Set workload for the reserved (system, probably) workloads.
-			let region_begin = old_sale.region_begin + old_sale.region_length;
-			let region_length = config.region_length;
+			let region_begin = old_sale.region_end;
+			let region_end = region_begin + config.region_length;
 
 			let mut first_core = 0;
 			for schedule in Reservations::<T>::get().into_iter() {
@@ -506,7 +507,7 @@ pub mod pallet {
 				if expiring {
 					// last time for this one - make it renewable.
 					let record = AllowedRenewalRecord {
-						begin: region_begin + region_length,
+						begin: region_end,
 						price: reserve_price,
 						workload: schedule,
 					};
@@ -517,17 +518,20 @@ pub mod pallet {
 			});
 			Leases::<T>::put(&leases);
 
+			let max_possible_sales = config.core_count.saturating_sub(first_core);
+			let limit_cores_offered = config.limit_cores_offered.unwrap_or(CoreIndex::max_value());
+			let cores_offered = limit_cores_offered.min(max_possible_sales);
 			// Update SaleStatus
 			let new_sale = SaleStatusRecord {
-				sale_start: now.saturating_add(config.presale_length),
-				auction_length: config.auction_length,
+				sale_start: now.saturating_add(config.interlude_length),
+				leadin_length: config.leadin_length,
 				start_price,
 				reserve_price,
 				region_begin,
-				region_length,
+				region_end,
 				first_core,
-				ideal_cores_sold: config.ideal_cores_sold,
-				cores_offered: config.cores_offered,
+				ideal_cores_sold: (config.ideal_bulk_proportion * cores_offered as u32) as u16,
+				cores_offered,
 				cores_sold: 0,
 			};
 			SaleStatus::<T>::put(&new_sale);
@@ -549,17 +553,17 @@ pub mod pallet {
 		}
 
 		pub(crate) fn current_schedulable_timeslice() -> Timeslice {
-			Self::current_timeslice() + Status::<T>::get().map_or(0, |x| x.advance_notice)
+			Self::current_timeslice() + Configuration::<T>::get().map_or(0, |x| x.advance_notice)
 		}
 
 		pub(crate) fn next_schedulable_timeslice() -> Timeslice {
 			Self::current_schedulable_timeslice().saturating_add(1)
 		}
 
-		pub(crate) fn process_timeslice(timeslice: Timeslice, status: &mut StatusRecord) {
+		pub(crate) fn process_timeslice(timeslice: Timeslice, status: &mut StatusRecord, config: &ConfigRecordOf<T>) {
 			Self::process_pool(timeslice, status);
 			let rc_begin = RelayBlockNumberOf::<T>::from(timeslice) * T::TimeslicePeriod::get();
-			for core in 0..status.core_count {
+			for core in 0..config.core_count {
 				Self::process_core_schedule(timeslice, rc_begin, core, status);
 			}
 		}
@@ -623,12 +627,13 @@ pub mod pallet {
 		/// Must be called on a core in `AllowedRenewals` whose value is a timeslice equal to the
 		/// current sale status's `region_end`.
 		pub(crate) fn do_renew(who: &T::AccountId, core: CoreIndex) -> DispatchResult {
+			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let record = AllowedRenewals::<T>::get(core).ok_or(Error::<T>::NotAllowed)?;
 			let mut sale = SaleStatus::<T>::get().ok_or(Error::<T>::NoSales)?;
 
 			ensure!(record.begin == sale.region_begin, Error::<T>::WrongTime);
-			ensure!(sale.first_core < status.core_count, Error::<T>::Unavailable);
+			ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
 			ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
 
 			Self::charge(who, record.price)?;
@@ -638,7 +643,7 @@ pub mod pallet {
 
 			Workplan::<T>::insert((record.begin, core), &record.workload);
 
-			let begin = sale.region_begin + sale.region_length;
+			let begin = sale.region_end;
 			let price = record.price + record.price / 100u32.into() * 2u32.into();
 			let new_record = AllowedRenewalRecord { begin, price, .. record };
 			AllowedRenewals::<T>::insert(core, new_record);
@@ -647,16 +652,17 @@ pub mod pallet {
 		}
 
 		pub(crate) fn do_purchase(who: T::AccountId, price_limit: BalanceOf<T>) -> DispatchResult {
+			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			let mut sale = SaleStatus::<T>::get().ok_or(Error::<T>::NoSales)?;
-			ensure!(sale.first_core < status.core_count, Error::<T>::Unavailable);
+			ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
 			ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(now > sale.sale_start, Error::<T>::TooEarly);
 			let current_price = lerp(
 				now,
 				sale.sale_start,
-				sale.auction_length,
+				sale.leadin_length,
 				sale.start_price,
 				sale.reserve_price,
 			).ok_or(Error::<T>::IndeterminablePrice)?;
@@ -666,19 +672,19 @@ pub mod pallet {
 			let core = sale.first_core + sale.cores_sold;
 			sale.cores_sold.saturating_inc();
 			SaleStatus::<T>::put(&sale);
-			Self::issue(core, sale.region_begin, sale.region_length, who, Some(current_price));
+			Self::issue(core, sale.region_begin, sale.region_end, who, Some(current_price));
 			Ok(())
 		}
 
 		pub(crate) fn issue(
 			core: CoreIndex,
 			begin: Timeslice,
-			length: Timeslice,
+			end: Timeslice,
 			owner: T::AccountId,
 			paid: Option<BalanceOf<T>>,
 		) {
 			let id = RegionId { begin, core, part: CorePart::complete() };
-			let record = RegionRecord { end: begin + length, owner, paid };
+			let record = RegionRecord { end, owner, paid };
 			Regions::<T>::insert(id, record);
 		}
 
@@ -781,7 +787,7 @@ pub mod pallet {
 			maybe_check_owner: Option<T::AccountId>,
 			target: ParaId,
 		) -> Result<(), Error<T>> {
-			let config = SaleConfig::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 			if let Some((region_id, region)) = Self::utilize(region_id, maybe_check_owner)? {
 				let workplan_key = (region_id.begin, region_id.core);
 				let mut workplan = Workplan::<T>::get(&workplan_key)

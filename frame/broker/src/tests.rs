@@ -17,10 +17,11 @@
 
 #![cfg(test)]
 
-use crate::{*, mock::*, types::*, Error, SaleConfigRecord};
+use crate::{*, mock::*, types::*, Error, ConfigRecord};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
+use sp_arithmetic::Perbill;
 
 fn advance_to(b: u64) {
 	while System::block_number() < b {
@@ -32,14 +33,16 @@ fn advance_to(b: u64) {
 #[test]
 fn basic_initialize_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Broker::do_configure(SaleConfigRecord {
-			presale_length: 1,
-			auction_length: 3,
-			ideal_cores_sold: 0,
-			cores_offered: 0,
+		assert_ok!(Broker::do_configure(ConfigRecord {
+			core_count: 10,
+			advance_notice: 1,
+			interlude_length: 1,
+			leadin_length: 3,
+			ideal_bulk_proportion: Perbill::zero(),
+			limit_cores_offered: None,
 			region_length: 10,
 		}));
-		assert_ok!(Broker::do_start_sales(10, 100, 1));
+		assert_ok!(Broker::do_start_sales(100));
 		assert_eq!(CoretimeTrace::get(), vec![]);
 	});
 }
@@ -47,23 +50,27 @@ fn basic_initialize_works() {
 #[test]
 fn initialize_with_system_paras_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Broker::do_configure(SaleConfigRecord {
-			presale_length: 1,
-			auction_length: 3,
-			ideal_cores_sold: 0,
-			cores_offered: 0,
+		assert_ok!(Broker::do_configure(ConfigRecord {
+			core_count: 10,
+			advance_notice: 1,
+			interlude_length: 1,
+			leadin_length: 3,
+			ideal_bulk_proportion: Perbill::zero(),
+			limit_cores_offered: None,
 			region_length: 5,
 		}));
 
 		let item = ScheduleItem { assignment: Task(1u32), part: CorePart::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 
-		assert_ok!(Broker::do_start_sales(10, 100, 0));
+		assert_eq!(Broker::current_schedulable_timeslice(), 1);
+
+		assert_ok!(Broker::do_start_sales(100));
 		assert_eq!(CoretimeTrace::get(), vec![]);
 
 		advance_to(10);
 		assert_eq!(CoretimeTrace::get(), vec![
-			(10, AssignCore { core: 0, begin: 10, assignment: vec![(Task(1), 57600)], end_hint: None })
+			(10, AssignCore { core: 0, begin: 12, assignment: vec![(Task(1), 57600)], end_hint: None })
 		]);
 	});
 }
