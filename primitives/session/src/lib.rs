@@ -127,7 +127,7 @@ where
 
 	let mut runtime_api = client.runtime_api();
 
-	runtime_api.register_extension(sp_keystore::KeystoreExt::new(keystore));
+	runtime_api.register_extension(sp_keystore::KeystoreExt::from(keystore));
 
 	for seed in seeds {
 		runtime_api.generate_session_keys(at, Some(seed.as_bytes().to_vec()))?;

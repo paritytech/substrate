@@ -314,7 +314,7 @@ mod tests {
 		AsyncApi::new(mock, false, shared_client)
 	}
 
-	fn offchain_db() -> Db<LocalStorage> {
+	fn offchain_db() -> OffchainDb<LocalStorage> {
 		OffchainDb::new(LocalStorage::new_test())
 	}
 
