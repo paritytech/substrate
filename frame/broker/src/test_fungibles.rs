@@ -17,14 +17,14 @@
 
 use frame_support::{
 	parameter_types,
-	traits::{ConstU16, ConstU64, fungibles::{self, Dust}, tokens::{self, Preservation, Fortitude, Provenance, DepositConsequence, WithdrawConsequence}}
+	traits::{fungibles::{self, Dust}, tokens::{self, Preservation, Fortitude, Provenance, DepositConsequence, WithdrawConsequence}}
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::collections::btree_map::BTreeMap;
 use codec::{Encode, Decode};
-use sp_core::{ConstU32, TypedGet, Get};
+use sp_core::{TypedGet, Get};
 
 parameter_types! {
 	static TestAssetOf: BTreeMap<(u32, Vec<u8>), Vec<u8>> = Default::default();
@@ -59,7 +59,7 @@ where
 	}
 
 	/// The minimum balance any single account may have.
-	fn minimum_balance(asset: Self::AssetId) -> Self::Balance {
+	fn minimum_balance(_asset: Self::AssetId) -> Self::Balance {
 		MinimumBalance::get()
 	}
 

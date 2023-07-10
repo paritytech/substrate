@@ -1,157 +1,185 @@
+use crate::{Config, CoretimeInterface, CoreIndex, CorePart, CoreAssignment, TaskId};
 use codec::{Encode, Decode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::RuntimeDebug;
-use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
+use frame_support::traits::fungible::Inspect;
+use frame_system::Config as SConfig;
+use sp_arithmetic::Perbill;
+use sp_core::{ConstU32, RuntimeDebug};
+use sp_runtime::BoundedVec;
 
-// TODO: Use BitArr instead; for this, we'll need to ensure Codec is impl'ed for `BitArr`.
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct CorePart([u8; 10]);
-impl CorePart {
-	pub fn void() -> Self {
-		Self([0u8; 10])
-	}
-	pub fn complete() -> Self {
-		Self([255u8; 10])
-	}
-	pub fn is_void(&self) -> bool {
-		&self.0 == &[0u8; 10]
-	}
-	pub fn is_complete(&self) -> bool {
-		&self.0 == &[255u8; 10]
-	}
-	pub fn set(&mut self, i: u32) -> Self {
-		if i < 80 {
-			self.0[(i / 8) as usize] |= (128 >> (i % 8));
-		}
-		*self
-	}
-	pub fn clear(&mut self, i: u32) -> Self {
-		if i < 80 {
-			self.0[(i / 8) as usize] &= !(128 >> (i % 8));
-		}
-		*self
-	}
-	pub fn count_zeros(&self) -> u32 {
-		self.0.iter().map(|i| i.count_zeros()).sum()
-	}
-	pub fn count_ones(&self) -> u32 {
-		self.0.iter().map(|i| i.count_ones()).sum()
-	}
-	pub fn from_chunk(from: u32, to: u32) -> Self {
-		let mut v = [0u8; 10];
-		for i in (from.min(80) as usize)..(to.min(80) as usize) {
-			v[i / 8] |= (128 >> (i % 8));
-		}
-		Self(v)
-	}
-}
-impl From<u128> for CorePart {
-	fn from(x: u128) -> Self {
-		let mut v = [0u8; 10];
-		for i in 0..10 {
-			v[i] = (x >> (72 - 8 * i)) as u8;
-		}
-		Self(v)
-	}
-}
-impl BitAnd<Self> for CorePart {
-	type Output = Self;
-	fn bitand(self, rhs: Self) -> Self {
-		let mut result = [0u8; 10];
-		for i in 0..10 {
-			result[i] = self.0[i].bitand(rhs.0[i]);
-		}
-		Self(result)
-	}
-}
-impl BitAndAssign<Self> for CorePart {
-	fn bitand_assign(&mut self, rhs: Self) {
-		for i in 0..10 {
-			self.0[i].bitand_assign(rhs.0[i]);
-		}
-	}
-}
-impl BitOr<Self> for CorePart {
-	type Output = Self;
-	fn bitor(self, rhs: Self) -> Self {
-		let mut result = [0u8; 10];
-		for i in 0..10 {
-			result[i] = self.0[i].bitor(rhs.0[i]);
-		}
-		Self(result)
-	}
-}
-impl BitOrAssign<Self> for CorePart {
-	fn bitor_assign(&mut self, rhs: Self) {
-		for i in 0..10 {
-			self.0[i].bitor_assign(rhs.0[i]);
-		}
-	}
-}
-impl BitXor<Self> for CorePart {
-	type Output = Self;
-	fn bitxor(self, rhs: Self) -> Self {
-		let mut result = [0u8; 10];
-		for i in 0..10 {
-			result[i] = self.0[i].bitxor(rhs.0[i]);
-		}
-		Self(result)
-	}
-}
-impl BitXorAssign<Self> for CorePart {
-	fn bitxor_assign(&mut self, rhs: Self) {
-		for i in 0..10 {
-			self.0[i].bitxor_assign(rhs.0[i]);
-		}
-	}
-}
-impl Not for CorePart {
-	type Output = Self;
-	fn not(self) -> Self {
-		let mut result = [0u8; 10];
-		for i in 0..10 {
-			result[i] = self.0[i].not();
-		}
-		Self(result)
-	}
+pub type BalanceOf<T> = <<T as Config>::Currency as Inspect<<T as SConfig>::AccountId>>::Balance;
+pub type RelayBalanceOf<T> = <<T as Config>::Coretime as CoretimeInterface>::Balance;
+pub type RelayBlockNumberOf<T> = <<T as Config>::Coretime as CoretimeInterface>::BlockNumber;
+
+/// Relay-chain block number with a fixed divisor of Config::TimeslicePeriod.
+pub type Timeslice = u32;
+/// Counter for the total number of set bits over every core's `CorePart`. `u32` so we don't
+/// ever get an overflow.
+pub type PartCount = u32;
+/// The same as `PartCount` but signed.
+pub type SignedPartCount = i32;
+
+/// Self-describing identity for a Region of Bulk Coretime.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct RegionId {
+	/// The timeslice at which this Region begins.
+	pub begin: Timeslice,
+	/// The index of the Polakdot Core on which this Region will be scheduled.
+	pub core: CoreIndex,
+	/// The regularity parts in which this Region will be scheduled.
+	pub part: CorePart,
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn complete_works() {
-		assert_eq!(CorePart::complete(), CorePart([0xff; 10]));
-		assert!(CorePart([0xff; 10]).is_complete());
-		for i in 0..80 {
-			assert!(!CorePart([0xff; 10]).clear(i).is_complete());
-		}
-	}
-
-	#[test]
-	fn void_works() {
-		assert_eq!(CorePart::void(), CorePart([0; 10]));
-		assert!(CorePart([0; 10]).is_void());
-		for i in 0..80 {
-			assert!(!(CorePart([0; 10]).set(i).is_void()));
-		}
-	}
-
-	#[test]
-	fn from_works() {
-		assert!(CorePart::from(0xfffff_fffff_fffff_fffff).is_complete());
-		assert_eq!(
-			CorePart::from(0x12345_67890_abcde_f0123),
-			CorePart([0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef, 0x01, 0x23]),
-		);
-	}
-
-	#[test]
-	fn chunk_works() {
-		assert_eq!(
-			CorePart::from_chunk(40, 60),
-			CorePart::from(0x00000_00000_fffff_00000),
-		);
-	}
+/// The rest of the information describing a Region.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct RegionRecord<AccountId, Balance> {
+	/// The end of the Region.
+	pub end: Timeslice,
+	/// The owner of the Region.
+	pub owner: AccountId,
+	/// The amount paid to Polkadot for this Region.
+	pub paid: Option<Balance>,
 }
+pub type RegionRecordOf<T> = RegionRecord<<T as SConfig>::AccountId, BalanceOf<T>>;
+
+/// An distinct item which can be scheduled on a Polkadot Core.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct ScheduleItem {
+	/// The regularity parts in which this Item will be scheduled on the Core.
+	pub part: CorePart,
+	/// The job that the Core should be doing.
+	pub assignment: CoreAssignment,
+}
+pub type Schedule = BoundedVec<ScheduleItem, ConstU32<80>>;
+
+/// Identity of a contributor to the Instantaneous Coretime Pool.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum Contributor<AccountId> {
+	/// The Polkadot system; revenue collected on its behalf goes to the `Config::OnRevenue`
+	/// handler.
+	System,
+	/// A private Bulk Coretime holder; revenue collected may be paid out to them.
+	Private(AccountId),
+}
+pub type ContributorOf<T> = Contributor<<T as SConfig>::AccountId>;
+
+/// The record of a Region which was contributed to the Instantaneous Coretime Pool. This helps
+/// with making pro rata payments to contributors.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct ContributionRecord<AccountId> {
+	/// The beginning of the Region contributed.
+	pub begin: Timeslice,
+	/// The end of the Region contributed.
+	pub end: Timeslice,
+	/// The index of the Polkadot Core contributed.
+	pub core: CoreIndex,
+	/// The regularity parts of the Polkadot Core contributed.
+	pub part: CorePart,
+	/// The identity of the contributor.
+	pub payee: Contributor<AccountId>,
+}
+pub type ContributionRecordOf<T> = ContributionRecord<<T as SConfig>::AccountId>;
+
+/// A per-timeslice bookkeeping record for tracking Instantaneous Coretime Pool activity and
+/// making proper payments to contributors.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct InstaPoolHistoryRecord<Balance> {
+	/// The total amount of Coretime (measured in Regularity Parts or 1/80th of a single block
+	/// of a Polkadot Core) contributed over a timeslice minus any contributions which have
+	/// already been paid out.
+	pub total_contributions: PartCount,
+	/// The payout remaining for the `total_contributions`, or `None` if the revenue is not yet
+	/// known.
+	pub maybe_payout: Option<Balance>,
+}
+pub type InstaPoolHistoryRecordOf<T> = InstaPoolHistoryRecord<BalanceOf<T>>;
+
+/// A record of an allowed renewal.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct AllowedRenewalRecord<Balance> {
+	/// The timeslice denoting the beginning of the Region for which a renewal can secure.
+	pub begin: Timeslice,
+	/// The price for which the next renewal can be made.
+	pub price: Balance,
+	/// The workload which will be scheduled on the Core in the case a renewal is made.
+	pub workload: Schedule,
+}
+pub type AllowedRenewalRecordOf<T> = AllowedRenewalRecord<BalanceOf<T>>;
+
+/// General status of the system.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct StatusRecord {
+	/// The current size of the Instantaneous Coretime Pool, measured in (measured in
+	/// Regularity Parts or 1/80th of a single block of a Polkadot Core).
+	pub pool_size: PartCount,
+	/// The last (Relay-chain) timeslice which we processed for (this processing is generally
+	/// done some number of timeslices in advance of actual Relay-chain execution to make up
+	/// for latencies and any needed Relay-side preparations).
+	pub last_timeslice: Timeslice,
+}
+
+/// The status of a Bulk Coretime Sale.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct SaleInfoRecord<Balance, BlockNumber> {
+	/// The local block number at which the sale will/did start.
+	pub sale_start: BlockNumber,
+	/// The length in blocks of the Leadin Period (where the price is decreasing).
+	pub leadin_length: BlockNumber,
+	/// The price of Bulk Coretime at the beginning of the Leadin Period.
+	pub start_price: Balance,
+	/// The price of Bulk Coretime by the end of the Leadin Period.
+	pub reserve_price: Balance,
+	/// The first timeslice of the Regions which are being sold in this sale.
+	pub region_begin: Timeslice,
+	/// The timeslice on which the Regions which are being sold in the sale terminate. (i.e. One
+	/// after the last timeslice which the Regions control.)
+	pub region_end: Timeslice,
+	/// The index of the first core which is for sale. Core of Regions which are sold have
+	/// incrementing indices from this.
+	pub first_core: CoreIndex,
+	/// The number of cores we want to sell, ideally. Selling this amount would result in no
+	/// change to the reserve_price for the next sale.
+	pub ideal_cores_sold: CoreIndex,
+	/// Number of cores which are/have been offered for sale.
+	pub cores_offered: CoreIndex,
+	/// Number of cores which have been sold; never more than cores_offered.
+	pub cores_sold: CoreIndex,
+}
+pub type SaleInfoRecordOf<T> = SaleInfoRecord<
+	BalanceOf<T>,
+	<T as SConfig>::BlockNumber,
+>;
+
+/// Record for Polkadot Core reservations (generally tasked with the maintenance of System
+/// Chains).
+pub type ReservationsRecord<Max> = BoundedVec<Schedule, Max>;
+pub type ReservationsRecordOf<T> = ReservationsRecord<<T as Config>::MaxReservedCores>;
+/// Record for Polkadot Core legacy leases.
+pub type LeasesRecord<Max> = BoundedVec<(Timeslice, TaskId), Max>;
+pub type LeasesRecordOf<T> = LeasesRecord<<T as Config>::MaxLeasedCores>;
+
+/// Configuration of this pallet.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct ConfigRecord<BlockNumber> {
+	/// The total number of cores which can be assigned (one plus the maximum index which can
+	/// be used in `Coretime::assign`).
+	pub core_count: CoreIndex,
+	/// The number of timeslices in advance which scheduling should be fixed and the
+	/// `Coretime::assign` API used to inform the Relay-chain.
+	pub advance_notice: Timeslice,
+	/// The length in blocks of the Interlude Period for forthcoming sales.
+	pub interlude_length: BlockNumber,
+	/// The length in blocks of the Leadin Period for forthcoming sales.
+	pub leadin_length: BlockNumber,
+	/// The length in timeslices of Regions which are up for sale in forthcoming sales.
+	pub region_length: Timeslice,
+	/// The proportion of cores available for sale which should be sold in order for the price
+	/// to remain the same in the next sale.
+	pub ideal_bulk_proportion: Perbill,
+	/// An artificial limit to the number of cores which are allowed to be sold. If `Some` then
+	/// no more cores will be sold than this.
+	pub limit_cores_offered: Option<CoreIndex>,
+}
+pub type ConfigRecordOf<T> = ConfigRecord<
+	<T as SConfig>::BlockNumber,
+>;

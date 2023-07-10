@@ -18,8 +18,8 @@
 #![cfg(test)]
 
 use crate::*;
-use frame_support::{parameter_types, traits::fungible::{ItemOf, DecreaseIssuance}};
-use sp_core::{H256, Get, ConstU64, ConstU16, ConstU32};
+use frame_support::{parameter_types, traits::fungible::ItemOf};
+use sp_core::{H256, ConstU64, ConstU16, ConstU32};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, Identity},

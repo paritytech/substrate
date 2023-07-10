@@ -17,14 +17,14 @@ scale-info = { version = "2.0.0", default-features = false, features = ["derive"
 bitvec = "1"
 sp-std = { version = "8.0.0", path = "../../primitives/std" }
 sp-arithmetic = { version = "16.0.0", path = "../../primitives/arithmetic" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
-sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
-sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 
 [features]
 default = ["std"]

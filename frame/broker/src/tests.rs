@@ -17,7 +17,7 @@
 
 #![cfg(test)]
 
-use crate::{*, mock::*, types::*, Error, ConfigRecord};
+use crate::{*, mock::*, core_part::*, ConfigRecord};
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
