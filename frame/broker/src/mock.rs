@@ -18,6 +18,7 @@
 #![cfg(test)]
 
 use crate::*;
+use sp_std::collections::btree_map::BTreeMap;
 use frame_support::{parameter_types, traits::{Hooks, fungible::{ItemOf, Mutate}}, assert_ok, PalletId};
 use sp_arithmetic::Perbill;
 use sp_core::{H256, ConstU64, ConstU16, ConstU32};
@@ -82,28 +83,82 @@ use CoretimeTraceItem::*;
 
 parameter_types!{
 	pub static CoretimeTrace: Vec<(u32, CoretimeTraceItem)> = Default::default();
+	pub static CoretimeCredit: BTreeMap<u64, u64> = Default::default();
+	pub static CoretimeSpending: Vec<(u32, u64)> = Default::default();
+	pub static CoretimeWorkplan: BTreeMap<(u32, CoreIndex), Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
+	pub static CoretimeUsage: BTreeMap<CoreIndex, Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
+	pub static CoretimeInPool: PartCount = 0;
+	pub static NotifyCoreCount: Vec<u16> = Default::default();
+	pub static NotifyRevenueInfo: Vec<(u32, u64)> = Default::default();
 }
 
-impl CoretimeInterface for CoretimeTrace {
-	type AccountId = ();
+pub struct TestCoretimeProvider;
+impl CoretimeInterface for TestCoretimeProvider {
+	type AccountId = u64;
 	type Balance = u64;
 	type BlockNumber = u32;
 	fn latest() -> Self::BlockNumber { System::block_number() as u32 }
-	fn request_core_count(_count: CoreIndex) {}
-	fn request_revenue_info_at(_when: Self::BlockNumber) {}
-	fn credit_account(_who: Self::AccountId, _amount: Self::Balance) {}
+	fn request_core_count(count: CoreIndex) {
+		NotifyCoreCount::mutate(|s| s.insert(0, count));
+	}
+	fn request_revenue_info_at(when: Self::BlockNumber) {
+		let mut total = 0;
+		CoretimeSpending::mutate(|s| s.retain(|(n, a)| if *n < when { total += a; false } else { true }));
+		NotifyRevenueInfo::mutate(|s| s.insert(0, (when, total)));
+	}
+	fn credit_account(who: Self::AccountId, amount: Self::Balance) {
+		CoretimeCredit::mutate(|c| *c.entry(who).or_default() += amount);
+	}
 	fn assign_core(
 		core: CoreIndex,
 		begin: Self::BlockNumber,
 		assignment: Vec<(CoreAssignment, PartsOf57600)>,
 		end_hint: Option<Self::BlockNumber>,
 	) {
-		let mut v = CoretimeTrace::get();
-		v.push((Self::latest(), AssignCore { core, begin, assignment, end_hint }));
-		CoretimeTrace::set(v);
+		CoretimeWorkplan::mutate(|p| p.insert((begin, core), assignment.clone()));
+		let item = (Self::latest(), AssignCore { core, begin, assignment, end_hint });
+		CoretimeTrace::mutate(|v| v.push(item));
 	}
-	fn check_notify_core_count() -> Option<u16> { None }
-	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> { None }
+	fn check_notify_core_count() -> Option<u16> {
+		NotifyCoreCount::mutate(|s| s.pop())
+	}
+	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
+		NotifyRevenueInfo::mutate(|s| s.pop())
+	}
+}
+impl TestCoretimeProvider {
+	pub fn spend_instantaneous(who: u64, price: u64) -> Result<(), ()> {
+		let mut c = CoretimeCredit::get();
+		c.insert(who, c.get(&who).ok_or(())?.checked_sub(price).ok_or(())?);
+		CoretimeCredit::set(c);
+		CoretimeSpending::mutate(|v| v.push((Self::latest(), price)));
+		Ok(())
+	}
+	pub fn bump() {
+		let mut pool_size = CoretimeInPool::get();
+		let mut workplan = CoretimeWorkplan::get();
+		let mut usage = CoretimeUsage::get();
+		let now = Self::latest();
+		workplan.retain(|(when, core), assignment| {
+			if *when <= now {
+				if let Some(old_assignment) = usage.get(core) {
+					if let Some(a) = old_assignment.iter().find(|i| i.0 == CoreAssignment::Pool) {
+						pool_size -= (a.1 / 720) as PartCount;
+					}
+				}
+				if let Some(a) = assignment.iter().find(|i| i.0 == CoreAssignment::Pool) {
+					pool_size += (a.1 / 720) as PartCount;
+				}
+				usage.insert(*core, assignment.clone());
+				false
+			} else {
+				true
+			}
+		});
+		CoretimeInPool::set(pool_size);
+		CoretimeWorkplan::set(workplan);
+		CoretimeUsage::set(usage);
+	}
 }
 
 parameter_types! {
@@ -117,7 +172,7 @@ impl crate::Config for Test {
 	type TimeslicePeriod = ConstU32<2>;
 	type MaxLeasedCores = ConstU32<5>;
 	type MaxReservedCores = ConstU32<5>;
-	type Coretime = CoretimeTrace;
+	type Coretime = TestCoretimeProvider;
 	type ConvertBalance = Identity;
 	type WeightInfo = ();
 	type PalletId = TestBrokerId;
@@ -126,6 +181,7 @@ impl crate::Config for Test {
 pub fn advance_to(b: u64) {
 	while System::block_number() < b {
 		System::set_block_number(System::block_number() + 1);
+		TestCoretimeProvider::bump();
 		Broker::on_initialize(System::block_number());
 	}
 }

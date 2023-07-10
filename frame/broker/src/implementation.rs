@@ -264,7 +264,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Ok(())
 	}
-	
+
 	pub(crate) fn do_reserve(schedule: Schedule) -> DispatchResult {
 		let mut r = Reservations::<T>::get();
 		r.try_push(schedule).map_err(|_| Error::<T>::TooManyReservations)?;
