@@ -125,6 +125,7 @@ impl TestNetFactory for GrandpaTestNet {
 		let (client, backend) = (client.as_client(), client.as_backend());
 		let (import, link) = block_import(
 			client.clone(),
+			512,
 			&self.test_config,
 			LongestChain::new(backend.clone()),
 			None,
@@ -317,7 +318,7 @@ fn initialize_grandpa(
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
 				local_role: Role::Authority,
@@ -466,7 +467,7 @@ async fn finalize_3_voters_1_full_observer() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: None,
 				name: Some(format!("peer#{}", peer_id)),
 				local_role: Role::Authority,
@@ -558,7 +559,7 @@ async fn transition_3_voters_twice_1_full_observer() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
 				local_role: Role::Authority,
@@ -685,8 +686,8 @@ async fn justification_is_generated_periodically() {
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(32, net.clone(), peers).await;
 
-	// when block#32 (justification_period) is finalized, justification
-	// is required => generated
+	// when block#32 (justification_generation_period) is finalized,
+	// justification is required => generated
 	for i in 0..3 {
 		assert!(net.lock().peer(i).client().justifications(hashof32).unwrap().is_some());
 	}
@@ -983,7 +984,7 @@ async fn voter_persists_its_votes() {
 	let bob_network = {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
-			justification_period: 32,
+			justification_generation_period: 32,
 			keystore: Some(bob_keystore.clone()),
 			name: Some(format!("peer#{}", 1)),
 			local_role: Role::Authority,
@@ -1025,7 +1026,7 @@ async fn voter_persists_its_votes() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", 0)),
 				local_role: Role::Authority,
@@ -1068,7 +1069,7 @@ async fn voter_persists_its_votes() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", 0)),
 				local_role: Role::Authority,
@@ -1230,7 +1231,7 @@ async fn finalize_3_voters_1_light_observer() {
 	let observer = observer::run_grandpa_observer(
 		Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
-			justification_period: 32,
+			justification_generation_period: 32,
 			keystore: None,
 			name: Some("observer".to_string()),
 			local_role: Role::Full,
@@ -1278,7 +1279,7 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore,
 				name: Some(format!("peer#{}", peer_id)),
 				local_role: Role::Authority,
@@ -1390,7 +1391,7 @@ where
 
 	let config = Config {
 		gossip_duration: TEST_GOSSIP_DURATION,
-		justification_period: 32,
+		justification_generation_period: 32,
 		keystore,
 		name: None,
 		local_role: Role::Authority,

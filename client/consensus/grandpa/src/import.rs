@@ -48,15 +48,6 @@ use crate::{
 	LOG_TARGET,
 };
 
-/// The minimum period on which justifications will be imported.
-///
-/// When importing a block, if it includes a justification it will
-/// only be processed if it fits within this period, otherwise it
-/// will be ignored (and won't be validated). This is to avoid slowing
-/// down sync by a peer serving us unnecessary justifications which
-/// aren't trivial to validate.
-const JUSTIFICATION_IMPORT_PERIOD: u32 = 512;
-
 /// A block-import handler for GRANDPA.
 ///
 /// This scans each imported block for signals of changing authority set.
@@ -68,6 +59,7 @@ const JUSTIFICATION_IMPORT_PERIOD: u32 = 512;
 /// object.
 pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	inner: Arc<Client>,
+	justification_import_period: u32,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
@@ -83,6 +75,7 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone
 	fn clone(&self) -> Self {
 		GrandpaBlockImport {
 			inner: self.inner.clone(),
+			justification_import_period: self.justification_import_period,
 			select_chain: self.select_chain.clone(),
 			authority_set: self.authority_set.clone(),
 			send_voter_commands: self.send_voter_commands.clone(),
@@ -659,7 +652,7 @@ where
 			Some(justification) => {
 				if environment::should_process_justification(
 					&*self.inner,
-					JUSTIFICATION_IMPORT_PERIOD,
+					self.justification_import_period,
 					number,
 					needs_justification,
 				) {
@@ -717,6 +710,7 @@ where
 impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Client, SC> {
 	pub(crate) fn new(
 		inner: Arc<Client>,
+		justification_import_period: u32,
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
@@ -755,6 +749,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 
 		GrandpaBlockImport {
 			inner,
+			justification_import_period,
 			select_chain,
 			authority_set,
 			send_voter_commands,

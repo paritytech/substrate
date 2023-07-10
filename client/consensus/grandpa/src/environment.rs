@@ -1094,7 +1094,7 @@ where
 		finalize_block(
 			self.client.clone(),
 			&self.authority_set,
-			Some(self.config.justification_period),
+			Some(self.config.justification_generation_period),
 			hash,
 			number,
 			(round, commit).into(),

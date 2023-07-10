@@ -1700,7 +1700,7 @@ mod tests {
 	fn config() -> crate::Config {
 		crate::Config {
 			gossip_duration: Duration::from_millis(10),
-			justification_period: 256,
+			justification_generation_period: 256,
 			keystore: None,
 			name: None,
 			local_role: Role::Authority,
