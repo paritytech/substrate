@@ -16,9 +16,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 serde = { version = "1.0.163", default-features = false, features = ["derive", "alloc"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-sp-core = { version = "21.0.0", default-features = false, path = "../core" }
-sp-runtime = { version = "24.0.0", default-features = false, path = "../runtime" }
-sp-std = { version = "8.0.0", default-features = false, path = "../std" }
+impl-trait-for-tuples = "0.2.2"
+
+sp-core = { default-features = false, path = "../core" }
+sp-runtime = { default-features = false, path = "../runtime" }
+sp-std = { default-features = false, path = "../std" }
 
 [features]
 default = ["std"]
