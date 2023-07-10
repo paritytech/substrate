@@ -3159,6 +3159,7 @@ dependencies = [
  "frame-system",
  "num-format",
  "pallet-staking",
+ "sp-staking",
 ]
 
 [[package]]
@@ -6529,6 +6530,7 @@ dependencies = [
  "sp-io",
  "sp-npos-elections",
  "sp-runtime",
+ "sp-staking",
  "sp-std",
  "sp-tracing",
  "substrate-test-utils",
@@ -9517,7 +9519,6 @@ dependencies = [
  "assert_matches",
  "criterion",
  "env_logger 0.9.3",
- "lru",
  "num_cpus",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -9527,6 +9528,7 @@ dependencies = [
  "sc-executor-wasmtime",
  "sc-runtime-test",
  "sc-tracing",
+ "schnellru",
  "sp-api",
  "sp-core",
  "sp-externalities",
@@ -9714,10 +9716,10 @@ dependencies = [
  "futures-timer",
  "libp2p",
  "log",
- "lru",
  "quickcheck",
  "sc-network",
  "sc-network-common",
+ "schnellru",
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -9774,7 +9776,6 @@ dependencies = [
  "futures-timer",
  "libp2p",
  "log",
- "lru",
  "mockall",
  "parity-scale-codec",
  "prost",
@@ -9786,6 +9787,7 @@ dependencies = [
  "sc-network",
  "sc-network-common",
  "sc-utils",
+ "schnellru",
  "smallvec",
  "sp-arithmetic",
  "sp-blockchain",
@@ -11005,9 +11007,9 @@ version = "4.0.0-dev"
 dependencies = [
  "futures",
  "log",
- "lru",
  "parity-scale-codec",
  "parking_lot 0.12.1",
+ "schnellru",
  "sp-api",
  "sp-consensus",
  "sp-database",
@@ -11524,6 +11526,7 @@ dependencies = [
 name = "sp-staking"
 version = "4.0.0-dev"
 dependencies = [
+ "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
  "serde",
