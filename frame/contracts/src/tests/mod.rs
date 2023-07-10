@@ -3020,8 +3020,7 @@ fn gas_estimation_call_runtime() {
 			CollectEvents::Skip,
 		)
 		.result
-		.unwrap()
-		.account_id;
+		.unwrap();
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
