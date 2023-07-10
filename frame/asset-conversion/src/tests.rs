@@ -356,7 +356,7 @@ fn add_tiny_liquidity_leads_to_insufficient_liquidity_minted_error() {
 				1,
 				user
 			),
-			Error::<Test>::AmountLessThanMinimal
+			Error::<Test>::AmountOneLessThanMinimal
 		);
 
 		assert_noop!(
