@@ -19,10 +19,9 @@
 //! Substrate transaction pool implementation.
 
 use crate::LOG_TARGET;
-use num_traits::CheckedSub;
 use sc_transaction_pool_api::ChainEvent;
 use sp_blockchain::TreeRoute;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Saturating};
 
 /// The threshold since the last update where we will skip any maintenance for blocks.
 ///
@@ -101,17 +100,16 @@ where
 		TreeRouteF: Fn(Block::Hash, Block::Hash) -> Result<TreeRoute<Block>, String>,
 		BlockNumberF: Fn(Block::Hash) -> Result<Option<NumberFor<Block>>, String>,
 	{
-		let (new_hash, current_hash, finalized) = match event {
-			ChainEvent::NewBestBlock { hash, .. } => (*hash, self.recent_best_block, false),
-			ChainEvent::Finalized { hash, .. } => (*hash, self.recent_finalized_block, true),
-		};
+		let new_hash = event.hash();
+		let finalized = event.is_finalized();
 
 		// do not proceed with txpool maintain if block distance is to high
-		let skip_maintenance = match (hash_to_number(new_hash), hash_to_number(current_hash)) {
-			(Ok(Some(new)), Ok(Some(current))) =>
-				new.checked_sub(&current) > Some(SKIP_MAINTENANCE_THRESHOLD.into()),
-			_ => true,
-		};
+		let skip_maintenance =
+			match (hash_to_number(new_hash), hash_to_number(self.recent_best_block)) {
+				(Ok(Some(new)), Ok(Some(current))) =>
+					new.saturating_sub(current) > SKIP_MAINTENANCE_THRESHOLD.into(),
+				_ => true,
+			};
 
 		if skip_maintenance {
 			log::debug!(target: LOG_TARGET, "skip maintain: tree_route would be too long");
@@ -131,10 +129,10 @@ where
 
 		log::debug!(
 			target: LOG_TARGET,
-			"resolve hash:{:?} finalized:{:?} tree_route:{:?} best_block:{:?} finalized_block:{:?}",
-			new_hash,
-			finalized,
-			tree_route,
+			"resolve hash: {new_hash:?} finalized: {finalized:?} \
+			 tree_route: (common {:?}, last {:?}) best_block: {:?} finalized_block:{:?}",
+			tree_route.common_block(),
+			tree_route.last(),
 			self.recent_best_block,
 			self.recent_finalized_block
 		);

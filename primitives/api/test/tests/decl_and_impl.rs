@@ -18,16 +18,13 @@
 use sp_api::{
 	decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis, ApiError, ApiExt, RuntimeApiInfo,
 };
-use sp_runtime::traits::{Block as BlockT, GetNodeBlockType};
+use sp_runtime::traits::Block as BlockT;
 
 use substrate_test_runtime_client::runtime::{Block, Hash};
 
-/// The declaration of the `Runtime` type and the implementation of the `GetNodeBlockType`
-/// trait are done by the `construct_runtime!` macro in a real runtime.
+/// The declaration of the `Runtime` type is done by the `construct_runtime!` macro in a real
+/// runtime.
 pub struct Runtime {}
-impl GetNodeBlockType for Runtime {
-	type NodeBlock = Block;
-}
 
 decl_runtime_apis! {
 	pub trait Api {

@@ -99,7 +99,7 @@ impl<Offender: Clone> Offence<Offender> for EquivocationOffence<Offender> {
 ///
 /// This type implements `OffenceReportSystem` such that:
 /// - Equivocation reports are published on-chain as unsigned extrinsic via
-///   `offchain::SendTransactioinsTypes`.
+///   `offchain::SendTransactionTypes`.
 /// - On-chain validity checks and processing are mostly delegated to the user provided generic
 ///   types implementing `KeyOwnerProofSystem` and `ReportOffence` traits.
 /// - Offence reporter for unsigned transactions is fetched via the the authorship pallet.

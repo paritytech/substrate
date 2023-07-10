@@ -18,7 +18,10 @@
 use super::*;
 use crate as pallet_glutton;
 
-use frame_support::traits::{ConstU32, ConstU64};
+use frame_support::{
+	assert_ok,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -78,4 +81,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
+}
+
+/// Set the `compute` and `storage` limits.
+///
+/// `1.0` corresponds to `100%`.
+pub fn set_limits(compute: f64, storage: f64) {
+	assert_ok!(Glutton::set_compute(RuntimeOrigin::root(), FixedU64::from_float(compute)));
+	assert_ok!(Glutton::set_storage(RuntimeOrigin::root(), FixedU64::from_float(storage)));
 }
