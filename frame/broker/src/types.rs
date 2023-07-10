@@ -20,7 +20,7 @@ pub type PartCount = u32;
 pub type SignedPartCount = i32;
 
 /// Self-describing identity for a Region of Bulk Coretime.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct RegionId {
 	/// The timeslice at which this Region begins.
 	pub begin: Timeslice,

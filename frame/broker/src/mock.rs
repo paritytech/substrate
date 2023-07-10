@@ -18,7 +18,8 @@
 #![cfg(test)]
 
 use crate::*;
-use frame_support::{parameter_types, traits::fungible::ItemOf};
+use frame_support::{parameter_types, traits::{Hooks, fungible::{ItemOf, Mutate}}, assert_ok};
+use sp_arithmetic::Perbill;
 use sp_core::{H256, ConstU64, ConstU16, ConstU32};
 use sp_runtime::{
 	testing::Header,
@@ -117,7 +118,72 @@ impl crate::Config for Test {
 	type WeightInfo = ();
 }
 
-// Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+pub fn advance_to(b: u64) {
+	while System::block_number() < b {
+		System::set_block_number(System::block_number() + 1);
+		Broker::on_initialize(System::block_number());
+	}
+}
+
+pub struct TestExt(ConfigRecordOf<Test>);
+impl TestExt {
+	pub fn new() -> Self {
+		Self(ConfigRecord {
+			core_count: 1,
+			advance_notice: 1,
+			interlude_length: 1,
+			leadin_length: 1,
+			ideal_bulk_proportion: Default::default(),
+			limit_cores_offered: None,
+			region_length: 3,
+		})
+	}
+
+	pub fn core_count(mut self, core_count: CoreIndex) -> Self {
+		self.0.core_count = core_count;
+		self
+	}
+
+	pub fn advance_notice(mut self, advance_notice: Timeslice) -> Self {
+		self.0.advance_notice = advance_notice;
+		self
+	}
+
+	pub fn interlude_length(mut self, interlude_length: u64) -> Self {
+		self.0.interlude_length = interlude_length;
+		self
+	}
+
+	pub fn leadin_length(mut self, leadin_length: u64) -> Self {
+		self.0.leadin_length = leadin_length;
+		self
+	}
+
+	pub fn region_length(mut self, region_length: Timeslice) -> Self {
+		self.0.region_length = region_length;
+		self
+	}
+
+	pub fn ideal_bulk_proportion(mut self, ideal_bulk_proportion: Perbill) -> Self {
+		self.0.ideal_bulk_proportion = ideal_bulk_proportion;
+		self
+	}
+
+	pub fn limit_cores_offered(mut self, limit_cores_offered: Option<CoreIndex>) -> Self {
+		self.0.limit_cores_offered = limit_cores_offered;
+		self
+	}
+
+	pub fn endow(self, who: u64, amount: u64) -> Self {
+		assert_ok!(<<Test as Config>::Currency as Mutate<_>>::mint_into(&who, amount));
+		self
+	}
+
+	pub fn execute_with<R>(self, f: impl Fn() -> R) -> R {
+		let c = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		sp_io::TestExternalities::from(c).execute_with(|| {
+			assert_ok!(Broker::do_configure(self.0));
+			f()
+		})
+	}
 }

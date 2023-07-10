@@ -17,49 +17,24 @@
 
 #![cfg(test)]
 
-use crate::{*, mock::*, core_part::*, ConfigRecord};
-use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use crate::{*, mock::*, core_part::*, test_fungibles::*};
+use frame_support::{assert_noop, assert_ok};
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
 use sp_arithmetic::Perbill;
 
-fn advance_to(b: u64) {
-	while System::block_number() < b {
-		System::set_block_number(System::block_number() + 1);
-		Broker::on_initialize(System::block_number());
-	}
-}
-
 #[test]
 fn basic_initialize_works() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Broker::do_configure(ConfigRecord {
-			core_count: 10,
-			advance_notice: 1,
-			interlude_length: 1,
-			leadin_length: 3,
-			ideal_bulk_proportion: Perbill::zero(),
-			limit_cores_offered: None,
-			region_length: 10,
-		}));
+	TestExt::new().execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100));
 		assert_eq!(CoretimeTrace::get(), vec![]);
+		assert_eq!(Broker::current_timeslice(), 0);
 	});
 }
 
 #[test]
 fn initialize_with_system_paras_works() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(Broker::do_configure(ConfigRecord {
-			core_count: 3,
-			advance_notice: 1,
-			interlude_length: 1,
-			leadin_length: 3,
-			ideal_bulk_proportion: Perbill::zero(),
-			limit_cores_offered: None,
-			region_length: 5,
-		}));
-
+	TestExt::new().core_count(2).execute_with(|| {
 		let item = ScheduleItem { assignment: Task(1u32), part: CorePart::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		let items = vec![
@@ -68,21 +43,64 @@ fn initialize_with_system_paras_works() {
 			ScheduleItem { assignment: Task(4u32), part: 0x00000_00000_00000_fffff.into() },
 		];
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(items)));
-
-		assert_eq!(Broker::current_timeslice(), 0);
-
 		assert_ok!(Broker::do_start_sales(100));
-		assert_eq!(CoretimeTrace::get(), vec![]);
-
 		advance_to(10);
 		assert_eq!(CoretimeTrace::get(), vec![
-			(10, AssignCore { core: 0, begin: 12, assignment: vec![
+			(6, AssignCore { core: 0, begin: 8, assignment: vec![
 				(Task(1), 57600),
 			], end_hint: None }),
-			(10, AssignCore { core: 1, begin: 12, assignment: vec![
+			(6, AssignCore { core: 1, begin: 8, assignment: vec![
 				(Task(2), 28800),
 				(Task(3), 14400),
 				(Task(4), 14400),
+			], end_hint: None }),
+		]);
+	});
+}
+
+#[test]
+fn purchase_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		assert_ok!(Broker::do_purchase(1, u64::max_value()));
+		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
+		let region = RegionId { begin, core: 0, part: CorePart::complete() };
+		assert_ok!(Broker::do_assign(region, None, 1000));
+		advance_to(6);
+		assert_eq!(CoretimeTrace::get(), vec![
+			(6, AssignCore { core: 0, begin: 8, assignment: vec![
+				(Task(1000), 57600),
+			], end_hint: None }),
+		]);
+	});
+}
+
+#[test]
+fn partition_purchase_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		assert_ok!(Broker::do_purchase(1, u64::max_value()));
+		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
+		let region1 = RegionId { begin, core: 0, part: CorePart::complete() };
+		assert_ok!(Broker::do_partition(region1, None, begin + 1));
+		let region2 = RegionId { begin: begin + 1, core: 0, part: CorePart::complete() };
+		assert_ok!(Broker::do_partition(region2, None, begin + 2));
+		let region3 = RegionId { begin: begin + 2, core: 0, part: CorePart::complete() };
+		assert_ok!(Broker::do_assign(region1, None, 1001));
+		assert_ok!(Broker::do_assign(region2, None, 1002));
+		assert_ok!(Broker::do_assign(region3, None, 1003));
+		advance_to(10);
+		assert_eq!(CoretimeTrace::get(), vec![
+			(6, AssignCore { core: 0, begin: 8, assignment: vec![
+				(Task(1001), 57600),
+			], end_hint: None }),
+			(8, AssignCore { core: 0, begin: 10, assignment: vec![
+				(Task(1002), 57600),
+			], end_hint: None }),
+			(10, AssignCore { core: 0, begin: 12, assignment: vec![
+				(Task(1003), 57600),
 			], end_hint: None }),
 		]);
 	});
