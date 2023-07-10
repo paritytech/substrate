@@ -36,7 +36,6 @@ pub trait ExtensionsFactory<Block: BlockT>: Send + Sync {
 	///
 	/// - `block_hash`: The hash of the block in the context that extensions will be used.
 	/// - `block_number`: The number of the block in the context that extensions will be used.
-	/// - `capabilities`: The capabilities
 	fn extensions_for(&self, block_hash: Block::Hash, block_number: NumberFor<Block>)
 		-> Extensions;
 }
