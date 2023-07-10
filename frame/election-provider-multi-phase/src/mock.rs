@@ -151,12 +151,13 @@ pub fn trim_helpers() -> TrimHelpers {
 
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	// TODO(gpestana): change seq_phragmen inputs to bounded vec
-	let targets_unbounded: Vec<_> = targets.clone().into();
-	let voters_unbounded: Vec<_> = voters.clone().into();
-
-	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { mut assignments, .. } =
-		seq_phragmen(desired_targets as usize, targets_unbounded, voters_unbounded, None).unwrap();
+	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { mut assignments, .. } = seq_phragmen(
+		desired_targets as usize,
+		targets.clone().into_inner(),
+		voters.clone().into_inner(),
+		None,
+	)
+	.unwrap();
 
 	// sort by decreasing order of stake
 	assignments.sort_by_key(|assignment| {
@@ -187,12 +188,14 @@ pub fn raw_solution() -> RawSolution<SolutionOf<Runtime>> {
 	let RoundSnapshot { voters, targets } = MultiPhase::snapshot().unwrap();
 	let desired_targets = MultiPhase::desired_targets().unwrap();
 
-	// TODO(gpestana): change seq_phragmen inputs to bounded vec
-	let targets: Vec<_> = targets.into();
-	let voters: Vec<_> = voters.into();
-
 	let ElectionResult::<_, SolutionAccuracyOf<Runtime>> { winners: _, assignments } =
-		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
+		seq_phragmen(
+			desired_targets as usize,
+			targets.clone().into_inner(),
+			voters.clone().into_inner(),
+			None,
+		)
+		.unwrap();
 
 	// closures
 	let cache = helpers::generate_voter_cache::<Runtime>(&voters);

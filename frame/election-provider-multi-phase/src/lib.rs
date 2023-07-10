@@ -1493,7 +1493,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// 1. [`SnapshotMetadata`]
 	/// 2. [`RoundSnapshot`]
-	/// 3. [`DesiredTargets`]1536
+	/// 3. [`DesiredTargets`]
 	///
 	/// Returns `Ok(())` if operation is okay.
 	///

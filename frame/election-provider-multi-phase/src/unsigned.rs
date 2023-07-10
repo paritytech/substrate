@@ -421,20 +421,23 @@ impl<T: MinerConfig> Miner<T> {
 	where
 		S: NposSolver<AccountId = T::AccountId>,
 	{
-		// TODO(gpestana): change the Solver::solve signature to accept bounded vec instead.
-		S::solve(desired_targets as usize, targets.clone().to_vec(), voters.clone().to_vec())
-			.map_err(|e| {
-				log_no_system!(error, "solver error: {:?}", e);
-				MinerError::Solver
-			})
-			.and_then(|e| {
-				Self::prepare_election_result_with_snapshot::<S::Accuracy>(
-					e,
-					voters,
-					targets,
-					desired_targets,
-				)
-			})
+		S::solve(
+			desired_targets as usize,
+			targets.clone().into_inner(),
+			voters.clone().into_inner(),
+		)
+		.map_err(|e| {
+			log_no_system!(error, "solver error: {:?}", e);
+			MinerError::Solver
+		})
+		.and_then(|e| {
+			Self::prepare_election_result_with_snapshot::<S::Accuracy>(
+				e,
+				voters,
+				targets,
+				desired_targets,
+			)
+		})
 	}
 
 	/// Convert a raw solution from [`sp_npos_elections::ElectionResult`] to [`RawSolution`], which
