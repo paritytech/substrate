@@ -471,7 +471,7 @@ sp_externalities::decl_extension! {
 
 impl KeystoreExt {
 	/// Create a new instance of `KeystoreExt`
-	pub fn new<T: Keystore + 'static>(keystore: T) -> Self {
-		Self(Arc::new(keystore))
+	pub fn new(keystore: impl Into<Arc<dyn Keystore>>) -> Self {
+		Self(keystore.into())
 	}
 }

@@ -407,8 +407,6 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 /// the wasm execution environment to send transactions from an offchain call to the  runtime.
 #[derive(Clone)]
 pub struct OffchainTransactionPoolFactory<Block: BlockT> {
-	// To break retain cycle between `Client` and `TransactionPool` we require this
-	// extension to be a `Weak` reference.
 	pool: Arc<dyn OffchainSubmitTransaction<Block>>,
 }
 

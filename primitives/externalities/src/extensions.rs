@@ -199,8 +199,8 @@ impl Extensions {
 
 	/// Merge `other` into `self`.
 	///
-	/// If both contain the same extension, the extension instance of `other` will be present
-	/// afterwards in `self`.
+	/// If both contain the same extension, the extension instance of `other` will overwrite the
+	/// instance found in `self`.
 	pub fn merge(&mut self, other: Self) {
 		self.extensions.extend(other.extensions);
 	}
