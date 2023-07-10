@@ -63,7 +63,7 @@ fn initialize_with_system_paras_works() {
 		let item = ScheduleItem { assignment: Task(1u32), part: CorePart::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 
-		assert_eq!(Broker::current_schedulable_timeslice(), 1);
+		assert_eq!(Broker::current_timeslice(), 0);
 
 		assert_ok!(Broker::do_start_sales(100));
 		assert_eq!(CoretimeTrace::get(), vec![]);

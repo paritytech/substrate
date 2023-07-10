@@ -470,26 +470,26 @@ pub mod pallet {
 			reserve_price: BalanceOf<T>,
 		) -> DispatchResult {
 			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
-			let current_schedulable_timeslice = Self::current_schedulable_timeslice();
 			let status = StatusRecord {
 				pool_size: 0,
-				last_timeslice: current_schedulable_timeslice,
+				last_timeslice: Self::current_timeslice(),
 			};
 			Status::<T>::put(&status);
+			let commit_timeslice = status.last_timeslice + config.advance_notice;
 			let now = frame_system::Pallet::<T>::block_number();
 			let dummy_sale = SaleInfoRecord {
 				sale_start: now,
 				leadin_length: Zero::zero(),
 				start_price: Zero::zero(),
 				reserve_price,
-				region_begin: current_schedulable_timeslice,
-				region_end: current_schedulable_timeslice + config.region_length,
+				region_begin: commit_timeslice,
+				region_end: commit_timeslice + config.region_length,
 				first_core: 0,
 				ideal_cores_sold: 0,
 				cores_offered: 0,
 				cores_sold: 0,
 			};
-			Self::rotate_sale(current_schedulable_timeslice, dummy_sale, &status, &config);
+			Self::rotate_sale(commit_timeslice, dummy_sale, &status, &config);
 			Ok(())
 		}
 
@@ -609,14 +609,6 @@ pub mod pallet {
 			let latest = T::Coretime::latest();
 			let timeslice_period = T::TimeslicePeriod::get();
 			(latest / timeslice_period).saturated_into()
-		}
-
-		pub(crate) fn current_schedulable_timeslice() -> Timeslice {
-			Self::current_timeslice() + Configuration::<T>::get().map_or(0, |x| x.advance_notice)
-		}
-
-		pub(crate) fn next_schedulable_timeslice() -> Timeslice {
-			Self::current_schedulable_timeslice().saturating_add(1)
 		}
 
 		pub(crate) fn process_timeslice(timeslice: Timeslice, status: &mut StatusRecord, config: &ConfigRecordOf<T>) {
@@ -821,15 +813,18 @@ pub mod pallet {
 			mut region_id: RegionId,
 			maybe_check_owner: Option<T::AccountId>,
 		) -> Result<Option<(RegionId, RegionRecordOf<T>)>, Error<T>> {
+			let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+			let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+
 			let mut region = Regions::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
 
 			if let Some(check_owner) = maybe_check_owner {
 				ensure!(check_owner == region.owner, Error::<T>::NotOwner);
 			}
 
-			let next_timeslice = Self::next_schedulable_timeslice();
-			if region_id.begin > next_timeslice {
-				region_id.begin = next_timeslice;
+			let last_commit_timeslice = status.last_timeslice + config.advance_notice;
+			if region_id.begin <= last_commit_timeslice {
+				region_id.begin = last_commit_timeslice + 1;
 			}
 			Regions::<T>::remove(&region_id);
 
