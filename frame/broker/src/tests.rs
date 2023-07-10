@@ -77,7 +77,7 @@ fn purchase_works() {
 }
 
 #[test]
-fn partition_purchase_works() {
+fn partition_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
@@ -101,6 +101,106 @@ fn partition_purchase_works() {
 			], end_hint: None }),
 			(10, AssignCore { core: 0, begin: 12, assignment: vec![
 				(Task(1003), 57600),
+			], end_hint: None }),
+		]);
+	});
+}
+
+#[test]
+fn interlace_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		assert_ok!(Broker::do_purchase(1, u64::max_value()));
+		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
+		let region1 = RegionId { begin, core: 0, part: CorePart::complete() };
+		assert_ok!(Broker::do_interlace(region1, None, CorePart::from_chunk(0, 30)));
+		let region1 = RegionId { begin, core: 0, part: CorePart::from_chunk(0, 30) };
+		let region2 = RegionId { begin, core: 0, part: CorePart::from_chunk(30, 80) };
+		assert_ok!(Broker::do_interlace(region2, None, CorePart::from_chunk(30, 60)));
+		let region2 = RegionId { begin, core: 0, part: CorePart::from_chunk(30, 60) };
+		let region3 = RegionId { begin, core: 0, part: CorePart::from_chunk(60, 80) };
+		assert_ok!(Broker::do_assign(region1, None, 1001));
+		assert_ok!(Broker::do_assign(region2, None, 1002));
+		assert_ok!(Broker::do_assign(region3, None, 1003));
+		advance_to(10);
+		assert_eq!(CoretimeTrace::get(), vec![
+			(6, AssignCore { core: 0, begin: 8, assignment: vec![
+				(Task(1001), 21600),
+				(Task(1002), 21600),
+				(Task(1003), 14400),
+			], end_hint: None }),
+		]);
+	});
+}
+
+#[test]
+fn interlace_then_partition_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		assert_ok!(Broker::do_purchase(1, u64::max_value()));
+		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
+		let region = RegionId { begin, core: 0, part: CorePart::complete() };
+		assert_ok!(Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)));
+		let region1 = RegionId { part: CorePart::from_chunk(0, 20), ..region };
+		let region2 = RegionId { part: CorePart::from_chunk(20, 80), ..region };
+		assert_ok!(Broker::do_partition(region1, None, begin + 1));
+		assert_ok!(Broker::do_partition(region2, None, begin + 2));
+		let region3 = RegionId { begin: begin + 1, ..region1 };
+		let region4 = RegionId { begin: begin + 2, ..region2 };
+		assert_ok!(Broker::do_assign(region1, None, 1001));
+		assert_ok!(Broker::do_assign(region2, None, 1002));
+		assert_ok!(Broker::do_assign(region3, None, 1003));
+		assert_ok!(Broker::do_assign(region4, None, 1004));
+		advance_to(10);
+		assert_eq!(CoretimeTrace::get(), vec![
+			(6, AssignCore { core: 0, begin: 8, assignment: vec![
+				(Task(1001), 14400),
+				(Task(1002), 43200),
+			], end_hint: None }),
+			(8, AssignCore { core: 0, begin: 10, assignment: vec![
+				(Task(1002), 43200),
+				(Task(1003), 14400),
+			], end_hint: None }),
+			(10, AssignCore { core: 0, begin: 12, assignment: vec![
+				(Task(1003), 14400),
+				(Task(1004), 43200),
+			], end_hint: None }),
+		]);
+	});
+}
+
+#[test]
+fn partition_then_interlace_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		assert_ok!(Broker::do_purchase(1, u64::max_value()));
+		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
+		let region = RegionId { begin, core: 0, part: CorePart::complete() };
+		assert_ok!(Broker::do_partition(region, None, begin + 1));
+		let region1 = RegionId { begin, ..region };
+		let region2 = RegionId { begin: begin + 1, ..region };
+		assert_ok!(Broker::do_interlace(region1, None, CorePart::from_chunk(0, 20)));
+		assert_ok!(Broker::do_interlace(region2, None, CorePart::from_chunk(0, 30)));
+		let region3 = RegionId { part: CorePart::from_chunk(20, 80), ..region1 };
+		let region4 = RegionId { part: CorePart::from_chunk(30, 80), ..region2 };
+		let region1 = RegionId { part: CorePart::from_chunk(0, 20), ..region1 };
+		let region2 = RegionId { part: CorePart::from_chunk(0, 30), ..region2 };
+		assert_ok!(Broker::do_assign(region1, None, 1001));
+		assert_ok!(Broker::do_assign(region2, None, 1002));
+		assert_ok!(Broker::do_assign(region3, None, 1003));
+		assert_ok!(Broker::do_assign(region4, None, 1004));
+		advance_to(10);
+		assert_eq!(CoretimeTrace::get(), vec![
+			(6, AssignCore { core: 0, begin: 8, assignment: vec![
+				(Task(1001), 14400),
+				(Task(1003), 43200),
+			], end_hint: None }),
+			(8, AssignCore { core: 0, begin: 10, assignment: vec![
+				(Task(1002), 21600),
+				(Task(1004), 36000),
 			], end_hint: None }),
 		]);
 	});
