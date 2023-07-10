@@ -445,11 +445,14 @@ async fn finalize_3_voters_no_observers() {
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(20, net.clone(), peers).await;
 
-	// normally there's no justification for finalized blocks
-	assert!(
-		net.lock().peer(0).client().justifications(hashof20).unwrap().is_none(),
-		"Extra justification for block#1",
-	);
+	// all peers should have stored the justification for the best finalized block #20
+	for peer_id in 0..3 {
+		let client = net.lock().peers[peer_id].client().as_client();
+		let justification =
+			crate::aux_schema::best_justification::<_, Block>(&*client).unwrap().unwrap();
+
+		assert_eq!(justification.justification.commit.target_number, 20);
+	}
 }
 
 #[tokio::test]
