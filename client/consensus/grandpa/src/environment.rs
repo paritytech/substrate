@@ -1330,6 +1330,12 @@ where
 	}
 
 	let last_finalized_number = client.info().finalized_number;
+
+	// keep the first justification before reaching the justification period
+	if last_finalized_number.is_zero() {
+		return true
+	}
+
 	last_finalized_number / justification_period.into() != number / justification_period.into()
 }
 
