@@ -38,7 +38,7 @@ use std::{
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub enum GenesisBuildAction {
+enum GenesisBuildAction {
 	#[serde(alias = "RuntimePatch")]
 	Patch(serde_json::Value),
 	#[serde(alias = "Runtime")]

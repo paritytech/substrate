@@ -11,6 +11,7 @@ use sp_core::{
 use sp_genesis_builder::Result as BuildResult;
 use sp_state_machine::BasicExternalities;
 
+/// Util that allows to call GenesisBuilder API from the runtime wasm code blob.
 pub struct GenesisConfigBuilderRuntimeCaller<'a> {
 	code: Cow<'a, [u8]>,
 	code_hash: Vec<u8>,
@@ -24,11 +25,14 @@ impl<'a> FetchRuntimeCode for GenesisConfigBuilderRuntimeCaller<'a> {
 }
 
 impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
+	/// Creates new instance using provided code blob.
 	pub fn new(code: &'a [u8]) -> Self {
 		GenesisConfigBuilderRuntimeCaller {
 			code: code.into(),
 			code_hash: sp_core::blake2_256(&code).to_vec(),
-			executor: WasmExecutor::<sp_io::SubstrateHostFunctions>::builder().build(),
+			executor: WasmExecutor::<sp_io::SubstrateHostFunctions>::builder()
+				.with_allow_missing_host_functions(true)
+				.build(),
 		}
 	}
 
@@ -47,6 +51,11 @@ impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
 }
 
 impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
+	/// Get the default `GenesisConfig` as a JSON blob.
+	///
+	/// This function instantiates the default `GenesisConfig` struct for the runtime and serializes
+	/// it into a JSON blob. It returns a `Vec<u8>` containing the JSON representation of the
+	/// default `GenesisConfig`.
 	pub fn get_default_config(&self) -> core::result::Result<Value, String> {
 		let mut t = BasicExternalities::new_empty();
 		let call_result = self
@@ -57,6 +66,14 @@ impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
 		Ok(from_slice(&default_config[..]).expect("returned value is json. qed."))
 	}
 
+	/// Build `GenesisConfig` from a JSON blob not using any defaults and store it in the storage.
+	///
+	/// This function deserializes the full `GenesisConfig` from the given JSON blob and puts it
+	/// into the storage. If the provided JSON blob is incorrect or incomplete or the
+	/// deserialization fails, an error is returned.
+	///
+	/// Please note that provided json blob must contain all `GenesisConfig` fields, no defaults
+	/// will be used.
 	pub fn get_storage_for_config(&self, config: Value) -> core::result::Result<Storage, String> {
 		let mut ext = BasicExternalities::new_empty();
 
@@ -70,6 +87,24 @@ impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
 		Ok(build_result.map(|_| ext.into_storages())?)
 	}
 
+	/// Patch default `GenesisConfig` using given JSON patch and store it in the storage.
+	///
+	/// This function generates the `GenesisConfig` for the runtime by applying a provided JSON
+	/// patch. The patch modifies the default `GenesisConfig` allowing customization of the specific
+	/// keys. The resulting `GenesisConfig` is then deserialized from the patched JSON
+	/// representation and stored in the storage.
+	///
+	/// If the provided JSON patch is incorrect or the deserialization fails the error will be
+	/// returned.
+	///
+	/// The patching process modifies the default `GenesisConfig` according to the following rules:
+	/// 1. Existing keys in the default configuration will be overridden by the corresponding values
+	/// in the patch. 2. If a key exists in the patch but not in the default configuration, it will
+	/// be added to the resulting `GenesisConfig`. 3. Keys in the default configuration that have
+	/// null values in the patch will be removed from the resulting    `GenesisConfig`. This is
+	/// helpful for changing enum variant value.
+	///
+	/// Please note that the patch may contain full `GenesisConfig`.
 	pub fn get_storage_for_patch(&self, patch: Value) -> core::result::Result<Storage, String> {
 		let mut config = self.get_default_config()?;
 		json_patch::merge(&mut config, &patch);
