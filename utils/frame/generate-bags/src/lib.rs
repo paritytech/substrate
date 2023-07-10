@@ -18,8 +18,7 @@
 //! Support code to ease the process of generating bag thresholds.
 //!
 //! NOTE: this assume the runtime implements [`pallet_staking::Config`], as it requires an
-//! implementation of the traits [`frame_support::traits::Currency`] and
-//! [`frame_support::traits::CurrencyToVote`].
+//! implementation of the traits [`frame_support::traits::Currency`] and `CurrencyToVote`.
 //!
 //! The process of adding bags to a runtime requires only four steps.
 //!
@@ -70,7 +69,7 @@ fn existential_weight<T: pallet_staking::Config>(
 	total_issuance: u128,
 	minimum_balance: u128,
 ) -> VoteWeight {
-	use frame_support::traits::CurrencyToVote;
+	use sp_staking::currency_to_vote::CurrencyToVote;
 
 	T::CurrencyToVote::to_vote(
 		minimum_balance

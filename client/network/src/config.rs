@@ -22,6 +22,7 @@
 //! See the documentation of [`Params`].
 
 pub use crate::{
+	discovery::DEFAULT_KADEMLIA_REPLICATION_FACTOR,
 	protocol::NotificationsSink,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
@@ -37,7 +38,7 @@ use zeroize::Zeroize;
 
 pub use sc_network_common::{
 	role::{Role, Roles},
-	sync::warp::WarpSyncProvider,
+	sync::{warp::WarpSyncProvider, SyncMode},
 	ExHashT,
 };
 use sc_utils::mpsc::TracingUnboundedSender;
@@ -50,6 +51,7 @@ use std::{
 	io::{self, Write},
 	iter,
 	net::Ipv4Addr,
+	num::NonZeroUsize,
 	path::{Path, PathBuf},
 	pin::Pin,
 	str::{self, FromStr},
@@ -272,40 +274,6 @@ impl NonReservedPeerMode {
 			"deny" => Some(Self::Deny),
 			_ => None,
 		}
-	}
-}
-
-/// Sync operation mode.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SyncMode {
-	/// Full block download and verification.
-	Full,
-	/// Download blocks and the latest state.
-	Fast {
-		/// Skip state proof download and verification.
-		skip_proofs: bool,
-		/// Download indexed transactions for recent blocks.
-		storage_chain_mode: bool,
-	},
-	/// Warp sync - verify authority set transitions and the latest state.
-	Warp,
-}
-
-impl SyncMode {
-	/// Returns if `self` is [`Self::Warp`].
-	pub fn is_warp(&self) -> bool {
-		matches!(self, Self::Warp)
-	}
-
-	/// Returns if `self` is [`Self::Fast`].
-	pub fn is_fast(&self) -> bool {
-		matches!(self, Self::Fast { .. })
-	}
-}
-
-impl Default for SyncMode {
-	fn default() -> Self {
-		Self::Full
 	}
 }
 
@@ -605,6 +573,12 @@ pub struct NetworkConfiguration {
 	/// the presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
 
+	/// Kademlia replication factor determines to how many closest peers a record is replicated to.
+	///
+	/// Discovery mechanism requires successful replication to all
+	/// `kademlia_replication_factor` peers to consider record successfully put.
+	pub kademlia_replication_factor: NonZeroUsize,
+
 	/// Enable serving block data over IPFS bitswap.
 	pub ipfs_server: bool,
 
@@ -656,6 +630,8 @@ impl NetworkConfiguration {
 			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
+			kademlia_replication_factor: NonZeroUsize::new(DEFAULT_KADEMLIA_REPLICATION_FACTOR)
+				.expect("value is a constant; constant is non-zero; qed."),
 			yamux_window_size: None,
 			ipfs_server: false,
 		}

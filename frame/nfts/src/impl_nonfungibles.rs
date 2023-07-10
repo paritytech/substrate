@@ -135,6 +135,18 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
+impl<T: Config<I>, I: 'static> InspectRole<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+	fn is_issuer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
+		Self::has_role(collection, who, CollectionRole::Issuer)
+	}
+	fn is_admin(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
+		Self::has_role(collection, who, CollectionRole::Admin)
+	}
+	fn is_freezer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
+		Self::has_role(collection, who, CollectionRole::Freezer)
+	}
+}
+
 impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfigFor<T, I>>
 	for Pallet<T, I>
 {
@@ -329,6 +341,13 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 	}
 
 	fn disable_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+		let transfer_disabled =
+			Self::has_system_attribute(&collection, &item, PalletAttributes::TransferDisabled)?;
+		// Can't lock the item twice
+		if transfer_disabled {
+			return Err(Error::<T, I>::ItemLocked.into())
+		}
+
 		<Self as Mutate<T::AccountId, ItemConfig>>::set_attribute(
 			collection,
 			item,
