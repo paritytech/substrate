@@ -233,7 +233,7 @@ test-linux-stable:
       -u ${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}
       https://elasticsearch.parity-build.parity.io/unit-tests/_doc/${CI_JOB_ID}
       -H 'Content-Type: application/json'
-      -d @target/nextest/default/junit.json"
+      -d @target/nextest/default/junit.json" || echo "failed to upload junit report"
   artifacts:
     when: always
     paths:
