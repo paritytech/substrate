@@ -48,7 +48,6 @@ use sp_std::{marker::PhantomData, mem, prelude::*, vec::Vec};
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type MomentOf<T> = <<T as Config>::Time as Time>::Moment;
 pub type SeedOf<T> = <T as frame_system::Config>::Hash;
-pub type BlockNumberOf<T> = BlockNumberFor<T>;
 pub type ExecResult = Result<ExecReturnValue, ExecError>;
 
 /// A type that represents a topic of an event. At the moment a hash is used.
@@ -244,7 +243,7 @@ pub trait Ext: sealing::Sealed {
 	fn minimum_balance(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a random number for the current block with the given subject.
-	fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>);
+	fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberFor<Self::T>);
 
 	/// Deposit an event with the given topics.
 	///
@@ -252,7 +251,7 @@ pub trait Ext: sealing::Sealed {
 	fn deposit_event(&mut self, topics: Vec<TopicOf<Self::T>>, data: Vec<u8>);
 
 	/// Returns the current block number.
-	fn block_number(&self) -> BlockNumberOf<Self::T>;
+	fn block_number(&self) -> BlockNumberFor<Self::T>;
 
 	/// Returns the maximum allowed size of a storage item.
 	fn max_value_size(&self) -> u32;
@@ -1341,7 +1340,7 @@ where
 		self.top_frame().value_transferred
 	}
 
-	fn random(&self, subject: &[u8]) -> (SeedOf<T>, BlockNumberOf<T>) {
+	fn random(&self, subject: &[u8]) -> (SeedOf<T>, BlockNumberFor<T>) {
 		T::Randomness::random(subject)
 	}
 
