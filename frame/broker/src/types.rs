@@ -19,11 +19,39 @@ impl CorePart {
 	pub fn is_complete(&self) -> bool {
 		&self.0 == &[255u8; 10]
 	}
+	pub fn set(&mut self, i: u32) -> Self {
+		if i < 80 {
+			self.0[(i / 8) as usize] |= (128 >> (i % 8));
+		}
+		*self
+	}
+	pub fn clear(&mut self, i: u32) -> Self {
+		if i < 80 {
+			self.0[(i / 8) as usize] &= !(128 >> (i % 8));
+		}
+		*self
+	}
 	pub fn count_zeros(&self) -> u32 {
 		self.0.iter().map(|i| i.count_zeros()).sum()
 	}
 	pub fn count_ones(&self) -> u32 {
 		self.0.iter().map(|i| i.count_ones()).sum()
+	}
+	pub fn from_chunk(from: u32, to: u32) -> Self {
+		let mut v = [0u8; 10];
+		for i in (from.min(80) as usize)..(to.min(80) as usize) {
+			v[i / 8] |= (128 >> (i % 8));
+		}
+		Self(v)
+	}
+}
+impl From<u128> for CorePart {
+	fn from(x: u128) -> Self {
+		let mut v = [0u8; 10];
+		for i in 0..10 {
+			v[i] = (x >> (72 - 8 * i)) as u8;
+		}
+		Self(v)
 	}
 }
 impl BitAnd<Self> for CorePart {
@@ -85,5 +113,45 @@ impl Not for CorePart {
 			result[i] = self.0[i].not();
 		}
 		Self(result)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn complete_works() {
+		assert_eq!(CorePart::complete(), CorePart([0xff; 10]));
+		assert!(CorePart([0xff; 10]).is_complete());
+		for i in 0..80 {
+			assert!(!CorePart([0xff; 10]).clear(i).is_complete());
+		}
+	}
+
+	#[test]
+	fn void_works() {
+		assert_eq!(CorePart::void(), CorePart([0; 10]));
+		assert!(CorePart([0; 10]).is_void());
+		for i in 0..80 {
+			assert!(!(CorePart([0; 10]).set(i).is_void()));
+		}
+	}
+
+	#[test]
+	fn from_works() {
+		assert!(CorePart::from(0xfffff_fffff_fffff_fffff).is_complete());
+		assert_eq!(
+			CorePart::from(0x12345_67890_abcde_f0123),
+			CorePart([0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef, 0x01, 0x23]),
+		);
+	}
+
+	#[test]
+	fn chunk_works() {
+		assert_eq!(
+			CorePart::from_chunk(40, 60),
+			CorePart::from(0x00000_00000_fffff_00000),
+		);
 	}
 }

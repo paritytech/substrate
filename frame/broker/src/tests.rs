@@ -51,7 +51,7 @@ fn basic_initialize_works() {
 fn initialize_with_system_paras_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Broker::do_configure(ConfigRecord {
-			core_count: 10,
+			core_count: 3,
 			advance_notice: 1,
 			interlude_length: 1,
 			leadin_length: 3,
@@ -62,6 +62,12 @@ fn initialize_with_system_paras_works() {
 
 		let item = ScheduleItem { assignment: Task(1u32), part: CorePart::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
+		let items = vec![
+			ScheduleItem { assignment: Task(2u32), part: 0xfffff_fffff_00000_00000.into() },
+			ScheduleItem { assignment: Task(3u32), part: 0x00000_00000_fffff_00000.into() },
+			ScheduleItem { assignment: Task(4u32), part: 0x00000_00000_00000_fffff.into() },
+		];
+		assert_ok!(Broker::do_reserve(Schedule::truncate_from(items)));
 
 		assert_eq!(Broker::current_timeslice(), 0);
 
@@ -70,7 +76,14 @@ fn initialize_with_system_paras_works() {
 
 		advance_to(10);
 		assert_eq!(CoretimeTrace::get(), vec![
-			(10, AssignCore { core: 0, begin: 12, assignment: vec![(Task(1), 57600)], end_hint: None })
+			(10, AssignCore { core: 0, begin: 12, assignment: vec![
+				(Task(1), 57600),
+			], end_hint: None }),
+			(10, AssignCore { core: 1, begin: 12, assignment: vec![
+				(Task(2), 28800),
+				(Task(3), 14400),
+				(Task(4), 14400),
+			], end_hint: None }),
 		]);
 	});
 }
