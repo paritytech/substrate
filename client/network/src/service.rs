@@ -29,13 +29,14 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::{FullNetworkConfiguration, MultiaddrWithPeerId, Params, TransportConfig},
+	config::{parse_addr, FullNetworkConfiguration, MultiaddrWithPeerId, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	event::{DhtEvent, Event},
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
+	peerset::PeersetHandle,
 	protocol::{self, NotifsHandlerError, Protocol, Ready},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
@@ -73,7 +74,6 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 
 use sc_network_common::ExHashT;
-use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 
@@ -271,11 +271,14 @@ where
 		)?;
 
 		// List of multiaddresses that we know in the network.
-		let mut boot_node_ids = HashSet::new();
+		let mut boot_node_ids = HashMap::<PeerId, Vec<Multiaddr>>::new();
 
 		// Process the bootnodes.
 		for bootnode in network_config.boot_nodes.iter() {
-			boot_node_ids.insert(bootnode.peer_id);
+			boot_node_ids
+				.entry(bootnode.peer_id)
+				.or_default()
+				.push(bootnode.multiaddr.clone());
 			known_addresses.push((bootnode.peer_id, bootnode.multiaddr.clone()));
 		}
 
@@ -320,6 +323,7 @@ where
 				config.use_kademlia_disjoint_query_paths(
 					network_config.kademlia_disjoint_query_paths,
 				);
+				config.with_kademlia_replication_factor(network_config.kademlia_replication_factor);
 
 				match network_config.transport {
 					TransportConfig::MemoryOnly => {
@@ -449,6 +453,7 @@ where
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
+			reported_invalid_boot_nodes: Default::default(),
 			_marker: Default::default(),
 			_block: Default::default(),
 		})
@@ -620,8 +625,11 @@ where
 	}
 
 	/// Returns the list of reserved peers.
-	pub fn reserved_peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.network_service.behaviour().user_protocol().reserved_peers()
+	fn reserved_peers(&self, pending_response: oneshot::Sender<Vec<PeerId>>) {
+		self.network_service
+			.behaviour()
+			.user_protocol()
+			.reserved_peers(pending_response);
 	}
 }
 
@@ -882,40 +890,6 @@ where
 		}
 	}
 
-	fn add_to_peers_set(
-		&self,
-		protocol: ProtocolName,
-		peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		let peers = self.split_multiaddr_and_peer_id(peers)?;
-
-		for (peer_id, addr) in peers.into_iter() {
-			// Make sure the local peer ID is never added to the PSM.
-			if peer_id == self.local_peer_id {
-				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
-			}
-
-			if !addr.is_empty() {
-				let _ = self
-					.to_worker
-					.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
-			}
-			let _ = self
-				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::AddToPeersSet(protocol.clone(), peer_id));
-		}
-
-		Ok(())
-	}
-
-	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
-		for peer_id in peers.into_iter() {
-			let _ = self
-				.to_worker
-				.unbounded_send(ServiceToWorkerMsg::RemoveFromPeersSet(protocol.clone(), peer_id));
-		}
-	}
-
 	fn sync_num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
 	}
@@ -1128,8 +1102,6 @@ enum ServiceToWorkerMsg {
 	SetPeersetReserved(ProtocolName, HashSet<PeerId>),
 	AddSetReserved(ProtocolName, PeerId),
 	RemoveSetReserved(ProtocolName, PeerId),
-	AddToPeersSet(ProtocolName, PeerId),
-	RemoveFromPeersSet(ProtocolName, PeerId),
 	EventStream(out_events::Sender),
 	Request {
 		target: PeerId,
@@ -1176,8 +1148,10 @@ where
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.
 	metrics: Option<Metrics>,
-	/// The `PeerId`'s of all boot nodes.
-	boot_node_ids: Arc<HashSet<PeerId>>,
+	/// The `PeerId`'s of all boot nodes mapped to the registered addresses.
+	boot_node_ids: Arc<HashMap<PeerId, Vec<Multiaddr>>>,
+	/// Boot nodes that we already have reported as invalid.
+	reported_invalid_boot_nodes: HashSet<PeerId>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
@@ -1306,16 +1280,6 @@ where
 				.remove_set_reserved_peer(protocol, peer_id),
 			ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
 				self.network_service.behaviour_mut().add_known_address(peer_id, addr),
-			ServiceToWorkerMsg::AddToPeersSet(protocol, peer_id) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.add_to_peers_set(protocol, peer_id),
-			ServiceToWorkerMsg::RemoveFromPeersSet(protocol, peer_id) => self
-				.network_service
-				.behaviour_mut()
-				.user_protocol_mut()
-				.remove_from_peers_set(protocol, peer_id),
 			ServiceToWorkerMsg::EventStream(sender) => self.event_streams.push(sender),
 			ServiceToWorkerMsg::Request {
 				target,
@@ -1349,8 +1313,7 @@ where
 				.user_protocol_mut()
 				.set_notification_handshake(protocol, handshake),
 			ServiceToWorkerMsg::ReservedPeers { pending_response } => {
-				let _ =
-					pending_response.send(self.reserved_peers().map(ToOwned::to_owned).collect());
+				self.reserved_peers(pending_response);
 			},
 		}
 	}
@@ -1454,16 +1417,10 @@ where
 						.behaviour_mut()
 						.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
 				}
-				self.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.add_default_set_discovered_nodes(iter::once(peer_id));
+				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id)) => {
-				self.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.add_default_set_discovered_nodes(iter::once(peer_id));
+				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted) => {
 				if let Some(metrics) = self.metrics.as_ref() {
@@ -1652,15 +1609,27 @@ where
 						peer_id, error,
 					);
 
-					if self.boot_node_ids.contains(&peer_id) {
+					let not_reported = !self.reported_invalid_boot_nodes.contains(&peer_id);
+
+					if let Some(addresses) =
+						not_reported.then(|| self.boot_node_ids.get(&peer_id)).flatten()
+					{
 						if let DialError::WrongPeerId { obtained, endpoint } = &error {
 							if let ConnectedPoint::Dialer { address, role_override: _ } = endpoint {
-								warn!(
-									"💔 The bootnode you want to connect to at `{}` provided a different peer ID `{}` than the one you expect `{}`.",
-									address,
-									obtained,
-									peer_id,
-								);
+								let address_without_peer_id = parse_addr(address.clone())
+									.map_or_else(|_| address.clone(), |r| r.1);
+
+								// Only report for address of boot node that was added at startup of
+								// the node and not for any address that the node learned of the
+								// boot node.
+								if addresses.iter().any(|a| address_without_peer_id == *a) {
+									warn!(
+										"💔 The bootnode you want to connect to at `{address}` provided a \
+										 different peer ID `{obtained}` than the one you expect `{peer_id}`.",
+									);
+
+									self.reported_invalid_boot_nodes.insert(peer_id);
+								}
 							}
 						}
 					}

@@ -442,6 +442,18 @@ pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
 ///
 /// These feature checking macros can be used to conditionally enable/disable code in a dependent
 /// crate based on a feature in the crate where the macro is called.
+///
+/// # Example
+///```
+/// sp_core::generate_feature_enabled_macro!(check_std_is_enabled, feature = "std", $);
+/// sp_core::generate_feature_enabled_macro!(check_std_or_serde_is_enabled, any(feature = "std", feature = "serde"), $);
+///
+/// // All the code passed to the macro will then conditionally compiled based on the features
+/// // activated for the crate where the macro was generated.
+/// check_std_is_enabled! {
+///     struct StdEnabled;
+/// }
+///```
 #[macro_export]
 // We need to skip formatting this macro because of this bug:
 // https://github.com/rust-lang/rustfmt/issues/5283

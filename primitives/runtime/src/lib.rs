@@ -43,7 +43,7 @@ pub use sp_core::storage::StateVersion;
 pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_core::{
-	crypto::{self, ByteArray},
+	crypto::{self, ByteArray, FromEntropy},
 	ecdsa, ed25519,
 	hash::{H256, H512},
 	sr25519,
@@ -96,7 +96,7 @@ pub use sp_arithmetic::helpers_128bit;
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
 	traits::SaturatedConversion, ArithmeticError, FixedI128, FixedI64, FixedPointNumber,
-	FixedPointOperand, FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
+	FixedPointOperand, FixedU128, FixedU64, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
 	Perquintill, Rational128, Rounding, UpperOf,
 };
 
@@ -309,6 +309,16 @@ pub enum MultiSigner {
 	Sr25519(sr25519::Public),
 	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the compressed pub key).
 	Ecdsa(ecdsa::Public),
+}
+
+impl FromEntropy for MultiSigner {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		Ok(match input.read_byte()? % 3 {
+			0 => Self::Ed25519(FromEntropy::from_entropy(input)?),
+			1 => Self::Sr25519(FromEntropy::from_entropy(input)?),
+			2.. => Self::Ecdsa(FromEntropy::from_entropy(input)?),
+		})
+	}
 }
 
 /// NOTE: This implementations is required by `SimpleAddressDeterminer`,
@@ -783,6 +793,9 @@ pub type ApplyExtrinsicResult =
 /// Same as `ApplyExtrinsicResult` but augmented with `PostDispatchInfo` on success.
 pub type ApplyExtrinsicResultWithInfo<T> =
 	Result<DispatchResultWithInfo<T>, transaction_validity::TransactionValidityError>;
+
+/// The error type used as return type in try runtime hooks.
+pub type TryRuntimeError = DispatchError;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.

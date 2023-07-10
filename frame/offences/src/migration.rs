@@ -29,6 +29,8 @@ use sp_std::vec::Vec;
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 mod v0 {
 	use super::*;
@@ -51,10 +53,7 @@ pub mod v1 {
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			let onchain = Pallet::<T>::on_chain_storage_version();
-			ensure!(onchain < 1, "pallet_offences::MigrateToV1 migration can be deleted");
-
+		fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 			log::info!(
 				target: LOG_TARGET,
 				"Number of reports to refund and delete: {}",
@@ -65,23 +64,20 @@ pub mod v1 {
 		}
 
 		fn on_runtime_upgrade() -> Weight {
-			let onchain = Pallet::<T>::on_chain_storage_version();
-
-			if onchain > 0 {
+			if Pallet::<T>::on_chain_storage_version() > 0 {
 				log::info!(target: LOG_TARGET, "pallet_offences::MigrateToV1 should be removed");
 				return T::DbWeight::get().reads(1)
 			}
 
 			let keys_removed = v0::ReportsByKindIndex::<T>::clear(u32::MAX, None).unique as u64;
-			let weight = T::DbWeight::get().reads_writes(keys_removed, keys_removed);
-
 			StorageVersion::new(1).put::<Pallet<T>>();
 
-			weight
+			// + 1 for reading/writing the new storage version
+			T::DbWeight::get().reads_writes(keys_removed + 1, keys_removed + 1)
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 			ensure!(onchain == 1, "pallet_offences::MigrateToV1 needs to be run");
 			ensure!(
@@ -145,7 +141,7 @@ mod test {
 		ext.execute_with(|| {
 			assert_eq!(
 				v1::MigrateToV1::<T>::on_runtime_upgrade(),
-				<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1),
+				<T as frame_system::Config>::DbWeight::get().reads_writes(2, 2),
 			);
 
 			assert!(<v0::ReportsByKindIndex<T>>::iter_values().count() == 0);

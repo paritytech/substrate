@@ -14,8 +14,8 @@ frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../../../frame/election-provider-support" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
+sp-staking = { version = "4.0.0-dev", path = "../../../primitives/staking" }
 
 # third party
 chrono = { version = "0.4.19" }
-git2 = { version = "0.16.0", default-features = false }
 num-format = "0.4.3"

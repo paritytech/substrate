@@ -47,6 +47,7 @@ impl StakingMock {
 impl sp_staking::StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
+	type CurrencyToVote = ();
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		StakingMinBond::get()
@@ -206,7 +207,7 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = ();
 	type MaxHolds = ();
 }
 
