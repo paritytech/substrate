@@ -363,53 +363,69 @@ impl<T: Config> Pallet<T> {
 
 	/// Must be called on a core in `AllowedRenewals` whose value is a timeslice equal to the
 	/// current sale status's `region_end`.
-	pub(crate) fn do_renew(who: &T::AccountId, core: CoreIndex) -> DispatchResult {
+	pub(crate) fn do_renew(who: &T::AccountId, core: CoreIndex) -> Result<CoreIndex, DispatchError> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let record = AllowedRenewals::<T>::get(core).ok_or(Error::<T>::NotAllowed)?;
 		let mut sale = SaleInfo::<T>::get().ok_or(Error::<T>::NoSales)?;
-		let workload = record.completion.complete().ok_or(Error::<T>::IncompleteAssignment)?;
+		let workload = record.completion.drain_complete().ok_or(Error::<T>::IncompleteAssignment)?;
 
 		ensure!(record.begin == sale.region_begin, Error::<T>::WrongTime);
 		ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
 		ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
 
 		Self::charge(who, record.price)?;
+		Self::deposit_event(Event::Renewed {
+			who: who.clone(),
+			core,
+			price: record.price,
+			begin: sale.region_begin,
+			length: sale.region_end.saturating_sub(sale.region_begin),
+			workload: workload.clone(),
+		});
 
 		let core = sale.first_core + sale.cores_sold;
 		sale.cores_sold.saturating_inc();
 
-		Workplan::<T>::insert((record.begin, core), workload);
+		Workplan::<T>::insert((record.begin, core), &workload);
 
 		let begin = sale.region_end;
 		let price = record.price + record.price / 100u32.into() * 2u32.into();
-		let new_record = AllowedRenewalRecord { begin, price, .. record };
-		AllowedRenewals::<T>::insert(core, new_record);
+		let new_record = AllowedRenewalRecord { begin, price, completion: Complete(workload) };
+		AllowedRenewals::<T>::insert(core, &new_record);
 		SaleInfo::<T>::put(&sale);
-		Ok(())
+		if let Some(workload) = new_record.completion.drain_complete() {
+			Self::deposit_event(Event::Renewable { core, price, begin, workload });
+		}
+		Ok(core)
 	}
 
-	pub(crate) fn do_purchase(who: T::AccountId, price_limit: BalanceOf<T>) -> DispatchResult {
+	pub(crate) fn do_purchase(
+		who: T::AccountId,
+		price_limit: BalanceOf<T>,
+	) -> Result<RegionId, DispatchError> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let mut sale = SaleInfo::<T>::get().ok_or(Error::<T>::NoSales)?;
 		ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
 		ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
 		let now = frame_system::Pallet::<T>::block_number();
 		ensure!(now > sale.sale_start, Error::<T>::TooEarly);
-		let current_price = lerp(
+		let price = lerp(
 			now,
 			sale.sale_start,
 			sale.leadin_length,
 			sale.start_price,
 			sale.reserve_price,
 		).ok_or(Error::<T>::IndeterminablePrice)?;
-		ensure!(price_limit >= current_price, Error::<T>::Overpriced);
+		ensure!(price_limit >= price, Error::<T>::Overpriced);
 
-		Self::charge(&who, current_price)?;
+		Self::charge(&who, price)?;
 		let core = sale.first_core + sale.cores_sold;
 		sale.cores_sold.saturating_inc();
 		SaleInfo::<T>::put(&sale);
-		Self::issue(core, sale.region_begin, sale.region_end, who, Some(current_price));
-		Ok(())
+		let id = Self::issue(core, sale.region_begin, sale.region_end, who.clone(), Some(price));
+		let length = sale.region_end.saturating_sub(sale.region_begin);
+		Self::deposit_event(Event::Purchased { who, region_id: id, price, length });
+		Ok(id)
 	}
 
 	pub(crate) fn issue(
@@ -418,10 +434,11 @@ impl<T: Config> Pallet<T> {
 		end: Timeslice,
 		owner: T::AccountId,
 		paid: Option<BalanceOf<T>>,
-	) {
+	) -> RegionId {
 		let id = RegionId { begin, core, part: CorePart::complete() };
 		let record = RegionRecord { end, owner, paid };
-		Regions::<T>::insert(id, record);
+		Regions::<T>::insert(&id, &record);
+		id
 	}
 
 	pub(crate) fn do_transfer(
@@ -446,15 +463,14 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn do_partition(
 		region_id: RegionId,
 		maybe_check_owner: Option<T::AccountId>,
-		pivot: Timeslice,
-	) -> Result<(), Error<T>> {
+		pivot_offset: Timeslice,
+	) -> Result<(RegionId, RegionId), Error<T>> {
 		let mut region = Regions::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
 
 		if let Some(check_owner) = maybe_check_owner {
 			ensure!(check_owner == region.owner, Error::<T>::NotOwner);
 		}
-
-		ensure!(pivot > region_id.begin, Error::<T>::PivotTooEarly);
+		let pivot = region_id.begin.saturating_add(pivot_offset);
 		ensure!(pivot < region.end, Error::<T>::PivotTooLate);
 
 		region.paid = None;
@@ -465,14 +481,14 @@ impl<T: Config> Pallet<T> {
 		Regions::<T>::insert(&new_region_id, &region);
 		Self::deposit_event(Event::Partitioned { region_id, pivot, new_region_id });
 
-		Ok(())
+		Ok((region_id, new_region_id))
 	}
 
 	pub(crate) fn do_interlace(
 		mut region_id: RegionId,
 		maybe_check_owner: Option<T::AccountId>,
 		pivot: CorePart,
-	) -> Result<(), Error<T>> {
+	) -> Result<(RegionId, RegionId), Error<T>> {
 		let region = Regions::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
 
 		if let Some(check_owner) = maybe_check_owner {
@@ -486,12 +502,12 @@ impl<T: Config> Pallet<T> {
 		let antipivot = region_id.part ^ pivot;
 		region_id.part = pivot;
 		Regions::<T>::insert(&region_id, &region);
-		region_id.part = antipivot;
-		Regions::<T>::insert(&region_id, &region);
+		let new_region_id = RegionId { part: antipivot, ..region_id };
+		Regions::<T>::insert(&new_region_id, &region);
 
-		Self::deposit_event(Event::Interlaced { region_id, pivot });
+		Self::deposit_event(Event::Interlaced { region_id, pivot, new_region_id });
 
-		Ok(())
+		Ok((region_id, new_region_id))
 	}
 
 	pub(crate) fn utilize(
@@ -552,6 +568,9 @@ impl<T: Config> Pallet<T> {
 					};
 					let record = AllowedRenewalRecord { begin, price, completion: workload };
 					AllowedRenewals::<T>::insert(region_id.core, &record);
+					if let Some(workload) = record.completion.drain_complete() {
+						Self::deposit_event(Event::Renewable { core: region_id.core, price, begin, workload });
+					}
 				}
 			}
 			Self::deposit_event(Event::Assigned { region_id, task: target });

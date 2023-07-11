@@ -32,13 +32,25 @@ fn basic_initialize_works() {
 }
 
 #[test]
+fn transfer_then_purchase_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		
+	});
+}
+
+// TODO: Renewal.
+
+#[test]
 fn instapool_payouts_work() {
 	TestExt::new().core_count(3).endow(1, 1000).execute_with(|| {
 		let item = ScheduleItem { assignment: Pool, part: CorePart::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
-		assert_ok!(Broker::do_purchase(1, u64::max_value()));
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
 		let region = RegionId { begin, core: 1, part: CorePart::complete() };
 		assert_ok!(Broker::do_pool(region, None, 2));
@@ -62,12 +74,10 @@ fn instapool_partial_core_payouts_work() {
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
-		assert_ok!(Broker::do_purchase(1, u64::max_value()));
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
 		let region = RegionId { begin, core: 1, part: CorePart::complete() };
-		assert_ok!(Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)));
-		let region1 = RegionId { begin, core: 1, part: CorePart::from_chunk(0, 20) };
-		let region2 = RegionId { begin, core: 1, part: CorePart::from_chunk(20, 80) };
+		let (region1, region2) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)).unwrap();
 		assert_ok!(Broker::do_pool(region1, None, 2));
 		assert_ok!(Broker::do_pool(region2, None, 3));
 		assert_ok!(Broker::do_purchase_credit(1, 40, 1));
@@ -115,9 +125,7 @@ fn purchase_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
-		assert_ok!(Broker::do_purchase(1, u64::max_value()));
-		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
-		let region = RegionId { begin, core: 0, part: CorePart::complete() };
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		assert_ok!(Broker::do_assign(region, None, 1000));
 		advance_to(6);
 		assert_eq!(CoretimeTrace::get(), vec![
@@ -133,13 +141,9 @@ fn partition_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
-		assert_ok!(Broker::do_purchase(1, u64::max_value()));
-		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
-		let region1 = RegionId { begin, core: 0, part: CorePart::complete() };
-		assert_ok!(Broker::do_partition(region1, None, begin + 1));
-		let region2 = RegionId { begin: begin + 1, core: 0, part: CorePart::complete() };
-		assert_ok!(Broker::do_partition(region2, None, begin + 2));
-		let region3 = RegionId { begin: begin + 2, core: 0, part: CorePart::complete() };
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		let (region1, region) = Broker::do_partition(region, None, 1).unwrap();
+		let (region2, region3) = Broker::do_partition(region, None, 1).unwrap();
 		assert_ok!(Broker::do_assign(region1, None, 1001));
 		assert_ok!(Broker::do_assign(region2, None, 1002));
 		assert_ok!(Broker::do_assign(region3, None, 1003));
@@ -163,15 +167,9 @@ fn interlace_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
-		assert_ok!(Broker::do_purchase(1, u64::max_value()));
-		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
-		let region1 = RegionId { begin, core: 0, part: CorePart::complete() };
-		assert_ok!(Broker::do_interlace(region1, None, CorePart::from_chunk(0, 30)));
-		let region1 = RegionId { begin, core: 0, part: CorePart::from_chunk(0, 30) };
-		let region2 = RegionId { begin, core: 0, part: CorePart::from_chunk(30, 80) };
-		assert_ok!(Broker::do_interlace(region2, None, CorePart::from_chunk(30, 60)));
-		let region2 = RegionId { begin, core: 0, part: CorePart::from_chunk(30, 60) };
-		let region3 = RegionId { begin, core: 0, part: CorePart::from_chunk(60, 80) };
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		let (region1, region) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 30)).unwrap();
+		let (region2, region3) =Broker::do_interlace(region, None, CorePart::from_chunk(30, 60)).unwrap();
 		assert_ok!(Broker::do_assign(region1, None, 1001));
 		assert_ok!(Broker::do_assign(region2, None, 1002));
 		assert_ok!(Broker::do_assign(region3, None, 1003));
@@ -191,16 +189,10 @@ fn interlace_then_partition_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
-		assert_ok!(Broker::do_purchase(1, u64::max_value()));
-		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
-		let region = RegionId { begin, core: 0, part: CorePart::complete() };
-		assert_ok!(Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)));
-		let region1 = RegionId { part: CorePart::from_chunk(0, 20), ..region };
-		let region2 = RegionId { part: CorePart::from_chunk(20, 80), ..region };
-		assert_ok!(Broker::do_partition(region1, None, begin + 1));
-		assert_ok!(Broker::do_partition(region2, None, begin + 2));
-		let region3 = RegionId { begin: begin + 1, ..region1 };
-		let region4 = RegionId { begin: begin + 2, ..region2 };
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		let (region1, region2) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)).unwrap();
+		let (region1, region3) = Broker::do_partition(region1, None, 1).unwrap();
+		let (region2, region4) = Broker::do_partition(region2, None, 2).unwrap();
 		assert_ok!(Broker::do_assign(region1, None, 1001));
 		assert_ok!(Broker::do_assign(region2, None, 1002));
 		assert_ok!(Broker::do_assign(region3, None, 1003));
@@ -228,18 +220,10 @@ fn partition_then_interlace_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
-		assert_ok!(Broker::do_purchase(1, u64::max_value()));
-		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
-		let region = RegionId { begin, core: 0, part: CorePart::complete() };
-		assert_ok!(Broker::do_partition(region, None, begin + 1));
-		let region1 = RegionId { begin, ..region };
-		let region2 = RegionId { begin: begin + 1, ..region };
-		assert_ok!(Broker::do_interlace(region1, None, CorePart::from_chunk(0, 20)));
-		assert_ok!(Broker::do_interlace(region2, None, CorePart::from_chunk(0, 30)));
-		let region3 = RegionId { part: CorePart::from_chunk(20, 80), ..region1 };
-		let region4 = RegionId { part: CorePart::from_chunk(30, 80), ..region2 };
-		let region1 = RegionId { part: CorePart::from_chunk(0, 20), ..region1 };
-		let region2 = RegionId { part: CorePart::from_chunk(0, 30), ..region2 };
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		let (region1, region2) = Broker::do_partition(region, None, 1).unwrap();
+		let (region1, region3) = Broker::do_interlace(region1, None, CorePart::from_chunk(0, 20)).unwrap();
+		let (region2, region4) = Broker::do_interlace(region2, None, CorePart::from_chunk(0, 30)).unwrap();
 		assert_ok!(Broker::do_assign(region1, None, 1001));
 		assert_ok!(Broker::do_assign(region2, None, 1002));
 		assert_ok!(Broker::do_assign(region3, None, 1003));

@@ -32,13 +32,6 @@ impl<T: Config> Inspect<T::AccountId> for Pallet<T> {
 
 impl<T: Config> Transfer<T::AccountId> for Pallet<T> {
 	fn transfer(index: &Self::ItemId, dest: &T::AccountId) -> DispatchResult {
-		let region_id = RegionId::from(*index);
-		let mut item = Regions::<T>::get(region_id).ok_or(TokenError::UnknownAsset)?;
-		let old_owner = item.owner;
-		item.owner = dest.clone();
-		Regions::<T>::insert(&region_id, &item);
-		let e = Event::<T>::Transferred { region_id, old_owner, owner: item.owner };
-		Pallet::<T>::deposit_event(e);
-		Ok(())
+		Self::do_transfer((*index).into(), None, dest.clone()).map_err(Into::into)
 	}
 }

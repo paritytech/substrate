@@ -111,8 +111,15 @@ pub enum CompletionStatus {
 	Complete(Schedule),
 }
 impl CompletionStatus {
-	/// Return the complete workload, or `None` if incomplete.
+	/// Return reference to the complete workload, or `None` if incomplete.
 	pub fn complete(&self) -> Option<&Schedule> {
+		match self {
+			Self::Complete(s) => Some(s),
+			Self::Partial(_) => None,
+		}
+	}
+	/// Return the complete workload, or `None` if incomplete.
+	pub fn drain_complete(self) -> Option<Schedule> {
 		match self {
 			Self::Complete(s) => Some(s),
 			Self::Partial(_) => None,

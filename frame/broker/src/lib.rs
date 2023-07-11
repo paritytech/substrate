@@ -155,6 +155,7 @@ pub mod pallet {
 		Interlaced {
 			region_id: RegionId,
 			pivot: CorePart,
+			new_region_id: RegionId,
 		},
 		Assigned {
 			region_id: RegionId,
@@ -166,13 +167,32 @@ pub mod pallet {
 		Pooled {
 			region_id: RegionId,
 		},
+		Renewable {
+			core: CoreIndex,
+			price: BalanceOf<T>,
+			begin: Timeslice,
+			workload: Schedule,
+		},
+		Renewed {
+			who: T::AccountId,
+			core: CoreIndex,
+			price: BalanceOf<T>,
+			begin: Timeslice,
+			length: Timeslice,
+			workload: Schedule,
+		},
+		Purchased {
+			who: T::AccountId,
+			region_id: RegionId,
+			price: BalanceOf<T>,
+			length: Timeslice,
+		},
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		UnknownRegion,
 		NotOwner,
-		PivotTooEarly,
 		PivotTooLate,
 		ExteriorPivot,
 		NullPivot,
