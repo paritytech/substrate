@@ -25,10 +25,9 @@ You will need to have the Substrate build dependencies to install Subkey. Use th
 Command:
 
 ```bash
-# Use the `--fast` flag to get the dependencies without needing to install the Substrate and Subkey binary
-curl https://getsubstrate.io -sSf | bash -s -- --fast
 # Install only `subkey`, at a specific version of the subkey crate
 cargo install --force subkey --git https://github.com/paritytech/substrate --version <SET VERSION> --locked
+# If you run into issues building, you likely are missing deps defined in https://docs.substrate.io/install/
 ```
 
 ### Run in a container
