@@ -122,7 +122,7 @@ use frame_support::{
 	pallet_prelude::InvalidTransaction,
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
-		OnRuntimeUpgrade,
+		OnRuntimeUpgrade, Poll,
 	},
 	weights::Weight,
 };
@@ -183,6 +183,7 @@ impl<
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
+			+ Poll<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
@@ -217,6 +218,7 @@ impl<
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
+			+ Poll<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>
@@ -380,6 +382,7 @@ impl<
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
 			+ OnInitialize<System::BlockNumber>
+			+ Poll<System::BlockNumber>
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
@@ -426,23 +429,58 @@ where
 		// This means the format of all the event related storages must always be compatible.
 		<frame_system::Pallet<System>>::reset_events();
 
-		let mut weight = Weight::zero();
+		let mut mandatory_weight = Weight::zero();
+
+		// first, run `OnRuntimeUpgrade`, if code changed.
 		if Self::runtime_upgraded() {
-			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
+			mandatory_weight = mandatory_weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}
+
+		// especial (pre) initialization done in the system pallet.
 		<frame_system::Pallet<System>>::initialize(block_number, parent_hash, digest);
-		weight = weight.saturating_add(<AllPalletsWithSystem as OnInitialize<
-			System::BlockNumber,
-		>>::on_initialize(*block_number));
-		weight = weight.saturating_add(
+
+		// all pallet's `OnInitialize` hook.
+		mandatory_weight =
+			mandatory_weight.saturating_add(<AllPalletsWithSystem as OnInitialize<
+				System::BlockNumber,
+			>>::on_initialize(*block_number));
+
+		mandatory_weight = mandatory_weight.saturating_add(
 			<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block,
 		);
+
+		// everything thus far was mandatory, register it no questions asked.
 		<frame_system::Pallet<System>>::register_extra_weight_unchecked(
-			weight,
+			mandatory_weight,
 			DispatchClass::Mandatory,
 		);
-
 		frame_system::Pallet::<System>::note_finished_initialize();
+
+		// TODO: triple check this, perhaps share some logic with `check_weight` extension as it is
+		// basically doing the same thing.
+
+		// If for all weight classes consumed so far, there is any roof for `Normal` class left,
+		// then execute `poll`.
+		use frame_support::traits::Get;
+		use sp_runtime::traits::Bounded;
+		let max_block_weight = <System::BlockWeights as Get<_>>::get();
+		let max_normal_class_weight = max_block_weight
+			.get(DispatchClass::Normal)
+			.max_total
+			.unwrap_or_else(Weight::max_value);
+		let consumed_total_weight = frame_system::Pallet::<System>::block_weight().total();
+
+		// TODO: don't run if tx are paused for any reason or mbm ongoing.
+		if consumed_total_weight.all_lt(max_normal_class_weight) {
+			let poll_weight =
+				<AllPalletsWithSystem as Poll<System::BlockNumber>>::poll(*block_number);
+
+			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
+				poll_weight,
+				DispatchClass::Normal,
+			);
+		}
+		frame_system::Pallet::<System>::note_finished_polling();
 	}
 
 	/// Returns if the runtime was upgraded since the last time this function was called.
@@ -541,7 +579,8 @@ where
 			);
 			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
 				used_weight,
-				DispatchClass::Mandatory,
+				DispatchClass::Mandatory, /* TODO: Is this correct? if so, we should probably
+				                           * register poll also as mandatory. */
 			);
 		}
 
