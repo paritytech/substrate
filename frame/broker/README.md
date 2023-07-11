@@ -33,6 +33,7 @@ fn main() {
 # TODO
 
 - Dispatchables
+- nonfungible impl
 
 - Benchmarks
 - Weights

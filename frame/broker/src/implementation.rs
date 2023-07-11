@@ -122,7 +122,6 @@ impl<T: Config> Pallet<T> {
 
 		// Calculate the start price for the sale after.
 		let reserve_price = {
-			let core_count = config.core_count;
 			let offered = old_sale.cores_offered;
 			let ideal = old_sale.ideal_cores_sold;
 			let sold = old_sale.cores_sold;

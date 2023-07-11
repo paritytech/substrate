@@ -30,6 +30,27 @@ pub struct RegionId {
 	/// The regularity parts in which this Region will be scheduled.
 	pub part: CorePart,
 }
+impl From<u128> for RegionId {
+	fn from(x: u128) -> Self {
+		Self {
+			begin: (x >> 96) as u32,
+			core: (x >> 80) as u16,
+			part: x.into(),
+		}
+	}
+}
+impl From<RegionId> for u128 {
+	fn from(x: RegionId) -> Self {
+		(x.begin as u128) << 96 | (x.core as u128) << 80 | u128::from(x.part)
+	}
+}
+#[test]
+fn region_id_converts_u128() {
+	let r = RegionId { begin: 0x12345678u32, core: 0xabcdu16, part: 0xdeadbeefcafef00d0123.into() };
+	let u = 0x12345678_abcd_deadbeefcafef00d0123u128;
+	assert_eq!(RegionId::from(u), r);
+	assert_eq!(u128::from(r), u);
+}
 
 /// The rest of the information describing a Region.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -89,6 +110,7 @@ pub struct AllowedRenewalRecord<Balance> {
 	/// The price for which the next renewal can be made.
 	pub price: Balance,
 	/// The workload which will be scheduled on the Core in the case a renewal is made.
+	// TODO: Use this as a counter; the renewal is not allowed until this is a complete schedule.
 	pub workload: Schedule,
 }
 pub type AllowedRenewalRecordOf<T> = AllowedRenewalRecord<BalanceOf<T>>;

@@ -48,10 +48,13 @@ impl CorePart {
 impl From<u128> for CorePart {
 	fn from(x: u128) -> Self {
 		let mut v = [0u8; 10];
-		for i in 0..10 {
-			v[i] = (x >> (72 - 8 * i)) as u8;
-		}
+		v.iter_mut().rev().fold(x, |a, i| { *i = a as u8; a >> 8 });
 		Self(v)
+	}
+}
+impl From<CorePart> for u128 {
+	fn from(x: CorePart) -> Self {
+		x.0.into_iter().fold(0u128, |a, i| a << 8 | i as u128)
 	}
 }
 impl BitAnd<Self> for CorePart {
@@ -144,6 +147,15 @@ mod tests {
 		assert_eq!(
 			CorePart::from(0x12345_67890_abcde_f0123),
 			CorePart([0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef, 0x01, 0x23]),
+		);
+	}
+
+	#[test]
+	fn into_works() {
+		assert_eq!(u128::from(CorePart::complete()), 0xfffff_fffff_fffff_fffff);
+		assert_eq!(
+			0x12345_67890_abcde_f0123u128,
+			CorePart([0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef, 0x01, 0x23]).into(),
 		);
 	}
 

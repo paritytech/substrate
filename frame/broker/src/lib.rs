@@ -29,6 +29,7 @@ mod types;
 mod coretime_interface;
 mod utils;
 mod implementation;
+mod nonfungible_impl;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -37,6 +38,7 @@ pub use types::*;
 pub use core_part::*;
 pub use coretime_interface::*;
 pub use utils::*;
+pub use nonfungible_impl::*;
 
 #[frame_support::pallet]
 pub mod pallet {
