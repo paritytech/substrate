@@ -46,6 +46,11 @@ use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, traits::CallCont
 use sp_runtime::traits::Block as BlockT;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
+use super::event::{
+	ChainHeadStorageEvent, ItemsEvent, StorageQuery, StorageQueryType, StorageResult,
+	StorageResultType,
+};
+
 pub(crate) const LOG_TARGET: &str = "rpc-spec-v2";
 
 /// An API for chain head RPC calls.
@@ -285,11 +290,24 @@ where
 		mut sink: SubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
-		key: String,
+		items: Vec<StorageQuery>,
 		child_key: Option<String>,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
-		let key = StorageKey(parse_hex_param(&mut sink, key)?);
+		let queries = items
+			.into_iter()
+			.map(|query| {
+				if query.ty != StorageQueryType::Value {
+					// Note: remove this once all types are implemented.
+					let _ = sink.reject(ChainHeadRpcError::InvalidParam(
+						"Storage query type not supported".into(),
+					));
+					return Err(SubscriptionEmptyError)
+				}
+
+				Ok((StorageKey(parse_hex_param(&mut sink, query.key)?), query.ty))
+			})
+			.collect::<Result<Vec<_>, _>>()?;
 
 		let child_key = child_key
 			.map(|child_key| parse_hex_param(&mut sink, child_key))
@@ -303,7 +321,7 @@ where
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) => {
 				// Invalid invalid subscription ID.
-				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
+				let _ = sink.send(&ChainHeadStorageEvent::<String>::Disjoint);
 				return Ok(())
 			},
 			Err(SubscriptionManagementError::BlockHashAbsent) => {
@@ -312,7 +330,7 @@ where
 				return Ok(())
 			},
 			Err(error) => {
-				let _ = sink.send(&ChainHeadEvent::<String>::Error(ErrorEvent {
+				let _ = sink.send(&ChainHeadStorageEvent::<String>::Error(ErrorEvent {
 					error: error.to_string(),
 				}));
 				return Ok(())
@@ -328,47 +346,90 @@ where
 				if well_known_keys::is_default_child_storage_key(child_key.storage_key()) ||
 					well_known_keys::is_child_storage_key(child_key.storage_key())
 				{
+					let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
+					return
+				}
+
+				for query in queries {
+					match query.1 {
+						StorageQueryType::Value =>
+							match client.child_storage(hash, &child_key, &query.0) {
+								Ok(result) => {
+									let Some(result) = result else {
+										continue
+									};
+
+									let event = ChainHeadStorageEvent::Items(ItemsEvent {
+										items: vec![StorageResult::<String> {
+											key: format!("0x{:?}", HexDisplay::from(&query.0)),
+											result: StorageResultType::Value(format!(
+												"0x{:?}",
+												HexDisplay::from(&result.0)
+											)),
+										}],
+									});
+
+									let _ = sink.send(&event);
+								},
+								Err(error) => {
+									let err = ChainHeadStorageEvent::<String>::Error(ErrorEvent {
+										error: error.to_string(),
+									});
+									let _ = sink.send(&err);
+									return
+								},
+							},
+						_ => (),
+					}
+				}
+
+				let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
+				return
+			}
+
+			for query in queries {
+				// The main key must not be prefixed with b":child_storage:" nor
+				// b":child_storage:default:".
+				if well_known_keys::is_default_child_storage_key(&query.0 .0) ||
+					well_known_keys::is_child_storage_key(&query.0 .0)
+				{
 					let _ = sink
 						.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
 					return
 				}
 
-				let res = client
-					.child_storage(hash, &child_key, &key)
-					.map(|result| {
-						let result =
-							result.map(|storage| format!("0x{:?}", HexDisplay::from(&storage.0)));
-						ChainHeadEvent::Done(ChainHeadResult { result })
-					})
-					.unwrap_or_else(|error| {
-						ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
-					});
-				let _ = sink.send(&res);
-				return
+				match query.1 {
+					StorageQueryType::Value => match client.storage(hash, &query.0) {
+						Ok(result) => {
+							let Some(result) = result else {
+									continue
+								};
+
+							let event = ChainHeadStorageEvent::Items(ItemsEvent {
+								items: vec![StorageResult::<String> {
+									key: format!("0x{:?}", HexDisplay::from(&query.0)),
+									result: StorageResultType::Value(format!(
+										"0x{:?}",
+										HexDisplay::from(&result.0)
+									)),
+								}],
+							});
+
+							let _ = sink.send(&event);
+						},
+						Err(error) => {
+							let err = ChainHeadStorageEvent::<String>::Error(ErrorEvent {
+								error: error.to_string(),
+							});
+							let _ = sink.send(&err);
+							return
+						},
+					},
+					_ => (),
+				}
 			}
 
-			// The main key must not be prefixed with b":child_storage:" nor
-			// b":child_storage:default:".
-			if well_known_keys::is_default_child_storage_key(&key.0) ||
-				well_known_keys::is_child_storage_key(&key.0)
-			{
-				let _ =
-					sink.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
-				return
-			}
-
-			// Main root trie storage query.
-			let res = client
-				.storage(hash, &key)
-				.map(|result| {
-					let result =
-						result.map(|storage| format!("0x{:?}", HexDisplay::from(&storage.0)));
-					ChainHeadEvent::Done(ChainHeadResult { result })
-				})
-				.unwrap_or_else(|error| {
-					ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
-				});
-			let _ = sink.send(&res);
+			let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());

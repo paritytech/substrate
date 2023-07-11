@@ -19,7 +19,7 @@
 #![allow(non_snake_case)]
 
 //! API trait of the chain head.
-use crate::chain_head::event::{ChainHeadEvent, FollowEvent, NetworkConfig};
+use crate::chain_head::event::{ChainHeadEvent, FollowEvent, NetworkConfig, StorageQuery};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[rpc(client, server)]
@@ -100,7 +100,7 @@ pub trait ChainHeadApi<Hash> {
 		&self,
 		follow_subscription: String,
 		hash: Hash,
-		key: String,
+		items: Vec<StorageQuery>,
 		child_key: Option<String>,
 		network_config: Option<NetworkConfig>,
 	);
