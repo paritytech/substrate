@@ -2,6 +2,7 @@
 //!
 //! > Substrate's State Transition Function (Runtime) Framework.
 //!
+//! ```ignore
 //!   ______   ______    ________   ___ __ __   ______
 //!  /_____/\ /_____/\  /_______/\ /__//_//_/\ /_____/\
 //!  \::::_\/_\:::_ \ \ \::: _  \ \\::\| \| \ \\::::_\/_
@@ -9,40 +10,44 @@
 //!    \:::._\/ \: __ `\ \\:: __  \ \\:.\-/\  \ \\::___\/_
 //!     \:\ \    \ \ `\ \ \\:.\ \  \ \\. \  \  \ \\:\____/\
 //!      \_\/     \_\/ \_\/ \__\/\__\/ \__\/ \__\/ \_____\/
-//!
+//! ```
 //!
 //! # Introduction
 //!
 //! Substrate is at a very high level composed of two parts:
 //!
-//! 1. A *runtime* which represents the state transition function of a blockchain, and is encoded
-//! as a Wasm blob.
+//! 1. A *runtime* which represents the state transition function (i.e. "Business Logic") of a
+//! blockchain, and is encoded as a Wasm blob.
 //! 2. A client whose primary purpose is to execute the given runtime.
 //!
-//! FRAME is the primary framework to build a runtime.
+//! FRAME is the Substrate's framework of choice to build a runtime.
 //!
 //! ## Pallets
 //!
-//! ```
-//! use frame::pallet;
+//! A pallet is analogous to a module in the runtime, which can itself be composed of multiple
+//! components, most notable:
 //!
-//! #[pallet::pallet]
-//! mod pallet {
+//! - Storage
+//! - Dispatchables
+//! - Events
+//! - Errors
 //!
-//! 	#[pallet::config]
-//! 	pub trait Config: frame_system::Config {}
-//!
-//! 	#[pallet::pallet]
-//! 	pub struct Pallet<T>(_);
-//! }
-//! # fn main() {}
-//! ```
+//! To see the full list of components, see the [`pallet`] and [`frame_support::pallet_macros`].
 //!
 //! ## Runtime
 //!
-//! <TODO>
+//! This crate also provides the ability to amalgamate multiple pallets into a single runtime. See
+//! [`runtime`].
 //!
-//! # This Crate
+//! > To do so, the `runtime` feature of this crate needs to be enabled.
+//!
+//! ## Example
+//!
+//! This example showcases a very simple pallet that exposes a single dispatchable, and a minimal
+//! runtime that contains it.
+#![doc = docify::embed!("frame/src/lib.rs", tests)]
+//!
+//! ## Underlying dependencies
 //!
 //! This crate is an amalgamation of multiple other crates that are often used together to compose a
 //! pallet. It is not necessary to use it, and it may fall short for certain purposes.
@@ -278,4 +283,62 @@ pub mod deps {
 	pub use sp_api;
 	#[cfg(feature = "runtime")]
 	pub use sp_version;
+}
+
+#[docify::export]
+#[cfg(test)]
+mod tests {
+	use crate as frame;
+
+	#[frame::pallet]
+	pub mod pallet {
+		use super::frame;
+		use frame::prelude::*;
+
+		#[pallet::config]
+		pub trait Config: frame_system::Config {
+			type RuntimeEvent: IsType<<Self as frame_system::Config>::RuntimeEvent>
+				+ From<Event<Self>>;
+		}
+
+		#[pallet::pallet]
+		pub struct Pallet<T>(PhantomData<T>);
+
+		#[pallet::event]
+		pub enum Event<T: Config> {}
+	}
+
+	mod runtime {
+		use super::{frame, pallet as pallet_example};
+		use frame::{prelude::*, testing_prelude::*};
+
+		type UncheckedExtrinsic = MockUncheckedExtrinsic<Test>;
+		type Block = MockBlock<Test>;
+
+		construct_runtime!(
+			pub enum Test
+			where
+				Block = Block,
+				NodeBlock = Block,
+				UncheckedExtrinsic = UncheckedExtrinsic,
+				{
+					System: frame_system,
+					Example: pallet_example,
+				}
+		);
+
+		#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+		impl frame_system::Config for Test {
+			type BaseCallFilter = frame::traits::Everything;
+			type RuntimeOrigin = RuntimeOrigin;
+			type RuntimeCall = RuntimeCall;
+			type RuntimeEvent = RuntimeEvent;
+			type PalletInfo = PalletInfo;
+			type OnSetCode = ();
+		}
+
+		impl pallet_example::Config for Test {
+			type RuntimeEvent = RuntimeEvent;
+		}
+	}
 }

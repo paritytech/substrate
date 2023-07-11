@@ -16,7 +16,6 @@ pallet-sudo = { path = "../../../frame/sudo", default-features = false }
 pallet-timestamp = { path = "../../../frame/timestamp", default-features = false }
 pallet-transaction-payment = { path = "../../../frame/transaction-payment", default-features = false }
 
-
 [build-dependencies]
 substrate-wasm-builder = { path = "../../../utils/wasm-builder", optional = true }
 
