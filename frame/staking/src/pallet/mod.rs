@@ -794,16 +794,12 @@ pub mod pallet {
 					<T::GenesisElectionProvider as ElectionProviderBase>::MaxWinners::get()
 			);
 
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(||
-					assert!(
-						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
-						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
-						T::SlashDeferDuration::get(),
-						T::BondingDuration::get(),
-					)
-				);
-			}
+			assert!(
+				T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+				"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+				T::SlashDeferDuration::get(),
+				T::BondingDuration::get(),
+			)
 		}
 
 		#[cfg(feature = "try-runtime")]
