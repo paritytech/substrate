@@ -140,7 +140,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
 	/// The executive mode of the block that is currently being built.
-	pub executive_mode: RuntimeExecutiveMode,
+	executive_mode: RuntimeExecutiveMode,
 }
 
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
