@@ -252,7 +252,8 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			{
 				fn integrity_test() {
 					let ext = #frame_support::sp_io::TestExternalities::default();
-					let mut ro_ext = #frame_support::private::ReadOnlyExternalities::from(&ext.backend);
+					let mut ro_ext =
+						#frame_support::__private::ReadOnlyExternalities::from(&ext.backend);
 
 					ro_ext.execute_with(|| {
 						<
