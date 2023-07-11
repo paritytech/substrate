@@ -101,9 +101,9 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
-		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
-		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
-		ReservableCurrency, SortedMembers, WithdrawReasons,
+		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency, Get,
+		InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency,
+		SortedMembers, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -113,6 +113,7 @@ use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
 	DispatchError, Perbill, RuntimeDebug,
 };
+use sp_staking::currency_to_vote::CurrencyToVote;
 use sp_std::{cmp::Ordering, prelude::*};
 
 #[cfg(any(feature = "try-runtime", test))]
@@ -1424,7 +1425,7 @@ mod tests {
 		type PalletId = ElectionsPhragmenPalletId;
 		type RuntimeEvent = RuntimeEvent;
 		type Currency = Balances;
-		type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+		type CurrencyToVote = ();
 		type ChangeMembers = TestChangeMembers;
 		type InitializeMembers = ();
 		type CandidacyBond = CandidacyBond;
