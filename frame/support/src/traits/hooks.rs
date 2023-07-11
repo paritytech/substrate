@@ -248,7 +248,7 @@ impl OnRuntimeUpgrade for Tuple {
 pub trait IntegrityTest {
 	/// Run integrity test.
 	///
-	/// The test is not executed in a externalities provided environment.
+	/// The test is executed in read-only externalities.
 	fn integrity_test() {}
 }
 
@@ -355,7 +355,7 @@ pub trait Hooks<BlockNumber> {
 
 	/// Run integrity test.
 	///
-	/// The test is not executed in a externalities provided environment.
+	/// The test is executed in read-only externalities.
 	fn integrity_test() {}
 }
 
