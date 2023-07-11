@@ -794,7 +794,7 @@ pub mod pallet {
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
 
-			ensure!(voting_period > BlockNumberFor::<T>::zero(), Error::<T>::VotingPeriodLow);
+			ensure!(voting_period > Zero::zero(), Error::<T>::VotingPeriodLow);
 			let (ext_proposal, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
