@@ -37,7 +37,7 @@ cargo-deny-licenses:
     - echo "___The complete log is in the artifacts___"
     - $CARGO_DENY_CMD 2> deny.log
     - if [ $CI_JOB_STATUS != 'success' ]; then
-        echo 'Please check license of your crate or add an exception to scripts/ci/deny.toml';
+      echo 'Please check license of your crate or add an exception to scripts/ci/deny.toml';
       fi
   artifacts:
     name: $CI_COMMIT_SHORT_SHA
@@ -90,15 +90,15 @@ cargo-check-benches:
     - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs. skip if base is not master
     - 'if [ $CI_COMMIT_REF_NAME != "master" ]; then
-        BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
-        printf "Merging base branch %s\n" "${BASE:=master}";
-        if [ $BASE != "master" ]; then
-          echo "$BASE is not master, skipping merge";
-        else
-          git config user.email "ci@gitlab.parity.io";
-          git fetch origin "refs/heads/${BASE}";
-          git merge --verbose --no-edit FETCH_HEAD;
-        fi
+      BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq -r .base.ref);
+      printf "Merging base branch %s\n" "${BASE:=master}";
+      if [ $BASE != "master" ]; then
+      echo "$BASE is not master, skipping merge";
+      else
+      git config user.email "ci@gitlab.parity.io";
+      git fetch origin "refs/heads/${BASE}";
+      git merge --verbose --no-edit FETCH_HEAD;
+      fi
       fi'
   parallel: 2
   script:
@@ -229,11 +229,12 @@ test-linux-stable:
     # Upload tests results to Elasticsearch
     - echo "Upload test results to Elasticsearch"
     - cat target/nextest/default/junit.xml | xq . > target/nextest/default/junit.json
-    - "curl -v -XPOST --http1.1
-      -u ${ELASTIC_USERNAME}:${ELASTIC_PASSWORD}
-      https://elasticsearch.parity-build.parity.io/unit-tests/_doc/${CI_JOB_ID}
-      -H 'Content-Type: application/json'
-      -d @target/nextest/default/junit.json"
+    - |
+      curl -v -XPOST --http1.1 \
+      -u ${ELASTIC_USERNAME}:${ELASTIC_PASSWORD} \
+      https://elasticsearch.parity-build.parity.io/unit-tests/_doc/${CI_JOB_ID} \
+      -H 'Content-Type: application/json' \
+      -d @target/nextest/default/junit.json || echo "failed to upload junit report"
   artifacts:
     when: always
     paths:
