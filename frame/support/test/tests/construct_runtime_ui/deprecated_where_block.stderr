@@ -148,7 +148,11 @@ error[E0277]: the trait bound `Runtime: Config` is not satisfied in `frame_syste
    | ||_- in this macro invocation
 ...  |
    |
-   = note: required because it appears within the type `Event<Runtime>`
+note: required because it appears within the type `Event<Runtime>`
+  --> $WORKSPACE/frame/system/src/lib.rs
+   |
+   |     pub enum Event<T: Config> {
+   |              ^^^^^
 note: required by a bound in `From`
   --> $RUST/core/src/convert/mod.rs
    |
@@ -169,7 +173,11 @@ error[E0277]: the trait bound `Runtime: Config` is not satisfied in `frame_syste
    | ||_- in this macro invocation
 ...  |
    |
-   = note: required because it appears within the type `Event<Runtime>`
+note: required because it appears within the type `Event<Runtime>`
+  --> $WORKSPACE/frame/system/src/lib.rs
+   |
+   |     pub enum Event<T: Config> {
+   |              ^^^^^
 note: required by a bound in `TryInto`
   --> $RUST/core/src/convert/mod.rs
    |
