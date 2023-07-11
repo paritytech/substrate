@@ -102,6 +102,24 @@ pub struct InstaPoolHistoryRecord<Balance> {
 }
 pub type InstaPoolHistoryRecordOf<T> = InstaPoolHistoryRecord<BalanceOf<T>>;
 
+/// How much of a core has been assigned or, if completely assigned, the workload itself.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum CompletionStatus {
+	/// The core is not fully assigned; the inner is the parts which have.
+	Partial(CorePart),
+	/// The core is fully assigned; the inner is the workload which has been assigned.
+	Complete(Schedule),
+}
+impl CompletionStatus {
+	/// Return the complete workload, or `None` if incomplete.
+	pub fn complete(&self) -> Option<&Schedule> {
+		match self {
+			Self::Complete(s) => Some(s),
+			Self::Partial(_) => None,
+		}
+	}
+}
+
 /// A record of an allowed renewal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct AllowedRenewalRecord<Balance> {
@@ -109,9 +127,9 @@ pub struct AllowedRenewalRecord<Balance> {
 	pub begin: Timeslice,
 	/// The price for which the next renewal can be made.
 	pub price: Balance,
-	/// The workload which will be scheduled on the Core in the case a renewal is made.
-	// TODO: Use this as a counter; the renewal is not allowed until this is a complete schedule.
-	pub workload: Schedule,
+	/// The workload which will be scheduled on the Core in the case a renewal is made, or if
+	/// incomplete, then the parts of the core which have been scheduled.
+	pub completion: CompletionStatus,
 }
 pub type AllowedRenewalRecordOf<T> = AllowedRenewalRecord<BalanceOf<T>>;
 

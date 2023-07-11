@@ -1,4 +1,5 @@
 use super::*;
+use CompletionStatus::{Complete, Partial};
 use sp_runtime::traits::{Convert, ConvertBack, AccountIdConversion};
 use frame_support::{
 	pallet_prelude::{*, DispatchResult},
@@ -172,7 +173,7 @@ impl<T: Config> Pallet<T> {
 				let record = AllowedRenewalRecord {
 					begin: region_end,
 					price: reserve_price,
-					workload: schedule,
+					completion: Complete(schedule),
 				};
 				AllowedRenewals::<T>::insert(first_core, record);
 			}
@@ -366,6 +367,7 @@ impl<T: Config> Pallet<T> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let record = AllowedRenewals::<T>::get(core).ok_or(Error::<T>::NotAllowed)?;
 		let mut sale = SaleInfo::<T>::get().ok_or(Error::<T>::NoSales)?;
+		let workload = record.completion.complete().ok_or(Error::<T>::IncompleteAssignment)?;
 
 		ensure!(record.begin == sale.region_begin, Error::<T>::WrongTime);
 		ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
@@ -376,7 +378,7 @@ impl<T: Config> Pallet<T> {
 		let core = sale.first_core + sale.cores_sold;
 		sale.cores_sold.saturating_inc();
 
-		Workplan::<T>::insert((record.begin, core), &record.workload);
+		Workplan::<T>::insert((record.begin, core), workload);
 
 		let begin = sale.region_end;
 		let price = record.price + record.price / 100u32.into() * 2u32.into();
@@ -534,20 +536,22 @@ impl<T: Config> Pallet<T> {
 			}).is_ok() {
 				Workplan::<T>::insert(&workplan_key, &workplan);
 			}
+
 			if region.end.saturating_sub(region_id.begin) == config.region_length {
-				if workplan.iter()
-					.filter(|i| matches!(i.assignment, CoreAssignment::Task(..)))
-					.fold(CorePart::void(), |a, i| a | i.part)
-					.is_complete()
-				{
-					if let Some(price) = region.paid {
-						let record = AllowedRenewalRecord {
-							begin: region.end,
-							price,
-							workload: workplan,
-						};
-						AllowedRenewals::<T>::insert(region_id.core, &record);
-					}
+				if let Some(price) = region.paid {
+					let begin = region.end;
+					let assigned = match AllowedRenewals::<T>::get(region_id.core) {
+						Some(AllowedRenewalRecord { completion: Partial(w), begin: b, price: p })
+							if begin == b && price == p => w,
+						_ => CorePart::void(),
+					} | region_id.part;
+					let workload = if assigned.is_complete() {
+						Complete(workplan)
+					} else {
+						Partial(assigned)
+					};
+					let record = AllowedRenewalRecord { begin, price, completion: workload };
+					AllowedRenewals::<T>::insert(region_id.core, &record);
 				}
 			}
 			Self::deposit_event(Event::Assigned { region_id, task: target });
