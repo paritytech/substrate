@@ -3608,7 +3608,9 @@ mod tests {
 			);
 			assert_eq!(
 				ctx.ext.ecdsa_to_eth_address(&pubkey_compressed).unwrap(),
-				array_bytes::hex2array_unchecked::<20>("09231da7b19A016f9e576d23B16277062F4d46A8")
+				array_bytes::hex2array_unchecked::<_, 20>(
+					"09231da7b19A016f9e576d23B16277062F4d46A8"
+				)
 			);
 			exec_success()
 		});
