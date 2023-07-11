@@ -26,20 +26,55 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for `pallet-broker`.
 pub trait WeightInfo {
+	fn configure() -> Weight;
+	fn reserve() -> Weight;
+	fn unreserve() -> Weight;
+	fn set_lease() -> Weight;
+	fn start_sales() -> Weight;
+	fn purchase() -> Weight;
+	fn renew() -> Weight;
 	fn transfer() -> Weight;
+	fn partition() -> Weight;
+	fn interlace() -> Weight;
+	fn assign() -> Weight;
+	fn pool() -> Weight;
+	fn claim_revenue() -> Weight;
+	fn purchase_credit() -> Weight;
 }
 
 /// Weights for `pallet-broker` using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn transfer() -> Weight {
-		Weight::from_parts(123, 456)
-	}
+	fn configure() -> Weight { Weight::from_parts(123, 456) }
+	fn reserve() -> Weight { Weight::from_parts(123, 456) }
+	fn unreserve() -> Weight { Weight::from_parts(123, 456) }
+	fn set_lease() -> Weight { Weight::from_parts(123, 456) }
+	fn start_sales() -> Weight { Weight::from_parts(123, 456) }
+	fn purchase() -> Weight { Weight::from_parts(123, 456) }
+	fn renew() -> Weight { Weight::from_parts(123, 456) }
+	fn transfer() -> Weight { Weight::from_parts(123, 456) }
+	fn partition() -> Weight { Weight::from_parts(123, 456) }
+	fn interlace() -> Weight { Weight::from_parts(123, 456) }
+	fn assign() -> Weight { Weight::from_parts(123, 456) }
+	fn pool() -> Weight { Weight::from_parts(123, 456) }
+	fn claim_revenue() -> Weight { Weight::from_parts(123, 456) }
+	fn purchase_credit() -> Weight { Weight::from_parts(123, 456) }
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn transfer() -> Weight {
-		Weight::from_parts(123, 456)
-	}
+	fn configure() -> Weight { Weight::from_parts(123, 456) }
+	fn reserve() -> Weight { Weight::from_parts(123, 456) }
+	fn unreserve() -> Weight { Weight::from_parts(123, 456) }
+	fn set_lease() -> Weight { Weight::from_parts(123, 456) }
+	fn start_sales() -> Weight { Weight::from_parts(123, 456) }
+	fn purchase() -> Weight { Weight::from_parts(123, 456) }
+	fn renew() -> Weight { Weight::from_parts(123, 456) }
+	fn transfer() -> Weight { Weight::from_parts(123, 456) }
+	fn partition() -> Weight { Weight::from_parts(123, 456) }
+	fn interlace() -> Weight { Weight::from_parts(123, 456) }
+	fn assign() -> Weight { Weight::from_parts(123, 456) }
+	fn pool() -> Weight { Weight::from_parts(123, 456) }
+	fn claim_revenue() -> Weight { Weight::from_parts(123, 456) }
+	fn purchase_credit() -> Weight { Weight::from_parts(123, 456) }
 }

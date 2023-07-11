@@ -29,6 +29,7 @@ mod types;
 mod coretime_interface;
 mod utils;
 mod implementation;
+mod dispatchable_impls;
 mod nonfungible_impl;
 
 pub mod weights;
@@ -45,7 +46,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::{
 		pallet_prelude::{*, DispatchResult},
-		traits::{fungible::{Credit, Mutate, Balanced}, OnUnbalanced},
+		traits::{fungible::{Credit, Mutate, Balanced}, OnUnbalanced, EnsureOrigin},
 		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
@@ -64,6 +65,9 @@ pub mod pallet {
 		/// Currency used to pay for Coretime.
 		type Currency: Mutate<Self::AccountId> + Balanced<Self::AccountId>;
 
+		/// The origin test needed for administrating this pallet.
+		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
 		/// What to do with any revenues collected from the sale of Coretime.
 		type OnRevenue: OnUnbalanced<Credit<Self::AccountId, Self::Currency>>;
 
@@ -76,6 +80,7 @@ pub mod pallet {
 		type ConvertBalance: Convert<BalanceOf<Self>, RelayBalanceOf<Self>> + ConvertBack<BalanceOf<Self>, RelayBalanceOf<Self>>;
 
 		/// Identifier from which the internal Pot is generated.
+		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
 		/// Number of Relay-chain blocks per timeslice.
@@ -210,6 +215,7 @@ pub mod pallet {
 		TooEarly,
 		NothingToDo,
 		TooManyReservations,
+		TooManyLeases,
 		RevenueAlreadyKnown,
 		NoRevenue,
 		UnknownRevenue,
@@ -229,9 +235,129 @@ pub mod pallet {
 	#[pallet::call(weight(<T as Config>::WeightInfo))]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		pub fn transfer(origin: OriginFor<T>, region_id: RegionId, new_owner: T::AccountId) -> DispatchResult {
+		pub fn configure(origin: OriginFor<T>, config: ConfigRecordOf<T>) -> DispatchResult {
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
+			Self::do_configure(config)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(1)]
+		pub fn reserve(origin: OriginFor<T>, schedule: Schedule) -> DispatchResult {
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
+			Self::do_reserve(schedule)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(2)]
+		pub fn unreserve(origin: OriginFor<T>, item_index: u32) -> DispatchResult {
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
+			Self::do_unreserve(item_index)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(3)]
+		pub fn set_lease(origin: OriginFor<T>, task: TaskId, until: Timeslice) -> DispatchResult {
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
+			Self::do_set_lease(task, until)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(4)]
+		pub fn start_sales(origin: OriginFor<T>, initial_price: BalanceOf<T>) -> DispatchResult {
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
+			Self::do_start_sales(initial_price)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(5)]
+		pub fn purchase(origin: OriginFor<T>, price_limit: BalanceOf<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_purchase(who, price_limit)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(6)]
+		pub fn renew(origin: OriginFor<T>, core: CoreIndex) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_renew(who, core)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(7)]
+		pub fn transfer(
+			origin: OriginFor<T>,
+			region_id: RegionId,
+			new_owner: T::AccountId,
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_transfer(region_id, Some(who), new_owner)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(8)]
+		pub fn partition(
+			origin: OriginFor<T>,
+			region_id: RegionId,
+			pivot: Timeslice,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_partition(region_id, Some(who), pivot)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(9)]
+		pub fn interlace(
+			origin: OriginFor<T>,
+			region_id: RegionId,
+			pivot: CorePart,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_interlace(region_id, Some(who), pivot)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(10)]
+		pub fn assign(
+			origin: OriginFor<T>,
+			region_id: RegionId,
+			target: TaskId,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_assign(region_id, Some(who), target)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(11)]
+		pub fn pool(
+			origin: OriginFor<T>,
+			region_id: RegionId,
+			payee: T::AccountId,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_pool(region_id, Some(who), payee)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(12)]
+		pub fn claim_revenue(
+			origin: OriginFor<T>,
+			region_id: RegionId,
+			max_timeslices: Timeslice,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_claim_revenue(region_id, max_timeslices)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(13)]
+		pub fn purchase_credit(
+			origin: OriginFor<T>,
+			who: T::AccountId,
+			amount: BalanceOf<T>,
+			beneficiary: RelayAccountIdOf<T>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::do_purchase_credit(who, amount, beneficiary)?;
 			Ok(())
 		}
 	}

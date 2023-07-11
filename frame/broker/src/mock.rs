@@ -18,6 +18,7 @@
 #![cfg(test)]
 
 use crate::*;
+use frame_system::EnsureNever;
 use sp_std::collections::btree_map::BTreeMap;
 use frame_support::{parameter_types, traits::{Hooks, fungible::{ItemOf, Mutate, Inspect, Credit, Balanced}, OnUnbalanced}, assert_ok, PalletId, ensure};
 use sp_arithmetic::Perbill;
@@ -184,6 +185,7 @@ impl crate::Config for Test {
 	type ConvertBalance = Identity;
 	type WeightInfo = ();
 	type PalletId = TestBrokerId;
+	type AdminOrigin = EnsureNever<()>;
 }
 
 pub fn advance_to(b: u64) {

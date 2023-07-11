@@ -33,7 +33,7 @@ fn main() {
 # TODO
 
 - Dispatchables
-- nonfungible impl
+- Nicer API for price finding; should include auction-sell-out info
 
 - Benchmarks
 - Weights

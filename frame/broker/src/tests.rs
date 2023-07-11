@@ -55,12 +55,12 @@ fn renewal_works() {
 		// Should now be renewable.
 		advance_to(6);
 		assert_noop!(Broker::do_purchase(1, u64::max_value()), Error::<Test>::TooEarly);
-		let core = Broker::do_renew(&1, region.core).unwrap();
+		let core = Broker::do_renew(1, region.core).unwrap();
 		assert_eq!(balance(1), 800);
 		advance_to(8);
 		assert_noop!(Broker::do_purchase(1, u64::max_value()), Error::<Test>::SoldOut);
 		advance_to(12);
-		let region = Broker::do_renew(&1, core).unwrap();
+		let region = Broker::do_renew(1, core).unwrap();
 		assert_eq!(balance(1), 690);
 	});
 }
@@ -80,7 +80,7 @@ fn instapool_payouts_work() {
 		advance_to(8);
 		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 10));
 		advance_to(10);
-		while Broker::do_check_revenue().unwrap() {}
+//		while Broker::check_revenue().unwrap() {}
 		assert_eq!(pot(), 14);
 		assert_eq!(revenue(), 106);
 		assert_ok!(Broker::do_claim_revenue(region, 100));
@@ -106,7 +106,7 @@ fn instapool_partial_core_payouts_work() {
 		advance_to(8);
 		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 40));
 		advance_to(10);
-		while Broker::do_check_revenue().unwrap() {}
+//		while Broker::check_revenue().unwrap() {}
 		assert_ok!(Broker::do_claim_revenue(region1, 100));
 		assert_ok!(Broker::do_claim_revenue(region2, 100));
 		assert_eq!(pot(), 0);
