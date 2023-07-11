@@ -548,18 +548,17 @@ where
 		let remaining_weight = max_weight.saturating_sub(weight.total());
 
 		if remaining_weight.all_gt(Weight::zero()) {
-			let used_weight = <AllPalletsWithSystem as OnIdle<
-				BlockNumberFor<System>,
-			>>::on_idle(block_number, remaining_weight);
+			let used_weight = <AllPalletsWithSystem as OnIdle<BlockNumberFor<System>>>::on_idle(
+				block_number,
+				remaining_weight,
+			);
 			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
 				used_weight,
 				DispatchClass::Mandatory,
 			);
 		}
 
-		<AllPalletsWithSystem as OnFinalize<
-			BlockNumberFor<System>,
-		>>::on_finalize(block_number);
+		<AllPalletsWithSystem as OnFinalize<BlockNumberFor<System>>>::on_finalize(block_number);
 	}
 
 	/// Apply extrinsic outside of the block execution function.
@@ -685,9 +684,9 @@ where
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
-		<AllPalletsWithSystem as OffchainWorker<
-			BlockNumberFor<System>,
-		>>::offchain_worker(*header.number())
+		<AllPalletsWithSystem as OffchainWorker<BlockNumberFor<System>>>::offchain_worker(
+			*header.number(),
+		)
 	}
 }
 
