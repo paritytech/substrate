@@ -291,7 +291,7 @@ type Executive = super::Executive<
 
 frame_support::parameter_types! {
 	/// Provides the runtime-mode to frame-executive.
-	pub static MockedMode: RuntimeExecutiveMode = RuntimeExecutiveMode::Normal;
+	pub static MockedMode: RuntimeExecutiveMode = RuntimeExecutiveMode::AllExtrinsics;
 }
 
 fn extra(nonce: u64, fee: Balance) -> SignedExtra {
@@ -984,10 +984,10 @@ fn inherents_ok_while_exts_forbidden_works() {
 	});
 }
 
-/// Refuses to import blocks with transactions during MBMs.
+/// Refuses to import blocks with transactions during `OnlyInherents` mode.
 #[test]
-#[should_panic = "Only inherents are allowed in 'Minimal' blocks"]
-fn extrinsic_while_exts_forbidden_errors() {
+#[should_panic = "Only inherents are allowed in this blocks"]
+fn transactions_in_only_inherents_block_errors() {
 	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
 
@@ -1007,15 +1007,14 @@ fn extrinsic_while_exts_forbidden_errors() {
 	});
 
 	new_test_ext(1).execute_with(|| {
-		// Tell `after_inherents` to forbid extrinsics:
-		MockedMode::set(RuntimeExecutiveMode::Minimal);
+		MockedMode::set(RuntimeExecutiveMode::OnlyInherents);
 		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 	});
 }
 
-/// Same as above but imports.
+/// Same as above but no error.
 #[test]
-fn extrinsic_while_exts_allowed_works() {
+fn transactions_in_normal_block_works() {
 	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
 
@@ -1076,8 +1075,8 @@ fn try_execute_block_works() {
 /// Same as `extrinsic_while_exts_forbidden_errors` but using the try-runtime function.
 #[test]
 #[cfg(feature = "try-runtime")]
-#[should_panic = "Non-mandatory extrinsic was applied in a mandatory-only block"]
-fn try_execute_ext_forbidden_errors() {
+#[should_panic = "Non-inherent extrinsic was supplied in a block that only allows inherent extrinsics"]
+fn try_execute_tx_forbidden_errors() {
 	let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 	let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
 
@@ -1098,8 +1097,7 @@ fn try_execute_ext_forbidden_errors() {
 	});
 
 	new_test_ext(1).execute_with(|| {
-		// Tell `after_inherents` to forbid extrinsics:
-		MockedMode::set(RuntimeExecutiveMode::Minimal);
+		MockedMode::set(RuntimeExecutiveMode::OnlyInherents);
 		Executive::try_execute_block(
 			Block::new(header, vec![xt1, xt2]),
 			true,

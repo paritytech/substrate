@@ -954,7 +954,7 @@ pub enum RuntimeExecutiveMode {
 	/// For example:
 	/// - Extrinsics with dispatch class `Normal`.
 	/// - `on_idle` hook.
-	Normal,
+	AllExtrinsics,
 	/// Only _necessary_ logic is allowed to run.
 	///
 	/// Explicitly forbidden are:
@@ -967,12 +967,12 @@ pub enum RuntimeExecutiveMode {
 	/// - Storage migrations.
 	///
 	/// Everything in between is to be judged by the runtime.
-	Minimal,
+	OnlyInherents,
 }
 
 impl Default for RuntimeExecutiveMode {
 	fn default() -> Self {
-		Self::Normal
+		Self::AllExtrinsics
 	}
 }
 

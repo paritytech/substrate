@@ -348,11 +348,11 @@ where
 		self.apply_inherents(&mut block_builder, inherent_data)?;
 
 		let block_timer = time::Instant::now();
-		block_builder.after_inherents(block_builder.executive_mode)?;
+		block_builder.after_inherents()?;
 		let end_reason = match block_builder.executive_mode {
-			RuntimeExecutiveMode::Normal =>
+			RuntimeExecutiveMode::AllExtrinsics =>
 				self.apply_transactions(&mut block_builder, deadline, block_size_limit).await?,
-			RuntimeExecutiveMode::Minimal => EndProposingReason::TransactionsForbidden,
+			RuntimeExecutiveMode::OnlyInherents => EndProposingReason::TransactionsForbidden,
 		};
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();

@@ -317,9 +317,9 @@ impl<
 			}
 		}
 
-		Self::after_inherents(mode);
-		if mode == RuntimeExecutiveMode::Minimal && extrinsics.len() > num_inherents {
-			return Err(InvalidTransaction::NonMandatory.into())
+		Self::after_inherents();
+		if mode == RuntimeExecutiveMode::OnlyInherents && extrinsics.len() > num_inherents {
+			return Err(InvalidTransaction::NotInherent.into())
 		}
 		// Apply transactions:
 		for e in extrinsics.iter().skip(num_inherents) {
@@ -548,11 +548,11 @@ impl<
 
 			// Process inherents (if any).
 			Self::apply_extrinsics(extrinsics.iter().take(num_inherents), mode);
-			Self::after_inherents(mode);
-			if mode == RuntimeExecutiveMode::Minimal && extrinsics.len() > num_inherents {
+			Self::after_inherents();
+			if mode == RuntimeExecutiveMode::OnlyInherents && extrinsics.len() > num_inherents {
 				// Note: It would be possible to not explicitly panic here since the state-root
 				// check should already catch any mismatch, but this makes it easier to debug.
-				panic!("Only inherents are allowed in 'Minimal' blocks");
+				panic!("Only inherents are allowed in this blocks");
 			}
 			// Process transactions (if any).
 			Self::apply_extrinsics(extrinsics.iter().skip(num_inherents), mode);
@@ -567,7 +567,7 @@ impl<
 	}
 
 	/// Execute code after inherents but before extrinsic application.
-	pub fn after_inherents(_mode: RuntimeExecutiveMode) {
+	pub fn after_inherents() {
 		// TODO run either MBMs or `poll` depending on the mode:
 		//  <https://github.com/paritytech/substrate/pull/14275>
 		//  <https://github.com/paritytech/substrate/pull/14279>
@@ -666,9 +666,10 @@ impl<
 		if r.is_err() && mandatory {
 			return Err(InvalidTransaction::BadMandatory.into())
 		}
-		if mode == RuntimeExecutiveMode::Minimal && !mandatory {
-			defensive!("Only 'Mandatory' extrinsics should be present in a 'Minimal' block");
-			return Err(InvalidTransaction::NonMandatory.into())
+		if mode == RuntimeExecutiveMode::OnlyInherents && !mandatory {
+			// Note: The block builder should never try to do this.
+			defensive!("Only inherents should be present in this block");
+			return Err(InvalidTransaction::NotInherent.into())
 		}
 
 		<frame_system::Pallet<System>>::note_applied_extrinsic(&r, dispatch_info);

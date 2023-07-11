@@ -140,7 +140,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
 	/// The executive mode of the block that is currently being built.
-	executive_mode: RuntimeExecutiveMode,
+	pub executive_mode: RuntimeExecutiveMode,
 }
 
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
@@ -196,7 +196,7 @@ where
 				ExecutionContext::BlockConstruction,
 				&header,
 			)?;
-			RuntimeExecutiveMode::Normal
+			RuntimeExecutiveMode::AllExtrinsics
 		};
 
 		Ok(Self {
@@ -211,14 +211,10 @@ where
 	}
 
 	/// Called after inherents but before extrinsics have been applied.
-	pub fn after_inherents(&self, mode: RuntimeExecutiveMode) -> Result<(), Error> {
+	pub fn after_inherents(&self) -> Result<(), Error> {
 		if self.version >= 7 {
 			self.api
-				.after_inherents_with_context(
-					self.parent_hash,
-					ExecutionContext::BlockConstruction,
-					mode,
-				)
+				.after_inherents_with_context(self.parent_hash, ExecutionContext::BlockConstruction)
 				.map_err(Into::into)
 		} else {
 			Ok(())

@@ -529,8 +529,8 @@ impl_runtime_apis! {
 			CheckInherentsResult::new()
 		}
 
-		fn after_inherents(mode: sp_runtime::RuntimeExecutiveMode) {
-			Executive::after_inherents(mode)
+		fn after_inherents() {
+			Executive::after_inherents()
 		}
 	}
 
