@@ -297,6 +297,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
+	type SessionChangeListener = ();
 }
 
 #[cfg(feature = "historical")]

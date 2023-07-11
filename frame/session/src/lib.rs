@@ -130,6 +130,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
 	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
 };
+use sp_session::{SessionChangeListener, SessionInfoProvider};
 use sp_staking::SessionIndex;
 use sp_std::{
 	marker::PhantomData,
@@ -403,8 +404,11 @@ pub mod pallet {
 		/// Handler for managing new session.
 		type SessionManager: SessionManager<Self::ValidatorId>;
 
-		/// Handler when a session has changed.
+		/// Handler when a session has changed for specific key ids.
 		type SessionHandler: SessionHandler<Self::ValidatorId>;
+
+		/// Handler when a session has changed.
+		type SessionChangeListener: SessionChangeListener;
 
 		/// The keys.
 		type Keys: OpaqueKeys + Member + Parameter + MaybeSerializeDeserialize;
@@ -698,6 +702,7 @@ impl<T: Config> Pallet<T> {
 
 		// Tell everyone about the new session keys.
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);
+		T::SessionChangeListener::on_session_change(session_index);
 	}
 
 	/// Disable the validator of index `i`, returns `false` if the validator was already disabled.
@@ -935,5 +940,11 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 
 		let validators = <Pallet<T>>::validators();
 		validators.get(i as usize).cloned()
+	}
+}
+
+impl<T: Config> SessionInfoProvider for Pallet<T> {
+	fn current_session_index() -> SessionIndex {
+		<CurrentIndex<T>>::get()
 	}
 }

@@ -533,6 +533,7 @@ impl pallet_session::Config for Runtime {
 	type NextSessionRotation = Babe;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type SessionChangeListener = Offences;
 	type Keys = SessionKeys;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
 }
@@ -1339,10 +1340,16 @@ impl pallet_im_online::Config for Runtime {
 	type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
 }
 
+parameter_types! {
+	pub const MaxSessionReportAge: u32 = BondingDuration::get() * SessionsPerEra::get();
+}
+
 impl pallet_offences::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+	type MaxSessionReportAge = MaxSessionReportAge;
+	type SessionInfoProvider = Session;
 }
 
 impl pallet_authority_discovery::Config for Runtime {

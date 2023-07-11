@@ -213,6 +213,7 @@ mod tests {
 		type ValidatorIdOf = ConvertInto;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 		type WeightInfo = ();
+		type SessionChangeListener = ();
 	}
 
 	impl pallet_session::historical::Config for Test {

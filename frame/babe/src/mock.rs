@@ -114,6 +114,7 @@ impl pallet_session::Config for Test {
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
 	type WeightInfo = ();
+	type SessionChangeListener = ();
 }
 
 impl pallet_session::historical::Config for Test {
@@ -166,6 +167,7 @@ parameter_types! {
 	pub const SlashDeferDuration: EraIndex = 0;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(16);
+	pub const MaxSessionReportAge: SessionIndex = BondingDuration::get() * SessionsPerEra::get();
 }
 
 pub struct OnChainSeqPhragmen;
@@ -213,6 +215,8 @@ impl pallet_offences::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
+	type SessionInfoProvider = Session;
+	type MaxSessionReportAge = MaxSessionReportAge;
 }
 
 parameter_types! {

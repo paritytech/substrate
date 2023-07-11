@@ -17,7 +17,25 @@
 
 //! # Offences Pallet
 //!
-//! Tracks reported offences
+//! The offences pallet tracks reported offences using 3 key storage types:
+//!
+//! - [`Reports`]: A storage map of a report hash to its details
+//! - [`ConcurrentReportsIndex`]: A storage double map that stores a vector of reports
+//! 	for a specific [`Kind`] and [`OpaqueTimeSlot`]
+//! - [`SessionReports`]: A storage map that keeps a vector of active reports for a
+//!   [`SessionIndex`].
+//!
+//! When a new offence is reported using [`ReportOffence::report_offence`], its `session_index` is
+//! first compared against the current `session_index`.
+//!
+//! If older than [`Config::MaxSessionReportAge`], the report is rejected right away.
+//!
+//! Else, all concurrent reports are loaded to determine the slash fraction and updated.
+//! The report is also inserted in [`SessionReports`] at this time.
+//! Finally, [`Config::OnOffenceHandler`] is called to handle any actions for this report.
+//!
+//! On the start of a new session, `clear_obsolete_reports` clears all reports
+//! that are older than [`Config::MaxSessionReportAge`].
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -26,24 +44,27 @@ pub mod migration;
 mod mock;
 mod tests;
 
-use core::marker::PhantomData;
-
 use codec::Encode;
-use frame_support::weights::Weight;
+use core::marker::PhantomData;
+use frame_support::{ensure, traits::Get, weights::Weight};
 use sp_runtime::{traits::Hash, Perbill};
+use sp_session::{SessionChangeListener, SessionInfoProvider};
 use sp_staking::{
 	offence::{Kind, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
-	SessionIndex,
+	EraIndex, SessionIndex,
 };
 use sp_std::prelude::*;
 
 pub use pallet::*;
 
 /// A binary blob which represents a SCALE codec-encoded `O::TimeSlot`.
-type OpaqueTimeSlot = Vec<u8>;
+pub type OpaqueTimeSlot = Vec<u8>;
 
 /// A type alias for a report identifier.
 type ReportIdOf<T> = <T as frame_system::Config>::Hash;
+
+/// A type alias for the data stored for a report in each session.
+type SessionReportOf<T> = (Kind, OpaqueTimeSlot, ReportIdOf<T>);
 
 const LOG_TARGET: &str = "runtime::offences";
 
@@ -68,6 +89,14 @@ pub mod pallet {
 		type IdentificationTuple: Parameter;
 		/// A handler called for every offence report.
 		type OnOffenceHandler: OnOffenceHandler<Self::AccountId, Self::IdentificationTuple, Weight>;
+
+		/// Number of sessions for which a report is stored.
+		/// Once it gets older than this value, it gets cleaned up at the start of a new session.
+		#[pallet::constant]
+		type MaxSessionReportAge: Get<EraIndex>;
+
+		/// A trait that provides information about the current session.
+		type SessionInfoProvider: SessionInfoProvider;
 	}
 
 	/// The primary structure that holds all offence records keyed by report identifiers.
@@ -92,6 +121,16 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// A map that stores all reports along with their kind & time slot info for a `SessionIndex`.
+	///
+	/// On start of a new session, all reports with a session index older than
+	/// `MaxSessionReportAge` are removed.
+	///
+	/// Note that `time_slot` is encoded and stored as an opaque type.
+	#[pallet::storage]
+	pub type SessionReports<T: Config> =
+		StorageMap<_, Twox64Concat, SessionIndex, Vec<SessionReportOf<T>>, ValueQuery>;
+
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -100,6 +139,30 @@ pub mod pallet {
 		/// (kind-specific) time slot. This event is not deposited for duplicate slashes.
 		/// \[kind, timeslot\].
 		Offence { kind: Kind, timeslot: OpaqueTimeSlot },
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	/// This is called at the start of each new session. Hence, only one session becomes
+	/// obsolete in this call, whose data gets cleared up here.
+	///
+	/// For example, if the `current_session_index` is 10 and `MaxSessionReportAge` is 6,
+	/// this clears all reports for `obsolete_session_index` 4.
+	fn clear_obsolete_reports(current_session_index: SessionIndex) {
+		let Some(obsolete_session_index) = current_session_index.checked_sub(T::MaxSessionReportAge::get()) else { return };
+
+		let session_reports = SessionReports::<T>::take(obsolete_session_index);
+
+		for (kind, time_slot, report_id) in &session_reports {
+			ConcurrentReportsIndex::<T>::remove(kind, time_slot);
+			Reports::<T>::remove(report_id);
+		}
+	}
+}
+
+impl<T: Config> SessionChangeListener for Pallet<T> {
+	fn on_session_change(session_index: SessionIndex) {
+		Self::clear_obsolete_reports(session_index)
 	}
 }
 
@@ -112,10 +175,19 @@ where
 		let offenders = offence.offenders();
 		let time_slot = offence.time_slot();
 
+		let session_index = offence.session_index();
+		let current_session_index = T::SessionInfoProvider::current_session_index();
+
+		ensure!(
+			session_index >= current_session_index.saturating_sub(T::MaxSessionReportAge::get()),
+			OffenceError::ObsoleteReport
+		);
+
 		// Go through all offenders in the offence report and find all offenders that were spotted
 		// in unique reports.
 		let TriageOutcome { concurrent_offenders } =
-			match Self::triage_offence_report::<O>(reporters, &time_slot, offenders) {
+			match Self::triage_offence_report::<O>(reporters, &time_slot, session_index, offenders)
+			{
 				Some(triage) => triage,
 				// The report contained only duplicates, so there is no need to slash again.
 				None => return Err(OffenceError::DuplicateReport),
@@ -167,9 +239,10 @@ impl<T: Config> Pallet<T> {
 	fn triage_offence_report<O: Offence<T::IdentificationTuple>>(
 		reporters: Vec<T::AccountId>,
 		time_slot: &O::TimeSlot,
+		session_index: SessionIndex,
 		offenders: Vec<T::IdentificationTuple>,
 	) -> Option<TriageOutcome<T>> {
-		let mut storage = ReportIndexStorage::<T, O>::load(time_slot);
+		let mut storage = ReportIndexStorage::<T, O>::load(time_slot, session_index);
 
 		let mut any_new = false;
 		for offender in offenders {
@@ -182,7 +255,7 @@ impl<T: Config> Pallet<T> {
 					OffenceDetails { offender, reporters: reporters.clone() },
 				);
 
-				storage.insert(report_id);
+				storage.insert(report_id, &time_slot);
 			}
 		}
 
@@ -216,28 +289,41 @@ struct TriageOutcome<T: Config> {
 #[must_use = "The changes are not saved without called `save`"]
 struct ReportIndexStorage<T: Config, O: Offence<T::IdentificationTuple>> {
 	opaque_time_slot: OpaqueTimeSlot,
+	session_index: SessionIndex,
 	concurrent_reports: Vec<ReportIdOf<T>>,
+	session_reports: Vec<(Kind, OpaqueTimeSlot, ReportIdOf<T>)>,
 	_phantom: PhantomData<O>,
 }
 
 impl<T: Config, O: Offence<T::IdentificationTuple>> ReportIndexStorage<T, O> {
 	/// Preload indexes from the storage for the specific `time_slot` and the kind of the offence.
-	fn load(time_slot: &O::TimeSlot) -> Self {
+	fn load(time_slot: &O::TimeSlot, session_index: SessionIndex) -> Self {
 		let opaque_time_slot = time_slot.encode();
 
+		let session_reports = SessionReports::<T>::get(session_index);
 		let concurrent_reports = <ConcurrentReportsIndex<T>>::get(&O::ID, &opaque_time_slot);
 
-		Self { opaque_time_slot, concurrent_reports, _phantom: Default::default() }
+		Self {
+			opaque_time_slot,
+			session_index,
+			concurrent_reports,
+			session_reports,
+			_phantom: Default::default(),
+		}
 	}
 
 	/// Insert a new report to the index.
-	fn insert(&mut self, report_id: ReportIdOf<T>) {
+	fn insert(&mut self, report_id: ReportIdOf<T>, time_slot: &O::TimeSlot) {
+		let opaque_time_slot = time_slot.encode();
+		self.session_reports.push((O::ID, opaque_time_slot, report_id));
+
 		// Update the list of concurrent reports.
 		self.concurrent_reports.push(report_id);
 	}
 
 	/// Dump the indexes to the storage.
 	fn save(self) {
+		SessionReports::<T>::set(self.session_index, self.session_reports);
 		<ConcurrentReportsIndex<T>>::insert(
 			&O::ID,
 			&self.opaque_time_slot,

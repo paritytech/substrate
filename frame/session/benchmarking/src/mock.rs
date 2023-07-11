@@ -133,6 +133,7 @@ impl pallet_session::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type WeightInfo = ();
+	type SessionChangeListener = ();
 }
 pallet_staking_reward_curve::build! {
 	const I_NPOS: sp_runtime::curve::PiecewiseLinear<'static> = curve!(

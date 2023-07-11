@@ -160,6 +160,7 @@ impl pallet_session::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
+	type SessionChangeListener = ();
 }
 
 impl pallet_session::historical::Config for Runtime {

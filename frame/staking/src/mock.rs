@@ -178,6 +178,7 @@ impl pallet_session::Config for Test {
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
+	type SessionChangeListener = ();
 }
 
 impl pallet_session::historical::Config for Test {

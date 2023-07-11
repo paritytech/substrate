@@ -21,11 +21,14 @@
 
 use super::*;
 use crate::mock::{
-	new_test_ext, offence_reports, with_on_offence_fractions, Offence, Offences, RuntimeEvent,
-	System, KIND,
+	new_test_ext, offence_reports, report_id, with_on_offence_fractions, Offence, Offences,
+	Runtime, RuntimeEvent, System, KIND,
 };
+use frame_support::assert_noop;
 use frame_system::{EventRecord, Phase};
 use sp_runtime::Perbill;
+
+static SESSION_INDEX: u32 = 10;
 
 #[test]
 fn should_report_an_authority_and_trigger_on_offence() {
@@ -34,7 +37,12 @@ fn should_report_an_authority_and_trigger_on_offence() {
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders: vec![5],
+		};
 
 		// when
 		Offences::report_offence(vec![], offence).unwrap();
@@ -53,7 +61,12 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders: vec![5],
+		};
 		Offences::report_offence(vec![], offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -72,13 +85,39 @@ fn should_not_report_the_same_authority_twice_in_the_same_slot() {
 }
 
 #[test]
+fn should_not_report_an_obsolete_offence() {
+	new_test_ext().execute_with(|| {
+		// given
+		let time_slot = 42;
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+
+		let offence = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX - 7,
+			time_slot,
+			offenders: vec![5],
+		};
+		assert_noop!(Offences::report_offence(vec![], offence), OffenceError::ObsoleteReport);
+
+		with_on_offence_fractions(|f| {
+			assert_eq!(f.clone(), vec![]);
+		});
+	});
+}
+
+#[test]
 fn should_report_in_different_time_slot() {
 	new_test_ext().execute_with(|| {
 		// given
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let mut offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let mut offence = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders: vec![5],
+		};
 		Offences::report_offence(vec![], offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -104,7 +143,12 @@ fn should_deposit_event() {
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders: vec![5],
+		};
 
 		// when
 		Offences::report_offence(vec![], offence).unwrap();
@@ -131,7 +175,12 @@ fn doesnt_deposit_event_for_dups() {
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
+		let offence = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders: vec![5],
+		};
 		Offences::report_offence(vec![], offence.clone()).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -164,8 +213,12 @@ fn reports_if_an_offence_is_dup() {
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence =
-			|time_slot, offenders| Offence { validator_set_count: 5, time_slot, offenders };
+		let offence = |time_slot, offenders| Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders,
+		};
 
 		let mut test_offence = offence(time_slot, vec![0]);
 
@@ -222,8 +275,18 @@ fn should_properly_count_offences() {
 		let time_slot = 42;
 		assert_eq!(offence_reports(KIND, time_slot), vec![]);
 
-		let offence1 = Offence { validator_set_count: 5, time_slot, offenders: vec![5] };
-		let offence2 = Offence { validator_set_count: 5, time_slot, offenders: vec![4] };
+		let offence1 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders: vec![5],
+		};
+		let offence2 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders: vec![4],
+		};
 		Offences::report_offence(vec![], offence1).unwrap();
 		with_on_offence_fractions(|f| {
 			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
@@ -241,6 +304,159 @@ fn should_properly_count_offences() {
 			vec![
 				OffenceDetails { offender: 5, reporters: vec![] },
 				OffenceDetails { offender: 4, reporters: vec![] },
+			]
+		);
+	});
+}
+
+#[test]
+fn should_properly_store_offences() {
+	new_test_ext().execute_with(|| {
+		// given
+		let time_slot = 42;
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+
+		let offence1 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders: vec![5],
+		};
+		let offence2 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot: time_slot + 1,
+			offenders: vec![4],
+		};
+		let offence3 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX + 1,
+			time_slot: time_slot + 1,
+			offenders: vec![6, 7],
+		};
+		let offence4 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX - 1,
+			time_slot: time_slot - 1,
+			offenders: vec![3],
+		};
+
+		// when
+		Offences::report_offence(vec![], offence1).unwrap();
+
+		// then
+		with_on_offence_fractions(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
+			f.clear();
+		});
+
+		// when
+		// report for the second time
+		Offences::report_offence(vec![], offence2).unwrap();
+		Offences::report_offence(vec![], offence3).unwrap();
+		Offences::report_offence(vec![], offence4).unwrap();
+
+		// then
+		let prev_session_reports = SessionReports::<Runtime>::get(SESSION_INDEX - 1);
+		assert_eq!(
+			prev_session_reports,
+			vec![(KIND, (time_slot - 1).encode(), report_id(time_slot - 1, 3)),]
+		);
+
+		let session_reports = SessionReports::<Runtime>::get(SESSION_INDEX);
+		assert_eq!(
+			session_reports,
+			vec![
+				(KIND, time_slot.encode(), report_id(time_slot, 5)),
+				(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 4)),
+			]
+		);
+
+		let next_session_reports = SessionReports::<Runtime>::get(SESSION_INDEX + 1);
+		assert_eq!(
+			next_session_reports,
+			vec![
+				(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 6)),
+				(KIND, (time_slot + 1).encode(), report_id(time_slot + 1, 7)),
+			]
+		);
+	});
+}
+
+#[test]
+fn should_properly_clear_obsolete_offences() {
+	new_test_ext().execute_with(|| {
+		// given
+		let time_slot = 42;
+		assert_eq!(offence_reports(KIND, time_slot), vec![]);
+
+		let offence1 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot,
+			offenders: vec![5],
+		};
+		let offence2 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX,
+			time_slot: time_slot + 1,
+			offenders: vec![4],
+		};
+		let offence3 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX + 1,
+			time_slot: time_slot + 5,
+			offenders: vec![6, 7],
+		};
+		let offence4 = Offence {
+			validator_set_count: 5,
+			session_index: SESSION_INDEX - 1,
+			time_slot: time_slot - 1,
+			offenders: vec![3],
+		};
+
+		// when
+		Offences::report_offence(vec![], offence1).unwrap();
+
+		// then
+		with_on_offence_fractions(|f| {
+			assert_eq!(f.clone(), vec![Perbill::from_percent(25)]);
+			f.clear();
+		});
+
+		// when
+		// report for the second time
+		Offences::report_offence(vec![], offence2).unwrap();
+		Offences::report_offence(vec![], offence3).unwrap();
+		Offences::report_offence(vec![], offence4).unwrap();
+
+		assert_eq!(
+			offence_reports(KIND, time_slot - 1),
+			vec![OffenceDetails { offender: 3, reporters: vec![] }]
+		);
+
+		<Offences as SessionChangeListener>::on_session_change(SESSION_INDEX + 5);
+
+		assert_eq!(offence_reports(KIND, time_slot - 1), vec![]);
+
+		// then
+		let obsolete_session_reports = SessionReports::<Runtime>::get(SESSION_INDEX - 1);
+		assert_eq!(obsolete_session_reports, vec![]);
+
+		let session_reports = SessionReports::<Runtime>::get(SESSION_INDEX + 1);
+		assert_eq!(
+			session_reports,
+			vec![
+				(KIND, (time_slot + 5).encode(), report_id(time_slot + 5, 6)),
+				(KIND, (time_slot + 5).encode(), report_id(time_slot + 5, 7)),
+			]
+		);
+
+		assert_eq!(
+			offence_reports(KIND, time_slot + 5),
+			vec![
+				OffenceDetails { offender: 6, reporters: vec![] },
+				OffenceDetails { offender: 7, reporters: vec![] },
 			]
 		);
 	});
