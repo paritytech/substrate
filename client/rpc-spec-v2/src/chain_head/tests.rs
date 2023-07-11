@@ -1,4 +1,7 @@
-use crate::chain_head::test_utils::ChainHeadMockClient;
+use crate::chain_head::{
+	event::{ChainHeadStorageEvent, StorageQuery, StorageQueryType, StorageResultType},
+	test_utils::ChainHeadMockClient,
+};
 
 use super::*;
 use assert_matches::assert_matches;
@@ -6,6 +9,7 @@ use codec::{Decode, Encode};
 use futures::Future;
 use jsonrpsee::{
 	core::{error::Error, server::rpc_module::Subscription as RpcSubscription},
+	rpc_params,
 	types::{error::CallError, EmptyServerParams as EmptyParams},
 	RpcModule,
 };
@@ -517,15 +521,29 @@ async fn get_storage() {
 
 	// Subscription ID is stale the disjoint event is emitted.
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", ["invalid_sub_id", &invalid_hash, &key])
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				"invalid_sub_id",
+				&invalid_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Value }]
+			],
+		)
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
-	assert_eq!(event, ChainHeadEvent::<String>::Disjoint);
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_eq!(event, ChainHeadStorageEvent::<String>::Disjoint);
 
 	// Valid subscription ID with invalid block hash will error.
 	let err = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &invalid_hash, &key])
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&invalid_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Value }]
+			],
+		)
 		.await
 		.unwrap_err();
 	assert_matches!(err,
@@ -534,11 +552,19 @@ async fn get_storage() {
 
 	// Valid call without storage at the key.
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key])
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&block_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Value }]
+			],
+		)
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	// The `Done` event is generated directly since the key does not have any value associated.
+	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Import a new block with storage changes.
 	let mut builder = client.new_block(Default::default()).unwrap();
@@ -558,24 +584,43 @@ async fn get_storage() {
 	);
 
 	// Valid call with storage at the key.
-	let expected_value = Some(format!("0x{:?}", HexDisplay::from(&VALUE)));
+	let expected_value = format!("0x{:?}", HexDisplay::from(&VALUE));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key])
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&block_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Value }]
+			],
+		)
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result == expected_value);
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value));
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child value set in `setup_api`.
 	let child_info = format!("0x{:?}", HexDisplay::from(b"child"));
 	let genesis_hash = format!("{:?}", client.genesis_hash());
-	let expected_value = Some(format!("0x{:?}", HexDisplay::from(&CHILD_VALUE)));
+	let expected_value = format!("0x{:?}", HexDisplay::from(&CHILD_VALUE));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &genesis_hash, &key, &child_info])
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&genesis_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Value }],
+				&child_info
+			],
+		)
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result == expected_value);
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value));
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
 }
 
 #[tokio::test]
@@ -589,44 +634,74 @@ async fn get_storage_wrong_key() {
 	prefixed_key.extend_from_slice(&KEY);
 	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &prefixed_key])
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&block_hash,
+				vec![StorageQuery { key: prefixed_key, ty: StorageQueryType::Value }]
+			],
+		)
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
 	prefixed_key.extend_from_slice(&KEY);
 	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &prefixed_key])
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&block_hash,
+				vec![StorageQuery { key: prefixed_key, ty: StorageQueryType::Value }]
+			],
+		)
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child key is prefixed by CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
 	prefixed_key.extend_from_slice(b"child");
 	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key, &prefixed_key])
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&block_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Value }],
+				&prefixed_key
+			],
+		)
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
 	prefixed_key.extend_from_slice(b"child");
 	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
 	let mut sub = api
-		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key, &prefixed_key])
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&block_hash,
+				vec![StorageQuery { key, ty: StorageQueryType::Value }],
+				&prefixed_key
+			],
+		)
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
 }
 
 #[tokio::test]
