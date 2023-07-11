@@ -24,6 +24,9 @@ use sp_core::Get;
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
 use sp_std::marker::PhantomData;
 
+/// EXPERIMENTAL FEATURE WARNING: This feature is experimental and its API should be considered
+/// unstable.
+///
 /// Make it easier to write versioned runtime upgrades.
 ///
 /// [`VersionedRuntimeUpgrade`] allows developers to write migrations without worrying about
