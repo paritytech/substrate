@@ -96,6 +96,10 @@ pub fn expand_outer_dispatch(
 			type RuntimeCall = Call<#type_use_gen>;
 		}
 
+		impl<#type_impl_gen> #scrate::dispatch::Callable<Pallet<T>> for frame_system::Pallet<T>
+		{
+			type RuntimeCall = frame_system::Call<Pallet<T>>;
+		}
 				
 		impl<#type_impl_gen> #scrate::dispatch::Callable<Pallet<T>> for pallet_template::Pallet<T>
 		{
@@ -195,24 +199,24 @@ pub fn expand_outer_dispatch(
 			}
 		}
 
-		// impl<#type_impl_gen> #scrate::dispatch::Dispatchable for Call<T> {
-		// 	type RuntimeOrigin = frame_system::pallet_prelude::OriginFor<T>;
-		// 	type Config = Call<T>;
-		// 	type Info = #scrate::dispatch::DispatchInfo;
-		// 	type PostInfo = #scrate::dispatch::PostDispatchInfo;
-		// 	fn dispatch(self, origin: Self::RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
-		// 		// if !<Self::RuntimeOrigin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
-		// 		// 	return #scrate::sp_std::result::Result::Err(
-		// 		// 		#system_path::Error::<#runtime>::CallFiltered.into()
-		// 		// 	);
-		// 		// }
+		impl<#type_impl_gen> #scrate::dispatch::Dispatchable for Call<T> {
+			type RuntimeOrigin = <T as Config>::RuntimeOrigin; //frame_system::pallet_prelude::OriginFor<T>;
+			type Config = Call<T>;
+			type Info = #scrate::dispatch::DispatchInfo;
+			type PostInfo = #scrate::dispatch::PostDispatchInfo;
+			fn dispatch(self, origin: Self::RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
+				// if !<Self::RuntimeOrigin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
+				// 	return #scrate::sp_std::result::Result::Err(
+				// 		#system_path::Error::<#runtime>::CallFiltered.into()
+				// 	);
+				// }
 
-		// 		#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
-		// 	}
-		// }
+				#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
+			}
+		}
 
 		impl<#type_impl_gen> #scrate::traits::UnfilteredDispatchable for Call<T> {
-			type RuntimeOrigin = frame_system::pallet_prelude::OriginFor<T>;
+			type RuntimeOrigin = <T as Config>::RuntimeOrigin; //frame_system::pallet_prelude::OriginFor<T>;
 			fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
@@ -228,26 +232,26 @@ pub fn expand_outer_dispatch(
 			}
 		}
 
-		// // #(
-		// // 	#pallet_attrs
-		// // 	impl<#type_impl_gen> #scrate::traits::IsSubType<#scrate::dispatch::CallableCallFor<#pallet_names<#type_use_gen>, #runtime<#type_use_gen>>> for <T as frame_system::Config>::RuntimeCall {
-		// // 		#[allow(unreachable_patterns)]
-		// // 		fn is_sub_type(&self) -> Option<&#scrate::dispatch::CallableCallFor<#pallet_names<#type_use_gen>, #runtime<#type_use_gen>>> {
-		// // 			match self {
-		// // 				#variant_patterns => Some(call),
-		// // 				// May be unreachable
-		// // 				_ => None,
-		// // 			}
-		// // 		}
-		// // 	}
+		#(
+			// #pallet_attrs
+			// impl<#type_impl_gen + frame_system::Config> #scrate::traits::IsSubType<#scrate::dispatch::CallableCallFor<#pallet_names<#type_use_gen>, Pallet<#type_use_gen>>> for <T as frame_system::Config>::RuntimeCall {
+			// 	#[allow(unreachable_patterns)]
+			// 	fn is_sub_type(&self) -> Option<&#scrate::dispatch::CallableCallFor<#pallet_names<#type_use_gen>, Pallet<#type_use_gen>>> {
+			// 		match self {
+			// 			#variant_patterns => Some(call),
+			// 			// May be unreachable
+			// 			_ => None,
+			// 		}
+			// 	}
+			// }
 
-		// // 	#pallet_attrs
-		// // 	impl<#type_impl_gen> From<#scrate::dispatch::CallableCallFor<#pallet_names<#type_use_gen>, #runtime<#type_use_gen>>> for <T as frame_system::Config>::RuntimeCall {
-		// // 		fn from(call: #scrate::dispatch::CallableCallFor<#pallet_names<#type_use_gen>, #runtime<#type_use_gen>>) -> Self {
-		// // 			#variant_patterns
-		// // 		}
-		// // 	}
-		// // )*
+			#pallet_attrs
+			impl<T: Config> From<#scrate::dispatch::CallableCallFor<#pallet_names<#type_use_gen>, Pallet<#type_use_gen>>> for Call<T> {
+				fn from(call: #scrate::dispatch::CallableCallFor<#pallet_names<#type_use_gen>, Pallet<#type_use_gen>>) -> Self {
+					#variant_patterns
+				}
+			}
+		)*
 
 		impl<#type_impl_gen> Pallet<T> {
 			#[doc(hidden)]

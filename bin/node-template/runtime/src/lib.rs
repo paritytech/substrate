@@ -274,6 +274,8 @@ impl pallet_sudo::Config for Runtime {
 impl pallet_bundle::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_bundle::weights::SubstrateWeight<Runtime>;
+	type BaseCallFilter = frame_support::traits::Everything;
+	type RuntimeOrigin = RuntimeOrigin;
 }
 
 // impl From<frame_system::Event<pallet_bundle::Pallet<Runtime>>> for RuntimeEvent {

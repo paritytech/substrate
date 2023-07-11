@@ -17,6 +17,10 @@ pub mod weights;
 pub use weights::*;
 
 pub use frame_support::construct_bundle;
+use frame_support::traits::Contains;
+use frame_support::traits::OriginTrait;
+use frame_support::dispatch::RawOrigin;
+use frame_support::dispatch::Dispatchable;
 
 #[frame_support::pallet(bundle)]
 pub mod pallet {
@@ -40,10 +44,17 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		// /// A dispatchable call.
-		// type RuntimeCall: Parameter
-		// 	+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
-		// 	+ GetDispatchInfo
-		// 	+ From<frame_system::Call<Self>>;
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+			+ GetDispatchInfo
+			+ From<Call<Self>>;
+
+		type BaseCallFilter: Contains<Call<Self>>;
+
+		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, <Self as Config>::RuntimeOrigin>>
+			+ From<RawOrigin<Self::AccountId>>
+			+ Clone
+			+ OriginTrait<Call = <Self as Config>::RuntimeCall, AccountId = Self::AccountId>;
 	}
 
 	// The pallet's runtime storage items.
@@ -163,18 +174,19 @@ pub mod pallet {
 
 	construct_bundle!(
 		pub struct Bundle {
+			System: frame_system,
 			Template: pallet_template,
 			Template2: pallet_template_2
 		}
 	);
 
 	impl<T: Config> frame_system::Config for Pallet<T> {
-		type BaseCallFilter = <T as frame_system::Config>::BaseCallFilter;
+		type BaseCallFilter = <T as Config>::BaseCallFilter;
 		type BlockWeights = <T as frame_system::Config>::BlockWeights;
 		type BlockLength = <T as frame_system::Config>::BlockLength;
 		type DbWeight = <T as frame_system::Config>::DbWeight;
-		type RuntimeOrigin = <T as frame_system::Config>::RuntimeOrigin;
-		type RuntimeCall = <T as frame_system::Config>::RuntimeCall;
+		type RuntimeOrigin = <T as Config>::RuntimeOrigin;
+		type RuntimeCall = Call<T>; //<T as frame_system::Config>::RuntimeCall;
 		type Index = <T as frame_system::Config>::Index;
 		type BlockNumber = <T as frame_system::Config>::BlockNumber;
 		type Hash = <T as frame_system::Config>::Hash;
