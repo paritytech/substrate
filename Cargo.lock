@@ -10271,7 +10271,6 @@ dependencies = [
  "sc-utils",
  "serde",
  "sp-api",
- "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
