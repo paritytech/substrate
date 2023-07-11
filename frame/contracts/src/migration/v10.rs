@@ -51,7 +51,7 @@ mod old {
 	>>::Balance;
 
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-	#[scale_info(skip_type_params(T))]
+	#[scale_info(skip_type_params(T, OldCurrency))]
 	pub struct ContractInfo<T: Config, OldCurrency>
 	where
 		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
@@ -112,7 +112,7 @@ impl<T: Config> Deref for DepositAccount<T> {
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-#[scale_info(skip_type_params(T))]
+#[scale_info(skip_type_params(T, OldCurrency))]
 pub struct ContractInfo<T: Config, OldCurrency>
 where
 	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
@@ -139,7 +139,7 @@ where
 }
 
 #[storage_alias]
-type ContractInfoOf<T: Config, OldCurrency: old::CurrencyOf<T>> = StorageMap<
+type ContractInfoOf<T: Config, OldCurrency> = StorageMap<
 	Pallet<T>,
 	Twox64Concat,
 	<T as frame_system::Config>::AccountId,

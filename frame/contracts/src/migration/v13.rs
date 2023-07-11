@@ -20,6 +20,33 @@
 //! we need the storage deposit to be handled by the [fungible
 //! traits](frame_support::traits::fungibles) instead.
 
+mod old {
+	use super::*;
+
+	pub type BalanceOf<T, OldCurrency> = <OldCurrency as frame_support::traits::Currency<
+		<T as frame_system::Config>::AccountId,
+	>>::Balance;
+
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	#[scale_info(skip_type_params(T, OldCurrency))]
+	pub struct ContractInfo<T: Config, OldCurrency>
+	where
+		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
+			+ Inspect<
+				<T as frame_system::Config>::AccountId,
+				Balance = old::BalanceOf<T, OldCurrency>,
+			>,
+	{
+		pub trie_id: TrieId,
+		pub deposit_account: DepositAccount<T>,
+		pub code_hash: CodeHash<T>,
+		pub storage_bytes: u32,
+		pub storage_items: u32,
+		pub storage_byte_deposit: BalanceOf<T, OldCurrency>,
+		pub storage_item_deposit: BalanceOf<T, OldCurrency>,
+		pub storage_base_deposit: BalanceOf<T, OldCurrency>,
+	}
+}
 pub struct Migration<T: Config, OldCurrency>
 where
 	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
@@ -34,11 +61,16 @@ where
 	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
 		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>,
 {
-	const VERSION: u16 = 10;
+	const VERSION: u16 = 13;
 
 	fn max_step_weight() -> Weight {
 		T::WeightInfo::v10_migration_step()
 	}
 
-	fn step(&mut self) -> (IsFinished, Weight) {}
+	fn step(&mut self) -> (IsFinished, Weight) {
+		// Move balance reserved from the deposit account back to the contract account.
+		// Let the deposit account be killed.
+
+		// Hold the reserved balance.
+	}
 }
