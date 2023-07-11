@@ -554,4 +554,152 @@ mod tests {
 		let conf_dec: NetworkConfig = serde_json::from_str(exp).unwrap();
 		assert_eq!(conf_dec, conf);
 	}
+
+	#[test]
+	fn chain_head_storage_query() {
+		// Item with Value.
+		let item = StorageQuery { key: "0x1".into(), ty: StorageQueryType::Value };
+		// Encode
+		let ser = serde_json::to_string(&item).unwrap();
+		let exp = r#"{"key":"0x1","type":"value"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, item);
+
+		// Item with Hash.
+		let item = StorageQuery { key: "0x1".into(), ty: StorageQueryType::Hash };
+		// Encode
+		let ser = serde_json::to_string(&item).unwrap();
+		let exp = r#"{"key":"0x1","type":"hash"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, item);
+
+		// Item with DescendantsValues.
+		let item = StorageQuery { key: "0x1".into(), ty: StorageQueryType::DescendantsValues };
+		// Encode
+		let ser = serde_json::to_string(&item).unwrap();
+		let exp = r#"{"key":"0x1","type":"descendants-values"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, item);
+
+		// Item with DescendantsHashes.
+		let item = StorageQuery { key: "0x1".into(), ty: StorageQueryType::DescendantsHashes };
+		// Encode
+		let ser = serde_json::to_string(&item).unwrap();
+		let exp = r#"{"key":"0x1","type":"descendants-hashes"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, item);
+
+		// Item with Merkle.
+		let item =
+			StorageQuery { key: "0x1".into(), ty: StorageQueryType::ClosestDescendantMerkleValue };
+		// Encode
+		let ser = serde_json::to_string(&item).unwrap();
+		let exp = r#"{"key":"0x1","type":"closest-descendant-merkle-value"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, item);
+	}
+
+	#[test]
+	fn chain_head_storage_result() {
+		// Item with Value.
+		let item = StorageResult { key: "0x1".into(), result: StorageResultType::Value("res") };
+		// Encode
+		let ser = serde_json::to_string(&item).unwrap();
+		let exp = r#"{"key":"0x1","value":"res"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: StorageResult<&str> = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, item);
+
+		// Item with Hash.
+		let item = StorageResult { key: "0x1".into(), result: StorageResultType::Hash("res") };
+		// Encode
+		let ser = serde_json::to_string(&item).unwrap();
+		let exp = r#"{"key":"0x1","hash":"res"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: StorageResult<&str> = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, item);
+
+		// Item with DescendantsValues.
+		let item = StorageResult {
+			key: "0x1".into(),
+			result: StorageResultType::ClosestDescendantMerkleValue("res"),
+		};
+		// Encode
+		let ser = serde_json::to_string(&item).unwrap();
+		let exp = r#"{"key":"0x1","closest-descendant-merkle-value":"res"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: StorageResult<&str> = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, item);
+	}
+
+	#[test]
+	fn chain_head_storage_event() {
+		// Event with Items.
+		let event = ChainHeadStorageEvent::Items(ItemsEvent {
+			items: vec![
+				StorageResult { key: "0x1".into(), result: StorageResultType::Value("first") },
+				StorageResult { key: "0x2".into(), result: StorageResultType::Hash("second") },
+			],
+		});
+		// Encode
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"items","items":[{"key":"0x1","value":"first"},{"key":"0x2","hash":"second"}]}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: ChainHeadStorageEvent<&str> = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, event);
+
+		// Event with WaitForContinue.
+		let event = ChainHeadStorageEvent::WaitForContinue;
+		// Encode
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"wait-for-continue"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: ChainHeadStorageEvent<&str> = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, event);
+
+		// Event with Done.
+		let event = ChainHeadStorageEvent::Done;
+		// Encode
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"done"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: ChainHeadStorageEvent<&str> = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, event);
+
+		// Event with Inaccessible.
+		let event = ChainHeadStorageEvent::Inaccessible;
+		// Encode
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"inaccessible"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: ChainHeadStorageEvent<&str> = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, event);
+
+		// Event with Inaccessible.
+		let event = ChainHeadStorageEvent::Error(ErrorEvent { error: "reason".into() });
+		// Encode
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"error","error":"reason"}"#;
+		assert_eq!(ser, exp);
+		// Decode
+		let dec: ChainHeadStorageEvent<&str> = serde_json::from_str(exp).unwrap();
+		assert_eq!(dec, event);
+	}
 }
