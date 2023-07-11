@@ -84,6 +84,7 @@ use sp_core::OpaqueMetadata;
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
 #[doc(hidden)]
+#[cfg(feature = "frame-metadata")]
 pub use sp_metadata_ir::{self as metadata_ir, frame_metadata as metadata};
 #[doc(hidden)]
 #[cfg(feature = "std")]

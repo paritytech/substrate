@@ -13,8 +13,8 @@ This module extends accounts based on the `Currency` trait to have smart-contrac
 be used with other modules that implement accounts based on `Currency`. These "smart-contract accounts"
 have the ability to instantiate smart-contracts and make calls to other contract and non-contract accounts.
 
-The smart-contract code is stored once in a `code_cache`, and later retrievable via its `code_hash`.
-This means that multiple smart-contracts can be instantiated from the same `code_cache`, without replicating
+The smart-contract code is stored once, and later retrievable via its `code_hash`.
+This means that multiple smart-contracts can be instantiated from the same `code`, without replicating
 the code each time.
 
 When a smart-contract is called, its associated code is retrieved via the code hash and gets executed.
@@ -24,18 +24,17 @@ or call other smart-contracts.
 Finally, when an account is reaped, its associated code and storage of the smart-contract account
 will also be deleted.
 
-### Gas
+### Weight
 
-Senders must specify a gas limit with every call, as all instructions invoked by the smart-contract require gas.
-Unused gas is refunded after the call, regardless of the execution outcome.
+Senders must specify a [`Weight`](https://paritytech.github.io/substrate/master/sp_weights/struct.Weight.html) limit with every call, as all instructions invoked by the smart-contract require weight.
+Unused weight is refunded after the call, regardless of the execution outcome.
 
-If the gas limit is reached, then all calls and state changes (including balance transfers) are only
-reverted at the current call's contract level. For example, if contract A calls B and B runs out of gas mid-call,
+If the weight limit is reached, then all calls and state changes (including balance transfers) are only
+reverted at the current call's contract level. For example, if contract A calls B and B runs out of weight mid-call,
 then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state
 changes still persist.
 
-One gas is equivalent to one [weight](https://docs.substrate.io/v3/runtime/weights-and-fees)
-which is defined as one picosecond of execution time on the runtime's reference machine.
+One `ref_time` `Weight` is defined as one picosecond of execution time on the runtime's reference machine.
 
 ### Revert Behaviour
 
@@ -43,29 +42,26 @@ Contract call failures are not cascading. When failures occur in a sub-call, the
 and the call will only revert at the specific contract level. For example, if contract A calls contract B, and B
 fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
 
-### Offchain Execution
+### Off-chain Execution
 
 In general, a contract execution needs to be deterministic so that all nodes come to the same
 conclusion when executing it. To that end we disallow any instructions that could cause
 indeterminism. Most notable are any floating point arithmetic. That said, sometimes contracts
 are executed off-chain and hence are not subject to consensus. If code is only executed by a
 single node and implicitly trusted by other actors is such a case. Trusted execution environments
-come to mind. To that end we allow the execution of indeterminstic code for offchain usages
+come to mind. To that end we allow the execution of indeterminstic code for off-chain usages
 with the following constraints:
 
 1. No contract can ever be instantiated from an indeterministic code. The only way to execute
 the code is to use a delegate call from a deterministic contract.
-2. The code that wants to use this feature needs to depend on `pallet-contracts` and use `bare_call`
+2. The code that wants to use this feature needs to depend on `pallet-contracts` and use [`bare_call()`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/struct.Pallet.html#method.bare_call)
 directly. This makes sure that by default `pallet-contracts` does not expose any indeterminism.
 
-## How to use
-
-When setting up the `Schedule` for your runtime make sure to set `InstructionWeights::fallback`
-to a non zero value. The default is `0` and prevents the upload of any non deterministic code.
+#### How to use
 
 An indeterministic code can be deployed on-chain by passing `Determinism::Relaxed`
-to `upload_code`. A deterministic contract can then delegate call into it if and only if it
-is ran by using `bare_call` and passing `Determinism::Relaxed` to it. **Never use
+to [`upload_code()`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/struct.Pallet.html#method.upload_code). A deterministic contract can then delegate call into it if and only if it
+is ran by using [`bare_call()`](https://paritytech.github.io/substrate/master/pallet_contracts/pallet/struct.Pallet.html#method.bare_call) and passing [`Determinism::Relaxed`](https://paritytech.github.io/substrate/master/pallet_contracts/enum.Determinism.html#variant.Relaxed) to it. **Never use
 this argument when the contract is called from an on-chain transaction.**
 
 ## Interface
@@ -99,24 +95,22 @@ Each contract is one WebAssembly module that looks like this:
 ```
 
 The documentation of all importable functions can be found
-[here](https://github.com/paritytech/substrate/blob/master/frame/contracts/src/wasm/runtime.rs).
-Look for the `define_env!` macro invocation.
+[here](https://paritytech.github.io/substrate/master/pallet_contracts/api_doc/trait.Current.html).
 
 ## Usage
 
 This module executes WebAssembly smart contracts. These can potentially be written in any language
-that compiles to web assembly. However, using a language that specifically targets this module
-will make things a lot easier. One such language is [`ink!`](https://use.ink)
-which is an [`eDSL`](https://wiki.haskell.org/Embedded_domain_specific_language) that enables
-writing WebAssembly based smart contracts in the Rust programming language.
+that compiles to Wasm. However, using a language that specifically targets this module
+will make things a lot easier. One such language is [`ink!`](https://use.ink). It enables
+writing WebAssembly-based smart-contracts in the Rust programming language.
 
 ## Debugging
 
-Contracts can emit messages to the client when called as RPC through the `seal_debug_message`
+Contracts can emit messages to the client when called as RPC through the [`debug_message`](https://paritytech.github.io/substrate/master/pallet_contracts/api_doc/trait.Current.html#tymethod.debug_message)
 API. This is exposed in [ink!](https://use.ink) via
 [`ink_env::debug_message()`](https://paritytech.github.io/ink/ink_env/fn.debug_message.html).
 
-Those messages are gathered into an internal buffer and send to the RPC client.
+Those messages are gathered into an internal buffer and sent to the RPC client.
 It is up the the individual client if and how those messages are presented to the user.
 
 This buffer is also printed as a debug message. In order to see these messages on the node
@@ -154,11 +148,11 @@ this pallet contains the concept of an unstable interface. Akin to the rust nigh
 it allows us to add new interfaces but mark them as unstable so that contract languages can
 experiment with them and give feedback before we stabilize those.
 
-In order to access interfaces marked as `#[unstable]` in `runtime.rs` one need to set
-`pallet_contracts::Config::UnsafeUnstableInterface` to `ConstU32<true>`. It should be obvious
+In order to access interfaces marked as `#[unstable]` in [`runtime.rs`](src/wasm/runtime.rs) one need to set
+`pallet_contracts::Config::UnsafeUnstableInterface` to `ConstU32<true>`. **It should be obvious
 that any production runtime should never be compiled with this feature: In addition to be
 subject to change or removal those interfaces might not have proper weights associated with
-them and are therefore considered unsafe.
+them and are therefore considered unsafe**.
 
 New interfaces are generally added as unstable and might go through several iterations
 before they are promoted to a stable interface.

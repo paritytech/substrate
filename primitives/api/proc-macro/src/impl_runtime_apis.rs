@@ -17,7 +17,6 @@
 
 use crate::{
 	common::API_VERSION_ATTRIBUTE,
-	runtime_metadata::generate_impl_runtime_metadata,
 	utils::{
 		extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
 		extract_parameter_names_types_and_borrows, generate_crate_access,
@@ -694,7 +693,11 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let runtime_api_versions = generate_runtime_api_versions(api_impls)?;
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
-	let runtime_metadata = generate_impl_runtime_metadata(api_impls)?;
+
+	#[cfg(feature = "frame-metadata")]
+	let runtime_metadata = crate::runtime_metadata::generate_impl_runtime_metadata(api_impls)?;
+	#[cfg(not(feature = "frame-metadata"))]
+	let runtime_metadata = quote!();
 
 	let impl_ = quote!(
 		#base_runtime_api
