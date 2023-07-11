@@ -1169,7 +1169,7 @@ pub trait Header:
 		+ Default
 		+ TypeInfo
 		+ MaxEncodedLen
-		+ FullCodec
+		+ FullCodec;
 	/// Header hash type
 	type Hash: HashOutput;
 	/// Hashing algorithm
