@@ -149,7 +149,7 @@ macro_rules! impl_incrementable {
 /// A trait representing an incrementable type.
 ///
 /// The `increment` and `initial_value` functions are fallible.
-/// They should either both return a Some with a valid value, or None.
+/// They should either both return `Some` with a valid value, or `None`.
 pub trait Incrementable
 where
 	Self: Sized,

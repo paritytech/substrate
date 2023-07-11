@@ -181,8 +181,8 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 	}
 
 	/// Create a collection of nonfungible items with `collection` Id to be owned by `who` and
-	/// managed by `admin`. Should be only used for applications that do not have an incremental
-	/// order for the collection IDs and is a replacement for the auto id creation.
+	/// managed by `admin`. Should be only used for applications that do not have an
+	/// incremental order for the collection IDs and is a replacement for the auto id creation.
 	///
 	///
 	/// SAFETY: This function can break the pallet if it is used in combination with the auto

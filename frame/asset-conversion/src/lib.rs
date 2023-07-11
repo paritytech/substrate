@@ -350,7 +350,7 @@ pub mod pallet {
 		PathError,
 		/// The provided path must consists of unique assets.
 		NonUniquePath,
-		/// It was not possible to get and increment the pool asset id.
+		/// It was not possible to get or increment the Id of the pool.
 		IncorrectPoolAssetId,
 		/// Unable to find an element in an array/vec that should have one-to-one correspondence
 		/// with another. For example, an array of assets constituting a `path` should have a
@@ -1119,7 +1119,7 @@ pub mod pallet {
 		/// Returns the next pool asset id for benchmark purposes only.
 		#[cfg(any(test, feature = "runtime-benchmarks"))]
 		pub fn get_next_pool_asset_id() -> T::PoolAssetId {
-			NextPoolAssetId::<T>::get().or(T::PoolAssetId::initial_value()).unwrap()
+			NextPoolAssetId::<T>::get().or(T::PoolAssetId::initial_value()).expect("Next pool asset ID can not be None")
 		}
 	}
 }
