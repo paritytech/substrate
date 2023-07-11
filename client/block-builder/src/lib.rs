@@ -184,20 +184,12 @@ where
 		}
 
 		api.set_call_context(CallContext::Onchain);
-		
+
 		let executive_mode = if version >= 5 {
-			api.initialize_block_with_context(
-				parent_hash,
-				ExecutionContext::BlockConstruction,
-				&header,
-			)?
+			api.initialize_block(parent_hash, &header)?
 		} else {
 			#[allow(deprecated)]
-			api.initialize_block_before_version_5_with_context(
-				parent_hash,
-				ExecutionContext::BlockConstruction,
-				&header,
-			)?;
+			api.initialize_block_before_version_5(parent_hash, &header)?;
 			RuntimeExecutiveMode::AllExtrinsics
 		};
 
@@ -215,9 +207,7 @@ where
 	/// Called after inherents but before extrinsics have been applied.
 	pub fn after_inherents(&self) -> Result<(), Error> {
 		if self.version >= 7 {
-			self.api
-				.after_inherents_with_context(self.parent_hash, ExecutionContext::BlockConstruction)
-				.map_err(Into::into)
+			self.api.after_inherents(self.parent_hash).map_err(Into::into)
 		} else {
 			Ok(())
 		}
