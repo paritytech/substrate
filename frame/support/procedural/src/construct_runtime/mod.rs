@@ -407,7 +407,7 @@ fn construct_runtime_final_expansion(
 		if let Some(where_section) = where_section {
 			Some(
 			proc_macro_warning::Warning::new_deprecated("WhereSection")
-				.old("use where section")
+				.old("use a `where` clause in `construct_runtime`")
 				.new("use `frame_system::Config` to set the `Block` type and delete this section. 
 					It is planned to be removed in December 2023")
 				.help_links(&["https://github.com/paritytech/substrate/pull/14437"])
