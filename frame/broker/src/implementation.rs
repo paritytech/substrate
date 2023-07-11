@@ -389,7 +389,7 @@ impl<T: Config> Pallet<T> {
 		Workplan::<T>::insert((record.begin, core), &workload);
 
 		let begin = sale.region_end;
-		let price = record.price + record.price / 100u32.into() * 2u32.into();
+		let price = record.price + config.renewal_bump * record.price;
 		let new_record = AllowedRenewalRecord { begin, price, completion: Complete(workload) };
 		AllowedRenewals::<T>::insert(core, &new_record);
 		SaleInfo::<T>::put(&sale);

@@ -226,6 +226,8 @@ pub struct ConfigRecord<BlockNumber> {
 	/// An artificial limit to the number of cores which are allowed to be sold. If `Some` then
 	/// no more cores will be sold than this.
 	pub limit_cores_offered: Option<CoreIndex>,
+	/// The amount by which the renewal price increases each sale period.
+	pub renewal_bump: Perbill,
 }
 pub type ConfigRecordOf<T> = ConfigRecord<
 	<T as SConfig>::BlockNumber,

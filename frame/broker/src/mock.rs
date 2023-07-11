@@ -195,11 +195,15 @@ pub fn advance_to(b: u64) {
 }
 
 pub fn pot() -> u64 {
-	<<Test as Config>::Currency as Inspect<_>>::total_balance(&Broker::account_id())
+	balance(Broker::account_id())
 }
 
 pub fn revenue() -> u64 {
-	<<Test as Config>::Currency as Inspect<_>>::total_balance(&0)
+	balance(0)
+}
+
+pub fn balance(who: u64) -> u64 {
+	<<Test as Config>::Currency as Inspect<_>>::total_balance(&who)
 }
 
 pub struct TestExt(ConfigRecordOf<Test>);
@@ -213,6 +217,7 @@ impl TestExt {
 			ideal_bulk_proportion: Default::default(),
 			limit_cores_offered: None,
 			region_length: 3,
+			renewal_bump: Perbill::from_percent(10),
 		})
 	}
 
@@ -248,6 +253,11 @@ impl TestExt {
 
 	pub fn limit_cores_offered(mut self, limit_cores_offered: Option<CoreIndex>) -> Self {
 		self.0.limit_cores_offered = limit_cores_offered;
+		self
+	}
+
+	pub fn renewal_bump(mut self, renewal_bump: Perbill) -> Self {
+		self.0.renewal_bump = renewal_bump;
 		self
 	}
 

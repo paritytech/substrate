@@ -44,7 +44,26 @@ fn transfer_works() {
 	});
 }
 
-// TODO: Renewal.
+#[test]
+fn renewal_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_eq!(balance(1), 900);
+		assert_ok!(Broker::do_assign(region, None, 1001));
+		// Should now be renewable.
+		advance_to(6);
+		assert_noop!(Broker::do_purchase(1, u64::max_value()), Error::<Test>::TooEarly);
+		let core = Broker::do_renew(&1, region.core).unwrap();
+		assert_eq!(balance(1), 800);
+		advance_to(8);
+		assert_noop!(Broker::do_purchase(1, u64::max_value()), Error::<Test>::SoldOut);
+		advance_to(12);
+		let region = Broker::do_renew(&1, core).unwrap();
+		assert_eq!(balance(1), 690);
+	});
+}
 
 #[test]
 fn instapool_payouts_work() {
@@ -66,7 +85,7 @@ fn instapool_payouts_work() {
 		assert_eq!(revenue(), 106);
 		assert_ok!(Broker::do_claim_revenue(region, 100));
 		assert_eq!(pot(), 10);
-		assert_eq!(<Test as Config>::Currency::total_balance(&2), 4);
+		assert_eq!(balance(2), 4);
 	});
 }
 
@@ -92,8 +111,8 @@ fn instapool_partial_core_payouts_work() {
 		assert_ok!(Broker::do_claim_revenue(region2, 100));
 		assert_eq!(pot(), 0);
 		assert_eq!(revenue(), 120);
-		assert_eq!(<Test as Config>::Currency::total_balance(&2), 5);
-		assert_eq!(<Test as Config>::Currency::total_balance(&3), 15);
+		assert_eq!(balance(2), 5);
+		assert_eq!(balance(3), 15);
 	});
 }
 
