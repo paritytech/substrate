@@ -339,6 +339,7 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(12)]
+		#[pallet::weight(T::WeightInfo::claim_revenue(*max_timeslices))]
 		pub fn claim_revenue(
 			origin: OriginFor<T>,
 			region_id: RegionId,

@@ -201,8 +201,16 @@ pub type SaleInfoRecordOf<T> = SaleInfoRecord<
 /// Chains).
 pub type ReservationsRecord<Max> = BoundedVec<Schedule, Max>;
 pub type ReservationsRecordOf<T> = ReservationsRecord<<T as Config>::MaxReservedCores>;
+
+/// Information on a single legacy lease.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct LeaseRecordItem {
+	pub until: Timeslice,
+	pub task: TaskId,
+}
+
 /// Record for Polkadot Core legacy leases.
-pub type LeasesRecord<Max> = BoundedVec<(Timeslice, TaskId), Max>;
+pub type LeasesRecord<Max> = BoundedVec<LeaseRecordItem, Max>;
 pub type LeasesRecordOf<T> = LeasesRecord<<T as Config>::MaxLeasedCores>;
 
 /// Configuration of this pallet.

@@ -129,12 +129,12 @@ impl<T: Config> Pallet<T> {
 
 		let mut leases = Leases::<T>::get();
 		// can morph to a renewable as long as it's > begin and < end.
-		leases.retain(|&(until, para)| {
+		leases.retain(|&LeaseRecordItem { until, task }| {
 			let part = CorePart::complete();
-			let assignment = CoreAssignment::Task(para);
+			let assignment = CoreAssignment::Task(task);
 			let schedule = BoundedVec::truncate_from(vec![ScheduleItem { part, assignment }]);
 			Workplan::<T>::insert((region_begin, first_core), &schedule);
-			let expiring = until >= region_begin;
+			let expiring = until >= region_begin && until < region_end;
 			if expiring {
 				// last time for this one - make it renewable.
 				let record = AllowedRenewalRecord {
@@ -142,7 +142,13 @@ impl<T: Config> Pallet<T> {
 					price: reserve_price,
 					completion: Complete(schedule),
 				};
-				AllowedRenewals::<T>::insert(first_core, record);
+				AllowedRenewals::<T>::insert(first_core, &record);
+				Self::deposit_event(Event::Renewable {
+					core: first_core,
+					price: reserve_price,
+					begin: region_end,
+					workload: record.completion.drain_complete().unwrap_or_default(),
+				});
 			}
 			first_core.saturating_inc();
 			!expiring

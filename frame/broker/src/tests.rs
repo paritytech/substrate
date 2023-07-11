@@ -80,7 +80,6 @@ fn instapool_payouts_work() {
 		advance_to(8);
 		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 10));
 		advance_to(10);
-//		while Broker::check_revenue().unwrap() {}
 		assert_eq!(pot(), 14);
 		assert_eq!(revenue(), 106);
 		assert_ok!(Broker::do_claim_revenue(region, 100));
@@ -106,7 +105,6 @@ fn instapool_partial_core_payouts_work() {
 		advance_to(8);
 		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 40));
 		advance_to(10);
-//		while Broker::check_revenue().unwrap() {}
 		assert_ok!(Broker::do_claim_revenue(region1, 100));
 		assert_ok!(Broker::do_claim_revenue(region2, 100));
 		assert_eq!(pot(), 0);
@@ -138,6 +136,25 @@ fn initialize_with_system_paras_works() {
 				(Task(3), 14400),
 				(Task(4), 14400),
 			], end_hint: None }),
+		]);
+	});
+}
+
+#[test]
+fn initialize_with_leased_slots_works() {
+	TestExt::new().core_count(2).execute_with(|| {
+		assert_ok!(Broker::do_set_lease(1000, 6));
+		assert_ok!(Broker::do_set_lease(1001, 7));
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(18);
+		let end_hint = None;
+		assert_eq!(CoretimeTrace::get(), vec![
+			(6, AssignCore { core: 0, begin: 8, assignment: vec![ (Task(1000), 57600), ], end_hint }),
+			(6, AssignCore { core: 1, begin: 8, assignment: vec![ (Task(1001), 57600), ], end_hint }),
+			(12, AssignCore { core: 0, begin: 14, assignment: vec![ (Task(1001), 57600), ], end_hint }),
+			(12, AssignCore { core: 1, begin: 14, assignment: vec![ (Pool, 57600), ], end_hint }),
+			(18, AssignCore { core: 0, begin: 20, assignment: vec![ (Pool, 57600), ], end_hint }),
+			(18, AssignCore { core: 1, begin: 20, assignment: vec![ (Pool, 57600), ], end_hint }),
 		]);
 	});
 }

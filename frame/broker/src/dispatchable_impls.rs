@@ -32,7 +32,8 @@ impl<T: Config> Pallet<T> {
 
 	pub(crate) fn do_set_lease(task: TaskId, until: Timeslice) -> DispatchResult {
 		let mut r = Leases::<T>::get();
-		r.try_push((until, task)).map_err(|_| Error::<T>::TooManyLeases)?;
+		r.try_push(LeaseRecordItem { until, task })
+            .map_err(|_| Error::<T>::TooManyLeases)?;
 		Leases::<T>::put(r);
 		Ok(())
 	}

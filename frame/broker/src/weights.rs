@@ -38,7 +38,7 @@ pub trait WeightInfo {
 	fn interlace() -> Weight;
 	fn assign() -> Weight;
 	fn pool() -> Weight;
-	fn claim_revenue() -> Weight;
+	fn claim_revenue(m: u32,) -> Weight;
 	fn purchase_credit() -> Weight;
 }
 
@@ -57,7 +57,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn interlace() -> Weight { Weight::from_parts(123, 456) }
 	fn assign() -> Weight { Weight::from_parts(123, 456) }
 	fn pool() -> Weight { Weight::from_parts(123, 456) }
-	fn claim_revenue() -> Weight { Weight::from_parts(123, 456) }
+	fn claim_revenue(_: u32,) -> Weight { Weight::from_parts(123, 456) }
 	fn purchase_credit() -> Weight { Weight::from_parts(123, 456) }
 }
 
@@ -75,6 +75,6 @@ impl WeightInfo for () {
 	fn interlace() -> Weight { Weight::from_parts(123, 456) }
 	fn assign() -> Weight { Weight::from_parts(123, 456) }
 	fn pool() -> Weight { Weight::from_parts(123, 456) }
-	fn claim_revenue() -> Weight { Weight::from_parts(123, 456) }
+	fn claim_revenue(_: u32,) -> Weight { Weight::from_parts(123, 456) }
 	fn purchase_credit() -> Weight { Weight::from_parts(123, 456) }
 }
