@@ -220,7 +220,7 @@ impl Serialize for Signature {
 	where
 		S: Serializer,
 	{
-		serializer.serialize_str(&array_bytes::bytes2hex("", self.as_ref()))
+		serializer.serialize_str(&array_bytes::bytes2hex("", self))
 	}
 }
 
@@ -552,7 +552,7 @@ mod test {
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap();
 		assert_eq!(
 			derived.0.seed(),
-			array_bytes::hex2array_unchecked::<32>(
+			array_bytes::hex2array_unchecked::<_, 32>(
 				"b8eefc4937200a8382d00050e050ced2d4ab72cc2ef1b061477afb51564fdd61"
 			)
 		);

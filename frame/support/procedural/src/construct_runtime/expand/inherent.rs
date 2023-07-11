@@ -90,8 +90,36 @@ pub fn expand_outer_inherent(
 				use #scrate::inherent::{ProvideInherent, IsFatalError};
 				use #scrate::traits::{IsSubType, ExtrinsicCall};
 				use #scrate::sp_runtime::traits::Block as _;
+				use #scrate::_private::sp_inherents::Error;
+				use #scrate::log;
 
 				let mut result = #scrate::inherent::CheckInherentsResult::new();
+
+				// This handle assume we abort on the first fatal error.
+				fn handle_put_error_result(res: Result<(), Error>) {
+					const LOG_TARGET: &str = "runtime::inherent";
+					match res {
+						Ok(()) => (),
+						Err(Error::InherentDataExists(id)) =>
+							log::debug!(
+								target: LOG_TARGET,
+								"Some error already reported for inherent {:?}, new non fatal \
+								error is ignored",
+								id
+							),
+						Err(Error::FatalErrorReported) =>
+							log::error!(
+								target: LOG_TARGET,
+								"Fatal error already reported, unexpected considering there is \
+								only one fatal error",
+							),
+						Err(_) =>
+							log::error!(
+								target: LOG_TARGET,
+								"Unexpected error from `put_error` operation",
+							),
+					}
+				}
 
 				for xt in block.extrinsics() {
 					// Inherents are before any other extrinsics.
@@ -110,9 +138,9 @@ pub fn expand_outer_inherent(
 								if #pallet_names::is_inherent(call) {
 									is_inherent = true;
 									if let Err(e) = #pallet_names::check_inherent(call, self) {
-										result.put_error(
+										handle_put_error_result(result.put_error(
 											#pallet_names::INHERENT_IDENTIFIER, &e
-										).expect("There is only one fatal error; qed");
+										));
 										if e.is_fatal_error() {
 											return result;
 										}
@@ -153,9 +181,9 @@ pub fn expand_outer_inherent(
 							});
 
 							if !found {
-								result.put_error(
+								handle_put_error_result(result.put_error(
 									#pallet_names::INHERENT_IDENTIFIER, &e
-								).expect("There is only one fatal error; qed");
+								));
 								if e.is_fatal_error() {
 									return result;
 								}
@@ -163,9 +191,9 @@ pub fn expand_outer_inherent(
 						},
 						Ok(None) => (),
 						Err(e) => {
-							result.put_error(
+							handle_put_error_result(result.put_error(
 								#pallet_names::INHERENT_IDENTIFIER, &e
-							).expect("There is only one fatal error; qed");
+							));
 							if e.is_fatal_error() {
 								return result;
 							}
