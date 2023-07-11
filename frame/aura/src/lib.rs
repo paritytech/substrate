@@ -132,6 +132,11 @@ pub mod pallet {
 				T::DbWeight::get().reads(1)
 			}
 		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_: T::BlockNumber) -> Result<(), sp_runtime::TryRuntimeError> {
+			Self::do_try_state()
+		}
 	}
 
 	/// The current authority set.
@@ -216,6 +221,55 @@ impl<T: Config> Pallet<T> {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of its slot.
 		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// This should be valid before or after each state transition of this pallet.
+	///
+	/// # Invariants
+	///
+	/// ## `CurrentSlot`
+	///
+	/// If we don't allow for multiple blocks per slot, then the current slot must be less than the
+	/// maximal slot number. Otherwise, it can be arbitrary.
+	///
+	/// ## `Authorities`
+	///
+	/// * The authorities must be non-empty.
+	/// * The current authority cannot be disabled.
+	/// * The number of authorities must be less than or equal to `T::MaxAuthorities`. This however,
+	///   is guarded by the type system.
+	#[cfg(any(test, feature = "try-runtime"))]
+	pub fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
+		// We don't have any guarantee that we are already after `on_initialize` and thus we have to
+		// check the current slot from the digest or take the last known slot.
+		let current_slot =
+			Self::current_slot_from_digests().unwrap_or_else(|| CurrentSlot::<T>::get());
+
+		// Check that the current slot is less than the maximal slot number, unless we allow for
+		// multiple blocks per slot.
+		if !T::AllowMultipleBlocksPerSlot::get() {
+			frame_support::ensure!(
+				current_slot < u64::MAX,
+				"Current slot has reached maximum value and cannot be incremented further.",
+			);
+		}
+
+		let authorities_len =
+			<Authorities<T>>::decode_len().ok_or("Failed to decode authorities length")?;
+
+		// Check that the authorities are non-empty.
+		frame_support::ensure!(!authorities_len.is_zero(), "Authorities must be non-empty.");
+
+		// Check that the current authority is not disabled.
+		let authority_index = *current_slot % authorities_len as u64;
+		frame_support::ensure!(
+			!T::DisabledValidators::is_disabled(authority_index as u32),
+			"Current validator is disabled and should not be attempting to author blocks.",
+		);
+
+		Ok(())
 	}
 }
 
