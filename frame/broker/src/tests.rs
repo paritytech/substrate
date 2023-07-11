@@ -18,7 +18,7 @@
 #![cfg(test)]
 
 use crate::{*, mock::*, core_part::*};
-use frame_support::{assert_noop, assert_ok, traits::fungible::Inspect};
+use frame_support::{assert_noop, assert_ok, traits::{fungible::Inspect, nonfungible::{Transfer, Inspect as NftInspect}}};
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
 
@@ -32,12 +32,15 @@ fn basic_initialize_works() {
 }
 
 #[test]
-fn transfer_then_purchase_works() {
+fn transfer_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
-		
+		assert_ok!(<Broker as Transfer<_>>::transfer(&region.into(), &2));
+		assert_eq!(<Broker as NftInspect<_>>::owner(&region.into()), Some(2));
+		assert_noop!(Broker::do_assign(region, Some(1), 1001), Error::<Test>::NotOwner);
+		assert_ok!(Broker::do_assign(region, Some(2), 1002));
 	});
 }
 

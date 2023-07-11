@@ -190,6 +190,7 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
+	#[derive(PartialEq)]
 	pub enum Error<T> {
 		UnknownRegion,
 		NotOwner,
