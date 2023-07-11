@@ -36,7 +36,6 @@ pub trait ExtensionsFactory<Block: BlockT>: Send + Sync {
 	///
 	/// - `block_hash`: The hash of the block in the context that extensions will be used.
 	/// - `block_number`: The number of the block in the context that extensions will be used.
-	/// - `capabilities`: The capabilities
 	fn extensions_for(&self, block_hash: Block::Hash, block_number: NumberFor<Block>)
 		-> Extensions;
 }
@@ -106,7 +105,7 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 	) -> Self {
 		Self {
 			extensions_factory: extensions_factory
-				.map(|f| RwLock::new(f))
+				.map(RwLock::new)
 				.unwrap_or_else(|| RwLock::new(Box::new(()))),
 			read_runtime_version,
 		}

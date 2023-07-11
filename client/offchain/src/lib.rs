@@ -54,7 +54,7 @@ use threadpool::ThreadPool;
 
 mod api;
 
-pub use api::Db as OffchainDb;
+pub use sp_core::offchain::storage::OffchainDb;
 pub use sp_offchain::{OffchainWorkerApi, STORAGE_PREFIX};
 
 const LOG_TARGET: &str = "offchain-worker";
@@ -133,7 +133,7 @@ pub struct OffchainWorkers<RA, Block: traits::Block, Storage> {
 	shared_http_client: api::SharedClient,
 	enable_http_requests: bool,
 	keystore: Option<KeystorePtr>,
-	offchain_db: Option<api::Db<Storage>>,
+	offchain_db: Option<OffchainDb<Storage>>,
 	transaction_pool: Option<OffchainTransactionPoolFactory<Block>>,
 	network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 	is_validator: bool,
@@ -163,7 +163,7 @@ impl<RA, Block: traits::Block, Storage> OffchainWorkers<RA, Block, Storage> {
 			shared_http_client: api::SharedClient::new(),
 			enable_http_requests,
 			keystore,
-			offchain_db: offchain_db.map(|d| api::Db::new(d)),
+			offchain_db: offchain_db.map(OffchainDb::new),
 			transaction_pool,
 			is_validator,
 			network_provider,

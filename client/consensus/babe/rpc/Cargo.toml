@@ -20,7 +20,6 @@ thiserror = "1.0"
 sc-consensus-babe = { version = "0.10.0-dev", path = "../" }
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../../epochs" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../rpc-api" }
-sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../transaction-pool/api" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 sp-application-crypto = { version = "23.0.0", path = "../../../../primitives/application-crypto" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
@@ -35,5 +34,6 @@ serde_json = "1.0.85"
 tokio = "1.22.0"
 sc-consensus = { version = "0.10.0-dev", path = "../../../consensus/common" }
 sc-keystore = { version = "4.0.0-dev", path = "../../../keystore" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../transaction-pool/api" }
 sp-keyring = { version = "24.0.0", path = "../../../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../../../test-utils/runtime/client" }

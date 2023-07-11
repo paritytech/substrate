@@ -1242,14 +1242,14 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 /// Something that acts like an `Extrinsic`.
 pub trait Extrinsic: Sized {
 	/// The function call.
-	type Call;
+	type Call: TypeInfo;
 
 	/// The payload we carry for signed extrinsics.
 	///
 	/// Usually it will contain a `Signature` and
 	/// may include some additional data that are specific to signed
 	/// extrinsics.
-	type SignaturePayload;
+	type SignaturePayload: SignaturePayload;
 
 	/// Is this `Extrinsic` signed?
 	/// If no information are available about signed/unsigned, `None` should be returned.
@@ -1266,6 +1266,31 @@ pub trait Extrinsic: Sized {
 	fn new(_call: Self::Call, _signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
 		None
 	}
+}
+
+/// Something that acts like a [`SignaturePayload`](Extrinsic::SignaturePayload) of an
+/// [`Extrinsic`].
+pub trait SignaturePayload {
+	/// The type of the address that signed the extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type SignatureAddress: TypeInfo;
+
+	/// The signature type of the extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type Signature: TypeInfo;
+
+	/// The additional data that is specific to the signed extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type SignatureExtra: TypeInfo;
+}
+
+impl SignaturePayload for () {
+	type SignatureAddress = ();
+	type Signature = ();
+	type SignatureExtra = ();
 }
 
 /// Implementor is an [`Extrinsic`] and provides metadata about this extrinsic.

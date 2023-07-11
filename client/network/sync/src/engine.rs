@@ -28,30 +28,24 @@ use codec::{Decode, Encode};
 use futures::{FutureExt, StreamExt};
 use futures_timer::Delay;
 use libp2p::PeerId;
-use lru::LruCache;
 use prometheus_endpoint::{
 	register, Gauge, GaugeVec, MetricSource, Opts, PrometheusError, Registry, SourcedGauge, U64,
 };
+use schnellru::{ByLength, LruMap};
 
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network::{
-	config::{
-		FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId, SyncMode as SyncOperationMode,
-	},
+	config::{FullNetworkConfiguration, NonDefaultSetConfig, ProtocolId},
 	utils::LruHashSet,
 	NotificationsSink, ProtocolName, ReputationChange,
 };
 use sc_network_common::{
 	role::Roles,
 	sync::{
-		message::{
-			generic::{BlockData, BlockResponse},
-			BlockAnnounce, BlockAnnouncesHandshake, BlockState,
-		},
+		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockState},
 		warp::WarpSyncParams,
 		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncEvent,
-		SyncMode,
 	},
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -245,7 +239,7 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	default_peers_set_num_light: usize,
 
 	/// A cache for the data that was associated to a block announcement.
-	block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
+	block_announce_data_cache: LruMap<B::Hash, Vec<u8>>,
 
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: HashSet<PeerId>,
@@ -290,12 +284,7 @@ where
 		warp_sync_protocol_name: Option<ProtocolName>,
 		rx: sc_utils::mpsc::TracingUnboundedReceiver<sc_network::SyncEvent<B>>,
 	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
-		let mode = match net_config.network_config.sync_mode {
-			SyncOperationMode::Full => SyncMode::Full,
-			SyncOperationMode::Fast { skip_proofs, storage_chain_mode } =>
-				SyncMode::LightState { skip_proofs, storage_chain_mode },
-			SyncOperationMode::Warp => SyncMode::Warp,
-		};
+		let mode = net_config.network_config.sync_mode;
 		let max_parallel_downloads = net_config.network_config.max_parallel_downloads;
 		let max_blocks_per_request = if net_config.network_config.max_blocks_per_request >
 			crate::MAX_BLOCKS_IN_RESPONSE as u32
@@ -305,12 +294,9 @@ where
 		} else {
 			net_config.network_config.max_blocks_per_request
 		};
-		let cache_capacity = NonZeroUsize::new(
-			(net_config.network_config.default_peers_set.in_peers as usize +
-				net_config.network_config.default_peers_set.out_peers as usize)
-				.max(1),
-		)
-		.expect("cache capacity is not zero");
+		let cache_capacity = (net_config.network_config.default_peers_set.in_peers +
+			net_config.network_config.default_peers_set.out_peers)
+			.max(1);
 		let important_peers = {
 			let mut imp_p = HashSet::new();
 			for reserved in &net_config.network_config.default_peers_set.reserved_nodes {
@@ -392,7 +378,7 @@ where
 				network_service,
 				peers: HashMap::new(),
 				evicted: HashSet::new(),
-				block_announce_data_cache: LruCache::new(cache_capacity),
+				block_announce_data_cache: LruMap::new(ByLength::new(cache_capacity)),
 				block_announce_protocol_name,
 				num_connected: num_connected.clone(),
 				is_major_syncing: is_major_syncing.clone(),
@@ -469,29 +455,16 @@ where
 		&mut self,
 		validation_result: PollBlockAnnounceValidation<B::Header>,
 	) {
-		let (header, _is_best, who) = match validation_result {
-			PollBlockAnnounceValidation::Skip => return,
+		match validation_result {
+			PollBlockAnnounceValidation::Skip => {},
 			PollBlockAnnounceValidation::Nothing { is_best: _, who, announce } => {
 				self.update_peer_info(&who);
 
 				if let Some(data) = announce.data {
 					if !data.is_empty() {
-						self.block_announce_data_cache.put(announce.header.hash(), data);
+						self.block_announce_data_cache.insert(announce.header.hash(), data);
 					}
 				}
-
-				return
-			},
-			PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
-				self.update_peer_info(&who);
-
-				if let Some(data) = announce.data {
-					if !data.is_empty() {
-						self.block_announce_data_cache.put(announce.header.hash(), data);
-					}
-				}
-
-				(announce.header, is_best, who)
 			},
 			PollBlockAnnounceValidation::Failure { who, disconnect } => {
 				if disconnect {
@@ -500,31 +473,8 @@ where
 				}
 
 				self.network_service.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
-				return
 			},
-		};
-
-		// to import header from announced block let's construct response to request that normally
-		// would have been sent over network (but it is not in our case)
-		let blocks_to_import = self.chain_sync.on_block_data(
-			&who,
-			None,
-			BlockResponse {
-				id: 0,
-				blocks: vec![BlockData {
-					hash: header.hash(),
-					header: Some(header),
-					body: None,
-					indexed_body: None,
-					receipt: None,
-					message_queue: None,
-					justification: None,
-					justifications: None,
-				}],
-			},
-		);
-
-		self.chain_sync.process_block_response_data(blocks_to_import);
+		}
 	}
 
 	/// Push a block announce validation.

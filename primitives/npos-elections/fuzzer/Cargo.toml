@@ -15,10 +15,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 clap = { version = "4.2.5", features = ["derive"] }
-codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 honggfuzz = "0.5"
 rand = { version = "0.8", features = ["std", "small_rng"] }
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 sp-npos-elections = { version = "4.0.0-dev", path = ".." }
 sp-runtime = { version = "24.0.0", path = "../../runtime" }
 

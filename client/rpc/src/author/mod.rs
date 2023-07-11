@@ -124,7 +124,7 @@ where
 		let best_block_hash = self.client.info().best_hash;
 		let mut runtime_api = self.client.runtime_api();
 
-		runtime_api.register_extension(KeystoreExt::new(self.keystore.clone()));
+		runtime_api.register_extension(KeystoreExt::from(self.keystore.clone()));
 
 		runtime_api
 			.generate_session_keys(best_block_hash, None)

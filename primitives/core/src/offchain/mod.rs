@@ -261,21 +261,21 @@ bitflags::bitflags! {
 	/// Execution context extra capabilities.
 	pub struct Capabilities: u32 {
 		/// External http calls.
-		const HTTP = 0b0000_0000_0001;
+		const HTTP = 1 << 0;
 		/// Keystore access.
-		const KEYSTORE = 0b0000_0000_0010;
+		const KEYSTORE = 1 << 2;
 		/// Randomness source.
-		const RANDOMNESS = 0b0000_0000_0100;
+		const RANDOMNESS = 1 << 3;
 		/// Access to opaque network state.
-		const NETWORK_STATE = 0b0000_0000_1000;
+		const NETWORK_STATE = 1 << 4;
 		/// Access to offchain worker DB (read only).
-		const OFFCHAIN_DB_READ = 0b0000_0001_0000;
+		const OFFCHAIN_DB_READ = 1 << 5;
 		/// Access to offchain worker DB (writes).
-		const OFFCHAIN_DB_WRITE = 0b0000_0010_0000;
+		const OFFCHAIN_DB_WRITE = 1 << 6;
 		/// Manage the authorized nodes
-		const NODE_AUTHORIZATION = 0b0000_0100_0000;
+		const NODE_AUTHORIZATION = 1 << 7;
 		/// Access time related functionality
-		const TIME = 0b0000_1000_0000;
+		const TIME = 1 << 8;
 	}
 }
 

@@ -25,8 +25,8 @@ use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
 use sc_cli::{execution_method_from_cli, CliConfiguration, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
-use sc_executor::{NativeElseWasmExecutor, WasmExecutor};
-use sc_service::{Configuration, NativeExecutionDispatch};
+use sc_executor::WasmExecutor;
+use sc_service::Configuration;
 use serde::Serialize;
 use sp_core::{
 	offchain::{
@@ -141,11 +141,11 @@ not created by a node that was compiled with the flag";
 
 impl PalletCmd {
 	/// Runs the command and benchmarks the chain.
-	pub fn run<BB, ExecDispatch>(&self, config: Configuration) -> Result<()>
+	pub fn run<BB, ExtraHostFunctions>(&self, config: Configuration) -> Result<()>
 	where
 		BB: BlockT + Debug,
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
-		ExecDispatch: NativeExecutionDispatch + 'static,
+		ExtraHostFunctions: sp_wasm_interface::HostFunctions,
 	{
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
@@ -209,13 +209,15 @@ impl PalletCmd {
 		let method =
 			execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy);
 
-		let executor = NativeElseWasmExecutor::<ExecDispatch>::new_with_wasm_executor(
-			WasmExecutor::builder()
-				.with_execution_method(method)
-				.with_max_runtime_instances(2)
-				.with_runtime_cache_size(2)
-				.build(),
-		);
+		let executor = WasmExecutor::<(
+			sp_io::SubstrateHostFunctions,
+			frame_benchmarking::benchmarking::HostFunctions,
+			ExtraHostFunctions,
+		)>::builder()
+		.with_execution_method(method)
+		.with_max_runtime_instances(2)
+		.with_runtime_cache_size(2)
+		.build();
 
 		let extensions = || -> Extensions {
 			let mut extensions = Extensions::default();
