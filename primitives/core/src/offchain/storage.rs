@@ -17,11 +17,13 @@
 
 //! In-memory implementation of offchain workers database.
 
-use crate::offchain::OffchainStorage;
+use crate::offchain::{DbExternalities, OffchainStorage, StorageKind, STORAGE_PREFIX};
 use std::{
 	collections::hash_map::{Entry, HashMap},
 	iter::Iterator,
 };
+
+const LOG_TARGET: &str = "offchain-worker::storage";
 
 /// In-memory storage for offchain workers.
 #[derive(Debug, Clone, Default)]
@@ -86,5 +88,97 @@ impl OffchainStorage for InMemOffchainStorage {
 			},
 			_ => false,
 		}
+	}
+}
+
+fn unavailable_yet<R: Default>(name: &str) -> R {
+	tracing::error!(
+		target: LOG_TARGET,
+		"The {:?} API is not available for offchain workers yet. Follow \
+		https://github.com/paritytech/substrate/issues/1458 for details",
+		name
+	);
+	Default::default()
+}
+
+const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
+
+/// Offchain DB that implements [`DbExternalities`] for [`OffchainStorage`].
+#[derive(Debug, Clone)]
+pub struct OffchainDb<Storage> {
+	/// Persistent storage database.
+	persistent: Storage,
+}
+
+impl<Storage> OffchainDb<Storage> {
+	/// Create new instance of Offchain DB.
+	pub fn new(persistent: Storage) -> Self {
+		Self { persistent }
+	}
+}
+
+impl<Storage: OffchainStorage> DbExternalities for OffchainDb<Storage> {
+	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
+		tracing::debug!(
+			target: LOG_TARGET,
+			?kind,
+			key = ?array_bytes::bytes2hex("", key),
+			value = ?array_bytes::bytes2hex("", value),
+			"Write",
+		);
+		match kind {
+			StorageKind::PERSISTENT => self.persistent.set(STORAGE_PREFIX, key, value),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
+	}
+
+	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
+		tracing::debug!(
+			target: LOG_TARGET,
+			?kind,
+			key = ?array_bytes::bytes2hex("", key),
+			"Clear",
+		);
+		match kind {
+			StorageKind::PERSISTENT => self.persistent.remove(STORAGE_PREFIX, key),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
+	}
+
+	fn local_storage_compare_and_set(
+		&mut self,
+		kind: StorageKind,
+		key: &[u8],
+		old_value: Option<&[u8]>,
+		new_value: &[u8],
+	) -> bool {
+		tracing::debug!(
+			target: LOG_TARGET,
+			?kind,
+			key = ?array_bytes::bytes2hex("", key),
+			new_value = ?array_bytes::bytes2hex("", new_value),
+			old_value = ?old_value.as_ref().map(|s| array_bytes::bytes2hex("", s)),
+			"CAS",
+		);
+		match kind {
+			StorageKind::PERSISTENT =>
+				self.persistent.compare_and_set(STORAGE_PREFIX, key, old_value, new_value),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		}
+	}
+
+	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
+		let result = match kind {
+			StorageKind::PERSISTENT => self.persistent.get(STORAGE_PREFIX, key),
+			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
+		};
+		tracing::debug!(
+			target: LOG_TARGET,
+			?kind,
+			key = ?array_bytes::bytes2hex("", key),
+			result = ?result.as_ref().map(|s| array_bytes::bytes2hex("", s)),
+			"Read",
+		);
+		result
 	}
 }

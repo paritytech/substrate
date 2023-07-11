@@ -18,7 +18,6 @@
 
 //! Service configuration.
 
-pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
@@ -81,8 +80,6 @@ pub struct Configuration {
 	/// over on-chain runtimes when the spec version matches. Set to `None` to
 	/// disable overrides (default).
 	pub wasm_runtime_overrides: Option<PathBuf>,
-	/// Execution strategies.
-	pub execution_strategies: ExecutionStrategies,
 	/// JSON-RPC server binding address.
 	pub rpc_addr: Option<SocketAddr>,
 	/// Maximum number of connections for JSON-RPC server.
