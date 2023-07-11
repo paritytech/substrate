@@ -1,5 +1,0 @@
-error: `System` pallet declaration is missing. Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`
- --> tests/construct_runtime_ui/missing_where_block.rs:4:21
-  |
-4 |     pub struct Runtime {}
-  |                        ^^

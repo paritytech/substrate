@@ -1048,7 +1048,7 @@ pub mod pallet {
 
 			// Insert the proposal into the blacklist.
 			let permanent =
-				(BlockNumberFor::<T>::max_value(), Default::default());
+				(BlockNumberFor::<T>::max_value(), BoundedVec::<T::AccountId, _>::default());
 			Blacklist::<T>::insert(&proposal_hash, permanent);
 
 			// Remove the queued proposal, if it's there.

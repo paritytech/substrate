@@ -186,10 +186,10 @@ impl<
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ OnIdle<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ OnFinalize<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ OffchainWorker<frame_system::pallet_prelude::BlockNumberFor<System>>,
+			+ OnInitialize<BlockNumberFor<System>>
+			+ OnIdle<BlockNumberFor<System>>
+			+ OnFinalize<BlockNumberFor<System>>
+			+ OffchainWorker<BlockNumberFor<System>>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
@@ -223,11 +223,11 @@ impl<
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ OnIdle<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ OnFinalize<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ OffchainWorker<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ frame_support::traits::TryState<frame_system::pallet_prelude::BlockNumberFor<System>>,
+			+ OnInitialize<BlockNumberFor<System>>
+			+ OnIdle<BlockNumberFor<System>>
+			+ OnFinalize<BlockNumberFor<System>>
+			+ OffchainWorker<BlockNumberFor<System>>
+			+ frame_support::traits::TryState<BlockNumberFor<System>>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
@@ -305,7 +305,7 @@ where
 		// run the try-state checks of all pallets, ensuring they don't alter any state.
 		let _guard = frame_support::StorageNoopGuard::default();
 		<AllPalletsWithSystem as frame_support::traits::TryState<
-			frame_system::pallet_prelude::BlockNumberFor<System>,
+			BlockNumberFor<System>,
 		>>::try_state(*header.number(), select)
 		.map_err(|e| {
 			frame_support::log::error!(target: LOG_TARGET, "failure: {:?}", e);
@@ -357,7 +357,7 @@ where
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<
-				frame_system::pallet_prelude::BlockNumberFor<System>,
+				BlockNumberFor<System>,
 			>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
 				frame_try_runtime::TryStateSelect::All,
@@ -372,7 +372,7 @@ where
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<
-				frame_system::pallet_prelude::BlockNumberFor<System>,
+				BlockNumberFor<System>,
 			>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
 				frame_try_runtime::TryStateSelect::All,
@@ -392,10 +392,10 @@ impl<
 		Context: Default,
 		UnsignedValidator,
 		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ OnIdle<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ OnFinalize<frame_system::pallet_prelude::BlockNumberFor<System>>
-			+ OffchainWorker<frame_system::pallet_prelude::BlockNumberFor<System>>,
+			+ OnInitialize<BlockNumberFor<System>>
+			+ OnIdle<BlockNumberFor<System>>
+			+ OnFinalize<BlockNumberFor<System>>
+			+ OffchainWorker<BlockNumberFor<System>>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
@@ -430,7 +430,7 @@ where
 	}
 
 	fn initialize_block_impl(
-		block_number: &frame_system::pallet_prelude::BlockNumberFor<System>,
+		block_number: &BlockNumberFor<System>,
 		parent_hash: &System::Hash,
 		digest: &Digest,
 	) {
@@ -445,7 +445,7 @@ where
 		}
 		<frame_system::Pallet<System>>::initialize(block_number, parent_hash, digest);
 		weight = weight.saturating_add(<AllPalletsWithSystem as OnInitialize<
-			frame_system::pallet_prelude::BlockNumberFor<System>,
+			BlockNumberFor<System>,
 		>>::on_initialize(*block_number));
 		weight = weight.saturating_add(
 			<System::BlockWeights as frame_support::traits::Get<_>>::get().base_block,
@@ -549,7 +549,7 @@ where
 
 		if remaining_weight.all_gt(Weight::zero()) {
 			let used_weight = <AllPalletsWithSystem as OnIdle<
-				frame_system::pallet_prelude::BlockNumberFor<System>,
+				BlockNumberFor<System>,
 			>>::on_idle(block_number, remaining_weight);
 			<frame_system::Pallet<System>>::register_extra_weight_unchecked(
 				used_weight,
@@ -558,7 +558,7 @@ where
 		}
 
 		<AllPalletsWithSystem as OnFinalize<
-			frame_system::pallet_prelude::BlockNumberFor<System>,
+			BlockNumberFor<System>,
 		>>::on_finalize(block_number);
 	}
 
@@ -686,7 +686,7 @@ where
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
 		<AllPalletsWithSystem as OffchainWorker<
-			frame_system::pallet_prelude::BlockNumberFor<System>,
+			BlockNumberFor<System>,
 		>>::offchain_worker(*header.number())
 	}
 }

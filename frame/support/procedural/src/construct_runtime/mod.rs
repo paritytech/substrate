@@ -403,20 +403,16 @@ fn construct_runtime_final_expansion(
 	let integrity_test = decl_integrity_test(&scrate);
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
-	let warning =
-		if let Some(where_section) = where_section {
-			Some(
-			proc_macro_warning::Warning::new_deprecated("WhereSection")
-				.old("use a `where` clause in `construct_runtime`")
-				.new("use `frame_system::Config` to set the `Block` type and delete this clause. 
-					It is planned to be removed in December 2023")
-				.help_links(&["https://github.com/paritytech/substrate/pull/14437"])
-				.span(where_section.span)
-				.build(),
-		)
-		} else {
-			None
-		};
+	let warning = where_section.map_or(None, |where_section| {
+		Some(proc_macro_warning::Warning::new_deprecated("WhereSection")
+			.old("use a `where` clause in `construct_runtime`")
+			.new("use `frame_system::Config` to set the `Block` type and delete this clause. 
+				It is planned to be removed in December 2023")
+			.help_links(&["https://github.com/paritytech/substrate/pull/14437"])
+			.span(where_section.span)
+			.build(),
+		)}
+	);
 
 	let res = quote!(
 		#warning
