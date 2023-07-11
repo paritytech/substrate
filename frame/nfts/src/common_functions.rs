@@ -68,6 +68,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	#[cfg(test)]
 	pub fn get_next_id() -> T::CollectionId {
-		NextCollectionId::<T, I>::get().or(T::CollectionId::initial_value()).unwrap()
+		NextCollectionId::<T, I>::get()
+			.or(T::CollectionId::initial_value())
+			.expect("Failed to get next collection ID")
 	}
 }
