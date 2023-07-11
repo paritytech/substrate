@@ -499,6 +499,11 @@ impl<G, E> ChainSpec<G, E> {
 		self.client_spec.chain_type.clone()
 	}
 
+	/// Sets the code.
+	pub fn set_code(&mut self, code: &[u8]) {
+		self.code = code.into();
+	}
+
 	/// Provides a `ChainSpec` builder.
 	pub fn builder() -> ChainSpecBuilder<G, E> {
 		ChainSpecBuilder::new()
