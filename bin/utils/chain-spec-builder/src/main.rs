@@ -22,11 +22,13 @@ use std::{
 };
 
 use ansi_term::Style;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
+use sc_chain_spec::{GenericChainSpec, GenesisConfigBuilderRuntimeCaller};
 
 use node_cli::chain_spec::{self, AccountId};
 use sc_keystore::LocalKeystore;
+use serde_json::Value;
 use sp_core::{
 	crypto::{ByteArray, Ss58Codec},
 	sr25519,
@@ -35,64 +37,152 @@ use sp_keystore::KeystorePtr;
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(rename_all = "kebab-case")]
-enum ChainSpecBuilder {
-	/// Create a new chain spec with the given authorities, endowed and sudo
-	/// accounts.
-	New {
-		/// Authority key seed.
-		#[arg(long, short, required = true)]
-		authority_seeds: Vec<String>,
-		/// Active nominators (SS58 format), each backing a random subset of the aforementioned
-		/// authorities.
-		#[arg(long, short, default_value = "0")]
-		nominator_accounts: Vec<String>,
-		/// Endowed account address (SS58 format).
-		#[arg(long, short)]
-		endowed_accounts: Vec<String>,
-		/// Sudo account address (SS58 format).
-		#[arg(long, short)]
-		sudo_account: String,
-		/// The path where the chain spec should be saved.
-		#[arg(long, short, default_value = "./chain_spec.json")]
-		chain_spec_path: PathBuf,
-	},
-	/// Create a new chain spec with the given number of authorities and endowed
-	/// accounts. Random keys will be generated as required.
-	Generate {
-		/// The number of authorities.
-		#[arg(long, short)]
-		authorities: usize,
-		/// The number of nominators backing the aforementioned authorities.
-		///
-		/// Will nominate a random subset of `authorities`.
-		#[arg(long, short, default_value_t = 0)]
-		nominators: usize,
-		/// The number of endowed accounts.
-		#[arg(long, short, default_value_t = 0)]
-		endowed: usize,
-		/// The path where the chain spec should be saved.
-		#[arg(long, short, default_value = "./chain_spec.json")]
-		chain_spec_path: PathBuf,
-		/// Path to use when saving generated keystores for each authority.
-		///
-		/// At this path, a new folder will be created for each authority's
-		/// keystore named `auth-$i` where `i` is the authority index, i.e.
-		/// `auth-0`, `auth-1`, etc.
-		#[arg(long, short)]
-		keystore_path: Option<PathBuf>,
-	},
+struct ChainSpecBuilder {
+	#[command(subcommand)]
+	command: ChainSpecBuilderCmd,
+	/// The path where the chain spec should be saved.
+	#[arg(long, short, default_value = "./chain_spec.json")]
+	chain_spec_path: PathBuf,
 }
 
-impl ChainSpecBuilder {
-	/// Returns the path where the chain spec should be saved.
-	fn chain_spec_path(&self) -> &Path {
-		match self {
-			ChainSpecBuilder::New { chain_spec_path, .. } => chain_spec_path.as_path(),
-			ChainSpecBuilder::Generate { chain_spec_path, .. } => chain_spec_path.as_path(),
-		}
-	}
+#[derive(Debug, Subcommand)]
+#[command(rename_all = "kebab-case")]
+enum ChainSpecBuilderCmd {
+	New(NewCmd),
+	Generate(GenerateCmd),
+	Runtime(RuntimeCmd),
+	Edit(EditCmd),
+	Verify(VerifyCmd),
+}
+
+/// Create a new chain spec with the given authorities, endowed and sudo
+/// accounts. Only works for kitchen-sink runtime
+#[derive(Parser, Debug)]
+#[command(rename_all = "kebab-case")]
+struct NewCmd {
+	/// Authority key seed.
+	#[arg(long, short, required = true)]
+	authority_seeds: Vec<String>,
+	/// Active nominators (SS58 format), each backing a random subset of the aforementioned
+	/// authorities.
+	#[arg(long, short, default_value = "0")]
+	nominator_accounts: Vec<String>,
+	/// Endowed account address (SS58 format).
+	#[arg(long, short)]
+	endowed_accounts: Vec<String>,
+	/// Sudo account address (SS58 format).
+	#[arg(long, short)]
+	sudo_account: String,
+}
+
+/// Create a new chain spec with the given number of authorities and endowed
+/// accounts. Random keys will be generated as required. Only works for kitchen-sink runtime
+#[derive(Parser, Debug)]
+struct GenerateCmd {
+	/// The number of authorities.
+	#[arg(long, short)]
+	authorities: usize,
+	/// The number of nominators backing the aforementioned authorities.
+	///
+	/// Will nominate a random subset of `authorities`.
+	#[arg(long, short, default_value_t = 0)]
+	nominators: usize,
+	/// The number of endowed accounts.
+	#[arg(long, short, default_value_t = 0)]
+	endowed: usize,
+	/// Path to use when saving generated keystores for each authority.
+	///
+	/// At this path, a new folder will be created for each authority's
+	/// keystore named `auth-$i` where `i` is the authority index, i.e.
+	/// `auth-0`, `auth-1`, etc.
+	#[arg(long, short)]
+	keystore_path: Option<PathBuf>,
+}
+
+/// Create a new chain spec by interacting with the provided runtime wasm blob.
+#[derive(Parser, Debug)]
+struct RuntimeCmd {
+	/// The name of chain
+	#[arg(long, short = 'n', default_value = "Custom")]
+	chain_name: String,
+	/// The chain id
+	#[arg(long, short = 'i', default_value = "custom")]
+	chain_id: String,
+	/// The path to runtime wasm blob
+	#[arg(long, short)]
+	runtime_wasm_path: PathBuf,
+	/// Export chainspec as raw storage
+	#[arg(long, short = 's')]
+	raw_storage: bool,
+	/// Verify the genesis config. This silently generates the raw storage from genesis config. Any
+	/// errors will be reported.
+	#[arg(long, short = 'v')]
+	verify: bool,
+	#[command(subcommand)]
+	action: GenesisBuildAction,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum GenesisBuildAction {
+	Patch(PatchCmd),
+	Full(FullCmd),
+	Default(DefaultCmd),
+}
+
+/// Patches the runtime's default genesis config with provided patch.
+#[derive(Parser, Debug, Clone)]
+struct PatchCmd {
+	/// The path to the runtime genesis config patch.
+	#[arg(long, short)]
+	patch_path: PathBuf,
+}
+
+/// Build the genesis config for runtime using provided json file. No defaults will be used.
+#[derive(Parser, Debug, Clone)]
+struct FullCmd {
+	/// The path to the full runtime genesis config json file.
+	#[arg(long, short)]
+	config_path: PathBuf,
+}
+
+/// Gets the default genesis config for the runtime and uses it in ChainSpec. Please note that
+/// default genesis config may not be valid. For some runtimes initial values should be added there
+/// (e.g. session keys, babe epoch).
+#[derive(Parser, Debug, Clone)]
+struct DefaultCmd {
+	#[arg(long, short)]
+	/// If provided stores the default genesis config json file at given path (in addition to
+	/// chain-spec).
+	default_config_path: Option<PathBuf>,
+}
+
+/// Edits provided input chain spec. Input can be converted into raw storage chain-spec. The code
+/// can be updated with the runtime provided in the command line.
+#[derive(Parser, Debug, Clone)]
+struct EditCmd {
+	#[arg(long, short)]
+	/// Chain spec to be edited
+	input_chain_spec: PathBuf,
+	/// The path to new runtime wasm blob to be stored into chain-spec
+	#[arg(long, short = 'r')]
+	runtime_wasm_path: Option<PathBuf>,
+	/// Convert genesis spec to raw format
+	#[arg(long, short = 's')]
+	convert_to_raw: bool,
+}
+
+/// Verifies provided input chain spec. If the runtime is provided verification is performed against
+/// new runtime.
+#[derive(Parser, Debug, Clone)]
+struct VerifyCmd {
+	#[arg(long, short)]
+	/// Chain spec to be edited
+	input_chain_spec: PathBuf,
+	/// The path to new runtime wasm blob to be stored into chain-spec
+	#[arg(long, short = 'r')]
+	runtime_wasm_path: Option<PathBuf>,
 }
 
 fn generate_chain_spec(
@@ -207,19 +297,80 @@ fn print_seeds(
 	println!("//{}", sudo_seed);
 }
 
+fn generate_chain_spec_for_runtime(cmd: &RuntimeCmd) -> Result<String, String> {
+	let code = fs::read(cmd.runtime_wasm_path.as_path()).expect("wasm blob file is readable");
+
+	let builder = chain_spec::ChainSpec::builder()
+		.with_name(&cmd.chain_name[..])
+		.with_id(&cmd.chain_id[..])
+		.with_chain_type(sc_chain_spec::ChainType::Live)
+		.with_extensions(Default::default())
+		.with_code(&code[..]);
+
+	let builder = match cmd.action {
+		GenesisBuildAction::Patch(PatchCmd { ref patch_path }) => {
+			let patch = fs::read(patch_path.as_path())
+				.map_err(|e| format!("patch file {patch_path:?} shall be readable: {e}"))?;
+			builder.with_genesis_patch(serde_json::from_slice::<Value>(&patch[..]).map_err(
+				|e| format!("patch file {patch_path:?} shall contain a valid json: {e}"),
+			)?)
+		},
+		GenesisBuildAction::Full(FullCmd { ref config_path }) => {
+			let config = fs::read(config_path.as_path())
+				.map_err(|e| format!("config file {config_path:?} shall be readable: {e}"))?;
+			builder.with_no_genesis_defaults(serde_json::from_slice::<Value>(&config[..]).map_err(
+				|e| format!("config file {config_path:?} shall contain a valid json: {e}"),
+			)?)
+		},
+		GenesisBuildAction::Default(DefaultCmd { ref default_config_path }) => {
+			let caller = GenesisConfigBuilderRuntimeCaller::new(&code[..]);
+			let default_config = caller
+				.get_default_config()
+				.expect("getting default config from runtime should work");
+			default_config_path.clone().map(|path| {
+				fs::write(path.as_path(), serde_json::to_string_pretty(&default_config).unwrap())
+					.map_err(|err| err.to_string())
+			});
+			builder.with_no_genesis_defaults(default_config)
+		},
+	};
+
+	let chain_spec = builder.build();
+
+	match (cmd.verify, cmd.raw_storage) {
+		(_, true) => chain_spec.as_json(true),
+		(true, false) => {
+			chain_spec.as_json(true)?;
+			println!("Genesis config verification: OK");
+			chain_spec.as_json(false)
+		},
+		(false, false) => chain_spec.as_json(false),
+	}
+}
+
 fn main() -> Result<(), String> {
-	#[cfg(build_type = "debug")]
-	println!(
-		"The chain spec builder builds a chain specification that includes a Substrate runtime \
-		 compiled as WASM. To ensure proper functioning of the included runtime compile (or run) \
-		 the chain spec builder binary in `--release` mode.\n",
-	);
+	sp_tracing::try_init_simple();
 
 	let builder = ChainSpecBuilder::parse();
-	let chain_spec_path = builder.chain_spec_path().to_path_buf();
+	#[cfg(build_type = "debug")]
+	if matches!(builder.command, ChainSpecBuilderCmd::Generate(_) | ChainSpecBuilderCmd::New(_)) {
+		println!(
+			"The chain spec builder builds a chain specification that includes a Substrate runtime \
+		 compiled as WASM. To ensure proper functioning of the included runtime compile (or run) \
+		 the chain spec builder binary in `--release` mode.\n",
+		 );
+	}
 
-	let (authority_seeds, nominator_accounts, endowed_accounts, sudo_account) = match builder {
-		ChainSpecBuilder::Generate { authorities, nominators, endowed, keystore_path, .. } => {
+	let chain_spec_path = builder.chain_spec_path.to_path_buf();
+	let mut write_chain_spec = true;
+
+	let chain_spec_json = match builder.command {
+		ChainSpecBuilderCmd::Generate(GenerateCmd {
+			authorities,
+			nominators,
+			endowed,
+			keystore_path,
+		}) => {
 			let authorities = authorities.max(1);
 			let rand_str = || -> String {
 				OsRng.sample_iter(&Alphanumeric).take(32).map(char::from).collect()
@@ -253,19 +404,45 @@ fn main() -> Result<(), String> {
 			let sudo_account =
 				chain_spec::get_account_id_from_seed::<sr25519::Public>(&sudo_seed).to_ss58check();
 
-			(authority_seeds, nominator_accounts, endowed_accounts, sudo_account)
+			generate_chain_spec(authority_seeds, nominator_accounts, endowed_accounts, sudo_account)
 		},
-		ChainSpecBuilder::New {
+		ChainSpecBuilderCmd::New(NewCmd {
 			authority_seeds,
 			nominator_accounts,
 			endowed_accounts,
 			sudo_account,
-			..
-		} => (authority_seeds, nominator_accounts, endowed_accounts, sudo_account),
-	};
+		}) =>
+			generate_chain_spec(authority_seeds, nominator_accounts, endowed_accounts, sudo_account),
+		ChainSpecBuilderCmd::Runtime(cmd) => generate_chain_spec_for_runtime(&cmd),
+		ChainSpecBuilderCmd::Edit(EditCmd {
+			ref input_chain_spec,
+			ref runtime_wasm_path,
+			convert_to_raw,
+		}) => {
+			let mut chain_spec = GenericChainSpec::<()>::from_json_file(input_chain_spec.clone())?;
+			runtime_wasm_path.clone().and_then(|path| {
+				chain_spec
+					.set_code(&fs::read(path.as_path()).expect("wasm blob file is readable")[..])
+					.into()
+			});
 
-	let json =
-		generate_chain_spec(authority_seeds, nominator_accounts, endowed_accounts, sudo_account)?;
+			chain_spec.as_json(convert_to_raw)
+		},
+		ChainSpecBuilderCmd::Verify(VerifyCmd { ref input_chain_spec, ref runtime_wasm_path }) => {
+			write_chain_spec = false;
+			let mut chain_spec = GenericChainSpec::<()>::from_json_file(input_chain_spec.clone())?;
+			runtime_wasm_path.clone().and_then(|path| {
+				chain_spec
+					.set_code(&fs::read(path.as_path()).expect("wasm blob file is readable")[..])
+					.into()
+			});
+			chain_spec.as_json(true)
+		},
+	}?;
 
-	fs::write(chain_spec_path, json).map_err(|err| err.to_string())
+	if write_chain_spec {
+		fs::write(chain_spec_path, chain_spec_json).map_err(|err| err.to_string())
+	} else {
+		Ok(())
+	}
 }
