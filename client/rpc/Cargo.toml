@@ -50,6 +50,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/comm
 tokio = "1.22.0"
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
+pretty_assertions = "1.2.1"
 
 [features]
 test-helpers = []

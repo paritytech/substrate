@@ -265,7 +265,6 @@ mod tests {
 				)),
 				wasm_method: Default::default(),
 				wasm_runtime_overrides: None,
-				execution_strategies: Default::default(),
 				rpc_addr: None,
 				rpc_max_connections: Default::default(),
 				rpc_cors: None,
