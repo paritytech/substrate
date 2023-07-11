@@ -251,11 +251,9 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 			{
 				fn integrity_test() {
-					let ext = #frame_support::sp_io::TestExternalities::default();
-					let mut ro_ext =
-						#frame_support::__private::ReadOnlyExternalities::from(&ext.backend);
+					let mut ext = #frame_support::sp_io::TestExternalities::default();
 
-					ro_ext.execute_with(|| {
+					ext.execute_with(|| {
 						<
 							Self as #frame_support::traits::Hooks<
 								<T as #frame_system::Config>::BlockNumber

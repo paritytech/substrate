@@ -65,13 +65,6 @@ pub use sp_std;
 #[doc(hidden)]
 pub use tt_call::*;
 
-// Re-exports go here:
-#[doc(hidden)]
-pub mod __private {
-	#[cfg(feature = "std")]
-	pub use sp_state_machine::ReadOnlyExternalities;
-}
-
 #[macro_use]
 pub mod dispatch;
 mod hash;
