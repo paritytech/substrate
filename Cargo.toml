@@ -245,6 +245,7 @@ members = [
 	"primitives/weights",
 	"scripts/ci/node-template-release",
 	"test-utils",
+	"test-utils/cli",
 	"test-utils/client",
 	"test-utils/derive",
 	"test-utils/runtime",

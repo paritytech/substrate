@@ -539,7 +539,6 @@ mod tests {
 				genesis_block_builder,
 				None,
 				None,
-				None,
 				Box::new(TaskExecutor::new()),
 				client_config,
 			)

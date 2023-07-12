@@ -128,7 +128,7 @@ pub use v1::*;
 /// as `I` in the case of an `#[instance_benchmarks]` module. You should not add these to the
 /// function signature as this will be handled automatically for you based on whether this is a
 /// `#[benchmarks]` or `#[instance_benchmarks]` module and whatever [where clause](#where-clause)
-/// you have defined for the the module. You should not manually add any generics to the
+/// you have defined for the module. You should not manually add any generics to the
 /// signature of your benchmark function.
 ///
 /// Also note that the `// setup code` and `// verification code` comments shown above are not

@@ -37,10 +37,10 @@ use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, InPoolTransaction, TransactionFor, TransactionPool,
 	TransactionSource, TxHash,
 };
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_keystore::KeystorePtr;
+use sp_keystore::{KeystoreExt, KeystorePtr};
 use sp_runtime::{generic, traits::Block as BlockT};
 use sp_session::SessionKeys;
 
@@ -122,8 +122,11 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let best_block_hash = self.client.info().best_hash;
-		self.client
-			.runtime_api()
+		let mut runtime_api = self.client.runtime_api();
+
+		runtime_api.register_extension(KeystoreExt::from(self.keystore.clone()));
+
+		runtime_api
 			.generate_session_keys(best_block_hash, None)
 			.map(Into::into)
 			.map_err(|api_err| Error::Client(Box::new(api_err)).into())

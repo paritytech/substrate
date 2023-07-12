@@ -39,7 +39,7 @@ async fn benchmark_block_works() {
 		.arg(base_dir.path())
 		.args(["--from", "1", "--to", "1"])
 		.args(["--repeat", "1"])
-		.args(["--execution", "wasm", "--wasm-execution", "compiled"])
+		.args(["--wasm-execution", "compiled"])
 		.status()
 		.unwrap();
 

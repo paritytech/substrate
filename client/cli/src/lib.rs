@@ -248,6 +248,4 @@ pub trait SubstrateCli: Sized {
 		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
 		Runner::new(config, tokio_runtime, signals)
 	}
-	/// Native runtime version.
-	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;
 }
