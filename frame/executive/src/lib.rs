@@ -689,7 +689,7 @@ mod tests {
 		transaction_validity::{
 			InvalidTransaction, TransactionValidityError, UnknownTransaction, ValidTransaction,
 		},
-		DispatchError,
+		BuildStorage, DispatchError,
 	};
 
 	use frame_support::{
@@ -833,7 +833,7 @@ mod tests {
 			NodeBlock = TestBlock,
 			UncheckedExtrinsic = TestUncheckedExtrinsic
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 			TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 			Custom: custom::{Pallet, Call, ValidateUnsigned, Inherent},
@@ -972,7 +972,7 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 211)] }
 			.assimilate_storage(&mut t)
 			.unwrap();
@@ -1000,7 +1000,7 @@ mod tests {
 	}
 
 	fn new_test_ext(balance_factor: Balance) -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 111 * balance_factor)] }
 			.assimilate_storage(&mut t)
 			.unwrap();
@@ -1008,7 +1008,7 @@ mod tests {
 	}
 
 	fn new_test_ext_v0(balance_factor: Balance) -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 111 * balance_factor)] }
 			.assimilate_storage(&mut t)
 			.unwrap();

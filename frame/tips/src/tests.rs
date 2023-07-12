@@ -28,9 +28,7 @@ use sp_runtime::{
 use sp_storage::Storage;
 
 use frame_support::{
-	assert_noop, assert_ok,
-	pallet_prelude::GenesisBuild,
-	parameter_types,
+	assert_noop, assert_ok, parameter_types,
 	storage::StoragePrefixedMap,
 	traits::{ConstU32, ConstU64, SortedMembers, StorageVersion},
 	PalletId,
@@ -48,10 +46,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
-		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config, Event<T>},
+		Treasury: pallet_treasury::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
 		Tips1: pallet_tips::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
@@ -570,7 +568,7 @@ fn test_migration_v4() {
 
 #[test]
 fn genesis_funding_works() {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let initial_funding = 100;
 	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized with 100.
@@ -578,7 +576,9 @@ fn genesis_funding_works() {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
+	pallet_treasury::GenesisConfig::<Test>::default()
+		.assimilate_storage(&mut t)
+		.unwrap();
 	let mut t: sp_io::TestExternalities = t.into();
 
 	t.execute_with(|| {
