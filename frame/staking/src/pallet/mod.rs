@@ -580,6 +580,16 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
+	/// Map of delegatee account + delegator account to the amount of funds staked.
+	#[pallet::storage]
+	pub type Delegations<T: Config> =
+		StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, T::AccountId, BalanceOf<T>, ValueQuery>;
+
+	/// Map of delegator account to their Ledger.
+	#[pallet::storage]
+	pub type Delegatees<T: Config> =
+	CountedStorageMap<_, Twox64Concat, T::AccountId, DelegationLedger<T>, ValueQuery>;
+
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
