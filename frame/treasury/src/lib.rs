@@ -704,8 +704,10 @@ pub mod pallet {
 		/// - `asset_kind`: An indicator of the specific asset class to be spent.
 		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
 		/// - `beneficiary`: The beneficiary of the spend.
-		/// - `valid_from`: The block number from which the spend can be claimed. If `None`, the
-		///   spend can be claimed immediately after approval.
+		/// - `valid_from`: The block number from which the spend can be claimed. It can refer to
+		///   the past if the resulting spend has not yet expired according to the
+		///   [`Config::PayoutPeriod`]. If `None`, the spend can be claimed immediately after
+		///   approval.
 		///
 		/// ## Events
 		///
@@ -721,6 +723,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 			let beneficiary = T::BeneficiaryLookup::lookup(beneficiary)?;
+
+			let now = frame_system::Pallet::<T>::block_number();
+			let valid_from = valid_from.unwrap_or(now);
+			let expire_at = valid_from.saturating_add(T::PayoutPeriod::get());
+			ensure!(expire_at > now, Error::<T, I>::SpendExpired);
 
 			let native_amount = T::BalanceConverter::from_asset_balance(amount, asset_kind.clone())
 				.map_err(|_| Error::<T, I>::FailedToConvertBalance)?;
@@ -746,8 +753,6 @@ pub mod pallet {
 			.unwrap_or(Ok(()))?;
 
 			let index = SpendCount::<T, I>::get();
-			let valid_from = valid_from.unwrap_or(frame_system::Pallet::<T>::block_number());
-			let expire_at = valid_from.saturating_add(T::PayoutPeriod::get());
 			Spends::<T, I>::insert(
 				index,
 				SpendStatus {

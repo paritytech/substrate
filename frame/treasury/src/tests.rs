@@ -695,10 +695,19 @@ fn spend_works() {
 #[test]
 fn spend_expires() {
 	new_test_ext().execute_with(|| {
+		assert_eq!(<Test as Config>::PayoutPeriod::get(), 5);
+
+		// spend `0` expires in 5 blocks after the creating.
 		System::set_block_number(1);
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
 		System::set_block_number(6);
 		assert_noop!(Treasury::payout(RuntimeOrigin::signed(1), 0), Error::<Test, _>::SpendExpired);
+
+		// spend cannot be approved since its already expired.
+		assert_noop!(
+			Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, Some(0)),
+			Error::<Test, _>::SpendExpired
+		);
 	});
 }
 
@@ -765,6 +774,7 @@ fn spend_valid_from_works() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(<Test as Config>::PayoutPeriod::get(), 5);
 		System::set_block_number(1);
+
 		// spend valid from block `2`.
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, Some(2)));
 		assert_noop!(Treasury::payout(RuntimeOrigin::signed(1), 0), Error::<Test, _>::EarlyPayout);
@@ -772,10 +782,10 @@ fn spend_valid_from_works() {
 		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 0));
 
 		System::set_block_number(5);
-		// spend valid from block `0`.
-		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, Some(0)));
-		// spend expired.
-		assert_noop!(Treasury::payout(RuntimeOrigin::signed(1), 1), Error::<Test, _>::SpendExpired);
+		// spend approved even if `valid_from` in the past since the payout period has not passed.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, Some(4)));
+		// spend paid.
+		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 1));
 	});
 }
 
