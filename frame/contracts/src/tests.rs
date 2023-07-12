@@ -634,7 +634,7 @@ fn test_ink_compiled_contract() {
 	let bytes = hex::decode(source.wasm[2..].to_owned()).expect("Invalid wasm code.");
 
 	let hex_selector = &spec.constructors[0].selector;
-	let selector = u32::from_str_radix(&hex_selector[2..], 16).unwrap();
+	let selector = u32::from_str_radix(&hex_selector[2..], 16).expect("Invalid selector");
 	let data = selector.to_be_bytes().encode().to_vec();
 
 	ExtBuilder::default().build().execute_with(|| {
