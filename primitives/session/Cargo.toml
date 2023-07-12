@@ -20,6 +20,7 @@ sp-core = { version = "21.0.0", default-features = false, path = "../core" }
 sp-runtime = { version = "24.0.0", optional = true, path = "../runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../staking" }
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
+sp-keystore = { version = "0.27.0", path = "../keystore", optional = true }
 
 [features]
 default = [ "std" ]
@@ -31,4 +32,5 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"sp-std/std",
+	"sp-keystore",
 ]

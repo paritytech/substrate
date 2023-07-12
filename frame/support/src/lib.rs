@@ -1527,6 +1527,12 @@ pub mod tests {
 	}
 }
 
+/// Private module re-exporting items used by frame support macros.
+#[doc(hidden)]
+pub mod _private {
+	pub use sp_inherents;
+}
+
 /// Prelude to be used for pallet testing, for ease of use.
 #[cfg(feature = "std")]
 pub mod testing_prelude {
