@@ -21,7 +21,7 @@ use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
-	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
+	traits::{ConstU16, ConstU32, ConstU64},
 	BasicExternalities,
 };
 use sp_consensus_beefy::mmr::MmrLeafVersion;
@@ -30,6 +30,7 @@ use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup, Keccak256, OpaqueKeys},
+	BuildStorage,
 };
 
 use crate as pallet_beefy_mmr;
@@ -49,7 +50,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 construct_runtime!(
 	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Mmr: pallet_mmr::{Pallet, Storage},
 		Beefy: pallet_beefy::{Pallet, Config<T>, Storage},
@@ -187,7 +188,7 @@ pub fn new_test_ext(ids: Vec<u8>) -> TestExternalities {
 }
 
 pub fn new_test_ext_raw_authorities(authorities: Vec<(u64, BeefyId)>) -> TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	let session_keys: Vec<_> = authorities
 		.iter()

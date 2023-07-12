@@ -28,7 +28,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, Identity, IdentityLookup},
-	DispatchResult,
+	BuildStorage, DispatchResult,
 };
 use sp_std::cell::RefCell;
 
@@ -40,7 +40,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Salary: pallet_salary::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -181,7 +181,7 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext

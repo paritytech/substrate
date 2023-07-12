@@ -30,7 +30,7 @@ use pallet_nfts::PalletFeatures;
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentifyAccount, IdentityLookup, Verify},
-	MultiSignature,
+	BuildStorage, MultiSignature,
 };
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -178,7 +178,7 @@ impl Config for Test {
 
 // Build genesis storage according to the mock runtime.
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));

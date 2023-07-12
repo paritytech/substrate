@@ -20,12 +20,14 @@ use crate as pallet_transaction_payment;
 
 use codec::Encode;
 
-use sp_runtime::{testing::TestXt, traits::One, transaction_validity::InvalidTransaction};
+use sp_runtime::{
+	testing::TestXt, traits::One, transaction_validity::InvalidTransaction, BuildStorage,
+};
 
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
-	traits::{Currency, GenesisBuild},
+	traits::Currency,
 	weights::Weight,
 };
 use frame_system as system;
@@ -80,7 +82,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_constants();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: if self.balance_factor > 0 {
 				vec![
@@ -99,8 +101,9 @@ impl ExtBuilder {
 		.unwrap();
 
 		if let Some(multiplier) = self.initial_multiplier {
-			let genesis = pallet::GenesisConfig { multiplier };
-			GenesisBuild::<Runtime>::assimilate_storage(&genesis, &mut t).unwrap();
+			pallet::GenesisConfig::<Runtime> { multiplier, ..Default::default() }
+				.assimilate_storage(&mut t)
+				.unwrap();
 		}
 
 		t.into()

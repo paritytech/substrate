@@ -1062,7 +1062,7 @@ mod mock {
 	};
 	use sp_runtime::{
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
-		StorageChild,
+		BuildStorage, StorageChild,
 	};
 
 	type Block = frame_system::mocking::MockBlockU32<Test>;
@@ -1071,7 +1071,7 @@ mod mock {
 	frame_support::construct_runtime!(
 		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 			StateTrieMigration: pallet_state_trie_migration::{Pallet, Call, Storage, Event<T>},
 		}
@@ -1236,8 +1236,8 @@ mod mock {
 		};
 
 		if with_pallets {
-			frame_system::GenesisConfig::default()
-				.assimilate_storage::<Test>(&mut custom_storage)
+			frame_system::GenesisConfig::<Test>::default()
+				.assimilate_storage(&mut custom_storage)
 				.unwrap();
 			pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 1000)] }
 				.assimilate_storage(&mut custom_storage)

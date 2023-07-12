@@ -106,6 +106,7 @@ mod tests {
 		generic::DigestItem,
 		testing::Header,
 		traits::{BlakeTwo256, Header as HeaderT, IdentityLookup},
+		BuildStorage,
 	};
 
 	type Block = frame_system::mocking::MockBlock<Test>;
@@ -113,7 +114,7 @@ mod tests {
 	frame_support::construct_runtime!(
 		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Authorship: pallet_authorship::{Pallet, Storage},
 		}
 	);
@@ -183,7 +184,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.into()
 	}
 

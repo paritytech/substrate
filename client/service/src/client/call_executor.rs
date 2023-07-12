@@ -22,14 +22,10 @@ use sc_client_api::{
 };
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
-use sp_core::{
-	traits::{CallContext, CodeExecutor, RuntimeCode},
-	ExecutionContext,
-};
+use sp_core::traits::{CallContext, CodeExecutor, RuntimeCode};
+use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
-use sp_state_machine::{
-	backend::AsTrieBackend, ExecutionStrategy, Ext, OverlayedChanges, StateMachine, StorageProof,
-};
+use sp_state_machine::{backend::AsTrieBackend, Ext, OverlayedChanges, StateMachine, StorageProof};
 use std::{cell::RefCell, sync::Arc};
 
 /// Call executor that executes methods locally, querying all required
@@ -166,7 +162,6 @@ where
 		at_hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
-		strategy: ExecutionStrategy,
 		context: CallContext,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
@@ -180,11 +175,7 @@ where
 
 		let runtime_code = self.check_override(runtime_code, &state, at_hash)?.0;
 
-		let extensions = self.execution_extensions.extensions(
-			at_hash,
-			at_number,
-			ExecutionContext::OffchainCall(None),
-		);
+		let mut extensions = self.execution_extensions.extensions(at_hash, at_number);
 
 		let mut sm = StateMachine::new(
 			&state,
@@ -192,14 +183,13 @@ where
 			&self.executor,
 			method,
 			call_data,
-			extensions,
+			&mut extensions,
 			&runtime_code,
 			context,
 		)
 		.set_parent_hash(at_hash);
 
-		sm.execute_using_consensus_failure_handler(strategy.get_manager())
-			.map_err(Into::into)
+		sm.execute().map_err(Into::into)
 	}
 
 	fn contextual_call(
@@ -210,21 +200,12 @@ where
 		changes: &RefCell<OverlayedChanges>,
 		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		recorder: &Option<ProofRecorder<Block>>,
-		context: ExecutionContext,
+		call_context: CallContext,
+		extensions: &RefCell<Extensions>,
 	) -> Result<Vec<u8>, sp_blockchain::Error> {
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let at_number =
-			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
-
-		let call_context = match context {
-			ExecutionContext::OffchainCall(_) => CallContext::Offchain,
-			_ => CallContext::Onchain,
-		};
-
-		let (execution_manager, extensions) =
-			self.execution_extensions.manager_and_extensions(at_hash, at_number, context);
 
 		let changes = &mut *changes.borrow_mut();
 
@@ -236,6 +217,7 @@ where
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 		let runtime_code = self.check_override(runtime_code, &state, at_hash)?.0;
+		let mut extensions = extensions.borrow_mut();
 
 		match recorder {
 			Some(recorder) => {
@@ -251,13 +233,13 @@ where
 					&self.executor,
 					method,
 					call_data,
-					extensions,
+					&mut extensions,
 					&runtime_code,
 					call_context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(execution_manager)
+				state_machine.execute()
 			},
 			None => {
 				let mut state_machine = StateMachine::new(
@@ -266,13 +248,13 @@ where
 					&self.executor,
 					method,
 					call_data,
-					extensions,
+					&mut extensions,
 					&runtime_code,
 					call_context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(execution_manager)
+				state_machine.execute()
 			},
 		}
 		.map_err(Into::into)
@@ -311,11 +293,7 @@ where
 			method,
 			call_data,
 			&runtime_code,
-			self.execution_extensions.extensions(
-				at_hash,
-				at_number,
-				ExecutionContext::OffchainCall(None),
-			),
+			&mut self.execution_extensions.extensions(at_hash, at_number),
 		)
 		.map_err(Into::into)
 	}
@@ -411,7 +389,6 @@ mod tests {
 				backend.clone(),
 				executor.clone(),
 				genesis_block_builder,
-				None,
 				Box::new(TaskExecutor::new()),
 				None,
 				None,
@@ -430,8 +407,6 @@ mod tests {
 			)
 			.unwrap(),
 			execution_extensions: Arc::new(ExecutionExtensions::new(
-				Default::default(),
-				None,
 				None,
 				Arc::new(executor.clone()),
 			)),
@@ -486,7 +461,6 @@ mod tests {
 				backend.clone(),
 				executor.clone(),
 				genesis_block_builder,
-				None,
 				Box::new(TaskExecutor::new()),
 				None,
 				None,

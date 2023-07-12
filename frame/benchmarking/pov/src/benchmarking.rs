@@ -339,7 +339,7 @@ frame_benchmarking::benchmarks! {
 
 #[cfg(test)]
 mod mock {
-	use sp_runtime::testing::H256;
+	use sp_runtime::{testing::H256, BuildStorage};
 
 	type AccountId = u64;
 	type AccountIndex = u32;
@@ -349,7 +349,7 @@ mod mock {
 	frame_support::construct_runtime!(
 		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Baseline: crate::{Pallet, Call, Storage, Event<T>},
 		}
 	);
@@ -385,6 +385,6 @@ mod mock {
 	}
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 	}
 }

@@ -230,12 +230,13 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		#[serde(skip)]
 		pub phantom: PhantomData<I>,
 		pub members: Vec<T::AccountId>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			use sp_std::collections::btree_set::BTreeSet;
 			let members_set: BTreeSet<_> = self.members.iter().collect();
@@ -345,6 +346,8 @@ pub mod pallet {
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
+		/// Prime account is not a member
+		PrimeAccountNotMember,
 	}
 
 	#[pallet::hooks]
@@ -415,6 +418,9 @@ pub mod pallet {
 					old_count,
 					old.len(),
 				);
+			}
+			if let Some(p) = &prime {
+				ensure!(new_members.contains(p), Error::<T, I>::PrimeAccountNotMember);
 			}
 			let mut new_members = new_members;
 			new_members.sort();

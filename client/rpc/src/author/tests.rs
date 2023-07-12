@@ -66,8 +66,7 @@ struct TestSetup {
 impl Default for TestSetup {
 	fn default() -> Self {
 		let keystore = Arc::new(MemoryKeystore::new());
-		let client_builder = substrate_test_runtime_client::TestClientBuilder::new();
-		let client = Arc::new(client_builder.set_keystore(keystore.clone()).build());
+		let client = Arc::new(substrate_test_runtime_client::TestClientBuilder::new().build());
 
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let pool =

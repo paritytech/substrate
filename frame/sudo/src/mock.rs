@@ -19,10 +19,13 @@
 
 use super::*;
 use crate as sudo;
-use frame_support::traits::{ConstU32, ConstU64, Contains, GenesisBuild};
+use frame_support::traits::{ConstU32, ConstU64, Contains};
 use sp_core::H256;
 use sp_io;
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
+use sp_runtime::{
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 
 // Logger module to track execution.
 #[frame_support::pallet]
@@ -92,7 +95,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Sudo: sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Logger: logger::{Pallet, Call, Storage, Event<T>},
 	}
@@ -149,7 +152,7 @@ pub type LoggerCall = logger::Call<Test>;
 
 // Build test environment by setting the root `key` for the Genesis.
 pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	sudo::GenesisConfig::<Test> { key: Some(root_key) }
 		.assimilate_storage(&mut t)
 		.unwrap();
@@ -158,5 +161,5 @@ pub fn new_test_ext(root_key: u64) -> sp_io::TestExternalities {
 
 #[cfg(feature = "runtime-benchmarks")]
 pub fn new_bench_ext() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 }

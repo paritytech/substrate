@@ -28,7 +28,7 @@ use frame_support::{
 use sp_core::{Pair, H256};
 use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
-	AccountId32,
+	AccountId32, BuildStorage,
 };
 
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -105,7 +105,7 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let balances = pallet_balances::GenesisConfig::<Test> {
 		balances: vec![
 			(sp_core::sr25519::Pair::from_string("//Alice", None).unwrap().public().into(), 6000),

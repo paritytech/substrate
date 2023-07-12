@@ -39,7 +39,7 @@ use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_io;
 use sp_runtime::{
 	traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
-	ArithmeticError, DispatchError, DispatchResult, FixedPointNumber, TokenError,
+	ArithmeticError, BuildStorage, DispatchError, DispatchResult, FixedPointNumber, TokenError,
 };
 use std::collections::BTreeSet;
 
@@ -73,7 +73,7 @@ pub enum TestId {
 frame_support::construct_runtime!(
 	pub struct Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 	}
@@ -170,7 +170,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![

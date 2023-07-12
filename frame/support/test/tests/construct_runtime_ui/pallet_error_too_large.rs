@@ -73,7 +73,7 @@ impl frame_system::Config for Runtime {
 construct_runtime! {
 	pub struct Runtime
 	{
-		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Pallet: pallet::{Pallet},
 	}
 }

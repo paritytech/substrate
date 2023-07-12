@@ -26,7 +26,10 @@ use frame_support::{
 	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling},
 };
 use sp_core::{Get, H256};
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup, ReduceBy};
+use sp_runtime::{
+	traits::{BlakeTwo256, IdentityLookup, ReduceBy},
+	BuildStorage,
+};
 
 use super::*;
 use crate as pallet_ranked_collective;
@@ -37,7 +40,7 @@ type Class = Rank;
 frame_support::construct_runtime!(
 	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Club: pallet_ranked_collective::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -191,7 +194,7 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext

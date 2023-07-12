@@ -111,7 +111,7 @@ benchmarks! {
 #[cfg(test)]
 pub mod mock {
 	use super::*;
-	use sp_runtime::testing::H256;
+	use sp_runtime::{testing::H256, BuildStorage};
 
 	type AccountId = u64;
 	type AccountIndex = u32;
@@ -121,7 +121,7 @@ pub mod mock {
 	frame_support::construct_runtime!(
 		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		}
 	);
 
@@ -156,7 +156,7 @@ pub mod mock {
 	pub fn new_test_ext() -> sp_io::TestExternalities {
 		use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.register_extension(KeystoreExt::new(MemoryKeystore::new()));
 

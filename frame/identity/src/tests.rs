@@ -28,14 +28,17 @@ use frame_support::{
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
-use sp_runtime::traits::{BadOrigin, BlakeTwo256, IdentityLookup};
+use sp_runtime::{
+	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
 	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Identity: pallet_identity::{Pallet, Call, Storage, Event<T>},
 	}
@@ -110,7 +113,7 @@ impl pallet_identity::Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10), (2, 10), (3, 10), (10, 100), (20, 100), (30, 100)],
 	}

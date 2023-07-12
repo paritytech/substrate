@@ -27,7 +27,10 @@ use frame_support::{
 use frame_support_test::TestRandomness;
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
+use sp_runtime::{
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 
 use RuntimeOrigin as Origin;
 
@@ -36,7 +39,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Society: pallet_society::{Pallet, Call, Storage, Event<T>, Config<T>},
 	}
@@ -142,7 +145,7 @@ impl EnvBuilder {
 	}
 
 	pub fn execute<R, F: FnOnce() -> R>(mut self, f: F) -> R {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		self.balances.push((Society::account_id(), self.balance.max(self.pot)));
 		pallet_balances::GenesisConfig::<Test> { balances: self.balances }
 			.assimilate_storage(&mut t)

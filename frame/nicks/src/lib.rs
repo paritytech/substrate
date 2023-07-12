@@ -238,7 +238,10 @@ mod tests {
 	};
 	use frame_system::EnsureSignedBy;
 	use sp_core::H256;
-	use sp_runtime::traits::{BadOrigin, BlakeTwo256, IdentityLookup};
+	use sp_runtime::{
+		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+		BuildStorage,
+	};
 
 	type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -307,7 +310,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 10), (2, 10)] }
 			.assimilate_storage(&mut t)
 			.unwrap();

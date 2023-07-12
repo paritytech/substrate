@@ -30,7 +30,10 @@ use frame_support::{
 };
 use pallet_balances::{Instance1, Instance2};
 use sp_core::{ConstU128, H256};
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
+use sp_runtime::{
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -149,7 +152,7 @@ impl pallet_nis::Config for Test {
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	pallet_balances::GenesisConfig::<Test, Instance1> {
 		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100)],
 	}
@@ -162,7 +165,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 // our desired mockup, but without any balances.
 #[cfg(feature = "runtime-benchmarks")]
 pub fn new_test_ext_empty() -> sp_io::TestExternalities {
-	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+	frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 }
 
 pub fn run_to_block(n: u64) {

@@ -194,7 +194,7 @@ pub mod pallet {
 
 	/// Allows you to define how `genesis_configuration is built.
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Foo::<T>::put(self.foo);
 		}

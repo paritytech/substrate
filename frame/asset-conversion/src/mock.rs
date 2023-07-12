@@ -30,8 +30,10 @@ use frame_support::{
 use frame_system::{EnsureSigned, EnsureSignedBy};
 use sp_arithmetic::Permill;
 use sp_core::H256;
-use sp_runtime::traits::{AccountIdConversion, BlakeTwo256, IdentityLookup};
-
+use sp_runtime::{
+	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(
@@ -175,7 +177,7 @@ impl Config for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10000), (2, 20000), (3, 30000), (4, 40000)],

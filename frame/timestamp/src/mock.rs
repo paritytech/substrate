@@ -26,7 +26,10 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_io::TestExternalities;
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
+use sp_runtime::{
+	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
+};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 type Moment = u64;
@@ -34,7 +37,7 @@ type Moment = u64;
 frame_support::construct_runtime!(
 	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 	}
 );
@@ -92,7 +95,7 @@ pub(crate) fn get_captured_moment() -> Option<Moment> {
 }
 
 pub(crate) fn new_test_ext() -> TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	clear_captured_moment();
 	TestExternalities::new(t)
 }

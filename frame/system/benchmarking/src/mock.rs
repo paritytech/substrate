@@ -20,7 +20,7 @@
 #![cfg(test)]
 
 use codec::Encode;
-use sp_runtime::traits::IdentityLookup;
+use sp_runtime::{traits::IdentityLookup, BuildStorage};
 
 type AccountId = u64;
 type AccountIndex = u32;
@@ -30,7 +30,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -75,7 +75,7 @@ impl sp_core::traits::ReadRuntimeVersion for MockedReadRuntimeVersion {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	let version = sp_version::RuntimeVersion {
 		spec_name: "spec_name".into(),

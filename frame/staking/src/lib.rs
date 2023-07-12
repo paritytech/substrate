@@ -314,7 +314,7 @@ use sp_runtime::{
 pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, SessionIndex,
+	EraIndex, OnStakingUpdate, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
@@ -549,7 +549,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// `slash_era` is the era in which the slash (which is being enacted now) actually happened.
 	///
-	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash was
+	/// This calls `Config::OnStakingUpdate::on_slash` with information as to how the slash was
 	/// applied.
 	pub fn slash(
 		&mut self,
@@ -562,7 +562,6 @@ impl<T: Config> StakingLedger<T> {
 		}
 
 		use sp_runtime::PerThing as _;
-		use sp_staking::OnStakerSlash as _;
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
 
@@ -667,7 +666,7 @@ impl<T: Config> StakingLedger<T> {
 		// clean unlocking chunks that are set to zero.
 		self.unlocking.retain(|c| !c.value.is_zero());
 
-		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
+		T::EventListeners::on_slash(&self.stash, self.active, &slashed_unlocking);
 		pre_slash_total.saturating_sub(self.total)
 	}
 }
