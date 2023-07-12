@@ -17,7 +17,7 @@
 
 //! # DO NOT USE IN PRODUCTION
 //!
-//! The produced values do not fulfill the cryptographic requirements for random numbers.  
+//! The produced values do not fulfill the cryptographic requirements for random numbers.
 //! Should not be used for high-stake production use-cases.
 //!
 //! # Randomness Pallet
@@ -51,7 +51,6 @@
 //!     use frame_system::pallet_prelude::*;
 //!
 //!     #[pallet::pallet]
-//!     #[pallet::generate_store(pub(super) trait Store)]
 //!     pub struct Pallet<T>(_);
 //!
 //!     #[pallet::config]
@@ -94,7 +93,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -168,6 +166,7 @@ mod tests {
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
+		BuildStorage,
 	};
 
 	use frame_support::{
@@ -185,7 +184,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			CollectiveFlip: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 		}
 	);
@@ -225,7 +224,7 @@ mod tests {
 	impl pallet_insecure_randomness_collective_flip::Config for Test {}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.into()
 	}
 

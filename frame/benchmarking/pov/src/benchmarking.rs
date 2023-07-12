@@ -192,6 +192,7 @@ frame_benchmarking::benchmarks! {
 
 	// Same as above, but we still expect a mathematical worst case PoV size for the bounded one.
 	storage_value_bounded_and_unbounded_read {
+		(0..1024).for_each(|i| Map1M::<T>::insert(i, i));
 	}: {
 		assert!(UnboundedValue::<T>::get().is_none());
 		assert!(BoundedValue::<T>::get().is_none());
@@ -338,7 +339,7 @@ frame_benchmarking::benchmarks! {
 
 #[cfg(test)]
 mod mock {
-	use sp_runtime::testing::H256;
+	use sp_runtime::{testing::H256, BuildStorage};
 
 	type AccountId = u64;
 	type AccountIndex = u32;
@@ -353,7 +354,7 @@ mod mock {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Baseline: crate::{Pallet, Call, Storage, Event<T>},
 		}
 	);
@@ -390,6 +391,6 @@ mod mock {
 	}
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 	}
 }

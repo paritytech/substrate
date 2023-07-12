@@ -25,14 +25,16 @@ use super::{
 use crate::{communication::grandpa_protocol_name, environment::SharedVoterSetState};
 use futures::prelude::*;
 use parity_scale_codec::Encode;
-use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
+use sc_network::{
+	config::{MultiaddrWithPeerId, Role},
+	event::Event as NetworkEvent,
+	types::ProtocolName,
+	Multiaddr, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+	NetworkSyncForkRequest, NotificationSenderError, NotificationSenderT as NotificationSender,
+	PeerId, ReputationChange,
+};
 use sc_network_common::{
-	config::MultiaddrWithPeerId,
-	protocol::{event::Event as NetworkEvent, role::ObservedRole, ProtocolName},
-	service::{
-		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
-		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
-	},
+	role::ObservedRole,
 	sync::{SyncEvent as SyncStreamEvent, SyncEventStream},
 };
 use sc_network_gossip::Validator;
@@ -113,18 +115,6 @@ impl NetworkPeers for TestNetwork {
 	}
 
 	fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
-
-	fn add_to_peers_set(
-		&self,
-		_protocol: ProtocolName,
-		_peers: HashSet<Multiaddr>,
-	) -> Result<(), String> {
-		unimplemented!();
-	}
-
-	fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
-		unimplemented!();
-	}
 
 	fn sync_num_connected(&self) -> usize {
 		unimplemented!();
@@ -679,7 +669,7 @@ fn grandpa_protocol_name() {
 
 	// Create protocol name using random genesis hash.
 	let genesis_hash = sp_core::H256::random();
-	let expected = format!("/{}/grandpa/1", array_bytes::bytes2hex("", genesis_hash.as_ref()));
+	let expected = format!("/{}/grandpa/1", array_bytes::bytes2hex("", genesis_hash));
 	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
 	assert_eq!(proto_name.to_string(), expected);
 

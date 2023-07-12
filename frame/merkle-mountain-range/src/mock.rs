@@ -39,7 +39,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MMR: pallet_mmr::{Pallet, Storage},
 	}
 );
@@ -75,7 +75,6 @@ impl Config for Test {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr-";
 
 	type Hashing = Keccak256;
-	type Hash = H256;
 	type LeafData = Compact<Keccak256, (ParentNumberAndHash<Test>, LeafData)>;
 	type OnNewRoot = ();
 	type WeightInfo = ();

@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use asynchronous_codec::Framed;
 /// Notifications protocol.
 ///
 /// The Substrate notifications protocol consists in the following:
@@ -35,11 +34,15 @@ use asynchronous_codec::Framed;
 ///
 /// Notification substreams are unidirectional. If A opens a substream with B, then B is
 /// encouraged but not required to open a substream to A as well.
+use crate::types::ProtocolName;
+
+use asynchronous_codec::Framed;
 use bytes::BytesMut;
 use futures::prelude::*;
 use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use log::{error, warn};
-use sc_network_common::protocol::ProtocolName;
+use unsigned_varint::codec::UviBytes;
+
 use std::{
 	convert::Infallible,
 	io, mem,
@@ -47,7 +50,6 @@ use std::{
 	task::{Context, Poll},
 	vec,
 };
-use unsigned_varint::codec::UviBytes;
 
 /// Maximum allowed size of the two handshake messages, in bytes.
 const MAX_HANDSHAKE_SIZE: usize = 1024;

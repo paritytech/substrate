@@ -144,8 +144,8 @@ pub(crate) fn replace_strategy_if_broken(strategy: &mut InstantiationStrategy) {
 		InstantiationStrategy::LegacyInstanceReuse => InstantiationStrategy::RecreateInstance,
 	};
 
-	use once_cell::sync::OnceCell;
-	static IS_OK: OnceCell<bool> = OnceCell::new();
+	use std::sync::OnceLock;
+	static IS_OK: OnceLock<bool> = OnceLock::new();
 
 	let is_ok = IS_OK.get_or_init(|| {
 		let is_ok = match is_madvise_working() {

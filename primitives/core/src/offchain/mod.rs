@@ -58,7 +58,7 @@ pub trait OffchainStorage: Clone + Send + Sync {
 
 /// A type of supported crypto.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, PassByEnum)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(C)]
 pub enum StorageKind {
 	/// Persistent storage is non-revertible and not fork-aware. It means that any value
@@ -208,14 +208,14 @@ impl OpaqueMultiaddr {
 #[derive(
 	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
 )]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Timestamp(u64);
 
 /// Duration type
 #[derive(
 	Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Default, RuntimeDebug, PassByInner, Encode, Decode,
 )]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Duration(u64);
 
 impl Duration {
@@ -260,34 +260,22 @@ impl Timestamp {
 bitflags::bitflags! {
 	/// Execution context extra capabilities.
 	pub struct Capabilities: u32 {
-		/// Access to transaction pool.
-		const TRANSACTION_POOL = 0b0000_0000_0001;
 		/// External http calls.
-		const HTTP = 0b0000_0000_0010;
+		const HTTP = 1 << 0;
 		/// Keystore access.
-		const KEYSTORE = 0b0000_0000_0100;
+		const KEYSTORE = 1 << 2;
 		/// Randomness source.
-		const RANDOMNESS = 0b0000_0000_1000;
+		const RANDOMNESS = 1 << 3;
 		/// Access to opaque network state.
-		const NETWORK_STATE = 0b0000_0001_0000;
+		const NETWORK_STATE = 1 << 4;
 		/// Access to offchain worker DB (read only).
-		const OFFCHAIN_DB_READ = 0b0000_0010_0000;
+		const OFFCHAIN_DB_READ = 1 << 5;
 		/// Access to offchain worker DB (writes).
-		const OFFCHAIN_DB_WRITE = 0b0000_0100_0000;
+		const OFFCHAIN_DB_WRITE = 1 << 6;
 		/// Manage the authorized nodes
-		const NODE_AUTHORIZATION = 0b0000_1000_0000;
+		const NODE_AUTHORIZATION = 1 << 7;
 		/// Access time related functionality
-		const TIME = 0b0001_0000_0000;
-	}
-}
-
-impl Capabilities {
-	/// Return capabilities for rich offchain calls.
-	///
-	/// Those calls should be allowed to sign and submit transactions
-	/// and access offchain workers database (but read only!).
-	pub fn rich_offchain_call() -> Self {
-		Capabilities::TRANSACTION_POOL | Capabilities::KEYSTORE | Capabilities::OFFCHAIN_DB_READ
+		const TIME = 1 << 8;
 	}
 }
 
@@ -793,8 +781,8 @@ mod tests {
 		assert!(!none.contains(Capabilities::KEYSTORE));
 		assert!(all.contains(Capabilities::KEYSTORE));
 		assert!(some.contains(Capabilities::KEYSTORE));
-		assert!(!none.contains(Capabilities::TRANSACTION_POOL));
-		assert!(all.contains(Capabilities::TRANSACTION_POOL));
-		assert!(!some.contains(Capabilities::TRANSACTION_POOL));
+		assert!(!none.contains(Capabilities::RANDOMNESS));
+		assert!(all.contains(Capabilities::RANDOMNESS));
+		assert!(!some.contains(Capabilities::TIME));
 	}
 }

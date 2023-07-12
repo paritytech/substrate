@@ -63,9 +63,12 @@ fn setup_bounty<T: Config>(
 	let fee = value / 2u32.into();
 	let deposit = T::BountyDepositBase::get() +
 		T::DataDepositPerByte::get() * T::MaximumReasonLength::get().into();
-	let _ = T::Currency::make_free_balance_be(&caller, deposit);
+	let _ = T::Currency::make_free_balance_be(&caller, deposit + T::Currency::minimum_balance());
 	let curator = account("curator", user, SEED);
-	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());
+	let _ = T::Currency::make_free_balance_be(
+		&curator,
+		fee / 2u32.into() + T::Currency::minimum_balance(),
+	);
 	let reason = vec![0; description as usize];
 	(caller, curator, fee, value, reason)
 }
@@ -73,7 +76,10 @@ fn setup_bounty<T: Config>(
 fn setup_child_bounty<T: Config>(user: u32, description: u32) -> BenchmarkChildBounty<T> {
 	let (caller, curator, fee, value, reason) = setup_bounty::<T>(user, description);
 	let child_curator = account("child-curator", user, SEED);
-	let _ = T::Currency::make_free_balance_be(&child_curator, fee / 2u32.into());
+	let _ = T::Currency::make_free_balance_be(
+		&child_curator,
+		fee / 2u32.into() + T::Currency::minimum_balance(),
+	);
 	let child_bounty_value = (value - fee) / 4u32.into();
 	let child_bounty_fee = child_bounty_value / 2u32.into();
 

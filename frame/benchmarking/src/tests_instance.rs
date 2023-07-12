@@ -34,7 +34,6 @@ mod pallet_test {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	pub trait OtherConfig {
@@ -50,7 +49,6 @@ mod pallet_test {
 	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn value)]
 	pub(crate) type Value<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::event]
@@ -62,7 +60,7 @@ mod pallet_test {
 		<T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>,
 	{
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
 			let _sender = ensure_signed(origin)?;
 			Value::<T, I>::put(n);
@@ -70,7 +68,7 @@ mod pallet_test {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
+		#[pallet::weight({0})]
 		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
 			let _sender = ensure_none(origin)?;
 			Ok(())
@@ -87,7 +85,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		TestPallet: pallet_test::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -130,7 +128,7 @@ impl pallet_test::OtherConfig for Test {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
+	RuntimeGenesisConfig::default().build_storage().unwrap().into()
 }
 
 mod benchmarks {

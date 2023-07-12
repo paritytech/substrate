@@ -144,9 +144,9 @@ fn unbounded_read_best_effort() {
 fn partial_unbounded_read_best_effort() {
 	let w_unbounded = W::storage_value_unbounded_read().proof_size();
 	let w_bounded = W::storage_value_bounded_read().proof_size();
-	let w_partial = W::storage_value_bounded_and_unbounded_read().proof_size();
+	let w_both = W::storage_value_bounded_and_unbounded_read().proof_size();
 
-	assert_eq!(w_bounded + w_unbounded, w_partial, "The bounded part increases the PoV");
+	assert!(w_both > w_bounded && w_both > w_unbounded, "The bounded part increases the PoV");
 }
 
 #[test]
@@ -173,7 +173,7 @@ mod mock {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Baseline: crate::{Pallet, Call, Storage, Event<T>},
 		}
 	);

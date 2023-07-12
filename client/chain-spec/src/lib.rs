@@ -189,7 +189,7 @@ pub use self::{
 };
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
 
-use sc_network_common::config::MultiaddrWithPeerId;
+use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::Storage;

@@ -36,16 +36,17 @@ use sc_client_api::{
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
-use sc_executor::RuntimeVersionOf;
-use sc_keystore::LocalKeystore;
-use sc_network::NetworkService;
-use sc_network_bitswap::BitswapRequestHandler;
-use sc_network_common::{
-	config::SyncMode,
-	protocol::role::Roles,
-	service::{NetworkEventStream, NetworkStateInfo, NetworkStatusProvider},
-	sync::warp::WarpSyncParams,
+use sc_executor::{
+	sp_wasm_interface::HostFunctions, HeapAllocStrategy, NativeElseWasmExecutor,
+	NativeExecutionDispatch, RuntimeVersionOf, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY,
 };
+use sc_keystore::LocalKeystore;
+use sc_network::{
+	config::{FullNetworkConfiguration, SyncMode},
+	NetworkService, NetworkStateInfo, NetworkStatusProvider,
+};
+use sc_network_bitswap::BitswapRequestHandler;
+use sc_network_common::{role::Roles, sync::warp::WarpSyncParams};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, engine::SyncingEngine,
@@ -62,7 +63,7 @@ use sc_rpc::{
 };
 use sc_rpc_spec_v2::{chain_head::ChainHeadApiServer, transaction::TransactionApiServer};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
-use sc_transaction_pool_api::MaintainedTransactionPool;
+use sc_transaction_pool_api::{MaintainedTransactionPool, TransactionPool};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -70,46 +71,29 @@ use sp_consensus::block_validation::{
 	BlockAnnounceValidator, Chain, DefaultBlockAnnounceValidator,
 };
 use sp_core::traits::{CodeExecutor, SpawnNamed};
-use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor, Zero};
-use std::{str::FromStr, sync::Arc, time::SystemTime};
+use std::{
+	str::FromStr,
+	sync::Arc,
+	time::{Duration, SystemTime},
+};
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExec> =
 	Client<TFullBackend<TBl>, TFullCallExecutor<TBl, TExec>, TBl, TRtApi>;
 
 /// Full client backend type.
-pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
+pub type TFullBackend<TBl> = Backend<TBl>;
 
 /// Full client call executor type.
-pub type TFullCallExecutor<TBl, TExec> =
-	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
+pub type TFullCallExecutor<TBl, TExec> = crate::client::LocalCallExecutor<TBl, Backend<TBl>, TExec>;
 
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
 
-trait AsCryptoStoreRef {
-	fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
-	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore>;
-}
-
-impl<T> AsCryptoStoreRef for Arc<T>
-where
-	T: CryptoStore + SyncCryptoStore + 'static,
-{
-	fn keystore_ref(&self) -> Arc<dyn CryptoStore> {
-		self.clone()
-	}
-	fn sync_keystore_ref(&self) -> Arc<dyn SyncCryptoStore> {
-		self.clone()
-	}
-}
-
-/// Construct and hold different layers of Keystore wrappers
-pub struct KeystoreContainer {
-	remote: Option<Box<dyn AsCryptoStoreRef>>,
-	local: Arc<LocalKeystore>,
-}
+/// Construct a local keystore shareable container
+pub struct KeystoreContainer(Arc<LocalKeystore>);
 
 impl KeystoreContainer {
 	/// Construct KeystoreContainer
@@ -120,50 +104,17 @@ impl KeystoreContainer {
 			KeystoreConfig::InMemory => LocalKeystore::in_memory(),
 		});
 
-		Ok(Self { remote: Default::default(), local: keystore })
+		Ok(Self(keystore))
 	}
 
-	/// Set the remote keystore.
-	/// Should be called right away at startup and not at runtime:
-	/// even though this overrides any previously set remote store, it
-	/// does not reset any references previously handed out - they will
-	/// stick around.
-	pub fn set_remote_keystore<T>(&mut self, remote: Arc<T>)
-	where
-		T: CryptoStore + SyncCryptoStore + 'static,
-	{
-		self.remote = Some(Box::new(remote))
+	/// Returns a shared reference to a dynamic `Keystore` trait implementation.
+	pub fn keystore(&self) -> KeystorePtr {
+		self.0.clone()
 	}
 
-	/// Returns an adapter to the asynchronous keystore that implements `CryptoStore`
-	pub fn keystore(&self) -> Arc<dyn CryptoStore> {
-		if let Some(c) = self.remote.as_ref() {
-			c.keystore_ref()
-		} else {
-			self.local.clone()
-		}
-	}
-
-	/// Returns the synchronous keystore wrapper
-	pub fn sync_keystore(&self) -> SyncCryptoStorePtr {
-		if let Some(c) = self.remote.as_ref() {
-			c.sync_keystore_ref()
-		} else {
-			self.local.clone() as SyncCryptoStorePtr
-		}
-	}
-
-	/// Returns the local keystore if available
-	///
-	/// The function will return None if the available keystore is not a local keystore.
-	///
-	/// # Note
-	///
-	/// Using the [`LocalKeystore`] will result in loosing the ability to use any other keystore
-	/// implementation, like a remote keystore for example. Only use this if you a certain that you
-	/// require it!
-	pub fn local_keystore(&self) -> Option<Arc<LocalKeystore>> {
-		Some(self.local.clone())
+	/// Returns a shared reference to the local keystore .
+	pub fn local_keystore(&self) -> Arc<LocalKeystore> {
+		self.0.clone()
 	}
 }
 
@@ -236,9 +187,8 @@ where
 
 	let client = {
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
-			config.execution_strategies.clone(),
-			Some(keystore_container.sync_keystore()),
-			sc_offchain::OffchainDb::factory_from_backend(&*backend),
+			None,
+			Arc::new(executor.clone()),
 		);
 
 		let wasm_runtime_substitutes = config
@@ -274,7 +224,7 @@ where
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
 				no_genesis: matches!(
 					config.network.sync_mode,
-					SyncMode::Fast { .. } | SyncMode::Warp { .. }
+					SyncMode::LightState { .. } | SyncMode::Warp { .. }
 				),
 				wasm_runtime_substitutes,
 			},
@@ -284,6 +234,27 @@ where
 	};
 
 	Ok((client, backend, keystore_container, task_manager))
+}
+
+/// Creates a [`NativeElseWasmExecutor`] according to [`Configuration`].
+pub fn new_native_or_wasm_executor<D: NativeExecutionDispatch>(
+	config: &Configuration,
+) -> NativeElseWasmExecutor<D> {
+	NativeElseWasmExecutor::new_with_wasm_executor(new_wasm_executor(config))
+}
+
+/// Creates a [`WasmExecutor`] according to [`Configuration`].
+pub fn new_wasm_executor<H: HostFunctions>(config: &Configuration) -> WasmExecutor<H> {
+	let strategy = config
+		.default_heap_pages
+		.map_or(DEFAULT_HEAP_ALLOC_STRATEGY, |p| HeapAllocStrategy::Static { extra_pages: p as _ });
+	WasmExecutor::<H>::builder()
+		.with_execution_method(config.wasm_method)
+		.with_onchain_heap_alloc_strategy(strategy)
+		.with_offchain_heap_alloc_strategy(strategy)
+		.with_max_runtime_instances(config.max_runtime_instances)
+		.with_runtime_cache_size(config.runtime_cache_size)
+		.build()
 }
 
 /// Create an instance of default DB-backend backend.
@@ -311,7 +282,7 @@ pub fn new_client<E, Block, RA, G>(
 	telemetry: Option<TelemetryHandle>,
 	config: ClientConfig<Block>,
 ) -> Result<
-	crate::client::Client<
+	Client<
 		Backend<Block>,
 		crate::client::LocalCallExecutor<Block, Backend<Block>, E>,
 		Block,
@@ -330,12 +301,11 @@ where
 	let executor = crate::client::LocalCallExecutor::new(
 		backend.clone(),
 		executor,
-		spawn_handle.clone(),
 		config.clone(),
 		execution_extensions,
 	)?;
 
-	crate::client::Client::new(
+	Client::new(
 		backend,
 		executor,
 		spawn_handle,
@@ -350,19 +320,14 @@ where
 
 /// Shared network instance implementing a set of mandatory traits.
 pub trait SpawnTaskNetwork<Block: BlockT>:
-	sc_offchain::NetworkProvider + NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static
+	NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static
 {
 }
 
 impl<T, Block> SpawnTaskNetwork<Block> for T
 where
 	Block: BlockT,
-	T: sc_offchain::NetworkProvider
-		+ NetworkStateInfo
-		+ NetworkStatusProvider
-		+ Send
-		+ Sync
-		+ 'static,
+	T: NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static,
 {
 }
 
@@ -377,7 +342,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// A task manager returned by `new_full_parts`.
 	pub task_manager: &'a mut TaskManager,
 	/// A shared keystore returned by `new_full_parts`.
-	pub keystore: SyncCryptoStorePtr,
+	pub keystore: KeystorePtr,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// Builds additional [`RpcModule`]s that should be added to the server
@@ -394,38 +359,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub sync_service: Arc<SyncingService<TBl>>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
-}
-
-/// Build a shared offchain workers instance.
-pub fn build_offchain_workers<TBl, TCl>(
-	config: &Configuration,
-	spawn_handle: SpawnTaskHandle,
-	client: Arc<TCl>,
-	network: Arc<dyn sc_offchain::NetworkProvider + Send + Sync>,
-) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBl>>>
-where
-	TBl: BlockT,
-	TCl: Send + Sync + ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + 'static,
-	<TCl as ProvideRuntimeApi<TBl>>::Api: sc_offchain::OffchainWorkerApi<TBl>,
-{
-	let offchain_workers = Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone())));
-
-	// Inform the offchain worker about new imported blocks
-	if let Some(offchain) = offchain_workers.clone() {
-		spawn_handle.spawn(
-			"offchain-notifications",
-			Some("offchain-worker"),
-			sc_offchain::notification_future(
-				config.role.is_authority(),
-				client,
-				offchain,
-				Clone::clone(&spawn_handle),
-				network,
-			),
-		);
-	}
-
-	offchain_workers
 }
 
 /// Spawn the tasks that are required to run a node.
@@ -448,7 +381,6 @@ where
 		+ Send
 		+ 'static,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_api::Metadata<TBl>
-		+ sc_offchain::OffchainWorkerApi<TBl>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl>
 		+ sp_session::SessionKeys<TBl>
 		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
@@ -479,6 +411,7 @@ where
 		client.clone(),
 		chain_info.best_hash,
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
+		keystore.clone(),
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
 
@@ -648,7 +581,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TRpc, TExPool>(
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
-	keystore: SyncCryptoStorePtr,
+	keystore: KeystorePtr,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
 	backend: Arc<TBackend>,
@@ -687,12 +620,8 @@ where
 
 	let (chain, state, child_state) = {
 		let chain = sc_rpc::chain::new_full(client.clone(), task_executor.clone()).into_rpc();
-		let (state, child_state) = sc_rpc::state::new_full(
-			client.clone(),
-			task_executor.clone(),
-			deny_unsafe,
-			config.rpc_max_payload,
-		);
+		let (state, child_state) =
+			sc_rpc::state::new_full(client.clone(), task_executor.clone(), deny_unsafe);
 		let state = state.into_rpc();
 		let child_state = child_state.into_rpc();
 
@@ -706,16 +635,24 @@ where
 	)
 	.into_rpc();
 
-	// Maximum pinned blocks per connection.
-	// This number is large enough to consider immediate blocks,
-	// but it will change to facilitate adequate limits for the pinning API.
-	const MAX_PINNED_BLOCKS: usize = 4096;
+	// Maximum pinned blocks across all connections.
+	// This number is large enough to consider immediate blocks.
+	// Note: This should never exceed the `PINNING_CACHE_SIZE` from client/db.
+	const MAX_PINNED_BLOCKS: usize = 512;
+
+	// Any block of any subscription should not be pinned more than
+	// this constant. When a subscription contains a block older than this,
+	// the subscription becomes subject to termination.
+	// Note: This should be enough for immediate blocks.
+	const MAX_PINNED_SECONDS: u64 = 60;
+
 	let chain_head_v2 = sc_rpc_spec_v2::chain_head::ChainHead::new(
 		client.clone(),
 		backend.clone(),
 		task_executor.clone(),
 		client.info().genesis_hash,
 		MAX_PINNED_BLOCKS,
+		Duration::from_secs(MAX_PINNED_SECONDS),
 	)
 	.into_rpc();
 
@@ -757,6 +694,8 @@ where
 pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// The service configuration.
 	pub config: &'a Configuration,
+	/// Full network configuration.
+	pub net_config: FullNetworkConfiguration,
 	/// A shared client returned by `new_full_parts`.
 	pub client: Arc<TCl>,
 	/// A shared transaction pool.
@@ -771,6 +710,7 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// Optional warp sync params.
 	pub warp_sync_params: Option<WarpSyncParams<TBl>>,
 }
+
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>,
@@ -795,11 +735,12 @@ where
 		+ HeaderBackend<TBl>
 		+ BlockchainEvents<TBl>
 		+ 'static,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
+	TExPool: TransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash> + 'static,
 	TImpQu: ImportQueue<TBl> + 'static,
 {
 	let BuildNetworkParams {
 		config,
+		mut net_config,
 		client,
 		transaction_pool,
 		spawn_handle,
@@ -808,15 +749,14 @@ where
 		warp_sync_params,
 	} = params;
 
-	let mut request_response_protocol_configs = Vec::new();
-
 	if warp_sync_params.is_none() && config.network.sync_mode.is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
 
 	if client.requires_full_sync() {
 		match config.network.sync_mode {
-			SyncMode::Fast { .. } => return Err("Fast sync doesn't work for archive nodes".into()),
+			SyncMode::LightState { .. } =>
+				return Err("Fast sync doesn't work for archive nodes".into()),
 			SyncMode::Warp => return Err("Warp sync doesn't work for archive nodes".into()),
 			SyncMode::Full => {},
 		}
@@ -830,32 +770,35 @@ where
 		Box::new(DefaultBlockAnnounceValidator)
 	};
 
-	let block_request_protocol_config = {
+	let (block_request_protocol_config, block_request_protocol_name) = {
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = BlockRequestHandler::new(
 			&protocol_id,
 			config.chain_spec.fork_id(),
 			client.clone(),
-			config.network.default_peers_set.in_peers as usize +
-				config.network.default_peers_set.out_peers as usize,
+			net_config.network_config.default_peers_set.in_peers as usize +
+				net_config.network_config.default_peers_set.out_peers as usize,
 		);
+		let config_name = protocol_config.name.clone();
 		spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
-		protocol_config
+		(protocol_config, config_name)
 	};
 
-	let state_request_protocol_config = {
+	let (state_request_protocol_config, state_request_protocol_name) = {
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = StateRequestHandler::new(
 			&protocol_id,
 			config.chain_spec.fork_id(),
 			client.clone(),
-			config.network.default_peers_set_num_full as usize,
+			net_config.network_config.default_peers_set_num_full as usize,
 		);
+		let config_name = protocol_config.name.clone();
+
 		spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
-		protocol_config
+		(protocol_config, config_name)
 	};
 
-	let warp_sync_protocol_config = match warp_sync_params.as_ref() {
+	let (warp_sync_protocol_config, warp_request_protocol_name) = match warp_sync_params.as_ref() {
 		Some(WarpSyncParams::WithProvider(warp_with_provider)) => {
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) = WarpSyncRequestHandler::new(
@@ -868,10 +811,12 @@ where
 				config.chain_spec.fork_id(),
 				warp_with_provider.clone(),
 			);
+			let config_name = protocol_config.name.clone();
+
 			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
-			Some(protocol_config)
+			(Some(protocol_config), Some(config_name))
 		},
-		_ => None,
+		_ => (None, None),
 	};
 
 	let light_client_request_protocol_config = {
@@ -885,58 +830,23 @@ where
 		protocol_config
 	};
 
-	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
-	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
-		Roles::from(&config.role),
-		client.clone(),
-		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
-		&config.network,
-		protocol_id.clone(),
-		&config.chain_spec.fork_id().map(ToOwned::to_owned),
-		block_announce_validator,
-		warp_sync_params,
-		chain_sync_network_handle,
-		import_queue.service(),
-		block_request_protocol_config.name.clone(),
-		state_request_protocol_config.name.clone(),
-		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
-	)?;
-	let sync_service_import_queue = sync_service.clone();
-	let sync_service = Arc::new(sync_service);
+	// install request handlers to `FullNetworkConfiguration`
+	net_config.add_request_response_protocol(block_request_protocol_config);
+	net_config.add_request_response_protocol(state_request_protocol_config);
+	net_config.add_request_response_protocol(light_client_request_protocol_config);
 
-	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
+	if let Some(config) = warp_sync_protocol_config {
+		net_config.add_request_response_protocol(config);
+	}
+
+	if config.network.ipfs_server {
 		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
 		spawn_handle.spawn("bitswap-request-handler", Some("networking"), handler.run());
-		protocol_config
-	}));
+		net_config.add_request_response_protocol(protocol_config);
+	}
 
-	let mut network_params = sc_network::config::Params {
-		role: config.role.clone(),
-		executor: {
-			let spawn_handle = Clone::clone(&spawn_handle);
-			Box::new(move |fut| {
-				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
-			})
-		},
-		network_config: config.network.clone(),
-		chain: client.clone(),
-		protocol_id: protocol_id.clone(),
-		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
-		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		block_announce_config,
-		request_response_protocol_configs: request_response_protocol_configs
-			.into_iter()
-			.chain([
-				Some(block_request_protocol_config),
-				Some(state_request_protocol_config),
-				Some(light_client_request_protocol_config),
-				warp_sync_protocol_config,
-			])
-			.flatten()
-			.collect::<Vec<_>>(),
-	};
-
-	// crate transactions protocol and add it to the list of supported protocols of `network_params`
+	// create transactions protocol and add it to the list of supported protocols of
+	// `network_params`
 	let transactions_handler_proto = sc_network_transactions::TransactionsHandlerPrototype::new(
 		protocol_id.clone(),
 		client
@@ -946,12 +856,48 @@ where
 			.expect("Genesis block exists; qed"),
 		config.chain_spec.fork_id(),
 	);
-	network_params
-		.network_config
-		.extra_sets
-		.insert(0, transactions_handler_proto.set_config());
+	net_config.add_notification_protocol(transactions_handler_proto.set_config());
 
-	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
+	let (tx, rx) = sc_utils::mpsc::tracing_unbounded("mpsc_syncing_engine_protocol", 100_000);
+	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
+	let (engine, sync_service, block_announce_config) = SyncingEngine::new(
+		Roles::from(&config.role),
+		client.clone(),
+		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
+		&net_config,
+		protocol_id.clone(),
+		&config.chain_spec.fork_id().map(ToOwned::to_owned),
+		block_announce_validator,
+		warp_sync_params,
+		chain_sync_network_handle,
+		import_queue.service(),
+		block_request_protocol_name,
+		state_request_protocol_name,
+		warp_request_protocol_name,
+		rx,
+	)?;
+	let sync_service_import_queue = sync_service.clone();
+	let sync_service = Arc::new(sync_service);
+
+	let genesis_hash = client.hash(Zero::zero()).ok().flatten().expect("Genesis block exists; qed");
+	let network_params = sc_network::config::Params::<TBl> {
+		role: config.role.clone(),
+		executor: {
+			let spawn_handle = Clone::clone(&spawn_handle);
+			Box::new(move |fut| {
+				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
+			})
+		},
+		network_config: net_config,
+		genesis_hash,
+		protocol_id: protocol_id.clone(),
+		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
+		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		block_announce_config,
+		tx,
+	};
+
+	let has_bootnodes = !network_params.network_config.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
 
@@ -961,17 +907,15 @@ where
 		Arc::new(TransactionPoolAdapter { pool: transaction_pool, client: client.clone() }),
 		config.prometheus_config.as_ref().map(|config| &config.registry),
 	)?;
-
 	spawn_handle.spawn("network-transactions-handler", Some("networking"), tx_handler.run());
-	spawn_handle.spawn(
+
+	spawn_handle.spawn_blocking(
 		"chain-sync-network-service-provider",
 		Some("networking"),
 		chain_sync_network_provider.run(network.clone()),
 	);
 	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(sync_service_import_queue)));
-
-	let event_stream = network.event_stream("syncing");
-	spawn_handle.spawn("syncing", None, engine.run(event_stream));
+	spawn_handle.spawn_blocking("syncing", None, engine.run());
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc", 10_000);
 	spawn_handle.spawn(

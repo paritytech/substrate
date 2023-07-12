@@ -39,7 +39,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
 		TransactionStorage: pallet_transaction_storage::{
 			Pallet, Call, Storage, Config<T>, Inherent, Event<T>
@@ -84,6 +84,10 @@ impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
 	type ReserveIdentifier = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 impl pallet_transaction_storage::Config for Test {
@@ -97,7 +101,7 @@ impl pallet_transaction_storage::Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = GenesisConfig {
+	let t = RuntimeGenesisConfig {
 		system: Default::default(),
 		balances: pallet_balances::GenesisConfig::<Test> {
 			balances: vec![(1, 1000000000), (2, 100), (3, 100), (4, 100)],

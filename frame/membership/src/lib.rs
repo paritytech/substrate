@@ -50,7 +50,6 @@ pub mod pallet {
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(4);
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
@@ -106,20 +105,15 @@ pub mod pallet {
 	pub type Prime<T: Config<I>, I: 'static = ()> = StorageValue<_, T::AccountId, OptionQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub members: BoundedVec<T::AccountId, T::MaxMembers>,
+		#[serde(skip)]
 		pub phantom: PhantomData<I>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
-		fn default() -> Self {
-			Self { members: Default::default(), phantom: Default::default() }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			use sp_std::collections::btree_set::BTreeSet;
 			let members_set: BTreeSet<_> = self.members.iter().collect();
@@ -169,7 +163,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::AddOrigin`.
 		#[pallet::call_index(0)]
-		#[pallet::weight(50_000_000)]
+		#[pallet::weight({50_000_000})]
 		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -192,7 +186,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::RemoveOrigin`.
 		#[pallet::call_index(1)]
-		#[pallet::weight(50_000_000)]
+		#[pallet::weight({50_000_000})]
 		pub fn remove_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -216,7 +210,7 @@ pub mod pallet {
 		///
 		/// Prime membership is *not* passed from `remove` to `add`, if extant.
 		#[pallet::call_index(2)]
-		#[pallet::weight(50_000_000)]
+		#[pallet::weight({50_000_000})]
 		pub fn swap_member(
 			origin: OriginFor<T>,
 			remove: AccountIdLookupOf<T>,
@@ -250,7 +244,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::ResetOrigin`.
 		#[pallet::call_index(3)]
-		#[pallet::weight(50_000_000)]
+		#[pallet::weight({50_000_000})]
 		pub fn reset_members(origin: OriginFor<T>, members: Vec<T::AccountId>) -> DispatchResult {
 			T::ResetOrigin::ensure_origin(origin)?;
 
@@ -273,7 +267,7 @@ pub mod pallet {
 		///
 		/// Prime membership is passed from the origin account to `new`, if extant.
 		#[pallet::call_index(4)]
-		#[pallet::weight(50_000_000)]
+		#[pallet::weight({50_000_000})]
 		pub fn change_key(origin: OriginFor<T>, new: AccountIdLookupOf<T>) -> DispatchResult {
 			let remove = ensure_signed(origin)?;
 			let new = T::Lookup::lookup(new)?;
@@ -308,7 +302,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::PrimeOrigin`.
 		#[pallet::call_index(5)]
-		#[pallet::weight(50_000_000)]
+		#[pallet::weight({50_000_000})]
 		pub fn set_prime(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
@@ -322,7 +316,7 @@ pub mod pallet {
 		///
 		/// May only be called from `T::PrimeOrigin`.
 		#[pallet::call_index(6)]
-		#[pallet::weight(50_000_000)]
+		#[pallet::weight({50_000_000})]
 		pub fn clear_prime(origin: OriginFor<T>) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
 			Prime::<T, I>::kill();
@@ -533,11 +527,12 @@ mod tests {
 	use sp_runtime::{
 		testing::Header,
 		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+		BuildStorage,
 	};
 
 	use frame_support::{
 		assert_noop, assert_ok, bounded_vec, ord_parameter_types, parameter_types,
-		traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
+		traits::{ConstU32, ConstU64, StorageVersion},
 	};
 	use frame_system::EnsureSignedBy;
 
@@ -550,7 +545,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Membership: pallet_membership::{Pallet, Call, Storage, Config<T>, Event<T>},
 		}
 	);
@@ -636,7 +631,7 @@ mod tests {
 	}
 
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		pallet_membership::GenesisConfig::<Test> {
 			members: bounded_vec![10, 20, 30],
@@ -649,7 +644,7 @@ mod tests {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	pub(crate) fn new_bench_ext() -> sp_io::TestExternalities {
-		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]

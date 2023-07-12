@@ -45,7 +45,7 @@ use sp_storage::{StorageData, StorageKey};
 /// # 		NodeBlock = frame_system::mocking::MockBlock<TestRuntime>,
 /// # 		UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<TestRuntime>,
 /// # 	{
-/// # 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+/// # 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 /// # 		Test: pallet_test::{Pallet, Storage},
 /// # 	}
 /// # );
@@ -94,8 +94,7 @@ use sp_storage::{StorageData, StorageKey};
 /// 	use frame_support::pallet_prelude::*;
 ///
 /// 	#[pallet::pallet]
-/// 	#[pallet::generate_store(pub(super) trait Store)]
-/// 	pub struct Pallet<T>(PhantomData<T>);
+/// 	pub struct Pallet<T>(_);
 ///
 /// 	#[pallet::config]
 /// 	pub trait Config: frame_system::Config {}

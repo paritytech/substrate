@@ -27,22 +27,29 @@
 //! `Future` that processes transactions.
 
 use crate::config::*;
+
 use codec::{Decode, Encode};
 use futures::{prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
+
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::{
+use sc_network::{
 	config::{NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, SetConfig},
 	error,
-	protocol::{event::Event, role::ObservedRole, ProtocolName},
-	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
-	sync::{SyncEvent, SyncEventStream},
+	event::Event,
+	types::ProtocolName,
 	utils::{interval, LruHashSet},
+	NetworkEventStream, NetworkNotification, NetworkPeers,
+};
+use sc_network_common::{
+	role::ObservedRole,
+	sync::{SyncEvent, SyncEventStream},
 	ExHashT,
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
+
 use std::{
 	collections::{hash_map::Entry, HashMap},
 	iter,
@@ -58,7 +65,7 @@ pub mod config;
 pub type Transactions<E> = Vec<E>;
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sends us any transaction.
 	///
 	/// This forces node to verify it, thus the negative value here. Once transaction is verified,
@@ -90,21 +97,19 @@ impl Metrics {
 	}
 }
 
-#[pin_project::pin_project]
 struct PendingTransaction<H> {
-	#[pin]
 	validation: TransactionImportFuture,
 	tx_hash: H,
 }
 
+impl<H> Unpin for PendingTransaction<H> {}
+
 impl<H: ExHashT> Future for PendingTransaction<H> {
 	type Output = (H, TransactionImport);
 
-	fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-		let mut this = self.project();
-
-		if let Poll::Ready(import_result) = Pin::new(&mut this.validation).poll_unpin(cx) {
-			return Poll::Ready((this.tx_hash.clone(), import_result))
+	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+		if let Poll::Ready(import_result) = self.validation.poll_unpin(cx) {
+			return Poll::Ready((self.tx_hash.clone(), import_result))
 		}
 
 		Poll::Pending
@@ -466,7 +471,7 @@ where
 
 			let (hashes, to_send): (Vec<_>, Vec<_>) = transactions
 				.iter()
-				.filter(|&(ref hash, _)| peer.known_transactions.insert(hash.clone()))
+				.filter(|(hash, _)| peer.known_transactions.insert(hash.clone()))
 				.cloned()
 				.unzip();
 

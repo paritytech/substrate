@@ -33,7 +33,7 @@ use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::SelectChain;
 use sp_consensus_grandpa::AuthorityId;
-use sp_keystore::SyncCryptoStorePtr;
+use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use crate::{
@@ -220,7 +220,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>, S: SyncingT<B>> {
 	client: Arc<Client>,
 	network: NetworkBridge<B, N, S>,
 	persistent_data: PersistentData<B>,
-	keystore: Option<SyncCryptoStorePtr>,
+	keystore: Option<KeystorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	justification_sender: Option<GrandpaJustificationSender<B>>,
 	telemetry: Option<TelemetryHandle>,
@@ -240,7 +240,7 @@ where
 		client: Arc<Client>,
 		network: NetworkBridge<B, Network, Syncing>,
 		persistent_data: PersistentData<B>,
-		keystore: Option<SyncCryptoStorePtr>,
+		keystore: Option<KeystorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 		justification_sender: Option<GrandpaJustificationSender<B>>,
 		telemetry: Option<TelemetryHandle>,

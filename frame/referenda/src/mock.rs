@@ -33,7 +33,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, Hash, IdentityLookup},
-	DispatchResult, Perbill,
+	BuildStorage, DispatchResult, Perbill,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -57,7 +57,7 @@ frame_support::construct_runtime!(
 pub struct BaseFilter;
 impl Contains<RuntimeCall> for BaseFilter {
 	fn contains(call: &RuntimeCall) -> bool {
-		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
+		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::force_set_balance { .. }))
 	}
 }
 
@@ -120,6 +120,10 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 parameter_types! {
 	pub static AlarmInterval: u64 = 1;
@@ -229,7 +233,7 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let balances = vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100), (6, 100)];
 	pallet_balances::GenesisConfig::<Test> { balances }
 		.assimilate_storage(&mut t)
@@ -295,19 +299,14 @@ impl<Class> VoteTally<u32, Class> for Tally {
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
-	RuntimeCall::Balances(pallet_balances::Call::set_balance {
-		who: 42,
-		new_free: value,
-		new_reserved: 0,
-	})
-	.encode()
+	RuntimeCall::Balances(pallet_balances::Call::force_set_balance { who: 42, new_free: value })
+		.encode()
 }
 
 pub fn set_balance_proposal_bounded(value: u64) -> BoundedCallOf<Test, ()> {
-	let c = RuntimeCall::Balances(pallet_balances::Call::set_balance {
+	let c = RuntimeCall::Balances(pallet_balances::Call::force_set_balance {
 		who: 42,
 		new_free: value,
-		new_reserved: 0,
 	});
 	<Preimage as StorePreimage>::bound(c).unwrap()
 }

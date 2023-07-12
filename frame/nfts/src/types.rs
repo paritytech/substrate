@@ -66,6 +66,7 @@ pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
 	<T as SystemConfig>::BlockNumber,
+	BalanceOf<T, I>,
 >;
 pub(super) type PreSignedAttributesOf<T, I = ()> = PreSignedAttributes<
 	<T as Config<I>>::CollectionId,
@@ -73,12 +74,6 @@ pub(super) type PreSignedAttributesOf<T, I = ()> = PreSignedAttributes<
 	<T as SystemConfig>::AccountId,
 	<T as SystemConfig>::BlockNumber,
 >;
-
-pub trait Incrementable {
-	fn increment(&self) -> Self;
-	fn initial_value() -> Self;
-}
-impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 /// Information about a collection.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -92,6 +87,8 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 	pub(super) items: u32,
 	/// The total number of outstanding item metadata of this collection.
 	pub(super) item_metadatas: u32,
+	/// The total number of outstanding item configs of this collection.
+	pub(super) item_configs: u32,
 	/// The total number of attributes for this collection.
 	pub(super) attributes: u32,
 }
@@ -99,12 +96,12 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 /// Witness data for the destroy transactions.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct DestroyWitness {
-	/// The total number of outstanding items of this collection.
-	#[codec(compact)]
-	pub items: u32,
 	/// The total number of items in this collection that have outstanding item metadata.
 	#[codec(compact)]
 	pub item_metadatas: u32,
+	/// The total number of outstanding item configs of this collection.
+	#[codec(compact)]
+	pub item_configs: u32,
 	/// The total number of attributes for this collection.
 	#[codec(compact)]
 	pub attributes: u32,
@@ -113,18 +110,20 @@ pub struct DestroyWitness {
 impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 	pub fn destroy_witness(&self) -> DestroyWitness {
 		DestroyWitness {
-			items: self.items,
 			item_metadatas: self.item_metadatas,
+			item_configs: self.item_configs,
 			attributes: self.attributes,
 		}
 	}
 }
 
 /// Witness data for items mint transactions.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct MintWitness<ItemId> {
+#[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+pub struct MintWitness<ItemId, Balance> {
 	/// Provide the id of the item in a required collection.
 	pub owned_item: ItemId,
+	/// The price specified in mint settings.
+	pub mint_price: Option<Balance>,
 }
 
 /// Information concerning the ownership of a single unique item.
@@ -344,6 +343,8 @@ pub struct CancelAttributesApprovalWitness {
 pub enum PalletAttributes<CollectionId> {
 	/// Marks an item as being used in order to claim another item.
 	UsedToClaim(CollectionId),
+	/// Marks an item as being restricted from transferring.
+	TransferDisabled,
 }
 
 /// Collection's configuration.
@@ -502,7 +503,7 @@ impl CollectionRoles {
 impl_codec_bitflags!(CollectionRoles, u8, CollectionRole);
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline> {
+pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline, Balance> {
 	/// A collection of the item to be minted.
 	pub(super) collection: CollectionId,
 	/// Item's ID.
@@ -515,6 +516,8 @@ pub struct PreSignedMint<CollectionId, ItemId, AccountId, Deadline> {
 	pub(super) only_account: Option<AccountId>,
 	/// A deadline for the signature.
 	pub(super) deadline: Deadline,
+	/// An optional price the claimer would need to pay for the mint.
+	pub(super) mint_price: Option<Balance>,
 }
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]

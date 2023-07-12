@@ -31,6 +31,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -43,7 +44,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -84,6 +85,7 @@ impl Config for Test {
 	type MessageProcessor = RecordingMessageProcessor;
 	type Size = u32;
 	type QueueChangeHandler = RecordingQueueChangeHandler;
+	type QueuePausedQuery = MockedQueuePauser;
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
 	type ServiceWeight = ServiceWeight;
@@ -154,7 +156,8 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 
 parameter_types! {
 	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
-	pub static SuspendedQueues: Vec<MessageOrigin> = vec![];
+	/// Queues that should return `Yield` upon being processed.
+	pub static YieldingQueues: Vec<MessageOrigin> = vec![];
 }
 
 /// A message processor which records all processed messages into [`MessagesProcessed`].
@@ -172,6 +175,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 		message: &[u8],
 		origin: Self::Origin,
 		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
 	) -> Result<bool, ProcessMessageError> {
 		processing_message(message, &origin)?;
 
@@ -204,7 +208,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 /// Processed a mocked message. Messages that end with `badformat`, `corrupt`, `unsupported` or
 /// `yield` will fail with an error respectively.
 fn processing_message(msg: &[u8], origin: &MessageOrigin) -> Result<(), ProcessMessageError> {
-	if SuspendedQueues::get().contains(&origin) {
+	if YieldingQueues::get().contains(&origin) {
 		return Err(ProcessMessageError::Yield)
 	}
 
@@ -239,6 +243,7 @@ impl ProcessMessage for CountingMessageProcessor {
 		message: &[u8],
 		origin: Self::Origin,
 		meter: &mut WeightMeter,
+		_id: &mut [u8; 32],
 	) -> Result<bool, ProcessMessageError> {
 		if let Err(e) = processing_message(message, &origin) {
 			NumMessagesErrored::set(NumMessagesErrored::get() + 1);
@@ -268,6 +273,17 @@ impl OnQueueChanged<MessageOrigin> for RecordingQueueChangeHandler {
 	}
 }
 
+parameter_types! {
+	pub static PausedQueues: Vec<MessageOrigin> = vec![];
+}
+
+pub struct MockedQueuePauser;
+impl QueuePausedQuery<MessageOrigin> for MockedQueuePauser {
+	fn is_paused(id: &MessageOrigin) -> bool {
+		PausedQueues::get().contains(id)
+	}
+}
+
 /// Create new test externalities.
 ///
 /// Is generic since it is used by the unit test, integration tests and benchmarks.
@@ -279,7 +295,7 @@ where
 	WeightForCall::take();
 	QueueChanges::take();
 	NumMessagesErrored::take();
-	let t = frame_system::GenesisConfig::default().build_storage::<T>().unwrap();
+	let t = frame_system::GenesisConfig::<T>::default().build_storage().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| frame_system::Pallet::<T>::set_block_number(1.into()));
 	ext

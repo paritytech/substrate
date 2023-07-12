@@ -23,7 +23,10 @@ use frame_support::{
 	traits::{ConstU64, Currency},
 	weights::constants::WEIGHT_REF_TIME_PER_SECOND,
 };
-use sp_runtime::traits::{Convert, IdentityLookup};
+use sp_runtime::{
+	traits::{Convert, IdentityLookup},
+	BuildStorage,
+};
 
 use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
 use sp_std::prelude::*;
@@ -89,6 +92,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -133,7 +140,7 @@ impl pallet_staking::Config for Runtime {
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
 	type UnixTime = pallet_timestamp::Pallet<Self>;
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RewardRemainder = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
@@ -153,7 +160,7 @@ impl pallet_staking::Config for Runtime {
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
-	type OnStakerSlash = ();
+	type EventListeners = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -230,11 +237,11 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			unexposed: vec![
-				(1, 2, 7 + 100),
-				(3, 4, 7 + 100),
-				(5, 6, 7 + 100),
-				(7, 8, 7 + 100),
-				(9, 10, 7 + 100),
+				(1, 1, 7 + 100),
+				(3, 3, 7 + 100),
+				(5, 5, 7 + 100),
+				(7, 7, 7 + 100),
+				(9, 9, 7 + 100),
 			],
 		}
 	}
@@ -274,7 +281,7 @@ impl ExtBuilder {
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let validators_range = VALIDATOR_PREFIX..VALIDATOR_PREFIX + VALIDATORS_PER_ERA;
 		let nominators_range =
@@ -286,12 +293,6 @@ impl ExtBuilder {
 				.clone()
 				.into_iter()
 				.map(|(stash, _, balance)| (stash, balance * 2))
-				.chain(
-					self.unexposed
-						.clone()
-						.into_iter()
-						.map(|(_, ctrl, balance)| (ctrl, balance * 2)),
-				)
 				.chain(validators_range.clone().map(|x| (x, 7 + 100)))
 				.chain(nominators_range.clone().map(|x| (x, 7 + 100)))
 				.collect::<Vec<_>>(),
@@ -373,7 +374,6 @@ pub fn create_exposed_nominator(exposed: AccountId, era: u32) {
 	Balances::make_free_balance_be(&exposed, 100);
 	assert_ok!(Staking::bond(
 		RuntimeOrigin::signed(exposed),
-		exposed,
 		10,
 		pallet_staking::RewardDestination::Staked
 	));

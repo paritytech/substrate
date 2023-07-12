@@ -17,7 +17,7 @@
 
 //! Smaller traits used in FRAME which don't need their own file.
 
-use crate::dispatch::Parameter;
+use crate::dispatch::{DispatchResult, Parameter};
 use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
@@ -893,7 +893,8 @@ pub trait ExtrinsicCall: sp_runtime::traits::Extrinsic {
 #[cfg(feature = "std")]
 impl<Call, Extra> ExtrinsicCall for sp_runtime::testing::TestXt<Call, Extra>
 where
-	Call: codec::Codec + Sync + Send,
+	Call: codec::Codec + Sync + Send + TypeInfo,
+	Extra: TypeInfo,
 {
 	fn call(&self) -> &Self::Call {
 		&self.call
@@ -903,7 +904,10 @@ where
 impl<Address, Call, Signature, Extra> ExtrinsicCall
 	for sp_runtime::generic::UncheckedExtrinsic<Address, Call, Signature, Extra>
 where
-	Extra: sp_runtime::traits::SignedExtension,
+	Address: TypeInfo,
+	Call: TypeInfo,
+	Signature: TypeInfo,
+	Extra: sp_runtime::traits::SignedExtension + TypeInfo,
 {
 	fn call(&self) -> &Self::Call {
 		&self.function
@@ -1152,6 +1156,19 @@ impl<Hash> PreimageRecipient<Hash> for () {
 	type MaxSize = ();
 	fn note_preimage(_: crate::BoundedVec<u8, Self::MaxSize>) {}
 	fn unnote_preimage(_: &Hash) {}
+}
+
+/// Trait for creating an asset account with a deposit taken from a designated depositor specified
+/// by the client.
+pub trait AccountTouch<AssetId, AccountId> {
+	/// The type for currency units of the deposit.
+	type Balance;
+
+	/// The deposit amount of a native currency required for creating an account of the `asset`.
+	fn deposit_required(asset: AssetId) -> Self::Balance;
+
+	/// Create an account for `who` of the `asset` with a deposit taken from the `depositor`.
+	fn touch(asset: AssetId, who: AccountId, depositor: AccountId) -> DispatchResult;
 }
 
 #[cfg(test)]

@@ -41,16 +41,13 @@ pub use codec;
 pub use frame_metadata as metadata;
 #[doc(hidden)]
 pub use log;
-#[cfg(feature = "std")]
-#[doc(hidden)]
-pub use once_cell;
 #[doc(hidden)]
 pub use paste;
 #[doc(hidden)]
 pub use scale_info;
-#[cfg(feature = "std")]
 pub use serde;
-pub use sp_core::Void;
+pub use sp_api::metadata_ir;
+pub use sp_core::{OpaqueMetadata, Void};
 #[doc(hidden)]
 pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
@@ -83,7 +80,6 @@ pub mod instances;
 pub mod migrations;
 pub mod traits;
 pub mod weights;
-
 #[doc(hidden)]
 pub mod unsigned {
 	#[doc(hidden)]
@@ -210,6 +206,8 @@ impl TypeId for PalletId {
 /// # fn main() {}
 /// ```
 pub use frame_support_procedural::storage_alias;
+
+pub use frame_support_procedural::derive_impl;
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
@@ -371,16 +369,14 @@ macro_rules! parameter_types {
 
 			/// Set the value of this parameter type in the storage.
 			///
-			/// This needs to be executed in an externalities provided
-			/// environment.
+			/// This needs to be executed in an externalities provided environment.
 			pub fn set(value: &$type) {
 				$crate::storage::unhashed::put(&Self::key(), value);
 			}
 
 			/// Returns the value of this parameter type.
 			///
-			/// This needs to be executed in an externalities provided
-			/// environment.
+			/// This needs to be executed in an externalities provided environment.
 			#[allow(unused)]
 			pub fn get() -> $type {
 				$crate::storage::unhashed::get(&Self::key()).unwrap_or_else(|| $value)
@@ -820,96 +816,179 @@ macro_rules! assert_error_encoded_size {
 	} => {};
 }
 
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub use serde::{Deserialize, Serialize};
+
+#[doc(hidden)]
+#[cfg(not(no_std))]
+pub use macro_magic;
 
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::metadata::{
-		PalletStorageMetadata, StorageEntryMetadata, StorageEntryModifier, StorageEntryType,
-		StorageHasher,
+	use crate::metadata_ir::{
+		PalletStorageMetadataIR, StorageEntryMetadataIR, StorageEntryModifierIR,
+		StorageEntryTypeIR, StorageHasherIR,
 	};
-	use codec::{Codec, EncodeLike};
-	use frame_support::traits::CrateVersion;
 	use sp_io::{MultiRemovalResults, TestExternalities};
+	use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 	use sp_std::result;
 
-	/// A PalletInfo implementation which just panics.
-	pub struct PanicPalletInfo;
+	pub use self::frame_system::{Config, Pallet};
 
-	impl crate::traits::PalletInfo for PanicPalletInfo {
-		fn index<P: 'static>() -> Option<usize> {
-			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+	#[pallet]
+	pub mod frame_system {
+		#[allow(unused)]
+		use super::{frame_system, frame_system::pallet_prelude::*};
+		pub use crate::dispatch::RawOrigin;
+		use crate::pallet_prelude::*;
+
+		#[pallet::pallet]
+		pub struct Pallet<T>(_);
+
+		#[pallet::config]
+		#[pallet::disable_frame_system_supertrait_check]
+		pub trait Config: 'static {
+			type BlockNumber: Parameter + Default + MaxEncodedLen;
+			type AccountId;
+			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
+			type RuntimeOrigin;
+			type RuntimeCall;
+			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: Get<crate::weights::RuntimeDbWeight>;
 		}
-		fn name<P: 'static>() -> Option<&'static str> {
-			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+
+		#[pallet::error]
+		pub enum Error<T> {
+			/// Required by construct_runtime
+			CallFiltered,
 		}
-		fn module_name<P: 'static>() -> Option<&'static str> {
-			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+
+		#[pallet::origin]
+		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+
+		#[pallet::call]
+		impl<T: Config> Pallet<T> {}
+
+		#[pallet::storage]
+		pub type Data<T> = StorageMap<_, Twox64Concat, u32, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type OptionLinkedMap<T> = StorageMap<_, Blake2_128Concat, u32, u32, OptionQuery>;
+
+		#[pallet::storage]
+		#[pallet::getter(fn generic_data)]
+		pub type GenericData<T: Config> =
+			StorageMap<_, Identity, T::BlockNumber, T::BlockNumber, ValueQuery>;
+
+		#[pallet::storage]
+		#[pallet::getter(fn generic_data2)]
+		pub type GenericData2<T: Config> =
+			StorageMap<_, Blake2_128Concat, T::BlockNumber, T::BlockNumber, OptionQuery>;
+
+		#[pallet::storage]
+		pub type DataDM<T> =
+			StorageDoubleMap<_, Twox64Concat, u32, Blake2_128Concat, u32, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type GenericDataDM<T: Config> = StorageDoubleMap<
+			_,
+			Blake2_128Concat,
+			T::BlockNumber,
+			Identity,
+			T::BlockNumber,
+			T::BlockNumber,
+			ValueQuery,
+		>;
+
+		#[pallet::storage]
+		pub type GenericData2DM<T: Config> = StorageDoubleMap<
+			_,
+			Blake2_128Concat,
+			T::BlockNumber,
+			Twox64Concat,
+			T::BlockNumber,
+			T::BlockNumber,
+			OptionQuery,
+		>;
+
+		#[pallet::storage]
+		#[pallet::unbounded]
+		pub type AppendableDM<T: Config> = StorageDoubleMap<
+			_,
+			Blake2_128Concat,
+			u32,
+			Blake2_128Concat,
+			T::BlockNumber,
+			Vec<u32>,
+			ValueQuery,
+		>;
+
+		#[pallet::genesis_config]
+		pub struct GenesisConfig<T: Config> {
+			pub data: Vec<(u32, u64)>,
+			pub test_config: Vec<(u32, u32, u64)>,
+			#[serde(skip)]
+			pub _config: sp_std::marker::PhantomData<T>,
 		}
-		fn crate_version<P: 'static>() -> Option<CrateVersion> {
-			unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+
+		impl<T: Config> Default for GenesisConfig<T> {
+			fn default() -> Self {
+				Self {
+					_config: Default::default(),
+					data: vec![(15u32, 42u64)],
+					test_config: vec![(15u32, 16u32, 42u64)],
+				}
+			}
+		}
+
+		#[pallet::genesis_build]
+		impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+			fn build(&self) {
+				for (k, v) in &self.data {
+					<Data<T>>::insert(k, v);
+				}
+				for (k1, k2, v) in &self.test_config {
+					<DataDM<T>>::insert(k1, k2, v);
+				}
+			}
+		}
+
+		pub mod pallet_prelude {
+			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
 		}
 	}
 
-	pub trait Config: 'static {
-		type BlockNumber: Codec + EncodeLike + Default + TypeInfo;
-		type RuntimeOrigin;
-		type PalletInfo: crate::traits::PalletInfo;
-		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
-	}
+	type BlockNumber = u32;
+	type AccountId = u32;
+	type Header = generic::Header<BlockNumber, BlakeTwo256>;
+	type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+	type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-	mod module {
-		#![allow(dead_code)]
-
-		use super::Config;
-
-		decl_module! {
-			pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self  {}
+	crate::construct_runtime!(
+		pub enum Runtime
+		where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic,
+		{
+			System: self::frame_system,
 		}
-	}
+	);
 
-	use self::module::Module;
-
-	decl_storage! {
-		trait Store for Module<T: Config> as Test {
-			pub Value get(fn value): u64;
-			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
-				map hasher(twox_64_concat) u32 => u64;
-			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;
-			pub GenericData get(fn generic_data):
-				map hasher(identity) T::BlockNumber => T::BlockNumber;
-			pub GenericData2 get(fn generic_data2):
-				map hasher(blake2_128_concat) T::BlockNumber => Option<T::BlockNumber>;
-			pub DataDM config(test_config) build(|_| vec![(15u32, 16u32, 42u64)]):
-				double_map hasher(twox_64_concat) u32, hasher(blake2_128_concat) u32 => u64;
-			pub GenericDataDM:
-				double_map hasher(blake2_128_concat) T::BlockNumber, hasher(identity) T::BlockNumber
-				=> T::BlockNumber;
-			pub GenericData2DM:
-				double_map hasher(blake2_128_concat) T::BlockNumber, hasher(twox_64_concat) T::BlockNumber
-				=> Option<T::BlockNumber>;
-			pub AppendableDM:
-				double_map hasher(blake2_128_concat) u32, hasher(blake2_128_concat) T::BlockNumber => Vec<u32>;
-		}
-	}
-
-	struct Test;
-
-	impl Config for Test {
-		type BlockNumber = u32;
-		type RuntimeOrigin = u32;
-		type PalletInfo = PanicPalletInfo;
+	impl Config for Runtime {
+		type BlockNumber = BlockNumber;
+		type AccountId = AccountId;
+		type BaseCallFilter = crate::traits::Everything;
+		type RuntimeOrigin = RuntimeOrigin;
+		type RuntimeCall = RuntimeCall;
+		type PalletInfo = PalletInfo;
 		type DbWeight = ();
 	}
 
 	fn new_test_ext() -> TestExternalities {
-		GenesisConfig::default().build_storage().unwrap().into()
+		RuntimeGenesisConfig::default().build_storage().unwrap().into()
 	}
-
-	type Map = Data;
 
 	trait Sorted {
 		fn sorted(self) -> Self;
@@ -927,15 +1006,15 @@ pub mod tests {
 		new_test_ext().execute_with(|| {
 			#[crate::storage_alias]
 			type GenericData2<T> = StorageMap<
-				Test,
+				System,
 				Blake2_128Concat,
 				<T as Config>::BlockNumber,
 				<T as Config>::BlockNumber,
 			>;
 
-			assert_eq!(Module::<Test>::generic_data2(5), None);
-			GenericData2::<Test>::insert(5, 5);
-			assert_eq!(Module::<Test>::generic_data2(5), Some(5));
+			assert_eq!(Pallet::<Runtime>::generic_data2(5), None);
+			GenericData2::<Runtime>::insert(5, 5);
+			assert_eq!(Pallet::<Runtime>::generic_data2(5), Some(5));
 
 			/// Some random docs that ensure that docs are accepted
 			#[crate::storage_alias]
@@ -1006,6 +1085,8 @@ pub mod tests {
 	#[test]
 	fn map_issue_3318() {
 		new_test_ext().execute_with(|| {
+			type OptionLinkedMap = self::frame_system::OptionLinkedMap<Runtime>;
+
 			OptionLinkedMap::insert(1, 1);
 			assert_eq!(OptionLinkedMap::get(1), Some(1));
 			OptionLinkedMap::insert(1, 2);
@@ -1016,6 +1097,8 @@ pub mod tests {
 	#[test]
 	fn map_swap_works() {
 		new_test_ext().execute_with(|| {
+			type OptionLinkedMap = self::frame_system::OptionLinkedMap<Runtime>;
+
 			OptionLinkedMap::insert(0, 0);
 			OptionLinkedMap::insert(1, 1);
 			OptionLinkedMap::insert(2, 2);
@@ -1045,6 +1128,8 @@ pub mod tests {
 	#[test]
 	fn double_map_swap_works() {
 		new_test_ext().execute_with(|| {
+			type DataDM = self::frame_system::DataDM<Runtime>;
+
 			DataDM::insert(0, 1, 1);
 			DataDM::insert(1, 0, 2);
 			DataDM::insert(1, 1, 3);
@@ -1077,6 +1162,8 @@ pub mod tests {
 	#[test]
 	fn map_basic_insert_remove_should_work() {
 		new_test_ext().execute_with(|| {
+			type Map = self::frame_system::Data<Runtime>;
+
 			// initialized during genesis
 			assert_eq!(Map::get(&15u32), 42u64);
 
@@ -1103,6 +1190,8 @@ pub mod tests {
 	#[test]
 	fn map_iteration_should_work() {
 		new_test_ext().execute_with(|| {
+			type Map = self::frame_system::Data<Runtime>;
+
 			assert_eq!(Map::iter().collect::<Vec<_>>().sorted(), vec![(15, 42)]);
 			// insert / remove
 			let key = 17u32;
@@ -1156,7 +1245,7 @@ pub mod tests {
 	fn double_map_basic_insert_remove_remove_prefix_with_commit_should_work() {
 		let key1 = 17u32;
 		let key2 = 18u32;
-		type DoubleMap = DataDM;
+		type DoubleMap = self::frame_system::DataDM<Runtime>;
 		let mut e = new_test_ext();
 		e.execute_with(|| {
 			// initialized during genesis
@@ -1201,7 +1290,7 @@ pub mod tests {
 		new_test_ext().execute_with(|| {
 			let key1 = 17u32;
 			let key2 = 18u32;
-			type DoubleMap = DataDM;
+			type DoubleMap = self::frame_system::DataDM<Runtime>;
 
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
@@ -1249,7 +1338,7 @@ pub mod tests {
 	#[test]
 	fn double_map_append_should_work() {
 		new_test_ext().execute_with(|| {
-			type DoubleMap = AppendableDM<Test>;
+			type DoubleMap = self::frame_system::AppendableDM<Runtime>;
 
 			let key1 = 17u32;
 			let key2 = 18u32;
@@ -1263,7 +1352,7 @@ pub mod tests {
 	#[test]
 	fn double_map_mutate_exists_should_work() {
 		new_test_ext().execute_with(|| {
-			type DoubleMap = DataDM;
+			type DoubleMap = self::frame_system::DataDM<Runtime>;
 
 			let (key1, key2) = (11, 13);
 
@@ -1280,8 +1369,8 @@ pub mod tests {
 	#[test]
 	fn double_map_try_mutate_exists_should_work() {
 		new_test_ext().execute_with(|| {
-			type DoubleMap = DataDM;
-			type TestResult = result::Result<(), &'static str>;
+			type DoubleMap = self::frame_system::DataDM<Runtime>;
+			type TestResult = Result<(), &'static str>;
 
 			let (key1, key2) = (11, 13);
 
@@ -1310,101 +1399,100 @@ pub mod tests {
 		});
 	}
 
-	fn expected_metadata() -> PalletStorageMetadata {
-		PalletStorageMetadata {
-			prefix: "Test",
+	fn expected_metadata() -> PalletStorageMetadataIR {
+		PalletStorageMetadataIR {
+			prefix: "System",
 			entries: vec![
-				StorageEntryMetadata {
-					name: "Value",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Plain(scale_info::meta_type::<u64>()),
-					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![],
-				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "Data",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Twox64Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "OptionLinkedMap",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Identity],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat],
 						key: scale_info::meta_type::<u32>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "DataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Twox64Concat, StorageHasher::Blake2_128Concat],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Twox64Concat,
+							StorageHasherIR::Blake2_128Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0, 0, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericDataDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Identity],
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![StorageHasherIR::Blake2_128Concat, StorageHasherIR::Identity],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0, 0, 0, 0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "GenericData2DM",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
+					modifier: StorageEntryModifierIR::Optional,
+					ty: StorageEntryTypeIR::Map {
+						hashers: vec![
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Twox64Concat,
+						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<u32>(),
 					},
 					default: vec![0],
 					docs: vec![],
 				},
-				StorageEntryMetadata {
+				StorageEntryMetadataIR {
 					name: "AppendableDM",
-					modifier: StorageEntryModifier::Default,
-					ty: StorageEntryType::Map {
+					modifier: StorageEntryModifierIR::Default,
+					ty: StorageEntryTypeIR::Map {
 						hashers: vec![
-							StorageHasher::Blake2_128Concat,
-							StorageHasher::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
+							StorageHasherIR::Blake2_128Concat,
 						],
 						key: scale_info::meta_type::<(u32, u32)>(),
 						value: scale_info::meta_type::<Vec<u32>>(),
@@ -1418,7 +1506,7 @@ pub mod tests {
 
 	#[test]
 	fn store_metadata() {
-		let metadata = Module::<Test>::storage_metadata();
+		let metadata = Pallet::<Runtime>::storage_metadata();
 		pretty_assertions::assert_eq!(expected_metadata(), metadata);
 	}
 
@@ -1437,18 +1525,27 @@ pub mod tests {
 			assert_eq!(300, StorageParameter::get());
 		})
 	}
+}
 
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub static Members: Vec<u64> = vec![];
-		pub const Foo: Option<u64> = None;
-	}
+/// Private module re-exporting items used by frame support macros.
+#[doc(hidden)]
+pub mod _private {
+	pub use sp_inherents;
+}
+
+/// Prelude to be used for pallet testing, for ease of use.
+#[cfg(feature = "std")]
+pub mod testing_prelude {
+	pub use super::{
+		assert_err, assert_err_ignore_postinfo, assert_err_with_weight, assert_error_encoded_size,
+		assert_noop, assert_ok, assert_storage_noop, bounded_btree_map, bounded_vec,
+		parameter_types, traits::Get,
+	};
+	pub use sp_arithmetic::assert_eq_error_rate;
 }
 
 /// Prelude to be used alongside pallet macro, for ease of use.
 pub mod pallet_prelude {
-	#[cfg(feature = "std")]
-	pub use crate::traits::GenesisBuild;
 	pub use crate::{
 		dispatch::{
 			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter,
@@ -1465,15 +1562,17 @@ pub mod pallet_prelude {
 			},
 		},
 		traits::{
-			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
-			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
+			BuildGenesisConfig, ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks,
+			IsType, PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
 	pub use frame_support::pallet_macros::*;
+	pub use frame_support_procedural::register_default_impl;
 	pub use scale_info::TypeInfo;
+	pub use sp_inherents::MakeFatalError;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
 		transaction_validity::{
@@ -1522,7 +1621,6 @@ pub mod pallet_prelude {
 /// * [`pallet::constant`](#palletconstant)
 /// * [`pallet::disable_frame_system_supertrait_check`](#disable_supertrait_check)
 /// * [`pallet::generate_store($vis trait Store)`](#palletgenerate_storevis-trait-store)
-/// * [`pallet::generate_storage_info`](#palletgenerate_storage_info)
 /// * [`pallet::storage_version`](#palletstorage_version)
 /// * [`pallet::hooks`](#hooks-pallethooks-optional)
 /// * [`pallet::call`](#call-palletcall-optional)
@@ -1546,6 +1644,7 @@ pub mod pallet_prelude {
 /// * [`pallet::inherent`](#inherent-palletinherent-optional)
 /// * [`pallet::validate_unsigned`](#validate-unsigned-palletvalidate_unsigned-optional)
 /// * [`pallet::origin`](#origin-palletorigin-optional)
+/// * [`pallet::composite_enum`](#composite-enum-palletcomposite_enum-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -1724,24 +1823,6 @@ pub mod pallet_prelude {
 /// definition.
 ///
 /// Also see [`pallet::generate_store`](`frame_support::pallet_macros::generate_store`).
-///
-/// # `pallet::generate_storage_info`
-///
-/// To generate the full storage info (used for PoV calculation) use the attribute
-/// `#[pallet::generate_storage_info]`, e.g.:
-///
-/// ```ignore
-/// #[pallet::pallet]
-/// #[pallet::generate_storage_info]
-/// pub struct Pallet<T>(_);
-/// ```
-///
-/// This requires all storage items to implement the trait [`traits::StorageInfoTrait`], thus
-/// all keys and value types must be bound by [`pallet_prelude::MaxEncodedLen`]. Individual
-/// storages can opt-out from this constraint by using `#[pallet::unbounded]` (see
-/// `#[pallet::storage]` for more info).
-///
-/// Also see [`pallet::generate_storage_info`](`frame_support::pallet_macros::generate_storage_info`)
 ///
 /// # `pallet::storage_version`
 ///
@@ -2156,7 +2237,7 @@ pub mod pallet_prelude {
 /// for the pallet.
 ///
 /// Item is defined as either an enum or a struct. It needs to be public and implement the
-/// trait [`GenesisBuild`](`traits::GenesisBuild`) with
+/// trait [`BuildGenesisConfig`](`traits::BuildGenesisConfig`) with
 /// [`#[pallet::genesis_build]`](#genesis-build-palletgenesis_build-optional). The type
 /// generics are constrained to be either none, or `T` or `T: Config`.
 ///
@@ -2270,6 +2351,29 @@ pub mod pallet_prelude {
 /// NOTE: for instantiable pallets, the origin must be generic over `T` and `I`.
 ///
 /// Also see [`pallet::origin`](`frame_support::pallet_macros::origin`)
+///
+/// # Composite enum `#[pallet::composite_enum]` (optional)
+///
+/// The `#[pallet::composite_enum]` attribute allows you to define an enum on the pallet which
+/// will then instruct `construct_runtime` to amalgamate all similarly-named enums from other
+/// pallets into an aggregate enum. This is similar in principle with how the aggregate enum is
+/// generated for `#[pallet::event]` or `#[pallet::error]`.
+///
+/// The item tagged with `#[pallet::composite_enum]` MUST be an enum declaration, and can ONLY
+/// be the following identifiers: `FreezeReason`, `HoldReason`, `LockId` or `SlashReason`.
+/// Custom identifiers are not supported.
+///
+/// NOTE: For ease of usage, when no `#[derive]` attributes are detected, the
+/// `#[pallet::composite_enum]` attribute will automatically derive the following traits for
+/// the enum:
+///
+/// ```ignore
+/// Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Encode, Decode, MaxEncodedLen, TypeInfo,
+/// RuntimeDebug
+/// ```
+///
+/// The inverse is also true: if there are any #[derive] attributes present for the enum, then
+/// the attribute will not automatically derive any of the traits described above.
 ///
 /// # General notes on instantiable pallets
 ///
@@ -2415,14 +2519,15 @@ pub mod pallet_prelude {
 /// 	//
 /// 	// Type must implement the `Default` trait.
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	#[derive(frame_support::DefaultNoBound)]
+/// 	pub struct GenesisConfig<T: Config> {
+/// 	    _config: sp_std::marker::PhantomData<T>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	// Declare genesis builder. (This is need only if GenesisConfig is declared)
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+/// 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 /// 		fn build(&self) {}
 /// 	}
 ///
@@ -2501,7 +2606,7 @@ pub mod pallet_prelude {
 /// 	#[pallet::extra_constants]
 /// 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 /// 		/// Some description
-/// 		fn exra_constant_name() -> u128 { 4u128 }
+/// 		fn extra_constant_name() -> u128 { 4u128 }
 /// 	}
 ///
 /// 	#[pallet::pallet]
@@ -2552,13 +2657,14 @@ pub mod pallet_prelude {
 /// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	#[derive(frame_support::DefaultNoBound)]
+/// 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+/// 		 _config: sp_std::marker::PhantomData<(T,I)>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+/// 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 /// 		fn build(&self) {}
 /// 	}
 ///
@@ -2616,13 +2722,13 @@ pub mod pallet_prelude {
 ///     - query the metadata using the `state_getMetadata` RPC and curl, or use `subsee -p
 ///       <PALLET_NAME> > meta.json`
 /// 2. Generate the template upgrade for the pallet provided by `decl_storage` with the
-///     environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
-///     my_pallet`. This template can be used as it contains all information for storages,
-///     genesis config and genesis build.
+///    environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
+///    my_pallet`. This template can be used as it contains all information for storages,
+///    genesis config and genesis build.
 /// 3. Reorganize the pallet to have the trait `Config`, `decl_*` macros,
-///     [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
-///     [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
-///     file. Suggested order:
+///    [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
+///    [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
+///    file. Suggested order:
 ///     * `Config`,
 ///     * `decl_module`,
 ///     * `decl_event`,
@@ -2682,8 +2788,8 @@ pub mod pallet_prelude {
 /// 8. **migrate error**: rewrite it with attribute
 ///    [`#[pallet::error]`](#error-palleterror-optional).
 /// 9. **migrate storage**: `decl_storage` provide an upgrade template (see 3.). All storages,
-///     genesis config, genesis build and default implementation of genesis config can be
-///     taken from it directly.
+///    genesis config, genesis build and default implementation of genesis config can be taken
+///    from it directly.
 ///
 ///     Otherwise here is the manual process:
 ///
@@ -2802,12 +2908,16 @@ pub use frame_support_procedural::pallet;
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
-		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
-		extra_constants, generate_deposit, generate_storage_info, generate_store, genesis_build,
-		genesis_config, getter, hooks, inherent, origin, storage, storage_prefix, storage_version,
-		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
+		call_index, compact, composite_enum, config, constant,
+		disable_frame_system_supertrait_check, error, event, extra_constants, generate_deposit,
+		generate_store, genesis_build, genesis_config, getter, hooks, import_section, inherent,
+		no_default, origin, pallet_section, storage, storage_prefix, storage_version, type_value,
+		unbounded, validate_unsigned, weight, whitelist_storage,
 	};
 }
+
+#[doc(inline)]
+pub use frame_support_procedural::register_default_impl;
 
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);

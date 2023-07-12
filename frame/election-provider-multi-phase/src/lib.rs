@@ -247,10 +247,7 @@ use sp_arithmetic::{
 	traits::{CheckedAdd, Zero},
 	UpperOf,
 };
-use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, BoundedSupports, ElectionScore, EvaluateSupport,
-	Supports, VoteWeight,
-};
+use sp_npos_elections::{BoundedSupports, ElectionScore, IdentifierT, Supports, VoteWeight};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
@@ -259,6 +256,9 @@ use sp_runtime::{
 	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
+
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -430,13 +430,17 @@ impl<C: Default> Default for RawSolution<C> {
 	DefaultNoBound,
 	scale_info::TypeInfo,
 )]
-#[scale_info(skip_type_params(T))]
-pub struct ReadySolution<T: Config> {
+#[scale_info(skip_type_params(AccountId, MaxWinners))]
+pub struct ReadySolution<AccountId, MaxWinners>
+where
+	AccountId: IdentifierT,
+	MaxWinners: Get<u32>,
+{
 	/// The final supports of the solution.
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	pub supports: BoundedSupports<T::AccountId, T::MaxWinners>,
+	pub supports: BoundedSupports<AccountId, MaxWinners>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
@@ -451,11 +455,11 @@ pub struct ReadySolution<T: Config> {
 /// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct RoundSnapshot<T: Config> {
+pub struct RoundSnapshot<AccountId, DataProvider> {
 	/// All of the voters.
-	pub voters: Vec<VoterOf<T>>,
+	pub voters: Vec<DataProvider>,
 	/// All of the targets.
-	pub targets: Vec<T::AccountId>,
+	pub targets: Vec<AccountId>,
 }
 
 /// Encodes the length of a solution or a snapshot.
@@ -501,10 +505,10 @@ where
 	fn eq(&self, other: &Self) -> bool {
 		use ElectionError::*;
 		match (self, other) {
-			(&Feasibility(ref x), &Feasibility(ref y)) if x == y => true,
-			(&Miner(ref x), &Miner(ref y)) if x == y => true,
-			(&DataProvider(ref x), &DataProvider(ref y)) if x == y => true,
-			(&Fallback(ref x), &Fallback(ref y)) if x == y => true,
+			(Feasibility(x), Feasibility(y)) if x == y => true,
+			(Miner(x), Miner(y)) if x == y => true,
+			(DataProvider(x), DataProvider(y)) if x == y => true,
+			(Fallback(x), Fallback(y)) if x == y => true,
 			_ => false,
 		}
 	}
@@ -614,6 +618,7 @@ pub mod pallet {
 		type MinerConfig: crate::unsigned::MinerConfig<
 			AccountId = Self::AccountId,
 			MaxVotesPerVoter = <Self::DataProvider as ElectionDataProvider>::MaxVotesPerVoter,
+			MaxWinners = Self::MaxWinners,
 		>;
 
 		/// Maximum number of signed submissions that can be queued.
@@ -732,6 +737,11 @@ pub mod pallet {
 		#[pallet::constant_name(MinerMaxVotesPerVoter)]
 		fn max_votes_per_voter() -> u32 {
 			<T::MinerConfig as MinerConfig>::MaxVotesPerVoter::get()
+		}
+
+		#[pallet::constant_name(MinerMaxWinners)]
+		fn max_winners() -> u32 {
+			<T::MinerConfig as MinerConfig>::MaxWinners::get()
 		}
 	}
 
@@ -873,6 +883,11 @@ pub mod pallet {
 			// `SignedMaxSubmissions` is a red flag that the developer does not understand how to
 			// configure this pallet.
 			assert!(T::SignedMaxSubmissions::get() >= T::SignedMaxRefunds::get());
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
+			Self::do_try_state()
 		}
 	}
 
@@ -1245,16 +1260,19 @@ pub mod pallet {
 	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
 
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
+	///
+	/// Always sorted by score.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
-	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T>>;
+	pub type QueuedSolution<T: Config> =
+		StorageValue<_, ReadySolution<T::AccountId, T::MaxWinners>>;
 
 	/// Snapshot data of the round.
 	///
 	/// This is created at the beginning of the signed phase and cleared upon calling `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn snapshot)]
-	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T>>;
+	pub type Snapshot<T: Config> = StorageValue<_, RoundSnapshot<T::AccountId, VoterOf<T>>>;
 
 	/// Desired number of targets to elect for this round.
 	///
@@ -1325,7 +1343,7 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 }
 
 impl<T: Config> Pallet<T> {
@@ -1385,7 +1403,7 @@ impl<T: Config> Pallet<T> {
 		// instead of using storage APIs, we do a manual encoding into a fixed-size buffer.
 		// `encoded_size` encodes it without storing it anywhere, this should not cause any
 		// allocation.
-		let snapshot = RoundSnapshot::<T> { voters, targets };
+		let snapshot = RoundSnapshot::<T::AccountId, VoterOf<T>> { voters, targets };
 		let size = snapshot.encoded_size();
 		log!(debug, "snapshot pre-calculated size {:?}", size);
 		let mut buffer = Vec::with_capacity(size);
@@ -1479,89 +1497,22 @@ impl<T: Config> Pallet<T> {
 	pub fn feasibility_check(
 		raw_solution: RawSolution<SolutionOf<T::MinerConfig>>,
 		compute: ElectionCompute,
-	) -> Result<ReadySolution<T>, FeasibilityError> {
-		let RawSolution { solution, score, round } = raw_solution;
-
-		// First, check round.
-		ensure!(Self::round() == round, FeasibilityError::InvalidRound);
-
-		// Winners are not directly encoded in the solution.
-		let winners = solution.unique_targets();
-
+	) -> Result<ReadySolution<T::AccountId, T::MaxWinners>, FeasibilityError> {
 		let desired_targets =
 			Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
-		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
-		// Fail early if targets requested by data provider exceed maximum winners supported.
-		ensure!(
-			desired_targets <= <T as pallet::Config>::MaxWinners::get(),
-			FeasibilityError::TooManyDesiredTargets
-		);
+		let snapshot = Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
+		let round = Self::round();
+		let minimum_untrusted_score = Self::minimum_untrusted_score();
 
-		// Ensure that the solution's score can pass absolute min-score.
-		let submitted_score = raw_solution.score;
-		ensure!(
-			Self::minimum_untrusted_score().map_or(true, |min_score| {
-				submitted_score.strict_threshold_better(min_score, Perbill::zero())
-			}),
-			FeasibilityError::UntrustedScoreTooLow
-		);
-
-		// Read the entire snapshot.
-		let RoundSnapshot { voters: snapshot_voters, targets: snapshot_targets } =
-			Self::snapshot().ok_or(FeasibilityError::SnapshotUnavailable)?;
-
-		// ----- Start building. First, we need some closures.
-		let cache = helpers::generate_voter_cache::<T::MinerConfig>(&snapshot_voters);
-		let voter_at = helpers::voter_at_fn::<T::MinerConfig>(&snapshot_voters);
-		let target_at = helpers::target_at_fn::<T::MinerConfig>(&snapshot_targets);
-		let voter_index = helpers::voter_index_fn_usize::<T::MinerConfig>(&cache);
-
-		// Then convert solution -> assignment. This will fail if any of the indices are gibberish,
-		// namely any of the voters or targets.
-		let assignments = solution
-			.into_assignment(voter_at, target_at)
-			.map_err::<FeasibilityError, _>(Into::into)?;
-
-		// Ensure that assignments is correct.
-		let _ = assignments.iter().try_for_each(|assignment| {
-			// Check that assignment.who is actually a voter (defensive-only).
-			// NOTE: while using the index map from `voter_index` is better than a blind linear
-			// search, this *still* has room for optimization. Note that we had the index when
-			// we did `solution -> assignment` and we lost it. Ideal is to keep the index
-			// around.
-
-			// Defensive-only: must exist in the snapshot.
-			let snapshot_index =
-				voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
-			// Defensive-only: index comes from the snapshot, must exist.
-			let (_voter, _stake, targets) =
-				snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
-
-			// Check that all of the targets are valid based on the snapshot.
-			if assignment.distribution.iter().any(|(d, _)| !targets.contains(d)) {
-				return Err(FeasibilityError::InvalidVote)
-			}
-			Ok(())
-		})?;
-
-		// ----- Start building support. First, we need one more closure.
-		let stake_of = helpers::stake_of_fn::<T::MinerConfig>(&snapshot_voters, &cache);
-
-		// This might fail if the normalization fails. Very unlikely. See `integrity_test`.
-		let staked_assignments = assignment_ratio_to_staked_normalized(assignments, stake_of)
-			.map_err::<FeasibilityError, _>(Into::into)?;
-		let supports = sp_npos_elections::to_supports(&staked_assignments);
-
-		// Finally, check that the claimed score was indeed correct.
-		let known_score = supports.evaluate();
-		ensure!(known_score == score, FeasibilityError::InvalidScore);
-
-		// Size of winners in miner solution is equal to `desired_targets` <= `MaxWinners`.
-		let supports = supports
-			.try_into()
-			.defensive_map_err(|_| FeasibilityError::BoundedConversionFailed)?;
-		Ok(ReadySolution { supports, compute, score })
+		Miner::<T::MinerConfig>::feasibility_check(
+			raw_solution,
+			compute,
+			desired_targets,
+			snapshot,
+			round,
+			minimum_untrusted_score,
+		)
 	}
 
 	/// Perform the tasks to be done after a new `elect` has been triggered:
@@ -1626,6 +1577,96 @@ impl<T: Config> Pallet<T> {
 			.fold(Zero::zero(), |acc, next| acc + next.voters.len() as u32);
 		let desired_targets = supports.len() as u32;
 		Self::register_weight(T::WeightInfo::elect_queued(active_voters, desired_targets));
+	}
+}
+
+#[cfg(feature = "try-runtime")]
+impl<T: Config> Pallet<T> {
+	fn do_try_state() -> Result<(), TryRuntimeError> {
+		Self::try_state_snapshot()?;
+		Self::try_state_signed_submissions_map()?;
+		Self::try_state_phase_off()
+	}
+
+	// [`Snapshot`] state check. Invariants:
+	// - [`DesiredTargets`] exists if and only if [`Snapshot`] is present.
+	// - [`SnapshotMetadata`] exist if and only if [`Snapshot`] is present.
+	fn try_state_snapshot() -> Result<(), TryRuntimeError> {
+		if <Snapshot<T>>::exists() &&
+			<SnapshotMetadata<T>>::exists() &&
+			<DesiredTargets<T>>::exists()
+		{
+			Ok(())
+		} else if !<Snapshot<T>>::exists() &&
+			!<SnapshotMetadata<T>>::exists() &&
+			!<DesiredTargets<T>>::exists()
+		{
+			Ok(())
+		} else {
+			Err("If snapshot exists, metadata and desired targets should be set too. Otherwise, none should be set.".into())
+		}
+	}
+
+	// [`SignedSubmissionsMap`] state check. Invariants:
+	// - All [`SignedSubmissionIndices`] are present in [`SignedSubmissionsMap`], and no more;
+	// - [`SignedSubmissionNextIndex`] is not present in [`SignedSubmissionsMap`];
+	// - [`SignedSubmissionIndices`] is sorted by election score.
+	fn try_state_signed_submissions_map() -> Result<(), TryRuntimeError> {
+		let mut last_score: ElectionScore = Default::default();
+		let indices = <SignedSubmissionIndices<T>>::get();
+
+		for (i, indice) in indices.iter().enumerate() {
+			let submission = <SignedSubmissionsMap<T>>::get(indice.2);
+			if submission.is_none() {
+				return Err(
+					"All signed submissions indices must be part of the submissions map".into()
+				)
+			}
+
+			if i == 0 {
+				last_score = indice.0
+			} else {
+				if last_score.strict_threshold_better(indice.0, Perbill::zero()) {
+					return Err(
+						"Signed submission indices vector must be ordered by election score".into()
+					)
+				}
+				last_score = indice.0;
+			}
+		}
+
+		if <SignedSubmissionsMap<T>>::iter().nth(indices.len()).is_some() {
+			return Err(
+				"Signed submissions map length should be the same as the indices vec length".into()
+			)
+		}
+
+		match <SignedSubmissionNextIndex<T>>::get() {
+			0 => Ok(()),
+			next =>
+				if <SignedSubmissionsMap<T>>::get(next).is_some() {
+					return Err(
+						"The next submissions index should not be in the submissions maps already"
+							.into(),
+					)
+				} else {
+					Ok(())
+				},
+		}
+	}
+
+	// [`Phase::Off`] state check. Invariants:
+	// - If phase is `Phase::Off`, [`Snapshot`] must be none.
+	fn try_state_phase_off() -> Result<(), TryRuntimeError> {
+		match Self::current_phase().is_off() {
+			false => Ok(()),
+			true =>
+				if <Snapshot<T>>::get().is_some() {
+					Err("Snapshot must be none when in Phase::Off".into())
+				} else {
+					Ok(())
+				},
+		}
 	}
 }
 
@@ -1701,6 +1742,11 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::SnapshotUnavailable
 			);
+
+			// kill also `SnapshotMetadata` and `DesiredTargets` for the storage state to be
+			// consistent for the try_state checks to pass.
+			<SnapshotMetadata<Runtime>>::kill();
+			<DesiredTargets<Runtime>>::kill();
 		})
 	}
 

@@ -219,7 +219,7 @@ frame_benchmarking::benchmarks! {
 
 	finalize_signed_phase_accept_solution {
 		let receiver = account("receiver", 0, SEED);
-		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
+		let initial_balance = T::Currency::minimum_balance() + 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
 		let ready = Default::default();
 		let deposit: BalanceOf<T> = 10u32.into();
@@ -228,7 +228,7 @@ frame_benchmarking::benchmarks! {
 		let call_fee: BalanceOf<T> = 30u32.into();
 
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
-		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), T::Currency::minimum_balance());
 	}: {
 		<MultiPhase<T>>::finalize_signed_phase_accept_solution(
 			ready,
@@ -246,17 +246,17 @@ frame_benchmarking::benchmarks! {
 
 	finalize_signed_phase_reject_solution {
 		let receiver = account("receiver", 0, SEED);
-		let initial_balance = T::Currency::minimum_balance().max(One::one()) * 10u32.into();
+		let initial_balance = T::Currency::minimum_balance() + 10u32.into();
 		let deposit: BalanceOf<T> = 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
 
-		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), T::Currency::minimum_balance());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 10u32.into());
 	}: {
 		<MultiPhase<T>>::finalize_signed_phase_reject_solution(&receiver, deposit)
 	} verify {
-		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
+		assert_eq!(T::Currency::free_balance(&receiver), T::Currency::minimum_balance());
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 

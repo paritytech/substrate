@@ -22,29 +22,27 @@
 //! components of the runtime that are expensive to initialize.
 
 use crate::error::{Error, WasmError};
+
 use codec::Decode;
-use lru::LruCache;
 use parking_lot::Mutex;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
 	wasm_runtime::{HeapAllocStrategy, WasmInstance, WasmModule},
 };
+use schnellru::{ByLength, LruMap};
 use sp_core::traits::{Externalities, FetchRuntimeCode, RuntimeCode};
 use sp_version::RuntimeVersion;
+use sp_wasm_interface::HostFunctions;
+
 use std::{
-	num::NonZeroUsize,
 	panic::AssertUnwindSafe,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
 
-use sp_wasm_interface::HostFunctions;
-
 /// Specification of different methods of executing the runtime Wasm code.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub enum WasmExecutionMethod {
-	/// Uses the Wasmi interpreter.
-	Interpreted,
 	/// Uses the Wasmtime compiled runtime.
 	Compiled {
 		/// The instantiation strategy to use.
@@ -53,8 +51,10 @@ pub enum WasmExecutionMethod {
 }
 
 impl Default for WasmExecutionMethod {
-	fn default() -> WasmExecutionMethod {
-		WasmExecutionMethod::Interpreted
+	fn default() -> Self {
+		Self::Compiled {
+			instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite,
+		}
 	}
 }
 
@@ -71,14 +71,14 @@ struct VersionedRuntimeId {
 /// A Wasm runtime object along with its cached runtime version.
 struct VersionedRuntime {
 	/// Shared runtime that can spawn instances.
-	module: Arc<dyn WasmModule>,
+	module: Box<dyn WasmModule>,
 	/// Runtime version according to `Core_version` if any.
 	version: Option<RuntimeVersion>,
 
 	// TODO: Remove this once the legacy instance reuse instantiation strategy
 	//       for `wasmtime` is gone, as this only makes sense with that particular strategy.
 	/// Cached instance pool.
-	instances: Arc<Vec<Mutex<Option<Box<dyn WasmInstance>>>>>,
+	instances: Vec<Mutex<Option<Box<dyn WasmInstance>>>>,
 }
 
 impl VersionedRuntime {
@@ -86,7 +86,7 @@ impl VersionedRuntime {
 	fn with_instance<R, F>(&self, ext: &mut dyn Externalities, f: F) -> Result<R, Error>
 	where
 		F: FnOnce(
-			&Arc<dyn WasmModule>,
+			&dyn WasmModule,
 			&mut dyn WasmInstance,
 			Option<&RuntimeVersion>,
 			&mut dyn Externalities,
@@ -106,7 +106,7 @@ impl VersionedRuntime {
 					.map(|r| Ok((r, false)))
 					.unwrap_or_else(|| self.module.new_instance().map(|i| (i, true)))?;
 
-				let result = f(&self.module, &mut *instance, self.version.as_ref(), ext);
+				let result = f(&*self.module, &mut *instance, self.version.as_ref(), ext);
 				if let Err(e) = &result {
 					if new_inst {
 						tracing::warn!(
@@ -142,7 +142,7 @@ impl VersionedRuntime {
 				// Allocate a new instance
 				let mut instance = self.module.new_instance()?;
 
-				f(&self.module, &mut *instance, self.version.as_ref(), ext)
+				f(&*self.module, &mut *instance, self.version.as_ref(), ext)
 			},
 		}
 	}
@@ -163,7 +163,7 @@ pub struct RuntimeCache {
 	/// A cache of runtimes along with metadata.
 	///
 	/// Runtimes sorted by recent usage. The most recently used is at the front.
-	runtimes: Mutex<LruCache<VersionedRuntimeId, Arc<VersionedRuntime>>>,
+	runtimes: Mutex<LruMap<VersionedRuntimeId, Arc<VersionedRuntime>>>,
 	/// The size of the instances cache for each runtime.
 	max_runtime_instances: usize,
 	cache_path: Option<PathBuf>,
@@ -185,9 +185,8 @@ impl RuntimeCache {
 		cache_path: Option<PathBuf>,
 		runtime_cache_size: u8,
 	) -> RuntimeCache {
-		let cap =
-			NonZeroUsize::new(runtime_cache_size.max(1) as usize).expect("cache size is not zero");
-		RuntimeCache { runtimes: Mutex::new(LruCache::new(cap)), max_runtime_instances, cache_path }
+		let cap = ByLength::new(runtime_cache_size.max(1) as u32);
+		RuntimeCache { runtimes: Mutex::new(LruMap::new(cap)), max_runtime_instances, cache_path }
 	}
 
 	/// Prepares a WASM module instance and executes given function for it.
@@ -228,7 +227,7 @@ impl RuntimeCache {
 	where
 		H: HostFunctions,
 		F: FnOnce(
-			&Arc<dyn WasmModule>,
+			&dyn WasmModule,
 			&mut dyn WasmInstance,
 			Option<&RuntimeVersion>,
 			&mut dyn Externalities,
@@ -275,7 +274,7 @@ impl RuntimeCache {
 			let versioned_runtime = Arc::new(result?);
 
 			// Save new versioned wasm runtime in cache
-			runtimes.put(versioned_runtime_id, versioned_runtime.clone());
+			runtimes.insert(versioned_runtime_id, versioned_runtime.clone());
 
 			versioned_runtime
 		};
@@ -294,26 +293,11 @@ pub fn create_wasm_runtime_with_code<H>(
 	blob: RuntimeBlob,
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
-) -> Result<Arc<dyn WasmModule>, WasmError>
+) -> Result<Box<dyn WasmModule>, WasmError>
 where
 	H: HostFunctions,
 {
 	match wasm_method {
-		WasmExecutionMethod::Interpreted => {
-			// Wasmi doesn't have any need in a cache directory.
-			//
-			// We drop the cache_path here to silence warnings that cache_path is not used if
-			// compiling without the `wasmtime` flag.
-			let _ = cache_path;
-
-			sc_executor_wasmi::create_runtime(
-				blob,
-				heap_alloc_strategy,
-				H::host_functions(),
-				allow_missing_func_imports,
-			)
-			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
-		},
 		WasmExecutionMethod::Compiled { instantiation_strategy } =>
 			sc_executor_wasmtime::create_runtime::<H>(
 				blob,
@@ -326,10 +310,14 @@ where
 						deterministic_stack_limit: None,
 						canonicalize_nans: false,
 						parallel_compilation: true,
+						wasm_multi_value: false,
+						wasm_bulk_memory: false,
+						wasm_reference_types: false,
+						wasm_simd: false,
 					},
 				},
 			)
-			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
+			.map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) }),
 	}
 }
 
@@ -430,7 +418,7 @@ where
 			// The following unwind safety assertion is OK because if the method call panics, the
 			// runtime will be dropped.
 			let runtime = AssertUnwindSafe(runtime.as_ref());
-			crate::native_executor::with_externalities_safe(&mut **ext, move || {
+			crate::executor::with_externalities_safe(&mut **ext, move || {
 				runtime.new_instance()?.call("Core_version".into(), &[])
 			})
 			.map_err(|_| WasmError::Instantiation("panic in call to get runtime version".into()))?
@@ -444,7 +432,7 @@ where
 	let mut instances = Vec::with_capacity(max_instances);
 	instances.resize_with(max_instances, || Mutex::new(None));
 
-	Ok(VersionedRuntime { module: runtime, version, instances: Arc::new(instances) })
+	Ok(VersionedRuntime { module: runtime, version, instances })
 }
 
 #[cfg(test)]

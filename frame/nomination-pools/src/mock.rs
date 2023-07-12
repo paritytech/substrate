@@ -2,7 +2,7 @@ use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
-use sp_runtime::FixedU128;
+use sp_runtime::{BuildStorage, FixedU128};
 use sp_staking::Stake;
 
 pub type BlockNumber = u64;
@@ -47,6 +47,7 @@ impl StakingMock {
 impl sp_staking::StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
+	type CurrencyToVote = ();
 
 	fn minimum_nominator_bond() -> Self::Balance {
 		StakingMinBond::get()
@@ -65,6 +66,14 @@ impl sp_staking::StakingInterface for StakingMock {
 
 	fn bonding_duration() -> EraIndex {
 		BondingDuration::get()
+	}
+
+	fn status(
+		_: &Self::AccountId,
+	) -> Result<sp_staking::StakerStatus<Self::AccountId>, DispatchError> {
+		Nominations::get()
+			.map(|noms| sp_staking::StakerStatus::Nominator(noms))
+			.ok_or(DispatchError::Other("NotStash"))
 	}
 
 	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
@@ -108,7 +117,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
+	fn nominations(_: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		Nominations::get()
 	}
 
@@ -116,15 +125,15 @@ impl sp_staking::StakingInterface for StakingMock {
 		unimplemented!("method currently not used in testing")
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+	fn stake(who: &Self::AccountId) -> Result<Stake<Balance>, DispatchError> {
 		match (
-			UnbondingBalanceMap::get().get(who).map(|v| *v),
-			BondedBalanceMap::get().get(who).map(|v| *v),
+			UnbondingBalanceMap::get().get(who).copied(),
+			BondedBalanceMap::get().get(who).copied(),
 		) {
 			(None, None) => Err(DispatchError::Other("balance not found")),
-			(Some(v), None) => Ok(Stake { total: v, active: 0, stash: *who }),
-			(None, Some(v)) => Ok(Stake { total: v, active: v, stash: *who }),
-			(Some(a), Some(b)) => Ok(Stake { total: a + b, active: b, stash: *who }),
+			(Some(v), None) => Ok(Stake { total: v, active: 0 }),
+			(None, Some(v)) => Ok(Stake { total: v, active: v }),
+			(Some(a), Some(b)) => Ok(Stake { total: a + b, active: b }),
 		}
 	}
 
@@ -196,6 +205,10 @@ impl pallet_balances::Config for Runtime {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 pub struct BalanceToU256;
@@ -241,7 +254,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Storage, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Pools: pools::{Pallet, Call, Storage, Event<T>},
 	}
@@ -251,11 +264,17 @@ pub struct ExtBuilder {
 	members: Vec<(AccountId, Balance)>,
 	max_members: Option<u32>,
 	max_members_per_pool: Option<u32>,
+	global_max_commission: Option<Perbill>,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { members: Default::default(), max_members: Some(4), max_members_per_pool: Some(3) }
+		Self {
+			members: Default::default(),
+			max_members: Some(4),
+			max_members_per_pool: Some(3),
+			global_max_commission: Some(Perbill::from_percent(90)),
+		}
 	}
 }
 
@@ -297,10 +316,15 @@ impl ExtBuilder {
 		self
 	}
 
+	pub fn global_max_commission(mut self, commission: Option<Perbill>) -> Self {
+		self.global_max_commission = commission;
+		self
+	}
+
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let _ = crate::GenesisConfig::<Runtime> {
 			min_join_bond: MinJoinBondConfig::get(),
@@ -308,6 +332,7 @@ impl ExtBuilder {
 			max_pools: Some(2),
 			max_members_per_pool: self.max_members_per_pool,
 			max_members: self.max_members,
+			global_max_commission: self.global_max_commission,
 		}
 		.assimilate_storage(&mut storage);
 
@@ -332,7 +357,7 @@ impl ExtBuilder {
 		ext
 	}
 
-	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+	pub fn build_and_execute(self, test: impl FnOnce()) {
 		self.build().execute_with(|| {
 			test();
 			Pools::do_try_state(CheckLevel::get()).unwrap();
@@ -352,6 +377,23 @@ pub fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
 parameter_types! {
 	storage PoolsEvents: u32 = 0;
 	storage BalancesEvents: u32 = 0;
+}
+
+/// Helper to run a specified amount of blocks.
+pub fn run_blocks(n: u64) {
+	let current_block = System::block_number();
+	run_to_block(n + current_block);
+}
+
+/// Helper to run to a specific block.
+pub fn run_to_block(n: u64) {
+	let current_block = System::block_number();
+	assert!(n > current_block);
+	while System::block_number() < n {
+		Pools::on_finalize(System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		Pools::on_initialize(System::block_number());
+	}
 }
 
 /// All events of this pallet.
@@ -380,7 +422,7 @@ pub fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Runtime>>
 
 /// Same as `fully_unbond`, in permissioned setting.
 pub fn fully_unbond_permissioned(member: AccountId) -> DispatchResult {
-	let points = PoolMembers::<Runtime>::get(&member)
+	let points = PoolMembers::<Runtime>::get(member)
 		.map(|d| d.active_points())
 		.unwrap_or_default();
 	Pools::unbond(RuntimeOrigin::signed(member), member, points)

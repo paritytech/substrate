@@ -19,7 +19,7 @@
 //! Module implementing the logic for verifying and importing AuRa blocks.
 
 use crate::{
-	aura_err, authorities, find_pre_digest, slot_author, AuthorityId, CompatibilityMode, Error,
+	authorities, standalone::SealVerificationError, AuthorityId, CompatibilityMode, Error,
 	LOG_TARGET,
 };
 use codec::{Codec, Decode, Encode};
@@ -36,9 +36,9 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::Error as ConsensusError;
-use sp_consensus_aura::{digests::CompatibleDigestItem, inherents::AuraInherentData, AuraApi};
+use sp_consensus_aura::{inherents::AuraInherentData, AuraApi};
 use sp_consensus_slots::Slot;
-use sp_core::{crypto::Pair, ExecutionContext};
+use sp_core::crypto::Pair;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider as _};
 use sp_runtime::{
 	traits::{Block as BlockT, Header, NumberFor},
@@ -54,7 +54,7 @@ use std::{fmt::Debug, hash::Hash, marker::PhantomData, sync::Arc};
 fn check_header<C, B: BlockT, P: Pair>(
 	client: &C,
 	slot_now: Slot,
-	mut header: B::Header,
+	header: B::Header,
 	hash: B::Hash,
 	authorities: &[AuthorityId<P>],
 	check_for_equivocation: CheckForEquivocation,
@@ -64,27 +64,16 @@ where
 	C: sc_client_api::backend::AuxStore,
 	P::Public: Encode + Decode + PartialEq + Clone,
 {
-	let seal = header.digest_mut().pop().ok_or(Error::HeaderUnsealed(hash))?;
+	let check_result =
+		crate::standalone::check_header_slot_and_seal::<B, P>(slot_now, header, authorities);
 
-	let sig = seal.as_aura_seal().ok_or_else(|| aura_err(Error::HeaderBadSeal(hash)))?;
-
-	let slot = find_pre_digest::<B, P::Signature>(&header)?;
-
-	if slot > slot_now {
-		header.digest_mut().push(seal);
-		Ok(CheckedHeader::Deferred(header, slot))
-	} else {
-		// check the signature is valid under the expected authority and
-		// chain state.
-		let expected_author =
-			slot_author::<P>(slot, authorities).ok_or(Error::SlotAuthorNotFound)?;
-
-		let pre_hash = header.hash();
-
-		if P::verify(&sig, pre_hash.as_ref(), expected_author) {
-			if check_for_equivocation.check_for_equivocation() {
+	match check_result {
+		Ok((header, slot, seal)) => {
+			let expected_author = crate::standalone::slot_author::<P>(slot, &authorities);
+			let should_equiv_check = check_for_equivocation.check_for_equivocation();
+			if let (true, Some(expected)) = (should_equiv_check, expected_author) {
 				if let Some(equivocation_proof) =
-					check_equivocation(client, slot_now, slot, &header, expected_author)
+					check_equivocation(client, slot_now, slot, &header, expected)
 						.map_err(Error::Client)?
 				{
 					info!(
@@ -98,9 +87,14 @@ where
 			}
 
 			Ok(CheckedHeader::Checked(header, (slot, seal)))
-		} else {
-			Err(Error::BadSignature(hash))
-		}
+		},
+		Err(SealVerificationError::Deferred(header, slot)) =>
+			Ok(CheckedHeader::Deferred(header, slot)),
+		Err(SealVerificationError::Unsealed) => Err(Error::HeaderUnsealed(hash)),
+		Err(SealVerificationError::BadSeal) => Err(Error::HeaderBadSeal(hash)),
+		Err(SealVerificationError::BadSignature) => Err(Error::BadSignature(hash)),
+		Err(SealVerificationError::SlotAuthorNotFound) => Err(Error::SlotAuthorNotFound),
+		Err(SealVerificationError::InvalidPreDigest(e)) => Err(Error::from(e)),
 	}
 }
 
@@ -144,7 +138,6 @@ where
 		at_hash: B::Hash,
 		inherent_data: sp_inherents::InherentData,
 		create_inherent_data_providers: CIDP::InherentDataProviders,
-		execution_context: ExecutionContext,
 	) -> Result<(), Error<B>>
 	where
 		C: ProvideRuntimeApi<B>,
@@ -154,7 +147,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents_with_context(at_hash, execution_context, block, inherent_data)
+			.check_inherents(at_hash, block, inherent_data)
 			.map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
@@ -255,7 +248,6 @@ where
 							parent_hash,
 							inherent_data,
 							create_inherent_data_providers,
-							block.origin.into(),
 						)
 						.await
 						.map_err(|e| e.to_string())?;

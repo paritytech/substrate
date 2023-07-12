@@ -45,7 +45,7 @@ use sp_npos_elections::{
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	PerU16,
+	BuildStorage, PerU16,
 };
 use std::sync::Arc;
 
@@ -59,7 +59,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Event<T>, Config<T>},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
 		MultiPhase: multi_phase::{Pallet, Call, Event<T>},
 	}
@@ -254,6 +254,10 @@ impl pallet_balances::Config for Runtime {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
+	type FreezeIdentifier = ();
+	type MaxFreezes = ();
+	type RuntimeHoldReason = ();
+	type MaxHolds = ();
 }
 
 #[derive(Default, Eq, PartialEq, Debug, Clone, Copy)]
@@ -297,6 +301,8 @@ parameter_types! {
 	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
+
+	#[derive(Debug)]
 	pub static MaxWinners: u32 = 200;
 
 	pub static EpochLength: u64 = 30;
@@ -359,6 +365,7 @@ impl MinerConfig for Runtime {
 	type MaxLength = MinerMaxLength;
 	type MaxWeight = MinerMaxWeight;
 	type MaxVotesPerVoter = <StakingMock as ElectionDataProvider>::MaxVotesPerVoter;
+	type MaxWinners = MaxWinners;
 	type Solution = TestNposSolution;
 
 	fn solution_weight(v: u32, t: u32, a: u32, d: u32) -> Weight {
@@ -567,7 +574,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![
@@ -608,7 +615,17 @@ impl ExtBuilder {
 	}
 
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
-		self.build().execute_with(test)
+		sp_tracing::try_init_simple();
+
+		let mut ext = self.build();
+		ext.execute_with(test);
+
+		#[cfg(feature = "try-runtime")]
+		ext.execute_with(|| {
+			assert_ok!(<MultiPhase as frame_support::traits::Hooks<u64>>::try_state(
+				System::block_number()
+			));
+		});
 	}
 }
 

@@ -67,7 +67,7 @@
 //!
 //! An account pair can become bonded using the [`bond`](Call::bond) call.
 //!
-//! Stash accounts can change their associated controller using the
+//! Stash accounts can update their associated controller back to the stash account using the
 //! [`set_controller`](Call::set_controller) call.
 //!
 //! There are three possible roles that any staked account pair can be in: `Validator`, `Nominator`
@@ -311,14 +311,15 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, StaticLookup, Zero},
 	Perbill, Perquintill, Rounding, RuntimeDebug,
 };
+pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, SessionIndex,
+	EraIndex, OnStakingUpdate, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
-pub use pallet::{pallet::*, *};
+pub use pallet::{pallet::*, UseNominatorsAndValidatorsMap, UseValidatorsMap};
 
 pub(crate) const LOG_TARGET: &str = "runtime::staking";
 
@@ -379,18 +380,6 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 	fn default() -> Self {
 		EraRewardPoints { total: Default::default(), individual: BTreeMap::new() }
 	}
-}
-
-/// Indicates the initial status of the staker.
-#[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, Clone))]
-pub enum StakerStatus<AccountId> {
-	/// Chilling.
-	Idle,
-	/// Declared desire in validating or already participating in it.
-	Validator,
-	/// Nominating for a group of other stakers.
-	Nominator(Vec<AccountId>),
 }
 
 /// A destination account for payment.
@@ -560,7 +549,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// `slash_era` is the era in which the slash (which is being enacted now) actually happened.
 	///
-	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash was
+	/// This calls `Config::OnStakingUpdate::on_slash` with information as to how the slash was
 	/// applied.
 	pub fn slash(
 		&mut self,
@@ -573,7 +562,6 @@ impl<T: Config> StakingLedger<T> {
 		}
 
 		use sp_runtime::PerThing as _;
-		use sp_staking::OnStakerSlash as _;
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
 
@@ -678,7 +666,7 @@ impl<T: Config> StakingLedger<T> {
 		// clean unlocking chunks that are set to zero.
 		self.unlocking.retain(|c| !c.value.is_zero());
 
-		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
+		T::EventListeners::on_slash(&self.stash, self.active, &slashed_unlocking);
 		pre_slash_total.saturating_sub(self.total)
 	}
 }
@@ -860,8 +848,19 @@ impl<Balance: AtLeast32BitUnsigned + Clone, T: Get<&'static PiecewiseLinear<'sta
 }
 
 /// Mode of era-forcing.
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(
+	Copy,
+	Clone,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	TypeInfo,
+	MaxEncodedLen,
+	serde::Serialize,
+	serde::Deserialize,
+)]
 pub enum Forcing {
 	/// Not forcing anything - just let whatever happen.
 	NotForcing,

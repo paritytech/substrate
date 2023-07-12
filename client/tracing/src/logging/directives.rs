@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
+use std::sync::OnceLock;
 use tracing_subscriber::{
 	filter::Directive, fmt as tracing_fmt, layer, reload::Handle, EnvFilter, Registry,
 };
 
 // Handle to reload the tracing log filter
-static FILTER_RELOAD_HANDLE: OnceCell<Handle<EnvFilter, SCSubscriber>> = OnceCell::new();
+static FILTER_RELOAD_HANDLE: OnceLock<Handle<EnvFilter, SCSubscriber>> = OnceLock::new();
 // Directives that are defaulted to when resetting the log filter
-static DEFAULT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
+static DEFAULT_DIRECTIVES: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 // Current state of log filter
-static CURRENT_DIRECTIVES: OnceCell<Mutex<Vec<String>>> = OnceCell::new();
+static CURRENT_DIRECTIVES: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 
 /// Add log filter directive(s) to the defaults
 ///

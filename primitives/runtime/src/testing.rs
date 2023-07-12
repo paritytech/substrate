@@ -23,10 +23,10 @@ use crate::{
 	scale_info::TypeInfo,
 	traits::{
 		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, OpaqueKeys,
-		PostDispatchInfoOf, SignedExtension, ValidateUnsigned,
+		PostDispatchInfoOf, SignaturePayload, SignedExtension, ValidateUnsigned,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
-	ApplyExtrinsicResultWithInfo, CryptoTypeId, KeyTypeId,
+	ApplyExtrinsicResultWithInfo, KeyTypeId,
 };
 use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
 use sp_core::{
@@ -115,7 +115,6 @@ impl UintAuthorityId {
 
 impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	const ID: KeyTypeId = key_types::DUMMY;
-	const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
 
 	type Signature = TestSignature;
 
@@ -155,10 +154,6 @@ impl OpaqueKeys for UintAuthorityId {
 	fn get<T: Decode>(&self, _: KeyTypeId) -> Option<T> {
 		self.using_encoded(|mut x| T::decode(&mut x)).ok()
 	}
-}
-
-impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
-	type Public = Self;
 }
 
 impl traits::IdentifyAccount for UintAuthorityId {
@@ -284,6 +279,15 @@ where
 	}
 }
 
+/// The signature payload of a `TestXt`.
+type TxSingaturePayload<Extra> = (u64, Extra);
+
+impl<Extra: TypeInfo> SignaturePayload for TxSingaturePayload<Extra> {
+	type SignatureAddress = u64;
+	type Signature = ();
+	type SignatureExtra = Extra;
+}
+
 /// Test transaction, tuple of (sender, call, signed_extra)
 /// with index only used if sender is some.
 ///
@@ -291,7 +295,7 @@ where
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct TestXt<Call, Extra> {
 	/// Signature of the extrinsic.
-	pub signature: Option<(u64, Extra)>,
+	pub signature: Option<TxSingaturePayload<Extra>>,
 	/// Call of the extrinsic.
 	pub call: Call,
 }
@@ -336,9 +340,11 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 	}
 }
 
-impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
+impl<Call: Codec + Sync + Send + TypeInfo, Extra: TypeInfo> traits::Extrinsic
+	for TestXt<Call, Extra>
+{
 	type Call = Call;
-	type SignaturePayload = (u64, Extra);
+	type SignaturePayload = TxSingaturePayload<Extra>;
 
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())

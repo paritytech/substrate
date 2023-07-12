@@ -21,6 +21,7 @@ use super::*;
 use crate::{self as bags_list};
 use frame_election_provider_support::VoteWeight;
 use frame_support::parameter_types;
+use sp_runtime::BuildStorage;
 use std::collections::HashMap;
 
 pub type AccountId = u32;
@@ -40,9 +41,10 @@ impl frame_election_provider_support::ScoreProvider<AccountId> for StakingMock {
 		*NextVoteWeightMap::get().get(id).unwrap_or(&NextVoteWeight::get())
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
-	fn set_score_of(id: &AccountId, weight: Self::Score) {
-		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(*id, weight));
+	frame_election_provider_support::runtime_benchmarks_fuzz_or_std_enabled! {
+		fn set_score_of(id: &AccountId, weight: Self::Score) {
+			NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(*id, weight));
+		}
 	}
 }
 
@@ -93,7 +95,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Storage, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Storage, Event<T>, Config<T>},
 		BagsList: bags_list::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -126,7 +128,7 @@ impl ExtBuilder {
 
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let storage = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let ids_with_weight: Vec<_> = if self.skip_genesis_ids {
 			self.ids.iter().collect()

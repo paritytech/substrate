@@ -23,7 +23,7 @@ use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
-pub mod common;
+use substrate_cli_test_utils as common;
 
 /// `benchmark block` works for the dev runtime using the wasm executor.
 #[tokio::test]
@@ -39,7 +39,7 @@ async fn benchmark_block_works() {
 		.arg(base_dir.path())
 		.args(["--from", "1", "--to", "1"])
 		.args(["--repeat", "1"])
-		.args(["--execution", "wasm", "--wasm-execution", "compiled"])
+		.args(["--wasm-execution", "compiled"])
 		.status()
 		.unwrap();
 

@@ -23,6 +23,7 @@ use crate::{mock::*, *};
 
 use frame_support::{assert_noop, assert_ok, assert_storage_noop, StorageNoopGuard};
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use sp_core::blake2_256;
 
 #[test]
 fn mocked_weight_works() {
@@ -147,13 +148,11 @@ fn service_queues_basic_works() {
 		assert_eq!(QueueChanges::take(), vec![(Here, 2, 5)]);
 
 		// Service one message from `There`.
-		ServiceHead::<Test>::set(There.into());
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg("x"), There)]);
 		assert_eq!(QueueChanges::take(), vec![(There, 2, 5)]);
 
 		// Service the remaining from `Here`.
-		ServiceHead::<Test>::set(Here.into());
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg("ab"), Here), (vmsg("abc"), Here)]);
 		assert_eq!(QueueChanges::take(), vec![(Here, 0, 0)]);
@@ -181,7 +180,7 @@ fn service_queues_failing_messages_works() {
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_last_event::<Test>(
 			Event::ProcessingFailed {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"badformat"),
+				id: blake2_256(b"badformat"),
 				origin: MessageOrigin::Here,
 				error: ProcessMessageError::BadFormat,
 			}
@@ -190,7 +189,7 @@ fn service_queues_failing_messages_works() {
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_last_event::<Test>(
 			Event::ProcessingFailed {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"corrupt"),
+				id: blake2_256(b"corrupt"),
 				origin: MessageOrigin::Here,
 				error: ProcessMessageError::Corrupt,
 			}
@@ -199,7 +198,7 @@ fn service_queues_failing_messages_works() {
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_last_event::<Test>(
 			Event::ProcessingFailed {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"unsupported"),
+				id: blake2_256(b"unsupported"),
 				origin: MessageOrigin::Here,
 				error: ProcessMessageError::Unsupported,
 			}
@@ -229,8 +228,8 @@ fn service_queues_suspension_works() {
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg("a"), Here)]);
 		assert_eq!(QueueChanges::take(), vec![(Here, 2, 2)]);
 
-		// Pause queue `Here` and `Everywhere(0)`.
-		SuspendedQueues::set(vec![Here, Everywhere(0)]);
+		// Make queue `Here` and `Everywhere(0)` yield.
+		YieldingQueues::set(vec![Here, Everywhere(0)]);
 
 		// Service one message from `There`.
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
@@ -247,13 +246,13 @@ fn service_queues_suspension_works() {
 		assert_eq!(MessageQueue::service_queues(Weight::MAX), Weight::zero());
 
 		// ... until we resume `Here`:
-		SuspendedQueues::set(vec![Everywhere(0)]);
+		YieldingQueues::set(vec![Everywhere(0)]);
 		assert_eq!(MessageQueue::service_queues(Weight::MAX), 2.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg("b"), Here), (vmsg("c"), Here)]);
 
 		// Everywhere still won't move.
 		assert_eq!(MessageQueue::service_queues(Weight::MAX), Weight::zero());
-		SuspendedQueues::take();
+		YieldingQueues::take();
 		// Resume `Everywhere(0)` makes it work.
 		assert_eq!(MessageQueue::service_queues(Weight::MAX), 3.into_weight());
 		assert_eq!(
@@ -529,7 +528,7 @@ fn service_page_suspension_works() {
 		msgs -= 5;
 
 		// Then we pause the queue.
-		SuspendedQueues::set(vec![Here]);
+		YieldingQueues::set(vec![Here]);
 		// Noting happens...
 		for _ in 0..5 {
 			let (_, status) = crate::Pallet::<Test>::service_page(
@@ -543,7 +542,7 @@ fn service_page_suspension_works() {
 		}
 
 		// Resume and process all remaining.
-		SuspendedQueues::take();
+		YieldingQueues::take();
 		let (_, status) = crate::Pallet::<Test>::service_page(
 			&Here,
 			&mut book,
@@ -560,7 +559,7 @@ fn service_page_suspension_works() {
 #[test]
 fn bump_service_head_works() {
 	use MessageOrigin::*;
-	new_test_ext::<Test>().execute_with(|| {
+	test_closure(|| {
 		// Create a ready ring with three queues.
 		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
 		knit(&Here);
@@ -583,7 +582,7 @@ fn bump_service_head_works() {
 /// `bump_service_head` does nothing when called with an insufficient weight limit.
 #[test]
 fn bump_service_head_bails() {
-	new_test_ext::<Test>().execute_with(|| {
+	test_closure(|| {
 		set_weight("bump_service_head", 2.into_weight());
 		setup_bump_service_head::<Test>(0.into(), 10.into());
 
@@ -680,7 +679,7 @@ fn service_page_item_skips_perm_overweight_message() {
 		assert_eq!(weight.consumed, 2.into_weight());
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"TooMuch"),
+				id: blake2_256(b"TooMuch"),
 				origin: MessageOrigin::Here,
 				message_index: 0,
 				page_index: 0,
@@ -1053,7 +1052,7 @@ fn execute_overweight_works() {
 		assert_eq!(QueueChanges::take(), vec![(origin, 1, 8)]);
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"weight=6"),
+				id: blake2_256(b"weight=6"),
 				origin: MessageOrigin::Here,
 				message_index: 0,
 				page_index: 0,
@@ -1108,7 +1107,7 @@ fn permanently_overweight_book_unknits() {
 		assert_eq!(MessageQueue::service_queues(8.into_weight()), 4.into_weight());
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
-				hash: <Test as frame_system::Config>::Hashing::hash(b"weight=9"),
+				id: blake2_256(b"weight=9"),
 				origin: Here,
 				message_index: 0,
 				page_index: 0,
@@ -1237,6 +1236,9 @@ fn ready_ring_knit_and_unknit_works() {
 		BookStateFor::<Test>::insert(There, empty_book::<Test>());
 		BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
 
+		// Pausing should make no difference:
+		PausedQueues::set(vec![Here, There, Everywhere(0)]);
+
 		// Knit them into the ready ring.
 		assert_ring(&[]);
 		knit(&Here);
@@ -1315,5 +1317,146 @@ fn enqueue_messages_works() {
 		assert_eq!(book.size, n + 3);
 		assert_eq!((book.begin, book.end), (0, 4));
 		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
+	});
+}
+
+#[test]
+fn service_queues_suspend_works() {
+	use MessageOrigin::*;
+	test_closure(|| {
+		MessageQueue::enqueue_messages(vec![msg("a"), msg("ab"), msg("abc")].into_iter(), Here);
+		MessageQueue::enqueue_messages(vec![msg("x"), msg("xy"), msg("xyz")].into_iter(), There);
+		assert_eq!(QueueChanges::take(), vec![(Here, 3, 6), (There, 3, 6)]);
+
+		// Pause `Here` - execution starts `There`.
+		PausedQueues::set(vec![Here]);
+		assert_eq!(
+			(true, false),
+			(
+				<Test as Config>::QueuePausedQuery::is_paused(&Here),
+				<Test as Config>::QueuePausedQuery::is_paused(&There)
+			)
+		);
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("x"), There)]);
+		assert_eq!(QueueChanges::take(), vec![(There, 2, 5)]);
+
+		// Unpause `Here` - execution continues `There`.
+		PausedQueues::take();
+		assert_eq!(
+			(false, false),
+			(
+				<Test as Config>::QueuePausedQuery::is_paused(&Here),
+				<Test as Config>::QueuePausedQuery::is_paused(&There)
+			)
+		);
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("xy"), There)]);
+		assert_eq!(QueueChanges::take(), vec![(There, 1, 3)]);
+
+		// Now it swaps to `Here`.
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("a"), Here)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, 2, 5)]);
+
+		// Pause `There` - execution continues `Here`.
+		PausedQueues::set(vec![There]);
+		assert_eq!(
+			(false, true),
+			(
+				<Test as Config>::QueuePausedQuery::is_paused(&Here),
+				<Test as Config>::QueuePausedQuery::is_paused(&There)
+			)
+		);
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("ab"), Here)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, 1, 3)]);
+
+		// Unpause `There` and service all remaining messages.
+		PausedQueues::take();
+		assert_eq!(
+			(false, false),
+			(
+				<Test as Config>::QueuePausedQuery::is_paused(&Here),
+				<Test as Config>::QueuePausedQuery::is_paused(&There)
+			)
+		);
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("abc"), Here), (vmsg("xyz"), There)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, 0, 0), (There, 0, 0)]);
+	});
+}
+
+/// Tests that manual overweight execution on a suspended queue errors with `QueueSuspended`.
+#[test]
+fn execute_overweight_respects_suspension() {
+	test_closure(|| {
+		let origin = MessageOrigin::Here;
+		MessageQueue::enqueue_message(msg("weight=5"), origin);
+		// Mark the message as permanently overweight.
+		MessageQueue::service_queues(4.into_weight());
+		assert_last_event::<Test>(
+			Event::OverweightEnqueued {
+				id: blake2_256(b"weight=5"),
+				origin,
+				message_index: 0,
+				page_index: 0,
+			}
+			.into(),
+		);
+		PausedQueues::set(vec![origin]);
+		assert!(<Test as Config>::QueuePausedQuery::is_paused(&origin));
+
+		// Execution should fail.
+		assert_eq!(
+			<MessageQueue as ServiceQueues>::execute_overweight(Weight::MAX, (origin, 0, 0)),
+			Err(ExecuteOverweightError::QueuePaused)
+		);
+
+		PausedQueues::take();
+		assert!(!<Test as Config>::QueuePausedQuery::is_paused(&origin));
+
+		// Execution should work again with same args.
+		assert_ok!(<MessageQueue as ServiceQueues>::execute_overweight(
+			Weight::MAX,
+			(origin, 0, 0)
+		));
+
+		assert_last_event::<Test>(
+			Event::Processed {
+				id: blake2_256(b"weight=5"),
+				origin,
+				weight_used: 5.into_weight(),
+				success: true,
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
+fn service_queue_suspension_ready_ring_works() {
+	test_closure(|| {
+		let origin = MessageOrigin::Here;
+		PausedQueues::set(vec![origin]);
+		MessageQueue::enqueue_message(msg("weight=5"), origin);
+
+		MessageQueue::service_queues(Weight::MAX);
+		// It did not execute but is in the ready ring.
+		assert!(System::events().is_empty(), "Paused");
+		assert_ring(&[origin]);
+
+		// Now when we un-pause, it will execute.
+		PausedQueues::take();
+		MessageQueue::service_queues(Weight::MAX);
+		assert_last_event::<Test>(
+			Event::Processed {
+				id: blake2_256(b"weight=5"),
+				origin,
+				weight_used: 5.into_weight(),
+				success: true,
+			}
+			.into(),
+		);
 	});
 }

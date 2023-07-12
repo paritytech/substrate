@@ -65,8 +65,10 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
-	ensure,
-	traits::{tokens::Balance as BalanceTrait, EnsureOrigin, Get, RankedMembers},
+	ensure, impl_ensure_origin_with_arg_ignoring_arg,
+	traits::{
+		tokens::Balance as BalanceTrait, EnsureOrigin, EnsureOriginWithArg, Get, RankedMembers,
+	},
 	BoundedVec, RuntimeDebug,
 };
 
@@ -148,7 +150,6 @@ pub mod pallet {
 	const RANK_COUNT: usize = 9;
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -322,7 +323,7 @@ pub mod pallet {
 
 		/// Set the parameters.
 		///
-		/// - `origin`: A origin complying with `ParamsOrigin` or root.
+		/// - `origin`: An origin complying with `ParamsOrigin` or root.
 		/// - `params`: The new parameters for the pallet.
 		#[pallet::weight(T::WeightInfo::set_params())]
 		#[pallet::call_index(1)]
@@ -369,7 +370,7 @@ pub mod pallet {
 			who: T::AccountId,
 			at_rank: RankOf<T, I>,
 		) -> DispatchResult {
-			match T::PromoteOrigin::try_origin(origin) {
+			match T::ApproveOrigin::try_origin(origin) {
 				Ok(allow_rank) => ensure!(allow_rank >= at_rank, Error::<T, I>::NoPermission),
 				Err(origin) => ensure_root(origin)?,
 			}
@@ -571,7 +572,7 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	type Success = T::AccountId;
 
 	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
-		let who = frame_system::EnsureSigned::try_origin(o)?;
+		let who = <frame_system::EnsureSigned<_> as EnsureOrigin<_>>::try_origin(o)?;
 		match T::Members::rank_of(&who) {
 			Some(rank) if rank >= MIN_RANK && Member::<T, I>::contains_key(&who) => Ok(who),
 			_ => Err(frame_system::RawOrigin::Signed(who).into()),
@@ -591,4 +592,10 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 		}
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
+}
+
+impl_ensure_origin_with_arg_ignoring_arg! {
+	impl< { T: Config<I>, I: 'static, const MIN_RANK: u16, A } >
+		EnsureOriginWithArg<T::RuntimeOrigin, A> for EnsureInducted<T, I, MIN_RANK>
+	{}
 }

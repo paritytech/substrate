@@ -18,13 +18,14 @@
 
 use futures::{channel::oneshot, StreamExt};
 use libp2p::PeerId;
-use sc_network_common::{
-	protocol::ProtocolName,
+
+use sc_network::{
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{NetworkNotification, NetworkPeers, NetworkRequest},
+	types::ProtocolName,
+	NetworkNotification, NetworkPeers, NetworkRequest, ReputationChange,
 };
-use sc_peerset::ReputationChange;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+
 use std::sync::Arc;
 
 /// Network-related services required by `sc-network-sync`
@@ -157,7 +158,7 @@ mod tests {
 		let peer = PeerId::random();
 		let proto = ProtocolName::from("test-protocol");
 		let proto_clone = proto.clone();
-		let change = sc_peerset::ReputationChange::new_fatal("test-change");
+		let change = sc_network::ReputationChange::new_fatal("test-change");
 
 		let mut mock_network = MockNetwork::new();
 		mock_network

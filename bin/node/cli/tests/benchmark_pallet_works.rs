@@ -16,10 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
-
-pub mod common;
 
 /// `benchmark pallet` works for the different combinations of `steps` and `repeat`.
 #[test]
