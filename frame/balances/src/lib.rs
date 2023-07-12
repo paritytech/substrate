@@ -541,11 +541,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set the regular balance of a given account; it also takes a reserved balance but this
@@ -564,7 +564,7 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,
 			#[pallet::compact] old_reserved: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = Self::ed();
@@ -592,7 +592,7 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::BalanceSet { who, free: new_free });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Exactly as `transfer_allow_death`, except the origin must be root and the source account
@@ -603,12 +603,12 @@ pub mod pallet {
 			source: AccountIdLookupOf<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Same as the [`transfer_allow_death`] call, but with a check that the transfer will not
@@ -622,11 +622,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Preserve)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Transfer the entire transferable balance from the caller account.
@@ -724,11 +724,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set the regular balance of a given account.
@@ -743,7 +743,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = Self::ed();
@@ -767,7 +767,7 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::BalanceSet { who, free: new_free });
-			Ok(().into())
+			Ok(())
 		}
 	}
 
