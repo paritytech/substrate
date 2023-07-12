@@ -173,7 +173,7 @@ pub fn expand_outer_dispatch(
 					);
 				}
 
-				#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
+				#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin.into())
 			}
 		}
 		impl #scrate::traits::UnfilteredDispatchable for RuntimeCall {
@@ -183,7 +183,7 @@ pub fn expand_outer_dispatch(
 					#(
 						#pallet_attrs
 						#variant_patterns =>
-							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin),
+							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin.into()),
 					)*
 				}
 			}

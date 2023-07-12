@@ -35,7 +35,7 @@ pub mod pallet {
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
-	pub trait Config: frame_system::Config + TypeInfo + Sync + Send {
+	pub trait Config: frame_system::Config + TypeInfo + Sync + Send + Debug {
 		// /// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 			// + From<pallet_template::Event<Bundle<Self>>> + From<pallet_template_2::Event<Bundle<Self>>>
@@ -43,18 +43,18 @@ pub mod pallet {
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
 
-		// /// A dispatchable call.
-		type RuntimeCall: Parameter
-			+ Dispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
-			+ GetDispatchInfo
-			+ From<Call<Self>>;
+		// // /// A dispatchable call.
+		// type RuntimeCall: Parameter
+		// 	+ Dispatchable<RuntimeOrigin = Origin<Self>> // <Self as Config>::RuntimeOrigin>
+		// 	+ GetDispatchInfo
+		// 	+ From<Call<Self>>;
 
 		type BaseCallFilter: Contains<Call<Self>>;
 
-		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, <Self as Config>::RuntimeOrigin>>
-			+ From<RawOrigin<Self::AccountId>>
-			+ Clone
-			+ OriginTrait<Call = <Self as Config>::RuntimeCall, AccountId = Self::AccountId>;
+		// type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, <Self as Config>::RuntimeOrigin>>
+		// 	+ From<RawOrigin<Self::AccountId>>
+		// 	+ Clone
+		// 	+ OriginTrait<Call = <Self as Config>::RuntimeCall, AccountId = Self::AccountId>;
 	}
 
 	// The pallet's runtime storage items.
@@ -181,12 +181,12 @@ pub mod pallet {
 	);
 
 	impl<T: Config> frame_system::Config for Pallet<T> {
-		type BaseCallFilter = <T as Config>::BaseCallFilter;
+		type BaseCallFilter = frame_support::traits::Everything;//<T as Config>::BaseCallFilter;
 		type BlockWeights = <T as frame_system::Config>::BlockWeights;
 		type BlockLength = <T as frame_system::Config>::BlockLength;
 		type DbWeight = <T as frame_system::Config>::DbWeight;
-		type RuntimeOrigin = <T as Config>::RuntimeOrigin;
-		type RuntimeCall = Call<T>; //<T as frame_system::Config>::RuntimeCall;
+		type RuntimeOrigin = Origin<T>; //<T as frame_system::Config>::RuntimeOrigin;
+		type RuntimeCall = Call<T>;  //<T as frame_system::Config>::RuntimeCall;
 		type Index = <T as frame_system::Config>::Index;
 		type BlockNumber = <T as frame_system::Config>::BlockNumber;
 		type Hash = <T as frame_system::Config>::Hash;

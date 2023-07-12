@@ -342,20 +342,20 @@ fn construct_runtime_final_expansion(
 		pallets_token,
 	} = definition;
 
-	// let system_pallet =
-	// 	pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
-	// 		syn::Error::new(
-	// 			pallets_token.span.join(),
-	// 			"`System` pallet declaration is missing. \
-	// 		 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
-	// 		)
-	// 	})?;
-	// if !system_pallet.cfg_pattern.is_empty() {
-	// 	return Err(syn::Error::new(
-	// 		system_pallet.name.span(),
-	// 		"`System` pallet declaration is feature gated, please remove any `#[cfg]` attributes",
-	// 	))
-	// }
+	let system_pallet =
+		pallets.iter().find(|decl| decl.name == SYSTEM_PALLET_NAME).ok_or_else(|| {
+			syn::Error::new(
+				pallets_token.span.join(),
+				"`System` pallet declaration is missing. \
+			 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
+			)
+		})?;
+	if !system_pallet.cfg_pattern.is_empty() {
+		return Err(syn::Error::new(
+			system_pallet.name.span(),
+			"`System` pallet declaration is feature gated, please remove any `#[cfg]` attributes",
+		))
+	}
 
 	let features = pallets
 		.iter()
@@ -382,11 +382,11 @@ fn construct_runtime_final_expansion(
 	// let outer_error =
 	// 	expand::expand_outer_enum(&name, &pallets, &scrate, expand::OuterEnumType::Error)?;
 
-	// let outer_origin = expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
+	let outer_origin = expand::expand_outer_origin(&name, system_pallet, &pallets, &scrate)?;
 	let all_pallets = decl_all_pallets(&name, pallets.iter(), &features);
 	// let pallet_to_index = decl_pallet_runtime_setup(&name, &pallets, &scrate);
 
-	let dispatch = expand::expand_outer_dispatch(&name, &pallets, &scrate); //system_pallet
+	let dispatch = expand::expand_outer_dispatch(&name, system_pallet, &pallets, &scrate); //system_pallet
 	// let metadata = expand::expand_runtime_metadata(
 	// 	&name,
 	// 	&pallets,
@@ -456,7 +456,7 @@ fn construct_runtime_final_expansion(
 
 		// #outer_error
 
-		// #outer_origin
+		#outer_origin
 
 		#all_pallets
 

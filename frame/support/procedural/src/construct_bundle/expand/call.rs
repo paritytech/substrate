@@ -23,7 +23,7 @@ use syn::Ident;
 
 pub fn expand_outer_dispatch(
 	runtime: &Ident,
-	// system_pallet: &Pallet,
+	system_pallet: &Pallet,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
 ) -> TokenStream {
@@ -32,7 +32,7 @@ pub fn expand_outer_dispatch(
 	let mut query_call_part_macros = Vec::new();
 	let mut pallet_names = Vec::new();
 	let mut pallet_attrs = Vec::new();
-	// let system_path = &system_pallet.path;
+	let system_path = &system_pallet.path;
 
 	let pallets_with_call = pallet_decls.iter().filter(|decl| decl.exists_part("Call"));
 
@@ -200,7 +200,7 @@ pub fn expand_outer_dispatch(
 		}
 
 		impl<#type_impl_gen> #scrate::dispatch::Dispatchable for Call<T> {
-			type RuntimeOrigin = <T as Config>::RuntimeOrigin; //frame_system::pallet_prelude::OriginFor<T>;
+			type RuntimeOrigin = crate::Origin<T>; //frame_system::pallet_prelude::OriginFor<T>;
 			type Config = Call<T>;
 			type Info = #scrate::dispatch::DispatchInfo;
 			type PostInfo = #scrate::dispatch::PostDispatchInfo;
@@ -211,18 +211,18 @@ pub fn expand_outer_dispatch(
 				// 	);
 				// }
 
-				#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin)
+				#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(self, origin.into())
 			}
 		}
 
 		impl<#type_impl_gen> #scrate::traits::UnfilteredDispatchable for Call<T> {
-			type RuntimeOrigin = <T as Config>::RuntimeOrigin; //frame_system::pallet_prelude::OriginFor<T>;
+			type RuntimeOrigin = crate::Origin<T>; //frame_system::pallet_prelude::OriginFor<T>;
 			fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
 						#pallet_attrs
 						#variant_patterns =>
-							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin),
+							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin.into()),
 					)*
 					Self::__Ignore(_, _) => {
 						let _ = origin; // Use origin for empty Call enum

@@ -275,7 +275,7 @@ impl pallet_bundle::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_bundle::weights::SubstrateWeight<Runtime>;
 	type BaseCallFilter = frame_support::traits::Everything;
-	type RuntimeOrigin = RuntimeOrigin;
+	// type RuntimeOrigin = RuntimeOrigin;
 }
 
 // impl From<frame_system::Event<pallet_bundle::Pallet<Runtime>>> for RuntimeEvent {
@@ -300,7 +300,7 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
-		TemplateBundle: pallet_bundle,
+		TemplateBundle: pallet_bundle::{Pallet, Call, Origin<T>, Storage, Event<T>},
 	}
 );
 
