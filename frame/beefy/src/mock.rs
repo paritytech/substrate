@@ -206,7 +206,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
@@ -228,7 +228,7 @@ impl pallet_staking::Config for Test {
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
-	type OnStakerSlash = ();
+	type EventListeners = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }

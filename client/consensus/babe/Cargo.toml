@@ -31,6 +31,7 @@ sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/commo
 sc-consensus-epochs = { version = "0.10.0-dev", path = "../epochs" }
 sc-consensus-slots = { version = "0.10.0-dev", path = "../slots" }
 sc-telemetry = { version = "4.0.0-dev", path = "../../telemetry" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../transaction-pool/api" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-application-crypto = { version = "23.0.0", path = "../../../primitives/application-crypto" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }

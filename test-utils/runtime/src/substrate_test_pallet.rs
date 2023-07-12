@@ -24,7 +24,7 @@
 use frame_support::{pallet_prelude::*, storage};
 use sp_core::sr25519::Public;
 use sp_runtime::{
-	traits::{BlakeTwo256, Hash},
+	traits::Hash,
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
 	},
@@ -41,7 +41,7 @@ pub mod pallet {
 	use crate::TransferData;
 	use frame_system::pallet_prelude::*;
 	use sp_core::storage::well_known_keys;
-	use sp_runtime::{transaction_validity::TransactionPriority, Perbill};
+	use sp_runtime::{traits::BlakeTwo256, transaction_validity::TransactionPriority, Perbill};
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]

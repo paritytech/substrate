@@ -98,45 +98,6 @@ pub use sp_storage as storage;
 #[doc(hidden)]
 pub use sp_std;
 
-/// Context for executing a call into the runtime.
-pub enum ExecutionContext {
-	/// Context used for general block import (including locally authored blocks).
-	Importing,
-	/// Context used for importing blocks as part of an initial sync of the blockchain.
-	///
-	/// We distinguish between major sync and import so that validators who are running
-	/// their initial sync (or catching up after some time offline) can use the faster
-	/// native runtime (since we can reasonably assume the network as a whole has already
-	/// come to a broad consensus on the block and it probably hasn't been crafted
-	/// specifically to attack this node), but when importing blocks at the head of the
-	/// chain in normal operation they can use the safer Wasm version.
-	Syncing,
-	/// Context used for block construction.
-	BlockConstruction,
-	/// Context used for offchain calls.
-	///
-	/// This allows passing offchain extension and customizing available capabilities.
-	OffchainCall(Option<(Box<dyn offchain::Externalities>, offchain::Capabilities)>),
-}
-
-impl ExecutionContext {
-	/// Returns the capabilities of particular context.
-	pub fn capabilities(&self) -> offchain::Capabilities {
-		use ExecutionContext::*;
-
-		match self {
-			Importing | Syncing | BlockConstruction => offchain::Capabilities::empty(),
-			// Enable keystore, transaction pool and Offchain DB reads by default for offchain
-			// calls.
-			OffchainCall(None) =>
-				offchain::Capabilities::KEYSTORE |
-					offchain::Capabilities::OFFCHAIN_DB_READ |
-					offchain::Capabilities::TRANSACTION_POOL,
-			OffchainCall(Some((_, capabilities))) => *capabilities,
-		}
-	}
-}
-
 /// Hex-serialized shim for `Vec<u8>`.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize, Hash, PartialOrd, Ord))]
