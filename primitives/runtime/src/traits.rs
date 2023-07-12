@@ -1254,7 +1254,7 @@ pub trait Block:
 	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
-	type Header: Header<Hash = Self::Hash>;
+	type Header: Header<Hash = Self::Hash> + MaybeSerializeDeserialize;
 	/// Block hash type.
 	type Hash: HashOutput;
 
