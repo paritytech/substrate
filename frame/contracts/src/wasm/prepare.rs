@@ -64,7 +64,7 @@ impl LoadedModule {
 		config
 			.wasm_multi_value(false)
 			.wasm_mutable_global(false)
-			.wasm_sign_extension(false)
+			.wasm_sign_extension(true)
 			.wasm_bulk_memory(false)
 			.wasm_reference_types(false)
 			.wasm_tail_call(false)
