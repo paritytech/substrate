@@ -1,14 +1,14 @@
 use super::*;
 use CompletionStatus::{Complete, Partial};
-use sp_runtime::traits::{Convert, ConvertBack, AccountIdConversion};
+use sp_runtime::traits::Convert;
 use frame_support::{
 	pallet_prelude::{*, DispatchResult},
 	traits::{
-		tokens::{Precision::Exact, Preservation::Expendable, Fortitude::Polite},
-		fungible::{Mutate, Balanced}, OnUnbalanced, DefensiveResult,
+		tokens::Preservation::Expendable,
+		fungible::Mutate, DefensiveResult,
 	}
 };
-use sp_arithmetic::{traits::{Zero, SaturatedConversion, Saturating}, Perbill, PerThing};
+use sp_arithmetic::traits::{Zero, Saturating};
 
 impl<T: Config> Pallet<T> {
 	pub(crate) fn do_configure(config: ConfigRecordOf<T>) -> DispatchResult {
@@ -33,7 +33,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn do_set_lease(task: TaskId, until: Timeslice) -> DispatchResult {
 		let mut r = Leases::<T>::get();
 		r.try_push(LeaseRecordItem { until, task })
-            .map_err(|_| Error::<T>::TooManyLeases)?;
+			.map_err(|_| Error::<T>::TooManyLeases)?;
 		Leases::<T>::put(r);
 		Ok(())
 	}
@@ -54,6 +54,7 @@ impl<T: Config> Pallet<T> {
 			leadin_length: Zero::zero(),
 			start_price: Zero::zero(),
 			reserve_price,
+			sellout_price: None,
 			region_begin: commit_timeslice,
 			region_end: commit_timeslice + config.region_length,
 			first_core: 0,
@@ -76,18 +77,15 @@ impl<T: Config> Pallet<T> {
 		ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
 		let now = frame_system::Pallet::<T>::block_number();
 		ensure!(now > sale.sale_start, Error::<T>::TooEarly);
-		let price = lerp(
-			now,
-			sale.sale_start,
-			sale.leadin_length,
-			sale.start_price,
-			sale.reserve_price,
-		).ok_or(Error::<T>::IndeterminablePrice)?;
+		let price = Self::sale_price(&sale, now);
 		ensure!(price_limit >= price, Error::<T>::Overpriced);
 
 		Self::charge(&who, price)?;
 		let core = sale.first_core + sale.cores_sold;
 		sale.cores_sold.saturating_inc();
+		if sale.cores_sold >= sale.ideal_cores_sold && sale.sellout_price.is_none() {
+			sale.sellout_price = Some(price);
+		}
 		SaleInfo::<T>::put(&sale);
 		let id = Self::issue(core, sale.region_begin, sale.region_end, who.clone(), Some(price));
 		let length = sale.region_end.saturating_sub(sale.region_begin);
@@ -126,6 +124,10 @@ impl<T: Config> Pallet<T> {
 		let price = record.price + config.renewal_bump * record.price;
 		let new_record = AllowedRenewalRecord { begin, price, completion: Complete(workload) };
 		AllowedRenewals::<T>::insert(core, &new_record);
+		if sale.cores_sold >= sale.ideal_cores_sold && sale.sellout_price.is_none() {
+			let price = Self::sale_price(&sale, frame_system::Pallet::<T>::block_number());
+			sale.sellout_price = Some(price);
+		}
 		SaleInfo::<T>::put(&sale);
 		if let Some(workload) = new_record.completion.drain_complete() {
 			Self::deposit_event(Event::Renewable { core, price, begin, workload });

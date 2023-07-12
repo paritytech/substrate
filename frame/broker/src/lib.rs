@@ -31,15 +31,17 @@ mod utils;
 mod implementation;
 mod dispatchable_impls;
 mod nonfungible_impl;
+mod adapt_price;
 
 pub mod weights;
 pub use weights::WeightInfo;
 
-pub use types::*;
+pub use adapt_price::*;
 pub use core_part::*;
 pub use coretime_interface::*;
-pub use utils::*;
 pub use nonfungible_impl::*;
+pub use types::*;
+pub use utils::*;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -74,6 +76,9 @@ pub mod pallet {
 		/// Relay chain's Coretime API used to interact with and instruct the low-level scheduling
 		/// system.
 		type Coretime: CoretimeInterface;
+
+		/// The algorithm to determine the next price on the basis of market performance.
+		type PriceAdapter: AdaptPrice;
 
 		/// Reversible conversion from local balance to Relay-chain balance. This will typically be
 		/// the `Identity`, but provided just in case the chains use different representations.
@@ -345,7 +350,7 @@ pub mod pallet {
 			region_id: RegionId,
 			max_timeslices: Timeslice,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let _ = ensure_signed(origin)?;
 			Self::do_claim_revenue(region_id, max_timeslices)?;
 			Ok(())
 		}
@@ -353,7 +358,6 @@ pub mod pallet {
 		#[pallet::call_index(13)]
 		pub fn purchase_credit(
 			origin: OriginFor<T>,
-			who: T::AccountId,
 			amount: BalanceOf<T>,
 			beneficiary: RelayAccountIdOf<T>,
 		) -> DispatchResult {

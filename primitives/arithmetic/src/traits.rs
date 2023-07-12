@@ -59,6 +59,7 @@ pub trait BaseArithmetic:
 	+ CheckedMul
 	+ CheckedDiv
 	+ CheckedRem
+	+ CheckedNeg
 	+ Ensure
 	+ Saturating
 	+ PartialOrd<Self>
@@ -116,6 +117,7 @@ impl<
 			+ CheckedMul
 			+ CheckedDiv
 			+ CheckedRem
+			+ CheckedNeg
 			+ Ensure
 			+ Saturating
 			+ PartialOrd<Self>

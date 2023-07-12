@@ -1,14 +1,14 @@
 use super::*;
-use CompletionStatus::{Complete, Partial};
-use sp_runtime::traits::{Convert, ConvertBack, AccountIdConversion};
+use CompletionStatus::Complete;
+use sp_runtime::traits::{ConvertBack, AccountIdConversion};
 use frame_support::{
 	pallet_prelude::{*, DispatchResult},
 	traits::{
 		tokens::{Precision::Exact, Preservation::Expendable, Fortitude::Polite},
-		fungible::{Mutate, Balanced}, OnUnbalanced, DefensiveResult,
+		fungible::Balanced, OnUnbalanced,
 	}
 };
-use sp_arithmetic::{traits::{Zero, SaturatedConversion, Saturating}, Perbill, PerThing};
+use sp_arithmetic::{traits::{Zero, SaturatedConversion, Saturating}, FixedPointNumber};
 
 impl<T: Config> Pallet<T> {
 	/// Attempt to tick things along. Will only do anything if the `Status.last_timeslice` is
@@ -35,29 +35,6 @@ impl<T: Config> Pallet<T> {
 
 		Status::<T>::put(&status);
 		Ok(())
-	}
-
-	fn bump_price(
-		offered: CoreIndex,
-		ideal: CoreIndex,
-		sold: CoreIndex,
-		old: BalanceOf<T>,
-	) -> BalanceOf<T> {
-		if sold > ideal {
-			let extra = if offered > ideal {
-				Perbill::from_rational((sold - ideal) as u32, (offered - ideal) as u32)
-			} else {
-				Perbill::zero()
-			};
-			old + extra * old
-		} else {
-			let extra = if ideal > 0 {
-				Perbill::from_rational(sold as u32, ideal as u32).left_from_one()
-			} else {
-				Perbill::zero()
-			};
-			old - extra * old
-		}
 	}
 
 	/// Begin selling for the next sale period.
@@ -93,9 +70,9 @@ impl<T: Config> Pallet<T> {
 			let offered = old_sale.cores_offered;
 			let ideal = old_sale.ideal_cores_sold;
 			let sold = old_sale.cores_sold;
-			let old_price = old_sale.reserve_price;
-			if offered > 0 {
-				Self::bump_price(offered, ideal, sold, old_price)
+			let old_price = old_sale.sellout_price.unwrap_or(old_sale.reserve_price);
+			if sold <= offered && offered > 0 {
+				T::PriceAdapter::adapt_price(sold, ideal, offered).saturating_mul_int(old_price)
 			} else {
 				old_price
 			}
@@ -164,6 +141,7 @@ impl<T: Config> Pallet<T> {
 			leadin_length: config.leadin_length,
 			start_price,
 			reserve_price,
+			sellout_price: None,
 			region_begin,
 			region_end,
 			first_core,
@@ -210,6 +188,11 @@ impl<T: Config> Pallet<T> {
 			return Ok(true)
 		}
 		Ok(false)
+	}
+
+	pub fn sale_price(sale: &SaleInfoRecordOf<T>, now: T::BlockNumber) -> BalanceOf<T> {
+		lerp(now, sale.sale_start, sale.leadin_length, sale.start_price, sale.reserve_price)
+			.unwrap_or(sale.start_price)
 	}
 
 	pub fn current_timeslice() -> Timeslice {

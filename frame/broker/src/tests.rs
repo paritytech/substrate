@@ -18,7 +18,7 @@
 #![cfg(test)]
 
 use crate::{*, mock::*, core_part::*};
-use frame_support::{assert_noop, assert_ok, traits::{fungible::Inspect, nonfungible::{Transfer, Inspect as NftInspect}}};
+use frame_support::{assert_noop, assert_ok, traits::{nonfungible::{Transfer, Inspect as NftInspect}}};
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
 
@@ -45,6 +45,65 @@ fn transfer_works() {
 }
 
 #[test]
+fn nft_metadata_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_eq!(attribute::<Timeslice>(region, b"begin"), 4);
+		assert_eq!(attribute::<Timeslice>(region, b"length"), 3);
+		assert_eq!(attribute::<Timeslice>(region, b"end"), 7);
+		assert_eq!(attribute::<u64>(region, b"owner"), 1);
+		assert_eq!(attribute::<CorePart>(region, b"part"), 0xfffff_fffff_fffff_fffff.into());
+		assert_eq!(attribute::<CoreIndex>(region, b"core"), 0);
+		assert_eq!(attribute::<Option<u64>>(region, b"paid"), Some(100));
+
+		assert_ok!(Broker::do_transfer(region, None, 42));
+		let (_, region) = Broker::do_partition(region, None, 2).unwrap();
+		let (region, _) = Broker::do_interlace(region, None, 0x00000_fffff_fffff_00000.into()).unwrap();
+		assert_eq!(attribute::<Timeslice>(region, b"begin"), 6);
+		assert_eq!(attribute::<Timeslice>(region, b"length"), 1);
+		assert_eq!(attribute::<Timeslice>(region, b"end"), 7);
+		assert_eq!(attribute::<u64>(region, b"owner"), 42);
+		assert_eq!(attribute::<CorePart>(region, b"part"), 0x00000_fffff_fffff_00000.into());
+		assert_eq!(attribute::<CoreIndex>(region, b"core"), 0);
+		assert_eq!(attribute::<Option<u64>>(region, b"paid"), None);
+	});
+}
+
+#[test]
+fn migration_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_set_lease(1000, 8));
+		assert_ok!(Broker::do_start_sales(100));
+
+		// Sale is for regions from TS4..7
+		// Not ending in this sale period.
+		assert_noop!(Broker::do_renew(1, 0), Error::<Test>::NotAllowed);
+
+		advance_to(12);
+		// Sale is now for regions from TS10..13
+		// Ending in this sale period.
+		// Should now be renewable.
+		assert_ok!(Broker::do_renew(1, 0));
+		assert_eq!(balance(1), 900);
+		advance_to(18);
+
+		assert_eq!(CoretimeTrace::get(), vec![
+			(6, AssignCore { core: 0, begin: 8, assignment: vec![
+				(Task(1000), 57600),
+			], end_hint: None }),
+			(12, AssignCore { core: 0, begin: 14, assignment: vec![
+				(Task(1000), 57600),
+			], end_hint: None }),
+			(18, AssignCore { core: 0, begin: 20, assignment: vec![
+				(Task(1000), 57600),
+			], end_hint: None }),
+		]);
+	});
+}
+
+#[test]
 fn renewal_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100));
@@ -60,7 +119,7 @@ fn renewal_works() {
 		advance_to(8);
 		assert_noop!(Broker::do_purchase(1, u64::max_value()), Error::<Test>::SoldOut);
 		advance_to(12);
-		let region = Broker::do_renew(1, core).unwrap();
+		assert_ok!(Broker::do_renew(1, core));
 		assert_eq!(balance(1), 690);
 	});
 }
@@ -73,8 +132,6 @@ fn instapool_payouts_work() {
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
-		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
-		let region = RegionId { begin, core: 1, part: CorePart::complete() };
 		assert_ok!(Broker::do_pool(region, None, 2));
 		assert_ok!(Broker::do_purchase_credit(1, 20, 1));
 		advance_to(8);
@@ -96,8 +153,6 @@ fn instapool_partial_core_payouts_work() {
 		assert_ok!(Broker::do_start_sales(100));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
-		let begin = SaleInfo::<Test>::get().unwrap().region_begin;
-		let region = RegionId { begin, core: 1, part: CorePart::complete() };
 		let (region1, region2) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)).unwrap();
 		assert_ok!(Broker::do_pool(region1, None, 2));
 		assert_ok!(Broker::do_pool(region2, None, 3));

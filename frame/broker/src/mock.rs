@@ -20,7 +20,7 @@
 use crate::*;
 use frame_system::EnsureNever;
 use sp_std::collections::btree_map::BTreeMap;
-use frame_support::{parameter_types, traits::{Hooks, fungible::{ItemOf, Mutate, Inspect, Credit, Balanced}, OnUnbalanced}, assert_ok, PalletId, ensure};
+use frame_support::{parameter_types, traits::{Hooks, nonfungible::{Inspect as NftInspect}, fungible::{ItemOf, Mutate, Inspect, Credit, Balanced}, OnUnbalanced}, assert_ok, PalletId, ensure};
 use sp_arithmetic::Perbill;
 use sp_core::{H256, ConstU64, ConstU16, ConstU32};
 use sp_runtime::{
@@ -186,6 +186,7 @@ impl crate::Config for Test {
 	type WeightInfo = ();
 	type PalletId = TestBrokerId;
 	type AdminOrigin = EnsureNever<()>;
+	type PriceAdapter = Linear;
 }
 
 pub fn advance_to(b: u64) {
@@ -208,7 +209,12 @@ pub fn balance(who: u64) -> u64 {
 	<<Test as Config>::Currency as Inspect<_>>::total_balance(&who)
 }
 
+pub fn attribute<T: codec::Decode>(nft: RegionId, attribute: impl codec::Encode) -> T {
+	<Broker as NftInspect<_>>::typed_attribute::<_, T>(&nft.into(), &attribute).unwrap()
+}
+
 pub struct TestExt(ConfigRecordOf<Test>);
+#[allow(dead_code)]
 impl TestExt {
 	pub fn new() -> Self {
 		Self(ConfigRecord {

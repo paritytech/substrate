@@ -176,6 +176,8 @@ pub struct SaleInfoRecord<Balance, BlockNumber> {
 	pub start_price: Balance,
 	/// The price of Bulk Coretime by the end of the Leadin Period.
 	pub reserve_price: Balance,
+	/// The price at which the Bulk Coretime offered sold out, if it did sell out.
+	pub sellout_price: Option<Balance>,
 	/// The first timeslice of the Regions which are being sold in this sale.
 	pub region_begin: Timeslice,
 	/// The timeslice on which the Regions which are being sold in the sale terminate. (i.e. One

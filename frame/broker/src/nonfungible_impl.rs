@@ -1,5 +1,4 @@
 use super::*;
-use sp_runtime::TokenError;
 use frame_support::{
 	pallet_prelude::{*, DispatchResult},
 	traits::{
