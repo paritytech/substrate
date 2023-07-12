@@ -13,7 +13,6 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-pallet-beefy-mmr = { version = "4.0.0-dev", default-features = false, path = "../../frame/beefy-mmr" }
 sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../primitives/application-crypto", features = ["serde"]  }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura", features = ["serde"] }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe", features = ["serde"] }
@@ -56,6 +55,7 @@ serde_json = { version = "1.0.85", default-features = false, features = ["alloc"
 futures = "0.3.21"
 sc-block-builder = { version = "0.10.0-dev", path = "../../client/block-builder" }
 sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
+sc-executor-common = { version = "0.10.0-dev", path = "../../client/executor/common" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
 sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
