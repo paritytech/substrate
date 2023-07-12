@@ -18,18 +18,14 @@
 #![allow(dead_code)]
 
 use _feps::ExtendedBalance;
-use frame_support::{
-	parameter_types, traits,
-	traits::{GenesisBuild, Hooks},
-	weights::constants,
-};
+use frame_support::{parameter_types, traits, traits::Hooks, weights::constants};
 use frame_system::EnsureRoot;
 use sp_core::{ConstU32, Get, H256};
 use sp_npos_elections::{ElectionScore, VoteWeight};
 use sp_runtime::{
 	testing,
 	traits::{IdentityLookup, Zero},
-	transaction_validity, PerU16, Perbill,
+	transaction_validity, BuildStorage, PerU16, Perbill,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -490,7 +486,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let _ =
 			pallet_balances::GenesisConfig::<Runtime> { balances: self.balances_builder.balances }
