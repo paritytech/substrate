@@ -161,7 +161,7 @@ pub mod pallet {
 			/// The price paid for this Region.
 			price: BalanceOf<T>,
 			/// The duration of the Region.
-			length: Timeslice,
+			duration: Timeslice,
 		},
 		/// The workload of a core has become renewable.
 		Renewable {
@@ -189,7 +189,7 @@ pub mod pallet {
 			/// The time at which the `workload` will begin on the `core`.
 			begin: Timeslice,
 			/// The number of timeslices for which this `workload` is newly scheduled.
-			length: Timeslice,
+			duration: Timeslice,
 			/// The workload which was renewed.
 			workload: Schedule,
 		},
@@ -197,6 +197,8 @@ pub mod pallet {
 		Transferred {
 			/// The Region which has been transferred.
 			region_id: RegionId,
+			/// The duration of the Region.
+			duration: Timeslice,
 			/// The old owner of the Region.
 			old_owner: T::AccountId,
 			/// The new owner of the Region.
@@ -220,6 +222,8 @@ pub mod pallet {
 		Assigned {
 			/// The Region which was assigned.
 			region_id: RegionId,
+			/// The duration of the assignment.
+			duration: Timeslice,
 			/// The task to which the Region was assigned.
 			task: TaskId,
 		},
@@ -227,14 +231,18 @@ pub mod pallet {
 		Pooled {
 			/// The Region which was added to the Instantaneous Coretime Pool.
 			region_id: RegionId,
+			/// The duration of the Region.
+			duration: Timeslice,
 		},
 		/// A Region has been dropped due to being out of date.
 		Dropped {
 			/// The Region which no longer exists.
 			region_id: RegionId,
+			/// The duration of the Region.
+			duration: Timeslice,
 		},
 	}
-	
+
 	#[pallet::error]
 	#[derive(PartialEq)]
 	pub enum Error<T> {

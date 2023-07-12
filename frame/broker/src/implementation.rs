@@ -300,7 +300,8 @@ impl<T: Config> Pallet<T> {
 		if region_id.begin < region.end {
 			Ok(Some((region_id, region)))
 		} else {
-			Self::deposit_event(Event::Dropped { region_id });
+			let duration = region.end.saturating_sub(region_id.begin);
+			Self::deposit_event(Event::Dropped { region_id, duration });
 			Ok(None)
 		}
 	}

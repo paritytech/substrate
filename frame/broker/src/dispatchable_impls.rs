@@ -88,8 +88,8 @@ impl<T: Config> Pallet<T> {
 		}
 		SaleInfo::<T>::put(&sale);
 		let id = Self::issue(core, sale.region_begin, sale.region_end, who.clone(), Some(price));
-		let length = sale.region_end.saturating_sub(sale.region_begin);
-		Self::deposit_event(Event::Purchased { who, region_id: id, price, length });
+		let duration = sale.region_end.saturating_sub(sale.region_begin);
+		Self::deposit_event(Event::Purchased { who, region_id: id, price, duration });
 		Ok(id)
 	}
 
@@ -114,7 +114,7 @@ impl<T: Config> Pallet<T> {
 			core,
 			price: record.price,
 			begin: sale.region_begin,
-			length: sale.region_end.saturating_sub(sale.region_begin),
+			duration: sale.region_end.saturating_sub(sale.region_begin),
 			workload: workload.clone(),
 		});
 
@@ -151,7 +151,8 @@ impl<T: Config> Pallet<T> {
 		let old_owner = region.owner;
 		region.owner = new_owner;
 		Regions::<T>::insert(&region_id, &region);
-		Self::deposit_event(Event::Transferred { region_id, old_owner, owner: region.owner });
+		let duration = region.end.saturating_sub(region_id.begin);
+		Self::deposit_event(Event::Transferred { region_id, old_owner, owner: region.owner, duration });
 
 		Ok(())
 	}
@@ -221,7 +222,8 @@ impl<T: Config> Pallet<T> {
 				Workplan::<T>::insert(&workplan_key, &workplan);
 			}
 
-			if region.end.saturating_sub(region_id.begin) == config.region_length {
+			let duration = region.end.saturating_sub(region_id.begin);
+			if duration == config.region_length {
 				if let Some(price) = region.paid {
 					let begin = region.end;
 					let assigned = match AllowedRenewals::<T>::get(region_id.core) {
@@ -241,7 +243,7 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 			}
-			Self::deposit_event(Event::Assigned { region_id, task: target });
+			Self::deposit_event(Event::Assigned { region_id, task: target, duration });
 		}
 		Ok(())
 	}
@@ -255,6 +257,7 @@ impl<T: Config> Pallet<T> {
 			let workplan_key = (region_id.begin, region_id.core);
 			let mut workplan = Workplan::<T>::get(&workplan_key)
 				.unwrap_or_default();
+			let duration = region.end.saturating_sub(region_id.begin);
 			if workplan.try_push(ScheduleItem {
 				part: region_id.part,
 				assignment: CoreAssignment::Pool,
@@ -263,13 +266,11 @@ impl<T: Config> Pallet<T> {
 				let size = region_id.part.count_ones() as i32;
 				InstaPoolIo::<T>::mutate(region_id.begin, |a| a.total.saturating_accrue(size));
 				InstaPoolIo::<T>::mutate(region.end, |a| a.total.saturating_reduce(size));
-				let record = ContributionRecord {
-					length: region.end.saturating_sub(region_id.begin),
-					payee,
-				};
+				let record = ContributionRecord { length: duration, payee };
 				InstaPoolContribution::<T>::insert(&region_id, record);
 			}
-			Self::deposit_event(Event::Pooled { region_id });
+
+			Self::deposit_event(Event::Pooled { region_id, duration });
 		}
 		Ok(())
 	}
