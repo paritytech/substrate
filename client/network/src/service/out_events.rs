@@ -34,7 +34,7 @@
 use crate::event::Event;
 
 use futures::{prelude::*, ready, stream::FusedStream};
-use log::error;
+use log::{error, info};
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
 	backtrace::Backtrace,
@@ -172,7 +172,8 @@ impl OutChannels {
 	/// Sends an event.
 	pub fn send(&mut self, event: Event) {
 		self.event_streams.retain_mut(|sender| {
-			if sender.inner.len() >= sender.queue_size_warning && !sender.warning_fired {
+			let current_pending = sender.inner.len();
+			if current_pending >= sender.queue_size_warning && !sender.warning_fired {
 				sender.warning_fired = true;
 				error!(
 					"The number of unprocessed events in channel `{}` exceeded {}.\n\
@@ -183,7 +184,16 @@ impl OutChannels {
 					sender.creation_backtrace,
 					Backtrace::force_capture(),
 				);
+			} else if sender.warning_fired &&
+				current_pending < sender.queue_size_warning.wrapping_div(2)
+			{
+				sender.warning_fired = false;
+				info!(
+					"Channel `{}` is no longer overflowed. Number of events: {}",
+					sender.name, current_pending
+				);
 			}
+
 			sender.inner.try_send(event.clone()).is_ok()
 		});
 
