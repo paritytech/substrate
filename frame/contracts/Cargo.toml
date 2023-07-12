@@ -60,6 +60,8 @@ pallet-insecure-randomness-collective-flip = { version = "4.0.0-dev", path = "..
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
 pallet-proxy = { version = "4.0.0-dev", path = "../proxy" }
 sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
+serde_json = "1.0.85"
+hex = { version = "0.4.3", default-features = false }
 
 [features]
 default = ["std"]

@@ -600,6 +600,59 @@ fn migration_on_idle_hooks_works() {
 }
 
 #[test]
+fn test_ink_compiled_contract() {
+	use serde::Deserialize;
+
+	#[derive(Deserialize)]
+	pub struct Root {
+		pub source: Source,
+		pub spec: Spec,
+	}
+
+	#[derive(Deserialize)]
+	pub struct Source {
+		pub wasm: String,
+	}
+
+	#[derive(Deserialize)]
+	pub struct Spec {
+		pub constructors: Vec<Constructor>,
+	}
+
+	#[derive(Deserialize)]
+	pub struct Constructor {
+		pub selector: String,
+	}
+
+	let fixture_path = [
+		std::env::var("CARGO_MANIFEST_DIR").as_deref().unwrap_or("frame/contracts"),
+		"/fixtures/flipper.contract",
+	]
+	.concat();
+
+	let contract = std::fs::File::open(fixture_path).expect("File not found.");
+	let Root { source, spec } = serde_json::from_reader(contract).expect("Invalid json.");
+	let bytes = hex::decode(source.wasm[2..].to_owned()).expect("Invalid wasm code.");
+
+	let hex_selector = &spec.constructors[0].selector;
+	let selector = u32::from_str_radix(&hex_selector[2..], 16).unwrap();
+	let data = selector.to_be_bytes().encode().to_vec();
+
+	ExtBuilder::default().build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 100_000_000_000_000);
+		assert_ok!(Contracts::instantiate_with_code(
+			RuntimeOrigin::signed(ALICE),
+			100_000,
+			Weight::MAX,
+			Some(10_000_000_000_000.into()),
+			bytes,
+			data,
+			vec![],
+		));
+	});
+}
+
+#[test]
 fn migration_in_progress_works() {
 	let (wasm, code_hash) = compile_module::<Test>("dummy").unwrap();
 

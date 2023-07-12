@@ -712,13 +712,18 @@ pub mod pallet {
 
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
+			log::debug!(target: LOG_TARGET, "called instantiate with code with data: {data:?}, code_len: {code_len} data_len: {data_len}");
+
+			let mut debug_message =
+				if cfg!(test) { Some(DebugBufferVec::<T>::default()) } else { None };
+
 			let common = CommonInput {
 				origin: Origin::from_account_id(origin),
 				value,
 				data,
 				gas_limit,
 				storage_deposit_limit,
-				debug_message: None,
+				debug_message: debug_message.as_mut(),
 			};
 
 			let mut output =
@@ -1491,6 +1496,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
 		}
 
+		log::debug!(target:LOG_TARGET, "uploading code with hash {:?}", module.code_hash());
 		Ok((module, deposit))
 	}
 

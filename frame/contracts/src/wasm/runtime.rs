@@ -513,6 +513,7 @@ impl<'a, E: Ext + 'a> Runtime<'a, E> {
 					}
 				}
 				// Otherwise the trap came from the contract itself.
+				log::debug!(target: crate::LOG_TARGET, "Contract trap code: {:?}", trap);
 				Err(Error::<E::T>::ContractTrapped.into())
 			},
 			// Any other error is returned only if instantiation or linking failed (i.e.
