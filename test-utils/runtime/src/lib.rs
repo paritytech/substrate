@@ -1311,14 +1311,8 @@ mod tests {
 			let r = BuildResult::decode(&mut &r[..]);
 			assert!(r.is_ok());
 
-			let mut keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
-
-			// following keys are not placed during `<RuntimeGenesisConfig as GenesisBuild>::build`
-			// process, add them `keys` to assert against known keys.
-			keys.push(hex(b":heappages"));
-			keys.sort();
-
-			assert_eq!(keys, storage_key_generator::get_expected_storage_hashed_keys());
+			let keys = t.into_storages().top.keys().cloned().map(hex).collect::<Vec<String>>();
+			assert_eq!(keys, storage_key_generator::get_expected_storage_hashed_keys(false));
 		}
 
 		#[test]
