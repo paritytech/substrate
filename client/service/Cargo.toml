@@ -69,7 +69,6 @@ sc-rpc-spec-v2 = { version = "0.10.0-dev", path = "../rpc-spec-v2" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-informant = { version = "0.10.0-dev", path = "../informant" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
-sc-offchain = { version = "4.0.0-dev", path = "../offchain" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../sysinfo" }

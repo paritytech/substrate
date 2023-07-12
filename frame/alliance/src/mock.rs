@@ -28,7 +28,7 @@ use sp_std::convert::{TryFrom, TryInto};
 
 pub use frame_support::{
 	assert_noop, assert_ok, ord_parameter_types, parameter_types,
-	traits::{EitherOfDiverse, GenesisBuild, SortedMembers},
+	traits::{EitherOfDiverse, SortedMembers},
 	BoundedVec,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
@@ -256,7 +256,7 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![
@@ -274,14 +274,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.assimilate_storage(&mut t)
 	.unwrap();
 
-	GenesisBuild::<Test>::assimilate_storage(
-		&pallet_alliance::GenesisConfig {
-			fellows: vec![],
-			allies: vec![],
-			phantom: Default::default(),
-		},
-		&mut t,
-	)
+	pallet_alliance::GenesisConfig::<Test> {
+		fellows: vec![],
+		allies: vec![],
+		phantom: Default::default(),
+	}
+	.assimilate_storage(&mut t)
 	.unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);

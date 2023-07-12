@@ -13,7 +13,7 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 async-trait = "0.1.57"
 codec = { package = "parity-scale-codec", version = "3.6.1" }
 futures = "0.3.21"
