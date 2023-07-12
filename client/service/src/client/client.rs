@@ -62,10 +62,8 @@ use sp_core::{
 		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
 		StorageKey,
 	},
-	traits::SpawnNamed,
+	traits::{CallContext, SpawnNamed},
 };
-#[cfg(feature = "test-helpers")]
-use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
@@ -161,7 +159,6 @@ pub fn new_in_mem<E, Block, G, RA>(
 	backend: Arc<in_mem::Backend<Block>>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<KeystorePtr>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -181,7 +178,6 @@ where
 		backend,
 		executor,
 		genesis_block_builder,
-		keystore,
 		spawn_handle,
 		prometheus_registry,
 		telemetry,
@@ -224,7 +220,6 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<KeystorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
@@ -239,12 +234,7 @@ where
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
 {
-	let extensions = ExecutionExtensions::new(
-		Default::default(),
-		keystore,
-		sc_offchain::OffchainDb::factory_from_backend(&*backend),
-		Arc::new(executor.clone()),
-	);
+	let extensions = ExecutionExtensions::new(None, Arc::new(executor.clone()));
 
 	let call_executor =
 		LocalCallExecutor::new(backend.clone(), executor, config.clone(), extensions)?;
@@ -875,12 +865,12 @@ where
 			// We should enact state, but don't have any storage changes, so we need to execute the
 			// block.
 			(true, None, Some(ref body)) => {
-				let runtime_api = self.runtime_api();
-				let execution_context = import_block.origin.into();
+				let mut runtime_api = self.runtime_api();
 
-				runtime_api.execute_block_with_context(
+				runtime_api.set_call_context(CallContext::Onchain);
+
+				runtime_api.execute_block(
 					*parent_hash,
-					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
 
@@ -1727,7 +1717,8 @@ where
 				params.overlayed_changes,
 				Some(params.storage_transaction_cache),
 				params.recorder,
-				params.context,
+				params.call_context,
+				params.extensions,
 			)
 			.map_err(Into::into)
 	}
@@ -1738,6 +1729,18 @@ where
 
 	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
 		self.state_at(at).map_err(Into::into)
+	}
+
+	fn initialize_extensions(
+		&self,
+		at: Block::Hash,
+		extensions: &mut sp_externalities::Extensions,
+	) -> Result<(), sp_api::ApiError> {
+		let block_number = self.expect_block_number_from_id(&BlockId::Hash(at))?;
+
+		extensions.merge(self.executor.execution_extensions().extensions(at, block_number));
+
+		Ok(())
 	}
 }
 
