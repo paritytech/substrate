@@ -1,0 +1,159 @@
+// This file is part of Substrate.
+
+// Copyright (C) Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+//! Implementation of the `chainHead_storage` method.
+
+use std::{marker::PhantomData, sync::Arc};
+
+use jsonrpsee::SubscriptionSink;
+use sc_client_api::{Backend, ChildInfo, StorageKey, StorageProvider};
+use sp_api::BlockT;
+use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys};
+
+use super::{
+	event::{
+		ChainHeadStorageEvent, ItemsEvent, StorageQuery, StorageQueryType, StorageResult,
+		StorageResultType,
+	},
+	ErrorEvent,
+};
+
+/// Generates the events of the `chainHead_storage` method.
+pub struct ChainHeadStorage<Client, Block, BE> {
+	/// Substrate client.
+	client: Arc<Client>,
+	_phantom: PhantomData<(Block, BE)>,
+}
+
+impl<Client, Block, BE> ChainHeadStorage<Client, Block, BE> {
+	/// Constructs a new [`ChainHeadStorage`].
+	pub fn new(client: Arc<Client>) -> Self {
+		Self { client, _phantom: PhantomData }
+	}
+}
+
+/// Checks if the provided key (main or child key) is valid
+/// for queries.
+///
+/// Keys that are identical to `:child_storage:` or `:child_storage:default:`
+/// are not queryable.
+fn is_key_queryable(key: &[u8]) -> bool {
+	!well_known_keys::is_default_child_storage_key(key) &&
+		!well_known_keys::is_child_storage_key(key)
+}
+
+/// The result of making a query call.
+enum QueryResult {
+	/// The query successfully produced a result that can be buffered.
+	Buffered(StorageResult<String>),
+	/// The query produced an event that should be propagated.
+	Immediate(ChainHeadStorageEvent<String>),
+}
+
+impl<Client, Block, BE> ChainHeadStorage<Client, Block, BE>
+where
+	Block: BlockT + 'static,
+	BE: Backend<Block> + 'static,
+	Client: StorageProvider<Block, BE> + 'static,
+{
+	/// Fetch the value from storage.
+	fn query_storage_value(
+		&self,
+		hash: Block::Hash,
+		key: &StorageKey,
+		child_key: Option<&ChildInfo>,
+	) -> Option<QueryResult> {
+		let result = if let Some(child_key) = child_key {
+			self.client.child_storage(hash, child_key, key)
+		} else {
+			self.client.storage(hash, key)
+		};
+
+		result
+			.map(|opt| {
+				opt.map(|storage_data| {
+					QueryResult::Buffered(StorageResult::<String> {
+						key: format!("0x{:?}", HexDisplay::from(&key.0)),
+						result: StorageResultType::Value(format!(
+							"0x{:?}",
+							HexDisplay::from(&storage_data.0)
+						)),
+					})
+				})
+			})
+			.unwrap_or_else(|err| {
+				Some(QueryResult::Immediate(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
+					error: err.to_string(),
+				})))
+			})
+	}
+
+	/// Make the storage query.
+	fn query_storage(
+		&self,
+		hash: Block::Hash,
+		query: &StorageQuery<StorageKey>,
+		child_key: Option<&ChildInfo>,
+	) -> Option<QueryResult> {
+		if !is_key_queryable(&query.key.0) {
+			return None
+		}
+
+		match query.ty {
+			StorageQueryType::Value => self.query_storage_value(hash, &query.key, child_key),
+			_ => None,
+		}
+	}
+
+	/// Generate the block events for the `chainHead_storage` method.
+	pub fn generate_events(
+		&self,
+		mut sink: SubscriptionSink,
+		hash: Block::Hash,
+		items: Vec<StorageQuery<StorageKey>>,
+		child_key: Option<ChildInfo>,
+	) {
+		if let Some(child_key) = child_key.as_ref() {
+			if !is_key_queryable(child_key.storage_key()) {
+				let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
+				return
+			}
+		}
+
+		let mut storage_results = Vec::with_capacity(items.len());
+		for item in items {
+			let Some(result) = self.query_storage(hash, &item, child_key.as_ref()) else {
+                continue
+            };
+
+			match result {
+				QueryResult::Buffered(storage_result) => storage_results.push(storage_result),
+				QueryResult::Immediate(event) => {
+					let _ = sink.send(&event);
+				},
+			}
+		}
+
+		if !storage_results.is_empty() {
+			let event = ChainHeadStorageEvent::Items(ItemsEvent { items: storage_results });
+			let _ = sink.send(&event);
+		}
+
+		let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
+	}
+}

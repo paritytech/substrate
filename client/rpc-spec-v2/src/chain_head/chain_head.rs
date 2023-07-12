@@ -42,13 +42,13 @@ use sc_client_api::{
 };
 use sp_api::CallApiAt;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, traits::CallContext, Bytes};
+use sp_core::{hexdisplay::HexDisplay, traits::CallContext, Bytes};
 use sp_runtime::traits::Block as BlockT;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
-use super::event::{
-	ChainHeadStorageEvent, ItemsEvent, StorageQuery, StorageQueryType, StorageResult,
-	StorageResultType,
+use super::{
+	chain_head_storage::ChainHeadStorage,
+	event::{ChainHeadStorageEvent, StorageQuery, StorageQueryType},
 };
 
 pub(crate) const LOG_TARGET: &str = "rpc-spec-v2";
@@ -341,99 +341,12 @@ where
 			},
 		};
 
+		let storage_client = ChainHeadStorage::<Client, Block, BE>::new(client);
+
 		let fut = async move {
 			let _block_guard = block_guard;
-			// The child key is provided, use the key to query the child trie.
-			if let Some(child_key) = child_key {
-				// The child key must not be prefixed with ":child_storage:" nor
-				// ":child_storage:default:".
-				if well_known_keys::is_default_child_storage_key(child_key.storage_key()) ||
-					well_known_keys::is_child_storage_key(child_key.storage_key())
-				{
-					let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
-					return
-				}
 
-				for query in items {
-					match query.ty {
-						StorageQueryType::Value =>
-							match client.child_storage(hash, &child_key, &query.key) {
-								Ok(result) => {
-									let Some(result) = result else {
-										continue
-									};
-
-									let event = ChainHeadStorageEvent::Items(ItemsEvent {
-										items: vec![StorageResult::<String> {
-											key: format!("0x{:?}", HexDisplay::from(&query.key)),
-											result: StorageResultType::Value(format!(
-												"0x{:?}",
-												HexDisplay::from(&result.0)
-											)),
-										}],
-									});
-
-									let _ = sink.send(&event);
-								},
-								Err(error) => {
-									let err = ChainHeadStorageEvent::<String>::Error(ErrorEvent {
-										error: error.to_string(),
-									});
-									let _ = sink.send(&err);
-									return
-								},
-							},
-						_ => (),
-					}
-				}
-
-				let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
-				return
-			}
-
-			for query in items {
-				// The main key must not be prefixed with b":child_storage:" nor
-				// b":child_storage:default:".
-				if well_known_keys::is_default_child_storage_key(&query.key.0) ||
-					well_known_keys::is_child_storage_key(&query.key.0)
-				{
-					let _ = sink
-						.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
-					return
-				}
-
-				match query.ty {
-					StorageQueryType::Value => match client.storage(hash, &query.key) {
-						Ok(result) => {
-							let Some(result) = result else {
-									continue
-								};
-
-							let event = ChainHeadStorageEvent::Items(ItemsEvent {
-								items: vec![StorageResult::<String> {
-									key: format!("0x{:?}", HexDisplay::from(&query.key)),
-									result: StorageResultType::Value(format!(
-										"0x{:?}",
-										HexDisplay::from(&result.0)
-									)),
-								}],
-							});
-
-							let _ = sink.send(&event);
-						},
-						Err(error) => {
-							let err = ChainHeadStorageEvent::<String>::Error(ErrorEvent {
-								error: error.to_string(),
-							});
-							let _ = sink.send(&err);
-							return
-						},
-					},
-					_ => (),
-				}
-			}
-
-			let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
+			storage_client.generate_events(sink, hash, items, child_key);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());

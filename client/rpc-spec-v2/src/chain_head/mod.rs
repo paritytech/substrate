@@ -33,6 +33,7 @@ pub mod error;
 pub mod event;
 
 mod chain_head_follow;
+mod chain_head_storage;
 mod subscription;
 
 pub use api::ChainHeadApiServer;
