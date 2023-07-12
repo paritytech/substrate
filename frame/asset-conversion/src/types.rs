@@ -135,11 +135,11 @@ impl<AssetId: Ord + Clone> MultiAssetIdConverter<NativeOrAssetId<AssetId>, Asset
 
 /// Trait for providing methods to swap between the various asset classes.
 pub trait Swap<AccountId, Balance, MultiAssetId> {
-	/// Take the `path[1]` asset and swap the exact amount of `amount_in` of `path[0]` for it.
+	/// Swap exactly `amount_in` of asset `path[0]` for asset `path[1]`.
 	/// If an `amount_out_min` is specified, it will return an error if it is unable to acquire
 	/// the amount desired.
 	///
-	/// Withdraws the `path[1]` asset from `sender`, deposits the `path[0]` asset to `send_to`,
+	/// Withdraws the `path[0]` asset from `sender`, deposits the `path[1]` asset to `send_to`,
 	/// respecting `keep_alive`.
 	///
 	/// If successful, returns the amount of `path[1]` acquired for the `amount_in`.
