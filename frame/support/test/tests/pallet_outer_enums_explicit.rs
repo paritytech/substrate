@@ -78,7 +78,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		// Exclude part `Storage` in order not to check its metadata in tests.
-		System: frame_system::{Pallet, Config, Call, Event<T> },
+		System: frame_system::{Pallet, Config<T>, Call, Event<T> },
 
 		// This pallet exposes the Error type explicitly.
 		Example: common::outer_enums::pallet::{Pallet, Config<T>, Event<T>, Error<T>},

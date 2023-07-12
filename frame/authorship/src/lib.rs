@@ -106,6 +106,7 @@ mod tests {
 		generic::DigestItem,
 		testing::Header,
 		traits::{BlakeTwo256, Header as HeaderT, IdentityLookup},
+		BuildStorage,
 	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -117,7 +118,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Authorship: pallet_authorship::{Pallet, Storage},
 		}
 	);
@@ -188,7 +189,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.into()
 	}
 

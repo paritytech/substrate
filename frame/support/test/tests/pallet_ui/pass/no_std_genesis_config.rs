@@ -43,8 +43,8 @@ construct_runtime! {
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-		Pallet: test_pallet::{Pallet, Config},
+		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Pallet: test_pallet::{Pallet, Config<T>},
 	}
 }
 

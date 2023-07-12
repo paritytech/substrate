@@ -2,7 +2,7 @@ use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
-use sp_runtime::FixedU128;
+use sp_runtime::{BuildStorage, FixedU128};
 use sp_staking::Stake;
 
 pub type BlockNumber = u64;
@@ -254,7 +254,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Storage, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Storage, Event<T>, Config<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Pools: pools::{Pallet, Call, Storage, Event<T>},
 	}
@@ -324,7 +324,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let _ = crate::GenesisConfig::<Runtime> {
 			min_join_bond: MinJoinBondConfig::get(),

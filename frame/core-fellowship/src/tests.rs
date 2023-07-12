@@ -30,7 +30,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, TryMorphInto},
-	DispatchError, DispatchResult,
+	BuildStorage, DispatchError, DispatchResult,
 };
 use sp_std::cell::RefCell;
 
@@ -46,7 +46,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		CoreFellowship: pallet_core_fellowship::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -149,7 +149,7 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| {
 		let params = ParamsType {

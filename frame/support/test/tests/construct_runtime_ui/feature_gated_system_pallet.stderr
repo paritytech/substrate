@@ -1,5 +1,5 @@
 error: `System` pallet declaration is feature gated, please remove any `#[cfg]` attributes
   --> tests/construct_runtime_ui/feature_gated_system_pallet.rs:10:3
    |
-10 |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+10 |         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
    |         ^^^^^^

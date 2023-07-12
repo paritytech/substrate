@@ -370,7 +370,10 @@ benchmarks_instance_pallet! {
 
 	impl_benchmark_test_suite!(
 		Society,
-		sp_io::TestExternalities::from(frame_system::GenesisConfig::default().build_storage::<crate::mock::Test>().unwrap()),
+		sp_io::TestExternalities::from(
+			<frame_system::GenesisConfig::<crate::mock::Test> as sp_runtime::BuildStorage>::build_storage(
+				&frame_system::GenesisConfig::default()).unwrap()
+			),
 		crate::mock::Test
 	);
 }

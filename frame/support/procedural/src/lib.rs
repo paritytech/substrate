@@ -1651,8 +1651,7 @@ pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 /// The macro will add the following attribute:
 /// * `#[cfg(feature = "std")]`
 ///
-/// The macro will implement `sp_runtime::BuildModuleGenesisStorage` using `()` as a second
-/// generic for non-instantiable pallets.
+/// The macro will implement `sp_runtime::BuildStorage`.
 #[proc_macro_attribute]
 pub fn genesis_build(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()

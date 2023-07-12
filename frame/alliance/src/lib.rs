@@ -405,11 +405,12 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub fellows: Vec<T::AccountId>,
 		pub allies: Vec<T::AccountId>,
+		#[serde(skip)]
 		pub phantom: PhantomData<(T, I)>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			for m in self.fellows.iter().chain(self.allies.iter()) {
 				assert!(Pallet::<T, I>::has_identity(m).is_ok(), "Member does not set identity!");

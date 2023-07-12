@@ -21,9 +21,7 @@ use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
-	traits::{
-		ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
-	},
+	traits::{ConstU16, ConstU32, ConstU64, KeyOwnerProofSystem, OnFinalize, OnInitialize},
 	BasicExternalities,
 };
 use pallet_session::historical as pallet_session_historical;
@@ -34,7 +32,7 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, TestXt},
 	traits::{BlakeTwo256, IdentityLookup, OpaqueKeys},
-	Perbill,
+	BuildStorage, Perbill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 
@@ -260,7 +258,7 @@ pub fn new_test_ext(ids: Vec<u8>) -> TestExternalities {
 }
 
 pub fn new_test_ext_raw_authorities(authorities: Vec<BeefyId>) -> TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	let balances: Vec<_> = (0..authorities.len()).map(|i| (i as u64, 10_000_000)).collect();
 

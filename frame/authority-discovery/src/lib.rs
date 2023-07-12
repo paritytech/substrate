@@ -59,14 +59,16 @@ pub mod pallet {
 	pub(super) type NextKeys<T: Config> =
 		StorageValue<_, WeakBoundedVec<AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
-	#[derive(Default)]
+	#[derive(frame_support::DefaultNoBound)]
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
 		pub keys: Vec<AuthorityId>,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::initialize_keys(&self.keys)
 		}
@@ -168,7 +170,7 @@ mod tests {
 	use crate as pallet_authority_discovery;
 	use frame_support::{
 		parameter_types,
-		traits::{ConstU32, ConstU64, GenesisBuild},
+		traits::{ConstU32, ConstU64},
 	};
 	use sp_application_crypto::Pair;
 	use sp_authority_discovery::AuthorityPair;
@@ -177,7 +179,7 @@ mod tests {
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId},
 		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		KeyTypeId, Perbill,
+		BuildStorage, KeyTypeId, Perbill,
 	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -189,9 +191,9 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
-			AuthorityDiscovery: pallet_authority_discovery::{Pallet, Config},
+			AuthorityDiscovery: pallet_authority_discovery::{Pallet, Config<T>},
 		}
 	);
 
@@ -308,13 +310,11 @@ mod tests {
 			.collect::<Vec<(&AuthorityId, AuthorityId)>>();
 
 		// Build genesis.
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
-		GenesisBuild::<Test>::assimilate_storage(
-			&pallet_authority_discovery::GenesisConfig { keys: vec![] },
-			&mut t,
-		)
-		.unwrap();
+		pallet_authority_discovery::GenesisConfig::<Test> { keys: vec![], ..Default::default() }
+			.assimilate_storage(&mut t)
+			.unwrap();
 
 		// Create externalities.
 		let mut externalities = TestExternalities::new(t);
