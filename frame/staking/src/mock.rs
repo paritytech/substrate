@@ -36,7 +36,10 @@ use sp_runtime::{
 	traits::{IdentityLookup, Zero},
 	BuildStorage,
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use sp_staking::{
+	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+	OnStakingUpdate,
+};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
