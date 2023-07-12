@@ -244,9 +244,9 @@ pub enum ChainHeadEvent<T> {
 /// The storage item received as paramter.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StorageQuery {
-	/// The hex-encoded key.
-	pub key: String,
+pub struct StorageQuery<Key> {
+	/// The provided key.
+	pub key: Key,
 	/// The type of the storage query.
 	#[serde(rename = "type")]
 	pub ty: StorageQueryType,
@@ -558,54 +558,53 @@ mod tests {
 	#[test]
 	fn chain_head_storage_query() {
 		// Item with Value.
-		let item = StorageQuery { key: "0x1".into(), ty: StorageQueryType::Value };
+		let item = StorageQuery { key: "0x1", ty: StorageQueryType::Value };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"value"}"#;
 		assert_eq!(ser, exp);
 		// Decode
-		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		let dec: StorageQuery<&str> = serde_json::from_str(exp).unwrap();
 		assert_eq!(dec, item);
 
 		// Item with Hash.
-		let item = StorageQuery { key: "0x1".into(), ty: StorageQueryType::Hash };
+		let item = StorageQuery { key: "0x1", ty: StorageQueryType::Hash };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"hash"}"#;
 		assert_eq!(ser, exp);
 		// Decode
-		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		let dec: StorageQuery<&str> = serde_json::from_str(exp).unwrap();
 		assert_eq!(dec, item);
 
 		// Item with DescendantsValues.
-		let item = StorageQuery { key: "0x1".into(), ty: StorageQueryType::DescendantsValues };
+		let item = StorageQuery { key: "0x1", ty: StorageQueryType::DescendantsValues };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"descendants-values"}"#;
 		assert_eq!(ser, exp);
 		// Decode
-		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		let dec: StorageQuery<&str> = serde_json::from_str(exp).unwrap();
 		assert_eq!(dec, item);
 
 		// Item with DescendantsHashes.
-		let item = StorageQuery { key: "0x1".into(), ty: StorageQueryType::DescendantsHashes };
+		let item = StorageQuery { key: "0x1", ty: StorageQueryType::DescendantsHashes };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"descendants-hashes"}"#;
 		assert_eq!(ser, exp);
 		// Decode
-		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		let dec: StorageQuery<&str> = serde_json::from_str(exp).unwrap();
 		assert_eq!(dec, item);
 
 		// Item with Merkle.
-		let item =
-			StorageQuery { key: "0x1".into(), ty: StorageQueryType::ClosestDescendantMerkleValue };
+		let item = StorageQuery { key: "0x1", ty: StorageQueryType::ClosestDescendantMerkleValue };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"closest-descendant-merkle-value"}"#;
 		assert_eq!(ser, exp);
 		// Decode
-		let dec: StorageQuery = serde_json::from_str(exp).unwrap();
+		let dec: StorageQuery<&str> = serde_json::from_str(exp).unwrap();
 		assert_eq!(dec, item);
 	}
 

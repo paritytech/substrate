@@ -100,7 +100,7 @@ pub trait ChainHeadApi<Hash> {
 		&self,
 		follow_subscription: String,
 		hash: Hash,
-		items: Vec<StorageQuery>,
+		items: Vec<StorageQuery<String>>,
 		child_key: Option<String>,
 		network_config: Option<NetworkConfig>,
 	);

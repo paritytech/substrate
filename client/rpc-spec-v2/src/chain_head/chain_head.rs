@@ -290,11 +290,12 @@ where
 		mut sink: SubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
-		items: Vec<StorageQuery>,
+		items: Vec<StorageQuery<String>>,
 		child_key: Option<String>,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
-		let queries = items
+		// Gain control over parameter parsing and returned error.
+		let items = items
 			.into_iter()
 			.map(|query| {
 				if query.ty != StorageQueryType::Value {
@@ -305,7 +306,10 @@ where
 					return Err(SubscriptionEmptyError)
 				}
 
-				Ok((StorageKey(parse_hex_param(&mut sink, query.key)?), query.ty))
+				Ok(StorageQuery {
+					key: StorageKey(parse_hex_param(&mut sink, query.key)?),
+					ty: query.ty,
+				})
 			})
 			.collect::<Result<Vec<_>, _>>()?;
 
@@ -350,10 +354,10 @@ where
 					return
 				}
 
-				for query in queries {
-					match query.1 {
+				for query in items {
+					match query.ty {
 						StorageQueryType::Value =>
-							match client.child_storage(hash, &child_key, &query.0) {
+							match client.child_storage(hash, &child_key, &query.key) {
 								Ok(result) => {
 									let Some(result) = result else {
 										continue
@@ -361,7 +365,7 @@ where
 
 									let event = ChainHeadStorageEvent::Items(ItemsEvent {
 										items: vec![StorageResult::<String> {
-											key: format!("0x{:?}", HexDisplay::from(&query.0)),
+											key: format!("0x{:?}", HexDisplay::from(&query.key)),
 											result: StorageResultType::Value(format!(
 												"0x{:?}",
 												HexDisplay::from(&result.0)
@@ -387,19 +391,19 @@ where
 				return
 			}
 
-			for query in queries {
+			for query in items {
 				// The main key must not be prefixed with b":child_storage:" nor
 				// b":child_storage:default:".
-				if well_known_keys::is_default_child_storage_key(&query.0 .0) ||
-					well_known_keys::is_child_storage_key(&query.0 .0)
+				if well_known_keys::is_default_child_storage_key(&query.key.0) ||
+					well_known_keys::is_child_storage_key(&query.key.0)
 				{
 					let _ = sink
 						.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
 					return
 				}
 
-				match query.1 {
-					StorageQueryType::Value => match client.storage(hash, &query.0) {
+				match query.ty {
+					StorageQueryType::Value => match client.storage(hash, &query.key) {
 						Ok(result) => {
 							let Some(result) = result else {
 									continue
@@ -407,7 +411,7 @@ where
 
 							let event = ChainHeadStorageEvent::Items(ItemsEvent {
 								items: vec![StorageResult::<String> {
-									key: format!("0x{:?}", HexDisplay::from(&query.0)),
+									key: format!("0x{:?}", HexDisplay::from(&query.key)),
 									result: StorageResultType::Value(format!(
 										"0x{:?}",
 										HexDisplay::from(&result.0)
