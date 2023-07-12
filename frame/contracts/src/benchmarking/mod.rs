@@ -293,6 +293,9 @@ benchmarks! {
 	// This benchmarks the v13 migration step (Move contracts' reserved balance to be held instead).
 	#[pov_mode = Measured]
 	v13_migration_step {
+		<Contract<T>>::with_caller(
+			whitelisted_caller(), WasmModule::dummy(), vec![],
+		)?;
 		let mut m = v13::Migration::<T>::default();
 	}: {
 		m.step();
