@@ -64,10 +64,7 @@ mod dummy_pallet {
 impl dummy_pallet::Config for Test {}
 
 construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>} = 0,
 		DummyPallet: dummy_pallet::{Pallet, Config<T>, Storage} = 1,
