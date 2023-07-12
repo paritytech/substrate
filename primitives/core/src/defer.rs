@@ -25,6 +25,13 @@
 #[must_use]
 pub struct DeferGuard<F: FnOnce()>(pub Option<F>);
 
+impl<F: FnOnce()> DeferGuard<F> {
+	/// Creates a new `DeferGuard` with the given closure.
+	pub fn new(f: F) -> Self {
+		Self(Some(f))
+	}
+}
+
 impl<F: FnOnce()> Drop for DeferGuard<F> {
 	fn drop(&mut self) {
 		self.0.take().map(|f| f());
