@@ -346,6 +346,8 @@ pub mod pallet {
 		WrongProposalWeight,
 		/// The given length bound for the proposal was too low.
 		WrongProposalLength,
+		/// Prime account is not a member
+		PrimeAccountNotMember,
 	}
 
 	#[pallet::hooks]
@@ -416,6 +418,9 @@ pub mod pallet {
 					old_count,
 					old.len(),
 				);
+			}
+			if let Some(p) = &prime {
+				ensure!(new_members.contains(p), Error::<T, I>::PrimeAccountNotMember);
 			}
 			let mut new_members = new_members;
 			new_members.sort();
