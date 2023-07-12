@@ -35,14 +35,12 @@ use crate::event::Event;
 
 use futures::{prelude::*, ready, stream::FusedStream};
 use log::error;
-use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
 	backtrace::Backtrace,
 	cell::RefCell,
 	fmt,
 	pin::Pin,
-	sync::Arc,
 	task::{Context, Poll},
 };
 
@@ -52,16 +50,15 @@ use std::{
 /// to warn if there are too many unprocessed events in the channel.
 pub fn channel(name: &'static str, queue_size_warning: usize) -> (Sender, Receiver) {
 	let (tx, rx) = async_channel::unbounded();
-	let metrics = Arc::new(Mutex::new(None));
 	let tx = Sender {
 		inner: tx,
 		name,
 		queue_size_warning,
 		warning_fired: false,
 		creation_backtrace: Backtrace::force_capture(),
-		metrics: metrics.clone(),
+		metrics: None,
 	};
-	let rx = Receiver { inner: rx, name, metrics };
+	let rx = Receiver { inner: rx, name, metrics: None };
 	(tx, rx)
 }
 
@@ -84,7 +81,7 @@ pub struct Sender {
 	creation_backtrace: Backtrace,
 	/// Clone of [`Receiver::metrics`]. Will be initialized when [`Sender`] is added to
 	/// [`OutChannels`] with `OutChannels::push()`.
-	metrics: Arc<Mutex<Option<Arc<Option<Metrics>>>>>,
+	metrics: Option<Metrics>,
 }
 
 impl fmt::Debug for Sender {
@@ -95,8 +92,8 @@ impl fmt::Debug for Sender {
 
 impl Drop for Sender {
 	fn drop(&mut self) {
-		let metrics = self.metrics.lock();
-		if let Some(Some(metrics)) = metrics.as_ref().map(|m| &**m) {
+		let metrics = self.metrics.clone();
+		if let Some(metrics) = metrics.as_ref() {
 			metrics.num_channels.with_label_values(&[self.name]).dec();
 		}
 	}
@@ -108,7 +105,7 @@ pub struct Receiver {
 	name: &'static str,
 	/// Initially contains `None`, and will be set to a value once the corresponding [`Sender`]
 	/// is assigned to an instance of [`OutChannels`].
-	metrics: Arc<Mutex<Option<Arc<Option<Metrics>>>>>,
+	metrics: Option<Metrics>,
 }
 
 impl Stream for Receiver {
@@ -116,13 +113,10 @@ impl Stream for Receiver {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Event>> {
 		if let Some(ev) = ready!(Pin::new(&mut self.inner).poll_next(cx)) {
-			let metrics = self.metrics.lock().clone();
-			match metrics.as_ref().map(|m| m.as_ref()) {
-				Some(Some(metrics)) => metrics.event_out(&ev, self.name),
-				Some(None) => (), // no registry
-				None => log::warn!(
-					"Inconsistency in out_events: event happened before sender associated"
-				),
+			let metrics = self.metrics.clone();
+			match metrics.as_ref() {
+				Some(metrics) => metrics.event_out(&ev, self.name),
+				None => (), // no registry
 			}
 			Poll::Ready(Some(ev))
 		} else {
@@ -151,7 +145,7 @@ pub struct OutChannels {
 	event_streams: Vec<Sender>,
 	/// The metrics we collect. A clone of this is sent to each [`Receiver`] associated with this
 	/// object.
-	metrics: Arc<Option<Metrics>>,
+	metrics: Option<Metrics>,
 }
 
 impl OutChannels {
@@ -160,17 +154,15 @@ impl OutChannels {
 		let metrics =
 			if let Some(registry) = registry { Some(Metrics::register(registry)?) } else { None };
 
-		Ok(Self { event_streams: Vec::new(), metrics: Arc::new(metrics) })
+		Ok(Self { event_streams: Vec::new(), metrics })
 	}
 
 	/// Adds a new [`Sender`] to the collection.
-	pub fn push(&mut self, sender: Sender) {
-		let mut metrics = sender.metrics.lock();
-		debug_assert!(metrics.is_none());
-		*metrics = Some(self.metrics.clone());
-		drop(metrics);
+	pub fn push(&mut self, mut sender: Sender) {
+		debug_assert!(sender.metrics.is_none());
+		sender.metrics = self.metrics.clone();
 
-		if let Some(metrics) = &*self.metrics {
+		if let Some(metrics) = self.metrics.as_ref() {
 			metrics.num_channels.with_label_values(&[sender.name]).inc();
 		}
 
@@ -195,7 +187,7 @@ impl OutChannels {
 			sender.inner.try_send(event.clone()).is_ok()
 		});
 
-		if let Some(metrics) = &*self.metrics {
+		if let Some(metrics) = self.metrics.as_ref() {
 			for ev in &self.event_streams {
 				metrics.event_in(&event, ev.name);
 			}
@@ -211,6 +203,7 @@ impl fmt::Debug for OutChannels {
 	}
 }
 
+#[derive(Clone)]
 struct Metrics {
 	// This list is ordered alphabetically
 	events_total: CounterVec<U64>,
