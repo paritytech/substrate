@@ -15,17 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! <!-- markdown-link-check-disable -->
-//! # Dev Mode Example Pallet
-//!
-//! A simple example of a FRAME pallet demonstrating
-//! the ease of requirements for a pallet in dev mode.
-//!
-//! Run `cargo doc --package pallet-dev-mode --open` to view this pallet's documentation.
-//!
-//! **Dev mode is not meant to be used in production.**
-
-// Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
@@ -56,11 +45,11 @@ impl Task for ExampleTask {
 	}
 
 	fn is_valid(&self) -> bool {
-		todo!()
+		unimplemented!()
 	}
 
 	fn run(&self) -> Result<(), DispatchError> {
-		todo!()
+		unimplemented!()
 	}
 }
 
@@ -68,29 +57,32 @@ impl<T: Config> PalletTask<T> for ExampleTask {
 	type Config = T;
 
 	fn is_valid(&self, _config: &Self::Config) -> bool {
-		// You can implement some validation logic here
-		// For demonstration purposes, we'll just return true
-		true
+		let value = Value::<T>::get().unwrap();
+		match self {
+			ExampleTask::Increment => value < 255,
+			ExampleTask::Decrement => value > 0,
+		}
 	}
 
 	fn run(&self, _config: &Self::Config) -> Result<(), DispatchError> {
 		match self {
 			ExampleTask::Increment => {
-				// You can call some functions on your pallet here
-				// For demonstration purposes, we'll just print a message
-				println!("Increment task running");
+				// Increment the value and emit an event
+				let new_val = Value::<T>::get().unwrap().checked_add(1).ok_or("Value overflow")?;
+				Value::<T>::put(new_val);
+				Pallet::<T>::deposit_event(Event::Incremented { new_val });
 			},
 			ExampleTask::Decrement => {
-				// You can call some functions on your pallet here
-				// For demonstration purposes, we'll just print a message
-				println!("Decrement task running");
+				// Decrement the value and emit an event
+				let new_val = Value::<T>::get().unwrap().checked_sub(1).ok_or("Value underflow")?;
+				Value::<T>::put(new_val);
+				Pallet::<T>::deposit_event(Event::Decremented { new_val });
 			},
 		}
 		Ok(())
 	}
 }
 
-/// Enable `dev_mode` for this pallet.
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
@@ -99,12 +91,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
-	// Simple declaration of the `Pallet` type. It is placeholder we use to implement traits and
-	// method.
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
@@ -114,20 +103,24 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// No need to define a `call_index` attribute here because of `dev_mode`.
-		// No need to define a `weight` attribute here because of `dev_mode`.
-		pub fn add_dummy(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
+		pub fn increment(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 
-			if let Some(mut dummies) = Dummy::<T>::get() {
-				dummies.push(id.clone());
-				Dummy::<T>::set(Some(dummies));
-			} else {
-				Dummy::<T>::set(Some(vec![id.clone()]));
-			}
+			// Increment the value and emit an event
+			let new_val = Value::<T>::get().unwrap().checked_add(1).ok_or("Value overflow")?;
+			Value::<T>::put(new_val);
+			Self::deposit_event(Event::Incremented { new_val });
 
-			// Let's deposit an event to let the outside world know this happened.
-			Self::deposit_event(Event::AddDummy { account: id });
+			Ok(())
+		}
+
+		pub fn decrement(origin: OriginFor<T>) -> DispatchResult {
+			ensure_root(origin)?;
+
+			// Decrement the value and emit an event
+			let new_val = Value::<T>::get().unwrap().checked_sub(1).ok_or("Value underflow")?;
+			Value::<T>::put(new_val);
+			Self::deposit_event(Event::Decremented { new_val });
 
 			Ok(())
 		}
@@ -136,20 +129,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AddDummy { account: T::AccountId },
+		Incremented { new_val: u8 },
+		Decremented { new_val: u8 },
 	}
-
-	/// The MEL requirement for bounded pallets is skipped by `dev_mode`.
-	/// This means that all storages are marked as unbounded.
-	/// This is equivalent to specifying `#[pallet::unbounded]` on this type definitions.
-	/// When the dev_mode is removed, we would need to implement implement `MaxEncodedLen`.
-	#[pallet::storage]
-	pub type Dummy<T: Config> = StorageValue<_, Vec<T::AccountId>>;
-
-	/// The Hasher requirement is skipped by `dev_mode`. So, second parameter can be `_`
-	/// and `Blake2_128Concat` is used as a default.
-	/// When the dev_mode is removed, we would need to specify the hasher like so:
-	/// `pub type Bar<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance>;`.
-	#[pallet::storage]
-	pub type Bar<T: Config> = StorageMap<_, _, T::AccountId, u32>;
 }
