@@ -505,6 +505,17 @@ impl ExtBuilder {
 	}
 }
 
+/// Get the path to a fixture file.
+fn fixture_path(file_name: impl AsRef<str>) -> String {
+	[
+		// When `CARGO_MANIFEST_DIR` is not set, Rust resolves relative paths from the root folder
+		std::env::var("CARGO_MANIFEST_DIR").as_deref().unwrap_or("frame/contracts"),
+		"/fixtures/",
+		file_name.as_ref(),
+	]
+	.concat()
+}
+
 /// Load a given wasm module represented by a .wat file and returns a wasm binary contents along
 /// with it's hash.
 ///
@@ -513,14 +524,8 @@ fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as
 where
 	T: frame_system::Config,
 {
-	let fixture_path = [
-		// When `CARGO_MANIFEST_DIR` is not set, Rust resolves relative paths from the root folder
-		std::env::var("CARGO_MANIFEST_DIR").as_deref().unwrap_or("frame/contracts"),
-		"/fixtures/",
-		fixture_name,
-		".wat",
-	]
-	.concat();
+	let file_name = [fixture_name, ".wat"].concat();
+	let fixture_path = fixture_path(file_name);
 	let wasm_binary = wat::parse_file(fixture_path)?;
 	let code_hash = T::Hashing::hash(&wasm_binary);
 	Ok((wasm_binary, code_hash))
@@ -604,33 +609,27 @@ fn test_ink_compiled_contract() {
 	use serde::Deserialize;
 
 	#[derive(Deserialize)]
-	pub struct Root {
-		pub source: Source,
-		pub spec: Spec,
+	struct Root {
+		source: Source,
+		spec: Spec,
 	}
 
 	#[derive(Deserialize)]
-	pub struct Source {
-		pub wasm: String,
+	struct Source {
+		wasm: String,
 	}
 
 	#[derive(Deserialize)]
-	pub struct Spec {
-		pub constructors: Vec<Constructor>,
+	struct Spec {
+		constructors: Vec<Constructor>,
 	}
 
 	#[derive(Deserialize)]
-	pub struct Constructor {
-		pub selector: String,
+	struct Constructor {
+		selector: String,
 	}
 
-	let fixture_path = [
-		std::env::var("CARGO_MANIFEST_DIR").as_deref().unwrap_or("frame/contracts"),
-		"/fixtures/flipper.contract",
-	]
-	.concat();
-
-	let contract = std::fs::File::open(fixture_path).expect("File not found.");
+	let contract = std::fs::File::open(fixture_path("flipper.contract")).expect("File not found.");
 	let Root { source, spec } = serde_json::from_reader(contract).expect("Invalid json.");
 	let bytes = hex::decode(source.wasm[2..].to_owned()).expect("Invalid wasm code.");
 
