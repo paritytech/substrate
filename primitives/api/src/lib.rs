@@ -135,6 +135,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// # Example
 ///
 /// ```rust
+/// # use sp_runtime::traits::Block as BlockT;
 /// sp_api::decl_runtime_apis! {
 ///     /// Declare the api trait.
 ///     pub trait Balance {
@@ -146,7 +147,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 ///
 ///     /// You can declare multiple api traits in one macro call.
 ///     /// In one module you can call the macro at maximum one time.
-///     pub trait BlockBuilder {
+///     pub trait BlockBuilder<Block: BlockT> {
 ///         /// The macro adds an explicit `Block: BlockT` generic parameter for you.
 ///         /// You can use this generic parameter as you would defined it manually.
 ///         fn build_block() -> Block;
@@ -203,7 +204,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// ```rust
 /// sp_api::decl_runtime_apis! {
 ///     /// Declare the api trait.
-/// 	#[api_version(2)]
+///     #[api_version(2)]
 ///     pub trait Balance {
 ///         /// Get the balance.
 ///         fn get_balance() -> u64;
@@ -283,7 +284,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// #         /// Set the balance.
 /// #         fn set_balance(val: u64);
 /// #     }
-/// #     pub trait BlockBuilder {
+/// #     pub trait BlockBuilder<Block: BlockT> {
 /// #        fn build_block() -> Block;
 /// #     }
 /// # }
@@ -298,7 +299,7 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 /// #       fn initialize_block(_header: &<Block as BlockT>::Header) {}
 /// #   }
 ///
-///     impl self::Balance<Block> for Runtime {
+///     impl self::Balance for Runtime {
 ///         fn get_balance() -> u64 {
 ///             1
 ///         }
@@ -381,23 +382,23 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// }
 ///
 /// /// All runtime api mock implementations need to be done in one call of the macro!
-/// sp_api::mock_impl_runtime_apis! {
-///     impl Balance<Block> for MockApi {
-///         /// Here we take the `&self` to access the instance.
-///         fn get_balance(&self) -> u64 {
-///             self.balance
-///         }
-///         fn set_balance(_bal: u64) {
-///             // Store the balance
-///         }
-///     }
+/// //sp_api::mock_impl_runtime_apis! {
+/// //    impl Balance for MockApi {
+/// //        /// Here we take the `&self` to access the instance.
+/// //        fn get_balance(&self) -> u64 {
+/// //            self.balance
+/// //        }
+/// //        fn set_balance(_bal: u64) {
+/// //            // Store the balance
+/// //        }
+/// //    }
 ///
-///     impl BlockBuilder<Block> for MockApi {
-///         fn build_block() -> Block {
-///              unimplemented!("Not Required in tests")
-///         }
-///     }
-/// }
+/// //    impl BlockBuilder<Block> for MockApi {
+/// //        fn build_block() -> Block {
+/// //             unimplemented!("Not Required in tests")
+/// //        }
+/// //    }
+/// //}
 ///
 /// # fn main() {}
 /// ```
@@ -432,22 +433,22 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 ///     balance: u64,
 /// }
 ///
-/// sp_api::mock_impl_runtime_apis! {
-///     impl Balance<Block> for MockApi {
-///         #[advanced]
-///         fn get_balance(&self, at: <Block as BlockT>::Hash) -> Result<u64, sp_api::ApiError> {
-///             println!("Being called at: {}", at);
-///
-///             Ok(self.balance.into())
-///         }
-///         #[advanced]
-///         fn set_balance(at: <Block as BlockT>::Hash, val: u64) -> Result<(), sp_api::ApiError> {
-///             println!("Being called at: {}", at);
-///
-///             Ok(().into())
-///         }
-///     }
-/// }
+/// // sp_api::mock_impl_runtime_apis! {
+/// //     impl Balance<Block> for MockApi {
+/// //         #[advanced]
+/// //         fn get_balance(&self, at: <Block as BlockT>::Hash) -> Result<u64, sp_api::ApiError> {
+/// //             println!("Being called at: {}", at);
+///	//
+/// //             Ok(self.balance.into())
+/// //         }
+/// //         #[advanced]
+/// //         fn set_balance(at: <Block as BlockT>::Hash, val: u64) -> Result<(), sp_api::ApiError> {
+/// //             println!("Being called at: {}", at);
+///	//
+/// //             Ok(().into())
+/// //         }
+/// //     }
+/// // }
 ///
 /// # fn main() {}
 /// ```
@@ -741,14 +742,14 @@ decl_runtime_apis! {
 	/// The `Core` runtime api that every Substrate runtime needs to implement.
 	#[core_trait]
 	#[api_version(4)]
-	pub trait Core {
+	pub trait Core<Block: BlockT> {
 		/// Returns the version of the runtime.
 		fn version() -> RuntimeVersion;
 		/// Execute the given block.
 		fn execute_block(block: Block);
 		/// Initialize a block with the given header.
 		#[renamed("initialise_block", 2)]
-		fn initialize_block(header: &<Block as BlockT>::Header);
+		fn initialize_block(header: &Block::Header);
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
@@ -770,11 +771,13 @@ decl_runtime_apis! {
 	}
 }
 
+#[cfg(feature = "std")]
 pub struct RuntimeInstanceBuilder<C, B: BlockT> {
 	call_api_at: C,
 	block: B::Hash,
 }
 
+#[cfg(feature = "std")]
 impl<C, B: BlockT> RuntimeInstanceBuilder<C, B> {
 	pub fn create(call_api_at: C, block: B::Hash) -> Self {
 		Self { call_api_at, block }
@@ -785,6 +788,8 @@ impl<C, B: BlockT> RuntimeInstanceBuilder<C, B> {
 			call_api_at: self.call_api_at,
 			block: self.block,
 			call_context: CallContext::Onchain,
+			with_recorder: false,
+			extensions: Default::default(),
 		}
 	}
 
@@ -793,18 +798,30 @@ impl<C, B: BlockT> RuntimeInstanceBuilder<C, B> {
 			call_api_at: self.call_api_at,
 			block: self.block,
 			call_context: CallContext::Offchain,
+			with_recorder: false,
+			extensions: Default::default(),
 		}
 	}
 }
 
+#[cfg(feature = "std")]
 pub struct RuntimeInstanceBuilderStage2<C, B: BlockT> {
 	call_api_at: C,
 	block: B::Hash,
 	call_context: CallContext,
+	with_recorder: bool,
+	extensions: RefCell<Extensions>,
 }
 
+#[cfg(feature = "std")]
 impl<C, B: BlockT> RuntimeInstanceBuilderStage2<C, B> {
 	pub fn with_recorder(mut self) -> Self {
+		self.with_recorder = true;
+		self
+	}
+
+	pub fn register_extension(mut self, ext: impl Extension) -> Self {
+		self.extensions.borrow_mut().register(ext);
 		self
 	}
 
@@ -813,15 +830,18 @@ impl<C, B: BlockT> RuntimeInstanceBuilderStage2<C, B> {
 		C: CallApiAt<B>,
 	{
 		RuntimeInstance {
+			recorder: self.with_recorder.then(|| Default::default()),
 			call_api_at: self.call_api_at,
 			block: self.block,
 			call_context: self.call_context,
 			overlayed_changes: Default::default(),
 			storage_transaction_cache: Default::default(),
+			extensions: self.extensions,
 		}
 	}
 }
 
+#[cfg(feature = "std")]
 pub struct RuntimeInstance<C: CallApiAt<Block>, Block: BlockT> {
 	call_api_at: C,
 	block: Block::Hash,
@@ -829,13 +849,15 @@ pub struct RuntimeInstance<C: CallApiAt<Block>, Block: BlockT> {
 	overlayed_changes: RefCell<OverlayedChanges>,
 	storage_transaction_cache: RefCell<StorageTransactionCache<Block, C::StateBackend>>,
 	recorder: Option<ProofRecorder<Block>>,
+	extensions: RefCell<Extensions>,
 }
 
+#[cfg(feature = "std")]
 impl<C: CallApiAt<B>, B: BlockT> RuntimeInstance<C, B> {
-	fn call(
+	pub fn __runtime_api_internal_call_api_at(
 		&self,
-		fn_name: &dyn Fn(RuntimeVersion) -> &'static str,
 		params: Vec<u8>,
+		fn_name: &dyn Fn(RuntimeVersion) -> &'static str,
 	) -> Result<Vec<u8>, ApiError> {
 		// TODO: Enable storage transaction if required.
 
@@ -846,10 +868,11 @@ impl<C: CallApiAt<B>, B: BlockT> RuntimeInstance<C, B> {
 				at: self.block,
 				function: (*fn_name)(version),
 				arguments: params,
-				overlayed_changes: &self.changes,
+				overlayed_changes: &self.overlayed_changes,
 				storage_transaction_cache: &self.storage_transaction_cache,
-				context: self.call_context,
+				call_context: self.call_context,
 				recorder: &self.recorder,
+				extensions: &self.extensions,
 			};
 
 			self.call_api_at.call_api_at(params)

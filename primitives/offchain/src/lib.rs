@@ -20,13 +20,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
+use sp_runtime::traits::Block as BlockT;
+
 /// Re-export of parent module scope storage prefix.
 pub use sp_core::offchain::STORAGE_PREFIX;
 
 sp_api::decl_runtime_apis! {
 	/// The offchain worker api.
 	#[api_version(2)]
-	pub trait OffchainWorkerApi {
+	pub trait OffchainWorkerApi<Block: BlockT> {
 		/// Starts the off-chain task for given block number.
 		#[changed_in(2)]
 		fn offchain_worker(number: sp_runtime::traits::NumberFor<Block>);

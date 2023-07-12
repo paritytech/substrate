@@ -25,16 +25,16 @@ use sp_runtime::{
 sp_api::decl_runtime_apis! {
 	/// The `TaggedTransactionQueue` api trait for interfering with the transaction queue.
 	#[api_version(3)]
-	pub trait TaggedTransactionQueue {
+	pub trait TaggedTransactionQueue<Block: BlockT> {
 		/// Validate the transaction.
 		#[changed_in(2)]
-		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
+		fn validate_transaction(tx: Block::Extrinsic) -> TransactionValidity;
 
 		/// Validate the transaction.
 		#[changed_in(3)]
 		fn validate_transaction(
 			source: TransactionSource,
-			tx: <Block as BlockT>::Extrinsic,
+			tx: Block::Extrinsic,
 		) -> TransactionValidity;
 
 		/// Validate the transaction.
@@ -48,7 +48,7 @@ sp_api::decl_runtime_apis! {
 		/// might be verified in any possible order.
 		fn validate_transaction(
 			source: TransactionSource,
-			tx: <Block as BlockT>::Extrinsic,
+			tx: Block::Extrinsic,
 			block_hash: Block::Hash,
 		) -> TransactionValidity;
 	}

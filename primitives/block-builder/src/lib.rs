@@ -25,26 +25,26 @@ use sp_runtime::{traits::Block as BlockT, ApplyExtrinsicResult};
 sp_api::decl_runtime_apis! {
 	/// The `BlockBuilder` api trait that provides the required functionality for building a block.
 	#[api_version(6)]
-	pub trait BlockBuilder {
+	pub trait BlockBuilder<Block: BlockT> {
 		/// Apply the given extrinsic.
 		///
 		/// Returns an inclusion outcome which specifies if this extrinsic is included in
 		/// this block or not.
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult;
+		fn apply_extrinsic(extrinsic: Block::Extrinsic) -> ApplyExtrinsicResult;
 
 		#[changed_in(6)]
 		fn apply_extrinsic(
-			extrinsic: <Block as BlockT>::Extrinsic,
+			extrinsic: Block::Extrinsic,
 		) -> sp_runtime::legacy::byte_sized_error::ApplyExtrinsicResult;
 
 		/// Finish the current block.
 		#[renamed("finalise_block", 3)]
-		fn finalize_block() -> <Block as BlockT>::Header;
+		fn finalize_block() -> Block::Header;
 
 		/// Generate inherent extrinsics. The inherent data will vary from chain to chain.
 		fn inherent_extrinsics(
 			inherent: InherentData,
-		) -> sp_std::vec::Vec<<Block as BlockT>::Extrinsic>;
+		) -> sp_std::vec::Vec<Block::Extrinsic>;
 
 		/// Check that the inherents are valid. The inherent data will vary from chain to chain.
 		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult;

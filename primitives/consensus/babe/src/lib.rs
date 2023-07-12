@@ -27,7 +27,10 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
+use sp_runtime::{
+	traits::{Block as BlockT, Header},
+	ConsensusEngineId, RuntimeDebug,
+};
 use sp_std::vec::Vec;
 
 use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
@@ -377,7 +380,7 @@ pub fn epoch_start_slot(epoch_index: u64, genesis_slot: Slot, epoch_duration: u6
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	#[api_version(2)]
-	pub trait BabeApi {
+	pub trait BabeApi<Block: BlockT> {
 		/// Return the configuration for BABE.
 		fn configuration() -> BabeConfiguration;
 

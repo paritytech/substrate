@@ -139,7 +139,7 @@ fn generate_versioned_api_traits(
 	for (version, _) in &methods {
 		let mut versioned_trait = api.clone();
 		versioned_trait.ident = versioned_trait_name(&versioned_trait.ident, *version);
-		versioned_trait.items = Vec::new();
+		versioned_trait.items.retain(|i| !matches!(i, TraitItem::Fn(_)));
 		// Add the methods from the current version and all previous one. Versions are sorted so
 		// it's safe to stop early.
 		for (_, m) in methods.iter().take_while(|(v, _)| v <= &version) {
@@ -186,7 +186,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 	for decl in decls {
 		let mut decl = decl.clone();
 		let decl_span = decl.span();
-		extend_generics_with_block(&mut decl.generics);
+		// extend_generics_with_block(&mut decl.generics);
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
 		let found_attributes = remove_supported_attributes(&mut decl.attrs);
 		let api_version =
@@ -307,19 +307,6 @@ impl<'a> ToClientSideDecl<'a> {
 		let block_hash = self.block_hash;
 		let crate_ = self.crate_;
 
-		// Add the special method that will be implemented by the `impl_runtime_apis!` macro
-		// to enable functions to call into the runtime.
-		decl.items.push(parse_quote! {
-			/// !!INTERNAL USE ONLY!!
-			#[doc(hidden)]
-			fn __runtime_api_internal_call_api_at(
-				&self,
-				at: #block_hash,
-				params: std::vec::Vec<u8>,
-				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
-			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError>;
-		});
-
 		decl
 	}
 }
@@ -427,15 +414,165 @@ impl<'a> ToClientSideDecl<'a> {
 		let runtime_mod = generate_runtime_mod_name_for_trait(trait_name);
 		let underscores = (0..trait_generics_num).map(|_| quote!(_));
 
+		method
+	}
+}
+
+impl<'a> Fold for ToClientSideDecl<'a> {
+	fn fold_item_trait(&mut self, mut input: ItemTrait) -> ItemTrait {
+		*self.found_attributes = remove_supported_attributes(&mut input.attrs);
+
+		input.items = self.fold_item_trait_items(input.items, input.generics.params.len());
+
+		fold::fold_item_trait(self, input)
+	}
+}
+
+/// Modify the given runtime api declaration to be usable on the client side.
+struct ToClientSideDeclV2<'a> {
+	block_hash: &'a TokenStream,
+	crate_: &'a TokenStream,
+	found_attributes: &'a mut HashMap<&'static str, Attribute>,
+	/// Any error that we found while converting this declaration.
+	errors: &'a mut Vec<TokenStream>,
+	trait_: &'a Ident,
+}
+
+impl<'a> ToClientSideDeclV2<'a> {
+	/// Process the given [`ItemTrait`].
+	fn process(mut self, mut decl: ItemTrait) -> TokenStream {
+		decl.items = self.fold_item_trait_items(decl.items, 1);
+
+		let crate_ = self.crate_;
+		let trait_name = decl.ident;
+		let trait_generics = decl.generics.clone();
+		let trait_generics = trait_generics.split_for_impl().1;
+		let mut generics = decl.generics;
+		generics.params.push(
+			parse_quote!( __RuntimeInstanceCallApiAt__: #crate_::CallApiAt<__RuntimeInstanceBlock__> + Send + 'static ),
+		);
+		generics.params.push(parse_quote!( __RuntimeInstanceBlock__: #crate_::BlockT ));
+
+		let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+		let items = decl.items.into_iter().filter(|i| !matches!(i, TraitItem::Type(_)));
+
+		quote! {
+			impl #impl_generics #trait_name #trait_generics for #crate_::RuntimeInstance<__RuntimeInstanceCallApiAt__, __RuntimeInstanceBlock__> #where_clause {
+				#( #items )*
+			}
+		}
+	}
+
+
+	fn fold_item_trait_items(
+		&mut self,
+		items: Vec<TraitItem>,
+		trait_generics_num: usize,
+	) -> Vec<TraitItem> {
+		let mut result = Vec::new();
+
+		items.into_iter().for_each(|i| match i {
+			TraitItem::Fn(method) => {
+				let fn_decl = self.create_method_decl(method, trait_generics_num);
+				result.push(fn_decl.into());
+			},
+			r => result.push(r),
+		});
+
+		result
+	}
+
+	/// Takes the method declared by the user and creates the declaration we require for the runtime
+	/// api client side. This method will call by default the `method_runtime_api_impl` for doing
+	/// the actual call into the runtime.
+	fn create_method_decl(
+		&mut self,
+		mut method: TraitItemFn,
+		trait_generics_num: usize,
+	) -> TraitItemFn {
+		let params = match extract_parameter_names_types_and_borrows(
+			&method.sig,
+			AllowSelfRefInParameters::YesButIgnore,
+		) {
+			Ok(res) => res.into_iter().map(|v| v.0).collect::<Vec<_>>(),
+			Err(e) => {
+				self.errors.push(e.to_compile_error());
+				Vec::new()
+			},
+		};
+		let ret_type = return_type_extract_type(&method.sig.output);
+
+		fold_fn_decl_for_client_side(&mut method.sig, self.block_hash, self.crate_);
+
+		let crate_ = self.crate_;
+
+		let found_attributes = remove_supported_attributes(&mut method.attrs);
+
+		// Parse the renamed attributes.
+		let mut renames = Vec::new();
+		for (_, a) in found_attributes.iter().filter(|a| a.0 == &RENAMED_ATTRIBUTE) {
+			match parse_renamed_attribute(a) {
+				Ok((old_name, version)) => {
+					renames.push((version, prefix_function_with_trait(&self.trait_, &old_name)));
+				},
+				Err(e) => self.errors.push(e.to_compile_error()),
+			}
+		}
+
+		renames.sort_by(|l, r| r.cmp(l));
+		let (versions, old_names) = renames.into_iter().fold(
+			(Vec::new(), Vec::new()),
+			|(mut versions, mut old_names), (version, old_name)| {
+				versions.push(version);
+				old_names.push(old_name);
+				(versions, old_names)
+			},
+		);
+
+		// Generate the function name before we may rename it below to
+		// `function_name_before_version_{}`.
+		let function_name = prefix_function_with_trait(&self.trait_, &method.sig.ident);
+
+		// If the method has a `changed_in` attribute, we need to alter the method name to
+		// `method_before_version_VERSION`.
+		match get_changed_in(&found_attributes) {
+			Ok(Some(version)) => {
+				// Make sure that the `changed_in` version is at least the current `api_version`.
+				if get_api_version(self.found_attributes).ok() < Some(version) {
+					self.errors.push(
+						Error::new(
+							method.span(),
+							"`changed_in` version can not be greater than the `api_version`",
+						)
+						.to_compile_error(),
+					);
+				}
+
+				let ident = Ident::new(
+					&format!("{}_before_version_{}", method.sig.ident, version),
+					method.sig.ident.span(),
+				);
+				method.sig.ident = ident;
+			},
+			Ok(None) => {},
+			Err(e) => {
+				self.errors.push(e.to_compile_error());
+			},
+		};
+
+		// The module where the runtime relevant stuff is declared.
+		let trait_name = &self.trait_;
+		let runtime_mod = generate_runtime_mod_name_for_trait(trait_name);
+		let underscores = (0..trait_generics_num).map(|_| quote!(_));
+
 		// Generate the default implementation that calls the `method_runtime_api_impl` method.
 		method.default = Some(parse_quote! {
 			{
 				let __runtime_api_impl_params_encoded__ =
 					#crate_::Encode::encode(&( #( &#params ),* ));
 
-				<Self as #trait_name<#( #underscores ),*>>::__runtime_api_internal_call_api_at(
-					self,
-					__runtime_api_at_param__,
+				self.__runtime_api_internal_call_api_at(
 					__runtime_api_impl_params_encoded__,
 					&|_version| {
 						#(
@@ -452,7 +589,7 @@ impl<'a> ToClientSideDecl<'a> {
 				)
 				.and_then(|r|
 					std::result::Result::map_err(
-						<#ret_type as #crate_::Decode>::decode(&mut &r[..]),
+						#crate_::Decode::decode(&mut &r[..]),
 						|err| #crate_::ApiError::FailedToDecodeReturnValue {
 							function: #function_name,
 							error: err,
@@ -463,30 +600,6 @@ impl<'a> ToClientSideDecl<'a> {
 		});
 
 		method
-	}
-}
-
-impl<'a> Fold for ToClientSideDecl<'a> {
-	fn fold_item_trait(&mut self, mut input: ItemTrait) -> ItemTrait {
-		extend_generics_with_block(&mut input.generics);
-
-		*self.found_attributes = remove_supported_attributes(&mut input.attrs);
-		// Check if this is the `Core` runtime api trait.
-		let is_core_trait = self.found_attributes.contains_key(CORE_TRAIT_ATTRIBUTE);
-		let block_ident = Ident::new(BLOCK_GENERIC_IDENT, Span::call_site());
-
-		if is_core_trait {
-			// Add all the supertraits we want to have for `Core`.
-			input.supertraits = parse_quote!('static + Send);
-		} else {
-			// Add the `Core` runtime api as super trait.
-			let crate_ = &self.crate_;
-			input.supertraits.push(parse_quote!( #crate_::Core<#block_ident> ));
-		}
-
-		input.items = self.fold_item_trait_items(input.items, input.generics.params.len());
-
-		fold::fold_item_trait(self, input)
 	}
 }
 
@@ -513,23 +626,12 @@ fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 	let id = generate_runtime_api_id(&trait_name.to_string());
 	let version = generate_runtime_api_version(version as u32);
 
-	let impl_generics = trait_.generics.type_params().map(|t| {
-		let ident = &t.ident;
-		let colon_token = &t.colon_token;
-		let bounds = &t.bounds;
-
-		quote! { #ident #colon_token #bounds }
-	});
-
-	let ty_generics = trait_.generics.type_params().map(|t| {
-		let ident = &t.ident;
-		quote! { #ident }
-	});
+	let (impl_generics, ty_generics, _) = trait_.generics.split_for_impl();
 
 	quote!(
 		#crate_::std_enabled! {
-			impl < #( #impl_generics, )* > #crate_::RuntimeApiInfo
-				for dyn #trait_name < #( #ty_generics, )* >
+			impl #impl_generics #crate_::RuntimeApiInfo
+				for dyn #trait_name #ty_generics
 			{
 				#id
 				#version
@@ -559,7 +661,7 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 	let mut result = Vec::new();
 
 	for decl in decls {
-		let decl = decl.clone();
+		let orig_decl = decl.clone();
 
 		let crate_ = generate_crate_access();
 		let block_hash = quote!( <Block as #crate_::BlockT>::Hash );
@@ -574,14 +676,23 @@ fn generate_client_side_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 			errors: &mut errors,
 			trait_: &trait_,
 		}
-		.process(decl);
+		.process(orig_decl.clone());
 
 		let api_version = get_api_version(&found_attributes);
 
 		let runtime_info = api_version.map(|v| generate_runtime_info_impl(&decl, v))?;
 
+		let impl_ = ToClientSideDeclV2 {
+			crate_: &crate_,
+			block_hash: &block_hash,
+			found_attributes: &mut found_attributes,
+			errors: &mut errors,
+			trait_: &trait_,
+		}
+		.process(orig_decl);
+
 		result.push(quote!(
-			#crate_::std_enabled! { #decl }
+			#crate_::std_enabled! { #decl #impl_ }
 			#runtime_info
 			#( #errors )*
 		));
@@ -659,35 +770,6 @@ impl<'ast> Visit<'ast> for CheckTraitDecl {
 		}
 
 		visit::visit_fn_arg(self, input);
-	}
-
-	fn visit_generic_param(&mut self, input: &'ast GenericParam) {
-		match input {
-			GenericParam::Type(ty) if ty.ident == BLOCK_GENERIC_IDENT =>
-				self.errors.push(Error::new(
-					input.span(),
-					"`Block: BlockT` generic parameter will be added automatically by the \
-						`decl_runtime_apis!` macro!",
-				)),
-			_ => {},
-		}
-
-		visit::visit_generic_param(self, input);
-	}
-
-	fn visit_trait_bound(&mut self, input: &'ast TraitBound) {
-		if let Some(last_ident) = input.path.segments.last().map(|v| &v.ident) {
-			if last_ident == "BlockT" || last_ident == BLOCK_GENERIC_IDENT {
-				self.errors.push(Error::new(
-					input.span(),
-					"`Block: BlockT` generic parameter will be added automatically by the \
-						`decl_runtime_apis!` macro! If you try to use a different trait than the \
-						substrate `Block` trait, please rename it locally.",
-				))
-			}
-		}
-
-		visit::visit_trait_bound(self, input)
 	}
 }
 

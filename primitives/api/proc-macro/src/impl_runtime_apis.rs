@@ -475,11 +475,9 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 /// This requires us to replace the runtime `Block` with the node `Block`,
 /// `impl Api for Runtime` with `impl Api for RuntimeApi` and replace the method implementations
 /// with code that calls into the runtime.
-struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
-	runtime_block: &'a TypePath,
-}
+struct ApiRuntimeImplToApiRuntimeApiImpl;
 
-impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
+impl ApiRuntimeImplToApiRuntimeApiImpl {
 	/// Process the given item implementation.
 	fn process(mut self, input: ItemImpl) -> ItemImpl {
 		let mut input = self.fold_item_impl(input);
@@ -559,14 +557,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	}
 }
 
-impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
-	fn fold_type_path(&mut self, input: TypePath) -> TypePath {
-		let new_ty_path =
-			if input == *self.runtime_block { parse_quote!(__SrApiBlock__) } else { input };
-
-		fold::fold_type_path(self, new_ty_path)
-	}
-
+impl Fold for ApiRuntimeImplToApiRuntimeApiImpl {
 	fn fold_item_impl(&mut self, mut input: ItemImpl) -> ItemImpl {
 		// All this `UnwindSafe` magic below here is required for this rust bug:
 		// https://github.com/rust-lang/rust/issues/24159
@@ -620,13 +611,12 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 
 	for impl_ in impls {
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
-		let runtime_block = extract_block_type_from_trait_path(impl_trait_path)?;
 		let mut runtime_mod_path = extend_with_runtime_decl_path(impl_trait_path.clone());
 		// remove the trait to get just the module path
 		runtime_mod_path.segments.pop();
 
 		let processed_impl =
-			ApiRuntimeImplToApiRuntimeApiImpl { runtime_block }.process(impl_.clone());
+			ApiRuntimeImplToApiRuntimeApiImpl.process(impl_.clone());
 
 		result.push(processed_impl);
 	}
@@ -725,7 +715,7 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let base_runtime_api = generate_runtime_api_base_structures()?;
 	let runtime_api_versions = generate_runtime_api_versions(api_impls)?;
 	let wasm_interface = generate_wasm_interface(api_impls)?;
-	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
+	// let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
 
 	#[cfg(feature = "frame-metadata")]
 	let runtime_metadata = crate::runtime_metadata::generate_impl_runtime_metadata(api_impls)?;
@@ -736,8 +726,6 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 		#base_runtime_api
 
 		#api_impls_for_runtime
-
-		#api_impls_for_runtime_api
 
 		#runtime_api_versions
 

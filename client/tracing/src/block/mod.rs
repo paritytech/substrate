@@ -176,7 +176,7 @@ where
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata<Block>,
+	Client::Api: Metadata,
 {
 	/// Create a new `BlockExecutor`
 	pub fn new(
@@ -226,7 +226,8 @@ where
 			if let Err(e) = dispatcher::with_default(&dispatch, || {
 				let span = tracing::info_span!(target: TRACE_TARGET, "trace_block");
 				let _enter = span.enter();
-				self.client.runtime_api().execute_block(parent_hash, block)
+				// self.client.runtime_api().execute_block(parent_hash, block)
+				Ok::<_, String>(todo!())
 			}) {
 				return Err(Error::Dispatch(format!(
 					"Failed to collect traces and execute block: {}",

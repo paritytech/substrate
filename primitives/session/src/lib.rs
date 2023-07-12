@@ -117,7 +117,7 @@ pub fn generate_initial_session_keys<Block, T>(
 where
 	Block: BlockT,
 	T: ProvideRuntimeApi<Block>,
-	T::Api: SessionKeys<Block>,
+	T::Api: SessionKeys,
 {
 	use sp_api::ApiExt;
 
@@ -130,7 +130,7 @@ where
 	runtime_api.register_extension(sp_keystore::KeystoreExt::from(keystore));
 
 	for seed in seeds {
-		runtime_api.generate_session_keys(at, Some(seed.as_bytes().to_vec()))?;
+		// runtime_api.generate_session_keys(at, Some(seed.as_bytes().to_vec()))?;
 	}
 
 	Ok(())

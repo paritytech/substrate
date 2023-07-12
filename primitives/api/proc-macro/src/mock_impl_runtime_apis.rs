@@ -132,15 +132,6 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 		}
 
 		impl #crate_::Core<#block_type> for #self_ty {
-			fn __runtime_api_internal_call_api_at(
-				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
-				_: std::vec::Vec<u8>,
-				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
-			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
-				unimplemented!("`__runtime_api_internal_call_api_at` not implemented for runtime api mocks")
-			}
-
 			fn version(
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
@@ -232,27 +223,7 @@ struct FoldRuntimeApiImpl<'a> {
 impl<'a> FoldRuntimeApiImpl<'a> {
 	/// Process the given [`syn::ItemImpl`].
 	fn process(mut self, impl_item: syn::ItemImpl) -> syn::ItemImpl {
-		let mut impl_item = self.fold_item_impl(impl_item);
-
-		let crate_ = generate_crate_access();
-
-		let block_type = self.block_type;
-
-		impl_item.items.push(parse_quote! {
-			fn __runtime_api_internal_call_api_at(
-				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
-				_: std::vec::Vec<u8>,
-				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
-			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
-				unimplemented!(
-					"`__runtime_api_internal_call_api_at` not implemented for runtime api mocks. \
-					 Calling deprecated methods is not supported by mocked runtime api."
-				)
-			}
-		});
-
-		impl_item
+		self.fold_item_impl(impl_item)
 	}
 }
 

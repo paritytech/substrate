@@ -30,7 +30,7 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use sp_keystore::KeystorePtr;
 use sp_runtime::{
-	traits::{Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	ConsensusEngineId, RuntimeDebug,
 };
 use sp_std::{borrow::Cow, vec::Vec};
@@ -552,7 +552,7 @@ sp_api::decl_runtime_apis! {
 	///
 	/// The consensus protocol will coordinate the handoff externally.
 	#[api_version(3)]
-	pub trait GrandpaApi {
+	pub trait GrandpaApi<Block: BlockT> {
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
 		///

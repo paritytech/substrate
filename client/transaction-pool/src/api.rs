@@ -244,6 +244,7 @@ where
 		sp_tracing::within_span!(
 			sp_tracing::Level::TRACE, "runtime::validate_transaction";
 		{
+			/*
 			if api_version >= 3 {
 				runtime_api.validate_transaction(block_hash, source, uxt, block_hash)
 					.map_err(|e| Error::RuntimeApi(e.to_string()))
@@ -273,6 +274,9 @@ where
 						.map_err(|e| Error::RuntimeApi(e.to_string()))
 				}
 			}
+			*/
+
+			todo!()
 		})
 	})
 }
