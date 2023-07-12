@@ -405,10 +405,11 @@ pub mod pallet {
 		AssetSpendVoided { index: SpendIndex },
 		/// A payment happened.
 		Paid { index: SpendIndex, payment_id: <T::Paymaster as Pay>::Id },
-		/// A payment succeed, the spend removed from the storage.
-		PaymentSucceed { index: SpendIndex, payment_id: <T::Paymaster as Pay>::Id },
-		/// A payment failed.
+		/// A payment failed and can be retried.
 		PaymentFailed { index: SpendIndex, payment_id: <T::Paymaster as Pay>::Id },
+		/// A spend processed and removed from the storage. It might have been successfully paid or
+		/// it may have expired.
+		SpendProcessed { index: SpendIndex },
 	}
 
 	/// Error for the treasury pallet.
@@ -464,8 +465,6 @@ pub mod pallet {
 			} else {
 				Weight::zero()
 			}
-
-			// TODO: once in a while remove expired `Spends`
 		}
 	}
 
@@ -787,7 +786,7 @@ pub mod pallet {
 		///
 		/// Spends must be claimed within some temporal bounds. A spend may be claimed within one
 		/// [`Config::PayoutPeriod`] from the `valid_from` block.
-		/// In case of a payout failure, the spend status must be updated with the check_status
+		/// In case of a payout failure, the spend status must be updated with the `check_status`
 		/// dispatchable before retrying with the current function.
 		///
 		/// ### Parameters
@@ -820,7 +819,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Check the status of the spend.
+		/// Check the status of the spend and remove it from the storage if processed.
 		///
 		/// ## Dispatch Origin
 		///
@@ -829,7 +828,8 @@ pub mod pallet {
 		/// ## Details
 		///
 		/// The status check is a prerequisite for retrying a failed payout.
-		/// If the payout has succeed the spend is removed from the storage.
+		/// If a spend has either succeeded or expired, it is removed from the storage by this
+		/// function. In such instances, transaction fees are refunded.
 		///
 		/// ### Parameters
 		/// - `index`: The spend index.
@@ -837,31 +837,43 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// Emits [`Event::PaymentFailed`] if the spend payout has failed.
-		/// Emits [`Event::PaymentSucceed`] if the spend payout has succeed.
+		/// Emits [`Event::SpendProcessed`] if the spend payout has succeed.
 		#[pallet::call_index(7)]
 		#[pallet::weight(T::WeightInfo::check_status())]
-		pub fn check_status(origin: OriginFor<T>, index: SpendIndex) -> DispatchResult {
+		pub fn check_status(origin: OriginFor<T>, index: SpendIndex) -> DispatchResultWithPostInfo {
+			use PaymentState as State;
+			use PaymentStatus as Status;
+
 			ensure_signed(origin)?;
 			let mut spend = Spends::<T, I>::get(index).ok_or(Error::<T, I>::InvalidIndex)?;
+			let now = frame_system::Pallet::<T>::block_number();
+
+			if now > spend.expire_at && !matches!(spend.status, State::Attempted { .. }) {
+				// spend has expired and no further status update is expected.
+				Spends::<T, I>::remove(index);
+				Self::deposit_event(Event::<T, I>::SpendProcessed { index });
+				return Ok(Pays::No.into())
+			}
 
 			let payment_id = match spend.status {
-				PaymentState::Attempted { id } => id,
+				State::Attempted { id } => id,
 				_ => return Err(Error::<T, I>::NotAttempted.into()),
 			};
 
 			match T::Paymaster::check_payment(payment_id) {
-				PaymentStatus::Failure => {
+				Status::Failure => {
 					spend.status = PaymentState::Failed;
 					Spends::<T, I>::insert(index, spend);
 					Self::deposit_event(Event::<T, I>::PaymentFailed { index, payment_id });
 				},
-				PaymentStatus::Success => {
+				Status::Success | Status::Unknown => {
 					Spends::<T, I>::remove(index);
-					Self::deposit_event(Event::<T, I>::PaymentSucceed { index, payment_id });
+					Self::deposit_event(Event::<T, I>::SpendProcessed { index });
+					return Ok(Pays::No.into())
 				},
-				_ => return Err(Error::<T, I>::Inconclusive.into()),
+				Status::InProgress => return Err(Error::<T, I>::Inconclusive.into()),
 			}
-			Ok(())
+			return Ok(Pays::Yes.into())
 		}
 
 		/// Void previously approved spend.

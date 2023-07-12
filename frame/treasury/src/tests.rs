@@ -28,7 +28,7 @@ use sp_runtime::{
 
 use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
-	pallet_prelude::GenesisBuild,
+	pallet_prelude::{GenesisBuild, Pays},
 	parameter_types,
 	traits::{
 		tokens::{ConversionFromAssetBalance, PaymentStatus},
@@ -232,6 +232,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.unwrap();
 	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
 	t.into()
+}
+
+fn get_payment_id(i: SpendIndex) -> Option<u64> {
+	let spend = Spends::<Test, _>::get(i).expect("no spend");
+	match spend.status {
+		PaymentState::Attempted { id } => Some(id),
+		_ => None,
+	}
 }
 
 #[test]
@@ -723,17 +731,12 @@ fn spend_payout_works() {
 		// beneficiary received `2` coins of asset `1`.
 		assert_eq!(paid(6, 1), 2);
 		assert_eq!(SpendCount::<Test, _>::get(), 1);
-		let spend = Spends::<Test, _>::get(0).unwrap();
-		let maybe_payment_id = match spend.status {
-			PaymentState::Attempted { id } => Some(id),
-			_ => None,
-		};
-		let payment_id = maybe_payment_id.expect("no payment attempt");
+		let payment_id = get_payment_id(0).expect("no payment attempt");
 		System::assert_last_event(Event::<Test, _>::Paid { index: 0, payment_id }.into());
 		set_status(payment_id, PaymentStatus::Success);
 		// the payment succeed.
 		assert_ok!(Treasury::check_status(RuntimeOrigin::signed(1), 0));
-		System::assert_last_event(Event::<Test, _>::PaymentSucceed { index: 0, payment_id }.into());
+		System::assert_last_event(Event::<Test, _>::SpendProcessed { index: 0 }.into());
 		// cannot payout the same spend twice.
 		assert_noop!(Treasury::payout(RuntimeOrigin::signed(1), 0), Error::<Test, _>::InvalidIndex);
 	});
@@ -746,12 +749,7 @@ fn payout_retry_works() {
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
 		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 0));
 		assert_eq!(paid(6, 1), 2);
-		let spend = Spends::<Test, _>::get(0).unwrap();
-		let maybe_payment_id = match spend.status {
-			PaymentState::Attempted { id } => Some(id),
-			_ => None,
-		};
-		let payment_id = maybe_payment_id.expect("no payment attempt");
+		let payment_id = get_payment_id(0).expect("no payment attempt");
 		// spend payment is failed
 		set_status(payment_id, PaymentStatus::Failure);
 		unpay(6, 1, 2);
@@ -805,5 +803,66 @@ fn void_spend_works() {
 		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, Some(10)));
 		assert_ok!(Treasury::void_spend(RuntimeOrigin::root(), 1));
 		assert_eq!(Spends::<Test, _>::get(1), None);
+	});
+}
+
+#[test]
+fn check_status_works() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(<Test as Config>::PayoutPeriod::get(), 5);
+		System::set_block_number(1);
+
+		// spend `0` expired and can be removed.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
+		System::set_block_number(7);
+		let info = Treasury::check_status(RuntimeOrigin::signed(1), 0).unwrap();
+		assert_eq!(info.pays_fee, Pays::No);
+		System::assert_last_event(Event::<Test, _>::SpendProcessed { index: 0 }.into());
+
+		// spend `1` payment failed and expired hence can be removed.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
+		assert_noop!(
+			Treasury::check_status(RuntimeOrigin::signed(1), 1),
+			Error::<Test, _>::NotAttempted
+		);
+		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 1));
+		let payment_id = get_payment_id(1).expect("no payment attempt");
+		set_status(payment_id, PaymentStatus::Failure);
+		// spend expired.
+		System::set_block_number(13);
+		let info = Treasury::check_status(RuntimeOrigin::signed(1), 1).unwrap();
+		assert_eq!(info.pays_fee, Pays::Yes);
+		System::assert_last_event(Event::<Test, _>::PaymentFailed { index: 1, payment_id }.into());
+		let info = Treasury::check_status(RuntimeOrigin::signed(1), 1).unwrap();
+		assert_eq!(info.pays_fee, Pays::No);
+		System::assert_last_event(Event::<Test, _>::SpendProcessed { index: 1 }.into());
+
+		// spend `2` payment succeed.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
+		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 2));
+		let payment_id = get_payment_id(2).expect("no payment attempt");
+		set_status(payment_id, PaymentStatus::Success);
+		let info = Treasury::check_status(RuntimeOrigin::signed(1), 2).unwrap();
+		assert_eq!(info.pays_fee, Pays::No);
+		System::assert_last_event(Event::<Test, _>::SpendProcessed { index: 2 }.into());
+
+		// spend `3` payment in process.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
+		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 3));
+		let payment_id = get_payment_id(3).expect("no payment attempt");
+		set_status(payment_id, PaymentStatus::InProgress);
+		assert_noop!(
+			Treasury::check_status(RuntimeOrigin::signed(1), 3),
+			Error::<Test, _>::Inconclusive
+		);
+
+		// spend `4` removed since the payment status is unknown.
+		assert_ok!(Treasury::spend(RuntimeOrigin::signed(10), 1, 2, 6, None));
+		assert_ok!(Treasury::payout(RuntimeOrigin::signed(1), 4));
+		let payment_id = get_payment_id(4).expect("no payment attempt");
+		set_status(payment_id, PaymentStatus::Unknown);
+		let info = Treasury::check_status(RuntimeOrigin::signed(1), 4).unwrap();
+		assert_eq!(info.pays_fee, Pays::No);
+		System::assert_last_event(Event::<Test, _>::SpendProcessed { index: 4 }.into());
 	});
 }
