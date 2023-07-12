@@ -290,6 +290,14 @@ benchmarks! {
 		m.step();
 	}
 
+	// This benchmarks the v13 migration step (Move contracts' reserved balance to be held instead).
+	#[pov_mode = Measured]
+	v13_migration_step {
+		let mut m = v13::Migration::<T>::default();
+	}: {
+		m.step();
+	}
+
 	// This benchmarks the weight of executing Migration::migrate to execute a noop migration.
 	#[pov_mode = Measured]
 	migration_noop {
