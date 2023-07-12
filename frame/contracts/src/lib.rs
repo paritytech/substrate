@@ -712,7 +712,7 @@ pub mod pallet {
 
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
-			log::debug!(target: LOG_TARGET, "called instantiate with code with data: {data:?}, code_len: {code_len} data_len: {data_len}");
+			log::debug!(target: LOG_TARGET, "Called instantiate_with_code with data: {data:?}, code_len: {code_len} data_len: {data_len}");
 
 			let mut debug_message =
 				if cfg!(test) { Some(DebugBufferVec::<T>::default()) } else { None };
