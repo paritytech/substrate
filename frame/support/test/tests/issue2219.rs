@@ -134,14 +134,16 @@ mod module {
 	pub type RequestLifeTime<T: Config> = StorageValue<_, u64, ValueQuery, ConstU64<0>>;
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config> {
 		pub enable_storage_role: bool,
 		pub request_life_time: u64,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			if self.enable_storage_role {
 				<Parameters<T>>::insert(Role::Storage, <RoleParameters<T>>::default());
@@ -187,7 +189,11 @@ frame_support::construct_runtime!(
 #[test]
 fn create_genesis_config() {
 	let config = RuntimeGenesisConfig {
-		module: module::GenesisConfig { request_life_time: 0, enable_storage_role: true },
+		module: module::GenesisConfig {
+			request_life_time: 0,
+			enable_storage_role: true,
+			..Default::default()
+		},
 	};
 	assert_eq!(config.module.request_life_time, 0);
 	assert!(config.module.enable_storage_role);

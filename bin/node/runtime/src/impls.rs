@@ -120,7 +120,7 @@ mod multiplier_tests {
 	use sp_runtime::{
 		assert_eq_error_rate,
 		traits::{Convert, One, Zero},
-		FixedPointNumber,
+		BuildStorage, FixedPointNumber,
 	};
 
 	use crate::{
@@ -197,8 +197,8 @@ mod multiplier_tests {
 	where
 		F: Fn() -> (),
 	{
-		let mut t: sp_io::TestExternalities = frame_system::GenesisConfig::default()
-			.build_storage::<Runtime>()
+		let mut t: sp_io::TestExternalities = frame_system::GenesisConfig::<Runtime>::default()
+			.build_storage()
 			.unwrap()
 			.into();
 		t.execute_with(|| {
