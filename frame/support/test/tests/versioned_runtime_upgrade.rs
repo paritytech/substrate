@@ -27,6 +27,7 @@ use frame_support::{
 	weights::constants::RocksDbWeight,
 };
 use frame_system::Config;
+use sp_runtime::BuildStorage;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -48,11 +49,14 @@ mod dummy_pallet {
 	pub type SomeStorage<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {}
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config> {
+		#[serde(skip)]
+		_config: sp_std::marker::PhantomData<T>,
+	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {}
 	}
 }
@@ -65,8 +69,8 @@ construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>} = 0,
-		DummyPallet: dummy_pallet::{Pallet, Config, Storage} = 1,
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>} = 0,
+		DummyPallet: dummy_pallet::{Pallet, Config<T>, Storage} = 1,
 	}
 );
 
@@ -81,7 +85,7 @@ impl frame_system::Config for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let mut ext: sp_io::TestExternalities = sp_io::TestExternalities::from(storage);
 	ext.execute_with(|| System::set_block_number(1));
 	ext

@@ -87,7 +87,7 @@ mod module1 {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I>
 	where
 		T::BlockNumber: std::fmt::Display,
 	{
@@ -196,7 +196,7 @@ mod module2 {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I>
 	where
 		T::BlockNumber: std::fmt::Display,
 	{

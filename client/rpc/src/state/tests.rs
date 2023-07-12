@@ -522,7 +522,7 @@ async fn should_return_runtime_version() {
 
 	let runtime_version = api.runtime_version(None.into()).unwrap();
 	let serialized = serde_json::to_string(&runtime_version).unwrap();
-	assert_eq!(serialized, result);
+	pretty_assertions::assert_eq!(serialized, result);
 
 	let deserialized: RuntimeVersion = serde_json::from_str(result).unwrap();
 	assert_eq!(deserialized, runtime_version);

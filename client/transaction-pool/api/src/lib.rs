@@ -29,12 +29,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
 };
-use std::{
-	collections::HashMap,
-	hash::Hash,
-	pin::Pin,
-	sync::{Arc, Weak},
-};
+use std::{collections::HashMap, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
 
 const LOG_TARGET: &str = "txpool::api";
 
@@ -354,6 +349,22 @@ pub trait LocalTransactionPool: Send + Sync {
 	) -> Result<Self::Hash, Self::Error>;
 }
 
+impl<T: LocalTransactionPool> LocalTransactionPool for Arc<T> {
+	type Block = T::Block;
+
+	type Hash = T::Hash;
+
+	type Error = T::Error;
+
+	fn submit_local(
+		&self,
+		at: <Self::Block as BlockT>::Hash,
+		xt: LocalTransactionFor<Self>,
+	) -> Result<Self::Hash, Self::Error> {
+		(**self).submit_local(at, xt)
+	}
+}
+
 /// An abstraction for [`LocalTransactionPool`]
 ///
 /// We want to use a transaction pool in [`OffchainTransactionPoolFactory`] in a `Arc` without
@@ -396,15 +407,13 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 /// the wasm execution environment to send transactions from an offchain call to the  runtime.
 #[derive(Clone)]
 pub struct OffchainTransactionPoolFactory<Block: BlockT> {
-	// To break retain cycle between `Client` and `TransactionPool` we require this
-	// extension to be a `Weak` reference.
-	pool: Weak<dyn OffchainSubmitTransaction<Block>>,
+	pool: Arc<dyn OffchainSubmitTransaction<Block>>,
 }
 
 impl<Block: BlockT> OffchainTransactionPoolFactory<Block> {
 	/// Creates a new instance using the given `tx_pool`.
-	pub fn new<T: LocalTransactionPool<Block = Block> + 'static>(tx_pool: &Arc<T>) -> Self {
-		Self { pool: Arc::downgrade(tx_pool) as Weak<_> }
+	pub fn new<T: LocalTransactionPool<Block = Block> + 'static>(tx_pool: T) -> Self {
+		Self { pool: Arc::new(tx_pool) as Arc<_> }
 	}
 
 	/// Returns an instance of [`TransactionPoolExt`] bound to the given `block_hash`.
@@ -419,7 +428,7 @@ impl<Block: BlockT> OffchainTransactionPoolFactory<Block> {
 /// Wraps a `pool` and `block_hash` to implement [`sp_core::offchain::TransactionPool`].
 struct OffchainTransactionPool<Block: BlockT> {
 	block_hash: Block::Hash,
-	pool: Weak<dyn OffchainSubmitTransaction<Block>>,
+	pool: Arc<dyn OffchainSubmitTransaction<Block>>,
 }
 
 impl<Block: BlockT> sp_core::offchain::TransactionPool for OffchainTransactionPool<Block> {
@@ -436,7 +445,7 @@ impl<Block: BlockT> sp_core::offchain::TransactionPool for OffchainTransactionPo
 			},
 		};
 
-		self.pool.upgrade().ok_or(())?.submit_at(self.block_hash, extrinsic)
+		self.pool.submit_at(self.block_hash, extrinsic)
 	}
 }
 
@@ -460,6 +469,29 @@ mod v1_compatible {
 	{
 		let hash: H = serde::Deserialize::deserialize(deserializer)?;
 		Ok((hash, 0))
+	}
+}
+
+/// Transaction pool that rejects all submitted transactions.
+///
+/// Could be used for example in tests.
+pub struct RejectAllTxPool<Block>(PhantomData<Block>);
+
+impl<Block> Default for RejectAllTxPool<Block> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
+
+impl<Block: BlockT> LocalTransactionPool for RejectAllTxPool<Block> {
+	type Block = Block;
+
+	type Hash = Block::Hash;
+
+	type Error = error::Error;
+
+	fn submit_local(&self, _: Block::Hash, _: Block::Extrinsic) -> Result<Self::Hash, Self::Error> {
+		Err(error::Error::ImmediatelyDropped)
 	}
 }
 

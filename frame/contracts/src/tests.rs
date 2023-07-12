@@ -52,7 +52,7 @@ use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
-	AccountId32, TokenError,
+	AccountId32, BuildStorage, TokenError,
 };
 use std::ops::Deref;
 
@@ -65,7 +65,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
@@ -486,7 +486,7 @@ impl ExtBuilder {
 		let env = Env::new().default_filter_or("runtime=debug");
 		let _ = Builder::from_env(env).is_test(true).try_init();
 		self.set_associated_consts();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Test> { balances: vec![] }
 			.assimilate_storage(&mut t)
 			.unwrap();
@@ -3755,6 +3755,19 @@ fn instantiate_with_zero_balance_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: deposit_expected,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![code_hash],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
 						account: deposit_account.clone(),
 					}),
@@ -3800,19 +3813,6 @@ fn instantiate_with_zero_balance_works() {
 						amount: min_balance,
 					}),
 					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: deposit_expected,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3865,6 +3865,19 @@ fn instantiate_with_below_existential_deposit_works() {
 		assert_eq!(
 			System::events(),
 			vec![
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
+						who: ALICE,
+						amount: deposit_expected,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![code_hash],
+				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
@@ -3921,19 +3934,6 @@ fn instantiate_with_below_existential_deposit_works() {
 						amount: 50,
 					}),
 					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
-						who: ALICE,
-						amount: deposit_expected,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -4587,10 +4587,28 @@ fn set_code_hash() {
 
 #[test]
 fn storage_deposit_limit_is_enforced() {
+	let ed = 200;
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
-	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Setting insufficient storage_deposit should fail.
+		assert_err!(
+			Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				Some((2 * ed + 3 - 1).into()), // expected deposit is 2 * ed + 3 for the call
+				Code::Upload(wasm.clone()),
+				vec![],
+				vec![],
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+			)
+			.result,
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -5591,7 +5609,7 @@ fn root_cannot_instantiate_with_code() {
 				vec![],
 				vec![],
 			),
-			DispatchError::RootNotAllowed,
+			DispatchError::BadOrigin
 		);
 	});
 }
