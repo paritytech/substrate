@@ -315,7 +315,6 @@ impl<'a> ToClientSideDecl<'a> {
 			fn __runtime_api_internal_call_api_at(
 				&self,
 				at: #block_hash,
-				context: #crate_::ExecutionContext,
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError>;
@@ -335,42 +334,13 @@ impl<'a> ToClientSideDecl<'a> {
 
 		items.into_iter().for_each(|i| match i {
 			TraitItem::Fn(method) => {
-				let (fn_decl, fn_decl_ctx) = self.fold_trait_item_fn(method, trait_generics_num);
+				let fn_decl = self.create_method_decl(method, trait_generics_num);
 				result.push(fn_decl.into());
-				result.push(fn_decl_ctx.into());
 			},
 			r => result.push(r),
 		});
 
 		result
-	}
-
-	fn fold_trait_item_fn(
-		&mut self,
-		method: TraitItemFn,
-		trait_generics_num: usize,
-	) -> (TraitItemFn, TraitItemFn) {
-		let crate_ = self.crate_;
-		let context = quote!( #crate_::ExecutionContext::OffchainCall(None) );
-		let fn_decl = self.create_method_decl(method.clone(), context, trait_generics_num);
-		let fn_decl_ctx = self.create_method_decl_with_context(method, trait_generics_num);
-
-		(fn_decl, fn_decl_ctx)
-	}
-
-	fn create_method_decl_with_context(
-		&mut self,
-		method: TraitItemFn,
-		trait_generics_num: usize,
-	) -> TraitItemFn {
-		let crate_ = self.crate_;
-		let context_arg: syn::FnArg = parse_quote!( context: #crate_::ExecutionContext );
-		let mut fn_decl_ctx = self.create_method_decl(method, quote!(context), trait_generics_num);
-		fn_decl_ctx.sig.ident =
-			Ident::new(&format!("{}_with_context", &fn_decl_ctx.sig.ident), Span::call_site());
-		fn_decl_ctx.sig.inputs.insert(2, context_arg);
-
-		fn_decl_ctx
 	}
 
 	/// Takes the method declared by the user and creates the declaration we require for the runtime
@@ -379,7 +349,6 @@ impl<'a> ToClientSideDecl<'a> {
 	fn create_method_decl(
 		&mut self,
 		mut method: TraitItemFn,
-		context: TokenStream,
 		trait_generics_num: usize,
 	) -> TraitItemFn {
 		let params = match extract_parameter_names_types_and_borrows(
@@ -467,7 +436,6 @@ impl<'a> ToClientSideDecl<'a> {
 				<Self as #trait_name<#( #underscores ),*>>::__runtime_api_internal_call_api_at(
 					self,
 					__runtime_api_at_param__,
-					#context,
 					__runtime_api_impl_params_encoded__,
 					&|_version| {
 						#(

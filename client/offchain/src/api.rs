@@ -25,8 +25,8 @@ pub use http::SharedClient;
 use libp2p::{Multiaddr, PeerId};
 use sp_core::{
 	offchain::{
-		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueMultiaddr,
-		OpaqueNetworkState, StorageKind, Timestamp,
+		self, HttpError, HttpRequestId, HttpRequestStatus, OpaqueMultiaddr, OpaqueNetworkState,
+		Timestamp,
 	},
 	OpaquePeerId,
 };
@@ -35,110 +35,6 @@ pub use sp_offchain::STORAGE_PREFIX;
 mod http;
 
 mod timestamp;
-
-fn unavailable_yet<R: Default>(name: &str) -> R {
-	tracing::error!(
-		target: super::LOG_TARGET,
-		"The {:?} API is not available for offchain workers yet. Follow \
-		https://github.com/paritytech/substrate/issues/1458 for details",
-		name
-	);
-	Default::default()
-}
-
-const LOCAL_DB: &str = "LOCAL (fork-aware) DB";
-
-/// Offchain DB reference.
-#[derive(Debug, Clone)]
-pub struct Db<Storage> {
-	/// Persistent storage database.
-	persistent: Storage,
-}
-
-impl<Storage: OffchainStorage> Db<Storage> {
-	/// Create new instance of Offchain DB.
-	pub fn new(persistent: Storage) -> Self {
-		Self { persistent }
-	}
-
-	/// Create new instance of Offchain DB, backed by given backend.
-	pub fn factory_from_backend<Backend, Block>(
-		backend: &Backend,
-	) -> Option<Box<dyn sc_client_api::execution_extensions::DbExternalitiesFactory>>
-	where
-		Backend: sc_client_api::Backend<Block, OffchainStorage = Storage>,
-		Block: sp_runtime::traits::Block,
-		Storage: 'static,
-	{
-		sc_client_api::Backend::offchain_storage(backend).map(|db| Box::new(Self::new(db)) as _)
-	}
-}
-
-impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
-	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		tracing::debug!(
-			target: "offchain-worker::storage",
-			?kind,
-			key = ?array_bytes::bytes2hex("", key),
-			value = ?array_bytes::bytes2hex("", value),
-			"Write",
-		);
-		match kind {
-			StorageKind::PERSISTENT => self.persistent.set(STORAGE_PREFIX, key, value),
-			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
-	}
-
-	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		tracing::debug!(
-			target: "offchain-worker::storage",
-			?kind,
-			key = ?array_bytes::bytes2hex("", key),
-			"Clear",
-		);
-		match kind {
-			StorageKind::PERSISTENT => self.persistent.remove(STORAGE_PREFIX, key),
-			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
-	}
-
-	fn local_storage_compare_and_set(
-		&mut self,
-		kind: StorageKind,
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool {
-		tracing::debug!(
-			target: "offchain-worker::storage",
-			?kind,
-			key = ?array_bytes::bytes2hex("", key),
-			new_value = ?array_bytes::bytes2hex("", new_value),
-			old_value = ?old_value.as_ref().map(|s| array_bytes::bytes2hex("", s)),
-			"CAS",
-		);
-		match kind {
-			StorageKind::PERSISTENT =>
-				self.persistent.compare_and_set(STORAGE_PREFIX, key, old_value, new_value),
-			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		}
-	}
-
-	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		let result = match kind {
-			StorageKind::PERSISTENT => self.persistent.get(STORAGE_PREFIX, key),
-			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
-		};
-		tracing::debug!(
-			target: "offchain-worker::storage",
-			?kind,
-			key = ?array_bytes::bytes2hex("", key),
-			result = ?result.as_ref().map(|s| array_bytes::bytes2hex("", s)),
-			"Read",
-		);
-		result
-	}
-}
 
 /// Asynchronous offchain API.
 ///
@@ -329,7 +225,7 @@ mod tests {
 		config::MultiaddrWithPeerId, types::ProtocolName, NetworkPeers, NetworkStateInfo,
 		ReputationChange,
 	};
-	use sp_core::offchain::{DbExternalities, Externalities};
+	use sp_core::offchain::{storage::OffchainDb, DbExternalities, Externalities, StorageKind};
 	use std::time::SystemTime;
 
 	pub(super) struct TestNetwork();
@@ -418,8 +314,8 @@ mod tests {
 		AsyncApi::new(mock, false, shared_client)
 	}
 
-	fn offchain_db() -> Db<LocalStorage> {
-		Db::new(LocalStorage::new_test())
+	fn offchain_db() -> OffchainDb<LocalStorage> {
+		OffchainDb::new(LocalStorage::new_test())
 	}
 
 	#[test]

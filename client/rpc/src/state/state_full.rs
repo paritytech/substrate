@@ -198,13 +198,7 @@ where
 			.and_then(|block| {
 				self.client
 					.executor()
-					.call(
-						block,
-						&method,
-						&call_data,
-						self.client.execution_extensions().strategies().other,
-						CallContext::Offchain,
-					)
+					.call(block, &method, &call_data, CallContext::Offchain)
 					.map(Into::into)
 			})
 			.map_err(client_err)

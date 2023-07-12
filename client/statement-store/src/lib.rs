@@ -59,7 +59,9 @@ use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, traits::SpawnNamed, Decode, Encode};
 use sp_runtime::traits::Block as BlockT;
 use sp_statement_store::{
-	runtime_api::{InvalidStatement, StatementSource, ValidStatement, ValidateStatement},
+	runtime_api::{
+		InvalidStatement, StatementSource, StatementStoreExt, ValidStatement, ValidateStatement,
+	},
 	AccountId, BlockHash, Channel, DecryptionKey, Hash, NetworkPriority, Proof, Result, Statement,
 	SubmitResult, Topic,
 };
@@ -491,8 +493,7 @@ impl Store {
 			+ 'static,
 		Client::Api: ValidateStatement<Block>,
 	{
-		let store = Arc::new(Self::new(path, options, client.clone(), prometheus)?);
-		client.execution_extensions().register_statement_store(store.clone());
+		let store = Arc::new(Self::new(path, options, client, prometheus)?);
 
 		// Perform periodic statement store maintenance
 		let worker_store = store.clone();
@@ -695,6 +696,11 @@ impl Store {
 	#[cfg(test)]
 	fn set_time(&mut self, time: u64) {
 		self.time_override = Some(time);
+	}
+
+	/// Returns `self` as [`StatementStoreExt`].
+	pub fn as_statement_store_ext(self: Arc<Self>) -> StatementStoreExt {
+		StatementStoreExt::new(self)
 	}
 }
 
