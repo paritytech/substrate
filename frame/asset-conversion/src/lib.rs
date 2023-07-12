@@ -710,7 +710,7 @@ pub mod pallet {
 			if let Some(amount_out_min) = amount_out_min {
 				ensure!(
 					amount_out >= amount_out_min,
-					Error::<T>::ProvidedMaximumNotSufficientForSwap
+					Error::<T>::ProvidedMinimumNotSufficientForSwap
 				);
 			}
 
