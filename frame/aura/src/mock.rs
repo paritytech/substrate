@@ -26,11 +26,7 @@ use frame_support::{
 };
 use sp_consensus_aura::{ed25519::AuthorityId, AuthorityIndex};
 use sp_core::H256;
-use sp_runtime::{
-	testing::{UintAuthorityId},
-	traits::IdentityLookup,
-	BuildStorage,
-};
+use sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup, BuildStorage};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
