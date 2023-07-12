@@ -750,7 +750,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn initialize_genesis_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
+	pub fn initialize_genesis_authorities(authorities: &[(AuthorityId, BabeAuthorityWeight)]) {
 		if !authorities.is_empty() {
 			assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
 			let bounded_authorities =

@@ -511,7 +511,7 @@ impl<T: Config> Pallet<T> {
 
 	// Perform module initialization, abstracted so that it can be called either through genesis
 	// config builder or through `on_genesis_session`.
-	fn initialize(authorities: &AuthorityList) {
+	pub fn initialize(authorities: &AuthorityList) {
 		if !authorities.is_empty() {
 			assert!(Self::grandpa_authorities().is_empty(), "Authorities are already initialized!");
 			Self::set_grandpa_authorities(authorities);

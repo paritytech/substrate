@@ -719,7 +719,7 @@ impl<T: Config> Pallet<T> {
 		res
 	}
 
-	fn initialize_keys(keys: &[T::AuthorityId]) {
+	pub fn initialize_keys(keys: &[T::AuthorityId]) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
 			let bounded_keys = <BoundedSlice<'_, _, T::MaxKeys>>::try_from(keys)

@@ -97,7 +97,7 @@ impl<T: Config> Pallet<T> {
 		NextKeys::<T>::get()
 	}
 
-	fn initialize_keys(keys: &Vec<AuthorityId>) {
+	pub fn initialize_keys(keys: &Vec<AuthorityId>) {
 		if !keys.is_empty() {
 			assert!(Keys::<T>::get().is_empty(), "Keys are already initialized!");
 
