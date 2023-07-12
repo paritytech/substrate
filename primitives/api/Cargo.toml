@@ -18,6 +18,7 @@ sp-api-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
 sp-core = { version = "21.0.0", default-features = false, path = "../core" }
 sp-std = { version = "8.0.0", default-features = false, path = "../std" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../runtime" }
+sp-externalities = { version = "0.19.0", default-features = false, optional = true, path = "../externalities" }
 sp-version = { version = "22.0.0", default-features = false, path = "../version" }
 sp-state-machine = { version = "0.28.0", default-features = false, optional = true, path = "../state-machine" }
 sp-trie = { version = "22.0.0", default-features = false, optional = true, path = "../trie" }
@@ -35,6 +36,7 @@ default = ["std"]
 std = [
 	"codec/std",
 	"sp-core/std",
+	"sp-externalities",
 	"sp-std/std",
 	"sp-runtime/std",
 	"sp-state-machine/std",
