@@ -514,14 +514,7 @@ benchmarks_instance_pallet! {
 			SystemOrigin::Signed(new_account.clone()).into(),
 			asset_id
 		).is_ok());
-		// check reserved balance of the caller...
-		if T::AssetAccountDeposit::get() > DepositBalanceOf::<T, I>::zero() {
-			// `touch` should reserve some balance of the caller if `AssetAccountDeposit` is required.
-			assert!(!T::Currency::reserved_balance(&new_account).is_zero());
-		} else {
-			// `touch` should not reserve any balance of the caller if no `AssetAccountDeposit` is required.
-			assert!(T::Currency::reserved_balance(&new_account).is_zero());
-		}
+		assert_eq!(T::Currency::reserved_balance(&new_account), T::AssetAccountDeposit::get());
 		// ...and also create an `Account` entry.
 		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
 	}: _(SystemOrigin::Signed(new_account.clone()), asset_id, true)
