@@ -26,7 +26,7 @@ use sp_std::marker::PhantomData;
 
 /// EXPERIMENTAL: The API of this feature may change.
 ///
-/// Make it easier to write versioned runtime upgrades.
+/// Make it easier to write versioned runtime upgrades .
 ///
 /// [`VersionedRuntimeUpgrade`] allows developers to write migrations without worrying about
 /// checking and setting storage versions. Instead, the developer wraps their migration in this
