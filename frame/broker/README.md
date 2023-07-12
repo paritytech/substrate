@@ -22,7 +22,8 @@ price fixed, unsold assigned to instapool, system cores reserved -/
 
 ## TODO
 
-- Nicer API for price finding; should include auction-sell-out info
+- Dropping out of date storage
+- Events
 
 - Benchmarks
 - Weights

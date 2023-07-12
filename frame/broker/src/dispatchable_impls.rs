@@ -105,9 +105,12 @@ impl<T: Config> Pallet<T> {
 		ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
 		ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
 
+		let old_core = core;
+		let core = sale.first_core + sale.cores_sold;
 		Self::charge(&who, record.price)?;
 		Self::deposit_event(Event::Renewed {
 			who,
+			old_core,
 			core,
 			price: record.price,
 			begin: sale.region_begin,
@@ -115,7 +118,6 @@ impl<T: Config> Pallet<T> {
 			workload: workload.clone(),
 		});
 
-		let core = sale.first_core + sale.cores_sold;
 		sale.cores_sold.saturating_inc();
 
 		Workplan::<T>::insert((record.begin, core), &workload);
@@ -168,18 +170,17 @@ impl<T: Config> Pallet<T> {
 		ensure!(pivot < region.end, Error::<T>::PivotTooLate);
 
 		region.paid = None;
-		let new_region_id = RegionId { begin: pivot, ..region_id.clone() };
-		let new_region = RegionRecord { end: pivot, ..region.clone() };
+		let new_region_ids = (region_id, RegionId { begin: pivot, ..region_id.clone() });
 
-		Regions::<T>::insert(&region_id, &new_region);
-		Regions::<T>::insert(&new_region_id, &region);
-		Self::deposit_event(Event::Partitioned { region_id, pivot, new_region_id });
+		Regions::<T>::insert(&new_region_ids.0, &RegionRecord { end: pivot, ..region.clone() });
+		Regions::<T>::insert(&new_region_ids.1, &region);
+		Self::deposit_event(Event::Partitioned { old_region_id: region_id, new_region_ids });
 
-		Ok((region_id, new_region_id))
+		Ok(new_region_ids)
 	}
 
 	pub(crate) fn do_interlace(
-		mut region_id: RegionId,
+		region_id: RegionId,
 		maybe_check_owner: Option<T::AccountId>,
 		pivot: CorePart,
 	) -> Result<(RegionId, RegionId), Error<T>> {
@@ -193,15 +194,14 @@ impl<T: Config> Pallet<T> {
 		ensure!(!pivot.is_void(), Error::<T>::NullPivot);
 		ensure!(pivot != region_id.part, Error::<T>::CompletePivot);
 
-		let antipivot = region_id.part ^ pivot;
-		region_id.part = pivot;
-		Regions::<T>::insert(&region_id, &region);
-		let new_region_id = RegionId { part: antipivot, ..region_id };
-		Regions::<T>::insert(&new_region_id, &region);
+		let one = RegionId { part: pivot, ..region_id };
+		Regions::<T>::insert(&one, &region);
+		let other = RegionId { part: region_id.part ^ pivot, ..region_id };
+		Regions::<T>::insert(&other, &region);
 
-		Self::deposit_event(Event::Interlaced { region_id, pivot, new_region_id });
-
-		Ok((region_id, new_region_id))
+		let new_region_ids = (one, other);
+		Self::deposit_event(Event::Interlaced { old_region_id: region_id, new_region_ids });
+		Ok(new_region_ids)
 	}
 
 	pub(crate) fn do_assign(

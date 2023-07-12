@@ -152,53 +152,89 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		Transferred {
+		/// A Region of Bulk Coretime has been purchased.
+		Purchased {
+			/// The identity of the purchaser.
+			who: T::AccountId,
+			/// The identity of the Region.
 			region_id: RegionId,
+			/// The price paid for this Region.
+			price: BalanceOf<T>,
+			/// The duration of the Region.
+			length: Timeslice,
+		},
+		/// The workload of a core has become renewable.
+		Renewable {
+			/// The core whose workload can be renewed.
+			core: CoreIndex,
+			/// The price at which the workload can be renewed.
+			price: BalanceOf<T>,
+			/// The time at which the workload would recommence of this renewal. The call to renew
+			/// cannot happen before the beginning of the interlude prior to the sale for regions
+			/// which begin at this time.
+			begin: Timeslice,
+			/// The actual workload which can be renewed.
+			workload: Schedule,
+		},
+		/// A workload has been renewed.
+		Renewed {
+			/// The identity of the renewer.
+			who: T::AccountId,
+			/// The price paid for this renewal.
+			price: BalanceOf<T>,
+			/// The index of the core on which the `workload` was previously scheduled.
+			old_core: CoreIndex,
+			/// The index of the core on which the renewed `workload` has been scheduled.
+			core: CoreIndex,
+			/// The time at which the `workload` will begin on the `core`.
+			begin: Timeslice,
+			/// The number of timeslices for which this `workload` is newly scheduled.
+			length: Timeslice,
+			/// The workload which was renewed.
+			workload: Schedule,
+		},
+		/// Ownership of a Region has been transferred.
+		Transferred {
+			/// The Region which has been transferred.
+			region_id: RegionId,
+			/// The old owner of the Region.
 			old_owner: T::AccountId,
+			/// The new owner of the Region.
 			owner: T::AccountId,
 		},
+		/// A Region has been split into two non-overlapping Regions.
 		Partitioned {
-			region_id: RegionId,
-			pivot: Timeslice,
-			new_region_id: RegionId,
+			/// The Region which was split.
+			old_region_id: RegionId,
+			/// The new Regions into which it became.
+			new_region_ids: (RegionId, RegionId),
 		},
+		/// A Region has been converted into two overlapping Regions each of lesser regularity.
 		Interlaced {
-			region_id: RegionId,
-			pivot: CorePart,
-			new_region_id: RegionId,
+			/// The Region which was interlaced.
+			old_region_id: RegionId,
+			/// The new Regions into which it became.
+			new_region_ids: (RegionId, RegionId),
 		},
+		/// A Region has been assigned to a particular task.
 		Assigned {
+			/// The Region which was assigned.
 			region_id: RegionId,
+			/// The task to which the Region was assigned.
 			task: TaskId,
 		},
-		Dropped {
-			region_id: RegionId,
-		},
+		/// A Region has been added to the Instantaneous Coretime Pool.
 		Pooled {
+			/// The Region which was added to the Instantaneous Coretime Pool.
 			region_id: RegionId,
 		},
-		Renewable {
-			core: CoreIndex,
-			price: BalanceOf<T>,
-			begin: Timeslice,
-			workload: Schedule,
-		},
-		Renewed {
-			who: T::AccountId,
-			core: CoreIndex,
-			price: BalanceOf<T>,
-			begin: Timeslice,
-			length: Timeslice,
-			workload: Schedule,
-		},
-		Purchased {
-			who: T::AccountId,
+		/// A Region has been dropped due to being out of date.
+		Dropped {
+			/// The Region which no longer exists.
 			region_id: RegionId,
-			price: BalanceOf<T>,
-			length: Timeslice,
 		},
 	}
-
+	
 	#[pallet::error]
 	#[derive(PartialEq)]
 	pub enum Error<T> {
