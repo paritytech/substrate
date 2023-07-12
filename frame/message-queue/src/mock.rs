@@ -31,6 +31,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -43,7 +44,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -294,7 +295,7 @@ where
 	WeightForCall::take();
 	QueueChanges::take();
 	NumMessagesErrored::take();
-	let t = frame_system::GenesisConfig::default().build_storage::<T>().unwrap();
+	let t = frame_system::GenesisConfig::<T>::default().build_storage().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| frame_system::Pallet::<T>::set_block_number(1.into()));
 	ext
