@@ -40,7 +40,6 @@ fn benchmark_pallet(steps: u32, repeat: u32, should_work: bool) {
 		.args(["--pallet", "frame-benchmarking", "--extrinsic", "addition"])
 		.args(["--steps", &format!("{}", steps), "--repeat", &format!("{}", repeat)])
 		.args([
-			"--execution=wasm",
 			"--wasm-execution=compiled",
 			"--no-storage-info",
 			"--no-median-slopes",
