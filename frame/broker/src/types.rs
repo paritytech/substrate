@@ -143,6 +143,9 @@ pub type AllowedRenewalRecordOf<T> = AllowedRenewalRecord<BalanceOf<T>>;
 /// General status of the system.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct StatusRecord {
+	/// The total number of cores which can be assigned (one plus the maximum index which can
+	/// be used in `Coretime::assign`).
+	pub core_count: CoreIndex,
 	/// The current size of the Instantaneous Coretime Pool, measured in
 	/// Regularity Parts or 1/80th of a single block of a Polkadot Core.
 	pub pool_size: PartCount,
@@ -218,9 +221,6 @@ pub type LeasesRecordOf<T> = LeasesRecord<<T as Config>::MaxLeasedCores>;
 /// Configuration of this pallet.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ConfigRecord<BlockNumber> {
-	/// The total number of cores which can be assigned (one plus the maximum index which can
-	/// be used in `Coretime::assign`).
-	pub core_count: CoreIndex,
 	/// The number of timeslices in advance which scheduling should be fixed and the
 	/// `Coretime::assign` API used to inform the Relay-chain.
 	pub advance_notice: Timeslice,
@@ -238,6 +238,8 @@ pub struct ConfigRecord<BlockNumber> {
 	pub limit_cores_offered: Option<CoreIndex>,
 	/// The amount by which the renewal price increases each sale period.
 	pub renewal_bump: Perbill,
+	/// The duration by which rewards for contributions to the InstaPool must be collected.
+	pub contribution_timeout: Timeslice,
 }
 pub type ConfigRecordOf<T> = ConfigRecord<
 	<T as SConfig>::BlockNumber,

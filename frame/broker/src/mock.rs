@@ -218,7 +218,6 @@ pub struct TestExt(ConfigRecordOf<Test>);
 impl TestExt {
 	pub fn new() -> Self {
 		Self(ConfigRecord {
-			core_count: 1,
 			advance_notice: 1,
 			interlude_length: 1,
 			leadin_length: 1,
@@ -226,12 +225,8 @@ impl TestExt {
 			limit_cores_offered: None,
 			region_length: 3,
 			renewal_bump: Perbill::from_percent(10),
+			contribution_timeout: 5,
 		})
-	}
-
-	pub fn core_count(mut self, core_count: CoreIndex) -> Self {
-		self.0.core_count = core_count;
-		self
 	}
 
 	pub fn advance_notice(mut self, advance_notice: Timeslice) -> Self {
@@ -266,6 +261,11 @@ impl TestExt {
 
 	pub fn renewal_bump(mut self, renewal_bump: Perbill) -> Self {
 		self.0.renewal_bump = renewal_bump;
+		self
+	}
+
+	pub fn contribution_timeout(mut self, contribution_timeout: Timeslice) -> Self {
+		self.0.contribution_timeout = contribution_timeout;
 		self
 	}
 

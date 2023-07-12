@@ -40,6 +40,10 @@ pub trait WeightInfo {
 	fn pool() -> Weight;
 	fn claim_revenue(m: u32,) -> Weight;
 	fn purchase_credit() -> Weight;
+	fn drop_region() -> Weight;
+	fn drop_contribution() -> Weight;
+	fn drop_history() -> Weight;
+	fn request_core_count() -> Weight;
 }
 
 /// Weights for `pallet-broker` using the Substrate node and recommended hardware.
@@ -59,6 +63,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn pool() -> Weight { Weight::from_parts(123, 456) }
 	fn claim_revenue(_: u32,) -> Weight { Weight::from_parts(123, 456) }
 	fn purchase_credit() -> Weight { Weight::from_parts(123, 456) }
+	fn drop_region() -> Weight { Weight::from_parts(123, 456) }
+	fn drop_contribution() -> Weight { Weight::from_parts(123, 456) }
+	fn drop_history() -> Weight { Weight::from_parts(123, 456) }
+	fn request_core_count() -> Weight { Weight::from_parts(123, 456) }
 }
 
 // For backwards compatibility and tests
@@ -77,4 +85,8 @@ impl WeightInfo for () {
 	fn pool() -> Weight { Weight::from_parts(123, 456) }
 	fn claim_revenue(_: u32,) -> Weight { Weight::from_parts(123, 456) }
 	fn purchase_credit() -> Weight { Weight::from_parts(123, 456) }
+	fn drop_region() -> Weight { Weight::from_parts(123, 456) }
+	fn drop_contribution() -> Weight { Weight::from_parts(123, 456) }
+	fn drop_history() -> Weight { Weight::from_parts(123, 456) }
+	fn request_core_count() -> Weight { Weight::from_parts(123, 456) }
 }

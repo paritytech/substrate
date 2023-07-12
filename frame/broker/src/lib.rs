@@ -47,7 +47,7 @@ pub use utils::*;
 pub mod pallet {
 	use super::*;
 	use frame_support::{
-		pallet_prelude::{*, DispatchResult},
+		pallet_prelude::{*, DispatchResult, DispatchResultWithPostInfo},
 		traits::{fungible::{Credit, Mutate, Balanced}, OnUnbalanced, EnsureOrigin},
 		PalletId,
 	};
@@ -271,6 +271,10 @@ pub mod pallet {
 		UnknownContribution,
 		InvalidContributions,
 		IncompleteAssignment,
+		/// An item cannot be dropped because it is still valid.
+		StillValid,
+		/// The history item does not exist.
+		NoHistory,
 	}
 
 	#[pallet::hooks]
@@ -312,9 +316,9 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		pub fn start_sales(origin: OriginFor<T>, initial_price: BalanceOf<T>) -> DispatchResult {
+		pub fn start_sales(origin: OriginFor<T>, initial_price: BalanceOf<T>, core_count: CoreIndex) -> DispatchResult {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;
-			Self::do_start_sales(initial_price)?;
+			Self::do_start_sales(initial_price, core_count)?;
 			Ok(())
 		}
 
@@ -407,6 +411,43 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_purchase_credit(who, amount, beneficiary)?;
+			Ok(())
+		}
+
+		#[pallet::call_index(14)]
+		pub fn drop_region(
+			origin: OriginFor<T>,
+			region_id: RegionId,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+			Self::do_drop_region(region_id)?;
+			Ok(Pays::No.into())
+		}
+
+		#[pallet::call_index(15)]
+		pub fn drop_contribution(
+			origin: OriginFor<T>,
+			region_id: RegionId,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+			Self::do_drop_contribution(region_id)?;
+			Ok(Pays::No.into())
+		}
+
+		#[pallet::call_index(16)]
+		pub fn drop_history(
+			origin: OriginFor<T>,
+			when: Timeslice,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+			Self::do_drop_history(when)?;
+			Ok(Pays::No.into())
+		}
+
+		#[pallet::call_index(17)]
+		pub fn request_core_count(origin: OriginFor<T>, core_count: CoreIndex) -> DispatchResult {
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
+			Self::do_request_core_count(core_count)?;
 			Ok(())
 		}
 	}

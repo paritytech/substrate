@@ -16,6 +16,13 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	pub(crate) fn do_request_core_count(
+		core_count: CoreIndex,
+	) -> DispatchResult {
+		T::Coretime::request_core_count(core_count);
+		Ok(())
+	}
+
 	pub(crate) fn do_reserve(schedule: Schedule) -> DispatchResult {
 		let mut r = Reservations::<T>::get();
 		r.try_push(schedule).map_err(|_| Error::<T>::TooManyReservations)?;
@@ -40,9 +47,11 @@ impl<T: Config> Pallet<T> {
 
 	pub(crate) fn do_start_sales(
 		reserve_price: BalanceOf<T>,
+		core_count: CoreIndex,
 	) -> DispatchResult {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let status = StatusRecord {
+			core_count,
 			pool_size: 0,
 			last_timeslice: Self::current_timeslice(),
 			system_pool_size: 0,
@@ -62,7 +71,7 @@ impl<T: Config> Pallet<T> {
 			cores_offered: 0,
 			cores_sold: 0,
 		};
-		Self::rotate_sale(dummy_sale, &config);
+		Self::rotate_sale(dummy_sale, &config, &status);
 		Status::<T>::put(&status);
 		Ok(())
 	}
@@ -71,9 +80,9 @@ impl<T: Config> Pallet<T> {
 		who: T::AccountId,
 		price_limit: BalanceOf<T>,
 	) -> Result<RegionId, DispatchError> {
-		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let mut sale = SaleInfo::<T>::get().ok_or(Error::<T>::NoSales)?;
-		ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
+		ensure!(sale.first_core < status.core_count, Error::<T>::Unavailable);
 		ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
 		let now = frame_system::Pallet::<T>::block_number();
 		ensure!(now > sale.sale_start, Error::<T>::TooEarly);
@@ -97,12 +106,13 @@ impl<T: Config> Pallet<T> {
 	/// current sale status's `region_end`.
 	pub(crate) fn do_renew(who: T::AccountId, core: CoreIndex) -> Result<CoreIndex, DispatchError> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let record = AllowedRenewals::<T>::get(core).ok_or(Error::<T>::NotAllowed)?;
 		let mut sale = SaleInfo::<T>::get().ok_or(Error::<T>::NoSales)?;
 		let workload = record.completion.drain_complete().ok_or(Error::<T>::IncompleteAssignment)?;
 
 		ensure!(record.begin == sale.region_begin, Error::<T>::WrongTime);
-		ensure!(sale.first_core < config.core_count, Error::<T>::Unavailable);
+		ensure!(sale.first_core < status.core_count, Error::<T>::Unavailable);
 		ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
 
 		let old_core = core;
@@ -316,6 +326,38 @@ impl<T: Config> Pallet<T> {
 		T::Currency::transfer(&who, &Self::account_id(), amount, Expendable)?;
 		let amount = T::ConvertBalance::convert(amount);
 		T::Coretime::credit_account(beneficiary, amount);
+		Ok(())
+	}
+
+	pub(crate) fn do_drop_region(region_id: RegionId) -> DispatchResult {
+		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+		let region = Regions::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
+		let next_commit_timeslice = status.last_timeslice + config.advance_notice + 1;
+		ensure!(next_commit_timeslice >= region.end, Error::<T>::StillValid);
+
+		Regions::<T>::remove(&region_id);
+		let duration = region.end.saturating_sub(region_id.begin);
+		Self::deposit_event(Event::Dropped { region_id, duration });
+		Ok(())
+	}
+
+	pub(crate) fn do_drop_contribution(region_id: RegionId) -> DispatchResult {
+		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+		let contrib = InstaPoolContribution::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
+		let end = region_id.begin.saturating_add(contrib.length);
+		ensure!(status.last_timeslice > end + config.contribution_timeout, Error::<T>::StillValid);
+		InstaPoolContribution::<T>::remove(region_id);
+		Ok(())
+	}
+
+	pub(crate) fn do_drop_history(when: Timeslice) -> DispatchResult {
+		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+		ensure!(status.last_timeslice > when + config.contribution_timeout, Error::<T>::StillValid);
+		ensure!(InstaPoolHistory::<T>::contains_key(when), Error::<T>::NoHistory);
+		InstaPoolHistory::<T>::remove(when);
 		Ok(())
 	}
 }

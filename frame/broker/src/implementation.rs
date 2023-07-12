@@ -27,10 +27,11 @@ impl<T: Config> Pallet<T> {
 		if let Some(sale) = SaleInfo::<T>::get() {
 			if commit_timeslice >= sale.region_begin {
 				// Sale can be rotated.
-				Self::rotate_sale(sale, &config);
+				Self::rotate_sale(sale, &config, &status);
 			}
 		}
 		Self::process_timeslice(commit_timeslice, &mut status, &config);
+		Self::process_core_count()?;
 		Self::process_revenue()?;
 
 		Status::<T>::put(&status);
@@ -43,6 +44,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn rotate_sale(
 		old_sale: SaleInfoRecordOf<T>,
 		config: &ConfigRecordOf<T>,
+		status: &StatusRecord,
 	) -> Option<()> {
 		let now = frame_system::Pallet::<T>::block_number();
 
@@ -105,7 +107,7 @@ impl<T: Config> Pallet<T> {
 		});
 
 		let mut leases = Leases::<T>::get();
-		// can morph to a renewable as long as it's > begin and < end.
+		// Can morph to a renewable as long as it's >=begin and <end.
 		leases.retain(|&LeaseRecordItem { until, task }| {
 			let part = CorePart::complete();
 			let assignment = CoreAssignment::Task(task);
@@ -132,7 +134,7 @@ impl<T: Config> Pallet<T> {
 		});
 		Leases::<T>::put(&leases);
 
-		let max_possible_sales = config.core_count.saturating_sub(first_core);
+		let max_possible_sales = status.core_count.saturating_sub(first_core);
 		let limit_cores_offered = config.limit_cores_offered.unwrap_or(CoreIndex::max_value());
 		let cores_offered = limit_cores_offered.min(max_possible_sales);
 		// Update SaleInfo
@@ -156,6 +158,14 @@ impl<T: Config> Pallet<T> {
 
 	pub fn account_id() -> T::AccountId {
 		T::PalletId::get().into_account_truncating()
+	}
+
+	fn process_core_count() -> Result<bool, DispatchError> {
+		if let Some(new_count) = T::Coretime::check_notify_core_count() {
+			Status::<T>::mutate_extant(|c| c.core_count = new_count);
+			return Ok(true)
+		}
+		Ok(false)
 	}
 
 	fn process_revenue() -> Result<bool, DispatchError> {
@@ -201,10 +211,10 @@ impl<T: Config> Pallet<T> {
 		(latest / timeslice_period).saturated_into()
 	}
 
-	pub(crate) fn process_timeslice(timeslice: Timeslice, status: &mut StatusRecord, config: &ConfigRecordOf<T>) {
+	pub(crate) fn process_timeslice(timeslice: Timeslice, status: &mut StatusRecord, _config: &ConfigRecordOf<T>) {
 		Self::process_pool(timeslice, status);
 		let rc_begin = RelayBlockNumberOf::<T>::from(timeslice) * T::TimeslicePeriod::get();
-		for core in 0..config.core_count {
+		for core in 0..status.core_count {
 			Self::process_core_schedule(timeslice, rc_begin, core);
 		}
 	}

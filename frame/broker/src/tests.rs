@@ -25,7 +25,7 @@ use CoretimeTraceItem::*;
 #[test]
 fn basic_initialize_works() {
 	TestExt::new().execute_with(|| {
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 		assert_eq!(CoretimeTrace::get(), vec![]);
 		assert_eq!(Broker::current_timeslice(), 0);
 	});
@@ -34,7 +34,7 @@ fn basic_initialize_works() {
 #[test]
 fn transfer_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		assert_ok!(<Broker as Transfer<_>>::transfer(&region.into(), &2));
@@ -47,7 +47,7 @@ fn transfer_works() {
 #[test]
 fn nft_metadata_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		assert_eq!(attribute::<Timeslice>(region, b"begin"), 4);
@@ -75,7 +75,7 @@ fn nft_metadata_works() {
 fn migration_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_set_lease(1000, 8));
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 
 		// Sale is for regions from TS4..7
 		// Not ending in this sale period.
@@ -106,7 +106,7 @@ fn migration_works() {
 #[test]
 fn renewal_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		assert_eq!(balance(1), 900);
@@ -126,10 +126,10 @@ fn renewal_works() {
 
 #[test]
 fn instapool_payouts_work() {
-	TestExt::new().core_count(3).endow(1, 1000).execute_with(|| {
+	TestExt::new().endow(1, 1000).execute_with(|| {
 		let item = ScheduleItem { assignment: Pool, part: CorePart::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 3));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		assert_ok!(Broker::do_pool(region, None, 2));
@@ -147,10 +147,10 @@ fn instapool_payouts_work() {
 
 #[test]
 fn instapool_partial_core_payouts_work() {
-	TestExt::new().core_count(2).endow(1, 1000).execute_with(|| {
+	TestExt::new().endow(1, 1000).execute_with(|| {
 		let item = ScheduleItem { assignment: Pool, part: CorePart::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 2));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let (region1, region2) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)).unwrap();
@@ -171,7 +171,7 @@ fn instapool_partial_core_payouts_work() {
 
 #[test]
 fn initialize_with_system_paras_works() {
-	TestExt::new().core_count(2).execute_with(|| {
+	TestExt::new().execute_with(|| {
 		let item = ScheduleItem { assignment: Task(1u32), part: CorePart::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		let items = vec![
@@ -180,7 +180,7 @@ fn initialize_with_system_paras_works() {
 			ScheduleItem { assignment: Task(4u32), part: 0x00000_00000_00000_fffff.into() },
 		];
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(items)));
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 2));
 		advance_to(10);
 		assert_eq!(CoretimeTrace::get(), vec![
 			(6, AssignCore { core: 0, begin: 8, assignment: vec![
@@ -197,10 +197,10 @@ fn initialize_with_system_paras_works() {
 
 #[test]
 fn initialize_with_leased_slots_works() {
-	TestExt::new().core_count(2).execute_with(|| {
+	TestExt::new().execute_with(|| {
 		assert_ok!(Broker::do_set_lease(1000, 6));
 		assert_ok!(Broker::do_set_lease(1001, 7));
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 2));
 		advance_to(18);
 		let end_hint = None;
 		assert_eq!(CoretimeTrace::get(), vec![
@@ -217,7 +217,7 @@ fn initialize_with_leased_slots_works() {
 #[test]
 fn purchase_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		assert_ok!(Broker::do_assign(region, None, 1000));
@@ -233,7 +233,7 @@ fn purchase_works() {
 #[test]
 fn partition_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let (region1, region) = Broker::do_partition(region, None, 1).unwrap();
@@ -259,7 +259,7 @@ fn partition_works() {
 #[test]
 fn interlace_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let (region1, region) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 30)).unwrap();
@@ -281,7 +281,7 @@ fn interlace_works() {
 #[test]
 fn interlace_then_partition_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let (region1, region2) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)).unwrap();
@@ -312,7 +312,7 @@ fn interlace_then_partition_works() {
 #[test]
 fn partition_then_interlace_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		assert_ok!(Broker::do_start_sales(100));
+		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let (region1, region2) = Broker::do_partition(region, None, 1).unwrap();
