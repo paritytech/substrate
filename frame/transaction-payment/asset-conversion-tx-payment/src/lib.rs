@@ -69,6 +69,8 @@ mod mock;
 mod tests;
 
 mod payment;
+use frame_support::traits::tokens::AssetId;
+use pallet_asset_conversion::MultiAssetIdConverter;
 pub use payment::*;
 
 /// Type aliases used for interaction with `OnChargeTransaction`.
@@ -116,7 +118,9 @@ pub mod pallet {
 	use super::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + pallet_transaction_payment::Config {
+	pub trait Config:
+		frame_system::Config + pallet_transaction_payment::Config + pallet_asset_conversion::Config
+	{
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// The fungibles instance used to pay for transactions in assets.
@@ -187,12 +191,12 @@ where
 		debug_assert!(self.tip <= fee, "tip should be included in the computed fee");
 		if fee.is_zero() {
 			Ok((fee, InitialPayment::Nothing))
-		} else if let Some(asset_id) = self.asset_id {
+		} else if let Some(asset_id) = &self.asset_id {
 			T::OnChargeAssetTransaction::withdraw_fee(
 				who,
 				call,
 				info,
-				asset_id,
+				asset_id.clone(),
 				fee.into(),
 				self.tip.into(),
 			)
@@ -324,7 +328,7 @@ where
 							tip.into(),
 							used_for_fee.into(),
 							received_exchanged.into(),
-							asset_id,
+							asset_id.clone(),
 							asset_consumed.into(),
 						)?;
 
