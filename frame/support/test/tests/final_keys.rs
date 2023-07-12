@@ -90,7 +90,7 @@ mod no_instance {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			<Value<T>>::put(self.value);
 			<TestGenericValue<T>>::put(&self.test_generic_value);
@@ -169,7 +169,7 @@ mod instance {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			<Value<T, I>>::put(self.value);
 			<TestGenericValue<T, I>>::put(&self.test_generic_value);

@@ -165,11 +165,14 @@ mod nested {
 		}
 
 		#[pallet::genesis_config]
-		#[derive(Default)]
-		pub struct GenesisConfig {}
+		#[derive(frame_support::DefaultNoBound)]
+		pub struct GenesisConfig<T: Config> {
+			#[serde(skip)]
+			pub _config: sp_std::marker::PhantomData<T>,
+		}
 
 		#[pallet::genesis_build]
-		impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 			fn build(&self) {}
 		}
 	}
@@ -234,11 +237,14 @@ pub mod module3 {
 	}
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {}
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config> {
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
+	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {}
 	}
 }
@@ -262,8 +268,8 @@ frame_support::construct_runtime!(
 		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
 		Module2: module2::{Pallet, Call, Storage, Event<T>, Origin},
 		Module1_2: module1::<Instance2>::{Pallet, Call, Storage, Event<T>, Origin<T>},
-		NestedModule3: nested::module3::{Pallet, Call, Config, Storage, Event<T>, Origin},
-		Module3: self::module3::{Pallet, Call, Config, Storage, Event<T>, Origin<T>},
+		NestedModule3: nested::module3::{Pallet, Call, Config<T>, Storage, Event<T>, Origin},
+		Module3: self::module3::{Pallet, Call, Config<T>, Storage, Event<T>, Origin<T>},
 		Module1_3: module1::<Instance3>::{Pallet, Storage, Event<T> } = 6,
 		Module1_4: module1::<Instance4>::{Pallet, Call, Event<T> } = 3,
 		Module1_5: module1::<Instance5>::{Pallet, Event<T>},

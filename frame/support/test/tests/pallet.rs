@@ -402,13 +402,18 @@ pub mod pallet {
 	pub type Unbounded<T> = StorageValue<Value = Vec<u8>>;
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config>
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType4>,
+	{
+		#[serde(skip)]
+		_config: sp_std::marker::PhantomData<T>,
 		_myfield: u32,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T>
 	where
 		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType4>,
 	{
@@ -586,7 +591,7 @@ pub mod pallet2 {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T>
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T>
 	where
 		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{

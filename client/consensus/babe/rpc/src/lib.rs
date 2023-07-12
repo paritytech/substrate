@@ -186,6 +186,8 @@ impl From<Error> for JsonRpseeError {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sc_consensus_babe::ImportQueueParams;
+	use sc_transaction_pool_api::{OffchainTransactionPoolFactory, RejectAllTxPool};
 	use sp_consensus_babe::inherents::InherentDataProvider;
 	use sp_core::{crypto::key_types::BABE, testing::TaskExecutor};
 	use sp_keyring::Sr25519Keyring;
@@ -219,22 +221,25 @@ mod tests {
 			sc_consensus_babe::block_import(config.clone(), client.clone(), client.clone())
 				.expect("can initialize block-import");
 
-		let (_, babe_worker_handle) = sc_consensus_babe::import_queue(
-			link.clone(),
-			block_import.clone(),
-			None,
-			client.clone(),
-			longest_chain.clone(),
-			move |_, _| async move {
+		let (_, babe_worker_handle) = sc_consensus_babe::import_queue(ImportQueueParams {
+			link: link.clone(),
+			block_import: block_import.clone(),
+			justification_import: None,
+			client: client.clone(),
+			select_chain: longest_chain.clone(),
+			create_inherent_data_providers: move |_, _| async move {
 				Ok((InherentDataProvider::from_timestamp_and_slot_duration(
 					0.into(),
 					slot_duration,
 				),))
 			},
-			&task_executor,
-			None,
-			None,
-		)
+			spawner: &task_executor,
+			registry: None,
+			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
+		})
 		.unwrap();
 
 		Babe::new(client.clone(), babe_worker_handle, keystore, longest_chain, deny_unsafe)

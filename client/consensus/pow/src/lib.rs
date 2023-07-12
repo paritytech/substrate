@@ -58,7 +58,6 @@ use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle};
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
-use sp_core::ExecutionContext;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::{
 	generic::{BlockId, Digest, DigestItem},
@@ -269,7 +268,6 @@ where
 		block: B,
 		at_hash: B::Hash,
 		inherent_data_providers: CIDP::InherentDataProviders,
-		execution_context: ExecutionContext,
 	) -> Result<(), Error<B>> {
 		if *block.header().number() < self.check_inherents_after {
 			return Ok(())
@@ -283,7 +281,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents_with_context(at_hash, execution_context, block, inherent_data)
+			.check_inherents(at_hash, block, inherent_data)
 			.map_err(|e| Error::Client(e.into()))?;
 
 		if !inherent_res.ok() {
@@ -348,7 +346,6 @@ where
 					self.create_inherent_data_providers
 						.create_inherent_data_providers(parent_hash, ())
 						.await?,
-					block.origin.into(),
 				)
 				.await?;
 			}

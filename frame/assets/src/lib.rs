@@ -380,7 +380,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			for (id, owner, is_sufficient, min_balance) in &self.assets {
 				assert!(!Asset::<T, I>::contains_key(id), "Asset id already in use");

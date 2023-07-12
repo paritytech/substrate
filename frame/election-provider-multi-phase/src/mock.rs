@@ -45,7 +45,7 @@ use sp_npos_elections::{
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	PerU16,
+	BuildStorage, PerU16,
 };
 use std::sync::Arc;
 
@@ -59,7 +59,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>, Config},
+		System: frame_system::{Pallet, Call, Event<T>, Config<T>},
 		Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
 		MultiPhase: multi_phase::{Pallet, Call, Event<T>},
 	}
@@ -574,7 +574,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: vec![

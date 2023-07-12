@@ -331,17 +331,18 @@ pub mod pallet {
 		///
 		/// # Examples
 		/// ```
-		/// use pallet_contracts::migration::{v9, v10, v11};
+		/// use pallet_contracts::migration::{v10, v11};
 		/// # struct Runtime {};
 		/// # struct Currency {};
-		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime, Currency>, v11::Migration<Runtime>);
+		/// type Migrations = (v10::Migration<Runtime, Currency>, v11::Migration<Runtime>);
 		/// ```
 		///
 		/// If you have a single migration step, you can use a tuple with a single element:
 		/// ```
-		/// use pallet_contracts::migration::v9;
+		/// use pallet_contracts::migration::v10;
 		/// # struct Runtime {};
-		/// type Migrations = (v9::Migration<Runtime>,);
+		/// # struct Currency {};
+		/// type Migrations = (v10::Migration<Runtime, Currency>,);
 		/// ```
 		type Migrations: MigrateSequence;
 	}
