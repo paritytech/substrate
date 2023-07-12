@@ -925,19 +925,25 @@ pub mod tests {
 		>;
 
 		#[pallet::genesis_config]
-		pub struct GenesisConfig {
+		pub struct GenesisConfig<T: Config> {
 			pub data: Vec<(u32, u64)>,
 			pub test_config: Vec<(u32, u32, u64)>,
+			#[serde(skip)]
+			pub _config: sp_std::marker::PhantomData<T>,
 		}
 
-		impl Default for GenesisConfig {
+		impl<T: Config> Default for GenesisConfig<T> {
 			fn default() -> Self {
-				Self { data: vec![(15u32, 42u64)], test_config: vec![(15u32, 16u32, 42u64)] }
+				Self {
+					_config: Default::default(),
+					data: vec![(15u32, 42u64)],
+					test_config: vec![(15u32, 16u32, 42u64)],
+				}
 			}
 		}
 
 		#[pallet::genesis_build]
-		impl<T: Config> GenesisBuild<T> for GenesisConfig {
+		impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 			fn build(&self) {
 				for (k, v) in &self.data {
 					<Data<T>>::insert(k, v);
@@ -1556,7 +1562,7 @@ pub mod pallet_prelude {
 			},
 		},
 		traits::{
-			ConstU32, EnsureOrigin, GenesisBuild, Get, GetDefault, GetStorageVersion, Hooks,
+			BuildGenesisConfig, ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks,
 			IsType, PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
@@ -2231,7 +2237,7 @@ pub mod pallet_prelude {
 /// for the pallet.
 ///
 /// Item is defined as either an enum or a struct. It needs to be public and implement the
-/// trait [`GenesisBuild`](`traits::GenesisBuild`) with
+/// trait [`BuildGenesisConfig`](`traits::BuildGenesisConfig`) with
 /// [`#[pallet::genesis_build]`](#genesis-build-palletgenesis_build-optional). The type
 /// generics are constrained to be either none, or `T` or `T: Config`.
 ///
@@ -2513,14 +2519,15 @@ pub mod pallet_prelude {
 /// 	//
 /// 	// Type must implement the `Default` trait.
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	#[derive(frame_support::DefaultNoBound)]
+/// 	pub struct GenesisConfig<T: Config> {
+/// 	    _config: sp_std::marker::PhantomData<T>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	// Declare genesis builder. (This is need only if GenesisConfig is declared)
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+/// 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 /// 		fn build(&self) {}
 /// 	}
 ///
@@ -2650,13 +2657,14 @@ pub mod pallet_prelude {
 /// 		StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 ///
 /// 	#[pallet::genesis_config]
-/// 	#[derive(Default)]
-/// 	pub struct GenesisConfig {
+/// 	#[derive(frame_support::DefaultNoBound)]
+/// 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+/// 		 _config: sp_std::marker::PhantomData<(T,I)>,
 /// 		_myfield: u32,
 /// 	}
 ///
 /// 	#[pallet::genesis_build]
-/// 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+/// 	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 /// 		fn build(&self) {}
 /// 	}
 ///

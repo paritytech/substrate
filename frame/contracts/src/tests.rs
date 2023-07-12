@@ -52,7 +52,7 @@ use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
 	testing::{Header, H256},
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
-	AccountId32, TokenError,
+	AccountId32, BuildStorage, TokenError,
 };
 use std::ops::Deref;
 
@@ -65,7 +65,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Randomness: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
@@ -486,7 +486,7 @@ impl ExtBuilder {
 		let env = Env::new().default_filter_or("runtime=debug");
 		let _ = Builder::from_env(env).is_test(true).try_init();
 		self.set_associated_consts();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Test> { balances: vec![] }
 			.assimilate_storage(&mut t)
 			.unwrap();

@@ -230,12 +230,13 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		#[serde(skip)]
 		pub phantom: PhantomData<I>,
 		pub members: Vec<T::AccountId>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			use sp_std::collections::btree_set::BTreeSet;
 			let members_set: BTreeSet<_> = self.members.iter().collect();

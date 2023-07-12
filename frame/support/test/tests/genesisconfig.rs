@@ -53,7 +53,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			for (k1, k2, v) in &self.t {
 				<AppendableDM<T>>::insert(k1, k2, v);
