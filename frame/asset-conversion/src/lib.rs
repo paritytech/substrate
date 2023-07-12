@@ -81,7 +81,7 @@ use sp_runtime::{
 	},
 	DispatchError,
 };
-use sp_std::vec;
+use sp_std::prelude::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
@@ -107,7 +107,6 @@ pub mod pallet {
 		traits::{IntegerSquareRoot, One, Zero},
 		Saturating,
 	};
-	use sp_std::prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
