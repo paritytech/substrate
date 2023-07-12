@@ -514,6 +514,7 @@ benchmarks_instance_pallet! {
 			SystemOrigin::Signed(new_account.clone()).into(),
 			asset_id
 		).is_ok());
+		// `touch` should reserve balance of the caller according to the `AssetAccountDeposit` amount...
 		assert_eq!(T::Currency::reserved_balance(&new_account), T::AssetAccountDeposit::get());
 		// ...and also create an `Account` entry.
 		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
