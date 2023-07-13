@@ -480,8 +480,9 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
 	old_state: InMemoryBackend<HashingFor<Block>>,
-	new_state:
-		Option<<InMemoryBackend<HashingFor<Block>> as StateBackend<HashingFor<Block>>>::Transaction>,
+	new_state: Option<
+		<InMemoryBackend<HashingFor<Block>> as StateBackend<HashingFor<Block>>>::Transaction,
+	>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(Block::Hash, Option<Justification>)>,
 	set_head: Option<Block::Hash>,

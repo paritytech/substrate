@@ -907,7 +907,10 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		Ok(())
 	}
 
-	fn update_db_storage(&mut self, update: PrefixedMemoryDB<HashingFor<Block>>) -> ClientResult<()> {
+	fn update_db_storage(
+		&mut self,
+		update: PrefixedMemoryDB<HashingFor<Block>>,
+	) -> ClientResult<()> {
 		self.db_updates = update;
 		Ok(())
 	}
@@ -1032,7 +1035,8 @@ impl<Block: BlockT> EmptyStorage<Block> {
 		let mut root = Block::Hash::default();
 		let mut mdb = MemoryDB::<HashingFor<Block>>::default();
 		// both triedbmut are the same on empty storage.
-		sp_trie::trie_types::TrieDBMutBuilderV1::<HashingFor<Block>>::new(&mut mdb, &mut root).build();
+		sp_trie::trie_types::TrieDBMutBuilderV1::<HashingFor<Block>>::new(&mut mdb, &mut root)
+			.build();
 		EmptyStorage(root)
 	}
 }

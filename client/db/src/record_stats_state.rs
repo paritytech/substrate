@@ -105,7 +105,9 @@ where
 	}
 }
 
-impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>> for RecordStatsState<S, B> {
+impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>>
+	for RecordStatsState<S, B>
+{
 	type Error = S::Error;
 	type Transaction = S::Transaction;
 	type TrieBackendStorage = S::TrieBackendStorage;
@@ -199,8 +201,8 @@ impl<S: StateBackend<HashingFor<B>>, B: BlockT> StateBackend<HashingFor<B>> for 
 	}
 }
 
-impl<S: StateBackend<HashingFor<B>> + AsTrieBackend<HashingFor<B>>, B: BlockT> AsTrieBackend<HashingFor<B>>
-	for RecordStatsState<S, B>
+impl<S: StateBackend<HashingFor<B>> + AsTrieBackend<HashingFor<B>>, B: BlockT>
+	AsTrieBackend<HashingFor<B>> for RecordStatsState<S, B>
 {
 	type TrieBackendStorage = <S as AsTrieBackend<HashingFor<B>>>::TrieBackendStorage;
 

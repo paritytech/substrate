@@ -614,7 +614,8 @@ impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 				log::debug!(target: "benchmark", "Some proof size: {}", &proof_size);
 				proof_size
 			} else {
-				if let Some(size) = proof.encoded_compact_size::<HashingFor<B>>(proof_recorder_root) {
+				if let Some(size) = proof.encoded_compact_size::<HashingFor<B>>(proof_recorder_root)
+				{
 					size as u32
 				} else if proof_recorder_root == self.root.get() {
 					log::debug!(target: "benchmark", "No changes - no proof");
