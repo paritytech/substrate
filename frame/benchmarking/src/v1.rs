@@ -1826,9 +1826,9 @@ pub fn show_benchmark_debug_info(
 /// ```
 #[macro_export]
 macro_rules! add_benchmark {
-	( $params:ident, $batches:ident, $name:path, $location:ty ) => (
+	( $params:ident, $batches:ident, $name:path, $location:ty ) => {
 		let name_string = stringify!($name).as_bytes();
-		let instance_string = stringify!( $location ).as_bytes();
+		let instance_string = stringify!($location).as_bytes();
 		let (config, whitelist) = $params;
 		let $crate::BenchmarkConfig {
 			pallet,
@@ -1855,9 +1855,7 @@ macro_rules! add_benchmark {
 						$crate::str::from_utf8(benchmark)
 							.expect("benchmark name is always a valid string!")
 					);
-					result.keys.insert(0,
-						(b"Benchmark Override".to_vec(), 0, 0, false)
-					);
+					result.keys.insert(0, (b"Benchmark Override".to_vec(), 0, 0, false));
 					Some($crate::vec![result])
 				},
 				Err($crate::BenchmarkError::Stop(e)) => {
@@ -1868,7 +1866,7 @@ macro_rules! add_benchmark {
 						verify,
 						e,
 					);
-					return Err(e.into());
+					return Err(e.into())
 				},
 				Err($crate::BenchmarkError::Skip) => {
 					$crate::log::error!(
@@ -1886,9 +1884,9 @@ macro_rules! add_benchmark {
 					);
 					Some(vec![$crate::BenchmarkResult {
 						components: selected_components.clone(),
-						.. Default::default()
+						..Default::default()
 					}])
-				}
+				},
 			};
 
 			if let Some(final_results) = final_results {
@@ -1900,7 +1898,7 @@ macro_rules! add_benchmark {
 				});
 			}
 		}
-	)
+	};
 }
 
 /// This macro allows users to easily generate a list of benchmarks for the pallets configured
@@ -1924,9 +1922,9 @@ macro_rules! add_benchmark {
 /// This should match what exists with the `add_benchmark!` macro.
 #[macro_export]
 macro_rules! list_benchmark {
-	( $list:ident, $extra:ident, $name:path, $location:ty ) => (
+	( $list:ident, $extra:ident, $name:path, $location:ty ) => {
 		let pallet_string = stringify!($name).as_bytes();
-		let instance_string = stringify!( $location ).as_bytes();
+		let instance_string = stringify!($location).as_bytes();
 		let benchmarks = <$location>::benchmarks($extra);
 		let pallet_benchmarks = BenchmarkList {
 			pallet: pallet_string.to_vec(),
@@ -1934,7 +1932,7 @@ macro_rules! list_benchmark {
 			benchmarks: benchmarks.to_vec(),
 		};
 		$list.push(pallet_benchmarks)
-	)
+	};
 }
 
 /// Defines pallet configs that `add_benchmarks` and `list_benchmarks` use.
