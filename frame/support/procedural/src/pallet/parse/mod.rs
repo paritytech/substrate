@@ -268,7 +268,7 @@ impl Def {
 			instances.extend_from_slice(&genesis_config.instances[..]);
 		}
 		if let Some(genesis_build) = &self.genesis_build {
-			instances.extend_from_slice(&genesis_build.instances[..]);
+			genesis_build.instances.as_ref().map(|i| instances.extend_from_slice(&i));
 		}
 		if let Some(extra_constants) = &self.extra_constants {
 			instances.extend_from_slice(&extra_constants.instances[..]);

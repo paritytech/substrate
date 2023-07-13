@@ -25,7 +25,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	codec::{Codec, Decode, Encode},
-	traits::{self, Block as BlockT, Header as HeaderT, MaybeSerialize, Member, NumberFor},
+	traits::{
+		self, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeSerializeDeserialize,
+		Member, NumberFor,
+	},
 	Justifications,
 };
 use sp_core::RuntimeDebug;
@@ -79,16 +82,23 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
-pub struct Block<Header, Extrinsic: MaybeSerialize> {
+pub struct Block<Header, Extrinsic> {
 	/// The block header.
 	pub header: Header,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<Extrinsic>,
 }
 
-impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
+impl<Header, Extrinsic> traits::HeaderProvider for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
+{
+	type HeaderT = Header;
+}
+
+impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
+where
+	Header: HeaderT + MaybeSerializeDeserialize,
 	Extrinsic: Member + Codec + traits::Extrinsic,
 {
 	type Extrinsic = Extrinsic;

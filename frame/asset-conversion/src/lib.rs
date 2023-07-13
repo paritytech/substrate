@@ -72,7 +72,10 @@ use frame_support::{
 	ensure,
 	traits::tokens::{AssetId, Balance},
 };
-use frame_system::{ensure_signed, pallet_prelude::OriginFor};
+use frame_system::{
+	ensure_signed,
+	pallet_prelude::{BlockNumberFor, OriginFor},
+};
 pub use pallet::*;
 use sp_arithmetic::traits::Unsigned;
 use sp_runtime::{
@@ -357,7 +360,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {
 			assert!(
 				T::MaxSwapPathLength::get() > 1,

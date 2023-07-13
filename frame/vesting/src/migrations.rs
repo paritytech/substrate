@@ -40,12 +40,12 @@ pub mod v1 {
 	pub fn migrate<T: Config>() -> Weight {
 		let mut reads_writes = 0;
 
-		Vesting::<T>::translate::<VestingInfo<BalanceOf<T>, T::BlockNumber>, _>(
+		Vesting::<T>::translate::<VestingInfo<BalanceOf<T>, BlockNumberFor<T>>, _>(
 			|_key, vesting_info| {
 				reads_writes += 1;
 				let v: Option<
 					BoundedVec<
-						VestingInfo<BalanceOf<T>, T::BlockNumber>,
+						VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
 						MaxVestingSchedulesGet<T>,
 					>,
 				> = vec![vesting_info].try_into().ok();

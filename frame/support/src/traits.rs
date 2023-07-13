@@ -80,8 +80,10 @@ pub use metadata::{
 };
 
 mod hooks;
+#[allow(deprecated)]
+pub use hooks::GenesisBuild;
 pub use hooks::{
-	GenesisBuild, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize,
+	BuildGenesisConfig, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize,
 	OnRuntimeUpgrade, OnTimestampSet,
 };
 
@@ -102,10 +104,7 @@ pub use dispatch::{
 };
 
 mod voting;
-pub use voting::{
-	ClassCountOf, CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote,
-	U128CurrencyToVote, VoteTally,
-};
+pub use voting::{ClassCountOf, PollStatus, Polling, VoteTally};
 
 mod preimages;
 pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, StorePreimage};
@@ -113,7 +112,7 @@ pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, St
 mod messages;
 pub use messages::{
 	EnqueueMessage, ExecuteOverweightError, Footprint, NoopServiceQueues, ProcessMessage,
-	ProcessMessageError, ServiceQueues, TransformOrigin,
+	ProcessMessageError, QueuePausedQuery, ServiceQueues, TransformOrigin,
 };
 
 #[cfg(feature = "try-runtime")]

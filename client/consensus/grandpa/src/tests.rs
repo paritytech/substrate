@@ -33,6 +33,7 @@ use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestClient, TestNetFactory,
 };
+use sc_transaction_pool_api::RejectAllTxPool;
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_consensus_grandpa::{
@@ -331,6 +332,9 @@ fn initialize_grandpa(
 			voting_rule: (),
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 			telemetry: None,
 		};
 		let voter =
@@ -481,6 +485,9 @@ async fn finalize_3_voters_1_full_observer() {
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
@@ -573,6 +580,9 @@ async fn transition_3_voters_twice_1_full_observer() {
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		voters
@@ -1040,6 +1050,9 @@ async fn voter_persists_its_votes() {
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		run_grandpa_voter(grandpa_params).expect("all in order with client and network")
@@ -1083,6 +1096,9 @@ async fn voter_persists_its_votes() {
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		run_grandpa_voter(grandpa_params)
@@ -1293,6 +1309,9 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 			prometheus_registry: None,
 			shared_voter_state: SharedVoterState::empty(),
 			telemetry: None,
+			offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(
+				RejectAllTxPool::default(),
+			),
 		};
 
 		Box::pin(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
@@ -1422,6 +1441,7 @@ where
 		justification_sender: None,
 		telemetry: None,
 		_phantom: PhantomData,
+		offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(RejectAllTxPool::default()),
 	}
 }
 
@@ -1986,7 +2006,7 @@ async fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 	// keys it should work
 	equivocation.identity = TryFrom::try_from(&[1; 32][..]).unwrap();
 	let equivocation_proof = sp_consensus_grandpa::Equivocation::Prevote(equivocation);
-	assert!(environment.report_equivocation(equivocation_proof).is_ok());
+	environment.report_equivocation(equivocation_proof).unwrap();
 }
 
 #[tokio::test]

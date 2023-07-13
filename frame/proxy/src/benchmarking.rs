@@ -22,7 +22,7 @@
 use super::*;
 use crate::Pallet as Proxy;
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;
@@ -41,7 +41,7 @@ fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(),
 			RawOrigin::Signed(caller.clone()).into(),
 			real,
 			T::ProxyType::default(),
-			T::BlockNumber::zero(),
+			BlockNumberFor::<T>::zero(),
 		)?;
 	}
 	Ok(())
@@ -64,7 +64,7 @@ fn add_announcements<T: Config>(
 			RawOrigin::Signed(real.clone()).into(),
 			caller_lookup,
 			T::ProxyType::default(),
-			T::BlockNumber::zero(),
+			BlockNumberFor::<T>::zero(),
 		)?;
 		real
 	};
@@ -187,7 +187,7 @@ benchmarks! {
 		RawOrigin::Signed(caller.clone()),
 		real,
 		T::ProxyType::default(),
-		T::BlockNumber::zero()
+		BlockNumberFor::<T>::zero()
 	)
 	verify {
 		let (proxies, _) = Proxies::<T>::get(caller);
@@ -202,7 +202,7 @@ benchmarks! {
 		RawOrigin::Signed(caller.clone()),
 		delegate,
 		T::ProxyType::default(),
-		T::BlockNumber::zero()
+		BlockNumberFor::<T>::zero()
 	)
 	verify {
 		let (proxies, _) = Proxies::<T>::get(caller);
@@ -224,7 +224,7 @@ benchmarks! {
 	}: _(
 		RawOrigin::Signed(caller.clone()),
 		T::ProxyType::default(),
-		T::BlockNumber::zero(),
+		BlockNumberFor::<T>::zero(),
 		0
 	)
 	verify {
@@ -246,7 +246,7 @@ benchmarks! {
 		Pallet::<T>::create_pure(
 			RawOrigin::Signed(whitelisted_caller()).into(),
 			T::ProxyType::default(),
-			T::BlockNumber::zero(),
+			BlockNumberFor::<T>::zero(),
 			0
 		)?;
 		let height = system::Pallet::<T>::block_number();
