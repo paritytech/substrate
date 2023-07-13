@@ -23,7 +23,7 @@
 use crate::{
 	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
-	Config, ContractInfo, ContractInfoOf, HoldReason, Weight, LOG_TARGET,
+	Config, ContractInfoOf, HoldReason, Weight, LOG_TARGET,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -33,6 +33,8 @@ use frame_support::{
 	},
 	DefaultNoBound,
 };
+use frame_system::Pallet as System;
+use sp_core::hexdisplay::HexDisplay;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Saturating};
@@ -47,8 +49,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 13;
 
 	fn max_step_weight() -> Weight {
-		// T::WeightInfo::v13_migration_step()
-		todo!()
+		T::WeightInfo::v13_migration_step()
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
@@ -59,11 +60,96 @@ impl<T: Config> MigrationStep for Migration<T> {
 		};
 
 		if let Some((account, contract)) = iter.next() {
-			do_step(contract, account);
-			(IsFinished::No, T::WeightInfo::v10_migration_step()) // TODO
+			let deposit_account = contract.deposit_account().deref();
+			System::<T>::dec_consumers(&deposit_account);
+			// Get the deposit balance to transfer.
+			let total_deposit_balance = T::Currency::total_balance(deposit_account);
+			let reducible_deposit_balance = T::Currency::reducible_balance(
+				&deposit_account,
+				Preservation::Expendable,
+				Fortitude::Force,
+			);
+
+			if total_deposit_balance > reducible_deposit_balance {
+				// This should never happen, as by design all balance in the deposit account should
+				// be reducible.
+				log::warn!(
+					target: LOG_TARGET,
+					"Deposit account 0x{:?} for contract 0x{:?} has some non-reducible balance {:?} from a total of {:?} that will remain in there.",
+					HexDisplay::from(&deposit_account.encode()),
+					HexDisplay::from(&account.encode()),
+					total_deposit_balance.saturating_sub(reducible_deposit_balance),
+					total_deposit_balance
+				);
+			}
+
+			// Move balance reserved from the deposit account back to the contract account.
+			// Let the deposit account die.
+			let transferred_deposit_balance = T::Currency::transfer(
+				&contract.deposit_account(),
+				&account,
+				reducible_deposit_balance,
+				Preservation::Expendable,
+			)
+			.map(|_| {
+				log::debug!(
+					target: LOG_TARGET,
+					"{:?} transferred from the deposit account 0x{:?} to the contract 0x{:?}.",
+					reducible_deposit_balance,
+					HexDisplay::from(&deposit_account.encode()),
+					HexDisplay::from(&account.encode())
+				);
+				reducible_deposit_balance
+			})
+			.unwrap_or_else(|err| {
+				log::error!(
+					target: LOG_TARGET,
+					"Failed to transfer {:?} from the deposit account 0x{:?} to the contract 0x{:?}, reason: {:?}.",
+					reducible_deposit_balance,
+					HexDisplay::from(&deposit_account.encode()),
+					HexDisplay::from(&account.encode()),
+					err
+				);
+				Zero::zero()
+			});
+
+			// Hold the reserved balance.
+			if transferred_deposit_balance == Zero::zero() {
+				log::warn!(
+					target: LOG_TARGET,
+					"No balance to hold as storage deposit on the contract 0x{:?}.",
+					HexDisplay::from(&account.encode())
+				);
+			} else {
+				T::Currency::hold(
+					&HoldReason::StorageDepositReserve.into(),
+					&account,
+					transferred_deposit_balance,
+				)
+				.map(|_| {
+					log::info!(
+						target: LOG_TARGET,
+						"Successfully held {:?} as storage deposit on the contract 0x{:?}.",
+						transferred_deposit_balance,
+						HexDisplay::from(&account.encode())
+					);
+				})
+				.unwrap_or_else(|err| {
+					log::error!(
+						target: LOG_TARGET,
+						"Failed to hold {:?} as storage deposit on the contract 0x{:?}, reason: {:?}.",
+						transferred_deposit_balance,
+						HexDisplay::from(&account.encode()),
+						err
+					);
+				});
+			}
+
+			log::debug!(target: LOG_TARGET, "===");
+			(IsFinished::No, T::WeightInfo::v13_migration_step())
 		} else {
 			log::info!(target: LOG_TARGET, "Done Migrating Storage Deposits.");
-			(IsFinished::Yes, T::WeightInfo::v10_migration_step()) // TODO
+			(IsFinished::Yes, T::WeightInfo::v13_migration_step())
 		}
 	}
 
@@ -75,89 +161,5 @@ impl<T: Config> MigrationStep for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		todo!()
-	}
-}
-
-fn do_step<T: Config>(contract: ContractInfo<T>, account: <T as frame_system::Config>::AccountId) {
-	// Get the deposit balance to transfer.
-	let total_deposit_balance = T::Currency::total_balance(contract.deposit_account().deref());
-	let reducible_deposit_balance = T::Currency::reducible_balance(
-		&contract.deposit_account().deref(),
-		Preservation::Expendable,
-		Fortitude::Force,
-	);
-
-	if total_deposit_balance > reducible_deposit_balance {
-		// This should never happen, as by design all balance in the deposit account should
-		// be reducible.
-		log::warn!(
-			target: LOG_TARGET,
-			"Deposit account {:?} for contract {:?} has some non-reducible balance {:?} that will remain in there.",
-			contract.deposit_account(),
-			account,
-			total_deposit_balance.saturating_sub(reducible_deposit_balance)
-		);
-	}
-
-	// Move balance reserved from the deposit account back to the contract account.
-	// Let the deposit account die.
-	let reducible_deposit_balance = T::Currency::transfer(
-		&contract.deposit_account(),
-		&account,
-		reducible_deposit_balance,
-		Preservation::Expendable,
-	)
-	.map(|_| {
-		log::debug!(
-			target: LOG_TARGET,
-			"{:?} transferred from the deposit account {:?} to the contract {:?}.",
-			reducible_deposit_balance,
-			contract.deposit_account(),
-			account
-		);
-		reducible_deposit_balance
-	})
-	.unwrap_or_else(|err| {
-		log::error!(
-			target: LOG_TARGET,
-			"Failed to transfer {:?} from the deposit account {:?} to the contract {:?}, reason: {:?}.",
-			reducible_deposit_balance,
-			contract.deposit_account(),
-			account,
-			err
-		);
-		Zero::zero()
-	});
-
-	// Hold the reserved balance.
-	if reducible_deposit_balance == Zero::zero() {
-		log::warn!(
-			target: LOG_TARGET,
-			"No balance to hold as storage deposit on the contract {:?}.",
-			account
-		);
-	} else {
-		T::Currency::hold(
-			&HoldReason::StorageDepositReserve.into(),
-			&account,
-			reducible_deposit_balance,
-		)
-		.map(|_| {
-			log::debug!(
-				target: LOG_TARGET,
-				"Successfully held {:?} as storage deposit on the contract {:?}.",
-				reducible_deposit_balance,
-				account
-			);
-		})
-		.unwrap_or_else(|err| {
-			log::error!(
-				target: LOG_TARGET,
-				"Failed to hold {:?} as storage deposit on the contract {:?}, reason: {:?}.",
-				reducible_deposit_balance,
-				account,
-				err
-			);
-		});
 	}
 }

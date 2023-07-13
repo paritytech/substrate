@@ -56,6 +56,7 @@ pub trait WeightInfo {
 	fn v10_migration_step() -> Weight;
 	fn v11_migration_step(k: u32, ) -> Weight;
 	fn v12_migration_step(c: u32, ) -> Weight;
+	fn v13_migration_step() -> Weight;
 	fn migration_noop() -> Weight;
 	fn migrate() -> Weight;
 	fn on_runtime_upgrade_noop() -> Weight;
@@ -224,6 +225,21 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4_u64))
 			.saturating_add(T::DbWeight::get().writes(2_u64))
 			.saturating_add(Weight::from_parts(0, 1).saturating_mul(c.into()))
+	}
+	/// Storage: `Contracts::ContractInfoOf` (r:2 w:0)
+	/// Proof: `Contracts::ContractInfoOf` (`max_values`: None, `max_size`: Some(290), added: 2765, mode: `Measured`)
+	/// Storage: `System::Account` (r:2 w:2)
+	/// Proof: `System::Account` (`max_values`: None, `max_size`: Some(128), added: 2603, mode: `Measured`)
+	/// Storage: `Balances::Holds` (r:1 w:1)
+	/// Proof: `Balances::Holds` (`max_values`: None, `max_size`: Some(85), added: 2560, mode: `Measured`)
+	fn v13_migration_step() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `682`
+		//  Estimated: `6622`
+		// Minimum execution time: 135_000_000 picoseconds.
+		Weight::from_parts(135_000_000, 6622)
+			.saturating_add(T::DbWeight::get().reads(5_u64))
+			.saturating_add(T::DbWeight::get().writes(3_u64))
 	}
 	/// Storage: Contracts MigrationInProgress (r:1 w:1)
 	/// Proof: Contracts MigrationInProgress (max_values: Some(1), max_size: Some(1026), added: 1521, mode: Measured)
@@ -2007,6 +2023,22 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4_u64))
 			.saturating_add(RocksDbWeight::get().writes(2_u64))
 			.saturating_add(Weight::from_parts(0, 1).saturating_mul(c.into()))
+	}
+
+	/// Storage: `Contracts::ContractInfoOf` (r:2 w:0)
+	/// Proof: `Contracts::ContractInfoOf` (`max_values`: None, `max_size`: Some(290), added: 2765, mode: `Measured`)
+	/// Storage: `System::Account` (r:2 w:2)
+	/// Proof: `System::Account` (`max_values`: None, `max_size`: Some(128), added: 2603, mode: `Measured`)
+	/// Storage: `Balances::Holds` (r:1 w:1)
+	/// Proof: `Balances::Holds` (`max_values`: None, `max_size`: Some(85), added: 2560, mode: `Measured`)
+	fn v13_migration_step() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `682`
+		//  Estimated: `6622`
+		// Minimum execution time: 135_000_000 picoseconds.
+		Weight::from_parts(135_000_000, 6622)
+			.saturating_add(RocksDbWeight::get().reads(5_u64))
+			.saturating_add(RocksDbWeight::get().writes(3_u64))
 	}
 	/// Storage: Contracts MigrationInProgress (r:1 w:1)
 	/// Proof: Contracts MigrationInProgress (max_values: Some(1), max_size: Some(1026), added: 1521, mode: Measured)
