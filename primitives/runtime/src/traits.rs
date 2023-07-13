@@ -1234,7 +1234,7 @@ pub trait Header:
 //
 // Note that this is a workaround for a compiler bug and should be removed when the compiler
 // bug is fixed.
-#![doc(hidden)]
+#[doc(hidden)]
 pub trait HeaderProvider {
 	/// Header type.
 	type HeaderT: Header;
