@@ -540,6 +540,9 @@ morph_types! {
 	/// Morpher to disregard the source value and replace with another.
 	pub type Replace<V: TypedGet> = |_| -> V::Type { V::get() };
 
+	/// Morpher to disregard the source value and replace with default for T.
+	pub type ReplaceWithDefaultFor<T: Default> = |_| -> T { T::default() };
+
 	/// Mutator which reduces a scalar by a particular amount.
 	pub type ReduceBy<N: TypedGet> = |r: N::Type| -> N::Type {
 		r.checked_sub(&N::get()).unwrap_or(Zero::zero())

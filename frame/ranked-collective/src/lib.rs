@@ -382,12 +382,19 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// The origin required to add or promote a mmember. The success value indicates the
+		/// The origin required to add a member.
+		type AddOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = ()>;
+
+		/// The origin required to remove a member. The success value indicates the
+		/// maximum rank *from which* the removal may be.
+		type RemoveOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Rank>;
+
+		/// The origin required to promote a member. The success value indicates the
 		/// maximum rank *to which* the promotion may be.
 		type PromoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Rank>;
 
-		/// The origin required to demote or remove a member. The success value indicates the
-		/// maximum rank *from which* the demotion/removal may be.
+		/// The origin required to demote a member. The success value indicates the
+		/// maximum rank *from which* the demotion may be.
 		type DemoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Rank>;
 
 		/// The polling system used for our voting.
@@ -490,7 +497,7 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::add_member())]
 		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
-			let _ = T::PromoteOrigin::ensure_origin(origin)?;
+			T::AddOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			Self::do_add_member(who)
 		}
@@ -538,7 +545,7 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 			min_rank: Rank,
 		) -> DispatchResultWithPostInfo {
-			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
+			let max_rank = T::RemoveOrigin::ensure_origin(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let MemberRecord { rank, .. } = Self::ensure_member(&who)?;
 			ensure!(min_rank >= rank, Error::<T, I>::InvalidWitness);
