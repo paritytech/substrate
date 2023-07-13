@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Config, Pallet};
+use crate::{pallet_prelude::BlockNumberFor, Config, Pallet};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -60,7 +60,7 @@ impl<T: Config + Send + Sync> SignedExtension for CheckGenesis<T> {
 	const IDENTIFIER: &'static str = "CheckGenesis";
 
 	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Pallet<T>>::block_hash(T::BlockNumber::zero()))
+		Ok(<Pallet<T>>::block_hash(BlockNumberFor::<T>::zero()))
 	}
 
 	fn pre_dispatch(

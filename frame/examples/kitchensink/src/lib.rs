@@ -183,7 +183,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub foo: u32,
-		pub bar: T::BlockNumber,
+		pub bar: BlockNumberFor<T>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -249,22 +249,22 @@ pub mod pallet {
 	/// All the possible hooks that a pallet can have. See [`frame_support::traits::Hooks`] for more
 	/// info.
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn integrity_test() {}
 
-		fn offchain_worker(_n: T::BlockNumber) {
+		fn offchain_worker(_n: BlockNumberFor<T>) {
 			unimplemented!()
 		}
 
-		fn on_initialize(_n: T::BlockNumber) -> Weight {
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			unimplemented!()
 		}
 
-		fn on_finalize(_n: T::BlockNumber) {
+		fn on_finalize(_n: BlockNumberFor<T>) {
 			unimplemented!()
 		}
 
-		fn on_idle(_n: T::BlockNumber, _remaining_weight: Weight) -> Weight {
+		fn on_idle(_n: BlockNumberFor<T>, _remaining_weight: Weight) -> Weight {
 			unimplemented!()
 		}
 
@@ -283,7 +283,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			unimplemented!()
 		}
 	}

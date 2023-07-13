@@ -272,8 +272,8 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
-		fn on_idle(_: T::BlockNumber, remaining_weight: Weight) -> Weight {
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			if remaining_weight.any_lt(T::DbWeight::get().reads(2)) {
 				return Weight::from_parts(0, 0)
 			}
@@ -295,7 +295,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			// ensure that the value of `ErasToCheckPerBlock` is less than
 			// `T::MaxErasToCheckPerBlock`.
 			ensure!(

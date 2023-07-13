@@ -19,15 +19,18 @@
 
 #![recursion_limit = "128"]
 
-use frame_support::traits::{Contains, OriginTrait};
+use frame_support::{
+	derive_impl,
+	traits::{Contains, OriginTrait},
+};
+use sp_core::ConstU32;
 use sp_runtime::{generic, traits::BlakeTwo256};
 
 mod nested {
 	#[frame_support::pallet(dev_mode)]
 	pub mod module {
-		use self::frame_system::pallet_prelude::*;
 		use frame_support::pallet_prelude::*;
-		use frame_support_test as frame_system;
+		use frame_system::pallet_prelude::*;
 
 		#[pallet::pallet]
 		pub struct Pallet<T>(_);
@@ -75,9 +78,8 @@ mod nested {
 
 #[frame_support::pallet(dev_mode)]
 pub mod module {
-	use self::frame_system::pallet_prelude::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -160,26 +162,24 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), 
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 frame_support::construct_runtime!(
-	pub enum RuntimeOriginTest where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub enum RuntimeOriginTest
 	{
-		System: frame_support_test,
+		System: frame_system,
 		NestedModule: nested::module,
 		Module: module,
 	}
 );
 
-impl frame_support_test::Config for RuntimeOriginTest {
-	type BlockNumber = BlockNumber;
-	type AccountId = AccountId;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for RuntimeOriginTest {
 	type BaseCallFilter = BaseCallFilter;
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
 }
 
 impl nested::module::Config for RuntimeOriginTest {

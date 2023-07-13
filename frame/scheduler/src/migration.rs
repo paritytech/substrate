@@ -19,6 +19,7 @@
 
 use super::*;
 use frame_support::traits::OnRuntimeUpgrade;
+use frame_system::pallet_prelude::BlockNumberFor;
 
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
@@ -34,22 +35,14 @@ pub mod v1 {
 	pub(crate) type Agenda<T: Config> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
-		<T as frame_system::Config>::BlockNumber,
-		Vec<
-			Option<
-				ScheduledV1<<T as Config>::RuntimeCall, <T as frame_system::Config>::BlockNumber>,
-			>,
-		>,
+		BlockNumberFor<T>,
+		Vec<Option<ScheduledV1<<T as Config>::RuntimeCall, BlockNumberFor<T>>>>,
 		ValueQuery,
 	>;
 
 	#[frame_support::storage_alias]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<BlockNumberFor<T>>>;
 }
 
 pub mod v2 {
@@ -60,18 +53,14 @@ pub mod v2 {
 	pub(crate) type Agenda<T: Config> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
-		<T as frame_system::Config>::BlockNumber,
+		BlockNumberFor<T>,
 		Vec<Option<ScheduledV2Of<T>>>,
 		ValueQuery,
 	>;
 
 	#[frame_support::storage_alias]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<BlockNumberFor<T>>>;
 }
 
 pub mod v3 {
@@ -82,18 +71,14 @@ pub mod v3 {
 	pub(crate) type Agenda<T: Config> = StorageMap<
 		Pallet<T>,
 		Twox64Concat,
-		<T as frame_system::Config>::BlockNumber,
+		BlockNumberFor<T>,
 		Vec<Option<ScheduledV3Of<T>>>,
 		ValueQuery,
 	>;
 
 	#[frame_support::storage_alias]
-	pub(crate) type Lookup<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
-	>;
+	pub(crate) type Lookup<T: Config> =
+		StorageMap<Pallet<T>, Twox64Concat, Vec<u8>, TaskAddress<BlockNumberFor<T>>>;
 
 	/// Migrate the scheduler pallet from V3 to V4.
 	pub struct MigrateToV4<T>(sp_std::marker::PhantomData<T>);

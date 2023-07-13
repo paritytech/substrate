@@ -200,7 +200,7 @@ pub mod pallet {
 		BountyIndex,
 		Twox64Concat,
 		BountyIndex,
-		ChildBounty<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+		ChildBounty<T::AccountId, BalanceOf<T>, BlockNumberFor<T>>,
 	>;
 
 	/// The description of each child-bounty.
@@ -816,7 +816,7 @@ impl<T: Config> Pallet<T> {
 
 	fn ensure_bounty_active(
 		bounty_id: BountyIndex,
-	) -> Result<(T::AccountId, T::BlockNumber), DispatchError> {
+	) -> Result<(T::AccountId, BlockNumberFor<T>), DispatchError> {
 		let parent_bounty = pallet_bounties::Pallet::<T>::bounties(bounty_id)
 			.ok_or(BountiesError::<T>::InvalidIndex)?;
 		if let BountyStatus::Active { curator, update_due } = parent_bounty.get_status() {

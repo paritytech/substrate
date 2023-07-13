@@ -1,6 +1,6 @@
 error: feature = 1
                  ^ expected one of `<key>`, `all`, `any`, `not` here
-  --> tests/construct_runtime_ui/invalid_meta_literal.rs:10:3
-   |
-10 |         #[cfg(feature = 1)]
-   |         ^
+ --> tests/construct_runtime_ui/invalid_meta_literal.rs:7:3
+  |
+7 |         #[cfg(feature = 1)]
+  |         ^

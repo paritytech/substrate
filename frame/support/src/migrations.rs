@@ -257,12 +257,9 @@ pub fn migrate_from_pallet_version_to_storage_version<
 /// # Examples:
 /// ```ignore
 /// construct_runtime! {
-/// 	pub enum Runtime where
-/// 		Block = Block,
-/// 		NodeBlock = primitives::Block,
-/// 		UncheckedExtrinsic = UncheckedExtrinsic
+/// 	pub enum Runtime
 /// 	{
-/// 		System: frame_system::{Pallet, Call, Storage, Config, Event<T>} = 0,
+/// 		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>} = 0,
 ///
 /// 		SomePalletToRemove: pallet_something::{Pallet, Call, Storage, Event<T>} = 1,
 /// 		AnotherPalletToRemove: pallet_something_else::{Pallet, Call, Storage, Event<T>} = 2,

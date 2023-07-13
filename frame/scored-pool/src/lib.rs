@@ -170,7 +170,7 @@ pub mod pallet {
 		/// Every `Period` blocks the `Members` are filled with the highest scoring
 		/// members in the `Pool`.
 		#[pallet::constant]
-		type Period: Get<Self::BlockNumber>;
+		type Period: Get<BlockNumberFor<Self>>;
 
 		/// The receiver of the signal for when the membership has been initialized.
 		/// This happens pre-genesis and will usually be the same as `MembershipChanged`.
@@ -282,7 +282,7 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		/// Every `Period` blocks the `Members` set is refreshed from the
 		/// highest scoring members in the pool.
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: frame_system::pallet_prelude::BlockNumberFor<T>) -> Weight {
 			if n % T::Period::get() == Zero::zero() {
 				let pool = <Pool<T, I>>::get();
 				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);

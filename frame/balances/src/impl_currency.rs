@@ -32,6 +32,7 @@ use frame_support::{
 		ReservableCurrency, SignedImbalance, TryDrop, WithdrawReasons,
 	},
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 pub use imbalances::{NegativeImbalance, PositiveImbalance};
 
 // wrapping these imbalances in a private module is necessary to ensure absolute privacy
@@ -842,7 +843,7 @@ impl<T: Config<I>, I: 'static> LockableCurrency<T::AccountId> for Pallet<T, I>
 where
 	T::Balance: MaybeSerializeDeserialize + Debug,
 {
-	type Moment = T::BlockNumber;
+	type Moment = BlockNumberFor<T>;
 
 	type MaxLocks = T::MaxLocks;
 

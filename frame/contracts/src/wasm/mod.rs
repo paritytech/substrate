@@ -417,7 +417,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 mod tests {
 	use super::*;
 	use crate::{
-		exec::{AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
+		exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
@@ -427,6 +427,7 @@ mod tests {
 	use frame_support::{
 		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
+	use frame_system::pallet_prelude::BlockNumberFor;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
 	use sp_core::H256;
@@ -632,7 +633,7 @@ mod tests {
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
+		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberFor<Self::T>) {
 			(H256::from_slice(subject), 42)
 		}
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {

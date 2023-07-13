@@ -27,6 +27,7 @@ use frame_election_provider_support::NposSolution;
 use frame_support::traits::{
 	defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
@@ -100,10 +101,8 @@ pub type SignedSubmissionOf<T> = SignedSubmission<
 
 /// Always sorted vector of a score, submitted at the given block number, which can be found at the
 /// given index (`u32`) of the `SignedSubmissionsMap`.
-pub type SubmissionIndicesOf<T> = BoundedVec<
-	(ElectionScore, <T as frame_system::Config>::BlockNumber, u32),
-	<T as Config>::SignedMaxSubmissions,
->;
+pub type SubmissionIndicesOf<T> =
+	BoundedVec<(ElectionScore, BlockNumberFor<T>, u32), <T as Config>::SignedMaxSubmissions>;
 
 /// Outcome of [`SignedSubmissions::insert`].
 pub enum InsertResult<T: Config> {
@@ -216,7 +215,7 @@ impl<T: Config> SignedSubmissions<T> {
 	fn swap_out_submission(
 		&mut self,
 		remove_pos: usize,
-		insert: Option<(ElectionScore, T::BlockNumber, u32)>,
+		insert: Option<(ElectionScore, BlockNumberFor<T>, u32)>,
 	) -> Option<SignedSubmissionOf<T>> {
 		if remove_pos >= self.indices.len() {
 			return None

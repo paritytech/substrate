@@ -4,48 +4,46 @@ error: `Pallet` does not have #[pallet::validate_unsigned] defined, perhaps you 
 5  |   #[frame_support::pallet]
    |   ^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-49 | / construct_runtime! {
-50 | |     pub struct Runtime where
-51 | |         Block = Block,
-52 | |         NodeBlock = Block,
-...  |
-57 | |     }
-58 | | }
+48 | / construct_runtime! {
+49 | |     pub struct Runtime
+50 | |     {
+51 | |         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
+52 | |         Pallet: pallet::{Pallet, ValidateUnsigned},
+53 | |     }
+54 | | }
    | |_- in this macro invocation
    |
    = note: this error originates in the macro `pallet::__substrate_validate_unsigned_check::is_validate_unsigned_part_defined` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0599]: no variant or associated item named `Pallet` found for enum `RuntimeCall` in the current scope
-  --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:56:3
+  --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:52:3
    |
-49 | // construct_runtime! {
-50 | ||     pub struct Runtime where
-51 | ||         Block = Block,
-52 | ||         NodeBlock = Block,
-...  ||
-55 | ||         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
-56 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
+48 | // construct_runtime! {
+49 | ||     pub struct Runtime
+50 | ||     {
+51 | ||         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
+52 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
    | ||        -^^^^^^ variant or associated item not found in `RuntimeCall`
    | ||________|
    | |
 ...  |
 
 error[E0599]: no function or associated item named `pre_dispatch` found for struct `pallet::Pallet` in the current scope
-  --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:49:1
+  --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:48:1
    |
 11 |        pub struct Pallet<T>(_);
    |        -------------------- function or associated item `pre_dispatch` not found for this struct
 ...
-49 |    construct_runtime! {
+48 |    construct_runtime! {
    |  __^
    | | _|
    | ||
-50 | ||     pub struct Runtime where
-51 | ||         Block = Block,
-52 | ||         NodeBlock = Block,
-...  ||
-57 | ||     }
-58 | || }
+49 | ||     pub struct Runtime
+50 | ||     {
+51 | ||         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
+52 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
+53 | ||     }
+54 | || }
    | ||_- in this macro invocation
 ...  |
    |
@@ -56,21 +54,21 @@ error[E0599]: no function or associated item named `pre_dispatch` found for stru
    = note: this error originates in the macro `frame_support::construct_runtime` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0599]: no function or associated item named `validate_unsigned` found for struct `pallet::Pallet` in the current scope
-  --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:49:1
+  --> tests/construct_runtime_ui/undefined_validate_unsigned_part.rs:48:1
    |
 11 |        pub struct Pallet<T>(_);
    |        -------------------- function or associated item `validate_unsigned` not found for this struct
 ...
-49 |    construct_runtime! {
+48 |    construct_runtime! {
    |  __^
    | | _|
    | ||
-50 | ||     pub struct Runtime where
-51 | ||         Block = Block,
-52 | ||         NodeBlock = Block,
-...  ||
-57 | ||     }
-58 | || }
+49 | ||     pub struct Runtime
+50 | ||     {
+51 | ||         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
+52 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
+53 | ||     }
+54 | || }
    | ||_- in this macro invocation
 ...  |
    |

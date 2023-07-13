@@ -1,5 +1,5 @@
 error: expected one of: `Pallet`, `Call`, `Storage`, `Event`, `Error`, `Config`, `Origin`, `Inherent`, `ValidateUnsigned`, `FreezeReason`, `HoldReason`, `LockId`, `SlashReason`
- --> $DIR/invalid_module_details_keyword.rs:9:20
+ --> tests/construct_runtime_ui/invalid_module_details_keyword.rs:6:20
   |
-9 |         system: System::{enum},
+6 |         system: System::{enum},
   |                          ^^^^
