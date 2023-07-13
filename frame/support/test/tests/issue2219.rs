@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use frame_support::derive_impl;
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_core::{sr25519, ConstU64};
 use sp_runtime::{
 	generic,
@@ -25,10 +27,8 @@ use sp_runtime::{
 mod module {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
-	pub type Request<T> =
-		(<T as frame_system::Config>::AccountId, Role, <T as frame_system::Config>::BlockNumber);
+	pub type Request<T> = (<T as frame_system::Config>::AccountId, Role, BlockNumberFor<T>);
 	pub type Requests<T> = Vec<Request<T>>;
 
 	#[derive(Copy, Clone, Eq, PartialEq, Debug, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -46,35 +46,35 @@ mod module {
 		pub max_actors: u32,
 
 		// payouts are made at this block interval
-		pub reward_period: T::BlockNumber,
+		pub reward_period: BlockNumberFor<T>,
 
 		// minimum amount of time before being able to unstake
-		pub bonding_period: T::BlockNumber,
+		pub bonding_period: BlockNumberFor<T>,
 
 		// how long tokens remain locked for after unstaking
-		pub unbonding_period: T::BlockNumber,
+		pub unbonding_period: BlockNumberFor<T>,
 
 		// minimum period required to be in service. unbonding before this time is highly penalized
-		pub min_service_period: T::BlockNumber,
+		pub min_service_period: BlockNumberFor<T>,
 
 		// "startup" time allowed for roles that need to sync their infrastructure
 		// with other providers before they are considered in service and punishable for
 		// not delivering required level of service.
-		pub startup_grace_period: T::BlockNumber,
+		pub startup_grace_period: BlockNumberFor<T>,
 	}
 
 	impl<T: Config> Default for RoleParameters<T> {
 		fn default() -> Self {
 			Self {
 				max_actors: 10,
-				reward_period: T::BlockNumber::default(),
-				unbonding_period: T::BlockNumber::default(),
+				reward_period: BlockNumberFor::<T>::default(),
+				unbonding_period: BlockNumberFor::<T>::default(),
 
 				// not currently used
 				min_actors: 5,
-				bonding_period: T::BlockNumber::default(),
-				min_service_period: T::BlockNumber::default(),
-				startup_grace_period: T::BlockNumber::default(),
+				bonding_period: BlockNumberFor::<T>::default(),
+				min_service_period: BlockNumberFor::<T>::default(),
+				startup_grace_period: BlockNumberFor::<T>::default(),
 			}
 		}
 	}
@@ -115,7 +115,7 @@ mod module {
 	/// tokens locked until given block number
 	#[pallet::storage]
 	#[pallet::getter(fn bondage)]
-	pub type Bondage<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber>;
+	pub type Bondage<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, BlockNumberFor<T>>;
 
 	/// First step before enter a role is registering intent with a new account/key.
 	/// This is done by sending a role_entry_request() from the new account.
@@ -161,27 +161,23 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-impl frame_support_test::Config for Runtime {
-	type BlockNumber = BlockNumber;
-	type AccountId = AccountId;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
+	type BlockHashCount = ConstU64<10>;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
 }
 
 impl module::Config for Runtime {}
 
 frame_support::construct_runtime!(
-	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_support_test,
+	pub struct Runtime {
+		System: frame_system,
 		Module: module,
 	}
 );
@@ -189,6 +185,7 @@ frame_support::construct_runtime!(
 #[test]
 fn create_genesis_config() {
 	let config = RuntimeGenesisConfig {
+		system: Default::default(),
 		module: module::GenesisConfig {
 			request_life_time: 0,
 			enable_storage_role: true,

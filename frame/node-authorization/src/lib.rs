@@ -169,7 +169,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Set reserved node every block. It may not be enabled depends on the offchain
 		/// worker settings when starting the node.
-		fn offchain_worker(now: T::BlockNumber) {
+		fn offchain_worker(now: frame_system::pallet_prelude::BlockNumberFor<T>) {
 			let network_state = sp_io::offchain::network_state();
 			match network_state {
 				Err(_) => log::error!(

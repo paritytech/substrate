@@ -29,7 +29,6 @@ use sp_core::H256;
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
-	testing::Header,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup, Keccak256, OpaqueKeys},
 	BuildStorage,
 };
@@ -46,14 +45,10 @@ impl_opaque_keys! {
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
@@ -70,13 +65,12 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
-	type BlockNumber = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -103,7 +97,7 @@ impl pallet_session::Config for Test {
 }
 
 pub type MmrLeaf = sp_consensus_beefy::mmr::MmrLeaf<
-	<Test as frame_system::Config>::BlockNumber,
+	frame_system::pallet_prelude::BlockNumberFor<Test>,
 	<Test as frame_system::Config>::Hash,
 	crate::MerkleRootOf<Test>,
 	Vec<u8>,
