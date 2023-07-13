@@ -102,7 +102,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: T::BlockNumber) -> Weight {
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if let Some(new_slot) = Self::current_slot_from_digests() {
 				let current_slot = CurrentSlot::<T>::get();
 
@@ -134,7 +134,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_: T::BlockNumber) -> Result<(), sp_runtime::TryRuntimeError> {
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}

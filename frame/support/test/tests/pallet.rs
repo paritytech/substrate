@@ -657,13 +657,12 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
-	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
@@ -709,10 +708,7 @@ pub type UncheckedExtrinsic =
 	sp_runtime::testing::TestXt<RuntimeCall, frame_system::CheckNonZeroSender<Runtime>>;
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
 		// Exclude part `Storage` in order not to check its metadata in tests.
 		System: frame_system exclude_parts { Pallet, Storage },

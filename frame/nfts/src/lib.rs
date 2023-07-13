@@ -171,7 +171,7 @@ pub mod pallet {
 
 		/// The max duration in blocks for deadlines.
 		#[pallet::constant]
-		type MaxDeadlineDuration: Get<<Self as SystemConfig>::BlockNumber>;
+		type MaxDeadlineDuration: Get<BlockNumberFor<Self>>;
 
 		/// The max number of attributes a user could set per call.
 		#[pallet::constant]
@@ -343,7 +343,7 @@ pub mod pallet {
 			T::CollectionId,
 			T::ItemId,
 			PriceWithDirection<ItemPrice<T, I>>,
-			<T as SystemConfig>::BlockNumber,
+			BlockNumberFor<T>,
 		>,
 		OptionQuery,
 	>;
@@ -414,7 +414,7 @@ pub mod pallet {
 			item: T::ItemId,
 			owner: T::AccountId,
 			delegate: T::AccountId,
-			deadline: Option<<T as SystemConfig>::BlockNumber>,
+			deadline: Option<BlockNumberFor<T>>,
 		},
 		/// An approval for a `delegate` account to transfer the `item` of an item
 		/// `collection` was cancelled by its `owner`.
@@ -509,7 +509,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: <T as SystemConfig>::BlockNumber,
+			deadline: BlockNumberFor<T>,
 		},
 		/// The swap was cancelled.
 		SwapCancelled {
@@ -518,7 +518,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: <T as SystemConfig>::BlockNumber,
+			deadline: BlockNumberFor<T>,
 		},
 		/// The swap has been claimed.
 		SwapClaimed {
@@ -529,7 +529,7 @@ pub mod pallet {
 			received_item: T::ItemId,
 			received_item_owner: T::AccountId,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: <T as SystemConfig>::BlockNumber,
+			deadline: BlockNumberFor<T>,
 		},
 		/// New attributes have been set for an `item` of the `collection`.
 		PreSignedAttributesSet {
@@ -1236,7 +1236,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
-			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
+			maybe_deadline: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1659,11 +1659,7 @@ pub mod pallet {
 		pub fn update_mint_settings(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			mint_settings: MintSettings<
-				BalanceOf<T, I>,
-				<T as SystemConfig>::BlockNumber,
-				T::CollectionId,
-			>,
+			mint_settings: MintSettings<BalanceOf<T, I>, BlockNumberFor<T>, T::CollectionId>,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1759,7 +1755,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			maybe_desired_item: Option<T::ItemId>,
 			maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			duration: <T as SystemConfig>::BlockNumber,
+			duration: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_create_swap(

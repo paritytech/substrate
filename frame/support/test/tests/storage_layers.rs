@@ -71,12 +71,11 @@ impl frame_system::Config for Runtime {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = Index;
-	type BlockNumber = BlockNumber;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type DbWeight = ();
@@ -94,12 +93,7 @@ impl frame_system::Config for Runtime {
 impl Config for Runtime {}
 
 frame_support::construct_runtime!(
-	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub struct Runtime {
 		System: frame_system,
 		MyPallet: pallet,
 	}

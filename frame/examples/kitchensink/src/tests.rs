@@ -23,15 +23,11 @@ use sp_runtime::BuildStorage;
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example_kitchensink;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // For testing the pallet, we construct a mock runtime.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
@@ -44,6 +40,8 @@ frame_support::construct_runtime!(
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
+	type BlockHashCount = ConstU64<10>;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;

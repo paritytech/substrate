@@ -107,17 +107,14 @@ pub mod pallet {
 pub mod tests {
 	use super::*;
 	use frame_support::derive_impl;
+	use sp_runtime::traits::ConstU64;
 
 	use super::pallet as pallet_default_config_example;
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
 			System: frame_system,
 			DefaultPallet: pallet_default_config_example,
@@ -129,6 +126,8 @@ pub mod tests {
 		// these items are defined by frame-system as `no_default`, so we must specify them here.
 		// Note that these are types that actually rely on the outer runtime, and can't sensibly
 		// have an _independent_ default.
+		type Block = Block;
+		type BlockHashCount = ConstU64<10>;
 		type BaseCallFilter = frame_support::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
@@ -140,7 +139,9 @@ pub mod tests {
 
 		// type Index = u32;
 		// type BlockNumber = u32;
-		// type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
+		// type Header =
+		// sp_runtime::generic::Header<frame_system::pallet_prelude::BlockNumberFor<Self>,
+		// Self::Hashing>;
 		// type Hash = sp_core::hash::H256;
 		// type Hashing = sp_runtime::traits::BlakeTwo256;
 		// type AccountId = u64;

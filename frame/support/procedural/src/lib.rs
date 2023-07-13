@@ -856,7 +856,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type RuntimeOrigin = RuntimeOrigin;
 ///     type OnSetCode = ();
 ///     type PalletInfo = PalletInfo;
-///     type Header = Header;
+///     type Block = Block;
 ///     // We decide to override this one.
 ///     type AccountData = pallet_balances::AccountData<u64>;
 /// }
@@ -902,7 +902,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type RuntimeOrigin = RuntimeOrigin;
 ///     type OnSetCode = ();
 ///     type PalletInfo = PalletInfo;
-///     type Header = Header;
+///     type Block = Block;
 ///     type AccountData = pallet_balances::AccountData<u64>;
 ///     type Version = <TestDefaultConfig as DefaultConfig>::Version;
 ///     type BlockWeights = <TestDefaultConfig as DefaultConfig>::BlockWeights;
@@ -1559,7 +1559,7 @@ pub fn unbounded(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::whitelist_storage]
-/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+/// pub(super) type Number<T: Config> = StorageValue<_, frame_system::pallet_prelude::BlockNumberFor::<T>, ValueQuery>;
 /// ```
 ///
 /// NOTE: As with all `pallet::*` attributes, this one _must_ be written as

@@ -145,7 +145,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			// Drop obsolete roots. The proof for `obsolete` will be checked later
 			// in this block, so we drop `obsolete` - 1.
 			let period = <StoragePeriod<T>>::get();
@@ -158,7 +158,7 @@ pub mod pallet {
 			T::DbWeight::get().reads_writes(2, 4)
 		}
 
-		fn on_finalize(n: T::BlockNumber) {
+		fn on_finalize(n: BlockNumberFor<T>) {
 			assert!(
 				<ProofChecked<T>>::take() || {
 					// Proof is not required for early or empty blocks.
@@ -238,7 +238,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::renew())]
 		pub fn renew(
 			origin: OriginFor<T>,
-			block: T::BlockNumber,
+			block: BlockNumberFor<T>,
 			index: u32,
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
@@ -342,7 +342,7 @@ pub mod pallet {
 	pub(super) type Transactions<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
-		T::BlockNumber,
+		BlockNumberFor<T>,
 		BoundedVec<TransactionInfo, T::MaxBlockTransactions>,
 		OptionQuery,
 	>;
@@ -350,7 +350,7 @@ pub mod pallet {
 	/// Count indexed chunks for each block.
 	#[pallet::storage]
 	pub(super) type ChunkCount<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::BlockNumber, u32, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, BlockNumberFor<T>, u32, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn byte_fee)]
@@ -365,7 +365,7 @@ pub mod pallet {
 	/// Storage period for data in blocks. Should match `sp_storage_proof::DEFAULT_STORAGE_PERIOD`
 	/// for block authoring.
 	#[pallet::storage]
-	pub(super) type StoragePeriod<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type StoragePeriod<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	// Intermediates
 	#[pallet::storage]
@@ -380,7 +380,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub byte_fee: BalanceOf<T>,
 		pub entry_fee: BalanceOf<T>,
-		pub storage_period: T::BlockNumber,
+		pub storage_period: BlockNumberFor<T>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {

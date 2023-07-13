@@ -29,7 +29,7 @@ use frame_support::{
 		Get,
 	},
 };
-use frame_system::RawOrigin as SystemOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin as SystemOrigin};
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, MintSettings};
 use sp_runtime::traits::StaticLookup;
 use sp_std::prelude::*;
@@ -39,11 +39,8 @@ use crate::Pallet as NftFractionalization;
 type BalanceOf<T> =
 	<<T as Config>::Currency as InspectFungible<<T as SystemConfig>::AccountId>>::Balance;
 
-type CollectionConfigOf<T> = CollectionConfig<
-	BalanceOf<T>,
-	<T as SystemConfig>::BlockNumber,
-	<T as Config>::NftCollectionId,
->;
+type CollectionConfigOf<T> =
+	CollectionConfig<BalanceOf<T>, BlockNumberFor<T>, <T as Config>::NftCollectionId>;
 
 fn default_collection_config<T: Config>() -> CollectionConfigOf<T>
 where
@@ -58,7 +55,7 @@ where
 
 fn mint_nft<T: Config>(nft_id: T::NftId) -> (T::AccountId, AccountIdLookupOf<T>)
 where
-	T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
+	T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, BlockNumberFor<T>, T::NftCollectionId>>
 		+ Mutate<T::AccountId, ItemConfig>,
 {
 	let caller: T::AccountId = whitelisted_caller();
@@ -84,7 +81,7 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 benchmarks! {
 	where_clause {
 		where
-			T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, T::BlockNumber, T::NftCollectionId>>
+			T::Nfts: Create<T::AccountId, CollectionConfig<BalanceOf<T>, frame_system::pallet_prelude::BlockNumberFor::<T>, T::NftCollectionId>>
 				+ Mutate<T::AccountId, ItemConfig>,
 	}
 

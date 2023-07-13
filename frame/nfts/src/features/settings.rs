@@ -61,7 +61,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		mint_settings: MintSettings<
 			BalanceOf<T, I>,
-			<T as SystemConfig>::BlockNumber,
+			frame_system::pallet_prelude::BlockNumberFor<T>,
 			T::CollectionId,
 		>,
 	) -> DispatchResult {

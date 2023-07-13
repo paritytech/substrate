@@ -19,13 +19,13 @@ use crate::construct_runtime::{parse::PalletPath, Pallet};
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::str::FromStr;
-use syn::{Ident, TypePath};
+use syn::Ident;
 
 pub fn expand_runtime_metadata(
 	runtime: &Ident,
 	pallet_declarations: &[Pallet],
 	scrate: &TokenStream,
-	extrinsic: &TypePath,
+	extrinsic: &TokenStream,
 	system_path: &PalletPath,
 ) -> TokenStream {
 	let pallets = pallet_declarations

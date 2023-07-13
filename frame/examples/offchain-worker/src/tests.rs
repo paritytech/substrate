@@ -30,20 +30,16 @@ use sp_core::{
 
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use sp_runtime::{
-	testing::{Header, TestXt},
+	testing::TestXt,
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	RuntimeAppPublic,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // For testing the module, we construct a mock runtime.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Example: example_offchain_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
@@ -58,12 +54,11 @@ impl frame_system::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
-	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -274,7 +269,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 			let signature_valid =
 				<PricePayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					frame_system::pallet_prelude::BlockNumberFor<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
 
 			assert!(signature_valid);
@@ -328,7 +323,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 			let signature_valid =
 				<PricePayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					frame_system::pallet_prelude::BlockNumberFor<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&price_payload, signature);
 
 			assert!(signature_valid);
