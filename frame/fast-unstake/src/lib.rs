@@ -71,10 +71,10 @@
 //! ### Example
 //!
 //! 1. Fast-unstake with multiple participants in the queue.
-#![doc = docify::embed!("frame/fast-unstake/src/tests.rs", successful_multi_queue)]
+#![doc = docify::embed!("src/tests.rs", successful_multi_queue)]
 //!
 //! 2. Fast unstake failing because a nominator is exposed.
-#![doc = docify::embed!("frame/fast-unstake/src/tests.rs", exposed_nominator_cannot_unstake)]
+#![doc = docify::embed!("src/tests.rs", exposed_nominator_cannot_unstake)]
 //!
 //! ## Pallet API
 //!
