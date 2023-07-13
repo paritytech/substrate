@@ -34,16 +34,20 @@ fn benchmark_pallet_works() {
 }
 
 fn benchmark_pallet(steps: u32, repeat: u32, should_work: bool) {
-	let output = Command::new(cargo_bin("substrate"))
+	let status = Command::new(cargo_bin("substrate"))
 		.args(["benchmark", "pallet", "--dev"])
 		// Use the `addition` benchmark since is the fastest.
 		.args(["--pallet", "frame-benchmarking", "--extrinsic", "addition"])
 		.args(["--steps", &format!("{}", steps), "--repeat", &format!("{}", repeat)])
-		.output()
+		.args([
+			"--wasm-execution=compiled",
+			"--no-storage-info",
+			"--no-median-slopes",
+			"--no-min-squares",
+			"--heap-pages=4096",
+		])
+		.status()
 		.unwrap();
 
-	if output.status.success() != should_work {
-		let log = String::from_utf8_lossy(&output.stderr).to_string();
-		panic!("Test failed:\n{}", log);
-	}
+	assert_eq!(status.success(), should_work);
 }

@@ -150,6 +150,10 @@ pub struct PalletCmd {
 	)]
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
+	/// DEPRECATED: This argument has no effect.
+	#[arg(long = "execution")]
+	pub execution: Option<String>,
+
 	/// Limit the memory the database cache can use.
 	#[arg(long = "db-cache", value_name = "MiB", default_value_t = 1024)]
 	pub database_cache_size: u32,
