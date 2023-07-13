@@ -135,7 +135,7 @@ benchmarks_instance_pallet! {
 		setup_pot_account::<T, _>();
 		create_approved_proposals::<T, _>(p)?;
 	}: {
-		Treasury::<T, _>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T, _>::on_initialize(frame_system::pallet_prelude::BlockNumberFor::<T>::zero());
 	}
 
 	impl_benchmark_test_suite!(Treasury, crate::tests::new_test_ext(), crate::tests::Test);

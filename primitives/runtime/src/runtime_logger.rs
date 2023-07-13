@@ -68,8 +68,7 @@ mod tests {
 	use sp_api::ProvideRuntimeApi;
 	use std::{env, str::FromStr};
 	use substrate_test_runtime_client::{
-		runtime::TestAPI, DefaultTestClientBuilderExt, ExecutionStrategy, TestClientBuilder,
-		TestClientBuilderExt,
+		runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
 	};
 
 	#[test]
@@ -78,9 +77,7 @@ mod tests {
 			sp_tracing::try_init_simple();
 			log::set_max_level(log::LevelFilter::from_str(&env::var("RUST_LOG").unwrap()).unwrap());
 
-			let client = TestClientBuilder::new()
-				.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
-				.build();
+			let client = TestClientBuilder::new().build();
 			let runtime_api = client.runtime_api();
 			runtime_api
 				.do_trace_log(client.chain_info().genesis_hash)

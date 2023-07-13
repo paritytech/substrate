@@ -64,12 +64,13 @@ use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	utils::is_descendent_of,
-	BlockchainEvents, CallExecutor, ExecutionStrategy, ExecutorProvider, Finalizer, LockImportRun,
-	StorageProvider, TransactionFor,
+	BlockchainEvents, CallExecutor, ExecutorProvider, Finalizer, LockImportRun, StorageProvider,
+	TransactionFor,
 };
 use sc_consensus::BlockImport;
 use sc_network::types::ProtocolName;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppCrypto;
@@ -479,7 +480,6 @@ where
 				self.expect_block_hash_from_id(&BlockId::Number(Zero::zero()))?,
 				"GrandpaApi_grandpa_authorities",
 				&[],
-				ExecutionStrategy::NativeElseWasm,
 				CallContext::Offchain,
 			)
 			.and_then(|call_result| {
@@ -688,6 +688,11 @@ pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 	pub shared_voter_state: SharedVoterState,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Offchain transaction pool factory.
+	///
+	/// This will be used to create an offchain transaction pool instance for sending an
+	/// equivocation report from the runtime.
+	pub offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
 }
 
 /// Returns the configuration value to put in
@@ -736,6 +741,7 @@ where
 		prometheus_registry,
 		shared_voter_state,
 		telemetry,
+		offchain_tx_pool_factory,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -810,6 +816,7 @@ where
 		shared_voter_state,
 		justification_sender,
 		telemetry,
+		offchain_tx_pool_factory,
 	);
 
 	let voter_work = voter_work.map(|res| match res {
@@ -879,6 +886,7 @@ where
 		shared_voter_state: SharedVoterState,
 		justification_sender: GrandpaJustificationSender<Block>,
 		telemetry: Option<TelemetryHandle>,
+		offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -903,6 +911,7 @@ where
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			justification_sender: Some(justification_sender),
 			telemetry: telemetry.clone(),
+			offchain_tx_pool_factory,
 			_phantom: PhantomData,
 		});
 
@@ -1054,6 +1063,7 @@ where
 					metrics: self.env.metrics.clone(),
 					justification_sender: self.env.justification_sender.clone(),
 					telemetry: self.telemetry.clone(),
+					offchain_tx_pool_factory: self.env.offchain_tx_pool_factory.clone(),
 					_phantom: PhantomData,
 				});
 

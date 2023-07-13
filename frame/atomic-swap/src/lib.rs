@@ -50,6 +50,7 @@ use frame_support::{
 	weights::Weight,
 	RuntimeDebugNoBound,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::RuntimeDebug;
@@ -69,7 +70,7 @@ pub struct PendingSwap<T: Config> {
 	/// Action of this swap.
 	pub action: T::SwapAction,
 	/// End block of the lock.
-	pub end_block: T::BlockNumber,
+	pub end_block: BlockNumberFor<T>,
 }
 
 /// Hashed proof type.
@@ -249,7 +250,7 @@ pub mod pallet {
 			target: T::AccountId,
 			hashed_proof: HashedProof,
 			action: T::SwapAction,
-			duration: T::BlockNumber,
+			duration: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			ensure!(

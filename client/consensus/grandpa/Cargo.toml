@@ -32,6 +32,7 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../transaction-pool/api" }
 sc-consensus = { version = "0.10.0-dev", path = "../common" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-gossip = { version = "0.10.0-dev", path = "../../network-gossip" }

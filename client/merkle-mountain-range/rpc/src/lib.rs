@@ -30,9 +30,12 @@ use jsonrpsee::{
 };
 use serde::{Deserialize, Serialize};
 
-use sp_api::{NumberFor, ProvideRuntimeApi};
+use sp_api::{ApiExt, NumberFor, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
-use sp_core::Bytes;
+use sp_core::{
+	offchain::{storage::OffchainDb, OffchainDbExt, OffchainStorage},
+	Bytes,
+};
 use sp_mmr_primitives::{Error as MmrError, Proof};
 use sp_runtime::traits::Block as BlockT;
 
@@ -127,26 +130,28 @@ pub trait MmrApi<BlockHash, BlockNumber, MmrHash> {
 }
 
 /// MMR RPC methods.
-pub struct Mmr<Client, Block> {
+pub struct Mmr<Client, Block, S> {
 	client: Arc<Client>,
+	offchain_db: OffchainDb<S>,
 	_marker: PhantomData<Block>,
 }
 
-impl<C, B> Mmr<C, B> {
+impl<C, B, S> Mmr<C, B, S> {
 	/// Create new `Mmr` with the given reference to the client.
-	pub fn new(client: Arc<C>) -> Self {
-		Self { client, _marker: Default::default() }
+	pub fn new(client: Arc<C>, offchain_storage: S) -> Self {
+		Self { client, _marker: Default::default(), offchain_db: OffchainDb::new(offchain_storage) }
 	}
 }
 
 #[async_trait]
-impl<Client, Block, MmrHash> MmrApiServer<<Block as BlockT>::Hash, NumberFor<Block>, MmrHash>
-	for Mmr<Client, (Block, MmrHash)>
+impl<Client, Block, MmrHash, S> MmrApiServer<<Block as BlockT>::Hash, NumberFor<Block>, MmrHash>
+	for Mmr<Client, (Block, MmrHash), S>
 where
 	Block: BlockT,
 	Client: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	Client::Api: MmrRuntimeApi<Block, MmrHash, NumberFor<Block>>,
 	MmrHash: Codec + Send + Sync + 'static,
+	S: OffchainStorage + 'static,
 {
 	fn mmr_root(&self, at: Option<<Block as BlockT>::Hash>) -> RpcResult<MmrHash> {
 		let block_hash = at.unwrap_or_else(||
@@ -166,18 +171,15 @@ where
 		best_known_block_number: Option<NumberFor<Block>>,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<LeavesProof<<Block as BlockT>::Hash>> {
-		let api = self.client.runtime_api();
+		let mut api = self.client.runtime_api();
 		let block_hash = at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash);
 
+		api.register_extension(OffchainDbExt::new(self.offchain_db.clone()));
+
 		let (leaves, proof) = api
-			.generate_proof_with_context(
-				block_hash,
-				sp_core::ExecutionContext::OffchainCall(None),
-				block_numbers,
-				best_known_block_number,
-			)
+			.generate_proof(block_hash, block_numbers, best_known_block_number)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;
 
@@ -185,7 +187,7 @@ where
 	}
 
 	fn verify_proof(&self, proof: LeavesProof<<Block as BlockT>::Hash>) -> RpcResult<bool> {
-		let api = self.client.runtime_api();
+		let mut api = self.client.runtime_api();
 
 		let leaves = Decode::decode(&mut &proof.leaves.0[..])
 			.map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
@@ -193,14 +195,11 @@ where
 		let decoded_proof = Decode::decode(&mut &proof.proof.0[..])
 			.map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
-		api.verify_proof_with_context(
-			proof.block_hash,
-			sp_core::ExecutionContext::OffchainCall(None),
-			leaves,
-			decoded_proof,
-		)
-		.map_err(runtime_error_into_rpc_error)?
-		.map_err(mmr_error_into_rpc_error)?;
+		api.register_extension(OffchainDbExt::new(self.offchain_db.clone()));
+
+		api.verify_proof(proof.block_hash, leaves, decoded_proof)
+			.map_err(runtime_error_into_rpc_error)?
+			.map_err(mmr_error_into_rpc_error)?;
 
 		Ok(true)
 	}

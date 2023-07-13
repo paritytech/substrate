@@ -187,9 +187,7 @@ where
 
 	let client = {
 		let extensions = sc_client_api::execution_extensions::ExecutionExtensions::new(
-			config.execution_strategies.clone(),
-			Some(keystore_container.keystore()),
-			sc_offchain::OffchainDb::factory_from_backend(&*backend),
+			None,
 			Arc::new(executor.clone()),
 		);
 
@@ -322,19 +320,14 @@ where
 
 /// Shared network instance implementing a set of mandatory traits.
 pub trait SpawnTaskNetwork<Block: BlockT>:
-	sc_offchain::NetworkProvider + NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static
+	NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static
 {
 }
 
 impl<T, Block> SpawnTaskNetwork<Block> for T
 where
 	Block: BlockT,
-	T: sc_offchain::NetworkProvider
-		+ NetworkStateInfo
-		+ NetworkStatusProvider
-		+ Send
-		+ Sync
-		+ 'static,
+	T: NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static,
 {
 }
 
@@ -368,38 +361,6 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub telemetry: Option<&'a mut Telemetry>,
 }
 
-/// Build a shared offchain workers instance.
-pub fn build_offchain_workers<TBl, TCl>(
-	config: &Configuration,
-	spawn_handle: SpawnTaskHandle,
-	client: Arc<TCl>,
-	network: Arc<dyn sc_offchain::NetworkProvider + Send + Sync>,
-) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBl>>>
-where
-	TBl: BlockT,
-	TCl: Send + Sync + ProvideRuntimeApi<TBl> + BlockchainEvents<TBl> + 'static,
-	<TCl as ProvideRuntimeApi<TBl>>::Api: sc_offchain::OffchainWorkerApi<TBl>,
-{
-	let offchain_workers = Some(Arc::new(sc_offchain::OffchainWorkers::new(client.clone())));
-
-	// Inform the offchain worker about new imported blocks
-	if let Some(offchain) = offchain_workers.clone() {
-		spawn_handle.spawn(
-			"offchain-notifications",
-			Some("offchain-worker"),
-			sc_offchain::notification_future(
-				config.role.is_authority(),
-				client,
-				offchain,
-				Clone::clone(&spawn_handle),
-				network,
-			),
-		);
-	}
-
-	offchain_workers
-}
-
 /// Spawn the tasks that are required to run a node.
 pub fn spawn_tasks<TBl, TBackend, TExPool, TRpc, TCl>(
 	params: SpawnTasksParams<TBl, TCl, TExPool, TRpc, TBackend>,
@@ -420,7 +381,6 @@ where
 		+ Send
 		+ 'static,
 	<TCl as ProvideRuntimeApi<TBl>>::Api: sp_api::Metadata<TBl>
-		+ sc_offchain::OffchainWorkerApi<TBl>
 		+ sp_transaction_pool::runtime_api::TaggedTransactionQueue<TBl>
 		+ sp_session::SessionKeys<TBl>
 		+ sp_api::ApiExt<TBl, StateBackend = TBackend::State>,
@@ -451,6 +411,7 @@ where
 		client.clone(),
 		chain_info.best_hash,
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),
+		keystore.clone(),
 	)
 	.map_err(|e| Error::Application(Box::new(e)))?;
 

@@ -27,8 +27,9 @@ use frame_support::{
 	weights::constants::RocksDbWeight,
 };
 use frame_system::Config;
+use sp_core::ConstU64;
+use sp_runtime::BuildStorage;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 #[frame_support::pallet]
@@ -48,11 +49,14 @@ mod dummy_pallet {
 	pub type SomeStorage<T: Config> = StorageValue<_, u32, ValueQuery>;
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {}
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config> {
+		#[serde(skip)]
+		_config: sp_std::marker::PhantomData<T>,
+	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {}
 	}
 }
@@ -60,19 +64,18 @@ mod dummy_pallet {
 impl dummy_pallet::Config for Test {}
 
 construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>} = 0,
-		DummyPallet: dummy_pallet::{Pallet, Config, Storage} = 1,
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>} = 0,
+		DummyPallet: dummy_pallet::{Pallet, Config<T>, Storage} = 1,
 	}
 );
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
+	type BlockHashCount = ConstU64<10>;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
@@ -81,7 +84,7 @@ impl frame_system::Config for Test {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let mut ext: sp_io::TestExternalities = sp_io::TestExternalities::from(storage);
 	ext.execute_with(|| System::set_block_number(1));
 	ext

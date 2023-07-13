@@ -115,8 +115,8 @@ cargo-check-benches:
       rusty-cachier cache upload
       ;;
       2)
-      cargo run --locked --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
-      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
+      cargo run --locked --release -p node-bench -- ::node::import::sr25519::transfer_keep_alive::paritydb::small --json
+      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::sr25519::transfer_keep_alive::paritydb::small.json
       ;;
       esac
 
@@ -305,7 +305,7 @@ quick-benchmarks:
     WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
   script:
     - rusty-cachier snapshot create
-    - time cargo run --locked --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
+    - time cargo run --locked --release --features runtime-benchmarks -- benchmark pallet --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
     - rusty-cachier cache upload
 
 test-frame-examples-compile-to-wasm:
