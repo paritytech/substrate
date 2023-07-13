@@ -37,7 +37,7 @@ use sc_client_api::{
 	StorageProvider,
 };
 use sc_rpc_api::state::ReadProof;
-use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
+use sp_api::{CallApiAt, Metadata};
 use sp_blockchain::{
 	CachedHeaderMetadata, Error as ClientError, HeaderBackend, HeaderMetadata,
 	Result as ClientResult,
@@ -181,12 +181,10 @@ where
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
 		+ BlockchainEvents<Block>
 		+ CallApiAt<Block>
-		+ ProvideRuntimeApi<Block>
 		+ BlockBackend<Block>
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata<Block>,
 {
 	fn call(
 		&self,
@@ -316,7 +314,7 @@ where
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_api()
-				.metadata(block)
+				.metadata()
 				.map(Into::into)
 				.map_err(|e| Error::Client(Box::new(e)))
 		})
@@ -488,11 +486,9 @@ where
 		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
 		+ BlockchainEvents<Block>
 		+ CallApiAt<Block>
-		+ ProvideRuntimeApi<Block>
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata<Block>,
 {
 	fn read_child_proof(
 		&self,

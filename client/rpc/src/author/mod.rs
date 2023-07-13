@@ -37,7 +37,7 @@ use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, InPoolTransaction, TransactionFor, TransactionPool,
 	TransactionSource, TxHash,
 };
-use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_api::ApiExt;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_keystore::{KeystoreExt, KeystorePtr};
@@ -86,8 +86,7 @@ const TX_SOURCE: TransactionSource = TransactionSource::External;
 impl<P, Client> AuthorApiServer<TxHash<P>, BlockHash<P>> for Author<P, Client>
 where
 	P: TransactionPool + Sync + Send + 'static,
-	Client: HeaderBackend<P::Block> + ProvideRuntimeApi<P::Block> + Send + Sync + 'static,
-	Client::Api: SessionKeys<P::Block>,
+	Client: HeaderBackend<P::Block> + Send + Sync + 'static,
 	P::Hash: Unpin,
 	<P::Block as BlockT>::Hash: Unpin,
 {
@@ -122,28 +121,36 @@ where
 		self.deny_unsafe.check_if_safe()?;
 
 		let best_block_hash = self.client.info().best_hash;
+		/*
 		let mut runtime_api = self.client.runtime_api();
 
 		runtime_api.register_extension(KeystoreExt::from(self.keystore.clone()));
 
 		runtime_api
-			.generate_session_keys(best_block_hash, None)
+			.generate_session_keys(None)
 			.map(Into::into)
 			.map_err(|api_err| Error::Client(Box::new(api_err)).into())
+		*/
+
+		todo!()
 	}
 
 	fn has_session_keys(&self, session_keys: Bytes) -> RpcResult<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
+		/*
 		let best_block_hash = self.client.info().best_hash;
 		let keys = self
 			.client
 			.runtime_api()
-			.decode_session_keys(best_block_hash, session_keys.to_vec())
+			.decode_session_keys(session_keys.to_vec())
 			.map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or(Error::InvalidSessionKeys)?;
 
 		Ok(self.keystore.has_keys(&keys))
+		*/
+
+		todo!()
 	}
 
 	fn has_key(&self, public_key: Bytes, key_type: String) -> RpcResult<bool> {

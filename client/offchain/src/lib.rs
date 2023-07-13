@@ -285,11 +285,12 @@ where
 
 				custom_extensions.into_iter().for_each(|ext| runtime.register_extension(ext));
 
+				/*
 				let run = if version == 2 {
-					runtime.offchain_worker(hash, &header)
+					runtime.offchain_worker(&header)
 				} else {
 					#[allow(deprecated)]
-					runtime.offchain_worker_before_version_2(hash, *header.number())
+					runtime.offchain_worker_before_version_2(*header.number())
 				};
 
 				if let Err(e) = run {
@@ -300,6 +301,7 @@ where
 						e
 					);
 				}
+				*/
 			});
 
 			runner.process()
