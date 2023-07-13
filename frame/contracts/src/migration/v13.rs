@@ -62,6 +62,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 		if let Some((account, contract)) = iter.next() {
 			let deposit_account = contract.deposit_account().deref();
 			System::<T>::dec_consumers(&deposit_account);
+
 			// Get the deposit balance to transfer.
 			let total_deposit_balance = T::Currency::total_balance(deposit_account);
 			let reducible_deposit_balance = T::Currency::reducible_balance(
@@ -71,8 +72,9 @@ impl<T: Config> MigrationStep for Migration<T> {
 			);
 
 			if total_deposit_balance > reducible_deposit_balance {
-				// This should never happen, as by design all balance in the deposit account should
-				// be reducible.
+				// This should never happen, as by design all balance in the deposit account is
+				// storage deposit and therefore reducible after decrementing the consumer
+				// reference.
 				log::warn!(
 					target: LOG_TARGET,
 					"Deposit account 0x{:?} for contract 0x{:?} has some non-reducible balance {:?} from a total of {:?} that will remain in there.",
