@@ -23,6 +23,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::well_known_keys::{self, CODE},
 	testing::TaskExecutor,
+	Blake2Hasher, Hasher,
 };
 use sp_version::RuntimeVersion;
 use std::{sync::Arc, time::Duration};
@@ -514,7 +515,119 @@ async fn call_runtime_without_flag() {
 }
 
 #[tokio::test]
-async fn get_storage() {
+async fn get_storage_hash() {
+	let (mut client, api, mut block_sub, sub_id, block) = setup_api().await;
+	let block_hash = format!("{:?}", block.header.hash());
+	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+	let key = format!("0x{:?}", HexDisplay::from(&KEY));
+
+	// Subscription ID is stale the disjoint event is emitted.
+	let mut sub = api
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				"invalid_sub_id",
+				&invalid_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Hash }]
+			],
+		)
+		.await
+		.unwrap();
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_eq!(event, ChainHeadStorageEvent::<String>::Disjoint);
+
+	// Valid subscription ID with invalid block hash will error.
+	let err = api
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&invalid_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Hash }]
+			],
+		)
+		.await
+		.unwrap_err();
+	assert_matches!(err,
+		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+	);
+
+	// Valid call without storage at the key.
+	let mut sub = api
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&block_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Hash }]
+			],
+		)
+		.await
+		.unwrap();
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	// The `Done` event is generated directly since the key does not have any value associated.
+	assert_matches!(event, ChainHeadStorageEvent::Done);
+
+	// Import a new block with storage changes.
+	let mut builder = client.new_block(Default::default()).unwrap();
+	builder.push_storage_change(KEY.to_vec(), Some(VALUE.to_vec())).unwrap();
+	let block = builder.build().unwrap().block;
+	let block_hash = format!("{:?}", block.header.hash());
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	// Ensure the imported block is propagated and pinned for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	// Valid call with storage at the key.
+	let expected_hash = format!("{:?}", Blake2Hasher::hash(&VALUE));
+	let mut sub = api
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&block_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Hash }]
+			],
+		)
+		.await
+		.unwrap();
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash));
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
+
+	// Child value set in `setup_api`.
+	let child_info = format!("0x{:?}", HexDisplay::from(&CHILD_STORAGE_KEY));
+	let genesis_hash = format!("{:?}", client.genesis_hash());
+	let expected_hash = format!("{:?}", Blake2Hasher::hash(&CHILD_VALUE));
+	println!("Expe: {:?}", expected_hash);
+	let mut sub = api
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&genesis_hash,
+				vec![StorageQuery { key: key.clone(), ty: StorageQueryType::Hash }],
+				&child_info
+			],
+		)
+		.await
+		.unwrap();
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash));
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
+}
+
+#[tokio::test]
+async fn get_storage_value() {
 	let (mut client, api, mut block_sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
 	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
