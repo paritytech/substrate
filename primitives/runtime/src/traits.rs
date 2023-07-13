@@ -1231,6 +1231,7 @@ pub trait Header:
 // recursive loop leading to a build error.
 //
 // Note that this is a workaround for a compiler bug and should be removed when the compiler bug is fixed.
+#![doc(hidden)]
 pub trait HeaderProvider {
 	/// Header type.
 	type HeaderT: Header;
