@@ -143,9 +143,10 @@ pub mod pallet {
 		/// Identifier for the class of non-native asset.
 		/// Note: A `From<u32>` bound here would prevent `MultiLocation` from being used as an
 		/// `AssetId`.
-		type AssetId: AssetId + PartialOrd;
+		type AssetId: AssetId;
 
 		/// Type that identifies either the native currency or a token class from `Assets`.
+		/// `Ord` is added because of `get_pool_id`.
 		type MultiAssetId: AssetId + Ord + From<Self::AssetId>;
 
 		/// Type to convert an `AssetId` into `MultiAssetId`.
@@ -913,13 +914,27 @@ pub mod pallet {
 			}
 		}
 
-		/// Returns a pool id constructed from 2 sorted assets.
-		/// Native asset should be lower than the other asset ids.
+		/// Returns a pool id constructed from 2 assets.
+		/// 1. Native asset should be lower than the other asset ids.
+		/// 2. Two native or two non-native assets are compared by their `Ord` implementation.
+		///
+		/// We expect deterministic order, so (asset1, asset2) or (asset2, asset1) returns the same
+		/// result.
 		pub fn get_pool_id(asset1: T::MultiAssetId, asset2: T::MultiAssetId) -> PoolIdOf<T> {
-			if asset1 <= asset2 {
-				(asset1, asset2)
-			} else {
-				(asset2, asset1)
+			match (
+				T::MultiAssetIdConverter::is_native(&asset1),
+				T::MultiAssetIdConverter::is_native(&asset2),
+			) {
+				(true, false) => return (asset1, asset2),
+				(false, true) => return (asset2, asset1),
+				_ => {
+					// else we want to be deterministic based on `Ord` implementation
+					if asset1 <= asset2 {
+						(asset1, asset2)
+					} else {
+						(asset2, asset1)
+					}
+				},
 			}
 		}
 
@@ -1179,7 +1194,8 @@ pub mod pallet {
 			for assets_pair in path.windows(2) {
 				if let [asset1, asset2] = assets_pair {
 					let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-					let new_element = pools.try_insert(pool_id).expect("can't get here");
+					let new_element =
+						pools.try_insert(pool_id).map_err(|_| Error::<T>::Overflow)?;
 					if !new_element {
 						return Err(Error::<T>::NonUniquePath.into())
 					}
