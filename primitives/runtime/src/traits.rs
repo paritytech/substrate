@@ -1215,7 +1215,9 @@ pub trait Header:
 	}
 }
 
-/// Something that provides the Header Type.
+// Something that provides the Header Type. Only for internal usage and should only be used
+// via `HeaderFor` or `BlockNumberFor`.
+//
 // This is needed to fix the "cyclical" issue in loading Header/BlockNumber as part of a
 // `pallet::call`. Essentially, `construct_runtime` aggregates all calls to create a `RuntimeCall`
 // that is then used to define `UncheckedExtrinsic`.
@@ -1230,7 +1232,8 @@ pub trait Header:
 // So, if we do not create a trait outside of `Block` that doesn't have `Extrinsic`, we go into a
 // recursive loop leading to a build error.
 //
-// Note that this is a workaround for a compiler bug and should be removed when the compiler bug is fixed.
+// Note that this is a workaround for a compiler bug and should be removed when the compiler
+// bug is fixed.
 #![doc(hidden)]
 pub trait HeaderProvider {
 	/// Header type.
