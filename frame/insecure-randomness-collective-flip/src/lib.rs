@@ -74,11 +74,12 @@ use safe_mix::TripletMix;
 
 use codec::Encode;
 use frame_support::{pallet_prelude::Weight, traits::Randomness};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::{Hash, Saturating};
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
 
-fn block_number_to_index<T: Config>(block_number: T::BlockNumber) -> usize {
+fn block_number_to_index<T: Config>(block_number: BlockNumberFor<T>) -> usize {
 	// on_initialize is called on the first block after genesis
 	let index = (block_number - 1u32.into()) % RANDOM_MATERIAL_LEN.into();
 	index.try_into().ok().expect("Something % 81 is always smaller than usize; qed")
@@ -90,7 +91,6 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -100,7 +100,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(block_number: T::BlockNumber) -> Weight {
+		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
 			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 
 			<RandomMaterial<T>>::mutate(|ref mut values| {
@@ -123,7 +123,7 @@ pub mod pallet {
 		StorageValue<_, BoundedVec<T::Hash, ConstU32<RANDOM_MATERIAL_LEN>>, ValueQuery>;
 }
 
-impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Pallet<T> {
+impl<T: Config> Randomness<T::Hash, BlockNumberFor<T>> for Pallet<T> {
 	/// This randomness uses a low-influence function, drawing upon the block hashes from the
 	/// previous 81 blocks. Its result for any given subject will be known far in advance by anyone
 	/// observing the chain. Any block producer has significant influence over their block hashes
@@ -134,7 +134,7 @@ impl<T: Config> Randomness<T::Hash, T::BlockNumber> for Pallet<T> {
 	/// WARNING: Hashing the result of this function will remove any low-influence properties it has
 	/// and mean that all bits of the resulting value are entirely manipulatable by the author of
 	/// the parent block, who can determine the value of `parent_hash`.
-	fn random(subject: &[u8]) -> (T::Hash, T::BlockNumber) {
+	fn random(subject: &[u8]) -> (T::Hash, BlockNumberFor<T>) {
 		let block_number = <frame_system::Pallet<T>>::block_number();
 		let index = block_number_to_index::<T>(block_number);
 
@@ -164,7 +164,6 @@ mod tests {
 
 	use sp_core::H256;
 	use sp_runtime::{
-		testing::Header,
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
 		BuildStorage,
 	};
@@ -175,14 +174,10 @@ mod tests {
 	};
 	use frame_system::limits;
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
 			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			CollectiveFlip: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
@@ -201,13 +196,12 @@ mod tests {
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
-		type BlockNumber = u64;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
