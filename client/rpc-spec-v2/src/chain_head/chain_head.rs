@@ -298,7 +298,7 @@ where
 		let items = items
 			.into_iter()
 			.map(|query| {
-				if query.ty != StorageQueryType::Value {
+				if query.ty != StorageQueryType::Value && query.ty != StorageQueryType::Hash {
 					// Note: remove this once all types are implemented.
 					let _ = sink.reject(ChainHeadRpcError::InvalidParam(
 						"Storage query type not supported".into(),

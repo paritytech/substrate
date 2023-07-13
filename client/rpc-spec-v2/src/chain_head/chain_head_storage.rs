@@ -103,6 +103,35 @@ where
 			})
 	}
 
+	/// Fetch the hash of a value from storage.
+	fn query_storage_hash(
+		&self,
+		hash: Block::Hash,
+		key: &StorageKey,
+		child_key: Option<&ChildInfo>,
+	) -> Option<QueryResult> {
+		let result = if let Some(child_key) = child_key {
+			self.client.child_storage_hash(hash, child_key, key)
+		} else {
+			self.client.storage_hash(hash, key)
+		};
+
+		result
+			.map(|opt| {
+				opt.map(|storage_data| {
+					QueryResult::Buffered(StorageResult::<String> {
+						key: format!("0x{:?}", HexDisplay::from(&key.0)),
+						result: StorageResultType::Hash(format!("{:?}", storage_data)),
+					})
+				})
+			})
+			.unwrap_or_else(|err| {
+				Some(QueryResult::Immediate(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
+					error: err.to_string(),
+				})))
+			})
+	}
+
 	/// Make the storage query.
 	fn query_storage(
 		&self,
@@ -116,6 +145,7 @@ where
 
 		match query.ty {
 			StorageQueryType::Value => self.query_storage_value(hash, &query.key, child_key),
+			StorageQueryType::Hash => self.query_storage_hash(hash, &query.key, child_key),
 			_ => None,
 		}
 	}
