@@ -34,7 +34,7 @@ use w3f_bls::{DoublePublicKey, DoubleSignature, EngineBLS, SerializableToBytes, 
 #[cfg(feature = "full_crypto")]
 use w3f_bls::{DoublePublicKeyScheme, Keypair, Message, SecretKey};
 
-use sp_runtime_interface::pass_by::PassByInner;
+use sp_runtime_interface::pass_by::{self, PassBy, PassByInner};
 use sp_std::{convert::TryFrom, marker::PhantomData, ops::Deref};
 
 /// BLS-377 specialized types
@@ -163,6 +163,10 @@ impl<T> PassByInner for Public<T> {
 	fn from_inner(inner: Self::Inner) -> Self {
 		Self { inner, _phantom: PhantomData }
 	}
+}
+
+impl<T> PassBy for Public<T> {
+	type PassBy = pass_by::Inner<Self, [u8; PUBLIC_KEY_SERIALIZED_SIZE]>;
 }
 
 impl<T> AsRef<[u8; PUBLIC_KEY_SERIALIZED_SIZE]> for Public<T> {
