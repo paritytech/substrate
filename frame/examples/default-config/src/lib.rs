@@ -151,7 +151,7 @@ pub mod tests {
 		// Note that these are types that actually rely on the outer runtime, and can't sensibly
 		// have an _independent_ default.
 		type Block = Block;
-		type BlockHashCount = ConstU64<10>;
+		type BlockHashCount = frame_support::traits::ConstU64<10>;
 		type BaseCallFilter = frame_support::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
