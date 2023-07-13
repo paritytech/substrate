@@ -24,12 +24,8 @@ use sp_core::Get;
 use sp_io::{hashing::twox_128, storage::clear_prefix, KillStorageResult};
 use sp_std::marker::PhantomData;
 
-#[cfg(feature = "try-runtime")]
-use sp_std::vec::Vec;
-
-#[cfg(feature = "experimental")]
-use crate::traits::OnRuntimeUpgrade;
-
+/// EXPERIMENTAL: The API of this feature may change.
+///
 /// Make it easier to write versioned runtime upgrades.
 ///
 /// [`VersionedRuntimeUpgrade`] allows developers to write migrations without worrying about
@@ -57,13 +53,19 @@ use crate::traits::OnRuntimeUpgrade;
 /// 	// OnRuntimeUpgrade implementation...
 /// }
 ///
-/// pub type VersionCheckedMigrateV5ToV6<Runtime, Pallet, DbWeight> =
-/// 	VersionedRuntimeUpgrade<5, 6, VersionUncheckedMigrateV5ToV6<Runtime>, Pallet, DbWeight>;
+/// pub type VersionCheckedMigrateV5ToV6<T, I> =
+/// 	VersionedRuntimeUpgrade<
+/// 		5,
+/// 		6,
+/// 		VersionUncheckedMigrateV5ToV6<T, I>,
+/// 		crate::pallet::Pallet<T, I>,
+/// 		<T as frame_system::Config>::DbWeight
+/// 	>;
 ///
 /// // Migrations tuple to pass to the Executive pallet:
 /// pub type Migrations = (
 /// 	// other migrations...
-/// 	VersionCheckedMigrateV5ToV6<Runtime, Balances, RuntimeDbWeight>,
+/// 	VersionCheckedMigrateV5ToV6<T, ()>,
 /// 	// other migrations...
 /// );
 /// ```
@@ -78,7 +80,7 @@ pub struct VersionedRuntimeUpgrade<const FROM: u16, const TO: u16, Inner, Pallet
 #[derive(codec::Encode, codec::Decode)]
 pub enum VersionedPostUpgradeData {
 	/// The migration ran, inner vec contains pre_upgrade data.
-	MigrationExecuted(Vec<u8>),
+	MigrationExecuted(sp_std::vec::Vec<u8>),
 	/// This migration is a noop, do not run post_upgrade checks.
 	Noop,
 }
@@ -93,16 +95,16 @@ pub enum VersionedPostUpgradeData {
 impl<
 		const FROM: u16,
 		const TO: u16,
-		Inner: OnRuntimeUpgrade,
+		Inner: crate::traits::OnRuntimeUpgrade,
 		Pallet: GetStorageVersion<CurrentStorageVersion = StorageVersion> + PalletInfoAccess,
 		DbWeight: Get<RuntimeDbWeight>,
-	> OnRuntimeUpgrade for VersionedRuntimeUpgrade<FROM, TO, Inner, Pallet, DbWeight>
+	> crate::traits::OnRuntimeUpgrade for VersionedRuntimeUpgrade<FROM, TO, Inner, Pallet, DbWeight>
 {
 	/// Executes pre_upgrade if the migration will run, and wraps the pre_upgrade bytes in
 	/// [`VersionedPostUpgradeData`] before passing them to post_upgrade, so it knows whether the
 	/// migration ran or not.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, sp_runtime::TryRuntimeError> {
 		use codec::Encode;
 		let on_chain_version = Pallet::on_chain_storage_version();
 		if on_chain_version == FROM {
@@ -152,7 +154,7 @@ impl<
 	/// the migration ran, and [`VersionedPostUpgradeData::Noop`] otherwise.
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(
-		versioned_post_upgrade_data_bytes: Vec<u8>,
+		versioned_post_upgrade_data_bytes: sp_std::vec::Vec<u8>,
 	) -> Result<(), sp_runtime::TryRuntimeError> {
 		use codec::DecodeAll;
 		match <VersionedPostUpgradeData>::decode_all(&mut &versioned_post_upgrade_data_bytes[..])
@@ -321,7 +323,7 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
+	fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, sp_runtime::TryRuntimeError> {
 		use crate::storage::unhashed::contains_prefixed_key;
 
 		let hashed_prefix = twox_128(P::get().as_bytes());
@@ -332,11 +334,11 @@ impl<P: Get<&'static str>, DbWeight: Get<RuntimeDbWeight>> frame_support::traits
 				P::get()
 			),
 		};
-		Ok(Vec::new())
+		Ok(sp_std::vec::Vec::new())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
+	fn post_upgrade(_state: sp_std::vec::Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
 		use crate::storage::unhashed::contains_prefixed_key;
 
 		let hashed_prefix = twox_128(P::get().as_bytes());
