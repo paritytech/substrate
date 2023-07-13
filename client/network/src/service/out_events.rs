@@ -92,8 +92,7 @@ impl fmt::Debug for Sender {
 
 impl Drop for Sender {
 	fn drop(&mut self) {
-		let metrics = self.metrics.clone();
-		if let Some(metrics) = metrics.as_ref() {
+		if let Some(metrics) = self.metrics.as_ref() {
 			metrics.num_channels.with_label_values(&[self.name]).dec();
 		}
 	}
@@ -113,10 +112,8 @@ impl Stream for Receiver {
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Event>> {
 		if let Some(ev) = ready!(Pin::new(&mut self.inner).poll_next(cx)) {
-			let metrics = self.metrics.clone();
-			match metrics.as_ref() {
-				Some(metrics) => metrics.event_out(&ev, self.name),
-				None => (), // no registry
+			if let Some(metrics) = &self.metrics {
+				metrics.event_out(&ev, self.name);
 			}
 			Poll::Ready(Some(ev))
 		} else {
@@ -162,7 +159,7 @@ impl OutChannels {
 		debug_assert!(sender.metrics.is_none());
 		sender.metrics = self.metrics.clone();
 
-		if let Some(metrics) = self.metrics.as_ref() {
+		if let Some(metrics) = &self.metrics {
 			metrics.num_channels.with_label_values(&[sender.name]).inc();
 		}
 
@@ -197,7 +194,7 @@ impl OutChannels {
 			sender.inner.try_send(event.clone()).is_ok()
 		});
 
-		if let Some(metrics) = self.metrics.as_ref() {
+		if let Some(metrics) = &self.metrics {
 			for ev in &self.event_streams {
 				metrics.event_in(&event, ev.name);
 			}
