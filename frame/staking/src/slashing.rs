@@ -51,8 +51,8 @@
 
 use crate::{
 	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, NominatorSlashInEra,
-	OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash, UnappliedSlash,
-	ValidatorSlashInEra,
+	OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash, StakingLedger,
+	UnappliedSlash, ValidatorSlashInEra,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -602,7 +602,7 @@ pub fn do_slash<T: Config>(
 		Some(c) => c,
 	};
 
-	let mut ledger = match <Pallet<T>>::ledger(&controller) {
+	let mut ledger = match StakingLedger::<T>::storage_get(&controller) {
 		Some(ledger) => ledger,
 		None => return, // nothing to do.
 	};
@@ -618,7 +618,7 @@ pub fn do_slash<T: Config>(
 			*reward_payout = reward_payout.saturating_sub(missing);
 		}
 
-		<Pallet<T>>::update_ledger(&controller, &ledger);
+		ledger.storage_put();
 
 		// trigger the event
 		<Pallet<T>>::deposit_event(super::Event::<T>::Slashed {

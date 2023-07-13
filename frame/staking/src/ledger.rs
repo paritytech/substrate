@@ -1,6 +1,6 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::{Defensive, Get},
+	traits::{Defensive, Get, LockableCurrency, WithdrawReasons},
 	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
@@ -8,7 +8,7 @@ use sp_runtime::{traits::Zero, Perquintill, Rounding, Saturating};
 use sp_staking::{EraIndex, OnStakingUpdate};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
-use crate::{log, BalanceOf, Config, UnlockChunk};
+use crate::{log, BalanceOf, Config, Ledger, UnlockChunk, STAKING_ID};
 
 /// The ledger of a (bonded) stash.
 #[derive(
@@ -40,6 +40,12 @@ pub struct StakingLedger<T: Config> {
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
 	pub claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
+	/// The controller associated with this ledger's stash.
+	///
+	/// This is not stored on-chain, and is only bundled when the ledger is read from storage.
+	/// Use [`controller`] function to get the controller associated with the ledger.
+	#[codec(skip)]
+	controller: Option<T::AccountId>,
 }
 
 impl<T: Config> StakingLedger<T> {
@@ -51,12 +57,57 @@ impl<T: Config> StakingLedger<T> {
 			active: Zero::zero(),
 			unlocking: Default::default(),
 			claimed_rewards: Default::default(),
+			controller: Default::default(),
 		}
+	}
+
+	// only used for new ledgers, so controller == stash.
+	pub fn new(
+		stash: T::AccountId,
+		total_stake: BalanceOf<T>,
+		active_stake: BalanceOf<T>,
+		unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, T::MaxUnlockingChunks>,
+		claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
+	) -> Self {
+		Self {
+			stash: stash.clone(),
+			total: total_stake,
+			active: active_stake,
+			unlocking,
+			claimed_rewards,
+			// controllers are deprecated and map 1-1 to stashes.
+			controller: Some(stash),
+		}
+	}
+
+	pub(crate) fn controller(&self) -> T::AccountId {
+		self.controller.clone().expect("TODO, handle this edge case better?")
+	}
+
+	pub(crate) fn storage_get(controller: &T::AccountId) -> Option<Self> {
+		<Ledger<T>>::get(&controller).map(|mut l| {
+			l.controller = Some(controller.clone());
+			l
+		})
+	}
+
+	pub(crate) fn storage_put(&self) {
+		T::Currency::set_lock(STAKING_ID, &self.stash, self.total, WithdrawReasons::all());
+		Ledger::<T>::insert(&self.controller(), &self);
+	}
+
+	pub(crate) fn storage_remove(self) {
+		T::Currency::remove_lock(STAKING_ID, &self.stash);
+		Ledger::<T>::remove(self.controller());
 	}
 
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
-	pub(crate) fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
+	pub(crate) fn consolidate_unlocked(
+		self,
+		current_era: EraIndex,
+		controller: &T::AccountId,
+	) -> Self {
 		let mut total = self.total;
 		let unlocking: BoundedVec<_, _> = self
 			.unlocking
@@ -81,6 +132,7 @@ impl<T: Config> StakingLedger<T> {
 			active: self.active,
 			unlocking,
 			claimed_rewards: self.claimed_rewards,
+			controller: Some(controller.clone()),
 		}
 	}
 
@@ -253,3 +305,29 @@ impl<T: Config> StakingLedger<T> {
 		pre_slash_total.saturating_sub(self.total)
 	}
 }
+
+#[cfg(test)]
+#[derive(frame_support::DebugNoBound, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct StakingLedgerInspect<T: Config> {
+	pub stash: T::AccountId,
+	#[codec(compact)]
+	pub total: BalanceOf<T>,
+	#[codec(compact)]
+	pub active: BalanceOf<T>,
+	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, T::MaxUnlockingChunks>,
+	pub claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
+}
+
+#[cfg(test)]
+impl<T: Config> PartialEq<StakingLedgerInspect<T>> for StakingLedger<T> {
+	fn eq(&self, other: &StakingLedgerInspect<T>) -> bool {
+		self.stash == other.stash &&
+			self.total == other.total &&
+			self.active == other.active &&
+			self.unlocking == other.unlocking &&
+			self.claimed_rewards == other.claimed_rewards
+	}
+}
+
+#[cfg(test)]
+impl<T: Config> codec::EncodeLike<StakingLedger<T>> for StakingLedgerInspect<T> {}

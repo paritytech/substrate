@@ -302,7 +302,7 @@ mod pallet;
 
 use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
-	traits::{Currency, Get},
+	traits::{Currency, Get, LockIdentifier},
 	weights::Weight,
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -323,6 +323,7 @@ pub use weights::WeightInfo;
 
 pub use pallet::{pallet::*, UseNominatorsAndValidatorsMap, UseValidatorsMap};
 
+pub(crate) const STAKING_ID: LockIdentifier = *b"staking ";
 pub(crate) const LOG_TARGET: &str = "runtime::staking";
 
 // syntactic sugar for logging.
@@ -644,7 +645,7 @@ pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
-		<Pallet<T>>::ledger(&controller).map(|l| l.stash)
+		StakingLedger::<T>::storage_get(&controller).map(|l| l.stash)
 	}
 }
 
