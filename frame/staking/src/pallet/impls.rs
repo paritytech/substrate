@@ -41,12 +41,12 @@ use sp_runtime::{
 use sp_staking::{
 	currency_to_vote::CurrencyToVote,
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, Stake, StakingInterface,
+	DelegationInterface, EraIndex, SessionIndex, Stake, StakingInterface,
 };
 use sp_std::prelude::*;
 
 use crate::{
-	election_size_tracker::StaticTracker, log, slashing, weights::WeightInfo, ActiveEraInfo,
+delegation, election_size_tracker::StaticTracker, log, slashing, weights::WeightInfo, ActiveEraInfo,
 	BalanceOf, EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxNominationsOf,
 	MaxWinnersOf, Nominations, NominationsQuota, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
@@ -1763,6 +1763,37 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		fn set_current_era(era: EraIndex) {
 			CurrentEra::<T>::put(era);
 		}
+	}
+}
+
+impl<T: Config> DelegationInterface for Pallet<T> {
+	type AccountId = T::AccountId;
+	type Balance = BalanceOf<T>;
+
+	// lock + stake
+	fn delegate(
+		delegator: Self::AccountId,
+		delegatee: Self::AccountId,
+		value: Self::Balance,
+	) -> sp_runtime::DispatchResult {
+		// try lock value from delegator
+		// add to DelegationLedger and Delegations storage.
+		// stake value to delegatee
+		// delegation::new(delegator, delegatee, value).put();
+		Ok(())
+	}
+
+	// withdraw + unlock
+	fn remove_delegate(
+		delegator: Self::AccountId,
+		delegatee: Self::AccountId,
+		value: Self::Balance,
+	) -> sp_runtime::DispatchResult {
+		// let delegation = delegation::get(delegator, delegatee);
+		// ensure!(value >= delegation.value, Error::<T>::InsufficientValue);
+		// try withdraw value from delegatee
+		// if successful, unlock value from delegator.
+		todo!()
 	}
 }
 
