@@ -7,7 +7,7 @@ error: `Pallet` does not have #[pallet::event] defined, perhaps you should remov
 48 | / construct_runtime! {
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config<T>, Event<T>},
 52 | |         Pallet: pallet expanded::{}::{Pallet, Event},
 53 | |     }
 54 | | }
@@ -21,7 +21,7 @@ error[E0412]: cannot find type `Event` in module `pallet`
 48 | / construct_runtime! {
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config<T>, Event<T>},
 52 | |         Pallet: pallet expanded::{}::{Pallet, Event},
 53 | |     }
 54 | | }

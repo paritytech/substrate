@@ -7,7 +7,7 @@ error: `Pallet` does not have #[pallet::validate_unsigned] defined, perhaps you 
 48 | / construct_runtime! {
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+51 | |         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
 52 | |         Pallet: pallet::{Pallet, ValidateUnsigned},
 53 | |     }
 54 | | }
@@ -40,7 +40,7 @@ error[E0599]: no function or associated item named `pre_dispatch` found for stru
    | ||
 49 | ||     pub struct Runtime
 50 | ||     {
-51 | ||         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+51 | ||         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
 52 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
 53 | ||     }
 54 | || }
@@ -65,7 +65,7 @@ error[E0599]: no function or associated item named `validate_unsigned` found for
    | ||
 49 | ||     pub struct Runtime
 50 | ||     {
-51 | ||         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+51 | ||         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
 52 | ||         Pallet: pallet::{Pallet, ValidateUnsigned},
 53 | ||     }
 54 | || }

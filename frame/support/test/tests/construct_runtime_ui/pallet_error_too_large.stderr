@@ -4,7 +4,7 @@ error[E0080]: evaluation of constant value failed
 73 | / construct_runtime! {
 74 | |     pub struct Runtime
 75 | |     {
-76 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+76 | |         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
 77 | |         Pallet: pallet::{Pallet},
 78 | |     }
 79 | | }

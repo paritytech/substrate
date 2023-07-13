@@ -7,7 +7,7 @@ error: `Pallet` does not have #[pallet::genesis_config] defined, perhaps you sho
 48 | / construct_runtime! {
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config<T>, Event<T>},
 52 | |         Pallet: pallet expanded::{}::{Pallet, Config},
 53 | |     }
 54 | | }
@@ -21,7 +21,7 @@ error[E0412]: cannot find type `GenesisConfig` in module `pallet`
 48 | / construct_runtime! {
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config, Event<T>},
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config<T>, Event<T>},
 52 | |         Pallet: pallet expanded::{}::{Pallet, Config},
 53 | |     }
 54 | | }

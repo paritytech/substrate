@@ -7,7 +7,7 @@ error: `Pallet` does not have #[pallet::call] defined, perhaps you should remove
 48 | / construct_runtime! {
 49 | |     pub struct Runtime
 50 | |     {
-51 | |         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+51 | |         System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
 52 | |         Pallet: pallet::{Pallet, Call},
 53 | |     }
 54 | | }

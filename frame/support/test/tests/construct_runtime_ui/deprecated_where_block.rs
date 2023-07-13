@@ -6,7 +6,7 @@ construct_runtime! {
 		NodeBlock = Block,
 		UncheckedExtrinsic = Uxt,
 	{
-		System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+		System: frame_system::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
 }
 
