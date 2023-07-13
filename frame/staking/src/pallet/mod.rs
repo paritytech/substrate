@@ -44,10 +44,10 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, MaxNominationsOf, NegativeImbalanceOf, Nominations,
-	NominationsQuota, PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger,
-	UnappliedSlash, UnlockChunk, ValidatorPrefs,
+	delegation, slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf,
+	EraPayout, EraRewardPoints, Exposure, Forcing, MaxNominationsOf, NegativeImbalanceOf,
+	Nominations, NominationsQuota, PositiveImbalanceOf, RewardDestination, SessionInterface,
+	StakingLedger, UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -582,13 +582,25 @@ pub mod pallet {
 
 	/// Map of delegatee account + delegator account to the amount of funds staked.
 	#[pallet::storage]
-	pub type Delegations<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, T::AccountId, Twox64Concat, T::AccountId, BalanceOf<T>, ValueQuery>;
+	pub(crate) type Delegations<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		Twox64Concat,
+		T::AccountId,
+		BalanceOf<T>,
+		OptionQuery,
+	>;
 
 	/// Map of delegator account to their Ledger.
 	#[pallet::storage]
-	pub type Delegatees<T: Config> =
-	CountedStorageMap<_, Twox64Concat, T::AccountId, DelegationLedger<T>, ValueQuery>;
+	pub(crate) type Delegatees<T: Config> = CountedStorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		delegation::DelegationLedger<T>,
+		OptionQuery,
+	>;
 
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]

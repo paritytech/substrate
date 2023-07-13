@@ -21,45 +21,22 @@
 //! (delegatee). Multiple delegators can delegate to the same delegatee. The delegatee is then able
 //! to use the funds of all delegators to nominate a set of validators.
 
-use std::ops::Sub;
-use codec::{FullCodec, MaxEncodedLen};
-use scale_info::TypeInfo;
-use frame_support::dispatch::DispatchResult;
-use sp_runtime::Saturating;
 use crate::{BalanceOf, Config};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::RuntimeDebug;
+use scale_info::TypeInfo;
 
 /// A ledger of a delegator.
 ///
 /// This keeps track of the active balance of the delegator that is made up from the funds that are
 /// currently delegated to a delegatee. It also tracks the slashes yet to be applied.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T))]
 pub struct DelegationLedger<T: Config> {
 	/// Sum of all delegated funds to this delegatee.
+	#[codec(compact)]
 	pub balance: BalanceOf<T>,
 	/// Slashes that are not yet applied.
+	#[codec(compact)]
 	pub pending_slash: BalanceOf<T>,
-}
-
-/// A generic representation of a delegation apis exposed by staking pallet for use by other runtime
-/// pallets.
-pub trait DelegationInterface {
-	/// AccountId type used by the runtime.
-	type AccountId: Clone + sp_std::fmt::Debug;
-
-	/// Balance type used by the runtime.
-	type Balance: Sub<Output = Self::Balance>
-	+ Ord
-	+ PartialEq
-	+ Default
-	+ Copy
-	+ MaxEncodedLen
-	+ FullCodec
-	+ TypeInfo
-	+ Saturating;
-
-	/// Delegate some funds or add to an existing delegation.
-	// TODO(ank4n): No restriction to number of delegations per delegator?
-	fn delegate(delegator: Self::AccountId, delegatee: Self::AccountId, value: Self::Balance) -> DispatchResult;
-	/// Remove delegation of some or all funds.
-	fn remove_delegate(delegator: Self::AccountId, delegatee: Self::AccountId, value: Self::Balance) -> DispatchResult;
 }

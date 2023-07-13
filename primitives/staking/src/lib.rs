@@ -272,4 +272,28 @@ pub trait StakingInterface {
 	fn set_current_era(era: EraIndex);
 }
 
+/// A generic representation of a delegation apis exposed by staking pallet for use by other runtime
+/// pallets.
+pub trait DelegationInterface {
+	/// AccountId type used by the runtime.
+	type AccountId: Clone + sp_std::fmt::Debug;
+
+	/// Balance type used by the runtime.
+	type Balance: Sub<Output = Self::Balance>
+	+ Ord
+	+ PartialEq
+	+ Default
+	+ Copy
+	+ MaxEncodedLen
+	+ FullCodec
+	+ TypeInfo
+	+ Saturating;
+
+	/// Delegate some funds or add to an existing delegation.
+	// TODO(ank4n): No restriction to number of delegations per delegator?
+	fn delegate(delegator: Self::AccountId, delegatee: Self::AccountId, value: Self::Balance) -> DispatchResult;
+	/// Remove delegation of some or all funds.
+	fn remove_delegate(delegator: Self::AccountId, delegatee: Self::AccountId, value: Self::Balance) -> DispatchResult;
+}
+
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
