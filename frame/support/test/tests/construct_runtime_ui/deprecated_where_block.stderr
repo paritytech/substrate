@@ -1,10 +1,10 @@
-warning: use of deprecated constant `WhereSection::_w`:
-                 It is deprecated to use a `where` clause in `construct_runtime`.
-                 Please instead use `frame_system::Config` to set the `Block` type and delete this clause.
-                 It is planned to be removed in December 2023.
+error: use of deprecated constant `WhereSection::_w`:
+               It is deprecated to use a `where` clause in `construct_runtime`.
+               Please instead use `frame_system::Config` to set the `Block` type and delete this clause.
+               It is planned to be removed in December 2023.
 
-                 For more info see:
-                     <https://github.com/paritytech/substrate/pull/14437>
+               For more info see:
+                   <https://github.com/paritytech/substrate/pull/14437>
   --> tests/construct_runtime_ui/deprecated_where_block.rs:3:1
    |
 3  | / construct_runtime! {
@@ -16,8 +16,8 @@ warning: use of deprecated constant `WhereSection::_w`:
 11 | | }
    | |_^
    |
-   = note: `#[warn(deprecated)]` on by default
-   = note: this warning originates in the macro `frame_support::match_and_insert` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: `-D deprecated` implied by `-D warnings`
+   = note: this error originates in the macro `frame_support::match_and_insert` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Runtime: Config` is not satisfied
   --> tests/construct_runtime_ui/deprecated_where_block.rs:3:1
