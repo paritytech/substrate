@@ -1230,7 +1230,7 @@ pub trait Header:
 // So, if we do not create a trait outside of `Block` that doesn't have `Extrinsic`, we go into a
 // recursive loop leading to a build error.
 //
-// Note that this is a workaround and should be removed once we have a better solution.
+// Note that this is a workaround for a compiler bug and should be removed when the compiler bug is fixed.
 pub trait HeaderProvider {
 	/// Header type.
 	type HeaderT: Header;
