@@ -438,13 +438,13 @@ pub use sp_api_proc_macro::impl_runtime_apis;
 /// //         #[advanced]
 /// //         fn get_balance(&self, at: <Block as BlockT>::Hash) -> Result<u64, sp_api::ApiError> {
 /// //             println!("Being called at: {}", at);
-///	//
+/// 	//
 /// //             Ok(self.balance.into())
 /// //         }
 /// //         #[advanced]
 /// //         fn set_balance(at: <Block as BlockT>::Hash, val: u64) -> Result<(), sp_api::ApiError> {
 /// //             println!("Being called at: {}", at);
-///	//
+/// 	//
 /// //             Ok(().into())
 /// //         }
 /// //     }
@@ -615,7 +615,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Bloc
 	/// The call context of this call.
 	pub call_context: CallContext,
 	/// The optional proof recorder for recording storage accesses.
-	pub recorder: &'a Option<ProofRecorder<Block>>,
+	pub recorder: Option<&'a ProofRecorder<Block>>,
 	/// The extensions that should be used for this call.
 	pub extensions: &'a RefCell<Extensions>,
 }
@@ -783,41 +783,46 @@ impl<C, B: BlockT> RuntimeInstanceBuilder<C, B> {
 		Self { call_api_at, block }
 	}
 
-	pub fn on_chain_context(self) -> RuntimeInstanceBuilderStage2<C, B> {
+	pub fn on_chain_context(self) -> RuntimeInstanceBuilderStage2<C, B, DisableProofRecorder> {
 		RuntimeInstanceBuilderStage2 {
 			call_api_at: self.call_api_at,
 			block: self.block,
 			call_context: CallContext::Onchain,
-			with_recorder: false,
+			with_recorder: DisableProofRecorder,
 			extensions: Default::default(),
 		}
 	}
 
-	pub fn off_chain_context(self) -> RuntimeInstanceBuilderStage2<C, B> {
+	pub fn off_chain_context(self) -> RuntimeInstanceBuilderStage2<C, B, DisableProofRecorder> {
 		RuntimeInstanceBuilderStage2 {
 			call_api_at: self.call_api_at,
 			block: self.block,
 			call_context: CallContext::Offchain,
-			with_recorder: false,
+			with_recorder: DisableProofRecorder,
 			extensions: Default::default(),
 		}
 	}
 }
 
 #[cfg(feature = "std")]
-pub struct RuntimeInstanceBuilderStage2<C, B: BlockT> {
+pub struct RuntimeInstanceBuilderStage2<C, B: BlockT, ProofRecorder> {
 	call_api_at: C,
 	block: B::Hash,
 	call_context: CallContext,
-	with_recorder: bool,
+	with_recorder: ProofRecorder,
 	extensions: RefCell<Extensions>,
 }
 
 #[cfg(feature = "std")]
-impl<C, B: BlockT> RuntimeInstanceBuilderStage2<C, B> {
-	pub fn with_recorder(mut self) -> Self {
-		self.with_recorder = true;
-		self
+impl<C, B: BlockT, ProofRecorder> RuntimeInstanceBuilderStage2<C, B, ProofRecorder> {
+	pub fn with_recorder(mut self) -> RuntimeInstanceBuilderStage2<C, B, EnableProofRecorder<B>> {
+		RuntimeInstanceBuilderStage2 {
+			with_recorder: EnableProofRecorder { recorder: Default::default() },
+			call_api_at: self.call_api_at,
+			block: self.block,
+			call_context: self.call_context,
+			extensions: self.extensions,
+		}
 	}
 
 	pub fn register_extension(mut self, ext: impl Extension) -> Self {
@@ -825,12 +830,12 @@ impl<C, B: BlockT> RuntimeInstanceBuilderStage2<C, B> {
 		self
 	}
 
-	pub fn build(self) -> RuntimeInstance<C, B>
+	pub fn build(self) -> RuntimeInstance<C, B, ProofRecorder>
 	where
 		C: CallApiAt<B>,
 	{
 		RuntimeInstance {
-			recorder: self.with_recorder.then(|| Default::default()),
+			recorder: self.with_recorder,
 			call_api_at: self.call_api_at,
 			block: self.block,
 			call_context: self.call_context,
@@ -841,19 +846,50 @@ impl<C, B: BlockT> RuntimeInstanceBuilderStage2<C, B> {
 	}
 }
 
+pub struct EnableProofRecorder<Block: BlockT> {
+	recorder: ProofRecorder<Block>,
+}
+
+pub struct DisableProofRecorder;
+
+pub trait GetProofRecorder<Block: BlockT> {
+	fn get(&self) -> Option<&ProofRecorder<Block>>;
+}
+
+impl<Block: BlockT> GetProofRecorder<Block> for EnableProofRecorder<Block> {
+	fn get(&self) -> Option<&ProofRecorder<Block>> {
+		Some(&self.recorder)
+	}
+}
+
+impl<Block: BlockT> GetProofRecorder<Block> for DisableProofRecorder {
+	fn get(&self) -> Option<&ProofRecorder<Block>> {
+		None
+	}
+}
+
 #[cfg(feature = "std")]
-pub struct RuntimeInstance<C: CallApiAt<Block>, Block: BlockT> {
+pub struct RuntimeInstance<C: CallApiAt<Block>, Block: BlockT, ProofRecorder> {
 	call_api_at: C,
 	block: Block::Hash,
 	call_context: CallContext,
 	overlayed_changes: RefCell<OverlayedChanges>,
 	storage_transaction_cache: RefCell<StorageTransactionCache<Block, C::StateBackend>>,
-	recorder: Option<ProofRecorder<Block>>,
+	recorder: ProofRecorder,
 	extensions: RefCell<Extensions>,
 }
 
 #[cfg(feature = "std")]
-impl<C: CallApiAt<B>, B: BlockT> RuntimeInstance<C, B> {
+impl<C: CallApiAt<B>, B: BlockT> RuntimeInstance<C, B, DisableProofRecorder> {
+	pub fn builder(call_api_at: C, at: B::Hash) -> RuntimeInstanceBuilder<C, B> {
+		RuntimeInstanceBuilder { call_api_at, block: at }
+	}
+}
+
+#[cfg(feature = "std")]
+impl<C: CallApiAt<B>, B: BlockT, ProofRecorder: GetProofRecorder<B>>
+	RuntimeInstance<C, B, ProofRecorder>
+{
 	pub fn __runtime_api_internal_call_api_at(
 		&self,
 		params: Vec<u8>,
@@ -871,7 +907,7 @@ impl<C: CallApiAt<B>, B: BlockT> RuntimeInstance<C, B> {
 				overlayed_changes: &self.overlayed_changes,
 				storage_transaction_cache: &self.storage_transaction_cache,
 				call_context: self.call_context,
-				recorder: &self.recorder,
+				recorder: self.recorder.get(),
 				extensions: &self.extensions,
 			};
 
@@ -881,6 +917,13 @@ impl<C: CallApiAt<B>, B: BlockT> RuntimeInstance<C, B> {
 		// self.commit_or_rollback(std::result::Result::is_ok(&res));
 
 		res
+	}
+}
+
+#[cfg(feature = "std")]
+impl<C: CallApiAt<B>, B: BlockT> RuntimeInstance<C, B, EnableProofRecorder<B>> {
+	pub fn recorder(&self) -> ProofRecorder<B> {
+		self.recorder.recorder.clone()
 	}
 }
 

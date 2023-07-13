@@ -43,7 +43,6 @@ use sc_transaction_pool_api::{
 };
 use std::sync::Arc;
 
-use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_runtime::{generic, traits::Block as BlockT};
@@ -88,7 +87,7 @@ where
 	Pool: TransactionPool + Sync + Send + 'static,
 	Pool::Hash: Unpin,
 	<Pool::Block as BlockT>::Hash: Unpin,
-	Client: HeaderBackend<Pool::Block> + ProvideRuntimeApi<Pool::Block> + Send + Sync + 'static,
+	Client: HeaderBackend<Pool::Block> + Send + Sync + 'static,
 {
 	fn submit_and_watch(&self, mut sink: SubscriptionSink, xt: Bytes) -> SubscriptionResult {
 		// This is the only place where the RPC server can return an error for this

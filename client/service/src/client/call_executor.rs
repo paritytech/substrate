@@ -199,7 +199,7 @@ where
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
 		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
-		recorder: &Option<ProofRecorder<Block>>,
+		recorder: Option<&ProofRecorder<Block>>,
 		call_context: CallContext,
 		extensions: &RefCell<Extensions>,
 	) -> Result<Vec<u8>, sp_blockchain::Error> {

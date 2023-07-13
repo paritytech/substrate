@@ -172,11 +172,11 @@ impl<Block: BlockT, ExecutorDispatch, Backend, G: GenesisInit>
 	}
 
 	/// Build the test client with the given native executor.
-	pub fn build_with_executor<RuntimeApi>(
+	pub fn build_with_executor(
 		self,
 		executor: ExecutorDispatch,
 	) -> (
-		client::Client<Backend, ExecutorDispatch, Block, RuntimeApi>,
+		client::Client<Backend, ExecutorDispatch, Block>,
 		sc_consensus::LongestChain<Backend, Block>,
 	)
 	where
@@ -246,7 +246,7 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 	D: sc_executor::NativeExecutionDispatch,
 {
 	/// Build the test client with the given native executor.
-	pub fn build_with_native_executor<RuntimeApi, I>(
+	pub fn build_with_native_executor<I>(
 		self,
 		executor: I,
 	) -> (
@@ -254,7 +254,6 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 			Backend,
 			client::LocalCallExecutor<Block, Backend, NativeElseWasmExecutor<D>>,
 			Block,
-			RuntimeApi,
 		>,
 		sc_consensus::LongestChain<Backend, Block>,
 	)

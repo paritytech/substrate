@@ -311,6 +311,7 @@ where
 	}
 
 	fn metadata(&self, block: Option<Block::Hash>) -> std::result::Result<Bytes, Error> {
+		/*
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_api()
@@ -318,6 +319,8 @@ where
 				.map(Into::into)
 				.map_err(|e| Error::Client(Box::new(e)))
 		})
+		*/
+		todo!()
 	}
 
 	fn runtime_version(

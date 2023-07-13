@@ -452,13 +452,14 @@ impl<'a> ToClientSideDeclV2<'a> {
 			parse_quote!( __RuntimeInstanceCallApiAt__: #crate_::CallApiAt<__RuntimeInstanceBlock__> + Send + 'static ),
 		);
 		generics.params.push(parse_quote!( __RuntimeInstanceBlock__: #crate_::BlockT ));
+		generics.params.push(parse_quote!( __RuntimeInstanceProofRecorder__: #crate_::GetProofRecorder<__RuntimeInstanceBlock__> ));
 
 		let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
 		let items = decl.items.into_iter().filter(|i| !matches!(i, TraitItem::Type(_)));
 
 		quote! {
-			impl #impl_generics #trait_name #trait_generics for #crate_::RuntimeInstance<__RuntimeInstanceCallApiAt__, __RuntimeInstanceBlock__> #where_clause {
+			impl #impl_generics #trait_name #trait_generics for #crate_::RuntimeInstance<__RuntimeInstanceCallApiAt__, __RuntimeInstanceBlock__, __RuntimeInstanceProofRecorder__> #where_clause {
 				#( #items )*
 			}
 		}

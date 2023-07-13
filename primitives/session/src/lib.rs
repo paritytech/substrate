@@ -22,8 +22,6 @@
 use codec::{Decode, Encode};
 
 #[cfg(feature = "std")]
-use sp_api::ProvideRuntimeApi;
-#[cfg(feature = "std")]
 use sp_runtime::traits::Block as BlockT;
 
 use sp_core::{crypto::KeyTypeId, RuntimeDebug};

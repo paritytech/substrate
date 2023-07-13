@@ -78,7 +78,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 				StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
 			>,
 		>,
-		proof_recorder: &Option<ProofRecorder<B>>,
+		proof_recorder: Option<&ProofRecorder<B>>,
 		call_context: CallContext,
 		extensions: &RefCell<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>>;

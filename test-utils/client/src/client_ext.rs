@@ -65,7 +65,7 @@ pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 	) -> Result<(), ConsensusError>;
 }
 
-impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
+impl<B, E, Block> ClientExt<Block> for Client<B, E, Block>
 where
 	B: sc_client_api::backend::Backend<Block>,
 	E: sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
@@ -147,10 +147,9 @@ where
 }
 
 #[async_trait::async_trait]
-impl<B, E, RA, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block, RA>
+impl<B, E, Block: BlockT> ClientBlockImportExt<Block> for Client<B, E, Block>
 where
 	Self: BlockImport<Block, Error = ConsensusError>,
-	RA: Send,
 	B: Send + Sync,
 	E: Send,
 	<Self as BlockImport<Block>>::Transaction: Send,

@@ -401,7 +401,7 @@ where
 
 	let chain_info = client.usage_info().chain;
 
-	sp_session::generate_initial_session_keys(
+	sp_session::generate_initial_session_keys::<TBl, _>(
 		client.clone(),
 		chain_info.best_hash,
 		config.dev_key_seed.clone().map(|s| vec![s]).unwrap_or_default(),

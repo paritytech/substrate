@@ -122,7 +122,6 @@ pub type Client<B> = client::Client<
 		NativeElseWasmExecutor<LocalExecutorDispatch>,
 	>,
 	substrate_test_runtime::Block,
-	substrate_test_runtime::RuntimeApi,
 >;
 
 /// A test client with default backend.

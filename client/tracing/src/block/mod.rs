@@ -172,11 +172,9 @@ where
 	Block: BlockT + 'static,
 	Client: HeaderBackend<Block>
 		+ BlockBackend<Block>
-		+ ProvideRuntimeApi<Block>
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata,
 {
 	/// Create a new `BlockExecutor`
 	pub fn new(

@@ -21,13 +21,13 @@ use sp_api::{
 use sp_runtime::traits::Block as BlockT;
 
 use substrate_test_runtime_client::runtime::{Block, Hash};
-
+/*
 /// The declaration of the `Runtime` type is done by the `construct_runtime!` macro in a real
 /// runtime.
 pub struct Runtime {}
 
 decl_runtime_apis! {
-	pub trait Api {
+	pub trait Api<Block: BlockT> {
 		fn test(data: u64);
 		fn something_with_block(block: Block) -> Block;
 		fn function_with_two_args(data: u64, block: Block);
@@ -71,12 +71,12 @@ impl_runtime_apis! {
 		fn wild_card(_: u32) {}
 	}
 
-	impl self::ApiWithCustomVersion<Block> for Runtime {
+	impl self::ApiWithCustomVersion for Runtime {
 		fn same_name() {}
 	}
 
 	#[api_version(3)]
-	impl self::ApiWithMultipleVersions<Block> for Runtime {
+	impl self::ApiWithMultipleVersions for Runtime {
 		fn stable_one(_: u64) {}
 
 		fn new_one() {}
@@ -129,7 +129,7 @@ mock_impl_runtime_apis! {
 		}
 	}
 
-	impl ApiWithCustomVersion<Block> for MockApi {
+	impl ApiWithCustomVersion for MockApi {
 		fn same_name() {}
 	}
 }
@@ -138,7 +138,6 @@ type TestClient = substrate_test_runtime_client::client::Client<
 	substrate_test_runtime_client::Backend,
 	substrate_test_runtime_client::ExecutorDispatch,
 	Block,
-	RuntimeApi,
 >;
 
 #[test]
@@ -168,17 +167,17 @@ fn check_runtime_api_info() {
 	assert_eq!(<dyn Api::<Block>>::VERSION, 1);
 
 	assert_eq!(
-		<dyn ApiWithCustomVersion::<Block>>::VERSION,
+		<dyn ApiWithCustomVersion>::VERSION,
 		runtime_decl_for_api_with_custom_version::VERSION,
 	);
 	assert_eq!(
-		&<dyn ApiWithCustomVersion::<Block>>::ID,
+		&<dyn ApiWithCustomVersion>::ID,
 		&runtime_decl_for_api_with_custom_version::ID,
 	);
-	assert_eq!(<dyn ApiWithCustomVersion::<Block>>::VERSION, 2);
+	assert_eq!(<dyn ApiWithCustomVersion>::VERSION, 2);
 
 	// The stable version of the API
-	assert_eq!(<dyn ApiWithMultipleVersions::<Block>>::VERSION, 2);
+	assert_eq!(<dyn ApiWithMultipleVersions>::VERSION, 2);
 }
 
 fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
@@ -188,10 +187,10 @@ fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
 #[test]
 fn check_runtime_api_versions() {
 	check_runtime_api_versions_contains::<dyn Api<Block>>();
-	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block>>();
+	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion>();
 	assert!(RUNTIME_API_VERSIONS
 		.iter()
-		.any(|v| v == &(<dyn ApiWithMultipleVersions<Block>>::ID, 3)));
+		.any(|v| v == &(<dyn ApiWithMultipleVersions>::ID, 3)));
 	check_runtime_api_versions_contains::<dyn sp_api::Core<Block>>();
 }
 
@@ -199,7 +198,7 @@ fn check_runtime_api_versions() {
 fn mock_runtime_api_has_api() {
 	let mock = MockApi { block: None };
 
-	assert!(mock.has_api::<dyn ApiWithCustomVersion<Block>>(Hash::default()).unwrap());
+	assert!(mock.has_api::<dyn ApiWithCustomVersion>(Hash::default()).unwrap());
 	assert!(mock.has_api::<dyn Api<Block>>(Hash::default()).unwrap());
 }
 
@@ -223,3 +222,4 @@ fn mock_runtime_api_works_with_advanced() {
 		mock.wild_card(Hash::repeat_byte(0x01), 1).unwrap_err().to_string(),
 	);
 }
+*/

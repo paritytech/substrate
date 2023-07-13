@@ -182,11 +182,9 @@ where
 		+ CallApiAt<Block>
 		+ HeaderBackend<Block>
 		+ BlockBackend<Block>
-		+ ProvideRuntimeApi<Block>
 		+ Send
 		+ Sync
 		+ 'static,
-	Client::Api: Metadata,
 {
 	let child_backend =
 		Box::new(self::state_full::FullState::new(client.clone(), executor.clone()));
