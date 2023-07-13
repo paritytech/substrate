@@ -19,7 +19,7 @@
 
 use super::*;
 use codec::{Decode, Encode};
-use frame_support::traits::{Instance, OnRuntimeUpgrade};
+use frame_support::traits::{Defensive, DefensiveOption, Instance, OnRuntimeUpgrade};
 
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
@@ -28,7 +28,7 @@ use sp_runtime::TryRuntimeError;
 const TARGET: &'static str = "runtime::society::migration";
 
 /// This migration moves all the state to v2 of Society.
-pub struct MigrateToV2<T: Config<I>, I: 'static, PastPayouts>(
+pub struct VersionUncheckedMigrateToV2<T: Config<I>, I: 'static, PastPayouts>(
 	sp_std::marker::PhantomData<(T, I, PastPayouts)>,
 );
 
@@ -36,12 +36,10 @@ impl<
 		T: Config<I>,
 		I: Instance + 'static,
 		PastPayouts: Get<Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)>>,
-	> OnRuntimeUpgrade for MigrateToV2<T, I, PastPayouts>
+	> OnRuntimeUpgrade for VersionUncheckedMigrateToV2<T, I, PastPayouts>
 {
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-		ensure!(can_migrate::<T, I>(), "pallet_society: already upgraded");
-
 		let current = Pallet::<T, I>::current_storage_version();
 		let onchain = Pallet::<T, I>::on_chain_storage_version();
 		ensure!(onchain == 0 && current == 2, "pallet_society: invalid version");
@@ -50,16 +48,16 @@ impl<
 	}
 
 	fn on_runtime_upgrade() -> Weight {
-		let current = Pallet::<T, I>::current_storage_version();
 		let onchain = Pallet::<T, I>::on_chain_storage_version();
-		if current == 2 && onchain == 0 {
-			from_original::<T, I>(&mut PastPayouts::get())
-		} else {
+		if onchain < 2 {
 			log::info!(
-				"Running migration with current storage version {:?} / onchain {:?}",
-				current,
+				target: TARGET,
+				"Running migration against onchain version {:?}",
 				onchain
 			);
+			from_original::<T, I>(&mut PastPayouts::get()).defensive_unwrap_or(Weight::MAX)
+		} else {
+			log::warn!("Unexpected onchain version: {:?} (expected 0)", onchain);
 			T::DbWeight::get().reads(1)
 		}
 	}
@@ -94,6 +92,19 @@ impl<
 		Ok(())
 	}
 }
+
+/// [`VersionUncheckedMigrateToV2`] wrapped in a
+/// [`frame_support::migrations::VersionedRuntimeUpgrade`], ensuring the migration is only performed
+/// when on-chain version is 0.
+#[cfg(feature = "experimental")]
+pub type VersionCheckedMigrateToV2<T, I, PastPayouts> =
+	frame_support::migrations::VersionedRuntimeUpgrade<
+		0,
+		2,
+		VersionUncheckedMigrateToV2<T, I, PastPayouts>,
+		crate::pallet::Pallet<T, I>,
+		<T as frame_system::Config>::DbWeight,
+	>;
 
 pub(crate) mod old {
 	use super::*;
@@ -180,10 +191,6 @@ pub(crate) mod old {
 		StorageMap<Pallet<T, I>, Twox64Concat, <T as frame_system::Config>::AccountId, Vote>;
 }
 
-pub fn can_migrate<T: Config<I>, I: Instance + 'static>() -> bool {
-	old::Members::<T, I>::exists()
-}
-
 /// Will panic if there are any inconsistencies in the pallet's state or old keys remaining.
 pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 	// Check all members are valid data.
@@ -235,15 +242,7 @@ pub fn assert_internal_consistency<T: Config<I>, I: Instance + 'static>() {
 
 pub fn from_original<T: Config<I>, I: Instance + 'static>(
 	past_payouts: &mut [(<T as frame_system::Config>::AccountId, BalanceOf<T, I>)],
-) -> Weight {
-	// First check that this is the original state layout. This is easy since the original layout
-	// contained the Members value, and this value no longer exists in the new layout.
-	if !old::Members::<T, I>::exists() {
-		log::warn!(target: TARGET, "Skipping MigrateToV2 migration since it appears unapplicable");
-		// Already migrated or no data to migrate: Bail.
-		return T::DbWeight::get().reads(1)
-	}
-
+) -> Result<Weight, &'static str> {
 	// Migrate Bids from old::Bids (just a trunctation).
 	Bids::<T, I>::put(BoundedVec::<_, T::MaxBids>::truncate_from(old::Bids::<T, I>::take()));
 
@@ -281,6 +280,36 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 		let record = MemberRecord { index: member_count, rank: 0, strikes, vouching };
 		Members::<T, I>::insert(&member, record);
 		MemberByIndex::<T, I>::insert(member_count, &member);
+
+		// The founder must be the first member in Society V2. If we find the founder not in index
+		// zero, we swap it with the first member.
+		if member == Founder::<T, I>::get().defensive_ok_or("founder must always be set")? &&
+			member_count > 0
+		{
+			let member_to_swap = MemberByIndex::<T, I>::get(0)
+				.defensive_ok_or("member_count > 0, we must have at least 1 member")?;
+			// Swap the founder with the first member in MemberByIndex.
+			MemberByIndex::<T, I>::swap(0, member_count);
+			// Update the indicies of the swapped member MemberRecords.
+			Members::<T, I>::mutate(&member, |m| {
+				if let Some(member) = m {
+					member.index = 0;
+				} else {
+					frame_support::defensive!(
+						"Member somehow disapeared from storage after it was inserted"
+					);
+				}
+			});
+			Members::<T, I>::mutate(&member_to_swap, |m| {
+				if let Some(member) = m {
+					member.index = member_count;
+				} else {
+					frame_support::defensive!(
+						"Member somehow disapeared from storage after it was queried"
+					);
+				}
+			});
+		}
 		member_count.saturating_inc();
 	}
 	MemberCount::<T, I>::put(member_count);
@@ -317,7 +346,7 @@ pub fn from_original<T: Config<I>, I: Instance + 'static>(
 	old::Defender::<T, I>::kill();
 	let _ = old::DefenderVotes::<T, I>::clear(u32::MAX, None);
 
-	T::BlockWeights::get().max_block
+	Ok(T::BlockWeights::get().max_block)
 }
 
 pub fn from_raw_past_payouts<T: Config<I>, I: Instance + 'static>(

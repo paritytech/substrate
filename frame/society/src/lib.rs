@@ -466,11 +466,11 @@ pub struct GroupParams<Balance> {
 
 pub type GroupParamsFor<T, I> = GroupParams<BalanceOf<T, I>>;
 
+pub(crate) const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -1681,8 +1681,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		bids.iter().any(|bid| bid.who == *who)
 	}
 
-	/// Add a member to the sorted members list. If the user is already a member, do nothing.
-	/// Can fail when `MaxMember` limit is reached, but in that case it has no side-effects.
+	/// Add a member to the members list. If the user is already a member, do nothing. Can fail when
+	/// `MaxMember` limit is reached, but in that case it has no side-effects.
 	///
 	/// Set the `payouts` for the member. NOTE: This *WILL NOT RESERVE THE FUNDS TO MAKE THE
 	/// PAYOUT*. Only set this to be non-empty if you already have the funds reserved in the Payouts
@@ -1703,7 +1703,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Add a member back to the sorted members list, setting their `rank` and `payouts`.
+	/// Add a member back to the members list, setting their `rank` and `payouts`.
 	///
 	/// Can fail when `MaxMember` limit is reached, but in that case it has no side-effects.
 	///
@@ -1713,8 +1713,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::insert_member(who, rank)
 	}
 
-	/// Add a member to the sorted members list. If the user is already a member, do nothing.
-	/// Can fail when `MaxMember` limit is reached, but in that case it has no side-effects.
+	/// Add a member to the members list. If the user is already a member, do nothing. Can fail when
+	/// `MaxMember` limit is reached, but in that case it has no side-effects.
 	fn add_new_member(who: &T::AccountId, rank: Rank) -> DispatchResult {
 		Self::insert_member(who, rank)
 	}
