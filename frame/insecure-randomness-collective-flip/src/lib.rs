@@ -166,6 +166,7 @@ mod tests {
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, Header as _, IdentityLookup},
+		BuildStorage,
 	};
 
 	use frame_support::{
@@ -183,7 +184,7 @@ mod tests {
 			NodeBlock = Block,
 			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			CollectiveFlip: pallet_insecure_randomness_collective_flip::{Pallet, Storage},
 		}
 	);
@@ -223,7 +224,7 @@ mod tests {
 	impl pallet_insecure_randomness_collective_flip::Config for Test {}
 
 	fn new_test_ext() -> sp_io::TestExternalities {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.into()
 	}
 

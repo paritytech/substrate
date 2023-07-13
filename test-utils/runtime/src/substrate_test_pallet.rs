@@ -24,7 +24,7 @@
 use frame_support::{pallet_prelude::*, storage};
 use sp_core::sr25519::Public;
 use sp_runtime::{
-	traits::{BlakeTwo256, Hash},
+	traits::Hash,
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, ValidTransaction,
 	},
@@ -41,11 +41,11 @@ pub mod pallet {
 	use crate::TransferData;
 	use frame_system::pallet_prelude::*;
 	use sp_core::storage::well_known_keys;
-	use sp_runtime::{transaction_validity::TransactionPriority, Perbill};
+	use sp_runtime::{traits::BlakeTwo256, transaction_validity::TransactionPriority, Perbill};
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
@@ -55,13 +55,15 @@ pub mod pallet {
 	pub type Authorities<T> = StorageValue<_, Vec<Public>, ValueQuery>;
 
 	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig {
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config> {
 		pub authorities: Vec<Public>,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			<Authorities<T>>::put(self.authorities.clone());
 		}

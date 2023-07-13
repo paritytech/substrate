@@ -185,32 +185,43 @@ pub enum PollBlockAnnounceValidation<H> {
 		/// The announcement.
 		announce: BlockAnnounce<H>,
 	},
-	/// The announcement header should be imported.
-	ImportHeader {
-		/// Who sent the processed block announcement?
-		who: PeerId,
-		/// Was this their new best block?
-		is_best: bool,
-		/// The announcement.
-		announce: BlockAnnounce<H>,
-	},
 	/// The block announcement should be skipped.
 	Skip,
 }
 
-/// Operation mode.
-#[derive(Debug, PartialEq, Eq)]
+/// Sync operation mode.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SyncMode {
-	// Sync headers only
-	Light,
-	// Sync headers and block bodies
+	/// Full block download and verification.
 	Full,
-	// Sync headers and the last finalied state
-	LightState { storage_chain_mode: bool, skip_proofs: bool },
-	// Warp sync mode.
+	/// Download blocks and the latest state.
+	LightState {
+		/// Skip state proof download and verification.
+		skip_proofs: bool,
+		/// Download indexed transactions for recent blocks.
+		storage_chain_mode: bool,
+	},
+	/// Warp sync - verify authority set transitions and the latest state.
 	Warp,
 }
 
+impl SyncMode {
+	/// Returns `true` if `self` is [`Self::Warp`].
+	pub fn is_warp(&self) -> bool {
+		matches!(self, Self::Warp)
+	}
+
+	/// Returns `true` if `self` is [`Self::LightState`].
+	pub fn light_state(&self) -> bool {
+		matches!(self, Self::LightState { .. })
+	}
+}
+
+impl Default for SyncMode {
+	fn default() -> Self {
+		Self::Full
+	}
+}
 #[derive(Debug)]
 pub struct Metrics {
 	pub queued_blocks: u32,
@@ -376,12 +387,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 		response: BlockResponse<Block>,
 	) -> Result<OnBlockData<Block>, BadPeer>;
 
-	/// Procss received block data.
-	fn process_block_response_data(
-		&mut self,
-		blocks_to_import: Result<OnBlockData<Block>, BadPeer>,
-	);
-
 	/// Handle a response from the remote to a justification request that we made.
 	///
 	/// `request` must be the original request that triggered `response`.
@@ -421,9 +426,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 	/// [`ChainSync::push_block_announce_validation`].
 	///
 	/// This should be polled until it returns [`Poll::Pending`].
-	///
-	/// If [`PollBlockAnnounceValidation::ImportHeader`] is returned, then the caller MUST try to
-	/// import passed header (call `on_block_data`). The network request isn't sent in this case.
 	fn poll_block_announce_validation(
 		&mut self,
 		cx: &mut std::task::Context<'_>,

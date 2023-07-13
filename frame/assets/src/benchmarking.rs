@@ -141,10 +141,10 @@ benchmarks_instance_pallet! {
 		let asset_id = default_asset_id::<T, I>();
 		let origin = T::CreateOrigin::try_successful_origin(&asset_id.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
-		let caller = T::CreateOrigin::ensure_origin(origin, &asset_id.into()).unwrap();
+		let caller = T::CreateOrigin::ensure_origin(origin.clone(), &asset_id.into()).unwrap();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	}: _(SystemOrigin::Signed(caller.clone()), asset_id.clone(), caller_lookup, 1u32.into())
+	}: _<T::RuntimeOrigin>(origin, asset_id, caller_lookup, 1u32.into())
 	verify {
 		assert_last_event::<T, I>(Event::Created { asset_id: asset_id.into(), creator: caller.clone(), owner: caller }.into());
 	}
@@ -514,8 +514,8 @@ benchmarks_instance_pallet! {
 			SystemOrigin::Signed(new_account.clone()).into(),
 			asset_id
 		).is_ok());
-		// `touch` should reserve some balance of the caller...
-		assert!(!T::Currency::reserved_balance(&new_account).is_zero());
+		// `touch` should reserve balance of the caller according to the `AssetAccountDeposit` amount...
+		assert_eq!(T::Currency::reserved_balance(&new_account), T::AssetAccountDeposit::get());
 		// ...and also create an `Account` entry.
 		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
 	}: _(SystemOrigin::Signed(new_account.clone()), asset_id, true)
@@ -535,8 +535,8 @@ benchmarks_instance_pallet! {
 			asset_id,
 			new_account_lookup.clone()
 		).is_ok());
-		// `touch_other` should reserve balance of the freezer
-		assert!(!T::Currency::reserved_balance(&asset_owner).is_zero());
+		// `touch` should reserve balance of the caller according to the `AssetAccountDeposit` amount...
+		assert_eq!(T::Currency::reserved_balance(&asset_owner), T::AssetAccountDeposit::get());
 		assert!(Account::<T, I>::contains_key(asset_id.into(), &new_account));
 	}: _(SystemOrigin::Signed(asset_owner.clone()), asset_id, new_account_lookup.clone())
 	verify {

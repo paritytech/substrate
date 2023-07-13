@@ -326,7 +326,7 @@
 //!
 //! This section assumes that the slash computation is executed by
 //! `pallet_staking::StakingLedger::slash`, which passes the information to this pallet via
-//! [`sp_staking::OnStakerSlash::on_slash`].
+//! [`sp_staking::OnStakingUpdate::on_slash`].
 //!
 //! Unbonding pools need to be slashed to ensure all nominators whom where in the bonded pool while
 //! it was backing a validator that equivocated are punished. Without these measures a member could
@@ -340,10 +340,6 @@
 //! To be fair to joiners, this implementation also need joining pools, which are actively staking,
 //! in addition to the unbonding pools. For maintenance simplicity these are not implemented.
 //! Related: <https://github.com/paritytech/substrate/issues/10860>
-//!
-//! **Relevant methods:**
-//!
-//! * [`Pallet::on_slash`]
 //!
 //! ### Limitations
 //!
@@ -375,7 +371,7 @@ use sp_runtime::{
 	},
 	FixedPointNumber, Perbill,
 };
-use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
+use sp_staking::{EraIndex, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
 #[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
@@ -750,6 +746,10 @@ impl<T: Config> Commission<T> {
 			Some((commission, payee)) => {
 				ensure!(!self.throttling(commission), Error::<T>::CommissionChangeThrottled);
 				ensure!(
+					commission <= &GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()),
+					Error::<T>::CommissionExceedsGlobalMaximum
+				);
+				ensure!(
 					self.max.map_or(true, |m| commission <= &m),
 					Error::<T>::CommissionExceedsMaximum
 				);
@@ -773,6 +773,10 @@ impl<T: Config> Commission<T> {
 	/// updated to the new maximum. This will also register a `throttle_from` update.
 	/// A `PoolCommissionUpdated` event is triggered if `current.0` is updated.
 	fn try_update_max(&mut self, pool_id: PoolId, new_max: Perbill) -> DispatchResult {
+		ensure!(
+			new_max <= GlobalMaxCommission::<T>::get().unwrap_or(Bounded::max_value()),
+			Error::<T>::CommissionExceedsGlobalMaximum
+		);
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
 				return Err(Error::<T>::MaxCommissionRestricted.into())
@@ -1676,7 +1680,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			MinJoinBond::<T>::put(self.min_join_bond);
 			MinCreateBond::<T>::put(self.min_create_bond);
@@ -1824,6 +1828,8 @@ pub mod pallet {
 		MaxCommissionRestricted,
 		/// The supplied commission exceeds the max allowed commission.
 		CommissionExceedsMaximum,
+		/// The supplied commission exceeds global maximum commission.
+		CommissionExceedsGlobalMaximum,
 		/// Not enough blocks have surpassed since the last commission update.
 		CommissionChangeThrottled,
 		/// The submitted changes to commission change rate are not allowed.
@@ -3125,16 +3131,18 @@ impl<T: Config> Pallet<T> {
 		RewardPools::<T>::iter_keys().try_for_each(|id| -> Result<(), TryRuntimeError> {
 			// the sum of the pending rewards must be less than the leftover balance. Since the
 			// reward math rounds down, we might accumulate some dust here.
-			log!(
-				trace,
-				"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}",
-				id,
-				pools_members_pending_rewards.get(&id),
-				RewardPool::<T>::current_balance(id)
-			);
+			let pending_rewards_lt_leftover_bal = RewardPool::<T>::current_balance(id) >=
+				pools_members_pending_rewards.get(&id).copied().unwrap_or_default();
+			if !pending_rewards_lt_leftover_bal {
+				log::warn!(
+					"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}",
+					id,
+					pools_members_pending_rewards.get(&id),
+					RewardPool::<T>::current_balance(id)
+				);
+			}
 			ensure!(
-				RewardPool::<T>::current_balance(id) >=
-					pools_members_pending_rewards.get(&id).copied().unwrap_or_default(),
+				pending_rewards_lt_leftover_bal,
 				"The sum of the pending rewards must be less than the leftover balance."
 			);
 			Ok(())
@@ -3253,7 +3261,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
+impl<T: Config> sp_staking::OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_slash(
 		pool_account: &T::AccountId,
 		// Bonded balance is always read directly from staking, therefore we don't need to update

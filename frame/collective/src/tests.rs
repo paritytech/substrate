@@ -21,7 +21,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::Pays,
 	parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
+	traits::{ConstU32, ConstU64, StorageVersion},
 	Hashable,
 };
 use frame_system::{EnsureRoot, EventRecord, Phase};
@@ -234,6 +234,25 @@ fn initialize_members_sorts_members() {
 		.build_and_execute(|| {
 			assert_eq!(Collective::members(), expected_members);
 		});
+}
+
+#[test]
+fn set_members_with_prime_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		let members = vec![1, 2, 3];
+		assert_ok!(Collective::set_members(
+			RuntimeOrigin::root(),
+			members.clone(),
+			Some(3),
+			MaxMembers::get()
+		));
+		assert_eq!(Collective::members(), members.clone());
+		assert_eq!(Collective::prime(), Some(3));
+		assert_noop!(
+			Collective::set_members(RuntimeOrigin::root(), members, Some(4), MaxMembers::get()),
+			Error::<Test, Instance1>::PrimeAccountNotMember
+		);
+	});
 }
 
 #[test]

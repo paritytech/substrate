@@ -402,9 +402,9 @@ pub trait NetworkNotification {
 	/// a receiver. With a `NotificationSender` at hand, sending a notification is done in two
 	/// steps:
 	///
-	/// 1.  [`NotificationSender::ready`] is used to wait for the sender to become ready
+	/// 1. [`NotificationSender::ready`] is used to wait for the sender to become ready
 	/// for another notification, yielding a [`NotificationSenderReady`] token.
-	/// 2.  [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
+	/// 2. [`NotificationSenderReady::send`] enqueues the notification for sending. This operation
 	/// can only fail if the underlying notification substream or connection has suddenly closed.
 	///
 	/// An error is returned by [`NotificationSenderReady::send`] if there exists no open
