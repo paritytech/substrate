@@ -195,7 +195,7 @@ pub mod benchmarking;
 
 pub mod migrations;
 
-const DEMOCRACY_ID: LockIdentifier = *b"democrac";
+pub(crate) const DEMOCRACY_ID: LockIdentifier = *b"democrac";
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -439,19 +439,14 @@ pub mod pallet {
 	pub type MetadataOf<T: Config> = StorageMap<_, Blake2_128Concat, MetadataOwner, PreimageHash>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
-		_phantom: sp_std::marker::PhantomData<T>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			GenesisConfig { _phantom: Default::default() }
-		}
+		#[serde(skip)]
+		_config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			PublicPropCount::<T>::put(0 as PropIndex);
 			ReferendumCount::<T>::put(0 as ReferendumIndex);

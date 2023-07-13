@@ -53,7 +53,7 @@ where
 	N: MultiplyRational + Into<u128> + Copy + core::fmt::Debug,
 {
 	let Some(got) = f.multiply_rational(n, d, r) else {
-		return;
+		return
 	};
 
 	let (ae, be, ce) =

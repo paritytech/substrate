@@ -27,7 +27,7 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		tokens::fungible, ConstU32, ConstU64, ConstU8, Imbalance as ImbalanceT, OnUnbalanced,
-		StorageMapShim, StoredMap,
+		StorageMapShim, StoredMap, WhitelistedStorageKeys,
 	},
 	weights::{IdentityFee, Weight},
 	RuntimeDebug,
@@ -35,13 +35,14 @@ use frame_support::{
 use frame_system::{self as system, RawOrigin};
 use pallet_transaction_payment::{ChargeTransactionPayment, CurrencyAdapter, Multiplier};
 use scale_info::TypeInfo;
-use sp_core::H256;
+use sp_core::{hexdisplay::HexDisplay, H256};
 use sp_io;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, IdentityLookup, SignedExtension, Zero},
-	ArithmeticError, DispatchError, DispatchResult, FixedPointNumber, TokenError,
+	ArithmeticError, BuildStorage, DispatchError, DispatchResult, FixedPointNumber, TokenError,
 };
+use std::collections::BTreeSet;
 
 mod currency_tests;
 mod dispatchable_tests;
@@ -77,7 +78,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 	}
@@ -136,7 +137,7 @@ impl Config for Test {
 	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = TestId;
 	type WeightInfo = ();
-	type HoldIdentifier = TestId;
+	type RuntimeHoldReason = TestId;
 	type FreezeIdentifier = TestId;
 	type MaxFreezes = ConstU32<2>;
 	type MaxHolds = ConstU32<2>;
@@ -175,7 +176,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_associated_consts();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Test> {
 			balances: if self.monied {
 				vec![
@@ -303,4 +304,16 @@ fn weights_sane() {
 
 	let info = crate::Call::<Test>::force_unreserve { who: 10, amount: 4 }.get_dispatch_info();
 	assert_eq!(<() as crate::WeightInfo>::force_unreserve(), info.weight);
+}
+
+#[test]
+fn check_whitelist() {
+	let whitelist: BTreeSet<String> = AllPalletsWithSystem::whitelisted_storage_keys()
+		.iter()
+		.map(|s| HexDisplay::from(&s.key).to_string())
+		.collect();
+	// Inactive Issuance
+	assert!(whitelist.contains("c2261276cc9d1f8598ea4b6a74b15c2f1ccde6872881f893a21de93dfe970cd5"));
+	// Total Issuance
+	assert!(whitelist.contains("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80"));
 }

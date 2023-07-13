@@ -401,21 +401,16 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub fellows: Vec<T::AccountId>,
 		pub allies: Vec<T::AccountId>,
+		#[serde(skip)]
 		pub phantom: PhantomData<(T, I)>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
-		fn default() -> Self {
-			Self { fellows: Vec::new(), allies: Vec::new(), phantom: Default::default() }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			for m in self.fellows.iter().chain(self.allies.iter()) {
 				assert!(Pallet::<T, I>::has_identity(m).is_ok(), "Member does not set identity!");

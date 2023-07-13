@@ -15,22 +15,21 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 bitflags = "1.3"
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = [
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = [
 	"derive",
 	"max-encoded-len",
 ] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 log = { version = "0.4", default-features = false }
-wasm-instrument = { version = "0.4", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { version = "1", default-features = false, features = [
 	"const_generics",
 ] }
-wasmi = { version = "0.28", default-features = false }
-wasmparser = { package = "wasmparser-nostd", version = "0.100", default-features = false }
+wasmi = { version = "0.30", default-features = false }
 impl-trait-for-tuples = "0.2"
 
-# Only used in benchmarking to generate random contract code
+# Only used in benchmarking to generate contract code
+wasm-instrument = { version = "0.4", optional = true, default-features = false }
 rand = { version = "0.8", optional = true, default-features = false }
 rand_pcg = { version = "0.3", optional = true }
 
@@ -39,16 +38,16 @@ environmental = { version = "1.1.4", default-features = false }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-pallet-contracts-primitives = { version = "7.0.0", default-features = false, path = "primitives" }
+pallet-contracts-primitives = { version = "24.0.0", default-features = false, path = "primitives" }
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 assert_matches = "1"
 env_logger = "0.9"
 pretty_assertions = "1"
@@ -60,7 +59,7 @@ pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-insecure-randomness-collective-flip = { version = "4.0.0-dev", path = "../insecure-randomness-collective-flip" }
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
 pallet-proxy = { version = "4.0.0-dev", path = "../proxy" }
-sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
+sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 
 [features]
 default = ["std"]
@@ -81,12 +80,12 @@ std = [
 	"pallet-contracts-proc-macro/full",
 	"log/std",
 	"rand/std",
-	"wasmparser/std",
 	"environmental/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"rand",
 	"rand_pcg",
+	"wasm-instrument",
 ]
 try-runtime = ["frame-support/try-runtime"]

@@ -85,7 +85,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		TestPallet: pallet_test::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -128,7 +128,7 @@ impl pallet_test::OtherConfig for Test {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
+	RuntimeGenesisConfig::default().build_storage().unwrap().into()
 }
 
 mod benchmarks {

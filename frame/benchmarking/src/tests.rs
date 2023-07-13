@@ -35,7 +35,7 @@ mod pallet_test {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -75,7 +75,7 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		TestPallet: pallet_test::{Pallet, Call, Storage},
 	}
 );
@@ -118,7 +118,7 @@ impl pallet_test::Config for Test {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
+	RuntimeGenesisConfig::default().build_storage().unwrap().into()
 }
 
 thread_local! {

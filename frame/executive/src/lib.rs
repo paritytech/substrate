@@ -137,6 +137,9 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 #[allow(dead_code)]
 const LOG_TARGET: &str = "runtime::executive";
 
@@ -329,6 +332,12 @@ where
 			);
 		}
 
+		frame_support::log::info!(
+			target: LOG_TARGET,
+			"try-runtime: Block #{:?} successfully executed",
+			header.number(),
+		);
+
 		Ok(frame_system::Pallet::<System>::block_weight().total())
 	}
 
@@ -338,7 +347,7 @@ where
 	/// `true`. Also, if set to `true`, it runs the `pre_upgrade` and `post_upgrade` hooks.
 	pub fn try_runtime_upgrade(
 		checks: frame_try_runtime::UpgradeCheckSelect,
-	) -> Result<Weight, &'static str> {
+	) -> Result<Weight, TryRuntimeError> {
 		if checks.try_state() {
 			let _guard = frame_support::StorageNoopGuard::default();
 			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
@@ -680,7 +689,7 @@ mod tests {
 		transaction_validity::{
 			InvalidTransaction, TransactionValidityError, UnknownTransaction, ValidTransaction,
 		},
-		DispatchError,
+		BuildStorage, DispatchError,
 	};
 
 	use frame_support::{
@@ -824,7 +833,7 @@ mod tests {
 			NodeBlock = TestBlock,
 			UncheckedExtrinsic = TestUncheckedExtrinsic
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 			TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 			Custom: custom::{Pallet, Call, ValidateUnsigned, Inherent},
@@ -883,7 +892,7 @@ mod tests {
 		type WeightInfo = ();
 		type FreezeIdentifier = ();
 		type MaxFreezes = ConstU32<1>;
-		type HoldIdentifier = ();
+		type RuntimeHoldReason = ();
 		type MaxHolds = ConstU32<1>;
 	}
 
@@ -963,7 +972,7 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 211)] }
 			.assimilate_storage(&mut t)
 			.unwrap();
@@ -991,7 +1000,7 @@ mod tests {
 	}
 
 	fn new_test_ext(balance_factor: Balance) -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 111 * balance_factor)] }
 			.assimilate_storage(&mut t)
 			.unwrap();
@@ -999,7 +1008,7 @@ mod tests {
 	}
 
 	fn new_test_ext_v0(balance_factor: Balance) -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 111 * balance_factor)] }
 			.assimilate_storage(&mut t)
 			.unwrap();

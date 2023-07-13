@@ -34,6 +34,30 @@ pub const CALL: &<Test as frame_system::Config>::RuntimeCall =
 	&RuntimeCall::Balances(crate::Call::transfer_allow_death { dest: 0, value: 0 });
 
 #[test]
+fn set_lock_with_amount_zero_removes_lock() {
+	ExtBuilder::default()
+		.existential_deposit(1)
+		.monied(true)
+		.build_and_execute_with(|| {
+			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
+			Balances::set_lock(ID_1, &1, 0, WithdrawReasons::all());
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
+		});
+}
+
+#[test]
+fn set_lock_with_withdraw_reasons_empty_removes_lock() {
+	ExtBuilder::default()
+		.existential_deposit(1)
+		.monied(true)
+		.build_and_execute_with(|| {
+			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::all());
+			Balances::set_lock(ID_1, &1, u64::MAX, WithdrawReasons::empty());
+			assert_ok!(<Balances as Currency<_>>::transfer(&1, &2, 1, AllowDeath));
+		});
+}
+
+#[test]
 fn basic_locking_should_work() {
 	ExtBuilder::default()
 		.existential_deposit(1)
@@ -642,7 +666,7 @@ fn burn_must_work() {
 #[should_panic = "the balance of any account should always be at least the existential deposit."]
 fn cannot_set_genesis_value_below_ed() {
 	EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = 11);
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let _ = crate::GenesisConfig::<Test> { balances: vec![(1, 10)] }
 		.assimilate_storage(&mut t)
 		.unwrap();
@@ -651,7 +675,7 @@ fn cannot_set_genesis_value_below_ed() {
 #[test]
 #[should_panic = "duplicate balances in genesis."]
 fn cannot_set_genesis_value_twice() {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let _ = crate::GenesisConfig::<Test> { balances: vec![(1, 10), (2, 20), (1, 15)] }
 		.assimilate_storage(&mut t)
 		.unwrap();

@@ -22,29 +22,27 @@
 //! components of the runtime that are expensive to initialize.
 
 use crate::error::{Error, WasmError};
+
 use codec::Decode;
-use lru::LruCache;
 use parking_lot::Mutex;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
 	wasm_runtime::{HeapAllocStrategy, WasmInstance, WasmModule},
 };
+use schnellru::{ByLength, LruMap};
 use sp_core::traits::{Externalities, FetchRuntimeCode, RuntimeCode};
 use sp_version::RuntimeVersion;
+use sp_wasm_interface::HostFunctions;
+
 use std::{
-	num::NonZeroUsize,
 	panic::AssertUnwindSafe,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
 
-use sp_wasm_interface::HostFunctions;
-
 /// Specification of different methods of executing the runtime Wasm code.
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub enum WasmExecutionMethod {
-	/// Uses the Wasmi interpreter.
-	Interpreted,
 	/// Uses the Wasmtime compiled runtime.
 	Compiled {
 		/// The instantiation strategy to use.
@@ -53,8 +51,10 @@ pub enum WasmExecutionMethod {
 }
 
 impl Default for WasmExecutionMethod {
-	fn default() -> WasmExecutionMethod {
-		WasmExecutionMethod::Interpreted
+	fn default() -> Self {
+		Self::Compiled {
+			instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite,
+		}
 	}
 }
 
@@ -163,7 +163,7 @@ pub struct RuntimeCache {
 	/// A cache of runtimes along with metadata.
 	///
 	/// Runtimes sorted by recent usage. The most recently used is at the front.
-	runtimes: Mutex<LruCache<VersionedRuntimeId, Arc<VersionedRuntime>>>,
+	runtimes: Mutex<LruMap<VersionedRuntimeId, Arc<VersionedRuntime>>>,
 	/// The size of the instances cache for each runtime.
 	max_runtime_instances: usize,
 	cache_path: Option<PathBuf>,
@@ -185,9 +185,8 @@ impl RuntimeCache {
 		cache_path: Option<PathBuf>,
 		runtime_cache_size: u8,
 	) -> RuntimeCache {
-		let cap =
-			NonZeroUsize::new(runtime_cache_size.max(1) as usize).expect("cache size is not zero");
-		RuntimeCache { runtimes: Mutex::new(LruCache::new(cap)), max_runtime_instances, cache_path }
+		let cap = ByLength::new(runtime_cache_size.max(1) as u32);
+		RuntimeCache { runtimes: Mutex::new(LruMap::new(cap)), max_runtime_instances, cache_path }
 	}
 
 	/// Prepares a WASM module instance and executes given function for it.
@@ -275,7 +274,7 @@ impl RuntimeCache {
 			let versioned_runtime = Arc::new(result?);
 
 			// Save new versioned wasm runtime in cache
-			runtimes.put(versioned_runtime_id, versioned_runtime.clone());
+			runtimes.insert(versioned_runtime_id, versioned_runtime.clone());
 
 			versioned_runtime
 		};
@@ -299,21 +298,6 @@ where
 	H: HostFunctions,
 {
 	match wasm_method {
-		WasmExecutionMethod::Interpreted => {
-			// Wasmi doesn't have any need in a cache directory.
-			//
-			// We drop the cache_path here to silence warnings that cache_path is not used if
-			// compiling without the `wasmtime` flag.
-			let _ = cache_path;
-
-			sc_executor_wasmi::create_runtime(
-				blob,
-				heap_alloc_strategy,
-				H::host_functions(),
-				allow_missing_func_imports,
-			)
-			.map(|runtime| -> Box<dyn WasmModule> { Box::new(runtime) })
-		},
 		WasmExecutionMethod::Compiled { instantiation_strategy } =>
 			sc_executor_wasmtime::create_runtime::<H>(
 				blob,

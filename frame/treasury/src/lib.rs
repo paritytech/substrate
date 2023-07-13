@@ -234,31 +234,14 @@ pub mod pallet {
 		StorageValue<_, BoundedVec<ProposalIndex, T::MaxApprovals>, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig;
-
-	#[cfg(feature = "std")]
-	impl Default for GenesisConfig {
-		fn default() -> Self {
-			Self
-		}
-	}
-
-	#[cfg(feature = "std")]
-	impl GenesisConfig {
-		/// Direct implementation of `GenesisBuild::assimilate_storage`.
-		#[deprecated(
-			note = "use `<GensisConfig<T, I> as GenesisBuild<T, I>>::assimilate_storage` instead"
-		)]
-		pub fn assimilate_storage<T: Config<I>, I: 'static>(
-			&self,
-			storage: &mut sp_runtime::Storage,
-		) -> Result<(), String> {
-			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
-		}
+	#[derive(frame_support::DefaultNoBound)]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		#[serde(skip)]
+		_config: sp_std::marker::PhantomData<(T, I)>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			// Create Treasury account
 			let account_id = <Pallet<T, I>>::account_id();

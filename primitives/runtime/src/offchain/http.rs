@@ -343,10 +343,10 @@ impl Response {
 /// A buffered byte iterator over response body.
 ///
 /// Note that reading the body may return `None` in following cases:
-/// 1. Either the deadline you've set is reached (check via `#error`;
-/// 	   In such case you can resume the reader by setting a new deadline)
-/// 2. Or because of IOError. In such case the reader is not resumable and will keep
-///    returning `None`.
+/// 1. Either the deadline you've set is reached (check via `#error`; In such case you can resume
+///    the reader by setting a new deadline)
+/// 2. Or because of IOError. In such case the reader is not resumable and will keep returning
+///    `None`.
 /// 3. The body has been returned. The reader will keep returning `None`.
 #[derive(Clone)]
 pub struct ResponseBody {

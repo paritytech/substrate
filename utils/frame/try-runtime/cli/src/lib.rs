@@ -122,10 +122,10 @@
 //!
 //! ```ignore
 //! #[cfg(feature = "try-runtime")]
-//! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
+//! fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {}
 //!
 //! #[cfg(feature = "try-runtime")]
-//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
+//! fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
@@ -141,7 +141,7 @@
 //!
 //! ```ignore
 //! #[cfg(feature = "try-runtime")]
-//! fn try_state(_: BlockNumber) -> Result<(), &'static str> {}
+//! fn try_state(_: BlockNumber) -> Result<(), TryRuntimeError> {}
 //! ```
 //!
 //! which is called on numerous code paths in the try-runtime tool. These checks should ensure that
@@ -248,7 +248,7 @@
 //! # assuming there's `./substrate --dev --tmp --ws-port 9999` or similar running.
 //! ./substrate-try-runtime \
 //!     try-runtime \
-//!     --runtime kitchensink_runtime.wasm \
+//!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
 //!     live --uri ws://localhost:9999
@@ -260,7 +260,7 @@
 //! ```bash
 //! ./substrate-try-runtime \
 //!     try-runtime \
-//!     --runtime kitchensink_runtime.wasm \
+//!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
 //!     live --uri ws://localhost:9999 \
@@ -295,7 +295,7 @@
 //! Then, we can use it to have the same command as before, `on-runtime-upgrade`
 //!
 //! ```bash
-//! try-runtime \
+//! ./substrate-try-runtime try-runtime \
 //!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     on-runtime-upgrade \
@@ -309,7 +309,7 @@
 //!     --runtime runtime-try-runtime.wasm \
 //!     -lruntime=debug \
 //!     execute-block live \
-//!     --uri ws://localhost:999
+//!     --uri ws://localhost:9999
 //! ```
 //!
 //! This can still be customized at a given block with `--at`. If you want to use a snapshot, you
@@ -320,15 +320,22 @@
 //!
 //! ```bash
 //! ./substrate-try-runtime try-runtime \
-//!     --runtime runtime-try-runtime.wasm \
-//!     -lruntime=debug \
-//!     execute-block live \
-//!     --try-state System,Staking \
-//!     --uri ws://localhost:999
+//!    --runtime runtime-try-runtime.wasm \
+//!    -lruntime=debug \
+//!    execute-block \
+//!    --try-state System,Staking \
+//!    live \
+//!    --uri ws://localhost:9999 \
+//!    --pallet System Staking
 //! ```
 //!
-//! Will only run the `try-state` of the two given pallets. See
-//! [`frame_try_runtime::TryStateSelect`] for more information.
+//! Will only run the `try-state` of the two given pallets. When running `try-state` against
+//! some real chain data it can take a long time for the command to execute since it has to
+//! query all the key-value pairs. In scenarios like above where we only want to run the
+//! `try-state` for some specific pallets, we can use the `--pallet` option to specify from
+//! which pallets we want to query the state. This will greatly decrease the execution time.
+//!
+//! See [`frame_try_runtime::TryStateSelect`] for more information.
 //!
 //! * Follow our live chain's blocks using `follow-chain`, whilst running the try-state of 3 pallets
 //!   in a round robin fashion
@@ -611,9 +618,7 @@ impl State {
 		try_runtime_check: bool,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
-		Block::Hash: FromStr,
 		Block::Header: DeserializeOwned,
-		Block::Hash: DeserializeOwned,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		let builder = match self {
@@ -725,7 +730,6 @@ impl TryRuntimeCmd {
 	where
 		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: DeserializeOwned,
-		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 		<NumberFor<Block> as FromStr>::Err: Debug,
 		<NumberFor<Block> as TryInto<u64>>::Error: Debug,
@@ -791,7 +795,6 @@ impl CliConfiguration for TryRuntimeCmd {
 /// Get the hash type of the generic `Block` from a `hash_str`.
 pub(crate) fn hash_of<Block: BlockT>(hash_str: &str) -> sc_cli::Result<Block::Hash>
 where
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 {
 	hash_str
@@ -855,7 +858,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
-	extensions: Extensions,
+	mut extensions: Extensions,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	let mut changes = Default::default();
 	let encoded_results = StateMachine::new(
@@ -864,11 +867,11 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 		executor,
 		method,
 		data,
-		extensions,
+		&mut extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
 		CallContext::Offchain,
 	)
-	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
@@ -884,7 +887,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
-	extensions: Extensions,
+	mut extensions: Extensions,
 	maybe_export_proof: Option<PathBuf>,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	use parity_scale_codec::Encode;
@@ -903,11 +906,11 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		executor,
 		method,
 		data,
-		extensions,
+		&mut extensions,
 		&runtime_code,
 		CallContext::Offchain,
 	)
-	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
+	.execute()
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 

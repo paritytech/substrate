@@ -87,7 +87,7 @@ mod module1 {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I>
 	where
 		T::BlockNumber: std::fmt::Display,
 	{
@@ -196,7 +196,7 @@ mod module2 {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I>
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I>
 	where
 		T::BlockNumber: std::fmt::Display,
 	{
@@ -352,7 +352,7 @@ impl module3::Config for Runtime {
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
-	GenesisConfig {
+	RuntimeGenesisConfig {
 		module_1_1: module1::GenesisConfig { value: 3, test: 2 },
 		module_1_2: module1::GenesisConfig { value: 4, test: 5 },
 		module_2: module2::GenesisConfig {
