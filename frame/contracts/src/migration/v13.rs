@@ -23,7 +23,7 @@
 use crate::{
 	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
-	Config, ContractInfoOf, HoldReason, Weight, LOG_TARGET,
+	Config, ContractInfo, ContractInfoOf, HoldReason, Weight, LOG_TARGET,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -157,11 +157,36 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
-		todo!()
+		let sample: Vec<_> = ContractInfoOf::<T>::iter().take(100).collect();
+
+		log::debug!(target: LOG_TARGET, "Taking sample of {} contracts", sample.len());
+		Ok(sample.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		todo!()
+		let sample = <Vec<(T::AccountId, ContractInfo<T>)> as Decode>::decode(&mut &state[..])
+			.expect("pre_upgrade_step provides a valid state; qed");
+
+		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
+		for (account, old_contract) in sample {
+			log::debug!(target: LOG_TARGET, "===");
+			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
+			let contract = ContractInfoOf::<T>::get(&account).unwrap();
+
+			let deposit = T::Currency::total_balance(
+				&contract.deposit_account(),
+			);
+			ensure!(
+				deposit ==
+					contract
+						.storage_base_deposit
+						.saturating_add(contract.storage_item_deposit)
+						.saturating_add(contract.storage_byte_deposit),
+				"deposit mismatch"
+			);
+		}
+
+		Ok(())
 	}
 }
