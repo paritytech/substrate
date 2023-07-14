@@ -39,6 +39,7 @@ fn benchmark_extrinsic(pallet: &str, extrinsic: &str) {
 		.args(&["--pallet", pallet, "--extrinsic", extrinsic])
 		// Run with low repeats for faster execution.
 		.args(["--warmup=10", "--repeat=10", "--max-ext-per-block=10"])
+		.args(["--wasm-execution=compiled"])
 		.status()
 		.unwrap();
 
