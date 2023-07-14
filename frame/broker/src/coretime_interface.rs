@@ -1,4 +1,4 @@
-use codec::{Encode, MaxEncodedLen, Decode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::Parameter;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
@@ -14,7 +14,9 @@ pub type TaskId = u32;
 pub type PartsOf57600 = u16;
 
 /// An element to which a core can be assigned.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
 pub enum CoreAssignment {
 	/// Core need not be used for anything.
 	Idle,
@@ -45,7 +47,9 @@ impl CoretimeInterface for () {
 	type AccountId = ();
 	type Balance = u64;
 	type BlockNumber = u32;
-	fn latest() -> Self::BlockNumber { 0 }
+	fn latest() -> Self::BlockNumber {
+		0
+	}
 	fn request_core_count(_count: CoreIndex) {}
 	fn request_revenue_info_at(_when: Self::BlockNumber) {}
 	fn credit_account(_who: Self::AccountId, _amount: Self::Balance) {}
@@ -54,7 +58,12 @@ impl CoretimeInterface for () {
 		_begin: Self::BlockNumber,
 		_assignment: Vec<(CoreAssignment, PartsOf57600)>,
 		_end_hint: Option<Self::BlockNumber>,
-	) {}
-	fn check_notify_core_count() -> Option<u16> { None }
-	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> { None }
+	) {
+	}
+	fn check_notify_core_count() -> Option<u16> {
+		None
+	}
+	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
+		None
+	}
 }

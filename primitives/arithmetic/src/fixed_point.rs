@@ -52,17 +52,19 @@ pub trait FixedPointOperand:
 {
 }
 
-impl<T:
-	Copy
-	+ Clone
-	+ Bounded
-	+ Zero
-	+ Saturating
-	+ PartialOrd<Self>
-	+ UniqueSaturatedInto<u128>
-	+ TryFrom<u128>
-	+ CheckedNeg
-> FixedPointOperand for T {}
+impl<
+		T: Copy
+			+ Clone
+			+ Bounded
+			+ Zero
+			+ Saturating
+			+ PartialOrd<Self>
+			+ UniqueSaturatedInto<u128>
+			+ TryFrom<u128>
+			+ CheckedNeg,
+	> FixedPointOperand for T
+{
+}
 
 /// Something that implements a decimal fixed point number.
 ///

@@ -17,17 +17,24 @@
 
 #![cfg(test)]
 
-use crate::*;
+use crate::{test_fungibles::TestFungibles, *};
+use frame_support::{
+	assert_ok, ensure, parameter_types,
+	traits::{
+		fungible::{Balanced, Credit, Inspect, ItemOf, Mutate},
+		nonfungible::Inspect as NftInspect,
+		Hooks, OnUnbalanced,
+	},
+	PalletId,
+};
 use frame_system::EnsureNever;
-use sp_std::collections::btree_map::BTreeMap;
-use frame_support::{parameter_types, traits::{Hooks, nonfungible::{Inspect as NftInspect}, fungible::{ItemOf, Mutate, Inspect, Credit, Balanced}, OnUnbalanced}, assert_ok, PalletId, ensure};
 use sp_arithmetic::Perbill;
-use sp_core::{H256, ConstU64, ConstU16, ConstU32};
+use sp_core::{ConstU16, ConstU32, ConstU64, H256};
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup, Identity},
+	traits::{BlakeTwo256, Identity, IdentityLookup},
 };
-use crate::test_fungibles::TestFungibles;
+use sp_std::collections::btree_map::BTreeMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -82,7 +89,7 @@ pub enum CoretimeTraceItem {
 }
 use CoretimeTraceItem::*;
 
-parameter_types!{
+parameter_types! {
 	pub static CoretimeTrace: Vec<(u32, CoretimeTraceItem)> = Default::default();
 	pub static CoretimeCredit: BTreeMap<u64, u64> = Default::default();
 	pub static CoretimeSpending: Vec<(u32, u64)> = Default::default();
@@ -98,13 +105,24 @@ impl CoretimeInterface for TestCoretimeProvider {
 	type AccountId = u64;
 	type Balance = u64;
 	type BlockNumber = u32;
-	fn latest() -> Self::BlockNumber { System::block_number() as u32 }
+	fn latest() -> Self::BlockNumber {
+		System::block_number() as u32
+	}
 	fn request_core_count(count: CoreIndex) {
 		NotifyCoreCount::mutate(|s| s.insert(0, count));
 	}
 	fn request_revenue_info_at(when: Self::BlockNumber) {
 		let mut total = 0;
-		CoretimeSpending::mutate(|s| s.retain(|(n, a)| if *n < when { total += a; false } else { true }));
+		CoretimeSpending::mutate(|s| {
+			s.retain(|(n, a)| {
+				if *n < when {
+					total += a;
+					false
+				} else {
+					true
+				}
+			})
+		});
 		NotifyRevenueInfo::mutate(|s| s.insert(0, (when, total)));
 	}
 	fn credit_account(who: Self::AccountId, amount: Self::Balance) {

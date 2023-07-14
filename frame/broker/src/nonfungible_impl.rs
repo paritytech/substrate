@@ -1,9 +1,7 @@
 use super::*;
 use frame_support::{
-	pallet_prelude::{*, DispatchResult},
-	traits::{
-		nonfungible::{Inspect, Transfer},
-	}
+	pallet_prelude::{DispatchResult, *},
+	traits::nonfungible::{Inspect, Transfer},
 };
 
 impl<T: Config> Inspect<T::AccountId> for Pallet<T> {

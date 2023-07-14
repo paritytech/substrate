@@ -1,8 +1,8 @@
-use crate::{Config, CoretimeInterface, CoreIndex, CoreMask, CoreAssignment, TaskId};
-use codec::{Encode, Decode, MaxEncodedLen};
-use scale_info::TypeInfo;
+use crate::{Config, CoreAssignment, CoreIndex, CoreMask, CoretimeInterface, TaskId};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::traits::fungible::Inspect;
 use frame_system::Config as SConfig;
+use scale_info::TypeInfo;
 use sp_arithmetic::Perbill;
 use sp_core::{ConstU32, RuntimeDebug};
 use sp_runtime::BoundedVec;
@@ -41,11 +41,7 @@ pub struct RegionId {
 }
 impl From<u128> for RegionId {
 	fn from(x: u128) -> Self {
-		Self {
-			begin: (x >> 96) as u32,
-			core: (x >> 80) as u16,
-			part: x.into(),
-		}
+		Self { begin: (x >> 96) as u32, core: (x >> 80) as u16, part: x.into() }
 	}
 }
 impl From<RegionId> for u128 {
@@ -168,7 +164,9 @@ pub struct StatusRecord {
 }
 
 /// A record of flux in the InstaPool.
-#[derive(Encode, Decode, Clone, Copy, Default, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Encode, Decode, Clone, Copy, Default, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
 pub struct PoolIoRecord {
 	/// The total change of the pool, measured in Regularity Parts.
 	pub total: SignedPartCount,
@@ -206,10 +204,7 @@ pub struct SaleInfoRecord<Balance, BlockNumber> {
 	/// Number of cores which have been sold; never more than cores_offered.
 	pub cores_sold: CoreIndex,
 }
-pub type SaleInfoRecordOf<T> = SaleInfoRecord<
-	BalanceOf<T>,
-	<T as SConfig>::BlockNumber,
->;
+pub type SaleInfoRecordOf<T> = SaleInfoRecord<BalanceOf<T>, <T as SConfig>::BlockNumber>;
 
 /// Record for Polkadot Core reservations (generally tasked with the maintenance of System
 /// Chains).
@@ -250,6 +245,4 @@ pub struct ConfigRecord<BlockNumber> {
 	/// The duration by which rewards for contributions to the InstaPool must be collected.
 	pub contribution_timeout: Timeslice,
 }
-pub type ConfigRecordOf<T> = ConfigRecord<
-	<T as SConfig>::BlockNumber,
->;
+pub type ConfigRecordOf<T> = ConfigRecord<<T as SConfig>::BlockNumber>;

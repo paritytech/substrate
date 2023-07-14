@@ -1,14 +1,18 @@
 use super::*;
-use CompletionStatus::Complete;
-use sp_runtime::traits::{ConvertBack, AccountIdConversion};
 use frame_support::{
-	pallet_prelude::{*, DispatchResult},
+	pallet_prelude::{DispatchResult, *},
 	traits::{
-		tokens::{Precision::Exact, Preservation::Expendable, Fortitude::Polite},
-		fungible::Balanced, OnUnbalanced,
-	}
+		fungible::Balanced,
+		tokens::{Fortitude::Polite, Precision::Exact, Preservation::Expendable},
+		OnUnbalanced,
+	},
 };
-use sp_arithmetic::{traits::{Zero, SaturatedConversion, Saturating}, FixedPointNumber};
+use sp_arithmetic::{
+	traits::{SaturatedConversion, Saturating, Zero},
+	FixedPointNumber,
+};
+use sp_runtime::traits::{AccountIdConversion, ConvertBack};
+use CompletionStatus::Complete;
 
 impl<T: Config> Pallet<T> {
 	/// Attempt to tick things along. Will only do anything if the `Status.last_timeslice` is
@@ -19,7 +23,9 @@ impl<T: Config> Pallet<T> {
 		ensure!(status.last_timeslice < current_timeslice, Error::<T>::NothingToDo);
 		status.last_timeslice.saturating_inc();
 
-		T::Coretime::request_revenue_info_at(T::TimeslicePeriod::get() * status.last_timeslice.into());
+		T::Coretime::request_revenue_info_at(
+			T::TimeslicePeriod::get() * status.last_timeslice.into(),
+		);
 
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let commit_timeslice = status.last_timeslice + config.advance_notice;
@@ -48,7 +54,8 @@ impl<T: Config> Pallet<T> {
 	) -> Option<()> {
 		let now = frame_system::Pallet::<T>::block_number();
 
-		let pool_item = ScheduleItem { assignment: CoreAssignment::Pool, part: CoreMask::complete() };
+		let pool_item =
+			ScheduleItem { assignment: CoreAssignment::Pool, part: CoreMask::complete() };
 		let just_pool = Schedule::truncate_from(vec![pool_item]);
 
 		// Clean up the old sale - we need to use up any unused cores by putting them into the
@@ -88,7 +95,8 @@ impl<T: Config> Pallet<T> {
 		let mut first_core = 0;
 		let mut total_pooled: SignedPartCount = 0;
 		for schedule in Reservations::<T>::get().into_iter() {
-			let parts: u32 = schedule.iter()
+			let parts: u32 = schedule
+				.iter()
 				.filter(|i| matches!(i.assignment, CoreAssignment::Pool))
 				.map(|i| i.part.count_ones())
 				.sum();
@@ -178,14 +186,19 @@ impl<T: Config> Pallet<T> {
 			}
 			let mut pool_record = InstaPoolHistory::<T>::get(timeslice).unwrap_or_default();
 			ensure!(pool_record.maybe_payout.is_none(), Error::<T>::RevenueAlreadyKnown);
-			ensure!(pool_record.total_contributions >= pool_record.system_contributions, Error::<T>::InvalidContributions);
+			ensure!(
+				pool_record.total_contributions >= pool_record.system_contributions,
+				Error::<T>::InvalidContributions
+			);
 			ensure!(pool_record.total_contributions > 0, Error::<T>::InvalidContributions);
 
 			// Payout system InstaPool Cores.
-			let system_payout = amount.saturating_mul(pool_record.system_contributions.into())
-				/ pool_record.total_contributions.into();
+			let system_payout = amount.saturating_mul(pool_record.system_contributions.into()) /
+				pool_record.total_contributions.into();
 			let _ = Self::charge(&Self::account_id(), system_payout);
-			pool_record.total_contributions.saturating_reduce(pool_record.system_contributions);
+			pool_record
+				.total_contributions
+				.saturating_reduce(pool_record.system_contributions);
 			pool_record.system_contributions = 0;
 			amount.saturating_reduce(system_payout);
 
@@ -211,7 +224,11 @@ impl<T: Config> Pallet<T> {
 		(latest / timeslice_period).saturated_into()
 	}
 
-	pub(crate) fn process_timeslice(timeslice: Timeslice, status: &mut StatusRecord, _config: &ConfigRecordOf<T>) {
+	pub(crate) fn process_timeslice(
+		timeslice: Timeslice,
+		status: &mut StatusRecord,
+		_config: &ConfigRecordOf<T>,
+	) {
 		Self::process_pool(timeslice, status);
 		let rc_begin = RelayBlockNumberOf::<T>::from(timeslice) * T::TimeslicePeriod::get();
 		for core in 0..status.core_count {
@@ -222,7 +239,8 @@ impl<T: Config> Pallet<T> {
 	fn process_pool(timeslice: Timeslice, status: &mut StatusRecord) {
 		let pool_io = InstaPoolIo::<T>::take(timeslice);
 		status.pool_size = (status.pool_size as i32).saturating_add(pool_io.total) as u32;
-		status.system_pool_size = (status.system_pool_size as i32).saturating_add(pool_io.system) as u32;
+		status.system_pool_size =
+			(status.system_pool_size as i32).saturating_add(pool_io.system) as u32;
 		let record = InstaPoolHistoryRecord {
 			total_contributions: status.pool_size,
 			system_contributions: status.system_pool_size,
@@ -258,12 +276,13 @@ impl<T: Config> Pallet<T> {
 			intermediate.push((CoreAssignment::Idle, 80 - total_used));
 		}
 		intermediate.sort();
-		let mut assignment: Vec<(CoreAssignment, PartsOf57600)> = Vec::with_capacity(intermediate.len());
+		let mut assignment: Vec<(CoreAssignment, PartsOf57600)> =
+			Vec::with_capacity(intermediate.len());
 		for i in intermediate.into_iter() {
 			if let Some(ref mut last) = assignment.last_mut() {
 				if last.0 == i.0 {
 					last.1 += i.1;
-					continue;
+					continue
 				}
 			}
 			assignment.push(i);
@@ -272,7 +291,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(crate) fn charge(who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
-		T::OnRevenue::on_unbalanced(T::Currency::withdraw(&who, amount, Exact, Expendable, Polite)?);
+		T::OnRevenue::on_unbalanced(T::Currency::withdraw(
+			&who, amount, Exact, Expendable, Polite,
+		)?);
 		Ok(())
 	}
 
@@ -313,9 +334,9 @@ impl<T: Config> Pallet<T> {
 				return Ok(None)
 			}
 		} else {
-			Workplan::<T>::mutate_extant((region_id.begin, region_id.core), |p|
+			Workplan::<T>::mutate_extant((region_id.begin, region_id.core), |p| {
 				p.retain(|i| (i.part & region_id.part).is_void())
-			);
+			});
 		}
 		if finality == Finality::Provisional {
 			Regions::<T>::insert(&region_id, &region);

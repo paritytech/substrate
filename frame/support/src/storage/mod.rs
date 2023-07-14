@@ -113,9 +113,7 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Mutate the value under a key if the value already exists. Do nothing and return the default
 	/// value if not.
-	fn mutate_extant<R: Default, F: FnOnce(&mut T) -> R>(
-		f: F,
-	) -> R {
+	fn mutate_extant<R: Default, F: FnOnce(&mut T) -> R>(f: F) -> R {
 		Self::mutate_exists(|maybe_v| match maybe_v {
 			Some(ref mut value) => f(value),
 			None => R::default(),

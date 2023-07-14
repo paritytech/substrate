@@ -136,9 +136,7 @@ where
 	}
 
 	/// Mutate the value under a key iff it exists. Do nothing and return the default value if not.
-	pub fn mutate_extant<R: Default, F: FnOnce(&mut Value) -> R>(
-		f: F,
-	) -> R {
+	pub fn mutate_extant<R: Default, F: FnOnce(&mut Value) -> R>(f: F) -> R {
 		<Self as crate::storage::StorageValue<Value>>::mutate_extant(f)
 	}
 

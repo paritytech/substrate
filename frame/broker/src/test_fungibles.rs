@@ -15,16 +15,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use codec::{Decode, Encode};
 use frame_support::{
 	parameter_types,
-	traits::{fungibles::{self, Dust}, tokens::{self, Preservation, Fortitude, Provenance, DepositConsequence, WithdrawConsequence}}
+	traits::{
+		fungibles::{self, Dust},
+		tokens::{
+			self, DepositConsequence, Fortitude, Preservation, Provenance, WithdrawConsequence,
+		},
+	},
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Zero;
+use sp_core::{Get, TypedGet};
 use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::collections::btree_map::BTreeMap;
-use codec::{Encode, Decode};
-use sp_core::{TypedGet, Get};
 
 parameter_types! {
 	static TestAssetOf: BTreeMap<(u32, Vec<u8>), Vec<u8>> = Default::default();
@@ -33,15 +38,16 @@ parameter_types! {
 }
 
 pub struct TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>(
-	core::marker::PhantomData<(Instance, AccountId, AssetId, MinimumBalance, HoldReason)>
+	core::marker::PhantomData<(Instance, AccountId, AssetId, MinimumBalance, HoldReason)>,
 );
 impl<
-	Instance: Get<u32>,
-	AccountId: Encode,
-	AssetId: tokens::AssetId + Copy,
-	MinimumBalance: TypedGet,
-	HoldReason,
-> fungibles::Inspect<AccountId> for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
+		Instance: Get<u32>,
+		AccountId: Encode,
+		AssetId: tokens::AssetId + Copy,
+		MinimumBalance: TypedGet,
+		HoldReason,
+	> fungibles::Inspect<AccountId>
+	for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
 where
 	MinimumBalance::Type: tokens::Balance,
 {
@@ -49,9 +55,10 @@ where
 	type Balance = MinimumBalance::Type;
 
 	fn total_issuance(asset: Self::AssetId) -> Self::Balance {
-		TestAssetOf::get().get(&(Instance::get(), asset.encode()))
-		.and_then(|data| Decode::decode(&mut &data[..]).ok())
-		.unwrap_or_default()
+		TestAssetOf::get()
+			.get(&(Instance::get(), asset.encode()))
+			.and_then(|data| Decode::decode(&mut &data[..]).ok())
+			.unwrap_or_default()
 	}
 
 	fn active_issuance(asset: Self::AssetId) -> Self::Balance {
@@ -64,9 +71,10 @@ where
 	}
 
 	fn total_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance {
-		TestBalanceOf::get().get(&(Instance::get(), asset.encode(), who.encode()))
-		.and_then(|data| Decode::decode(&mut &data[..]).ok())
-		.unwrap_or_default()
+		TestBalanceOf::get()
+			.get(&(Instance::get(), asset.encode(), who.encode()))
+			.and_then(|data| Decode::decode(&mut &data[..]).ok())
+			.unwrap_or_default()
 	}
 
 	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance {
@@ -89,10 +97,10 @@ where
 		_provenance: Provenance,
 	) -> DepositConsequence {
 		if !Self::asset_exists(asset) {
-			return DepositConsequence::UnknownAsset;
+			return DepositConsequence::UnknownAsset
 		}
 		if amount + Self::balance(asset, who) < Self::minimum_balance(asset) {
-			return DepositConsequence::BelowMinimum;
+			return DepositConsequence::BelowMinimum
 		}
 		DepositConsequence::Success
 	}
@@ -102,11 +110,12 @@ where
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance> {
-		if Self::reducible_balance(asset, who, Preservation::Expendable, Fortitude::Polite) < amount {
-			return WithdrawConsequence::BalanceLow;
+		if Self::reducible_balance(asset, who, Preservation::Expendable, Fortitude::Polite) < amount
+		{
+			return WithdrawConsequence::BalanceLow
 		}
 		if Self::total_balance(asset, who) < Self::minimum_balance(asset) + amount {
-			return WithdrawConsequence::WouldDie;
+			return WithdrawConsequence::WouldDie
 		}
 		WithdrawConsequence::Success
 	}
@@ -117,12 +126,13 @@ where
 }
 
 impl<
-	Instance: Get<u32>,
-	AccountId: Encode,
-	AssetId: tokens::AssetId + Copy,
-	MinimumBalance: TypedGet,
-	HoldReason,
-> fungibles::Unbalanced<AccountId> for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
+		Instance: Get<u32>,
+		AccountId: Encode,
+		AssetId: tokens::AssetId + Copy,
+		MinimumBalance: TypedGet,
+		HoldReason,
+	> fungibles::Unbalanced<AccountId>
+	for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
 where
 	MinimumBalance::Type: tokens::Balance,
 {
@@ -157,23 +167,26 @@ where
 }
 
 impl<
-	Instance: Get<u32>,
-	AccountId: Encode,
-	AssetId: tokens::AssetId + Copy,
-	MinimumBalance: TypedGet,
-	HoldReason,
-> fungibles::Mutate<AccountId> for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
+		Instance: Get<u32>,
+		AccountId: Encode,
+		AssetId: tokens::AssetId + Copy,
+		MinimumBalance: TypedGet,
+		HoldReason,
+	> fungibles::Mutate<AccountId>
+	for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
 where
 	MinimumBalance::Type: tokens::Balance,
-{}
+{
+}
 
 impl<
-	Instance: Get<u32>,
-	AccountId: Encode,
-	AssetId: tokens::AssetId + Copy,
-	MinimumBalance: TypedGet,
-	HoldReason,
-> fungibles::Balanced<AccountId> for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
+		Instance: Get<u32>,
+		AccountId: Encode,
+		AssetId: tokens::AssetId + Copy,
+		MinimumBalance: TypedGet,
+		HoldReason,
+	> fungibles::Balanced<AccountId>
+	for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
 where
 	MinimumBalance::Type: tokens::Balance,
 {
@@ -182,12 +195,13 @@ where
 }
 
 impl<
-	Instance: Get<u32>,
-	AccountId: Encode,
-	AssetId: tokens::AssetId + Copy,
-	MinimumBalance: TypedGet,
-	HoldReason: Encode + Decode + TypeInfo + 'static,
-> fungibles::InspectHold<AccountId> for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
+		Instance: Get<u32>,
+		AccountId: Encode,
+		AssetId: tokens::AssetId + Copy,
+		MinimumBalance: TypedGet,
+		HoldReason: Encode + Decode + TypeInfo + 'static,
+	> fungibles::InspectHold<AccountId>
+	for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
 where
 	MinimumBalance::Type: tokens::Balance,
 {
@@ -196,7 +210,8 @@ where
 	fn total_balance_on_hold(asset: Self::AssetId, who: &AccountId) -> Self::Balance {
 		let asset = asset.encode();
 		let who = who.encode();
-		TestHoldOf::get().iter()
+		TestHoldOf::get()
+			.iter()
 			.filter(|(k, _)| k.0 == Instance::get() && k.1 == asset && k.2 == who)
 			.filter_map(|(_, b)| Self::Balance::decode(&mut &b[..]).ok())
 			.fold(Zero::zero(), |a, i| a + i)
@@ -207,19 +222,21 @@ where
 		reason: &Self::Reason,
 		who: &AccountId,
 	) -> Self::Balance {
-		TestHoldOf::get().get(&(Instance::get(), asset.encode(), who.encode(), reason.encode()))
-		.and_then(|data| Decode::decode(&mut &data[..]).ok())
-		.unwrap_or_default()
+		TestHoldOf::get()
+			.get(&(Instance::get(), asset.encode(), who.encode(), reason.encode()))
+			.and_then(|data| Decode::decode(&mut &data[..]).ok())
+			.unwrap_or_default()
 	}
 }
 
 impl<
-	Instance: Get<u32>,
-	AccountId: Encode,
-	AssetId: tokens::AssetId + Copy,
-	MinimumBalance: TypedGet,
-	HoldReason: Encode + Decode + TypeInfo + 'static,
-> fungibles::UnbalancedHold<AccountId> for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
+		Instance: Get<u32>,
+		AccountId: Encode,
+		AssetId: tokens::AssetId + Copy,
+		MinimumBalance: TypedGet,
+		HoldReason: Encode + Decode + TypeInfo + 'static,
+	> fungibles::UnbalancedHold<AccountId>
+	for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
 where
 	MinimumBalance::Type: tokens::Balance,
 {
@@ -230,30 +247,37 @@ where
 		amount: Self::Balance,
 	) -> DispatchResult {
 		let mut th = TestHoldOf::get();
-		th.insert((Instance::get(), asset.encode(), who.encode(), reason.encode()), amount.encode());
+		th.insert(
+			(Instance::get(), asset.encode(), who.encode(), reason.encode()),
+			amount.encode(),
+		);
 		TestHoldOf::set(th);
 		Ok(())
 	}
 }
 
 impl<
-	Instance: Get<u32>,
-	AccountId: Encode,
-	AssetId: tokens::AssetId + Copy,
-	MinimumBalance: TypedGet,
-	HoldReason: Encode + Decode + TypeInfo + 'static,
-> fungibles::MutateHold<AccountId> for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
+		Instance: Get<u32>,
+		AccountId: Encode,
+		AssetId: tokens::AssetId + Copy,
+		MinimumBalance: TypedGet,
+		HoldReason: Encode + Decode + TypeInfo + 'static,
+	> fungibles::MutateHold<AccountId>
+	for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
 where
 	MinimumBalance::Type: tokens::Balance,
-{}
+{
+}
 
 impl<
-	Instance: Get<u32>,
-	AccountId: Encode,
-	AssetId: tokens::AssetId + Copy,
-	MinimumBalance: TypedGet,
-	HoldReason: Encode + Decode + TypeInfo + 'static,
-> fungibles::BalancedHold<AccountId> for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
+		Instance: Get<u32>,
+		AccountId: Encode,
+		AssetId: tokens::AssetId + Copy,
+		MinimumBalance: TypedGet,
+		HoldReason: Encode + Decode + TypeInfo + 'static,
+	> fungibles::BalancedHold<AccountId>
+	for TestFungibles<Instance, AccountId, AssetId, MinimumBalance, HoldReason>
 where
 	MinimumBalance::Type: tokens::Balance,
-{}
+{
+}

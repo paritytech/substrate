@@ -20,18 +20,18 @@
 
 pub use pallet::*;
 
-mod mock;
-mod tests;
-mod benchmarking;
-mod test_fungibles;
-mod core_part;
-mod types;
-mod coretime_interface;
-mod utils;
-mod implementation;
-mod dispatchable_impls;
-mod nonfungible_impl;
 mod adapt_price;
+mod benchmarking;
+mod core_part;
+mod coretime_interface;
+mod dispatchable_impls;
+mod implementation;
+mod mock;
+mod nonfungible_impl;
+mod test_fungibles;
+mod tests;
+mod types;
+mod utils;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -47,12 +47,15 @@ pub use utils::*;
 pub mod pallet {
 	use super::*;
 	use frame_support::{
-		pallet_prelude::{*, DispatchResult, DispatchResultWithPostInfo},
-		traits::{fungible::{Credit, Mutate, Balanced}, OnUnbalanced, EnsureOrigin},
+		pallet_prelude::{DispatchResult, DispatchResultWithPostInfo, *},
+		traits::{
+			fungible::{Balanced, Credit, Mutate},
+			EnsureOrigin, OnUnbalanced,
+		},
 		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::traits::{ConvertBack, Convert};
+	use sp_runtime::traits::{Convert, ConvertBack};
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -82,7 +85,8 @@ pub mod pallet {
 
 		/// Reversible conversion from local balance to Relay-chain balance. This will typically be
 		/// the `Identity`, but provided just in case the chains use different representations.
-		type ConvertBalance: Convert<BalanceOf<Self>, RelayBalanceOf<Self>> + ConvertBack<BalanceOf<Self>, RelayBalanceOf<Self>>;
+		type ConvertBalance: Convert<BalanceOf<Self>, RelayBalanceOf<Self>>
+			+ ConvertBack<BalanceOf<Self>, RelayBalanceOf<Self>>;
 
 		/// Identifier from which the internal Pot is generated.
 		#[pallet::constant]
@@ -123,7 +127,8 @@ pub mod pallet {
 
 	/// Records of allowed renewals.
 	#[pallet::storage]
-	pub type AllowedRenewals<T> = StorageMap<_, Twox64Concat, CoreIndex, AllowedRenewalRecordOf<T>, OptionQuery>;
+	pub type AllowedRenewals<T> =
+		StorageMap<_, Twox64Concat, CoreIndex, AllowedRenewalRecordOf<T>, OptionQuery>;
 
 	/// The current (unassigned) Regions.
 	#[pallet::storage]
@@ -131,7 +136,8 @@ pub mod pallet {
 
 	/// The work we plan on having each core do at a particular time in the future.
 	#[pallet::storage]
-	pub type Workplan<T> = StorageMap<_, Twox64Concat, (Timeslice, CoreIndex), Schedule, OptionQuery>;
+	pub type Workplan<T> =
+		StorageMap<_, Twox64Concat, (Timeslice, CoreIndex), Schedule, OptionQuery>;
 
 	/// The current workload of each core. This gets updated with workplan as timeslices pass.
 	#[pallet::storage]
@@ -139,7 +145,8 @@ pub mod pallet {
 
 	/// Record of a single contribution to the Instantaneous Coretime Pool.
 	#[pallet::storage]
-	pub type InstaPoolContribution<T> = StorageMap<_, Blake2_128Concat, RegionId, ContributionRecordOf<T>, OptionQuery>;
+	pub type InstaPoolContribution<T> =
+		StorageMap<_, Blake2_128Concat, RegionId, ContributionRecordOf<T>, OptionQuery>;
 
 	/// Record of Coretime entering or leaving the Instantaneous Coretime Pool.
 	#[pallet::storage]
@@ -147,7 +154,8 @@ pub mod pallet {
 
 	/// Total InstaPool rewards for each Timeslice and the number of core parts which contributed.
 	#[pallet::storage]
-	pub type InstaPoolHistory<T> = StorageMap<_, Blake2_128Concat, Timeslice, InstaPoolHistoryRecordOf<T>>;
+	pub type InstaPoolHistory<T> =
+		StorageMap<_, Blake2_128Concat, Timeslice, InstaPoolHistoryRecordOf<T>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -359,8 +367,8 @@ pub mod pallet {
 		///
 		/// - `origin`: Must be Root or pass `AdminOrigin`.
 		/// - `task`: The workload which should be placed on a core.
-		/// - `until`: The timeslice now earlier than which `task` should be placed as a workload
-		///   on a core.
+		/// - `until`: The timeslice now earlier than which `task` should be placed as a workload on
+		///   a core.
 		#[pallet::call_index(3)]
 		pub fn set_lease(
 			origin: OriginFor<T>,
@@ -394,7 +402,10 @@ pub mod pallet {
 		///   of Bulk Coretime.
 		/// - `price_limit`: An amount no more than which should be paid.
 		#[pallet::call_index(5)]
-		pub fn purchase(origin: OriginFor<T>, price_limit: BalanceOf<T>) -> DispatchResultWithPostInfo {
+		pub fn purchase(
+			origin: OriginFor<T>,
+			price_limit: BalanceOf<T>,
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::do_purchase(who, price_limit)?;
 			Ok(Pays::No.into())
@@ -573,10 +584,7 @@ pub mod pallet {
 		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
 		/// - `region_id`: The time of the Pool History record which has expired.
 		#[pallet::call_index(16)]
-		pub fn drop_history(
-			origin: OriginFor<T>,
-			when: Timeslice,
-		) -> DispatchResultWithPostInfo {
+		pub fn drop_history(origin: OriginFor<T>, when: Timeslice) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 			Self::do_drop_history(when)?;
 			Ok(Pays::No.into())

@@ -1,10 +1,12 @@
-use codec::{Encode, Decode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
-use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 // TODO: Use BitArr instead; for this, we'll need to ensure Codec is impl'ed for `BitArr`.
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
 pub struct CoreMask([u8; 10]);
 impl CoreMask {
 	pub fn void() -> Self {
@@ -48,7 +50,10 @@ impl CoreMask {
 impl From<u128> for CoreMask {
 	fn from(x: u128) -> Self {
 		let mut v = [0u8; 10];
-		v.iter_mut().rev().fold(x, |a, i| { *i = a as u8; a >> 8 });
+		v.iter_mut().rev().fold(x, |a, i| {
+			*i = a as u8;
+			a >> 8
+		});
 		Self(v)
 	}
 }
@@ -161,9 +166,6 @@ mod tests {
 
 	#[test]
 	fn chunk_works() {
-		assert_eq!(
-			CoreMask::from_chunk(40, 60),
-			CoreMask::from(0x00000_00000_fffff_00000),
-		);
+		assert_eq!(CoreMask::from_chunk(40, 60), CoreMask::from(0x00000_00000_fffff_00000),);
 	}
 }

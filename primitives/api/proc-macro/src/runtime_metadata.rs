@@ -88,9 +88,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream2 {
 	let mut where_clause = Vec::new();
 	for item in &decl.items {
 		// Collect metadata for methods only.
-		let syn::TraitItem::Fn(method) = item else {
-			continue
-		};
+		let syn::TraitItem::Fn(method) = item else { continue };
 
 		// Collect metadata only for the latest methods.
 		let is_changed_in =
@@ -103,9 +101,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream2 {
 		let signature = &method.sig;
 		for input in &signature.inputs {
 			// Exclude `self` from metadata collection.
-			let syn::FnArg::Typed(typed) = input else {
-				continue
-			};
+			let syn::FnArg::Typed(typed) = input else { continue };
 
 			let pat = &typed.pat;
 			let name = quote!(#pat).to_string();
@@ -153,9 +149,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream2 {
 	// The trait generics where already extended with `Block: BlockT`.
 	let mut generics = decl.generics.clone();
 	for generic_param in generics.params.iter_mut() {
-		let syn::GenericParam::Type(ty) = generic_param else {
-			continue
-		};
+		let syn::GenericParam::Type(ty) = generic_param else { continue };
 
 		// Default type parameters are not allowed in functions.
 		ty.eq_token = None;

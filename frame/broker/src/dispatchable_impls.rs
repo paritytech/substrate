@@ -1,14 +1,11 @@
 use super::*;
-use CompletionStatus::{Complete, Partial};
-use sp_runtime::traits::Convert;
 use frame_support::{
-	pallet_prelude::{*, DispatchResult},
-	traits::{
-		tokens::Preservation::Expendable,
-		fungible::Mutate, DefensiveResult,
-	}
+	pallet_prelude::{DispatchResult, *},
+	traits::{fungible::Mutate, tokens::Preservation::Expendable, DefensiveResult},
 };
-use sp_arithmetic::traits::{Zero, Saturating};
+use sp_arithmetic::traits::{Saturating, Zero};
+use sp_runtime::traits::Convert;
+use CompletionStatus::{Complete, Partial};
 
 impl<T: Config> Pallet<T> {
 	pub(crate) fn do_configure(config: ConfigRecordOf<T>) -> DispatchResult {
@@ -16,9 +13,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	pub(crate) fn do_request_core_count(
-		core_count: CoreIndex,
-	) -> DispatchResult {
+	pub(crate) fn do_request_core_count(core_count: CoreIndex) -> DispatchResult {
 		T::Coretime::request_core_count(core_count);
 		Ok(())
 	}
@@ -109,7 +104,8 @@ impl<T: Config> Pallet<T> {
 		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let record = AllowedRenewals::<T>::get(core).ok_or(Error::<T>::NotAllowed)?;
 		let mut sale = SaleInfo::<T>::get().ok_or(Error::<T>::NoSales)?;
-		let workload = record.completion.drain_complete().ok_or(Error::<T>::IncompleteAssignment)?;
+		let workload =
+			record.completion.drain_complete().ok_or(Error::<T>::IncompleteAssignment)?;
 
 		ensure!(record.begin == sale.region_begin, Error::<T>::WrongTime);
 		ensure!(sale.first_core < status.core_count, Error::<T>::Unavailable);
@@ -162,7 +158,12 @@ impl<T: Config> Pallet<T> {
 		region.owner = new_owner;
 		Regions::<T>::insert(&region_id, &region);
 		let duration = region.end.saturating_sub(region_id.begin);
-		Self::deposit_event(Event::Transferred { region_id, old_owner, owner: region.owner, duration });
+		Self::deposit_event(Event::Transferred {
+			region_id,
+			old_owner,
+			owner: region.owner,
+			duration,
+		});
 
 		Ok(())
 	}
@@ -224,14 +225,16 @@ impl<T: Config> Pallet<T> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		if let Some((region_id, region)) = Self::utilize(region_id, maybe_check_owner, finality)? {
 			let workplan_key = (region_id.begin, region_id.core);
-			let mut workplan = Workplan::<T>::get(&workplan_key)
-				.unwrap_or_default();
+			let mut workplan = Workplan::<T>::get(&workplan_key).unwrap_or_default();
 			// Ensure no previous allocations exist.
 			workplan.retain(|i| (i.part & region_id.part).is_void());
-			if workplan.try_push(ScheduleItem {
-				part: region_id.part,
-				assignment: CoreAssignment::Task(target),
-			}).is_ok() {
+			if workplan
+				.try_push(ScheduleItem {
+					part: region_id.part,
+					assignment: CoreAssignment::Task(target),
+				})
+				.is_ok()
+			{
 				Workplan::<T>::insert(&workplan_key, &workplan);
 			}
 
@@ -240,19 +243,24 @@ impl<T: Config> Pallet<T> {
 				if let Some(price) = region.paid {
 					let begin = region.end;
 					let assigned = match AllowedRenewals::<T>::get(region_id.core) {
-						Some(AllowedRenewalRecord { completion: Partial(w), begin: b, price: p })
-							if begin == b && price == p => w,
+						Some(AllowedRenewalRecord {
+							completion: Partial(w),
+							begin: b,
+							price: p,
+						}) if begin == b && price == p => w,
 						_ => CoreMask::void(),
 					} | region_id.part;
-					let workload = if assigned.is_complete() {
-						Complete(workplan)
-					} else {
-						Partial(assigned)
-					};
+					let workload =
+						if assigned.is_complete() { Complete(workplan) } else { Partial(assigned) };
 					let record = AllowedRenewalRecord { begin, price, completion: workload };
 					AllowedRenewals::<T>::insert(region_id.core, &record);
 					if let Some(workload) = record.completion.drain_complete() {
-						Self::deposit_event(Event::Renewable { core: region_id.core, price, begin, workload });
+						Self::deposit_event(Event::Renewable {
+							core: region_id.core,
+							price,
+							begin,
+							workload,
+						});
 					}
 				}
 			}
@@ -269,13 +277,12 @@ impl<T: Config> Pallet<T> {
 	) -> Result<(), Error<T>> {
 		if let Some((region_id, region)) = Self::utilize(region_id, maybe_check_owner, finality)? {
 			let workplan_key = (region_id.begin, region_id.core);
-			let mut workplan = Workplan::<T>::get(&workplan_key)
-				.unwrap_or_default();
+			let mut workplan = Workplan::<T>::get(&workplan_key).unwrap_or_default();
 			let duration = region.end.saturating_sub(region_id.begin);
-			if workplan.try_push(ScheduleItem {
-				part: region_id.part,
-				assignment: CoreAssignment::Pool,
-			}).is_ok() {
+			if workplan
+				.try_push(ScheduleItem { part: region_id.part, assignment: CoreAssignment::Pool })
+				.is_ok()
+			{
 				Workplan::<T>::insert(&workplan_key, &workplan);
 				let size = region_id.part.count_ones() as i32;
 				InstaPoolIo::<T>::mutate(region_id.begin, |a| a.total.saturating_accrue(size));
@@ -290,20 +297,31 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// TODO: Consolidation of InstaPoolHistory records as long as contributors don't change.
-	pub(crate) fn do_claim_revenue(mut region: RegionId, max_timeslices: Timeslice) -> DispatchResult {
-		let mut contribution = InstaPoolContribution::<T>::take(region)
-			.ok_or(Error::<T>::UnknownContribution)?;
+	pub(crate) fn do_claim_revenue(
+		mut region: RegionId,
+		max_timeslices: Timeslice,
+	) -> DispatchResult {
+		let mut contribution =
+			InstaPoolContribution::<T>::take(region).ok_or(Error::<T>::UnknownContribution)?;
 		let contributed_parts = region.part.count_ones();
 
 		let mut payout = BalanceOf::<T>::zero();
 		let last = region.begin + contribution.length.min(max_timeslices);
 		for r in region.begin..last {
-			let mut pool_record = match InstaPoolHistory::<T>::get(r) { Some(x) => x, None => continue };
-			let total_payout = match pool_record.maybe_payout { Some(x) => x, None => break };
+			let mut pool_record = match InstaPoolHistory::<T>::get(r) {
+				Some(x) => x,
+				None => continue,
+			};
+			let total_payout = match pool_record.maybe_payout {
+				Some(x) => x,
+				None => break,
+			};
 			region.begin = r;
 			contribution.length.saturating_dec();
-			payout.saturating_accrue(total_payout.saturating_mul(contributed_parts.into())
-				/ pool_record.total_contributions.into());
+			payout.saturating_accrue(
+				total_payout.saturating_mul(contributed_parts.into()) /
+					pool_record.total_contributions.into(),
+			);
 			pool_record.total_contributions.saturating_reduce(contributed_parts);
 
 			let remaining_payout = total_payout.saturating_sub(payout);
@@ -313,12 +331,13 @@ impl<T: Config> Pallet<T> {
 			} else {
 				InstaPoolHistory::<T>::remove(region.begin);
 			}
-		};
+		}
 
 		if contribution.length > 0 {
 			InstaPoolContribution::<T>::insert(region, &contribution);
 		}
-		T::Currency::transfer(&Self::account_id(), &contribution.payee, payout, Expendable).defensive_ok();
+		T::Currency::transfer(&Self::account_id(), &contribution.payee, payout, Expendable)
+			.defensive_ok();
 		Ok(())
 	}
 
@@ -349,7 +368,8 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn do_drop_contribution(region_id: RegionId) -> DispatchResult {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
-		let contrib = InstaPoolContribution::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
+		let contrib =
+			InstaPoolContribution::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
 		let end = region_id.begin.saturating_add(contrib.length);
 		ensure!(status.last_timeslice > end + config.contribution_timeout, Error::<T>::StillValid);
 		InstaPoolContribution::<T>::remove(region_id);
