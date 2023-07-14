@@ -214,7 +214,9 @@ pub type ReservationsRecordOf<T> = ReservationsRecord<<T as Config>::MaxReserved
 /// Information on a single legacy lease.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct LeaseRecordItem {
+	/// The timeslice until the lease is valid.
 	pub until: Timeslice,
+	/// The task which the lease is for.
 	pub task: TaskId,
 }
 
