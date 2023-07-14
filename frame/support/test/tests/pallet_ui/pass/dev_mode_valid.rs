@@ -1,10 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{
-	traits::{
-		ConstU32,
-	},
-};
+use frame_support::traits::ConstU32;
 
 pub use pallet::*;
 
@@ -60,7 +56,7 @@ pub mod pallet {
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
@@ -96,17 +92,15 @@ frame_support::construct_runtime!(
 	}
 );
 
-impl pallet::Config for Runtime {
-	
-}
+impl pallet::Config for Runtime {}
 
 fn main() {
-	use frame_support::{pallet_prelude::*};
-	use storage::unhashed;
+	use frame_support::pallet_prelude::*;
 	use sp_io::{
 		hashing::{blake2_128, twox_128},
 		TestExternalities,
 	};
+	use storage::unhashed;
 
 	fn blake2_128_concat(d: &[u8]) -> Vec<u8> {
 		let mut v = blake2_128(d).to_vec();

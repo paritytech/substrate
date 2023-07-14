@@ -1,6 +1,6 @@
 use frame_support::construct_runtime;
-use sp_runtime::{generic, traits::BlakeTwo256};
 use sp_core::sr25519;
+use sp_runtime::{generic, traits::BlakeTwo256};
 
 #[frame_support::pallet]
 mod pallet {
@@ -18,22 +18,22 @@ mod pallet {
 
 #[derive(scale_info::TypeInfo, frame_support::PalletError, codec::Encode, codec::Decode)]
 pub enum Nested1 {
-	Nested2(Nested2)
+	Nested2(Nested2),
 }
 
 #[derive(scale_info::TypeInfo, frame_support::PalletError, codec::Encode, codec::Decode)]
 pub enum Nested2 {
-	Nested3(Nested3)
+	Nested3(Nested3),
 }
 
 #[derive(scale_info::TypeInfo, frame_support::PalletError, codec::Encode, codec::Decode)]
 pub enum Nested3 {
-	Nested4(Nested4)
+	Nested4(Nested4),
 }
 
 #[derive(scale_info::TypeInfo, frame_support::PalletError, codec::Encode, codec::Decode)]
 pub enum Nested4 {
-	Num(u8)
+	Num(u8),
 }
 
 pub type Signature = sr25519::Signature;
@@ -47,7 +47,7 @@ impl pallet::Config for Runtime {}
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;

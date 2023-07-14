@@ -58,7 +58,7 @@ pub mod pallet {
 }
 
 pub type BlockNumber = u32;
-pub type Index = u64;
+pub type Nonce = u64;
 pub type AccountId = u64;
 pub type Header = sp_runtime::generic::Header<BlockNumber, sp_runtime::traits::BlakeTwo256>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
@@ -70,7 +70,7 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = Index;
+	type Nonce = Nonce;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
