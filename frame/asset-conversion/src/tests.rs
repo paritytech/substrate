@@ -157,7 +157,15 @@ fn can_create_pool() {
 		assert_eq!(balance(pool_account, NativeOrAssetId::Native), setup_fee);
 		assert_eq!(lp_token + 1, AssetConversion::get_next_pool_asset_id());
 
-		assert_eq!(events(), [Event::<Test>::PoolCreated { creator: user, pool_id, lp_token }]);
+		assert_eq!(
+			events(),
+			[Event::<Test>::PoolCreated {
+				creator: user,
+				pool_id,
+				pool_account: AssetConversion::get_pool_account(&pool_id),
+				lp_token
+			}]
+		);
 		assert_eq!(pools(), vec![pool_id]);
 		assert_eq!(assets(), vec![token_2]);
 		assert_eq!(pool_assets(), vec![lp_token]);
@@ -236,6 +244,7 @@ fn different_pools_should_have_different_lp_tokens() {
 			[Event::<Test>::PoolCreated {
 				creator: user,
 				pool_id: pool_id_1_2,
+				pool_account: AssetConversion::get_pool_account(&pool_id_1_2),
 				lp_token: lp_token2_1
 			}]
 		);
@@ -246,6 +255,7 @@ fn different_pools_should_have_different_lp_tokens() {
 			[Event::<Test>::PoolCreated {
 				creator: user,
 				pool_id: pool_id_1_3,
+				pool_account: AssetConversion::get_pool_account(&pool_id_1_3),
 				lp_token: lp_token3_1,
 			}]
 		);

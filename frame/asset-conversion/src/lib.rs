@@ -229,6 +229,8 @@ pub mod pallet {
 			/// The pool id associated with the pool. Note that the order of the assets may not be
 			/// the same as the order specified in the create pool extrinsic.
 			pool_id: PoolIdOf<T>,
+			/// The account ID of the pool
+			pool_account: T::AccountId,
 			/// The id of the liquidity tokens that will be minted when assets are added to this
 			/// pool.
 			lp_token: T::PoolAssetId,
@@ -385,13 +387,12 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			ensure!(asset1 != asset2, Error::<T>::EqualAssets);
 
-			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-			let (asset1, asset2) = pool_id.clone();
-
-			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(&asset1) {
+			// prepare pool_id
+			let pool_id = Self::get_pool_id(asset1, asset2);
+			let (asset1, asset2) = &pool_id;
+			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(asset1) {
 				Err(Error::<T>::PoolMustContainNativeCurrency)?;
 			}
-
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
 			let pool_account = Self::get_pool_account(&pool_id);
@@ -405,12 +406,12 @@ pub mod pallet {
 				Preserve,
 			)?;
 
-			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset1) {
+			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(asset1) {
 				if !T::Assets::contains(&asset, &pool_account) {
 					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
 				}
 			}
-			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset2) {
+			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(asset2) {
 				if !T::Assets::contains(&asset, &pool_account) {
 					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
 				}
@@ -426,7 +427,12 @@ pub mod pallet {
 			let pool_info = PoolInfo { lp_token: lp_token.clone() };
 			Pools::<T>::insert(pool_id.clone(), pool_info);
 
-			Self::deposit_event(Event::PoolCreated { creator: sender, pool_id, lp_token });
+			Self::deposit_event(Event::PoolCreated {
+				creator: sender,
+				pool_id,
+				pool_account,
+				lp_token,
+			});
 
 			Ok(())
 		}
