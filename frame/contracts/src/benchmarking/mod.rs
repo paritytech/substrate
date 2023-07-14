@@ -270,20 +270,6 @@ benchmarks! {
 		m.step();
 	}
 
-	// This benchmarks the last iteration of a migration step, when we are passed the last key of a map.
-	// This benchmark is using `v13::Migration` but this can be used for any migration step that follow the same logic of
-	// iterating over a map and mutating the next entry.
-	#[pov_mode = Measured]
-	migration_noop_step {
-		let contract = <Contract<T>>::with_caller(
-			whitelisted_caller(), WasmModule::dummy(), vec![],
-		)?;
-
-		let mut m = v13::Migration::<T>::default();
-	}: {
-		m.step();
-	}
-
 	// This benchmarks the weight of executing Migration::migrate to execute a noop migration.
 	#[pov_mode = Measured]
 	migration_noop {

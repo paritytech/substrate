@@ -128,7 +128,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 			(IsFinished::No, T::WeightInfo::v13_migration_step())
 		} else {
 			log::debug!(target: LOG_TARGET, "No more contracts to migrate");
-			(IsFinished::Yes, T::WeightInfo::migration_noop_step())
+			(IsFinished::Yes, T::WeightInfo::v13_migration_step())
 		}
 	}
 }
