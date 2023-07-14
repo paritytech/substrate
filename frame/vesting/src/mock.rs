@@ -52,7 +52,7 @@ impl frame_system::Config for Test {
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type Block = Block;
-	type Index = u64;
+	type Nonce = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type OnKilledAccount = ();
 	type OnNewAccount = ();

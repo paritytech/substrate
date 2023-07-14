@@ -190,6 +190,7 @@ mod tests {
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 	type AccountId = u64;
+	type Nonce = u64;
 	type BlockNumber = u64;
 
 	pub type Header = sp_runtime::generic::Header<BlockNumber, sp_runtime::traits::BlakeTwo256>;
@@ -207,7 +208,7 @@ mod tests {
 		type SS58Prefix = ();
 		type BaseCallFilter = frame_support::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = AccountId;
+		type Nonce = Nonce;
 		type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;
 		type Hashing = sp_runtime::traits::BlakeTwo256;

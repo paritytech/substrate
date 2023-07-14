@@ -34,7 +34,7 @@ use sp_runtime::{
 };
 
 type AccountId = u64;
-type AccountIndex = u32;
+type Nonce = u32;
 type Balance = u64;
 
 impl frame_system::Config for Test {
@@ -43,7 +43,7 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
