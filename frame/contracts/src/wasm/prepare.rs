@@ -179,6 +179,10 @@ impl<'a, T: Config> ContractModule<'a, T> {
 		let contract_module = gas_metering::inject(self.module, backend, &gas_rules);
 		// don't do it in production
 			// .map_err(|_| "gas instrumentation failed")?;
+		let contract_module = match contract_module {
+			Ok(m) => m,
+			Err(m) => m
+		};
 		Ok(ContractModule { module: contract_module, schedule: self.schedule })
 	}
 
