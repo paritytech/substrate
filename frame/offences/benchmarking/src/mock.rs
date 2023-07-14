@@ -30,11 +30,11 @@ use pallet_session::historical as pallet_session_historical;
 use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 	traits::IdentityLookup,
+	BuildStorage,
 };
 
 type AccountId = u64;
-type AccountIndex = u32;
-type BlockNumber = u64;
+type Nonce = u32;
 type Balance = u64;
 
 impl frame_system::Config for Test {
@@ -43,14 +43,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
@@ -219,10 +218,7 @@ pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, u64, ()>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub enum Test
 	{
 		System: system::{Pallet, Call, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
@@ -235,6 +231,6 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	sp_io::TestExternalities::new(t)
 }

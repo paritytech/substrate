@@ -210,7 +210,7 @@ pub mod pallet {
 		/// be instantiated from existing codes that use this deprecated functionality. It will
 		/// be removed eventually. Hence for new `pallet-contracts` deployments it is okay
 		/// to supply a dummy implementation for this type (because it is never used).
-		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
+		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
 
 		/// The currency in which fees are paid and contract balances are held.
 		type Currency: ReservableCurrency<Self::AccountId> // TODO: Move to fungible traits
@@ -338,23 +338,23 @@ pub mod pallet {
 		///
 		/// # Examples
 		/// ```
-		/// use pallet_contracts::migration::{v9, v10, v11};
+		/// use pallet_contracts::migration::{v10, v11};
 		/// # struct Runtime {};
-		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// type Migrations = (v10::Migration<Runtime>, v11::Migration<Runtime>);
 		/// ```
 		///
 		/// If you have a single migration step, you can use a tuple with a single element:
 		/// ```
-		/// use pallet_contracts::migration::v9;
+		/// use pallet_contracts::migration::v10;
 		/// # struct Runtime {};
-		/// type Migrations = (v9::Migration<Runtime>,);
+		/// type Migrations = (v10::Migration<Runtime>,);
 		/// ```
 		type Migrations: MigrateSequence;
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_idle(_block: T::BlockNumber, mut remaining_weight: Weight) -> Weight {
+		fn on_idle(_block: BlockNumberFor<T>, mut remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
 
 			loop {

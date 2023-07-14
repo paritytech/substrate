@@ -92,6 +92,8 @@ pub struct CodeInfo<T: Config> {
 	/// to be run on-chain. Specifically, such a code can never be instantiated into a contract
 	/// and can just be used through a delegate call.
 	determinism: Determinism,
+	/// length of the code in bytes.
+	code_len: u32,
 }
 
 /// Defines the required determinism level of a wasm blob when either running or uploading code.
@@ -268,15 +270,11 @@ impl<T: Config> WasmBlob<T> {
 	fn load_code(
 		code_hash: CodeHash<T>,
 		gas_meter: &mut GasMeter<T>,
-	) -> Result<CodeVec<T>, DispatchError> {
-		let max_code_len = T::MaxCodeLen::get();
-		let charged = gas_meter.charge(CodeLoadToken(max_code_len))?;
-
+	) -> Result<(CodeVec<T>, CodeInfo<T>), DispatchError> {
+		let code_info = <CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
+		gas_meter.charge(CodeLoadToken(code_info.code_len))?;
 		let code = <PristineCode<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
-		let code_len = code.len() as u32;
-		gas_meter.adjust_gas(charged, CodeLoadToken(code_len));
-
-		Ok(code)
+		Ok((code, code_info))
 	}
 
 	/// Create the module without checking the passed code.
@@ -324,13 +322,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		code_hash: CodeHash<T>,
 		gas_meter: &mut GasMeter<T>,
 	) -> Result<Self, DispatchError> {
-		let code = Self::load_code(code_hash, gas_meter)?;
-		// We store `code_info` at the same time as contract code,
-		// therefore this query shouldn't really fail.
-		// We consider its failure equal to `CodeNotFound`, as contract code without
-		// `code_info` is unusable in this pallet.
-		let code_info = <CodeInfoOf<T>>::get(code_hash).ok_or(Error::<T>::CodeNotFound)?;
-
+		let (code, code_info) = Self::load_code(code_hash, gas_meter)?;
 		Ok(Self { code, code_info, code_hash })
 	}
 
@@ -432,7 +424,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 mod tests {
 	use super::*;
 	use crate::{
-		exec::{AccountIdOf, BlockNumberOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
+		exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Ext, Key, SeedOf},
 		gas::GasMeter,
 		storage::WriteOutcome,
 		tests::{RuntimeCall, Test, ALICE, BOB},
@@ -442,6 +434,7 @@ mod tests {
 	use frame_support::{
 		assert_err, assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight,
 	};
+	use frame_system::pallet_prelude::BlockNumberFor;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
 	use sp_core::H256;
@@ -652,7 +645,7 @@ mod tests {
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
+		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberFor<Self::T>) {
 			(H256::from_slice(subject), 42)
 		}
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
