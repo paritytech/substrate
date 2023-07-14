@@ -170,7 +170,7 @@ fn basic_setup_works() {
 			}
 		);
 		// Account 1 does not control any stash
-		assert_eq!(Ledger::get(&1), None);
+		assert_eq!(Staking::ledger(&1), None);
 
 		// ValidatorPrefs are default
 		assert_eq_uvec!(
@@ -183,7 +183,7 @@ fn basic_setup_works() {
 		);
 
 		assert_eq!(
-			Ledger::get(101).unwrap(),
+			Staking::ledger(&101).unwrap(),
 			StakingLedgerInspect {
 				stash: 101,
 				total: 500,
@@ -715,9 +715,9 @@ fn nominators_also_get_slashed_pro_rata() {
 		assert_eq!(initial_exposure.others.first().unwrap().who, 101);
 
 		// staked values;
-		let nominator_stake = Staking::ledger(101).unwrap().active;
+		let nominator_stake = Staking::ledger(&101).unwrap().active;
 		let nominator_balance = balances(&101).0;
-		let validator_stake = Staking::ledger(11).unwrap().active;
+		let validator_stake = Staking::ledger(&11).unwrap().active;
 		let validator_balance = balances(&11).0;
 		let exposed_stake = initial_exposure.total;
 		let exposed_validator = initial_exposure.own;
@@ -730,8 +730,8 @@ fn nominators_also_get_slashed_pro_rata() {
 		);
 
 		// both stakes must have been decreased.
-		assert!(Staking::ledger(101).unwrap().active < nominator_stake);
-		assert!(Staking::ledger(11).unwrap().active < validator_stake);
+		assert!(Staking::ledger(&101).unwrap().active < nominator_stake);
+		assert!(Staking::ledger(&11).unwrap().active < validator_stake);
 
 		let slash_amount = slash_percent * exposed_stake;
 		let validator_share =
@@ -744,8 +744,8 @@ fn nominators_also_get_slashed_pro_rata() {
 		assert!(nominator_share > 0);
 
 		// both stakes must have been decreased pro-rata.
-		assert_eq!(Staking::ledger(101).unwrap().active, nominator_stake - nominator_share);
-		assert_eq!(Staking::ledger(11).unwrap().active, validator_stake - validator_share);
+		assert_eq!(Staking::ledger(&101).unwrap().active, nominator_stake - nominator_share);
+		assert_eq!(Staking::ledger(&11).unwrap().active, validator_stake - validator_share);
 		assert_eq!(
 			balances(&101).0, // free balance
 			nominator_balance - nominator_share,
@@ -1929,7 +1929,7 @@ fn bond_with_no_staked_value() {
 			// unbonding even 1 will cause all to be unbonded.
 			assert_ok!(Staking::unbond(RuntimeOrigin::signed(1), 1));
 			assert_eq!(
-				Staking::ledger(1).unwrap(),
+				Staking::ledger(&1).unwrap(),
 				StakingLedgerInspect {
 					stash: 1,
 					active: 0,
@@ -1944,14 +1944,14 @@ fn bond_with_no_staked_value() {
 
 			// not yet removed.
 			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(1), 0));
-			assert!(Staking::ledger(1).is_some());
+			assert!(Staking::ledger(&1).is_some());
 			assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 			mock::start_active_era(3);
 
 			// poof. Account 1 is removed from the staking system.
 			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(1), 0));
-			assert!(Staking::ledger(1).is_none());
+			assert!(Staking::ledger(&1).is_none());
 			assert_eq!(Balances::locks(&1).len(), 0);
 		});
 }
@@ -2036,7 +2036,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 			// ensure all have equal stake.
 			assert_eq!(
 				<Validators<Test>>::iter()
-					.map(|(v, _)| (v, Staking::ledger(v).unwrap().total))
+					.map(|(v, _)| (v, Staking::ledger(&v).unwrap().total))
 					.collect::<Vec<_>>(),
 				vec![(31, 1000), (21, 1000), (11, 1000)],
 			);
@@ -2088,7 +2088,7 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 			// ensure all have equal stake.
 			assert_eq!(
 				<Validators<Test>>::iter()
-					.map(|(v, _)| (v, Staking::ledger(v).unwrap().total))
+					.map(|(v, _)| (v, Staking::ledger(&v).unwrap().total))
 					.collect::<Vec<_>>(),
 				vec![(31, 1000), (21, 1000), (11, 1000)],
 			);
@@ -2974,7 +2974,7 @@ fn retroactive_deferred_slashes_one_before() {
 
 		mock::start_active_era(4);
 
-		assert_eq!(Staking::ledger(11).unwrap().total, 1000);
+		assert_eq!(Staking::ledger(&11).unwrap().total, 1000);
 		// slash happens after the next line.
 
 		mock::start_active_era(5);
@@ -2989,9 +2989,9 @@ fn retroactive_deferred_slashes_one_before() {
 		));
 
 		// their ledger has already been slashed.
-		assert_eq!(Staking::ledger(11).unwrap().total, 900);
+		assert_eq!(Staking::ledger(&11).unwrap().total, 900);
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(11), 1000));
-		assert_eq!(Staking::ledger(11).unwrap().total, 900);
+		assert_eq!(Staking::ledger(&11).unwrap().total, 900);
 	})
 }
 
@@ -5617,7 +5617,7 @@ fn reducing_max_unlocking_chunks_abrupt() {
 		MaxUnlockingChunks::set(2);
 		start_active_era(10);
 		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 300, RewardDestination::Staked));
-		assert!(matches!(Staking::ledger(3), Some(_)));
+		assert!(matches!(Staking::ledger(&3), Some(_)));
 
 		// when staker unbonds
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(3), 20));
@@ -5626,7 +5626,7 @@ fn reducing_max_unlocking_chunks_abrupt() {
 		// => 10 + 3 = 13
 		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
 			bounded_vec![UnlockChunk { value: 20 as Balance, era: 13 as EraIndex }];
-		assert!(matches!(Staking::ledger(3),
+		assert!(matches!(Staking::ledger(&3),
 			Some(StakingLedger {
 				unlocking,
 				..
@@ -5638,7 +5638,7 @@ fn reducing_max_unlocking_chunks_abrupt() {
 		// then another unlock chunk is added
 		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
 			bounded_vec![UnlockChunk { value: 20, era: 13 }, UnlockChunk { value: 50, era: 14 }];
-		assert!(matches!(Staking::ledger(3),
+		assert!(matches!(Staking::ledger(&3),
 			Some(StakingLedger {
 				unlocking,
 				..

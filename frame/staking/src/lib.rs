@@ -159,7 +159,7 @@
 //! ```
 //! use pallet_staking::{self as staking};
 //!
-//! #[frame_support::pallet]
+//! #[frame_support::pallet(dev_mode)]
 //! pub mod pallet {
 //! 	use super::*;
 //! 	use frame_support::pallet_prelude::*;
@@ -645,7 +645,7 @@ pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
-		StakingLedger::<T>::storage_get(&controller).map(|l| l.stash)
+		Pallet::<T>::ledger(&controller).map(|l| l.stash)
 	}
 }
 

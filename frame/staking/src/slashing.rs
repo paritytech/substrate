@@ -51,8 +51,8 @@
 
 use crate::{
 	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, NominatorSlashInEra,
-	OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash, StakingLedger,
-	UnappliedSlash, ValidatorSlashInEra,
+	OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash, UnappliedSlash,
+	ValidatorSlashInEra,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -602,7 +602,7 @@ pub fn do_slash<T: Config>(
 		Some(c) => c,
 	};
 
-	let mut ledger = match StakingLedger::<T>::storage_get(&controller) {
+	let mut ledger = match Pallet::<T>::ledger(&controller) {
 		Some(ledger) => ledger,
 		None => return, // nothing to do.
 	};
