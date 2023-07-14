@@ -1,5 +1,5 @@
 error: expected one of: `Pallet`, `Call`, `Storage`, `Event`, `Error`, `Config`, `Origin`, `Inherent`, `ValidateUnsigned`, `FreezeReason`, `HoldReason`, `LockId`, `SlashReason`
-  --> $DIR/invalid_module_entry.rs:10:23
-   |
-10 |         Balance: balances::{Unexpected},
-   |                             ^^^^^^^^^^
+ --> tests/construct_runtime_ui/invalid_module_entry.rs:7:23
+  |
+7 |         Balance: balances::{Unexpected},
+  |                             ^^^^^^^^^^

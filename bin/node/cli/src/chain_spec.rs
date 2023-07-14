@@ -19,10 +19,9 @@
 //! Substrate chain configurations.
 
 use grandpa_primitives::AuthorityId as GrandpaId;
-use kitchensink_runtime::{
-	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig,
-	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GluttonConfig,
-	GrandpaConfig, ImOnlineConfig, IndicesConfig, MaxNominations, NameServiceConfig,
+use kitchensink_runtime::
+	constants::currency::*, wasm_binary_unwrap, BabeConfig, BalancesConfig, Block, CouncilConfig,
+	DemocracyConfig, ElectionsConfig, ImOnlineConfig, IndicesConfig, MaxNominations, NameServiceConfig,
 	NominationPoolsConfig, SessionConfig, SessionKeys, SocietyConfig, StakerStatus, StakingConfig,
 	SudoConfig, SystemConfig, TechnicalCommitteeConfig,
 };
@@ -295,7 +294,7 @@ pub fn testnet_genesis(
 	const STASH: Balance = ENDOWMENT / 1000;
 
 	RuntimeGenesisConfig {
-		system: SystemConfig { code: wasm_binary_unwrap().to_vec() },
+		system: SystemConfig { code: wasm_binary_unwrap().to_vec(), ..Default::default() },
 		balances: BalancesConfig {
 			balances: endowed_accounts.iter().cloned().map(|x| (x, ENDOWMENT)).collect(),
 		},
@@ -340,12 +339,12 @@ pub fn testnet_genesis(
 		},
 		sudo: SudoConfig { key: Some(root_key) },
 		babe: BabeConfig {
-			authorities: vec![],
 			epoch_config: Some(kitchensink_runtime::BABE_GENESIS_EPOCH_CONFIG),
+			..Default::default()
 		},
 		im_online: ImOnlineConfig { keys: vec![] },
-		authority_discovery: AuthorityDiscoveryConfig { keys: vec![] },
-		grandpa: GrandpaConfig { authorities: vec![] },
+		authority_discovery: Default::default(),
+		grandpa: Default::default(),
 		technical_membership: Default::default(),
 		treasury: Default::default(),
 		society: SocietyConfig { pot: 0 },
@@ -370,11 +369,7 @@ pub fn testnet_genesis(
 			subnode_deposit: Some(10 * DOLLARS),
 			..Default::default()
 		},
-		glutton: GluttonConfig {
-			compute: Default::default(),
-			storage: Default::default(),
-			trash_data_count: Default::default(),
-		},
+		glutton: Default::default(),
 	}
 }
 
