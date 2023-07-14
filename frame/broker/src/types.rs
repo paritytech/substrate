@@ -225,7 +225,7 @@ pub type LeasesRecordOf<T> = LeasesRecord<<T as Config>::MaxLeasedCores>;
 /// Configuration of this pallet.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ConfigRecord<BlockNumber, RelayBlockNumber> {
-	/// The number of timeslices in advance which scheduling should be fixed and the
+	/// The number of Relay-chain blocks in advance which scheduling should be fixed and the
 	/// `Coretime::assign` API used to inform the Relay-chain.
 	pub advance_notice: RelayBlockNumber,
 	/// The length in blocks of the Interlude Period for forthcoming sales.
