@@ -114,7 +114,7 @@ pub mod mock {
 	use sp_runtime::{testing::H256, BuildStorage};
 
 	type AccountId = u64;
-	type AccountIndex = u32;
+	type Nonce = u32;
 
 	type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -131,7 +131,7 @@ pub mod mock {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = AccountIndex;
+		type Nonce = Nonce;
 		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
