@@ -219,10 +219,10 @@ impl<T: Config> Pallet<T> {
 		region_id: RegionId,
 		maybe_check_owner: Option<T::AccountId>,
 		target: TaskId,
-		permanence: Permanence,
+		finality: Finality,
 	) -> Result<(), Error<T>> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
-		if let Some((region_id, region)) = Self::utilize(region_id, maybe_check_owner, permanence)? {
+		if let Some((region_id, region)) = Self::utilize(region_id, maybe_check_owner, finality)? {
 			let workplan_key = (region_id.begin, region_id.core);
 			let mut workplan = Workplan::<T>::get(&workplan_key)
 				.unwrap_or_default();
@@ -236,7 +236,7 @@ impl<T: Config> Pallet<T> {
 			}
 
 			let duration = region.end.saturating_sub(region_id.begin);
-			if duration == config.region_length && permanence == Permanence::Permanent {
+			if duration == config.region_length && finality == Finality::Final {
 				if let Some(price) = region.paid {
 					let begin = region.end;
 					let assigned = match AllowedRenewals::<T>::get(region_id.core) {
@@ -265,9 +265,9 @@ impl<T: Config> Pallet<T> {
 		region_id: RegionId,
 		maybe_check_owner: Option<T::AccountId>,
 		payee: T::AccountId,
-		permanence: Permanence,
+		finality: Finality,
 	) -> Result<(), Error<T>> {
-		if let Some((region_id, region)) = Self::utilize(region_id, maybe_check_owner, permanence)? {
+		if let Some((region_id, region)) = Self::utilize(region_id, maybe_check_owner, finality)? {
 			let workplan_key = (region_id.begin, region_id.core);
 			let mut workplan = Workplan::<T>::get(&workplan_key)
 				.unwrap_or_default();

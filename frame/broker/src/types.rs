@@ -22,11 +22,11 @@ pub type SignedPartCount = i32;
 
 /// Whether a core assignment is revokable or not.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum Permanence {
+pub enum Finality {
 	/// The region remains with the same owner allowing the assignment to be altered.
 	Provisional,
 	/// The region is removed; the assignment may be eligible for renewal.
-	Permanent,
+	Final,
 }
 
 /// Self-describing identity for a Region of Bulk Coretime.

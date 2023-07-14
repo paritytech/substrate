@@ -292,7 +292,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn utilize(
 		mut region_id: RegionId,
 		maybe_check_owner: Option<T::AccountId>,
-		permanence: Permanence,
+		finality: Finality,
 	) -> Result<Option<(RegionId, RegionRecordOf<T>)>, Error<T>> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
@@ -317,7 +317,7 @@ impl<T: Config> Pallet<T> {
 				p.retain(|i| (i.part & region_id.part).is_void())
 			);
 		}
-		if permanence == Permanence::Provisional {
+		if finality == Finality::Provisional {
 			Regions::<T>::insert(&region_id, &region);
 		}
 

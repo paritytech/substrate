@@ -374,10 +374,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			region_id: RegionId,
 			target: TaskId,
-			permanence: Permanence,
+			finality: Finality,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::do_assign(region_id, Some(who), target, permanence)?;
+			Self::do_assign(region_id, Some(who), target, finality)?;
 			Ok(())
 		}
 
@@ -386,10 +386,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			region_id: RegionId,
 			payee: T::AccountId,
-			permanence: Permanence,
+			finality: Finality,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			Self::do_pool(region_id, Some(who), payee, permanence)?;
+			Self::do_pool(region_id, Some(who), payee, finality)?;
 			Ok(())
 		}
 
