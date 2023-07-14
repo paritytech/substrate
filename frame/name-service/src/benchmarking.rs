@@ -31,7 +31,7 @@ use sp_std::vec;
 type CurrencyOf<T> = <T as Config>::Currency;
 
 fn safe_mint<T: Config>() -> BalanceOf<T> {
-	CommitmentDeposit::<T>::get().unwrap() * 100u32.into()
+	CommitmentDeposit::<T>::get().unwrap() * 10000u32.into()
 }
 
 fn run_to_block<T: Config>(n: BlockNumberFor<T>) {
