@@ -48,7 +48,7 @@ impl<T: Config> Pallet<T> {
 	) -> Option<()> {
 		let now = frame_system::Pallet::<T>::block_number();
 
-		let pool_item = ScheduleItem { assignment: CoreAssignment::Pool, part: CorePart::complete() };
+		let pool_item = ScheduleItem { assignment: CoreAssignment::Pool, part: CoreMask::complete() };
 		let just_pool = Schedule::truncate_from(vec![pool_item]);
 
 		// Clean up the old sale - we need to use up any unused cores by putting them into the
@@ -109,7 +109,7 @@ impl<T: Config> Pallet<T> {
 		let mut leases = Leases::<T>::get();
 		// Can morph to a renewable as long as it's >=begin and <end.
 		leases.retain(|&LeaseRecordItem { until, task }| {
-			let part = CorePart::complete();
+			let part = CoreMask::complete();
 			let assignment = CoreAssignment::Task(task);
 			let schedule = BoundedVec::truncate_from(vec![ScheduleItem { part, assignment }]);
 			Workplan::<T>::insert((region_begin, first_core), &schedule);
@@ -242,7 +242,7 @@ impl<T: Config> Pallet<T> {
 			None => return,
 		};
 		let workload = Workload::<T>::get(core);
-		let parts_used = workplan.iter().map(|i| i.part).fold(CorePart::void(), |a, i| a | i);
+		let parts_used = workplan.iter().map(|i| i.part).fold(CoreMask::void(), |a, i| a | i);
 		let mut workplan = workplan.into_inner();
 		workplan.extend(workload.into_iter().filter(|i| (i.part & parts_used).is_void()));
 		let workplan = Schedule::truncate_from(workplan);
@@ -283,7 +283,7 @@ impl<T: Config> Pallet<T> {
 		owner: T::AccountId,
 		paid: Option<BalanceOf<T>>,
 	) -> RegionId {
-		let id = RegionId { begin, core, part: CorePart::complete() };
+		let id = RegionId { begin, core, part: CoreMask::complete() };
 		let record = RegionRecord { end, owner, paid };
 		Regions::<T>::insert(&id, &record);
 		id

@@ -246,30 +246,58 @@ pub mod pallet {
 	#[pallet::error]
 	#[derive(PartialEq)]
 	pub enum Error<T> {
+		/// The given region identity is not known.
 		UnknownRegion,
+		/// The owner of the region is not the origin.
 		NotOwner,
+		/// The pivot point of the partition at or after the end of the region.
 		PivotTooLate,
+		/// The pivot mask for the interlacing is not contained within the region's interlace mask.
 		ExteriorPivot,
-		NullPivot,
+		/// The pivot mask for the interlacing is void (and therefore unschedulable).
+		VoidPivot,
+		/// The pivot mask for the interlacing is complete (and therefore not a strict subset).
 		CompletePivot,
+		/// The workplan of the pallet's state is invalid. This indicates a state corruption.
 		CorruptWorkplan,
+		/// There is no sale happening currently.
 		NoSales,
+		/// The price for the sale could not be determined. This indicates a logic error.
 		IndeterminablePrice,
+		/// The price limit is exceeded.
 		Overpriced,
+		/// There are no cores available.
 		Unavailable,
+		/// The sale limit has been reached.
 		SoldOut,
+		/// The renewal operation is not valid at the current time (it may become valid in the next
+		/// sale).
 		WrongTime,
+		/// Invalid attempt to renew.
 		NotAllowed,
+		/// This pallet has not yet been initialized.
 		Uninitialized,
+		/// The purchase cannot happen yet as the sale period is yet to begin.
 		TooEarly,
+		/// There is no work to be done.
 		NothingToDo,
+		/// The maximum amount of reservations has already been reached.
 		TooManyReservations,
+		/// The maximum amount of leases has already been reached.
 		TooManyLeases,
+		/// The revenue for the Instantaneous Core Sales of this period is already known. This
+		/// is unexpected and indicates a logic error.
 		RevenueAlreadyKnown,
-		NoRevenue,
+		/// The revenue for the Instantaneous Core Sales of this period is not (yet) known and thus
+		/// this operation cannot proceed.
 		UnknownRevenue,
+		/// The identified contribution to the Instantaneous Core Pool is unknown.
 		UnknownContribution,
+		/// The recorded contributions to the Instantaneous Core Pool are invalid. This is
+		/// unexpected and indicates a logic error.
 		InvalidContributions,
+		/// The workload assigned for renewal is incomplete. This is unexpected and indicates a
+		/// logic error.
 		IncompleteAssignment,
 		/// An item cannot be dropped because it is still valid.
 		StillValid,
@@ -362,7 +390,7 @@ pub mod pallet {
 		pub fn interlace(
 			origin: OriginFor<T>,
 			region_id: RegionId,
-			pivot: CorePart,
+			pivot: CoreMask,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::do_interlace(region_id, Some(who), pivot)?;

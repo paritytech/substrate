@@ -1,4 +1,4 @@
-use crate::{Config, CoretimeInterface, CoreIndex, CorePart, CoreAssignment, TaskId};
+use crate::{Config, CoretimeInterface, CoreIndex, CoreMask, CoreAssignment, TaskId};
 use codec::{Encode, Decode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use frame_support::traits::fungible::Inspect;
@@ -14,7 +14,7 @@ pub type RelayAccountIdOf<T> = <<T as Config>::Coretime as CoretimeInterface>::A
 
 /// Relay-chain block number with a fixed divisor of Config::TimeslicePeriod.
 pub type Timeslice = u32;
-/// Counter for the total number of set bits over every core's `CorePart`. `u32` so we don't
+/// Counter for the total number of set bits over every core's `CoreMask`. `u32` so we don't
 /// ever get an overflow.
 pub type PartCount = u32;
 /// The same as `PartCount` but signed.
@@ -37,7 +37,7 @@ pub struct RegionId {
 	/// The index of the Polakdot Core on which this Region will be scheduled.
 	pub core: CoreIndex,
 	/// The regularity parts in which this Region will be scheduled.
-	pub part: CorePart,
+	pub part: CoreMask,
 }
 impl From<u128> for RegionId {
 	fn from(x: u128) -> Self {
@@ -77,7 +77,7 @@ pub type RegionRecordOf<T> = RegionRecord<<T as SConfig>::AccountId, BalanceOf<T
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ScheduleItem {
 	/// The regularity parts in which this Item will be scheduled on the Core.
-	pub part: CorePart,
+	pub part: CoreMask,
 	/// The job that the Core should be doing.
 	pub assignment: CoreAssignment,
 }
@@ -115,7 +115,7 @@ pub type InstaPoolHistoryRecordOf<T> = InstaPoolHistoryRecord<BalanceOf<T>>;
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum CompletionStatus {
 	/// The core is not fully assigned; the inner is the parts which have.
-	Partial(CorePart),
+	Partial(CoreMask),
 	/// The core is fully assigned; the inner is the workload which has been assigned.
 	Complete(Schedule),
 }

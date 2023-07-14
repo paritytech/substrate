@@ -23,10 +23,11 @@ price fixed, unsold assigned to instapool, system cores reserved -/
 ## TODO
 
 - More Events
-- Tests for dropping out of date storage
-- Tests for core count changes
 
 - Benchmarks
 - Weights
 - Final docs
 - Tests
+  - Tests for dropping out of date storage
+  - Tests for core count changes
+  - Tests for every error

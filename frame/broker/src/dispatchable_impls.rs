@@ -193,7 +193,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn do_interlace(
 		region_id: RegionId,
 		maybe_check_owner: Option<T::AccountId>,
-		pivot: CorePart,
+		pivot: CoreMask,
 	) -> Result<(RegionId, RegionId), Error<T>> {
 		let region = Regions::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
 
@@ -202,7 +202,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		ensure!((pivot & !region_id.part).is_void(), Error::<T>::ExteriorPivot);
-		ensure!(!pivot.is_void(), Error::<T>::NullPivot);
+		ensure!(!pivot.is_void(), Error::<T>::VoidPivot);
 		ensure!(pivot != region_id.part, Error::<T>::CompletePivot);
 
 		let one = RegionId { part: pivot, ..region_id };
@@ -242,7 +242,7 @@ impl<T: Config> Pallet<T> {
 					let assigned = match AllowedRenewals::<T>::get(region_id.core) {
 						Some(AllowedRenewalRecord { completion: Partial(w), begin: b, price: p })
 							if begin == b && price == p => w,
-						_ => CorePart::void(),
+						_ => CoreMask::void(),
 					} | region_id.part;
 					let workload = if assigned.is_complete() {
 						Complete(workplan)

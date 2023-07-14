@@ -55,7 +55,7 @@ fn permanent_is_not_reassignable() {
 		assert_noop!(Broker::do_assign(region, Some(1), 1002, Final), Error::<Test>::UnknownRegion);
 		assert_noop!(Broker::do_pool(region, Some(1), 1002, Final), Error::<Test>::UnknownRegion);
 		assert_noop!(Broker::do_partition(region, Some(1), 1), Error::<Test>::UnknownRegion);
-		assert_noop!(Broker::do_interlace(region, Some(1), CorePart::from_chunk(0, 40)), Error::<Test>::UnknownRegion);
+		assert_noop!(Broker::do_interlace(region, Some(1), CoreMask::from_chunk(0, 40)), Error::<Test>::UnknownRegion);
 	});
 }
 
@@ -67,7 +67,7 @@ fn provisional_is_reassignable() {
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		assert_ok!(Broker::do_assign(region, Some(1), 1001, Provisional));
 		let (region1, region) = Broker::do_partition(region, Some(1), 1).unwrap();
-		let (region2, region3) = Broker::do_interlace(region, Some(1), CorePart::from_chunk(0, 40)).unwrap();
+		let (region2, region3) = Broker::do_interlace(region, Some(1), CoreMask::from_chunk(0, 40)).unwrap();
 		assert_ok!(Broker::do_pool(region1, Some(1), 1, Provisional));
 		assert_ok!(Broker::do_assign(region2, Some(1), 1002, Provisional));
 		assert_ok!(Broker::do_assign(region3, Some(1), 1003, Provisional));
@@ -94,7 +94,7 @@ fn nft_metadata_works() {
 		assert_eq!(attribute::<Timeslice>(region, b"length"), 3);
 		assert_eq!(attribute::<Timeslice>(region, b"end"), 7);
 		assert_eq!(attribute::<u64>(region, b"owner"), 1);
-		assert_eq!(attribute::<CorePart>(region, b"part"), 0xfffff_fffff_fffff_fffff.into());
+		assert_eq!(attribute::<CoreMask>(region, b"part"), 0xfffff_fffff_fffff_fffff.into());
 		assert_eq!(attribute::<CoreIndex>(region, b"core"), 0);
 		assert_eq!(attribute::<Option<u64>>(region, b"paid"), Some(100));
 
@@ -105,7 +105,7 @@ fn nft_metadata_works() {
 		assert_eq!(attribute::<Timeslice>(region, b"length"), 1);
 		assert_eq!(attribute::<Timeslice>(region, b"end"), 7);
 		assert_eq!(attribute::<u64>(region, b"owner"), 42);
-		assert_eq!(attribute::<CorePart>(region, b"part"), 0x00000_fffff_fffff_00000.into());
+		assert_eq!(attribute::<CoreMask>(region, b"part"), 0x00000_fffff_fffff_00000.into());
 		assert_eq!(attribute::<CoreIndex>(region, b"core"), 0);
 		assert_eq!(attribute::<Option<u64>>(region, b"paid"), None);
 	});
@@ -167,7 +167,7 @@ fn renewal_works() {
 #[test]
 fn instapool_payouts_work() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		let item = ScheduleItem { assignment: Pool, part: CorePart::complete() };
+		let item = ScheduleItem { assignment: Pool, part: CoreMask::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		assert_ok!(Broker::do_start_sales(100, 3));
 		advance_to(2);
@@ -188,12 +188,12 @@ fn instapool_payouts_work() {
 #[test]
 fn instapool_partial_core_payouts_work() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		let item = ScheduleItem { assignment: Pool, part: CorePart::complete() };
+		let item = ScheduleItem { assignment: Pool, part: CoreMask::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		assert_ok!(Broker::do_start_sales(100, 2));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
-		let (region1, region2) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)).unwrap();
+		let (region1, region2) = Broker::do_interlace(region, None, CoreMask::from_chunk(0, 20)).unwrap();
 		assert_ok!(Broker::do_pool(region1, None, 2, Final));
 		assert_ok!(Broker::do_pool(region2, None, 3, Final));
 		assert_ok!(Broker::do_purchase_credit(1, 40, 1));
@@ -212,7 +212,7 @@ fn instapool_partial_core_payouts_work() {
 #[test]
 fn initialize_with_system_paras_works() {
 	TestExt::new().execute_with(|| {
-		let item = ScheduleItem { assignment: Task(1u32), part: CorePart::complete() };
+		let item = ScheduleItem { assignment: Task(1u32), part: CoreMask::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		let items = vec![
 			ScheduleItem { assignment: Task(2u32), part: 0xfffff_fffff_00000_00000.into() },
@@ -302,8 +302,8 @@ fn interlace_works() {
 		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
-		let (region1, region) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 30)).unwrap();
-		let (region2, region3) =Broker::do_interlace(region, None, CorePart::from_chunk(30, 60)).unwrap();
+		let (region1, region) = Broker::do_interlace(region, None, CoreMask::from_chunk(0, 30)).unwrap();
+		let (region2, region3) =Broker::do_interlace(region, None, CoreMask::from_chunk(30, 60)).unwrap();
 		assert_ok!(Broker::do_assign(region1, None, 1001, Final));
 		assert_ok!(Broker::do_assign(region2, None, 1002, Final));
 		assert_ok!(Broker::do_assign(region3, None, 1003, Final));
@@ -324,7 +324,7 @@ fn interlace_then_partition_works() {
 		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
-		let (region1, region2) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)).unwrap();
+		let (region1, region2) = Broker::do_interlace(region, None, CoreMask::from_chunk(0, 20)).unwrap();
 		let (region1, region3) = Broker::do_partition(region1, None, 1).unwrap();
 		let (region2, region4) = Broker::do_partition(region2, None, 2).unwrap();
 		assert_ok!(Broker::do_assign(region1, None, 1001, Final));
@@ -356,8 +356,8 @@ fn partition_then_interlace_works() {
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let (region1, region2) = Broker::do_partition(region, None, 1).unwrap();
-		let (region1, region3) = Broker::do_interlace(region1, None, CorePart::from_chunk(0, 20)).unwrap();
-		let (region2, region4) = Broker::do_interlace(region2, None, CorePart::from_chunk(0, 30)).unwrap();
+		let (region1, region3) = Broker::do_interlace(region1, None, CoreMask::from_chunk(0, 20)).unwrap();
+		let (region2, region4) = Broker::do_interlace(region2, None, CoreMask::from_chunk(0, 30)).unwrap();
 		assert_ok!(Broker::do_assign(region1, None, 1001, Final));
 		assert_ok!(Broker::do_assign(region2, None, 1002, Final));
 		assert_ok!(Broker::do_assign(region3, None, 1003, Final));
