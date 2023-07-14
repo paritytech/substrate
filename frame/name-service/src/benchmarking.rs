@@ -232,7 +232,7 @@ benchmarks! {
 			Registrations::<T>::get(name_hash).unwrap(),
 			Registration {
 			owner: new_owner,
-			expiry: Some(200u32.into()),
+			expiry: Some(201u32.into()),
 			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
 		});
 	}
