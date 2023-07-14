@@ -1635,6 +1635,7 @@ mod tests {
 		func: Rc<dyn Fn(MockCtx, &Self) -> ExecResult + 'static>,
 		func_type: ExportedFunction,
 		code_hash: CodeHash<Test>,
+		code_info: CodeInfo<Test>,
 		refcount: u64,
 	}
 
@@ -1659,7 +1660,13 @@ mod tests {
 				loader.counter += 1;
 				loader.map.insert(
 					hash,
-					MockExecutable { func: Rc::new(f), func_type, code_hash: hash, refcount: 1 },
+					MockExecutable {
+						func: Rc::new(f),
+						func_type,
+						code_hash: hash,
+						code_info: CodeInfo::<Test>::new(ALICE),
+						refcount: 1,
+					},
 				);
 				hash
 			})
@@ -1727,6 +1734,10 @@ mod tests {
 
 		fn code_hash(&self) -> &CodeHash<Test> {
 			&self.code_hash
+		}
+
+		fn code_info(&self) -> &CodeInfo<Test> {
+			&self.code_info
 		}
 
 		fn code_len(&self) -> u32 {

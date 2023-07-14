@@ -52,9 +52,9 @@ use sp_core::ByteArray;
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
-	testing::{Header, H256},
+	testing::H256,
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
-	AccountId32, BuildStorage, TokenError,
+	AccountId32, BuildStorage, Perbill, TokenError,
 };
 use std::ops::Deref;
 

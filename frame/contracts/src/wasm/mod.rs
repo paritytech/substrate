@@ -307,6 +307,7 @@ impl<T: Config> CodeInfo<T> {
 			owner,
 			deposit: Default::default(),
 			refcount: 0,
+			code_len: 0,
 			determinism: Determinism::Enforced,
 		}
 	}
