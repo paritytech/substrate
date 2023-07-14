@@ -242,13 +242,6 @@ pub mod pallet {
 			/// The duration of the Region.
 			duration: Timeslice,
 		},
-		/// A Region has been dropped due to being out of date.
-		Dropped {
-			/// The Region which no longer exists.
-			region_id: RegionId,
-			/// The duration of the Region.
-			duration: Timeslice,
-		},
 		/// A new number of cores has been requested.
 		CoreCountRequested {
 			/// The number of cores requested.
@@ -272,6 +265,70 @@ pub mod pallet {
 			index: u32,
 			/// The workload of the now cancelled reservation.
 			workload: Schedule,
+		},
+		/// A new lease has been created.
+		Leased {
+			/// The task to which a core will be assigned
+			task: TaskId,
+			/// The timeslice contained in the sale period after which this lease will
+			/// self-terminate (and therefore the earliest timeslice at which the lease may no
+			/// longer apply).
+			until: Timeslice,
+		},
+		/// The sale rotation has been started and a new sale is imminent.
+		SalesStarted {
+			/// The nominal price of an Region of Bulk Coretime.
+			reserve_price: BalanceOf<T>,
+			/// The maximum number of cores which this pallet will attempt to assign.
+			core_count: CoreIndex,
+		},
+		/// The act of claiming revenue has begun.
+		RevenueClaimBegun {
+			/// The region to be claimed for.
+			region: RegionId,
+			/// The maximum number of timeslices which should be searched for claimed.
+			max_timeslices: Timeslice,
+		},
+		/// A particular timeslice has a non-zero claim.
+		RevenueClaimItem {
+			/// The timeslice whose claim is being processed.
+			when: Timeslice,
+			/// The amount which was claimed at this timeslice.
+			amount: BalanceOf<T>,
+		},
+		RevenueClaimPaid {
+			/// The account to whom revenue has been paid.
+			who: T::AccountId,
+			/// The total amount of revenue claimed and paid.
+			amount: BalanceOf<T>,
+			/// The next region which should be claimed for the continuation of this contribution.
+			next: Option<RegionId>,
+		},
+		/// Some Instantaneous Coretime Pool credit has been purchased.
+		CreditPurchased {
+			/// The account which purchased the credit.
+			who: T::AccountId,
+			/// The Relay-chain account to which the credit will be made.
+			beneficiary: RelayAccountIdOf<T>,
+			/// The amount of credit purchased.
+			amount: BalanceOf<T>,
+		},
+		/// A Region has been dropped due to being out of date.
+		RegionDropped {
+			/// The Region which no longer exists.
+			region_id: RegionId,
+			/// The duration of the Region.
+			duration: Timeslice,
+		},
+		ContributionDropped {
+			/// The Region whose contribution is no longer exists.
+			region_id: RegionId,
+		},
+		HistoryDropped {
+			/// The timeslice whose history is no longer available.
+			when: Timeslice,
+			/// The amount of revenue the system has taken.
+			revenue: BalanceOf<T>,
 		},
 	}
 

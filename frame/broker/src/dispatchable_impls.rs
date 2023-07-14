@@ -42,6 +42,7 @@ impl<T: Config> Pallet<T> {
 		r.try_push(LeaseRecordItem { until, task })
 			.map_err(|_| Error::<T>::TooManyLeases)?;
 		Leases::<T>::put(r);
+		Self::deposit_event(Event::<T>::Leased { until, task });
 		Ok(())
 	}
 
@@ -72,6 +73,7 @@ impl<T: Config> Pallet<T> {
 			cores_offered: 0,
 			cores_sold: 0,
 		};
+		Self::deposit_event(Event::<T>::SalesStarted { reserve_price, core_count });
 		Self::rotate_sale(dummy_sale, &config, &status);
 		Status::<T>::put(&status);
 		Ok(())
@@ -311,9 +313,14 @@ impl<T: Config> Pallet<T> {
 			InstaPoolContribution::<T>::take(region).ok_or(Error::<T>::UnknownContribution)?;
 		let contributed_parts = region.part.count_ones();
 
+		Self::deposit_event(Event::RevenueClaimBegun { region, max_timeslices });
+
 		let mut payout = BalanceOf::<T>::zero();
 		let last = region.begin + contribution.length.min(max_timeslices);
 		for r in region.begin..last {
+			region.begin = r + 1;
+			contribution.length.saturating_dec();
+
 			let mut pool_record = match InstaPoolHistory::<T>::get(r) {
 				Some(x) => x,
 				None => continue,
@@ -322,20 +329,21 @@ impl<T: Config> Pallet<T> {
 				Some(x) => x,
 				None => break,
 			};
-			region.begin = r;
-			contribution.length.saturating_dec();
-			payout.saturating_accrue(
-				total_payout.saturating_mul(contributed_parts.into()) /
-					pool_record.total_contributions.into(),
-			);
+			let p = total_payout.saturating_mul(contributed_parts.into()) /
+				pool_record.total_contributions.into();
+
+			payout.saturating_accrue(p);
 			pool_record.total_contributions.saturating_reduce(contributed_parts);
 
 			let remaining_payout = total_payout.saturating_sub(payout);
 			if !remaining_payout.is_zero() && pool_record.total_contributions > 0 {
 				pool_record.maybe_payout = Some(remaining_payout);
-				InstaPoolHistory::<T>::insert(region.begin, &pool_record);
+				InstaPoolHistory::<T>::insert(r, &pool_record);
 			} else {
-				InstaPoolHistory::<T>::remove(region.begin);
+				InstaPoolHistory::<T>::remove(r);
+			}
+			if !p.is_zero() {
+				Self::deposit_event(Event::RevenueClaimItem { when: r, amount: p });
 			}
 		}
 
@@ -344,6 +352,12 @@ impl<T: Config> Pallet<T> {
 		}
 		T::Currency::transfer(&Self::account_id(), &contribution.payee, payout, Expendable)
 			.defensive_ok();
+		let next = if last < region.begin + contribution.length { Some(region) } else { None };
+		Self::deposit_event(Event::RevenueClaimPaid {
+			who: contribution.payee,
+			amount: payout,
+			next,
+		});
 		Ok(())
 	}
 
@@ -353,8 +367,9 @@ impl<T: Config> Pallet<T> {
 		beneficiary: RelayAccountIdOf<T>,
 	) -> DispatchResult {
 		T::Currency::transfer(&who, &Self::account_id(), amount, Expendable)?;
-		let amount = T::ConvertBalance::convert(amount);
-		T::Coretime::credit_account(beneficiary, amount);
+		let rc_amount = T::ConvertBalance::convert(amount);
+		T::Coretime::credit_account(beneficiary.clone(), rc_amount);
+		Self::deposit_event(Event::<T>::CreditPurchased { who, beneficiary, amount });
 		Ok(())
 	}
 
@@ -365,7 +380,7 @@ impl<T: Config> Pallet<T> {
 
 		Regions::<T>::remove(&region_id);
 		let duration = region.end.saturating_sub(region_id.begin);
-		Self::deposit_event(Event::Dropped { region_id, duration });
+		Self::deposit_event(Event::RegionDropped { region_id, duration });
 		Ok(())
 	}
 
@@ -377,6 +392,7 @@ impl<T: Config> Pallet<T> {
 		let end = region_id.begin.saturating_add(contrib.length);
 		ensure!(status.last_timeslice > end + config.contribution_timeout, Error::<T>::StillValid);
 		InstaPoolContribution::<T>::remove(region_id);
+		Self::deposit_event(Event::ContributionDropped { region_id });
 		Ok(())
 	}
 
@@ -388,6 +404,8 @@ impl<T: Config> Pallet<T> {
 		if let Some(payout) = record.maybe_payout {
 			let _ = Self::charge(&Self::account_id(), payout);
 		}
+		let revenue = record.maybe_payout.unwrap_or_default();
+		Self::deposit_event(Event::HistoryDropped { when, revenue });
 		Ok(())
 	}
 }
