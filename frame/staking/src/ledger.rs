@@ -49,7 +49,7 @@ pub struct StakingLedger<T: Config> {
 }
 
 impl<T: Config> StakingLedger<T> {
-	/// Initializes the default object using the given `validator`.
+	#[cfg(feature = "runtime-benchmarks")]
 	pub fn default_from(stash: T::AccountId) -> Self {
 		Self {
 			stash,
@@ -61,18 +61,18 @@ impl<T: Config> StakingLedger<T> {
 		}
 	}
 
-	// only used for new ledgers, so controller == stash.
+	/// only used for new ledgers, so controller == stash.
 	pub fn new(
 		stash: T::AccountId,
-		total_stake: BalanceOf<T>,
 		active_stake: BalanceOf<T>,
+		total_stake: BalanceOf<T>,
 		unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, T::MaxUnlockingChunks>,
 		claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 	) -> Self {
 		Self {
 			stash: stash.clone(),
-			total: total_stake,
 			active: active_stake,
+			total: total_stake,
 			unlocking,
 			claimed_rewards,
 			// controllers are deprecated and map 1-1 to stashes.
@@ -103,11 +103,7 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the
 	/// total by the sum of their balances.
-	pub(crate) fn consolidate_unlocked(
-		self,
-		current_era: EraIndex,
-		controller: &T::AccountId,
-	) -> Self {
+	pub(crate) fn consolidate_unlocked(self, current_era: EraIndex) -> Self {
 		let mut total = self.total;
 		let unlocking: BoundedVec<_, _> = self
 			.unlocking
@@ -132,7 +128,7 @@ impl<T: Config> StakingLedger<T> {
 			active: self.active,
 			unlocking,
 			claimed_rewards: self.claimed_rewards,
-			controller: Some(controller.clone()),
+			controller: self.controller,
 		}
 	}
 

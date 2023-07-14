@@ -113,7 +113,7 @@ impl<T: Config> Pallet<T> {
 		let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 		let (stash, old_total) = (ledger.stash.clone(), ledger.total);
 		if let Some(current_era) = Self::current_era() {
-			ledger = ledger.consolidate_unlocked(current_era, controller)
+			ledger = ledger.consolidate_unlocked(current_era)
 		}
 
 		let used_weight =
@@ -1068,13 +1068,13 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		<Bonded<T>>::insert(voter.clone(), voter.clone());
 		<Ledger<T>>::insert(
 			voter.clone(),
-			StakingLedger {
-				stash: voter.clone(),
-				active: stake,
-				total: stake,
-				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
-			},
+			StakingLedger::<T>::new(
+				voter.clone(),
+				stake,
+				stake,
+				Default::default(),
+				Default::default(),
+			),
 		);
 
 		Self::do_add_nominator(&voter, Nominations { targets, submitted_in: 0, suppressed: false });
@@ -1086,13 +1086,13 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		<Bonded<T>>::insert(target.clone(), target.clone());
 		<Ledger<T>>::insert(
 			target.clone(),
-			StakingLedger {
-				stash: target.clone(),
-				active: stake,
-				total: stake,
-				unlocking: Default::default(),
-				claimed_rewards: Default::default(),
-			},
+			StakingLedger::<T>::new(
+				target.clone(),
+				stake,
+				stake,
+				Default::default(),
+				Default::default(),
+			),
 		);
 		Self::do_add_validator(
 			&target,
@@ -1127,13 +1127,13 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			<Bonded<T>>::insert(v.clone(), v.clone());
 			<Ledger<T>>::insert(
 				v.clone(),
-				StakingLedger {
-					stash: v.clone(),
-					active: stake,
-					total: stake,
-					unlocking: Default::default(),
-					claimed_rewards: Default::default(),
-				},
+				StakingLedger::<T>::new(
+					v.clone(),
+					stake,
+					stake,
+					Default::default(),
+					Default::default(),
+				),
 			);
 			Self::do_add_validator(
 				&v,
@@ -1148,13 +1148,13 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			<Bonded<T>>::insert(v.clone(), v.clone());
 			<Ledger<T>>::insert(
 				v.clone(),
-				StakingLedger {
-					stash: v.clone(),
-					active: stake,
-					total: stake,
-					unlocking: Default::default(),
-					claimed_rewards: Default::default(),
-				},
+				StakingLedger::<T>::new(
+					v.clone(),
+					stake,
+					stake,
+					Default::default(),
+					Default::default(),
+				),
 			);
 			Self::do_add_nominator(
 				&v,
