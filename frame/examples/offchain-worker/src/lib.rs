@@ -53,6 +53,7 @@ use frame_system::{
 		AppCrypto, CreateSignedTransaction, SendSignedTransaction, SendUnsignedTransaction,
 		SignedPayload, Signer, SigningTypes, SubmitTransaction,
 	},
+	pallet_prelude::BlockNumberFor,
 };
 use lite_json::json::JsonValue;
 use sp_core::crypto::KeyTypeId;
@@ -136,14 +137,14 @@ pub mod pallet {
 		/// every `GRACE_PERIOD` blocks. We use Local Storage to coordinate
 		/// sending between distinct runs of this offchain worker.
 		#[pallet::constant]
-		type GracePeriod: Get<Self::BlockNumber>;
+		type GracePeriod: Get<BlockNumberFor<Self>>;
 
 		/// Number of blocks of cooldown after unsigned transaction is included.
 		///
 		/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval`
 		/// blocks.
 		#[pallet::constant]
-		type UnsignedInterval: Get<Self::BlockNumber>;
+		type UnsignedInterval: Get<BlockNumberFor<Self>>;
 
 		/// A configuration for base priority of unsigned transactions.
 		///
@@ -171,7 +172,7 @@ pub mod pallet {
 		/// be cases where some blocks are skipped, or for some the worker runs twice (re-orgs),
 		/// so the code should be able to handle that.
 		/// You can use `Local Storage` API to coordinate runs of the worker.
-		fn offchain_worker(block_number: T::BlockNumber) {
+		fn offchain_worker(block_number: BlockNumberFor<T>) {
 			// Note that having logs compiled to WASM may cause the size of the blob to increase
 			// significantly. You can use `RuntimeDebug` custom derive to hide details of the types
 			// in WASM. The `sp-api` crate also provides a feature `disable-logging` to disable
@@ -258,7 +259,7 @@ pub mod pallet {
 		#[pallet::weight({0})]
 		pub fn submit_price_unsigned(
 			origin: OriginFor<T>,
-			_block_number: T::BlockNumber,
+			_block_number: BlockNumberFor<T>,
 			price: u32,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
@@ -275,7 +276,7 @@ pub mod pallet {
 		#[pallet::weight({0})]
 		pub fn submit_price_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
-			price_payload: PricePayload<T::Public, T::BlockNumber>,
+			price_payload: PricePayload<T::Public, BlockNumberFor<T>>,
 			_signature: T::Signature,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned transaction.
@@ -341,7 +342,7 @@ pub mod pallet {
 	/// This storage entry defines when new transaction is going to be accepted.
 	#[pallet::storage]
 	#[pallet::getter(fn next_unsigned_at)]
-	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 }
 
 /// Payload used by this example crate to hold price
@@ -353,7 +354,7 @@ pub struct PricePayload<Public, BlockNumber> {
 	public: Public,
 }
 
-impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, T::BlockNumber> {
+impl<T: SigningTypes> SignedPayload<T> for PricePayload<T::Public, BlockNumberFor<T>> {
 	fn public(&self) -> T::Public {
 		self.public.clone()
 	}
@@ -374,7 +375,7 @@ impl<T: Config> Pallet<T> {
 	/// and local storage usage.
 	///
 	/// Returns a type of transaction that should be produced in current run.
-	fn choose_transaction_type(block_number: T::BlockNumber) -> TransactionType {
+	fn choose_transaction_type(block_number: BlockNumberFor<T>) -> TransactionType {
 		/// A friendlier name for the error that is going to be returned in case we are in the grace
 		/// period.
 		const RECENTLY_SENT: () = ();
@@ -389,16 +390,17 @@ impl<T: Config> Pallet<T> {
 		// low-level method of local storage API, which means that only one worker
 		// will be able to "acquire a lock" and send a transaction if multiple workers
 		// happen to be executed concurrently.
-		let res = val.mutate(|last_send: Result<Option<T::BlockNumber>, StorageRetrievalError>| {
-			match last_send {
-				// If we already have a value in storage and the block number is recent enough
-				// we avoid sending another transaction at this time.
-				Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
-					Err(RECENTLY_SENT),
-				// In every other case we attempt to acquire the lock and send a transaction.
-				_ => Ok(block_number),
-			}
-		});
+		let res =
+			val.mutate(|last_send: Result<Option<BlockNumberFor<T>>, StorageRetrievalError>| {
+				match last_send {
+					// If we already have a value in storage and the block number is recent enough
+					// we avoid sending another transaction at this time.
+					Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
+						Err(RECENTLY_SENT),
+					// In every other case we attempt to acquire the lock and send a transaction.
+					_ => Ok(block_number),
+				}
+			});
 
 		// The result of `mutate` call will give us a nested `Result` type.
 		// The first one matches the return of the closure passed to `mutate`, i.e.
@@ -419,9 +421,9 @@ impl<T: Config> Pallet<T> {
 				let transaction_type = block_number % 4u32.into();
 				if transaction_type == Zero::zero() {
 					TransactionType::Signed
-				} else if transaction_type == T::BlockNumber::from(1u32) {
+				} else if transaction_type == BlockNumberFor::<T>::from(1u32) {
 					TransactionType::UnsignedForAny
-				} else if transaction_type == T::BlockNumber::from(2u32) {
+				} else if transaction_type == BlockNumberFor::<T>::from(2u32) {
 					TransactionType::UnsignedForAll
 				} else {
 					TransactionType::Raw
@@ -472,7 +474,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A helper function to fetch the price and send a raw unsigned transaction.
-	fn fetch_price_and_send_raw_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
+	fn fetch_price_and_send_raw_unsigned(
+		block_number: BlockNumberFor<T>,
+	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
@@ -505,7 +509,7 @@ impl<T: Config> Pallet<T> {
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
 	fn fetch_price_and_send_unsigned_for_any_account(
-		block_number: T::BlockNumber,
+		block_number: BlockNumberFor<T>,
 	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
@@ -535,7 +539,7 @@ impl<T: Config> Pallet<T> {
 
 	/// A helper function to fetch the price, sign payload and send an unsigned transaction
 	fn fetch_price_and_send_unsigned_for_all_accounts(
-		block_number: T::BlockNumber,
+		block_number: BlockNumberFor<T>,
 	) -> Result<(), &'static str> {
 		// Make sure we don't fetch the price if unsigned transaction is going to be rejected
 		// anyway.
@@ -669,7 +673,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn validate_transaction_parameters(
-		block_number: &T::BlockNumber,
+		block_number: &BlockNumberFor<T>,
 		new_price: &u32,
 	) -> TransactionValidity {
 		// Now let's check if the transaction has any chance to succeed.

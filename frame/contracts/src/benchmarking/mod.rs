@@ -30,7 +30,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{v10, v11, v12, v9, MigrationStep},
+	migration::{v09, v10, v11, v12, MigrationStep},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -216,8 +216,8 @@ benchmarks! {
 	#[pov_mode = Measured]
 	v9_migration_step {
 		let c in 0 .. T::MaxCodeLen::get();
-		v9::store_old_dummy_code::<T>(c as usize);
-		let mut m = v9::Migration::<T>::default();
+		v09::store_old_dummy_code::<T>(c as usize);
+		let mut m = v09::Migration::<T>::default();
 	}: {
 		m.step();
 	}

@@ -83,6 +83,7 @@ sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/autho
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
+sc-offchain = { version = "4.0.0-dev", path = "../../../client/offchain" }
 
 # frame dependencies
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
