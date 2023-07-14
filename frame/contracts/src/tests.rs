@@ -641,7 +641,7 @@ fn test_ink_compiled_contract() {
 		let _ = Balances::deposit_creating(&ALICE, 100_000_000_000_000);
 		assert_ok!(Contracts::instantiate_with_code(
 			RuntimeOrigin::signed(ALICE),
-			100_000,
+			0,
 			Weight::MAX,
 			Some(10_000_000_000_000.into()),
 			bytes,
