@@ -32,7 +32,7 @@ use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
 use sp_std::prelude::*;
 
 pub type AccountId = u128;
-pub type AccountIndex = u32;
+pub type Nonce = u32;
 pub type BlockNumber = u64;
 pub type Balance = u128;
 pub type T = Runtime;
@@ -50,7 +50,7 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;

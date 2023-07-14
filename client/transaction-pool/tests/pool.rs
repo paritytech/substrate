@@ -39,7 +39,7 @@ use sp_runtime::{
 };
 use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 use substrate_test_runtime_client::{
-	runtime::{Block, Extrinsic, ExtrinsicBuilder, Hash, Header, Index, Transfer, TransferData},
+	runtime::{Block, Extrinsic, ExtrinsicBuilder, Hash, Header, Nonce, Transfer, TransferData},
 	AccountKeyring::*,
 	ClientBlockImportExt,
 };
@@ -119,7 +119,7 @@ fn early_nonce_should_be_culled() {
 		.ready()
 		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
-	assert_eq!(pending, Vec::<Index>::new());
+	assert_eq!(pending, Vec::<Nonce>::new());
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn late_nonce_should_be_queued() {
 		.ready()
 		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
-	assert_eq!(pending, Vec::<Index>::new());
+	assert_eq!(pending, Vec::<Nonce>::new());
 
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt(Alice, 209))).unwrap();
 	let pending: Vec<_> = pool
@@ -182,7 +182,7 @@ fn should_ban_invalid_transactions() {
 		.ready()
 		.map(|a| TransferData::try_from(&a.data).unwrap().nonce)
 		.collect();
-	assert_eq!(pending, Vec::<Index>::new());
+	assert_eq!(pending, Vec::<Nonce>::new());
 
 	// then
 	block_on(pool.submit_one(&BlockId::number(0), SOURCE, uxt.clone())).unwrap_err();

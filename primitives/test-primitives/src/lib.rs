@@ -71,7 +71,7 @@ pub type Hash = H256;
 /// The block number type used in this runtime.
 pub type BlockNumber = u64;
 /// Index of a transaction.
-pub type Index = u64;
+pub type Nonce = u64;
 /// The item of a block digest.
 pub type DigestItem = sp_runtime::generic::DigestItem;
 /// The digest of a block.

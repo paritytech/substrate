@@ -873,7 +873,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type BlockWeights = ();
 ///     type BlockLength = ();
 ///     type DbWeight = ();
-///     type Index = u64;
+///     type Nonce = u64;
 ///     type BlockNumber = u64;
 ///     type Hash = sp_core::hash::H256;
 ///     type Hashing = sp_runtime::traits::BlakeTwo256;
@@ -908,7 +908,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type BlockWeights = <TestDefaultConfig as DefaultConfig>::BlockWeights;
 ///     type BlockLength = <TestDefaultConfig as DefaultConfig>::BlockLength;
 ///     type DbWeight = <TestDefaultConfig as DefaultConfig>::DbWeight;
-///     type Index = <TestDefaultConfig as DefaultConfig>::Index;
+///     type Nonce = <TestDefaultConfig as DefaultConfig>::Nonce;
 ///     type BlockNumber = <TestDefaultConfig as DefaultConfig>::BlockNumber;
 ///     type Hash = <TestDefaultConfig as DefaultConfig>::Hash;
 ///     type Hashing = <TestDefaultConfig as DefaultConfig>::Hashing;
