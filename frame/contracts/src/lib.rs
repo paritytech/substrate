@@ -709,6 +709,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
+			let code_len = code.len() as u32;
 
 			let (module, upload_deposit) = Self::try_upload_code(
 				origin.clone(),
@@ -743,7 +744,7 @@ pub mod pallet {
 
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(data_len, salt_len),
+				T::WeightInfo::instantiate_with_code(code_len, data_len, salt_len),
 			)
 		}
 
