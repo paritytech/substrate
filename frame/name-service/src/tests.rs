@@ -972,11 +972,11 @@ mod subnodes {
 			// register subnode `child2.child1.alice`
 			let child2 = "child2".as_bytes();
 			let child2_label_hash = blake2_256(&child2);
-			let child2_hash = NameService::subnode_hash(parent_hash, child2_label_hash);
+			let child2_hash = NameService::subnode_hash(child1_hash.clone(), child2_label_hash);
 
 			assert_ok!(NameService::set_subnode_record(
 				RuntimeOrigin::signed(owner),
-				parent_hash,
+				child1_hash.clone(),
 				child2.to_vec()
 			));
 
@@ -985,22 +985,33 @@ mod subnodes {
 			assert!(Registrations::<Test>::get(child1_hash).is_some());
 			assert!(Registrations::<Test>::get(child2_hash).is_some());
 
-			// nodes and subnodes can be deregistered in any order by the owner.
-			// firstly deregister `child1.alice`.
+			// subnode children cannot be deregistered until the parent is deregistered or expired.
+			assert_noop!(
+				NameService::deregister_subnode(
+					RuntimeOrigin::signed(3),
+					child1_hash,
+					child2_label_hash
+				),
+				Error::<Test>::RegistrationNotExpired
+			);
+
+			// deregister top level domain `alice`. This will succeed even as a parent of a subnode.
+			assert_ok!(NameService::deregister(RuntimeOrigin::signed(owner), parent_hash));
+
+			// subnode parents must be deregistered before their children.
+			// firstly deregister `child1.alice`. Since `alice` is already deregistered, anyone can
+			// deregister `child1.alice`.
 			assert_ok!(NameService::deregister_subnode(
-				RuntimeOrigin::signed(owner),
+				RuntimeOrigin::signed(3),
 				parent_hash,
 				child1_label_hash
 			));
 
-			// deregister top level domain `alice`.
-			assert_ok!(NameService::deregister(RuntimeOrigin::signed(owner), parent_hash));
-
-			// finally, deregister `child2.alice`. Because `alice` no longer exists, anyone can now
-			// deregister `child2.alice`.
+			// finally, deregister `child2.alice`. Because `child1.alice` no longer exists, anyone
+			// can now deregister `child2.alice`.
 			assert_ok!(NameService::deregister_subnode(
 				RuntimeOrigin::signed(3),
-				parent_hash,
+				child1_hash,
 				child2_label_hash
 			));
 		})
