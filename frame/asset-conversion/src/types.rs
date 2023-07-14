@@ -41,9 +41,6 @@ pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 
 	/// If it's not native, returns the AssetId for the given MultiAssetId.
 	fn try_convert(asset: &MultiAssetId) -> MultiAssetIdConversionResult<MultiAssetId, AssetId>;
-
-	/// Wraps an AssetId as a MultiAssetId.
-	fn into_multiasset_id(asset: &AssetId) -> MultiAssetId;
 }
 
 /// Result of `MultiAssetIdConverter::try_convert`
@@ -60,17 +57,25 @@ pub enum MultiAssetIdConversionResult<MultiAssetId, AssetId> {
 
 /// Benchmark Helper
 #[cfg(feature = "runtime-benchmarks")]
-pub trait BenchmarkHelper<AssetId> {
+pub trait BenchmarkHelper<AssetId, MultiAssetId> {
 	/// Returns an asset id from a given integer.
 	fn asset_id(asset_id: u32) -> AssetId;
+
+	/// Returns an mutli asset id from a given integer.
+	fn mutliasset_id(asset_id: u32) -> MultiAssetId;
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl<AssetId> BenchmarkHelper<AssetId> for ()
+impl<AssetId, MultiAssetId> BenchmarkHelper<AssetId, MultiAssetId> for ()
 where
 	AssetId: From<u32>,
+	MultiAssetId: From<u32>,
 {
 	fn asset_id(asset_id: u32) -> AssetId {
+		asset_id.into()
+	}
+
+	fn mutliasset_id(asset_id: u32) -> MultiAssetId {
 		asset_id.into()
 	}
 }
@@ -140,10 +145,6 @@ impl<AssetId: Ord + Clone> MultiAssetIdConverter<NativeOrAssetId<AssetId>, Asset
 			NativeOrAssetId::Asset(asset) => MultiAssetIdConversionResult::Converted(asset.clone()),
 			NativeOrAssetId::Native => MultiAssetIdConversionResult::Native,
 		}
-	}
-
-	fn into_multiasset_id(asset: &AssetId) -> NativeOrAssetId<AssetId> {
-		NativeOrAssetId::Asset((*asset).clone())
 	}
 }
 
