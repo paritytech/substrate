@@ -1217,7 +1217,7 @@ impl pallet_name_service::Config for Runtime {
 	type MinCommitmentAge = MinCommitmentAge;
 	type MaxCommitmentAge = MaxCommitmentAge;
 	type MaxNameLength = MaxNameLength;
-	type RegistrationFeeHandler = ();
+	type RegistrationFeeHandler = (); // registration fees are currently burnt.
 	type MaxTextLength = MaxTextLength;
 	type MaxSuffixLength = MaxSuffixLength;
 	type NameServiceResolver = pallet_name_service::Pallet<Self>;

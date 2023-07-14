@@ -98,7 +98,6 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type BlockNumberToBalance = Identity;
-	// TODO: make a custom handler and test behavior
 	type RegistrationFeeHandler = ();
 	type MinCommitmentAge = ConstU64<10>;
 	type MaxCommitmentAge = ConstU64<10>;
