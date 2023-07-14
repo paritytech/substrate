@@ -45,7 +45,6 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
 pub type BlockNumber = u64;
-pub type Index = u64;
 
 parameter_types! {
 	pub const Version: RuntimeVersion = VERSION;
@@ -55,7 +54,7 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type Index = u128;
+	type Nonce = u128;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type Block = Block;

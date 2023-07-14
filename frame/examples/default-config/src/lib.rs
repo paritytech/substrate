@@ -137,7 +137,7 @@ pub mod tests {
 
 		// all of this is coming from `frame_system::config_preludes::TestDefaultConfig`.
 
-		// type Index = u32;
+		// type Nonce = u32;
 		// type BlockNumber = u32;
 		// type Header =
 		// sp_runtime::generic::Header<frame_system::pallet_prelude::BlockNumberFor<Self>,
