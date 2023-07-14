@@ -211,7 +211,7 @@ pub mod pallet {
 			new_count: u32,
 			witness_count: Option<u32>,
 		) -> DispatchResult {
-			T::AdminOrigin::try_origin_or_root(origin)?;
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
 
 			let current_count = TrashDataCount::<T>::get();
 			ensure!(
@@ -236,7 +236,7 @@ pub mod pallet {
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(1)]
 		pub fn set_compute(origin: OriginFor<T>, compute: FixedU64) -> DispatchResult {
-			T::AdminOrigin::try_origin_or_root(origin)?;
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
 
 			ensure!(compute <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 			Compute::<T>::set(compute);
@@ -254,7 +254,7 @@ pub mod pallet {
 		/// Only callable by Root or `AdminOrigin`.
 		#[pallet::call_index(2)]
 		pub fn set_storage(origin: OriginFor<T>, storage: FixedU64) -> DispatchResult {
-			T::AdminOrigin::try_origin_or_root(origin)?;
+			T::AdminOrigin::ensure_origin_or_root(origin)?;
 
 			ensure!(storage <= RESOURCE_HARD_LIMIT, Error::<T>::InsaneLimit);
 			Storage::<T>::set(storage);
