@@ -23,8 +23,12 @@
 use crate::{
 	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
-	Config, ContractInfo, ContractInfoOf, HoldReason, Weight, LOG_TARGET,
+	Config, ContractInfoOf, HoldReason, Weight, LOG_TARGET,
 };
+#[cfg(feature = "try-runtime")]
+use crate::{BalanceOf, ContractInfo};
+#[cfg(feature = "try-runtime")]
+use frame_support::dispatch::Vec;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
@@ -38,7 +42,6 @@ use sp_core::hexdisplay::HexDisplay;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 use sp_runtime::{traits::Zero, Saturating};
-use sp_std::ops::Deref;
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
@@ -60,13 +63,15 @@ impl<T: Config> MigrationStep for Migration<T> {
 		};
 
 		if let Some((account, contract)) = iter.next() {
-			let deposit_account = contract.deposit_account().deref();
-			System::<T>::dec_consumers(&deposit_account);
+			let deposit_account = &contract.deposit_account();
+			if System::<T>::consumers(deposit_account) > Zero::zero() {
+				System::<T>::dec_consumers(deposit_account);
+			}
 
 			// Get the deposit balance to transfer.
 			let total_deposit_balance = T::Currency::total_balance(deposit_account);
 			let reducible_deposit_balance = T::Currency::reducible_balance(
-				&deposit_account,
+				deposit_account,
 				Preservation::Expendable,
 				Fortitude::Force,
 			);
@@ -88,7 +93,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 			// Move balance reserved from the deposit account back to the contract account.
 			// Let the deposit account die.
 			let transferred_deposit_balance = T::Currency::transfer(
-				&contract.deposit_account(),
+				deposit_account,
 				&account,
 				reducible_deposit_balance,
 				Preservation::Expendable,
@@ -148,6 +153,10 @@ impl<T: Config> MigrationStep for Migration<T> {
 			}
 
 			log::debug!(target: LOG_TARGET, "===");
+
+			// Store last key for next migration step
+			self.last_account = Some(account);
+
 			(IsFinished::No, T::WeightInfo::v13_migration_step())
 		} else {
 			log::info!(target: LOG_TARGET, "Done Migrating Storage Deposits.");
@@ -160,30 +169,34 @@ impl<T: Config> MigrationStep for Migration<T> {
 		let sample: Vec<_> = ContractInfoOf::<T>::iter().take(100).collect();
 
 		log::debug!(target: LOG_TARGET, "Taking sample of {} contracts", sample.len());
-		Ok(sample.encode())
+
+		let state: Vec<(T::AccountId, ContractInfo<T>, BalanceOf<T>)> = sample
+			.iter()
+			.map(|(account, contract)| {
+				let deposit_balance = T::Currency::total_balance(&contract.deposit_account());
+				let account_balance = T::Currency::total_balance(&account);
+				(account.clone(), contract.clone(), account_balance.saturating_add(deposit_balance))
+			})
+			.collect();
+
+		Ok(state.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let sample = <Vec<(T::AccountId, ContractInfo<T>)> as Decode>::decode(&mut &state[..])
-			.expect("pre_upgrade_step provides a valid state; qed");
+		let sample =
+			<Vec<(T::AccountId, ContractInfo<T>, BalanceOf<T>)> as Decode>::decode(&mut &state[..])
+				.expect("pre_upgrade_step provides a valid state; qed");
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
-		for (account, old_contract) in sample {
+		for (account, contract, old_total_balance) in sample {
 			log::debug!(target: LOG_TARGET, "===");
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
-			let contract = ContractInfoOf::<T>::get(&account).unwrap();
 
-			let deposit = T::Currency::total_balance(
-				&contract.deposit_account(),
-			);
+			ensure!(old_total_balance == T::Currency::total_balance(&account), "deposit mismatch");
 			ensure!(
-				deposit ==
-					contract
-						.storage_base_deposit
-						.saturating_add(contract.storage_item_deposit)
-						.saturating_add(contract.storage_byte_deposit),
-				"deposit mismatch"
+				!System::<T>::account_exists(&contract.deposit_account()),
+				"deposit account still exists"
 			);
 		}
 
