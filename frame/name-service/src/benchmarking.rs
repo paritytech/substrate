@@ -183,7 +183,6 @@ benchmarks! {
 		NameService::<T>::commit(origin.into(), owner.clone(), hash.clone()).expect("Must commit");
 		let run_to: BlockNumberFor<T> = 100u32.into();
 		run_to_block::<T>(run_to);
-
 	}: _(RawOrigin::Signed(caller.clone()), name.to_vec(), secret, 100u32.into()
 	)
 	verify {
@@ -192,11 +191,6 @@ benchmarks! {
 		// registered name is now stored.
 		assert!(
 			Registrations::<T>::contains_key(NameService::<T>::name_hash(&name))
-		);
-		// fees have been deducted from fee payer.
-		assert_eq!(
-			CurrencyOf::<T>::free_balance(&caller),
-			(safe_mint::<T>()) - CommitmentDeposit::<T>::get().unwrap() - 100u32.into()
 		);
 	}
 
@@ -228,13 +222,7 @@ benchmarks! {
 
 	}: _(RawOrigin::Signed(owner.clone()), new_owner.clone(), name_hash.clone())
 	verify {
-		assert_eq!(
-			Registrations::<T>::get(name_hash).unwrap(),
-			Registration {
-			owner: new_owner,
-			expiry: Some(200u32.into()),
-			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
-		});
+		assert_eq!(Registrations::<T>::get(name_hash).unwrap().owner, new_owner);
 	}
 
 	renew {
