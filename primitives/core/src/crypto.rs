@@ -949,8 +949,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Notably, integer junction indices may be legally prefixed with arbitrary number of zeros.
 	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will
 	/// generally be equivalent to no password at all.
-	///
-	/// an error is returned if no matches are found.
 	#[cfg(feature = "std")]
 	fn from_string_with_seed(
 		s: &str,
