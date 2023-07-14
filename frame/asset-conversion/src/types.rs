@@ -40,10 +40,22 @@ pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 	fn is_native(asset: &MultiAssetId) -> bool;
 
 	/// If it's not native, returns the AssetId for the given MultiAssetId.
-	fn try_convert(asset: &MultiAssetId) -> Result<AssetId, ()>;
+	fn try_convert(asset: &MultiAssetId) -> MultiAssetIdConversionResult<MultiAssetId, AssetId>;
 
 	/// Wraps an AssetId as a MultiAssetId.
 	fn into_multiasset_id(asset: &AssetId) -> MultiAssetId;
+}
+
+/// Result of `MultiAssetIdConverter::try_convert`
+#[cfg_attr(feature = "std", derive(PartialEq, Debug))]
+pub enum MultiAssetIdConversionResult<MultiAssetId, AssetId> {
+	/// Input asset is uccessfully converted. Means converted asset is supported.
+	Converted(AssetId),
+	/// Means that input asset is native asset, so no conversion (see
+	/// `MultiAssetIdConverter::get_native`).
+	Native,
+	/// Means input asset is not supported for pool.
+	Unsupported(MultiAssetId),
 }
 
 /// Benchmark Helper
@@ -121,10 +133,12 @@ impl<AssetId: Ord + Clone> MultiAssetIdConverter<NativeOrAssetId<AssetId>, Asset
 		*asset == Self::get_native()
 	}
 
-	fn try_convert(asset: &NativeOrAssetId<AssetId>) -> Result<AssetId, ()> {
+	fn try_convert(
+		asset: &NativeOrAssetId<AssetId>,
+	) -> MultiAssetIdConversionResult<NativeOrAssetId<AssetId>, AssetId> {
 		match asset {
-			NativeOrAssetId::Asset(asset) => Ok(asset.clone()),
-			NativeOrAssetId::Native => Err(()),
+			NativeOrAssetId::Asset(asset) => MultiAssetIdConversionResult::Converted(asset.clone()),
+			NativeOrAssetId::Native => MultiAssetIdConversionResult::Native,
 		}
 	}
 
