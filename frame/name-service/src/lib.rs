@@ -78,7 +78,7 @@
 //!
 //! ### Registering a subnode
 //!
-//! Subnodes can be recursively registered [`Call:set_subnode_record`] on the system. Ownership can
+//! Subnodes can be recursively registered [`Call::set_subnode_record`] on the system. Ownership can
 //! be transferred between these subnodes, so they do not necessarily need to be tied with the owner
 //! of parent nodes. Owners can degregister subnodes [`Call::deregister_subnode`], or anyone can if
 //! the parent node has expired.
