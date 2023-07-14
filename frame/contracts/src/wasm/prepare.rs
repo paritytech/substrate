@@ -369,7 +369,7 @@ where
 		// or the deployment will fail. We have none assigned for float instructions.
 		floats: true,
 		mutable_global: false,
-		saturating_float_to_int: true,
+		saturating_float_to_int: false,
 		sign_extension: true,
 		bulk_memory: false,
 		multi_value: false,
