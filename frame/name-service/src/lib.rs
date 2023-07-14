@@ -190,18 +190,18 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// Convert the block number into a balance.
-		type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;
+		type BlockNumberToBalance: Convert<BlockNumberFor<Self>, BalanceOf<Self>>;
 
 		/// The account where registration fees are paid to.
 		type RegistrationFeeHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The amount of blocks a user needs to wait after a Commitment before revealing.
 		#[pallet::constant]
-		type MinCommitmentAge: Get<Self::BlockNumber>;
+		type MinCommitmentAge: Get<BlockNumberFor<Self>>;
 
 		/// The amount of blocks after a commitment is created for before it expires.
 		#[pallet::constant]
-		type MaxCommitmentAge: Get<Self::BlockNumber>;
+		type MaxCommitmentAge: Get<BlockNumberFor<Self>>;
 
 		/// Maximum length of a name.
 		#[pallet::constant]
@@ -269,7 +269,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		CommitmentHash,
-		Commitment<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+		Commitment<T::AccountId, BalanceOf<T>, BlockNumberFor<T>>,
 	>;
 
 	/// Name Registrations
@@ -278,7 +278,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		NameHash,
-		Registration<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+		Registration<T::AccountId, BalanceOf<T>, BlockNumberFor<T>>,
 	>;
 
 	/// This resolver maps name hashes to a tuple of the account and `para_id` associated with the
@@ -331,7 +331,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			if let Some(commitment_deposit) = self.commitment_deposit {
 				CommitmentDeposit::<T>::put(commitment_deposit);
@@ -362,7 +362,7 @@ pub mod pallet {
 		/// A `Registration` has been transferred to a new owner.
 		NewOwner { from: T::AccountId, to: T::AccountId },
 		/// A `Registration` has been renewed.
-		NameRenewed { name_hash: NameHash, expires: T::BlockNumber },
+		NameRenewed { name_hash: NameHash, expires: BlockNumberFor<T> },
 		/// An address has been set for a name hash to resolve to.
 		AddressSet { name_hash: NameHash, address: T::AccountId },
 		/// An name has been set as a reverse lookup for a name hash. You can query storage to see
@@ -430,7 +430,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name_hash: NameHash,
 			who: T::AccountId,
-			maybe_expiry: Option<T::BlockNumber>,
+			maybe_expiry: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::do_register(name_hash, who, maybe_expiry, None)?;
@@ -478,7 +478,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			name: Vec<u8>,
 			secret: u64,
-			length: T::BlockNumber,
+			length: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let name_bounded: BoundedVec<u8, T::MaxNameLength> =
@@ -532,7 +532,7 @@ pub mod pallet {
 		pub fn renew(
 			origin: OriginFor<T>,
 			name_hash: NameHash,
-			expiry: T::BlockNumber,
+			expiry: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			Self::do_renew(sender, name_hash, expiry)?;

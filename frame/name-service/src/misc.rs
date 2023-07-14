@@ -18,10 +18,11 @@
 //! Miscellaneous functions for the name registration pallet.
 
 use crate::{types::*, *};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::{Bounded, Convert, Saturating};
 
 impl<T: Config> Pallet<T> {
-	pub fn registration_fee(name: Vec<u8>, length: T::BlockNumber) -> BalanceOf<T> {
+	pub fn registration_fee(name: Vec<u8>, length: BlockNumberFor<T>) -> BalanceOf<T> {
 		let name_length = name.len();
 		let fee_reg = if name_length < 3 {
 			// names with under 3 characters should not be registered, so we
@@ -40,7 +41,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Gets the length fee based on the number of blocks provided.
-	pub fn length_fee(length: T::BlockNumber) -> BalanceOf<T> {
+	pub fn length_fee(length: BlockNumberFor<T>) -> BalanceOf<T> {
 		let length_as_balance: BalanceOf<T> = T::BlockNumberToBalance::convert(length);
 		RegistrationFeePerBlock::<T>::get().saturating_mul(length_as_balance)
 	}

@@ -23,7 +23,7 @@ use super::{types::*, *};
 use crate::Pallet as NameService;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get, ReservableCurrency};
-use frame_system::{Pallet as System, RawOrigin};
+use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System, RawOrigin};
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, One};
 use sp_std::vec;
@@ -34,7 +34,7 @@ fn safe_mint<T: Config>() -> BalanceOf<T> {
 	CommitmentDeposit::<T>::get().unwrap() * 100u32.into()
 }
 
-fn run_to_block<T: Config>(n: T::BlockNumber) {
+fn run_to_block<T: Config>(n: BlockNumberFor<T>) {
 	while System::<T>::block_number() < n {
 		NameService::<T>::on_finalize(System::<T>::block_number());
 		System::<T>::set_block_number(System::<T>::block_number() + One::one());
@@ -98,14 +98,14 @@ benchmarks! {
 		RawOrigin::Root,
 		name_hash.clone(),
 		new_owner.clone(),
-		Some(T::BlockNumber::max_value())
+		Some(BlockNumberFor<T>::max_value())
 	)
 	verify {
 		assert_eq!(
 			Registrations::<T>::get(name_hash).unwrap(),
 			Registration {
 			owner: new_owner.clone(),
-			expiry: Some(T::BlockNumber::max_value()),
+			expiry: Some(BlockNumberFor<T>::max_value()),
 			deposit: None,
 		});
 	}
@@ -181,7 +181,7 @@ benchmarks! {
 		let hash: CommitmentHash = NameService::<T>::commitment_hash(&name, secret);
 		let origin = RawOrigin::Signed(caller.clone());
 		NameService::<T>::commit(origin.into(), owner.clone(), hash.clone()).expect("Must commit");
-		let run_to: T::BlockNumber = 100u32.into();
+		let run_to: BlockNumberFor<T> = 100u32.into();
 		run_to_block::<T>(run_to);
 
 	}: _(RawOrigin::Signed(caller.clone()), name.to_vec(), secret, 100u32.into()
@@ -243,13 +243,13 @@ benchmarks! {
 			vec![0; T::MaxNameLength::get() as usize],
 			true
 		);
-	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), T::BlockNumber::max_value())
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), BlockNumberFor<T>::max_value())
 	verify {
 		assert_eq!(
 			Registrations::<T>::get(name_hash).unwrap(),
 			Registration {
 			owner: owner,
-			expiry: Some(T::BlockNumber::max_value()),
+			expiry: Some(BlockNumberFor<T>::max_value()),
 			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
 		});
 	}

@@ -19,6 +19,7 @@
 
 use crate::{types::*, *};
 use frame_support::traits::{BalanceStatus, ReservableCurrency};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::Zero;
 
 impl<T: Config> Pallet<T> {
@@ -64,7 +65,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_register(
 		name_hash: NameHash,
 		owner: T::AccountId,
-		maybe_expiration: Option<T::BlockNumber>,
+		maybe_expiration: Option<BlockNumberFor<T>>,
 		maybe_deposit: Option<BalanceOf<T>>,
 	) -> DispatchResult {
 		if let Some(old_registration) = Registrations::<T>::take(name_hash) {

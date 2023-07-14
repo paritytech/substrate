@@ -20,6 +20,7 @@
 use crate::*;
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{traits::Currency, BoundedVec, RuntimeDebug};
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_std::fmt::Debug;
 
@@ -32,17 +33,11 @@ pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
-pub type CommitmentOf<T> = Commitment<
-	<T as frame_system::Config>::AccountId,
-	BalanceOf<T>,
-	<T as frame_system::Config>::BlockNumber,
->;
+pub type CommitmentOf<T> =
+	Commitment<<T as frame_system::Config>::AccountId, BalanceOf<T>, BlockNumberFor<T>>;
 
-pub type RegistrationOf<T> = Registration<
-	<T as frame_system::Config>::AccountId,
-	BalanceOf<T>,
-	<T as frame_system::Config>::BlockNumber,
->;
+pub type RegistrationOf<T> =
+	Registration<<T as frame_system::Config>::AccountId, BalanceOf<T>, BlockNumberFor<T>>;
 
 pub type NameHash = [u8; 32];
 pub type CommitmentHash = [u8; 32];

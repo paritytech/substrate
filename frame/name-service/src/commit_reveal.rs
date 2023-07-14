@@ -22,6 +22,7 @@ use frame_support::traits::{
 	BalanceStatus, Currency, ExistenceRequirement, OnUnbalanced, ReservableCurrency,
 	WithdrawReasons,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_runtime::traits::{Saturating, Zero};
 use sp_std::prelude::*;
 
@@ -46,7 +47,7 @@ impl<T: Config> Pallet<T> {
 	/// Checks whether a commitment has passed the minimum commitment period.
 	pub fn is_commitment_valid(
 		commitment: &CommitmentOf<T>,
-		block_number: &T::BlockNumber,
+		block_number: &BlockNumberFor<T>,
 	) -> bool {
 		&commitment.when.saturating_add(T::MinCommitmentAge::get()) <= block_number
 	}
@@ -54,7 +55,7 @@ impl<T: Config> Pallet<T> {
 	/// Checks whether a commitment has passed the commitment expiry time.
 	pub fn is_commitment_expired(
 		commitment: &CommitmentOf<T>,
-		block_number: &T::BlockNumber,
+		block_number: &BlockNumberFor<T>,
 	) -> bool {
 		&commitment.when.saturating_add(T::MaxCommitmentAge::get()) <= block_number
 	}
@@ -104,7 +105,7 @@ impl<T: Config> Pallet<T> {
 		fee_payer: T::AccountId,
 		name: Vec<u8>,
 		secret: u64,
-		length: T::BlockNumber,
+		length: BlockNumberFor<T>,
 	) -> DispatchResult {
 		ensure!(name.len() <= T::MaxNameLength::get() as usize, Error::<T>::NameTooLong);
 
@@ -161,7 +162,7 @@ impl<T: Config> Pallet<T> {
 	pub fn do_renew(
 		fee_payer: T::AccountId,
 		name_hash: NameHash,
-		expiry: T::BlockNumber,
+		expiry: BlockNumberFor<T>,
 	) -> DispatchResult {
 		Registrations::<T>::try_mutate(name_hash, |maybe_registration| {
 			let r = maybe_registration.as_mut().ok_or(Error::<T>::RegistrationNotFound)?;
