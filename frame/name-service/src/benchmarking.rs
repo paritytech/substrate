@@ -243,7 +243,7 @@ benchmarks! {
 			vec![0; T::MaxNameLength::get() as usize],
 			true
 		);
-	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), BlockNumberFor::<T>::from(100u32))
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), BlockNumberFor::<T>::from(500u32))
 	verify {
 		assert_eq!(
 			Registrations::<T>::get(name_hash).unwrap(),
