@@ -98,14 +98,14 @@ benchmarks! {
 		RawOrigin::Root,
 		name_hash.clone(),
 		new_owner.clone(),
-		Some(BlockNumberFor<T>::max_value())
+		Some(BlockNumberFor::<T>::max_value())
 	)
 	verify {
 		assert_eq!(
 			Registrations::<T>::get(name_hash).unwrap(),
 			Registration {
 			owner: new_owner.clone(),
-			expiry: Some(BlockNumberFor<T>::max_value()),
+			expiry: Some(BlockNumberFor::<T>::max_value()),
 			deposit: None,
 		});
 	}
@@ -243,13 +243,13 @@ benchmarks! {
 			vec![0; T::MaxNameLength::get() as usize],
 			true
 		);
-	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), BlockNumberFor<T>::max_value())
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), BlockNumberFor::<T>::max_value())
 	verify {
 		assert_eq!(
 			Registrations::<T>::get(name_hash).unwrap(),
 			Registration {
 			owner: owner,
-			expiry: Some(BlockNumberFor<T>::max_value()),
+			expiry: Some(BlockNumberFor::<T>::max_value()),
 			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
 		});
 	}
