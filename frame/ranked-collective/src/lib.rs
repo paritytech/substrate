@@ -489,9 +489,8 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Introduce a new member.
 		///
-		/// - `origin`: Must be the `AdminOrigin`.
+		/// - `origin`: Must be the `AddOrigin`.
 		/// - `who`: Account of non-member which will become a member.
-		/// - `rank`: The rank to give the new member.
 		///
 		/// Weight: `O(1)`
 		#[pallet::call_index(0)]
@@ -504,7 +503,7 @@ pub mod pallet {
 
 		/// Increment the rank of an existing member by one.
 		///
-		/// - `origin`: Must be the `AdminOrigin`.
+		/// - `origin`: Must be the `PromoteOrigin`.
 		/// - `who`: Account of existing member.
 		///
 		/// Weight: `O(1)`
@@ -519,7 +518,7 @@ pub mod pallet {
 		/// Decrement the rank of an existing member by one. If the member is already at rank zero,
 		/// then they are removed entirely.
 		///
-		/// - `origin`: Must be the `AdminOrigin`.
+		/// - `origin`: Must be the `DemoteOrigin`.
 		/// - `who`: Account of existing member of rank greater than zero.
 		///
 		/// Weight: `O(1)`, less if the member's index is highest in its rank.
@@ -533,7 +532,7 @@ pub mod pallet {
 
 		/// Remove the member entirely.
 		///
-		/// - `origin`: Must be the `AdminOrigin`.
+		/// - `origin`: Must be the `RemoveOrigin`.
 		/// - `who`: Account of existing member of rank greater than zero.
 		/// - `min_rank`: The rank of the member or greater.
 		///
