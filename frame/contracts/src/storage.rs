@@ -218,8 +218,9 @@ impl<T: Config> ContractInfo<T> {
 
 	/// Sets and returns the contract base deposit.
 	///
-	/// `upload_deposit` is the balance of the deposit paid for uploading the contract.
-	pub fn update_base_deposit(&mut self, upload_deposit: BalanceOf<T>) -> BalanceOf<T> {
+	/// The base deposit is updated when the `code_hash` of the contract changes, as it depends on
+	/// the deposit paid to upload the contract's code.
+	pub fn update_base_deposit(&mut self, code_info: &crate::CodeInfo<T>) -> BalanceOf<T> {
 		let ed = Pallet::<T>::min_balance();
 		let info_deposit =
 			Diff { bytes_added: self.encoded_size() as u32, items_added: 1, ..Default::default() }
@@ -229,7 +230,7 @@ impl<T: Config> ContractInfo<T> {
 		// Instantiating the contract, prevent it to be deleted, therefore the base deposit includes
 		// a fraction (`T::CodeHashLockupDepositPercent`) of the original storage deposit to prevent
 		// abuse.
-		let upload_deposit = T::CodeHashLockupDepositPercent::get().mul_ceil(upload_deposit);
+		let upload_deposit = T::CodeHashLockupDepositPercent::get().mul_ceil(code_info.deposit());
 
 		// Instantiate needs to transfer at least the minimum balance in order to pull the
 		// deposit account into existence.

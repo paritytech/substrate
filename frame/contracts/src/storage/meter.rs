@@ -429,7 +429,7 @@ where
 		let ed = Pallet::<T>::min_balance();
 
 		let code_info = CodeInfoOf::<T>::get(info.code_hash).ok_or(Error::<T>::CodeNotFound)?;
-		let deposit = info.update_base_deposit(code_info.deposit());
+		let deposit = info.update_base_deposit(&code_info);
 		if deposit > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}

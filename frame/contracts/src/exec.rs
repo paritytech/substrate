@@ -1483,7 +1483,7 @@ where
 		let code_info = CodeInfoOf::<T>::get(hash).ok_or(Error::<T>::CodeNotFound)?;
 
 		let old_base_deposit = info.storage_base_deposit();
-		let new_base_deposit = info.update_base_deposit(code_info.deposit());
+		let new_base_deposit = info.update_base_deposit(&code_info);
 		let deposit = if new_base_deposit > old_base_deposit {
 			StorageDeposit::Charge(new_base_deposit - old_base_deposit)
 		} else {
