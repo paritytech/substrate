@@ -1353,7 +1353,7 @@ fn can_not_swap_same_asset() {
 #[test]
 fn validate_pool_id_sorting() {
 	new_test_ext().execute_with(|| {
-		use crate::NativeOrAssetId::{Asset, Native};
+		use crate::mock::NativeOrAssetId::{Asset, Native};
 		assert_eq!(AssetConversion::get_pool_id(Native, Asset(2)), (Native, Asset(2)));
 		assert_eq!(AssetConversion::get_pool_id(Asset(2), Native), (Native, Asset(2)));
 		assert_eq!(AssetConversion::get_pool_id(Native, Native), (Native, Native));

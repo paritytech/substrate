@@ -16,8 +16,6 @@
 // limitations under the License.
 
 use super::*;
-use core::marker::PhantomData;
-use sp_std::cmp::Ordering;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -77,74 +75,6 @@ where
 
 	fn mutliasset_id(asset_id: u32) -> MultiAssetId {
 		asset_id.into()
-	}
-}
-
-/// An implementation of MultiAssetId that can be either Native or an asset.
-#[derive(Decode, Encode, Default, MaxEncodedLen, TypeInfo, Clone, Copy, Debug)]
-pub enum NativeOrAssetId<AssetId>
-where
-	AssetId: Ord,
-{
-	/// Native asset. For example, on AssetHubPolkadot this would be dot.
-	#[default]
-	Native,
-	/// A non-native asset id.
-	Asset(AssetId),
-}
-
-impl<AssetId: Ord> From<AssetId> for NativeOrAssetId<AssetId> {
-	fn from(asset: AssetId) -> Self {
-		Self::Asset(asset)
-	}
-}
-
-impl<AssetId: Ord> Ord for NativeOrAssetId<AssetId> {
-	fn cmp(&self, other: &Self) -> Ordering {
-		match (self, other) {
-			(Self::Native, Self::Native) => Ordering::Equal,
-			(Self::Native, Self::Asset(_)) => Ordering::Less,
-			(Self::Asset(_), Self::Native) => Ordering::Greater,
-			(Self::Asset(id1), Self::Asset(id2)) => <AssetId as Ord>::cmp(id1, id2),
-		}
-	}
-}
-impl<AssetId: Ord> PartialOrd for NativeOrAssetId<AssetId> {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(<Self as Ord>::cmp(self, other))
-	}
-}
-impl<AssetId: Ord> PartialEq for NativeOrAssetId<AssetId> {
-	fn eq(&self, other: &Self) -> bool {
-		self.cmp(other) == Ordering::Equal
-	}
-}
-impl<AssetId: Ord> Eq for NativeOrAssetId<AssetId> {}
-
-/// Converts between a MultiAssetId and an AssetId
-/// (or the native currency).
-pub struct NativeOrAssetIdConverter<AssetId> {
-	_phantom: PhantomData<AssetId>,
-}
-
-impl<AssetId: Ord + Clone> MultiAssetIdConverter<NativeOrAssetId<AssetId>, AssetId>
-	for NativeOrAssetIdConverter<AssetId>
-{
-	fn get_native() -> NativeOrAssetId<AssetId> {
-		NativeOrAssetId::Native
-	}
-
-	fn is_native(asset: &NativeOrAssetId<AssetId>) -> bool {
-		*asset == Self::get_native()
-	}
-
-	fn try_convert(
-		asset: &NativeOrAssetId<AssetId>,
-	) -> MultiAssetIdConversionResult<NativeOrAssetId<AssetId>, AssetId> {
-		match asset {
-			NativeOrAssetId::Asset(asset) => MultiAssetIdConversionResult::Converted(asset.clone()),
-			NativeOrAssetId::Native => MultiAssetIdConversionResult::Native,
-		}
 	}
 }
 
