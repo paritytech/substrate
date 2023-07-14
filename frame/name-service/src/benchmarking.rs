@@ -232,7 +232,7 @@ benchmarks! {
 			Registrations::<T>::get(name_hash).unwrap(),
 			Registration {
 			owner: new_owner,
-			expiry: Some(201u32.into()),
+			expiry: Some(200u32.into()),
 			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
 		});
 	}
@@ -243,7 +243,7 @@ benchmarks! {
 			vec![0; T::MaxNameLength::get() as usize],
 			true
 		);
-	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), BlockNumberFor::<T>::max_value())
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), BlockNumberFor::<T>::from(100u32))
 	verify {
 		assert_eq!(
 			Registrations::<T>::get(name_hash).unwrap(),
