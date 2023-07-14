@@ -203,8 +203,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn process_core_count() -> bool {
-		if let Some(new_count) = T::Coretime::check_notify_core_count() {
-			Status::<T>::mutate_extant(|c| c.core_count = new_count);
+		if let Some(core_count) = T::Coretime::check_notify_core_count() {
+			Status::<T>::mutate_extant(|c| c.core_count = core_count);
+			Self::deposit_event(Event::<T>::CoreCountChanged { core_count });
 			return true
 		}
 		false

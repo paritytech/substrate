@@ -15,20 +15,25 @@ impl<T: Config> Pallet<T> {
 
 	pub(crate) fn do_request_core_count(core_count: CoreIndex) -> DispatchResult {
 		T::Coretime::request_core_count(core_count);
+		Self::deposit_event(Event::<T>::CoreCountRequested { core_count });
 		Ok(())
 	}
 
-	pub(crate) fn do_reserve(schedule: Schedule) -> DispatchResult {
+	pub(crate) fn do_reserve(workload: Schedule) -> DispatchResult {
 		let mut r = Reservations::<T>::get();
-		r.try_push(schedule).map_err(|_| Error::<T>::TooManyReservations)?;
+		let index = r.len() as u32;
+		r.try_push(workload.clone()).map_err(|_| Error::<T>::TooManyReservations)?;
 		Reservations::<T>::put(r);
+		Self::deposit_event(Event::<T>::ReservationMade { index, workload });
 		Ok(())
 	}
 
-	pub(crate) fn do_unreserve(item_index: u32) -> DispatchResult {
+	pub(crate) fn do_unreserve(index: u32) -> DispatchResult {
 		let mut r = Reservations::<T>::get();
-		r.remove(item_index as usize);
+		ensure!(index < r.len() as u32, Error::<T>::UnknownReservation);
+		let workload = r.remove(index as usize);
 		Reservations::<T>::put(r);
+		Self::deposit_event(Event::<T>::ReservationCancelled { index, workload });
 		Ok(())
 	}
 

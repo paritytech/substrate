@@ -249,6 +249,30 @@ pub mod pallet {
 			/// The duration of the Region.
 			duration: Timeslice,
 		},
+		/// A new number of cores has been requested.
+		CoreCountRequested {
+			/// The number of cores requested.
+			core_count: CoreIndex,
+		},
+		/// The number of cores available for scheduling has changed.
+		CoreCountChanged {
+			/// The new number of cores available for scheduling.
+			core_count: CoreIndex,
+		},
+		/// There is a new reservation for a workload.
+		ReservationMade {
+			/// The index of the reservation.
+			index: u32,
+			/// The workload of the reservation.
+			workload: Schedule,
+		},
+		/// A reservation for a workload has been cancelled.
+		ReservationCancelled {
+			/// The index of the reservation which was cancelled.
+			index: u32,
+			/// The workload of the now cancelled reservation.
+			workload: Schedule,
+		},
 	}
 
 	#[pallet::error]
@@ -311,6 +335,8 @@ pub mod pallet {
 		StillValid,
 		/// The history item does not exist.
 		NoHistory,
+		/// No reservation of the given index exists.
+		UnknownReservation,
 	}
 
 	#[pallet::hooks]
@@ -349,10 +375,13 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
-		/// Cancel a reserved workload.
+		/// Cancel a reservation for a workload.
 		///
 		/// - `origin`: Must be Root or pass `AdminOrigin`.
-		/// - `item_index`: The index of the reservation.
+		/// - `item_index`: The index of the reservation. Usually this will also be the index of the
+		///   core on which the reservation has been scheduled. However, it is possible that if
+		///   other cores are reserved or unreserved in the same sale rotation that they won't
+		///   correspond, so it's better to look up the core properly in the `Reservations` storage.
 		#[pallet::call_index(2)]
 		pub fn unreserve(origin: OriginFor<T>, item_index: u32) -> DispatchResultWithPostInfo {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;
