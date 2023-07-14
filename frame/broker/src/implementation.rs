@@ -292,6 +292,7 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn utilize(
 		mut region_id: RegionId,
 		maybe_check_owner: Option<T::AccountId>,
+		permanence: Permanence,
 	) -> Result<Option<(RegionId, RegionRecordOf<T>)>, Error<T>> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
@@ -301,18 +302,25 @@ impl<T: Config> Pallet<T> {
 			ensure!(check_owner == region.owner, Error::<T>::NotOwner);
 		}
 
+		Regions::<T>::remove(&region_id);
+
 		let last_commit_timeslice = status.last_timeslice + config.advance_notice;
 		if region_id.begin <= last_commit_timeslice {
 			region_id.begin = last_commit_timeslice + 1;
-		}
-		Regions::<T>::remove(&region_id);
-
-		if region_id.begin < region.end {
-			Ok(Some((region_id, region)))
+			if region_id.begin >= region.end {
+				let duration = region.end.saturating_sub(region_id.begin);
+				Self::deposit_event(Event::Dropped { region_id, duration });
+				return Ok(None)
+			}
 		} else {
-			let duration = region.end.saturating_sub(region_id.begin);
-			Self::deposit_event(Event::Dropped { region_id, duration });
-			Ok(None)
+			Workplan::<T>::mutate_extant((region_id.begin, region_id.core), |p|
+				p.retain(|i| (i.part & region_id.part).is_void())
+			);
 		}
+		if permanence == Permanence::Provisional {
+			Regions::<T>::insert(&region_id, &region);
+		}
+
+		Ok(Some((region_id, region)))
 	}
 }

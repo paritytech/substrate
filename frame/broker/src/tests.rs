@@ -18,9 +18,10 @@
 #![cfg(test)]
 
 use crate::{*, mock::*, core_part::*};
-use frame_support::{assert_noop, assert_ok, traits::{nonfungible::{Transfer, Inspect as NftInspect}}};
+use frame_support::{assert_noop, assert_ok, traits::nonfungible::{Transfer, Inspect as NftInspect}};
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
+use Permanence::*;
 
 #[test]
 fn basic_initialize_works() {
@@ -39,8 +40,47 @@ fn transfer_works() {
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		assert_ok!(<Broker as Transfer<_>>::transfer(&region.into(), &2));
 		assert_eq!(<Broker as NftInspect<_>>::owner(&region.into()), Some(2));
-		assert_noop!(Broker::do_assign(region, Some(1), 1001), Error::<Test>::NotOwner);
-		assert_ok!(Broker::do_assign(region, Some(2), 1002));
+		assert_noop!(Broker::do_assign(region, Some(1), 1001, Permanent), Error::<Test>::NotOwner);
+		assert_ok!(Broker::do_assign(region, Some(2), 1002, Permanent));
+	});
+}
+
+#[test]
+fn permanent_is_not_reassignable() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_ok!(Broker::do_assign(region, Some(1), 1001, Permanent));
+		assert_noop!(Broker::do_assign(region, Some(1), 1002, Permanent), Error::<Test>::UnknownRegion);
+		assert_noop!(Broker::do_pool(region, Some(1), 1002, Permanent), Error::<Test>::UnknownRegion);
+		assert_noop!(Broker::do_partition(region, Some(1), 1), Error::<Test>::UnknownRegion);
+		assert_noop!(Broker::do_interlace(region, Some(1), CorePart::from_chunk(0, 40)), Error::<Test>::UnknownRegion);
+	});
+}
+
+#[test]
+fn provisional_is_reassignable() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_ok!(Broker::do_assign(region, Some(1), 1001, Provisional));
+		let (region1, region) = Broker::do_partition(region, Some(1), 1).unwrap();
+		let (region2, region3) = Broker::do_interlace(region, Some(1), CorePart::from_chunk(0, 40)).unwrap();
+		assert_ok!(Broker::do_pool(region1, Some(1), 1, Provisional));
+		assert_ok!(Broker::do_assign(region2, Some(1), 1002, Provisional));
+		assert_ok!(Broker::do_assign(region3, Some(1), 1003, Provisional));
+		advance_to(8);
+		assert_eq!(CoretimeTrace::get(), vec![
+			(6, AssignCore { core: 0, begin: 8, assignment: vec![
+				(Pool, 57600),
+			], end_hint: None }),
+			(8, AssignCore { core: 0, begin: 10, assignment: vec![
+				(Task(1002), 28800),
+				(Task(1003), 28800),
+			], end_hint: None }),
+		]);
 	});
 }
 
@@ -110,7 +150,7 @@ fn renewal_works() {
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		assert_eq!(balance(1), 900);
-		assert_ok!(Broker::do_assign(region, None, 1001));
+		assert_ok!(Broker::do_assign(region, None, 1001, Permanent));
 		// Should now be renewable.
 		advance_to(6);
 		assert_noop!(Broker::do_purchase(1, u64::max_value()), Error::<Test>::TooEarly);
@@ -132,7 +172,7 @@ fn instapool_payouts_work() {
 		assert_ok!(Broker::do_start_sales(100, 3));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
-		assert_ok!(Broker::do_pool(region, None, 2));
+		assert_ok!(Broker::do_pool(region, None, 2, Permanent));
 		assert_ok!(Broker::do_purchase_credit(1, 20, 1));
 		advance_to(8);
 		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 10));
@@ -154,8 +194,8 @@ fn instapool_partial_core_payouts_work() {
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let (region1, region2) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)).unwrap();
-		assert_ok!(Broker::do_pool(region1, None, 2));
-		assert_ok!(Broker::do_pool(region2, None, 3));
+		assert_ok!(Broker::do_pool(region1, None, 2, Permanent));
+		assert_ok!(Broker::do_pool(region2, None, 3, Permanent));
 		assert_ok!(Broker::do_purchase_credit(1, 40, 1));
 		advance_to(8);
 		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 40));
@@ -220,7 +260,7 @@ fn purchase_works() {
 		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
-		assert_ok!(Broker::do_assign(region, None, 1000));
+		assert_ok!(Broker::do_assign(region, None, 1000, Permanent));
 		advance_to(6);
 		assert_eq!(CoretimeTrace::get(), vec![
 			(6, AssignCore { core: 0, begin: 8, assignment: vec![
@@ -238,9 +278,9 @@ fn partition_works() {
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let (region1, region) = Broker::do_partition(region, None, 1).unwrap();
 		let (region2, region3) = Broker::do_partition(region, None, 1).unwrap();
-		assert_ok!(Broker::do_assign(region1, None, 1001));
-		assert_ok!(Broker::do_assign(region2, None, 1002));
-		assert_ok!(Broker::do_assign(region3, None, 1003));
+		assert_ok!(Broker::do_assign(region1, None, 1001, Permanent));
+		assert_ok!(Broker::do_assign(region2, None, 1002, Permanent));
+		assert_ok!(Broker::do_assign(region3, None, 1003, Permanent));
 		advance_to(10);
 		assert_eq!(CoretimeTrace::get(), vec![
 			(6, AssignCore { core: 0, begin: 8, assignment: vec![
@@ -264,9 +304,9 @@ fn interlace_works() {
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
 		let (region1, region) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 30)).unwrap();
 		let (region2, region3) =Broker::do_interlace(region, None, CorePart::from_chunk(30, 60)).unwrap();
-		assert_ok!(Broker::do_assign(region1, None, 1001));
-		assert_ok!(Broker::do_assign(region2, None, 1002));
-		assert_ok!(Broker::do_assign(region3, None, 1003));
+		assert_ok!(Broker::do_assign(region1, None, 1001, Permanent));
+		assert_ok!(Broker::do_assign(region2, None, 1002, Permanent));
+		assert_ok!(Broker::do_assign(region3, None, 1003, Permanent));
 		advance_to(10);
 		assert_eq!(CoretimeTrace::get(), vec![
 			(6, AssignCore { core: 0, begin: 8, assignment: vec![
@@ -287,10 +327,10 @@ fn interlace_then_partition_works() {
 		let (region1, region2) = Broker::do_interlace(region, None, CorePart::from_chunk(0, 20)).unwrap();
 		let (region1, region3) = Broker::do_partition(region1, None, 1).unwrap();
 		let (region2, region4) = Broker::do_partition(region2, None, 2).unwrap();
-		assert_ok!(Broker::do_assign(region1, None, 1001));
-		assert_ok!(Broker::do_assign(region2, None, 1002));
-		assert_ok!(Broker::do_assign(region3, None, 1003));
-		assert_ok!(Broker::do_assign(region4, None, 1004));
+		assert_ok!(Broker::do_assign(region1, None, 1001, Permanent));
+		assert_ok!(Broker::do_assign(region2, None, 1002, Permanent));
+		assert_ok!(Broker::do_assign(region3, None, 1003, Permanent));
+		assert_ok!(Broker::do_assign(region4, None, 1004, Permanent));
 		advance_to(10);
 		assert_eq!(CoretimeTrace::get(), vec![
 			(6, AssignCore { core: 0, begin: 8, assignment: vec![
@@ -318,10 +358,10 @@ fn partition_then_interlace_works() {
 		let (region1, region2) = Broker::do_partition(region, None, 1).unwrap();
 		let (region1, region3) = Broker::do_interlace(region1, None, CorePart::from_chunk(0, 20)).unwrap();
 		let (region2, region4) = Broker::do_interlace(region2, None, CorePart::from_chunk(0, 30)).unwrap();
-		assert_ok!(Broker::do_assign(region1, None, 1001));
-		assert_ok!(Broker::do_assign(region2, None, 1002));
-		assert_ok!(Broker::do_assign(region3, None, 1003));
-		assert_ok!(Broker::do_assign(region4, None, 1004));
+		assert_ok!(Broker::do_assign(region1, None, 1001, Permanent));
+		assert_ok!(Broker::do_assign(region2, None, 1002, Permanent));
+		assert_ok!(Broker::do_assign(region3, None, 1003, Permanent));
+		assert_ok!(Broker::do_assign(region4, None, 1004, Permanent));
 		advance_to(10);
 		assert_eq!(CoretimeTrace::get(), vec![
 			(6, AssignCore { core: 0, begin: 8, assignment: vec![

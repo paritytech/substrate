@@ -20,6 +20,15 @@ pub type PartCount = u32;
 /// The same as `PartCount` but signed.
 pub type SignedPartCount = i32;
 
+/// Whether a core assignment is revokable or not.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum Permanence {
+	/// The region remains with the same owner allowing the assignment to be altered.
+	Provisional,
+	/// The region is removed; the assignment may be eligible for renewal.
+	Permanent,
+}
+
 /// Self-describing identity for a Region of Bulk Coretime.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct RegionId {
@@ -59,7 +68,7 @@ pub struct RegionRecord<AccountId, Balance> {
 	pub end: Timeslice,
 	/// The owner of the Region.
 	pub owner: AccountId,
-	/// The amount paid to Polkadot for this Region.
+	/// The amount paid to Polkadot for this Region, or `None` if renewal is not allowed.
 	pub paid: Option<Balance>,
 }
 pub type RegionRecordOf<T> = RegionRecord<<T as SConfig>::AccountId, BalanceOf<T>>;
