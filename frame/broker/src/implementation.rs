@@ -4,7 +4,7 @@ use frame_support::{
 	traits::{
 		fungible::Balanced,
 		tokens::{Fortitude::Polite, Precision::Exact, Preservation::Expendable},
-		OnUnbalanced, Defensive,
+		Defensive, OnUnbalanced,
 	},
 };
 use sp_arithmetic::{
@@ -28,7 +28,10 @@ impl<T: Config> Pallet<T> {
 		(advanced / timeslice_period).saturated_into()
 	}
 
-	pub fn next_timeslice_to_commit(config: &ConfigRecordOf<T>, status: &StatusRecord) -> Option<Timeslice> {
+	pub fn next_timeslice_to_commit(
+		config: &ConfigRecordOf<T>,
+		status: &StatusRecord,
+	) -> Option<Timeslice> {
 		if status.last_committed_timeslice < Self::latest_timeslice_ready_to_commit(config) {
 			Some(status.last_committed_timeslice + 1)
 		} else {

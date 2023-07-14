@@ -30,7 +30,13 @@ pub enum CoreAssignment {
 pub trait CoretimeInterface {
 	type AccountId: Parameter;
 	type Balance;
-	type BlockNumber: AtLeast32BitUnsigned + Copy + TypeInfo + Encode + Decode + MaxEncodedLen + Debug;
+	type BlockNumber: AtLeast32BitUnsigned
+		+ Copy
+		+ TypeInfo
+		+ Encode
+		+ Decode
+		+ MaxEncodedLen
+		+ Debug;
 	fn latest() -> Self::BlockNumber;
 	fn request_core_count(count: CoreIndex);
 	fn request_revenue_info_at(when: Self::BlockNumber);
