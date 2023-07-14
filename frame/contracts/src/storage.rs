@@ -217,6 +217,7 @@ impl<T: Config> ContractInfo<T> {
 	}
 
 	/// Sets and returns the contract base deposit.
+	///
 	/// `upload_deposit` is the balance of the deposit paid for uploading the contract.
 	pub fn update_base_deposit(&mut self, upload_deposit: BalanceOf<T>) -> BalanceOf<T> {
 		let ed = Pallet::<T>::min_balance();
