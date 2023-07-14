@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
-	SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
+	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	defensive,
@@ -996,21 +996,27 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = BlockNumberFor<T>;
 	type MaxVotesPerVoter = T::MaxNominations;
+	type MaxElectingVoters = <T::ElectionProvider as ElectionProviderBase>::MaxElectingVoters;
+	type MaxElectableTargets = <T::ElectionProvider as ElectionProviderBase>::MaxElectableTargets;
 
 	fn desired_targets() -> data_provider::Result<u32> {
 		Self::register_weight(T::DbWeight::get().reads(1));
 		Ok(Self::validator_count())
 	}
 
-	fn electing_voters(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<VoterOf<Self>>> {
+	fn electing_voters(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<VoterOf<Self>, Self::MaxElectingVoters>> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(maybe_max_len);
 		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
 
-		Ok(voters)
+		Ok(BoundedVec::truncate_from(voters))
 	}
 
-	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
+	fn electable_targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<T::AccountId, Self::MaxElectableTargets>> {
 		let target_count = T::TargetList::count();
 
 		// We can't handle this case yet -- return an error.
@@ -1018,7 +1024,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			return Err("Target snapshot too big")
 		}
 
-		Ok(Self::get_npos_targets(None))
+		Ok(BoundedVec::truncate_from(Self::get_npos_targets(None)))
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {

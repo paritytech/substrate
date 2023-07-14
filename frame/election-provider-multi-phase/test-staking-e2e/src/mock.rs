@@ -214,8 +214,14 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type SlashHandler = ();
 	type RewardHandler = ();
 	type DataProvider = Staking;
-	type Fallback =
-		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking, MaxWinners)>;
+	type Fallback = frame_election_provider_support::NoElection<(
+		AccountId,
+		BlockNumber,
+		Staking,
+		MaxElectingVoters,
+		MaxElectableTargets,
+		MaxWinners,
+	)>;
 	type GovernanceFallback = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, ()>;
 	type ForceOrigin = EnsureRoot<AccountId>;
@@ -315,6 +321,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 	>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxWinners = MaxWinners;
 	type VotersBound = VotersBound;
 	type TargetsBound = TargetsBound;

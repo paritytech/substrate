@@ -331,6 +331,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxWinners = MaxWinners;
 	type VotersBound = ConstU32<{ u32::MAX }>;
 	type TargetsBound = ConstU32<{ u32::MAX }>;
@@ -342,6 +344,8 @@ impl ElectionProviderBase for MockFallback {
 	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 	type MaxWinners = MaxWinners;
 }
 
@@ -457,8 +461,12 @@ impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
 	type MaxVotesPerVoter = MaxNominations;
+	type MaxElectingVoters = MaxElectingVoters;
+	type MaxElectableTargets = MaxElectableTargets;
 
-	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
+	fn electable_targets(
+		maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<AccountId, Self::MaxElectableTargets>> {
 		let targets = Targets::get();
 
 		if !DataProviderAllowBadData::get() &&
@@ -467,20 +475,15 @@ impl ElectionDataProvider for StakingMock {
 			return Err("Targets too big")
 		}
 
-		Ok(targets)
+		Ok(BoundedVec::truncate_from(targets))
 	}
 
 	fn electing_voters(
-		maybe_max_len: Option<usize>,
-	) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
-		let mut voters = Voters::get();
-		if !DataProviderAllowBadData::get() {
-			if let Some(max_len) = maybe_max_len {
-				voters.truncate(max_len)
-			}
-		}
+		_maybe_max_len: Option<usize>,
+	) -> data_provider::Result<BoundedVec<VoterOf<Runtime>, Self::MaxElectingVoters>> {
+		let voters = Voters::get();
 
-		Ok(voters)
+		Ok(BoundedVec::truncate_from(voters))
 	}
 
 	fn desired_targets() -> data_provider::Result<u32> {

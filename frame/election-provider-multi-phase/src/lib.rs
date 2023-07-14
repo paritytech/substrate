@@ -693,6 +693,8 @@ pub mod pallet {
 		type DataProvider: ElectionDataProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
+			MaxElectingVoters = Self::MaxElectingVoters,
+			MaxElectableTargets = Self::MaxElectableTargets,
 		>;
 
 		/// Configuration for the fallback.
@@ -1465,11 +1467,6 @@ impl<T: Config> Pallet<T> {
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
-		// TODO(gpestana): data provider must return a bounded vec. this is just to experiment at
-		// this level without having to touch the data provider trait and impl for now.
-		let targets: BoundedVec<_, T::MaxElectableTargets> = BoundedVec::truncate_from(targets);
-		let voters: BoundedVec<_, T::MaxElectingVoters> = BoundedVec::truncate_from(voters);
-
 		let mut desired_targets = <Pallet<T> as ElectionProviderBase>::desired_targets_checked()
 			.map_err(|e| ElectionError::DataProvider(e))?;
 
@@ -1709,6 +1706,8 @@ impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
+	type MaxElectingVoters = T::MaxElectingVoters;
+	type MaxElectableTargets = T::MaxElectableTargets;
 	type MaxWinners = T::MaxWinners;
 	type DataProvider = T::DataProvider;
 }
