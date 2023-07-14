@@ -34,7 +34,7 @@
 use crate::event::Event;
 
 use futures::{prelude::*, ready, stream::FusedStream};
-use log::{error, info};
+use log::{debug, error};
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
 use std::{
 	backtrace::Backtrace,
@@ -43,6 +43,9 @@ use std::{
 	pin::Pin,
 	task::{Context, Poll},
 };
+
+/// Log target for this file.
+pub const LOG_TARGET: &str = "sub-libp2p::out_events";
 
 /// Creates a new channel that can be associated to a [`OutChannels`].
 ///
@@ -54,12 +57,23 @@ pub fn channel(name: &'static str, queue_size_warning: usize) -> (Sender, Receiv
 		inner: tx,
 		name,
 		queue_size_warning,
-		warning_fired: false,
+		warning_fired: SenderWarningState::NotFired,
 		creation_backtrace: Backtrace::force_capture(),
 		metrics: None,
 	};
 	let rx = Receiver { inner: rx, name, metrics: None };
 	(tx, rx)
+}
+
+/// A state of a sender warning that is used to avoid spamming the logs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SenderWarningState {
+	/// The warning has not been fired yet.
+	NotFired,
+	/// The warning has been fired, and the channel is full
+	FiredFull,
+	/// The warning has been fired and the channel is not full anymore.
+	FiredFree,
 }
 
 /// Sending side of a channel.
@@ -75,8 +89,9 @@ pub struct Sender {
 	name: &'static str,
 	/// Threshold queue size to generate an error message in the logs.
 	queue_size_warning: usize,
-	/// We generate the error message only once to not spam the logs.
-	warning_fired: bool,
+	/// We generate the error message only once to not spam the logs after the first error.
+	/// Subsequently we indicate channel fullness on debug level.
+	warning_fired: SenderWarningState,
 	/// Backtrace of a place where the channel was created.
 	creation_backtrace: Backtrace,
 	/// Clone of [`Receiver::metrics`]. Will be initialized when [`Sender`] is added to
@@ -170,22 +185,32 @@ impl OutChannels {
 	pub fn send(&mut self, event: Event) {
 		self.event_streams.retain_mut(|sender| {
 			let current_pending = sender.inner.len();
-			if current_pending >= sender.queue_size_warning && !sender.warning_fired {
-				sender.warning_fired = true;
-				error!(
-					"The number of unprocessed events in channel `{}` exceeded {}.\n\
-					 The channel was created at:\n{:}\n
-					 The last event was sent from:\n{:}",
-					sender.name,
-					sender.queue_size_warning,
-					sender.creation_backtrace,
-					Backtrace::force_capture(),
-				);
-			} else if sender.warning_fired &&
+			if current_pending >= sender.queue_size_warning {
+				if sender.warning_fired == SenderWarningState::NotFired {
+					error!(
+						"The number of unprocessed events in channel `{}` exceeded {}.\n\
+						 The channel was created at:\n{:}\n
+						 The last event was sent from:\n{:}",
+						sender.name,
+						sender.queue_size_warning,
+						sender.creation_backtrace,
+						Backtrace::force_capture(),
+					);
+				} else if sender.warning_fired == SenderWarningState::FiredFree {
+					// We don't want to spam the logs, so we only log on debug level
+					debug!(
+						target: LOG_TARGET,
+						"Channel `{}` is overflowed. Number of events: {}",
+						sender.name, current_pending
+					);
+				}
+				sender.warning_fired = SenderWarningState::FiredFull;
+			} else if sender.warning_fired == SenderWarningState::FiredFull &&
 				current_pending < sender.queue_size_warning.wrapping_div(2)
 			{
-				sender.warning_fired = false;
-				info!(
+				sender.warning_fired = SenderWarningState::FiredFree;
+				debug!(
+					target: LOG_TARGET,
 					"Channel `{}` is no longer overflowed. Number of events: {}",
 					sender.name, current_pending
 				);
