@@ -159,7 +159,7 @@ mod commit_reveal {
 
 			let commitment_hash = blake2_256(&encoded_bytes);
 			let length = 10;
-			let name_hash = sp_io::hashing::blake2_256(&name);
+			let name_hash = blake2_256(&name);
 			let min_commitment: u64 = <<Test as Config>::MinCommitmentAge as Get<u64>>::get();
 
 			assert_eq!(Balances::free_balance(&1), 100);
@@ -247,31 +247,49 @@ mod commit_reveal {
 		});
 	}
 
-	// #[test]
-	// fn reveal_existing_registration_deposit_returned() {
-	// 	new_test_ext().execute_with(|| {
-	// 		let (name, _) = alice_register_bob_senario_setup();
+	#[test]
+	fn reveal_secret_differentiates_same_name_commitemnts() {
+		new_test_ext().execute_with(|| {
+			let sender = 1;
+			let name = "alice".as_bytes().to_vec();
+			let name_hash = blake2_256(&name);
 
-	// 		// second registration
-	// 		let sender = 2;
-	// 		let owner = 2;
-	// 		let secret = 6_u64;
-	// 		let commitment_hash = blake2_256(&(&name, secret).encode());
-	// 		let min_commitment: u64 = <Test as crate::Config>::MinCommitmentAge::get();
+			// commit `name` using secret 1
+			let owner_1 = 2;
+			let secret_1 = 3_u64;
+			let commitment_hash_1 = blake2_256(&(&name, secret_1).encode());
+			assert_ok!(NameService::commit(
+				RuntimeOrigin::signed(sender),
+				owner_1,
+				commitment_hash_1
+			));
 
-	// 		// run until expiry
-	// 		add_blocks(1000);
+			// commit the same `name` using secret 2
+			let owner_2 = 3;
+			let secret_2 = 4_u64;
+			let commitment_hash_2 = blake2_256(&(&name, secret_2).encode());
+			assert_ok!(NameService::commit(
+				RuntimeOrigin::signed(sender),
+				owner_2,
+				commitment_hash_2
+			));
 
-	// 		// second registration
-	// 		assert_ok!(NameService::commit(RuntimeOrigin::signed(sender), owner, commitment_hash));
-	// 		add_blocks(min_commitment + 1);
-	// 		assert_noop!(NameService::reveal(RuntimeOrigin::signed(sender), name.clone(), secret, 1));
+			// run min commitment age and reveal using secret 2.
+			add_blocks(<<Test as Config>::MinCommitmentAge as Get<u64>>::get());
+			assert_ok!(NameService::reveal(RuntimeOrigin::signed(sender), name, secret_2, 10));
 
-	// 		// deposit returned from initial registration
-	// 		// Note registration + length fee permanently lost. commit and name deposit returned.
-	// 		assert_eq!(Balances::free_balance(&1), 1098);
-	// 	});
-	// }
+			// ensure `name` is registered to owner 2.
+			let registration = Registrations::<Test>::get(name_hash).unwrap();
+			assert_eq!(registration.owner, owner_2);
+			assert_eq!(Balances::reserved_balance(&owner_2), 1);
+
+			// commitment from `owner_1` can now be removed.
+			assert_ok!(NameService::remove_commitment(
+				RuntimeOrigin::signed(owner_2),
+				commitment_hash_1
+			));
+		})
+	}
 
 	#[test]
 	fn reveal_ensure_active_registration_not_registered_again() {
@@ -331,7 +349,7 @@ mod registrar {
 			let name = "alice".as_bytes().to_vec();
 			let commitment_hash = (name.clone(), secret).using_encoded(blake2_256);
 			let length = 1;
-			let name_hash = sp_io::hashing::blake2_256(&name);
+			let name_hash = blake2_256(&name);
 			let min_commitment: u64 = <<Test as Config>::MinCommitmentAge as Get<u64>>::get();
 
 			// Registration not found
