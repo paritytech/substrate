@@ -1601,8 +1601,6 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 	}
 }
 
-/// Only for bare bone testing when you don't care about signed extensions at all.
-#[cfg(feature = "std")]
 impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();

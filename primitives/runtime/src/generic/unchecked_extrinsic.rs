@@ -107,7 +107,6 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 	for UncheckedExtrinsic<Address, Call, Signature, Extra>
 {
 	type Call = Call;
-
 	type SignaturePayload = (Address, Signature, Extra);
 
 	fn is_signed(&self) -> Option<bool> {
