@@ -219,7 +219,7 @@ fn instapool_payouts_work() {
 		assert_ok!(Broker::do_purchase_credit(1, 20, 1));
 		advance_to(8);
 		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 10));
-		advance_to(10);
+		advance_to(11);
 		assert_eq!(pot(), 14);
 		assert_eq!(revenue(), 106);
 		assert_ok!(Broker::do_claim_revenue(region, 100));
@@ -243,13 +243,13 @@ fn instapool_partial_core_payouts_work() {
 		assert_ok!(Broker::do_purchase_credit(1, 40, 1));
 		advance_to(8);
 		assert_ok!(TestCoretimeProvider::spend_instantaneous(1, 40));
-		advance_to(10);
+		advance_to(11);
 		assert_ok!(Broker::do_claim_revenue(region1, 100));
 		assert_ok!(Broker::do_claim_revenue(region2, 100));
-		assert_eq!(pot(), 0);
 		assert_eq!(revenue(), 120);
 		assert_eq!(balance(2), 5);
 		assert_eq!(balance(3), 15);
+		assert_eq!(pot(), 0);
 	});
 }
 

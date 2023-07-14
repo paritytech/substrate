@@ -236,7 +236,7 @@ pub struct TestExt(ConfigRecordOf<Test>);
 impl TestExt {
 	pub fn new() -> Self {
 		Self(ConfigRecord {
-			advance_notice: 1,
+			advance_notice: 2,
 			interlude_length: 1,
 			leadin_length: 1,
 			ideal_bulk_proportion: Default::default(),

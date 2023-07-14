@@ -157,9 +157,9 @@ pub struct StatusRecord {
 	/// The current amount of the Instantaneous Coretime Pool which is provided by the Polkadot
 	/// System, rather than provided as a result of privately operated Coretime.
 	pub system_pool_size: PartCount,
-	/// The last (Relay-chain) timeslice which we processed for (this processing is generally
-	/// done some number of timeslices in advance of actual Relay-chain execution to make up
-	/// for latencies and any needed Relay-side preparations).
+	/// The last (Relay-chain) timeslice which we committed to the Relay-chain.
+	pub last_committed_timeslice: Timeslice,
+	/// The timeslice of the last time we ticked.
 	pub last_timeslice: Timeslice,
 }
 
@@ -224,10 +224,10 @@ pub type LeasesRecordOf<T> = LeasesRecord<<T as Config>::MaxLeasedCores>;
 
 /// Configuration of this pallet.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct ConfigRecord<BlockNumber> {
+pub struct ConfigRecord<BlockNumber, RelayBlockNumber> {
 	/// The number of timeslices in advance which scheduling should be fixed and the
 	/// `Coretime::assign` API used to inform the Relay-chain.
-	pub advance_notice: Timeslice,
+	pub advance_notice: RelayBlockNumber,
 	/// The length in blocks of the Interlude Period for forthcoming sales.
 	pub interlude_length: BlockNumber,
 	/// The length in blocks of the Leadin Period for forthcoming sales.
@@ -245,4 +245,4 @@ pub struct ConfigRecord<BlockNumber> {
 	/// The duration by which rewards for contributions to the InstaPool must be collected.
 	pub contribution_timeout: Timeslice,
 }
-pub type ConfigRecordOf<T> = ConfigRecord<<T as SConfig>::BlockNumber>;
+pub type ConfigRecordOf<T> = ConfigRecord<<T as SConfig>::BlockNumber, RelayBlockNumberOf<T>>;

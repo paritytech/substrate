@@ -4,7 +4,7 @@ use frame_support::{
 	traits::{
 		fungible::Balanced,
 		tokens::{Fortitude::Polite, Precision::Exact, Preservation::Expendable},
-		OnUnbalanced,
+		OnUnbalanced, Defensive,
 	},
 };
 use sp_arithmetic::{
@@ -15,32 +15,63 @@ use sp_runtime::traits::{AccountIdConversion, ConvertBack};
 use CompletionStatus::Complete;
 
 impl<T: Config> Pallet<T> {
+	pub fn current_timeslice() -> Timeslice {
+		let latest = T::Coretime::latest();
+		let timeslice_period = T::TimeslicePeriod::get();
+		(latest / timeslice_period).saturated_into()
+	}
+
+	pub fn latest_timeslice_ready_to_commit(config: &ConfigRecordOf<T>) -> Timeslice {
+		let latest = T::Coretime::latest();
+		let advanced = latest.saturating_add(config.advance_notice);
+		let timeslice_period = T::TimeslicePeriod::get();
+		(advanced / timeslice_period).saturated_into()
+	}
+
+	pub fn next_timeslice_to_commit(config: &ConfigRecordOf<T>, status: &StatusRecord) -> Option<Timeslice> {
+		if status.last_committed_timeslice < Self::latest_timeslice_ready_to_commit(config) {
+			Some(status.last_committed_timeslice + 1)
+		} else {
+			None
+		}
+	}
+
 	/// Attempt to tick things along. Will only do anything if the `Status.last_timeslice` is
 	/// less than `Self::current_timeslice`.
 	pub(crate) fn do_tick() -> DispatchResult {
 		let mut status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
-		let current_timeslice = Self::current_timeslice();
-		ensure!(status.last_timeslice < current_timeslice, Error::<T>::NothingToDo);
-		status.last_timeslice.saturating_inc();
-
-		T::Coretime::request_revenue_info_at(
-			T::TimeslicePeriod::get() * status.last_timeslice.into(),
-		);
-
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
-		let commit_timeslice = status.last_timeslice + config.advance_notice;
 
-		if let Some(sale) = SaleInfo::<T>::get() {
-			if commit_timeslice >= sale.region_begin {
-				// Sale can be rotated.
-				Self::rotate_sale(sale, &config, &status);
+		Self::process_core_count();
+		let _ = Self::process_revenue().defensive();
+
+		if let Some(commit_timeslice) = Self::next_timeslice_to_commit(&config, &status) {
+			status.last_committed_timeslice = commit_timeslice;
+			if let Some(sale) = SaleInfo::<T>::get() {
+				if commit_timeslice >= sale.region_begin {
+					// Sale can be rotated.
+					Self::rotate_sale(sale, &config, &status);
+				}
+			}
+
+			Self::process_pool(commit_timeslice, &mut status);
+
+			let timeslice_period = T::TimeslicePeriod::get();
+			let rc_begin = RelayBlockNumberOf::<T>::from(commit_timeslice) * timeslice_period;
+			for core in 0..status.core_count {
+				Self::process_core_schedule(commit_timeslice, rc_begin, core);
 			}
 		}
-		Self::process_timeslice(commit_timeslice, &mut status, &config);
-		Self::process_core_count()?;
-		Self::process_revenue()?;
+
+		let current_timeslice = Self::current_timeslice();
+		if status.last_timeslice < current_timeslice {
+			let rc_block = T::TimeslicePeriod::get() * current_timeslice.into();
+			T::Coretime::request_revenue_info_at(rc_block);
+			status.last_timeslice.saturating_inc();
+		}
 
 		Status::<T>::put(&status);
+
 		Ok(())
 	}
 
@@ -168,12 +199,12 @@ impl<T: Config> Pallet<T> {
 		T::PalletId::get().into_account_truncating()
 	}
 
-	fn process_core_count() -> Result<bool, DispatchError> {
+	fn process_core_count() -> bool {
 		if let Some(new_count) = T::Coretime::check_notify_core_count() {
 			Status::<T>::mutate_extant(|c| c.core_count = new_count);
-			return Ok(true)
+			return true
 		}
-		Ok(false)
+		false
 	}
 
 	fn process_revenue() -> Result<bool, DispatchError> {
@@ -188,7 +219,7 @@ impl<T: Config> Pallet<T> {
 			ensure!(pool_record.maybe_payout.is_none(), Error::<T>::RevenueAlreadyKnown);
 			ensure!(
 				pool_record.total_contributions >= pool_record.system_contributions,
-				Error::<T>::InvalidContributions
+				Error::<T>::InvalidContributions,
 			);
 			ensure!(pool_record.total_contributions > 0, Error::<T>::InvalidContributions);
 
@@ -216,24 +247,6 @@ impl<T: Config> Pallet<T> {
 	pub fn sale_price(sale: &SaleInfoRecordOf<T>, now: T::BlockNumber) -> BalanceOf<T> {
 		lerp(now, sale.sale_start, sale.leadin_length, sale.start_price, sale.reserve_price)
 			.unwrap_or(sale.start_price)
-	}
-
-	pub fn current_timeslice() -> Timeslice {
-		let latest = T::Coretime::latest();
-		let timeslice_period = T::TimeslicePeriod::get();
-		(latest / timeslice_period).saturated_into()
-	}
-
-	pub(crate) fn process_timeslice(
-		timeslice: Timeslice,
-		status: &mut StatusRecord,
-		_config: &ConfigRecordOf<T>,
-	) {
-		Self::process_pool(timeslice, status);
-		let rc_begin = RelayBlockNumberOf::<T>::from(timeslice) * T::TimeslicePeriod::get();
-		for core in 0..status.core_count {
-			Self::process_core_schedule(timeslice, rc_begin, core);
-		}
 	}
 
 	fn process_pool(timeslice: Timeslice, status: &mut StatusRecord) {
@@ -315,7 +328,6 @@ impl<T: Config> Pallet<T> {
 		maybe_check_owner: Option<T::AccountId>,
 		finality: Finality,
 	) -> Result<Option<(RegionId, RegionRecordOf<T>)>, Error<T>> {
-		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let region = Regions::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
 
@@ -325,9 +337,9 @@ impl<T: Config> Pallet<T> {
 
 		Regions::<T>::remove(&region_id);
 
-		let last_commit_timeslice = status.last_timeslice + config.advance_notice;
-		if region_id.begin <= last_commit_timeslice {
-			region_id.begin = last_commit_timeslice + 1;
+		let last_committed_timeslice = status.last_committed_timeslice;
+		if region_id.begin <= last_committed_timeslice {
+			region_id.begin = last_committed_timeslice + 1;
 			if region_id.begin >= region.end {
 				let duration = region.end.saturating_sub(region_id.begin);
 				Self::deposit_event(Event::Dropped { region_id, duration });

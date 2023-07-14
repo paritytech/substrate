@@ -45,13 +45,14 @@ impl<T: Config> Pallet<T> {
 		core_count: CoreIndex,
 	) -> DispatchResult {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
+		let commit_timeslice = Self::latest_timeslice_ready_to_commit(&config);
 		let status = StatusRecord {
 			core_count,
 			pool_size: 0,
-			last_timeslice: Self::current_timeslice(),
+			last_committed_timeslice: commit_timeslice.saturating_sub(1),
 			system_pool_size: 0,
+			last_timeslice: Self::current_timeslice(),
 		};
-		let commit_timeslice = status.last_timeslice + config.advance_notice;
 		let now = frame_system::Pallet::<T>::block_number();
 		let dummy_sale = SaleInfoRecord {
 			sale_start: now,
@@ -353,11 +354,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(crate) fn do_drop_region(region_id: RegionId) -> DispatchResult {
-		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let region = Regions::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
-		let next_commit_timeslice = status.last_timeslice + config.advance_notice + 1;
-		ensure!(next_commit_timeslice >= region.end, Error::<T>::StillValid);
+		ensure!(status.last_committed_timeslice >= region.end, Error::<T>::StillValid);
 
 		Regions::<T>::remove(&region_id);
 		let duration = region.end.saturating_sub(region_id.begin);
