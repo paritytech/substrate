@@ -2065,7 +2065,7 @@ mod benches {
 		[pallet_message_queue, MessageQueue]
 		[pallet_mmr, Mmr]
 		[pallet_multisig, Multisig]
-		[pallet_name_service, NameService]
+		[pallet_name_service, NameService::<Runtime>]
 		[pallet_nomination_pools, NominationPoolsBench::<Runtime>]
 		[pallet_offences, OffencesBench::<Runtime>]
 		[pallet_preimage, Preimage]
