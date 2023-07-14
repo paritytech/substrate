@@ -1,3 +1,27 @@
+[package]
+name = "substrate"
+description = "Next-generation framework for blockchain innovation"
+license = "GPL-3.0-only"
+readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version = "0.0.0"
+
+[workspace.package]
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+repository = "https://github.com/paritytech/substrate.git"
+
+# This list of dependencies is really for documentation purposes only.
+[dependencies]
+aquamarine = "0.3.2"
+# brings in almost all sc- crates
+sc-service = { path = "client/service" }
+# brings in almost all sp- crates
+sp-runtime = { path = "primitives/runtime" }
+# brings in almost all frame- crates
+frame-support = { path = "frame/support" }
+
 [workspace]
 resolver = "2"
 
