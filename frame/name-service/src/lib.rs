@@ -699,7 +699,6 @@ pub mod pallet {
 		///
 		/// Overwrites existing values if already present.
 		/// Can only be called by the Root origin.
-		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(14)]
 		#[pallet::weight(T::WeightInfo::register_domain())]
 		pub fn register_domain(origin: OriginFor<T>, para: Domain<T>) -> DispatchResult {
@@ -719,7 +718,6 @@ pub mod pallet {
 		}
 
 		/// Can only be called by the Root origin.
-		/// TODO: explore the possibility of bounding this call to XCM calls in addition to root.
 		#[pallet::call_index(15)]
 		#[pallet::weight(T::WeightInfo::deregister_domain())]
 		pub fn deregister_domain(origin: OriginFor<T>, para_id: u32) -> DispatchResult {
