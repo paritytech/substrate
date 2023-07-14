@@ -249,7 +249,7 @@ benchmarks! {
 			Registrations::<T>::get(name_hash).unwrap(),
 			Registration {
 			owner: owner,
-			expiry: Some(BlockNumberFor::<T>::from(500)),
+			expiry: Some(BlockNumberFor::<T>::from(500u32)),
 			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
 		});
 	}
