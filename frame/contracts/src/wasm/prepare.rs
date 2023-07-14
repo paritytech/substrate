@@ -370,7 +370,7 @@ where
 		floats: true,
 		mutable_global: false,
 		saturating_float_to_int: false,
-		sign_extension: true,
+		sign_extension: false,
 		bulk_memory: false,
 		multi_value: false,
 		reference_types: false,
