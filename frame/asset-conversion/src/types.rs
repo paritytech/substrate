@@ -58,10 +58,10 @@ pub enum MultiAssetIdConversionResult<MultiAssetId, AssetId> {
 /// Benchmark Helper
 #[cfg(feature = "runtime-benchmarks")]
 pub trait BenchmarkHelper<AssetId, MultiAssetId> {
-	/// Returns an asset id from a given integer.
+	/// Returns an `AssetId` from a given integer.
 	fn asset_id(asset_id: u32) -> AssetId;
 
-	/// Returns an mutli asset id from a given integer.
+	/// Returns a `MultiAssetId` from a given integer.
 	fn mutliasset_id(asset_id: u32) -> MultiAssetId;
 }
 
