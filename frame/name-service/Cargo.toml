@@ -12,13 +12,16 @@ description = "FRAME name service pallet"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
+# parity
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+
+# FRAME
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
 
 # Benchmarking dependencies
@@ -30,13 +33,14 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 [features]
 default = ["std"]
 std = [
-	"sp-io/std",
 	"codec/std",
-	"sp-core/std",
-	"sp-std/std",
+	"scale-info/std",
 	"frame-support/std",
-	"sp-runtime/std",
 	"frame-system/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-io/std",
+	"sp-core/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
