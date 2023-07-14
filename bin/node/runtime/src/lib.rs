@@ -1196,11 +1196,6 @@ impl pallet_message_queue::Config for Runtime {
 }
 
 parameter_types! {
-	pub const BiddingPeriod: BlockNumber = 1 * DAYS;
-	pub const OwnershipPeriod: BlockNumber = 365 * DAYS;
-}
-
-parameter_types! {
 	pub const MinimumCommitmentPeriod: BlockNumber = 1 * MINUTES;
 	pub const CommitmentAlivePeriod: BlockNumber = 1 * DAYS;
 	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
