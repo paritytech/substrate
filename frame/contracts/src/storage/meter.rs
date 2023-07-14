@@ -422,13 +422,13 @@ where
 		&mut self,
 		origin: &T::AccountId,
 		contract: &T::AccountId,
-		info: &mut ContractInfo<T>,
+		contract_info: &mut ContractInfo<T>,
 		code_info: &CodeInfo<T>,
 	) -> Result<DepositOf<T>, DispatchError> {
 		debug_assert!(self.is_alive());
 		let ed = Pallet::<T>::min_balance();
 
-		let deposit = info.update_base_deposit(&code_info);
+		let deposit = contract_info.update_base_deposit(&code_info);
 		if deposit > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
@@ -444,12 +444,12 @@ where
 		// charges possibly below the ed are collected and fail.
 		E::charge(
 			origin,
-			info.deposit_account(),
+			contract_info.deposit_account(),
 			&deposit.saturating_sub(&Deposit::Charge(ed)),
 			false,
 		)?;
 
-		System::<T>::inc_consumers(info.deposit_account())?;
+		System::<T>::inc_consumers(contract_info.deposit_account())?;
 
 		// We also need to make sure that the contract's account itself exists.
 		T::Currency::transfer(origin, contract, ed, ExistenceRequirement::KeepAlive)?;
