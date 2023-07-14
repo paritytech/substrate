@@ -55,7 +55,6 @@ pub enum TryInstantiate {
 	/// necessary.
 	Skip,
 }
-
 /// The reason why a contract is instrumented.
 enum InstrumentReason {
 	/// A new code is uploaded.
@@ -63,6 +62,7 @@ enum InstrumentReason {
 	/// Existing code is re-instrumented.
 	Reinstrument,
 }
+
 
 struct ContractModule<'a, T: Config> {
 	/// A deserialized module. The module is valid (this is Guaranteed by `new` method).
@@ -367,10 +367,10 @@ where
 		component_model: false,
 		// This is not our only defense: All instructions explicitly need to have weights assigned
 		// or the deployment will fail. We have none assigned for float instructions.
-		floats: matches!(determinism, Determinism::Relaxed),
+		floats: true,
 		mutable_global: false,
 		saturating_float_to_int: false,
-		sign_extension: false,
+		sign_extension: true,
 		bulk_memory: false,
 		multi_value: false,
 		reference_types: false,
