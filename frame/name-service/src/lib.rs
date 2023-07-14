@@ -162,6 +162,9 @@ mod subnodes;
 mod types;
 pub mod weights;
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
