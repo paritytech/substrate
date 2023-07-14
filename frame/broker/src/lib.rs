@@ -308,6 +308,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_now: T::BlockNumber) -> Weight {
+			// NOTE: This may need some clever benchmarking...
 			let _ = Self::do_tick();
 			Weight::zero()
 		}
@@ -315,55 +316,107 @@ pub mod pallet {
 
 	#[pallet::call(weight(<T as Config>::WeightInfo))]
 	impl<T: Config> Pallet<T> {
+		/// Configure the pallet.
+		///
+		/// - `origin`: Must be Root or pass `AdminOrigin`.
+		/// - `config`: The configuration for this pallet.
 		#[pallet::call_index(0)]
-		pub fn configure(origin: OriginFor<T>, config: ConfigRecordOf<T>) -> DispatchResult {
+		pub fn configure(
+			origin: OriginFor<T>,
+			config: ConfigRecordOf<T>,
+		) -> DispatchResultWithPostInfo {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;
 			Self::do_configure(config)?;
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
+		/// Reserve a core for a workload.
+		///
+		/// - `origin`: Must be Root or pass `AdminOrigin`.
+		/// - `workload`: The workload which should be permanently placed on a core.
 		#[pallet::call_index(1)]
-		pub fn reserve(origin: OriginFor<T>, schedule: Schedule) -> DispatchResult {
+		pub fn reserve(origin: OriginFor<T>, workload: Schedule) -> DispatchResultWithPostInfo {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;
-			Self::do_reserve(schedule)?;
-			Ok(())
+			Self::do_reserve(workload)?;
+			Ok(Pays::No.into())
 		}
 
+		/// Cancel a reserved workload.
+		///
+		/// - `origin`: Must be Root or pass `AdminOrigin`.
+		/// - `item_index`: The index of the reservation.
 		#[pallet::call_index(2)]
-		pub fn unreserve(origin: OriginFor<T>, item_index: u32) -> DispatchResult {
+		pub fn unreserve(origin: OriginFor<T>, item_index: u32) -> DispatchResultWithPostInfo {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;
 			Self::do_unreserve(item_index)?;
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
+		/// Reserve a core for a single task workload for a limited period.
+		///
+		/// In the interlude and sale period where Bulk Coretime is sold for the period immediately
+		/// after `until`, then the same workload may be renewed.
+		///
+		/// - `origin`: Must be Root or pass `AdminOrigin`.
+		/// - `task`: The workload which should be placed on a core.
+		/// - `until`: The timeslice now earlier than which `task` should be placed as a workload
+		///   on a core.
 		#[pallet::call_index(3)]
-		pub fn set_lease(origin: OriginFor<T>, task: TaskId, until: Timeslice) -> DispatchResult {
+		pub fn set_lease(
+			origin: OriginFor<T>,
+			task: TaskId,
+			until: Timeslice,
+		) -> DispatchResultWithPostInfo {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;
 			Self::do_set_lease(task, until)?;
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
+		/// Begin the Bulk Coretime sales rotation.
+		///
+		/// - `origin`: Must be Root or pass `AdminOrigin`.
+		/// - `initial_price`: The price of Bulk Coretime in the first sale.
+		/// - `core_count`: The number of cores which can be allocated.
 		#[pallet::call_index(4)]
-		pub fn start_sales(origin: OriginFor<T>, initial_price: BalanceOf<T>, core_count: CoreIndex) -> DispatchResult {
+		pub fn start_sales(
+			origin: OriginFor<T>,
+			initial_price: BalanceOf<T>,
+			core_count: CoreIndex,
+		) -> DispatchResultWithPostInfo {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;
 			Self::do_start_sales(initial_price, core_count)?;
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
+		/// Purchase Bulk Coretime in the ongoing Sale.
+		///
+		/// - `origin`: Must be a Signed origin with at least enough funds to pay the current price
+		///   of Bulk Coretime.
+		/// - `price_limit`: An amount no more than which should be paid.
 		#[pallet::call_index(5)]
-		pub fn purchase(origin: OriginFor<T>, price_limit: BalanceOf<T>) -> DispatchResult {
+		pub fn purchase(origin: OriginFor<T>, price_limit: BalanceOf<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::do_purchase(who, price_limit)?;
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
+		/// Renew Bulk Coretime in the ongoing Sale or its prior Interlude Period.
+		///
+		/// - `origin`: Must be a Signed origin with at least enough funds to pay the renewal price
+		///   of the core.
+		/// - `core`: The core which should be renewed.
 		#[pallet::call_index(6)]
-		pub fn renew(origin: OriginFor<T>, core: CoreIndex) -> DispatchResult {
+		pub fn renew(origin: OriginFor<T>, core: CoreIndex) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::do_renew(who, core)?;
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
+		/// Transfer a Bulk Coretime Region to a new owner.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `region_id`: The Region whose ownership should change.
+		/// - `new_owner`: The new owner for the Region.
 		#[pallet::call_index(7)]
 		pub fn transfer(
 			origin: OriginFor<T>,
@@ -375,6 +428,12 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Split a Bulk Coretime Region into two non-overlapping Regions at a particular time into
+		/// the region.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `region_id`: The Region which should be partitioned into two non-overlapping Regions.
+		/// - `pivot`: The offset in time into the Region at which to make the split.
 		#[pallet::call_index(8)]
 		pub fn partition(
 			origin: OriginFor<T>,
@@ -386,6 +445,14 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Split a Bulk Coretime Region into two wholly-overlapping Regions with complementary
+		/// interlace masks which together make up the original Region's interlace mask.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `region_id`: The Region which should become two interlaced Regions of incomplete
+		///   regularity.
+		/// - `pivot`: The interlace mask of on of the two new regions (the other it its partial
+		///   complement).
 		#[pallet::call_index(9)]
 		pub fn interlace(
 			origin: OriginFor<T>,
@@ -397,42 +464,71 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Assign a Bulk Coretime Region to a task.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `region_id`: The Region which should be assigned to the task.
+		/// - `task`: The task to assign.
+		/// - `finality`: Indication of whether this assignment is final (in which case it may be
+		///   eligible for renewal) or provisional (in which case it may be manipulated and/or
+		/// reassigned at a later stage).
 		#[pallet::call_index(10)]
 		pub fn assign(
 			origin: OriginFor<T>,
 			region_id: RegionId,
-			target: TaskId,
+			task: TaskId,
 			finality: Finality,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
-			Self::do_assign(region_id, Some(who), target, finality)?;
-			Ok(())
+			Self::do_assign(region_id, Some(who), task, finality)?;
+			Ok(if finality == Finality::Final { Pays::No } else { Pays::Yes }.into())
 		}
 
+		/// Place a Bulk Coretime Region into the Instantaneous Coretime Pool.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `region_id`: The Region which should be assigned to the Pool.
+		/// - `payee`: The account which is able to collect any revenue due for the usage of this
+		///   Coretime.
 		#[pallet::call_index(11)]
 		pub fn pool(
 			origin: OriginFor<T>,
 			region_id: RegionId,
 			payee: T::AccountId,
 			finality: Finality,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::do_pool(region_id, Some(who), payee, finality)?;
-			Ok(())
+			Ok(if finality == Finality::Final { Pays::No } else { Pays::Yes }.into())
 		}
 
+		/// Claim the revenue owed from inclusion in the Instantaneous Coretime Pool.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `region_id`: The Region which was assigned to the Pool.
+		/// - `max_timeslices`: The maximum number of timeslices which should be processed. This may
+		///   effect the weight of the call but should be ideally made equivalant to the length of
+		///   the Region `region_id`. If it is less than this, then further dispatches will be
+		///   required with the `region_id` which makes up any remainders of the region to be
+		///   collected.
 		#[pallet::call_index(12)]
 		#[pallet::weight(T::WeightInfo::claim_revenue(*max_timeslices))]
 		pub fn claim_revenue(
 			origin: OriginFor<T>,
 			region_id: RegionId,
 			max_timeslices: Timeslice,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 			Self::do_claim_revenue(region_id, max_timeslices)?;
-			Ok(())
+			Ok(Pays::No.into())
 		}
 
+		/// Purchase credit for use in the Instantaneous Coretime Pool.
+		///
+		/// - `origin`: Must be a Signed origin able to pay at least `amount`.
+		/// - `amount`: The amount of credit to purchase.
+		/// - `beneficiary`: The account on the Relay-chain which controls the credit (generally
+		///   this will be the collator's hot wallet).
 		#[pallet::call_index(13)]
 		pub fn purchase_credit(
 			origin: OriginFor<T>,
@@ -444,6 +540,10 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Drop an expired Region from the chain.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `region_id`: The Region which has expired.
 		#[pallet::call_index(14)]
 		pub fn drop_region(
 			origin: OriginFor<T>,
@@ -454,6 +554,10 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
+		/// Drop an expired Instantaneous Pool Contribution record from the chain.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `region_id`: The Region identifying the Pool Contribution which has expired.
 		#[pallet::call_index(15)]
 		pub fn drop_contribution(
 			origin: OriginFor<T>,
@@ -464,6 +568,10 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
+		/// Drop an expired Instantaneous Pool History record from the chain.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `region_id`: The time of the Pool History record which has expired.
 		#[pallet::call_index(16)]
 		pub fn drop_history(
 			origin: OriginFor<T>,
@@ -474,6 +582,10 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
+		/// Request a change to the number of cores available for scheduling work.
+		///
+		/// - `origin`: Must be Root or pass `AdminOrigin`.
+		/// - `core_count`: The desired number of cores to be made available.
 		#[pallet::call_index(17)]
 		pub fn request_core_count(origin: OriginFor<T>, core_count: CoreIndex) -> DispatchResult {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;

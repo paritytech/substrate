@@ -360,8 +360,10 @@ impl<T: Config> Pallet<T> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		ensure!(status.last_timeslice > when + config.contribution_timeout, Error::<T>::StillValid);
-		ensure!(InstaPoolHistory::<T>::contains_key(when), Error::<T>::NoHistory);
-		InstaPoolHistory::<T>::remove(when);
+		let record = InstaPoolHistory::<T>::take(when).ok_or(Error::<T>::NoHistory)?;
+		if let Some(payout) = record.maybe_payout {
+			let _ = Self::charge(&Self::account_id(), payout);
+		}
 		Ok(())
 	}
 }
