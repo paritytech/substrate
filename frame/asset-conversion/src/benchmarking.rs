@@ -111,7 +111,12 @@ benchmarks! {
 	verify {
 		let lp_token = get_lp_token_id::<T>();
 		let pool_id = (asset1.clone(), asset2.clone());
-		assert_last_event::<T>(Event::PoolCreated { creator: caller.clone(), pool_id, pool_account: AssetConversion::<T>::get_pool_account(&pool_id), lp_token }.into());
+		assert_last_event::<T>(Event::PoolCreated {
+			creator: caller.clone(),
+			pool_account: AssetConversion::<T>::get_pool_account(&pool_id),
+			pool_id,
+			lp_token }.into()
+		);
 	}
 
 	add_liquidity {

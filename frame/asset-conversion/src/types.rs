@@ -69,7 +69,7 @@ pub enum NativeOrAssetId<AssetId>
 where
 	AssetId: Ord,
 {
-	/// Native asset. For example, on statemint this would be dot.
+	/// Native asset. For example, on AssetHubPolkadot this would be dot.
 	#[default]
 	Native,
 	/// A non-native asset id.
