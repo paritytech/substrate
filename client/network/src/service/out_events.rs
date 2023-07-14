@@ -200,7 +200,7 @@ impl OutChannels {
 					// We don't want to spam the logs, so we only log on debug level
 					debug!(
 						target: LOG_TARGET,
-						"Channel `{}` is overflowed. Number of events: {}",
+						"Channel `{}` is overflowed again. Number of events: {}",
 						sender.name, current_pending
 					);
 				}
