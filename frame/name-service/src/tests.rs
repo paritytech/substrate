@@ -21,11 +21,8 @@
 
 use super::*;
 use crate::mock::*;
-use frame_support::{assert_noop, assert_ok};
-
 use codec::Encode;
-// use sp_std::prelude::*;
-// use sp_runtime::traits::One;
+use frame_support::{assert_noop, assert_ok, BoundedVec};
 use sp_io::hashing::blake2_256;
 
 fn add_blocks(n: u64) {
@@ -952,5 +949,57 @@ mod subnodes {
 				Error::<Test>::RegistrationNotExpired
 			);
 		});
+	}
+}
+
+mod domains {
+	use super::*;
+
+	#[test]
+	fn domain_registration_works_and_handles_errors() {
+		new_test_ext().execute_with(|| {
+			let suffix_existing: BoundedVec<u8, <Test as Config>::MaxSuffixLength> =
+				BoundedVec::try_from("pdot".as_bytes().to_vec()).unwrap();
+
+			let suffix_new: BoundedVec<u8, <Test as Config>::MaxSuffixLength> =
+				BoundedVec::try_from("dom".as_bytes().to_vec()).unwrap();
+
+			assert_noop!(
+				NameService::register_domain(
+					RuntimeOrigin::root(),
+					Domain { id: 2, suffix: suffix_existing }
+				),
+				Error::<Test>::SuffixExists
+			);
+
+			assert_noop!(
+				NameService::register_domain(
+					RuntimeOrigin::root(),
+					Domain { id: 1, suffix: suffix_new.clone() }
+				),
+				Error::<Test>::DomainExists
+			);
+
+			// successfully register a new domain
+			let id = 2;
+			assert_ok!(NameService::register_domain(
+				RuntimeOrigin::root(),
+				Domain { id, suffix: suffix_new }
+			));
+		})
+	}
+
+	#[test]
+	fn domain_deregistration_works_and_handles_errors() {
+		new_test_ext().execute_with(|| {
+			let id_existing = 1u32;
+			let id_new = 2u32;
+
+			assert_noop!(
+				NameService::deregister_domain(RuntimeOrigin::root(), id_new),
+				Error::<Test>::DomainNotFound
+			);
+			assert_ok!(NameService::deregister_domain(RuntimeOrigin::root(), id_existing));
+		})
 	}
 }

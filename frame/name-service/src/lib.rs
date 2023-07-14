@@ -387,6 +387,8 @@ pub mod pallet {
 		SubNodesDisabled,
 		/// This suffix already exists in storage.
 		SuffixExists,
+		/// The provided domain ID already exists.
+		DomainExists,
 		/// This commitment hash already exists in storage.
 		CommitmentExists,
 		/// The commitment cannot yet be removed. Has not expired.
@@ -706,6 +708,7 @@ pub mod pallet {
 				!ReverseDomainsLookup::<T>::contains_key(&para.suffix),
 				Error::<T>::SuffixExists
 			);
+			ensure!(!DomainRegistrations::<T>::contains_key(para.id), Error::<T>::DomainExists,);
 			DomainRegistrations::<T>::insert(para.id, para.suffix.clone());
 			ReverseDomainsLookup::<T>::insert(para.suffix.clone(), para.id);
 			Self::deposit_event(Event::<T>::DomainRegistered {
