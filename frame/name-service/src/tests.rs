@@ -950,6 +950,61 @@ mod subnodes {
 			);
 		});
 	}
+
+	#[test]
+	fn can_deregister_tree_of_subnodes() {
+		new_test_ext().execute_with(|| {
+			// regiser top level node `alice`
+			let owner = 2;
+			let (_, parent_hash) = alice_register_bob_senario_setup();
+
+			// register subnode `child1.alice`
+			let child1 = "child1".as_bytes();
+			let child1_label_hash = blake2_256(&child1);
+			let child1_hash = NameService::subnode_hash(parent_hash, child1_label_hash);
+
+			assert_ok!(NameService::set_subnode_record(
+				RuntimeOrigin::signed(owner),
+				parent_hash,
+				child1.to_vec()
+			));
+
+			// register subnode `child2.child1.alice`
+			let child2 = "child2".as_bytes();
+			let child2_label_hash = blake2_256(&child2);
+			let child2_hash = NameService::subnode_hash(parent_hash, child2_label_hash);
+
+			assert_ok!(NameService::set_subnode_record(
+				RuntimeOrigin::signed(owner),
+				parent_hash,
+				child2.to_vec()
+			));
+
+			// both `alice` and her subnodes should now exist
+			assert!(Registrations::<Test>::get(parent_hash).is_some());
+			assert!(Registrations::<Test>::get(child1_hash).is_some());
+			assert!(Registrations::<Test>::get(child2_hash).is_some());
+
+			// nodes and subnodes can be deregistered in any order by the owner.
+			// firstly deregister `child1.alice`.
+			assert_ok!(NameService::deregister_subnode(
+				RuntimeOrigin::signed(owner),
+				parent_hash,
+				child1_label_hash
+			));
+
+			// deregister top level domain `alice`.
+			assert_ok!(NameService::deregister(RuntimeOrigin::signed(owner), parent_hash));
+
+			// finally, deregister `child2.alice`. Because `alice` no longer exists, anyone can now
+			// deregister `child2.alice`.
+			assert_ok!(NameService::deregister_subnode(
+				RuntimeOrigin::signed(3),
+				parent_hash,
+				child2_label_hash
+			));
+		})
+	}
 }
 
 mod domains {
