@@ -972,11 +972,11 @@ mod subnodes {
 			// register subnode `child2.child1.alice`
 			let child2 = "child2".as_bytes();
 			let child2_label_hash = blake2_256(&child2);
-			let child2_hash = NameService::subnode_hash(child1_hash.clone(), child2_label_hash);
+			let child2_hash = NameService::subnode_hash(child1_hash, child2_label_hash);
 
 			assert_ok!(NameService::set_subnode_record(
 				RuntimeOrigin::signed(owner),
-				child1_hash.clone(),
+				child1_hash,
 				child2.to_vec()
 			));
 
