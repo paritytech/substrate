@@ -17,6 +17,7 @@
 
 //! Implementations for the Staking FRAME Pallet.
 
+use delegation::Delegation;
 use frame_election_provider_support::{
 	bounds::{CountBound, SizeBound},
 	data_provider, BoundedSupportsOf, DataProviderBounds, ElectionDataProvider, ElectionProvider,
@@ -1776,6 +1777,17 @@ impl<T: Config> DelegationInterface for Pallet<T> {
 		delegatee: Self::AccountId,
 		value: Self::Balance,
 	) -> sp_runtime::DispatchResult {
+		let delegator_balance = T::Currency::free_balance(&delegator);
+		ensure!(value >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
+		ensure!(delegator_balance >= value, Error::<T>::InsufficientBond);
+
+		let delegation = Delegation::get(delegator.clone(), delegatee.clone());
+		let existing_balance: BalanceOf<T> = delegation.map(|d: Delegation<T>| d.balance).unwrap_or_default();
+		let new_balance = existing_balance + value;
+
+		T::Currency::set_lock(STAKING_ID, &delegator, new_balance, WithdrawReasons::all());
+		// delegation.update_balance(new_balance);
+
 		// try lock value from delegator
 		// add to DelegationLedger and Delegations storage.
 		// stake value to delegatee
@@ -1785,9 +1797,9 @@ impl<T: Config> DelegationInterface for Pallet<T> {
 
 	// withdraw + unlock
 	fn remove_delegate(
-		delegator: Self::AccountId,
-		delegatee: Self::AccountId,
-		value: Self::Balance,
+		_delegator: Self::AccountId,
+		_delegatee: Self::AccountId,
+		_value: Self::Balance,
 	) -> sp_runtime::DispatchResult {
 		// let delegation = delegation::get(delegator, delegatee);
 		// ensure!(value >= delegation.value, Error::<T>::InsufficientValue);

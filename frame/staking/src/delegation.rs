@@ -21,10 +21,11 @@
 //! (delegatee). Multiple delegators can delegate to the same delegatee. The delegatee is then able
 //! to use the funds of all delegators to nominate a set of validators.
 
-use crate::{BalanceOf, Config};
+use crate::{Delegatee, Delegations, BalanceOf, Config};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
+use frame_support::traits::Defensive;
 
 /// A ledger of a delegator.
 ///
@@ -39,4 +40,22 @@ pub struct DelegationLedger<T: Config> {
 	/// Slashes that are not yet applied.
 	#[codec(compact)]
 	pub pending_slash: BalanceOf<T>,
+}
+
+pub struct Delegation<T: Config> {
+	pub ledger: DelegationLedger<T>,
+	pub delegator: T::AccountId,
+	pub delegatee: T::AccountId,
+	pub balance: BalanceOf<T>,
+}
+
+impl<T: Config> Delegation<T> {
+	/// The maximum number of delegators that can delegate to a single delegatee.
+	pub fn get(delegator: T::AccountId, delegatee: T::AccountId) -> Option<Self> {
+		let delegated_balance = Delegations::<T>::get(&delegator, &delegatee)?;
+		// since delegated balance exists, delegatee ledger must exist.
+		let ledger = Delegatee::<T>::get(&delegatee).defensive()?;
+
+		Some(Self { ledger, delegator, delegatee, balance: delegated_balance })
+	}
 }
