@@ -152,6 +152,11 @@ mod commit_reveal {
 			let secret = 3_u64;
 			let name = "alice".as_bytes().to_vec();
 			let encoded_bytes = (&name, secret).encode();
+
+			// uncomment to verify hexes in `-- --nocapture`.
+			// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&encoded_bytes));
+			// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&commitment_hash));
+
 			let commitment_hash = blake2_256(&encoded_bytes);
 			let length = 10;
 			let name_hash = sp_io::hashing::blake2_256(&name);
@@ -176,14 +181,12 @@ mod commit_reveal {
 			assert_eq!(registration.expiry.unwrap(), 22);
 
 			// ensure correct balance is deducated from sender
-			// commit deposit + registration fee + length fee
-			// 10 + 1 + 10  = 21
-			// commitment deposit returned
-			// 21 - 10 = 11
+			// registration fee + length fee
+			// 10 + 1  = 11
 			assert_eq!(Balances::free_balance(&1), 88);
 
-			// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&encoded_bytes));
-			// println!("{:?}", sp_core::hexdisplay::HexDisplay::from(&commitment_hash));
+			// commitment deposit is repatriated to the name owner.
+			assert_eq!(Balances::reserved_balance(&owner), 1);
 		});
 	}
 
