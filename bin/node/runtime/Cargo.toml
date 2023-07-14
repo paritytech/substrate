@@ -335,6 +335,7 @@ try-runtime = [
 	"pallet-message-queue/try-runtime",
 	"pallet-mmr/try-runtime",
 	"pallet-multisig/try-runtime",
+	"pallet-name-service/try-runtime",
 	"pallet-nomination-pools/try-runtime",
 	"pallet-offences/try-runtime",
 	"pallet-glutton/try-runtime",
