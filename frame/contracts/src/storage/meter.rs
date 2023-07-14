@@ -19,8 +19,7 @@
 
 use crate::{
 	storage::{ContractInfo, DepositAccount},
-	BalanceOf, CodeInfoOf, Config, Error, Inspect, Origin, Pallet, StorageDeposit as Deposit,
-	System,
+	BalanceOf, CodeInfo, Config, Error, Inspect, Origin, Pallet, StorageDeposit as Deposit, System,
 };
 
 use frame_support::{
@@ -424,11 +423,11 @@ where
 		origin: &T::AccountId,
 		contract: &T::AccountId,
 		info: &mut ContractInfo<T>,
+		code_info: &CodeInfo<T>,
 	) -> Result<DepositOf<T>, DispatchError> {
 		debug_assert!(self.is_alive());
 		let ed = Pallet::<T>::min_balance();
 
-		let code_info = CodeInfoOf::<T>::get(info.code_hash).ok_or(Error::<T>::CodeNotFound)?;
 		let deposit = info.update_base_deposit(&code_info);
 		if deposit > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())

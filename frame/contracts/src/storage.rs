@@ -22,7 +22,7 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, Key},
 	weights::WeightInfo,
-	AddressGenerator, BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue,
+	AddressGenerator, BalanceOf, CodeHash, CodeInfo, Config, ContractInfoOf, DeletionQueue,
 	DeletionQueueCounter, Error, Pallet, TrieId, SENTINEL,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -220,7 +220,7 @@ impl<T: Config> ContractInfo<T> {
 	///
 	/// The base deposit is updated when the `code_hash` of the contract changes, as it depends on
 	/// the deposit paid to upload the contract's code.
-	pub fn update_base_deposit(&mut self, code_info: &crate::CodeInfo<T>) -> BalanceOf<T> {
+	pub fn update_base_deposit(&mut self, code_info: &CodeInfo<T>) -> BalanceOf<T> {
 		let ed = Pallet::<T>::min_balance();
 		let info_deposit =
 			Diff { bytes_added: self.encoded_size() as u32, items_added: 1, ..Default::default() }

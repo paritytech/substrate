@@ -411,6 +411,10 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		&self.code_hash
 	}
 
+	fn code_info(&self) -> &CodeInfo<T> {
+		&self.code_info
+	}
+
 	fn code_len(&self) -> u32 {
 		self.code.len() as u32
 	}
