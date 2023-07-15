@@ -203,6 +203,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxCommitmentAge: Get<BlockNumberFor<Self>>;
 
+		/// The bound on the length a name can be registered for. Applies to initial registration
+		/// and renewing.
+		#[pallet::constant]
+		type MaxRegistrationLength: Get<BlockNumberFor<Self>>;
+
 		/// Maximum length of a name.
 		#[pallet::constant]
 		type MaxNameLength: Get<u32>;
@@ -401,12 +406,14 @@ pub mod pallet {
 		RegistrationNotExpired,
 		/// This registration does not exist.
 		RegistrationNotFound,
+		/// The provided registration length is too long.
+		MaxRegistrationLengthExceeded,
 		/// Name is too short to be registered.
 		NameTooShort,
 		/// The name was longer than the configured limit.
-		NameTooLong,
+		NameLengthExceeded,
 		/// The text was longer than the configured limit.
-		TextTooLong,
+		TextLengthExceeded,
 		/// The account is not the name owner.
 		NotOwner,
 		/// Cannot renew this registration.
@@ -484,7 +491,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let name_bounded: BoundedVec<u8, T::MaxNameLength> =
-				BoundedVec::try_from(name).map_err(|_| Error::<T>::NameTooLong)?;
+				BoundedVec::try_from(name).map_err(|_| Error::<T>::NameLengthExceeded)?;
 			Self::do_reveal(sender, name_bounded.to_vec(), secret, length)?;
 			Ok(())
 		}
@@ -574,7 +581,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let label_bounded: BoundedVec<u8, T::MaxNameLength> =
-				BoundedVec::try_from(label).map_err(|_| Error::<T>::NameTooLong)?;
+				BoundedVec::try_from(label).map_err(|_| Error::<T>::NameLengthExceeded)?;
 			Self::do_set_subnode_record(sender, parent_hash, &label_bounded)?;
 			Ok(())
 		}
@@ -665,7 +672,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let name_bounded: BoundedVec<u8, T::MaxNameLength> =
-				BoundedVec::try_from(name).map_err(|_| Error::<T>::NameTooLong)?;
+				BoundedVec::try_from(name).map_err(|_| Error::<T>::NameLengthExceeded)?;
 			ensure!(Registrations::<T>::contains_key(name_hash), Error::<T>::RegistrationNotFound);
 			T::NameServiceResolver::set_name(name_hash, name_bounded, sender)?;
 			Ok(())
@@ -686,7 +693,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let text_bounded: BoundedVec<u8, T::MaxTextLength> =
-				BoundedVec::try_from(text).map_err(|_| Error::<T>::TextTooLong)?;
+				BoundedVec::try_from(text).map_err(|_| Error::<T>::TextLengthExceeded)?;
 
 			let registration =
 				Registrations::<T>::get(name_hash).ok_or(Error::<T>::RegistrationNotFound)?;

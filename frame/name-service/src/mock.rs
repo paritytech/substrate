@@ -52,6 +52,7 @@ parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
 }
+
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Block = Block;
@@ -96,16 +97,16 @@ impl pallet_balances::Config for Test {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Currency = Balances;
 	type BlockNumberToBalance = Identity;
-	type RegistrationFeeHandler = ();
+	type Currency = Balances;
 	type MinCommitmentAge = ConstU64<10>;
 	type MaxCommitmentAge = ConstU64<10>;
-	// 2048 is the standard URL limit
-	type MaxNameLength = ConstU32<2048>;
-	type MaxTextLength = ConstU32<2048>;
+	type MaxNameLength = ConstU32<2048>; // 2048 is the standard URL limit
 	type MaxSuffixLength = ConstU32<4>;
+	type MaxTextLength = ConstU32<2048>;
 	type NameServiceResolver = NameService;
+	type MaxRegistrationLength = ConstU64<365>;
+	type RegistrationFeeHandler = ();
 	type WeightInfo = ();
 }
 

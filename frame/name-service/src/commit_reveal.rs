@@ -107,7 +107,11 @@ impl<T: Config> Pallet<T> {
 		secret: u64,
 		length: BlockNumberFor<T>,
 	) -> DispatchResult {
-		ensure!(name.len() <= T::MaxNameLength::get() as usize, Error::<T>::NameTooLong);
+		ensure!(
+			length <= T::MaxRegistrationLength::get(),
+			Error::<T>::MaxRegistrationLengthExceeded,
+		);
+		ensure!(name.len() <= T::MaxNameLength::get() as usize, Error::<T>::NameLengthExceeded);
 
 		let commitment_hash = Self::commitment_hash(&name, secret);
 		let commitment = Self::get_commitment(commitment_hash)?;
@@ -179,6 +183,11 @@ impl<T: Config> Pallet<T> {
 
 			// calculate additional length to determine fee to be paid
 			let length = expiry.saturating_sub(current_expiry);
+
+			ensure!(
+				length <= T::MaxRegistrationLength::get(),
+				Error::<T>::MaxRegistrationLengthExceeded,
+			);
 
 			// determine renew fee
 			let fee = Self::length_fee(length);

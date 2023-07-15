@@ -22,7 +22,7 @@
 use super::*;
 use crate::mock::*;
 use codec::Encode;
-use frame_support::{assert_noop, assert_ok, BoundedVec};
+use frame_support::{assert_noop, assert_ok, traits::Currency, BoundedVec};
 use sp_io::hashing::blake2_256;
 
 fn add_blocks(n: u64) {
@@ -211,6 +211,17 @@ mod commit_reveal {
 			assert_eq!(commitment.when, 1);
 			add_blocks(min_commitment - 1);
 
+			// length is beyond max allowed.
+			assert_noop!(
+				NameService::reveal(
+					RuntimeOrigin::signed(sender),
+					name.clone(),
+					secret,
+					<<Test as Config>::MaxRegistrationLength as Get<u64>>::get() + 1u64
+				),
+				Error::<Test>::MaxRegistrationLengthExceeded
+			);
+
 			// Reveal is too early
 			assert_noop!(
 				NameService::reveal(RuntimeOrigin::signed(sender), name.clone(), secret, length),
@@ -239,7 +250,7 @@ mod commit_reveal {
 
 			assert_noop!(
 				NameService::reveal(RuntimeOrigin::signed(2), name.clone(), secret, length),
-				Error::<Test>::NameTooLong,
+				Error::<Test>::NameLengthExceeded,
 			);
 		});
 	}
@@ -425,10 +436,23 @@ mod registrar {
 				Error::<Test>::ExpiryInvalid,
 			);
 
-			let new_expiry_too_expensive = 10000;
+			let new_expiry_too_expensive = 200;
 			assert_noop!(
 				NameService::renew(RuntimeOrigin::signed(1), name_hash, new_expiry_too_expensive),
 				BalancesError::InsufficientBalance,
+			);
+
+			// renew length is beyond max allowed.
+			Balances::make_free_balance_be(&1, 1000);
+
+			// new expiry = 1 block after max allowed length increase
+			assert_noop!(
+				NameService::renew(
+					RuntimeOrigin::signed(1),
+					name_hash,
+					<<Test as Config>::MaxRegistrationLength as Get<u64>>::get() + 10u64 + 13u64
+				),
+				Error::<Test>::MaxRegistrationLengthExceeded
 			);
 		});
 	}

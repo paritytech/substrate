@@ -24,6 +24,7 @@ use crate::Pallet as NameService;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get, ReservableCurrency};
 use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System, RawOrigin};
+use sp_arithmetic::traits::BaseArithmetic;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, One};
 use sp_std::vec;
@@ -183,7 +184,7 @@ benchmarks! {
 		NameService::<T>::commit(origin.into(), owner.clone(), hash.clone()).expect("Must commit");
 		let run_to: BlockNumberFor<T> = 100u32.into();
 		run_to_block::<T>(run_to);
-	}: _(RawOrigin::Signed(caller.clone()), name.to_vec(), secret, 100u32.into()
+	}: _(RawOrigin::Signed(caller.clone()), name.to_vec(), secret, T::MaxRegistrationLength::get().into()
 	)
 	verify {
 		// commitment has been removed.
@@ -231,7 +232,8 @@ benchmarks! {
 			vec![0; T::MaxNameLength::get() as usize],
 			true
 		);
-	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), BlockNumberFor::<T>::from(500u32))
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), T::MaxRegistrationLength::get()
+)
 	verify {
 		assert_eq!(
 			Registrations::<T>::get(name_hash).unwrap(),

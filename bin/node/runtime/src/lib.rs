@@ -1196,26 +1196,28 @@ impl pallet_message_queue::Config for Runtime {
 }
 
 parameter_types! {
-	pub const MinimumCommitmentPeriod: BlockNumber = 1 * MINUTES;
 	pub const CommitmentAlivePeriod: BlockNumber = 1 * DAYS;
-	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
 	pub const MaxCommitmentAge: BlockNumber = 10 * MINUTES;
+	pub const MinCommitmentAge: BlockNumber = 1 * MINUTES;
 	pub const MaxNameLength: u32 = 2048; // 2048 is the standard URL limit
-	pub const MaxTextLength: u32 = 2048;
+	pub const MaxRegistrationLength: u32 = 365 * DAYS;
 	pub const MaxSuffixLength: u32 = 4;
+	pub const MaxTextLength: u32 = 2048;
+	pub const MinimumCommitmentPeriod: BlockNumber = 1 * MINUTES;
 }
 
 impl pallet_name_service::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type Currency = Balances;
 	type BlockNumberToBalance = ConvertInto;
-	type MinCommitmentAge = MinCommitmentAge;
+	type Currency = Balances;
 	type MaxCommitmentAge = MaxCommitmentAge;
+	type MinCommitmentAge = MinCommitmentAge;
 	type MaxNameLength = MaxNameLength;
-	type RegistrationFeeHandler = (); // registration fees are currently burnt.
-	type MaxTextLength = MaxTextLength;
+	type MaxRegistrationLength = MaxRegistrationLength;
 	type MaxSuffixLength = MaxSuffixLength;
+	type MaxTextLength = MaxTextLength;
 	type NameServiceResolver = pallet_name_service::Pallet<Self>;
+	type RegistrationFeeHandler = (); // registration fees are currently burnt.
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_name_service::weights::SubstrateWeight<Runtime>;
 }
 
