@@ -23,6 +23,8 @@ use crate::CoreAssignment::Task;
 use frame_benchmarking::v2::*;
 use frame_support::traits::EnsureOrigin;
 use sp_arithmetic::Perbill;
+use frame_support::storage::bounded_vec::BoundedVec;
+use sp_core::Get;
 
 fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
 	ConfigRecord {
@@ -37,11 +39,36 @@ fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
 	}
 }
 
+fn new_schedule() -> Schedule {
+	// Max items for worst case
+	let mut items = Vec::new();
+	for i in 0..80 {
+		items.push(ScheduleItem { assignment: Task(i), part: CoreMask::complete() });
+	}
+	Schedule::truncate_from(items)
+}
+
+fn setup_reservations<T: Config>(n: u32) {
+	let schedule = new_schedule();
+
+	Reservations::<T>::put(
+		BoundedVec::try_from(vec![schedule.clone(); n as usize]).unwrap(),
+	);
+}
+
+fn setup_leases<T: Config>(n: u32, task: u32, until: u32) {
+	Leases::<T>::put(
+		BoundedVec::try_from(vec![
+			LeaseRecordItem { task , until: until.into() };
+			n as usize
+		])
+		.unwrap(),
+	);
+}
+
 #[benchmarks]
 mod benches {
 	use super::*;
-	use frame_support::storage::bounded_vec::BoundedVec;
-	use sp_core::Get;
 
 	#[benchmark]
 	fn configure() -> Result<(), BenchmarkError> {
@@ -60,27 +87,16 @@ mod benches {
 
 	#[benchmark]
 	fn reserve() -> Result<(), BenchmarkError> {
-		// Max items for worst case
-		let mut items = Vec::new();
-		for i in 0..80 {
-			items.push(ScheduleItem { assignment: Task(i), part: CoreMask::complete() });
-		}
-		let schedule = Schedule::truncate_from(items);
+		let schedule = new_schedule();
 
-		// Assume MaxReservations to be almost filled for worst case
-		Reservations::<T>::put(
-			BoundedVec::try_from(vec![
-				schedule.clone();
-				T::MaxReservedCores::get().saturating_sub(1) as usize
-			])
-			.unwrap(),
-		);
+		// Assume Reservations to be almost filled for worst case
+		setup_reservations::<T>(T::MaxReservedCores::get().saturating_sub(1));
 
 		let origin =
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
-		_(origin as T::RuntimeOrigin, schedule.clone());
+		_(origin as T::RuntimeOrigin, schedule);
 
 		assert_eq!(Reservations::<T>::get().len(), T::MaxReservedCores::get() as usize);
 
@@ -91,18 +107,8 @@ mod benches {
 	fn unreserve(
 		n: Linear<0, { T::MaxReservedCores::get().saturating_sub(1) }>,
 	) -> Result<(), BenchmarkError> {
-		// Max items for worst case
-		let mut items = Vec::new();
-		for i in 0..80 {
-			items.push(ScheduleItem { assignment: Task(i), part: CoreMask::complete() });
-		}
-		let schedule = Schedule::truncate_from(items);
-
-		// Assume MaxReservations to be filled for worst case
-		Reservations::<T>::put(
-			BoundedVec::try_from(vec![schedule.clone(); T::MaxReservedCores::get() as usize])
-				.unwrap(),
-		);
+		// Assume Reservations to be filled for worst case
+		setup_reservations::<T>(T::MaxReservedCores::get());
 
 		let origin =
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
@@ -114,6 +120,48 @@ mod benches {
 			Reservations::<T>::get().len(),
 			T::MaxReservedCores::get().saturating_sub(1) as usize
 		);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn set_lease() -> Result<(), BenchmarkError> {
+		let task = 1u32;
+		let until = 10u32.into();
+
+		// Assume Leases to be filled for worst case
+		setup_leases::<T>(T::MaxLeasedCores::get().saturating_sub(1), task, until);
+
+		let origin =
+			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, task, until);
+
+		assert_eq!(Leases::<T>::get().len(), T::MaxLeasedCores::get() as usize);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn start_sales(n: Linear<0, { T::MaxReservedCores::get().saturating_sub(1) }>,) -> Result<(), BenchmarkError> {
+		Configuration::<T>::put(new_config_record::<T>());
+
+		// Assume Reservations to be almost filled for worst case
+		setup_reservations::<T>(T::MaxReservedCores::get());
+
+		// Assume Leases to be filled for worst case
+		setup_leases::<T>(T::MaxLeasedCores::get(), 1, 10);
+
+		let initial_price = 10u32.into();
+
+		let origin =
+			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, initial_price, n.try_into().unwrap());
+
+		assert!(SaleInfo::<T>::get().is_some());
 
 		Ok(())
 	}
