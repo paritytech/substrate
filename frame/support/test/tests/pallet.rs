@@ -1154,6 +1154,7 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::NMap2<Runtime>>::final_prefix());
+		assert_eq!(pallet::Pallet::<Runtime>::nmap2((1, 2)), Some(3u64));
 
 		pallet::NMap3::<Runtime>::insert((&1, &2), &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"NMap3")].concat();
@@ -1161,6 +1162,7 @@ fn storage_expand() {
 		k.extend(2u16.using_encoded(twox_64_concat));
 		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
 		assert_eq!(&k[..32], &<pallet::NMap3<Runtime>>::final_prefix());
+		assert_eq!(pallet::Pallet::<Runtime>::nmap3((1, 2)), Ok(3u128));
 		assert_eq!(
 			pallet::NMap3::<Runtime>::get((2, 3)),
 			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
@@ -1171,6 +1173,12 @@ fn storage_expand() {
 		k.extend(1u8.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u32>(&k), Some(3u32));
 		assert_eq!(pallet::CountedNMap::<Runtime>::count(), 1);
+		assert_eq!(
+			unhashed::get::<u32>(
+				&[twox_128(b"Example"), twox_128(b"CounterForCountedNMap")].concat()
+			),
+			Some(1u32)
+		);
 
 		pallet::CountedNMap2::<Runtime>::insert((&1, &2), &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"CountedNMap2")].concat();
@@ -1178,6 +1186,13 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(pallet::CountedNMap2::<Runtime>::count(), 1);
+		assert_eq!(
+			unhashed::get::<u32>(
+				&[twox_128(b"Example"), twox_128(b"CounterForCountedNMap2")].concat()
+			),
+			Some(1u32)
+		);
+		assert_eq!(pallet::Pallet::<Runtime>::counted_nmap2((1, 2)), Some(3u64));
 
 		pallet::CountedNMap3::<Runtime>::insert((&1, &2), &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"CountedNMap3")].concat();
@@ -1185,9 +1200,16 @@ fn storage_expand() {
 		k.extend(2u16.using_encoded(twox_64_concat));
 		assert_eq!(pallet::CountedNMap3::<Runtime>::count(), 1);
 		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
+		assert_eq!(pallet::Pallet::<Runtime>::counted_nmap3((1, 2)), Ok(3u128));
 		assert_eq!(
 			pallet::CountedNMap3::<Runtime>::get((2, 3)),
 			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
+		);
+		assert_eq!(
+			unhashed::get::<u32>(
+				&[twox_128(b"Example"), twox_128(b"CounterForCountedNMap3")].concat()
+			),
+			Some(1u32)
 		);
 
 		#[cfg(feature = "frame-feature-testing")]
