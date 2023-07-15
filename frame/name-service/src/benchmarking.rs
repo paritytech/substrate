@@ -24,7 +24,6 @@ use crate::Pallet as NameService;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, Get, ReservableCurrency};
 use frame_system::{pallet_prelude::BlockNumberFor, Pallet as System, RawOrigin};
-use sp_arithmetic::traits::BaseArithmetic;
 use sp_io::hashing::blake2_256;
 use sp_runtime::traits::{Bounded, One};
 use sp_std::vec;
