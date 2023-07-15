@@ -246,7 +246,7 @@ pub mod pallet {
 		}
 
 		/// Set how much of the remaining `proof_size` weight should be consumed by `on_idle`.
-		//
+		///
 		/// `1.0` means that all remaining `proof_size` will be consumed. The PoV benchmarking
 		/// results that are used here are likely an over-estimation. 100% intended consumption will
 		/// therefore translate to less than 100% actual consumption.

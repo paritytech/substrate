@@ -296,6 +296,7 @@ pub mod pallet {
 			/// The amount which was claimed at this timeslice.
 			amount: BalanceOf<T>,
 		},
+		/// A revenue claim has (possibly only in part) been paid.
 		RevenueClaimPaid {
 			/// The account to whom revenue has been paid.
 			who: T::AccountId,
@@ -320,15 +321,26 @@ pub mod pallet {
 			/// The duration of the Region.
 			duration: Timeslice,
 		},
+		/// Some historical Instantaneous Core Pool contribution record has been dropped.
 		ContributionDropped {
 			/// The Region whose contribution is no longer exists.
 			region_id: RegionId,
 		},
+		/// Some historical Instantaneous Core Pool payment record has been dropped.
 		HistoryDropped {
 			/// The timeslice whose history is no longer available.
 			when: Timeslice,
 			/// The amount of revenue the system has taken.
 			revenue: BalanceOf<T>,
+		},
+		/// A Core has been assigned to one or more tasks and/or the Pool on the Relay-chain.
+		CoreAssigned {
+			/// The index of the Core which has been assigned.
+			core: CoreIndex,
+			/// The Relay-chain block at which this assignment should take effect.
+			when: RelayBlockNumberOf<T>,
+			/// The workload to be done on the Core.
+			assignment: Schedule,
 		},
 	}
 

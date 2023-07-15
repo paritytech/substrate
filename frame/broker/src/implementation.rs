@@ -308,9 +308,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(crate) fn charge(who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
-		T::OnRevenue::on_unbalanced(T::Currency::withdraw(
-			&who, amount, Exact, Expendable, Polite,
-		)?);
+		let credit = T::Currency::withdraw(&who, amount, Exact, Expendable, Polite)?;
+		T::OnRevenue::on_unbalanced(credit);
 		Ok(())
 	}
 

@@ -21,9 +21,8 @@ use super::*;
 
 use crate::CoreAssignment::Task;
 use frame_benchmarking::v2::*;
-use frame_support::traits::EnsureOrigin;
+use frame_support::{storage::bounded_vec::BoundedVec, traits::EnsureOrigin};
 use sp_arithmetic::Perbill;
-use frame_support::storage::bounded_vec::BoundedVec;
 use sp_core::Get;
 
 fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
@@ -51,18 +50,13 @@ fn new_schedule() -> Schedule {
 fn setup_reservations<T: Config>(n: u32) {
 	let schedule = new_schedule();
 
-	Reservations::<T>::put(
-		BoundedVec::try_from(vec![schedule.clone(); n as usize]).unwrap(),
-	);
+	Reservations::<T>::put(BoundedVec::try_from(vec![schedule.clone(); n as usize]).unwrap());
 }
 
 fn setup_leases<T: Config>(n: u32, task: u32, until: u32) {
 	Leases::<T>::put(
-		BoundedVec::try_from(vec![
-			LeaseRecordItem { task , until: until.into() };
-			n as usize
-		])
-		.unwrap(),
+		BoundedVec::try_from(vec![LeaseRecordItem { task, until: until.into() }; n as usize])
+			.unwrap(),
 	);
 }
 
@@ -144,7 +138,9 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn start_sales(n: Linear<0, { T::MaxReservedCores::get().saturating_sub(1) }>,) -> Result<(), BenchmarkError> {
+	fn start_sales(
+		n: Linear<0, { T::MaxReservedCores::get().saturating_sub(1) }>,
+	) -> Result<(), BenchmarkError> {
 		Configuration::<T>::put(new_config_record::<T>());
 
 		// Assume Reservations to be almost filled for worst case
