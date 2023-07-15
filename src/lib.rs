@@ -58,8 +58,9 @@
 //! In broad terms, it is divided into three categories:
 //!
 //! * `sc-*` (short for *substrate-client*) crates, located under `./client` folder. These are all
-//!   the client crates. Notable examples are crates such as [`sc-network`], [`sc-consensus`] and
-//!   [`sc-client-db`], all of which are expected to reside in the client side.
+//!   the client crates. Notable examples are crates such as [`sc-network`], various consensus
+//!   crates, [`sc-rpc-api`] and [`sc-client-db`], all of which are expected to reside in the client
+//!   side.
 //! * `sp` (short for *substrate-primitives*) crates, located under `./primitives` folder. These are
 //!   the traits that glue the client and runtime together, but are not opinionated about what
 //!   framework is using for building the runtime. Notable examples are [`sp-api`] and [`sp-io`],
@@ -68,17 +69,28 @@
 //! * `pallet-*` and `frame-*` crates, located under `./frame` folder. These are the crates related
 //!   to FRAME. See [`frame_support`] for more information.
 //!
-//! ## Additional Resources
+//! ## Where To Next?
 //!
-//! Additional resources to get started with substrate:
+//! Additional noteworthy crates within substrate:
+//!
+//! - RPC APIs of a Substrate node: [`sc-rpc-api`]
+//! - CLI Options of a Substrate node: [`sc-cli`]
+//! - All of the consensus related crates provided by Substrate:
+//! 	- [`sc-consensus-aura`]
+//! 	- [`sc-consensus-babe`]
+//! 	- [`sc-consensus-grandpa`]
+//! 	- [`sc-consensus-beefy`]
+//! 	- [`sc-consensus-manual-seal`]
+//! 	- [`sc-consensus-pow`]
+//!
+//! Additional noteworthy external resources:
 //!
 //! - [Substrate Developer Hub](https://substrate.dev)
-//! - [Parity Tech's Rust Docs Hub](https://paritytech.github.io/)
+//! - [Parity Tech's Documentation Hub](https://paritytech.github.io/)
 //! - [Polkadot Wiki](https://wiki.polkadot.network/en/)
 //!
 //! TODO: templates?
 //! TODO: examples?
-//!
 //!
 //! [polkadot]:
 //!     https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&logo=polkadot&logoColor=white
@@ -89,7 +101,17 @@
 //! [`sp-api`]: ../sp_api/index.html
 //! [`sc-client-db`]: ../sc_client_db/index.html
 //! [`sc-network`]: ../sc_network/index.html
-//! [`sc-consensus`]: ../sc_consensus/index.html
+//! [`sc-rpc-api`]: ../sc_rpc_api/index.html
+//! [`sc-cli`]: ../sc_cli/index.html
+//! [`sc-consensus-aura`]: ../sc_consensus_aura/index.html
+//! [`sc-consensus-babe`]: ../sc_consensus_babe/index.html
+//! [`sc-consensus-grandpa`]: ../sc_consensus_grandpa/index.html
+//! [`sc-consensus-beefy`]: ../sc_consensus_beefy/index.html
+//! [`sc-consensus-manual-seal`]: ../sc_consensus_manual_seal/index.html
+//! [`sc-consensus-pow`]: ../sc_consensus_pow/index.html
+
+#![deny(rustdoc::broken_intra_doc_links)]
+#![deny(rustdoc::private_intra_doc_links)]
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// In this module, we explore substrate at a more depth. First, let's establish substrate being
@@ -109,10 +131,10 @@
 /// The client and the runtime of course need to communicate. This is done through two concepts:
 ///
 /// 1. Host functions: a way for the (Wasm) runtime to talk to the client. All host functions are
-///    defined in [`sp_io`]. For example, [`sp_io::storage`] are the set of host functions that
+///    defined in [`sp-io`]. For example, [`sp-io::storage`] are the set of host functions that
 ///    allow the runtime to read and write data to the on-chain state.
 /// 2. Runtime APIs: a way for the client to talk to the Wasm runtime. Runtime APIs are defined
-///    using macros and utilities in [`sp-api`]. For example, [`sp_api::Core`] is the most basic
+///    using macros and utilities in [`sp-api`]. For example, [`sp-api::Core`] is the most basic
 ///    runtime API that any blockchain must implement in order to be able to (re) execute blocks.
 ///
 /// ```mermaid
@@ -154,4 +176,9 @@
 /// ```
 ///
 /// As noted the runtime contains all of the application specific logic of the blockchain.
+///
+/// [`sp-io`]: ../../sp_io/index.html
+/// [`sp-api`]: ../../sp_api/index.html
+/// [`sp-io::storage`]: ../../sp_io/storage/index.html
+/// [`sp-api::Core`]: ../../sp_api/trait.Core.html
 pub mod substrate_diagram {}

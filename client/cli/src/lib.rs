@@ -26,7 +26,7 @@ use clap::{CommandFactory, FromArgMatches, Parser};
 use sc_service::Configuration;
 
 pub mod arg_enums;
-mod commands;
+pub mod commands;
 mod config;
 mod error;
 mod params;

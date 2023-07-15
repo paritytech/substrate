@@ -15,11 +15,18 @@ repository = "https://github.com/paritytech/substrate.git"
 # This list of dependencies is really for documentation purposes only.
 [dependencies]
 aquamarine = "0.3.2"
-# brings in almost all sc- crates
+
 sc-service = { path = "client/service" }
-# brings in almost all sp- crates
+sc-cli = { path = "client/cli" }
+sc-consensus-aura = { path = "client/consensus/aura" }
+sc-consensus-babe = { path = "client/consensus/babe" }
+sc-consensus-grandpa = { path = "client/consensus/grandpa" }
+sc-consensus-beefy = { path = "client/consensus/beefy" }
+sc-consensus-manual-seal = { path = "client/consensus/manual-seal" }
+sc-consensus-pow = { path = "client/consensus/pow" }
+
 sp-runtime = { path = "primitives/runtime" }
-# brings in almost all frame- crates
+
 frame-support = { path = "frame/support" }
 
 [workspace]
