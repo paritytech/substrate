@@ -20,11 +20,40 @@
 use super::*;
 
 use frame_benchmarking::v2::*;
-use frame_system::RawOrigin;
+use frame_support::traits::EnsureOrigin;
+use sp_arithmetic::Perbill;
+
+fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
+	ConfigRecord {
+		advance_notice: 2u32.into(),
+		interlude_length: 1u32.into(),
+		leadin_length: 1u32.into(),
+		ideal_bulk_proportion: Default::default(),
+		limit_cores_offered: None,
+		region_length: 3,
+		renewal_bump: Perbill::from_percent(10),
+		contribution_timeout: 5,
+	}
+}
 
 #[benchmarks]
 mod benches {
 	use super::*;
+
+	#[benchmark]
+	fn configure()  -> Result<(), BenchmarkError> {
+		let config = new_config_record::<T>();
+
+		let origin =
+		T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, config.clone());
+
+		assert_eq!(Configuration::<T>::get(), Some(config));
+
+		Ok(())
+	}
 
 	// Implements a test for each benchmark. Execute with:
 	// `cargo test -p pallet-broker --features runtime-benchmarks`.

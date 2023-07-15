@@ -19,15 +19,16 @@
 
 use crate::{test_fungibles::TestFungibles, *};
 use frame_support::{
-	assert_ok, ensure, parameter_types,
+	assert_ok, ensure, ord_parameter_types, parameter_types,
 	traits::{
+		EitherOfDiverse,
 		fungible::{Balanced, Credit, Inspect, ItemOf, Mutate},
 		nonfungible::Inspect as NftInspect,
 		Hooks, OnUnbalanced,
 	},
 	PalletId,
 };
-use frame_system::EnsureNever;
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_arithmetic::Perbill;
 use sp_core::{ConstU16, ConstU32, ConstU64, H256};
 use sp_runtime::{
@@ -192,6 +193,11 @@ impl OnUnbalanced<Credit<u64, <Test as Config>::Currency>> for IntoZero {
 	}
 }
 
+ord_parameter_types! {
+	pub const One: u64 = 1;
+}
+type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = ItemOf<TestFungibles<(), u64, (), ConstU64<0>, ()>, (), u64>;
@@ -203,7 +209,7 @@ impl crate::Config for Test {
 	type ConvertBalance = Identity;
 	type WeightInfo = ();
 	type PalletId = TestBrokerId;
-	type AdminOrigin = EnsureNever<()>;
+	type AdminOrigin = EnsureOneOrRoot;
 	type PriceAdapter = Linear;
 }
 
@@ -299,4 +305,9 @@ impl TestExt {
 			f()
 		})
 	}
+}
+
+pub fn new_test_ext() -> sp_io::TestExternalities {
+	let c = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	sp_io::TestExternalities::from(c)
 }
