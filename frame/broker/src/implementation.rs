@@ -304,8 +304,8 @@ impl<T: Config> Pallet<T> {
 			}
 			assignment.push(i);
 		}
-		Self::deposit_event(Event::<T>::CoreAssigned { core, when, assignment });
-		T::Coretime::assign_core(core, rc_begin, assignment, None);
+		T::Coretime::assign_core(core, rc_begin, assignment.clone(), None);
+		Self::deposit_event(Event::<T>::CoreAssigned { core, when: rc_begin, assignment });
 	}
 
 	pub(crate) fn charge(who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {

@@ -340,7 +340,7 @@ pub mod pallet {
 			/// The Relay-chain block at which this assignment should take effect.
 			when: RelayBlockNumberOf<T>,
 			/// The workload to be done on the Core.
-			assignment: Schedule,
+			assignment: Vec<(CoreAssignment, PartsOf57600)>,
 		},
 	}
 
