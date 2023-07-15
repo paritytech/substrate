@@ -69,7 +69,16 @@
 //! * `pallet-*` and `frame-*` crates, located under `./frame` folder. These are the crates related
 //!   to FRAME. See [`frame_support`] for more information.
 //!
-//! ## Where To Next?
+//! ## Parachain?
+//!
+//! As noted above, Substrate is the main engine behind the Polkadot ecosystem. One of the ways
+//! through which Polkadot can be utilized is by building "parachains", blockchains that are
+//! connected to Polkadot's shared security.
+//!
+//! To build a parachain, one needs to use [`Cumulus`](https://github.com/paritytech/cumulus/), the library on top of Substrate, empowering
+//! any substrate-based chain to be a Polkadot parachain.
+//!
+//! ## Where To Go Next?
 //!
 //! Additional noteworthy crates within substrate:
 //!
@@ -87,10 +96,15 @@
 //!
 //! - [Substrate Developer Hub](https://substrate.dev)
 //! - [Parity Tech's Documentation Hub](https://paritytech.github.io/)
+//! - [Frontier: Substrate's Ethereum Compatibility Library](https://paritytech.github.io/frontier/)
 //! - [Polkadot Wiki](https://wiki.polkadot.network/en/)
 //!
-//! TODO: templates?
-//! TODO: examples?
+//! Templates:
+//!
+//! - classic [`substrate-node-template`](https://github.com/substrate-developer-hub/substrate-node-template)
+//! - classic [cumulus-parachain-template](https://github.com/substrate-developer-hub/substrate-parachain-template)
+//! - [`extended-parachain-template`](https://github.com/paritytech/extended-parachain-template)
+//! - [`frontier-parachain-template`](https://github.com/paritytech/frontier-parachain-template)
 //!
 //! [polkadot]:
 //!     https://img.shields.io/badge/polkadot-E6007A?style=for-the-badge&logo=polkadot&logoColor=white
