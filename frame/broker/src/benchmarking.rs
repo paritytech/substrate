@@ -19,6 +19,7 @@
 
 use super::*;
 
+use crate::CoreAssignment::Task;
 use frame_benchmarking::v2::*;
 use frame_support::traits::EnsureOrigin;
 use sp_arithmetic::Perbill;
@@ -39,18 +40,80 @@ fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
 #[benchmarks]
 mod benches {
 	use super::*;
+	use frame_support::storage::bounded_vec::BoundedVec;
+	use sp_core::Get;
 
 	#[benchmark]
-	fn configure()  -> Result<(), BenchmarkError> {
+	fn configure() -> Result<(), BenchmarkError> {
 		let config = new_config_record::<T>();
 
 		let origin =
-		T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
 		_(origin as T::RuntimeOrigin, config.clone());
 
 		assert_eq!(Configuration::<T>::get(), Some(config));
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn reserve() -> Result<(), BenchmarkError> {
+		// Max items for worst case
+		let mut items = Vec::new();
+		for i in 0..80 {
+			items.push(ScheduleItem { assignment: Task(i), part: CoreMask::complete() });
+		}
+		let schedule = Schedule::truncate_from(items);
+
+		// Assume MaxReservations to be almost filled for worst case
+		Reservations::<T>::put(
+			BoundedVec::try_from(vec![
+				schedule.clone();
+				T::MaxReservedCores::get().saturating_sub(1) as usize
+			])
+			.unwrap(),
+		);
+
+		let origin =
+			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, schedule.clone());
+
+		assert_eq!(Reservations::<T>::get().len(), T::MaxReservedCores::get() as usize);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn unreserve(
+		n: Linear<0, { T::MaxReservedCores::get().saturating_sub(1) }>,
+	) -> Result<(), BenchmarkError> {
+		// Max items for worst case
+		let mut items = Vec::new();
+		for i in 0..80 {
+			items.push(ScheduleItem { assignment: Task(i), part: CoreMask::complete() });
+		}
+		let schedule = Schedule::truncate_from(items);
+
+		// Assume MaxReservations to be filled for worst case
+		Reservations::<T>::put(
+			BoundedVec::try_from(vec![schedule.clone(); T::MaxReservedCores::get() as usize])
+				.unwrap(),
+		);
+
+		let origin =
+			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(origin as T::RuntimeOrigin, n);
+
+		assert_eq!(
+			Reservations::<T>::get().len(),
+			T::MaxReservedCores::get().saturating_sub(1) as usize
+		);
 
 		Ok(())
 	}

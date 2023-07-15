@@ -21,10 +21,9 @@ use crate::{test_fungibles::TestFungibles, *};
 use frame_support::{
 	assert_ok, ensure, ord_parameter_types, parameter_types,
 	traits::{
-		EitherOfDiverse,
 		fungible::{Balanced, Credit, Inspect, ItemOf, Mutate},
 		nonfungible::Inspect as NftInspect,
-		Hooks, OnUnbalanced,
+		EitherOfDiverse, Hooks, OnUnbalanced,
 	},
 	PalletId,
 };
