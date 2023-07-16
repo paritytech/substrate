@@ -2,7 +2,7 @@
 //!
 //! > Substrate's State Transition Function (Runtime) Framework.
 //!
-//! ```ignore
+//! ```co_compile
 //!   ______   ______    ________   ___ __ __   ______
 //!  /_____/\ /_____/\  /_______/\ /__//_//_/\ /_____/\
 //!  \::::_\/_\:::_ \ \ \::: _  \ \\::\| \| \ \\::::_\/_
@@ -73,6 +73,9 @@
 /// `#[pallet::bar]` inside the mod.
 pub use frame_support::pallet;
 
+/// The logging library of the runtime. Can be normally like the classic `log` crate.
+pub use frame_support::log;
+
 /// The main prelude of this `FRAME`.
 ///
 /// This prelude should almost always be the first non-import line of code in any pallet or runtime.
@@ -84,10 +87,6 @@ pub use frame_support::pallet;
 /// mod pallet {}
 /// ```
 pub mod prelude {
-	/// A macro-sub module that contains a list of all pallet macros, with proper
-	/// documentation. It enhances IDE experience.
-	pub use frame_support::pallet_macros as _;
-
 	/// `frame_system`'s parent crate, which is mandatory in all pallets build with this crate.
 	///
 	/// Conveniently, the keyword `frame_system` is in scope as one uses `use
@@ -108,6 +107,10 @@ pub mod prelude {
 	/// All of the std alternative types.
 	#[doc(no_inline)]
 	pub use sp_std::prelude::*;
+
+	/// All FRAME-relevant derive macros.
+	#[doc(no_inline)]
+	pub use super::derive::*;
 }
 
 /// The main testing prelude of `FRAME`.
@@ -132,6 +135,7 @@ pub mod testing_prelude {
 
 	pub use frame_system::{self, mocking::*};
 	pub use sp_io::TestExternalities as TestState;
+	pub use sp_std::if_std;
 }
 
 /// All of the types and tools needed to build FRAME-based runtimes.
@@ -181,8 +185,12 @@ pub mod runtime {
 	/// A non-testing runtime should have this enabled, as such:
 	///
 	/// ```
-	/// use frame::runtime::{prelude::*, apis::{*, self}};
+	/// use frame::runtime::{prelude::*, apis::{*,}};
 	/// ```
+	// TODO: This is because of wildcard imports, and it should be not needed once we can avoid
+	// that. Imports like that are needed because we seem to need some unknown types in the macro
+	// expansion.
+	#[allow(ambiguous_glob_reexports)]
 	pub mod apis {
 		// Types often used in the runtime APIs.
 		pub use frame_support::OpaqueMetadata;
@@ -192,8 +200,6 @@ pub mod runtime {
 		/// Macro to implement runtime APIs.
 		pub use sp_api::impl_runtime_apis;
 
-		// TODO: preferably not do wildcard imports, but we need to bring in some
-		// macro_generated stuff.
 		pub use frame_system_rpc_runtime_api::*;
 		pub use sp_api::{self, *};
 		pub use sp_block_builder::*;
@@ -211,13 +217,11 @@ pub mod runtime {
 	///
 	/// Some note-worthy opinions in this prelude:
 	///
+	/// - `u32` block number.
 	/// - [`sp_runtime::MultiAddress`] and [`sp_runtime::MultiSignature`] are used as the account id
 	///   and signature types. This implies that this prelude can possibly used with an
 	///   "account-index" system (eg `pallet-indices`). And, in any case, it should be paired with
-	///   [`AccountIdLookup`] in [`frame_system::Config::Lookup`].
-	///
-	/// - The choice of hashing, block-number and nonce are left to [`frame_system::Config`]. Set
-	///   these values with care.
+	///   `AccountIdLookup` in [`frame_system::Config::Lookup`].
 	pub mod types_common {
 		use frame_system::Config as SysConfig;
 
@@ -276,8 +280,7 @@ pub mod runtime {
 
 	/// The main prelude of FRAME for building runtimes, and in the context of testing.
 	///
-	/// counter part of [`runtime::prelude`],
-	// TODO: seems like we should get rid of this.
+	/// counter part of `runtime::prelude`.
 	#[cfg(feature = "std")]
 	pub mod testing_prelude {
 		pub use sp_core::storage::Storage;
@@ -285,17 +288,12 @@ pub mod runtime {
 	}
 }
 
-/// The logging library of the runtime. Can be normally like the classic `log` crate.
-pub use frame_support::log;
-
-pub mod macros {
-	pub use frame_support::{derive_impl, macro_magic::use_attr, register_default_impl};
-	pub use sp_std::if_std;
-}
-
 /// All traits often used in FRAME pallets.
 ///
 /// Note that types implementing these traits can also be found in this module.
+// TODO: `Hash` and `Bounded` are defined multiple times; should be fixed once these two crates are
+// cleaned up.
+#[allow(ambiguous_glob_reexports)]
 pub mod traits {
 	pub use frame_support::traits::*;
 	pub use sp_runtime::traits::*;
@@ -312,7 +310,9 @@ pub mod primitives {
 	pub use sp_runtime::traits::{BlakeTwo256, Hash, Keccak256};
 }
 
-/// All derive macros.
+/// All derive macros used in frame.
+///
+/// This is already part of the [`prelude`].
 pub mod derive {
 	pub use frame_support::{
 		CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound,
@@ -320,19 +320,27 @@ pub mod derive {
 	};
 	pub use parity_scale_codec::{Decode, Encode};
 	pub use scale_info::TypeInfo;
+	pub use sp_runtime::RuntimeDebug;
 	pub use sp_std::fmt::Debug;
 }
 
 /// Access to all of the dependencies of this crate. In case the re-exports are not enough, this
 /// module can be used.
+///
+/// Any time one uses this module to access a dependency, you can have a moment to think about
+/// whether this item could have been placed in any of the other modules and preludes in this crate.
+/// In most cases, hopefully the answer is yes.
+#[doc(hidden)]
 pub mod deps {
 	// TODO: It would be great to somehow instruct RA to prefer *not* suggesting auto-imports from
 	// these. For example, we prefer `frame::derive::CloneNoBound` rather than
-	// `frame::deps::CloneNoBound`.
+	// `frame::deps::frame_support::CloneNoBound`.
 	pub use frame_support;
 	pub use frame_system;
+
 	pub use sp_arithmetic;
 	pub use sp_core;
+	pub use sp_io;
 	pub use sp_runtime;
 	pub use sp_std;
 
@@ -343,6 +351,16 @@ pub mod deps {
 	pub use frame_executive;
 	#[cfg(feature = "runtime")]
 	pub use sp_api;
+	#[cfg(feature = "runtime")]
+	pub use sp_block_builder;
+	#[cfg(feature = "runtime")]
+	pub use sp_consensus_aura;
+	#[cfg(feature = "runtime")]
+	pub use sp_consensus_grandpa;
+	#[cfg(feature = "runtime")]
+	pub use sp_inherents;
+	#[cfg(feature = "runtime")]
+	pub use sp_offchain;
 	#[cfg(feature = "runtime")]
 	pub use sp_version;
 }
