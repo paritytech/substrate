@@ -420,13 +420,7 @@ where
 
 			let res = client
 				.executor()
-				.call(
-					hash,
-					&function,
-					&call_parameters,
-					client.execution_extensions().strategies().other,
-					CallContext::Offchain,
-				)
+				.call(hash, &function, &call_parameters, CallContext::Offchain)
 				.map(|result| {
 					let result = format!("0x{:?}", HexDisplay::from(&result));
 					ChainHeadEvent::Done(ChainHeadResult { result })

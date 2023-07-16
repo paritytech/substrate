@@ -23,8 +23,8 @@ use codec::{Decode, Encode};
 use futures::{channel::oneshot, stream::StreamExt};
 use libp2p::PeerId;
 use log::{debug, trace};
-use lru::LruCache;
 use prost::Message;
+use schnellru::{ByLength, LruMap};
 
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_network::{
@@ -35,7 +35,6 @@ use sp_runtime::traits::Block as BlockT;
 
 use std::{
 	hash::{Hash, Hasher},
-	num::NonZeroUsize,
 	sync::Arc,
 	time::Duration,
 };
@@ -115,7 +114,7 @@ pub struct StateRequestHandler<B: BlockT, Client> {
 	/// Maps from request to number of times we have seen this request.
 	///
 	/// This is used to check if a peer is spamming us with the same request.
-	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
+	seen_requests: LruMap<SeenRequestsKey<B>, SeenRequestsValue>,
 }
 
 impl<B, Client> StateRequestHandler<B, Client>
@@ -145,9 +144,8 @@ where
 		);
 		protocol_config.inbound_queue = Some(tx);
 
-		let capacity =
-			NonZeroUsize::new(num_peer_hint.max(1) * 2).expect("cache capacity is not zero");
-		let seen_requests = LruCache::new(capacity);
+		let capacity = ByLength::new(num_peer_hint.max(1) as u32 * 2);
+		let seen_requests = LruMap::new(capacity);
 
 		(Self { client, request_receiver, seen_requests }, protocol_config)
 	}
@@ -180,7 +178,7 @@ where
 
 		let mut reputation_changes = Vec::new();
 
-		match self.seen_requests.get_mut(&key) {
+		match self.seen_requests.get(&key) {
 			Some(SeenRequestsValue::First) => {},
 			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
 				*requests = requests.saturating_add(1);
@@ -190,7 +188,7 @@ where
 				}
 			},
 			None => {
-				self.seen_requests.put(key.clone(), SeenRequestsValue::First);
+				self.seen_requests.insert(key.clone(), SeenRequestsValue::First);
 			},
 		}
 
@@ -247,7 +245,7 @@ where
 					.last()
 					.map(|e| sp_core::hexdisplay::HexDisplay::from(&e.key))),
 			);
-			if let Some(value) = self.seen_requests.get_mut(&key) {
+			if let Some(value) = self.seen_requests.get(&key) {
 				// If this is the first time we have processed this request, we need to change
 				// it to `Fulfilled`.
 				if let SeenRequestsValue::First = value {

@@ -30,11 +30,16 @@ threadpool = "1.7"
 tracing = "0.1.29"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
+sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
+sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
+sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
+sp-externalities = { version = "0.19.0", path = "../../primitives/externalities" }
+log = "0.4.17"
 
 [dev-dependencies]
 lazy_static = "1.4.0"

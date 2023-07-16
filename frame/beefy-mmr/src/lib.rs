@@ -43,6 +43,7 @@ use sp_consensus_beefy::{
 };
 
 use frame_support::{crypto::ecdsa::ECDSAExt, traits::Get};
+use frame_system::pallet_prelude::BlockNumberFor;
 
 pub use pallet::*;
 
@@ -139,7 +140,7 @@ pub mod pallet {
 
 impl<T: Config> LeafDataProvider for Pallet<T> {
 	type LeafData = MmrLeaf<
-		<T as frame_system::Config>::BlockNumber,
+		BlockNumberFor<T>,
 		<T as frame_system::Config>::Hash,
 		MerkleRootOf<T>,
 		T::LeafExtra,

@@ -28,10 +28,10 @@ use codec::{Decode, Encode};
 use futures::{FutureExt, StreamExt};
 use futures_timer::Delay;
 use libp2p::PeerId;
-use lru::LruCache;
 use prometheus_endpoint::{
 	register, Gauge, GaugeVec, MetricSource, Opts, PrometheusError, Registry, SourcedGauge, U64,
 };
+use schnellru::{ByLength, LruMap};
 
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
@@ -239,7 +239,7 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	default_peers_set_num_light: usize,
 
 	/// A cache for the data that was associated to a block announcement.
-	block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
+	block_announce_data_cache: LruMap<B::Hash, Vec<u8>>,
 
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: HashSet<PeerId>,
@@ -294,12 +294,9 @@ where
 		} else {
 			net_config.network_config.max_blocks_per_request
 		};
-		let cache_capacity = NonZeroUsize::new(
-			(net_config.network_config.default_peers_set.in_peers as usize +
-				net_config.network_config.default_peers_set.out_peers as usize)
-				.max(1),
-		)
-		.expect("cache capacity is not zero");
+		let cache_capacity = (net_config.network_config.default_peers_set.in_peers +
+			net_config.network_config.default_peers_set.out_peers)
+			.max(1);
 		let important_peers = {
 			let mut imp_p = HashSet::new();
 			for reserved in &net_config.network_config.default_peers_set.reserved_nodes {
@@ -381,7 +378,7 @@ where
 				network_service,
 				peers: HashMap::new(),
 				evicted: HashSet::new(),
-				block_announce_data_cache: LruCache::new(cache_capacity),
+				block_announce_data_cache: LruMap::new(ByLength::new(cache_capacity)),
 				block_announce_protocol_name,
 				num_connected: num_connected.clone(),
 				is_major_syncing: is_major_syncing.clone(),
@@ -465,7 +462,7 @@ where
 
 				if let Some(data) = announce.data {
 					if !data.is_empty() {
-						self.block_announce_data_cache.put(announce.header.hash(), data);
+						self.block_announce_data_cache.insert(announce.header.hash(), data);
 					}
 				}
 			},
