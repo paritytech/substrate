@@ -231,14 +231,18 @@ benchmarks! {
 			vec![0; T::MaxNameLength::get() as usize],
 			true
 		);
-	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), T::MaxRegistrationLength::get()
+
+		let expiry = Registrations::<T>::get(name_hash).unwrap().expiry.unwrap();
+		let new_expiry = expiry + T::MaxRegistrationLength::get();
+
+	}: _(RawOrigin::Signed(owner.clone()), name_hash.clone(), new_expiry
 )
 	verify {
 		assert_eq!(
 			Registrations::<T>::get(name_hash).unwrap(),
 			Registration {
 			owner: owner,
-			expiry: Some(BlockNumberFor::<T>::from(10512000u32)),
+			expiry: Some(new_expiry),
 			deposit: Some(CommitmentDeposit::<T>::get().unwrap()),
 		});
 	}
