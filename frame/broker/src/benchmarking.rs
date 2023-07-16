@@ -19,11 +19,16 @@
 
 use super::*;
 
-use crate::CoreAssignment::Task;
+use crate::{CoreAssignment::Task, Pallet as Broker};
 use frame_benchmarking::v2::*;
-use frame_support::{storage::bounded_vec::BoundedVec, traits::EnsureOrigin};
+use frame_support::{
+	storage::bounded_vec::BoundedVec,
+	traits::{fungible::Mutate, EnsureOrigin, Hooks},
+};
+use frame_system::{Pallet as System, RawOrigin};
 use sp_arithmetic::Perbill;
 use sp_core::Get;
+use sp_runtime::Saturating;
 
 fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
 	ConfigRecord {
@@ -58,6 +63,13 @@ fn setup_leases<T: Config>(n: u32, task: u32, until: u32) {
 		BoundedVec::try_from(vec![LeaseRecordItem { task, until: until.into() }; n as usize])
 			.unwrap(),
 	);
+}
+
+fn advance_to<T: Config>(b: u32) {
+	while System::<T>::block_number() < b.into() {
+		System::<T>::set_block_number(System::<T>::block_number().saturating_add(1u32.into()));
+		Broker::<T>::on_initialize(System::<T>::block_number());
+	}
 }
 
 #[benchmarks]
@@ -123,7 +135,7 @@ mod benches {
 		let task = 1u32;
 		let until = 10u32.into();
 
-		// Assume Leases to be filled for worst case
+		// Assume Leases to be almost filled for worst case
 		setup_leases::<T>(T::MaxLeasedCores::get().saturating_sub(1), task, until);
 
 		let origin =
@@ -158,6 +170,37 @@ mod benches {
 		_(origin as T::RuntimeOrigin, initial_price, n.try_into().unwrap());
 
 		assert!(SaleInfo::<T>::get().is_some());
+
+		Ok(())
+	}
+
+	// Todo: Check further for worst case
+	#[benchmark]
+	fn purchase() -> Result<(), BenchmarkError> {
+		Configuration::<T>::put(new_config_record::<T>());
+
+		// Assume Leases to be almost filled for worst case
+		setup_leases::<T>(T::MaxLeasedCores::get().saturating_sub(1), 1, 10);
+
+		let admin_origin =
+			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		Broker::<T>::start_sales(
+			admin_origin,
+			1u32.into(),
+			T::MaxReservedCores::get().try_into().unwrap(),
+		)
+		.map_err(|_| BenchmarkError::Weightless)?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 100u32.into());
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), 1u32.into());
+
+		assert_eq!(SaleInfo::<T>::get().unwrap().sellout_price, Some(1u32.into()));
 
 		Ok(())
 	}
