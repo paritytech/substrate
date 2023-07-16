@@ -199,7 +199,7 @@ impl ProposalProvider<AccountId, H256, RuntimeCall> for AllianceProposalProvider
 	}
 
 	fn proposal_of(proposal_hash: H256) -> Option<RuntimeCall> {
-		AllianceMotion::proposal_of(proposal_hash)
+		AllianceMotion::proposal_of(&proposal_hash)
 	}
 }
 
