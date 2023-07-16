@@ -64,7 +64,7 @@ fn kdf(shared_secret: &[u8]) -> [u8; AES_KEY_LEN] {
 	let hkdf = hkdf::Hkdf::<sha2::Sha256>::new(None, shared_secret);
 	let mut aes_key = [0u8; AES_KEY_LEN];
 	hkdf.expand(b"", &mut aes_key)
-		.expect("There's always enough data for derivation.");
+		.expect("There's always enough data for derivation. qed.");
 	aes_key
 }
 
