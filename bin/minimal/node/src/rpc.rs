@@ -31,9 +31,9 @@ pub fn create_full<C, P>(
 where
 	C: sp_api::ProvideRuntimeApi<
 		// TODO: bloody hell..
-		frame::runtime::runtime_types_generic::Block<
-			frame::runtime::runtime_types_generic::Header<u32, frame::primitives::BlakeTwo256>,
-			frame::runtime::runtime_types_generic::OpaqueExtrinsic,
+		frame::deps::sp_runtime::generic::Block<
+			frame::deps::sp_runtime::generic::Header<u32, frame::primitives::BlakeTwo256>,
+			frame::deps::sp_runtime::OpaqueExtrinsic,
 		>,
 		// OpaqueBlock,
 	>,

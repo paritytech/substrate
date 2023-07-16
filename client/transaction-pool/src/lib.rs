@@ -52,8 +52,8 @@ use std::{
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
 	error::Error as TxPoolError, ChainEvent, ImportNotificationStream, MaintainedTransactionPool,
-	OffchainTransactionPoolFactory, PoolFuture, PoolStatus, ReadyTransactions, TransactionFor,
-	TransactionPool, TransactionSource, TransactionStatusStreamFor, TxHash,
+	PoolFuture, PoolStatus, ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
+	TransactionStatusStreamFor, TxHash,
 };
 use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{
@@ -395,11 +395,6 @@ where
 			client.usage_info().chain.best_hash,
 			client.usage_info().chain.finalized_hash,
 		));
-
-		// make transaction pool available for off-chain runtime calls.
-		client
-			.execution_extensions()
-			.register_transaction_pool_factory(OffchainTransactionPoolFactory::new(&pool));
 
 		pool
 	}

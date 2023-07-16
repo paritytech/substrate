@@ -15,20 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::common::API_VERSION_ATTRIBUTE;
+use inflector::Inflector;
 use proc_macro2::{Span, TokenStream};
-
+use proc_macro_crate::{crate_name, FoundCrate};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
 	parse_quote, spanned::Spanned, token::And, Attribute, Error, FnArg, GenericArgument, Ident,
 	ImplItem, ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
 };
-
-use quote::{format_ident, quote, ToTokens};
-
-use proc_macro_crate::{crate_name, FoundCrate};
-
-use crate::common::API_VERSION_ATTRIBUTE;
-
-use inflector::Inflector;
 
 /// Generates the access to the `sc_client` crate.
 pub fn generate_crate_access() -> TokenStream {
@@ -267,13 +262,12 @@ pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
 }
 
 /// Extract the documentation from the provided attributes.
+#[cfg(feature = "frame-metadata")]
 pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
 	attrs
 		.iter()
 		.filter_map(|attr| {
-			let syn::Meta::NameValue(meta) = &attr.meta else {
-				return None
-			};
+			let syn::Meta::NameValue(meta) = &attr.meta else { return None };
 			let Ok(lit) = syn::parse2::<syn::Lit>(meta.value.to_token_stream()) else {
 				unreachable!("non-lit doc attribute values do not exist");
 			};
@@ -283,6 +277,7 @@ pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
 }
 
 /// Filters all attributes except the cfg ones.
+#[cfg(feature = "frame-metadata")]
 pub fn filter_cfg_attributes(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
 	attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect()
 }

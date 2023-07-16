@@ -30,7 +30,4 @@ rustflags = [
   "-Aclippy::derivable_impls",           # false positives
   "-Aclippy::stable_sort_primitive",     # prefer stable sort
   "-Aclippy::extra-unused-type-parameters", # stylistic
-  "-Aclippy::let_with_type_underscore"   # used as a workaround for an infinite macro expansion loop in clippy
-                                         # specifying this as an attribute directly in the affected macro
-                                         # triggers other weird rust 1.70 bugs
 ]

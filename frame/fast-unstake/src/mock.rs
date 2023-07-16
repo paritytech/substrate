@@ -23,13 +23,16 @@ use frame_support::{
 	traits::{ConstU64, Currency},
 	weights::constants::WEIGHT_REF_TIME_PER_SECOND,
 };
-use sp_runtime::traits::{Convert, IdentityLookup};
+use sp_runtime::{
+	traits::{Convert, IdentityLookup},
+	BuildStorage,
+};
 
 use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
 use sp_std::prelude::*;
 
 pub type AccountId = u128;
-pub type AccountIndex = u32;
+pub type Nonce = u32;
 pub type BlockNumber = u64;
 pub type Balance = u128;
 pub type T = Runtime;
@@ -47,14 +50,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
@@ -137,7 +139,7 @@ impl pallet_staking::Config for Runtime {
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
 	type UnixTime = pallet_timestamp::Pallet<Self>;
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RewardRemainder = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
@@ -157,7 +159,7 @@ impl pallet_staking::Config for Runtime {
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
-	type OnStakerSlash = ();
+	type EventListeners = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -195,14 +197,9 @@ impl fast_unstake::Config for Runtime {
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+
 frame_support::construct_runtime!(
-	pub struct Runtime
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
+	pub struct Runtime {
 		System: frame_system,
 		Timestamp: pallet_timestamp,
 		Balances: pallet_balances,
@@ -278,7 +275,7 @@ impl ExtBuilder {
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let validators_range = VALIDATOR_PREFIX..VALIDATOR_PREFIX + VALIDATORS_PER_ERA;
 		let nominators_range =

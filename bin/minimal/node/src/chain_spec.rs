@@ -57,6 +57,7 @@ fn testnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
 		system: SystemConfig {
 			// Add Wasm runtime to storage.
 			code: wasm_binary.to_vec(),
+			_config: Default::default(),
 		},
 		balances: BalancesConfig { balances },
 		sudo: SudoConfig { key: Some(AccountKeyring::Alice.to_account_id()) },

@@ -23,7 +23,7 @@ pub struct GenesisBuildDef {
 	/// The index of item in pallet module.
 	pub index: usize,
 	/// A set of usage of instance, must be check for consistency with trait.
-	pub instances: Vec<helper::InstanceUsage>,
+	pub instances: Option<Vec<helper::InstanceUsage>>,
 	/// The where_clause used.
 	pub where_clause: Option<syn::WhereClause>,
 	/// The span of the pallet::genesis_build attribute.
@@ -53,7 +53,8 @@ impl GenesisBuildDef {
 			})?
 			.1;
 
-		let instances = vec![helper::check_genesis_builder_usage(item_trait)?];
+		let instances =
+			helper::check_genesis_builder_usage(item_trait)?.map(|instances| vec![instances]);
 
 		Ok(Self { attr_span, index, instances, where_clause: item.generics.where_clause.clone() })
 	}

@@ -12,7 +12,11 @@
 //!      \_\/     \_\/ \_\/ \__\/\__\/ \__\/ \__\/ \_____\/
 //! ```
 //!
-//! # Introduction
+//! ## Warning: Experimental
+//!
+//! This crate and all of its content is experimental, and should not yet be used in production.
+//!
+//! ## Introduction
 //!
 //! Substrate is at a very high level composed of two parts:
 //!
@@ -22,17 +26,21 @@
 //!
 //! FRAME is the Substrate's framework of choice to build a runtime.
 //!
+//! FRAME is composed of two major components, **pallets** and a **runtime**. Pallets are isolated
+//! pieces of logic that can be composed together to form a runtime.
+//!
 //! ## Pallets
 //!
 //! A pallet is analogous to a module in the runtime, which can itself be composed of multiple
-//! components, most notable:
+//! components, most notable of which are:
 //!
 //! - Storage
 //! - Dispatchables
 //! - Events
 //! - Errors
 //!
-//! To see the full list of components, see the [`pallet`] and [`frame_support::pallet_macros`].
+//! Most of these components are defined using macros, the full list of which can be found in
+//! [`frame_support::pallet_macros`]
 //!
 //! ## Runtime
 //!
@@ -45,7 +53,7 @@
 //!
 //! This example showcases a very simple pallet that exposes a single dispatchable, and a minimal
 //! runtime that contains it.
-#![doc = docify::embed!("frame/src/lib.rs", tests)]
+#![doc = docify::embed!("src/lib.rs", tests)]
 //!
 //! ## Underlying dependencies
 //!
@@ -59,33 +67,226 @@
 
 /// export the main pallet macro. This can wrap a `mod pallet` and will transform it into being
 /// a pallet, eg `#[frame::pallet] mod pallet { .. }`.
+///
+/// Note that this is not part of the prelude, in order to make it such that the common way to
+/// define a macro is `#[frame::pallet] mod pallet { .. }`, followed by `#[pallet::foot]`,
+/// `#[pallet::bar]` inside the mod.
 pub use frame_support::pallet;
 
-/// A macro-sub module that contains a list of all pallet macros, with proper documentation. It
-/// enhances IDE experience.
-pub use frame_support::pallet_macros as _;
-
+/// The main prelude of this `FRAME`.
+///
+/// This prelude should almost always be the first non-import line of code in any pallet or runtime.
+///
+/// ```
+/// use frame::prelude::*;
+///
+/// // rest of your pallet..
+/// mod pallet {}
+/// ```
 pub mod prelude {
+	/// A macro-sub module that contains a list of all pallet macros, with proper
+	/// documentation. It enhances IDE experience.
+	pub use frame_support::pallet_macros as _;
+
+	/// `frame_system`'s parent crate, which is mandatory in all pallets build with this crate.
+	///
+	/// Conveniently, the keyword `frame_system` is in scope as one uses `use
+	/// frame::prelude::*`
+	#[doc(inline)]
+	pub use frame_system;
+
+	/// Pallet prelude of `frame-support`.
+	///
+	/// Note: this needs to revised once `frame-support` evolves.
+	#[doc(no_inline)]
 	pub use frame_support::pallet_prelude::*;
-	pub use frame_system::{self, pallet_prelude::*};
+
+	/// Pallet prelude of `frame-system`.
+	#[doc(no_inline)]
+	pub use frame_system::pallet_prelude::*;
+
+	/// All of the std alternative types.
+	#[doc(no_inline)]
 	pub use sp_std::prelude::*;
 }
 
-pub use frame_support::log;
-
+/// The main testing prelude of `FRAME`.
+///
+/// A test setup typically starts with:
+///
+/// ```
+/// use frame::{prelude::*, testing_prelude::*};
+/// // rest of your test setup.
+/// ```
 #[cfg(feature = "std")]
 pub mod testing_prelude {
+	/// Testing includes building a runtime, so we bring in all preludes related to runtimes as
+	/// well.
 	pub use super::runtime::{prelude::*, testing_prelude::*};
 
+	/// Other helper macros from `frame_support` that help with asserting in tests.
 	pub use frame_support::{
 		assert_err, assert_err_ignore_postinfo, assert_error_encoded_size, assert_noop, assert_ok,
-		assert_storage_noop, derive_impl, ord_parameter_types, parameter_types,
-		parameter_types_impl_thread_local, storage_alias,
+		assert_storage_noop, storage_alias,
 	};
 
 	pub use frame_system::{self, mocking::*};
 	pub use sp_io::TestExternalities as TestState;
 }
+
+/// All of the types and tools needed to build FRAME-based runtimes.
+#[cfg(any(feature = "runtime", feature = "std"))]
+pub mod runtime {
+	/// The main prelude of `FRAME` for building runtimes.
+	///
+	/// A runtime typically starts with:
+	///
+	/// ```
+	/// use frame::{prelude::*, runtime::prelude::*};
+	/// ```
+	pub mod prelude {
+		/// All of the types related to the FRAME runtime executive.
+		pub use frame_executive::*;
+
+		/// Macro to amalgamate the runtime into `struct Runtime`.
+		pub use frame_support::construct_runtime;
+
+		/// Macro to easily derive the `Config` trait of various pallet for `Runtime`.
+		pub use frame_support::derive_impl;
+
+		/// Macros to easily impl traits such as `Get` for types.
+		// TODO: using linking in the Get int he line above triggers an ICE :/
+		pub use frame_support::{ord_parameter_types, parameter_types};
+
+		/// Const types that can easily be used in conjuncture with `Get`.
+		pub use frame_support::traits::{
+			ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
+			ConstU32, ConstU64, ConstU8,
+		};
+
+		/// Types to define your runtime version.
+		pub use sp_version::{create_runtime_str, runtime_version, RuntimeVersion};
+
+		// TODO: this is a temporary hack
+		pub use frame_support::{self};
+
+		#[cfg(feature = "std")]
+		pub use sp_version::NativeVersion;
+	}
+
+	/// Types and traits for runtimes that implement runtime APIs.
+	///
+	/// A testing runtime should not need this.
+	///
+	/// A non-testing runtime should have this enabled, as such:
+	///
+	/// ```
+	/// use frame::runtime::{prelude::*, apis::{*, self}};
+	/// ```
+	pub mod apis {
+		// Types often used in the runtime APIs.
+		pub use frame_support::OpaqueMetadata;
+		pub use sp_inherents::{CheckInherentsResult, InherentData};
+		pub use sp_runtime::ApplyExtrinsicResult;
+
+		/// Macro to implement runtime APIs.
+		pub use sp_api::impl_runtime_apis;
+
+		// TODO: preferably not do wildcard imports, but we need to bring in some
+		// macro_generated stuff.
+		pub use frame_system_rpc_runtime_api::*;
+		pub use sp_api::{self, *};
+		pub use sp_block_builder::*;
+		pub use sp_consensus_aura::*;
+		pub use sp_consensus_grandpa::*;
+		pub use sp_offchain::*;
+		pub use sp_session::api::*;
+		pub use sp_transaction_pool::runtime_api::*;
+	}
+
+	/// A set of opinionated types aliases commonly used in runtimes.
+	///
+	/// This is one set of opinionated types. They are compatible with one another, but are not
+	/// guaranteed to work if you start tweaking a portion.
+	///
+	/// Some note-worthy opinions in this prelude:
+	///
+	/// - [`sp_runtime::MultiAddress`] and [`sp_runtime::MultiSignature`] are used as the account id
+	///   and signature types. This implies that this prelude can possibly used with an
+	///   "account-index" system (eg `pallet-indices`). And, in any case, it should be paired with
+	///   [`AccountIdLookup`] in [`frame_system::Config::Lookup`].
+	///
+	/// - The choice of hashing, block-number and nonce are left to [`frame_system::Config`]. Set
+	///   these values with care.
+	pub mod types_common {
+		use frame_system::Config as SysConfig;
+
+		/// A signature type compatible capably of handling multiple crypto-schemes.
+		pub type Signature = sp_runtime::MultiSignature;
+
+		/// The corresponding account-id type of [`Signature`].
+		pub type AccountId = <
+			<Signature as sp_runtime::traits::Verify>::Signer
+			as
+			sp_runtime::traits::IdentifyAccount
+		>::AccountId;
+
+		/// The block-number type, which should be fed into [`frame_system::Config`].
+		pub type BlockNumber = u32;
+
+		type HeaderInner<T> = sp_runtime::generic::Header<BlockNumber, <T as SysConfig>::Hashing>;
+
+		// NOTE: `AccountIndex` is provided for future compatibility, if you want to introduce
+		// something like `pallet-indices`.
+		type ExtrinsicInner<T, Extra, AccountIndex = ()> = sp_runtime::generic::UncheckedExtrinsic<
+			sp_runtime::MultiAddress<AccountId, AccountIndex>,
+			<T as SysConfig>::RuntimeCall,
+			Signature,
+			Extra,
+		>;
+
+		/// The block type, which should be fed into [`frame_system::Config`].
+		///
+		/// Should be parameterized with `T: frame_system::Config` and a tuple of `SignedExtension`.
+		/// When in doubt, use [`SystemSignedExtensionsOf`].
+		// Note that this cannot be dependent on `T` for block-number because it would lead to a
+		// circular dependency (self-referential generics).
+		pub type BlockOf<T, Extra = ()> =
+			sp_runtime::generic::Block<HeaderInner<T>, ExtrinsicInner<T, Extra>>;
+
+		/// The opaque block type. This is the same [`BlockOf`], but it has
+		/// [`sp_runtime::OpaqueExtrinsic`] as its final extrinsic type. This should be provided to
+		/// the client side as the extrinsic type.
+		pub type OpaqueBlockOf<T> =
+			sp_runtime::generic::Block<HeaderInner<T>, sp_runtime::OpaqueExtrinsic>;
+
+		/// Default set of signed extensions exposed from the `frame_system`.
+		///
+		/// crucially, this does not contain any tx-payment extension.
+		pub type SystemSignedExtensionsOf<T> = (
+			frame_system::CheckNonZeroSender<T>,
+			frame_system::CheckSpecVersion<T>,
+			frame_system::CheckTxVersion<T>,
+			frame_system::CheckGenesis<T>,
+			frame_system::CheckEra<T>,
+			frame_system::CheckNonce<T>,
+			frame_system::CheckWeight<T>,
+		);
+	}
+
+	/// The main prelude of FRAME for building runtimes, and in the context of testing.
+	///
+	/// counter part of [`runtime::prelude`],
+	// TODO: seems like we should get rid of this.
+	#[cfg(feature = "std")]
+	pub mod testing_prelude {
+		pub use sp_core::storage::Storage;
+		pub use sp_runtime::BuildStorage;
+	}
+}
+
+/// The logging library of the runtime. Can be normally like the classic `log` crate.
+pub use frame_support::log;
 
 pub mod macros {
 	pub use frame_support::{derive_impl, macro_magic::use_attr, register_default_impl};
@@ -122,145 +323,6 @@ pub mod derive {
 	pub use sp_std::fmt::Debug;
 }
 
-/// types that are often needed to amalgamate a real runtime. In principle, this is very similar to
-/// [`test`], but it contains production-ready types, as opposed to mocks.
-#[cfg(any(feature = "runtime", feature = "std"))]
-pub mod runtime {
-	pub mod prelude {
-		pub use frame_executive::*;
-		pub use frame_support::{
-			self, // TODO: this is a temporary hack.
-			construct_runtime,
-			derive_impl,
-			parameter_types,
-			traits::{
-				ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
-				ConstU32, ConstU64, ConstU8,
-			},
-			OpaqueMetadata,
-		};
-		pub use sp_api::impl_runtime_apis;
-		pub use sp_inherents::{CheckInherentsResult, InherentData};
-		pub use sp_runtime::{generic as block_types_generic, ApplyExtrinsicResult};
-		#[cfg(feature = "std")]
-		pub use sp_version::NativeVersion;
-		pub use sp_version::{create_runtime_str, runtime_version, RuntimeVersion};
-	}
-
-	#[cfg(feature = "std")]
-	pub mod testing_prelude {
-		pub use frame_support::construct_runtime;
-		pub use sp_core::storage::Storage;
-		pub use sp_runtime::BuildStorage;
-	}
-
-	/// A set of opinionated types aliases commonly used in runtimes.
-	///
-	/// This is one set of opinionated types. They are compatible with one another, but are not
-	/// guaranteed to work if you start tweaking a portion.
-	///
-	/// Some note-worthy opinions in this prelude:
-	///
-	/// - [`sp_runtime::MultiAddress`] and [`sp_runtime::MultiSignature`] are used as the account id
-	///   and signature types. This implies that this prelude can possibly used with an
-	///   "account-index" system (eg `pallet-indices`). And, in any case, it should be paired with
-	///   [`AccountIdLookup`] in [`frame_system::Config::Lookup`].
-	/// - The choice of hashing, blocknumber, account account nonce are left to
-	///   [`frame_system::Config`]. Set these values with care.
-	// TODO: tests that this works for multiple ones.
-	// TODO: a prelude that works with `AccountId32`.
-	pub mod runtime_types_common {
-		use frame_system::Config as SysConfig;
-
-		/// A signature type compatible capably of handling multiple crypto-schemes.
-		pub type Signature = sp_runtime::MultiSignature;
-
-		/// The corresponding account-id type of [`Signature`].
-		pub type AccountId = <
-			<Signature as sp_runtime::traits::Verify>::Signer
-			as
-			sp_runtime::traits::IdentifyAccount
-		>::AccountId;
-
-		type HeaderInner<T> =
-			sp_runtime::generic::Header<BlockNumberOf<T>, <T as SysConfig>::Hashing>;
-
-		// NOTE: `AccountIndex` is provided for future compatibility, if you want to introduce
-		// something like `pallet-indices`.
-		type ExtrinsicInner<T, Extra, AccountIndex = ()> = sp_runtime::generic::UncheckedExtrinsic<
-			sp_runtime::MultiAddress<AccountId, AccountIndex>,
-			<T as SysConfig>::RuntimeCall,
-			Signature,
-			Extra,
-		>;
-
-		pub type SystemSignedExtensionsOf<T> = (
-			frame_system::CheckNonZeroSender<T>,
-			frame_system::CheckSpecVersion<T>,
-			frame_system::CheckTxVersion<T>,
-			frame_system::CheckGenesis<T>,
-			frame_system::CheckEra<T>,
-			frame_system::CheckNonce<T>,
-			frame_system::CheckWeight<T>,
-		);
-
-		/// The block type.
-		///
-		/// Should be parameterized with `T: frame_system::Config` and a tuple of `SignedExtension`.
-		/// When in doubt, use [`SystemSignedExtensionsOf`].
-		pub type BlockOf<T, Extra = ()> =
-			sp_runtime::generic::Block<HeaderInner<T>, ExtrinsicInner<T, Extra>>;
-
-		/// The opaque block type. This is the same [`BlockOf`], but it has
-		/// [`sp_runtime::OpaqueExtrinsic`] as its final extrinsic type. This should be provided to
-		/// the client side as the extrinsic type.
-		pub type OpaqueBlockOf<T> =
-			sp_runtime::generic::Block<HeaderInner<T>, sp_runtime::OpaqueExtrinsic>;
-
-		/// Get the extrinsic type from a decorated [`BlockOf`].
-		pub type ExtrinsicOf<Block> = <Block as sp_runtime::traits::Block>::Extrinsic;
-
-		/// Get the header type from a decorated [`BlockOf`].
-		pub type HeaderOf<Block> = <Block as sp_runtime::traits::Block>::Header;
-
-		/// The block number type to be used, as defined in [`frame_system::Config`].
-		pub type BlockNumberOf<T> = <T as SysConfig>::BlockNumber;
-
-		/// The account nonce type to be used, as defined in [`frame_system::Config`].
-		pub type NonceOf<T> = <T as SysConfig>::Index;
-	}
-
-	pub mod runtime_types_generic {
-		pub use sp_runtime::{
-			generic::*, AccountId32, MultiAddress, MultiSignature, MultiSigner, OpaqueExtrinsic,
-		};
-	}
-
-	pub mod runtime_apis {
-		// This should contain all RPCs, but only those that are needed in order to run a bare-bone
-		// chain.
-
-		// TODO: preferably not do wildcard imports, but we need to bring in some macro_generated
-		// stuff.
-		pub use frame_system_rpc_runtime_api::*;
-		pub use sp_api::{self, *};
-		pub use sp_block_builder::*;
-		pub use sp_consensus_aura::*;
-		pub use sp_consensus_grandpa::*;
-		pub use sp_offchain::*;
-		pub use sp_session::api::*;
-		pub use sp_transaction_pool::runtime_api::*;
-	}
-
-	/// The two database types that can be used, and their corresponding weights.
-	pub mod db_weights {
-		pub use frame_support::weights::constants::{ParityDbWeight, RocksDbWeight};
-	}
-
-	/// All weight-related types.
-	pub use frame_support::weights;
-}
-
 /// Access to all of the dependencies of this crate. In case the re-exports are not enough, this
 /// module can be used.
 pub mod deps {
@@ -289,11 +351,11 @@ pub mod deps {
 #[cfg(test)]
 mod tests {
 	use crate as frame;
+	use frame::{prelude::*, testing_prelude::*};
 
-	#[frame::pallet]
+	#[frame::pallet(dev_mode)]
 	pub mod pallet {
-		use super::frame;
-		use frame::prelude::*;
+		use super::*;
 
 		#[pallet::config]
 		pub trait Config: frame_system::Config {
@@ -306,38 +368,42 @@ mod tests {
 
 		#[pallet::event]
 		pub enum Event<T: Config> {}
+
+		#[pallet::storage]
+		pub type Value<T> = StorageValue<Value = u32>;
+
+		#[pallet::call]
+		impl<T: Config> Pallet<T> {
+			pub fn some_dispatchable(_origin: OriginFor<T>) -> DispatchResult {
+				Ok(())
+			}
+		}
 	}
 
 	mod runtime {
 		use super::{frame, pallet as pallet_example};
 		use frame::{prelude::*, testing_prelude::*};
 
-		type UncheckedExtrinsic = MockUncheckedExtrinsic<Test>;
-		type Block = MockBlock<Test>;
-
 		construct_runtime!(
-			pub enum Test
-			where
-				Block = Block,
-				NodeBlock = Block,
-				UncheckedExtrinsic = UncheckedExtrinsic,
-				{
-					System: frame_system,
-					Example: pallet_example,
-				}
+			pub struct Runtime {
+				System: frame_system,
+				Example: pallet_example,
+			}
 		);
 
 		#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
-		impl frame_system::Config for Test {
+		impl frame_system::Config for Runtime {
 			type BaseCallFilter = frame::traits::Everything;
 			type RuntimeOrigin = RuntimeOrigin;
 			type RuntimeCall = RuntimeCall;
 			type RuntimeEvent = RuntimeEvent;
 			type PalletInfo = PalletInfo;
 			type OnSetCode = ();
+			type Block = MockBlock<Self>;
+			type BlockHashCount = ();
 		}
 
-		impl pallet_example::Config for Test {
+		impl pallet_example::Config for Runtime {
 			type RuntimeEvent = RuntimeEvent;
 		}
 	}

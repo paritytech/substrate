@@ -33,6 +33,8 @@ sc-consensus = { path = "../../../client/consensus/common" }
 sc-consensus-manual-seal = { path = "../../../client/consensus/manual-seal" }
 sc-rpc-api = { path = "../../../client/rpc-api" }
 sc-basic-authorship = { path = "../../../client/basic-authorship" }
+sc-offchain = { path = "../../../client/offchain" }
+sc-client-api = { path = "../../../client/api" }
 
 sp-timestamp = { path = "../../../primitives/timestamp" }
 sp-keyring = { path = "../../../primitives/keyring" }

@@ -237,10 +237,8 @@ fn check_event_type(
 			// Check bound contains IsType and From
 			let has_is_type_bound = type_.bounds.iter().any(|s| {
 				syn::parse2::<IsTypeBoundEventParse>(s.to_token_stream()).map_or(false, |b| {
-					// b.0.segments.iter().take(b.0.segments.len() - 1).collect::<Vec<_>>() ==
-					// 	frame_system.segments.iter().collect::<Vec<_>>()
-					// TODO: I don't think this check is necessary.
-					true
+					b.0 == syn::parse2(quote::quote!(#frame_system::Config))
+						.expect("is a valid path; qed")
 				})
 			});
 
@@ -398,9 +396,8 @@ impl ConfigDef {
 
 		let has_frame_system_supertrait = item.supertraits.iter().any(|s| {
 			syn::parse2::<ConfigBoundParse>(s.to_token_stream()).map_or(false, |b| {
-				// b.0.segments.iter().take(b.0.segments.len() - 1).collect::<Vec<_>>() ==
-				// 	frame_system.segments.iter().collect::<Vec<_>>()
-				true
+				b.0 == syn::parse2(quote::quote!(#frame_system::Config))
+					.expect("is a valid path; qed")
 			})
 		});
 
