@@ -41,7 +41,7 @@ use sp_arithmetic::{
 /// The result is meant to be scaled with minimum inflation and maximum inflation.
 ///
 /// (as detailed
-/// [here](https://research.web3.foundation/en/latest/polkadot/economics/1-token-economics.html#inflation-model-with-parachains))
+/// [here](https://research.web3.foundation/Polkadot/overview/token-economics#inflation-model-with-parachains))
 ///
 /// Arguments are:
 /// * `stake`: The fraction of total issued tokens that actively staked behind validators. Known as

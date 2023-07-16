@@ -23,7 +23,7 @@
 
 use std::borrow::Cow;
 
-use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
+use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes};
 
 use sc_transaction_pool::BasicPool;
 use sc_transaction_pool_api::{TransactionPool, TransactionSource};
@@ -57,7 +57,7 @@ impl core::BenchmarkDescription for PoolBenchmarkDescription {
 
 impl core::Benchmark for PoolBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
-		let context = self.database.create_context(Profile::Wasm);
+		let context = self.database.create_context();
 
 		let _ = context
 			.client
