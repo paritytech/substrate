@@ -298,15 +298,13 @@ impl TestExt {
 	}
 
 	pub fn execute_with<R>(self, f: impl Fn() -> R) -> R {
-		let c = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		sp_io::TestExternalities::from(c).execute_with(|| {
+		new_test_ext().execute_with(|| {
 			assert_ok!(Broker::do_configure(self.0));
 			f()
 		})
 	}
 }
 
-#[cfg(feature = "runtime-benchmarks")]
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let c = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	sp_io::TestExternalities::from(c)
