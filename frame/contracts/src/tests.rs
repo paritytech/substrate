@@ -5633,3 +5633,27 @@ fn root_cannot_instantiate() {
 		);
 	});
 }
+
+#[test]
+fn sign_extension_works() {
+	let (code, _) = compile_module::<Test>("sign_extension").unwrap();
+
+	ExtBuilder::default().build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+
+		assert_ok!(
+			Contracts::bare_instantiate(
+				ALICE,
+				0,
+				GAS_LIMIT,
+				None,
+				Code::Upload(code),
+				vec![],
+				vec![],
+				DebugInfo::Skip,
+				CollectEvents::Skip,
+			)
+			.result
+		);
+	});
+}
