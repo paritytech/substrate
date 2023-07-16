@@ -158,12 +158,14 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// This pallet's configuration trait
-	#[pallet::config]
+	#[pallet::config(with_default)]
 	pub trait Config: CreateSignedTransaction<Call<Self>> + frame_system::Config {
 		/// The identifier type for an offchain worker.
+		#[pallet::no_default]
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
 		/// The overarching event type.
+		#[pallet::no_default]
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		// Configuration parameters
@@ -172,6 +174,7 @@ pub mod pallet {
 		///
 		/// This ensures that we only accept unsigned transactions once, every `UnsignedInterval`
 		/// blocks.
+		#[pallet::no_default]
 		#[pallet::constant]
 		type UnsignedInterval: Get<Self::BlockNumber>;
 
