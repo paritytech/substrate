@@ -205,7 +205,7 @@ pub trait IntegrityTest {
 /// - [`OnInitialize`]
 /// - [`OnFinalize`]
 /// - [`OnRuntimeUpgrade`]
-/// - [`OffchainWorker`]
+/// - [`crate::traits::misc::OffchainWorker`]
 /// - [`OnIdle`]
 /// - [`IntegrityTest`]
 ///
@@ -231,7 +231,7 @@ pub trait IntegrityTest {
 /// 	OnInitialize
 /// end
 ///
-/// subgraph Extrinsics
+/// subgraph Extrinsics/BlockBody
 /// 	direction TB
 /// 	Inherent1
 /// 	Inherent2
@@ -250,6 +250,20 @@ pub trait IntegrityTest {
 /// 	OnIdle --> OnFinalize
 /// end
 /// ```
+///
+/// * `OnRuntimeUpgrade` is only executed before everything else if a code
+/// * `OnRuntimeUpgrade` is mandatorily at the beginning of the block body (extrinsics) being
+///   processed. change is detected.
+/// * Extrinsics start with inherents, and continue with other signed or unsigned extrinsics.
+/// * `OnIdle` optionally comes after extrinsics.
+/// `OnFinalize` mandatorily comes after `OnIdle`.
+///
+/// > `OffchainWorker` is not part of this flow, as it is not really part of the consensus/main
+/// > block import path, and is called optionally, and in other circumstances. See
+/// > [`crate::traits::misc::OffchainWorker`] for more information.
+///
+/// To learn more about the execution of hooks see `frame-executive` as this component is is charge
+/// of dispatching extrinsics and placing the hooks in the correct order.
 pub trait Hooks<BlockNumber> {
 	/// Block initialization hook. This is called at the very beginning of block execution.
 	///
