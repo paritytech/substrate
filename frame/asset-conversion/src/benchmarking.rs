@@ -117,8 +117,8 @@ benchmarks! {
 			creator: caller.clone(),
 			pool_account: AssetConversion::<T>::get_pool_account(&pool_id),
 			pool_id,
-			lp_token }.into()
-		);
+			lp_token,
+		}.into());
 	}
 
 	add_liquidity {
