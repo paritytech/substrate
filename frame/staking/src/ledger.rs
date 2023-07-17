@@ -15,15 +15,14 @@ use crate::{log, BalanceOf, Config, Ledger, UnlockChunk, STAKING_ID};
 /// Note: All the reads and mutations to the `Ledger` storage type *MUST* be performed through the
 /// methods exposed by this struct to ensure data and staking lock consistency, namely:
 ///
-/// - [`StakingLedger::storage_get`]: queries the [`Ledger`] storage type and enriches the returned
+/// - `StakingLedger::storage_get`: queries the [`Ledger`] storage type and enriches the returned
 /// object with the controller account, which is used in posterior mutating calls to both
-/// [`StakingLedger::storage_put`] and [`StakingLedger::storage_remove`].
-/// - [`StakingLedger::storage_put`]: inserts/updates a staking ledger entry in [`Ledger`] and
+/// `StakingLedger::storage_put` and [`StakingLedger::storage_remove`].
+/// - `StakingLedger::storage_put`: inserts/updates a staking ledger entry in [`Ledger`] and
 /// updates the staking locks accordingly.
-/// - [`StakingLedger::storage_remove`]: removes a staking ledger entry in [`Ledger`] and updates
+/// - `StakingLedger::storage_remove`: removes a staking ledger entry in [`Ledger`] and updates
 /// the staking locks accordingly.
-/// - [`StakingLedger::storage_exists`]: checks if an account has staking ledger entry in
-///   [`Ledger`].
+/// - `StakingLedger::storage_exists`: checks if an account has staking ledger entry in [`Ledger`].
 #[derive(
 	PartialEqNoBound,
 	EqNoBound,
