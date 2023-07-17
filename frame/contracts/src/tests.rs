@@ -1431,7 +1431,7 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 		.unwrap()
 		.account_id;
 
-		// Check that the BOB contract has been instantiated and has the minimum balance
+		// Check that the contract has been instantiated and has the minimum balance
 		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
 		assert_eq!(get_contract(&addr).extra_deposit(), 0);
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);

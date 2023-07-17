@@ -529,15 +529,6 @@ impl<T: Config> CachedContract<T> {
 			None
 		}
 	}
-
-	/// Returns `Some` iff the contract is not `Cached::Invalidated`.
-	fn deposit_account(&self) -> Option<&DepositAccount<T>> {
-		match self {
-			CachedContract::Cached(contract) => Some(contract.deposit_account()),
-			CachedContract::Terminated(deposit_account) => Some(&deposit_account),
-			CachedContract::Invalidated => None,
-		}
-	}
 }
 
 impl<T: Config> Frame<T> {
@@ -1021,18 +1012,8 @@ where
 			// in its contract info. The load is necessary to pull it from storage in case
 			// it was invalidated.
 			frame.contract_info.load(account_id);
-			let deposit_account = frame
-				.contract_info
-				.deposit_account()
-				.expect(
-					"Is only `None` when the info is invalidated.
-				We just re-loaded from storage which either makes the state `Cached` or `Terminated`.
-				qed",
-				)
-				.clone();
 			let mut contract = frame.contract_info.into_contract();
-			prev.nested_storage
-				.absorb(frame.nested_storage, deposit_account, contract.as_mut());
+			prev.nested_storage.absorb(frame.nested_storage, account_id, contract.as_mut());
 
 			// In case the contract wasn't terminated we need to persist changes made to it.
 			if let Some(contract) = contract {
@@ -1067,14 +1048,10 @@ where
 			if !persist {
 				return
 			}
-			let deposit_account = self.first_frame.contract_info.deposit_account().expect(
-				"Is only `None` when the info is invalidated. The first frame can't be invalidated.
-				qed",
-			).clone();
 			let mut contract = self.first_frame.contract_info.as_contract();
 			self.storage_meter.absorb(
 				mem::take(&mut self.first_frame.nested_storage),
-				deposit_account,
+				&self.first_frame.account_id,
 				contract.as_deref_mut(),
 			);
 			if let Some(contract) = contract {
