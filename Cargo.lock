@@ -2603,6 +2603,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 
 [[package]]
+name = "frame"
+version = "0.0.1-dev"
+dependencies = [
+ "docify",
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-rpc-runtime-api",
+ "pallet-examples",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-api",
+ "sp-arithmetic",
+ "sp-block-builder",
+ "sp-consensus-aura",
+ "sp-consensus-grandpa",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-session",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+]
+
+[[package]]
 name = "frame-benchmarking"
 version = "4.0.0-dev"
 dependencies = [
@@ -6555,6 +6583,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-example-frame-crate"
+version = "4.0.0-dev"
+dependencies = [
+ "frame",
+ "parity-scale-codec",
+ "scale-info",
+]
+
+[[package]]
 name = "pallet-example-kitchensink"
 version = "4.0.0-dev"
 dependencies = [
@@ -6610,6 +6647,7 @@ dependencies = [
  "pallet-default-config-example",
  "pallet-dev-mode",
  "pallet-example-basic",
+ "pallet-example-frame-crate",
  "pallet-example-kitchensink",
  "pallet-example-offchain-worker",
  "pallet-example-split",

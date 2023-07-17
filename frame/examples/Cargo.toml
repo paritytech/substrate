@@ -18,6 +18,7 @@ pallet-example-offchain-worker = { default-features = false, path = "./offchain-
 pallet-example-kitchensink = { default-features = false, path = "./kitchensink" }
 pallet-dev-mode = { default-features = false, path = "./dev-mode" }
 pallet-example-split = { default-features = false, path = "./split" }
+pallet-example-frame-crate = { default-features = false, path = "./frame-crate" }
 
 [features]
 default = [ "std" ]
