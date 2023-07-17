@@ -37,6 +37,7 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../..
 sp-std = { version = "8.0.0", default-features = false, path = "../../../primitives/std" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "22.0.0", default-features = false, path = "../../../primitives/version", features=["serde"] }
+serde_json = { version = "1.0.85", default-features = false, features = ["alloc"] }
 
 # Used for the node template's RPCs
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
