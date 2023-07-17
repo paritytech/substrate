@@ -144,7 +144,7 @@ impl WeightMeter {
 	/// Check if the given weight can be consumed.
 	#[deprecated(note = "Use `can_consume` instead. Will be removed after December 2023.")]
 	pub fn can_accrue(&self, w: Weight) -> bool {
-		self.consumed.checked_add(&w).map_or(false, |t| t.all_lte(self.limit))
+		self.can_consume(w)
 	}
 
 	/// Check if the given weight can be consumed.
