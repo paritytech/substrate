@@ -542,7 +542,7 @@ mod test {
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.to_raw_vec(),
-			array_bytes::hex2array_unchecked::<32>(
+			array_bytes::hex2array_unchecked::<_, 32>(
 				"a4f2269333b3e87c577aa00c4a2cd650b3b30b2e8c286a47c251279ff3a26e0d"
 			)
 		);
