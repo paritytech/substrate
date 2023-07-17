@@ -267,6 +267,19 @@ mod tests {
 
 	#[test]
 	#[cfg(debug_assertions)]
+	fn consume_works() {
+		let mut meter = WeightMeter::from_limit(Weight::from_parts(5, 10));
+
+		meter.consume(Weight::from_parts(4, 0));
+		assert_eq!(meter.remaining(), Weight::from_parts(1, 10));
+		meter.consume(Weight::from_parts(1, 0));
+		assert_eq!(meter.remaining(), Weight::from_parts(0, 10));
+		meter.consume(Weight::from_parts(0, 10));
+		assert_eq!(meter.consumed(), Weight::from_parts(5, 10));
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(expected = "Weight counter overflow")]
 	fn consume_defensive_fail() {
 		let mut meter = WeightMeter::from_limit(Weight::from_parts(10, 0));
