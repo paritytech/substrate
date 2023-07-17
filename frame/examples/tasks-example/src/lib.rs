@@ -17,6 +17,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::marker::PhantomData;
+
 use codec::{Decode, Encode};
 use frame_support::{dispatch::DispatchResult, traits::Task};
 // Re-export pallet items so that they can be accessed from the crate namespace.
@@ -24,19 +26,17 @@ pub use pallet::*;
 use sp_runtime::DispatchError;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub enum ExampleTask {
+pub enum Never {}
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+pub enum ExampleTask<T: Config> {
 	Increment,
 	Decrement,
+	_Phantom(PhantomData<T>, Never),
 }
 
-pub trait PalletTask<T: Config>: Task {
-	type Config: frame_system::Config;
-	fn is_valid(&self, config: &Self::Config) -> bool;
-	fn run(&self, config: &Self::Config) -> Result<(), DispatchError>;
-}
-
-impl Task for ExampleTask {
-	type Enumeration = std::vec::IntoIter<ExampleTask>;
+impl<T: Config> Task for ExampleTask<T> {
+	type Enumeration = std::vec::IntoIter<ExampleTask<T>>;
 
 	const TASK_INDEX: usize = 0;
 
@@ -45,26 +45,15 @@ impl Task for ExampleTask {
 	}
 
 	fn is_valid(&self) -> bool {
-		unimplemented!()
-	}
-
-	fn run(&self) -> Result<(), DispatchError> {
-		unimplemented!()
-	}
-}
-
-impl<T: Config> PalletTask<T> for ExampleTask {
-	type Config = T;
-
-	fn is_valid(&self, _config: &Self::Config) -> bool {
 		let value = Value::<T>::get().unwrap();
 		match self {
 			ExampleTask::Increment => value < 255,
 			ExampleTask::Decrement => value > 0,
+			ExampleTask::_Phantom(_, _) => unreachable!(),
 		}
 	}
 
-	fn run(&self, _config: &Self::Config) -> Result<(), DispatchError> {
+	fn run(&self) -> Result<(), DispatchError> {
 		match self {
 			ExampleTask::Increment => {
 				// Increment the value and emit an event
@@ -78,6 +67,7 @@ impl<T: Config> PalletTask<T> for ExampleTask {
 				Value::<T>::put(new_val);
 				Pallet::<T>::deposit_event(Event::Decremented { new_val });
 			},
+			ExampleTask::_Phantom(_, _) => unreachable!(),
 		}
 		Ok(())
 	}
