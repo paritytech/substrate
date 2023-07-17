@@ -1,18 +1,14 @@
 [package]
 name = "substrate"
 description = "Next-generation framework for blockchain innovation"
-license = "GPL-3.0-only"
-readme = "README.md"
-authors.workspace = true
-edition.workspace = true
-version = "0.0.0"
-
-[workspace.package]
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
-repository = "https://github.com/paritytech/substrate.git"
+version = "0.0.0"
 
-# This list of dependencies is really for documentation purposes only.
+# This list of dependencies is for documentation purposes only.
 [dependencies]
 aquamarine = "0.3.2"
 
