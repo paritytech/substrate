@@ -29,7 +29,7 @@ use sp_core::{
 	Blake2Hasher,
 };
 use sp_externalities::{Extension, Extensions, MultiRemovalResults};
-use sp_trie::{empty_child_trie_root, HashKey, LayoutV0, LayoutV1, TrieConfiguration};
+use sp_trie::{empty_child_trie_root, LayoutV0, LayoutV1, TrieConfiguration};
 use std::{
 	any::{Any, TypeId},
 	collections::BTreeMap,
@@ -282,7 +282,7 @@ impl Externalities for BasicExternalities {
 		if let Some((data, child_info)) = self.overlay.child_changes(child_info.storage_key()) {
 			let delta =
 				data.into_iter().map(|(k, v)| (k.as_ref(), v.value().map(|v| v.as_slice())));
-			crate::in_memory_backend::new_in_mem::<Blake2Hasher, HashKey<_>>()
+			crate::in_memory_backend::new_in_mem::<Blake2Hasher>()
 				.child_storage_root(&child_info, delta, state_version)
 				.0
 		} else {

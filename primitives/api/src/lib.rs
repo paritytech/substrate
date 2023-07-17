@@ -458,26 +458,16 @@ pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashFor<B>>;
 
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
-pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
-	<Backend as StateBackend<HashFor<Block>>>::Transaction,
-	HashFor<Block>,
->;
+pub type StorageTransactionCache<Block> =
+	sp_state_machine::StorageTransactionCache<HashFor<Block>>;
 
 #[cfg(feature = "std")]
-pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
-	<SBackend as StateBackend<HashFor<Block>>>::Transaction,
-	HashFor<Block>,
->;
+pub type StorageChanges<Block> = sp_state_machine::StorageChanges<HashFor<Block>>;
 
 /// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
 pub type StateBackendFor<P, Block> =
 	<<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
-
-/// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
-#[cfg(feature = "std")]
-pub type TransactionFor<P, Block> =
-	<StateBackendFor<P, Block> as StateBackend<HashFor<Block>>>::Transaction;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -531,9 +521,6 @@ pub enum ApiError {
 /// Extends the runtime api implementation with some common functionality.
 #[cfg(feature = "std")]
 pub trait ApiExt<Block: BlockT> {
-	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashFor<Block>>;
-
 	/// Execute the given closure inside a new transaction.
 	///
 	/// Depending on the outcome of the closure, the transaction is committed or rolled-back.
@@ -586,7 +573,7 @@ pub trait ApiExt<Block: BlockT> {
 		&self,
 		backend: &Self::StateBackend,
 		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
+	) -> Result<StorageChanges<Block>, String>
 	where
 		Self: Sized;
 

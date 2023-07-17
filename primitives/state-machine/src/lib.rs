@@ -143,7 +143,7 @@ mod std_reexport {
 	pub use crate::{
 		basic::BasicExternalities,
 		error::{Error, ExecutionError},
-		in_memory_backend::{new_in_mem, new_in_mem_hash_key},
+		in_memory_backend::new_in_mem,
 		read_only::{InspectState, ReadOnlyExternalities},
 		testing::TestExternalities,
 		trie_backend::create_proof_check_backend,
@@ -168,6 +168,7 @@ mod execution {
 		traits::{CallContext, CodeExecutor, RuntimeCode},
 	};
 	use sp_externalities::Extensions;
+	use sp_trie::PrefixedMemoryDB;
 	use std::collections::{HashMap, HashSet};
 
 	pub(crate) type CallResult<E> = Result<Vec<u8>, E>;
@@ -176,7 +177,7 @@ mod execution {
 	pub type DefaultHandler<E> = fn(CallResult<E>, CallResult<E>) -> CallResult<E>;
 
 	/// Trie backend with in-memory storage.
-	pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
+	pub type InMemoryBackend<H> = TrieBackend<PrefixedMemoryDB<H>, H>;
 
 	/// Storage backend trust level.
 	#[derive(Debug, Clone)]
@@ -201,7 +202,7 @@ mod execution {
 		call_data: &'a [u8],
 		overlay: &'a mut OverlayedChanges,
 		extensions: &'a mut Extensions,
-		storage_transaction_cache: Option<&'a mut StorageTransactionCache<B::Transaction, H>>,
+		storage_transaction_cache: Option<&'a mut StorageTransactionCache<H>>,
 		runtime_code: &'a RuntimeCode<'a>,
 		stats: StateMachineStats,
 		/// The hash of the block the state machine will be executed on.
@@ -261,7 +262,7 @@ mod execution {
 		/// build that will be cached.
 		pub fn with_storage_transaction_cache(
 			mut self,
-			cache: Option<&'a mut StorageTransactionCache<B::Transaction, H>>,
+			cache: Option<&'a mut StorageTransactionCache<H>>,
 		) -> Self {
 			self.storage_transaction_cache = cache;
 			self
@@ -1109,7 +1110,7 @@ mod execution {
 #[cfg(test)]
 mod tests {
 	use super::{backend::AsTrieBackend, ext::Ext, *};
-	use crate::{execution::CallResult, in_memory_backend::new_in_mem_hash_key};
+	use crate::{execution::CallResult, in_memory_backend::new_in_mem};
 	use assert_matches::assert_matches;
 	use codec::Encode;
 	use sp_core::{
@@ -1431,7 +1432,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let state = new_in_mem_hash_key::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1447,7 +1448,7 @@ mod tests {
 	fn append_storage_works() {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
-		let state = new_in_mem_hash_key::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1484,7 +1485,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let state = new_in_mem_hash_key::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend();
 		let mut overlay = OverlayedChanges::default();
 

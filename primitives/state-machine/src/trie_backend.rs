@@ -30,6 +30,7 @@ use codec::Codec;
 use hash_db::HashDB;
 use hash_db::Hasher;
 use sp_core::storage::{ChildInfo, StateVersion};
+use sp_trie::PrefixedMemoryDB;
 #[cfg(feature = "std")]
 use sp_trie::{
 	cache::{LocalTrieCache, TrieCache},
@@ -377,7 +378,6 @@ where
 	H::Out: Ord + Codec,
 {
 	type Error = crate::DefaultError;
-	type Transaction = S::Overlay;
 	type TrieBackendStorage = S;
 	type RawIter = crate::trie_backend_essence::RawIter<S, H, C>;
 
@@ -458,7 +458,7 @@ where
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, Self::Transaction)
+	) -> (H::Out, PrefixedMemoryDB<H>)
 	where
 		H::Out: Ord,
 	{
@@ -470,7 +470,7 @@ where
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, bool, Self::Transaction)
+	) -> (H::Out, bool, PrefixedMemoryDB<H>)
 	where
 		H::Out: Ord,
 	{

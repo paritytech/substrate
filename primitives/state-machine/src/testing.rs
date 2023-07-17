@@ -47,8 +47,7 @@ where
 	/// The overlay changed storage.
 	overlay: OverlayedChanges,
 	offchain_db: TestPersistentOffchainDB,
-	storage_transaction_cache:
-		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H>,
+	storage_transaction_cache: StorageTransactionCache<H>,
 	/// Storage backend.
 	pub backend: InMemoryBackend<H>,
 	/// Extensions.
@@ -166,31 +165,44 @@ where
 	/// does not need to be computed.
 	pub fn from_raw_snapshot(
 		&mut self,
-		raw_storage: Vec<(H::Out, (Vec<u8>, i32))>,
+		raw_storage: Vec<(Vec<u8>, (Vec<u8>, i32))>,
 		storage_root: H::Out,
 	) {
-		for (k, (v, ref_count)) in raw_storage {
+		for (key, (v, ref_count)) in raw_storage {
+			let mut hash = H::Out::default();
+			let hash_len = hash.as_ref().len();
+
+			if key.len() < hash_len {
+				log::warn!("Invalid key in `from_raw_snapshot`: {key:?}");
+				continue
+			}
+
+			hash.as_mut().copy_from_slice(&key[(key.len() - hash_len)..]);
+
 			// Each time .emplace is called the internal MemoryDb ref count increments.
 			// Repeatedly call emplace to initialise the ref count to the correct value.
 			for _ in 0..ref_count {
-				self.backend.backend_storage_mut().emplace(k, hash_db::EMPTY_PREFIX, v.clone());
+				self.backend.backend_storage_mut().emplace(
+					hash,
+					(&key[..(key.len() - hash_len)], None),
+					v.clone(),
+				);
 			}
 		}
+
 		self.backend.set_root(storage_root);
 	}
 
 	/// Drains the underlying raw storage key/values and returns the root hash.
 	///
 	/// Useful for backing up the storage in a format that can be quickly re-loaded.
-	///
-	/// Note: This DB will be inoperable after this call.
-	pub fn into_raw_snapshot(mut self) -> (Vec<(H::Out, (Vec<u8>, i32))>, H::Out) {
+	pub fn into_raw_snapshot(mut self) -> (Vec<(Vec<u8>, (Vec<u8>, i32))>, H::Out) {
 		let raw_key_values = self
 			.backend
 			.backend_storage_mut()
 			.drain()
 			.into_iter()
-			.collect::<Vec<(H::Out, (Vec<u8>, i32))>>();
+			.collect::<Vec<(Vec<u8>, (Vec<u8>, i32))>>();
 
 		(raw_key_values, *self.backend.root())
 	}

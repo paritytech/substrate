@@ -102,7 +102,7 @@ where
 	/// The storage backend to read from.
 	backend: &'a B,
 	/// The cache for the storage transactions.
-	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H>,
+	storage_transaction_cache: &'a mut StorageTransactionCache<H>,
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
 	/// Extensions registered with this instance.
@@ -119,7 +119,7 @@ where
 	#[cfg(not(feature = "std"))]
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
-		storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H>,
+		storage_transaction_cache: &'a mut StorageTransactionCache<H>,
 		backend: &'a B,
 	) -> Self {
 		Ext { overlay, backend, id: 0, storage_transaction_cache }
@@ -129,7 +129,7 @@ where
 	#[cfg(feature = "std")]
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
-		storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H>,
+		storage_transaction_cache: &'a mut StorageTransactionCache<H>,
 		backend: &'a B,
 		extensions: Option<&'a mut sp_externalities::Extensions>,
 	) -> Self {

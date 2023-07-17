@@ -34,6 +34,7 @@ use sp_externalities::{Extension, Extensions};
 #[cfg(not(feature = "std"))]
 use sp_std::collections::btree_map::BTreeMap as Map;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
+use sp_trie::PrefixedMemoryDB;
 #[cfg(feature = "std")]
 use std::collections::{hash_map::Entry as MapEntry, HashMap as Map};
 #[cfg(feature = "std")]
@@ -89,7 +90,7 @@ impl Extrinsics {
 ///
 /// It allows changes to be modified using nestable transactions.
 #[derive(Debug, Default, Clone)]
-pub struct OverlayedChanges {
+pub struct OverlayedChanges<H: Hasher> {
 	/// Top level storage changes.
 	top: OverlayedChangeSet,
 	/// Child storage changes. The map key is the child storage key without the common prefix.
@@ -102,6 +103,10 @@ pub struct OverlayedChanges {
 	collect_extrinsics: bool,
 	/// Collect statistic on this execution.
 	stats: StateMachineStats,
+	/// Caches the "storage transaction" that is created while calling `storage_root`.
+	///
+	/// This transaction can be applied to the backend to persist the state changes.
+	storage_transaction_cache: Option<StorageTransactionCache<H>>,
 }
 
 /// Transaction index operation.
@@ -129,7 +134,7 @@ pub enum IndexOperation {
 ///
 /// This contains all the changes to the storage and transactions to apply theses changes to the
 /// backend.
-pub struct StorageChanges<Transaction, H: Hasher> {
+pub struct StorageChanges<H: Hasher> {
 	/// All changes to the main storage.
 	///
 	/// A value of `None` means that it was deleted.
@@ -142,7 +147,7 @@ pub struct StorageChanges<Transaction, H: Hasher> {
 	/// [`main_storage_changes`](StorageChanges::main_storage_changes) and from
 	/// [`child_storage_changes`](StorageChanges::child_storage_changes).
 	/// [`offchain_storage_changes`](StorageChanges::offchain_storage_changes).
-	pub transaction: Transaction,
+	pub transaction: PrefixedMemoryDB<H>,
 	/// The storage root after applying the transaction.
 	pub transaction_storage_root: H::Out,
 	/// Changes to the transaction index,
@@ -151,7 +156,7 @@ pub struct StorageChanges<Transaction, H: Hasher> {
 }
 
 #[cfg(feature = "std")]
-impl<Transaction, H: Hasher> StorageChanges<Transaction, H> {
+impl<H: Hasher> StorageChanges<H> {
 	/// Deconstruct into the inner values
 	pub fn into_inner(
 		self,
@@ -159,7 +164,7 @@ impl<Transaction, H: Hasher> StorageChanges<Transaction, H> {
 		StorageCollection,
 		ChildStorageCollection,
 		OffchainChangesCollection,
-		Transaction,
+		PrefixedMemoryDB<H>,
 		H::Out,
 		Vec<IndexOperation>,
 	) {
@@ -177,27 +182,14 @@ impl<Transaction, H: Hasher> StorageChanges<Transaction, H> {
 /// Storage transactions are calculated as part of the `storage_root`.
 /// These transactions can be reused for importing the block into the
 /// storage. So, we cache them to not require a recomputation of those transactions.
-pub struct StorageTransactionCache<Transaction, H: Hasher> {
+pub struct StorageTransactionCache<H: Hasher> {
 	/// Contains the changes for the main and the child storages as one transaction.
-	pub(crate) transaction: Option<Transaction>,
+	transaction: PrefixedMemoryDB<H>,
 	/// The storage root after applying the transaction.
-	pub(crate) transaction_storage_root: Option<H::Out>,
+	transaction_storage_root: H::Out,
 }
 
-impl<Transaction, H: Hasher> StorageTransactionCache<Transaction, H> {
-	/// Reset the cached transactions.
-	pub fn reset(&mut self) {
-		*self = Self::default();
-	}
-}
-
-impl<Transaction, H: Hasher> Default for StorageTransactionCache<Transaction, H> {
-	fn default() -> Self {
-		Self { transaction: None, transaction_storage_root: None }
-	}
-}
-
-impl<Transaction: Default, H: Hasher> Default for StorageChanges<Transaction, H> {
+impl<H: Hasher> Default for StorageChanges<H> {
 	fn default() -> Self {
 		Self {
 			main_storage_changes: Default::default(),
@@ -211,7 +203,7 @@ impl<Transaction: Default, H: Hasher> Default for StorageChanges<Transaction, H>
 	}
 }
 
-impl OverlayedChanges {
+impl<H: Hasher> OverlayedChanges<H> {
 	/// Whether no changes are contained in the top nor in any of the child changes.
 	pub fn is_empty(&self) -> bool {
 		self.top.is_empty() && self.children.is_empty()
@@ -234,6 +226,12 @@ impl OverlayedChanges {
 		})
 	}
 
+	/// Should be called when there are changes that require to reset the
+	/// `storage_transaction_cache`.
+	fn mark_dirty(&mut self) {
+		self.storage_transaction_cache = None;
+	}
+
 	/// Returns mutable reference to current value.
 	/// If there is no value in the overlay, the given callback is used to initiate the value.
 	/// Warning this function registers a change, so the mutable reference MUST be modified.
@@ -245,6 +243,8 @@ impl OverlayedChanges {
 		key: &[u8],
 		init: impl Fn() -> StorageValue,
 	) -> &mut StorageValue {
+		self.mark_dirty();
+
 		let value = self.top.modify(key.to_vec(), init, self.extrinsic_index());
 
 		// if the value was deleted initialise it back with an empty vec
@@ -266,6 +266,8 @@ impl OverlayedChanges {
 	///
 	/// Can be rolled back or committed when called inside a transaction.
 	pub fn set_storage(&mut self, key: StorageKey, val: Option<StorageValue>) {
+		self.mark_dirty();
+
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
 		self.top.set(key, val, self.extrinsic_index());
@@ -282,6 +284,8 @@ impl OverlayedChanges {
 		key: StorageKey,
 		val: Option<StorageValue>,
 	) {
+		self.mark_dirty();
+
 		let extrinsic_index = self.extrinsic_index();
 		let size_write = val.as_ref().map(|x| x.len() as u64).unwrap_or(0);
 		self.stats.tally_write_overlay(size_write);
@@ -300,6 +304,8 @@ impl OverlayedChanges {
 	///
 	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn clear_child_storage(&mut self, child_info: &ChildInfo) -> u32 {
+		self.mark_dirty();
+
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
 		let top = &self.top;
@@ -316,6 +322,8 @@ impl OverlayedChanges {
 	///
 	/// Can be rolled back or committed when called inside a transaction.
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) -> u32 {
+		self.mark_dirty();
+
 		self.top.clear_where(|key, _| key.starts_with(prefix), self.extrinsic_index())
 	}
 
@@ -323,6 +331,8 @@ impl OverlayedChanges {
 	///
 	/// Can be rolled back or committed when called inside a transaction
 	pub(crate) fn clear_child_prefix(&mut self, child_info: &ChildInfo, prefix: &[u8]) -> u32 {
+		self.mark_dirty();
+
 		let extrinsic_index = self.extrinsic_index();
 		let storage_key = child_info.storage_key().to_vec();
 		let top = &self.top;
@@ -364,6 +374,8 @@ impl OverlayedChanges {
 	/// Any changes made during that transaction are discarded. Returns an error if
 	/// there is no open transaction that can be rolled back.
 	pub fn rollback_transaction(&mut self) -> Result<(), NoOpenTransaction> {
+		self.mark_dirty();
+
 		self.top.rollback_transaction()?;
 		retain_map(&mut self.children, |_, (changeset, _)| {
 			changeset
@@ -495,40 +507,19 @@ impl OverlayedChanges {
 		&self.transaction_index_ops
 	}
 
-	/// Convert this instance with all changes into a [`StorageChanges`] instance.
-	#[cfg(feature = "std")]
-	pub fn into_storage_changes<B: Backend<H>, H: Hasher>(
-		mut self,
-		backend: &B,
-		mut cache: StorageTransactionCache<B::Transaction, H>,
-		state_version: StateVersion,
-	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
-	where
-		H::Out: Ord + Encode + 'static,
-	{
-		self.drain_storage_changes(backend, &mut cache, state_version)
-	}
-
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
-	pub fn drain_storage_changes<B: Backend<H>, H: Hasher>(
+	pub fn drain_storage_changes(
 		&mut self,
-		backend: &B,
-		cache: &mut StorageTransactionCache<B::Transaction, H>,
 		state_version: StateVersion,
-	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
+	) -> Result<StorageChanges<H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
 		// If the transaction does not exist, we generate it.
-		if cache.transaction.is_none() {
-			self.storage_root(backend, cache, state_version);
-		}
-
-		let (transaction, transaction_storage_root) = cache
-			.transaction
-			.take()
-			.and_then(|t| cache.transaction_storage_root.take().map(|tr| (t, tr)))
-			.expect("Transaction was be generated as part of `storage_root`; qed");
+		let (transaction, transaction_storage_root) = match self.storage_transaction_cache.take() {
+			Some(cache) => cache,
+			None => unimplemented!(),
+		};
 
 		let (main_storage_changes, child_storage_changes) = self.drain_committed();
 		let offchain_storage_changes = self.offchain_drain_committed().collect();
@@ -576,10 +567,9 @@ impl OverlayedChanges {
 	/// as seen by the current transaction.
 	///
 	/// Returns the storage root and caches storage transaction in the given `cache`.
-	pub fn storage_root<H: Hasher, B: Backend<H>>(
-		&self,
+	pub fn storage_root<B: Backend<H>>(
+		&mut self,
 		backend: &B,
-		cache: &mut StorageTransactionCache<B::Transaction, H>,
 		state_version: StateVersion,
 	) -> H::Out
 	where
@@ -592,8 +582,8 @@ impl OverlayedChanges {
 
 		let (root, transaction) = backend.full_storage_root(delta, child_delta, state_version);
 
-		cache.transaction = Some(transaction);
-		cache.transaction_storage_root = Some(root);
+		self.storage_transaction_cache =
+			Some(StorageTransactionCache { transaction, transaction_storage_root: root });
 
 		root
 	}
@@ -639,7 +629,7 @@ impl OverlayedChanges {
 }
 
 #[cfg(feature = "std")]
-impl From<sp_core::storage::Storage> for OverlayedChanges {
+impl<H: Hasher> From<sp_core::storage::Storage> for OverlayedChanges<H> {
 	fn from(storage: sp_core::storage::Storage) -> Self {
 		Self {
 			top: storage.top.into(),
