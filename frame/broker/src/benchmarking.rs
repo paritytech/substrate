@@ -30,6 +30,8 @@ use sp_arithmetic::Perbill;
 use sp_core::Get;
 use sp_runtime::Saturating;
 
+const SEED: u32 = 0;
+
 fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
 	ConfigRecord {
 		advance_notice: 2u32.into(),
@@ -72,9 +74,27 @@ fn advance_to<T: Config>(b: u32) {
 	}
 }
 
+fn setup_and_start_sale<T: Config>()  -> Result<(), BenchmarkError> {
+	Configuration::<T>::put(new_config_record::<T>());
+
+	// Assume Leases to be almost filled for worst case
+	setup_leases::<T>(T::MaxLeasedCores::get().saturating_sub(1), 1, 10);
+
+	let core_index: u16 = T::MaxReservedCores::get().try_into().unwrap();
+
+	Broker::<T>::do_start_sales(
+		10u32.into(),
+		core_index 
+	)
+	.map_err(|_| BenchmarkError::Weightless)?;
+
+	Ok(())
+}
+
 #[benchmarks]
 mod benches {
 	use super::*;
+	use crate::Finality::Final;
 
 	#[benchmark]
 	fn configure() -> Result<(), BenchmarkError> {
@@ -150,9 +170,7 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn start_sales(
-		n: Linear<0, { T::MaxReservedCores::get().saturating_sub(1) }>,
-	) -> Result<(), BenchmarkError> {
+	fn start_sales() -> Result<(), BenchmarkError> {
 		Configuration::<T>::put(new_config_record::<T>());
 
 		// Assume Reservations to be almost filled for worst case
@@ -167,40 +185,240 @@ mod benches {
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
-		_(origin as T::RuntimeOrigin, initial_price, n.try_into().unwrap());
+		_(origin as T::RuntimeOrigin, initial_price, 12); //Todo: Check with Gav
 
 		assert!(SaleInfo::<T>::get().is_some());
+
+		Ok(())
+	}
+	
+	#[benchmark]
+	fn purchase() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 10u32.into());
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), 10u32.into());
+
+		assert_eq!(SaleInfo::<T>::get().unwrap().sellout_price, Some(10u32.into()));
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn renew() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let core_index: u16 = T::MaxReservedCores::get().try_into().unwrap();
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 20u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		Broker::<T>::do_assign(region, None, 1001, Final).map_err(|_| BenchmarkError::Weightless)?;
+
+		advance_to::<T>(6);
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), core_index.saturating_sub(1));
+
+		assert!(AllowedRenewals::<T>::get(core_index.saturating_sub(1)).is_some());
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn transfer() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 10u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), region, recipient);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn partition() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 10u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), region, 2);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn interlace() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 10u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), region, 0x00000_fffff_fffff_00000.into());
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn assign() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 10u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), region, 1000, Final);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn pool() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 10u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), region, recipient, Final);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn claim_revenue() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 10u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+
+		Broker::<T>::do_pool(region, None, recipient, Final).map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), region, 100);
 
 		Ok(())
 	}
 
 	// Todo: Check further for worst case
 	#[benchmark]
-	fn purchase() -> Result<(), BenchmarkError> {
-		Configuration::<T>::put(new_config_record::<T>());
-
-		// Assume Leases to be almost filled for worst case
-		setup_leases::<T>(T::MaxLeasedCores::get().saturating_sub(1), 1, 10);
-
-		let admin_origin =
-			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-
-		Broker::<T>::start_sales(
-			admin_origin,
-			1u32.into(),
-			T::MaxReservedCores::get().try_into().unwrap(),
-		)
-		.map_err(|_| BenchmarkError::Weightless)?;
+	fn purchase_credit() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 100u32.into());
+		T::Currency::set_balance(&caller.clone(), 30u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+
+		Broker::<T>::do_pool(region, None, recipient, Final).map_err(|_| BenchmarkError::Weightless)?;
+
+		let beneficiary: RelayAccountIdOf<T> = account("beneficiary", 0, SEED);
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), 1u32.into());
+		_(RawOrigin::Signed(caller), 20u32.into(), beneficiary);
 
-		assert_eq!(SaleInfo::<T>::get().unwrap().sellout_price, Some(1u32.into()));
+		Ok(())
+	}
+
+	#[benchmark]
+	fn drop_region() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 10u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		advance_to::<T>(12);
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), region);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn drop_contribution() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(&caller.clone(), 10u32.into());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+
+		Broker::<T>::do_pool(region, None, recipient, Final).map_err(|_| BenchmarkError::Weightless)?;
+
+		advance_to::<T>(26);
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), region);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn request_core_count(
+		n: Linear<0, { T::MaxReservedCores::get().saturating_sub(1) }>,
+	) -> Result<(), BenchmarkError> {
+		let admin_origin =
+			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+
+		#[extrinsic_call]
+		_(admin_origin as T::RuntimeOrigin, n.try_into().unwrap());
 
 		Ok(())
 	}
