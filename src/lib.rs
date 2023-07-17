@@ -38,7 +38,7 @@
 //! look into the [`frame_support`] crate, which is the entry point crate into runtime development.
 //!
 //! > Side note, it is entirely possible to craft a substrate-based runtime without FRAME, an
-//! > example of which can be found here.
+//! > example of which can be found [here](https://github.com/JoshOrndorff/frameless-node-template).
 //!
 //! In more broad terms, two common avenues exist into substrate:
 //!
