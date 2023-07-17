@@ -20,8 +20,8 @@ mod writer;
 
 use crate::shared::HostInfoParams;
 use sc_cli::{
-	ExecutionStrategy, WasmExecutionMethod, WasmtimeInstantiationStrategy,
-	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
+	WasmExecutionMethod, WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+	DEFAULT_WASM_EXECUTION_METHOD,
 };
 use std::{fmt::Debug, path::PathBuf};
 
@@ -43,7 +43,7 @@ pub struct PalletCmd {
 	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
-	#[arg(short, long, default_value_t = 2)]
+	#[arg(short, long, default_value_t = 50)]
 	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
@@ -55,7 +55,7 @@ pub struct PalletCmd {
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run from within the wasm.
-	#[arg(short, long, default_value_t = 1)]
+	#[arg(short, long, default_value_t = 20)]
 	pub repeat: u32,
 
 	/// Select how many repetitions of this benchmark should run from the client.
@@ -129,10 +129,6 @@ pub struct PalletCmd {
 	#[clap(flatten)]
 	pub shared_params: sc_cli::SharedParams,
 
-	/// The execution strategy that should be used for benchmarks.
-	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
-	pub execution: Option<ExecutionStrategy>,
-
 	/// Method for executing Wasm runtime code.
 	#[arg(
 		long = "wasm-execution",
@@ -153,6 +149,10 @@ pub struct PalletCmd {
 		value_enum,
 	)]
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
+
+	/// DEPRECATED: This argument has no effect.
+	#[arg(long = "execution")]
+	pub execution: Option<String>,
 
 	/// Limit the memory the database cache can use.
 	#[arg(long = "db-cache", value_name = "MiB", default_value_t = 1024)]

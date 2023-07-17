@@ -1741,3 +1741,37 @@ fn weights_sane() {
 	let info = crate::Call::<Test>::finish_destroy { id: 10 }.get_dispatch_info();
 	assert_eq!(<() as crate::WeightInfo>::finish_destroy(), info.weight);
 }
+
+#[test]
+fn asset_destroy_refund_existence_deposit() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, false, 1));
+		Balances::make_free_balance_be(&1, 100);
+		let admin = 1;
+		let admin_origin = RuntimeOrigin::signed(admin);
+
+		let account2 = 2; // account with own deposit
+		let account3 = 3; // account with admin's deposit
+		Balances::make_free_balance_be(&account2, 100);
+
+		assert_eq!(Balances::reserved_balance(&account2), 0);
+		assert_eq!(Balances::reserved_balance(&account3), 0);
+		assert_eq!(Balances::reserved_balance(&admin), 0);
+
+		assert_ok!(Assets::touch(RuntimeOrigin::signed(account2), 0));
+		assert_ok!(Assets::touch_other(admin_origin.clone(), 0, account3));
+
+		assert_eq!(Balances::reserved_balance(&account2), 10);
+		assert_eq!(Balances::reserved_balance(&account3), 0);
+		assert_eq!(Balances::reserved_balance(&admin), 10);
+
+		assert_ok!(Assets::start_destroy(admin_origin.clone(), 0));
+		assert_ok!(Assets::destroy_accounts(admin_origin.clone(), 0));
+		assert_ok!(Assets::destroy_approvals(admin_origin.clone(), 0));
+		assert_ok!(Assets::finish_destroy(admin_origin.clone(), 0));
+
+		assert_eq!(Balances::reserved_balance(&account2), 0);
+		assert_eq!(Balances::reserved_balance(&account3), 0);
+		assert_eq!(Balances::reserved_balance(&admin), 0);
+	});
+}

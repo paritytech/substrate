@@ -150,8 +150,17 @@ where
 
 		log::info!(target: LOG_TARGET, "Total accounts: {:?}", all_accounts.len());
 		log::info!(target: LOG_TARGET, "Total stake to unlock: {:?}", total_stake_to_unlock);
-		log::info!(target: LOG_TARGET, "Total deposit to unreserve: {:?}", total_deposits_to_unreserve);
-		log::info!(target: LOG_TARGET, "Bugged deposits: {}/{}", bugged_deposits, account_deposits.len());
+		log::info!(
+			target: LOG_TARGET,
+			"Total deposit to unreserve: {:?}",
+			total_deposits_to_unreserve
+		);
+		log::info!(
+			target: LOG_TARGET,
+			"Bugged deposits: {}/{}",
+			bugged_deposits,
+			account_deposits.len()
+		);
 
 		Ok(account_reserved_before.encode())
 	}

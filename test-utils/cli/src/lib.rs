@@ -25,6 +25,7 @@ use nix::{
 };
 use node_primitives::{Hash, Header};
 use regex::Regex;
+use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use std::{
 	env,
 	io::{BufRead, BufReader, Read},
@@ -177,7 +178,8 @@ pub async fn wait_n_finalized_blocks(n: usize, url: &str) {
 	use substrate_rpc_client::{ws_client, ChainApi};
 
 	let mut built_blocks = std::collections::HashSet::new();
-	let mut interval = tokio::time::interval(Duration::from_secs(2));
+	let block_duration = Duration::from_secs(2);
+	let mut interval = tokio::time::interval(block_duration);
 	let rpc = ws_client(url).await.unwrap();
 
 	loop {
@@ -218,6 +220,25 @@ pub async fn run_node_for_a_while(base_path: &Path, args: &[&str]) {
 		child.stop();
 	})
 	.await
+}
+
+pub async fn block_hash(block_number: u64, url: &str) -> Result<Hash, String> {
+	use substrate_rpc_client::{ws_client, ChainApi};
+
+	let rpc = ws_client(url).await.unwrap();
+
+	let result = ChainApi::<(), Hash, Header, ()>::block_hash(
+		&rpc,
+		Some(ListOrValue::Value(NumberOrHex::Number(block_number))),
+	)
+	.await
+	.map_err(|_| "Couldn't get block hash".to_string())?;
+
+	match result {
+		ListOrValue::Value(maybe_block_hash) if maybe_block_hash.is_some() =>
+			Ok(maybe_block_hash.unwrap()),
+		_ => Err("Couldn't get block hash".to_string()),
+	}
 }
 
 pub struct KillChildOnDrop(pub Child);

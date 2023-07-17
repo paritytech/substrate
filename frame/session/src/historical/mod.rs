@@ -377,17 +377,17 @@ pub(crate) mod tests {
 		force_new_session, set_next_validators, NextValidators, Session, System, Test,
 	};
 
-	use sp_runtime::{key_types::DUMMY, testing::UintAuthorityId};
+	use sp_runtime::{key_types::DUMMY, testing::UintAuthorityId, BuildStorage};
 
 	use frame_support::{
-		traits::{GenesisBuild, KeyOwnerProofSystem, OnInitialize},
+		traits::{KeyOwnerProofSystem, OnInitialize},
 		BasicExternalities,
 	};
 
 	type Historical = Pallet<Test>;
 
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		let keys: Vec<_> = NextValidators::get()
 			.iter()
 			.cloned()

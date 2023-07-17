@@ -20,7 +20,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_benchmarking::v1::{benchmarks, whitelisted_caller};
+use frame_benchmarking::{
+	v1::{benchmarks, whitelisted_caller},
+	BenchmarkError,
+};
 use frame_support::{dispatch::DispatchClass, storage, traits::Get};
 use frame_system::{Call, Pallet as System, RawOrigin};
 use sp_core::storage::well_known_keys;
@@ -30,7 +33,26 @@ use sp_std::{prelude::*, vec};
 mod mock;
 
 pub struct Pallet<T: Config>(System<T>);
-pub trait Config: frame_system::Config {}
+pub trait Config: frame_system::Config {
+	/// Adds ability to the Runtime to test against their sample code.
+	///
+	/// Default is `../res/kitchensink_runtime.compact.compressed.wasm`.
+	fn prepare_set_code_data() -> Vec<u8> {
+		include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec()
+	}
+
+	/// Adds ability to the Runtime to prepare/initialize before running benchmark `set_code`.
+	fn setup_set_code_requirements(_code: &Vec<u8>) -> Result<(), BenchmarkError> {
+		Ok(())
+	}
+
+	/// Adds ability to the Runtime to do custom validation after benchmark.
+	///
+	/// Default is checking for `CodeUpdated` event .
+	fn verify_set_code() {
+		System::<Self>::assert_last_event(frame_system::Event::<Self>::CodeUpdated.into());
+	}
+}
 
 benchmarks! {
 	remark {
@@ -49,16 +71,18 @@ benchmarks! {
 	}: _(RawOrigin::Root, Default::default())
 
 	set_code {
-		let runtime_blob = include_bytes!("../res/kitchensink_runtime.compact.compressed.wasm").to_vec();
+		let runtime_blob = T::prepare_set_code_data();
+		T::setup_set_code_requirements(&runtime_blob)?;
 	}: _(RawOrigin::Root, runtime_blob)
 	verify {
-		System::<T>::assert_last_event(frame_system::Event::<T>::CodeUpdated.into());
+		T::verify_set_code()
 	}
 
 	#[extra]
 	set_code_without_checks {
 		// Assume Wasm ~4MB
 		let code = vec![1; 4_000_000 as usize];
+		T::setup_set_code_requirements(&code)?;
 	}: _(RawOrigin::Root, code)
 	verify {
 		let current_code = storage::unhashed::get_raw(well_known_keys::CODE).ok_or("Code not stored.")?;

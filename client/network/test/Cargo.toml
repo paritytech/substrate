@@ -32,7 +32,6 @@ sc-network-sync = { version = "0.10.0-dev", path = "../sync" }
 sc-service = { version = "0.10.0-dev", default-features = false, features = ["test-helpers"], path = "../../service" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 sp-core = { version = "21.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "24.0.0", path = "../../../primitives/runtime" }
 sp-tracing = { version = "10.0.0", path = "../../../primitives/tracing" }
