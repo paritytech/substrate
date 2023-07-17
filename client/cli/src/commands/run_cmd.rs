@@ -404,7 +404,7 @@ pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 		return Err("Node name should not contain invalid chars such as '.' and '@'")
 	}
 
-	let invalid_patterns = r"^https?:/";
+	let invalid_patterns = r"^https?:";
 	let re = Regex::new(invalid_patterns).unwrap();
 	if re.is_match(&name) {
 		return Err("Node name should not contain urls")
