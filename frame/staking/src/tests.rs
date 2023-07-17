@@ -712,7 +712,10 @@ fn set_payee_also_updates_payee_destination() {
 
 		// Then
 		assert_eq!(Payee::<Test>::get(11), RewardDestination::Controller);
-		assert_eq!(Payees::<Test>::get(11), PayoutDestination::Free(11));
+		assert_eq!(
+			Payees::<Test>::get(11),
+			PayoutDestination::Split((Perbill::from_percent(100), 11))
+		);
 	});
 }
 
@@ -772,7 +775,10 @@ fn update_payee_works() {
 
 		// Then
 		assert_eq!(Payee::<Test>::get(stash), RewardDestination::Controller);
-		assert_eq!(Payees::<Test>::get(stash), PayoutDestination::Free(controller));
+		assert_eq!(
+			Payees::<Test>::get(stash),
+			PayoutDestination::Split((Perbill::from_percent(100), controller))
+		);
 
 		// Successfully sets yet to be inserted `Payees` record from a `Payee` record of
 		// `RewardDestination::Account(AccountId)`.
@@ -792,7 +798,10 @@ fn update_payee_works() {
 
 		// Then
 		assert_eq!(Payee::<Test>::get(stash), RewardDestination::Account(69));
-		assert_eq!(Payees::<Test>::get(stash), PayoutDestination::Free(69));
+		assert_eq!(
+			Payees::<Test>::get(stash),
+			PayoutDestination::Split((Perbill::from_percent(100), 69))
+		);
 	});
 }
 

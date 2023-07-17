@@ -386,19 +386,17 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PayoutDestination<AccountId> {
 	/// Pay into the stash account and add to bond.
-	Compound,
-	/// Pay into a specified account as free balance.
-	Free(AccountId),
-	/// Pay the specified percentage to the specified account as free balance, and pay the rest
-	/// into the stash account and add to bond.
+	Stake,
+	/// Pay the specified percentage to the specified account as free balance, and pay the rest, if
+	/// any, into the stash account and add to bond.
 	Split((Perbill, AccountId)),
 	/// Receive no reward.
-	None,
+	Forgo,
 }
 
 impl<AccountId> Default for PayoutDestination<AccountId> {
 	fn default() -> Self {
-		PayoutDestination::Compound
+		PayoutDestination::Stake
 	}
 }
 
@@ -432,11 +430,14 @@ impl<AccountId: Clone> RewardDestination<AccountId> {
 		controller: AccountId,
 	) -> PayoutDestination<AccountId> {
 		match self {
-			RewardDestination::Staked => PayoutDestination::Compound,
-			RewardDestination::Stash => PayoutDestination::Free(stash),
-			RewardDestination::Controller => PayoutDestination::Free(controller),
-			RewardDestination::Account(a) => PayoutDestination::Free(a.clone()),
-			RewardDestination::None => PayoutDestination::None,
+			RewardDestination::Staked => PayoutDestination::Stake,
+			RewardDestination::Stash =>
+				PayoutDestination::Split((Perbill::from_percent(100), stash)),
+			RewardDestination::Controller =>
+				PayoutDestination::Split((Perbill::from_percent(100), controller)),
+			RewardDestination::Account(a) =>
+				PayoutDestination::Split((Perbill::from_percent(100), a.clone())),
+			RewardDestination::None => PayoutDestination::Forgo,
 		}
 	}
 }
