@@ -513,8 +513,10 @@ mod tests {
 		// they'd get filtered for including a `.`
 		assert!(is_node_name_valid("http://visitme").is_err());
 		assert!(is_node_name_valid("http:/visitme").is_err());
+		assert!(is_node_name_valid("http:visitme").is_err());
 		assert!(is_node_name_valid("https://visitme").is_err());
 		assert!(is_node_name_valid("https:/visitme").is_err());
+		assert!(is_node_name_valid("https:visitme").is_err());
 		assert!(is_node_name_valid("www.visit.me").is_err());
 		assert!(is_node_name_valid("www.visit").is_err());
 		assert!(is_node_name_valid("hello\\world").is_err());
