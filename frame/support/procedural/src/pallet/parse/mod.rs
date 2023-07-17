@@ -60,8 +60,8 @@ pub struct Def {
 	pub extra_constants: Option<extra_constants::ExtraConstantsDef>,
 	pub composites: Vec<composite::CompositeDef>,
 	pub type_values: Vec<type_value::TypeValueDef>,
-	pub frame_system: syn::Ident,
-	pub frame_support: syn::Ident,
+	pub frame_system: syn::Path,
+	pub frame_support: syn::Path,
 	pub dev_mode: bool,
 }
 

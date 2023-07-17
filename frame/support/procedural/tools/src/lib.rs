@@ -49,13 +49,13 @@ pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 /// Generate the crate access for the crate using 2018 syntax.
 ///
 /// for `frame-support` output will for example be `frame_support`.
-pub fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Ident, Error> {
+pub fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Path, Error> {
 	match crate_name(def_crate) {
 		Ok(FoundCrate::Itself) => {
 			let name = def_crate.to_string().replace("-", "_");
-			Ok(syn::Ident::new(&name, Span::call_site()))
+			Ok(syn::Path::from(syn::Ident::new(&name, Span::call_site())))
 		},
-		Ok(FoundCrate::Name(name)) => Ok(Ident::new(&name, Span::call_site())),
+		Ok(FoundCrate::Name(name)) => Ok(syn::Path::from(Ident::new(&name, Span::call_site()))),
 		Err(e) => Err(Error::new(Span::call_site(), e)),
 	}
 }

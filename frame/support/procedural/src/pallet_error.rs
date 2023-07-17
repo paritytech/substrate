@@ -111,7 +111,7 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 
 fn generate_field_types(
 	field: &syn::Field,
-	scrate: &syn::Ident,
+	scrate: &syn::Path,
 ) -> syn::Result<Option<proc_macro2::TokenStream>> {
 	let attrs = &field.attrs;
 
@@ -143,7 +143,7 @@ fn generate_field_types(
 
 fn generate_variant_field_types(
 	variant: &syn::Variant,
-	scrate: &syn::Ident,
+	scrate: &syn::Path,
 ) -> syn::Result<Option<Vec<proc_macro2::TokenStream>>> {
 	let attrs = &variant.attrs;
 
