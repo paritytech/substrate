@@ -1106,7 +1106,7 @@ mod tests {
 												.add_self_reported_address(
 													&other,
 													&[protocol_name],
-													addr,
+													addr.clone(),
 												);
 
 											to_discover[swarm_n].remove(&other);

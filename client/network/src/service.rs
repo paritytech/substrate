@@ -1392,12 +1392,7 @@ where
 				peer_id,
 				info:
 					IdentifyInfo {
-						protocol_version,
-						agent_version,
-						mut listen_addrs,
-						protocols,
-						observed_addr,
-						..
+						protocol_version, agent_version, mut listen_addrs, protocols, ..
 					},
 			}) => {
 				if listen_addrs.len() > 30 {
@@ -1409,14 +1404,13 @@ where
 					listen_addrs.truncate(30);
 				}
 				for addr in listen_addrs {
-					self.network_service
-						.behaviour_mut()
-						.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
+					self.network_service.behaviour_mut().add_self_reported_address_to_dht(
+						&peer_id,
+						&protocols,
+						addr.clone(),
+					);
 				}
 				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
-				// Confirm the reported address manually since they are no longer trusted by default
-				// (libp2p >= 0.52)
-				self.network_service.add_external_address(observed_addr);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id)) => {
 				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
@@ -1532,6 +1526,13 @@ where
 				}
 
 				self.event_streams.send(Event::Dht(event));
+			},
+			SwarmEvent::Behaviour(BehaviourOut::AutoNAT(event)) => {
+				debug!(
+					target: "sub-libp2p",
+					"AutoNAT => {:?}",
+					event,
+				);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::None) => {
 				// Ignored event from lower layers.
