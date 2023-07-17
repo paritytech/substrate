@@ -34,7 +34,7 @@ use frame_support::{
 	weights::Weight,
 	Blake2_128Concat, BoundedVec, StorageHasher,
 };
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::{
@@ -48,7 +48,6 @@ use sp_std::{marker::PhantomData, mem, prelude::*, vec::Vec};
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type MomentOf<T> = <<T as Config>::Time as Time>::Moment;
 pub type SeedOf<T> = <T as frame_system::Config>::Hash;
-pub type BlockNumberOf<T> = <T as frame_system::Config>::BlockNumber;
 pub type ExecResult = Result<ExecReturnValue, ExecError>;
 
 /// A type that represents a topic of an event. At the moment a hash is used.
@@ -244,7 +243,7 @@ pub trait Ext: sealing::Sealed {
 	fn minimum_balance(&self) -> BalanceOf<Self::T>;
 
 	/// Returns a random number for the current block with the given subject.
-	fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>);
+	fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberFor<Self::T>);
 
 	/// Deposit an event with the given topics.
 	///
@@ -252,7 +251,7 @@ pub trait Ext: sealing::Sealed {
 	fn deposit_event(&mut self, topics: Vec<TopicOf<Self::T>>, data: Vec<u8>);
 
 	/// Returns the current block number.
-	fn block_number(&self) -> BlockNumberOf<Self::T>;
+	fn block_number(&self) -> BlockNumberFor<Self::T>;
 
 	/// Returns the maximum allowed size of a storage item.
 	fn max_value_size(&self) -> u32;
@@ -400,7 +399,7 @@ pub struct Stack<'a, T: Config, E> {
 	/// The timestamp at the point of call stack instantiation.
 	timestamp: MomentOf<T>,
 	/// The block number at the time of call stack instantiation.
-	block_number: T::BlockNumber,
+	block_number: BlockNumberFor<T>,
 	/// The nonce is cached here when accessed. It is written back when the call stack
 	/// finishes executing. Please refer to [`Nonce`] to a description of
 	/// the nonce itself.
@@ -1341,7 +1340,7 @@ where
 		self.top_frame().value_transferred
 	}
 
-	fn random(&self, subject: &[u8]) -> (SeedOf<T>, BlockNumberOf<T>) {
+	fn random(&self, subject: &[u8]) -> (SeedOf<T>, BlockNumberFor<T>) {
 		T::Randomness::random(subject)
 	}
 
@@ -1360,7 +1359,7 @@ where
 		);
 	}
 
-	fn block_number(&self) -> T::BlockNumber {
+	fn block_number(&self) -> BlockNumberFor<T> {
 		self.block_number
 	}
 

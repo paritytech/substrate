@@ -40,6 +40,8 @@ use sc_client_api::{
 	utils::is_descendent_of,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
+use sp_api::ApiExt;
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::SelectChain as SelectChainT;
 use sp_consensus_grandpa::{
@@ -444,6 +446,7 @@ pub(crate) struct Environment<
 	pub(crate) metrics: Option<Metrics>,
 	pub(crate) justification_sender: Option<GrandpaJustificationSender<Block>>,
 	pub(crate) telemetry: Option<TelemetryHandle>,
+	pub(crate) offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -570,8 +573,13 @@ where
 		// submit equivocation report at **best** block
 		let equivocation_proof = EquivocationProof::new(authority_set.set_id, equivocation);
 
-		self.client
-			.runtime_api()
+		let mut runtime_api = self.client.runtime_api();
+
+		runtime_api.register_extension(
+			self.offchain_tx_pool_factory.offchain_transaction_pool(best_block_hash),
+		);
+
+		runtime_api
 			.submit_report_equivocation_unsigned_extrinsic(
 				best_block_hash,
 				equivocation_proof,

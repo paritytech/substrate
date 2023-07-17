@@ -36,7 +36,10 @@ const MAX_KEYS: u32 = 1000;
 pub fn create_heartbeat<T: Config>(
 	k: u32,
 ) -> Result<
-	(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature),
+	(
+		crate::Heartbeat<frame_system::pallet_prelude::BlockNumberFor<T>>,
+		<T::AuthorityId as RuntimeAppPublic>::Signature,
+	),
 	&'static str,
 > {
 	let mut keys = Vec::new();
@@ -48,7 +51,7 @@ pub fn create_heartbeat<T: Config>(
 	Keys::<T>::put(bounded_keys);
 
 	let input_heartbeat = Heartbeat {
-		block_number: T::BlockNumber::zero(),
+		block_number: frame_system::pallet_prelude::BlockNumberFor::<T>::zero(),
 		session_index: 0,
 		authority_index: k - 1,
 		validators_len: keys.len() as u32,
