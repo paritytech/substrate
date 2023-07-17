@@ -326,6 +326,16 @@ pub mod pallet {
 			/// The Region whose contribution is no longer exists.
 			region_id: RegionId,
 		},
+		/// Some historical Instantaneous Core Pool payment record has been initialized.
+		HistoryInitialized {
+			/// The timeslice whose history has been initialized.
+			when: Timeslice,
+			/// The amount of privately contributed Coretime to the Instantaneous Coretime Pool.
+			private_pool_size: CoreMaskBitCount,
+			/// The amount of Coretime contributed to the Instantaneous Coretime Pool by the
+			/// Polkadot System.
+			system_pool_size: CoreMaskBitCount,
+		},
 		/// Some historical Instantaneous Core Pool payment record has been dropped.
 		HistoryDropped {
 			/// The timeslice whose history is no longer available.
@@ -349,9 +359,6 @@ pub mod pallet {
 			system_payout: BalanceOf<T>,
 			/// The total amount of revenue remaining to be claimed.
 			private_payout: BalanceOf<T>,
-			/// The total amount of Core Mask bits contributed privately (i.e. excluding the
-			/// Polkadot System).
-			private_contributions: PartCount,
 		},
 		/// A Core has been assigned to one or more tasks and/or the Pool on the Relay-chain.
 		CoreAssigned {

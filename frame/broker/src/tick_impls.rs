@@ -70,6 +70,54 @@ impl<T: Config> Pallet<T> {
 		meter.consumed
 	}
 
+	fn process_core_count() -> bool {
+		if let Some(core_count) = T::Coretime::check_notify_core_count() {
+			Status::<T>::mutate_extant(|c| c.core_count = core_count);
+			Self::deposit_event(Event::<T>::CoreCountChanged { core_count });
+			return true
+		}
+		false
+	}
+
+	fn process_revenue() -> bool {
+		let (until, amount) = match T::Coretime::check_notify_revenue_info() {
+			Some(x) => x,
+			None => return false,
+		};
+		let when: Timeslice = (until / T::TimeslicePeriod::get()).saturated_into();
+		let mut revenue = T::ConvertBalance::convert_back(amount);
+		if revenue.is_zero() {
+			Self::deposit_event(Event::<T>::HistoryDropped { when, revenue });
+			InstaPoolHistory::<T>::remove(when);
+			return true
+		}
+		let mut r = InstaPoolHistory::<T>::get(when).unwrap_or_default();
+		if r.maybe_payout.is_some() {
+			Self::deposit_event(Event::<T>::HistoryIgnored { when, revenue });
+			return true
+		}
+		// Payout system InstaPool Cores.
+		let total_contrib = r.system_contributions.saturating_add(r.private_contributions);
+		let system_payout = revenue.saturating_mul(r.system_contributions.into()) /
+			total_contrib.into();
+		let _ = Self::charge(&Self::account_id(), system_payout);
+		revenue.saturating_reduce(system_payout);
+
+		if !revenue.is_zero() && r.private_contributions > 0 {
+			r.maybe_payout = Some(revenue);
+			InstaPoolHistory::<T>::insert(when, &r);
+			Self::deposit_event(Event::<T>::ClaimsReady {
+				when,
+				system_payout,
+				private_payout: revenue,
+			});
+		} else {
+			InstaPoolHistory::<T>::remove(when);
+			Self::deposit_event(Event::<T>::HistoryDropped { when, revenue });
+		}
+		true
+	}
+
 	/// Begin selling for the next sale period.
 	///
 	/// Triggered by Relay-chain block number/timeslice.
@@ -86,7 +134,7 @@ impl<T: Config> Pallet<T> {
 
 		// Clean up the old sale - we need to use up any unused cores by putting them into the
 		// InstaPool.
-		let mut old_pooled: SignedPartCount = 0;
+		let mut old_pooled: SignedCoreMaskBitCount = 0;
 		for i in old_sale.cores_sold..old_sale.cores_offered {
 			old_pooled.saturating_accrue(80);
 			Workplan::<T>::insert((old_sale.region_begin, old_sale.first_core + i), &just_pool);
@@ -113,7 +161,7 @@ impl<T: Config> Pallet<T> {
 		let region_end = region_begin + config.region_length;
 
 		let mut first_core = 0;
-		let mut total_pooled: SignedPartCount = 0;
+		let mut total_pooled: SignedCoreMaskBitCount = 0;
 		for schedule in Reservations::<T>::get().into_iter() {
 			let parts: u32 = schedule
 				.iter()
@@ -178,67 +226,23 @@ impl<T: Config> Pallet<T> {
 		Some(())
 	}
 
-	fn process_core_count() -> bool {
-		if let Some(core_count) = T::Coretime::check_notify_core_count() {
-			Status::<T>::mutate_extant(|c| c.core_count = core_count);
-			Self::deposit_event(Event::<T>::CoreCountChanged { core_count });
-			return true
-		}
-		false
-	}
-
-	fn process_revenue() -> bool {
-		let (until, amount) = match T::Coretime::check_notify_revenue_info() {
-			Some(x) => x,
-			None => return false,
-		};
-		let when: Timeslice = (until / T::TimeslicePeriod::get()).saturated_into();
-		let mut revenue = T::ConvertBalance::convert_back(amount);
-		if revenue.is_zero() {
-			Self::deposit_event(Event::<T>::HistoryDropped { when, revenue });
-			InstaPoolHistory::<T>::remove(when);
-			return true
-		}
-		let mut r = InstaPoolHistory::<T>::get(when).unwrap_or_default();
-		if r.maybe_payout.is_some() {
-			Self::deposit_event(Event::<T>::HistoryIgnored { when, revenue });
-			return true
-		}
-		// Payout system InstaPool Cores.
-		let total_contrib = r.system_contributions.saturating_add(r.private_contributions);
-		let system_payout = revenue.saturating_mul(r.system_contributions.into()) /
-			total_contrib.into();
-		let _ = Self::charge(&Self::account_id(), system_payout);
-		revenue.saturating_reduce(system_payout);
-
-		if !revenue.is_zero() && r.private_contributions > 0 {
-			r.maybe_payout = Some(revenue);
-			InstaPoolHistory::<T>::insert(when, &r);
-			Self::deposit_event(Event::<T>::ClaimsReady {
-				when,
-				system_payout,
-				private_payout: revenue,
-				private_contributions: r.private_contributions,
-			});
-		} else {
-			InstaPoolHistory::<T>::remove(when);
-			Self::deposit_event(Event::<T>::HistoryDropped { when, revenue });
-		}
-		true
-	}
-
-	fn process_pool(timeslice: Timeslice, status: &mut StatusRecord) {
-		let pool_io = InstaPoolIo::<T>::take(timeslice);
-		status.private_pool_size = (status.private_pool_size as SignedPartCount)
-			.saturating_add(pool_io.private) as PartCount;
-		status.system_pool_size = (status.system_pool_size as SignedPartCount)
-			.saturating_add(pool_io.system) as PartCount;
+	fn process_pool(when: Timeslice, status: &mut StatusRecord) {
+		let pool_io = InstaPoolIo::<T>::take(when);
+		status.private_pool_size = (status.private_pool_size as SignedCoreMaskBitCount)
+			.saturating_add(pool_io.private) as CoreMaskBitCount;
+		status.system_pool_size = (status.system_pool_size as SignedCoreMaskBitCount)
+			.saturating_add(pool_io.system) as CoreMaskBitCount;
 		let record = InstaPoolHistoryRecord {
 			private_contributions: status.private_pool_size,
 			system_contributions: status.system_pool_size,
 			maybe_payout: None,
 		};
-		InstaPoolHistory::<T>::insert(timeslice, record);
+		InstaPoolHistory::<T>::insert(when, record);
+		Self::deposit_event(Event::<T>::HistoryInitialized {
+			when,
+			private_pool_size: status.private_pool_size,
+			system_pool_size: status.system_pool_size,
+		});
 	}
 
 	/// Schedule cores for the given `timeslice`.

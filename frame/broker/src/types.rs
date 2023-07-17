@@ -15,10 +15,11 @@ pub type RelayAccountIdOf<T> = <<T as Config>::Coretime as CoretimeInterface>::A
 /// Relay-chain block number with a fixed divisor of Config::TimeslicePeriod.
 pub type Timeslice = u32;
 /// Counter for the total number of set bits over every core's `CoreMask`. `u32` so we don't
-/// ever get an overflow.
-pub type PartCount = u32;
-/// The same as `PartCount` but signed.
-pub type SignedPartCount = i32;
+/// ever get an overflow. This is 1/80th of a Polkadot Core per timeslice. Assuming timeslices are
+/// 80 blocks, then this indicates usage of a single core one time over a timeslice.
+pub type CoreMaskBitCount = u32;
+/// The same as `CoreMaskBitCount` but signed.
+pub type SignedCoreMaskBitCount = i32;
 
 /// Whether a core assignment is revokable or not.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -94,13 +95,12 @@ pub type ContributionRecordOf<T> = ContributionRecord<<T as SConfig>::AccountId>
 /// making proper payments to contributors.
 #[derive(Encode, Decode, Clone, Default, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct InstaPoolHistoryRecord<Balance> {
-	/// The total amount of Coretime (measured in Regularity Parts or 1/80th of a single block
-	/// of a Polkadot Core) contributed from purchased Bulk Coretime over a timeslice minus any
-	/// contributions which have already been paid out.
-	pub private_contributions: PartCount,
-	/// The total amount of Coretime (measured in Regularity Parts or 1/80th of a single block
-	/// of a Polkadot Core) contributed by the Polkadot System in this timeslice.
-	pub system_contributions: PartCount,
+	/// The total amount of Coretime (measured in Core Mask Bits minus any contributions which have
+	/// already been paid out.
+	pub private_contributions: CoreMaskBitCount,
+	/// The total amount of Coretime (measured in Core Mask Bits contributed by the Polkadot System
+	/// in this timeslice.
+	pub system_contributions: CoreMaskBitCount,
 	/// The payout remaining for the `private_contributions`, or `None` if the revenue is not yet
 	/// known.
 	pub maybe_payout: Option<Balance>,
@@ -152,11 +152,11 @@ pub struct StatusRecord {
 	/// be used in `Coretime::assign`).
 	pub core_count: CoreIndex,
 	/// The current size of the Instantaneous Coretime Pool, measured in
-	/// Regularity Parts or 1/80th of a single block of a Polkadot Core.
-	pub private_pool_size: PartCount,
+	/// Core Mask Bits.
+	pub private_pool_size: CoreMaskBitCount,
 	/// The current amount of the Instantaneous Coretime Pool which is provided by the Polkadot
 	/// System, rather than provided as a result of privately operated Coretime.
-	pub system_pool_size: PartCount,
+	pub system_pool_size: CoreMaskBitCount,
 	/// The last (Relay-chain) timeslice which we committed to the Relay-chain.
 	pub last_committed_timeslice: Timeslice,
 	/// The timeslice of the last time we ticked.
@@ -169,11 +169,11 @@ pub struct StatusRecord {
 )]
 pub struct PoolIoRecord {
 	/// The total change of the portion of the pool supplied by purchased Bulk Coretime, measured
-	/// in Regularity Parts.
-	pub private: SignedPartCount,
+	/// in Core Mask Bits.
+	pub private: SignedCoreMaskBitCount,
 	/// The total change of the portion of the pool supplied by the Polkaot System, measured in
-	/// Regularity Parts.
-	pub system: SignedPartCount,
+	/// Core Mask Bits.
+	pub system: SignedCoreMaskBitCount,
 }
 
 /// The status of a Bulk Coretime Sale.

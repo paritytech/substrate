@@ -95,7 +95,7 @@ parameter_types! {
 	pub static CoretimeSpending: Vec<(u32, u64)> = Default::default();
 	pub static CoretimeWorkplan: BTreeMap<(u32, CoreIndex), Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
 	pub static CoretimeUsage: BTreeMap<CoreIndex, Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
-	pub static CoretimeInPool: PartCount = 0;
+	pub static CoretimeInPool: CoreMaskBitCount = 0;
 	pub static NotifyCoreCount: Vec<u16> = Default::default();
 	pub static NotifyRevenueInfo: Vec<(u32, u64)> = Default::default();
 }
@@ -163,11 +163,11 @@ impl TestCoretimeProvider {
 			if *when <= now {
 				if let Some(old_assignment) = usage.get(core) {
 					if let Some(a) = old_assignment.iter().find(|i| i.0 == CoreAssignment::Pool) {
-						pool_size -= (a.1 / 720) as PartCount;
+						pool_size -= (a.1 / 720) as CoreMaskBitCount;
 					}
 				}
 				if let Some(a) = assignment.iter().find(|i| i.0 == CoreAssignment::Pool) {
-					pool_size += (a.1 / 720) as PartCount;
+					pool_size += (a.1 / 720) as CoreMaskBitCount;
 				}
 				usage.insert(*core, assignment.clone());
 				false
