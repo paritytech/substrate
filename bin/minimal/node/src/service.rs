@@ -16,7 +16,7 @@ type HostFunctions = (sp_io::SubstrateHostFunctions, frame_benchmarking::benchma
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
 pub(crate) type FullClient =
-	sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>;
+	sc_service::TFullClient<Block, RuntimeApi, WasmExecutor<HostFunctions>>;
 type FullBackend = sc_service::TFullBackend<Block>;
 type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
 
