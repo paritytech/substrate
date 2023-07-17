@@ -1790,7 +1790,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Migrates an account's `RewardDestination` in `Payee` to `PayoutDestination` in `Payees`,
+		/// Migrates an account's `RewardDestination` in `Payee` to `PayoutDestination` in `Payees`
 		/// if a record exists and if it has not already been migrated.
 		///
 		/// Effects will be felt instantly (as soon as this function is completed successfully).
