@@ -50,7 +50,7 @@ enum GenesisSource<G> {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
 	#[deprecated(
-		note = "Factory is planned to be removed in December 2023. Use `GenesisBuilderApi` instead."
+		note = "Factory and G type parameter are planned to be removed in December 2023. Use `GenesisBuilderApi` instead."
 	)]
 	Factory(Arc<dyn Fn() -> G + Send + Sync>),
 	Storage(Storage),
