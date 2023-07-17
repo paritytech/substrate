@@ -245,7 +245,7 @@ pub trait Hooks<BlockNumber> {
 		Weight::zero()
 	}
 
-	/// Block finalization hook. This is called at the very beginning of the block execution
+	/// Block finalization hook. This is called at the very end of block execution.
 	///
 	/// Note that this has nothing to do with finality in the a *consensus"* jargon.
 	///
