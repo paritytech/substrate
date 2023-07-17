@@ -41,6 +41,7 @@ sp-keyring = { path = "../../../primitives/keyring" }
 sp-api = { path = "../../../primitives/api" }
 sp-blockchain = { path = "../../../primitives/blockchain" }
 sp-block-builder = { path = "../../../primitives/block-builder" }
+sp-io = { path = "../../../primitives/io" }
 
 
 substrate-frame-rpc-system = { path = "../../../utils/frame/rpc/system" }

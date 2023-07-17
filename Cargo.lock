@@ -5080,6 +5080,7 @@ dependencies = [
  "sp-api",
  "sp-block-builder",
  "sp-blockchain",
+ "sp-io",
  "sp-keyring",
  "sp-timestamp",
  "substrate-build-script-utils",

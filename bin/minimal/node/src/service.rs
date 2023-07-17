@@ -1,7 +1,7 @@
 use futures::FutureExt;
 use runtime::{self, interface::OpaqueBlock as Block, RuntimeApi};
 use sc_client_api::backend::Backend;
-pub use sc_executor::NativeElseWasmExecutor;
+use sc_executor::WasmExecutor;
 use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sc_transaction_pool_api::OffchainTransactionPoolFactory;
@@ -10,7 +10,8 @@ use std::sync::Arc;
 use crate::cli::Consensus;
 
 #[cfg(feature = "runtime-benchmarks")]
-type HostFunctions = (sp_io::SubstrateHostFunctions, frame_benchmarking::benchmarking::HostFunctions);
+type HostFunctions =
+	(sp_io::SubstrateHostFunctions, frame_benchmarking::benchmarking::HostFunctions);
 
 #[cfg(not(feature = "runtime-benchmarks"))]
 type HostFunctions = sp_io::SubstrateHostFunctions;
@@ -44,7 +45,7 @@ pub fn new_partial(
 		})
 		.transpose()?;
 
-	let executor = sc_service::new_native_or_wasm_executor(&config);
+	let executor = sc_service::new_wasm_executor(&config);
 
 	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, _>(
