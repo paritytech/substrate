@@ -127,8 +127,9 @@ impl WeightMeter {
 		self.try_consume(w).is_ok()
 	}
 
-	/// Consume the given weight after checking that it can be consumed and return `Ok`. Otherwise
-	/// do nothing and return `Err`.
+	/// Consume the given weight after checking that it can be consumed.
+	///
+	/// Returns `Ok` if the weight can be consumed or otherwise an `Err`.
 	pub fn try_consume(&mut self, w: Weight) -> Result<(), ()> {
 		self.consumed.checked_add(&w).map_or(Err(()), |test| {
 			if test.any_gt(self.limit) {
