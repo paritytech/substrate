@@ -253,13 +253,12 @@ pub trait IntegrityTest {
 pub trait Hooks<BlockNumber> {
 	/// Block initialization hook. This is called at the very beginning of block execution.
 	///
-	/// Must return the non-negotiable weight of both itself and whatever [`on_finalize`] wishes to
-	/// consume.
+	/// Must return the non-negotiable weight of both itself and whatever [`Hooks::on_finalize`]
+	/// wishes to consume.
 	///
-	/// The weight returned by this is treated as [`DispatchClass::Mandatory`], meaning that it MUST
-	/// BE EXECUTED. This implies that this hook should only ever be used if the logic in it must
-	/// happen under any circumstance. For all similar use cases where a delay is acceptable, use
-	/// [`poll`].
+	/// The weight returned by this is treated as `DispatchClass::Mandatory`, meaning that
+	/// it MUST BE EXECUTED. This implies that this hook should only ever be used if the logic in it
+	/// must happen under any circumstance.
 	///
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied, including inherent
 	/// extrinsics. Hence for instance, if you runtime includes `pallet-timestamp`, the `timestamp`
@@ -268,33 +267,23 @@ pub trait Hooks<BlockNumber> {
 		Weight::zero()
 	}
 
-	/// Similar to [`on_initialize`], but:
-	///
-	/// 1. is called after [`on_initialize`] of all pallets is done executing,
-	/// 2. execution on *each block* is not guaranteed
-	///
-	/// The latter point is usually correlated with the block resources being available, for example
-	/// `Weight` leftover.
-	fn poll(_n: BlockNumber) -> Weight {
-		Weight::zero()
-	}
-
 	/// Block finalization hook. This is called at the very end of block execution.
 	///
 	/// Note that this has nothing to do with finality in the "consensus" sense.
 	///
 	/// Note that the non-negotiable weight for this has must have already been returned by
-	/// [`on_initialize`]. It usage along is not permitted.
+	/// [`Hooks::on_initialize`]. It usage along is not permitted.
 	///
-	/// Similar to [`on_initialize`] it should only be used when execution is absolutely necessary.
+	/// Similar to [`Hooks::on_initialize`] it should only be used when execution is absolutely
+	/// necessary.
 	fn on_finalize(_n: BlockNumber) {}
 
 	/// Hook to consume a block's idle time. This will run when the block is being finalized (before
-	/// [`on_finalize`]).
+	/// [`Hooks::on_finalize`]).
 	///
 	/// Given that all dispatchables are already executed and noted (and the weight for
-	/// [`on_finalize`], which comes next, is also already accounted for via `on_initialize`), this
-	/// hook consumes anything that is leftover.
+	/// [`Hooks::on_finalize`], which comes next, is also already accounted for via
+	/// `on_initialize`), this hook consumes anything that is leftover.
 	///
 	/// Each pallet's `on_idle` is chosen to be the first to execute in a round-robin fashion
 	/// indexed by the block number.
@@ -310,11 +299,12 @@ pub trait Hooks<BlockNumber> {
 
 	/// Hook executed when a code change (aka. a "runtime upgrade") is detected by FRAME.
 	///
-	/// Be aware that this is called before [`on_initialize`] of any pallet; therefore, a lot of the
-	/// critical storage items such as `block_number` in system pallet might have not been set.
+	/// Be aware that this is called before [`Hooks::on_initialize`] of any pallet; therefore, a lot
+	/// of the critical storage items such as `block_number` in system pallet might have not been
+	/// set.
 	///
-	/// Vert similar to [`on_initialize`], any code in this block is mandatory and MUST execute. Use
-	/// with care.
+	/// Vert similar to [`Hooks::on_initialize`], any code in this block is mandatory and MUST
+	/// execute. Use with care.
 	///
 	/// ## Implementation Note: Versioning
 	///
@@ -323,12 +313,14 @@ pub trait Hooks<BlockNumber> {
 	/// done. This is helpful to prevent accidental repetitive execution of this hook, which can be
 	/// catastrophic.
 	///
-	/// Alternatively, [`migrations::VersionedRuntimeUpgrade`] can be used to assist with this.
+	/// Alternatively, `migrations::VersionedRuntimeUpgrade` can be used to assist with
+	/// this.
 	///
 	/// ## Implementation Note: Runtime Level Migration
 	///
 	/// Additional "upgrade hooks" can be created by pallets by a manual implementation of
-	/// [`OnRuntimeUpgrade`] which can be passed on to `Executive` at the top level runtime.
+	/// [`Hooks::on_runtime_upgrade`] which can be passed on to `Executive` at the top level
+	/// runtime.
 	fn on_runtime_upgrade() -> Weight {
 		Weight::zero()
 	}
@@ -388,8 +380,8 @@ pub trait Hooks<BlockNumber> {
 	/// Check the integrity of this pallet's configuration.
 	///
 	/// Any code located in this hook is placed in an auto-generated test, and generated as a part
-	/// of [`construct_runtime`]'s expansion. Look for a test case with a name along the lines of:
-	/// `__construct_runtime_integrity_test`.
+	/// of [`crate::construct_runtime`]'s expansion. Look for a test case with a name along the
+	/// lines of: `__construct_runtime_integrity_test`.
 	///
 	/// This hook is the location where the values/types provided to the `Config` trait
 	/// of the pallet can be tested for correctness. For example, if two `type Foo: Get<u32>` and
