@@ -222,7 +222,6 @@ impl<B: BlockT> Future for GossipEngine<B> {
 								);
 								this.forwarding_state = ForwardingState::Busy(to_forward.into());
 							},
-							NotificationEvent::NotificationSinkReplaced { .. } => {},
 						},
 						// The network event stream closed. Do the same for [`GossipValidator`].
 						Poll::Ready(None) => {
@@ -337,9 +336,11 @@ mod tests {
 	};
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network::{
-		config::MultiaddrWithPeerId, service::traits::NotificationEvent, Event, NetworkBlock,
-		NetworkEventStream, NetworkNotification, NetworkPeers, NotificationSenderError,
-		NotificationSenderT as NotificationSender, NotificationService, NotificationsSink,
+		config::MultiaddrWithPeerId,
+		service::traits::{MessageSink, NotificationEvent},
+		Event, NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+		NotificationSenderError, NotificationSenderT as NotificationSender, NotificationService,
+		NotificationsSink,
 	};
 	use sc_network_common::{role::ObservedRole, sync::SyncEventStream};
 	use sp_runtime::{
@@ -547,7 +548,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn notification_sink(&self, _peer: &PeerId) -> Option<NotificationsSink> {
+		fn message_sink(&self, peer: &PeerId) -> Option<Box<dyn MessageSink>> {
 			unimplemented!();
 		}
 	}

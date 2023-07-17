@@ -31,7 +31,9 @@ use scale_info::TypeInfo;
 
 #[cfg(feature = "serde")]
 use crate::crypto::Ss58Codec;
-use crate::crypto::{CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom};
+use crate::crypto::{
+	CryptoType, CryptoTypeId, Derive, FromEntropy, Public as TraitPublic, UncheckedFrom,
+};
 #[cfg(feature = "full_crypto")]
 use crate::crypto::{DeriveError, DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "full_crypto")]
@@ -77,6 +79,14 @@ pub struct Public(pub [u8; 32]);
 pub struct Pair {
 	public: VerificationKey,
 	secret: SigningKey,
+}
+
+impl FromEntropy for Public {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		let mut result = Self([0u8; 32]);
+		input.read(&mut result.0[..])?;
+		Ok(result)
+	}
 }
 
 impl AsRef<[u8; 32]> for Public {
@@ -224,7 +234,7 @@ impl Serialize for Signature {
 	where
 		S: Serializer,
 	{
-		serializer.serialize_str(&array_bytes::bytes2hex("", self.as_ref()))
+		serializer.serialize_str(&array_bytes::bytes2hex("", self))
 	}
 }
 
@@ -489,7 +499,7 @@ mod test {
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.seed(),
-			array_bytes::hex2array_unchecked::<32>(
+			array_bytes::hex2array_unchecked::<_, 32>(
 				"ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c"
 			)
 		);

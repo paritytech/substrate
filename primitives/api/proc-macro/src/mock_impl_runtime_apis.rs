@@ -121,13 +121,20 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 			> where Self: Sized {
 				unimplemented!("`into_storage_changes` not implemented for runtime api mocks")
 			}
+
+			fn set_call_context(&mut self, _: #crate_::CallContext) {
+				unimplemented!("`set_call_context` not implemented for runtime api mocks")
+			}
+
+			fn register_extension<E: #crate_::Extension>(&mut self, _: E) {
+				unimplemented!("`register_extension` not implemented for runtime api mocks")
+			}
 		}
 
 		impl #crate_::Core<#block_type> for #self_ty {
 			fn __runtime_api_internal_call_api_at(
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
 				_: std::vec::Vec<u8>,
 				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
@@ -141,14 +148,6 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				unimplemented!("`Core::version` not implemented for runtime api mocks")
 			}
 
-			fn version_with_context(
-				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
-			) -> std::result::Result<#crate_::RuntimeVersion, #crate_::ApiError> {
-				unimplemented!("`Core::version` not implemented for runtime api mocks")
-			}
-
 			fn execute_block(
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
@@ -157,27 +156,9 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				unimplemented!("`Core::execute_block` not implemented for runtime api mocks")
 			}
 
-			fn execute_block_with_context(
-				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
-				_: #block_type,
-			) -> std::result::Result<(), #crate_::ApiError> {
-				unimplemented!("`Core::execute_block` not implemented for runtime api mocks")
-			}
-
 			fn initialize_block(
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
-				_: &<#block_type as #crate_::BlockT>::Header,
-			) -> std::result::Result<(), #crate_::ApiError> {
-				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
-			}
-
-			fn initialize_block_with_context(
-				&self,
-				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
 				_: &<#block_type as #crate_::BlockT>::Header,
 			) -> std::result::Result<(), #crate_::ApiError> {
 				unimplemented!("`Core::initialize_block` not implemented for runtime api mocks")
@@ -255,26 +236,12 @@ impl<'a> FoldRuntimeApiImpl<'a> {
 
 		let crate_ = generate_crate_access();
 
-		// We also need to overwrite all the `_with_context` methods. To do this,
-		// we clone all methods and add them again with the new name plus one more argument.
-		impl_item.items.extend(impl_item.items.clone().into_iter().filter_map(|i| {
-			if let syn::ImplItem::Fn(mut m) = i {
-				m.sig.ident = quote::format_ident!("{}_with_context", m.sig.ident);
-				m.sig.inputs.insert(2, parse_quote!( _: #crate_::ExecutionContext ));
-
-				Some(m.into())
-			} else {
-				None
-			}
-		}));
-
 		let block_type = self.block_type;
 
 		impl_item.items.push(parse_quote! {
 			fn __runtime_api_internal_call_api_at(
 				&self,
 				_: <#block_type as #crate_::BlockT>::Hash,
-				_: #crate_::ExecutionContext,
 				_: std::vec::Vec<u8>,
 				_: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {

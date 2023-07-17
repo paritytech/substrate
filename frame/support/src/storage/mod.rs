@@ -202,6 +202,18 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		f: F,
 	) -> Result<R, E>;
 
+	/// Mutate the value under a key if the value already exists. Do nothing and return the default
+	/// value if not.
+	fn mutate_extant<KeyArg: EncodeLike<K>, R: Default, F: FnOnce(&mut V) -> R>(
+		key: KeyArg,
+		f: F,
+	) -> R {
+		Self::mutate_exists(key, |maybe_v| match maybe_v {
+			Some(ref mut value) => f(value),
+			None => R::default(),
+		})
+	}
+
 	/// Mutate the value under a key.
 	///
 	/// Deletes the item if mutated to a `None`.

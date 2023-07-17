@@ -89,11 +89,11 @@ pub fn page<T: Config>(msg: &[u8]) -> PageOf<T> {
 }
 
 pub fn single_page_book<T: Config>() -> BookStateOf<T> {
-	BookState { begin: 0, end: 1, count: 1, ready_neighbours: None, message_count: 0, size: 0 }
+	BookState { begin: 0, end: 1, count: 1, ..Default::default() }
 }
 
 pub fn empty_book<T: Config>() -> BookStateOf<T> {
-	BookState { begin: 0, end: 1, count: 1, ready_neighbours: None, message_count: 0, size: 0 }
+	BookState { begin: 0, end: 1, count: 1, ..Default::default() }
 }
 
 /// Returns a full page of messages with their index as payload and the number of messages.
@@ -118,9 +118,9 @@ pub fn book_for<T: Config>(page: &PageOf<T>) -> BookStateOf<T> {
 		count: 1,
 		begin: 0,
 		end: 1,
-		ready_neighbours: None,
 		message_count: page.remaining.into() as u64,
 		size: page.remaining_size.into() as u64,
+		..Default::default()
 	}
 }
 

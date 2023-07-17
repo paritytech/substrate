@@ -55,7 +55,7 @@ impl GenerateNodeKeyCmd {
 		let file_data = if self.bin {
 			secret.as_ref().to_owned()
 		} else {
-			array_bytes::bytes2hex("", secret.as_ref()).into_bytes()
+			array_bytes::bytes2hex("", secret).into_bytes()
 		};
 
 		match &self.file {

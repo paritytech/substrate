@@ -130,7 +130,7 @@ pub mod pallet {
 		type Moment: Parameter
 			+ Default
 			+ AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment>
+			+ Scale<BlockNumberFor<Self>, Output = Self::Moment>
 			+ Copy
 			+ MaxEncodedLen
 			+ scale_info::StaticTypeInfo;
@@ -151,7 +151,7 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	/// Current time for the current block.
 	#[pallet::storage]

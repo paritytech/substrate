@@ -26,7 +26,7 @@ use frame_benchmarking::v1::{
 use frame_support::{
 	assert_ok,
 	dispatch::UnfilteredDispatchable,
-	traits::{Bounded, Currency, EnsureOrigin},
+	traits::{Bounded, Currency, EnsureOrigin, EnsureOriginWithArg},
 };
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded as ArithBounded;
@@ -172,7 +172,9 @@ fn skip_timeout_period<T: Config<I>, I: 'static>(index: ReferendumIndex) {
 	frame_system::Pallet::<T>::set_block_number(timeout_period_over);
 }
 
-fn alarm_time<T: Config<I>, I: 'static>(index: ReferendumIndex) -> T::BlockNumber {
+fn alarm_time<T: Config<I>, I: 'static>(
+	index: ReferendumIndex,
+) -> frame_system::pallet_prelude::BlockNumberFor<T> {
 	let status = Referenda::<T, I>::ensure_ongoing(index).unwrap();
 	status.alarm.unwrap().0
 }
@@ -196,7 +198,7 @@ fn is_not_confirming<T: Config<I>, I: 'static>(index: ReferendumIndex) -> bool {
 benchmarks_instance_pallet! {
 	submit {
 		let origin =
-			T::SubmitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into()).map_err(|_| BenchmarkError::Weightless)?;
 		if let Ok(caller) = frame_system::ensure_signed(origin.clone()) {
 			T::Currency::make_free_balance_be(&caller, BalanceOf::<T, I>::max_value());
 			whitelist_account!(caller);
@@ -213,7 +215,7 @@ benchmarks_instance_pallet! {
 
 	place_decision_deposit_preparing {
 		let origin =
-			T::SubmitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into()).map_err(|_| BenchmarkError::Weightless)?;
 		let index = create_referendum::<T, I>(origin.clone());
 	}: place_decision_deposit<T::RuntimeOrigin>(origin, index)
 	verify {
@@ -222,7 +224,7 @@ benchmarks_instance_pallet! {
 
 	place_decision_deposit_queued {
 		let origin =
-			T::SubmitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into()).map_err(|_| BenchmarkError::Weightless)?;
 		let index = create_referendum::<T, I>(origin.clone());
 		fill_queue::<T, I>(origin.clone(), index, 1, 90);
 	}: place_decision_deposit<T::RuntimeOrigin>(origin, index)
@@ -234,7 +236,7 @@ benchmarks_instance_pallet! {
 
 	place_decision_deposit_not_queued {
 		let origin =
-			T::SubmitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into()).map_err(|_| BenchmarkError::Weightless)?;
 		let index = create_referendum::<T, I>(origin.clone());
 		fill_queue::<T, I>(origin.clone(), index, 0, 90);
 		let track = Referenda::<T, I>::ensure_ongoing(index).unwrap().track;
@@ -248,7 +250,7 @@ benchmarks_instance_pallet! {
 
 	place_decision_deposit_passing {
 		let origin =
-			T::SubmitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into()).map_err(|_| BenchmarkError::Weightless)?;
 		let index = create_referendum::<T, I>(origin.clone());
 		skip_prepare_period::<T, I>(index);
 		make_passing::<T, I>(index);
@@ -259,7 +261,7 @@ benchmarks_instance_pallet! {
 
 	place_decision_deposit_failing {
 		let origin =
-			T::SubmitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into()).map_err(|_| BenchmarkError::Weightless)?;
 		let index = create_referendum::<T, I>(origin.clone());
 		skip_prepare_period::<T, I>(index);
 	}: place_decision_deposit<T::RuntimeOrigin>(origin, index)
@@ -269,7 +271,7 @@ benchmarks_instance_pallet! {
 
 	refund_decision_deposit {
 		let origin =
-			T::SubmitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into()).map_err(|_| BenchmarkError::Weightless)?;
 		let index = create_referendum::<T, I>(origin.clone());
 		place_deposit::<T, I>(index);
 		assert_ok!(Referenda::<T, I>::cancel(
@@ -284,7 +286,7 @@ benchmarks_instance_pallet! {
 
 	refund_submission_deposit {
 		let origin =
-			T::SubmitOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
+			T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into()).map_err(|_| BenchmarkError::Weightless)?;
 		let index = create_referendum::<T, I>(origin.clone());
 		let caller = frame_system::ensure_signed(origin.clone()).unwrap();
 		let balance = T::Currency::free_balance(&caller);
@@ -303,7 +305,7 @@ benchmarks_instance_pallet! {
 	}
 
 	cancel {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -315,7 +317,7 @@ benchmarks_instance_pallet! {
 	}
 
 	kill {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -327,7 +329,7 @@ benchmarks_instance_pallet! {
 	}
 
 	one_fewer_deciding_queue_empty {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -346,7 +348,7 @@ benchmarks_instance_pallet! {
 	}
 
 	one_fewer_deciding_failing {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin.clone());
 		// No spaces free in the queue.
@@ -371,7 +373,7 @@ benchmarks_instance_pallet! {
 	}
 
 	one_fewer_deciding_passing {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin.clone());
 		// No spaces free in the queue.
@@ -396,7 +398,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_requeued_insertion {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		// First create our referendum and place the deposit. It will be failing.
 		let index = create_referendum::<T, I>(origin.clone());
@@ -419,7 +421,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_requeued_slide {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		// First create our referendum and place the deposit. It will be failing.
 		let index = create_referendum::<T, I>(origin.clone());
@@ -447,7 +449,7 @@ benchmarks_instance_pallet! {
 		// free and this failing. It would result in `QUEUE_SIZE - 1` items being shifted for the
 		// insertion at the beginning.
 
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		// First create our referendum and place the deposit. It will be failing.
 		let index = create_referendum::<T, I>(origin.clone());
@@ -466,7 +468,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_not_queued {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		// First create our referendum and place the deposit. It will be failing.
 		let index = create_referendum::<T, I>(origin.clone());
@@ -485,7 +487,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_no_deposit {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		skip_prepare_period::<T, I>(index);
@@ -496,7 +498,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_preparing {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -507,7 +509,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_timed_out {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		skip_timeout_period::<T, I>(index);
@@ -518,7 +520,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_begin_deciding_failing {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -529,7 +531,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_begin_deciding_passing {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -541,7 +543,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_begin_confirming {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -555,7 +557,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_end_confirming {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -570,7 +572,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_continue_not_confirming {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -586,7 +588,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_continue_confirming {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -601,7 +603,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_approved {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -616,7 +618,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_rejected {
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin);
 		place_deposit::<T, I>(index);
@@ -632,7 +634,7 @@ benchmarks_instance_pallet! {
 
 	set_some_metadata {
 		use sp_std::borrow::Cow;
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin.clone());
 		let hash = T::Preimages::note(Cow::from(vec![5, 6])).unwrap();
@@ -643,7 +645,7 @@ benchmarks_instance_pallet! {
 
 	clear_metadata {
 		use sp_std::borrow::Cow;
-		let origin = T::SubmitOrigin::try_successful_origin()
+		let origin = T::SubmitOrigin::try_successful_origin(&RawOrigin::Root.into())
 			.expect("SubmitOrigin has no successful origin required for the benchmark");
 		let index = create_referendum::<T, I>(origin.clone());
 		let hash = T::Preimages::note(Cow::from(vec![6, 7, 8])).unwrap();
