@@ -6629,6 +6629,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-example-frame-crate"
+version = "4.0.0-dev"
+dependencies = [
+ "frame",
+ "parity-scale-codec",
+ "scale-info",
+]
+
+[[package]]
 name = "pallet-example-kitchensink"
 version = "4.0.0-dev"
 dependencies = [
@@ -6684,6 +6693,7 @@ dependencies = [
  "pallet-default-config-example",
  "pallet-dev-mode",
  "pallet-example-basic",
+ "pallet-example-frame-crate",
  "pallet-example-kitchensink",
  "pallet-example-offchain-worker",
  "pallet-example-split",
