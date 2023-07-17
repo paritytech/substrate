@@ -41,7 +41,7 @@ pub(crate) async fn create_snapshot<Block, HostFns>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr + serde::de::DeserializeOwned,
+	Block::Hash: serde::de::DeserializeOwned,
 	Block::Header: serde::de::DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,

@@ -186,13 +186,10 @@ pub mod pallet {
 		<<T as Config>::Currency as FunInspect<<T as frame_system::Config>::AccountId>>::Balance;
 	type DebtOf<T> =
 		fungible::Debt<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
-	type ReceiptRecordOf<T> = ReceiptRecord<
-		<T as frame_system::Config>::AccountId,
-		<T as frame_system::Config>::BlockNumber,
-		BalanceOf<T>,
-	>;
+	type ReceiptRecordOf<T> =
+		ReceiptRecord<<T as frame_system::Config>::AccountId, BlockNumberFor<T>, BalanceOf<T>>;
 	type IssuanceInfoOf<T> = IssuanceInfo<BalanceOf<T>>;
-	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber, BalanceOf<T>>;
+	type SummaryRecordOf<T> = SummaryRecord<BlockNumberFor<T>, BalanceOf<T>>;
 	type BidOf<T> = Bid<BalanceOf<T>, <T as frame_system::Config>::AccountId>;
 	type QueueTotalsTypeOf<T> = BoundedVec<(u32, BalanceOf<T>), <T as Config>::QueueCount>;
 
@@ -275,7 +272,7 @@ pub mod pallet {
 		/// The base period for the duration queues. This is the common multiple across all
 		/// supported freezing durations that can be bid upon.
 		#[pallet::constant]
-		type BasePeriod: Get<Self::BlockNumber>;
+		type BasePeriod: Get<BlockNumberFor<Self>>;
 
 		/// The minimum amount of funds that may be placed in a bid. Note that this
 		/// does not actually limit the amount which may be represented in a receipt since bids may
@@ -296,7 +293,7 @@ pub mod pallet {
 		/// A larger value results in fewer storage hits each block, but a slower period to get to
 		/// the target.
 		#[pallet::constant]
-		type IntakePeriod: Get<Self::BlockNumber>;
+		type IntakePeriod: Get<BlockNumberFor<Self>>;
 
 		/// The maximum amount of bids that can consolidated into receipts in a single intake. A
 		/// larger value here means less of the block available for transactions should there be a
@@ -306,7 +303,7 @@ pub mod pallet {
 
 		/// The maximum proportion which may be thawed and the period over which it is reset.
 		#[pallet::constant]
-		type ThawThrottle: Get<(Perquintill, Self::BlockNumber)>;
+		type ThawThrottle: Get<(Perquintill, BlockNumberFor<Self>)>;
 	}
 
 	#[pallet::pallet]
@@ -413,7 +410,7 @@ pub mod pallet {
 			/// The identity of the receipt.
 			index: ReceiptIndex,
 			/// The block number at which the receipt may be thawed.
-			expiry: T::BlockNumber,
+			expiry: BlockNumberFor<T>,
 			/// The owner of the receipt.
 			who: T::AccountId,
 			/// The proportion of the effective total issuance which the receipt represents.
@@ -508,7 +505,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let mut weight_counter =
 				WeightCounter { used: Weight::zero(), limit: T::MaxIntakeWeight::get() };
 			if T::IntakePeriod::get().is_zero() || (n % T::IntakePeriod::get()).is_zero() {
@@ -1062,7 +1059,7 @@ pub mod pallet {
 
 		pub(crate) fn process_queue(
 			duration: u32,
-			now: T::BlockNumber,
+			now: BlockNumberFor<T>,
 			our_account: &T::AccountId,
 			issuance: &IssuanceInfo<BalanceOf<T>>,
 			max_bids: u32,
@@ -1106,7 +1103,7 @@ pub mod pallet {
 
 		pub(crate) fn process_bid(
 			mut bid: BidOf<T>,
-			expiry: T::BlockNumber,
+			expiry: BlockNumberFor<T>,
 			_our_account: &T::AccountId,
 			issuance: &IssuanceInfo<BalanceOf<T>>,
 			remaining: &mut BalanceOf<T>,

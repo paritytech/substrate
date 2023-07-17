@@ -44,7 +44,7 @@ pub enum Error {
 }
 
 /// Base error code for all dev errors.
-const BASE_ERROR: i32 = 6000;
+const BASE_ERROR: i32 = crate::error::base::DEV;
 
 impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {

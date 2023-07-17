@@ -23,5 +23,6 @@ error[E0277]: `Bar` doesn't implement `std::fmt::Debug`
    = note: required for the cast from `&Bar` to the object type `dyn std::fmt::Debug`
 help: consider annotating `Bar` with `#[derive(Debug)]`
    |
-17 |     #[derive(Debug)]
+17 +     #[derive(Debug)]
+18 |     struct Bar;
    |

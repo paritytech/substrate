@@ -243,10 +243,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (B::Hash, Self::Transaction) {
 		self.state.storage_root(delta, state_version)
 	}
 
@@ -255,10 +252,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (B::Hash, bool, Self::Transaction) {
 		self.state.child_storage_root(child_info, delta, state_version)
 	}
 

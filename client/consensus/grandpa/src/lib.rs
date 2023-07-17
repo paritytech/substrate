@@ -64,12 +64,13 @@ use prometheus_endpoint::{PrometheusError, Registry};
 use sc_client_api::{
 	backend::{AuxStore, Backend},
 	utils::is_descendent_of,
-	BlockchainEvents, CallExecutor, ExecutionStrategy, ExecutorProvider, Finalizer, LockImportRun,
-	StorageProvider, TransactionFor,
+	BlockchainEvents, CallExecutor, ExecutorProvider, Finalizer, LockImportRun, StorageProvider,
+	TransactionFor,
 };
 use sc_consensus::BlockImport;
 use sc_network::types::ProtocolName;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppCrypto;
@@ -214,10 +215,10 @@ impl Clone for SharedVoterState {
 pub struct Config {
 	/// The expected duration for a message to be gossiped across the network.
 	pub gossip_duration: Duration,
-	/// Justification generation period (in blocks). GRANDPA will try to generate justifications
-	/// at least every justification_period blocks. There are some other events which might cause
-	/// justification generation.
-	pub justification_period: u32,
+	/// Justification generation period (in blocks). GRANDPA will try to generate
+	/// justifications at least every justification_generation_period blocks. There
+	/// are some other events which might cause justification generation.
+	pub justification_generation_period: u32,
 	/// Whether the GRANDPA observer protocol is live on the network and thereby
 	/// a full-node not running as a validator is running the GRANDPA observer
 	/// protocol (we will only issue catch-up requests to authorities when the
@@ -479,7 +480,6 @@ where
 				self.expect_block_hash_from_id(&BlockId::Number(Zero::zero()))?,
 				"GrandpaApi_grandpa_authorities",
 				&[],
-				ExecutionStrategy::NativeElseWasm,
 				CallContext::Offchain,
 			)
 			.and_then(|call_result| {
@@ -495,8 +495,16 @@ where
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
+///
+/// The `justification_import_period` sets the minimum period on which
+/// justifications will be imported.  When importing a block, if it includes a
+/// justification it will only be processed if it fits within this period,
+/// otherwise it will be ignored (and won't be validated). This is to avoid
+/// slowing down sync by a peer serving us unnecessary justifications which
+/// aren't trivial to validate.
 pub fn block_import<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
+	justification_import_period: u32,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	telemetry: Option<TelemetryHandle>,
@@ -508,6 +516,7 @@ where
 {
 	block_import_with_authority_set_hard_forks(
 		client,
+		justification_import_period,
 		genesis_authorities_provider,
 		select_chain,
 		Default::default(),
@@ -540,6 +549,7 @@ pub struct AuthoritySetHardFork<Block: BlockT> {
 /// given static authorities.
 pub fn block_import_with_authority_set_hard_forks<BE, Block: BlockT, Client, SC>(
 	client: Arc<Client>,
+	justification_import_period: u32,
 	genesis_authorities_provider: &dyn GenesisAuthoritySetProvider<Block>,
 	select_chain: SC,
 	authority_set_hard_forks: Vec<AuthoritySetHardFork<Block>>,
@@ -599,6 +609,7 @@ where
 	Ok((
 		GrandpaBlockImport::new(
 			client.clone(),
+			justification_import_period,
 			select_chain.clone(),
 			persistent_data.authority_set.clone(),
 			voter_commands_tx,
@@ -688,6 +699,11 @@ pub struct GrandpaParams<Block: BlockT, C, N, S, SC, VR> {
 	pub shared_voter_state: SharedVoterState,
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
+	/// Offchain transaction pool factory.
+	///
+	/// This will be used to create an offchain transaction pool instance for sending an
+	/// equivocation report from the runtime.
+	pub offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
 }
 
 /// Returns the configuration value to put in
@@ -718,7 +734,6 @@ pub fn run_grandpa_voter<Block: BlockT, BE: 'static, C, N, S, SC, VR>(
 	grandpa_params: GrandpaParams<Block, C, N, S, SC, VR>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
-	Block::Hash: Ord,
 	BE: Backend<Block> + 'static,
 	N: NetworkT<Block> + Sync + 'static,
 	S: SyncingT<Block> + Sync + 'static,
@@ -737,6 +752,7 @@ where
 		prometheus_registry,
 		shared_voter_state,
 		telemetry,
+		offchain_tx_pool_factory,
 	} = grandpa_params;
 
 	// NOTE: we have recently removed `run_grandpa_observer` from the public
@@ -811,6 +827,7 @@ where
 		shared_voter_state,
 		justification_sender,
 		telemetry,
+		offchain_tx_pool_factory,
 	);
 
 	let voter_work = voter_work.map(|res| match res {
@@ -880,6 +897,7 @@ where
 		shared_voter_state: SharedVoterState,
 		justification_sender: GrandpaJustificationSender<Block>,
 		telemetry: Option<TelemetryHandle>,
+		offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
 	) -> Self {
 		let metrics = match prometheus_registry.as_ref().map(Metrics::register) {
 			Some(Ok(metrics)) => Some(metrics),
@@ -904,6 +922,7 @@ where
 			metrics: metrics.as_ref().map(|m| m.environment.clone()),
 			justification_sender: Some(justification_sender),
 			telemetry: telemetry.clone(),
+			offchain_tx_pool_factory,
 			_phantom: PhantomData,
 		});
 
@@ -1055,6 +1074,7 @@ where
 					metrics: self.env.metrics.clone(),
 					justification_sender: self.env.justification_sender.clone(),
 					telemetry: self.telemetry.clone(),
+					offchain_tx_pool_factory: self.env.offchain_tx_pool_factory.clone(),
 					_phantom: PhantomData,
 				});
 

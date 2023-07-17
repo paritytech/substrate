@@ -26,6 +26,7 @@ use frame_support::{
 	traits::Get,
 	BoundedBTreeMap, BoundedBTreeSet,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 
 pub(super) type DepositBalanceOf<T, I = ()> =
@@ -34,7 +35,7 @@ pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 pub(super) type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
 	<T as SystemConfig>::AccountId,
-	Option<<T as SystemConfig>::BlockNumber>,
+	Option<BlockNumberFor<T>>,
 	<T as Config<I>>::ApprovalsLimit,
 >;
 pub(super) type ItemAttributesApprovals<T, I = ()> =
@@ -56,30 +57,21 @@ pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as SystemConfig>::AccountId,
 	BalanceOf<T, I>,
 >;
-pub(super) type CollectionConfigFor<T, I = ()> = CollectionConfig<
-	BalanceOf<T, I>,
-	<T as SystemConfig>::BlockNumber,
-	<T as Config<I>>::CollectionId,
->;
+pub(super) type CollectionConfigFor<T, I = ()> =
+	CollectionConfig<BalanceOf<T, I>, BlockNumberFor<T>, <T as Config<I>>::CollectionId>;
 pub(super) type PreSignedMintOf<T, I = ()> = PreSignedMint<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
-	<T as SystemConfig>::BlockNumber,
+	BlockNumberFor<T>,
 	BalanceOf<T, I>,
 >;
 pub(super) type PreSignedAttributesOf<T, I = ()> = PreSignedAttributes<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
-	<T as SystemConfig>::BlockNumber,
+	BlockNumberFor<T>,
 >;
-
-pub trait Incrementable {
-	fn increment(&self) -> Self;
-	fn initial_value() -> Self;
-}
-impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 /// Information about a collection.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]

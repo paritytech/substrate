@@ -244,7 +244,7 @@ impl Tester {
 fn config() -> crate::Config {
 	crate::Config {
 		gossip_duration: std::time::Duration::from_millis(10),
-		justification_period: 256,
+		justification_generation_period: 256,
 		keystore: None,
 		name: None,
 		local_role: Role::Authority,
@@ -669,7 +669,7 @@ fn grandpa_protocol_name() {
 
 	// Create protocol name using random genesis hash.
 	let genesis_hash = sp_core::H256::random();
-	let expected = format!("/{}/grandpa/1", array_bytes::bytes2hex("", genesis_hash.as_ref()));
+	let expected = format!("/{}/grandpa/1", array_bytes::bytes2hex("", genesis_hash));
 	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
 	assert_eq!(proto_name.to_string(), expected);
 
