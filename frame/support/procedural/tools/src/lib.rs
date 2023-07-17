@@ -46,13 +46,18 @@ pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 	}
 }
 
+/// Check if the output of [`generate_crate_access_2018`] (or generally another path) is using the
+/// `frame` crate or not.
+pub fn is_using_frame_crate(path: &syn::Path) -> bool {
+	path.segments.first().map(|s| s.ident == "frame").unwrap_or(false)
+}
+
 /// Generate the crate access for the crate using 2018 syntax.
 ///
-/// for `frame-support` output will for example be `frame_support`.
+/// If `frame` is in scope, it will use `frame::deps::<def_crate>`. Else, it will try and find
+/// `<def_crate>` directly.
 pub fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Path, Error> {
 	if let Ok(FoundCrate::Name(name)) = crate_name(&"frame") {
-		// TODO: add tes to make sure `frame` always contains
-		// `frame::deps::frame_support/frame_system`.
 		let path = format!("{}::deps::{}", name, def_crate.to_string().replace("-", "_"));
 		let path = syn::parse_str::<syn::Path>(&path)?;
 		return Ok(path)
@@ -75,11 +80,8 @@ pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream
 	let mod_name = generate_hidden_includes_mod_name(unique_id);
 
 	if let Ok(FoundCrate::Name(name)) = crate_name(&"frame") {
-		// TODO: add tes to make sure `frame` always contains
-		// `frame::deps::frame_support/frame_system`.
-		// TODO: handle error.
 		let path = format!("{}::deps::{}", name, def_crate.to_string().replace("-", "_"));
-		let path = syn::parse_str::<syn::Path>(&path).unwrap();
+		let path = syn::parse_str::<syn::Path>(&path).expect("is a valid path; qed");
 		return quote::quote!(
 			#[doc(hidden)]
 			mod #mod_name {
@@ -106,7 +108,8 @@ pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream
 	}
 }
 
-// fn to remove white spaces around string types (basically whitespaces around tokens)
+// fn to remove white spaces around string types
+// (basically whitespaces around tokens)
 pub fn clean_type_string(input: &str) -> String {
 	input
 		.replace(" ::", "::")

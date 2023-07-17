@@ -428,7 +428,6 @@ mod keyword {
 
 /// Parse attributes for item in pallet module
 /// syntax must be `pallet::` (e.g. `#[pallet::config]`)
-#[derive(Debug)]
 enum PalletAttr {
 	Config(proc_macro2::Span, bool),
 	Pallet(proc_macro2::Span),
@@ -564,7 +563,7 @@ impl syn::parse::Parse for PalletAttr {
 }
 
 /// The optional weight annotation on a `#[pallet::call]` like `#[pallet::call(weight($type))]`.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct InheritedCallWeightAttr {
 	pub typename: syn::Type,
 	pub span: proc_macro2::Span,

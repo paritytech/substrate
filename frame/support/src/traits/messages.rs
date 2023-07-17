@@ -118,9 +118,7 @@ impl<OverweightAddr> ServiceQueues for NoopServiceQueues<OverweightAddr> {
 /// The resource footprint of a queue.
 #[derive(Default, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct Footprint {
-	/// The count of items in the queue.
 	pub count: u64,
-	/// The byte-size of items in the queue.
 	pub size: u64,
 }
 

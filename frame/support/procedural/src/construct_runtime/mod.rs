@@ -275,7 +275,6 @@ fn construct_runtime_implicit_to_explicit(
 	let mut expansion = quote::quote!(
 		#frame_support::construct_runtime! { #input }
 	);
-
 	for pallet in definition.pallets.iter().filter(|pallet| pallet.pallet_parts.is_none()) {
 		let pallet_path = &pallet.path;
 		let pallet_name = &pallet.name;
@@ -283,6 +282,7 @@ fn construct_runtime_implicit_to_explicit(
 		expansion = quote::quote!(
 			#frame_support::tt_call! {
 				macro = [{ #pallet_path::tt_default_parts }]
+				your_tt_return = [{ #frame_support::tt_return }]
 				~~> #frame_support::match_and_insert! {
 					target = [{ #expansion }]
 					pattern = [{ #pallet_name: #pallet_path #pallet_instance }]
@@ -318,7 +318,7 @@ fn construct_runtime_explicit_to_explicit_expanded(
 		expansion = quote::quote!(
 			#frame_support::tt_call! {
 				macro = [{ #pallet_path::tt_extra_parts }]
-				frame_support = [{ #frame_support }]
+				your_tt_return = [{ #frame_support::tt_return }]
 				~~> #frame_support::match_and_insert! {
 					target = [{ #expansion }]
 					pattern = [{ #pallet_name: #pallet_path #pallet_instance }]
@@ -403,17 +403,19 @@ fn construct_runtime_final_expansion(
 	let integrity_test = decl_integrity_test(&scrate);
 	let static_assertions = decl_static_assertions(&name, &pallets, &scrate);
 
-	let warning =
-		where_section.map_or(None, |where_section| {
-			Some(proc_macro_warning::Warning::new_deprecated("WhereSection")
-			.old("use a `where` clause in `construct_runtime`")
-			.new("use `frame_system::Config` to set the `Block` type and delete this clause. 
-				It is planned to be removed in December 2023")
-			.help_links(&["https://github.com/paritytech/substrate/pull/14437"])
-			.span(where_section.span)
-			.build(),
+	let warning = where_section.map_or(None, |where_section| {
+		Some(
+			proc_macro_warning::Warning::new_deprecated("WhereSection")
+				.old("use a `where` clause in `construct_runtime`")
+				.new(
+					"use `frame_system::Config` to set the `Block` type and delete this clause.
+				It is planned to be removed in December 2023",
+				)
+				.help_links(&["https://github.com/paritytech/substrate/pull/14437"])
+				.span(where_section.span)
+				.build(),
 		)
-		});
+	});
 
 	let res = quote!(
 		#warning
@@ -783,6 +785,7 @@ fn decl_static_assertions(
 		quote! {
 			#scrate::tt_call! {
 				macro = [{ #path::tt_error_token }]
+				your_tt_return = [{ #scrate::tt_return }]
 				~~> #scrate::assert_error_encoded_size! {
 					path = [{ #path }]
 					runtime = [{ #runtime }]

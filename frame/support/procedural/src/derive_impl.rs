@@ -85,12 +85,10 @@ fn combine_impls(
 			.iter()
 			.cloned()
 			.partition(|impl_item| impl_item_ident(impl_item).is_some());
-
 	let existing_local_keys: HashSet<Ident> = existing_local_keys
 		.into_iter()
 		.filter_map(|item| impl_item_ident(&item).cloned())
 		.collect();
-
 	let mut final_impl = local_impl;
 	let extended_items = foreign_impl.items.into_iter().filter_map(|item| {
 		if let Some(ident) = impl_item_ident(&item) {
@@ -114,7 +112,6 @@ fn combine_impls(
 				.then_some(item)
 		}
 	});
-
 	final_impl.items.extend(extended_items);
 	final_impl
 }
