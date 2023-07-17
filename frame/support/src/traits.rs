@@ -80,8 +80,10 @@ pub use metadata::{
 };
 
 mod hooks;
+#[allow(deprecated)]
+pub use hooks::GenesisBuild;
 pub use hooks::{
-	GenesisBuild, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize,
+	BuildGenesisConfig, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize,
 	OnRuntimeUpgrade, OnTimestampSet,
 };
 

@@ -130,14 +130,16 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	#[derive(DefaultNoBound)]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
 		pub compute: FixedU64,
 		pub storage: FixedU64,
 		pub trash_data_count: u32,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			assert!(
 				self.trash_data_count <= MAX_TRASH_DATA_ENTRIES,
@@ -269,9 +271,7 @@ pub mod pallet {
 		///
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_proof_size(meter: &mut WeightMeter) {
-			let Ok(n) = Self::calculate_proof_size_iters(&meter) else {
-				return;
-			};
+			let Ok(n) = Self::calculate_proof_size_iters(&meter) else { return };
 
 			meter.defensive_saturating_accrue(T::WeightInfo::waste_proof_size_some(n));
 
@@ -301,9 +301,7 @@ pub mod pallet {
 		///
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_ref_time(meter: &mut WeightMeter) {
-			let Ok(n) = Self::calculate_ref_time_iters(&meter) else {
-				return;
-			};
+			let Ok(n) = Self::calculate_ref_time_iters(&meter) else { return };
 			meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time_iter(n));
 
 			let clobber = Self::waste_ref_time_iter(vec![0u8; 64], n);

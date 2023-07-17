@@ -23,48 +23,10 @@
 //! extensions to support APIs for particular execution context & capabilities.
 
 use parking_lot::RwLock;
-use sc_transaction_pool_api::OffchainTransactionPoolFactory;
-use sp_core::{
-	offchain::{self, OffchainDbExt, OffchainWorkerExt},
-	traits::{ReadRuntimeVersion, ReadRuntimeVersionExt},
-	ExecutionContext,
-};
+use sp_core::traits::{ReadRuntimeVersion, ReadRuntimeVersionExt};
 use sp_externalities::{Extension, Extensions};
-use sp_keystore::{KeystoreExt, KeystorePtr};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-pub use sp_state_machine::ExecutionStrategy;
-use sp_state_machine::{DefaultHandler, ExecutionManager};
-use std::{
-	marker::PhantomData,
-	sync::{Arc, Weak},
-};
-
-/// Execution strategies settings.
-#[derive(Debug, Clone)]
-pub struct ExecutionStrategies {
-	/// Execution strategy used when syncing.
-	pub syncing: ExecutionStrategy,
-	/// Execution strategy used when importing blocks.
-	pub importing: ExecutionStrategy,
-	/// Execution strategy used when constructing blocks.
-	pub block_construction: ExecutionStrategy,
-	/// Execution strategy used for offchain workers.
-	pub offchain_worker: ExecutionStrategy,
-	/// Execution strategy used in other cases.
-	pub other: ExecutionStrategy,
-}
-
-impl Default for ExecutionStrategies {
-	fn default() -> ExecutionStrategies {
-		ExecutionStrategies {
-			syncing: ExecutionStrategy::NativeElseWasm,
-			importing: ExecutionStrategy::NativeElseWasm,
-			block_construction: ExecutionStrategy::AlwaysWasm,
-			offchain_worker: ExecutionStrategy::NativeWhenPossible,
-			other: ExecutionStrategy::NativeElseWasm,
-		}
-	}
-}
+use std::{marker::PhantomData, sync::Arc};
 
 /// Generate the starting set of [`Extensions`].
 ///
@@ -74,22 +36,12 @@ pub trait ExtensionsFactory<Block: BlockT>: Send + Sync {
 	///
 	/// - `block_hash`: The hash of the block in the context that extensions will be used.
 	/// - `block_number`: The number of the block in the context that extensions will be used.
-	/// - `capabilities`: The capabilities
-	fn extensions_for(
-		&self,
-		block_hash: Block::Hash,
-		block_number: NumberFor<Block>,
-		capabilities: offchain::Capabilities,
-	) -> Extensions;
+	fn extensions_for(&self, block_hash: Block::Hash, block_number: NumberFor<Block>)
+		-> Extensions;
 }
 
 impl<Block: BlockT> ExtensionsFactory<Block> for () {
-	fn extensions_for(
-		&self,
-		_: Block::Hash,
-		_: NumberFor<Block>,
-		_capabilities: offchain::Capabilities,
-	) -> Extensions {
+	fn extensions_for(&self, _: Block::Hash, _: NumberFor<Block>) -> Extensions {
 		Extensions::new()
 	}
 }
@@ -99,10 +51,9 @@ impl<Block: BlockT, T: ExtensionsFactory<Block>> ExtensionsFactory<Block> for Ve
 		&self,
 		block_hash: Block::Hash,
 		block_number: NumberFor<Block>,
-		capabilities: offchain::Capabilities,
 	) -> Extensions {
 		let mut exts = Extensions::new();
-		exts.extend(self.iter().map(|e| e.extensions_for(block_hash, block_number, capabilities)));
+		exts.extend(self.iter().map(|e| e.extensions_for(block_hash, block_number)));
 		exts
 	}
 }
@@ -125,12 +76,7 @@ impl<Block: BlockT, Ext> ExtensionBeforeBlock<Block, Ext> {
 impl<Block: BlockT, Ext: Default + Extension> ExtensionsFactory<Block>
 	for ExtensionBeforeBlock<Block, Ext>
 {
-	fn extensions_for(
-		&self,
-		_: Block::Hash,
-		block_number: NumberFor<Block>,
-		_: offchain::Capabilities,
-	) -> Extensions {
+	fn extensions_for(&self, _: Block::Hash, block_number: NumberFor<Block>) -> Extensions {
 		let mut exts = Extensions::new();
 
 		if block_number < self.before {
@@ -141,78 +87,33 @@ impl<Block: BlockT, Ext: Default + Extension> ExtensionsFactory<Block>
 	}
 }
 
-/// Create a Offchain DB accessor object.
-pub trait DbExternalitiesFactory: Send + Sync {
-	/// Create [`offchain::DbExternalities`] instance.
-	fn create(&self) -> Box<dyn offchain::DbExternalities>;
-}
-
-impl<T: offchain::DbExternalities + Clone + Sync + Send + 'static> DbExternalitiesFactory for T {
-	fn create(&self) -> Box<dyn offchain::DbExternalities> {
-		Box::new(self.clone())
-	}
-}
-
 /// A producer of execution extensions for offchain calls.
 ///
 /// This crate aggregates extensions available for the offchain calls
 /// and is responsible for producing a correct `Extensions` object.
 /// for each call, based on required `Capabilities`.
 pub struct ExecutionExtensions<Block: BlockT> {
-	strategies: ExecutionStrategies,
-	keystore: Option<KeystorePtr>,
-	offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
-	// FIXME: these three are only RwLock because of https://github.com/paritytech/substrate/issues/4587
-	//        remove when fixed.
-	transaction_pool_factory: RwLock<Option<OffchainTransactionPoolFactory<Block>>>,
 	extensions_factory: RwLock<Box<dyn ExtensionsFactory<Block>>>,
-	statement_store: RwLock<Option<Weak<dyn sp_statement_store::StatementStore>>>,
 	read_runtime_version: Arc<dyn ReadRuntimeVersion>,
 }
 
 impl<Block: BlockT> ExecutionExtensions<Block> {
-	/// Create new `ExecutionExtensions` given a `keystore` and `ExecutionStrategies`.
+	/// Create new `ExecutionExtensions` given an `extensions_factory`.
 	pub fn new(
-		strategies: ExecutionStrategies,
-		keystore: Option<KeystorePtr>,
-		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
+		extensions_factory: Option<Box<dyn ExtensionsFactory<Block>>>,
 		read_runtime_version: Arc<dyn ReadRuntimeVersion>,
 	) -> Self {
-		let transaction_pool = RwLock::new(None);
-		let statement_store = RwLock::new(None);
-		let extensions_factory = Box::new(());
 		Self {
-			strategies,
-			keystore,
-			offchain_db,
-			extensions_factory: RwLock::new(extensions_factory),
-			transaction_pool_factory: transaction_pool,
-			statement_store,
+			extensions_factory: extensions_factory
+				.map(RwLock::new)
+				.unwrap_or_else(|| RwLock::new(Box::new(()))),
 			read_runtime_version,
 		}
-	}
-
-	/// Get a reference to the execution strategies.
-	pub fn strategies(&self) -> &ExecutionStrategies {
-		&self.strategies
 	}
 
 	/// Set the new extensions_factory
 	pub fn set_extensions_factory(&self, maker: impl ExtensionsFactory<Block> + 'static) {
 		*self.extensions_factory.write() = Box::new(maker);
-	}
-
-	/// Register transaction pool extension.
-	pub fn register_transaction_pool_factory(
-		&self,
-		factory: OffchainTransactionPoolFactory<Block>,
-	) {
-		*self.transaction_pool_factory.write() = Some(factory);
-	}
-
-	/// Register statement store extension.
-	pub fn register_statement_store(&self, store: Arc<dyn sp_statement_store::StatementStore>) {
-		*self.statement_store.write() = Some(Arc::downgrade(&store) as _);
 	}
 
 	/// Based on the execution context and capabilities it produces
@@ -221,74 +122,12 @@ impl<Block: BlockT> ExecutionExtensions<Block> {
 		&self,
 		block_hash: Block::Hash,
 		block_number: NumberFor<Block>,
-		context: ExecutionContext,
 	) -> Extensions {
-		let capabilities = context.capabilities();
-
 		let mut extensions =
-			self.extensions_factory
-				.read()
-				.extensions_for(block_hash, block_number, capabilities);
-
-		if capabilities.contains(offchain::Capabilities::KEYSTORE) {
-			if let Some(ref keystore) = self.keystore {
-				extensions.register(KeystoreExt(keystore.clone()));
-			}
-		}
-
-		if capabilities.contains(offchain::Capabilities::TRANSACTION_POOL) {
-			if let Some(pool) = self.transaction_pool_factory.read().as_ref() {
-				extensions.register(pool.offchain_transaction_pool(block_hash));
-			}
-		}
-
-		if capabilities.contains(offchain::Capabilities::STATEMENT_STORE) {
-			if let Some(store) = self.statement_store.read().as_ref().and_then(|x| x.upgrade()) {
-				extensions.register(sp_statement_store::runtime_api::StatementStoreExt(store));
-			}
-		}
-		if capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_READ) ||
-			capabilities.contains(offchain::Capabilities::OFFCHAIN_DB_WRITE)
-		{
-			if let Some(offchain_db) = self.offchain_db.as_ref() {
-				extensions.register(OffchainDbExt::new(offchain::LimitedExternalities::new(
-					capabilities,
-					offchain_db.create(),
-				)));
-			}
-		}
-
-		if let ExecutionContext::OffchainCall(Some(ext)) = context {
-			extensions.register(OffchainWorkerExt::new(offchain::LimitedExternalities::new(
-				capabilities,
-				ext.0,
-			)));
-		}
+			self.extensions_factory.read().extensions_for(block_hash, block_number);
 
 		extensions.register(ReadRuntimeVersionExt::new(self.read_runtime_version.clone()));
 
 		extensions
-	}
-
-	/// Create `ExecutionManager` and `Extensions` for given offchain call.
-	///
-	/// Based on the execution context and capabilities it produces
-	/// the right manager and extensions object to support desired set of APIs.
-	pub fn manager_and_extensions<E: std::fmt::Debug>(
-		&self,
-		block_hash: Block::Hash,
-		block_number: NumberFor<Block>,
-		context: ExecutionContext,
-	) -> (ExecutionManager<DefaultHandler<E>>, Extensions) {
-		let manager = match context {
-			ExecutionContext::BlockConstruction => self.strategies.block_construction.get_manager(),
-			ExecutionContext::Syncing => self.strategies.syncing.get_manager(),
-			ExecutionContext::Importing => self.strategies.importing.get_manager(),
-			ExecutionContext::OffchainCall(Some((_, capabilities))) if capabilities.is_all() =>
-				self.strategies.offchain_worker.get_manager(),
-			ExecutionContext::OffchainCall(_) => self.strategies.other.get_manager(),
-		};
-
-		(manager, self.extensions(block_hash, block_number, context))
 	}
 }
