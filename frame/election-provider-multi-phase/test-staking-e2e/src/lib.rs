@@ -20,7 +20,7 @@ mod mock;
 
 pub(crate) const LOG_TARGET: &str = "tests::e2e-epm";
 
-use frame_support::{assert_err, assert_ok};
+use frame_support::{assert_err, assert_noop, assert_ok};
 use mock::*;
 use sp_core::Get;
 use sp_npos_elections::{to_supports, StakedAssignment};
@@ -287,7 +287,7 @@ fn set_validation_intention_after_chilled() {
 ///
 /// Related to <https://github.com/paritytech/substrate/issues/14246>.
 fn ledger_consistency_active_balance_below_ed() {
-	use pallet_staking::Error;
+	use pallet_staking::{Error, Event};
 
 	ExtBuilder::default()
 		.staking(StakingExtBuilder::default())
@@ -296,18 +296,17 @@ fn ledger_consistency_active_balance_below_ed() {
 
 			// unbonding total of active stake fails because the active ledger balance would fall
 			// below the `MinNominatorBond`.
-			assert_err!(
+			assert_noop!(
 				Staking::unbond(RuntimeOrigin::signed(11), 1000),
 				Error::<Runtime>::InsufficientBond
 			);
-			assert_eq!(Staking::ledger(&11).unwrap().active, 1000);
 
 			// however, chilling works as expected.
 			assert_ok!(Staking::chill(RuntimeOrigin::signed(11)));
 
 			// now unbonding the full active balance works, since remainer of the active balance is
 			// not enforced to be below `MinNominatorBond` if the stash has been chilled.
-			assert_ok!(Staking::unbond(RuntimeOrigin::signed(11), 1000),);
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(11), 1000));
 
 			// the active balance of the ledger entry is 0, while total balance is 1000 until
 			// `withdraw_unbonded` is called.
@@ -324,6 +323,12 @@ fn ledger_consistency_active_balance_below_ed() {
 			assert_err!(
 				Staking::reap_stash(RuntimeOrigin::signed(11), 21, 0),
 				Error::<Runtime>::FundedTarget,
+			);
+
+			// check the events so far: 1x Chilled and 1x Unbounded
+			assert_eq!(
+				staking_events(),
+				[Event::Chilled { stash: 11 }, Event::Unbonded { stash: 11, amount: 1000 }]
 			);
 
 			// after advancing `BondingDuration` eras, the `withdraw_unbonded` will unlock the
