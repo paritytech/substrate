@@ -357,7 +357,7 @@ impl From<DiscoveryOut> for BehaviourOut {
 }
 
 impl From<void::Void> for BehaviourOut {
-	fn from(_e: void::Void) -> Self {
-		Self::None
+	fn from(e: void::Void) -> Self {
+		void::unreachable(e)
 	}
 }
