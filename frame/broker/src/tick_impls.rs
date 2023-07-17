@@ -198,6 +198,7 @@ impl<T: Config> Pallet<T> {
 					begin: region_end,
 					workload: record.completion.drain_complete().unwrap_or_default(),
 				});
+				Self::deposit_event(Event::LeaseEnding { when: region_end, task });
 			}
 			first_core.saturating_inc();
 			!expiring
@@ -207,21 +208,34 @@ impl<T: Config> Pallet<T> {
 		let max_possible_sales = status.core_count.saturating_sub(first_core);
 		let limit_cores_offered = config.limit_cores_offered.unwrap_or(CoreIndex::max_value());
 		let cores_offered = limit_cores_offered.min(max_possible_sales);
+		let sale_start = now.saturating_add(config.interlude_length);
+		let leadin_length = config.leadin_length;
+		let ideal_cores_sold = (config.ideal_bulk_proportion * cores_offered as u32) as u16;
 		// Update SaleInfo
 		let new_sale = SaleInfoRecord {
-			sale_start: now.saturating_add(config.interlude_length),
-			leadin_length: config.leadin_length,
+			sale_start,
+			leadin_length,
 			start_price,
 			reserve_price,
 			sellout_price: None,
 			region_begin,
 			region_end,
 			first_core,
-			ideal_cores_sold: (config.ideal_bulk_proportion * cores_offered as u32) as u16,
+			ideal_cores_sold,
 			cores_offered,
 			cores_sold: 0,
 		};
 		SaleInfo::<T>::put(&new_sale);
+		Self::deposit_event(Event::SaleInitialized {
+			sale_start,
+			leadin_length,
+			start_price,
+			reserve_price,
+			region_begin,
+			region_end,
+			ideal_cores_sold,
+			cores_offered,
+		});
 
 		Some(())
 	}

@@ -266,14 +266,42 @@ pub mod pallet {
 			/// The workload of the now cancelled reservation.
 			workload: Schedule,
 		},
+		/// A new sale has been initialized.
+		SaleInitialized {
+			/// The local block number at which the sale will/did start.
+			sale_start: T::BlockNumber,
+			/// The length in blocks of the Leadin Period (where the price is decreasing).
+			leadin_length: T::BlockNumber,
+			/// The price of Bulk Coretime at the beginning of the Leadin Period.
+			start_price: BalanceOf<T>,
+			/// The price of Bulk Coretime by the end of the Leadin Period.
+			reserve_price: BalanceOf<T>,
+			/// The first timeslice of the Regions which are being sold in this sale.
+			region_begin: Timeslice,
+			/// The timeslice on which the Regions which are being sold in the sale terminate.
+			/// (i.e. One after the last timeslice which the Regions control.)
+			region_end: Timeslice,
+			/// The number of cores we want to sell, ideally. Selling this amount would result in no
+			/// change to the reserve_price for the next sale.
+			ideal_cores_sold: CoreIndex,
+			/// Number of cores which are/have been offered for sale.
+			cores_offered: CoreIndex,
+		},
 		/// A new lease has been created.
 		Leased {
-			/// The task to which a core will be assigned
+			/// The task to which a core will be assigned.
 			task: TaskId,
 			/// The timeslice contained in the sale period after which this lease will
 			/// self-terminate (and therefore the earliest timeslice at which the lease may no
 			/// longer apply).
 			until: Timeslice,
+		},
+		/// A lease is about to end.
+		LeaseEnding {
+			/// The task to which a core was assigned.
+			task: TaskId,
+			/// The timeslice at which the task will no longer be scheduled.
+			when: Timeslice,
 		},
 		/// The sale rotation has been started and a new sale is imminent.
 		SalesStarted {
