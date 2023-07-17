@@ -217,7 +217,7 @@ pub trait IntegrityTest {
 ///
 /// In short, the following diagram shows the
 pub trait Hooks<BlockNumber> {
-	/// Block initialization hook. This is called at the very beginning of the block execution
+	/// Block initialization hook. This is called at the very beginning of block execution.
 	///
 	/// Must return the non-negotiable weight of both itself, and whatever [`on_finalize`] wishes to
 	/// consumed.
@@ -245,9 +245,9 @@ pub trait Hooks<BlockNumber> {
 		Weight::zero()
 	}
 
-	/// Block finalization hook. This is called at the very beginning of the block execution
+	/// Block finalization hook. This is called at the very end of block execution.
 	///
-	/// Note that this has nothing to do with finality in the a *consensus"* jargon.
+	/// Note that this has nothing to do with finality in the "consensus" sense.
 	///
 	/// Note that the non-negotiable weight for this has must have already been returned by
 	/// [`OnInitialize`]. It usage along is not permitted.
