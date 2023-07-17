@@ -219,8 +219,8 @@ pub trait IntegrityTest {
 pub trait Hooks<BlockNumber> {
 	/// Block initialization hook. This is called at the very beginning of block execution.
 	///
-	/// Must return the non-negotiable weight of both itself, and whatever [`on_finalize`] wishes to
-	/// consumed.
+	/// Must return the non-negotiable weight of both itself and whatever [`on_finalize`] wishes to
+	/// consume.
 	///
 	/// The weight returned by this is treated as [`DispatchClass::Mandatory`], meaning that it MUST
 	/// BE EXECUTED. This implies that this hook should only ever be used if the logic in it must
@@ -250,16 +250,16 @@ pub trait Hooks<BlockNumber> {
 	/// Note that this has nothing to do with finality in the "consensus" sense.
 	///
 	/// Note that the non-negotiable weight for this has must have already been returned by
-	/// [`OnInitialize`]. It usage along is not permitted.
+	/// [`on_initialize`]. It usage along is not permitted.
 	///
-	/// Similar to [`OnInitialize`] it should only be used when execution is absolutely necessary.
+	/// Similar to [`on_initialize`] it should only be used when execution is absolutely necessary.
 	fn on_finalize(_n: BlockNumber) {}
 
 	/// Hook to consume a block's idle time. This will run when the block is being finalized (before
 	/// [`on_finalize`]).
 	///
-	/// Given that all dispatchables are already executed and noted, and the weight for
-	/// [`on_finalize`], which comes next, is also already accounted for (via `on_initialize`), this
+	/// Given that all dispatchables are already executed and noted (and the weight for
+	/// [`on_finalize`], which comes next, is also already accounted for via `on_initialize`), this
 	/// hook consumes anything that is leftover.
 	///
 	/// Each pallet's `on_idle` is chosen to be the first to execute in a round-robin fashion
@@ -276,8 +276,8 @@ pub trait Hooks<BlockNumber> {
 
 	/// Hook executed when a code change (aka. a "runtime upgrade") is detected by FRAME.
 	///
-	/// Be aware that this is called before [`on_initialize`] of any pallet, therefore a lot of the
-	/// critical storage items such as `block_number` in system pallet might not been set.
+	/// Be aware that this is called before [`on_initialize`] of any pallet; therefore, a lot of the
+	/// critical storage items such as `block_number` in system pallet might have not been set.
 	///
 	/// Vert similar to [`on_initialize`], any code in this block is mandatory and MUST execute. Use
 	/// with care.
@@ -346,9 +346,9 @@ pub trait Hooks<BlockNumber> {
 	/// [`sp-io`], namely [`sp_io::offchain`]. This includes exotic operations such as HTTP calls
 	/// that are not really possible in the rest of the runtime code.
 	///
-	/// The execution of this hook is entirely optional and is left at the discretion of the node
-	/// side software, and its configuration. In a normal substrate-cli, look for the CLI flags
-	/// related to offchain-workers to learn more.
+	/// The execution of this hook is entirely optional and is left at the discretion of the
+	/// node-side software and its configuration. In a normal substrate-cli, look for the CLI
+	/// flags related to offchain-workers to learn more.
 	fn offchain_worker(_n: BlockNumber) {}
 
 	/// Check the integrity of this pallet's configuration.
@@ -357,7 +357,7 @@ pub trait Hooks<BlockNumber> {
 	/// of [`construct_runtime`]'s expansion. Look for a test case with a name along the lines of:
 	/// `__construct_runtime_integrity_test`.
 	///
-	/// This hook is suitable location to ensure value values/types provided to the `Config` trait
+	/// This hook is the location where the values/types provided to the `Config` trait
 	/// of the pallet can be tested for correctness. For example, if two `type Foo: Get<u32>` and
 	/// `type Bar: Get<u32>` where `Foo::get()` must always be greater than `Bar::get()`, such
 	/// checks can be asserted upon here.
