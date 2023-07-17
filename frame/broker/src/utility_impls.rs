@@ -8,7 +8,7 @@ use frame_support::{
 	},
 };
 use sp_arithmetic::{
-	traits::{SaturatedConversion, Saturating, Bounded},
+	traits::{SaturatedConversion, Saturating, Bounded}, FixedU64, FixedPointNumber,
 };
 use sp_runtime::traits::AccountIdConversion;
 
@@ -42,8 +42,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn sale_price(sale: &SaleInfoRecordOf<T>, now: T::BlockNumber) -> BalanceOf<T> {
-		lerp(now, sale.sale_start, sale.leadin_length, sale.start_price, sale.reserve_price)
-			.unwrap_or(sale.start_price)
+		let num = now.saturating_sub(sale.sale_start).min(sale.leadin_length).saturated_into();
+		let through = FixedU64::from_rational(num, sale.leadin_length.saturated_into());
+		T::PriceAdapter::leadin_factor_at(through).saturating_mul_int(sale.price)
 	}
 
 	pub(crate) fn charge(who: &T::AccountId, amount: BalanceOf<T>) -> DispatchResult {

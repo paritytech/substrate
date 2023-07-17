@@ -204,7 +204,7 @@ mod benches {
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), 10u32.into());
 
-		assert_eq!(SaleInfo::<T>::get().unwrap().sellout_price, Some(10u32.into()));
+		assert_eq!(SaleInfo::<T>::get().unwrap().last_purchase_price, Some(10u32.into()));
 
 		Ok(())
 	}

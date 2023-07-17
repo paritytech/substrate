@@ -47,7 +47,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub(crate) fn do_start_sales(
-		reserve_price: BalanceOf<T>,
+		price: BalanceOf<T>,
 		core_count: CoreIndex,
 	) -> DispatchResult {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
@@ -63,8 +63,7 @@ impl<T: Config> Pallet<T> {
 		let dummy_sale = SaleInfoRecord {
 			sale_start: now,
 			leadin_length: Zero::zero(),
-			start_price: Zero::zero(),
-			reserve_price,
+			price,
 			sellout_price: None,
 			region_begin: commit_timeslice,
 			region_end: commit_timeslice + config.region_length,
@@ -73,7 +72,7 @@ impl<T: Config> Pallet<T> {
 			cores_offered: 0,
 			cores_sold: 0,
 		};
-		Self::deposit_event(Event::<T>::SalesStarted { reserve_price, core_count });
+		Self::deposit_event(Event::<T>::SalesStarted { price, core_count });
 		Self::rotate_sale(dummy_sale, &config, &status);
 		Status::<T>::put(&status);
 		Ok(())
@@ -95,7 +94,7 @@ impl<T: Config> Pallet<T> {
 		Self::charge(&who, price)?;
 		let core = sale.first_core + sale.cores_sold;
 		sale.cores_sold.saturating_inc();
-		if sale.cores_sold >= sale.ideal_cores_sold && sale.sellout_price.is_none() {
+		if sale.cores_sold <= sale.ideal_cores_sold || sale.sellout_price.is_none() {
 			sale.sellout_price = Some(price);
 		}
 		SaleInfo::<T>::put(&sale);
@@ -140,10 +139,6 @@ impl<T: Config> Pallet<T> {
 		let price = record.price + config.renewal_bump * record.price;
 		let new_record = AllowedRenewalRecord { begin, price, completion: Complete(workload) };
 		AllowedRenewals::<T>::insert(core, &new_record);
-		if sale.cores_sold >= sale.ideal_cores_sold && sale.sellout_price.is_none() {
-			let price = Self::sale_price(&sale, frame_system::Pallet::<T>::block_number());
-			sale.sellout_price = Some(price);
-		}
 		SaleInfo::<T>::put(&sale);
 		if let Some(workload) = new_record.completion.drain_complete() {
 			Self::deposit_event(Event::Renewable { core, price, begin, workload });

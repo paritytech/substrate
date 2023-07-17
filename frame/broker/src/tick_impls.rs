@@ -142,19 +142,32 @@ impl<T: Config> Pallet<T> {
 		InstaPoolIo::<T>::mutate(old_sale.region_begin, |r| r.system.saturating_accrue(old_pooled));
 		InstaPoolIo::<T>::mutate(old_sale.region_end, |r| r.system.saturating_reduce(old_pooled));
 
-		// Calculate the start price for the sale after.
-		let reserve_price = {
+		// Calculate the start price for the upcoming sale.
+		let price = {
 			let offered = old_sale.cores_offered;
 			let ideal = old_sale.ideal_cores_sold;
 			let sold = old_sale.cores_sold;
-			let old_price = old_sale.sellout_price.unwrap_or(old_sale.reserve_price);
-			if sold <= offered && offered > 0 {
-				T::PriceAdapter::adapt_price(sold, ideal, offered).saturating_mul_int(old_price)
+
+			let maybe_purchase_price = if offered == 0 {
+				// No cores offered for sale - no purchase price.
+				None
+			} else if sold >= ideal {
+				// Sold more than the ideal amount. We should look for the last purchase price
+				// before the sell-out. If there was no purchase at all, then we avoid having a
+				// price here so that we make no alterations to it (since otherwise we would
+				// increase it).
+				old_sale.sellout_price
 			} else {
-				old_price
+				// Sold less than the ideal - we fall back to the regular price.
+				Some(old_sale.price)
+			};
+			if let Some(purchase_price) = maybe_purchase_price {
+				T::PriceAdapter::adapt_price(sold.min(offered), ideal, offered)
+					.saturating_mul_int(purchase_price)
+			} else {
+				old_sale.price
 			}
 		};
-		let start_price = reserve_price * 2u32.into();
 
 		// Set workload for the reserved (system, probably) workloads.
 		let region_begin = old_sale.region_end;
@@ -188,13 +201,13 @@ impl<T: Config> Pallet<T> {
 				// last time for this one - make it renewable.
 				let record = AllowedRenewalRecord {
 					begin: region_end,
-					price: reserve_price,
+					price,
 					completion: Complete(schedule),
 				};
 				AllowedRenewals::<T>::insert(first_core, &record);
 				Self::deposit_event(Event::Renewable {
 					core: first_core,
-					price: reserve_price,
+					price,
 					begin: region_end,
 					workload: record.completion.drain_complete().unwrap_or_default(),
 				});
@@ -215,8 +228,7 @@ impl<T: Config> Pallet<T> {
 		let new_sale = SaleInfoRecord {
 			sale_start,
 			leadin_length,
-			start_price,
-			reserve_price,
+			price,
 			sellout_price: None,
 			region_begin,
 			region_end,
@@ -229,8 +241,8 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::SaleInitialized {
 			sale_start,
 			leadin_length,
-			start_price,
-			reserve_price,
+			start_price: Self::sale_price(&new_sale, now),
+			regular_price: price,
 			region_begin,
 			region_end,
 			ideal_cores_sold,

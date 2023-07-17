@@ -274,15 +274,15 @@ pub mod pallet {
 			leadin_length: T::BlockNumber,
 			/// The price of Bulk Coretime at the beginning of the Leadin Period.
 			start_price: BalanceOf<T>,
-			/// The price of Bulk Coretime by the end of the Leadin Period.
-			reserve_price: BalanceOf<T>,
+			/// The price of Bulk Coretime after the Leadin Period.
+			regular_price: BalanceOf<T>,
 			/// The first timeslice of the Regions which are being sold in this sale.
 			region_begin: Timeslice,
 			/// The timeslice on which the Regions which are being sold in the sale terminate.
 			/// (i.e. One after the last timeslice which the Regions control.)
 			region_end: Timeslice,
 			/// The number of cores we want to sell, ideally. Selling this amount would result in no
-			/// change to the reserve_price for the next sale.
+			/// change to the price for the next sale.
 			ideal_cores_sold: CoreIndex,
 			/// Number of cores which are/have been offered for sale.
 			cores_offered: CoreIndex,
@@ -306,7 +306,7 @@ pub mod pallet {
 		/// The sale rotation has been started and a new sale is imminent.
 		SalesStarted {
 			/// The nominal price of an Region of Bulk Coretime.
-			reserve_price: BalanceOf<T>,
+			price: BalanceOf<T>,
 			/// The maximum number of cores which this pallet will attempt to assign.
 			core_count: CoreIndex,
 		},

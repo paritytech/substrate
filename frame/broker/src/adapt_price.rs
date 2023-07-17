@@ -1,23 +1,40 @@
 use crate::CoreIndex;
 use sp_arithmetic::{traits::One, FixedU64};
 
+/// Type for determining how to set price.
 pub trait AdaptPrice {
-	fn adapt_price(sold: CoreIndex, target: CoreIndex, max: CoreIndex) -> FixedU64;
+	/// Return the factor by which the regular price must be multiplied during the leadin period.
+	///
+	/// - `when`: The amount through the leadin period; between zero and one.
+	fn leadin_factor_at(when: FixedU64) -> FixedU64;
+	/// Return the correction factor by which the regular price must be multiplied based on market
+	/// performance.
+	///
+	/// - `sold`: The number of cores sold.
+	/// - `target`: The target number of cores to be sold.
+	/// - `limit`: The maximum number of cores to be sold.
+	fn adapt_price(sold: CoreIndex, target: CoreIndex, limit: CoreIndex) -> FixedU64;
 }
 
 impl AdaptPrice for () {
+	fn leadin_factor_at(_: FixedU64) -> FixedU64 { FixedU64::one() }
 	fn adapt_price(_: CoreIndex, _: CoreIndex, _: CoreIndex) -> FixedU64 {
 		FixedU64::one()
 	}
 }
 
+/// Simple implementation of `AdaptPrice` giving a monotonic leadin and a linear price change based
+/// on cores sold.
 pub struct Linear;
 impl AdaptPrice for Linear {
-	fn adapt_price(sold: CoreIndex, target: CoreIndex, max: CoreIndex) -> FixedU64 {
+	fn leadin_factor_at(when: FixedU64) -> FixedU64 {
+		FixedU64::from(2) - when
+	}
+	fn adapt_price(sold: CoreIndex, target: CoreIndex, limit: CoreIndex) -> FixedU64 {
 		if sold < target {
 			FixedU64::from_rational(sold.into(), target.into())
 		} else {
-			FixedU64::one() + FixedU64::from_rational((sold - target).into(), (max - target).into())
+			FixedU64::one() + FixedU64::from_rational((sold - target).into(), (limit - target).into())
 		}
 	}
 }
