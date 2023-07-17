@@ -15,7 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Traits for hooking tasks to events in a blockchain's lifecycle.
+//! Traits relating to pallet hooks.
+//!
+//! See [`Hooks`] as the main entry-point.
+
+#![deny(missing_docs)]
 
 use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
@@ -25,18 +29,9 @@ use sp_std::prelude::*;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 
-/// The block initialization trait.
-///
-/// Implementing this lets you express what should happen for your pallet when the block is
-/// beginning (right before the first extrinsic is executed).
+/// See [`Hooks::on_initialize`].
 pub trait OnInitialize<BlockNumber> {
-	/// The block is being initialized. Implement to have something happen.
-	///
-	/// Return the non-negotiable weight consumed in the block.
-	///
-	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
-	/// including inherent extrinsics. Hence for instance, if you runtime includes
-	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
+	/// See [`Hooks::on_initialize`].
 	fn on_initialize(_n: BlockNumber) -> Weight {
 		Weight::zero()
 	}
@@ -53,32 +48,18 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 	}
 }
 
-/// The block finalization trait.
-///
-/// Implementing this lets you express what should happen for your pallet when the block is ending.
+/// See [`Hooks::on_finalize`].
 #[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnFinalize<BlockNumber> {
-	/// The block is being finalized. Implement to have something happen.
-	///
-	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
-	/// including inherent extrinsics.
+	/// See [`Hooks::on_finalize`].
 	fn on_finalize(_n: BlockNumber) {}
 }
 
-/// The block's on idle trait.
-///
-/// Implementing this lets you express what should happen for your pallet before
-/// block finalization (see `on_finalize` hook) in case any remaining weight is left.
+/// See [`Hooks::on_idle`].
 pub trait OnIdle<BlockNumber> {
-	/// The block is being finalized.
-	/// Implement to have something happen in case there is leftover weight.
-	/// Check the passed `remaining_weight` to make sure it is high enough to allow for
-	/// your pallet's extra computation.
-	///
-	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
-	/// in a block are applied but before `on_finalize` is executed.
+	/// See [`Hooks::on_idle`].
 	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
 		Weight::zero()
 	}
@@ -118,26 +99,14 @@ pub trait OnGenesis {
 	fn on_genesis() {}
 }
 
-/// The runtime upgrade trait.
-///
-/// Implementing this lets you express what should happen when the runtime upgrades,
-/// and changes may need to occur to your module.
+/// See [`Hooks::on_runtime_upgrade`].
 pub trait OnRuntimeUpgrade {
-	/// Perform a module upgrade.
-	///
-	/// # Warning
-	///
-	/// This function will be called before we initialized any runtime state, aka `on_initialize`
-	/// wasn't called yet. So, information like the block number and any other
-	/// block local data are not accessible.
-	///
-	/// Return the non-negotiable weight consumed for runtime upgrade.
+	/// See [`Hooks::on_runtime_upgrade`].
 	fn on_runtime_upgrade() -> Weight {
 		Weight::zero()
 	}
 
-	/// Same as `on_runtime_upgrade`, but perform the optional `pre_upgrade` and `post_upgrade` as
-	/// well.
+	/// See [`Hooks::on_runtime_upgrade`].
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let maybe_state = if checks {
@@ -159,31 +128,13 @@ pub trait OnRuntimeUpgrade {
 		Ok(weight)
 	}
 
-	/// Execute some pre-checks prior to a runtime upgrade.
-	///
-	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
-	/// which will be passed to `post_upgrade` after upgrading for post-check. An empty vector
-	/// should be returned if there is no such need.
-	///
-	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
-	///
-	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
-	/// inaccurate.
+	/// See [`Hooks::on_runtime_upgrade`].
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
 		Ok(Vec::new())
 	}
 
-	/// Execute some post-checks after a runtime upgrade.
-	///
-	/// The `state` parameter is the `Vec<u8>` returned by `pre_upgrade` before upgrading, which
-	/// can be used for post-check. NOTE: if `pre_upgrade` is not implemented an empty vector will
-	/// be passed in, in such case `post_upgrade` should ignore it.
-	///
-	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
-	///
-	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
-	/// inaccurate.
+	/// See [`Hooks::on_runtime_upgrade`].
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(_state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		Ok(())
@@ -200,9 +151,9 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
-	/// We are executing pre- and post-checks sequentially in order to be able to test several
-	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
-	/// hooks for tuples are a noop.
+	// We are executing pre- and post-checks sequentially in order to be able to test several
+	// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
+	// hooks for tuples are a noop.
 	#[cfg(feature = "try-runtime")]
 	fn try_on_runtime_upgrade(checks: bool) -> Result<Weight, TryRuntimeError> {
 		let mut weight = Weight::zero();
@@ -239,64 +190,150 @@ impl OnRuntimeUpgrade for Tuple {
 	}
 }
 
-/// Type that provide some integrity tests.
-///
-/// This implemented for modules by `decl_module`.
+/// See [`Hooks::integrity_test`].
 #[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait IntegrityTest {
-	/// Run integrity test.
-	///
-	/// The test is not executed in a externalities provided environment.
+	/// See [`Hooks::integrity_test`].
 	fn integrity_test() {}
 }
 
-/// The pallet hooks trait. Implementing this lets you express some logic to execute.
+#[cfg_attr(doc, aquamarine::aquamarine)]
+/// The pallet hooks trait. This is merely an umbrella trait for:
+///
+/// - [`OnInitialize`]
+/// - [`OnFinalize`]
+/// - [`OnRuntimeUpgrade`]
+/// - [`crate::traits::misc::OffchainWorker`]
+/// - [`OnIdle`]
+/// - [`IntegrityTest`]
+///
+/// ## Ordering
+///
+/// For all hooks, except [`OnIdle`] the order of execution is derived from how the pallets are
+/// ordered in [`crate::construct_runtime`].
+///
+/// ## Summary
+///
+/// In short, the following diagram shows the flow of hooks in a pallet
+///
+/// ```mermaid
+/// graph LR
+/// 	Optional --> BeforeExtrinsics
+/// 	BeforeExtrinsics --> Extrinsics
+/// 	Extrinsics --> AfterExtrinsics
+/// 	subgraph Optional
+/// 	OnRuntimeUpgrade
+/// end
+///
+/// subgraph BeforeExtrinsics
+/// 	OnInitialize
+/// end
+///
+/// subgraph Extrinsics
+/// 	direction TB
+/// 	Inherent1
+/// 	Inherent2
+/// 	Extrinsic1
+/// 	Extrinsic2
+///
+/// 	Inherent1 --> Inherent2
+/// 	Inherent2 --> Extrinsic1
+/// 	Extrinsic1 --> Extrinsic2
+/// end
+///
+/// subgraph AfterExtrinsics
+/// 	OnIdle
+/// 	OnFinalize
+///
+/// 	OnIdle --> OnFinalize
+/// end
+/// ```
+///
+/// * `OnRuntimeUpgrade` is only executed before everything else if a code
+/// * `OnRuntimeUpgrade` is mandatorily at the beginning of the block body (extrinsics) being
+///   processed. change is detected.
+/// * Extrinsics start with inherents, and continue with other signed or unsigned extrinsics.
+/// * `OnIdle` optionally comes after extrinsics.
+/// `OnFinalize` mandatorily comes after `OnIdle`.
+///
+/// > `OffchainWorker` is not part of this flow, as it is not really part of the consensus/main
+/// > block import path, and is called optionally, and in other circumstances. See
+/// > [`crate::traits::misc::OffchainWorker`] for more information.
+///
+/// To learn more about the execution of hooks see `frame-executive` as this component is is charge
+/// of dispatching extrinsics and placing the hooks in the correct order.
 pub trait Hooks<BlockNumber> {
-	/// The block is being finalized. Implement to have something happen.
+	/// Block initialization hook. This is called at the very beginning of block execution.
+	///
+	/// Must return the non-negotiable weight of both itself and whatever [`Hooks::on_finalize`]
+	/// wishes to consume.
+	///
+	/// The weight returned by this is treated as `DispatchClass::Mandatory`, meaning that
+	/// it MUST BE EXECUTED. If this is not the case, consider using [`Hooks::on_idle`] instead.
+	///
+	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied, including inherent
+	/// extrinsics. Hence for instance, if you runtime includes `pallet-timestamp`, the `timestamp`
+	/// is not yet up to date at this point.
+	fn on_initialize(_n: BlockNumber) -> Weight {
+		Weight::zero()
+	}
+
+	/// Block finalization hook. This is called at the very end of block execution.
+	///
+	/// Note that this has nothing to do with finality in the "consensus" sense.
+	///
+	/// Note that the non-negotiable weight for this has must have already been returned by
+	/// [`Hooks::on_initialize`]. It usage alone is not permitted.
+	///
+	/// Similar to [`Hooks::on_initialize`] it should only be used when execution is absolutely
+	/// necessary. In other cases, consider using [`Hooks::on_idle`] instead.
 	fn on_finalize(_n: BlockNumber) {}
 
-	/// This will be run when the block is being finalized (before `on_finalize`).
+	/// Hook to consume a block's idle time. This will run when the block is being finalized (before
+	/// [`Hooks::on_finalize`]).
 	///
-	/// Implement to have something happen using the remaining weight. Will not fire if the
-	/// remaining weight is 0.
+	/// Given that all dispatchables are already executed and noted (and the weight for
+	/// [`Hooks::on_finalize`], which comes next, is also already accounted for via
+	/// `on_initialize`), this hook consumes anything that is leftover.
 	///
 	/// Each pallet's `on_idle` is chosen to be the first to execute in a round-robin fashion
 	/// indexed by the block number.
 	///
 	/// Return the weight used, the caller will use this to calculate the remaining weight and then
 	/// call the next pallet `on_idle` hook if there is still weight left.
+	///
+	/// Any implementation should always respect `_remaining_weight` and never consume (and
+	/// therefore return) more than this amount.
 	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
 		Weight::zero()
 	}
 
-	/// The block is being initialized. Implement to have something happen.
+	/// Hook executed when a code change (aka. a "runtime upgrade") is detected by FRAME.
 	///
-	/// Return the non-negotiable weight consumed in the block.
-	fn on_initialize(_n: BlockNumber) -> Weight {
-		Weight::zero()
-	}
-
-	/// Perform a module upgrade.
+	/// Be aware that this is called before [`Hooks::on_initialize`] of any pallet; therefore, a lot
+	/// of the critical storage items such as `block_number` in system pallet might have not been
+	/// set.
 	///
-	/// NOTE: this doesn't include all pallet logic triggered on runtime upgrade. For instance it
-	/// doesn't include the write of the pallet version in storage. The final complete logic
-	/// triggered on runtime upgrade is given by implementation of `OnRuntimeUpgrade` trait by
-	/// `Pallet`.
+	/// Vert similar to [`Hooks::on_initialize`], any code in this block is mandatory and MUST
+	/// execute. Use with care.
 	///
-	/// # Warning
+	/// ## Implementation Note: Versioning
 	///
-	/// This function will be called before we initialized any runtime state, aka `on_initialize`
-	/// wasn't called yet. So, information like the block number and any other block local data are
-	/// not accessible.
+	/// 1. An implementation of this should typically follow a pattern where the version of the
+	/// pallet is checked against the onchain version, and a decision is made about what needs to be
+	/// done. This is helpful to prevent accidental repetitive execution of this hook, which can be
+	/// catastrophic.
 	///
-	/// Return the non-negotiable weight consumed for runtime upgrade.
+	/// Alternatively, `migrations::VersionedRuntimeUpgrade` can be used to assist with
+	/// this.
 	///
-	/// While this function can be freely implemented, using `on_runtime_upgrade` from inside the
-	/// pallet is discouraged and might get deprecated in the future. Alternatively, export the same
-	/// logic as a free-function from your pallet, and pass it to `type Executive` from the
-	/// top-level runtime.
+	/// ## Implementation Note: Runtime Level Migration
+	///
+	/// Additional "upgrade hooks" can be created by pallets by a manual implementation of
+	/// [`Hooks::on_runtime_upgrade`] which can be passed on to `Executive` at the top level
+	/// runtime.
 	fn on_runtime_upgrade() -> Weight {
 		Weight::zero()
 	}
@@ -336,26 +373,36 @@ pub trait Hooks<BlockNumber> {
 		Ok(())
 	}
 
-	/// Implementing this function on a module allows you to perform long-running tasks
-	/// that make (by default) validators generate transactions that feed results
-	/// of those long-running computations back on chain.
+	/// Implementing this function on a pallet allows you to perform long-running tasks that are
+	/// dispatched as separate threads, and entirely independent of the main wasm runtime.
 	///
-	/// NOTE: This function runs off-chain, so it can access the block state,
-	/// but cannot preform any alterations. More specifically alterations are
-	/// not forbidden, but they are not persisted in any way after the worker
-	/// has finished.
+	/// This function can freely read from the state, but any change it makes to the state is
+	/// meaningless. Writes can be pushed back to the chain by submitting extrinsics from the
+	/// offchain worker to the transaction pool. See `pallet-example-offchain-worker` for more
+	/// details on this.
 	///
-	/// This function is being called after every block import (when fully synced).
+	/// Moreover, the code in this function has access to a wider range of host functions in
+	/// [`sp-io`], namely [`sp_io::offchain`]. This includes exotic operations such as HTTP calls
+	/// that are not really possible in the rest of the runtime code.
 	///
-	/// Implement this and use any of the `Offchain` `sp_io` set of APIs
-	/// to perform off-chain computations, calls and submit transactions
-	/// with results to trigger any on-chain changes.
-	/// Any state alterations are lost and are not persisted.
+	/// The execution of this hook is entirely optional and is left at the discretion of the
+	/// node-side software and its configuration. In a normal substrate-cli, look for the CLI
+	/// flags related to offchain-workers to learn more.
 	fn offchain_worker(_n: BlockNumber) {}
 
-	/// Run integrity test.
+	/// Check the integrity of this pallet's configuration.
 	///
-	/// The test is not executed in a externalities provided environment.
+	/// Any code located in this hook is placed in an auto-generated test, and generated as a part
+	/// of [`crate::construct_runtime`]'s expansion. Look for a test case with a name along the
+	/// lines of: `__construct_runtime_integrity_test`.
+	///
+	/// This hook is the location where the values/types provided to the `Config` trait
+	/// of the pallet can be tested for correctness. For example, if two `type Foo: Get<u32>` and
+	/// `type Bar: Get<u32>` where `Foo::get()` must always be greater than `Bar::get()`, such
+	/// checks can be asserted upon here.
+	///
+	/// Note that this hook is not executed in an externality environment, so if access to state is
+	/// needed, the code should be wrapped in `sp_io::TestExternalities`.
 	fn integrity_test() {}
 }
 
