@@ -60,7 +60,7 @@ pub trait BenchmarkHelper<AssetId, MultiAssetId> {
 	fn asset_id(asset_id: u32) -> AssetId;
 
 	/// Returns a `MultiAssetId` from a given integer.
-	fn mutliasset_id(asset_id: u32) -> MultiAssetId;
+	fn multiasset_id(asset_id: u32) -> MultiAssetId;
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -73,7 +73,7 @@ where
 		asset_id.into()
 	}
 
-	fn mutliasset_id(asset_id: u32) -> MultiAssetId {
+	fn multiasset_id(asset_id: u32) -> MultiAssetId {
 		asset_id.into()
 	}
 }
