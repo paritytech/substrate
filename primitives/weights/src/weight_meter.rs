@@ -33,10 +33,10 @@ use sp_arithmetic::Perbill;
 /// // The weight is limited to (10, 0).
 /// let mut meter = WeightMeter::from_limit(Weight::from_parts(10, 0));
 /// // There is enough weight remaining for an operation with (6, 0) weight.
-/// assert!(meter.check_accrue(Weight::from_parts(6, 0)));
+/// assert!(meter.try_consume(Weight::from_parts(6, 0)).is_ok());
 /// assert_eq!(meter.remaining(), Weight::from_parts(4, 0));
 /// // There is not enough weight remaining for an operation with (5, 0) weight.
-/// assert!(!meter.check_accrue(Weight::from_parts(5, 0)));
+/// assert!(!meter.try_consume(Weight::from_parts(5, 0)).is_ok());
 /// // The total limit is obviously unchanged:
 /// assert_eq!(meter.limit(), Weight::from_parts(10, 0));
 /// ```
