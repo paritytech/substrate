@@ -105,27 +105,23 @@ fn offchainify_works() {
 			roll_one(pool_state.clone(), false);
 			let current_phase = ElectionProviderMultiPhase::current_phase();
 
-			let result = match QueuedSolution::<Runtime>::get() {
-				Some(_solution) if !current_phase.is_unsigned() =>
-					Err("solution must be queued only in unsigned phase."),
-				None if current_phase.is_unsigned() =>
-					Err("solution must be queued during unsigned phase."),
-				_ => Ok(()),
-			};
-
-			assert_ok!(result);
+			assert!(
+				match QueuedSolution::<Runtime>::get() {
+					Some(_) => current_phase.is_unsigned(),
+					None => !current_phase.is_unsigned(),
+				},
+				"solution must be queued *only* in unsigned phase"
+			);
 		}
+
 		// test ocw solution queue if submission in unsigned phase is delayed.
 		for _ in 0..100 {
 			roll_one(pool_state.clone(), true);
-
-			let result = match QueuedSolution::<Runtime>::get() {
-				Some(_solution) =>
-					Err("solution must never be submitted since it has been delayed."),
-				_ => Ok(()),
-			};
-
-			assert_ok!(result);
+			assert_eq!(
+				QueuedSolution::<Runtime>::get(),
+				None,
+				"solution must never be submitted and stored since it is delayed"
+			);
 		}
 	})
 }

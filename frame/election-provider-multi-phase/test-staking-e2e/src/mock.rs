@@ -178,6 +178,7 @@ parameter_types! {
 	pub static MinerMaxLength: u32 = 256;
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static TransactionPriority: transaction_validity::TransactionPriority = 1;
+	#[derive(Debug)]
 	pub static MaxWinners: u32 = 100;
 	pub static MaxVotesPerVoter: u32 = 16;
 	pub static MaxNominations: u32 = 16;
