@@ -10159,6 +10159,7 @@ dependencies = [
  "parity-db",
  "parking_lot 0.12.1",
  "sc-client-api",
+ "sc-keystore",
  "sp-api",
  "sp-blockchain",
  "sp-core",
@@ -11592,8 +11593,14 @@ dependencies = [
 name = "sp-statement-store"
 version = "4.0.0-dev"
 dependencies = [
+ "aes-gcm 0.10.2",
+ "curve25519-dalek 3.2.0",
+ "ed25519-dalek",
+ "hkdf",
  "parity-scale-codec",
+ "rand 0.8.5",
  "scale-info",
+ "sha2 0.10.6",
  "sp-api",
  "sp-application-crypto",
  "sp-core",
@@ -11602,6 +11609,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-std",
  "thiserror",
+ "x25519-dalek 2.0.0-pre.1",
 ]
 
 [[package]]
