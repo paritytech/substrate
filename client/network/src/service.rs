@@ -1581,9 +1581,9 @@ where
 						// 	Either::Right(PingFailure::Timeout),
 						// )))) => "ping-timeout",
 						Some(ConnectionError::Handler(Either::Left(Either::Left(
-							Either::Left(Either::Left(
+							Either::Left(Either::Left(Either::Left(
 								NotifsHandlerError::SyncNotificationsClogged,
-							)),
+							))),
 						)))) => "sync-notifications-clogged",
 						Some(ConnectionError::Handler(_)) => "protocol-error",
 						Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
