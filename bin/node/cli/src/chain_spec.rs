@@ -431,47 +431,33 @@ pub(crate) mod tests {
 	use sc_service_test;
 	use sp_runtime::BuildStorage;
 
-	fn local_testnet_genesis_instant_single() -> RuntimeGenesisConfig {
-		json_vs_legacy::testnet_genesis_legacy(
-			vec![authority_keys_from_seed("Alice")],
-			vec![],
-			get_account_id_from_seed::<sr25519::Public>("Alice"),
-			None,
-		)
-	}
-
 	/// Local testnet config (single validator - Alice)
 	pub fn integration_test_config_with_single_authority() -> ChainSpec {
-		ChainSpec::from_genesis(
-			"Integration Test",
-			"test",
-			ChainType::Development,
-			local_testnet_genesis_instant_single,
-			vec![],
-			None,
-			None,
-			None,
-			None,
-			Default::default(),
-			wasm_binary_unwrap(),
-		)
+		ChainSpec::builder()
+			.with_name("Integration Test")
+			.with_id("test")
+			.with_chain_type(ChainType::Development)
+			.with_genesis_config_patch(testnet_genesis(
+				vec![authority_keys_from_seed("Alice")],
+				vec![],
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
+				None,
+			))
+			.with_extensions(Default::default())
+			.with_code(wasm_binary_unwrap())
+			.build()
 	}
 
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn integration_test_config_with_two_authorities() -> ChainSpec {
-		ChainSpec::from_genesis(
-			"Integration Test",
-			"test",
-			ChainType::Development,
-			json_vs_legacy::local_testnet_genesis_legacy,
-			vec![],
-			None,
-			None,
-			None,
-			None,
-			Default::default(),
-			wasm_binary_unwrap(),
-		)
+		ChainSpec::builder()
+			.with_name("Integration Test")
+			.with_id("test")
+			.with_chain_type(ChainType::Development)
+			.with_genesis_config_patch(local_testnet_genesis())
+			.with_extensions(Default::default())
+			.with_code(wasm_binary_unwrap())
+			.build()
 	}
 
 	#[test]
@@ -507,6 +493,9 @@ pub(crate) mod tests {
 		staging_testnet_config().build_storage().unwrap();
 	}
 
+	// This compares the output of RuntimeGenesisConfig-based ChainSpec building against JSON-based
+	// ChainSpec building. Once RuntimeGenesisConfig is removed from client-sode, entire mod can be
+	// removed.
 	mod json_vs_legacy {
 		use crate::chain_spec::*;
 		use kitchensink_runtime::{CouncilConfig, DemocracyConfig, IndicesConfig};
@@ -640,7 +629,6 @@ pub(crate) mod tests {
 			)
 		}
 
-		use std::io::prelude::*;
 		#[test]
 		fn development_config_building_test() {
 			sp_tracing::try_init_simple();
@@ -738,6 +726,67 @@ pub(crate) mod tests {
 			let mut keys_expected = storage.top.keys().cloned().map(hex).collect::<Vec<String>>();
 			keys_expected.sort();
 			assert_eq!(keys, keys_expected);
+		}
+
+		fn local_testnet_genesis_instant_single_legacy() -> RuntimeGenesisConfig {
+			testnet_genesis_legacy(
+				vec![authority_keys_from_seed("Alice")],
+				vec![],
+				get_account_id_from_seed::<sr25519::Public>("Alice"),
+				None,
+			)
+		}
+
+		/// Local testnet config (single validator - Alice)
+		pub(super) fn integration_test_config_with_single_authority_legacy() -> ChainSpec {
+			#[allow(deprecated)]
+			ChainSpec::from_genesis(
+				"Integration Test",
+				"test",
+				ChainType::Development,
+				local_testnet_genesis_instant_single_legacy,
+				vec![],
+				None,
+				None,
+				None,
+				None,
+				Default::default(),
+				wasm_binary_unwrap(),
+			)
+		}
+
+		#[test]
+		fn integration_test_config_with_single_authority_legacy_compare_test() {
+			sp_tracing::try_init_simple();
+			let j1 = integration_test_config_with_single_authority_legacy().as_json(true).unwrap();
+			let j2 = super::integration_test_config_with_single_authority().as_json(true).unwrap();
+			assert_eq!(j1, j2);
+		}
+
+		/// Local testnet config (multivalidator Alice + Bob)
+		pub fn integration_test_config_with_two_authorities_legacy() -> ChainSpec {
+			#[allow(deprecated)]
+			ChainSpec::from_genesis(
+				"Integration Test",
+				"test",
+				ChainType::Development,
+				local_testnet_genesis_legacy,
+				vec![],
+				None,
+				None,
+				None,
+				None,
+				Default::default(),
+				wasm_binary_unwrap(),
+			)
+		}
+
+		#[test]
+		fn integration_test_config_with_with_two_authorities_compare_test() {
+			sp_tracing::try_init_simple();
+			let j1 = integration_test_config_with_two_authorities_legacy().as_json(true).unwrap();
+			let j2 = super::integration_test_config_with_two_authorities().as_json(true).unwrap();
+			assert_eq!(j1, j2);
 		}
 	}
 }

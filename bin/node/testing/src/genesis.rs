@@ -20,10 +20,9 @@
 
 use crate::keyring::*;
 use kitchensink_runtime::{
-	constants::currency::*, wasm_binary_unwrap, AccountId, AssetsConfig, BabeConfig,
-	BalancesConfig, GluttonConfig, GrandpaConfig, IndicesConfig, RuntimeGenesisConfig,
-	SessionConfig, SocietyConfig, StakerStatus, StakingConfig, SystemConfig,
-	BABE_GENESIS_EPOCH_CONFIG,
+	constants::currency::*, AccountId, AssetsConfig, BabeConfig, BalancesConfig, GluttonConfig,
+	GrandpaConfig, IndicesConfig, RuntimeGenesisConfig, SessionConfig, SocietyConfig, StakerStatus,
+	StakingConfig, BABE_GENESIS_EPOCH_CONFIG,
 };
 use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use sp_runtime::Perbill;
