@@ -254,7 +254,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					#frame_support::sp_io::TestExternalities::default().execute_with(|| {
 						<
 							Self as #frame_support::traits::Hooks<
-								<T as #frame_system::Config>::BlockNumberFor::<T>
+								#frame_system::pallet_prelude::BlockNumberFor::<T>
 							>
 						>::integrity_test()
 					});
