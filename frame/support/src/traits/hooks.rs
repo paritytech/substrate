@@ -231,7 +231,7 @@ pub trait IntegrityTest {
 /// 	OnInitialize
 /// end
 ///
-/// subgraph Extrinsics/BlockBody
+/// subgraph Extrinsics
 /// 	direction TB
 /// 	Inherent1
 /// 	Inherent2
@@ -271,8 +271,7 @@ pub trait Hooks<BlockNumber> {
 	/// wishes to consume.
 	///
 	/// The weight returned by this is treated as `DispatchClass::Mandatory`, meaning that
-	/// it MUST BE EXECUTED. This implies that this hook should only ever be used if the logic in it
-	/// must happen under any circumstance.
+	/// it MUST BE EXECUTED. If this is not the case, consider using [`Hooks::on_idle`] instead.
 	///
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied, including inherent
 	/// extrinsics. Hence for instance, if you runtime includes `pallet-timestamp`, the `timestamp`
@@ -286,10 +285,10 @@ pub trait Hooks<BlockNumber> {
 	/// Note that this has nothing to do with finality in the "consensus" sense.
 	///
 	/// Note that the non-negotiable weight for this has must have already been returned by
-	/// [`Hooks::on_initialize`]. It usage along is not permitted.
+	/// [`Hooks::on_initialize`]. It usage alone is not permitted.
 	///
 	/// Similar to [`Hooks::on_initialize`] it should only be used when execution is absolutely
-	/// necessary.
+	/// necessary. In other cases, consider using [`Hooks::on_idle`] instead.
 	fn on_finalize(_n: BlockNumber) {}
 
 	/// Hook to consume a block's idle time. This will run when the block is being finalized (before
