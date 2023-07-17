@@ -394,6 +394,11 @@ impl CliConfiguration for RunCmd {
 /// Check whether a node name is considered as valid.
 pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 	let name = _name.to_string();
+
+	if name.is_empty() {
+		return Err("Node name cannot be empty")
+	}
+
 	if name.chars().count() >= crate::NODE_NAME_MAX_LENGTH {
 		return Err("Node name too long")
 	}
@@ -498,6 +503,7 @@ mod tests {
 
 	#[test]
 	fn tests_node_name_bad() {
+		assert!(is_node_name_valid("").is_err());
 		assert!(is_node_name_valid(
 			"very very long names are really not very cool for the ui at all, really they're not"
 		)
