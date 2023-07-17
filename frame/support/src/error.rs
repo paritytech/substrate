@@ -21,51 +21,6 @@
 pub use sp_runtime::traits::{BadOrigin, LookupError};
 
 /// Declare an error type for a runtime module.
-///
-/// `decl_error!` supports only variants that do not hold any data. The dispatchable
-/// functions return [`DispatchResult`](sp_runtime::DispatchResult). The error type
-/// implements `From<ErrorType> for DispatchResult` to make the error type usable as error
-/// in the dispatchable functions.
-///
-/// It is required that the error type is registered in `decl_module!` to make the error
-/// exported in the metadata.
-///
-/// # Usage
-///
-/// ```
-/// # use frame_support::{decl_error, decl_module};
-/// #
-/// decl_error! {
-///     /// Errors that can occur in my module.
-///     pub enum MyError for Module<T: Config> {
-///         /// Hey this is an error message that indicates bla.
-///         MyCoolErrorMessage,
-///         /// You are just not cool enough for my module!
-///         YouAreNotCoolEnough,
-///     }
-/// }
-///
-/// # use frame_system::Config;
-///
-/// // You need to register the error type in `decl_module!` as well to make the error
-/// // exported in the metadata.
-///
-/// decl_module! {
-///     pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
-///         type Error = MyError<T>;
-///
-///         #[weight = 0]
-///         fn do_something(origin) -> frame_support::dispatch::DispatchResult {
-///             Err(MyError::<T>::YouAreNotCoolEnough.into())
-///         }
-///     }
-/// }
-///
-/// # fn main() {}
-/// ```
-///
-/// For instantiable modules you also need to give the instance generic type and bound to the
-/// error declaration.
 #[macro_export]
 #[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
 	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]

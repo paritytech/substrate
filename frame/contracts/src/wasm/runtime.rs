@@ -2091,7 +2091,7 @@ pub mod env {
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	///
-	/// The data is encoded as (T::Hash, T::BlockNumber).
+	/// The data is encoded as (T::Hash, frame_system::pallet_prelude::BlockNumberFor::<T>).
 	///
 	/// # Changes from v0
 	///

@@ -404,7 +404,7 @@ pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 		return Err("Node name should not contain invalid chars such as '.' and '@'")
 	}
 
-	let invalid_patterns = r"(https?:\\/+)?(www)+";
+	let invalid_patterns = r"^https?:\/\/";
 	let re = Regex::new(invalid_patterns).unwrap();
 	if re.is_match(&name) {
 		return Err("Node name should not contain urls")
@@ -490,6 +490,10 @@ mod tests {
 	#[test]
 	fn tests_node_name_good() {
 		assert!(is_node_name_valid("short name").is_ok());
+		assert!(is_node_name_valid("www").is_ok());
+		assert!(is_node_name_valid("aawww").is_ok());
+		assert!(is_node_name_valid("wwwaa").is_ok());
+		assert!(is_node_name_valid("www aa").is_ok());
 	}
 
 	#[test]
@@ -502,6 +506,8 @@ mod tests {
 		assert!(is_node_name_valid("http://visit.me").is_err());
 		assert!(is_node_name_valid("https://visit.me").is_err());
 		assert!(is_node_name_valid("www.visit.me").is_err());
+		assert!(is_node_name_valid("www.visit").is_err());
+		assert!(is_node_name_valid("visit.www").is_err());
 		assert!(is_node_name_valid("email@domain").is_err());
 	}
 }
