@@ -20,19 +20,18 @@
 use core::marker::PhantomData;
 
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchResult, traits::Task};
+use frame_support::{dispatch::DispatchResult, traits::Task, Never};
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
 use sp_runtime::DispatchError;
 
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub enum Never {}
-
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub enum ExampleTask<T: Config> {
 	Increment,
 	Decrement,
-	_Phantom(PhantomData<T>, Never),
+	#[doc(hidden)]
+	#[codec(skip)]
+	__Ignore(PhantomData<T>, Never),
 }
 
 impl<T: Config> Task for ExampleTask<T> {
@@ -49,7 +48,7 @@ impl<T: Config> Task for ExampleTask<T> {
 		match self {
 			ExampleTask::Increment => value < 255,
 			ExampleTask::Decrement => value > 0,
-			ExampleTask::_Phantom(_, _) => unreachable!(),
+			ExampleTask::__Ignore(_, _) => unreachable!(),
 		}
 	}
 
@@ -67,7 +66,7 @@ impl<T: Config> Task for ExampleTask<T> {
 				Value::<T>::put(new_val);
 				Pallet::<T>::deposit_event(Event::Decremented { new_val });
 			},
-			ExampleTask::_Phantom(_, _) => unreachable!(),
+			ExampleTask::__Ignore(_, _) => unreachable!(),
 		}
 		Ok(())
 	}
