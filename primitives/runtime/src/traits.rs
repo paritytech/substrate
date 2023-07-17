@@ -26,7 +26,7 @@ use crate::{
 	},
 	DispatchResult,
 };
-use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
+use codec::{Codec, Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 #[cfg(feature = "serde")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -1154,7 +1154,9 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Header:
+	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + TypeInfo + 'static
+{
 	/// Header number.
 	type Number: Member
 		+ MaybeSerializeDeserialize
@@ -1164,7 +1166,10 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 		+ Copy
 		+ MaybeDisplay
 		+ AtLeast32BitUnsigned
-		+ Codec;
+		+ Default
+		+ TypeInfo
+		+ MaxEncodedLen
+		+ FullCodec;
 	/// Header hash type
 	type Hash: HashOutput;
 	/// Hashing algorithm
@@ -1210,15 +1215,50 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	}
 }
 
+// Something that provides the Header Type. Only for internal usage and should only be used
+// via `HeaderFor` or `BlockNumberFor`.
+//
+// This is needed to fix the "cyclical" issue in loading Header/BlockNumber as part of a
+// `pallet::call`. Essentially, `construct_runtime` aggregates all calls to create a `RuntimeCall`
+// that is then used to define `UncheckedExtrinsic`.
+// ```ignore
+// pub type UncheckedExtrinsic =
+// 	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+// ```
+// This `UncheckedExtrinsic` is supplied to the `Block`.
+// ```ignore
+// pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+// ```
+// So, if we do not create a trait outside of `Block` that doesn't have `Extrinsic`, we go into a
+// recursive loop leading to a build error.
+//
+// Note that this is a workaround for a compiler bug and should be removed when the compiler
+// bug is fixed.
+#[doc(hidden)]
+pub trait HeaderProvider {
+	/// Header type.
+	type HeaderT: Header;
+}
+
 /// Something which fulfills the abstract idea of a Substrate block. It has types for
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Block:
+	HeaderProvider<HeaderT = <Self as Block>::Header>
+	+ Clone
+	+ Send
+	+ Sync
+	+ Codec
+	+ Eq
+	+ MaybeSerialize
+	+ Debug
+	+ 'static
+{
 	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
-	type Header: Header<Hash = Self::Hash>;
+	type Header: Header<Hash = Self::Hash> + MaybeSerializeDeserialize;
 	/// Block hash type.
 	type Hash: HashOutput;
 

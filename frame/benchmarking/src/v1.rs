@@ -1826,9 +1826,9 @@ pub fn show_benchmark_debug_info(
 /// ```
 #[macro_export]
 macro_rules! add_benchmark {
-	( $params:ident, $batches:ident, $name:path, $( $location:tt )* ) => (
+	( $params:ident, $batches:ident, $name:path, $location:ty ) => {
 		let name_string = stringify!($name).as_bytes();
-		let instance_string = stringify!( $( $location )* ).as_bytes();
+		let instance_string = stringify!($location).as_bytes();
 		let (config, whitelist) = $params;
 		let $crate::BenchmarkConfig {
 			pallet,
@@ -1838,7 +1838,7 @@ macro_rules! add_benchmark {
 			internal_repeats,
 		} = config;
 		if &pallet[..] == &name_string[..] {
-			let benchmark_result = $( $location )*::run_benchmark(
+			let benchmark_result = <$location>::run_benchmark(
 				&benchmark[..],
 				&selected_components[..],
 				whitelist,
@@ -1855,9 +1855,7 @@ macro_rules! add_benchmark {
 						$crate::str::from_utf8(benchmark)
 							.expect("benchmark name is always a valid string!")
 					);
-					result.keys.insert(0,
-						(b"Benchmark Override".to_vec(), 0, 0, false)
-					);
+					result.keys.insert(0, (b"Benchmark Override".to_vec(), 0, 0, false));
 					Some($crate::vec![result])
 				},
 				Err($crate::BenchmarkError::Stop(e)) => {
@@ -1868,7 +1866,7 @@ macro_rules! add_benchmark {
 						verify,
 						e,
 					);
-					return Err(e.into());
+					return Err(e.into())
 				},
 				Err($crate::BenchmarkError::Skip) => {
 					$crate::log::error!(
@@ -1886,9 +1884,9 @@ macro_rules! add_benchmark {
 					);
 					Some(vec![$crate::BenchmarkResult {
 						components: selected_components.clone(),
-						.. Default::default()
+						..Default::default()
 					}])
-				}
+				},
 			};
 
 			if let Some(final_results) = final_results {
@@ -1900,21 +1898,7 @@ macro_rules! add_benchmark {
 				});
 			}
 		}
-	)
-}
-
-/// Callback for `define_benchmarks` to call `add_benchmark`.
-#[macro_export]
-macro_rules! cb_add_benchmarks {
-	// anchor
-	( $params:ident, $batches:ident, [ $name:path, $( $location:tt )* ] ) => {
-		$crate::add_benchmark!( $params, $batches, $name, $( $location )* );
 	};
-	// recursion tail
-	( $params:ident, $batches:ident, [ $name:path, $( $location:tt )* ] $([ $names:path, $( $locations:tt )* ])+ ) => {
-		$crate::cb_add_benchmarks!( $params, $batches, [ $name, $( $location )* ] );
-		$crate::cb_add_benchmarks!( $params, $batches, $([ $names, $( $locations )* ])+ );
-	}
 }
 
 /// This macro allows users to easily generate a list of benchmarks for the pallets configured
@@ -1938,31 +1922,17 @@ macro_rules! cb_add_benchmarks {
 /// This should match what exists with the `add_benchmark!` macro.
 #[macro_export]
 macro_rules! list_benchmark {
-	( $list:ident, $extra:ident, $name:path, $( $location:tt )* ) => (
+	( $list:ident, $extra:ident, $name:path, $location:ty ) => {
 		let pallet_string = stringify!($name).as_bytes();
-		let instance_string = stringify!( $( $location )* ).as_bytes();
-		let benchmarks = $( $location )*::benchmarks($extra);
+		let instance_string = stringify!($location).as_bytes();
+		let benchmarks = <$location>::benchmarks($extra);
 		let pallet_benchmarks = BenchmarkList {
 			pallet: pallet_string.to_vec(),
 			instance: instance_string.to_vec(),
 			benchmarks: benchmarks.to_vec(),
 		};
 		$list.push(pallet_benchmarks)
-	)
-}
-
-/// Callback for `define_benchmarks` to call `list_benchmark`.
-#[macro_export]
-macro_rules! cb_list_benchmarks {
-	// anchor
-	( $list:ident, $extra:ident, [ $name:path, $( $location:tt )* ] ) => {
-		$crate::list_benchmark!( $list, $extra, $name, $( $location )* );
 	};
-	// recursion tail
-	( $list:ident, $extra:ident, [ $name:path, $( $location:tt )* ] $([ $names:path, $( $locations:tt )* ])+ ) => {
-		$crate::cb_list_benchmarks!( $list, $extra, [ $name, $( $location )* ] );
-		$crate::cb_list_benchmarks!( $list, $extra, $([ $names, $( $locations )* ])+ );
-	}
 }
 
 /// Defines pallet configs that `add_benchmarks` and `list_benchmarks` use.
@@ -1970,7 +1940,7 @@ macro_rules! cb_list_benchmarks {
 /// in `add_benchmark` and `list_benchmark`.
 #[macro_export]
 macro_rules! define_benchmarks {
-	( $([ $names:path, $( $locations:tt )* ])* ) => {
+	( $([ $names:path, $locations:ty ])* ) => {
 		/// Calls `list_benchmark` with all configs from `define_benchmarks`
 		/// and passes the first two parameters on.
 		///
@@ -1981,7 +1951,7 @@ macro_rules! define_benchmarks {
 		#[macro_export]
 		macro_rules! list_benchmarks {
 			( $list:ident, $extra:ident ) => {
-				$crate::cb_list_benchmarks!( $list, $extra, $([ $names, $( $locations )* ])+ );
+				$( $crate::list_benchmark!( $list, $extra, $names, $locations); )*
 			}
 		}
 
@@ -1995,7 +1965,7 @@ macro_rules! define_benchmarks {
 		#[macro_export]
 		macro_rules! add_benchmarks {
 			( $params:ident, $batches:ident ) => {
-				$crate::cb_add_benchmarks!( $params, $batches, $([ $names, $( $locations )* ])+ );
+				$( $crate::add_benchmark!( $params, $batches, $names, $locations ); )*
 			}
 		}
 	}
@@ -2007,8 +1977,6 @@ pub use benchmarks;
 pub use benchmarks_instance;
 pub use benchmarks_instance_pallet;
 pub use benchmarks_iter;
-pub use cb_add_benchmarks;
-pub use cb_list_benchmarks;
 pub use define_benchmarks;
 pub use impl_bench_case_tests;
 pub use impl_bench_name_tests;
