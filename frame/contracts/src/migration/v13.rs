@@ -28,11 +28,11 @@ use crate::{
 #[cfg(feature = "try-runtime")]
 use crate::{BalanceOf, ContractInfo};
 #[cfg(feature = "try-runtime")]
-use frame_support::dispatch::Vec;
+use frame_support::{dispatch::Vec, traits::fungible::InspectHold};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		fungible::{InspectHold, Mutate, MutateHold},
+		fungible::{Mutate, MutateHold},
 		tokens::{fungible::Inspect, Fortitude, Preservation},
 	},
 	DefaultNoBound,
