@@ -32,7 +32,7 @@ use frame_support::dispatch::Vec;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		fungible::{Mutate, MutateHold},
+		fungible::{InspectHold, Mutate, MutateHold},
 		tokens::{fungible::Inspect, Fortitude, Preservation},
 	},
 	DefaultNoBound,
@@ -134,7 +134,7 @@ impl<T: Config> MigrationStep for Migration<T> {
 					transferred_deposit_balance,
 				)
 				.map(|_| {
-					log::info!(
+					log::debug!(
 						target: LOG_TARGET,
 						"Successfully held {:?} as storage deposit on the contract 0x{:?}.",
 						transferred_deposit_balance,
@@ -170,12 +170,17 @@ impl<T: Config> MigrationStep for Migration<T> {
 
 		log::debug!(target: LOG_TARGET, "Taking sample of {} contracts", sample.len());
 
-		let state: Vec<(T::AccountId, ContractInfo<T>, BalanceOf<T>)> = sample
+		let state: Vec<(T::AccountId, ContractInfo<T>, BalanceOf<T>, BalanceOf<T>)> = sample
 			.iter()
 			.map(|(account, contract)| {
 				let deposit_balance = T::Currency::total_balance(&contract.deposit_account());
 				let account_balance = T::Currency::total_balance(&account);
-				(account.clone(), contract.clone(), account_balance.saturating_add(deposit_balance))
+				(
+					account.clone(),
+					contract.clone(),
+					account_balance.saturating_add(deposit_balance),
+					deposit_balance,
+				)
 			})
 			.collect();
 
@@ -185,15 +190,28 @@ impl<T: Config> MigrationStep for Migration<T> {
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
 		let sample =
-			<Vec<(T::AccountId, ContractInfo<T>, BalanceOf<T>)> as Decode>::decode(&mut &state[..])
-				.expect("pre_upgrade_step provides a valid state; qed");
+			<Vec<(T::AccountId, ContractInfo<T>, BalanceOf<T>, BalanceOf<T>)> as Decode>::decode(
+				&mut &state[..],
+			)
+			.expect("pre_upgrade_step provides a valid state; qed");
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
-		for (account, contract, old_total_balance) in sample {
+		for (account, contract, old_total_balance, deposit_balance) in sample {
 			log::debug!(target: LOG_TARGET, "===");
 			log::debug!(target: LOG_TARGET, "Account: 0x{} ", HexDisplay::from(&account.encode()));
 
-			ensure!(old_total_balance == T::Currency::total_balance(&account), "deposit mismatch");
+			ensure!(
+				old_total_balance == T::Currency::total_balance(&account),
+				"total balance mismatch"
+			);
+			ensure!(
+				deposit_balance ==
+					T::Currency::balance_on_hold(
+						&HoldReason::StorageDepositReserve.into(),
+						&account
+					),
+				"deposit mismatch"
+			);
 			ensure!(
 				!System::<T>::account_exists(&contract.deposit_account()),
 				"deposit account still exists"

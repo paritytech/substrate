@@ -248,6 +248,7 @@ impl<T: Config> WasmBlob<T> {
 						&self.code_info.owner,
 						deposit,
 					)
+					// TODO: better error mapping
 					.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
 
 					<Pallet<T>>::deposit_event(
