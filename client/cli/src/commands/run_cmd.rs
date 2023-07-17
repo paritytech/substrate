@@ -404,7 +404,7 @@ pub fn is_node_name_valid(_name: &str) -> std::result::Result<(), &str> {
 		return Err("Node name should not contain invalid chars such as '.' and '@'")
 	}
 
-	let invalid_patterns = r"^https?:\/\/";
+	let invalid_patterns = r"^https?:/";
 	let re = Regex::new(invalid_patterns).unwrap();
 	if re.is_match(&name) {
 		return Err("Node name should not contain urls")
@@ -503,10 +503,15 @@ mod tests {
 		)
 		.is_err());
 		assert!(is_node_name_valid("Dots.not.Ok").is_err());
-		assert!(is_node_name_valid("http://visit.me").is_err());
-		assert!(is_node_name_valid("https://visit.me").is_err());
+		// NOTE: the urls below don't include a domain otherwise
+		// they'd get filtered for including a `.`
+		assert!(is_node_name_valid("http://visitme").is_err());
+		assert!(is_node_name_valid("http:/visitme").is_err());
+		assert!(is_node_name_valid("https://visitme").is_err());
+		assert!(is_node_name_valid("https:/visitme").is_err());
 		assert!(is_node_name_valid("www.visit.me").is_err());
 		assert!(is_node_name_valid("www.visit").is_err());
+		assert!(is_node_name_valid("hello\\world").is_err());
 		assert!(is_node_name_valid("visit.www").is_err());
 		assert!(is_node_name_valid("email@domain").is_err());
 	}
