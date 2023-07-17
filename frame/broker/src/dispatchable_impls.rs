@@ -304,7 +304,6 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	// TODO: Consolidation of InstaPoolHistory records as long as contributors don't change.
 	pub(crate) fn do_claim_revenue(
 		mut region: RegionId,
 		max_timeslices: Timeslice,

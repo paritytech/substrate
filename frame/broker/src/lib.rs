@@ -25,13 +25,13 @@ mod benchmarking;
 mod core_part;
 mod coretime_interface;
 mod dispatchable_impls;
-mod implementation;
 mod mock;
 mod nonfungible_impl;
 mod test_fungibles;
 mod tests;
+mod tick_impls;
 mod types;
-mod utils;
+mod utility_impls;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -41,7 +41,7 @@ pub use core_part::*;
 pub use coretime_interface::*;
 pub use nonfungible_impl::*;
 pub use types::*;
-pub use utils::*;
+pub use utility_impls::*;
 
 #[frame_support::pallet]
 pub mod pallet {
