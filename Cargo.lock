@@ -12081,6 +12081,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
+ "sp-api",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",

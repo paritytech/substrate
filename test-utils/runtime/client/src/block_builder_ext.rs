@@ -43,10 +43,17 @@ pub trait BlockBuilderExt {
 	) -> Result<(), sp_blockchain::Error>;
 }
 
-impl<'a, B> BlockBuilderExt
-	for sc_block_builder::BlockBuilder<'a, substrate_test_runtime::Block, B>
-where
-	B: backend::Backend<substrate_test_runtime::Block>,
+impl<'a, Backend, CallApiAt: sp_api::CallApiAt<substrate_test_runtime::Block>, ProofRecorder>
+	BlockBuilderExt
+	for sc_block_builder::BlockBuilder<
+		'a,
+		substrate_test_runtime::Block,
+		Backend,
+		CallApiAt,
+		ProofRecorder,
+	> where
+	Backend: backend::Backend<substrate_test_runtime::Block>,
+ProofRecorder: sp_api::GetProofRecorder<substrate_test_runtime::Block>,
 {
 	fn push_transfer(
 		&mut self,

@@ -647,6 +647,34 @@ pub trait CallApiAt<Block: BlockT> {
 	) -> Result<(), ApiError>;
 }
 
+#[cfg(feature = "std")]
+impl<T: CallApiAt<Block>, Block: BlockT> CallApiAt<Block> for &T {
+	type StateBackend = T::StateBackend;
+
+	fn call_api_at(
+		&self,
+		params: CallApiAtParams<Block, Self::StateBackend>,
+	) -> Result<Vec<u8>, ApiError> {
+		(*self).call_api_at(params)
+	}
+
+	fn runtime_version_at(&self, at_hash: Block::Hash) -> Result<RuntimeVersion, ApiError> {
+		(*self).runtime_version_at(at_hash)
+	}
+
+	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, ApiError> {
+		(*self).state_at(at)
+	}
+
+	fn initialize_extensions(
+		&self,
+		at: Block::Hash,
+		extensions: &mut Extensions,
+	) -> Result<(), ApiError> {
+		(*self).initialize_extensions(at, extensions)
+	}
+}
+
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
 #[cfg(feature = "std")]
 pub struct ApiRef<'a, T>(T, std::marker::PhantomData<&'a ()>);
@@ -846,22 +874,27 @@ impl<C, B: BlockT, ProofRecorder> RuntimeInstanceBuilderStage2<C, B, ProofRecord
 	}
 }
 
+#[cfg(feature = "std")]
 pub struct EnableProofRecorder<Block: BlockT> {
 	recorder: ProofRecorder<Block>,
 }
 
+#[cfg(feature = "std")]
 pub struct DisableProofRecorder;
 
+#[cfg(feature = "std")]
 pub trait GetProofRecorder<Block: BlockT> {
 	fn get(&self) -> Option<&ProofRecorder<Block>>;
 }
 
+#[cfg(feature = "std")]
 impl<Block: BlockT> GetProofRecorder<Block> for EnableProofRecorder<Block> {
 	fn get(&self) -> Option<&ProofRecorder<Block>> {
 		Some(&self.recorder)
 	}
 }
 
+#[cfg(feature = "std")]
 impl<Block: BlockT> GetProofRecorder<Block> for DisableProofRecorder {
 	fn get(&self) -> Option<&ProofRecorder<Block>> {
 		None
@@ -917,6 +950,19 @@ impl<C: CallApiAt<B>, B: BlockT, ProofRecorder: GetProofRecorder<B>>
 		// self.commit_or_rollback(std::result::Result::is_ok(&res));
 
 		res
+	}
+
+	pub fn api_version<Api: ?Sized + RuntimeApiInfo>(&self) -> Result<Option<u32>, ApiError> {
+		let version = self.call_api_at.runtime_version_at(self.block)?;
+		Ok(version.api_version(&Api::ID))
+	}
+
+	pub fn execute_in_transaction<R>(&self, mut inner: impl FnOnce(&Self) -> TransactionOutcome<R>) -> R {
+		(inner)(self).into_inner()
+	}
+
+	pub fn extract_proof(&self) -> Option<StorageProof> {
+		self.recorder.get().map(|r| r.to_storage_proof())
 	}
 }
 

@@ -24,7 +24,7 @@ use log::{error, info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
 use rand::Rng;
-use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider, RecordProof};
+use sc_block_builder::{BlockBuilderApi, RecordProof};
 use sc_chain_spec::{resolve_state_version_from_wasm, BuildGenesisBlock};
 use sc_client_api::{
 	backend::{
@@ -1390,45 +1390,6 @@ where
 		)?;
 
 		Ok(state)
-	}
-}
-
-impl<B, E, Block> BlockBuilderProvider<B, Block> for Client<B, E, Block>
-where
-	B: backend::Backend<Block> + Send + Sync + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
-	Block: BlockT,
-	Self: ChainHeaderBackend<Block>,
-{
-	fn new_block_at<R: Into<RecordProof>>(
-		&self,
-		parent: Block::Hash,
-		inherent_digests: Digest,
-		record_proof: R,
-	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, B>> {
-		sc_block_builder::BlockBuilder::new(
-			(),
-			parent,
-			self.expect_block_number_from_id(&BlockId::Hash(parent))?,
-			record_proof.into(),
-			inherent_digests,
-			&self.backend,
-		)
-	}
-
-	fn new_block(
-		&self,
-		inherent_digests: Digest,
-	) -> sp_blockchain::Result<sc_block_builder::BlockBuilder<Block, B>> {
-		let info = self.chain_info();
-		sc_block_builder::BlockBuilder::new(
-			(),
-			info.best_hash,
-			info.best_number,
-			RecordProof::No,
-			inherent_digests,
-			&self.backend,
-		)
 	}
 }
 

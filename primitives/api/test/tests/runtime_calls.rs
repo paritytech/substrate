@@ -31,7 +31,7 @@ use substrate_test_runtime_client::{
 };
 
 use codec::Encode;
-use sc_block_builder::BlockBuilderProvider;
+use sc_block_builder::BlockBuilder;
 use sp_consensus::SelectChain;
 use substrate_test_runtime_client::sc_executor::WasmExecutor;
 
@@ -88,7 +88,7 @@ fn initialize_block_works() {
 
 #[test]
 fn record_proof_works() {
-	let client = TestClientBuilder::new().build();
+	let (client, backend) = TestClientBuilder::new().build_with_backend();
 	let best_hash = client.chain_info().best_hash;
 	let storage_root = *client.header(best_hash).unwrap().unwrap().state_root();
 
@@ -108,9 +108,10 @@ fn record_proof_works() {
 	}
 	.into_unchecked_extrinsic();
 
+	let genesis_hash = client.chain_info().genesis_hash;
+
 	// Build the block and record proof
-	let mut builder = client
-		.new_block_at(client.chain_info().best_hash, Default::default(), true)
+	let mut builder = BlockBuilder::with_proof_recording(&client, genesis_hash, 0, Default::default(), &*backend)
 		.expect("Creates block builder");
 	builder.push(transaction.clone()).unwrap();
 	let (block, _, proof) = builder.build().expect("Bake block").into_inner();

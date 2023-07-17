@@ -398,10 +398,10 @@ where
 		Some(1) => {
 			#[allow(deprecated)]
 			{
-				runtime_api.configuration_before_version_2(at_hash)?.into()
+				runtime_api.configuration_before_version_2()?.into()
 			}
 		},
-		Some(2) => runtime_api.configuration(at_hash)?,
+		Some(2) => runtime_api.configuration()?,
 		_ =>
 			return Err(sp_blockchain::Error::VersionInvalid(
 				"Unsupported or invalid BabeApi version".to_string(),
@@ -1014,7 +1014,7 @@ where
 		let inherent_res = self
 			.client
 			.runtime_api()
-			.check_inherents(at_hash, block, inherent_data)
+			.check_inherents(block, inherent_data)
 			.map_err(Error::RuntimeApi)?;
 
 		if !inherent_res.ok() {
@@ -1079,7 +1079,7 @@ where
 		let generate_key_owner_proof = |at_hash: Block::Hash| {
 			self.client
 				.runtime_api()
-				.generate_key_ownership_proof(at_hash, slot, equivocation_proof.offender.clone())
+				.generate_key_ownership_proof(slot, equivocation_proof.offender.clone())
 				.map_err(Error::RuntimeApi)
 		};
 
@@ -1106,11 +1106,7 @@ where
 			.register_extension(self.offchain_tx_pool_factory.offchain_transaction_pool(best_hash));
 
 		runtime_api
-			.submit_report_equivocation_unsigned_extrinsic(
-				best_hash,
-				equivocation_proof,
-				key_owner_proof,
-			)
+			.submit_report_equivocation_unsigned_extrinsic(equivocation_proof, key_owner_proof)
 			.map_err(Error::RuntimeApi)?;
 
 		info!(target: LOG_TARGET, "Submitted equivocation report for author {:?}", author);
@@ -1378,10 +1374,10 @@ where
 		};
 
 		// Read epoch info from the imported state.
-		let current_epoch = self.client.runtime_api().current_epoch(hash).map_err(|e| {
+		let current_epoch = self.client.runtime_api().current_epoch().map_err(|e| {
 			ConsensusError::ClientImport(babe_err::<Block>(Error::RuntimeApi(e)).into())
 		})?;
-		let next_epoch = self.client.runtime_api().next_epoch(hash).map_err(|e| {
+		let next_epoch = self.client.runtime_api().next_epoch().map_err(|e| {
 			ConsensusError::ClientImport(babe_err::<Block>(Error::RuntimeApi(e)).into())
 		})?;
 

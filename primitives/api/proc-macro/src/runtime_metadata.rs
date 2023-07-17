@@ -220,17 +220,13 @@ pub fn generate_impl_runtime_metadata(impls: &[ItemImpl]) -> Result<TokenStream2
 
 		// Extract the generics from the trait to pass to the `runtime_metadata`
 		// function on the hidden module.
-		let generics = trait_
-			.segments
-			.iter()
-			.find_map(|segment| {
-				if let syn::PathArguments::AngleBracketed(generics) = &segment.arguments {
-					Some(generics.clone())
-				} else {
-					None
-				}
-			});
-
+		let generics = trait_.segments.iter().find_map(|segment| {
+			if let syn::PathArguments::AngleBracketed(generics) = &segment.arguments {
+				Some(generics.clone())
+			} else {
+				None
+			}
+		});
 
 		let mod_name = generate_runtime_mod_name_for_trait(&trait_name_ident);
 		// Get absolute path to the `runtime_decl_for_` module by replacing the last segment.

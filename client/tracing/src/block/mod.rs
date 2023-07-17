@@ -170,11 +170,7 @@ pub struct BlockExecutor<Block: BlockT, Client> {
 impl<Block, Client> BlockExecutor<Block, Client>
 where
 	Block: BlockT + 'static,
-	Client: HeaderBackend<Block>
-		+ BlockBackend<Block>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<Block> + BlockBackend<Block> + Send + Sync + 'static,
 {
 	/// Create a new `BlockExecutor`
 	pub fn new(

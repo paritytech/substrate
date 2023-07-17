@@ -615,8 +615,7 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 		// remove the trait to get just the module path
 		runtime_mod_path.segments.pop();
 
-		let processed_impl =
-			ApiRuntimeImplToApiRuntimeApiImpl.process(impl_.clone());
+		let processed_impl = ApiRuntimeImplToApiRuntimeApiImpl.process(impl_.clone());
 
 		result.push(processed_impl);
 	}

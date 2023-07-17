@@ -26,9 +26,14 @@
 
 #![warn(missing_docs)]
 
+use std::marker::PhantomData;
+
 use codec::Encode;
 
-use sp_api::{ApiExt, ApiRef, Core, StorageChanges, StorageProof, TransactionOutcome};
+use sp_api::{
+	ApiExt, ApiRef, CallApiAt, Core, DisableProofRecorder, EnableProofRecorder, RuntimeInstance,
+	StorageChanges, StorageProof, TransactionOutcome,
+};
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
 use sp_core::traits::CallContext;
 use sp_runtime::{
@@ -101,60 +106,79 @@ impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>>
 	}
 }
 
-/// Block builder provider
-pub trait BlockBuilderProvider<B, Block>
-where
-	Block: BlockT,
-	B: backend::Backend<Block>,
-	Self: Sized,
-{
-	/// Create a new block, built on top of `parent`.
-	///
-	/// When proof recording is enabled, all accessed trie nodes are saved.
-	/// These recorded trie nodes can be used by a third party to proof the
-	/// output of this block builder without having access to the full storage.
-	fn new_block_at<R: Into<RecordProof>>(
-		&self,
-		parent: Block::Hash,
-		inherent_digests: Digest,
-		record_proof: R,
-	) -> sp_blockchain::Result<BlockBuilder<Block, B>>;
-
-	/// Create a new block, built on the head of the chain.
-	fn new_block(
-		&self,
-		inherent_digests: Digest,
-	) -> sp_blockchain::Result<BlockBuilder<Block, B>>;
-}
-
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, Block: BlockT, B> {
+pub struct BlockBuilder<
+	'a,
+	Block: BlockT,
+	Backend,
+	CallApiAt: sp_api::CallApiAt<Block>,
+	ProofRecorder,
+> {
 	extrinsics: Vec<Block::Extrinsic>,
-	api: (),
+	runtime_instance: RuntimeInstance<CallApiAt, Block, ProofRecorder>,
 	version: u32,
 	parent_hash: Block::Hash,
-	backend: &'a B,
+	backend: &'a Backend,
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
+	_phantom: PhantomData<ProofRecorder>,
 }
 
-impl<'a, Block, B> BlockBuilder<'a, Block, B>
+impl<'a, Block, Backend, CallApiAt>
+	BlockBuilder<'a, Block, Backend, CallApiAt, DisableProofRecorder>
 where
 	Block: BlockT,
-	B: backend::Backend<Block>,
+	Backend: backend::Backend<Block>,
+	CallApiAt: sp_api::CallApiAt<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
 	///
 	/// While proof recording is enabled, all accessed trie nodes are saved.
 	/// These recorded trie nodes can be used by a third party to prove the
 	/// output of this block builder without having access to the full storage.
-	pub fn new(
-		api: (),
+	pub fn with_proof_recording(
+		call_api_at: CallApiAt,
 		parent_hash: Block::Hash,
 		parent_number: NumberFor<Block>,
-		record_proof: RecordProof,
 		inherent_digests: Digest,
-		backend: &'a B,
+		backend: &'a Backend,
+	) -> Result<BlockBuilder<Block, Backend, CallApiAt, EnableProofRecorder<Block>>, Error> {
+		let header = <<Block as BlockT>::Header as HeaderT>::new(
+			parent_number + One::one(),
+			Default::default(),
+			Default::default(),
+			parent_hash,
+			inherent_digests,
+		);
+
+		let estimated_header_size = header.encoded_size();
+
+		let runtime_instance = RuntimeInstance::builder(call_api_at, parent_hash)
+			.on_chain_context()
+			.with_recorder()
+			.build();
+
+		let version = runtime_instance
+			.api_version::<dyn BlockBuilderApi<Block>>()?
+			.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
+
+		Ok(BlockBuilder {
+			parent_hash,
+			extrinsics: Vec::new(),
+			runtime_instance,
+			version,
+			backend,
+			estimated_header_size,
+			_phantom: PhantomData,
+		})
+	}
+
+	pub fn without_proof_recording(
+		call_api_at: CallApiAt,
+		parent_hash: Block::Hash,
+		parent_number: NumberFor<Block>,
+		inherent_digests: Digest,
+		backend: &'a Backend,
 	) -> Result<Self, Error> {
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			parent_number + One::one(),
@@ -166,32 +190,33 @@ where
 
 		let estimated_header_size = header.encoded_size();
 
-		/*
-		if record_proof.yes() {
-			api.record_proof();
-		}
+		let runtime_instance =
+			RuntimeInstance::builder(call_api_at, parent_hash).on_chain_context().build();
 
-		api.set_call_context(CallContext::Onchain);
-
-		// api.initialize_block(parent_hash, &header)?;
-
-		let version = api
-			.api_version::<dyn BlockBuilderApi<Block>>(parent_hash)?
+		let version = runtime_instance
+			.api_version::<dyn BlockBuilderApi<Block>>()?
 			.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
-		*/
-
-		let version = 1;
 
 		Ok(Self {
 			parent_hash,
 			extrinsics: Vec::new(),
-			api,
+			runtime_instance,
 			version,
 			backend,
 			estimated_header_size,
+			_phantom: PhantomData,
 		})
 	}
+}
 
+impl<'a, Block, Backend, CallApiAt, ProofRecorder>
+	BlockBuilder<'a, Block, Backend, CallApiAt, ProofRecorder>
+where
+	Block: BlockT,
+	Backend: backend::Backend<Block>,
+	CallApiAt: sp_api::CallApiAt<Block>,
+	ProofRecorder: sp_api::GetProofRecorder<Block>,
+{
 	/// Push onto the block's list of extrinsics.
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it).
@@ -200,14 +225,13 @@ where
 		let extrinsics = &mut self.extrinsics;
 		let version = self.version;
 
-		/*
-		self.api.execute_in_transaction(|api| {
+		self.runtime_instance.execute_in_transaction(|api| {
 			let res = if version < 6 {
 				#[allow(deprecated)]
-				api.apply_extrinsic_before_version_6(parent_hash, xt.clone())
+				BlockBuilderApi::<Block>::apply_extrinsic_before_version_6(api, xt.clone())
 					.map(legacy::byte_sized_error::convert_to_latest)
 			} else {
-				api.apply_extrinsic(parent_hash, xt.clone())
+				BlockBuilderApi::<Block>::apply_extrinsic(api, xt.clone())
 			};
 
 			match res {
@@ -221,8 +245,6 @@ where
 				Err(e) => TransactionOutcome::Rollback(Err(Error::from(e))),
 			}
 		})
-		*/
-		todo!()
 	}
 
 	/// Consume the builder to build a valid `Block` containing all pushed extrinsics.
@@ -230,11 +252,10 @@ where
 	/// Returns the build `Block`, the changes to the storage and an optional `StorageProof`
 	/// supplied by `self.api`, combined as [`BuiltBlock`].
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
-	pub fn build(mut self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
-		return Ok(todo!())
-		/*
-		let header: Block::Header = todo!();
-		// let header = self.api.finalize_block(self.parent_hash)?;
+	pub fn build(
+		mut self,
+	) -> Result<BuiltBlock<Block, backend::StateBackendFor<Backend, Block>>, Error> {
+		let header: Block::Header = self.runtime_instance.finalize_block()?;
 
 		debug_assert_eq!(
 			header.extrinsics_root().clone(),
@@ -244,12 +265,12 @@ where
 			),
 		);
 
-		let proof = self.api.extract_proof();
+		let proof = self.runtime_instance.extract_proof();
 
 		let state = self.backend.state_at(self.parent_hash)?;
 
 		let storage_changes = self
-			.api
+			.runtime_instance
 			.into_storage_changes(&state, self.parent_hash)
 			.map_err(sp_blockchain::Error::StorageChanges)?;
 
@@ -258,7 +279,6 @@ where
 			storage_changes,
 			proof,
 		})
-		*/
 	}
 
 	/// Create the inherents for the block.

@@ -80,8 +80,7 @@ use std::{
 };
 
 /// Full client type.
-pub type TFullClient<TBl, TExec> =
-	Client<TFullBackend<TBl>, TFullCallExecutor<TBl, TExec>, TBl>;
+pub type TFullClient<TBl, TExec> = Client<TFullBackend<TBl>, TFullCallExecutor<TBl, TExec>, TBl>;
 
 /// Full client backend type.
 pub type TFullBackend<TBl> = Backend<TBl>;

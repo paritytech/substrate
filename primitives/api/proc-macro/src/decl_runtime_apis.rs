@@ -449,7 +449,7 @@ impl<'a> ToClientSideDeclV2<'a> {
 		let trait_generics = trait_generics.split_for_impl().1;
 		let mut generics = decl.generics;
 		generics.params.push(
-			parse_quote!( __RuntimeInstanceCallApiAt__: #crate_::CallApiAt<__RuntimeInstanceBlock__> + Send + 'static ),
+			parse_quote!( __RuntimeInstanceCallApiAt__: #crate_::CallApiAt<__RuntimeInstanceBlock__> ),
 		);
 		generics.params.push(parse_quote!( __RuntimeInstanceBlock__: #crate_::BlockT ));
 		generics.params.push(parse_quote!( __RuntimeInstanceProofRecorder__: #crate_::GetProofRecorder<__RuntimeInstanceBlock__> ));
@@ -464,7 +464,6 @@ impl<'a> ToClientSideDeclV2<'a> {
 			}
 		}
 	}
-
 
 	fn fold_item_trait_items(
 		&mut self,
