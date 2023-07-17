@@ -199,6 +199,7 @@ pub trait IntegrityTest {
 	fn integrity_test() {}
 }
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// The pallet hooks trait. This is merely an umbrella trait for:
 ///
 /// - [`OnInitialize`]
@@ -215,7 +216,40 @@ pub trait IntegrityTest {
 ///
 /// ## Summary
 ///
-/// In short, the following diagram shows the
+/// In short, the following diagram shows the flow of hooks in a pallet
+///
+/// ```mermaid
+// graph LR
+// Optional --> BeforeExtrinsics
+// BeforeExtrinsics --> Extrinsics
+// Extrinsics --> AfterExtrinsics
+// subgraph Optional
+// 	OnRuntimeUpgrade
+// end
+//
+// subgraph BeforeExtrinsics
+// 	OnInitialize
+// end
+//
+// subgraph Extrinsics
+// 	direction TB
+// 	Inherent1
+// 	Inherent2
+// 	Extrinsic1
+// 	Extrinsic2
+//
+// 	Inherent1 --> Inherent2
+// 	Inherent2 --> Extrinsic1
+// 	Extrinsic1 --> Extrinsic2
+// end
+//
+// subgraph AfterExtrinsics
+// 	OnIdle
+// 	OnFinalize
+//
+// 	OnIdle --> OnFinalize
+// end
+/// ```
 pub trait Hooks<BlockNumber> {
 	/// Block initialization hook. This is called at the very beginning of block execution.
 	///
