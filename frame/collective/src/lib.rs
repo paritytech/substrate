@@ -691,9 +691,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Actual proposal of an hash, if it's current
 	pub fn proposal_of(hash: &T::Hash) -> Option<T::Proposal> {
-		ProposalOf::<T, I>::get(hash)
-			.map(|v| Decode::decode(&mut &v[..]).ok())
-			.flatten()
+		ProposalOf::<T, I>::get(hash).and_then(|v| Decode::decode(&mut &v[..]).ok())
 	}
 
 	/// Check whether `who` is a member of the collective.
