@@ -1,4 +1,5 @@
 // This file is part of Substrate.
+mod pallet_dummy;
 
 // Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -69,6 +70,7 @@ frame_support::construct_runtime!(
 		Utility: pallet_utility::{Pallet, Call, Storage, Event},
 		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>, HoldReason},
 		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
+		Dummy: pallet_dummy
 	}
 );
 
@@ -374,6 +376,8 @@ impl pallet_proxy::Config for Test {
 	type AnnouncementDepositBase = ConstU64<1>;
 	type AnnouncementDepositFactor = ConstU64<1>;
 }
+
+impl pallet_dummy::Config for Test {}
 
 parameter_types! {
 	pub MySchedule: Schedule<Test> = {
@@ -3002,7 +3006,7 @@ fn gas_estimation_call_runtime() {
 		.unwrap()
 		.account_id;
 
-		let addr_callee = Contracts::bare_instantiate(
+		Contracts::bare_instantiate(
 			ALICE,
 			min_balance * 100,
 			GAS_LIMIT,
@@ -3014,15 +3018,11 @@ fn gas_estimation_call_runtime() {
 			CollectEvents::Skip,
 		)
 		.result
-		.unwrap()
-		.account_id;
+		.unwrap();
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
-			dest: addr_callee,
-			value: min_balance * 10,
-		});
+		let call = RuntimeCall::Dummy(pallet_dummy::Call::overestimate_pre_charge {});
 		let result = Contracts::bare_call(
 			ALICE,
 			addr_caller.clone(),
