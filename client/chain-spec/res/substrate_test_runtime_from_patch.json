@@ -8,7 +8,7 @@
   "properties": null,
   "codeSubstitutes": {},
   "genesis": {
-    "jsonPatch": {
+    "runtimeConfigPatch": {
       "babe": {
         "epochConfig": {
           "allowed_slots": "PrimaryAndSecondaryPlainSlots",

@@ -218,7 +218,7 @@ fn generate_chain_spec(
 		.with_name("Custom")
 		.with_id("custom")
 		.with_chain_type(sc_chain_spec::ChainType::Live)
-		.with_genesis_patch(chain_spec::testnet_genesis(
+		.with_genesis_config_patch(chain_spec::testnet_genesis(
 			authorities,
 			nominator_accounts,
 			sudo_account,
@@ -311,14 +311,14 @@ fn generate_chain_spec_for_runtime(cmd: &RuntimeCmd) -> Result<String, String> {
 		GenesisBuildAction::Patch(PatchCmd { ref patch_path }) => {
 			let patch = fs::read(patch_path.as_path())
 				.map_err(|e| format!("patch file {patch_path:?} shall be readable: {e}"))?;
-			builder.with_genesis_patch(serde_json::from_slice::<Value>(&patch[..]).map_err(
+			builder.with_genesis_config_patch(serde_json::from_slice::<Value>(&patch[..]).map_err(
 				|e| format!("patch file {patch_path:?} shall contain a valid json: {e}"),
 			)?)
 		},
 		GenesisBuildAction::Full(FullCmd { ref config_path }) => {
 			let config = fs::read(config_path.as_path())
 				.map_err(|e| format!("config file {config_path:?} shall be readable: {e}"))?;
-			builder.with_no_genesis_defaults(serde_json::from_slice::<Value>(&config[..]).map_err(
+			builder.with_genesis_config(serde_json::from_slice::<Value>(&config[..]).map_err(
 				|e| format!("config file {config_path:?} shall contain a valid json: {e}"),
 			)?)
 		},
@@ -331,7 +331,7 @@ fn generate_chain_spec_for_runtime(cmd: &RuntimeCmd) -> Result<String, String> {
 				fs::write(path.as_path(), serde_json::to_string_pretty(&default_config).unwrap())
 					.map_err(|err| err.to_string())
 			});
-			builder.with_no_genesis_defaults(default_config)
+			builder.with_genesis_config(default_config)
 		},
 	};
 

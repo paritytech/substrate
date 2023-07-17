@@ -45,13 +45,15 @@ enum GenesisBuildAction {
 	Full(serde_json::Value),
 }
 
+#[allow(deprecated)]
 enum GenesisSource<G> {
 	File(PathBuf),
 	Binary(Cow<'static, [u8]>),
-	#[deprecated(note = "todo: add note")]
+	#[deprecated(
+		note = "Factory is planned to be removed in December 2023. Use `GenesisBuilderApi` instead."
+	)]
 	Factory(Arc<dyn Fn() -> G + Send + Sync>),
 	Storage(Storage),
-	//maybe a factory for providing json of GenesisBuildAction??
 	GenesisBuilderApi(GenesisBuildAction),
 }
 
@@ -60,6 +62,7 @@ impl<G> Clone for GenesisSource<G> {
 		match *self {
 			Self::File(ref path) => Self::File(path.clone()),
 			Self::Binary(ref d) => Self::Binary(d.clone()),
+			#[allow(deprecated)]
 			Self::Factory(ref f) => Self::Factory(f.clone()),
 			Self::Storage(ref s) => Self::Storage(s.clone()),
 			Self::GenesisBuilderApi(ref s) => Self::GenesisBuilderApi(s.clone()),
@@ -97,6 +100,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 					.map_err(|e| format!("Error parsing embedded file: {}", e))?;
 				Ok(genesis.genesis) //GenesisRuntime (typically)
 			},
+			#[allow(deprecated)]
 			Self::Factory(f) => Ok(Genesis::Runtime(f())),
 			Self::Storage(storage) => {
 				let top = storage
@@ -124,9 +128,9 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 			},
 			// maybe a Factory for getting GenesisBuilderApi command?
 			Self::GenesisBuilderApi(GenesisBuildAction::Full(config)) =>
-				Ok(Genesis::JsonFull(config.clone())),
+				Ok(Genesis::RuntimeConfig(config.clone())),
 			Self::GenesisBuilderApi(GenesisBuildAction::Patch(patch)) =>
-				Ok(Genesis::JsonPatch(patch.clone())),
+				Ok(Genesis::RuntimeConfigPatch(patch.clone())),
 		}
 	}
 }
@@ -138,6 +142,7 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 			.insert(sp_core::storage::well_known_keys::CODE.to_vec(), self.code.clone());
 
 		match self.genesis.resolve()? {
+			#[allow(deprecated)]
 			Genesis::Runtime(gc) => gc.assimilate_storage(storage),
 			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => {
 				storage.top.extend(map.into_iter().map(|(k, v)| (k.0, v.0)));
@@ -156,10 +161,10 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 			// it, but Substrate itself isn't capable of loading chain specs with just a hash at the
 			// moment.
 			Genesis::StateRootHash(_) => Err("Genesis storage in hash format not supported".into()),
-			Genesis::JsonFull(config) => RuntimeCaller::new(&self.code[..])
+			Genesis::RuntimeConfig(config) => RuntimeCaller::new(&self.code[..])
 				.get_storage_for_config(config)?
 				.assimilate_storage(storage),
-			Genesis::JsonPatch(patch) => RuntimeCaller::new(&self.code[..])
+			Genesis::RuntimeConfigPatch(patch) => RuntimeCaller::new(&self.code[..])
 				.get_storage_for_patch(patch)?
 				.assimilate_storage(storage),
 		}?;
@@ -205,19 +210,15 @@ impl From<sp_core::storage::Storage> for RawGenesis {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 enum Genesis<G> {
-	//deprecated
-	// #[serde(alias = "RuntimeDeprecated")]
-	#[deprecated(note = "todo: add note")]
-	Runtime(G), //G is RuntimeGenesisConfig
+	/// note: this will be removed together with [`ChainSpec::from_genesis`]
+	Runtime(G),
 	Raw(RawGenesis),
 	/// State root hash of the genesis storage.
 	StateRootHash(StorageData),
-
-	// CodeWithPatch(Option<serde_json::Value>), (PatchDefault?)
-	#[serde(alias = "Runtime")]
-	JsonFull(serde_json::Value),
-	#[serde(alias = "Patch")]
-	JsonPatch(serde_json::Value),
+	/// Full runtime genesis config.
+	RuntimeConfig(serde_json::Value),
+	/// Patch for default runtime genesis config.
+	RuntimeConfigPatch(serde_json::Value),
 }
 
 /// A configuration of a client. Does not include runtime storage initialization.
@@ -347,12 +348,12 @@ impl<G, E> ChainSpecBuilder<G, E> {
 		self
 	}
 
-	pub fn with_genesis_patch(mut self, patch: serde_json::Value) -> Self {
+	pub fn with_genesis_config_patch(mut self, patch: serde_json::Value) -> Self {
 		self.genesis_build_action = Some(GenesisBuildAction::Patch(patch));
 		self
 	}
 
-	pub fn with_no_genesis_defaults(mut self, config: serde_json::Value) -> Self {
+	pub fn with_genesis_config(mut self, config: serde_json::Value) -> Self {
 		self.genesis_build_action = Some(GenesisBuildAction::Full(config));
 		self
 	}
@@ -456,7 +457,10 @@ impl<G, E> ChainSpec<G, E> {
 	}
 
 	/// Create hardcoded spec.
-	#[deprecated(note = "todo: add note")]
+	#[deprecated(
+		note = "`from_genesis` is planned to be removed in December 2023. Use [`builder()`] instead."
+	)]
+	// deprecated note: Genesis<G>::Runtime + GenesisSource::Factory shall also be removed
 	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
 		name: &str,
 		id: &str,
@@ -486,9 +490,9 @@ impl<G, E> ChainSpec<G, E> {
 			code_substitutes: BTreeMap::new(),
 		};
 
+		#[allow(deprecated)]
 		ChainSpec {
 			client_spec,
-			#[allow(deprecated)]
 			genesis: GenesisSource::Factory(Arc::new(constructor)),
 			code: code.into(),
 		}
@@ -566,12 +570,13 @@ struct ChainSpecJsonContainer<G, E> {
 impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	fn json_container(&self, raw: bool) -> Result<ChainSpecJsonContainer<G, E>, String> {
 		let genesis = match (raw, self.genesis.resolve()?) {
-			(true, Genesis::JsonPatch(patch)) => Genesis::Raw(RawGenesis::from(
+			(true, Genesis::RuntimeConfigPatch(patch)) => Genesis::Raw(RawGenesis::from(
 				RuntimeCaller::new(&self.code[..]).get_storage_for_patch(patch)?,
 			)),
-			(true, Genesis::JsonFull(config)) => Genesis::Raw(RawGenesis::from(
+			(true, Genesis::RuntimeConfig(config)) => Genesis::Raw(RawGenesis::from(
 				RuntimeCaller::new(&self.code[..]).get_storage_for_config(config)?,
 			)),
+			#[allow(deprecated)]
 			(true, Genesis::Runtime(g)) => {
 				let storage = g.build_storage()?;
 				Genesis::Raw(RawGenesis::from(storage))
@@ -785,7 +790,7 @@ mod tests {
 			.with_extensions(Default::default())
 			.with_chain_type(ChainType::Local)
 			.with_code(substrate_test_runtime::wasm_binary_unwrap().into())
-			.with_genesis_patch(json!({
+			.with_genesis_config_patch(json!({
 				"babe": {
 					"epochConfig": {
 						"c": [
@@ -835,7 +840,7 @@ mod tests {
 			.with_extensions(Default::default())
 			.with_chain_type(ChainType::Local)
 			.with_code(substrate_test_runtime::wasm_binary_unwrap().into())
-			.with_no_genesis_defaults(serde_json::from_str(j).unwrap())
+			.with_genesis_config(serde_json::from_str(j).unwrap())
 			.build();
 
 		// std::fs::write("/tmp/config.json", output.as_json(false).unwrap());
@@ -872,7 +877,7 @@ mod tests {
 			.with_extensions(Default::default())
 			.with_chain_type(ChainType::Local)
 			.with_code(substrate_test_runtime::wasm_binary_unwrap().into())
-			.with_no_genesis_defaults(serde_json::from_str(j).unwrap())
+			.with_genesis_config(serde_json::from_str(j).unwrap())
 			.build();
 
 		assert_eq!( output.as_json(true), Err("Invalid JSON blob: unknown field `babex`, expected one of `system`, `babe`, `substrateTest`, `balances` at line 1 column 8".to_string()) );
@@ -887,7 +892,7 @@ mod tests {
 			.with_extensions(Default::default())
 			.with_chain_type(ChainType::Local)
 			.with_code(substrate_test_runtime::wasm_binary_unwrap().into())
-			.with_genesis_patch(json!({
+			.with_genesis_config_patch(json!({
 				"invalid_pallet": {},
 				"substrateTest": {
 					"authorities": [

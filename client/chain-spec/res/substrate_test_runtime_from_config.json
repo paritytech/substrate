@@ -8,7 +8,7 @@
   "properties": null,
   "codeSubstitutes": {},
   "genesis": {
-    "jsonFull": {
+    "runtimeConfig": {
       "babe": {
         "authorities": [
           [
