@@ -11,6 +11,19 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 use crate::{log, BalanceOf, Config, Ledger, UnlockChunk, STAKING_ID};
 
 /// The ledger of a (bonded) stash.
+///
+/// Note: All the reads and mutations to the `Ledger` storage type *MUST* be performed through the
+/// methods exposed by this struct to ensure data and staking lock consistency, namely:
+///
+/// - [`StakingLedger::storage_get`]: queries the [`Ledger`] storage type and enriches the returned
+/// object with the controller account, which is used in posterior mutating calls to both
+/// [`StakingLedger::storage_put`] and [`StakingLedger::storage_remove`].
+/// - [`StakingLedger::storage_put`]: inserts/updates a staking ledger entry in [`Ledger`] and
+/// updates the staking locks accordingly.
+/// - [`StakingLedger::storage_remove`]: removes a staking ledger entry in [`Ledger`] and updates
+/// the staking locks accordingly.
+/// - [`StakingLedger::storage_exists`]: checks if an account has staking ledger entry in
+///   [`Ledger`].
 #[derive(
 	PartialEqNoBound,
 	EqNoBound,
@@ -61,7 +74,13 @@ impl<T: Config> StakingLedger<T> {
 		}
 	}
 
-	/// only used for new ledgers, so controller == stash.
+	/// Returns a new instance of a staking ledger.
+	///
+	/// The `Ledger` storage is not mutated. In order to do that [`fn storage_put`] must be called
+	/// on the returned staking ledger.
+	///
+	/// Note: as the controller accounts are being deprecated, the stash account is the same as the
+	/// controller account.
 	pub fn new(
 		stash: T::AccountId,
 		active_stake: BalanceOf<T>,
@@ -80,10 +99,16 @@ impl<T: Config> StakingLedger<T> {
 		}
 	}
 
+	/// Returns the controller account of the staking ledger.
 	pub(crate) fn controller(&self) -> T::AccountId {
 		self.controller.clone().expect("TODO, handle this edge case better?")
 	}
 
+	/// Returns the staking ledger entry stored in [`Ledger`] storage. Returns `None` if the entry
+	/// does not exist for the give controller.
+	///
+	/// Note: To ensure consistency, all the [`Ledger`] storage queries should be made through this
+	/// helper function.
 	pub(crate) fn storage_get(controller: &T::AccountId) -> Option<Self> {
 		<Ledger<T>>::get(&controller).map(|mut l| {
 			l.controller = Some(controller.clone());
@@ -91,14 +116,34 @@ impl<T: Config> StakingLedger<T> {
 		})
 	}
 
+	/// Inserts/updates a staking ledger account.
+	///
+	/// The staking locks od the stash account are updated accordingly.
+	///
+	/// Note: To ensure lock consistency, all the [`Ledger`] storage updates should be made through
+	/// this helper function.
 	pub(crate) fn storage_put(&self) {
 		T::Currency::set_lock(STAKING_ID, &self.stash, self.total, WithdrawReasons::all());
 		Ledger::<T>::insert(&self.controller(), &self);
 	}
 
+	/// Removes a staking ledger account.
+	///
+	/// The staking locks od the stash account are updated accordingly.
+	///
+	/// Note: To ensure lock consistency, all the [`Ledger`] storage removes should be made through
+	/// this helper function.
 	pub(crate) fn storage_remove(self) {
 		T::Currency::remove_lock(STAKING_ID, &self.stash);
 		Ledger::<T>::remove(self.controller());
+	}
+
+	/// Checks if a staking ledger with a given controller account exists.
+	///
+	/// Note: this is only a wrapper around `Ledger::contains_key` to ensure that, as a rule,
+	/// developers never call into [`Ledger`] directly.
+	pub(crate) fn storage_exists(controller: &T::AccountId) -> bool {
+		<Ledger<T>>::contains_key(controller)
 	}
 
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the

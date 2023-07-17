@@ -316,6 +316,9 @@ pub mod pallet {
 	pub type MinCommission<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
+	///
+	/// Note: All the reads and mutations to this storage *MUST* be done through the methods exposed
+	/// by [`StakingLedger`] to ensure data and lock consistency.
 	#[pallet::storage]
 	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T>>;
 
@@ -840,7 +843,7 @@ pub mod pallet {
 				return Err(Error::<T>::AlreadyBonded.into())
 			}
 
-			if <Ledger<T>>::contains_key(&controller_to_be_deprecated) {
+			if StakingLedger::<T>::storage_exists(&controller_to_be_deprecated) {
 				return Err(Error::<T>::AlreadyPaired.into())
 			}
 
@@ -1242,11 +1245,12 @@ pub mod pallet {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 
-			if <Ledger<T>>::contains_key(&stash) {
+			if StakingLedger::<T>::storage_exists(&stash) {
 				return Err(Error::<T>::AlreadyPaired.into())
 			}
 			if old_controller != stash {
 				<Bonded<T>>::insert(&stash, &stash);
+				// the ledger is accessed directly since this is temporary passive migration logic.
 				if let Some(l) = <Ledger<T>>::take(&old_controller) {
 					<Ledger<T>>::insert(&stash, l);
 				}

@@ -91,7 +91,7 @@
 //! #### Nomination
 //!
 //! A **nominator** does not take any _direct_ role in maintaining the network, instead, it votes on
-//! a set of validators  to be elected. Once interest in nomination is stated by an account, it
+//! a set of validators to be elected. Once interest in nomination is stated by an account, it
 //! takes effect at the next election round. The funds in the nominator's stash account indicate the
 //! _weight_ of its vote. Both the rewards and any punishment that a validator earns are shared
 //! between the validator and its nominators. This rule incentivizes the nominators to NOT vote for
