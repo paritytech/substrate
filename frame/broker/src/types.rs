@@ -95,13 +95,13 @@ pub type ContributionRecordOf<T> = ContributionRecord<<T as SConfig>::AccountId>
 #[derive(Encode, Decode, Clone, Default, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct InstaPoolHistoryRecord<Balance> {
 	/// The total amount of Coretime (measured in Regularity Parts or 1/80th of a single block
-	/// of a Polkadot Core) contributed over a timeslice minus any contributions which have
-	/// already been paid out.
-	pub total_contributions: PartCount,
+	/// of a Polkadot Core) contributed from purchased Bulk Coretime over a timeslice minus any
+	/// contributions which have already been paid out.
+	pub private_contributions: PartCount,
 	/// The total amount of Coretime (measured in Regularity Parts or 1/80th of a single block
 	/// of a Polkadot Core) contributed by the Polkadot System in this timeslice.
 	pub system_contributions: PartCount,
-	/// The payout remaining for the `total_contributions`, or `None` if the revenue is not yet
+	/// The payout remaining for the `private_contributions`, or `None` if the revenue is not yet
 	/// known.
 	pub maybe_payout: Option<Balance>,
 }
@@ -153,7 +153,7 @@ pub struct StatusRecord {
 	pub core_count: CoreIndex,
 	/// The current size of the Instantaneous Coretime Pool, measured in
 	/// Regularity Parts or 1/80th of a single block of a Polkadot Core.
-	pub pool_size: PartCount,
+	pub private_pool_size: PartCount,
 	/// The current amount of the Instantaneous Coretime Pool which is provided by the Polkadot
 	/// System, rather than provided as a result of privately operated Coretime.
 	pub system_pool_size: PartCount,
@@ -168,10 +168,11 @@ pub struct StatusRecord {
 	Encode, Decode, Clone, Copy, Default, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen,
 )]
 pub struct PoolIoRecord {
-	/// The total change of the pool, measured in Regularity Parts.
-	pub total: SignedPartCount,
-	/// The total change of the portion of the pool supplied by the Polkaot System,
-	/// measured in Regularity Parts.
+	/// The total change of the portion of the pool supplied by purchased Bulk Coretime, measured
+	/// in Regularity Parts.
+	pub private: SignedPartCount,
+	/// The total change of the portion of the pool supplied by the Polkaot System, measured in
+	/// Regularity Parts.
 	pub system: SignedPartCount,
 }
 

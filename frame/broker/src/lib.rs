@@ -333,6 +333,26 @@ pub mod pallet {
 			/// The amount of revenue the system has taken.
 			revenue: BalanceOf<T>,
 		},
+		/// Some historical Instantaneous Core Pool payment record has been ignored because the
+		/// timeslice was already known. Governance may need to intervene.
+		HistoryIgnored {
+			/// The timeslice whose history is was ignored.
+			when: Timeslice,
+			/// The amount of revenue which was ignored.
+			revenue: BalanceOf<T>,
+		},
+		/// Some historical Instantaneous Core Pool Revenue is ready for payout claims.
+		ClaimsReady {
+			/// The timeslice whose history is available.
+			when: Timeslice,
+			/// The amount of revenue the Polkadot System has already taken.
+			system_payout: BalanceOf<T>,
+			/// The total amount of revenue remaining to be claimed.
+			private_payout: BalanceOf<T>,
+			/// The total amount of Core Mask bits contributed privately (i.e. excluding the
+			/// Polkadot System).
+			private_contributions: PartCount,
+		},
 		/// A Core has been assigned to one or more tasks and/or the Pool on the Relay-chain.
 		CoreAssigned {
 			/// The index of the Core which has been assigned.
@@ -411,9 +431,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_now: T::BlockNumber) -> Weight {
-			// NOTE: This may need some clever benchmarking...
-			let _ = Self::do_tick();
-			Weight::zero()
+			Self::do_tick()
 		}
 	}
 

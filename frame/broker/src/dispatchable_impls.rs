@@ -54,9 +54,9 @@ impl<T: Config> Pallet<T> {
 		let commit_timeslice = Self::latest_timeslice_ready_to_commit(&config);
 		let status = StatusRecord {
 			core_count,
-			pool_size: 0,
-			last_committed_timeslice: commit_timeslice.saturating_sub(1),
+			private_pool_size: 0,
 			system_pool_size: 0,
+			last_committed_timeslice: commit_timeslice.saturating_sub(1),
 			last_timeslice: Self::current_timeslice(),
 		};
 		let now = frame_system::Pallet::<T>::block_number();
@@ -293,8 +293,8 @@ impl<T: Config> Pallet<T> {
 			{
 				Workplan::<T>::insert(&workplan_key, &workplan);
 				let size = region_id.part.count_ones() as i32;
-				InstaPoolIo::<T>::mutate(region_id.begin, |a| a.total.saturating_accrue(size));
-				InstaPoolIo::<T>::mutate(region.end, |a| a.total.saturating_reduce(size));
+				InstaPoolIo::<T>::mutate(region_id.begin, |a| a.private.saturating_accrue(size));
+				InstaPoolIo::<T>::mutate(region.end, |a| a.private.saturating_reduce(size));
 				let record = ContributionRecord { length: duration, payee };
 				InstaPoolContribution::<T>::insert(&region_id, record);
 			}
@@ -330,13 +330,13 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 			let p = total_payout.saturating_mul(contributed_parts.into()) /
-				pool_record.total_contributions.into();
+				pool_record.private_contributions.into();
 
 			payout.saturating_accrue(p);
-			pool_record.total_contributions.saturating_reduce(contributed_parts);
+			pool_record.private_contributions.saturating_reduce(contributed_parts);
 
 			let remaining_payout = total_payout.saturating_sub(payout);
-			if !remaining_payout.is_zero() && pool_record.total_contributions > 0 {
+			if !remaining_payout.is_zero() && pool_record.private_contributions > 0 {
 				pool_record.maybe_payout = Some(remaining_payout);
 				InstaPoolHistory::<T>::insert(r, &pool_record);
 			} else {

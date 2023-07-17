@@ -44,6 +44,12 @@ pub trait WeightInfo {
 	fn drop_contribution() -> Weight;
 	fn drop_history() -> Weight;
 	fn request_core_count() -> Weight;
+	fn process_core_count() -> Weight;
+	fn process_revenue() -> Weight;
+	fn rotate_sale() -> Weight;
+	fn process_pool() -> Weight;
+	fn process_core_schedule() -> Weight;
+	fn request_revenue_info_at() -> Weight;
 }
 
 /// Weights for `pallet-broker` using the Substrate node and recommended hardware.
@@ -67,6 +73,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn drop_contribution() -> Weight { Weight::from_parts(123, 456) }
 	fn drop_history() -> Weight { Weight::from_parts(123, 456) }
 	fn request_core_count() -> Weight { Weight::from_parts(123, 456) }
+	fn process_core_count() -> Weight { Weight::from_parts(123, 456) }
+	fn process_revenue() -> Weight { Weight::from_parts(123, 456) }
+	fn rotate_sale() -> Weight { Weight::from_parts(123, 456) }
+	fn process_pool() -> Weight { Weight::from_parts(123, 456) }
+	fn process_core_schedule() -> Weight { Weight::from_parts(123, 456) }
+	fn request_revenue_info_at() -> Weight { Weight::from_parts(123, 456) }
 }
 
 // For backwards compatibility and tests
@@ -89,4 +101,10 @@ impl WeightInfo for () {
 	fn drop_contribution() -> Weight { Weight::from_parts(123, 456) }
 	fn drop_history() -> Weight { Weight::from_parts(123, 456) }
 	fn request_core_count() -> Weight { Weight::from_parts(123, 456) }
+	fn process_core_count() -> Weight { Weight::from_parts(123, 456) }
+	fn process_revenue() -> Weight { Weight::from_parts(123, 456) }
+	fn rotate_sale() -> Weight { Weight::from_parts(123, 456) }
+	fn process_pool() -> Weight { Weight::from_parts(123, 456) }
+	fn process_core_schedule() -> Weight { Weight::from_parts(123, 456) }
+	fn request_revenue_info_at() -> Weight { Weight::from_parts(123, 456) }
 }
