@@ -99,8 +99,10 @@ impl<T: Config> StakingLedger<T> {
 	}
 
 	/// Returns the controller account of the staking ledger.
-	pub(crate) fn controller(&self) -> T::AccountId {
-		self.controller.clone().expect("TODO, handle this edge case better?")
+	fn controller(&self) -> T::AccountId {
+		self.controller
+			.clone()
+			.expect("staking ledger instance was fetched through `storage_get`, qed.")
 	}
 
 	/// Returns the staking ledger entry stored in [`Ledger`] storage. Returns `None` if the entry
