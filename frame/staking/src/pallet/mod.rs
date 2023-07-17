@@ -45,7 +45,7 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PayeeDestination,
+	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PayoutDestination,
 	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash,
 	UnlockChunk, ValidatorPrefs,
 };
@@ -338,7 +338,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn payees)]
 	pub type Payees<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, PayeeDestination<T::AccountId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, T::AccountId, PayoutDestination<T::AccountId>, ValueQuery>;
 
 	/// The map from (wannabe) validator stash key to the preferences of that validator.
 	///
@@ -1237,7 +1237,7 @@ pub mod pallet {
 
 			// In-progress lazy migration to `Payees` storage item.
 			// NOTE: To be removed in next runtime upgrade once migration is completed.
-			Payees::<T>::insert(stash, payee.to_payee_destination(stash.clone(), controller));
+			Payees::<T>::insert(stash, payee.to_payout_destination(stash.clone(), controller));
 			Ok(())
 		}
 
@@ -1790,7 +1790,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Migrates an account's `RewardDestination` in `Payee` to `PayeeDestination` in `Payees`,
+		/// Migrates an account's `RewardDestination` in `Payee` to `PayoutDestination` in `Payees`,
 		/// if a record exists and if it has not already been migrated.
 		///
 		/// Effects will be felt instantly (as soon as this function is completed successfully).
@@ -1815,7 +1815,7 @@ pub mod pallet {
 			);
 			Payees::<T>::insert(
 				stash.clone(),
-				Payee::<T>::get(&stash).to_payee_destination(stash.clone(), controller),
+				Payee::<T>::get(&stash).to_payout_destination(stash.clone(), controller),
 			);
 			Ok(())
 		}

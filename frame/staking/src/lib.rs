@@ -384,7 +384,7 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 
 /// A destination account for payment.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum PayeeDestination<AccountId> {
+pub enum PayoutDestination<AccountId> {
 	/// Pay into the stash account and add to bond.
 	Compound,
 	/// Pay into a specified account as free balance.
@@ -396,14 +396,14 @@ pub enum PayeeDestination<AccountId> {
 	None,
 }
 
-impl<AccountId> Default for PayeeDestination<AccountId> {
+impl<AccountId> Default for PayoutDestination<AccountId> {
 	fn default() -> Self {
-		PayeeDestination::Compound
+		PayoutDestination::Compound
 	}
 }
 
 /// A destination account for payment.
-/// NOTE: Being lazily migrated and deprecated in favour of `PayeeDestination`.
+/// NOTE: Being lazily migrated and deprecated in favour of `PayoutDestination`.
 /// Tracking at <https://github.com/paritytech/substrate/issues/14438>
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum RewardDestination<AccountId> {
@@ -426,17 +426,17 @@ impl<AccountId: Clone> Default for RewardDestination<AccountId> {
 }
 
 impl<AccountId: Clone> RewardDestination<AccountId> {
-	fn to_payee_destination(
+	fn to_payout_destination(
 		&self,
 		stash: AccountId,
 		controller: AccountId,
-	) -> PayeeDestination<AccountId> {
+	) -> PayoutDestination<AccountId> {
 		match self {
-			RewardDestination::Staked => PayeeDestination::Compound,
-			RewardDestination::Stash => PayeeDestination::Free(stash),
-			RewardDestination::Controller => PayeeDestination::Free(controller),
-			RewardDestination::Account(a) => PayeeDestination::Free(a.clone()),
-			RewardDestination::None => PayeeDestination::None,
+			RewardDestination::Staked => PayoutDestination::Compound,
+			RewardDestination::Stash => PayoutDestination::Free(stash),
+			RewardDestination::Controller => PayoutDestination::Free(controller),
+			RewardDestination::Account(a) => PayoutDestination::Free(a.clone()),
+			RewardDestination::None => PayoutDestination::None,
 		}
 	}
 }
