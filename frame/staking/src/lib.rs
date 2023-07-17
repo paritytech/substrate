@@ -390,7 +390,7 @@ pub enum PayoutDestination<AccountId> {
 	/// Pay the specified percentage to the specified account as free balance, and pay the rest, if
 	/// any, into the stash account and add to bond.
 	Split((Perbill, AccountId)),
-	/// Receive no reward.
+	/// Receive no payouts.
 	Forgo,
 }
 
