@@ -25,6 +25,19 @@ use frame_support::{
 use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+
+	/// Perform a transfer of an item from one account to another within a collection.
+	///
+	/// # Errors
+	/// If any of the following conditions are not met, the function will return an error:
+	/// - The collection or item does not exist (`UnknownCollection`).
+	/// - The collection is frozen, and no transfers are allowed (`Frozen`).
+	/// - The item is locked, and transfers are not permitted (`Locked`).
+	/// - The `with_details` closure returns an error.
+	///
+	/// # Returns
+	/// Returns `Ok(())` if the transfer is successful, otherwise, it returns an error indicating the
+	/// reason for failure.
 	pub fn do_transfer(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -49,7 +62,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let origin = details.owner;
 		details.owner = dest;
 
-		// The approved account has to be reset to None, because otherwise pre-approve attack would
+		// The approved account has to be reset to `None`, because otherwise pre-approve attack would
 		// be possible, where the owner can approve their second account before making the
 		// transaction and then claiming the item back.
 		details.approved = None;
@@ -66,6 +79,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Create a new collection with the provided details.
+	///
+	/// # Errors
+	/// If the collection ID is already in use, this function returns an `InUse` error.
+	/// If reserving the deposit fails (e.g., insufficient funds), a `DispatchError` is returned.
+	///
+	/// # Returns
+	/// Returns `Ok(())` if the collection is successfully created, otherwise, it returns an error
+	/// indicating the reason for failure.
 	pub fn do_create_collection(
 		collection: T::CollectionId,
 		owner: T::AccountId,
@@ -99,6 +121,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Destroy a collection along with its associated items and metadata.
+	///
+	/// # Errors
+	/// This function returns an error in the following cases:
+	/// - The collection does not exist (`UnknownCollection`).
+	/// - The provided witness does not match the actual counts (`BadWitness`).
+	/// - The caller is not the owner of the collection (`NoPermission`).
+	/// - Any other dispatch errors that might occur during the execution of the function.
+	///
+	/// # Returns
+	/// Returns a `DestroyWitness` with information about the number of items, item metadatas, and
+	/// attributes that were destroyed along with the collection if the destruction is successful.
+	/// Otherwise, it returns a dispatch error indicating the reason for failure.
 	pub fn do_destroy_collection(
 		collection: T::CollectionId,
 		witness: DestroyWitness,
@@ -141,6 +176,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
+	/// Mint (create) a new item within a collection and assign ownership to an account.
+	///
+	/// # Errors
+	/// This function returns an error in the following cases:
+	/// - The item already exists in the collection (`AlreadyExists`).
+	/// - The collection does not exist (`UnknownCollection`).
+	/// - The provided closure `with_details` returns an error.
+	/// - The collection has reached its maximum supply (`MaxSupplyReached`).
+	/// - An arithmetic overflow occurs when incrementing the number of items in the collection.
+	/// - The currency reserve operation for the item deposit fails for any reason.
+	///
+	/// # Returns
+	/// Returns `Ok(())` if the minting is successful, otherwise, it returns an error indicating the
+	/// reason for failure.	
 	pub fn do_mint(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -187,6 +236,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Burn (destroy) an item from a collection.
+	///
+	/// # Errors
+	/// This function returns an error in the following cases:
+	/// - The item is locked and burns are not permitted (`Locked`).
+	/// - The collection or item does not exist (`UnknownCollection`).
+	/// - The `with_details` closure returns an error.
+	///
+	/// # Returns
+	/// Returns `Ok(())` if the burn is successful, otherwise, it returns an error indicating the
+	/// reason for failure.
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -217,7 +277,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
 	}
-
+	
+	/// Set or remove the price for an item in a collection.
+	///
+	/// # Errors
+	/// This function returns an error in the following cases:
+	/// - The item or collection does not exist (`UnknownItem` or `UnknownCollection`).
+	/// - The sender is not the owner of the item (`NoPermission`).
+	///
+	/// # Returns
+	/// Returns `Ok(())` if setting or removing the price is successful, otherwise, it returns an error
+	/// indicating the reason for failure.
 	pub fn do_set_price(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -244,6 +314,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	/// Buy an item from a collection.
+	///
+	/// # Errors
+	/// This function returns an error in the following cases:
+	/// - The item or collection does not exist (`UnknownItem` or `UnknownCollection`).
+	/// - The buyer is the current owner of the item (`NoPermission`).
+	/// - The item is not for sale (`NotForSale`).
+	/// - The bid price is lower than the item's sale price (`BidTooLow`).
+	/// - The item is set to be sold only to a specific buyer, and the provided buyer is not the
+	///   whitelisted buyer (`NoPermission`).
+	/// - The currency transfer between the buyer and the owner fails for any reason.
+	///
+	/// # Returns
+	/// Returns `Ok(())` if the purchase is successful, otherwise, it returns an error indicating the
+	/// reason for failure.
 	pub fn do_buy_item(
 		collection: T::CollectionId,
 		item: T::ItemId,
