@@ -72,25 +72,47 @@ impl WeightMeter {
 	}
 
 	/// Consume some weight and defensively fail if it is over the limit. Saturate in any case.
+	#[deprecated = "Use `consume` instead"]
 	pub fn defensive_saturating_accrue(&mut self, w: Weight) {
+		self.consume(w);
+	}
+
+	/// Consume some weight and defensively fail if it is over the limit. Saturate in any case.
+	///
+	/// This is provided as a less noisy version of `defensive_saturating_accrue`.
+	pub fn consume(&mut self, w: Weight) {
 		self.consumed.saturating_accrue(w);
 		debug_assert!(self.consumed.all_lte(self.limit), "Weight counter overflow");
 	}
 
-	/// Consume the given weight after checking that it can be consumed. Otherwise do nothing.
+	/// Consume the given weight after checking that it can be consumed and return `true`. Otherwise
+	/// do nothing and return `false`.
+	#[deprecated = "Use `try_consume` instead"]
 	pub fn check_accrue(&mut self, w: Weight) -> bool {
+		self.try_consume(w).is_ok()
+	}
+
+	/// Consume the given weight after checking that it can be consumed and return `Ok`. Otherwise
+	/// do nothing and return `Err`.
+	pub fn try_consume(&mut self, w: Weight) -> Result<(), ()> {
 		self.consumed.checked_add(&w).map_or(false, |test| {
 			if test.any_gt(self.limit) {
-				false
+				Err(())
 			} else {
 				self.consumed = test;
-				true
+				Ok(())
 			}
 		})
 	}
 
 	/// Check if the given weight can be consumed.
+	#[deprecated = "Use `can_consume` instead"]
 	pub fn can_accrue(&self, w: Weight) -> bool {
+		self.consumed.checked_add(&w).map_or(false, |t| t.all_lte(self.limit))
+	}
+
+	/// Check if the given weight can be consumed.
+	pub fn can_consume(&self, w: Weight) -> bool {
 		self.consumed.checked_add(&w).map_or(false, |t| t.all_lte(self.limit))
 	}
 }
