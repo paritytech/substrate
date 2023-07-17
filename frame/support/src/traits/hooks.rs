@@ -217,7 +217,7 @@ pub trait IntegrityTest {
 ///
 /// In short, the following diagram shows the
 pub trait Hooks<BlockNumber> {
-	/// Block initialization hook. This is called at the very beginning of the block execution
+	/// Block initialization hook. This is called at the very beginning of block execution.
 	///
 	/// Must return the non-negotiable weight of both itself, and whatever [`on_finalize`] wishes to
 	/// consumed.
