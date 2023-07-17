@@ -23,7 +23,7 @@
 //! Each set of host functions are defined with an instance of the
 //! [`sp_runtime_interface::runtime_interface`] macro.
 //!
-//! Most notable, this crate contains host functions for:
+//! Most notably, this crate contains host functions for:
 //!
 //! - [`hashing`]
 //! - [`crypto`]
