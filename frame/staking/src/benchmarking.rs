@@ -472,7 +472,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(controller.clone()), RewardDestination::Controller)
 	verify {
 		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Controller);
-		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Free(controller));
+		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Split((Perbill::from_percent(100),controller)));
 	}
 
 	update_payee {
@@ -483,7 +483,7 @@ benchmarks! {
 		whitelist_account!(controller);
 	}: _(RawOrigin::Signed(stash.clone()), controller)
 	verify {
-		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Compound);
+		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Stake);
 	}
 
 	set_controller {
