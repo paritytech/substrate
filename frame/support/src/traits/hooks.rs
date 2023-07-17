@@ -247,7 +247,7 @@ pub trait Hooks<BlockNumber> {
 
 	/// Block finalization hook. This is called at the very end of block execution.
 	///
-	/// Note that this has nothing to do with finality in the a *consensus"* jargon.
+	/// Note that this has nothing to do with finality in the "consensus" sense.
 	///
 	/// Note that the non-negotiable weight for this has must have already been returned by
 	/// [`OnInitialize`]. It usage along is not permitted.
