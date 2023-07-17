@@ -55,7 +55,6 @@ use ip_network::IpNetwork;
 use libp2p::{
 	core::{Endpoint, Multiaddr},
 	kad::{
-		self,
 		record::store::{MemoryStore, RecordStore},
 		GetClosestPeersError, GetRecordOk, Kademlia, KademliaBucketInserts, KademliaConfig,
 		KademliaEvent, QueryId, QueryResult, Quorum, Record, RecordKey,
@@ -223,7 +222,6 @@ impl DiscoveryConfig {
 
 			let store = MemoryStore::new(local_peer_id);
 			let mut kad = Kademlia::with_config(local_peer_id, store, config);
-			kad.set_mode(Some(kad::Mode::Server));
 
 			for (peer_id, addr) in &permanent_addresses {
 				kad.add_address(peer_id, addr.clone());
@@ -992,7 +990,7 @@ mod tests {
 			upgrade,
 		},
 		identity::Keypair,
-		noise,
+		kad, noise,
 		swarm::{Executor, Swarm, SwarmBuilder, SwarmEvent},
 		yamux, Multiaddr,
 	};
@@ -1046,6 +1044,16 @@ mod tests {
 					TokioExecutor(runtime),
 				)
 				.build();
+				// Set the Kademlia mode to server so that it can accept incoming requests.
+				//
+				// Note: the server mode is set automatically when the node learns its external
+				// address, but that does not happen in tests => hence we set it manually.
+				swarm
+					.behaviour_mut()
+					.kademlia
+					.as_mut()
+					.unwrap()
+					.set_mode(Some(kad::Mode::Server));
 				let listen_addr: Multiaddr =
 					format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
