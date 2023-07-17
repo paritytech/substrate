@@ -1073,7 +1073,7 @@ impl<T: Config> Pallet<T> {
 			Err(_) => return Err((Unavailable, Some(task))),
 		};
 
-		weight.consume(T::WeightInfo::service_task(
+		let _ = weight.try_consume(T::WeightInfo::service_task(
 			lookup_len.map(|x| x as usize),
 			task.maybe_id.is_some(),
 			task.maybe_periodic.is_some(),
@@ -1160,8 +1160,8 @@ impl<T: Config> Pallet<T> {
 				(error_and_info.post_info.actual_weight, Err(error_and_info.error)),
 		};
 		let call_weight = maybe_actual_call_weight.unwrap_or(call_weight);
-		weight.consume(base_weight);
-		weight.consume(call_weight);
+		let _ = weight.try_consume(base_weight);
+		let _ = weight.try_consume(call_weight);
 		Ok(result)
 	}
 }
