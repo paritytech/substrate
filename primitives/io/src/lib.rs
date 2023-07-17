@@ -53,7 +53,7 @@
 //!
 //! This code will panic with the following error:
 //!
-//! ```ignore
+//! ```no_compile
 //! thread 'main' panicked at '`get_version_1` called outside of an Externalities-provided environment.'
 //! ```
 //!
@@ -76,14 +76,6 @@
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(enable_alloc_error_handler, feature(alloc_error_handler))]
-#![cfg_attr(
-	feature = "std",
-	doc = "Substrate runtime standard library as compiled when linked with Rust's standard library."
-)]
-#![cfg_attr(
-	not(feature = "std"),
-	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
-)]
 
 use sp_std::vec::Vec;
 
