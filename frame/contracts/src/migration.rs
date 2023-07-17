@@ -27,13 +27,13 @@
 //!
 //! ## Example:
 //!
-//! To configure a migration to `v11` for a runtime using `v8` of pallet-contracts on the chain, you
-//! would set the `Migrations` type as follows:
+//! To configure a migration to `v11` for a runtime using `v10` of pallet-contracts on the chain,
+//! you would set the `Migrations` type as follows:
 //!
 //! ```
-//! use pallet_contracts::migration::{v9, v10, v11};
+//! use pallet_contracts::migration::{v10, v11};
 //! # pub enum Runtime {};
-//! type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+//! type Migrations = (v10::Migration<Runtime>, v11::Migration<Runtime>);
 //! ```
 //!
 //! ## Notes:
@@ -56,10 +56,10 @@
 //! While the migration is in progress, all dispatchables except `migrate`, are blocked, and returns
 //! a `MigrationInProgress` error.
 
+pub mod v09;
 pub mod v10;
 pub mod v11;
 pub mod v12;
-pub mod v9;
 
 use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
 use codec::{Codec, Decode};

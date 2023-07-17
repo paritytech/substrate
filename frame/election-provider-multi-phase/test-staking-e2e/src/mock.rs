@@ -18,18 +18,14 @@
 #![allow(dead_code)]
 
 use _feps::ExtendedBalance;
-use frame_support::{
-	parameter_types, traits,
-	traits::{GenesisBuild, Hooks},
-	weights::constants,
-};
+use frame_support::{parameter_types, traits, traits::Hooks, weights::constants};
 use frame_system::EnsureRoot;
 use sp_core::{ConstU32, Get, H256};
 use sp_npos_elections::{ElectionScore, VoteWeight};
 use sp_runtime::{
 	testing,
 	traits::{IdentityLookup, Zero},
-	transaction_validity, PerU16, Perbill,
+	transaction_validity, BuildStorage, PerU16, Perbill,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -50,14 +46,11 @@ pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+
 type Extrinsic = testing::TestXt<RuntimeCall, ()>;
 
 frame_support::construct_runtime!(
-	pub enum Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub enum Runtime
 	{
 		System: frame_system,
 		ElectionProviderMultiPhase: pallet_election_provider_multi_phase,
@@ -71,7 +64,7 @@ frame_support::construct_runtime!(
 );
 
 pub(crate) type AccountId = u128;
-pub(crate) type AccountIndex = u32;
+pub(crate) type Nonce = u32;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u64;
 pub(crate) type VoterIndex = u32;
@@ -84,14 +77,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
@@ -265,7 +257,7 @@ impl pallet_staking::Config for Runtime {
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RewardRemainder = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Slash = (); // burn slashes
@@ -285,7 +277,7 @@ impl pallet_staking::Config for Runtime {
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = HistoryDepth;
-	type OnStakerSlash = ();
+	type EventListeners = ();
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 }
@@ -490,7 +482,7 @@ impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
-			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
 		let _ =
 			pallet_balances::GenesisConfig::<Runtime> { balances: self.balances_builder.balances }
