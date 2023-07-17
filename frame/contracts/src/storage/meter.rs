@@ -438,7 +438,7 @@ where
 
 		// Instantiate needs to transfer at least the minimum balance in order to pull the
 		// deposit account into existence.
-		deposit = deposit.max(Deposit::Charge(ed));
+		deposit = deposit.max(Deposit::Charge(ed)).saturating_add(&Deposit::Charge(ed));
 		if deposit.charge_or_zero() > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
