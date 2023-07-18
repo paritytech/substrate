@@ -1390,7 +1390,12 @@ where
 				peer_id,
 				info:
 					IdentifyInfo {
-						protocol_version, agent_version, mut listen_addrs, protocols, ..
+						protocol_version,
+						agent_version,
+						mut listen_addrs,
+						protocols,
+						observed_addr,
+						..
 					},
 			}) => {
 				if listen_addrs.len() > 30 {
@@ -1409,6 +1414,10 @@ where
 					);
 				}
 				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
+				// Confirm the observed address manually since they are no longer trusted by
+				// default (libp2p >= 0.52)
+				// TODO: remove this when/if AutoNAT is implemented.
+				self.network_service.add_external_address(observed_addr);
 			},
 			SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id)) => {
 				self.network_service.behaviour_mut().user_protocol_mut().add_known_peer(peer_id);
@@ -1525,13 +1534,6 @@ where
 
 				self.event_streams.send(Event::Dht(event));
 			},
-			SwarmEvent::Behaviour(BehaviourOut::AutoNAT(event)) => {
-				debug!(
-					target: "sub-libp2p",
-					"AutoNAT => {:?}",
-					event,
-				);
-			},
 			SwarmEvent::Behaviour(BehaviourOut::None) => {
 				// Ignored event from lower layers.
 			},
@@ -1579,9 +1581,9 @@ where
 							Either::Left(Either::Right(_)),
 						)))) => "ping-timeout",
 						Some(ConnectionError::Handler(Either::Left(Either::Left(
-							Either::Left(Either::Left(Either::Left(
+							Either::Left(Either::Left(
 								NotifsHandlerError::SyncNotificationsClogged,
-							))),
+							)),
 						)))) => "sync-notifications-clogged",
 						Some(ConnectionError::Handler(_)) => "protocol-error",
 						Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
