@@ -50,7 +50,7 @@ const SEED_SERIALIZED_LEN: usize = 32;
 
 // Edwards form sizes.
 // @burdges @swasilyev: currently ring-proof is using SHORT-WEIERSTRASS
-// I had to temporary patch bandersnatch_vrfs crate to use SW instrad of ED...
+// I had to temporary patch bandersnatch_vrfs crate to use SW instead of ED...
 // const PUBLIC_SERIALIZED_LEN: usize = 32;
 // const SIGNATURE_SERIALIZED_LEN: usize = 64;
 
