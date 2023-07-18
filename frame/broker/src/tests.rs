@@ -98,6 +98,44 @@ fn drop_contribution_works() {
 }
 
 #[test]
+fn drop_history_works() {
+	TestExt::new()
+		.contribution_timeout(3)
+		.endow(1, 1000)
+		.endow(2, 10)
+		.execute_with(|| {
+			assert_ok!(Broker::do_start_sales(100, 1));
+			advance_to(2);
+			let mut region = Broker::do_purchase(1, u64::max_value()).unwrap();
+			assert_ok!(Broker::do_pool(region, Some(1), 1, Final));
+			assert_ok!(Broker::do_purchase_credit(1, 20, 1));
+			advance_to(8);
+			assert_ok!(TestCoretimeProvider::spend_instantaneous(2, 10));
+			advance_to(15);
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 3);
+			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
+			advance_to(16);
+			assert_ok!(Broker::do_drop_history(region));
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 2);
+			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
+			advance_to(17);
+			region.begin += 1;
+			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
+			advance_to(18);
+			assert_ok!(Broker::do_drop_history(region));
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 1);
+			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
+			advance_to(19);
+			region.begin += 1;
+			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
+			advance_to(20);
+			assert_ok!(Broker::do_drop_history(region));
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 0);
+			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
+		});
+}
+
+#[test]
 fn request_core_count_works() {
 	TestExt::new().execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100, 0));
