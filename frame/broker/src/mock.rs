@@ -126,7 +126,7 @@ impl CoretimeInterface for TestCoretimeProvider {
 		NotifyRevenueInfo::mutate(|s| s.insert(0, (when, total)));
 	}
 	fn credit_account(who: Self::AccountId, amount: Self::Balance) {
-		CoretimeCredit::mutate(|c| *c.entry(who).or_default() += amount);
+		CoretimeCredit::mutate(|c| c.entry(who).or_default().saturating_accrue(amount));
 	}
 	fn assign_core(
 		core: CoreIndex,
