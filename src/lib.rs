@@ -10,27 +10,38 @@
 //!
 //! ## Overview
 //!
-//! Substrate approaches blockchain development with a focus on **safety**, **correctness**, and
-//! **upgradeability**.
+//! Substrate approaches blockchain development with an acknowledgement of a few self-evident
+//! truths:
 //!
-//! **Safety** is acquired through a use of Rust, a modern language empowering everyone to build
-//! reliable and efficient software.
+//! 1. Society and technology evolves.
+//! 2. Humans are fallible.
 //!
-//! **Correctness** is ensured through a rich type system enforcing semantic guarantees. This is
-//! more relevant in `FRAME`, the companion framework of Substrate for writing the business logic of
-//! your blockchain, also known as the "runtime" or "state transition function".
+//! This, specifically, makes the task of designing a correct, safe and long-lasting blockchain
+//! system hard.
 //!
-//! Finally, **upgradeability** is achieved through a meta-protocol design, whereby the entire
-//! application logic of the blockchain (the _Runtime_) is encoded as a Wasm module, and is stored
-//! on-chain. Other than the runtime, the rest of the system is called the "client" software, which
-//! is a native binary capable of doing all the redundant, non-application-specific work, such as
-//! networking, consensus, and database management.
+//! Nonetheless, in order to achieve this goal, substrate embraces the following:
+//!
+//! 1. Use of **Rust** as a modern, and safe programming language, which limits human error through
+//!    various means, most notably memory safety.
+//! 2. Substrate is written from the ground-up with a generic, modular and extensible design. This
+//!    ensures that software components can be easily swapped and upgraded. Examples of this is
+//!    multiple consensus mechanisms provided by Substrate, as listed below.
+//! 3. Lastly, the final blockchain system created with the above properties needs to be
+//!    upgradeable. In order to achieve this, Substrate is designed as a meta-protocol, whereby the
+//!    application logic of the blockchain (called "Runtime") is encoded as a Wasm blob, and is
+//!    stored onchain. The rest of the system (called "Client") acts as the executor of the Wasm
+//!    blob.
+//!
+//! In essence, the meta-protocol of all Substrate based chains is the "Runtime as Wasm blob"
+//! accord. This enables the Runtime to become inherently upgradeable (without forks). The upgrade
+//! is merely a matter of the Wasm blob being changed in the chain state, which is, in principle,
+//! same as updating an account's balance.
 //!
 //! To learn more about the substrate architecture using some visuals, see [`substrate_diagram`].
 //!
 //! All in all, this design enables all substrate-based chains to achieve forkless, self-enacting
 //! upgrades out of the box. Combined with governance abilities that are shipped with `FRAME`, this
-//! enables a chain to always evolve.
+//! enables a chain to survive the test of time.
 //!
 //! ## How to Get Stared
 //!
@@ -40,15 +51,17 @@
 //! > Side note, it is entirely possible to craft a substrate-based runtime without FRAME, an
 //! > example of which can be found [here](https://github.com/JoshOrndorff/frameless-node-template).
 //!
-//! In more broad terms, two common avenues exist into substrate:
+//! In more broad terms, the following avenues exist into developing with substrate:
 //!
-//! 1. Starting with templates: A number of substrate-based templates exist and they can be used for
-//!    various purposes, with zero to little additional code needed. All of these templates contain
-//!    runtimes that are highly configurable and are likely suitable for basic needs.
-//! 2. Customizing the client: To the contrary, some developers may want to customize the client
-//!    side software to achieve novel goals such as a new consensus engine, or a new database
-//!    backend. While Substrate's main configurability is in the runtime, the client is also highly
-//!    generic and can be customized to a great extent.
+//! * **Templates**: A number of substrate-based templates exist and they can be used for various
+//!   purposes, with zero to little additional code needed. All of these templates contain runtimes
+//!   that are highly configurable and are likely suitable for basic needs.
+//! * `FRAME`: If need, one can customize that runtime even further, by using `FRAME` and developing
+//!   custom modules.
+//! * **Core**: To the contrary, some developers may want to customize the client side software to
+//!   achieve novel goals such as a new consensus engine, or a new database backend. While
+//!   Substrate's main configurability is in the runtime, the client is also highly generic and can
+//!   be customized to a great extent.
 //!
 //! ## Structure
 //!
@@ -85,12 +98,12 @@
 //! - RPC APIs of a Substrate node: [`sc-rpc-api`]
 //! - CLI Options of a Substrate node: [`sc-cli`]
 //! - All of the consensus related crates provided by Substrate:
-//! 	- [`sc-consensus-aura`]
-//! 	- [`sc-consensus-babe`]
-//! 	- [`sc-consensus-grandpa`]
-//! 	- [`sc-consensus-beefy`]
-//! 	- [`sc-consensus-manual-seal`]
-//! 	- [`sc-consensus-pow`]
+//!     - [`sc-consensus-aura`]
+//!     - [`sc-consensus-babe`]
+//!     - [`sc-consensus-grandpa`]
+//!     - [`sc-consensus-beefy`]
+//!     - [`sc-consensus-manual-seal`]
+//!     - [`sc-consensus-pow`]
 //!
 //! Additional noteworthy external resources:
 //!
@@ -189,7 +202,10 @@
 /// end
 /// ```
 ///
-/// As noted the runtime contains all of the application specific logic of the blockchain.
+/// As noted the runtime contains all of the application specific logic of the blockchain. This is
+/// usually written with `FRAME`. The client, on the other hand, contains reusable and generic
+/// components that are not specific to one single blockchain, such as networking, database, and the
+/// consensus engine.
 ///
 /// [`sp-io`]: ../../sp_io/index.html
 /// [`sp-api`]: ../../sp_api/index.html

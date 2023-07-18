@@ -17,6 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate CLI library.
+//!
+//! To see a full list of commands available, see [`commands`].
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
