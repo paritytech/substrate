@@ -57,6 +57,10 @@
 //!
 //! To learn more about the substrate architecture using some visuals, see [`substrate_diagram`].
 //!
+//! `FRAME`, Substrate's default runtime development library takes the above even further by
+//! embracing a declarative programming model whereby correctness is enhanced and the system is
+//! highly configurable through parameterization.
+//!
 //! All in all, this design enables all substrate-based chains to achieve forkless, self-enacting
 //! upgrades out of the box. Combined with governance abilities that are shipped with `FRAME`, this
 //! enables a chain to survive the test of time.
@@ -64,7 +68,8 @@
 //! ## How to Get Stared
 //!
 //! Most developers want to leave the client side code as-is, and focus on the runtime. To do so,
-//! look into the [`frame_support`] crate, which is the entry point crate into runtime development.
+//! look into the [`frame_support`] crate, which is the entry point crate into runtime development
+//! with FRAME.
 //!
 //! > Side note, it is entirely possible to craft a substrate-based runtime without FRAME, an
 //! > example of which can be found [here](https://github.com/JoshOrndorff/frameless-node-template).
