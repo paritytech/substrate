@@ -23,9 +23,7 @@ use frame_benchmarking::{
 };
 use frame_support::traits::StorageInfo;
 use linked_hash_map::LinkedHashMap;
-use sc_cli::{
-	execution_method_from_cli, CliConfiguration, ExecutionStrategy, Result, SharedParams,
-};
+use sc_cli::{execution_method_from_cli, CliConfiguration, Result, SharedParams};
 use sc_client_db::BenchmarkingState;
 use sc_executor::WasmExecutor;
 use sc_service::Configuration;
@@ -182,7 +180,6 @@ impl PalletCmd {
 		}
 
 		let spec = config.chain_spec;
-		let strategy = self.execution.unwrap_or(ExecutionStrategy::Wasm);
 		let pallet = self.pallet.clone().unwrap_or_default();
 		let pallet = pallet.as_bytes();
 		let extrinsic = self.extrinsic.clone().unwrap_or_default();
@@ -243,11 +240,11 @@ impl PalletCmd {
 			&executor,
 			"Benchmark_benchmark_metadata",
 			&(self.extra).encode(),
-			extensions(),
+			&mut extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
 			CallContext::Offchain,
 		)
-		.execute(strategy.into())
+		.execute()
 		.map_err(|e| format!("{}: {}", ERROR_METADATA_NOT_FOUND, e))?;
 
 		let (list, storage_info) =
@@ -379,12 +376,12 @@ impl PalletCmd {
 							1,    // no need to do internal repeats
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| {
 						format!("Error executing and verifying runtime benchmark: {}", e)
 					})?;
@@ -419,12 +416,12 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
@@ -451,12 +448,12 @@ impl PalletCmd {
 							self.repeat,
 						)
 							.encode(),
-						extensions(),
+						&mut extensions(),
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						CallContext::Offchain,
 					)
-					.execute(strategy.into())
+					.execute()
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
 
 					let batch =
