@@ -25,10 +25,10 @@
 //!
 //! ## Overview
 //!
-//! This module extends accounts based on the [`fungible`] traits to have smart-contract
-//! functionality. It can be used with other modules that implement accounts based on [`fungible`]
-//! traits. These "smart-contract accounts" have the ability to instantiate smart-contracts and make
-//! calls to other contract and non-contract accounts.
+//! This module extends accounts based on the [`frame_support::traits::fungible`] traits to have
+//! smart-contract functionality. It can be used with other modules that implement accounts based on
+//! the [`frame_support::traits::fungible`] traits. These "smart-contract accounts" have the ability
+//! to instantiate smart-contracts and make calls to other contract and non-contract accounts.
 //!
 //! The smart-contract code is stored once, and later retrievable via its hash.
 //! This means that multiple smart-contracts can be instantiated from the same hash, without
