@@ -48,7 +48,7 @@ variables:
   CARGO_INCREMENTAL: 0
   DOCKER_OS: "debian:bullseye"
   ARCH: "x86_64"
-  CI_IMAGE: "paritytech/ci-unified:bullseye-1.70.0-2023-05-23"
+  CI_IMAGE: !reference [.ci-unified, variables, CI_IMAGE]
   BUILDAH_IMAGE: "quay.io/buildah/stable:v1.29"
   BUILDAH_COMMAND: "buildah --storage-driver overlay2"
   RELENG_SCRIPTS_BRANCH: "master"
@@ -301,8 +301,12 @@ include:
   # completion, because the publishing jobs depends on them AS INTENDED: crates should not be
   # published before their source code is checked.
   - project: parity/infrastructure/ci_cd/shared
-    ref: v0.2
+    ref: main
     file: /common/timestamp.yml
+  - project: parity/infrastructure/ci_cd/shared
+    ref: main
+    file: /common/ci-unified.yml
+
 
 #### stage:                        notify
 

@@ -66,7 +66,7 @@ where
 	) -> Result<bool, ProcessMessageError> {
 		let required = Weight::from_parts(REQUIRED_WEIGHT, REQUIRED_WEIGHT);
 
-		if meter.check_accrue(required) {
+		if meter.try_consume(required).is_ok() {
 			Ok(true)
 		} else {
 			Err(ProcessMessageError::Overweight(required))
