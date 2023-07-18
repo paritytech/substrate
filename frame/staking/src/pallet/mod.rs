@@ -45,8 +45,8 @@ pub use impls::*;
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	RewardDestination, SessionInterface, StakingLedger, StakingLedgerStatus, UnappliedSlash,
+	UnlockChunk, ValidatorPrefs,
 };
 
 // The speculative number of spans are used as an input of the weight annotation of
@@ -294,7 +294,6 @@ pub mod pallet {
 	///
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
-	#[pallet::getter(fn bonded)]
 	pub type Bonded<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::AccountId>;
 
 	/// The minimum active bond to become and maintain the role of a nominator.
@@ -837,15 +836,12 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-			let controller_to_be_deprecated = stash.clone();
 
-			if <Bonded<T>>::contains_key(&stash) {
-				return Err(Error::<T>::AlreadyBonded.into())
-			}
-
-			if StakingLedger::<T>::storage_exists(&controller_to_be_deprecated) {
-				return Err(Error::<T>::AlreadyPaired.into())
-			}
+			match StakingLedger::<T>::get(&stash) {
+				None => Ok(()),
+				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::AlreadyBonded),
+				Some(StakingLedgerStatus::Paired(_)) => Err(Error::<T>::AlreadyPaired),
+			}?;
 
 			// Reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
@@ -856,6 +852,8 @@ pub mod pallet {
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
+
+			// TODO: insert stash<>stash to Bonded; StakingLedger::bond(&AccountId, &AccountId)
 			<Bonded<T>>::insert(&stash, &stash);
 			<Payee<T>>::insert(&stash, payee);
 
@@ -878,7 +876,7 @@ pub mod pallet {
 					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			);
-			ledger.storage_put();
+			ledger.mutate()?;
 			Ok(())
 		}
 
@@ -904,8 +902,14 @@ pub mod pallet {
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
-			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let mut ledger = match StakingLedger::<T>::get(&stash) {
+				None => Err(Error::<T>::NotStash),
+				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
+				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
+			}?;
+
+			//let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
+			//let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
@@ -919,7 +923,7 @@ pub mod pallet {
 				);
 
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
-				ledger.storage_put();
+				ledger.mutate()?;
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&stash) {
 					let _ =
@@ -1020,7 +1024,7 @@ pub mod pallet {
 						.map_err(|_| Error::<T>::NoMoreChunks)?;
 				};
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
-				ledger.storage_put();
+				ledger.mutate()?;
 
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&ledger.stash) {
@@ -1131,7 +1135,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			// TODO: refactor get ledger from controller to StakingLedger.
+			// Maybe wrap the AccountId with input to StakingLedger::get with an enum that could be
+			// either a stash or controller.
+			let ledger = <Ledger<T>>::get(controller).ok_or(Error::<T>::NotController)?;
+
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
 
@@ -1195,7 +1203,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::chill())]
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+
+			// TODO: refactor get ledger from controller to StakingLedger.
+			// Maybe wrap the AccountId with input to StakingLedger::get with an enum that could be
+			// either a stash or controller.
+			let ledger = <Ledger<T>>::get(controller).ok_or(Error::<T>::NotController)?;
 			Self::chill_stash(&ledger.stash);
 			Ok(())
 		}
@@ -1243,19 +1255,29 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_controller())]
 		pub fn set_controller(origin: OriginFor<T>) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
-			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 
-			if StakingLedger::<T>::storage_exists(&stash) {
-				return Err(Error::<T>::AlreadyPaired.into())
+			// the bonded map and ledger are mutated directly as this logic is related to a
+			// (temporary) passive migration.
+			match StakingLedger::<T>::get(&stash) {
+				None => Err(Error::<T>::NotStash.into()),
+				Some(StakingLedgerStatus::BondedNotPaired) => {
+					// update bond only.
+					<Bonded<T>>::insert(&stash, &stash);
+					Ok(())
+				},
+				Some(StakingLedgerStatus::Paired(ledger)) => {
+					let controller = ledger.controller().ok_or(Error::<T>::NotController)?; // correct error to throw here?
+					if controller == stash {
+						// stash is already its own controller.
+						return Err(Error::<T>::AlreadyPaired.into())
+					}
+					// update bond and ledger.
+					<Ledger<T>>::remove(controller);
+					<Bonded<T>>::insert(&stash, &stash);
+					<Ledger<T>>::insert(&stash, ledger);
+					Ok(())
+				},
 			}
-			if old_controller != stash {
-				<Bonded<T>>::insert(&stash, &stash);
-				// the ledger is accessed directly since this is temporary passive migration logic.
-				if let Some(l) = <Ledger<T>>::take(&old_controller) {
-					<Ledger<T>>::insert(&stash, l);
-				}
-			}
-			Ok(())
 		}
 
 		/// Sets the ideal number of validators.
@@ -1508,7 +1530,7 @@ pub mod pallet {
 			});
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
-			ledger.storage_put();
+			ledger.mutate()?;
 			if T::VoterList::contains(&ledger.stash) {
 				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
 					.defensive();
@@ -1548,7 +1570,7 @@ pub mod pallet {
 
 			let ed = T::Currency::minimum_balance();
 			let reapable = T::Currency::total_balance(&stash) < ed ||
-				Self::ledger(&Self::bonded(stash.clone()).ok_or(Error::<T>::NotStash)?)
+				Self::ledger(&Self::bonded(&stash.clone()).ok_or(Error::<T>::NotStash)?)
 					.map(|l| l.total)
 					.unwrap_or_default() < ed;
 			ensure!(reapable, Error::<T>::FundedTarget);

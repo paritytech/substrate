@@ -306,7 +306,7 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use ledger::StakingLedger;
+use ledger::{StakingLedger, StakingLedgerStatus};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,

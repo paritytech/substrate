@@ -263,7 +263,7 @@ fn change_controller_works() {
 #[test]
 fn change_controller_already_paired_once_stash() {
 	ExtBuilder::default().build_and_execute(|| {
-		// 10 and 11 are bonded as controller and stash respectively.
+		// 11 and 11 are bonded as controller and stash respectively.
 		assert_eq!(Staking::bonded(&11), Some(11));
 
 		// 11 is initially a validator.

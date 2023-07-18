@@ -618,7 +618,8 @@ pub fn do_slash<T: Config>(
 			*reward_payout = reward_payout.saturating_sub(missing);
 		}
 
-		ledger.storage_put();
+		// TODO: handle error here
+		let _ = ledger.mutate();
 
 		// trigger the event
 		<Pallet<T>>::deposit_event(super::Event::<T>::Slashed {

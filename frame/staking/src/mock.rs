@@ -77,7 +77,7 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 }
 
 pub fn is_disabled(controller: AccountId) -> bool {
-	let stash = StakingLedger::<Test>::storage_get(&controller).unwrap().stash;
+	let stash = Ledger::<Test>::get(&controller).unwrap().stash;
 	let validator_index = match Session::validators().iter().position(|v| *v == stash) {
 		Some(index) => index as u32,
 		None => return false,
