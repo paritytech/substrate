@@ -3,6 +3,9 @@ use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, 
 use scale_info::TypeInfo;
 use sp_core::RuntimeDebug;
 
+/// The number of bits in the `CoreMask`.
+pub const CORE_MASK_BITS: usize = 80;
+
 // TODO: Use BitArr instead; for this, we'll need to ensure Codec is impl'ed for `BitArr`.
 #[derive(
 	Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen,

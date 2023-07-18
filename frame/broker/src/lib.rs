@@ -22,7 +22,7 @@ pub use pallet::*;
 
 mod adapt_price;
 mod benchmarking;
-mod core_part;
+mod core_mask;
 mod coretime_interface;
 mod dispatchable_impls;
 mod mock;
@@ -37,7 +37,7 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 pub use adapt_price::*;
-pub use core_part::*;
+pub use core_mask::*;
 pub use coretime_interface::*;
 pub use nonfungible_impl::*;
 pub use types::*;
