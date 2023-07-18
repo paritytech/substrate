@@ -162,7 +162,7 @@ cargo-check-try-runtime-and-experimental:
     - .test-refs
   script:
     - rusty-cachier snapshot create
-    - time cargo check --locked --features try-runtime,experimental
+    - time cargo check --workspace --locked --features try-runtime,experimental
     - rusty-cachier cache upload
 
 test-deterministic-wasm:
