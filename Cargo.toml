@@ -25,6 +25,12 @@ sp-runtime = { path = "primitives/runtime" }
 
 frame-support = { path = "frame/support" }
 
+# This is only here to make the CI checks happy and capable of running `cargo check --features
+# try-runtime,experimental`.
+[features]
+experimental = []
+try-runtime = []
+
 [workspace]
 resolver = "2"
 
