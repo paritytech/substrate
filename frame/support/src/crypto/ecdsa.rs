@@ -34,14 +34,16 @@ pub trait ECDSAExt {
 
 impl ECDSAExt for Public {
 	fn to_eth_address(&self) -> Result<[u8; 20], ()> {
-		use secp256k1::PublicKey;
+		use k256::{elliptic_curve::sec1::ToEncodedPoint, PublicKey};
 
-		PublicKey::from_slice(self.as_slice()).map_err(drop).and_then(|pub_key| {
+		PublicKey::from_sec1_bytes(self.as_slice()).map_err(drop).and_then(|pub_key| {
 			// uncompress the key
-			let uncompressed = pub_key.serialize_uncompressed();
+			let uncompressed = pub_key.to_encoded_point(false);
 			// convert to ETH address
-			<[u8; 20]>::try_from(sp_io::hashing::keccak_256(&uncompressed[1..])[12..].as_ref())
-				.map_err(drop)
+			<[u8; 20]>::try_from(
+				sp_io::hashing::keccak_256(&uncompressed.as_bytes()[1..])[12..].as_ref(),
+			)
+			.map_err(drop)
 		})
 	}
 }

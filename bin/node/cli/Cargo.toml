@@ -35,7 +35,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # third-party dependencies
-array-bytes = "4.1"
+array-bytes = "6.1"
 clap = { version = "4.2.5", features = ["derive"], optional = true }
 codec = { package = "parity-scale-codec", version = "3.6.1" }
 serde = { version = "1.0.163", features = ["derive"] }
@@ -58,6 +58,7 @@ sp-keystore = { version = "0.27.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../../primitives/transaction-storage-proof" }
 sp-io = { path = "../../../primitives/io" }
+sp-statement-store = { path = "../../../primitives/statement-store" }
 
 # client dependencies
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
@@ -82,6 +83,7 @@ sc-authority-discovery = { version = "0.10.0-dev", path = "../../../client/autho
 sc-sync-state-rpc = { version = "0.10.0-dev", path = "../../../client/sync-state-rpc" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../../../client/sysinfo" }
 sc-storage-monitor = { version = "0.1.0", path = "../../../client/storage-monitor" }
+sc-offchain = { version = "4.0.0-dev", path = "../../../client/offchain" }
 
 # frame dependencies
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }

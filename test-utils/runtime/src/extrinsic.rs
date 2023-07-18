@@ -19,7 +19,7 @@
 
 use crate::{
 	substrate_test_pallet::pallet::Call as PalletCall, AccountId, Balance, BalancesCall,
-	CheckSubstrateCall, Extrinsic, Index, Pair, RuntimeCall, SignedPayload, TransferData,
+	CheckSubstrateCall, Extrinsic, Nonce, Pair, RuntimeCall, SignedPayload, TransferData,
 };
 use codec::Encode;
 use frame_system::{CheckNonce, CheckWeight};
@@ -81,7 +81,7 @@ impl TryFrom<&Extrinsic> for TransferData {
 pub struct ExtrinsicBuilder {
 	function: RuntimeCall,
 	signer: Option<Pair>,
-	nonce: Option<Index>,
+	nonce: Option<Nonce>,
 }
 
 impl ExtrinsicBuilder {
@@ -176,7 +176,7 @@ impl ExtrinsicBuilder {
 	}
 
 	/// Given `nonce` will be set in `Extrinsic`
-	pub fn nonce(mut self, nonce: Index) -> Self {
+	pub fn nonce(mut self, nonce: Nonce) -> Self {
 		self.nonce = Some(nonce);
 		self
 	}

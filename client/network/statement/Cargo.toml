@@ -13,7 +13,7 @@ documentation = "https://docs.rs/sc-network-statement"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 async-channel = "1.8.0"
 codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }
 futures = "0.3.21"

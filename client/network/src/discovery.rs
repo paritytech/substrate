@@ -548,7 +548,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		addresses: &[Multiaddr],
 		effective_role: Endpoint,
 	) -> Result<Vec<Multiaddr>, ConnectionDenied> {
-		let Some(peer_id) = maybe_peer else { return Ok(Vec::new()); };
+		let Some(peer_id) = maybe_peer else { return Ok(Vec::new()) };
 
 		let mut list = self
 			.permanent_addresses
@@ -663,6 +663,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			},
 			FromSwarm::NewListenAddr(e) => {
 				self.kademlia.on_swarm_event(FromSwarm::NewListenAddr(e));
+
+				if let Some(ref mut mdns) = self.mdns {
+					mdns.on_swarm_event(FromSwarm::NewListenAddr(e));
+				}
 			},
 		}
 	}

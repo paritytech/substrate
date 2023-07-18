@@ -25,7 +25,7 @@
 pub use frame_metadata;
 
 mod types;
-use frame_metadata::{RuntimeMetadataPrefixed, RuntimeMetadataV14};
+use frame_metadata::RuntimeMetadataPrefixed;
 pub use types::*;
 
 mod v14;
@@ -35,25 +35,18 @@ mod v15;
 const V14: u32 = 14;
 
 /// Metadata V15.
-///
-/// Not yet stable, thus we set it to `u32::MAX`.
-const V15: u32 = u32::MAX;
+const V15: u32 = 15;
 
 /// Transform the IR to the specified version.
 ///
 /// Use [`supported_versions`] to find supported versions.
 pub fn into_version(metadata: MetadataIR, version: u32) -> Option<RuntimeMetadataPrefixed> {
+	// Note: Unstable metadata version is `u32::MAX` until stabilized.
 	match version {
 		// Latest stable version.
-		V14 => {
-			let v14: frame_metadata::v14::RuntimeMetadataV14 = metadata.into();
-			Some(v14.into())
-		},
+		V14 => Some(into_v14(metadata)),
 		// Unstable metadata.
-		V15 => {
-			let v15: frame_metadata::v15::RuntimeMetadataV15 = metadata.into();
-			Some(v15.into())
-		},
+		V15 => Some(into_latest(metadata)),
 		_ => None,
 	}
 }
@@ -65,7 +58,13 @@ pub fn supported_versions() -> sp_std::vec::Vec<u32> {
 
 /// Transform the IR to the latest stable metadata version.
 pub fn into_latest(metadata: MetadataIR) -> RuntimeMetadataPrefixed {
-	let latest: RuntimeMetadataV14 = metadata.into();
+	let latest: frame_metadata::v15::RuntimeMetadataV15 = metadata.into();
+	latest.into()
+}
+
+/// Transform the IR to metadata version 14.
+pub fn into_v14(metadata: MetadataIR) -> RuntimeMetadataPrefixed {
+	let latest: frame_metadata::v14::RuntimeMetadataV14 = metadata.into();
 	latest.into()
 }
 

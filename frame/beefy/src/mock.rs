@@ -21,9 +21,7 @@ use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
-	traits::{
-		ConstU16, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
-	},
+	traits::{ConstU16, ConstU32, ConstU64, KeyOwnerProofSystem, OnFinalize, OnInitialize},
 	BasicExternalities,
 };
 use pallet_session::historical as pallet_session_historical;
@@ -32,9 +30,9 @@ use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	curve::PiecewiseLinear,
 	impl_opaque_keys,
-	testing::{Header, TestXt},
+	testing::TestXt,
 	traits::{BlakeTwo256, IdentityLookup, OpaqueKeys},
-	Perbill,
+	BuildStorage, Perbill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 
@@ -51,14 +49,10 @@ impl_opaque_keys! {
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Authorship: pallet_authorship,
@@ -78,14 +72,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -117,6 +110,7 @@ parameter_types! {
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
 	type MaxAuthorities = ConstU32<100>;
+	type MaxNominators = ConstU32<1000>;
 	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
 	type OnNewValidatorSet = ();
 	type WeightInfo = ();
@@ -206,7 +200,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
@@ -228,7 +222,7 @@ impl pallet_staking::Config for Test {
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
-	type OnStakerSlash = ();
+	type EventListeners = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -260,7 +254,7 @@ pub fn new_test_ext(ids: Vec<u8>) -> TestExternalities {
 }
 
 pub fn new_test_ext_raw_authorities(authorities: Vec<BeefyId>) -> TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	let balances: Vec<_> = (0..authorities.len()).map(|i| (i as u64, 10_000_000)).collect();
 
