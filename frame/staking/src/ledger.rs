@@ -110,27 +110,17 @@ impl<T: Config> StakingLedger<T> {
 		self.controller.clone().or_else(|| Self::controller_of(&self.stash))
 	}
 
-	/// Removes all data related to a staking ledger and its bond.
-	pub(crate) fn kill(stash: &T::AccountId) -> Result<(), Error<T>> {
-		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
-
-		// TODO: we can return an error here now instead of silently failing, do it?
-		<Ledger<T>>::get(&controller).map_or_else(
-			|| log!(debug, "ledger not found in storage, unexpected"),
-			|ledger| {
-				T::Currency::remove_lock(STAKING_ID, &ledger.stash);
-				Ledger::<T>::remove(controller);
-			},
-		);
+	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
+		<Bonded<T>>::insert(&self.stash, &self.stash);
 
 		Ok(())
 	}
 
 	pub(crate) fn get(stash: &T::AccountId) -> Option<StakingLedgerStatus<T>> {
 		if let Some(controller) = <Bonded<T>>::get(stash) {
-			match <Ledger<T>>::get(&controller).map(|mut l| {
-				l.controller = Some(controller.clone());
-				l
+			match <Ledger<T>>::get(&controller).map(|mut ledger| {
+				ledger.controller = Some(controller.clone());
+				ledger
 			}) {
 				Some(ledger) => Some(StakingLedgerStatus::Paired(ledger)),
 				None => Some(StakingLedgerStatus::BondedNotPaired),
@@ -151,6 +141,18 @@ impl<T: Config> StakingLedger<T> {
 		Ledger::<T>::insert(&self.controller().ok_or(Error::<T>::NotController)?, &self);
 
 		Ok(())
+	}
+
+	/// Removes all data related to a staking ledger and its bond.
+	pub(crate) fn kill(stash: &T::AccountId) -> Result<(), Error<T>> {
+		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
+
+		<Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController).map(|ledger| {
+			T::Currency::remove_lock(STAKING_ID, &ledger.stash);
+			Ledger::<T>::remove(controller);
+
+			Ok(())
+		})?
 	}
 
 	/// Remove entries from `unlocking` that are sufficiently old and reduce the

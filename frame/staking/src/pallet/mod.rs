@@ -850,13 +850,6 @@ pub mod pallet {
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
-			// You're auto-bonded forever, here. We might improve this by only bonding when
-			// you actually validate/nominate and remove once you unbond __everything__.
-
-			// TODO: insert stash<>stash to Bonded; StakingLedger::bond(&AccountId, &AccountId)
-			<Bonded<T>>::insert(&stash, &stash);
-			<Payee<T>>::insert(&stash, payee);
-
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
 			let history_depth = T::HistoryDepth::get();
 			let last_reward_era = current_era.saturating_sub(history_depth);
@@ -877,6 +870,12 @@ pub mod pallet {
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			);
 			ledger.mutate()?;
+
+			// You're auto-bonded forever, here. We might improve this by only bonding when
+			// you actually validate/nominate and remove once you unbond __everything__.
+			ledger.bond()?;
+			<Payee<T>>::insert(&stash, payee);
+
 			Ok(())
 		}
 
@@ -1256,7 +1255,7 @@ pub mod pallet {
 		pub fn set_controller(origin: OriginFor<T>) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			// the bonded map and ledger are mutated directly as this logic is related to a
+			// the bonded map and ledger are mutated directly as this extrinsic is related to a
 			// (temporary) passive migration.
 			match StakingLedger::<T>::get(&stash) {
 				None => Err(Error::<T>::NotStash.into()),
