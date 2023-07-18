@@ -89,7 +89,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(price_limit >= price, Error::<T>::Overpriced);
 
 		Self::charge(&who, price)?;
-		let core = sale.first_core + sale.cores_sold;
+		let core = sale.first_core.saturating_add(sale.cores_sold);
 		sale.cores_sold.saturating_inc();
 		if sale.cores_sold <= sale.ideal_cores_sold || sale.sellout_price.is_none() {
 			sale.sellout_price = Some(price);
