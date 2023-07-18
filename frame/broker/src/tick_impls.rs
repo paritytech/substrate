@@ -25,7 +25,7 @@ impl<T: Config> Pallet<T> {
 
 		let mut meter = WeightMeter::max_limit();
 
-		if Self::process_core_count() {
+		if Self::process_core_count(&mut status) {
 			meter.consume(T::WeightInfo::process_core_count());
 		}
 
@@ -67,9 +67,9 @@ impl<T: Config> Pallet<T> {
 		meter.consumed
 	}
 
-	fn process_core_count() -> bool {
+	fn process_core_count(status: &mut StatusRecord) -> bool {
 		if let Some(core_count) = T::Coretime::check_notify_core_count() {
-			Status::<T>::mutate_extant(|c| c.core_count = core_count);
+			status.core_count = core_count;
 			Self::deposit_event(Event::<T>::CoreCountChanged { core_count });
 			return true
 		}

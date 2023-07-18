@@ -36,6 +36,20 @@ fn basic_initialize_works() {
 }
 
 #[test]
+fn request_core_count_works() {
+	TestExt::new().execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 0));
+		assert_ok!(Broker::request_core_count(RuntimeOrigin::root(), 1));
+		advance_to(12);
+		let assignment = vec![(Pool, 57600)];
+		assert_eq!(
+			CoretimeTrace::get(),
+			vec![(12, AssignCore { core: 0, begin: 14, assignment, end_hint: None })],
+		);
+	});
+}
+
+#[test]
 fn transfer_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100, 1));
