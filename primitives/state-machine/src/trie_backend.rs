@@ -529,7 +529,7 @@ pub mod tests {
 	use sp_trie::{
 		cache::{CacheSize, SharedTrieCache},
 		trie_types::{TrieDBBuilder, TrieDBMutBuilderV0, TrieDBMutBuilderV1},
-		KeySpacedDBMut, PrefixedKey, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
+		KeySpacedDBMut, PrefixedMemoryDB, Trie, TrieCache, TrieMut,
 	};
 	use std::iter;
 	use trie_db::NodeCodec;
@@ -1187,7 +1187,7 @@ pub mod tests {
 			(Some(child_info_1.clone()), (28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
 			(Some(child_info_2.clone()), (10..15).map(|i| (vec![i], Some(vec![i]))).collect()),
 		];
-		let in_memory = new_in_mem::<BlakeTwo256, PrefixedKey<BlakeTwo256>>();
+		let in_memory = new_in_mem::<BlakeTwo256>();
 		let in_memory = in_memory.update(contents, state_version);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory
@@ -1292,7 +1292,7 @@ pub mod tests {
 					.collect(),
 			),
 		];
-		let in_memory = new_in_mem::<BlakeTwo256, PrefixedKey<BlakeTwo256>>();
+		let in_memory = new_in_mem::<BlakeTwo256>();
 		let in_memory = in_memory.update(contents, state_version);
 		let child_storage_keys = vec![child_info_1.to_owned()];
 		let in_memory_root = in_memory
@@ -1480,7 +1480,7 @@ pub mod tests {
 			(Some(child_info_1.clone()), vec![(key.clone(), Some(child_trie_1_val.clone()))]),
 			(Some(child_info_2.clone()), vec![(key.clone(), Some(child_trie_2_val.clone()))]),
 		];
-		let in_memory = new_in_mem::<BlakeTwo256, PrefixedKey<BlakeTwo256>>();
+		let in_memory = new_in_mem::<BlakeTwo256>();
 		let in_memory = in_memory.update(contents, state_version);
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
 		let in_memory_root = in_memory

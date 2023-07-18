@@ -39,7 +39,7 @@ use std::{
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
 pub struct BasicExternalities {
-	overlay: OverlayedChanges,
+	overlay: OverlayedChanges<Blake2Hasher>,
 	extensions: Extensions,
 }
 

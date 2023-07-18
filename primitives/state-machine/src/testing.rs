@@ -23,8 +23,8 @@ use std::{
 };
 
 use crate::{
-	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue, TrieBackendBuilder,
+	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey, StorageValue,
+	TrieBackendBuilder,
 };
 
 use hash_db::{HashDB, Hasher};
@@ -45,9 +45,8 @@ where
 	H::Out: codec::Codec + Ord,
 {
 	/// The overlay changed storage.
-	overlay: OverlayedChanges,
+	overlay: OverlayedChanges<H>,
 	offchain_db: TestPersistentOffchainDB,
-	storage_transaction_cache: StorageTransactionCache<H>,
 	/// Storage backend.
 	pub backend: InMemoryBackend<H>,
 	/// Extensions.
@@ -63,12 +62,7 @@ where
 {
 	/// Get externalities implementation.
 	pub fn ext(&mut self) -> Ext<H, InMemoryBackend<H>> {
-		Ext::new(
-			&mut self.overlay,
-			&mut self.storage_transaction_cache,
-			&self.backend,
-			Some(&mut self.extensions),
-		)
+		Ext::new(&mut self.overlay, &self.backend, Some(&mut self.extensions))
 	}
 
 	/// Create a new instance of `TestExternalities` with storage.
@@ -111,13 +105,12 @@ where
 			offchain_db,
 			extensions: Default::default(),
 			backend,
-			storage_transaction_cache: Default::default(),
 			state_version,
 		}
 	}
 
 	/// Returns the overlayed changes.
-	pub fn overlayed_changes(&self) -> &OverlayedChanges {
+	pub fn overlayed_changes(&self) -> &OverlayedChanges<H> {
 		&self.overlay
 	}
 
@@ -202,6 +195,7 @@ where
 			.backend_storage_mut()
 			.drain()
 			.into_iter()
+			.filter(|(_, (_, r))| *r > 0)
 			.collect::<Vec<(Vec<u8>, (Vec<u8>, i32))>>();
 
 		(raw_key_values, *self.backend.root())
@@ -232,11 +226,7 @@ where
 	///
 	/// This will panic if there are still open transactions.
 	pub fn commit_all(&mut self) -> Result<(), String> {
-		let changes = self.overlay.drain_storage_changes::<_, _>(
-			&self.backend,
-			&mut Default::default(),
-			self.state_version,
-		)?;
+		let changes = self.overlay.drain_storage_changes(&self.backend, self.state_version)?;
 
 		self.backend
 			.apply_transaction(changes.transaction_storage_root, changes.transaction);
@@ -260,12 +250,8 @@ where
 		let proving_backend = TrieBackendBuilder::wrap(&self.backend)
 			.with_recorder(Default::default())
 			.build();
-		let mut proving_ext = Ext::new(
-			&mut self.overlay,
-			&mut self.storage_transaction_cache,
-			&proving_backend,
-			Some(&mut self.extensions),
-		);
+		let mut proving_ext =
+			Ext::new(&mut self.overlay, &proving_backend, Some(&mut self.extensions));
 
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
 		let proof = proving_backend.extract_proof().expect("Failed to extract storage proof");
@@ -421,27 +407,14 @@ mod tests {
 		original_ext.insert_child(child_info.clone(), b"cattytown".to_vec(), b"is_dark".to_vec());
 		original_ext.insert_child(child_info.clone(), b"doggytown".to_vec(), b"is_sunny".to_vec());
 
-		// Call emplace on one of the keys to increment the MemoryDb refcount, so we can check
-		// that it is intact in the recovered_ext.
-		let keys = original_ext.backend.backend_storage_mut().keys();
-		let expected_ref_count = 5;
-		let ref_count_key = keys.into_iter().next().unwrap().0;
-		for _ in 0..expected_ref_count - 1 {
-			original_ext.backend.backend_storage_mut().emplace(
-				ref_count_key,
-				hash_db::EMPTY_PREFIX,
-				// We can use anything for the 'value' because it does not affect behavior when
-				// emplacing an existing key.
-				(&[0u8; 32]).to_vec(),
-			);
-		}
-		let refcount = original_ext
-			.backend
-			.backend_storage()
-			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
-			.unwrap()
-			.1;
-		assert_eq!(refcount, expected_ref_count);
+		// Apply the backend to itself again to increase the ref count of all nodes.
+		original_ext.backend.apply_transaction(
+			*original_ext.backend.root(),
+			original_ext.backend.clone().into_storage(),
+		);
+
+		// Ensure all have the correct ref counrt
+		assert!(original_ext.backend.backend_storage().keys().values().all(|r| *r == 2));
 
 		// Drain the raw storage and root.
 		let root = *original_ext.backend.root();
@@ -470,14 +443,8 @@ mod tests {
 			Some(b"is_sunny".to_vec())
 		);
 
-		// Check the refcount of the key with > 1 refcount is correct.
-		let refcount = recovered_ext
-			.backend
-			.backend_storage()
-			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
-			.unwrap()
-			.1;
-		assert_eq!(refcount, expected_ref_count);
+		// Ensure all have the correct ref count after importing
+		assert!(recovered_ext.backend.backend_storage().keys().values().all(|r| *r == 2));
 	}
 
 	#[test]

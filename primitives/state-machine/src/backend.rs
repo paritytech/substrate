@@ -169,6 +169,12 @@ where
 	}
 }
 
+/// The transaction type used by [`Backend`].
+///
+/// This transaction contains all the changes that need to be applied to the backend to create the
+/// state for a new block.
+pub type BackendTransaction<H> = PrefixedMemoryDB<H>;
+
 /// A state backend is used to read state data and can have changes committed
 /// to it.
 ///
@@ -234,7 +240,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, PrefixedMemoryDB<H>)
+	) -> (H::Out, BackendTransaction<H>)
 	where
 		H::Out: Ord;
 
@@ -246,7 +252,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, bool, PrefixedMemoryDB<H>)
+	) -> (H::Out, bool, BackendTransaction<H>)
 	where
 		H::Out: Ord;
 
@@ -281,11 +287,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			Item = (&'a ChildInfo, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
 		>,
 		state_version: StateVersion,
-	) -> (H::Out, PrefixedMemoryDB<H>)
+	) -> (H::Out, BackendTransaction<H>)
 	where
 		H::Out: Ord + Encode,
 	{
-		let mut txs = PrefixedMemoryDB::default();
+		let mut txs = BackendTransaction::default();
 		let mut child_roots: Vec<_> = Default::default();
 		// child first
 		for (child_info, child_delta) in child_deltas {
@@ -330,7 +336,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn commit(
 		&self,
 		_: H::Out,
-		_: PrefixedMemoryDB<H>,
+		_: BackendTransaction<H>,
 		_: StorageCollection,
 		_: ChildStorageCollection,
 	) -> Result<(), Self::Error> {

@@ -89,7 +89,6 @@ impl Extrinsics {
 /// The set of changes that are overlaid onto the backend.
 ///
 /// It allows changes to be modified using nestable transactions.
-#[derive(Debug, Default, Clone)]
 pub struct OverlayedChanges<H: Hasher> {
 	/// Top level storage changes.
 	top: OverlayedChangeSet,
@@ -107,6 +106,48 @@ pub struct OverlayedChanges<H: Hasher> {
 	///
 	/// This transaction can be applied to the backend to persist the state changes.
 	storage_transaction_cache: Option<StorageTransactionCache<H>>,
+}
+
+impl<H: Hasher> Default for OverlayedChanges<H> {
+	fn default() -> Self {
+		Self {
+			top: Default::default(),
+			children: Default::default(),
+			offchain: Default::default(),
+			transaction_index_ops: Default::default(),
+			collect_extrinsics: Default::default(),
+			stats: Default::default(),
+			storage_transaction_cache: None,
+		}
+	}
+}
+
+impl<H: Hasher> Clone for OverlayedChanges<H> {
+	fn clone(&self) -> Self {
+		Self {
+			top: self.top.clone(),
+			children: self.children.clone(),
+			offchain: self.offchain.clone(),
+			transaction_index_ops: self.transaction_index_ops.clone(),
+			collect_extrinsics: self.collect_extrinsics.clone(),
+			stats: self.stats.clone(),
+			storage_transaction_cache: self.storage_transaction_cache.clone(),
+		}
+	}
+}
+
+impl<H: Hasher> sp_std::fmt::Debug for OverlayedChanges<H> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		f.debug_struct("OverlayedChanges")
+			.field("top", &self.top)
+			.field("children", &self.children)
+			.field("offchain", &self.offchain)
+			.field("transaction_index_ops", &self.transaction_index_ops)
+			.field("collect_extrinsics", &self.collect_extrinsics)
+			.field("stats", &self.stats)
+			.field("storage_transaction_cache", &self.storage_transaction_cache)
+			.finish()
+	}
 }
 
 /// Transaction index operation.
@@ -179,16 +220,6 @@ impl<H: Hasher> StorageChanges<H> {
 	}
 }
 
-/// Storage transactions are calculated as part of the `storage_root`.
-/// These transactions can be reused for importing the block into the
-/// storage. So, we cache them to not require a recomputation of those transactions.
-pub struct StorageTransactionCache<H: Hasher> {
-	/// Contains the changes for the main and the child storages as one transaction.
-	transaction: PrefixedMemoryDB<H>,
-	/// The storage root after applying the transaction.
-	transaction_storage_root: H::Out,
-}
-
 impl<H: Hasher> Default for StorageChanges<H> {
 	fn default() -> Self {
 		Self {
@@ -200,6 +231,45 @@ impl<H: Hasher> Default for StorageChanges<H> {
 			#[cfg(feature = "std")]
 			transaction_index_changes: Default::default(),
 		}
+	}
+}
+
+/// Storage transactions are calculated as part of the `storage_root`.
+/// These transactions can be reused for importing the block into the
+/// storage. So, we cache them to not require a recomputation of those transactions.
+pub struct StorageTransactionCache<H: Hasher> {
+	/// Contains the changes for the main and the child storages as one transaction.
+	transaction: PrefixedMemoryDB<H>,
+	/// The storage root after applying the transaction.
+	transaction_storage_root: H::Out,
+}
+
+impl<H: Hasher> StorageTransactionCache<H> {
+	fn into_inner(self) -> (PrefixedMemoryDB<H>, H::Out) {
+		(self.transaction, self.transaction_storage_root)
+	}
+}
+
+impl<H: Hasher> Clone for StorageTransactionCache<H> {
+	fn clone(&self) -> Self {
+		Self {
+			transaction: self.transaction.clone(),
+			transaction_storage_root: self.transaction_storage_root.clone(),
+		}
+	}
+}
+
+impl<H: Hasher> sp_std::fmt::Debug for StorageTransactionCache<H> {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		let mut debug = f.debug_struct("StorageTransactionCache");
+
+		#[cfg(feature = "std")]
+		debug.field("transaction_storage_root", &self.transaction_storage_root);
+
+		#[cfg(not(feature = "std"))]
+		debug.field("transaction_storage_root", &self.transaction_storage_root.as_ref());
+
+		debug.finish()
 	}
 }
 
@@ -508,17 +578,24 @@ impl<H: Hasher> OverlayedChanges<H> {
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
-	pub fn drain_storage_changes(
+	pub fn drain_storage_changes<B: Backend<H>>(
 		&mut self,
+		backend: &B,
 		state_version: StateVersion,
 	) -> Result<StorageChanges<H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
-		// If the transaction does not exist, we generate it.
 		let (transaction, transaction_storage_root) = match self.storage_transaction_cache.take() {
-			Some(cache) => cache,
-			None => unimplemented!(),
+			Some(cache) => cache.into_inner(),
+			// If the transaction does not exist, we generate it.
+			None => {
+				self.storage_root(backend, state_version);
+				self.storage_transaction_cache
+					.take()
+					.expect("`storage_transaction_cache` was just initialized; qed")
+					.into_inner()
+			},
 		};
 
 		let (main_storage_changes, child_storage_changes) = self.drain_committed();
@@ -745,7 +822,7 @@ mod tests {
 
 	#[test]
 	fn overlayed_storage_works() {
-		let mut overlayed = OverlayedChanges::default();
+		let mut overlayed = OverlayedChanges::<Blake2Hasher>::default();
 
 		let key = vec![42, 69, 169, 142];
 
@@ -780,7 +857,7 @@ mod tests {
 	fn offchain_overlayed_storage_transactions_works() {
 		use sp_core::offchain::STORAGE_PREFIX;
 		fn check_offchain_content(
-			state: &OverlayedChanges,
+			state: &OverlayedChanges<Blake2Hasher>,
 			nb_commit: usize,
 			expected: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 		) {
@@ -857,8 +934,7 @@ mod tests {
 		overlay.set_storage(b"dogglesworth".to_vec(), Some(b"cat".to_vec()));
 		overlay.set_storage(b"doug".to_vec(), None);
 
-		let mut cache = StorageTransactionCache::default();
-		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
+		let mut ext = Ext::new(&mut overlay, &backend, None);
 		let root = array_bytes::hex2bytes_unchecked(
 			"39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa",
 		);
@@ -868,7 +944,7 @@ mod tests {
 
 	#[test]
 	fn extrinsic_changes_are_collected() {
-		let mut overlay = OverlayedChanges::default();
+		let mut overlay = OverlayedChanges::<Blake2Hasher>::default();
 		overlay.set_collect_extrinsics(true);
 
 		overlay.start_transaction();
@@ -909,7 +985,7 @@ mod tests {
 
 	#[test]
 	fn next_storage_key_change_works() {
-		let mut overlay = OverlayedChanges::default();
+		let mut overlay = OverlayedChanges::<Blake2Hasher>::default();
 		overlay.start_transaction();
 		overlay.set_storage(vec![20], Some(vec![20]));
 		overlay.set_storage(vec![30], Some(vec![30]));
@@ -950,7 +1026,7 @@ mod tests {
 		let child_info = ChildInfo::new_default(b"Child1");
 		let child_info = &child_info;
 		let child = child_info.storage_key();
-		let mut overlay = OverlayedChanges::default();
+		let mut overlay = OverlayedChanges::<Blake2Hasher>::default();
 		overlay.start_transaction();
 		overlay.set_child_storage(child_info, vec![20], Some(vec![20]));
 		overlay.set_child_storage(child_info, vec![30], Some(vec![30]));

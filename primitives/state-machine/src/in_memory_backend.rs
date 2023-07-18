@@ -80,6 +80,7 @@ where
 	/// Apply the given transaction to this backend and set the root to the given value.
 	pub fn apply_transaction(&mut self, root: H::Out, transaction: PrefixedMemoryDB<H>) {
 		let mut storage = sp_std::mem::take(self).into_storage();
+
 		storage.consolidate(transaction);
 		*self = TrieBackendBuilder::new(storage, root).build();
 	}
@@ -191,7 +192,7 @@ mod tests {
 	#[test]
 	fn in_memory_with_child_trie_only() {
 		let state_version = StateVersion::default();
-		let storage = new_in_mem_hash_key::<BlakeTwo256>();
+		let storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 		let child_info = &child_info;
 		let storage = storage.update(
@@ -207,7 +208,7 @@ mod tests {
 	#[test]
 	fn insert_multiple_times_child_data_works() {
 		let state_version = StateVersion::default();
-		let mut storage = new_in_mem_hash_key::<BlakeTwo256>();
+		let mut storage = new_in_mem::<BlakeTwo256>();
 		let child_info = ChildInfo::new_default(b"1");
 
 		storage.insert(

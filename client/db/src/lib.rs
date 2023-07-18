@@ -88,7 +88,7 @@ use sp_state_machine::{
 	backend::{AsTrieBackend, Backend as StateBackend},
 	ChildStorageCollection, DBValue, IndexOperation, IterArgs, OffchainChangesCollection,
 	StateMachineStats, StorageCollection, StorageIterator, StorageKey, StorageValue,
-	UsageInfo as StateUsageInfo,
+	UsageInfo as StateUsageInfo, BackendTransaction,
 };
 use sp_trie::{cache::SharedTrieCache, prefixed_key, MemoryDB, PrefixedMemoryDB};
 
@@ -187,7 +187,6 @@ impl<B: BlockT> StorageIterator<HashFor<B>> for RawIter<B> {
 
 impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	type Error = <DbState<B> as StateBackend<HashFor<B>>>::Error;
-	type Transaction = <DbState<B> as StateBackend<HashFor<B>>>::Transaction;
 	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
 	type RawIter = RawIter<B>;
 
@@ -243,7 +242,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, Self::Transaction) {
+	) -> (B::Hash, BackendTransaction<HashFor<B>>) {
 		self.state.storage_root(delta, state_version)
 	}
 
@@ -252,7 +251,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction) {
+	) -> (B::Hash, bool, BackendTransaction<HashFor<B>>) {
 		self.state.child_storage_root(child_info, delta, state_version)
 	}
 
