@@ -263,14 +263,13 @@ benchmarks! {
 		let (_, caller, _) = create_asset_and_pool::<T>(&native, &asset1);
 		let (_, _) = create_asset::<T>(&asset2);
 		let ed: u128 = T::Currency::minimum_balance().into();
-		let add_native = 1000 + ed;
 
 		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
 			native.clone(),
 			asset1.clone(),
-			add_native.into(),
-			200.into(),
+			(1000 * ed).into(),
+			500.into(),
 			0.into(),
 			0.into(),
 			caller.clone(),
@@ -285,7 +284,7 @@ benchmarks! {
 				SystemOrigin::Signed(caller.clone()).into(),
 				native.clone(),
 				asset2.clone(),
-				(500 + ed).into(),
+				(500 * ed).into(),
 				1000.into(),
 				0.into(),
 				0.into(),
@@ -302,7 +301,7 @@ benchmarks! {
 				SystemOrigin::Signed(caller.clone()).into(),
 				asset1.clone(),
 				asset2.clone(),
-				200.into(),
+				2000.into(),
 				2000.into(),
 				0.into(),
 				0.into(),
@@ -324,7 +323,7 @@ benchmarks! {
 		let path: BoundedVec<_, T::MaxSwapPathLength> = BoundedVec::try_from(path).unwrap();
 		let asset2_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(2), &caller);
 		let asset3_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(3), &caller);
-	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), add_native.into(), caller.clone(), false)
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), (1000 * ed).into(), caller.clone(), false)
 	verify {
 		if !T::AllowMultiAssetPools::get() {
 			let new_asset2_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(2), &caller);
