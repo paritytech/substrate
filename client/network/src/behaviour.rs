@@ -175,7 +175,6 @@ impl<B: BlockT> Behaviour<B> {
 		peerset: PeersetHandle,
 		connection_limits: ConnectionLimits,
 	) -> Result<Self, request_responses::RegisterError> {
-		let local_peer_id = local_public_key.to_peer_id();
 		Ok(Self {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
