@@ -1124,6 +1124,13 @@ impl<Block: BlockT> Backend<Block> {
 		Self::from_database(db as Arc<_>, canonicalization_delay, &db_config, needs_init)
 	}
 
+	/// Reset the shared trie cache.
+	pub fn reset_trie_cache(&self) {
+		if let Some(cache) = &self.shared_trie_cache {
+			cache.reset();
+		}
+	}
+
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(blocks_pruning: u32, canonicalization_delay: u64) -> Self {
