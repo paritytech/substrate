@@ -27,6 +27,16 @@ sc-consensus-pow = { path = "client/consensus/pow" }
 sp-runtime = { path = "primitives/runtime" }
 frame-support = { path = "frame/support" }
 
+node-cli = { path = "bin/node/cli" }
+
+[[bin]]
+name = "substrate"
+path = "bin/node/cli/bin/main.rs"
+
+[features]
+runtime-benchmarks = [ "node-cli/runtime-benchmarks" ]
+try-runtime = [ "node-cli/try-runtime" ]
+
 [workspace]
 resolver = "2"
 

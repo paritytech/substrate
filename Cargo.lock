@@ -11926,6 +11926,7 @@ dependencies = [
  "aquamarine",
  "chain-spec-builder",
  "frame-support",
+ "node-cli",
  "sc-cli",
  "sc-consensus-aura",
  "sc-consensus-babe",
