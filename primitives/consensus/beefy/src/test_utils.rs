@@ -23,7 +23,7 @@ use sp_core::{ecdsa, keccak_256, Pair};
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
-/// Set of test accounts using [`crate::crypto`] types.
+/// Set of test accounts using [`crate::ecdsa_crypto`] types.
 #[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumIter)]
 pub enum Keyring {
