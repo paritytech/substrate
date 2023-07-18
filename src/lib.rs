@@ -74,8 +74,8 @@
 //!   the client crates. Notable examples are crates such as [`sc-network`], various consensus
 //!   crates, [`sc-rpc-api`] and [`sc-client-db`], all of which are expected to reside in the client
 //!   side.
-//! * `sp` (short for *substrate-primitives*) crates, located under `./primitives` folder. These are
-//!   the traits that glue the client and runtime together, but are not opinionated about what
+//! * `sp-*` (short for *substrate-primitives*) crates, located under `./primitives` folder. These
+//!   are the traits that glue the client and runtime together, but are not opinionated about what
 //!   framework is using for building the runtime. Notable examples are [`sp-api`] and [`sp-io`],
 //!   which form the communication bridge between the client and runtime, as explained in
 //!   [`substrate_diagram`].
@@ -88,7 +88,7 @@
 //! through which Polkadot can be utilized is by building "parachains", blockchains that are
 //! connected to Polkadot's shared security.
 //!
-//! To build a parachain, one needs to use [`Cumulus`](https://github.com/paritytech/cumulus/), the
+//! To build a parachain, one could use [`Cumulus`](https://github.com/paritytech/cumulus/), the
 //! library on top of Substrate, empowering any substrate-based chain to be a Polkadot parachain.
 //!
 //! ## Where To Go Next?
@@ -111,6 +111,12 @@
 //! - [Parity Tech's Documentation Hub](https://paritytech.github.io/)
 //! - [Frontier: Substrate's Ethereum Compatibility Library](https://paritytech.github.io/frontier/)
 //! - [Polkadot Wiki](https://wiki.polkadot.network/en/)
+//!
+//! Notable upstream crates:
+//!
+//! - [`parity-db`](https://github.com/paritytech/parity-db)
+//! - [`trie`](https://github.com/paritytech/trie)
+//! - [`parity-common`](https://github.com/paritytech/parity-common)
 //!
 //! Templates:
 //!
