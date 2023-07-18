@@ -43,6 +43,7 @@ pub trait WeightInfo {
 	fn drop_region() -> Weight;
 	fn drop_contribution() -> Weight;
 	fn drop_history() -> Weight;
+	fn drop_renewal() -> Weight;
 	fn request_core_count() -> Weight;
 	fn process_core_count() -> Weight;
 	fn process_revenue() -> Weight;
@@ -72,6 +73,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn drop_region() -> Weight { Weight::from_parts(123, 456) }
 	fn drop_contribution() -> Weight { Weight::from_parts(123, 456) }
 	fn drop_history() -> Weight { Weight::from_parts(123, 456) }
+	fn drop_renewal() -> Weight { Weight::from_parts(123, 456) }
 	fn request_core_count() -> Weight { Weight::from_parts(123, 456) }
 	fn process_core_count() -> Weight { Weight::from_parts(123, 456) }
 	fn process_revenue() -> Weight { Weight::from_parts(123, 456) }
@@ -100,6 +102,7 @@ impl WeightInfo for () {
 	fn drop_region() -> Weight { Weight::from_parts(123, 456) }
 	fn drop_contribution() -> Weight { Weight::from_parts(123, 456) }
 	fn drop_history() -> Weight { Weight::from_parts(123, 456) }
+	fn drop_renewal() -> Weight { Weight::from_parts(123, 456) }
 	fn request_core_count() -> Weight { Weight::from_parts(123, 456) }
 	fn process_core_count() -> Weight { Weight::from_parts(123, 456) }
 	fn process_revenue() -> Weight { Weight::from_parts(123, 456) }

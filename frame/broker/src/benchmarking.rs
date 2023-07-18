@@ -228,7 +228,8 @@ mod benches {
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), core_index.saturating_sub(1));
 
-		assert!(AllowedRenewals::<T>::get((core_index.saturating_sub(1), 10)).is_some());
+		let id = AllowedRenewalId { core: core_index.saturating_sub(1), when: 10 };
+		assert!(AllowedRenewals::<T>::get(id).is_some());
 
 		Ok(())
 	}

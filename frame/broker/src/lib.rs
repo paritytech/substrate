@@ -128,7 +128,7 @@ pub mod pallet {
 	/// Records of allowed renewals.
 	#[pallet::storage]
 	pub type AllowedRenewals<T> =
-		StorageMap<_, Twox64Concat, (CoreIndex, Timeslice), AllowedRenewalRecordOf<T>, OptionQuery>;
+		StorageMap<_, Twox64Concat, AllowedRenewalId, AllowedRenewalRecordOf<T>, OptionQuery>;
 
 	/// The current (unassigned) Regions.
 	#[pallet::storage]
@@ -397,6 +397,13 @@ pub mod pallet {
 			/// The workload to be done on the Core.
 			assignment: Vec<(CoreAssignment, PartsOf57600)>,
 		},
+		/// Some historical Instantaneous Core Pool payment record has been dropped.
+		AllowedRenewalDropped {
+			/// The timeslice whose renewal is no longer available.
+			when: Timeslice,
+			/// The core whose workload is no longer available to be renewed for `when`.
+			core: CoreIndex,
+		},
 	}
 
 	#[pallet::error]
@@ -461,6 +468,8 @@ pub mod pallet {
 		NoHistory,
 		/// No reservation of the given index exists.
 		UnknownReservation,
+		/// The renewal record cannot be found.
+		UnknownRenewal,
 	}
 
 	#[pallet::hooks]
@@ -704,7 +713,7 @@ pub mod pallet {
 
 		/// Drop an expired Region from the chain.
 		///
-		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `origin`: Must be a Signed origin.
 		/// - `region_id`: The Region which has expired.
 		#[pallet::call_index(14)]
 		pub fn drop_region(
@@ -718,7 +727,7 @@ pub mod pallet {
 
 		/// Drop an expired Instantaneous Pool Contribution record from the chain.
 		///
-		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `origin`: Must be a Signed origin.
 		/// - `region_id`: The Region identifying the Pool Contribution which has expired.
 		#[pallet::call_index(15)]
 		pub fn drop_contribution(
@@ -732,7 +741,7 @@ pub mod pallet {
 
 		/// Drop an expired Instantaneous Pool History record from the chain.
 		///
-		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `origin`: Must be a Signed origin.
 		/// - `region_id`: The time of the Pool History record which has expired.
 		#[pallet::call_index(16)]
 		pub fn drop_history(origin: OriginFor<T>, when: Timeslice) -> DispatchResultWithPostInfo {
@@ -741,11 +750,27 @@ pub mod pallet {
 			Ok(Pays::No.into())
 		}
 
+		/// Drop an expired Allowed Renewal record from the chain.
+		///
+		/// - `origin`: Must be a Signed origin of the account which owns the Region `region_id`.
+		/// - `core`: The core to which the expired renewal refers.
+		/// - `when`: The timeslice to which the expired renewal refers. This must have passed.
+		#[pallet::call_index(17)]
+		pub fn drop_renewal(
+			origin: OriginFor<T>,
+			core: CoreIndex,
+			when: Timeslice,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+			Self::do_drop_renewal(core, when)?;
+			Ok(Pays::No.into())
+		}
+
 		/// Request a change to the number of cores available for scheduling work.
 		///
 		/// - `origin`: Must be Root or pass `AdminOrigin`.
 		/// - `core_count`: The desired number of cores to be made available.
-		#[pallet::call_index(17)]
+		#[pallet::call_index(18)]
 		pub fn request_core_count(origin: OriginFor<T>, core_count: CoreIndex) -> DispatchResult {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;
 			Self::do_request_core_count(core_count)?;

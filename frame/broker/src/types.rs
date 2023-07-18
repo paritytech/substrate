@@ -132,6 +132,15 @@ impl CompletionStatus {
 	}
 }
 
+/// The identity of a possible Core workload renewal.
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct AllowedRenewalId {
+	/// The core whose workload at the sale ending with `when` may be renewed to begin at `when`.
+	pub core: CoreIndex,
+	/// The point in time that the renewable workload on `core` ends and a fresh renewal may begin.
+	pub when: Timeslice,
+}
+
 /// A record of an allowed renewal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct AllowedRenewalRecord<Balance> {
