@@ -118,9 +118,7 @@ impl<T: Config> ContractInfo<T> {
 
 	/// Same as [`Self::extra_deposit`] but including the base deposit.
 	pub fn total_deposit(&self) -> BalanceOf<T> {
-		self.extra_deposit()
-			.saturating_add(self.storage_base_deposit)
-			.saturating_sub(Pallet::<T>::min_balance())
+		self.extra_deposit().saturating_add(self.storage_base_deposit)
 	}
 
 	/// Return the account that storage deposits should be deposited into.

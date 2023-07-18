@@ -894,6 +894,9 @@ pub mod pallet {
 
 		/// Some funds have been released as storage deposit.
 		StorageDepositReleased { who: T::AccountId, amount: BalanceOf<T> },
+
+		/// Some funds have been transferred to be used as storage deposit.
+		StorageDepositTransferred { from: T::AccountId, to: T::AccountId, amount: BalanceOf<T> },
 	}
 
 	#[pallet::error]

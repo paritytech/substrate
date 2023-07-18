@@ -25,7 +25,7 @@ use frame_support::{
 	dispatch::{fmt::Debug, DispatchError},
 	ensure,
 	traits::{
-		fungible::MutateHold,
+		fungible::{Mutate, MutateHold},
 		tokens::{
 			Fortitude, Fortitude::Polite, Precision, Preservation, Restriction, WithdrawConsequence,
 		},
@@ -82,7 +82,7 @@ pub trait Ext<T: Config> {
 	/// It should be used in combination with `check_limit` to check that no more balance than this
 	/// limit is ever charged.
 	///
-	/// `terminated` designates whether the `contract` was terminated.
+	/// `reason` indicates the [`ChargeReason`] that originated the charge.
 	fn charge(
 		origin: &T::AccountId,
 		contract: &T::AccountId,
@@ -95,6 +95,16 @@ pub trait Ext<T: Config> {
 ///
 /// It uses [`frame_support::traits::fungible::Mutate`] in order to do accomplish the reserves.
 pub enum ReservingExt {}
+
+// /// Indicates the reason that originated the charge.
+// pub enum ChargeReason {
+// 	/// The charge was originated by a contract instantiation.
+// 	Instantiate,
+// 	/// The charge was originated by a contract termination.
+// 	Terminate,
+// 	/// The charge was not originated by a contract instantiation or termination.
+// 	Regular,
+// }
 
 /// Used to implement a type state pattern for the meter.
 ///
@@ -417,7 +427,7 @@ where
 		};
 	}
 
-	/// Charge from `origin` a storage deposit for contract instantiation.
+	/// Charge from `origin` a storage deposit plus the ed for contract instantiation.
 	///
 	/// This immediately transfers the balance in order to create the account.
 	pub fn charge_instantiate(
@@ -432,26 +442,29 @@ where
 		debug_assert!(self.is_alive());
 
 		let ed = Pallet::<T>::min_balance();
-		let mut deposit =
+		let storage_deposit =
 			Diff { bytes_added: info.encoded_size() as u32, items_added: 1, ..Default::default() }
 				.update_contract::<T>(None);
 
-		// Instantiate needs to transfer at least the minimum balance in order to pull the
-		// deposit account into existence.
-		deposit = deposit.max(Deposit::Charge(ed)).saturating_add(&Deposit::Charge(ed));
-		if deposit.charge_or_zero() > self.limit {
+		// Instantiate needs to transfer the deposit plus the minimum balance in order to pull the
+		// contract account into existence.
+		let total_deposit = storage_deposit.saturating_add(&Deposit::Charge(ed));
+		if (total_deposit.charge_or_zero()) > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
 
 		// We do not increase `own_contribution` because this will be charged later when the
 		// contract execution does conclude and hence would lead to a double charge.
-		self.total_deposit = deposit.clone();
-		info.storage_base_deposit = deposit.charge_or_zero();
+		self.total_deposit = total_deposit.clone();
+		info.storage_base_deposit = storage_deposit.charge_or_zero();
+
+		// We need to make sure that the contract's account itself exists, by adding the ED.
+		T::Currency::transfer(origin, contract, ed, Preservation::Protect)?;
 
 		// Charge storage deposit.
-		E::charge(origin, contract, &deposit, false)?;
+		E::charge(origin, contract, &storage_deposit, false)?;
 
-		Ok(deposit)
+		Ok(total_deposit)
 	}
 
 	/// Call to tell the meter that the currently executing contract was executed.
