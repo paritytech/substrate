@@ -128,7 +128,7 @@ pub mod pallet {
 	/// Records of allowed renewals.
 	#[pallet::storage]
 	pub type AllowedRenewals<T> =
-		StorageMap<_, Twox64Concat, CoreIndex, AllowedRenewalRecordOf<T>, OptionQuery>;
+		StorageMap<_, Twox64Concat, (CoreIndex, Timeslice), AllowedRenewalRecordOf<T>, OptionQuery>;
 
 	/// The current (unassigned) Regions.
 	#[pallet::storage]
@@ -281,8 +281,8 @@ pub mod pallet {
 			/// The timeslice on which the Regions which are being sold in the sale terminate.
 			/// (i.e. One after the last timeslice which the Regions control.)
 			region_end: Timeslice,
-			/// The number of cores we want to sell, ideally. Selling this amount would result in no
-			/// change to the price for the next sale.
+			/// The number of cores we want to sell, ideally. Selling this amount would result in
+			/// no change to the price for the next sale.
 			ideal_cores_sold: CoreIndex,
 			/// Number of cores which are/have been offered for sale.
 			cores_offered: CoreIndex,

@@ -135,8 +135,6 @@ impl CompletionStatus {
 /// A record of an allowed renewal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct AllowedRenewalRecord<Balance> {
-	/// The timeslice denoting the beginning of the Region for which a renewal can secure.
-	pub begin: Timeslice,
 	/// The price for which the next renewal can be made.
 	pub price: Balance,
 	/// The workload which will be scheduled on the Core in the case a renewal is made, or if

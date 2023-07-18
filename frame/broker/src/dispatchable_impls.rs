@@ -46,10 +46,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	pub(crate) fn do_start_sales(
-		price: BalanceOf<T>,
-		core_count: CoreIndex,
-	) -> DispatchResult {
+	pub(crate) fn do_start_sales(price: BalanceOf<T>, core_count: CoreIndex) -> DispatchResult {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let commit_timeslice = Self::latest_timeslice_ready_to_commit(&config);
 		let status = StatusRecord {
@@ -109,14 +106,14 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn do_renew(who: T::AccountId, core: CoreIndex) -> Result<CoreIndex, DispatchError> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
-		let record = AllowedRenewals::<T>::get(core).ok_or(Error::<T>::NotAllowed)?;
 		let mut sale = SaleInfo::<T>::get().ok_or(Error::<T>::NoSales)?;
-		let workload =
-			record.completion.drain_complete().ok_or(Error::<T>::IncompleteAssignment)?;
-
-		ensure!(record.begin == sale.region_begin, Error::<T>::WrongTime);
 		ensure!(sale.first_core < status.core_count, Error::<T>::Unavailable);
 		ensure!(sale.cores_sold < sale.cores_offered, Error::<T>::SoldOut);
+
+		let record =
+			AllowedRenewals::<T>::get((core, sale.region_begin)).ok_or(Error::<T>::NotAllowed)?;
+		let workload =
+			record.completion.drain_complete().ok_or(Error::<T>::IncompleteAssignment)?;
 
 		let old_core = core;
 		let core = sale.first_core + sale.cores_sold;
@@ -133,12 +130,13 @@ impl<T: Config> Pallet<T> {
 
 		sale.cores_sold.saturating_inc();
 
-		Workplan::<T>::insert((record.begin, core), &workload);
+		Workplan::<T>::insert((sale.region_begin, core), &workload);
 
 		let begin = sale.region_end;
 		let price = record.price + config.renewal_bump * record.price;
-		let new_record = AllowedRenewalRecord { begin, price, completion: Complete(workload) };
-		AllowedRenewals::<T>::insert(core, &new_record);
+		let new_record = AllowedRenewalRecord { price, completion: Complete(workload) };
+		AllowedRenewals::<T>::remove((core, sale.region_begin));
+		AllowedRenewals::<T>::insert((core, begin), &new_record);
 		SaleInfo::<T>::put(&sale);
 		if let Some(workload) = new_record.completion.drain_complete() {
 			Self::deposit_event(Event::Renewable { core, price, begin, workload });
@@ -245,18 +243,16 @@ impl<T: Config> Pallet<T> {
 			if duration == config.region_length && finality == Finality::Final {
 				if let Some(price) = region.paid {
 					let begin = region.end;
-					let assigned = match AllowedRenewals::<T>::get(region_id.core) {
-						Some(AllowedRenewalRecord {
-							completion: Partial(w),
-							begin: b,
-							price: p,
-						}) if begin == b && price == p => w,
+					let assigned = match AllowedRenewals::<T>::get((region_id.core, begin)) {
+						Some(AllowedRenewalRecord { completion: Partial(w), price: p })
+							if price == p =>
+							w,
 						_ => CoreMask::void(),
 					} | region_id.part;
 					let workload =
 						if assigned.is_complete() { Complete(workplan) } else { Partial(assigned) };
-					let record = AllowedRenewalRecord { begin, price, completion: workload };
-					AllowedRenewals::<T>::insert(region_id.core, &record);
+					let record = AllowedRenewalRecord { price, completion: workload };
+					AllowedRenewals::<T>::insert((region_id.core, begin), &record);
 					if let Some(workload) = record.completion.drain_complete() {
 						Self::deposit_event(Event::Renewable {
 							core: region_id.core,

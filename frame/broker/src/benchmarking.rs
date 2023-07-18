@@ -74,7 +74,7 @@ fn advance_to<T: Config>(b: u32) {
 	}
 }
 
-fn setup_and_start_sale<T: Config>()  -> Result<(), BenchmarkError> {
+fn setup_and_start_sale<T: Config>() -> Result<(), BenchmarkError> {
 	Configuration::<T>::put(new_config_record::<T>());
 
 	// Assume Leases to be almost filled for worst case
@@ -82,11 +82,8 @@ fn setup_and_start_sale<T: Config>()  -> Result<(), BenchmarkError> {
 
 	let core_index: u16 = T::MaxReservedCores::get().try_into().unwrap();
 
-	Broker::<T>::do_start_sales(
-		10u32.into(),
-		core_index 
-	)
-	.map_err(|_| BenchmarkError::Weightless)?;
+	Broker::<T>::do_start_sales(10u32.into(), core_index)
+		.map_err(|_| BenchmarkError::Weightless)?;
 
 	Ok(())
 }
@@ -191,7 +188,7 @@ mod benches {
 
 		Ok(())
 	}
-	
+
 	#[benchmark]
 	fn purchase() -> Result<(), BenchmarkError> {
 		setup_and_start_sale::<T>()?;
@@ -204,7 +201,7 @@ mod benches {
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), 10u32.into());
 
-		assert_eq!(SaleInfo::<T>::get().unwrap().last_purchase_price, Some(10u32.into()));
+		assert_eq!(SaleInfo::<T>::get().unwrap().sellout_price, Some(10u32.into()));
 
 		Ok(())
 	}
@@ -220,16 +217,18 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 20u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
-		Broker::<T>::do_assign(region, None, 1001, Final).map_err(|_| BenchmarkError::Weightless)?;
+		Broker::<T>::do_assign(region, None, 1001, Final)
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		advance_to::<T>(6);
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), core_index.saturating_sub(1));
 
-		assert!(AllowedRenewals::<T>::get(core_index.saturating_sub(1)).is_some());
+		assert!(AllowedRenewals::<T>::get((core_index.saturating_sub(1), 10)).is_some());
 
 		Ok(())
 	}
@@ -243,7 +242,8 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 10u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 
@@ -262,7 +262,8 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 10u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, 2);
@@ -279,7 +280,8 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 10u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, 0x00000_fffff_fffff_00000.into());
@@ -296,7 +298,8 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 10u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, 1000, Final);
@@ -313,7 +316,8 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 10u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 
@@ -332,11 +336,13 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 10u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 
-		Broker::<T>::do_pool(region, None, recipient, Final).map_err(|_| BenchmarkError::Weightless)?;
+		Broker::<T>::do_pool(region, None, recipient, Final)
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, 100);
@@ -354,11 +360,13 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 30u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 
-		Broker::<T>::do_pool(region, None, recipient, Final).map_err(|_| BenchmarkError::Weightless)?;
+		Broker::<T>::do_pool(region, None, recipient, Final)
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let beneficiary: RelayAccountIdOf<T> = account("beneficiary", 0, SEED);
 
@@ -377,7 +385,8 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 10u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		advance_to::<T>(12);
 
@@ -396,11 +405,13 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 10u32.into());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into()).map_err(|_| BenchmarkError::Weightless)?;
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 
-		Broker::<T>::do_pool(region, None, recipient, Final).map_err(|_| BenchmarkError::Weightless)?;
+		Broker::<T>::do_pool(region, None, recipient, Final)
+			.map_err(|_| BenchmarkError::Weightless)?;
 
 		advance_to::<T>(26);
 

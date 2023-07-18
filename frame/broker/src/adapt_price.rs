@@ -17,7 +17,9 @@ pub trait AdaptPrice {
 }
 
 impl AdaptPrice for () {
-	fn leadin_factor_at(_: FixedU64) -> FixedU64 { FixedU64::one() }
+	fn leadin_factor_at(_: FixedU64) -> FixedU64 {
+		FixedU64::one()
+	}
 	fn adapt_price(_: CoreIndex, _: CoreIndex, _: CoreIndex) -> FixedU64 {
 		FixedU64::one()
 	}
@@ -34,7 +36,8 @@ impl AdaptPrice for Linear {
 		if sold < target {
 			FixedU64::from_rational(sold.into(), target.into())
 		} else {
-			FixedU64::one() + FixedU64::from_rational((sold - target).into(), (limit - target).into())
+			FixedU64::one() +
+				FixedU64::from_rational((sold - target).into(), (limit - target).into())
 		}
 	}
 }

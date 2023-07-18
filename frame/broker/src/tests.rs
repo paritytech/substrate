@@ -137,7 +137,7 @@ fn nft_metadata_works() {
 fn migration_works() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
 		assert_ok!(Broker::do_set_lease(1000, 8));
-		assert_ok!(Broker::do_start_sales(100, 1));
+		assert_ok!(Broker::do_start_sales(100, 2));
 
 		// Sale is for regions from TS4..7
 		// Not ending in this sale period.
@@ -151,36 +151,17 @@ fn migration_works() {
 		assert_eq!(balance(1), 900);
 		advance_to(18);
 
+		let just_pool = || vec![(Pool, 57600)];
+		let just_1000 = || vec![(Task(1000), 57600)];
 		assert_eq!(
 			CoretimeTrace::get(),
 			vec![
-				(
-					6,
-					AssignCore {
-						core: 0,
-						begin: 8,
-						assignment: vec![(Task(1000), 57600),],
-						end_hint: None
-					}
-				),
-				(
-					12,
-					AssignCore {
-						core: 0,
-						begin: 14,
-						assignment: vec![(Task(1000), 57600),],
-						end_hint: None
-					}
-				),
-				(
-					18,
-					AssignCore {
-						core: 0,
-						begin: 20,
-						assignment: vec![(Task(1000), 57600),],
-						end_hint: None
-					}
-				),
+				(6, AssignCore { core: 0, begin: 8, assignment: just_1000(), end_hint: None }),
+				(6, AssignCore { core: 1, begin: 8, assignment: just_pool(), end_hint: None }),
+				(12, AssignCore { core: 0, begin: 14, assignment: just_1000(), end_hint: None }),
+				(12, AssignCore { core: 1, begin: 14, assignment: just_pool(), end_hint: None }),
+				(18, AssignCore { core: 0, begin: 20, assignment: just_1000(), end_hint: None }),
+				(18, AssignCore { core: 1, begin: 20, assignment: just_pool(), end_hint: None }),
 			]
 		);
 	});

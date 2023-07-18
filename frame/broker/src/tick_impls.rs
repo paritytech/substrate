@@ -1,8 +1,5 @@
 use super::*;
-use frame_support::{
-	pallet_prelude::*,
-	weights::WeightMeter,
-};
+use frame_support::{pallet_prelude::*, weights::WeightMeter};
 use sp_arithmetic::{
 	traits::{SaturatedConversion, Saturating, Zero},
 	FixedPointNumber,
@@ -98,8 +95,8 @@ impl<T: Config> Pallet<T> {
 		}
 		// Payout system InstaPool Cores.
 		let total_contrib = r.system_contributions.saturating_add(r.private_contributions);
-		let system_payout = revenue.saturating_mul(r.system_contributions.into()) /
-			total_contrib.into();
+		let system_payout =
+			revenue.saturating_mul(r.system_contributions.into()) / total_contrib.into();
 		let _ = Self::charge(&Self::account_id(), system_payout);
 		revenue.saturating_reduce(system_payout);
 
@@ -199,12 +196,8 @@ impl<T: Config> Pallet<T> {
 			let expiring = until >= region_begin && until < region_end;
 			if expiring {
 				// last time for this one - make it renewable.
-				let record = AllowedRenewalRecord {
-					begin: region_end,
-					price,
-					completion: Complete(schedule),
-				};
-				AllowedRenewals::<T>::insert(first_core, &record);
+				let record = AllowedRenewalRecord { price, completion: Complete(schedule) };
+				AllowedRenewals::<T>::insert((first_core, region_end), &record);
 				Self::deposit_event(Event::Renewable {
 					core: first_core,
 					price,

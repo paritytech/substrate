@@ -8,7 +8,8 @@ use frame_support::{
 	},
 };
 use sp_arithmetic::{
-	traits::{SaturatedConversion, Saturating, Bounded}, FixedU64, FixedPointNumber,
+	traits::{Bounded, SaturatedConversion, Saturating},
+	FixedPointNumber, FixedU64,
 };
 use sp_runtime::traits::AccountIdConversion;
 
