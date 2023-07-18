@@ -50,7 +50,7 @@ const SEED_SERIALIZED_LEN: usize = 32;
 
 // Edwards form sizes.
 // @burdges @swasilyev: currently ring-proof is using SHORT-WEIERSTRASS
-// I had to temporary patch bandersnatch_vrfs crate to use SW instead of ED...
+// I had to temporary patch bandersnatch_vrfs crate to use SW instrad of ED...
 // const PUBLIC_SERIALIZED_LEN: usize = 32;
 // const SIGNATURE_SERIALIZED_LEN: usize = 64;
 
@@ -72,15 +72,20 @@ const PEDERSEN_SIGNATURE_SERIALIZED_LEN: usize = 163;
 // Short-Weierstrass form sizes.
 const RING_PROOF_SERIALIZED_LEN: usize = 592;
 
-// Size of serialized ring-vrf context params
+// Max ring domain size
+const RING_MAX_SIZE: u32 = 1024;
+
+// Max size of serialized ring-vrf context params.
+//
+// This size is dependent on the ring size.
+//
+// Some values:
+//  ring-size → ~serialized-size
+//   512        →  74 KB
+//  1024        → 147 KB
+//  2048        → 295 KB
 // @burdges @swasilyev: This is quite big...
-// This size grows with the domain size.
-// Example values
-// domsize -> serialized-size-in-kilobytes
-// 2^9  ->  74 KB
-// 2^10 -> 147 KB
-// 2^11 -> 295 KB
-const RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN: usize = 147744;
+const RING_CONTEXT_SERIALIZED_LEN: usize = 147752;
 
 /// Bandersnatch public key.
 #[cfg_attr(feature = "full_crypto", derive(Hash))]
@@ -568,14 +573,18 @@ pub mod vrf {
 				.iter()
 				.map(|o| o.0.clone())
 				.collect::<arrayvec::ArrayVec<bandersnatch_vrfs::VrfPreOut, N>>()
-				.into_inner() else {
-					return false
-				};
+				.into_inner()
+			else {
+				return false
+			};
 
 			// Deserialize only the proof, the rest has already been deserialized
 			// This is another hack used because backend signature type is generic over
 			// the number of ios.
-			let Ok(signature) = ThinVrfSignature::<0>::deserialize_compressed(signature.signature.as_ref()).map(|s| s.signature) else {
+			let Ok(signature) =
+				ThinVrfSignature::<0>::deserialize_compressed(signature.signature.as_ref())
+					.map(|s| s.signature)
+			else {
 				return false
 			};
 			let signature = ThinVrfSignature { signature, preoutputs: preouts };
@@ -614,14 +623,11 @@ pub mod ring_vrf {
 	impl RingVrfContext {
 		/// Build an dummy instance used for testing purposes.
 		pub fn new_testing() -> Self {
-			let seed = [0; 32];
-			let domain_size = 2usize.pow(10);
-			let kzg = KZG::testing_kzg_setup(seed, domain_size);
-			Self(kzg)
+			Self(KZG::testing_kzg_setup([0; 32], RING_MAX_SIZE))
 		}
 
 		/// Get the keyset size.
-		/// TODO @swasilyev: shouldn't be equal to the domain_size used at init time?
+		/// TODO @swasilyev: shouldn't this be equal to the domain_size used at init time?
 		pub fn max_keyset_size(&self) -> usize {
 			self.0.max_keyset_size()
 		}
@@ -655,7 +661,7 @@ pub mod ring_vrf {
 
 	impl Encode for RingVrfContext {
 		fn encode(&self) -> Vec<u8> {
-			let mut buf = Box::new([0; RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN]);
+			let mut buf = Box::new([0; RING_CONTEXT_SERIALIZED_LEN]);
 			self.0
 				.serialize_compressed(buf.as_mut_slice())
 				.expect("preout serialization can't fail");
@@ -665,7 +671,7 @@ pub mod ring_vrf {
 
 	impl Decode for RingVrfContext {
 		fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
-			let buf = <Box<[u8; RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN]>>::decode(i)?;
+			let buf = <Box<[u8; RING_CONTEXT_SERIALIZED_LEN]>>::decode(i)?;
 			let kzg =
 				KZG::deserialize_compressed(buf.as_slice()).map_err(|_| "KZG decode error")?;
 			Ok(RingVrfContext(kzg))
@@ -674,12 +680,12 @@ pub mod ring_vrf {
 
 	impl MaxEncodedLen for RingVrfContext {
 		fn max_encoded_len() -> usize {
-			<[u8; RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN]>::max_encoded_len()
+			<[u8; RING_CONTEXT_SERIALIZED_LEN]>::max_encoded_len()
 		}
 	}
 
 	impl TypeInfo for RingVrfContext {
-		type Identity = [u8; RING_VRF_CONTEXT_PARAMS_SERIALIZED_LEN];
+		type Identity = [u8; RING_CONTEXT_SERIALIZED_LEN];
 
 		fn type_info() -> scale_info::Type {
 			Self::Identity::type_info()
@@ -775,15 +781,19 @@ pub mod ring_vrf {
 				.iter()
 				.map(|o| o.0.clone())
 				.collect::<arrayvec::ArrayVec<bandersnatch_vrfs::VrfPreOut, N>>()
-				.into_inner() else {
-					return false
-				};
-
-			let Ok(signature) = PedersenVrfSignature::deserialize_compressed(self.signature.as_slice()) else {
+				.into_inner()
+			else {
 				return false
 			};
 
-			let Ok(ring_proof) = RingProof::deserialize_compressed(self.ring_proof.as_slice()) else {
+			let Ok(signature) =
+				PedersenVrfSignature::deserialize_compressed(self.signature.as_slice())
+			else {
+				return false
+			};
+
+			let Ok(ring_proof) = RingProof::deserialize_compressed(self.ring_proof.as_slice())
+			else {
 				return false
 			};
 
