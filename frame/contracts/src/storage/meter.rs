@@ -19,7 +19,7 @@
 
 use crate::{
 	storage::{ContractInfo, DepositAccount},
-	BalanceOf, Config, Error, Inspect, Origin, Pallet, System,
+	BalanceOf, Config, Error, Inspect, Origin, Pallet, System, LOG_TARGET,
 };
 use codec::Encode;
 use frame_support::{
@@ -438,6 +438,10 @@ where
 		// deposit account into existence.
 		// We also add another `ed` here which goes to the contract's own account into existence.
 		deposit = deposit.max(Deposit::Charge(ed)).saturating_add(&Deposit::Charge(ed));
+		log::debug!(
+			target: LOG_TARGET,
+			"Charge instantiate: limit={:?}, deposit={:?}", self.limit, deposit,);
+
 		if deposit.charge_or_zero() > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
