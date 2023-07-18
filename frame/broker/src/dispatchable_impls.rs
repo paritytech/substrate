@@ -116,7 +116,7 @@ impl<T: Config> Pallet<T> {
 			record.completion.drain_complete().ok_or(Error::<T>::IncompleteAssignment)?;
 
 		let old_core = core;
-		let core = sale.first_core + sale.cores_sold;
+		let core = sale.first_core.saturating_add(sale.cores_sold);
 		Self::charge(&who, record.price)?;
 		Self::deposit_event(Event::Renewed {
 			who,
