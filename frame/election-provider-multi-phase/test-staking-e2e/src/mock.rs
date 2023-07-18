@@ -19,7 +19,8 @@
 
 use _feps::ExtendedBalance;
 use frame_support::{
-	dispatch::UnfilteredDispatchable, parameter_types, traits, traits::Hooks, weights::constants,
+	assert_ok, dispatch::UnfilteredDispatchable, parameter_types, traits, traits::Hooks,
+	weights::constants,
 };
 use frame_system::EnsureRoot;
 use sp_core::{ConstU32, Get};
@@ -703,6 +704,12 @@ pub(crate) fn start_next_active_era_delayed_solution(
 	pool: Arc<RwLock<PoolState>>,
 ) -> Result<(), ()> {
 	start_active_era(active_era() + 1, pool, true)
+}
+
+pub(crate) fn advance_eras(n: usize, pool: Arc<RwLock<PoolState>>) {
+	for _ in 0..n {
+		assert_ok!(start_next_active_era(pool.clone()));
+	}
 }
 
 /// Progress until the given era.
