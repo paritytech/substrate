@@ -15,7 +15,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Runtime Modules shared primitive types.
+//! # Substrate Runtime Primitives.
+//!
+//! This crate, among other things, contains a large library of types and utilities that are used in
+//! the Substrate runtime, but are not particularly `FRAME`-oriented.
+//!
+//! ## Block, Header and Extrinsics
+//!
+//! Most notable, this crate contains some of the types and trait that enable important
+//! communication between the client and the runtime. This includes:
+//!
+//! - A set of traits to declare what any block/header/extrinsic type should provide.
+//! 	- [`traits::Block`], [`traits::Header`], [`traits::Extrinsic`]
+//! - A set of types that implement these traits, whilst still providing a high degree of
+//!   configurability via generics.
+//! 	- [`generic::Block`], [`generic::Header`], [`generic::UncheckedExtrinsic`] and
+//!    [`generic::CheckedExtrinsic`]
+//!
+//! ## Runtime API Types
+//!
+//! This crate also contains some types that are often used in conjuncture with Runtime APIs. Most
+//! notable:
+//!
+//! - [`ApplyExtrinsicResult`], and [`DispatchOutcome`], which dictate how the client and runtime
+//!   communicate about the success or failure of an extrinsic.
+//! - [`transaction_validity`], which dictates how the client and runtime communicate about the
+//!  validity of an extrinsic while still in the transaction-queue.
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
