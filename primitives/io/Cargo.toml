@@ -96,6 +96,5 @@ improved_panic_error_reporting = []
 # This feature adds BLS crypto primitives. It should not be used in production since
 # the BLS implementation and interface may still be subject to significant change.
 bls-experimental = [
-	 "sp-core/bls-experimental",
 	 "sp-keystore/bls-experimental",
 ]
