@@ -282,16 +282,12 @@ pub mod pallet {
 		}
 
 		fn integrity_test() {
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(|| {
-					// ensure that the value of `ErasToCheckPerBlock` is less than
-					// `T::MaxErasToCheckPerBlock`.
-					assert!(
-						ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
-						"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
-					);
-				});
-			}
+			// Ensure that the value of `ErasToCheckPerBlock` is less or equal to
+			// `T::MaxErasToCheckPerBlock`.
+			assert!(
+				ErasToCheckPerBlock::<T>::get() <= T::MaxErasToCheckPerBlock::get(),
+				"the value of `ErasToCheckPerBlock` is greater than `T::MaxErasToCheckPerBlock`",
+			);
 		}
 
 		#[cfg(feature = "try-runtime")]

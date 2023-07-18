@@ -18,13 +18,19 @@
 #![allow(dead_code)]
 
 use _feps::ExtendedBalance;
-use frame_support::{parameter_types, traits, traits::Hooks, weights::constants};
+use frame_support::{
+	dispatch::UnfilteredDispatchable, parameter_types, traits, traits::Hooks, weights::constants,
+};
 use frame_system::EnsureRoot;
-use sp_core::{ConstU32, Get, H256};
+use sp_core::{ConstU32, Get};
 use sp_npos_elections::{ElectionScore, VoteWeight};
 use sp_runtime::{
+	offchain::{
+		testing::{OffchainState, PoolState, TestOffchainExt, TestTransactionPoolExt},
+		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
+	},
 	testing,
-	traits::{IdentityLookup, Zero},
+	traits::Zero,
 	transaction_validity, BuildStorage, PerU16, Perbill,
 };
 use sp_staking::{
@@ -34,19 +40,23 @@ use sp_staking::{
 use sp_std::prelude::*;
 use std::collections::BTreeMap;
 
+use codec::Decode;
 use frame_election_provider_support::{onchain, ElectionDataProvider, SequentialPhragmen, Weight};
 use pallet_election_provider_multi_phase::{
-	unsigned::MinerConfig, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
+	unsigned::MinerConfig, Call, ElectionCompute, QueuedSolution, SolutionAccuracyOf,
 };
 use pallet_staking::StakerStatus;
+use parking_lot::RwLock;
+use std::sync::Arc;
+
+use frame_support::derive_impl;
 
 use crate::{log, log_current_time};
 
-pub const INIT_TIMESTAMP: u64 = 30_000;
-pub const BLOCK_TIME: u64 = 1000;
+pub const INIT_TIMESTAMP: BlockNumber = 30_000;
+pub const BLOCK_TIME: BlockNumber = 1000;
 
-type Block = frame_system::mocking::MockBlock<Runtime>;
-
+type Block = frame_system::mocking::MockBlockU32<Runtime>;
 type Extrinsic = testing::TestXt<RuntimeCall, ()>;
 
 frame_support::construct_runtime!(
@@ -63,38 +73,26 @@ frame_support::construct_runtime!(
 	}
 );
 
-pub(crate) type AccountId = u128;
-pub(crate) type Nonce = u32;
-pub(crate) type BlockNumber = u64;
+pub(crate) type AccountId = u64;
+pub(crate) type AccountIndex = u32;
+pub(crate) type BlockNumber = u32;
 pub(crate) type Balance = u64;
-pub(crate) type VoterIndex = u32;
+pub(crate) type VoterIndex = u16;
 pub(crate) type TargetIndex = u16;
-pub(crate) type Moment = u64;
+pub(crate) type Moment = u32;
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = traits::Everything;
-	type BlockWeights = BlockWeights;
-	type BlockLength = ();
-	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type Nonce = Nonce;
-	type RuntimeCall = RuntimeCall;
-	type Hash = H256;
-	type Hashing = sp_runtime::traits::BlakeTwo256;
-	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
+	type BaseCallFilter = frame_support::traits::Everything;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ();
-	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<Balance>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = traits::ConstU32<16>;
+
+	type AccountData = pallet_balances::AccountData<Balance>;
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
@@ -126,13 +124,13 @@ impl pallet_balances::Config for Runtime {
 impl pallet_timestamp::Config for Runtime {
 	type Moment = Moment;
 	type OnTimestampSet = ();
-	type MinimumPeriod = traits::ConstU64<5>;
+	type MinimumPeriod = traits::ConstU32<5>;
 	type WeightInfo = ();
 }
 
 parameter_types! {
-	pub static Period: BlockNumber = 30;
-	pub static Offset: BlockNumber = 0;
+	pub static Period: u32 = 30;
+	pub static Offset: u32 = 0;
 }
 
 sp_runtime::impl_opaque_keys! {
@@ -180,6 +178,7 @@ parameter_types! {
 	pub static MinerMaxLength: u32 = 256;
 	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static TransactionPriority: transaction_validity::TransactionPriority = 1;
+	#[derive(Debug)]
 	pub static MaxWinners: u32 = 100;
 	pub static MaxVotesPerVoter: u32 = 16;
 	pub static MaxNominations: u32 = 16;
@@ -479,17 +478,18 @@ impl Default for ExtBuilder {
 }
 
 impl ExtBuilder {
-	pub fn build(self) -> sp_io::TestExternalities {
+	pub fn build(&self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 
-		let _ =
-			pallet_balances::GenesisConfig::<Runtime> { balances: self.balances_builder.balances }
-				.assimilate_storage(&mut storage);
+		let _ = pallet_balances::GenesisConfig::<Runtime> {
+			balances: self.balances_builder.balances.clone(),
+		}
+		.assimilate_storage(&mut storage);
 
 		let mut stakers = self.staking_builder.stakers.clone();
-		self.staking_builder.status.into_iter().for_each(|(stash, status)| {
+		self.staking_builder.status.clone().into_iter().for_each(|(stash, status)| {
 			let (_, _, _, ref mut prev_status) = stakers
 				.iter_mut()
 				.find(|s| s.0 == stash)
@@ -497,7 +497,7 @@ impl ExtBuilder {
 			*prev_status = status;
 		});
 		// replaced any of the stakes if needed.
-		self.staking_builder.stakes.into_iter().for_each(|(stash, stake)| {
+		self.staking_builder.stakes.clone().into_iter().for_each(|(stash, stake)| {
 			let (_, _, ref mut prev_stake, _) = stakers
 				.iter_mut()
 				.find(|s| s.0 == stash)
@@ -532,12 +532,13 @@ impl ExtBuilder {
 		ext.execute_with(|| {
 			System::set_block_number(1);
 			Session::on_initialize(1);
-			<Staking as Hooks<u64>>::on_initialize(1);
+			<Staking as Hooks<u32>>::on_initialize(1);
 			Timestamp::set_timestamp(INIT_TIMESTAMP);
 		});
 
 		ext
 	}
+
 	pub fn staking(mut self, builder: StakingExtBuilder) -> Self {
 		self.staking_builder = builder;
 		self
@@ -553,8 +554,33 @@ impl ExtBuilder {
 		self
 	}
 
+	pub fn build_offchainify(
+		self,
+	) -> (sp_io::TestExternalities, Arc<RwLock<PoolState>>, Arc<RwLock<OffchainState>>) {
+		// add offchain and pool externality extensions.
+		let mut ext = self.build();
+		let (offchain, offchain_state) = TestOffchainExt::new();
+		let (pool, pool_state) = TestTransactionPoolExt::new();
+
+		ext.register_extension(OffchainDbExt::new(offchain.clone()));
+		ext.register_extension(OffchainWorkerExt::new(offchain));
+		ext.register_extension(TransactionPoolExt::new(pool));
+
+		(ext, pool_state, offchain_state)
+	}
+
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
-		self.build().execute_with(test)
+		let mut ext = self.build();
+		ext.execute_with(test);
+
+		#[cfg(feature = "try-runtime")]
+		ext.execute_with(|| {
+			let bn = System::block_number();
+
+			assert_ok!(<MultiPhase as Hooks<u64>>::try_state(bn));
+			assert_ok!(<Staking as Hooks<u64>>::try_state(bn));
+			assert_ok!(<Session as Hooks<u64>>::try_state(bn));
+		});
 	}
 }
 
@@ -586,18 +612,67 @@ pub fn roll_to(n: BlockNumber, delay_solution: bool) {
 	}
 }
 
+// Progress to given block, triggering session and era changes as we progress and ensuring that
+// there is a solution queued when expected.
+pub fn roll_to_with_ocw(n: BlockNumber, pool: Arc<RwLock<PoolState>>, delay_solution: bool) {
+	for b in (System::block_number()) + 1..=n {
+		System::set_block_number(b);
+		Session::on_initialize(b);
+		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
+
+		ElectionProviderMultiPhase::on_initialize(b);
+		ElectionProviderMultiPhase::offchain_worker(b);
+
+		if !delay_solution && pool.read().transactions.len() > 0 {
+			// decode submit_unsigned callable that may be queued in the pool by ocw. skip all
+			// other extrinsics in the pool.
+			for encoded in &pool.read().transactions {
+				let extrinsic = Extrinsic::decode(&mut &encoded[..]).unwrap();
+
+				let _ = match extrinsic.call {
+					RuntimeCall::ElectionProviderMultiPhase(
+						call @ Call::submit_unsigned { .. },
+					) => {
+						// call submit_unsigned callable in OCW pool.
+						crate::assert_ok!(call.dispatch_bypass_filter(RuntimeOrigin::none()));
+					},
+					_ => (),
+				};
+			}
+
+			pool.try_write().unwrap().transactions.clear();
+		}
+
+		Staking::on_initialize(b);
+		if b != n {
+			Staking::on_finalize(System::block_number());
+		}
+
+		log_current_time();
+	}
+}
+// helper to progress one block ahead.
+pub fn roll_one(pool: Arc<RwLock<PoolState>>, delay_solution: bool) {
+	let bn = System::block_number().saturating_add(1);
+	roll_to_with_ocw(bn, pool, delay_solution);
+}
+
 /// Progresses from the current block number (whatever that may be) to the block where the session
 /// `session_index` starts.
-pub(crate) fn start_session(session_index: SessionIndex, delay_solution: bool) {
-	let end: u64 = if Offset::get().is_zero() {
-		Period::get() * (session_index as u64)
+pub(crate) fn start_session(
+	session_index: SessionIndex,
+	pool: Arc<RwLock<PoolState>>,
+	delay_solution: bool,
+) {
+	let end = if Offset::get().is_zero() {
+		Period::get() * session_index
 	} else {
-		Offset::get() * (session_index as u64) + Period::get() * (session_index as u64)
+		Offset::get() * session_index + Period::get() * session_index
 	};
 
 	assert!(end >= System::block_number());
 
-	roll_to(end, delay_solution);
+	roll_to_with_ocw(end, pool, delay_solution);
 
 	// session must have progressed properly.
 	assert_eq!(
@@ -610,29 +685,35 @@ pub(crate) fn start_session(session_index: SessionIndex, delay_solution: bool) {
 }
 
 /// Go one session forward.
-pub(crate) fn advance_session() {
+pub(crate) fn advance_session(pool: Arc<RwLock<PoolState>>) {
 	let current_index = Session::current_index();
-	start_session(current_index + 1, false);
+	start_session(current_index + 1, pool, false);
 }
 
-pub(crate) fn advance_session_delayed_solution() {
+pub(crate) fn advance_session_delayed_solution(pool: Arc<RwLock<PoolState>>) {
 	let current_index = Session::current_index();
-	start_session(current_index + 1, true);
+	start_session(current_index + 1, pool, true);
 }
 
-pub(crate) fn start_next_active_era() -> Result<(), ()> {
-	start_active_era(active_era() + 1, false)
+pub(crate) fn start_next_active_era(pool: Arc<RwLock<PoolState>>) -> Result<(), ()> {
+	start_active_era(active_era() + 1, pool, false)
 }
 
-pub(crate) fn start_next_active_era_delayed_solution() -> Result<(), ()> {
-	start_active_era(active_era() + 1, true)
+pub(crate) fn start_next_active_era_delayed_solution(
+	pool: Arc<RwLock<PoolState>>,
+) -> Result<(), ()> {
+	start_active_era(active_era() + 1, pool, true)
 }
 
 /// Progress until the given era.
-pub(crate) fn start_active_era(era_index: EraIndex, delay_solution: bool) -> Result<(), ()> {
+pub(crate) fn start_active_era(
+	era_index: EraIndex,
+	pool: Arc<RwLock<PoolState>>,
+	delay_solution: bool,
+) -> Result<(), ()> {
 	let era_before = current_era();
 
-	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into(), delay_solution);
+	start_session((era_index * <SessionsPerEra as Get<u32>>::get()).into(), pool, delay_solution);
 
 	log!(
 		info,
@@ -745,7 +826,7 @@ pub(crate) fn slash_through_offending_threshold() {
 
 // Slashes a percentage of the active nominators that haven't been slashed yet, with
 // a minimum of 1 validator slash.
-pub(crate) fn slash_percentage(percentage: Perbill) -> Vec<u128> {
+pub(crate) fn slash_percentage(percentage: Perbill) -> Vec<AccountId> {
 	let validators = Session::validators();
 	let mut remaining_slashes = (percentage * validators.len() as u32).max(1);
 	let mut slashed = vec![];
@@ -779,5 +860,19 @@ pub(crate) fn staking_events() -> Vec<pallet_staking::Event<Runtime>> {
 		.into_iter()
 		.map(|r| r.event)
 		.filter_map(|e| if let RuntimeEvent::Staking(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>()
+}
+
+pub(crate) fn epm_events() -> Vec<pallet_election_provider_multi_phase::Event<Runtime>> {
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| {
+			if let RuntimeEvent::ElectionProviderMultiPhase(inner) = e {
+				Some(inner)
+			} else {
+				None
+			}
+		})
 		.collect::<Vec<_>>()
 }
