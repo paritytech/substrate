@@ -52,9 +52,7 @@ fn check<N>(f: N, n: N, d: N, r: Rounding)
 where
 	N: MultiplyRational + Into<u128> + Copy + core::fmt::Debug,
 {
-	let Some(got) = f.multiply_rational(n, d, r) else {
-		return;
-	};
+	let Some(got) = f.multiply_rational(n, d, r) else { return };
 
 	let (ae, be, ce) =
 		(Fraction::from(f.into()), Fraction::from(n.into()), Fraction::from(d.into()));
