@@ -313,7 +313,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<DesiredTargets<T>>::get().is_none());
 		assert!(<Snapshot<T>>::get().is_none());
 		assert!(<SnapshotMetadata<T>>::get().is_none());
-		assert_eq!(<CurrentPhase<T>>::get(), <Phase<T::BlockNumber>>::Off);
+		assert_eq!(<CurrentPhase<T>>::get(), <Phase<frame_system::pallet_prelude::BlockNumberFor::<T>>>::Off);
 	}
 
 	submit {

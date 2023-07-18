@@ -17,26 +17,25 @@
 use super::*;
 use crate::Config;
 
-use codec::FullCodec;
 use frame_support::{
 	ensure,
-	traits::{fungible::Inspect, fungibles::SwapNative, tokens::Balance},
+	traits::{fungible::Inspect, tokens::Balance},
 	unsigned::TransactionValidityError,
 };
-use scale_info::TypeInfo;
+use pallet_asset_conversion::Swap;
 use sp_runtime::{
-	traits::{DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf, Zero},
+	traits::{DispatchInfoOf, PostDispatchInfoOf, Zero},
 	transaction_validity::InvalidTransaction,
 	Saturating,
 };
-use sp_std::{fmt::Debug, marker::PhantomData};
+use sp_std::marker::PhantomData;
 
 /// Handle withdrawing, refunding and depositing of transaction fees.
 pub trait OnChargeAssetTransaction<T: Config> {
 	/// The underlying integer type in which fees are calculated.
 	type Balance: Balance;
 	/// The type used to identify the assets used for transaction payment.
-	type AssetId: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo;
+	type AssetId: AssetId;
 	/// The type used to store the intermediate values between pre- and post-dispatch.
 	type LiquidityInfo;
 
@@ -74,8 +73,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 	) -> Result<AssetBalanceOf<T>, TransactionValidityError>;
 }
 
-/// Implements the asset transaction for a balance to asset converter (implementing
-/// [`SwapNative`]).
+/// Implements the asset transaction for a balance to asset converter (implementing [`Swap`]).
 ///
 /// The converter is given the complete fee in terms of the asset used for the transaction.
 pub struct AssetConversionAdapter<C, CON>(PhantomData<(C, CON)>);
@@ -85,8 +83,9 @@ impl<T, C, CON> OnChargeAssetTransaction<T> for AssetConversionAdapter<C, CON>
 where
 	T: Config,
 	C: Inspect<<T as frame_system::Config>::AccountId>,
-	CON: SwapNative<T::RuntimeOrigin, T::AccountId, BalanceOf<T>, AssetBalanceOf<T>, AssetIdOf<T>>,
-	AssetIdOf<T>: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo,
+	CON: Swap<T::AccountId, T::HigherPrecisionBalance, T::MultiAssetId>,
+	T::HigherPrecisionBalance: From<BalanceOf<T>> + TryInto<AssetBalanceOf<T>>,
+	T::MultiAssetId: From<AssetIdOf<T>>,
 	BalanceOf<T>: IsType<<C as Inspect<<T as frame_system::Config>::AccountId>>::Balance>,
 {
 	type Balance = BalanceOf<T>;
@@ -115,15 +114,19 @@ where
 		let native_asset_required =
 			if C::balance(&who) >= ed.saturating_add(fee.into()) { fee } else { fee + ed.into() };
 
-		let asset_consumed = CON::swap_tokens_for_exact_native(
+		let asset_consumed = CON::swap_tokens_for_exact_tokens(
 			who.clone(),
-			asset_id,
-			native_asset_required,
+			vec![asset_id.into(), T::MultiAssetIdConverter::get_native()],
+			T::HigherPrecisionBalance::from(native_asset_required),
 			None,
 			who.clone(),
 			true,
 		)
 		.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
+
+		let asset_consumed = asset_consumed
+			.try_into()
+			.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
 
 		ensure!(asset_consumed > Zero::zero(), InvalidTransaction::Payment);
 
@@ -166,17 +169,25 @@ where
 			// If this fails, the account might have dropped below the existential balance or there
 			// is not enough liquidity left in the pool. In that case we don't throw an error and
 			// the account will keep the native currency.
-			match CON::swap_exact_native_for_tokens(
+			match CON::swap_exact_tokens_for_tokens(
 				who.clone(), // we already deposited the native to `who`
-				asset_id,    // we want asset_id back
-				swap_back,   // amount of the native asset to convert to `asset_id`
+				vec![
+					T::MultiAssetIdConverter::get_native(), // we provide the native
+					asset_id.into(),                        // we want asset_id back
+				],
+				T::HigherPrecisionBalance::from(swap_back), /* amount of the native asset to
+				                                             * convert to `asset_id` */
 				None,        // no minimum amount back
 				who.clone(), // we will refund to `who`
 				false,       // no need to keep alive
 			)
 			.ok()
 			{
-				Some(acquired) => asset_refund = acquired,
+				Some(acquired) => {
+					asset_refund = acquired
+						.try_into()
+						.map_err(|_| TransactionValidityError::from(InvalidTransaction::Payment))?;
+				},
 				None => {
 					Pallet::<T>::deposit_event(Event::<T>::AssetRefundFailed {
 						native_amount_kept: swap_back,

@@ -31,8 +31,8 @@ type RefCount = u32;
 
 /// Information of an account.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode)]
-struct AccountInfo<Index, AccountData> {
-	nonce: Index,
+struct AccountInfo<Nonce, AccountData> {
+	nonce: Nonce,
 	consumers: RefCount,
 	providers: RefCount,
 	sufficients: RefCount,
@@ -47,8 +47,8 @@ pub trait V2ToV3 {
 	/// System config account id
 	type AccountId: 'static + FullCodec;
 
-	/// System config index
-	type Index: 'static + FullCodec + Copy;
+	/// System config nonce
+	type Nonce: 'static + FullCodec + Copy;
 
 	/// System config account data
 	type AccountData: 'static + FullCodec;
@@ -65,13 +65,13 @@ type Account<V, T: Config> = StorageMap<
 	Pallet<T>,
 	Blake2_128Concat,
 	<V as V2ToV3>::AccountId,
-	AccountInfo<<V as V2ToV3>::Index, <V as V2ToV3>::AccountData>,
+	AccountInfo<<V as V2ToV3>::Nonce, <V as V2ToV3>::AccountData>,
 >;
 
 /// Migrate from unique `u8` reference counting to triple `u32` reference counting.
 pub fn migrate_from_single_u8_to_triple_ref_count<V: V2ToV3, T: Config>() -> Weight {
 	let mut translated: usize = 0;
-	<Account<V, T>>::translate::<(V::Index, u8, V::AccountData), _>(|_key, (nonce, rc, data)| {
+	<Account<V, T>>::translate::<(V::Nonce, u8, V::AccountData), _>(|_key, (nonce, rc, data)| {
 		translated += 1;
 		Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, sufficients: 0, data })
 	});
@@ -88,7 +88,7 @@ pub fn migrate_from_single_u8_to_triple_ref_count<V: V2ToV3, T: Config>() -> Wei
 /// Migrate from unique `u32` reference counting to triple `u32` reference counting.
 pub fn migrate_from_single_to_triple_ref_count<V: V2ToV3, T: Config>() -> Weight {
 	let mut translated: usize = 0;
-	<Account<V, T>>::translate::<(V::Index, RefCount, V::AccountData), _>(
+	<Account<V, T>>::translate::<(V::Nonce, RefCount, V::AccountData), _>(
 		|_key, (nonce, consumers, data)| {
 			translated += 1;
 			Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
@@ -106,7 +106,7 @@ pub fn migrate_from_single_to_triple_ref_count<V: V2ToV3, T: Config>() -> Weight
 /// Migrate from dual `u32` reference counting to triple `u32` reference counting.
 pub fn migrate_from_dual_to_triple_ref_count<V: V2ToV3, T: Config>() -> Weight {
 	let mut translated: usize = 0;
-	<Account<V, T>>::translate::<(V::Index, RefCount, RefCount, V::AccountData), _>(
+	<Account<V, T>>::translate::<(V::Nonce, RefCount, RefCount, V::AccountData), _>(
 		|_key, (nonce, consumers, providers, data)| {
 			translated += 1;
 			Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })

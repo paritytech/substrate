@@ -9,12 +9,12 @@ description = "A no-std/Substrate compatible library to construct binary merkle 
 homepage = "https://substrate.io"
 
 [dependencies]
-array-bytes = { version = "4.1", optional = true }
+array-bytes = { version = "6.1", optional = true }
 log = { version = "0.4", default-features = false, optional = true }
 hash-db = { version = "0.16.0", default-features = false }
 
 [dev-dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 env_logger = "0.9"
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }

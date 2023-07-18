@@ -13,7 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 async-channel = "1.8.0"
-array-bytes = "4.1"
+array-bytes = "6.1"
 fdlimit = "0.2.1"
 futures = "0.3.21"
 log = "0.4.17"

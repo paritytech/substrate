@@ -108,11 +108,12 @@ pub mod pallet {
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub members: BoundedVec<T::AccountId, T::MaxMembers>,
+		#[serde(skip)]
 		pub phantom: PhantomData<I>,
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			use sp_std::collections::btree_set::BTreeSet;
 			let members_set: BTreeSet<_> = self.members.iter().collect();
@@ -524,26 +525,22 @@ mod tests {
 
 	use sp_core::H256;
 	use sp_runtime::{
-		testing::Header,
 		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+		BuildStorage,
 	};
 
 	use frame_support::{
 		assert_noop, assert_ok, bounded_vec, ord_parameter_types, parameter_types,
-		traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
+		traits::{ConstU32, ConstU64, StorageVersion},
 	};
 	use frame_system::EnsureSignedBy;
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 
 	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
+		pub enum Test
 		{
-			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+			System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 			Membership: pallet_membership::{Pallet, Call, Storage, Config<T>, Event<T>},
 		}
 	);
@@ -559,14 +556,13 @@ mod tests {
 		type BlockLength = ();
 		type DbWeight = ();
 		type RuntimeOrigin = RuntimeOrigin;
-		type Index = u64;
-		type BlockNumber = u64;
+		type Nonce = u64;
 		type Hash = H256;
 		type RuntimeCall = RuntimeCall;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
+		type Block = Block;
 		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
@@ -629,7 +625,7 @@ mod tests {
 	}
 
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		pallet_membership::GenesisConfig::<Test> {
 			members: bounded_vec![10, 20, 30],
@@ -642,7 +638,7 @@ mod tests {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	pub(crate) fn new_bench_ext() -> sp_io::TestExternalities {
-		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
+		frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
