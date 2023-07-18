@@ -1044,16 +1044,21 @@ mod tests {
 					TokioExecutor(runtime),
 				)
 				.build();
+
 				// Set the Kademlia mode to server so that it can accept incoming requests.
 				//
 				// Note: the server mode is set automatically when the node learns its external
 				// address, but that does not happen in tests => hence we set it manually.
-				swarm
-					.behaviour_mut()
-					.kademlia
-					.as_mut()
-					.unwrap()
-					.set_mode(Some(kad::Mode::Server));
+				if i != 0 {
+					// leave the first swarm in client mode
+					swarm
+						.behaviour_mut()
+						.kademlia
+						.as_mut()
+						.unwrap()
+						.set_mode(Some(kad::Mode::Server));
+				}
+
 				let listen_addr: Multiaddr =
 					format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 

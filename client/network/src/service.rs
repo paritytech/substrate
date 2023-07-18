@@ -61,13 +61,11 @@ use libp2p::{
 	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
-	// ping::Failure as PingFailure,
 	swarm::{
 		ConnectionError, ConnectionId, DialError, Executor, ListenError, NetworkBehaviour, Swarm,
 		SwarmBuilder, SwarmEvent, THandlerErr,
 	},
-	Multiaddr,
-	PeerId,
+	Multiaddr, PeerId,
 };
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
@@ -1577,9 +1575,9 @@ where
 					};
 					let reason = match cause {
 						Some(ConnectionError::IO(_)) => "transport-error",
-						// Some(ConnectionError::Handler(Either::Left(Either::Left(
-						// 	Either::Right(PingFailure::Timeout),
-						// )))) => "ping-timeout",
+						Some(ConnectionError::Handler(Either::Left(Either::Left(
+							Either::Left(Either::Right(_)),
+						)))) => "ping-timeout",
 						Some(ConnectionError::Handler(Either::Left(Either::Left(
 							Either::Left(Either::Left(Either::Left(
 								NotifsHandlerError::SyncNotificationsClogged,
@@ -1683,7 +1681,7 @@ where
 				debug!(
 					target: "sub-libp2p",
 					"Libp2p => IncomingConnectionError({},{} via {:?}): {}",
-					local_addr, send_back_addr,	connection_id, error,
+					local_addr, send_back_addr, connection_id, error,
 				);
 				if let Some(metrics) = self.metrics.as_ref() {
 					#[allow(deprecated)]
