@@ -1156,7 +1156,7 @@ pub trait Crypto {
 		self.extension::<KeystoreExt>()
 			.expect("No `keystore` associated for the current context!")
 			.bls377_generate_new(id, seed)
-			.expect("`bandernatch_generate` failed")
+			.expect("`bls377_generate` failed")
 	}
 }
 
