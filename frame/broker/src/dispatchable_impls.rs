@@ -63,7 +63,7 @@ impl<T: Config> Pallet<T> {
 			price,
 			sellout_price: None,
 			region_begin: commit_timeslice,
-			region_end: commit_timeslice + config.region_length,
+			region_end: commit_timeslice.saturating_add(config.region_length),
 			first_core: 0,
 			ideal_cores_sold: 0,
 			cores_offered: 0,
