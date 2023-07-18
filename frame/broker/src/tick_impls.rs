@@ -286,7 +286,7 @@ impl<T: Config> Pallet<T> {
 		let mut intermediate = workplan
 			.into_iter()
 			.map(|i| (i.assignment, i.part.count_ones() as u16 * (57_600 / 80)))
-			.inspect(|i| total_used += i.1)
+			.inspect(|i| total_used.saturating_accrue(i.1))
 			.collect::<Vec<_>>();
 		if total_used < 80 {
 			intermediate.push((CoreAssignment::Idle, 80 - total_used));

@@ -31,6 +31,7 @@ use sp_core::Get;
 use sp_runtime::Saturating;
 
 const SEED: u32 = 0;
+const MAX_CORE_COUNT: u16 = 1_000;
 
 fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
 	ConfigRecord {
@@ -77,12 +78,13 @@ fn advance_to<T: Config>(b: u32) {
 fn setup_and_start_sale<T: Config>() -> Result<(), BenchmarkError> {
 	Configuration::<T>::put(new_config_record::<T>());
 
-	// Assume Leases to be almost filled for worst case
-	setup_leases::<T>(T::MaxLeasedCores::get().saturating_sub(1), 1, 10);
+	// Assume Reservations to be filled for worst case
+	setup_reservations::<T>(T::MaxReservedCores::get());
 
-	let core_index: u16 = T::MaxReservedCores::get().try_into().unwrap();
+	// Assume Leases to be filled for worst case
+	setup_leases::<T>(T::MaxLeasedCores::get(), 1, 10);
 
-	Broker::<T>::do_start_sales(10u32.into(), core_index)
+	Broker::<T>::do_start_sales(10u32.into(), MAX_CORE_COUNT.into())
 		.map_err(|_| BenchmarkError::Weightless)?;
 
 	Ok(())
@@ -167,10 +169,10 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn start_sales() -> Result<(), BenchmarkError> {
+	fn start_sales(n: Linear<0, { MAX_CORE_COUNT.into() }>) -> Result<(), BenchmarkError> {
 		Configuration::<T>::put(new_config_record::<T>());
 
-		// Assume Reservations to be almost filled for worst case
+		// Assume Reservations to be filled for worst case
 		setup_reservations::<T>(T::MaxReservedCores::get());
 
 		// Assume Leases to be filled for worst case
@@ -182,7 +184,7 @@ mod benches {
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
-		_(origin as T::RuntimeOrigin, initial_price, 12); //Todo: Check with Gav
+		_(origin as T::RuntimeOrigin, initial_price, n.try_into().unwrap());
 
 		assert!(SaleInfo::<T>::get().is_some());
 
@@ -212,8 +214,6 @@ mod benches {
 
 		advance_to::<T>(2);
 
-		let core_index: u16 = T::MaxReservedCores::get().try_into().unwrap();
-
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(&caller.clone(), 20u32.into());
 
@@ -226,9 +226,9 @@ mod benches {
 		advance_to::<T>(6);
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), core_index.saturating_sub(1));
+		_(RawOrigin::Signed(caller), region.core);
 
-		let id = AllowedRenewalId { core: core_index.saturating_sub(1), when: 10 };
+		let id = AllowedRenewalId { core: region.core, when: 10 };
 		assert!(AllowedRenewals::<T>::get(id).is_some());
 
 		Ok(())
@@ -424,7 +424,7 @@ mod benches {
 
 	#[benchmark]
 	fn request_core_count(
-		n: Linear<0, { T::MaxReservedCores::get().saturating_sub(1) }>,
+		n: Linear<0, { MAX_CORE_COUNT.into() }>,
 	) -> Result<(), BenchmarkError> {
 		let admin_origin =
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
