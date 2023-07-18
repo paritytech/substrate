@@ -36,6 +36,68 @@ fn basic_initialize_works() {
 }
 
 #[test]
+fn drop_region_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_ok!(Broker::do_assign(region, Some(1), 1001, Provisional));
+		advance_to(11);
+		assert_noop!(Broker::do_drop_region(region), Error::<Test>::StillValid);
+		advance_to(12);
+		// assignment worked.
+		let just_1001 = vec![(Task(1001), 57600)];
+		let just_pool = vec![(Pool, 57600)];
+		assert_eq!(
+			CoretimeTrace::get(),
+			vec![
+				(6, AssignCore { core: 0, begin: 8, assignment: just_1001, end_hint: None }),
+				(12, AssignCore { core: 0, begin: 14, assignment: just_pool, end_hint: None }),
+			]
+		);
+		// `region` still exists as it was never finalized.
+		assert_eq!(Regions::<Test>::iter().count(), 1);
+		assert_ok!(Broker::do_drop_region(region));
+		assert_eq!(Regions::<Test>::iter().count(), 0);
+		assert_noop!(Broker::do_drop_region(region), Error::<Test>::UnknownRegion);
+	});
+}
+
+#[test]
+fn drop_renewal_works() {
+	TestExt::new().endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_ok!(Broker::do_assign(region, Some(1), 1001, Final));
+		advance_to(11);
+		let e = Error::<Test>::StillValid;
+		assert_noop!(Broker::do_drop_renewal(region.core, region.begin + 3), e);
+		advance_to(12);
+		assert_ok!(Broker::do_drop_renewal(region.core, region.begin + 3));
+		let e = Error::<Test>::UnknownRenewal;
+		assert_noop!(Broker::do_drop_renewal(region.core, region.begin + 3), e);
+	});
+}
+
+#[test]
+fn drop_contribution_works() {
+	TestExt::new().contribution_timeout(3).endow(1, 1000).execute_with(|| {
+		assert_ok!(Broker::do_start_sales(100, 1));
+		advance_to(2);
+		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		assert_ok!(Broker::do_pool(region, Some(1), 1, Final));
+		assert_eq!(InstaPoolContribution::<Test>::iter().count(), 1);
+		advance_to(19);
+		assert_noop!(Broker::do_drop_contribution(region), Error::<Test>::StillValid);
+		advance_to(20);
+		assert_ok!(Broker::do_drop_contribution(region));
+		assert_eq!(InstaPoolContribution::<Test>::iter().count(), 0);
+		assert_noop!(Broker::do_drop_contribution(region), Error::<Test>::UnknownContribution);
+	});
+}
+
+#[test]
 fn request_core_count_works() {
 	TestExt::new().execute_with(|| {
 		assert_ok!(Broker::do_start_sales(100, 0));

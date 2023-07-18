@@ -425,8 +425,6 @@ pub mod pallet {
 		CorruptWorkplan,
 		/// There is no sale happening currently.
 		NoSales,
-		/// The price for the sale could not be determined. This indicates a logic error.
-		IndeterminablePrice,
 		/// The price limit is exceeded.
 		Overpriced,
 		/// There are no cores available.
@@ -448,17 +446,11 @@ pub mod pallet {
 		TooManyReservations,
 		/// The maximum amount of leases has already been reached.
 		TooManyLeases,
-		/// The revenue for the Instantaneous Core Sales of this period is already known. This
-		/// is unexpected and indicates a logic error.
-		RevenueAlreadyKnown,
 		/// The revenue for the Instantaneous Core Sales of this period is not (yet) known and thus
 		/// this operation cannot proceed.
 		UnknownRevenue,
 		/// The identified contribution to the Instantaneous Core Pool is unknown.
 		UnknownContribution,
-		/// The recorded contributions to the Instantaneous Core Pool are invalid. This is
-		/// unexpected and indicates a logic error.
-		InvalidContributions,
 		/// The workload assigned for renewal is incomplete. This is unexpected and indicates a
 		/// logic error.
 		IncompleteAssignment,

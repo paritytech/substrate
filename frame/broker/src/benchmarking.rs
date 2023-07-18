@@ -423,9 +423,7 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn request_core_count(
-		n: Linear<0, { MAX_CORE_COUNT.into() }>,
-	) -> Result<(), BenchmarkError> {
+	fn request_core_count(n: Linear<0, { MAX_CORE_COUNT.into() }>) -> Result<(), BenchmarkError> {
 		let admin_origin =
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 

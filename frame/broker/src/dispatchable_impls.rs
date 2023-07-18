@@ -378,9 +378,9 @@ impl<T: Config> Pallet<T> {
 		let config = Configuration::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let status = Status::<T>::get().ok_or(Error::<T>::Uninitialized)?;
 		let contrib =
-			InstaPoolContribution::<T>::get(&region_id).ok_or(Error::<T>::UnknownRegion)?;
+			InstaPoolContribution::<T>::get(&region_id).ok_or(Error::<T>::UnknownContribution)?;
 		let end = region_id.begin.saturating_add(contrib.length);
-		ensure!(status.last_timeslice > end + config.contribution_timeout, Error::<T>::StillValid);
+		ensure!(status.last_timeslice >= end + config.contribution_timeout, Error::<T>::StillValid);
 		InstaPoolContribution::<T>::remove(region_id);
 		Self::deposit_event(Event::ContributionDropped { region_id });
 		Ok(())
