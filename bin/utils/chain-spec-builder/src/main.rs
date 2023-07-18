@@ -16,6 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Substrate's chain spec builder utility.
+//!
+//! A chain-spec is short for `chain-configuration`. See the [`sc-chain-spec`] for more information.
+//!
+//! See [`ChainSpecBuilder`] for a list of available commands.
+
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -37,7 +43,7 @@ use sp_keystore::KeystorePtr;
 /// of authorities and endowed accounts and/or generate random accounts.
 #[derive(Parser)]
 #[command(rename_all = "kebab-case")]
-enum ChainSpecBuilder {
+pub enum ChainSpecBuilder {
 	/// Create a new chain spec with the given authorities, endowed and sudo
 	/// accounts.
 	New {

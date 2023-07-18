@@ -12,6 +12,9 @@ version = "0.0.0"
 [dependencies]
 aquamarine = "0.3.2"
 
+subkey = { path = "bin/utils/subkey" }
+chain-spec-builder = { path = "bin/utils/chain-spec-builder" }
+
 sc-service = { path = "client/service" }
 sc-cli = { path = "client/cli" }
 sc-consensus-aura = { path = "client/consensus/aura" }
@@ -22,7 +25,6 @@ sc-consensus-manual-seal = { path = "client/consensus/manual-seal" }
 sc-consensus-pow = { path = "client/consensus/pow" }
 
 sp-runtime = { path = "primitives/runtime" }
-
 frame-support = { path = "frame/support" }
 
 # This is only here to make the CI checks happy and capable of running `cargo check --features

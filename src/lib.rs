@@ -105,6 +105,20 @@
 //! * `pallet-*` and `frame-*` crates, located under `./frame` folder. These are the crates related
 //!   to FRAME. See [`frame_support`] for more information.
 //!
+//! ### Binaries
+//!
+//! Multiple binaries are shipped with substrate, the most important of which are located in the
+//! `./bin` folder.
+//!
+//! * [`node`] is an extensive substrate node that contains the superset of all runtime and client
+//!   side features. The corresponding runtime, called [`kitchensink_runtime`] contains all of the
+//!   modules that are provided with `FRAME`. This node and runtime is only used for testing.
+//! * [`node-template`]: a template node that contains a minimal set of features and can act as a
+//!   starting point of a project.
+//! * [`subkey`]: Substrate's key management utility.
+//! * [`chain-spec-builder`]: Substrate's utility to build *chain specifications*. Such
+//!   specifications can then be used with `--chain` argument of a typical substrate node's CLI.
+//!
 //! ## Parachain?
 //!
 //! As noted above, Substrate is the main engine behind the Polkadot ecosystem. One of the ways
@@ -165,6 +179,11 @@
 //! [`sc-consensus-beefy`]: ../sc_consensus_beefy/index.html
 //! [`sc-consensus-manual-seal`]: ../sc_consensus_manual_seal/index.html
 //! [`sc-consensus-pow`]: ../sc_consensus_pow/index.html
+//! [`node`]: ../node_cli/index.html
+//! [`node-template`]: ../node_template/index.html
+//! [`kitchensink_runtime`]: ../kitchensink_runtime/index.html
+//! [`subkey`]: ..//subkey/index.html
+//! [`chian-spec-builder`]: ../chain_spec_builder/index.html
 
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(rustdoc::private_intra_doc_links)]

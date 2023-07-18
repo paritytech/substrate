@@ -11924,6 +11924,7 @@ name = "substrate"
 version = "0.0.0"
 dependencies = [
  "aquamarine",
+ "chain-spec-builder",
  "frame-support",
  "sc-cli",
  "sc-consensus-aura",
@@ -11934,6 +11935,7 @@ dependencies = [
  "sc-consensus-pow",
  "sc-service",
  "sp-runtime",
+ "subkey",
 ]
 
 [[package]]
