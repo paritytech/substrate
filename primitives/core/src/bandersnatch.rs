@@ -17,9 +17,6 @@
 
 //! VRFs backed by [Bandersnatch](https://neuromancer.sk/std/bls/Bandersnatch),
 //! an elliptic curve built over BLS12-381 scalar field.
-//!
-//! The Bandersnatch curve can be represented in twisted Edwards coordinates, allowing
-//! efficieny inside zk-SNARKS circuits.
 
 #[cfg(feature = "std")]
 use crate::crypto::Ss58Codec;
@@ -45,46 +42,31 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"band");
 #[cfg(feature = "full_crypto")]
 pub const SIGNING_CTX: &[u8] = b"SigningContext";
 
+// Max ring domain size
+const RING_MAX_SIZE: u32 = 1024;
+
 #[cfg(feature = "full_crypto")]
 const SEED_SERIALIZED_LEN: usize = 32;
 
-// Edwards form sizes.
-// @burdges @swasilyev: currently ring-proof is using SHORT-WEIERSTRASS
-// I had to temporary patch bandersnatch_vrfs crate to use SW instrad of ED...
-// const PUBLIC_SERIALIZED_LEN: usize = 32;
-// const SIGNATURE_SERIALIZED_LEN: usize = 64;
-
-// Short-Weierstrass form sizes.
+// Short-Weierstrass form serialized sizes.
 const PUBLIC_SERIALIZED_LEN: usize = 33;
 const SIGNATURE_SERIALIZED_LEN: usize = 65;
-
-// Edwards form sizes (TODO davxy: probably in the end we'll use this form)
-// const PREOUT_SERIALIZED_LEN: usize = 32;
-
-// Short-Weierstrass form sizes.
 const PREOUT_SERIALIZED_LEN: usize = 33;
-
-// Size of serialized pedersen-vrf signature
-// Short-Weierstrass form sizes
 const PEDERSEN_SIGNATURE_SERIALIZED_LEN: usize = 163;
-
-// Size of serialized ring-proof
-// Short-Weierstrass form sizes.
 const RING_PROOF_SERIALIZED_LEN: usize = 592;
-
-// Max ring domain size
-const RING_MAX_SIZE: u32 = 1024;
 
 // Max size of serialized ring-vrf context params.
 //
 // This size is dependent on the ring size.
 //
 // Some values:
-//  ring-size → ~serialized-size
+//  ring_size → ~serialized_size
 //   512        →  74 KB
 //  1024        → 147 KB
 //  2048        → 295 KB
-// @burdges @swasilyev: This is quite big...
+// TODO @swasilyev: This is quite big... can we do anything about it?
+// Looks like the relationship is:
+//  serialized_size(ring_size) = 144·(ring_size + 2) + 4
 const RING_CONTEXT_SERIALIZED_LEN: usize = 147752;
 
 /// Bandersnatch public key.
@@ -266,7 +248,7 @@ impl TraitPair for Pair {
 			("bandersnatch-vrf-HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
 		};
 
-		// TODO @burdges : we need a serializable dleq_vrf::SecretKey to initialize acc
+		// TODO @burdges : probably we need a serializable dleq_vrf::SecretKey to initialize acc
 		let mut acc = [0; 32];
 		for j in path {
 			match j {
@@ -305,7 +287,7 @@ impl TraitPair for Pair {
 
 	/// Return a vector filled with seed raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
-		// TODO @burdges: we need a serializable Secret in dleq_vrf?
+		// TODO @burdges: for this we need a serializable dleq_vrfs::SecretKey
 		unimplemented!()
 	}
 }
@@ -401,7 +383,7 @@ pub mod vrf {
 	pub struct VrfSignData {
 		/// VRF inputs to be signed.
 		pub vrf_inputs: VrfIosVec<VrfInput>,
-		/// Associated Fiat-Shamir transcript
+		/// Associated Fiat-Shamir transcript.
 		pub transcript: Transcript,
 	}
 
@@ -411,9 +393,9 @@ pub mod vrf {
 		/// The `transcript_data` will be used as messages for the Fiat-Shamir
 		/// transform part of the scheme. If unsure just give it a unique label
 		/// depending on the actual usage of the signing data
-		/// (@burges: or leave it empty? There is already the `label` field for contextualization).
-		/// The `vrf_inputs` is a sequence of [`VrfInput`]s to be signed and which
-		/// contribute to the actual output bytes produced via the VRF.
+		/// (TODO @burges: or leave it empty? There is already the `label` field for
+		/// contextualization). The `vrf_inputs` is a sequence of [`VrfInput`]s to be signed and
+		/// which contribute to the actual output bytes produced via the VRF.
 		pub fn new<T: Into<VrfIosVec<VrfInput>>>(
 			label: &'static [u8],
 			transcript_data: &[&[u8]],
@@ -480,9 +462,8 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	impl VrfSecret for Pair {
 		fn vrf_sign(&self, data: &Self::VrfSignData) -> Self::VrfSignature {
-			// TODO: @davxy
 			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
+			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
 			match data.vrf_inputs.len() {
 				0 => self.vrf_sign_gen::<0>(data),
 				1 => self.vrf_sign_gen::<1>(data),
@@ -512,7 +493,7 @@ pub mod vrf {
 				return false
 			}
 			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
+			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
 			match preouts_len {
 				0 => self.vrf_verify_gen::<0>(data, signature),
 				1 => self.vrf_verify_gen::<1>(data, signature),
@@ -711,7 +692,7 @@ pub mod ring_vrf {
 		/// the [`RingProver`] has been derived.
 		pub fn ring_vrf_sign(&self, data: &VrfSignData, prover: &RingProver) -> RingVrfSignature {
 			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
+			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
 			match data.vrf_inputs.len() {
 				0 => self.ring_vrf_sign_gen::<0>(data, prover),
 				1 => self.ring_vrf_sign_gen::<1>(data, prover),
@@ -764,8 +745,8 @@ pub mod ring_vrf {
 			if preouts_len != data.vrf_inputs.len() {
 				return false
 			}
-			// Hack used because backend signature type is generic over the number of ios
-			// @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
+			// Hack used because backend signature type is generic over the number of ios.
+			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
 			match preouts_len {
 				0 => self.verify_gen::<0>(data, verifier),
 				1 => self.verify_gen::<1>(data, verifier),
