@@ -95,6 +95,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
 
+		/// The maximum number of nominators for each validator.
+		#[pallet::constant]
+		type MaxNominators: Get<u32>;
+
 		/// The maximum number of entries to keep in the set id to session index mapping.
 		///
 		/// Since the `SetIdSession` map is only used for validating equivocations this
@@ -189,7 +193,10 @@ pub mod pallet {
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
 		#[pallet::call_index(0)]
-		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		#[pallet::weight(T::WeightInfo::report_equivocation(
+			key_owner_proof.validator_count(),
+			T::MaxNominators::get(),
+		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<EquivocationProof<T::Hash, BlockNumberFor<T>>>,
@@ -215,7 +222,10 @@ pub mod pallet {
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
 		#[pallet::call_index(1)]
-		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		#[pallet::weight(T::WeightInfo::report_equivocation(
+			key_owner_proof.validator_count(),
+			T::MaxNominators::get(),
+		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
 			equivocation_proof: Box<EquivocationProof<T::Hash, BlockNumberFor<T>>>,
@@ -365,7 +375,7 @@ pub mod pallet {
 }
 
 pub trait WeightInfo {
-	fn report_equivocation(validator_count: u32) -> Weight;
+	fn report_equivocation(validator_count: u32, max_nominators_per_validator: u32) -> Weight;
 	fn note_stalled() -> Weight;
 }
 

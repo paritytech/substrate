@@ -175,7 +175,7 @@ pub mod pallet {
 
 		fn on_idle(_: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			let mut meter = WeightMeter::from_limit(remaining_weight);
-			if !meter.check_accrue(T::WeightInfo::empty_on_idle()) {
+			if meter.try_consume(T::WeightInfo::empty_on_idle()).is_err() {
 				return T::WeightInfo::empty_on_idle()
 			}
 
@@ -191,7 +191,7 @@ pub mod pallet {
 			Self::waste_at_most_proof_size(&mut meter);
 			Self::waste_at_most_ref_time(&mut meter);
 
-			meter.consumed
+			meter.consumed()
 		}
 	}
 
@@ -273,7 +273,7 @@ pub mod pallet {
 		pub(crate) fn waste_at_most_proof_size(meter: &mut WeightMeter) {
 			let Ok(n) = Self::calculate_proof_size_iters(&meter) else { return };
 
-			meter.defensive_saturating_accrue(T::WeightInfo::waste_proof_size_some(n));
+			meter.consume(T::WeightInfo::waste_proof_size_some(n));
 
 			(0..n).for_each(|i| {
 				TrashData::<T>::get(i);
@@ -302,7 +302,7 @@ pub mod pallet {
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_ref_time(meter: &mut WeightMeter) {
 			let Ok(n) = Self::calculate_ref_time_iters(&meter) else { return };
-			meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time_iter(n));
+			meter.consume(T::WeightInfo::waste_ref_time_iter(n));
 
 			let clobber = Self::waste_ref_time_iter(vec![0u8; 64], n);
 

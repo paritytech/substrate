@@ -72,7 +72,7 @@ pub use pallet::*;
 
 pub trait WeightInfo {
 	fn plan_config_change() -> Weight;
-	fn report_equivocation(validator_count: u32) -> Weight;
+	fn report_equivocation(validator_count: u32, max_nominators_per_validator: u32) -> Weight;
 }
 
 /// Trigger an epoch change, if any should take place.
@@ -152,6 +152,10 @@ pub mod pallet {
 		/// Max number of authorities allowed
 		#[pallet::constant]
 		type MaxAuthorities: Get<u32>;
+
+		/// The maximum number of nominators for each validator.
+		#[pallet::constant]
+		type MaxNominators: Get<u32>;
 
 		/// The proof of key ownership, used for validating equivocation reports.
 		/// The proof must include the session index and validator count of the
@@ -407,6 +411,7 @@ pub mod pallet {
 		#[pallet::call_index(0)]
 		#[pallet::weight(<T as Config>::WeightInfo::report_equivocation(
 			key_owner_proof.validator_count(),
+			T::MaxNominators::get(),
 		))]
 		pub fn report_equivocation(
 			origin: OriginFor<T>,
@@ -433,6 +438,7 @@ pub mod pallet {
 		#[pallet::call_index(1)]
 		#[pallet::weight(<T as Config>::WeightInfo::report_equivocation(
 			key_owner_proof.validator_count(),
+			T::MaxNominators::get(),
 		))]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
