@@ -1263,18 +1263,34 @@ async fn beefy_reports_equivocations() {
 
 	let peers = peers.into_iter().enumerate();
 	// finalize block #1 -> BEEFY should not finalize anything (each node votes on different MMR).
-	finalize_block_and_wait_for_beefy(&net, peers, &hashes[1], &[]).await;
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
+	peers.clone().for_each(|(index, _)| {
+		let client = net.lock().peer(index).client().as_client();
+		client.finalize_block(hashes[1], None).unwrap();
+	});
 
-	// Verify neither Bob or Bob_Prime report themselves as equivocating.
-	assert!(api_bob.reported_equivocations.as_ref().unwrap().lock().is_empty());
-	assert!(api_bob_prime.reported_equivocations.as_ref().unwrap().lock().is_empty());
+	// run for up to 5 seconds waiting for Alice's report of Bob/Bob_Prime equivocation.
+	for wait_ms in [250, 500, 1250, 3000] {
+		run_for(Duration::from_millis(wait_ms), &net).await;
+		if !api_alice.reported_equivocations.as_ref().unwrap().lock().is_empty() {
+			break
+		}
+	}
 
-	// Verify Alice reports Bob/Bob_Prime equivocation.
+	// Verify expected equivocation
 	let alice_reported_equivocations = api_alice.reported_equivocations.as_ref().unwrap().lock();
 	assert_eq!(alice_reported_equivocations.len(), 1);
 	let equivocation_proof = alice_reported_equivocations.get(0).unwrap();
 	assert_eq!(equivocation_proof.first.id, BeefyKeyring::Bob.public());
 	assert_eq!(equivocation_proof.first.commitment.block_number, 1);
+
+	// Verify neither Bob or Bob_Prime report themselves as equivocating.
+	assert!(api_bob.reported_equivocations.as_ref().unwrap().lock().is_empty());
+	assert!(api_bob_prime.reported_equivocations.as_ref().unwrap().lock().is_empty());
+
+	// sanity verify no new blocks have been finalized by BEEFY
+	streams_empty_after_timeout(best_blocks, &net, None).await;
+	streams_empty_after_timeout(versioned_finality_proof, &net, None).await;
 }
 
 #[tokio::test]

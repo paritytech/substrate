@@ -169,6 +169,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		with_details: impl FnOnce(&ItemDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::ItemLocked);
+		ensure!(
+			!Self::has_system_attribute(&collection, &item, PalletAttributes::TransferDisabled)?,
+			Error::<T, I>::ItemLocked
+		);
 		let item_config = Self::get_item_config(&collection, &item)?;
 		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
 		// then we keep the config record and don't remove it

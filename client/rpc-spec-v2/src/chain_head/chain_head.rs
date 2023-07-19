@@ -162,7 +162,8 @@ where
 			},
 		};
 		// Keep track of the subscription.
-		let Some(rx_stop) = self.subscriptions.insert_subscription(sub_id.clone(), with_runtime) else {
+		let Some(rx_stop) = self.subscriptions.insert_subscription(sub_id.clone(), with_runtime)
+		else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
 			debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription already accepted", sub_id);
@@ -420,13 +421,7 @@ where
 
 			let res = client
 				.executor()
-				.call(
-					hash,
-					&function,
-					&call_parameters,
-					client.execution_extensions().strategies().other,
-					CallContext::Offchain,
-				)
+				.call(hash, &function, &call_parameters, CallContext::Offchain)
 				.map(|result| {
 					let result = format!("0x{:?}", HexDisplay::from(&result));
 					ChainHeadEvent::Done(ChainHeadResult { result })

@@ -21,3 +21,6 @@
 /// before calling this migration. After calling this migration, it will get replaced with
 /// own storage identifier.
 pub mod v4;
+
+/// A migration that unreserves all funds held in the context of this pallet.
+pub mod unreserve_deposits;

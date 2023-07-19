@@ -50,6 +50,15 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+use frame_support::{
+	dispatch::{
+		DispatchClass, DispatchInfo, DispatchResult, GetDispatchInfo, Pays, PostDispatchInfo,
+	},
+	traits::{Defensive, EstimateCallFee, Get},
+	weights::{Weight, WeightToFee},
+};
+pub use pallet::*;
+pub use payment::*;
 use sp_runtime::{
 	traits::{
 		Convert, DispatchInfoOf, Dispatchable, One, PostDispatchInfoOf, SaturatedConversion,
@@ -58,17 +67,10 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
-	FixedPointNumber, FixedPointOperand, FixedU128, Perquintill, RuntimeDebug,
+	FixedPointNumber, FixedPointOperand, FixedU128, Perbill, Perquintill, RuntimeDebug,
 };
 use sp_std::prelude::*;
-
-use frame_support::{
-	dispatch::{
-		DispatchClass, DispatchInfo, DispatchResult, GetDispatchInfo, Pays, PostDispatchInfo,
-	},
-	traits::{EstimateCallFee, Get},
-	weights::{Weight, WeightToFee},
-};
+pub use types::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 
 #[cfg(test)]
 mod mock;
@@ -77,10 +79,6 @@ mod tests;
 
 mod payment;
 mod types;
-
-pub use pallet::*;
-pub use payment::*;
-pub use types::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 
 /// Fee multiplier.
 pub type Multiplier = FixedU128;
@@ -108,9 +106,16 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 /// with tests that the combination of this `M` and `V` is not such that the multiplier can drop to
 /// zero and never recover.
 ///
-/// note that `s'` is interpreted as a portion in the _normal transaction_ capacity of the block.
+/// Note that `s'` is interpreted as a portion in the _normal transaction_ capacity of the block.
 /// For example, given `s' == 0.25` and `AvailableBlockRatio = 0.75`, then the target fullness is
 /// _0.25 of the normal capacity_ and _0.1875 of the entire block_.
+///
+/// Since block weight is multi-dimension, we use the scarcer resource, referred as limiting
+/// dimension, for calculation of fees. We determine the limiting dimension by comparing the
+/// dimensions using the ratio of `dimension_value / max_dimension_value` and selecting the largest
+/// ratio. For instance, if a block is 30% full based on `ref_time` and 25% full based on
+/// `proof_size`, we identify `ref_time` as the limiting dimension, indicating that the block is 30%
+/// full.
 ///
 /// This implementation implies the bound:
 /// - `v ≤ p / k * (s − s')`
@@ -207,15 +212,30 @@ where
 		let normal_block_weight =
 			current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
 
-		// TODO: Handle all weight dimensions
-		let normal_max_weight = normal_max_weight.ref_time();
-		let normal_block_weight = normal_block_weight.ref_time();
+		// Normalize dimensions so they can be compared. Ensure (defensive) max weight is non-zero.
+		let normalized_ref_time = Perbill::from_rational(
+			normal_block_weight.ref_time(),
+			normal_max_weight.ref_time().max(1),
+		);
+		let normalized_proof_size = Perbill::from_rational(
+			normal_block_weight.proof_size(),
+			normal_max_weight.proof_size().max(1),
+		);
 
-		let s = S::get();
-		let v = V::get();
+		// Pick the limiting dimension. If the proof size is the limiting dimension, then the
+		// multiplier is adjusted by the proof size. Otherwise, it is adjusted by the ref time.
+		let (normal_limiting_dimension, max_limiting_dimension) =
+			if normalized_ref_time < normalized_proof_size {
+				(normal_block_weight.proof_size(), normal_max_weight.proof_size())
+			} else {
+				(normal_block_weight.ref_time(), normal_max_weight.ref_time())
+			};
 
-		let target_weight = (s * normal_max_weight) as u128;
-		let block_weight = normal_block_weight as u128;
+		let target_block_fullness = S::get();
+		let adjustment_variable = V::get();
+
+		let target_weight = (target_block_fullness * max_limiting_dimension) as u128;
+		let block_weight = normal_limiting_dimension as u128;
 
 		// determines if the first_term is positive
 		let positive = block_weight >= target_weight;
@@ -223,12 +243,13 @@ where
 
 		// defensive only, a test case assures that the maximum weight diff can fit in Multiplier
 		// without any saturation.
-		let diff = Multiplier::saturating_from_rational(diff_abs, normal_max_weight.max(1));
+		let diff = Multiplier::saturating_from_rational(diff_abs, max_limiting_dimension.max(1));
 		let diff_squared = diff.saturating_mul(diff);
 
-		let v_squared_2 = v.saturating_mul(v) / Multiplier::saturating_from_integer(2);
+		let v_squared_2 = adjustment_variable.saturating_mul(adjustment_variable) /
+			Multiplier::saturating_from_integer(2);
 
-		let first_term = v.saturating_mul(diff);
+		let first_term = adjustment_variable.saturating_mul(diff);
 		let second_term = v_squared_2.saturating_mul(diff_squared);
 
 		if positive {
@@ -290,9 +311,10 @@ const MULTIPLIER_DEFAULT_VALUE: Multiplier = Multiplier::from_u32(1);
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	use super::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -358,18 +380,20 @@ pub mod pallet {
 	pub(super) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
 		pub multiplier: Multiplier,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { multiplier: MULTIPLIER_DEFAULT_VALUE }
+			Self { multiplier: MULTIPLIER_DEFAULT_VALUE, _config: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			StorageVersion::<T>::put(Releases::V2);
 			NextFeeMultiplier::<T>::put(self.multiplier);
@@ -386,12 +410,13 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_finalize(_: T::BlockNumber) {
+		fn on_finalize(_: frame_system::pallet_prelude::BlockNumberFor<T>) {
 			<NextFeeMultiplier<T>>::mutate(|fm| {
 				*fm = T::FeeMultiplierUpdate::convert(*fm);
 			});
 		}
 
+		#[cfg(feature = "std")]
 		fn integrity_test() {
 			// given weight == u64, we build multipliers from `diff` of two weight values, which can
 			// at most be maximum block weight. Make sure that this can fit in a multiplier without
@@ -417,25 +442,21 @@ pub mod pallet {
 				return
 			}
 
-			#[cfg(any(feature = "std", test))]
-			sp_io::TestExternalities::new_empty().execute_with(|| {
-				// This is the minimum value of the multiplier. Make sure that if we collapse to
-				// this value, we can recover with a reasonable amount of traffic. For this test we
-				// assert that if we collapse to minimum, the trend will be positive with a weight
-				// value which is 1% more than the target.
-				let min_value = T::FeeMultiplierUpdate::min();
+			// This is the minimum value of the multiplier. Make sure that if we collapse to this
+			// value, we can recover with a reasonable amount of traffic. For this test we assert
+			// that if we collapse to minimum, the trend will be positive with a weight value which
+			// is 1% more than the target.
+			let min_value = T::FeeMultiplierUpdate::min();
+			let target = target + addition;
 
-				let target = target + addition;
-
-				<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
-				let next = T::FeeMultiplierUpdate::convert(min_value);
-				assert!(
-					next > min_value,
-					"The minimum bound of the multiplier is too low. When \
-					block saturation is more than target by 1% and multiplier is minimal then \
-					the multiplier doesn't increase."
-				);
-			});
+			<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
+			let next = T::FeeMultiplierUpdate::convert(min_value);
+			assert!(
+				next > min_value,
+				"The minimum bound of the multiplier is too low. When \
+				block saturation is more than target by 1% and multiplier is minimal then \
+				the multiplier doesn't increase."
+			);
 		}
 	}
 }
@@ -710,19 +731,20 @@ where
 		tip: BalanceOf<T>,
 		final_fee: BalanceOf<T>,
 	) -> TransactionPriority {
-		// Calculate how many such extrinsics we could fit into an empty block and take
-		// the limitting factor.
+		// Calculate how many such extrinsics we could fit into an empty block and take the
+		// limiting factor.
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let max_block_length = *T::BlockLength::get().max.get(info.class) as u64;
 
-		// TODO: Take into account all dimensions of weight
-		let max_block_weight = max_block_weight.ref_time();
-		let info_weight = info.weight.ref_time();
-
-		let bounded_weight = info_weight.clamp(1, max_block_weight);
+		// bounded_weight is used as a divisor later so we keep it non-zero.
+		let bounded_weight = info.weight.max(Weight::from_parts(1, 1)).min(max_block_weight);
 		let bounded_length = (len as u64).clamp(1, max_block_length);
 
-		let max_tx_per_block_weight = max_block_weight / bounded_weight;
+		// returns the scarce resource, i.e. the one that is limiting the number of transactions.
+		let max_tx_per_block_weight = max_block_weight
+			.checked_div_per_component(&bounded_weight)
+			.defensive_proof("bounded_weight is non-zero; qed")
+			.unwrap_or(1);
 		let max_tx_per_block_length = max_block_length / bounded_length;
 		// Given our current knowledge this value is going to be in a reasonable range - i.e.
 		// less than 10^9 (2^30), so multiplying by the `tip` value is unlikely to overflow the

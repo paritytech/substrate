@@ -17,13 +17,13 @@
 
 //! Integration tests for sr25519
 
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::sr25519::AppPair;
 use sp_core::{
 	crypto::{ByteArray, Pair},
 	testing::SR25519,
 };
-use sp_keystore::{testing::MemoryKeystore, Keystore};
+use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use std::sync::Arc;
 use substrate_test_runtime_client::{
 	runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
@@ -32,9 +32,12 @@ use substrate_test_runtime_client::{
 #[test]
 fn sr25519_works_in_runtime() {
 	let keystore = Arc::new(MemoryKeystore::new());
-	let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
-	let (signature, public) = test_client
-		.runtime_api()
+	let test_client = TestClientBuilder::new().build();
+
+	let mut runtime_api = test_client.runtime_api();
+	runtime_api.register_extension(KeystoreExt::new(keystore.clone()));
+
+	let (signature, public) = runtime_api
 		.test_sr25519_crypto(test_client.chain_info().genesis_hash)
 		.expect("Tests `sr25519` crypto.");
 

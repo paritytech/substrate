@@ -81,20 +81,20 @@ When reviewing a pull request, the end-goal is to suggest useful changes to the 
 To create a Polkadot companion PR:
 
 . Pull latest Polkadot master (or clone it, if you haven't yet).
-. Override substrate deps to point to your local path or branch using https://github.com/bkchr/diener. (E.g. from the polkadot clone dir run `diener patch --crates-to-patch ../substrate --substrate` assuming substrate clone is in a sibling dir. If you do use diener, ensure that you _do not_ commit the changes diener makes to the Cargo.tomls.)
-. Make the changes required and build polkadot locally.
+. Override substrate deps to point to your local path or branch using https://github.com/bkchr/diener. (E.g. from the Polkadot clone dir run `diener patch --crates-to-patch ../substrate --substrate` assuming substrate clone is in a sibling dir. If you do use diener, ensure that you _do not_ commit the changes diener makes to the Cargo.tomls.)
+. Make the changes required and build Polkadot locally.
 . Submit all this as a PR against the Polkadot Repo.
-. In the _description_ of your _Substrate_ PR add "polkadot companion: [Polkadot_PR_URL]"
-. Now you should see that the `check_polkadot` CI job will build your Substrate PR agains the mentioned Polkadot branch in your PR description.
-. Someone will need to approve the Polkadot PR before the Substrate CI will go green. (The Polkadot CI failing can be ignored as long as the polkadot job in the _substrate_ PR is green).
+. In the _description_ of your _Substrate_ PR add "Polkadot companion: [Polkadot_PR_URL]"
+. Now you should see that the `check_polkadot` CI job will build your Substrate PR against the mentioned Polkadot branch in your PR description.
+. Someone will need to approve the Polkadot PR before the Substrate CI will go green. (The Polkadot CI failing can be ignored as long as the Polkadot job in the _substrate_ PR is green).
 . Wait for reviews on both the Substrate and the Polkadot PRs.
-. Once the Substrate PR runs green, a member of the `parity` github group can comment on the Substrate PR with `bot merge` which will:
+. Once the Substrate PR runs green, a member of the `parity` Github group can comment on the Substrate PR with `bot merge` which will:
     - Merge the Substrate PR.
-    - The bot will push a commit to the Polkadot PR updating its Substrate reference. (effecively doing `cargo update -p sp-io`)
-    - If the polkadot PR origins from a fork then a project member may need to press `approve run` on the polkadot PR.
+    - The bot will push a commit to the Polkadot PR updating its Substrate reference. (effectively doing `cargo update -p sp-io`)
+    - If the Polkadot PR origins from a fork then a project member may need to press `approve run` on the Polkadot PR.
     - The bot will merge the Polkadot PR once all its CI `{"build_allow_failure":false}` checks are green.
     Note: The merge-bot currently doesn't work with forks on org accounts, only individual accounts.
-	(Hint: it's recommended to use `bot merge` to merge all substrate PRs, not just ones with a polkadot companion.)
+	(Hint: it's recommended to use `bot merge` to merge all substrate PRs, not just ones with a Polkadot companion.)
 
 If your PR is reviewed well, but a Polkadot PR is missing, signal it with https://github.com/paritytech/substrate/labels/E6-needs_polkadot_pr[`E6-needs_polkadot_pr`] to prevent it from getting automatically merged. In most cases the CI will add this label automatically.
 
@@ -102,7 +102,7 @@ As there might be multiple pending PRs that might conflict with one another, a) 
 
 == Helping out
 
-We use https://paritytech.github.io/labels/doc_substrate.html[labels] to manage PRs and issues and communicate state of a PR. Please familiarize yourself with them. Best way to get started is to a pick a ticket tagged https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AZ1-easy[`easy`] or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AZ2-medium[`medium`] and get going or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AZ6-mentor[`mentor`] and get in contact with the mentor offering their support on that larger task.
+We use https://paritytech.github.io/labels/doc_substrate.html[labels] to manage PRs and issues and communicate state of a PR. Please familiarize yourself with them. The best way to get started is to a pick a ticket tagged https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AZ1-easy[`easy`] or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AZ2-medium[`medium`] and get going or https://github.com/paritytech/substrate/issues?q=is%3Aissue+is%3Aopen+label%3AZ6-mentor[`mentor`] and get in contact with the mentor offering their support on that larger task.
 
 == Issues
 Please label issues with the following labels:
@@ -120,7 +120,7 @@ Declaring formal releases remains the prerogative of the project maintainer(s).
 UI tests are used for macros to ensure that the output of a macro doesn't change and is in the expected format. These UI tests are sensible to any changes
 in the macro generated code or to switching the rust stable version. The tests are only run when the `RUN_UI_TESTS` environment variable is set. So, when
 the CI is for example complaining about failing UI tests and it is expected that they fail these tests need to be executed locally. To simplify the updating
-of the UI test ouput there is the `.maintain/update-rust-stable.sh` script. This can be run with `.maintain/update-rust-stable.sh CURRENT_STABLE_VERSION`
+of the UI test output there is the `.maintain/update-rust-stable.sh` script. This can be run with `.maintain/update-rust-stable.sh CURRENT_STABLE_VERSION`
 and then it will run all UI tests to update the expected output.
 
 == Changes to this arrangement

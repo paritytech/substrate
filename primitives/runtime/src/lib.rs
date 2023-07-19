@@ -15,7 +15,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Runtime Modules shared primitive types.
+//! # Substrate Runtime Primitives.
+//!
+//! This crate, among other things, contains a large library of types and utilities that are used in
+//! the Substrate runtime, but are not particularly `FRAME`-oriented.
+//!
+//! ## Block, Header and Extrinsics
+//!
+//! Most notable, this crate contains some of the types and trait that enable important
+//! communication between the client and the runtime. This includes:
+//!
+//! - A set of traits to declare what any block/header/extrinsic type should provide.
+//! 	- [`traits::Block`], [`traits::Header`], [`traits::Extrinsic`]
+//! - A set of types that implement these traits, whilst still providing a high degree of
+//!   configurability via generics.
+//! 	- [`generic::Block`], [`generic::Header`], [`generic::UncheckedExtrinsic`] and
+//!    [`generic::CheckedExtrinsic`]
+//!
+//! ## Runtime API Types
+//!
+//! This crate also contains some types that are often used in conjuncture with Runtime APIs. Most
+//! notable:
+//!
+//! - [`ApplyExtrinsicResult`], and [`DispatchOutcome`], which dictate how the client and runtime
+//!   communicate about the success or failure of an extrinsic.
+//! - [`transaction_validity`], which dictates how the client and runtime communicate about the
+//!  validity of an extrinsic while still in the transaction-queue.
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -43,7 +68,7 @@ pub use sp_core::storage::StateVersion;
 pub use sp_core::storage::{Storage, StorageChild};
 
 use sp_core::{
-	crypto::{self, ByteArray},
+	crypto::{self, ByteArray, FromEntropy},
 	ecdsa, ed25519,
 	hash::{H256, H512},
 	sr25519,
@@ -96,7 +121,7 @@ pub use sp_arithmetic::helpers_128bit;
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
 	traits::SaturatedConversion, ArithmeticError, FixedI128, FixedI64, FixedPointNumber,
-	FixedPointOperand, FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
+	FixedPointOperand, FixedU128, FixedU64, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
 	Perquintill, Rational128, Rounding, UpperOf,
 };
 
@@ -199,6 +224,9 @@ pub trait BuildStorage {
 
 /// Something that can build the genesis storage of a module.
 #[cfg(feature = "std")]
+#[deprecated(
+	note = "`BuildModuleGenesisStorage` is planned to be removed in December 2023. Use `BuildStorage` instead of it."
+)]
 pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
@@ -309,6 +337,16 @@ pub enum MultiSigner {
 	Sr25519(sr25519::Public),
 	/// An SECP256k1/ECDSA identity (actually, the Blake2 hash of the compressed pub key).
 	Ecdsa(ecdsa::Public),
+}
+
+impl FromEntropy for MultiSigner {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		Ok(match input.read_byte()? % 3 {
+			0 => Self::Ed25519(FromEntropy::from_entropy(input)?),
+			1 => Self::Sr25519(FromEntropy::from_entropy(input)?),
+			2.. => Self::Ecdsa(FromEntropy::from_entropy(input)?),
+		})
+	}
 }
 
 /// NOTE: This implementations is required by `SimpleAddressDeterminer`,

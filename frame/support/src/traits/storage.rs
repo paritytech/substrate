@@ -37,6 +37,12 @@ pub trait Instance: 'static {
 	const INDEX: u8;
 }
 
+// Dummy implementation for `()`.
+impl Instance for () {
+	const PREFIX: &'static str = "";
+	const INDEX: u8 = 0;
+}
+
 /// An instance of a storage in a pallet.
 ///
 /// Define an instance for an individual storage inside a pallet.

@@ -90,7 +90,7 @@ pub trait Ext<T: Config> {
 
 /// This [`Ext`] is used for actual on-chain execution when balance needs to be charged.
 ///
-/// It uses [`ReservableCurrency`] in order to do accomplish the reserves.
+/// It uses [`frame_support::traits::ReservableCurrency`] in order to do accomplish the reserves.
 pub enum ReservingExt {}
 
 /// Used to implement a type state pattern for the meter.
