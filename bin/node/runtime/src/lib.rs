@@ -34,7 +34,7 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		fungible::ItemOf,
+		fungible::{Balanced, Credit, ItemOf},
 		tokens::{nonfungibles_v2::Inspect, GetSalary, PayFromAccount},
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
 		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
@@ -1871,8 +1871,6 @@ impl pallet_statement::Config for Runtime {
 parameter_types! {
 	pub const BrokerPalletId: PalletId = PalletId(*b"py/broke");
 }
-
-use frame_support::traits::fungible::{Balanced, Credit};
 
 pub struct IntoAuthor;
 impl OnUnbalanced<Credit<AccountId, Balances>> for IntoAuthor {
