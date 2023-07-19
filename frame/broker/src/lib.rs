@@ -25,9 +25,10 @@ mod benchmarking;
 mod core_mask;
 mod coretime_interface;
 mod dispatchable_impls;
-mod mock;
 mod nonfungible_impl;
+#[cfg(test)]
 mod test_fungibles;
+#[cfg(test)]
 mod tests;
 mod tick_impls;
 mod types;
@@ -56,6 +57,7 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_runtime::traits::{Convert, ConvertBack};
+	use sp_std::vec::Vec;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);

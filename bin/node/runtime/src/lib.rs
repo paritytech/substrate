@@ -1868,6 +1868,36 @@ impl pallet_statement::Config for Runtime {
 	type MaxAllowedBytes = MaxAllowedBytes;
 }
 
+parameter_types! {
+	pub const BrokerPalletId: PalletId = PalletId(*b"py/broke");
+}
+
+use frame_support::traits::fungible::{Balanced, Credit};
+
+pub struct IntoAuthor;
+impl OnUnbalanced<Credit<AccountId, Balances>> for IntoAuthor {
+	fn on_nonzero_unbalanced(credit: Credit<AccountId, Balances>) {
+		if let Some(author) = Authorship::author() {
+			let _ = <Balances as Balanced<_>>::resolve(&author, credit);
+		}
+	}
+}
+
+impl pallet_broker::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type OnRevenue = IntoAuthor;
+	type TimeslicePeriod = ConstU32<2>;
+	type MaxLeasedCores = ConstU32<5>;
+	type MaxReservedCores = ConstU32<5>;
+	type Coretime = ();
+	type ConvertBalance = sp_runtime::traits::Identity;
+	type WeightInfo = ();
+	type PalletId = BrokerPalletId;
+	type AdminOrigin = EnsureRoot<AccountId>;
+	type PriceAdapter = pallet_broker::Linear;
+}
+
 construct_runtime!(
 	pub struct Runtime
 	{
@@ -1941,6 +1971,7 @@ construct_runtime!(
 		MessageQueue: pallet_message_queue,
 		Pov: frame_benchmarking_pallet_pov,
 		Statement: pallet_statement,
+		Broker: pallet_broker,
 	}
 );
 
@@ -2021,6 +2052,7 @@ mod benches {
 		[pallet_bags_list, VoterList]
 		[pallet_balances, Balances]
 		[pallet_bounties, Bounties]
+		[pallet_broker, Broker]
 		[pallet_child_bounties, ChildBounties]
 		[pallet_collective, Council]
 		[pallet_conviction_voting, ConvictionVoting]

@@ -66,6 +66,7 @@ pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../.
 pallet-bags-list = { version = "4.0.0-dev", default-features = false, path = "../../../frame/bags-list" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances" }
 pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/bounties" }
+pallet-broker = { version = "0.1.0", default-features = false, path = "../../../frame/broker" }
 pallet-child-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/child-bounties" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts" }
@@ -153,6 +154,7 @@ std = [
 	"pallet-bags-list/std",
 	"pallet-balances/std",
 	"pallet-bounties/std",
+	"pallet-broker/std",
 	"sp-block-builder/std",
 	"codec/std",
 	"scale-info/std",
@@ -249,6 +251,7 @@ runtime-benchmarks = [
 	"pallet-bags-list/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-bounties/runtime-benchmarks",
+	"pallet-broker/runtime-benchmarks",
 	"pallet-child-bounties/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
 	"pallet-contracts/runtime-benchmarks",
@@ -313,6 +316,7 @@ try-runtime = [
 	"pallet-bags-list/try-runtime",
 	"pallet-balances/try-runtime",
 	"pallet-bounties/try-runtime",
+	"pallet-broker/try-runtime",
 	"pallet-child-bounties/try-runtime",
 	"pallet-collective/try-runtime",
 	"pallet-contracts/try-runtime",

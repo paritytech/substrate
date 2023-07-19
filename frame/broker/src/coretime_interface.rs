@@ -3,7 +3,7 @@ use frame_support::Parameter;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_core::RuntimeDebug;
-use sp_std::fmt::Debug;
+use sp_std::{fmt::Debug, vec::Vec};
 
 /// Index of a Polkadot Core.
 pub type CoreIndex = u16;
@@ -52,7 +52,7 @@ pub trait CoretimeInterface {
 }
 impl CoretimeInterface for () {
 	type AccountId = ();
-	type Balance = u64;
+	type Balance = u128;
 	type BlockNumber = u32;
 	fn latest() -> Self::BlockNumber {
 		0

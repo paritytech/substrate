@@ -4094,6 +4094,7 @@ dependencies = [
  "pallet-bags-list",
  "pallet-balances",
  "pallet-bounties",
+ "pallet-broker",
  "pallet-child-bounties",
  "pallet-collective",
  "pallet-contracts",

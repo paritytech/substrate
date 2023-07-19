@@ -5,6 +5,7 @@ use sp_arithmetic::{
 	FixedPointNumber,
 };
 use sp_runtime::traits::ConvertBack;
+use sp_std::{vec, vec::Vec};
 use CompletionStatus::Complete;
 
 impl<T: Config> Pallet<T> {

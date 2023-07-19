@@ -3,6 +3,7 @@ use frame_support::{
 	pallet_prelude::{DispatchResult, *},
 	traits::nonfungible::{Inspect, Transfer},
 };
+use sp_std::vec::Vec;
 
 impl<T: Config> Inspect<T::AccountId> for Pallet<T> {
 	type ItemId = u128;
