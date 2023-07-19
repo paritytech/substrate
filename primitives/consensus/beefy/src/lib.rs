@@ -319,7 +319,7 @@ impl OpaqueKeyOwnershipProof {
 }
 
 sp_api::decl_runtime_apis! {
-	/// API necessary for BEEFY voters with only ECDSA key.
+	/// API necessary for BEEFY voters.
 	pub trait BeefyApi<AuthorityId> where
 	AuthorityId : Codec + RuntimeAppPublic,
 	{

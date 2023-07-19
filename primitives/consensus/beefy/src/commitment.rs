@@ -280,7 +280,6 @@ mod tests {
 
 	#[cfg(feature = "bls-experimental")]
 	type TestBlsSignedCommitment = SignedCommitment<u128, EcdsaBlsSignaturePair>;
-	//type TestVersionedBlsFinalityProof = VersionedFinalityProof<u128, EcdsaBlsSignaturePair>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
