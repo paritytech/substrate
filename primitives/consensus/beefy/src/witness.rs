@@ -97,7 +97,7 @@ mod tests {
 
 	type TestCommitment = Commitment<u128>;
 
-	///types for ecdsa signed commitment
+	/// Types for ecdsa signed commitment.
 	type TestSignedCommitment = SignedCommitment<u128, ecdsa_crypto::Signature>;
 	type TestSignedCommitmentWitness =
 		SignedCommitmentWitness<u128, Vec<Option<ecdsa_crypto::Signature>>>;

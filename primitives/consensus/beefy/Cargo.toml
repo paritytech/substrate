@@ -24,7 +24,6 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../runti
 sp-std = { version = "8.0.0", default-features = false, path = "../../std" }
 strum = { version = "0.24.1", features = ["derive"], default-features = false }
 lazy_static = "1.4.0"
-w3f-bls = { version = "0.1.3", default-features = false, optional = true}
 
 [dev-dependencies]
 array-bytes = "6.1"
@@ -58,7 +57,6 @@ serde = [
 # This feature adds BLS crypto primitives. It should not be used in production since
 # the BLS implementation and interface may still be subject to significant change.
 bls-experimental = [
- 	 "w3f-bls",
  	 "sp-core/bls-experimental",
  	 "sp-application-crypto/bls-experimental",	 
 ]
