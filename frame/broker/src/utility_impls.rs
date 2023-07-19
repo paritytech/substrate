@@ -8,7 +8,7 @@ use frame_support::{
 	},
 };
 use sp_arithmetic::{
-	traits::{Bounded, SaturatedConversion, Saturating},
+	traits::{SaturatedConversion, Saturating},
 	FixedPointNumber, FixedU64,
 };
 use sp_runtime::traits::AccountIdConversion;
@@ -101,4 +101,3 @@ impl<T: Config> Pallet<T> {
 		Ok(Some((region_id, region)))
 	}
 }
-

@@ -17,7 +17,7 @@
 
 #![cfg(test)]
 
-use crate::{core_part::*, mock::*, *};
+use crate::{core_mask::*, mock::*, *};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::nonfungible::{Inspect as NftInspect, Transfer},
@@ -115,21 +115,21 @@ fn drop_history_works() {
 			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 3);
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
 			advance_to(16);
-			assert_ok!(Broker::do_drop_history(region));
+			assert_ok!(Broker::do_drop_history(region.begin));
 			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 2);
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
 			advance_to(17);
 			region.begin += 1;
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
 			advance_to(18);
-			assert_ok!(Broker::do_drop_history(region));
+			assert_ok!(Broker::do_drop_history(region.begin));
 			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 1);
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
 			advance_to(19);
 			region.begin += 1;
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
 			advance_to(20);
-			assert_ok!(Broker::do_drop_history(region));
+			assert_ok!(Broker::do_drop_history(region.begin));
 			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 0);
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
 		});

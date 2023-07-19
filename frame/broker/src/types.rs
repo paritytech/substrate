@@ -1,4 +1,6 @@
-use crate::{Config, CoreAssignment, CoreIndex, CoreMask, CORE_MASK_BITS, CoretimeInterface, TaskId};
+use crate::{
+	Config, CoreAssignment, CoreIndex, CoreMask, CoretimeInterface, TaskId, CORE_MASK_BITS,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::traits::fungible::Inspect;
 use frame_system::Config as SConfig;
@@ -78,7 +80,7 @@ pub struct ScheduleItem {
 	/// The job that the Core should be doing.
 	pub assignment: CoreAssignment,
 }
-pub type Schedule = BoundedVec<ScheduleItem, ConstU32<CORE_MASK_BITS>>;
+pub type Schedule = BoundedVec<ScheduleItem, ConstU32<{ CORE_MASK_BITS as u32 }>>;
 
 /// The record body of a Region which was contributed to the Instantaneous Coretime Pool. This helps
 /// with making pro rata payments to contributors.

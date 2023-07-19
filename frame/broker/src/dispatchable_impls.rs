@@ -380,7 +380,10 @@ impl<T: Config> Pallet<T> {
 		let contrib =
 			InstaPoolContribution::<T>::get(&region_id).ok_or(Error::<T>::UnknownContribution)?;
 		let end = region_id.begin.saturating_add(contrib.length);
-		ensure!(status.last_timeslice > end.saturating_add(config.contribution_timeout), Error::<T>::StillValid);
+		ensure!(
+			status.last_timeslice > end.saturating_add(config.contribution_timeout),
+			Error::<T>::StillValid
+		);
 		InstaPoolContribution::<T>::remove(region_id);
 		Self::deposit_event(Event::ContributionDropped { region_id });
 		Ok(())

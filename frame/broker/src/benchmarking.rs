@@ -33,6 +33,10 @@ use sp_runtime::Saturating;
 const SEED: u32 = 0;
 const MAX_CORE_COUNT: u16 = 1_000;
 
+fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
+}
+
 fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
 	ConfigRecord {
 		advance_notice: 2u32.into(),
@@ -49,8 +53,11 @@ fn new_config_record<T: Config>() -> ConfigRecordOf<T> {
 fn new_schedule() -> Schedule {
 	// Max items for worst case
 	let mut items = Vec::new();
-	for i in 0..80 {
-		items.push(ScheduleItem { assignment: Task(i), part: CoreMask::complete() });
+	for i in 0..CORE_MASK_BITS {
+		items.push(ScheduleItem {
+			assignment: Task(i.try_into().unwrap()),
+			part: CoreMask::complete(),
+		});
 	}
 	Schedule::truncate_from(items)
 }
@@ -187,6 +194,23 @@ mod benches {
 		_(origin as T::RuntimeOrigin, initial_price, n.try_into().unwrap());
 
 		assert!(SaleInfo::<T>::get().is_some());
+		assert_last_event::<T>(
+			Event::SaleInitialized {
+				sale_start: 2u32.into(),
+				leadin_length: 1u32.into(),
+				start_price: 20u32.into(),
+				regular_price: 10u32.into(),
+				region_begin: 4,
+				region_end: 7,
+				ideal_cores_sold: 0,
+				cores_offered: n
+					.saturating_sub(T::MaxReservedCores::get())
+					.saturating_sub(T::MaxLeasedCores::get())
+					.try_into()
+					.unwrap(),
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
@@ -201,9 +225,18 @@ mod benches {
 		T::Currency::set_balance(&caller.clone(), 10u32.into());
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), 10u32.into());
+		_(RawOrigin::Signed(caller.clone()), 10u32.into());
 
 		assert_eq!(SaleInfo::<T>::get().unwrap().sellout_price, Some(10u32.into()));
+		assert_last_event::<T>(
+			Event::Purchased {
+				who: caller,
+				region_id: RegionId { begin: 4, core: 10, part: CoreMask::complete() },
+				price: 10u32.into(),
+				duration: 3u32.into(),
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
@@ -286,6 +319,21 @@ mod benches {
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, 0x00000_fffff_fffff_00000.into());
+
+		assert_last_event::<T>(
+			Event::Interlaced {
+				old_region_id: RegionId { begin: 4, core: 10, part: CoreMask::complete() },
+				new_region_ids: (
+					RegionId { begin: 4, core: 10, part: 0x00000_fffff_fffff_00000.into() },
+					RegionId {
+						begin: 4,
+						core: 10,
+						part: CoreMask::complete() ^ 0x00000_fffff_fffff_00000.into(),
+					},
+				),
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
