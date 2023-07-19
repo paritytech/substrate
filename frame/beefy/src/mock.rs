@@ -110,6 +110,7 @@ parameter_types! {
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
 	type MaxAuthorities = ConstU32<100>;
+	type MaxNominators = ConstU32<1000>;
 	type MaxSetIdSessionEntries = MaxSetIdSessionEntries;
 	type OnNewValidatorSet = ();
 	type WeightInfo = ();
