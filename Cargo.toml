@@ -29,6 +29,10 @@ frame-support = { path = "frame/support" }
 
 node-cli = { path = "bin/node/cli" }
 
+# Exists here to be backwards compatible and to support `cargo run` in the workspace.
+#
+# Just uses the `node-cli` main binary. `node-cli` itself also again exposes the node as
+# `substrate-node`. Using `node-cli` directly you can also enable features.
 [[bin]]
 name = "substrate"
 path = "bin/node/cli/bin/main.rs"

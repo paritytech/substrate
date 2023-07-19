@@ -25,6 +25,8 @@ maintenance = { status = "actively-developed" }
 is-it-maintained-issue-resolution = { repository = "paritytech/substrate" }
 is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 
+# The same node binary as the `substrate` (defined in the workspace `Cargo.toml`) binary,
+# but just exposed by this crate here.
 [[bin]]
 name = "substrate-node"
 path = "bin/main.rs"
