@@ -40,7 +40,7 @@ use sp_runtime::{
 use sp_staking::{
 	currency_to_vote::CurrencyToVote,
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, Stake, StakingInterface,
+	EraIndex, SessionIndex, Stake, StakingAccount, StakingInterface,
 };
 use sp_std::prelude::*;
 
@@ -66,16 +66,18 @@ use sp_runtime::TryRuntimeError;
 const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 
 impl<T: Config> Pallet<T> {
+	/// Fetches the ledger associated with a stash account, if any.
 	pub fn ledger(stash: &T::AccountId) -> Option<StakingLedger<T>> {
-		match StakingLedger::<T>::get(stash) {
+		match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
 			None => None,
 			Some(StakingLedgerStatus::BondedNotPaired) => None,
 			Some(StakingLedgerStatus::Paired(ledger)) => Some(ledger),
 		}
 	}
 
+	/// Fetches the controller bonded to a stash account, if any.
 	pub fn bonded(stash: &T::AccountId) -> Option<T::AccountId> {
-		StakingLedger::<T>::controller_of(&stash)
+		StakingLedger::<T>::paired_account(StakingAccount::Stash(stash.clone()))
 	}
 
 	/// The total balance that can be slashed from a stash account as of right now.
@@ -174,18 +176,14 @@ impl<T: Config> Pallet<T> {
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		})?;
 
-		let mut ledger = match StakingLedger::<T>::get(&validator_stash) {
-			None =>
-				Err(Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
-			Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController.into()),
-			Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
-		}?;
-
-		//let controller = Self::bonded(&validator_stash).ok_or_else(|| {
-		//	Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
-		//})?;
-		//let mut ledger =
-		//  StakingLedger::<T>::storage_get(&controller).ok_or(Error::<T>::NotController)?;
+		let mut ledger =
+			match StakingLedger::<T>::get(StakingAccount::Stash(validator_stash.clone())) {
+				None =>
+					Err(Error::<T>::NotStash
+						.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
+				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController.into()),
+				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
+			}?;
 
 		ledger
 			.claimed_rewards
@@ -317,7 +315,8 @@ impl<T: Config> Pallet<T> {
 					ledger.total += amount;
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
 
-					// TODO: handle error here.
+					// calling `fn Self::ledger` ensures that the returned ledger exists in storage,
+					// qed.
 					let _ = ledger.mutate();
 
 					r

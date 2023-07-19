@@ -5,7 +5,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Zero, Perquintill, Rounding, Saturating};
-use sp_staking::{EraIndex, OnStakingUpdate};
+use sp_staking::{EraIndex, OnStakingUpdate, StakingAccount};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{log, BalanceOf, Bonded, Config, Error, Ledger, UnlockChunk, STAKING_ID};
@@ -97,37 +97,15 @@ impl<T: Config> StakingLedger<T> {
 		}
 	}
 
-	pub(crate) fn controller_of(stash: &T::AccountId) -> Option<T::AccountId> {
-		<Bonded<T>>::get(stash)
-	}
-
 	/// Returns the controller account of the staking ledger.
 	///
 	/// Note: Fallback into querying the `Bonded` storage with the ledger stash if the controller
 	/// is not set, which most likely means that self was fetched directly from `Ledger` instead of
 	/// through the methods exposed in `StakingLedger`. If ledger does not exist, return `None`.
 	pub(crate) fn controller(&self) -> Option<T::AccountId> {
-		self.controller.clone().or_else(|| Self::controller_of(&self.stash))
-	}
-
-	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
-		<Bonded<T>>::insert(&self.stash, &self.stash);
-
-		Ok(())
-	}
-
-	pub(crate) fn get(stash: &T::AccountId) -> Option<StakingLedgerStatus<T>> {
-		if let Some(controller) = <Bonded<T>>::get(stash) {
-			match <Ledger<T>>::get(&controller).map(|mut ledger| {
-				ledger.controller = Some(controller.clone());
-				ledger
-			}) {
-				Some(ledger) => Some(StakingLedgerStatus::Paired(ledger)),
-				None => Some(StakingLedgerStatus::BondedNotPaired),
-			}
-		} else {
-			None
-		}
+		self.controller
+			.clone()
+			.or_else(|| Self::paired_account(StakingAccount::Stash(self.stash.clone())))
 	}
 
 	/// Inserts/updates a staking ledger account.
@@ -142,6 +120,49 @@ impl<T: Config> StakingLedger<T> {
 
 		Ok(())
 	}
+
+	// TODO: add tests!
+	/// Returns the paired account, if any.
+	///
+	/// A "pair" refers to the tuple (stash, controller). If the input is the
+	/// [`StakingAccount::Stash`], its pair account will be of type [`StakingAccount::Controller`]
+	/// and vice-versa.
+	///
+	/// This method is meant to abstract from the runtime development the difference between stash
+	/// and controller. This will be deprecated once the controller is fully deprecated as well.
+	pub(crate) fn paired_account(account: StakingAccount<T::AccountId>) -> Option<T::AccountId> {
+		match account {
+			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash),
+			StakingAccount::Controller(controller) =>
+				<Ledger<T>>::get(&controller).map(|ledger| ledger.stash),
+		}
+	}
+
+	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
+		<Bonded<T>>::insert(&self.stash, &self.stash);
+
+		Ok(())
+	}
+
+	pub(crate) fn get(account: StakingAccount<T::AccountId>) -> Option<StakingLedgerStatus<T>> {
+		let controller = if let Some(controller) = match account {
+			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash),
+			StakingAccount::Controller(controller) => Some(controller),
+		} {
+			controller
+		} else {
+			return None
+		};
+
+		match <Ledger<T>>::get(&controller).map(|mut ledger| {
+			ledger.controller = Some(controller.clone());
+			ledger
+		}) {
+			Some(ledger) => Some(StakingLedgerStatus::Paired(ledger)),
+			None => Some(StakingLedgerStatus::BondedNotPaired),
+		}
+	}
+
 
 	/// Removes all data related to a staking ledger and its bond.
 	pub(crate) fn kill(stash: &T::AccountId) -> Result<(), Error<T>> {

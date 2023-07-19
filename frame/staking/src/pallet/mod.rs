@@ -35,7 +35,7 @@ use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	ArithmeticError, Perbill, Percent,
 };
-use sp_staking::{EraIndex, SessionIndex};
+use sp_staking::{EraIndex, SessionIndex, StakingAccount};
 use sp_std::prelude::*;
 
 mod impls;
@@ -837,7 +837,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			match StakingLedger::<T>::get(&stash) {
+			match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
 				None => Ok(()),
 				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::AlreadyBonded),
 				Some(StakingLedgerStatus::Paired(_)) => Err(Error::<T>::AlreadyPaired),
@@ -901,7 +901,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			let mut ledger = match StakingLedger::<T>::get(&stash) {
+			let mut ledger = match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
 				None => Err(Error::<T>::NotStash),
 				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
 				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
@@ -1134,10 +1134,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			// TODO: refactor get ledger from controller to StakingLedger.
-			// Maybe wrap the AccountId with input to StakingLedger::get with an enum that could be
-			// either a stash or controller.
-			let ledger = <Ledger<T>>::get(controller).ok_or(Error::<T>::NotController)?;
+			let ledger = match StakingLedger::<T>::get(StakingAccount::Controller(controller)) {
+				None => Err(Error::<T>::NotStash),
+				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
+				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
+			}?;
 
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
@@ -1203,10 +1204,12 @@ pub mod pallet {
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			// TODO: refactor get ledger from controller to StakingLedger.
-			// Maybe wrap the AccountId with input to StakingLedger::get with an enum that could be
-			// either a stash or controller.
-			let ledger = <Ledger<T>>::get(controller).ok_or(Error::<T>::NotController)?;
+			let ledger = match StakingLedger::<T>::get(StakingAccount::Controller(controller)) {
+				None => Err(Error::<T>::NotStash),
+				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
+				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
+			}?;
+
 			Self::chill_stash(&ledger.stash);
 			Ok(())
 		}
@@ -1257,7 +1260,7 @@ pub mod pallet {
 
 			// the bonded map and ledger are mutated directly as this extrinsic is related to a
 			// (temporary) passive migration.
-			match StakingLedger::<T>::get(&stash) {
+			match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
 				None => Err(Error::<T>::NotStash.into()),
 				Some(StakingLedgerStatus::BondedNotPaired) => {
 					// update bond only.
@@ -1265,7 +1268,7 @@ pub mod pallet {
 					Ok(())
 				},
 				Some(StakingLedgerStatus::Paired(ledger)) => {
-					let controller = ledger.controller().ok_or(Error::<T>::NotController)?; // correct error to throw here?
+					let controller = ledger.controller().ok_or(Error::<T>::NotController)?; // TODO: correct error to throw here?
 					if controller == stash {
 						// stash is already its own controller.
 						return Err(Error::<T>::AlreadyPaired.into())

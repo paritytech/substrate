@@ -37,6 +37,15 @@ pub type SessionIndex = u32;
 /// Counter for the number of eras that have passed.
 pub type EraIndex = u32;
 
+/// Representation of a staking account, which may be a stash or controller account.
+///
+/// Note: once the controller is completely deprecated, this enum can also be deprecated in favor of
+/// the stash account.
+pub enum StakingAccount<AccountId> {
+	Stash(AccountId),
+	Controller(AccountId),
+}
+
 /// Representation of the status of a staker.
 #[derive(RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone))]

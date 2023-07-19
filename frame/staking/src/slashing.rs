@@ -618,7 +618,7 @@ pub fn do_slash<T: Config>(
 			*reward_payout = reward_payout.saturating_sub(missing);
 		}
 
-		// TODO: handle error here
+		// calling `fn Pallet::ledger` ensures that the returned ledger exists in storage, qed.
 		let _ = ledger.mutate();
 
 		// trigger the event
