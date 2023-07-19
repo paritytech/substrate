@@ -76,10 +76,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 	}: SealBlockParams<'_, B, BI, SC, C, E, TP, CIDP, P>,
 ) where
 	B: BlockT,
-	BI: BlockImport<B, Error = sp_consensus::Error>
-		+ Send
-		+ Sync
-		+ 'static,
+	BI: BlockImport<B, Error = sp_consensus::Error> + Send + Sync + 'static,
 	C: HeaderBackend<B> + ProvideRuntimeApi<B>,
 	E: Environment<B>,
 	E::Proposer: Proposer<B, Proof = P>,

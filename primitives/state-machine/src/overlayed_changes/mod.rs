@@ -34,7 +34,7 @@ use sp_externalities::{Extension, Extensions};
 #[cfg(not(feature = "std"))]
 use sp_std::collections::btree_map::BTreeMap as Map;
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
-use sp_trie::PrefixedMemoryDB;
+use sp_trie::{empty_child_trie_root, LayoutV1, PrefixedMemoryDB};
 #[cfg(feature = "std")]
 use std::collections::{hash_map::Entry as MapEntry, HashMap as Map};
 #[cfg(feature = "std")]
@@ -643,15 +643,19 @@ impl<H: Hasher> OverlayedChanges<H> {
 	/// Generate the storage root using `backend` and all changes
 	/// as seen by the current transaction.
 	///
-	/// Returns the storage root and caches storage transaction in the given `cache`.
+	/// Returns the storage root and if the storage root was cached.
 	pub fn storage_root<B: Backend<H>>(
 		&mut self,
 		backend: &B,
 		state_version: StateVersion,
-	) -> H::Out
+	) -> (H::Out, bool)
 	where
 		H::Out: Ord + Encode,
 	{
+		if let Some(cache) = &self.storage_transaction_cache {
+			return (cache.transaction_storage_root, true)
+		}
+
 		let delta = self.changes().map(|(k, v)| (&k[..], v.value().map(|v| &v[..])));
 		let child_delta = self.children().map(|(changes, info)| {
 			(info, changes.map(|(k, v)| (&k[..], v.value().map(|v| &v[..]))))
@@ -662,7 +666,73 @@ impl<H: Hasher> OverlayedChanges<H> {
 		self.storage_transaction_cache =
 			Some(StorageTransactionCache { transaction, transaction_storage_root: root });
 
-		root
+		(root, false)
+	}
+
+	/// Generate the child storage root using `backend` and all child changes
+	/// as seen by the current transaction.
+	///
+	/// Returns the storage root and if the storage root was cached.
+	pub fn child_storage_root<B: Backend<H>>(
+		&mut self,
+		child_info: &ChildInfo,
+		backend: &B,
+		state_version: StateVersion,
+	) -> Result<(H::Out, bool), B::Error>
+	where
+		H::Out: Ord + Encode + Decode,
+	{
+		let storage_key = child_info.storage_key();
+		let prefixed_storage_key = child_info.prefixed_storage_key();
+
+		if self.storage_transaction_cache.is_some() {
+			let root = self
+				.storage(prefixed_storage_key.as_slice())
+				.map(|v| Ok(v.map(|v| v.to_vec())))
+				.or_else(|| backend.storage(prefixed_storage_key.as_slice()).map(Some).transpose())
+				.transpose()?
+				.flatten()
+				.and_then(|k| Decode::decode(&mut &k[..]).ok())
+				// V1 is equivalent to V0 on empty root.
+				.unwrap_or_else(empty_child_trie_root::<LayoutV1<H>>);
+
+			return Ok((root, true))
+		}
+
+		let root = if let Some((changes, info)) = self.child_changes(storage_key) {
+			let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
+			Some(backend.child_storage_root(info, delta, state_version))
+		} else {
+			None
+		};
+
+		let root = if let Some((root, is_empty, _)) = root {
+			// We store update in the overlay in order to be able to use
+			// 'self.storage_transaction' cache. This is brittle as it rely on Ext only querying
+			// the trie backend for storage root.
+			// A better design would be to manage 'child_storage_transaction' in a
+			// similar way as 'storage_transaction' but for each child trie.
+			if is_empty {
+				self.set_storage(prefixed_storage_key.into_inner(), None);
+			} else {
+				self.set_storage(prefixed_storage_key.into_inner(), Some(root.encode()));
+			}
+
+			self.mark_dirty();
+
+			root
+		} else {
+			// empty overlay
+			let root = backend
+				.storage(prefixed_storage_key.as_slice())?
+				.and_then(|k| Decode::decode(&mut &k[..]).ok())
+				// V1 is equivalent to V0 on empty root.
+				.unwrap_or_else(empty_child_trie_root::<LayoutV1<H>>);
+
+			root
+		};
+
+		Ok((root, false))
 	}
 
 	/// Returns an iterator over the keys (in lexicographic order) following `key` (excluding `key`)
@@ -809,7 +879,8 @@ impl<'a> OverlayedExtensions<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{ext::Ext, InMemoryBackend};
+	use crate::{ext::Ext, new_in_mem, InMemoryBackend};
+	use array_bytes::bytes2hex;
 	use sp_core::{traits::Externalities, Blake2Hasher};
 	use std::collections::BTreeMap;
 
@@ -934,12 +1005,56 @@ mod tests {
 		overlay.set_storage(b"dogglesworth".to_vec(), Some(b"cat".to_vec()));
 		overlay.set_storage(b"doug".to_vec(), None);
 
-		let mut ext = Ext::new(&mut overlay, &backend, None);
-		let root = array_bytes::hex2bytes_unchecked(
-			"39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa",
-		);
+		{
+			let mut ext = Ext::new(&mut overlay, &backend, None);
+			let root = "39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa";
 
-		assert_eq!(&ext.storage_root(state_version)[..], &root);
+			assert_eq!(bytes2hex("", &ext.storage_root(state_version)), root);
+			// Calling a second time should use it from the cache
+			assert_eq!(bytes2hex("", &ext.storage_root(state_version)), root);
+		}
+
+		// Check that the storage root is recalculated
+		overlay.set_storage(b"doug2".to_vec(), Some(b"yes".to_vec()));
+
+		let mut ext = Ext::new(&mut overlay, &backend, None);
+		let root = "5c0a4e35cb967de785e1cb8743e6f24b6ff6d45155317f2078f6eb3fc4ff3e3d";
+		assert_eq!(bytes2hex("", &ext.storage_root(state_version)), root);
+	}
+
+	#[test]
+	fn overlayed_child_storage_root_works() {
+		let state_version = StateVersion::default();
+		let child_info = ChildInfo::new_default(b"Child1");
+		let child_info = &child_info;
+		let backend = new_in_mem::<Blake2Hasher>();
+		let mut overlay = OverlayedChanges::<Blake2Hasher>::default();
+		overlay.start_transaction();
+		overlay.set_child_storage(child_info, vec![20], Some(vec![20]));
+		overlay.set_child_storage(child_info, vec![30], Some(vec![30]));
+		overlay.set_child_storage(child_info, vec![40], Some(vec![40]));
+		overlay.commit_transaction().unwrap();
+		overlay.set_child_storage(child_info, vec![10], Some(vec![10]));
+		overlay.set_child_storage(child_info, vec![30], None);
+
+		{
+			let mut ext = Ext::new(&mut overlay, &backend, None);
+			let child_root = "c02965e1df4dc5baf6977390ce67dab1d7a9b27a87c1afe27b50d29cc990e0f5";
+			let root = "eafb765909c3ed5afd92a0c564acf4620d0234b31702e8e8e9b48da72a748838";
+
+			assert_eq!(
+				bytes2hex("", &ext.child_storage_root(child_info, state_version)),
+				child_root,
+			);
+
+			assert_eq!(bytes2hex("", &ext.storage_root(state_version)), root);
+
+			// Calling a second time should use it from the cache
+			assert_eq!(
+				bytes2hex("", &ext.child_storage_root(child_info, state_version)),
+				child_root,
+			);
+		}
 	}
 
 	#[test]

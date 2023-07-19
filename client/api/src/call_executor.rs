@@ -26,7 +26,7 @@ use sp_state_machine::{OverlayedChanges, StorageProof};
 use std::cell::RefCell;
 
 use crate::execution_extensions::ExecutionExtensions;
-use sp_api::{ProofRecorder, HashFor};
+use sp_api::{HashFor, ProofRecorder};
 
 /// Executor Provider
 pub trait ExecutorProvider<Block: BlockT> {

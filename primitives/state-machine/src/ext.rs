@@ -22,7 +22,7 @@ use crate::overlayed_changes::OverlayedExtensions;
 use crate::{
 	backend::Backend, IndexOperation, IterArgs, OverlayedChanges, StorageKey, StorageValue,
 };
-use codec::{Decode, Encode, EncodeAppend};
+use codec::{Encode, EncodeAppend};
 use hash_db::Hasher;
 #[cfg(feature = "std")]
 use sp_core::hexdisplay::HexDisplay;
@@ -30,7 +30,6 @@ use sp_core::storage::{
 	well_known_keys::is_child_storage_key, ChildInfo, StateVersion, TrackedStorageKey,
 };
 use sp_externalities::{Extension, ExtensionStore, Externalities, MultiRemovalResults};
-use sp_trie::{empty_child_trie_root, LayoutV1};
 
 use crate::{log_error, trace, warn};
 use sp_std::{
@@ -513,13 +512,14 @@ where
 	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
 		let _guard = guard();
 
-		let root = self.overlay.storage_root(self.backend, state_version);
+		let (root, cached) = self.overlay.storage_root(self.backend, state_version);
+
 		trace!(
 			target: "state",
 			method = "StorageRoot",
 			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
 			storage_root = %HexDisplay::from(&root.as_ref()),
-			cached = false,
+			%cached,
 		);
 
 		root.encode()
@@ -531,74 +531,22 @@ where
 		state_version: StateVersion,
 	) -> Vec<u8> {
 		let _guard = guard();
-		let storage_key = child_info.storage_key();
-		let prefixed_storage_key = child_info.prefixed_storage_key();
-		if false {
-			let root = self
-				.storage(prefixed_storage_key.as_slice())
-				.and_then(|k| Decode::decode(&mut &k[..]).ok())
-				// V1 is equivalent to V0 on empty root.
-				.unwrap_or_else(empty_child_trie_root::<LayoutV1<H>>);
-			trace!(
-				target: "state",
-				method = "ChildStorageRoot",
-				ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
-				child_info = %HexDisplay::from(&storage_key),
-				storage_root = %HexDisplay::from(&root.as_ref()),
-				cached = true,
-			);
-			root.encode()
-		} else {
-			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
-				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
-				Some(self.backend.child_storage_root(info, delta, state_version))
-			} else {
-				None
-			};
 
-			if let Some((root, is_empty, _)) = root {
-				let root = root.encode();
-				// We store update in the overlay in order to be able to use
-				// 'self.storage_transaction' cache. This is brittle as it rely on Ext only querying
-				// the trie backend for storage root.
-				// A better design would be to manage 'child_storage_transaction' in a
-				// similar way as 'storage_transaction' but for each child trie.
-				if is_empty {
-					self.overlay.set_storage(prefixed_storage_key.into_inner(), None);
-				} else {
-					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
-				}
+		let (root, cached) = self
+			.overlay
+			.child_storage_root(child_info, self.backend, state_version)
+			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 
-				trace!(
-					target: "state",
-					method = "ChildStorageRoot",
-					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
-					child_info = %HexDisplay::from(&storage_key),
-					storage_root = %HexDisplay::from(&root.as_ref()),
-					cached = false,
-				);
+		trace!(
+			target: "state",
+			method = "ChildStorageRoot",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
+			storage_root = %HexDisplay::from(&root.as_ref()),
+			%cached,
+		);
 
-				root
-			} else {
-				// empty overlay
-				let root = self
-					.storage(prefixed_storage_key.as_slice())
-					.and_then(|k| Decode::decode(&mut &k[..]).ok())
-					// V1 is equivalent to V0 on empty root.
-					.unwrap_or_else(empty_child_trie_root::<LayoutV1<H>>);
-
-				trace!(
-					target: "state",
-					method = "ChildStorageRoot",
-					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
-					child_info = %HexDisplay::from(&storage_key),
-					storage_root = %HexDisplay::from(&root.as_ref()),
-					cached = false,
-				);
-
-				root.encode()
-			}
-		}
+		root.encode()
 	}
 
 	fn storage_index_transaction(&mut self, index: u32, hash: &[u8], size: u32) {
@@ -875,7 +823,7 @@ where
 mod tests {
 	use super::*;
 	use crate::InMemoryBackend;
-	use codec::Encode;
+	use codec::{Decode, Encode};
 	use sp_core::{
 		map,
 		storage::{Storage, StorageChild},

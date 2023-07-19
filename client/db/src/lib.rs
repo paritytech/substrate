@@ -86,9 +86,9 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	backend::{AsTrieBackend, Backend as StateBackend},
-	ChildStorageCollection, DBValue, IndexOperation, IterArgs, OffchainChangesCollection,
-	StateMachineStats, StorageCollection, StorageIterator, StorageKey, StorageValue,
-	UsageInfo as StateUsageInfo, BackendTransaction,
+	BackendTransaction, ChildStorageCollection, DBValue, IndexOperation, IterArgs,
+	OffchainChangesCollection, StateMachineStats, StorageCollection, StorageIterator, StorageKey,
+	StorageValue, UsageInfo as StateUsageInfo,
 };
 use sp_trie::{cache::SharedTrieCache, prefixed_key, MemoryDB, PrefixedMemoryDB};
 

@@ -36,7 +36,7 @@ use sp_storage::{ChildInfo, StorageData, StorageKey};
 
 use crate::{blockchain::Backend as BlockchainBackend, UsageInfo};
 
-pub use sp_state_machine::{Backend as StateBackend, KeyValueStates, BackendTransaction};
+pub use sp_state_machine::{Backend as StateBackend, BackendTransaction, KeyValueStates};
 
 /// Extracts the state backend type for the given backend.
 pub type StateBackendFor<B, Block> = <B as Backend<Block>>::State;

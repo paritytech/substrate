@@ -125,7 +125,7 @@ impl sp_std::fmt::Display for DefaultError {
 }
 
 pub use crate::{
-	backend::{Backend, IterArgs, KeysIter, PairsIter, StorageIterator, BackendTransaction},
+	backend::{Backend, BackendTransaction, IterArgs, KeysIter, PairsIter, StorageIterator},
 	error::{Error, ExecutionError},
 	ext::Ext,
 	overlayed_changes::{

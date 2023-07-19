@@ -601,10 +601,7 @@ pub trait CallApiAt<Block: BlockT> {
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.
-	fn call_api_at(
-		&self,
-		params: CallApiAtParams<Block>,
-	) -> Result<Vec<u8>, ApiError>;
+	fn call_api_at(&self, params: CallApiAtParams<Block>) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at_hash: Block::Hash) -> Result<RuntimeVersion, ApiError>;
