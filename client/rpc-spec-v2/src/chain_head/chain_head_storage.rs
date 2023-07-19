@@ -58,12 +58,7 @@ fn is_key_queryable(key: &[u8]) -> bool {
 }
 
 /// The result of making a query call.
-enum QueryResult {
-	/// The query successfully produced a result that can be buffered.
-	Buffered(StorageResult<String>),
-	/// The query produced an event that should be propagated.
-	Immediate(ChainHeadStorageEvent<String>),
-}
+type QueryResult = Result<StorageResult<String>, ChainHeadStorageEvent<String>>;
 
 impl<Client, Block, BE> ChainHeadStorage<Client, Block, BE>
 where
@@ -87,14 +82,14 @@ where
 		result
 			.map(|opt| {
 				opt.map(|storage_data| {
-					QueryResult::Buffered(StorageResult::<String> {
+					QueryResult::Ok(StorageResult::<String> {
 						key: hex_string(&key.0),
 						result: StorageResultType::Value(hex_string(&storage_data.0)),
 					})
 				})
 			})
 			.unwrap_or_else(|err| {
-				Some(QueryResult::Immediate(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
+				Some(QueryResult::Err(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
 					error: err.to_string(),
 				})))
 			})
@@ -116,14 +111,14 @@ where
 		result
 			.map(|opt| {
 				opt.map(|storage_data| {
-					QueryResult::Buffered(StorageResult::<String> {
+					QueryResult::Ok(StorageResult::<String> {
 						key: hex_string(&key.0),
 						result: StorageResultType::Hash(hex_string(&storage_data.as_ref())),
 					})
 				})
 			})
 			.unwrap_or_else(|err| {
-				Some(QueryResult::Immediate(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
+				Some(QueryResult::Err(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
 					error: err.to_string(),
 				})))
 			})
@@ -169,8 +164,8 @@ where
             };
 
 			match result {
-				QueryResult::Buffered(storage_result) => storage_results.push(storage_result),
-				QueryResult::Immediate(event) => {
+				QueryResult::Ok(storage_result) => storage_results.push(storage_result),
+				QueryResult::Err(event) => {
 					let _ = sink.send(&event);
 				},
 			}
