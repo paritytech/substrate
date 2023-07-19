@@ -24,6 +24,7 @@ use crate::{
 		chain_head_follow::ChainHeadFollower,
 		error::Error as ChainHeadRpcError,
 		event::{ChainHeadEvent, ChainHeadResult, ErrorEvent, FollowEvent, NetworkConfig},
+		hex_string,
 		subscription::{SubscriptionManagement, SubscriptionManagementError},
 	},
 	SubscriptionTaskExecutor,
@@ -42,7 +43,7 @@ use sc_client_api::{
 };
 use sp_api::CallApiAt;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-use sp_core::{hexdisplay::HexDisplay, traits::CallContext, Bytes};
+use sp_core::{traits::CallContext, Bytes};
 use sp_runtime::traits::Block as BlockT;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
@@ -79,7 +80,7 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 		max_pinned_blocks: usize,
 		max_pinned_duration: Duration,
 	) -> Self {
-		let genesis_hash = format!("0x{:?}", HexDisplay::from(&genesis_hash.as_ref()));
+		let genesis_hash = hex_string(&genesis_hash.as_ref());
 
 		Self {
 			client,
@@ -233,7 +234,7 @@ where
 			let event = match client.block(hash) {
 				Ok(Some(signed_block)) => {
 					let extrinsics = signed_block.block.extrinsics();
-					let result = format!("0x{:?}", HexDisplay::from(&extrinsics.encode()));
+					let result = hex_string(&extrinsics.encode());
 					ChainHeadEvent::Done(ChainHeadResult { result })
 				},
 				Ok(None) => {
@@ -276,7 +277,7 @@ where
 
 		self.client
 			.header(hash)
-			.map(|opt_header| opt_header.map(|h| format!("0x{:?}", HexDisplay::from(&h.encode()))))
+			.map(|opt_header| opt_header.map(|h| hex_string(&h.encode())))
 			.map_err(ChainHeadRpcError::FetchBlockHeader)
 			.map_err(Into::into)
 	}
@@ -402,7 +403,7 @@ where
 				.executor()
 				.call(hash, &function, &call_parameters, CallContext::Offchain)
 				.map(|result| {
-					let result = format!("0x{:?}", HexDisplay::from(&result));
+					let result = hex_string(&result);
 					ChainHeadEvent::Done(ChainHeadResult { result })
 				})
 				.unwrap_or_else(|error| {

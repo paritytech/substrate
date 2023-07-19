@@ -23,14 +23,14 @@ use std::{marker::PhantomData, sync::Arc};
 use jsonrpsee::SubscriptionSink;
 use sc_client_api::{Backend, ChildInfo, StorageKey, StorageProvider};
 use sp_api::BlockT;
-use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys};
+use sp_core::storage::well_known_keys;
 
 use super::{
 	event::{
 		ChainHeadStorageEvent, ItemsEvent, StorageQuery, StorageQueryType, StorageResult,
 		StorageResultType,
 	},
-	ErrorEvent,
+	hex_string, ErrorEvent,
 };
 
 /// Generates the events of the `chainHead_storage` method.
@@ -88,11 +88,8 @@ where
 			.map(|opt| {
 				opt.map(|storage_data| {
 					QueryResult::Buffered(StorageResult::<String> {
-						key: format!("0x{:?}", HexDisplay::from(&key.0)),
-						result: StorageResultType::Value(format!(
-							"0x{:?}",
-							HexDisplay::from(&storage_data.0)
-						)),
+						key: hex_string(&key.0),
+						result: StorageResultType::Value(hex_string(&storage_data.0)),
 					})
 				})
 			})
@@ -120,8 +117,8 @@ where
 			.map(|opt| {
 				opt.map(|storage_data| {
 					QueryResult::Buffered(StorageResult::<String> {
-						key: format!("0x{:?}", HexDisplay::from(&key.0)),
-						result: StorageResultType::Hash(format!("{:?}", storage_data)),
+						key: hex_string(&key.0),
+						result: StorageResultType::Hash(hex_string(&storage_data.as_ref())),
 					})
 				})
 			})

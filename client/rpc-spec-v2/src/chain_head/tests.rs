@@ -20,7 +20,6 @@ use sp_api::BlockT;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{
-	hexdisplay::HexDisplay,
 	storage::well_known_keys::{self, CODE},
 	testing::TaskExecutor,
 	Blake2Hasher, Hasher,
@@ -293,14 +292,14 @@ async fn get_genesis() {
 
 	let genesis: String =
 		api.call("chainHead_unstable_genesisHash", EmptyParams::new()).await.unwrap();
-	assert_eq!(genesis, format!("0x{}", HexDisplay::from(&CHAIN_GENESIS)));
+	assert_eq!(genesis, hex_string(&CHAIN_GENESIS));
 }
 
 #[tokio::test]
 async fn get_header() {
 	let (_client, api, _sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
-	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+	let invalid_hash = hex_string(&INVALID_HASH);
 
 	// Invalid subscription ID must produce no results.
 	let res: Option<String> = api
@@ -329,7 +328,7 @@ async fn get_header() {
 async fn get_body() {
 	let (mut client, api, mut block_sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
-	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+	let invalid_hash = hex_string(&INVALID_HASH);
 
 	// Subscription ID is stale the disjoint event is emitted.
 	let mut sub = api
@@ -382,7 +381,7 @@ async fn get_body() {
 	let mut sub = api.subscribe("chainHead_unstable_body", [&sub_id, &block_hash]).await.unwrap();
 	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
 	// Hex encoded scale encoded string for the vector of extrinsics.
-	let expected = format!("0x{:?}", HexDisplay::from(&block.extrinsics.encode()));
+	let expected = hex_string(&block.extrinsics.encode());
 	assert_matches!(event,
 		ChainHeadEvent::Done(done) if done.result == expected
 	);
@@ -392,7 +391,7 @@ async fn get_body() {
 async fn call_runtime() {
 	let (_client, api, _sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
-	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+	let invalid_hash = hex_string(&INVALID_HASH);
 
 	// Subscription ID is stale the disjoint event is emitted.
 	let mut sub = api
@@ -431,7 +430,7 @@ async fn call_runtime() {
 
 	let alice_id = AccountKeyring::Alice.to_account_id();
 	// Hex encoded scale encoded bytes representing the call parameters.
-	let call_parameters = format!("0x{:?}", HexDisplay::from(&alice_id.encode()));
+	let call_parameters = hex_string(&alice_id.encode());
 	let mut sub = api
 		.subscribe(
 			"chainHead_unstable_call",
@@ -500,7 +499,7 @@ async fn call_runtime_without_flag() {
 
 	// Valid runtime call on a subscription started with `with_runtime` false.
 	let alice_id = AccountKeyring::Alice.to_account_id();
-	let call_parameters = format!("0x{:?}", HexDisplay::from(&alice_id.encode()));
+	let call_parameters = hex_string(&alice_id.encode());
 	let err = api
 		.subscribe(
 			"chainHead_unstable_call",
@@ -518,8 +517,8 @@ async fn call_runtime_without_flag() {
 async fn get_storage_hash() {
 	let (mut client, api, mut block_sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
-	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
-	let key = format!("0x{:?}", HexDisplay::from(&KEY));
+	let invalid_hash = hex_string(&INVALID_HASH);
+	let key = hex_string(&KEY);
 
 	// Subscription ID is stale the disjoint event is emitted.
 	let mut sub = api
@@ -604,7 +603,7 @@ async fn get_storage_hash() {
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child value set in `setup_api`.
-	let child_info = format!("0x{:?}", HexDisplay::from(&CHILD_STORAGE_KEY));
+	let child_info = hex_string(&CHILD_STORAGE_KEY);
 	let genesis_hash = format!("{:?}", client.genesis_hash());
 	let expected_hash = format!("{:?}", Blake2Hasher::hash(&CHILD_VALUE));
 	println!("Expe: {:?}", expected_hash);
@@ -630,8 +629,8 @@ async fn get_storage_hash() {
 async fn get_storage_value() {
 	let (mut client, api, mut block_sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
-	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
-	let key = format!("0x{:?}", HexDisplay::from(&KEY));
+	let invalid_hash = hex_string(&INVALID_HASH);
+	let key = hex_string(&KEY);
 
 	// Subscription ID is stale the disjoint event is emitted.
 	let mut sub = api
@@ -698,7 +697,7 @@ async fn get_storage_value() {
 	);
 
 	// Valid call with storage at the key.
-	let expected_value = format!("0x{:?}", HexDisplay::from(&VALUE));
+	let expected_value = hex_string(&VALUE);
 	let mut sub = api
 		.subscribe(
 			"chainHead_unstable_storage",
@@ -716,9 +715,9 @@ async fn get_storage_value() {
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child value set in `setup_api`.
-	let child_info = format!("0x{:?}", HexDisplay::from(b"child"));
+	let child_info = hex_string(b"child");
 	let genesis_hash = format!("{:?}", client.genesis_hash());
-	let expected_value = format!("0x{:?}", HexDisplay::from(&CHILD_VALUE));
+	let expected_value = hex_string(&CHILD_VALUE);
 	let mut sub = api
 		.subscribe(
 			"chainHead_unstable_storage",
@@ -741,12 +740,12 @@ async fn get_storage_value() {
 async fn get_storage_wrong_key() {
 	let (mut _client, api, mut _block_sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
-	let key = format!("0x{:?}", HexDisplay::from(&KEY));
+	let key = hex_string(&KEY);
 
 	// Key is prefixed by CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
 	prefixed_key.extend_from_slice(&KEY);
-	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
+	let prefixed_key = hex_string(&prefixed_key);
 	let mut sub = api
 		.subscribe(
 			"chainHead_unstable_storage",
@@ -764,7 +763,7 @@ async fn get_storage_wrong_key() {
 	// Key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
 	prefixed_key.extend_from_slice(&KEY);
-	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
+	let prefixed_key = hex_string(&prefixed_key);
 	let mut sub = api
 		.subscribe(
 			"chainHead_unstable_storage",
@@ -782,7 +781,7 @@ async fn get_storage_wrong_key() {
 	// Child key is prefixed by CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
 	prefixed_key.extend_from_slice(b"child");
-	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
+	let prefixed_key = hex_string(&prefixed_key);
 	let mut sub = api
 		.subscribe(
 			"chainHead_unstable_storage",
@@ -801,7 +800,7 @@ async fn get_storage_wrong_key() {
 	// Child key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
 	prefixed_key.extend_from_slice(b"child");
-	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
+	let prefixed_key = hex_string(&prefixed_key);
 	let mut sub = api
 		.subscribe(
 			"chainHead_unstable_storage",
@@ -1036,14 +1035,14 @@ async fn follow_with_unpin() {
 	);
 
 	// Unpin an invalid subscription ID must return Ok(()).
-	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+	let invalid_hash = hex_string(&INVALID_HASH);
 	let _res: () = api
 		.call("chainHead_unstable_unpin", ["invalid_sub_id", &invalid_hash])
 		.await
 		.unwrap();
 
 	// Valid subscription with invalid block hash.
-	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+	let invalid_hash = hex_string(&INVALID_HASH);
 	let err = api
 		.call::<_, serde_json::Value>("chainHead_unstable_unpin", [&sub_id, &invalid_hash])
 		.await
