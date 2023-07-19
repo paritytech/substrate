@@ -13,7 +13,7 @@
 #
 # # Usage
 #
-# 1. Build `target/release/substrate` binary: `cargo build --release`
+# 1. Build `target/release/substrate-node` binary: `cargo build --release`
 # 2. Start networks and containers:
 #    `sudo docker-compose -f .maintain/sentry-node/docker-compose.yml up`
 # 3. Connect to nodes:
@@ -24,16 +24,14 @@
 #   - grafana: localhost:3001
 #   - prometheus: localhost:9090
 
-
 version: "3.7"
 services:
-
   validator-a:
     ports:
       - "9944:9944"
       - "9615:9615"
     volumes:
-      - ../../target/release/substrate:/usr/local/bin/substrate
+      - ../../target/release/substrate-node:/usr/local/bin/substrate-node
     image: parity/substrate
     networks:
       - internet
@@ -64,7 +62,7 @@ services:
     ports:
       - "9945:9944"
     volumes:
-      - ../../target/release/substrate:/usr/local/bin/substrate
+      - ../../target/release/substrate-node:/usr/local/bin/substrate
     networks:
       - internet
     command:
@@ -94,7 +92,7 @@ services:
     ports:
       - "9946:9944"
     volumes:
-      - ../../target/release/substrate:/usr/local/bin/substrate
+      - ../../target/release/substrate-node:/usr/local/bin/substrate
     networks:
       - internet
     command:

@@ -172,11 +172,11 @@
 //!
 //! ```bash
 //! # this is like your running deployed node.
-//! cargo build --release && cp target/release/substrate .
+//! cargo build --release && cp target/release/substrate-node .
 //!
 //! # this is like your WIP branch.
 //! cargo build --release --features try-runtime
-//! cp target/release/substrate substrate-try-runtime
+//! cp target/release/substrate-node substrate-try-runtime
 //! cp ./target/release/wbuild/kitchensink-runtime/kitchensink_runtime.wasm runtime-try-runtime.wasm
 //! ```
 //!
