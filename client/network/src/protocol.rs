@@ -53,7 +53,7 @@ use notifications::{Notifications, NotificationsOut};
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
 
-mod notifications;
+pub mod notifications;
 
 pub mod message;
 
