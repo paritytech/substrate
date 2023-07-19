@@ -55,7 +55,7 @@ const INVALID_PARAM_ERROR: i32 = BASE_ERROR + 3;
 /// Invalid subscription ID.
 const INVALID_SUB_ID: i32 = BASE_ERROR + 4;
 /// Wait-for-continue event not generated.
-const INVALID_CONTINUE: i32 = BASE_ERROR + 4;
+const INVALID_CONTINUE: i32 = BASE_ERROR + 5;
 
 impl From<Error> for ErrorObject<'static> {
 	fn from(e: Error) -> Self {
