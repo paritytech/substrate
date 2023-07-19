@@ -65,7 +65,6 @@ use sc_client_api::{
 	backend::{AuxStore, Backend},
 	utils::is_descendent_of,
 	BlockchainEvents, CallExecutor, ExecutorProvider, Finalizer, LockImportRun, StorageProvider,
-	TransactionFor,
 };
 use sc_consensus::BlockImport;
 use sc_network::types::ProtocolName;
@@ -309,7 +308,7 @@ pub trait ClientForGrandpa<Block, BE>:
 	+ BlockchainEvents<Block>
 	+ ProvideRuntimeApi<Block>
 	+ ExecutorProvider<Block>
-	+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
+	+ BlockImport<Block, Error = sp_consensus::Error>
 	+ StorageProvider<Block, BE>
 where
 	BE: Backend<Block>,
@@ -329,7 +328,7 @@ where
 		+ BlockchainEvents<Block>
 		+ ProvideRuntimeApi<Block>
 		+ ExecutorProvider<Block>
-		+ BlockImport<Block, Transaction = TransactionFor<BE, Block>, Error = sp_consensus::Error>
+		+ BlockImport<Block, Error = sp_consensus::Error>
 		+ StorageProvider<Block, BE>,
 {
 }
