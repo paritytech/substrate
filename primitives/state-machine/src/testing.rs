@@ -36,7 +36,7 @@ use sp_core::{
 	},
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
-use sp_trie::StorageProof;
+use sp_trie::{PrefixedMemoryDB, StorageProof};
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H>
@@ -157,10 +157,12 @@ where
 	/// This can be used as a fast way to restore the storage state from a backup because the trie
 	/// does not need to be computed.
 	pub fn from_raw_snapshot(
-		&mut self,
 		raw_storage: Vec<(Vec<u8>, (Vec<u8>, i32))>,
 		storage_root: H::Out,
-	) {
+		state_version: StateVersion,
+	) -> Self {
+		let mut backend = PrefixedMemoryDB::default();
+
 		for (key, (v, ref_count)) in raw_storage {
 			let mut hash = H::Out::default();
 			let hash_len = hash.as_ref().len();
@@ -175,15 +177,17 @@ where
 			// Each time .emplace is called the internal MemoryDb ref count increments.
 			// Repeatedly call emplace to initialise the ref count to the correct value.
 			for _ in 0..ref_count {
-				self.backend.backend_storage_mut().emplace(
-					hash,
-					(&key[..(key.len() - hash_len)], None),
-					v.clone(),
-				);
+				backend.emplace(hash, (&key[..(key.len() - hash_len)], None), v.clone());
 			}
 		}
 
-		self.backend.set_root(storage_root);
+		Self {
+			backend: TrieBackendBuilder::new(backend, storage_root).build(),
+			overlay: Default::default(),
+			offchain_db: Default::default(),
+			extensions: Default::default(),
+			state_version,
+		}
 	}
 
 	/// Drains the underlying raw storage key/values and returns the root hash.
@@ -421,9 +425,11 @@ mod tests {
 		let (raw_storage, storage_root) = original_ext.into_raw_snapshot();
 
 		// Load the raw storage and root into a new TestExternalities.
-		let mut recovered_ext =
-			TestExternalities::<BlakeTwo256>::from((Default::default(), Default::default()));
-		recovered_ext.from_raw_snapshot(raw_storage, storage_root);
+		let recovered_ext = TestExternalities::<BlakeTwo256>::from_raw_snapshot(
+			raw_storage,
+			storage_root,
+			Default::default(),
+		);
 
 		// Check the storage root is the same as the original
 		assert_eq!(root, *recovered_ext.backend.root());
