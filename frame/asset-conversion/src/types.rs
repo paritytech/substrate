@@ -41,12 +41,12 @@ pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 	fn try_convert(asset: &MultiAssetId) -> MultiAssetIdConversionResult<MultiAssetId, AssetId>;
 }
 
-/// Result of `MultiAssetIdConverter::try_convert`
+/// Result of `MultiAssetIdConverter::try_convert`.
 #[cfg_attr(feature = "std", derive(PartialEq, Debug))]
 pub enum MultiAssetIdConversionResult<MultiAssetId, AssetId> {
-	/// Input asset is uccessfully converted. Means converted asset is supported.
+	/// Input asset is successfully converted. Means that converted asset is supported.
 	Converted(AssetId),
-	/// Means that input asset is native asset, so no conversion (see
+	/// Means that input asset is the chain's native asset, if it has one, so no conversion (see
 	/// `MultiAssetIdConverter::get_native`).
 	Native,
 	/// Means input asset is not supported for pool.
