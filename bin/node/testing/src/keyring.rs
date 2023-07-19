@@ -20,7 +20,7 @@
 
 use codec::Encode;
 use kitchensink_runtime::{CheckedExtrinsic, SessionKeys, SignedExtra, UncheckedExtrinsic};
-use node_primitives::{AccountId, Balance, Index};
+use node_primitives::{AccountId, Balance, Nonce};
 use sp_keyring::{AccountKeyring, Ed25519Keyring, Sr25519Keyring};
 use sp_runtime::generic::Era;
 
@@ -68,7 +68,7 @@ pub fn to_session_keys(
 }
 
 /// Returns transaction extra.
-pub fn signed_extra(nonce: Index, extra_fee: Balance) -> SignedExtra {
+pub fn signed_extra(nonce: Nonce, extra_fee: Balance) -> SignedExtra {
 	(
 		frame_system::CheckNonZeroSender::new(),
 		frame_system::CheckSpecVersion::new(),

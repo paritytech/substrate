@@ -15,8 +15,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 async-trait = { version = "0.1.57", optional = true }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
-futures-timer = { version = "3.0.2", optional = true }
-log = { version = "0.4.17", optional = true }
 thiserror = { version = "1.0.30", optional = true }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../inherents" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../runtime" }
@@ -27,8 +25,6 @@ default = [ "std" ]
 std = [
 	"async-trait",
 	"codec/std",
-	"futures-timer",
-	"log",
 	"sp-inherents/std",
 	"sp-runtime/std",
 	"sp-std/std",

@@ -27,7 +27,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../primitives
 sp-tracing = { version = "10.0.0", default-features = false, path = "../../primitives/tracing" }
 
 [dev-dependencies]
-array-bytes = "4.1"
+array-bytes = "6.1"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../transaction-payment" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
