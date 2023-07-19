@@ -33,10 +33,6 @@ node-cli = { path = "bin/node/cli" }
 name = "substrate"
 path = "bin/node/cli/bin/main.rs"
 
-[features]
-runtime-benchmarks = [ "node-cli/runtime-benchmarks" ]
-try-runtime = [ "node-cli/try-runtime" ]
-
 [workspace]
 resolver = "2"
 

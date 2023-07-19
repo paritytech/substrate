@@ -16,25 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#![cfg(unix)]
+use std::env;
 
-use assert_cmd::cargo::cargo_bin;
-use std::process::Command;
-use tempfile::tempdir;
-
-use substrate_cli_test_utils as common;
-
-#[tokio::test]
-async fn check_block_works() {
-	let base_path = tempdir().expect("could not create a temp dir");
-
-	common::run_node_for_a_while(base_path.path(), &["--dev", "--no-hardware-benchmarks"]).await;
-
-	let status = Command::new(cargo_bin("substrate-node"))
-		.args(&["check-block", "--dev", "-d"])
-		.arg(base_path.path())
-		.arg("1")
-		.status()
-		.unwrap();
-	assert!(status.success());
+fn main() {
+	if let Ok(profile) = env::var("PROFILE") {
+		println!("cargo:rustc-cfg=build_type=\"{}\"", profile);
+	}
 }

@@ -14,8 +14,11 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [[bin]]
-path = "src/main.rs"
+path = "bin/main.rs"
 name = "chain-spec-builder"
+
+[lib]
+crate-type = ["rlib"]
 
 [dependencies]
 ansi_term = "0.12.1"
