@@ -229,7 +229,7 @@ pub mod pallet {
 			/// The pool id associated with the pool. Note that the order of the assets may not be
 			/// the same as the order specified in the create pool extrinsic.
 			pool_id: PoolIdOf<T>,
-			/// The account ID of the pool
+			/// The account ID of the pool.
 			pool_account: T::AccountId,
 			/// The id of the liquidity tokens that will be minted when assets are added to this
 			/// pool.
