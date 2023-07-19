@@ -177,6 +177,8 @@ members = [
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
+	"frame/paged-list",
+	"frame/paged-list/fuzzer",
 	"frame/insecure-randomness-collective-flip",
 	"frame/ranked-collective",
 	"frame/recovery",
