@@ -13,6 +13,7 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dev-dependencies]
+parking_lot = "0.12.1"
 codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }
 scale-info = { version = "2.0.1", features = ["derive"] }
 log = { version = "0.4.17", default-features = false }

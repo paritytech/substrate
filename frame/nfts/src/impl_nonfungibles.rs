@@ -341,6 +341,13 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 	}
 
 	fn disable_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+		let transfer_disabled =
+			Self::has_system_attribute(&collection, &item, PalletAttributes::TransferDisabled)?;
+		// Can't lock the item twice
+		if transfer_disabled {
+			return Err(Error::<T, I>::ItemLocked.into())
+		}
+
 		<Self as Mutate<T::AccountId, ItemConfig>>::set_attribute(
 			collection,
 			item,

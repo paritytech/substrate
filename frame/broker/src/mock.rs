@@ -31,21 +31,17 @@ use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_arithmetic::Perbill;
 use sp_core::{ConstU16, ConstU32, ConstU64, H256};
 use sp_runtime::{
-	testing::Header,
+	BuildStorage,
 	traits::{BlakeTwo256, Identity, IdentityLookup},
 	Saturating,
 };
 use sp_std::collections::btree_map::BTreeMap;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Broker: crate,
@@ -59,13 +55,12 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -307,6 +302,6 @@ impl TestExt {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let c = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let c = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	sp_io::TestExternalities::from(c)
 }

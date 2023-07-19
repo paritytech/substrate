@@ -4,6 +4,7 @@ use crate::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::traits::fungible::Inspect;
 use frame_system::Config as SConfig;
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::TypeInfo;
 use sp_arithmetic::Perbill;
 use sp_core::{ConstU32, RuntimeDebug};
@@ -213,7 +214,7 @@ pub struct SaleInfoRecord<Balance, BlockNumber> {
 	/// Number of cores which have been sold; never more than cores_offered.
 	pub cores_sold: CoreIndex,
 }
-pub type SaleInfoRecordOf<T> = SaleInfoRecord<BalanceOf<T>, <T as SConfig>::BlockNumber>;
+pub type SaleInfoRecordOf<T> = SaleInfoRecord<BalanceOf<T>, BlockNumberFor<T>>;
 
 /// Record for Polkadot Core reservations (generally tasked with the maintenance of System
 /// Chains).
@@ -256,4 +257,4 @@ pub struct ConfigRecord<BlockNumber, RelayBlockNumber> {
 	/// The duration by which rewards for contributions to the InstaPool must be collected.
 	pub contribution_timeout: Timeslice,
 }
-pub type ConfigRecordOf<T> = ConfigRecord<<T as SConfig>::BlockNumber, RelayBlockNumberOf<T>>;
+pub type ConfigRecordOf<T> = ConfigRecord<BlockNumberFor<T>, RelayBlockNumberOf<T>>;

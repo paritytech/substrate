@@ -39,12 +39,12 @@ use super::bench::{Benchmark, BenchmarkParams};
 /// did not use more weight than declared which would otherwise be an issue.
 /// To test this with a dev node, first create one with a temp directory:
 ///
-/// $ substrate --dev -d /tmp/my-dev --execution wasm --wasm-execution compiled
+/// $ substrate --dev -d /tmp/my-dev --wasm-execution compiled
 ///
 /// And wait some time to let it produce 3 blocks. Then benchmark them with:
 ///
 /// $ substrate benchmark-block --from 1 --to 3 --dev -d /tmp/my-dev
-///   --execution wasm --wasm-execution compiled --pruning archive
+///   --wasm-execution compiled --pruning archive
 ///
 /// The output will be similar to this:
 ///
