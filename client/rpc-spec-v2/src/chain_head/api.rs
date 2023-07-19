@@ -86,7 +86,7 @@ pub trait ChainHeadApi<Hash> {
 	#[method(name = "chainHead_unstable_genesisHash", blocking)]
 	fn chain_head_unstable_genesis_hash(&self) -> RpcResult<String>;
 
-	/// Return a storage entry at a specific block's state.
+	/// Returns storage entries at a specific block's state.
 	///
 	/// # Unstable
 	///
