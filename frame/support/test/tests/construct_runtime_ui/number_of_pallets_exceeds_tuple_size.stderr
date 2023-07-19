@@ -1,7 +1,7 @@
 error: The number of pallets exceeds the maximum number of tuple elements. To increase this limit, enable the tuples-96 feature of [frame_support].
-  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:50:2
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:49:2
    |
-50 |     pub struct Runtime where
+49 |     pub struct Runtime
    |     ^^^
 
 error[E0412]: cannot find type `RuntimeCall` in this scope
@@ -34,26 +34,26 @@ error[E0412]: cannot find type `RuntimeOrigin` in this scope
    |                          ^^^^^^^^^^^^^ help: you might have meant to use the associated type: `Self::RuntimeOrigin`
 
 error[E0412]: cannot find type `RuntimeCall` in this scope
-  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:27:21
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:26:21
    |
-27 |     type RuntimeCall = RuntimeCall;
+26 |     type RuntimeCall = RuntimeCall;
    |                        ^^^^^^^^^^^ help: you might have meant to use the associated type: `Self::RuntimeCall`
 
 error[E0412]: cannot find type `RuntimeEvent` in this scope
-  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:33:22
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:32:22
    |
-33 |     type RuntimeEvent = RuntimeEvent;
+32 |     type RuntimeEvent = RuntimeEvent;
    |                         ^^^^^^^^^^^^ help: you might have meant to use the associated type: `Self::RuntimeEvent`
 
 error[E0412]: cannot find type `PalletInfo` in this scope
-  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:39:20
+  --> tests/construct_runtime_ui/number_of_pallets_exceeds_tuple_size.rs:38:20
    |
-39 |     type PalletInfo = PalletInfo;
+38 |     type PalletInfo = PalletInfo;
    |                       ^^^^^^^^^^
    |
 help: you might have meant to use the associated type
    |
-39 |     type PalletInfo = Self::PalletInfo;
+38 |     type PalletInfo = Self::PalletInfo;
    |                       ~~~~~~~~~~~~~~~~
 help: consider importing this trait
    |
