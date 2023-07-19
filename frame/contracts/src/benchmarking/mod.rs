@@ -178,7 +178,7 @@ where
 
 /// The funding that each account that either calls or instantiates contracts is funded with.
 fn caller_funding<T: Config>() -> BalanceOf<T> {
-	BalanceOf::<T>::max_value() / 2u32.into()
+	BalanceOf::<T>::max_value() / 10_000u32.into()
 }
 
 /// Load the specified contract file from disk by including it into the runtime.
