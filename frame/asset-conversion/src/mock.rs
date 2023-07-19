@@ -200,7 +200,7 @@ pub enum NativeOrAssetId<AssetId>
 where
 	AssetId: Ord,
 {
-	/// Native asset. For example, on AssetHubPolkadot this would be dot.
+	/// Native asset. For example, on the Polkadot Asset Hub this would be DOT.
 	#[default]
 	Native,
 	/// A non-native asset id.
