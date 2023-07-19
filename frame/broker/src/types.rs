@@ -3,8 +3,7 @@ use crate::{
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::traits::fungible::Inspect;
-use frame_system::Config as SConfig;
-use frame_system::pallet_prelude::BlockNumberFor;
+use frame_system::{pallet_prelude::BlockNumberFor, Config as SConfig};
 use scale_info::TypeInfo;
 use sp_arithmetic::Perbill;
 use sp_core::{ConstU32, RuntimeDebug};

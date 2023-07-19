@@ -31,9 +31,8 @@ use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_arithmetic::Perbill;
 use sp_core::{ConstU16, ConstU32, ConstU64, H256};
 use sp_runtime::{
-	BuildStorage,
 	traits::{BlakeTwo256, Identity, IdentityLookup},
-	Saturating,
+	BuildStorage, Saturating,
 };
 use sp_std::collections::btree_map::BTreeMap;
 
