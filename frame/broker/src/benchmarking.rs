@@ -82,7 +82,7 @@ fn advance_to<T: Config>(b: u32) {
 	}
 }
 
-fn setup_and_start_sale<T: Config>() -> Result<(), BenchmarkError> {
+fn setup_and_start_sale<T: Config>() -> Result<u16, BenchmarkError> {
 	Configuration::<T>::put(new_config_record::<T>());
 
 	// Assume Reservations to be filled for worst case
@@ -94,7 +94,10 @@ fn setup_and_start_sale<T: Config>() -> Result<(), BenchmarkError> {
 	Broker::<T>::do_start_sales(10u32.into(), MAX_CORE_COUNT.into())
 		.map_err(|_| BenchmarkError::Weightless)?;
 
-	Ok(())
+	Ok(T::MaxReservedCores::get()
+		.saturating_add(T::MaxLeasedCores::get())
+		.try_into()
+		.unwrap())
 }
 
 #[benchmarks]
@@ -217,7 +220,7 @@ mod benches {
 
 	#[benchmark]
 	fn purchase() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
@@ -231,7 +234,7 @@ mod benches {
 		assert_last_event::<T>(
 			Event::Purchased {
 				who: caller,
-				region_id: RegionId { begin: 4, core: 10, part: CoreMask::complete() },
+				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
 				price: 10u32.into(),
 				duration: 3u32.into(),
 			}
@@ -307,7 +310,7 @@ mod benches {
 
 	#[benchmark]
 	fn interlace() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
@@ -322,12 +325,12 @@ mod benches {
 
 		assert_last_event::<T>(
 			Event::Interlaced {
-				old_region_id: RegionId { begin: 4, core: 10, part: CoreMask::complete() },
+				old_region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
 				new_region_ids: (
-					RegionId { begin: 4, core: 10, part: 0x00000_fffff_fffff_00000.into() },
+					RegionId { begin: 4, core, part: 0x00000_fffff_fffff_00000.into() },
 					RegionId {
 						begin: 4,
-						core: 10,
+						core,
 						part: CoreMask::complete() ^ 0x00000_fffff_fffff_00000.into(),
 					},
 				),
@@ -358,7 +361,7 @@ mod benches {
 
 	#[benchmark]
 	fn pool() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
@@ -372,6 +375,14 @@ mod benches {
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, recipient, Final);
+
+		assert_last_event::<T>(
+			Event::Pooled {
+				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				duration: 3u32.into(),
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
@@ -427,7 +438,7 @@ mod benches {
 
 	#[benchmark]
 	fn drop_region() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
@@ -442,12 +453,20 @@ mod benches {
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region);
 
+		assert_last_event::<T>(
+			Event::RegionDropped {
+				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				duration: 3u32.into(),
+			}
+			.into(),
+		);
+
 		Ok(())
 	}
 
 	#[benchmark]
 	fn drop_contribution() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
@@ -467,6 +486,13 @@ mod benches {
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region);
 
+		assert_last_event::<T>(
+			Event::ContributionDropped {
+				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+			}
+			.into(),
+		);
+
 		Ok(())
 	}
 
@@ -477,6 +503,10 @@ mod benches {
 
 		#[extrinsic_call]
 		_(admin_origin as T::RuntimeOrigin, n.try_into().unwrap());
+
+		assert_last_event::<T>(
+			Event::CoreCountRequested { core_count: n.try_into().unwrap() }.into(),
+		);
 
 		Ok(())
 	}
