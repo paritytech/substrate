@@ -188,7 +188,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 		};
 		let required = Weight::from_parts(weight, weight);
 
-		if meter.check_accrue(required) {
+		if meter.try_consume(required).is_ok() {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
 			MessagesProcessed::set(m);
@@ -245,7 +245,7 @@ impl ProcessMessage for CountingMessageProcessor {
 		}
 		let required = Weight::from_parts(1, 1);
 
-		if meter.check_accrue(required) {
+		if meter.try_consume(required).is_ok() {
 			NumMessagesProcessed::set(NumMessagesProcessed::get() + 1);
 			Ok(true)
 		} else {
