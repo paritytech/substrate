@@ -11921,6 +11921,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate"
+version = "0.0.0"
+dependencies = [
+ "aquamarine",
+ "chain-spec-builder",
+ "frame-support",
+ "node-cli",
+ "sc-cli",
+ "sc-consensus-aura",
+ "sc-consensus-babe",
+ "sc-consensus-beefy",
+ "sc-consensus-grandpa",
+ "sc-consensus-manual-seal",
+ "sc-consensus-pow",
+ "sc-service",
+ "sp-runtime",
+ "subkey",
+]
+
+[[package]]
 name = "substrate-bip39"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

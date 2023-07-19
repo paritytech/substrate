@@ -1,3 +1,42 @@
+[package]
+name = "substrate"
+description = "Next-generation framework for blockchain innovation"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+version = "0.0.0"
+
+# This list of dependencies is for documentation purposes only.
+[dependencies]
+aquamarine = "0.3.2"
+
+subkey = { path = "bin/utils/subkey" }
+chain-spec-builder = { path = "bin/utils/chain-spec-builder" }
+
+sc-service = { path = "client/service" }
+sc-cli = { path = "client/cli" }
+sc-consensus-aura = { path = "client/consensus/aura" }
+sc-consensus-babe = { path = "client/consensus/babe" }
+sc-consensus-grandpa = { path = "client/consensus/grandpa" }
+sc-consensus-beefy = { path = "client/consensus/beefy" }
+sc-consensus-manual-seal = { path = "client/consensus/manual-seal" }
+sc-consensus-pow = { path = "client/consensus/pow" }
+
+sp-runtime = { path = "primitives/runtime" }
+frame-support = { path = "frame/support" }
+
+node-cli = { path = "bin/node/cli" }
+
+# Exists here to be backwards compatible and to support `cargo run` in the workspace.
+#
+# Just uses the `node-cli` main binary. `node-cli` itself also again exposes the node as
+# `substrate-node`. Using `node-cli` directly you can also enable features.
+[[bin]]
+name = "substrate"
+path = "bin/node/cli/bin/main.rs"
+
 [workspace]
 resolver = "2"
 
