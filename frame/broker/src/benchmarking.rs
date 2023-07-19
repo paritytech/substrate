@@ -343,7 +343,7 @@ mod benches {
 
 	#[benchmark]
 	fn assign() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
@@ -355,6 +355,18 @@ mod benches {
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, 1000, Final);
+
+		let workplan_key = (region.begin, region.core);
+		assert!(Workplan::<T>::get(workplan_key).is_some());
+
+		assert_last_event::<T>(
+			Event::Assigned {
+				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				task: 1000,
+				duration: 3u32.into(),
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
@@ -375,6 +387,9 @@ mod benches {
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, recipient, Final);
+
+		let workplan_key = (region.begin, region.core);
+		assert!(Workplan::<T>::get(workplan_key).is_some());
 
 		assert_last_event::<T>(
 			Event::Pooled {
@@ -410,7 +425,6 @@ mod benches {
 		Ok(())
 	}
 
-	// Todo: Check further for worst case
 	#[benchmark]
 	fn purchase_credit() -> Result<(), BenchmarkError> {
 		setup_and_start_sale::<T>()?;
@@ -431,7 +445,11 @@ mod benches {
 		let beneficiary: RelayAccountIdOf<T> = account("beneficiary", 0, SEED);
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), 20u32.into(), beneficiary);
+		_(RawOrigin::Signed(caller.clone()), 20u32.into(), beneficiary.clone());
+
+		assert_last_event::<T>(
+			Event::CreditPurchased { who: caller, beneficiary, amount: 20u32.into() }.into(),
+		);
 
 		Ok(())
 	}
