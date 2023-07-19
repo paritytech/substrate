@@ -448,15 +448,15 @@ where
 
 		// Instantiate needs to transfer the deposit plus the minimum balance in order to pull the
 		// contract account into existence.
-		let total_deposit = storage_deposit.saturating_add(&Deposit::Charge(ed));
-		if (total_deposit.charge_or_zero()) > self.limit {
+		let deposit = storage_deposit.saturating_add(&Deposit::Charge(ed));
+		if (deposit.charge_or_zero()) > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
 
 		// We do not increase `own_contribution` because this will be charged later when the
 		// contract execution does conclude and hence would lead to a double charge.
-		self.total_deposit = total_deposit.clone();
-		info.storage_base_deposit = storage_deposit.charge_or_zero();
+		self.total_deposit = deposit.clone();
+		info.storage_base_deposit = deposit.charge_or_zero();
 
 		// We need to make sure that the contract's account itself exists, by adding the ED.
 		T::Currency::transfer(origin, contract, ed, Preservation::Protect)?;
@@ -464,7 +464,7 @@ where
 		// Charge storage deposit.
 		E::charge(origin, contract, &storage_deposit, false)?;
 
-		Ok(total_deposit)
+		Ok(storage_deposit)
 	}
 
 	/// Call to tell the meter that the currently executing contract was executed.
