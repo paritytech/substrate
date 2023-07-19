@@ -143,7 +143,7 @@ where
 			return None
 		}
 
-		match query.ty {
+		match query.queue_type {
 			StorageQueryType::Value => self.query_storage_value(hash, &query.key, child_key),
 			StorageQueryType::Hash => self.query_storage_hash(hash, &query.key, child_key),
 			_ => None,

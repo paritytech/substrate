@@ -298,7 +298,9 @@ where
 		let items = items
 			.into_iter()
 			.map(|query| {
-				if query.ty != StorageQueryType::Value && query.ty != StorageQueryType::Hash {
+				if query.queue_type != StorageQueryType::Value &&
+					query.queue_type != StorageQueryType::Hash
+				{
 					// Note: remove this once all types are implemented.
 					let _ = sink.reject(ChainHeadRpcError::InvalidParam(
 						"Storage query type not supported".into(),
@@ -308,7 +310,7 @@ where
 
 				Ok(StorageQuery {
 					key: StorageKey(parse_hex_param(&mut sink, query.key)?),
-					ty: query.ty,
+					queue_type: query.queue_type,
 				})
 			})
 			.collect::<Result<Vec<_>, _>>()?;
