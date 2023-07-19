@@ -21,7 +21,7 @@ use regex::Regex;
 use std::process::Command;
 
 fn expected_regex() -> Regex {
-	Regex::new(r"^substrate (.+)-([a-f\d]+)$").unwrap()
+	Regex::new(r"^substrate-node (.+)-([a-f\d]+)$").unwrap()
 }
 
 #[test]
