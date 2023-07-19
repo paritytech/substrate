@@ -17,9 +17,9 @@
 
 //! Move contracts' _reserved_ balance to be _held_ instead. Since
 //! [`Currency`](frame_support::traits::Currency) has been deprecated [here](https://github.com/paritytech/substrate/pull/12951),
-//! we need the storage deposit to be handled by the [fungible
-//! traits](frame_support::traits::fungibles) instead. For this we need to transfer the balance in
-//! the deposit account to the contract's account and hold it in there.
+//! we need the storage deposit to be handled by the [`frame_support::traits::fungible`] traits
+//! instead. For this we need to transfer the balance in the deposit account to the contract's
+//! account and hold it in there.
 
 use crate::{
 	migration::{IsFinished, MigrationStep},

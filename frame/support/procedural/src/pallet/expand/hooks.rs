@@ -251,11 +251,13 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 			{
 				fn integrity_test() {
-					<
-						Self as #frame_support::traits::Hooks<
-						#frame_system::pallet_prelude::BlockNumberFor::<T>
-						>
+					#frame_support::sp_io::TestExternalities::default().execute_with(|| {
+						<
+							Self as #frame_support::traits::Hooks<
+								#frame_system::pallet_prelude::BlockNumberFor::<T>
+							>
 						>::integrity_test()
+					});
 				}
 			}
 		}
