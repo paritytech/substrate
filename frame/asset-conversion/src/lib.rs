@@ -305,7 +305,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Provided assets are equal.
 		EqualAssets,
-		/// Provided assets is not supported for pool.
+		/// Provided asset is not supported for pool.
 		UnsupportedAsset,
 		/// Pool already exists.
 		PoolExists,
