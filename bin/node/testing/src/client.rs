@@ -36,9 +36,6 @@ pub type Client = client::Client<
 	kitchensink_runtime::RuntimeApi,
 >;
 
-/// Transaction for kitchensink-runtime.
-pub type Transaction = sc_client_api::backend::TransactionFor<Backend, node_primitives::Block>;
-
 /// Genesis configuration parameters for `TestClient`.
 #[derive(Default)]
 pub struct GenesisParameters;

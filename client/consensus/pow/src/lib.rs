@@ -488,7 +488,7 @@ where
 ///
 /// `pre_runtime` is a parameter that allows a custom additional pre-runtime digest to be inserted
 /// for blocks being built. This can encode authorship information, or just be a graffiti.
-pub fn start_mining_worker<Block, S, Algorithm, E, SO, L, CIDP>(
+pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP>(
 	block_import: BoxBlockImport<Block>,
 	client: Arc<C>,
 	select_chain: S,
@@ -506,6 +506,7 @@ pub fn start_mining_worker<Block, S, Algorithm, E, SO, L, CIDP>(
 )
 where
 	Block: BlockT,
+	C: BlockchainEvents<Block> + 'static,
 	S: SelectChain<Block> + 'static,
 	Algorithm: PowAlgorithm<Block> + Clone,
 	Algorithm::Difficulty: Send + 'static,
