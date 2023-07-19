@@ -107,8 +107,7 @@ pub mod test_utils {
 		<ContractInfoOf<Test>>::insert(address, contract);
 	}
 	pub fn set_balance(who: &AccountIdOf<Test>, amount: u64) {
-		let imbalance = <Test as Config>::Currency::set_balance(who, amount);
-		drop(imbalance);
+		let _ = <Test as Config>::Currency::set_balance(who, amount);
 	}
 	pub fn get_balance(who: &AccountIdOf<Test>) -> u64 {
 		<Test as Config>::Currency::free_balance(who)
