@@ -64,7 +64,7 @@ impl<T: Config> Pallet<T> {
 
 		Status::<T>::put(&status);
 
-		meter.consumed
+		meter.consumed()
 	}
 
 	fn process_core_count(status: &mut StatusRecord) -> bool {
