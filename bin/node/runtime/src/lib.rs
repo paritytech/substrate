@@ -74,8 +74,8 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	generic, impl_opaque_keys,
 	traits::{
-		self, AccountIdConversion, BlakeTwo256, Block as BlockT, Bounded, ConvertInto, NumberFor,
-		OpaqueKeys, SaturatedConversion, StaticLookup,
+		self, AccountIdConversion, BlakeTwo256, Block as BlockT, Bounded, ConvertBack, ConvertInto,
+		NumberFor, OpaqueKeys, SaturatedConversion, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill,
@@ -1881,6 +1881,18 @@ impl OnUnbalanced<Credit<AccountId, Balances>> for IntoAuthor {
 	}
 }
 
+pub struct BalanceToCoretimeBalance;
+impl Convert<Balance, u64> for BalanceToCoretimeBalance {
+	fn convert(balance: Balance) -> u64 {
+		balance.try_into().unwrap_or(u64::max_value())
+	}
+}
+impl ConvertBack<Balance, u64> for BalanceToCoretimeBalance {
+	fn convert_back(n: u64) -> Balance {
+		Balance::from(n)
+	}
+}
+
 impl pallet_broker::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
@@ -1889,7 +1901,7 @@ impl pallet_broker::Config for Runtime {
 	type MaxLeasedCores = ConstU32<5>;
 	type MaxReservedCores = ConstU32<5>;
 	type Coretime = ();
-	type ConvertBalance = sp_runtime::traits::Identity;
+	type ConvertBalance = BalanceToCoretimeBalance;
 	type WeightInfo = ();
 	type PalletId = BrokerPalletId;
 	type AdminOrigin = EnsureRoot<AccountId>;
