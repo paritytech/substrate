@@ -296,7 +296,7 @@ pub mod pallet {
 		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
 			let mut weight_counter = WeightMeter::from_limit(T::MaximumWeight::get());
 			Self::service_agendas(&mut weight_counter, now, u32::max_value());
-			weight_counter.consumed
+			weight_counter.consumed()
 		}
 	}
 
@@ -959,7 +959,7 @@ use ServiceTaskError::*;
 impl<T: Config> Pallet<T> {
 	/// Service up to `max` agendas queue starting from earliest incompletely executed agenda.
 	fn service_agendas(weight: &mut WeightMeter, now: BlockNumberFor<T>, max: u32) {
-		if !weight.check_accrue(T::WeightInfo::service_agendas_base()) {
+		if weight.try_consume(T::WeightInfo::service_agendas_base()).is_err() {
 			return
 		}
 
@@ -970,7 +970,7 @@ impl<T: Config> Pallet<T> {
 		let max_items = T::MaxScheduledPerBlock::get();
 		let mut count_down = max;
 		let service_agenda_base_weight = T::WeightInfo::service_agenda_base(max_items);
-		while count_down > 0 && when <= now && weight.can_accrue(service_agenda_base_weight) {
+		while count_down > 0 && when <= now && weight.can_consume(service_agenda_base_weight) {
 			if !Self::service_agenda(weight, &mut executed, now, when, u32::max_value()) {
 				incomplete_since = incomplete_since.min(when);
 			}
@@ -1001,8 +1001,9 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect::<Vec<_>>();
 		ordered.sort_by_key(|k| k.1);
-		let within_limit =
-			weight.check_accrue(T::WeightInfo::service_agenda_base(ordered.len() as u32));
+		let within_limit = weight
+			.try_consume(T::WeightInfo::service_agenda_base(ordered.len() as u32))
+			.is_ok();
 		debug_assert!(within_limit, "weight limit should have been checked in advance");
 
 		// Items which we know can be executed and have postponed for execution in a later block.
@@ -1020,7 +1021,7 @@ impl<T: Config> Pallet<T> {
 				task.maybe_id.is_some(),
 				task.maybe_periodic.is_some(),
 			);
-			if !weight.can_accrue(base_weight) {
+			if !weight.can_consume(base_weight) {
 				postponed += 1;
 				break
 			}
@@ -1072,7 +1073,7 @@ impl<T: Config> Pallet<T> {
 			Err(_) => return Err((Unavailable, Some(task))),
 		};
 
-		weight.check_accrue(T::WeightInfo::service_task(
+		let _ = weight.try_consume(T::WeightInfo::service_task(
 			lookup_len.map(|x| x as usize),
 			task.maybe_id.is_some(),
 			task.maybe_periodic.is_some(),
@@ -1148,7 +1149,7 @@ impl<T: Config> Pallet<T> {
 		// We only allow a scheduled call if it cannot push the weight past the limit.
 		let max_weight = base_weight.saturating_add(call_weight);
 
-		if !weight.can_accrue(max_weight) {
+		if !weight.can_consume(max_weight) {
 			return Err(Overweight)
 		}
 
@@ -1159,8 +1160,8 @@ impl<T: Config> Pallet<T> {
 				(error_and_info.post_info.actual_weight, Err(error_and_info.error)),
 		};
 		let call_weight = maybe_actual_call_weight.unwrap_or(call_weight);
-		weight.check_accrue(base_weight);
-		weight.check_accrue(call_weight);
+		let _ = weight.try_consume(base_weight);
+		let _ = weight.try_consume(call_weight);
 		Ok(result)
 	}
 }

@@ -419,6 +419,7 @@ impl pallet_babe::Config for Runtime {
 	type EquivocationReportSystem = ();
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<10>;
+	type MaxNominators = ConstU32<100>;
 }
 
 /// Adds one to the given input and returns the final result.
