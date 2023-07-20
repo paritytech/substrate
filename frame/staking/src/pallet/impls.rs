@@ -40,7 +40,9 @@ use sp_runtime::{
 use sp_staking::{
 	currency_to_vote::CurrencyToVote,
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, Stake, StakingAccount, StakingInterface,
+	EraIndex, SessionIndex, Stake,
+	StakingAccount::{self, Controller, Stash},
+	StakingInterface,
 };
 use sp_std::prelude::*;
 
@@ -67,8 +69,8 @@ const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 
 impl<T: Config> Pallet<T> {
 	/// Fetches the ledger associated with a controller or stash account, if any.
-	pub fn ledger(controller: &T::AccountId) -> Option<StakingLedger<T>> {
-		match StakingLedger::<T>::get(StakingAccount::Controller(controller.clone())) {
+	pub fn ledger(account: StakingAccount<T::AccountId>) -> Option<StakingLedger<T>> {
+		match StakingLedger::<T>::get(account) {
 			None => None,
 			Some(StakingLedgerStatus::BondedNotPaired) => None,
 			Some(StakingLedgerStatus::Paired(ledger)) => Some(ledger),
@@ -77,17 +79,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Fetches the controller bonded to a stash account, if any.
 	pub fn bonded(stash: &T::AccountId) -> Option<T::AccountId> {
-		StakingLedger::<T>::paired_account(StakingAccount::Stash(stash.clone()))
+		StakingLedger::<T>::paired_account(Stash(stash.clone()))
 	}
 
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
-		// TODO_
-		Self::bonded(stash)
-			.and_then(|s| Self::ledger(&s))
-			.map(|l| l.active)
-			.unwrap_or_default()
+		Self::ledger(Stash(stash.clone())).map(|l| l.active).unwrap_or_default()
 	}
 
 	/// Internal impl of [`Self::slashable_balance_of`] that returns [`VoteWeight`].
@@ -122,7 +120,8 @@ impl<T: Config> Pallet<T> {
 		num_slashing_spans: u32,
 	) -> Result<Weight, DispatchError> {
 		// TODO_: stash, not controller
-		let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+		let mut ledger =
+			Self::ledger(Controller(controller.clone())).ok_or(Error::<T>::NotController)?;
 		let (stash, old_total) = (ledger.stash.clone(), ledger.total);
 		if let Some(current_era) = Self::current_era() {
 			ledger = ledger.consolidate_unlocked(current_era)
@@ -311,17 +310,18 @@ impl<T: Config> Pallet<T> {
 			RewardDestination::Controller => Self::bonded(stash)
 				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
 			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
-			RewardDestination::Staked => Self::ledger(&stash).and_then(|mut ledger| {
-				ledger.active += amount;
-				ledger.total += amount;
-				let r = T::Currency::deposit_into_existing(stash, amount).ok();
+			RewardDestination::Staked =>
+				Self::ledger(Stash(stash.clone())).and_then(|mut ledger| {
+					ledger.active += amount;
+					ledger.total += amount;
+					let r = T::Currency::deposit_into_existing(stash, amount).ok();
 
-				// calling `fn Self::ledger` ensures that the returned ledger exists in storage,
-				// qed.
-				let _ = ledger.update();
+					// calling `fn Self::ledger` ensures that the returned ledger exists in storage,
+					// qed.
+					let _ = ledger.update();
 
-				r
-			}),
+					r
+				}),
 			RewardDestination::Account(dest_account) =>
 				Some(T::Currency::deposit_creating(&dest_account, amount)),
 			RewardDestination::None => None,
@@ -1610,7 +1610,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	fn stash_by_ctrl(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
-		Self::ledger(controller)
+		Self::ledger(Controller(controller.clone()))
 			.map(|l| l.stash)
 			.ok_or(Error::<T>::NotController.into())
 	}
@@ -1630,8 +1630,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	fn stake(who: &Self::AccountId) -> Result<Stake<BalanceOf<T>>, DispatchError> {
-		Self::bonded(who)
-			.and_then(|c| Self::ledger(&c))
+		Self::ledger(Stash(who.clone()))
 			.map(|l| Stake { total: l.total, active: l.active })
 			.ok_or(Error::<T>::NotStash.into())
 	}

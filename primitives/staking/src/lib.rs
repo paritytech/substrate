@@ -46,6 +46,12 @@ pub enum StakingAccount<AccountId> {
 	Controller(AccountId),
 }
 
+impl<AccountId> From<AccountId> for StakingAccount<AccountId> {
+    fn from(account: AccountId) -> Self {
+        StakingAccount::Stash(account)
+    }
+}
+
 /// Representation of the status of a staker.
 #[derive(RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone))]

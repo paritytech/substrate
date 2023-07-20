@@ -35,7 +35,10 @@ use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	ArithmeticError, Perbill, Percent,
 };
-use sp_staking::{EraIndex, SessionIndex, StakingAccount};
+use sp_staking::{
+	EraIndex, SessionIndex,
+	StakingAccount::{self, Controller, Stash},
+};
 use sp_std::prelude::*;
 
 mod impls;
@@ -962,7 +965,7 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let unlocking = Self::ledger(&controller)
+			let unlocking = Self::ledger(Controller(controller.clone()))
 				.map(|l| l.unlocking.len())
 				.ok_or(Error::<T>::NotController)?;
 
@@ -980,7 +983,8 @@ pub mod pallet {
 
 			// we need to fetch the ledger again because it may have been mutated in the call
 			// to `Self::do_withdraw_unbonded` above.
-			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let mut ledger =
+				Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
 			let mut value = value.min(ledger.active);
 
 			ensure!(
@@ -1088,7 +1092,7 @@ pub mod pallet {
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
 
 			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
@@ -1234,7 +1238,7 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 			<Payee<T>>::insert(stash, payee);
 			Ok(())
@@ -1519,7 +1523,7 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let initial_unlocking = ledger.unlocking.len() as u32;
@@ -1573,9 +1577,7 @@ pub mod pallet {
 
 			let ed = T::Currency::minimum_balance();
 			let reapable = T::Currency::total_balance(&stash) < ed ||
-				Self::ledger(&Self::bonded(&stash.clone()).ok_or(Error::<T>::NotStash)?)
-					.map(|l| l.total)
-					.unwrap_or_default() < ed;
+				Self::ledger(Stash(stash.clone())).map(|l| l.total).unwrap_or_default() < ed;
 			ensure!(reapable, Error::<T>::FundedTarget);
 
 			// Remove all staking-related information and lock.
@@ -1599,7 +1601,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::kick(who.len() as u32))]
 		pub fn kick(origin: OriginFor<T>, who: Vec<AccountIdLookupOf<T>>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 
 			for nom_stash in who
@@ -1708,7 +1710,8 @@ pub mod pallet {
 		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			// Anyone can call this function.
 			let caller = ensure_signed(origin)?;
-			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+			let ledger =
+				Self::ledger(Controller(controller.clone())).ok_or(Error::<T>::NotController)?;
 			let stash = ledger.stash;
 
 			// In order for one user to chill another user, the following conditions must be met:
