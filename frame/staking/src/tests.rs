@@ -726,7 +726,7 @@ fn update_payee_works() {
 		// fail with `BadState` if a key either does not exist in `Payee`, or already exists in
 		// `Payees`.
 		//
-		// This test checks both these scnerarios, and also tests a successful update.
+		// This test checks both these scenarios, and also tests a successful update.
 
 		// Results in error if key does not exist in `Payee`.
 
