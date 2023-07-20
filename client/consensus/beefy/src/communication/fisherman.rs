@@ -148,7 +148,7 @@ where
 	R: ProvideRuntimeApi<B> + Send + Sync,
 	R::Api: BeefyApi<B>,
 {
-	/// Check `vote` for contained finalized block against expected payload.
+	/// Check `vote` for contained block against expected payload.
 	///
 	/// Note: this fn expects `vote.commitment.block_number` to be finalized.
 	fn check_vote(
@@ -159,9 +159,7 @@ where
 		let (header, expected_payload) = self.expected_header_and_payload(number)?;
 		if vote.commitment.payload != expected_payload {
 			let validator_set = self.active_validator_set_at(&header)?;
-			// TODO: create/get grandpa proof for block number
-			let grandpa_proof = ();
-			let proof = InvalidForkVoteProof { vote, grandpa_proof };
+			let proof = InvalidForkVoteProof { vote };
 			self.report_invalid_fork_vote(proof, &header, &expected_payload, &validator_set)?;
 		}
 		Ok(())
@@ -178,7 +176,6 @@ where
 		let (header, expected_payload) = self.expected_header_and_payload(number)?;
 		if commitment.payload != expected_payload {
 			// TODO: create/get grandpa proof for block number
-			let grandpa_proof = ();
 			let validator_set = self.active_validator_set_at(&header)?;
 			if signatures.len() != validator_set.validators().len() {
 				// invalid proof
@@ -190,7 +187,7 @@ where
 				if let Some(signature) = signature {
 					let vote =
 						VoteMessage { commitment: commitment.clone(), id: id.clone(), signature };
-					let proof = InvalidForkVoteProof { vote, grandpa_proof };
+					let proof = InvalidForkVoteProof { vote };
 					self.report_invalid_fork_vote(
 						proof,
 						&header,
