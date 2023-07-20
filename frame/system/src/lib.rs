@@ -50,7 +50,7 @@
 //!   - [`CheckWeight`]: Checks the weight and length of the block and ensure that it does not
 //!     exceed the limits.
 //!   - [`CheckNonce`]: Checks the nonce of the transaction. Contains a single payload of type
-//!     `T::Index`.
+//!     `T::Nonce`.
 //!   - [`CheckEra`]: Checks the era of the transaction. Contains a single payload of type `Era`.
 //!   - [`CheckGenesis`]: Checks the provided genesis hash of the transaction. Must be a part of the
 //!     signed payload of the transaction.
@@ -64,6 +64,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use pallet_prelude::{BlockNumberFor, HeaderFor};
 #[cfg(feature = "std")]
 use serde::Serialize;
 use sp_io::hashing::blake2_256;
@@ -72,9 +73,9 @@ use sp_runtime::traits::TrailingZeroInput;
 use sp_runtime::{
 	generic,
 	traits::{
-		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+		self, AtLeast32Bit, BadOrigin, BlockNumberProvider, Bounded, CheckEqual, Dispatchable,
+		Hash, Header, Lookup, LookupError, MaybeDisplay, MaybeSerializeDeserialize, Member, One,
+		Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
 	DispatchError, RuntimeDebug,
 };
@@ -216,14 +217,11 @@ pub mod pallet {
 
 		#[frame_support::register_default_impl(TestDefaultConfig)]
 		impl DefaultConfig for TestDefaultConfig {
-			type Index = u32;
-			type BlockNumber = u32;
-			type Header = sp_runtime::generic::Header<Self::BlockNumber, Self::Hashing>;
+			type Nonce = u32;
 			type Hash = sp_core::hash::H256;
 			type Hashing = sp_runtime::traits::BlakeTwo256;
 			type AccountId = u64;
 			type Lookup = sp_runtime::traits::IdentityLookup<u64>;
-			type BlockHashCount = frame_support::traits::ConstU32<10>;
 			type MaxConsumers = frame_support::traits::ConstU32<16>;
 			type AccountData = ();
 			type OnNewAccount = ();
@@ -275,9 +273,8 @@ pub mod pallet {
 			+ Debug
 			+ From<Call<Self>>;
 
-		/// Account index (aka nonce) type. This stores the number of previous transactions
-		/// associated with a sender account.
-		type Index: Parameter
+		/// This stores the number of previous transactions associated with a sender account.
+		type Nonce: Parameter
 			+ Member
 			+ MaybeSerializeDeserialize
 			+ Debug
@@ -286,21 +283,6 @@ pub mod pallet {
 			+ AtLeast32Bit
 			+ Copy
 			+ MaxEncodedLen;
-
-		/// The block number type used by the runtime.
-		type BlockNumber: Parameter
-			+ Member
-			+ MaybeSerializeDeserialize
-			+ Debug
-			+ MaybeDisplay
-			+ AtLeast32BitUnsigned
-			+ Default
-			+ Bounded
-			+ Copy
-			+ sp_std::hash::Hash
-			+ sp_std::str::FromStr
-			+ MaxEncodedLen
-			+ TypeInfo;
 
 		/// The output of the `Hashing` function.
 		type Hash: Parameter
@@ -338,12 +320,15 @@ pub mod pallet {
 		/// functional/efficient alternatives.
 		type Lookup: StaticLookup<Target = Self::AccountId>;
 
-		/// The block header.
-		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
+		/// The Block type used by the runtime. This is used by `construct_runtime` to retrieve the
+		/// extrinsics or other block specific data as needed.
+		#[pallet::no_default]
+		type Block: Parameter + Member + traits::Block<Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
-		type BlockHashCount: Get<Self::BlockNumber>;
+		#[pallet::no_default]
+		type BlockHashCount: Get<BlockNumberFor<Self>>;
 
 		/// The weight of runtime database operations the runtime can invoke.
 		#[pallet::constant]
@@ -405,9 +390,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		#[cfg(feature = "std")]
 		fn integrity_test() {
-			sp_io::TestExternalities::default().execute_with(|| {
-				T::BlockWeights::get().validate().expect("The weights are invalid.");
-			});
+			T::BlockWeights::get().validate().expect("The weights are invalid.");
 		}
 	}
 
@@ -568,7 +551,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		AccountInfo<T::Index, T::AccountData>,
+		AccountInfo<T::Nonce, T::AccountData>,
 		ValueQuery,
 	>;
 
@@ -590,7 +573,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn block_hash)]
 	pub type BlockHash<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, T::Hash, ValueQuery>;
+		StorageMap<_, Twox64Concat, BlockNumberFor<T>, T::Hash, ValueQuery>;
 
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
@@ -603,7 +586,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_number)]
-	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type Number<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	/// Hash of the previous block.
 	#[pallet::storage]
@@ -642,14 +625,14 @@ pub mod pallet {
 	/// allows light-clients to leverage the changes trie storage tracking mechanism and
 	/// in case of changes fetch the list of events of interest.
 	///
-	/// The value has the type `(T::BlockNumber, EventIndex)` because if we used only just
+	/// The value has the type `(BlockNumberFor<T>, EventIndex)` because if we used only just
 	/// the `EventIndex` then in case if the topic has the same contents on the next block
 	/// no notification will be triggered thus the event might be lost.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	#[pallet::getter(fn event_topics)]
 	pub(super) type EventTopics<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(BlockNumberFor<T>, EventIndex)>, ValueQuery>;
 
 	/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 	#[pallet::storage]
@@ -680,7 +663,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
-			<BlockHash<T>>::insert::<_, T::Hash>(T::BlockNumber::zero(), hash69());
+			<BlockHash<T>>::insert::<_, T::Hash>(BlockNumberFor::<T>::zero(), hash69());
 			<ParentHash<T>>::put::<T::Hash>(hash69());
 			<LastRuntimeUpgrade<T>>::put(LastRuntimeUpgradeInfo::from(T::Version::get()));
 			<UpgradedToU32RefCount<T>>::put(true);
@@ -743,9 +726,9 @@ pub type RefCount = u32;
 
 /// Information of an account.
 #[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct AccountInfo<Index, AccountData> {
+pub struct AccountInfo<Nonce, AccountData> {
 	/// The number of transactions this account has sent.
-	pub nonce: Index,
+	pub nonce: Nonce,
 	/// The number of other modules that currently depend on this account's existence. The account
 	/// cannot be reaped until this is zero.
 	pub consumers: RefCount,
@@ -1367,7 +1350,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize(number: &T::BlockNumber, parent_hash: &T::Hash, digest: &generic::Digest) {
+	pub fn initialize(number: &BlockNumberFor<T>, parent_hash: &T::Hash, digest: &generic::Digest) {
 		// populate environment
 		ExecutionPhase::<T>::put(Phase::Initialization);
 		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
@@ -1384,7 +1367,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Remove temporary "environment" entries in storage, compute the storage root and return the
 	/// resulting header for this block.
-	pub fn finalize() -> T::Header {
+	pub fn finalize() -> HeaderFor<T> {
 		log::debug!(
 			target: LOG_TARGET,
 			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
@@ -1456,13 +1439,7 @@ impl<T: Config> Pallet<T> {
 		let storage_root = T::Hash::decode(&mut &sp_io::storage::root(version)[..])
 			.expect("Node is configured to use the same hash; qed");
 
-		<T::Header as traits::Header>::new(
-			number,
-			extrinsics_root,
-			storage_root,
-			parent_hash,
-			digest,
-		)
+		HeaderFor::<T>::new(number, extrinsics_root, storage_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the block's log data.
@@ -1475,8 +1452,8 @@ impl<T: Config> Pallet<T> {
 	pub fn externalities() -> TestExternalities {
 		TestExternalities::new(sp_core::storage::Storage {
 			top: map![
-				<BlockHash<T>>::hashed_key_for(T::BlockNumber::zero()) => [69u8; 32].encode(),
-				<Number<T>>::hashed_key().to_vec() => T::BlockNumber::one().encode(),
+				<BlockHash<T>>::hashed_key_for(BlockNumberFor::<T>::zero()) => [69u8; 32].encode(),
+				<Number<T>>::hashed_key().to_vec() => BlockNumberFor::<T>::one().encode(),
 				<ParentHash<T>>::hashed_key().to_vec() => [69u8; 32].encode()
 			],
 			children_default: map![],
@@ -1521,7 +1498,7 @@ impl<T: Config> Pallet<T> {
 	/// Set the block number to something in particular. Can be used as an alternative to
 	/// `initialize` for tests that don't need to bother with the other environment entries.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn set_block_number(n: T::BlockNumber) {
+	pub fn set_block_number(n: BlockNumberFor<T>) {
 		<Number<T>>::put(n);
 	}
 
@@ -1587,13 +1564,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Retrieve the account transaction counter from storage.
-	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Index {
+	pub fn account_nonce(who: impl EncodeLike<T::AccountId>) -> T::Nonce {
 		Account::<T>::get(who).nonce
 	}
 
 	/// Increment a particular account's nonce by 1.
 	pub fn inc_account_nonce(who: impl EncodeLike<T::AccountId>) {
-		Account::<T>::mutate(who, |a| a.nonce += T::Index::one());
+		Account::<T>::mutate(who, |a| a.nonce += T::Nonce::one());
 	}
 
 	/// Note what the extrinsic data of the current extrinsic index is.
@@ -1649,7 +1626,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// An account is being created.
-	pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Index, T::AccountData>) {
+	pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Nonce, T::AccountData>) {
 		T::OnNewAccount::on_new_account(&who);
 		Self::deposit_event(Event::NewAccount { account: who });
 	}
@@ -1739,7 +1716,7 @@ impl<T: Config> HandleLifetime<T::AccountId> for Consumer<T> {
 }
 
 impl<T: Config> BlockNumberProvider for Pallet<T> {
-	type BlockNumber = <T as Config>::BlockNumber;
+	type BlockNumber = BlockNumberFor<T>;
 
 	fn current_block_number() -> Self::BlockNumber {
 		Pallet::<T>::block_number()
@@ -1810,6 +1787,10 @@ pub mod pallet_prelude {
 	/// Type alias for the `Origin` associated type of system config.
 	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
+	/// Type alias for the `Header`.
+	pub type HeaderFor<T> =
+		<<T as crate::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+
 	/// Type alias for the `BlockNumber` associated type of system config.
-	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;
+	pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 }

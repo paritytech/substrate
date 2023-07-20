@@ -28,6 +28,7 @@ use frame_support::{
 	},
 };
 use frame_system::RawOrigin as SystemOrigin;
+use sp_core::Get;
 use sp_runtime::traits::{Bounded, StaticLookup};
 use sp_std::{ops::Div, prelude::*};
 
@@ -168,117 +169,160 @@ benchmarks! {
 	}
 
 	swap_exact_tokens_for_tokens {
-		let asset1 = T::MultiAssetIdConverter::get_native();
-		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(0));
-		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(1));
-		let asset4 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(2));
-
-		let (_, caller, _) = create_asset_and_pool::<T>(&asset1, &asset2);
-		let (_, _) = create_asset::<T>(&asset3);
-		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2.clone(), asset3.clone())?;
-		let (_, _) = create_asset::<T>(&asset4);
-		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset3.clone(), asset4.clone())?;
-
-		let path: BoundedVec<_, T::MaxSwapPathLength> =
-			BoundedVec::try_from(vec![asset1.clone(), asset2.clone(), asset3.clone(), asset4.clone()]).unwrap();
+		let native = T::MultiAssetIdConverter::get_native();
+		let asset1 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(1));
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(2));
+		let (_, caller, _) = create_asset_and_pool::<T>(&native, &asset1);
+		let (_, _) = create_asset::<T>(&asset2);
 		let ed: u128 = T::Currency::minimum_balance().into();
-		let add_amount1 = 100 * ed;
 
 		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
+			native.clone(),
 			asset1.clone(),
-			asset2.clone(),
-			add_amount1.into(),
+			(100 * ed).into(),
 			200.into(),
 			0.into(),
 			0.into(),
 			caller.clone(),
 		)?;
-		AssetConversion::<T>::add_liquidity(
-			SystemOrigin::Signed(caller.clone()).into(),
-			asset2.clone(),
-			asset3.clone(),
-			200.into(),
-			2000.into(),
-			0.into(),
-			0.into(),
-			caller.clone(),
-		)?;
-		AssetConversion::<T>::add_liquidity(
-			SystemOrigin::Signed(caller.clone()).into(),
-			asset3.clone(),
-			asset4.clone(),
-			2000.into(),
-			2000.into(),
-			0.into(),
-			0.into(),
-			caller.clone(),
-		)?;
-		let asset1_balance = T::Currency::balance(&caller);
-	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), ed.into(), 1.into(), caller.clone(), false)
+
+		let path;
+		// if we only allow the native-asset pools, then the worst case scenario would be to swap
+		// asset1-native-asset2
+		if !T::AllowMultiAssetPools::get() {
+			AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), native.clone(), asset2.clone())?;
+			AssetConversion::<T>::add_liquidity(
+				SystemOrigin::Signed(caller.clone()).into(),
+				native.clone(),
+				asset2.clone(),
+				(500 * ed).into(),
+				1000.into(),
+				0.into(),
+				0.into(),
+				caller.clone(),
+			)?;
+			path = vec![asset1.clone(), native.clone(), asset2.clone()];
+		} else {
+			let asset3 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(3));
+			AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset1.clone(), asset2.clone())?;
+			let (_, _) = create_asset::<T>(&asset3);
+			AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2.clone(), asset3.clone())?;
+
+			AssetConversion::<T>::add_liquidity(
+				SystemOrigin::Signed(caller.clone()).into(),
+				asset1.clone(),
+				asset2.clone(),
+				200.into(),
+				2000.into(),
+				0.into(),
+				0.into(),
+				caller.clone(),
+			)?;
+			AssetConversion::<T>::add_liquidity(
+				SystemOrigin::Signed(caller.clone()).into(),
+				asset2.clone(),
+				asset3.clone(),
+				2000.into(),
+				2000.into(),
+				0.into(),
+				0.into(),
+				caller.clone(),
+			)?;
+			path = vec![native.clone(), asset1.clone(), asset2.clone(), asset3.clone()];
+		}
+
+		let path: BoundedVec<_, T::MaxSwapPathLength> = BoundedVec::try_from(path).unwrap();
+		let native_balance = T::Currency::balance(&caller);
+		let asset1_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(1), &caller);
+	}: _(SystemOrigin::Signed(caller.clone()), path, ed.into(), 1.into(), caller.clone(), false)
 	verify {
-		let new_asset1_balance = T::Currency::balance(&caller);
-		assert_eq!(
-			new_asset1_balance,
-			asset1_balance - ed.into()
-		);
+		if !T::AllowMultiAssetPools::get() {
+			let new_asset1_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(1), &caller);
+			assert_eq!(new_asset1_balance, asset1_balance - 100.into());
+		} else {
+			let new_native_balance = T::Currency::balance(&caller);
+			assert_eq!(new_native_balance, native_balance - ed.into());
+		}
 	}
 
 	swap_tokens_for_exact_tokens {
-		let asset1 = T::MultiAssetIdConverter::get_native();
-		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(0));
-		let asset3 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(1));
-		let asset4 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(2));
-
-		let (_, caller, _) = create_asset_and_pool::<T>(&asset1, &asset2);
-		let (_, _) = create_asset::<T>(&asset3);
-		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2.clone(), asset3.clone())?;
-		let (_, _) = create_asset::<T>(&asset4);
-		AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset3.clone(), asset4.clone())?;
-
-		let path: BoundedVec<_, T::MaxSwapPathLength> =
-			BoundedVec::try_from(vec![asset1.clone(), asset2.clone(), asset3.clone(), asset4.clone()]).unwrap();
+		let native = T::MultiAssetIdConverter::get_native();
+		let asset1 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(1));
+		let asset2 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(2));
+		let (_, caller, _) = create_asset_and_pool::<T>(&native, &asset1);
+		let (_, _) = create_asset::<T>(&asset2);
 		let ed: u128 = T::Currency::minimum_balance().into();
-		let add_amount1 = 1000 + ed;
+		let add_native = 1000 + ed;
 
 		AssetConversion::<T>::add_liquidity(
 			SystemOrigin::Signed(caller.clone()).into(),
+			native.clone(),
 			asset1.clone(),
-			asset2.clone(),
-			add_amount1.into(),
+			add_native.into(),
 			200.into(),
 			0.into(),
 			0.into(),
 			caller.clone(),
 		)?;
-		AssetConversion::<T>::add_liquidity(
-			SystemOrigin::Signed(caller.clone()).into(),
-			asset2.clone(),
-			asset3.clone(),
-			200.into(),
-			2000.into(),
-			0.into(),
-			0.into(),
-			caller.clone(),
-		)?;
-		AssetConversion::<T>::add_liquidity(
-			SystemOrigin::Signed(caller.clone()).into(),
-			asset3.clone(),
-			asset4.clone(),
-			2000.into(),
-			2000.into(),
-			0.into(),
-			0.into(),
-			caller.clone(),
-		)?;
-		let asset4_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(2), &caller);
-	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), add_amount1.into(), caller.clone(), false)
+
+		let path;
+		// if we only allow the native-asset pools, then the worst case scenario would be to swap
+		// asset1-native-asset2
+		if !T::AllowMultiAssetPools::get() {
+			AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), native.clone(), asset2.clone())?;
+			AssetConversion::<T>::add_liquidity(
+				SystemOrigin::Signed(caller.clone()).into(),
+				native.clone(),
+				asset2.clone(),
+				(500 + ed).into(),
+				1000.into(),
+				0.into(),
+				0.into(),
+				caller.clone(),
+			)?;
+			path = vec![asset1.clone(), native.clone(), asset2.clone()];
+		} else {
+			AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset1.clone(), asset2.clone())?;
+			let asset3 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(3));
+			let (_, _) = create_asset::<T>(&asset3);
+			AssetConversion::<T>::create_pool(SystemOrigin::Signed(caller.clone()).into(), asset2.clone(), asset3.clone())?;
+
+			AssetConversion::<T>::add_liquidity(
+				SystemOrigin::Signed(caller.clone()).into(),
+				asset1.clone(),
+				asset2.clone(),
+				200.into(),
+				2000.into(),
+				0.into(),
+				0.into(),
+				caller.clone(),
+			)?;
+			AssetConversion::<T>::add_liquidity(
+				SystemOrigin::Signed(caller.clone()).into(),
+				asset2.clone(),
+				asset3.clone(),
+				2000.into(),
+				2000.into(),
+				0.into(),
+				0.into(),
+				caller.clone(),
+			)?;
+			path = vec![native.clone(), asset1.clone(), asset2.clone(), asset3.clone()];
+		}
+
+		let path: BoundedVec<_, T::MaxSwapPathLength> = BoundedVec::try_from(path).unwrap();
+		let asset2_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(2), &caller);
+		let asset3_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(3), &caller);
+	}: _(SystemOrigin::Signed(caller.clone()), path.clone(), 100.into(), add_native.into(), caller.clone(), false)
 	verify {
-		let new_asset4_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(2), &caller);
-		assert_eq!(
-			new_asset4_balance,
-			asset4_balance + 100.into()
-		);
+		if !T::AllowMultiAssetPools::get() {
+			let new_asset2_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(2), &caller);
+			assert_eq!(new_asset2_balance, asset2_balance + 100.into());
+		} else {
+			let new_asset3_balance = T::Assets::balance(T::BenchmarkHelper::asset_id(3), &caller);
+			assert_eq!(new_asset3_balance, asset3_balance + 100.into());
+		}
 	}
 
 	impl_benchmark_test_suite!(AssetConversion, crate::mock::new_test_ext(), crate::mock::Test);

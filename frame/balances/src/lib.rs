@@ -120,7 +120,7 @@
 //! use frame_support::traits::{WithdrawReasons, LockableCurrency};
 //! use sp_runtime::traits::Bounded;
 //! pub trait Config: frame_system::Config {
-//! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+//! 	type Currency: LockableCurrency<Self::AccountId, Moment=frame_system::pallet_prelude::BlockNumberFor<Self>>;
 //! }
 //! # struct StakingLedger<T: Config> {
 //! # 	stash: <T as frame_system::Config>::AccountId,
@@ -498,7 +498,7 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		#[cfg(not(feature = "insecure_zero_ed"))]
 		fn integrity_test() {
 			assert!(

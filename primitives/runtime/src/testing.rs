@@ -235,12 +235,16 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 }
 
 /// Testing block
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, TypeInfo)]
 pub struct Block<Xt> {
 	/// Block header
 	pub header: Header,
 	/// List of extrinsics
 	pub extrinsics: Vec<Xt>,
+}
+
+impl<Xt> traits::HeaderProvider for Block<Xt> {
+	type HeaderT = Header;
 }
 
 impl<

@@ -398,7 +398,7 @@ mod tests {
 			},
 		);
 
-		let Some(output) = output else { return } ;
+		let Some(output) = output else { return };
 
 		let stderr = dbg!(String::from_utf8(output.stderr).unwrap());
 
