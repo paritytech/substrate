@@ -1239,7 +1239,7 @@ pub mod pallet {
 			let payee_final = match payee {
 				PayoutDestination::Split((percent, account)) => {
 					if percent == Perbill::from_percent(100) {
-						PayoutDestination::Free(account)
+						PayoutDestination::Credit(account)
 					} else if percent == Perbill::zero() {
 						PayoutDestination::Stake
 					} else {

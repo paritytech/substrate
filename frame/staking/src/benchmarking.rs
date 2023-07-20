@@ -582,7 +582,7 @@ benchmarks! {
 		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
 
 		// Re-set the controller account as reward destination.
-		Staking::<T>::set_payee(RawOrigin::Signed(validator_controller.clone()).into(), PayoutDestination::Free(validator_controller.clone()))?;
+		Staking::<T>::set_payee(RawOrigin::Signed(validator_controller.clone()).into(), PayoutDestination::Credit(validator_controller.clone()))?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
@@ -596,7 +596,7 @@ benchmarks! {
 			ensure!(balance.is_zero(), "Controller has balance, but should be dead.");
 
 			// Re-set the controller account as payout destination.
-			Staking::<T>::set_payee(RawOrigin::Signed(controller.clone()).into(), PayoutDestination::Free(controller.clone()))?;
+			Staking::<T>::set_payee(RawOrigin::Signed(controller.clone()).into(), PayoutDestination::Credit(controller.clone()))?;
 		}
 	}: payout_stakers(RawOrigin::Signed(caller), validator, current_era)
 	verify {

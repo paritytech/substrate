@@ -133,7 +133,7 @@ pub fn create_stash_and_dead_payee<T: Config>(
 	Staking::<T>::bond(
 		RawOrigin::Signed(staker.clone()).into(),
 		amount,
-		PayoutDestination::Free(payee),
+		PayoutDestination::Credit(payee),
 	)?;
 	Ok((staker.clone(), staker))
 }

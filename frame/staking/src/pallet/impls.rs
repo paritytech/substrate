@@ -307,8 +307,8 @@ impl<T: Config> Pallet<T> {
 					Self::update_ledger(&controller, &l);
 					r
 				}),
-			PayoutDestination::Split((percent_free, dest_account)) => {
-				let amount_free = percent_free * amount;
+			PayoutDestination::Split((share, dest_account)) => {
+				let amount_free = share * amount;
 				let amount_stake = amount.saturating_sub(amount_free);
 				let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
 
@@ -327,7 +327,7 @@ impl<T: Config> Pallet<T> {
 				total_imbalance.subsume(T::Currency::deposit_creating(&dest_account, amount_free));
 				Some(total_imbalance)
 			},
-			PayoutDestination::Free(dest_account) =>
+			PayoutDestination::Credit(dest_account) =>
 				Some(T::Currency::deposit_creating(&dest_account, amount)),
 			PayoutDestination::Forgo => None,
 		}
@@ -1696,7 +1696,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::bond(
 			RawOrigin::Signed(who.clone()).into(),
 			value,
-			PayoutDestination::Free(payee.clone()),
+			PayoutDestination::Credit(payee.clone()),
 		)
 	}
 

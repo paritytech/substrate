@@ -438,9 +438,9 @@ impl<AccountId: Clone> RewardDestination<AccountId> {
 	) -> PayoutDestination<AccountId> {
 		match self {
 			RewardDestination::Staked => PayoutDestination::Stake,
-			RewardDestination::Stash => PayoutDestination::Free(stash),
-			RewardDestination::Controller => PayoutDestination::Free(controller),
-			RewardDestination::Account(a) => PayoutDestination::Free(a.clone()),
+			RewardDestination::Stash => PayoutDestination::Credit(stash),
+			RewardDestination::Controller => PayoutDestination::Credit(controller),
+			RewardDestination::Account(a) => PayoutDestination::Credit(a.clone()),
 			RewardDestination::None => PayoutDestination::Forgo,
 		}
 	}
