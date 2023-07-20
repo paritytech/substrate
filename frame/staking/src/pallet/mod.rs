@@ -1235,7 +1235,7 @@ pub mod pallet {
 			let stash = &ledger.stash;
 
 			// Fall back to `Stake` or `Free` variants if a 0% or 100% perbill is provided for an
-			// account.
+			// account respectively.
 			let payee_final = match payee {
 				PayoutDestination::Split((percent, account)) => {
 					if percent == Perbill::from_percent(100) {
