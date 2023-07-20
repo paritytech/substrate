@@ -19,9 +19,10 @@ use crate as example_offchain_worker;
 use crate::*;
 use codec::Decode;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types,
+	assert_noop, assert_ok, derive_impl, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
+use pallet::config_preludes::*;
 use sp_core::{
 	offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
 	sr25519::Signature,
@@ -111,12 +112,11 @@ parameter_types! {
 	pub const UnsignedPriority: u64 = 1 << 20;
 }
 
+#[derive_impl(TestDefaultConfig as pallet::DefaultConfig)]
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type AuthorityId = crypto::TestAuthId;
 	type GracePeriod = ConstU64<5>;
-	type MaxPrices = ConstU32<64>;
-	type MaxAuthorities = ConstU32<64>;
 }
 
 fn test_pub() -> sp_core::sr25519::Public {

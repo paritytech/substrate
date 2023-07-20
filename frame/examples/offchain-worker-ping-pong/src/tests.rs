@@ -17,11 +17,10 @@
 
 use crate as example_offchain_worker;
 use crate::*;
-use frame_support::derive_impl;
 use pallet::config_preludes::*;
 use codec::Decode;
 use frame_support::{
-	assert_ok,
+	assert_ok, derive_impl,
 	traits::{ConstU32, ConstU64},
 };
 use sp_core::{
