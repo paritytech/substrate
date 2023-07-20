@@ -472,7 +472,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(controller.clone()), RewardDestination::Controller)
 	verify {
 		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Controller);
-		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Split((Perbill::from_percent(100),controller)));
+		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Free(,controller));
 	}
 
 	update_payee {
