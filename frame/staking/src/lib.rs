@@ -316,7 +316,7 @@ use sp_runtime::{
 pub use sp_staking::StakerStatus;
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
-	EraIndex, SessionIndex,
+	EraIndex, SessionIndex, StakingAccount,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
@@ -645,7 +645,10 @@ pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
-		Pallet::<T>::ledger(&controller).map(|l| l.stash)
+		match StakingLedger::<T>::get(StakingAccount::Controller(controller)) {
+			Some(StakingLedgerStatus::Paired(ledger)) => Some(ledger.stash),
+			_ => None,
+		}
 	}
 }
 

@@ -4182,6 +4182,7 @@ fn payout_creates_controller() {
 			false,
 		)
 		.unwrap();
+
 		assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![11]));
 
 		// kill controller

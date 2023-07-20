@@ -66,9 +66,9 @@ use sp_runtime::TryRuntimeError;
 const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 
 impl<T: Config> Pallet<T> {
-	/// Fetches the ledger associated with a stash account, if any.
-	pub fn ledger(stash: &T::AccountId) -> Option<StakingLedger<T>> {
-		match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
+	/// Fetches the ledger associated with a controller or stash account, if any.
+	pub fn ledger(controller: &T::AccountId) -> Option<StakingLedger<T>> {
+		match StakingLedger::<T>::get(StakingAccount::Controller(controller.clone())) {
 			None => None,
 			Some(StakingLedgerStatus::BondedNotPaired) => None,
 			Some(StakingLedgerStatus::Paired(ledger)) => Some(ledger),
@@ -83,6 +83,7 @@ impl<T: Config> Pallet<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
 	pub fn slashable_balance_of(stash: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
+		// TODO_
 		Self::bonded(stash)
 			.and_then(|s| Self::ledger(&s))
 			.map(|l| l.active)
@@ -120,6 +121,7 @@ impl<T: Config> Pallet<T> {
 		controller: &T::AccountId,
 		num_slashing_spans: u32,
 	) -> Result<Weight, DispatchError> {
+		// TODO_: stash, not controller
 		let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 		let (stash, old_total) = (ledger.stash.clone(), ledger.total);
 		if let Some(current_era) = Self::current_era() {
@@ -131,12 +133,12 @@ impl<T: Config> Pallet<T> {
 				// This account must have called `unbond()` with some value that caused the active
 				// portion to fall below existential deposit + will have no more unlocking chunks
 				// left. We can now safely remove all staking-related information.
-				Self::kill_stash(&stash, num_slashing_spans)?;
+				Self::kill_stash(&ledger.stash, num_slashing_spans)?;
 
 				T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans)
 			} else {
 				// This was the consequence of a partial unbond. just update the ledger and move on.
-				ledger.mutate()?;
+				ledger.update()?;
 
 				// This is only an update, so we use less overall weight.
 				T::WeightInfo::withdraw_unbonded_update(num_slashing_spans)
@@ -206,7 +208,7 @@ impl<T: Config> Pallet<T> {
 
 		// Input data seems good, no errors allowed after this point
 
-		ledger.mutate()?;
+		ledger.update()?;
 
 		// Get Era reward points. It has TOTAL and INDIVIDUAL
 		// Find the fraction of the era reward that belongs to the validator
@@ -270,6 +272,7 @@ impl<T: Config> Pallet<T> {
 
 		// Lets now calculate how this is split to the nominators.
 		// Reward only the clipped exposures. Note this is not necessarily sorted.
+
 		for nominator in exposure.others.iter() {
 			let nominator_exposure_part = Perbill::from_rational(nominator.value, exposure.total);
 
@@ -308,19 +311,17 @@ impl<T: Config> Pallet<T> {
 			RewardDestination::Controller => Self::bonded(stash)
 				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
 			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
-			RewardDestination::Staked => Self::bonded(stash)
-				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
-				.and_then(|(_, mut ledger)| {
-					ledger.active += amount;
-					ledger.total += amount;
-					let r = T::Currency::deposit_into_existing(stash, amount).ok();
+			RewardDestination::Staked => Self::ledger(&stash).and_then(|mut ledger| {
+				ledger.active += amount;
+				ledger.total += amount;
+				let r = T::Currency::deposit_into_existing(stash, amount).ok();
 
-					// calling `fn Self::ledger` ensures that the returned ledger exists in storage,
-					// qed.
-					let _ = ledger.mutate();
+				// calling `fn Self::ledger` ensures that the returned ledger exists in storage,
+				// qed.
+				let _ = ledger.update();
 
-					r
-				}),
+				r
+			}),
 			RewardDestination::Account(dest_account) =>
 				Some(T::Currency::deposit_creating(&dest_account, amount)),
 			RewardDestination::None => None,
@@ -672,17 +673,17 @@ impl<T: Config> Pallet<T> {
 	/// - after a `withdraw_unbonded()` call that frees all of a stash's bonded balance.
 	/// - through `reap_stash()` if the balance has fallen to zero (through slashing).
 	pub(crate) fn kill_stash(stash: &T::AccountId, num_slashing_spans: u32) -> DispatchResult {
-		slashing::clear_stash_metadata::<T>(stash, num_slashing_spans)?;
+		slashing::clear_stash_metadata::<T>(&stash, num_slashing_spans)?;
 
 		// removes controller from `Bonded` and staking ledger from `Ledger`.
-		StakingLedger::<T>::kill(stash)?;
-		<Bonded<T>>::remove(stash);
-		<Payee<T>>::remove(stash);
+		StakingLedger::<T>::kill(&stash)?;
+		<Bonded<T>>::remove(&stash);
+		<Payee<T>>::remove(&stash);
 
-		Self::do_remove_validator(stash);
-		Self::do_remove_nominator(stash);
+		Self::do_remove_validator(&stash);
+		Self::do_remove_nominator(&stash);
 
-		frame_system::Pallet::<T>::dec_consumers(stash);
+		frame_system::Pallet::<T>::dec_consumers(&stash);
 
 		Ok(())
 	}
@@ -1021,7 +1022,6 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(maybe_max_len);
 		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
-
 		Ok(voters)
 	}
 
@@ -1840,7 +1840,13 @@ impl<T: Config> Pallet<T> {
 
 	fn ensure_ledger_consistent(ctrl: T::AccountId) -> Result<(), TryRuntimeError> {
 		// ensures ledger.total == ledger.active + sum(ledger.unlocking).
-		let ledger = Self::ledger(&ctrl).ok_or("Not a controller.")?;
+		let ledger = match StakingLedger::<T>::get(StakingAccount::Controller(ctrl.clone()))
+			.ok_or("Not a controller")?
+		{
+			StakingLedgerStatus::Paired(l) => Ok(l),
+			_ => Err("Not a controller"),
+		}?;
+
 		let real_total: BalanceOf<T> =
 			ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
 		ensure!(real_total == ledger.total, "ledger.total corrupt");

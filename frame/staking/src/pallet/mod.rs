@@ -839,8 +839,8 @@ pub mod pallet {
 
 			match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
 				None => Ok(()),
-				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::AlreadyBonded),
-				Some(StakingLedgerStatus::Paired(_)) => Err(Error::<T>::AlreadyPaired),
+				Some(StakingLedgerStatus::BondedNotPaired) |
+				Some(StakingLedgerStatus::Paired(_)) => Err(Error::<T>::AlreadyBonded),
 			}?;
 
 			// Reject a bond which is considered to be _dust_.
@@ -869,7 +869,7 @@ pub mod pallet {
 					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			);
-			ledger.mutate()?;
+			ledger.update()?;
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
@@ -922,7 +922,7 @@ pub mod pallet {
 				);
 
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
-				ledger.mutate()?;
+				ledger.update()?;
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&stash) {
 					let _ =
@@ -1023,7 +1023,7 @@ pub mod pallet {
 						.map_err(|_| Error::<T>::NoMoreChunks)?;
 				};
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
-				ledger.mutate()?;
+				ledger.update()?;
 
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&ledger.stash) {
@@ -1134,11 +1134,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger = match StakingLedger::<T>::get(StakingAccount::Controller(controller)) {
-				None => Err(Error::<T>::NotStash),
-				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
-				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
-			}?;
+			let ledger =
+				match StakingLedger::<T>::get(StakingAccount::Controller(controller.clone())) {
+					None => Err(Error::<T>::NotStash),
+					Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
+					Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
+				}?;
 
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
@@ -1532,7 +1533,7 @@ pub mod pallet {
 			});
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
-			ledger.mutate()?;
+			ledger.update()?;
 			if T::VoterList::contains(&ledger.stash) {
 				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
 					.defensive();

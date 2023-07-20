@@ -619,7 +619,7 @@ pub fn do_slash<T: Config>(
 		}
 
 		// calling `fn Pallet::ledger` ensures that the returned ledger exists in storage, qed.
-		let _ = ledger.mutate();
+		let _ = ledger.update();
 
 		// trigger the event
 		<Pallet<T>>::deposit_event(super::Event::<T>::Slashed {
