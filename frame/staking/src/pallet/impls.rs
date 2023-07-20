@@ -1007,6 +1007,7 @@ impl<T: Config> Pallet<T> {
 	) -> PayoutDestination<T::AccountId> {
 		if !Payees::<T>::contains_key(stash) {
 			let current = Payee::<T>::get(stash).to_payout_destination(stash.clone(), controller);
+			Payees::<T>::insert(stash, current.clone());
 			Payee::<T>::remove(stash);
 			current
 		} else {
