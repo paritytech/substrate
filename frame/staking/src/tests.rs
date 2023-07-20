@@ -725,9 +725,28 @@ fn update_payee_works() {
 		// `update_payee` is used to lazily migrate `Payee` records into `Payees` records. It will
 		// fail with `BadState` if a key either does not exist in `Payee`, or already exists in
 		// `Payees`.
-		//
-		// This test checks both these scenarios, and also tests a successful update.
 
+		// Given
+		let (stash, controller) =
+			testing_utils::create_stash_controller::<Test>(12, 13, RewardDestination::Controller)
+				.unwrap();
+
+		// When
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(controller), RewardDestination::Stash));
+		assert!(Payee::<Test>::contains_key(stash));
+		assert!(Payees::<Test>::contains_key(stash));
+
+		// Then
+		assert_noop!(
+			Staking::update_payee(RuntimeOrigin::signed(stash), controller),
+			Error::<Test>::BadUpdate
+		);
+	});
+}
+
+#[test]
+fn update_payee_handles_errors() {
+	ExtBuilder::default().build_and_execute(|| {
 		// Results in error if key does not exist in `Payee`.
 
 		// Given
@@ -748,15 +767,18 @@ fn update_payee_works() {
 
 		// When
 		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(controller), RewardDestination::Stash));
-		assert!(Payee::<Test>::contains_key(stash));
-		assert!(Payees::<Test>::contains_key(stash));
 
 		// Then
 		assert_noop!(
 			Staking::update_payee(RuntimeOrigin::signed(stash), controller),
 			Error::<Test>::BadUpdate
 		);
+	})
+}
 
+#[test]
+fn update_payee_works_for_controller() {
+	ExtBuilder::default().build_and_execute(|| {
 		// Successfully sets yet to be inserted `Payees` record from a `Payee` record of
 		// `RewardDestination::Controller`.
 
@@ -779,7 +801,12 @@ fn update_payee_works() {
 			Payees::<Test>::get(stash),
 			PayoutDestination::Split((Perbill::from_percent(100), controller))
 		);
+	})
+}
 
+#[test]
+fn update_payee_works_for_account_id() {
+	ExtBuilder::default().build_and_execute(|| {
 		// Successfully sets yet to be inserted `Payees` record from a `Payee` record of
 		// `RewardDestination::Account(AccountId)`.
 
@@ -802,7 +829,7 @@ fn update_payee_works() {
 			Payees::<Test>::get(stash),
 			PayoutDestination::Split((Perbill::from_percent(100), 69))
 		);
-	});
+	})
 }
 
 #[test]
