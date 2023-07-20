@@ -948,6 +948,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+#[cfg_attr(feature = "runtime-benchmarks", derive(Debug))]
 enum ServiceTaskError {
 	/// Could not be executed due to missing preimage.
 	Unavailable,

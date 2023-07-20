@@ -18,7 +18,7 @@
 //! Scheduler pallet benchmarking.
 
 use super::*;
-use frame_benchmarking::v1::{account, benchmarks, BenchmarkError};
+use frame_benchmarking::v2::*;
 use frame_support::{
 	ensure,
 	traits::{schedule::Priority, BoundedInline},
@@ -125,107 +125,138 @@ fn make_origin<T: Config>(signed: bool) -> <T as Config>::PalletsOrigin {
 	}
 }
 
-benchmarks! {
-	// `service_agendas` when no work is done.
-	service_agendas_base {
+#[benchmarks]
+mod benches {
+	use super::*;
+
+	/// `service_agendas` when no work is done.
+	#[benchmark]
+	fn service_agendas_base() {
 		let now = BlockNumberFor::<T>::from(BLOCK_NUMBER);
 		IncompleteSince::<T>::put(now - One::one());
-	}: {
-		Scheduler::<T>::service_agendas(&mut WeightMeter::max_limit(), now, 0);
-	} verify {
+
+		#[block]
+		{
+			Scheduler::<T>::service_agendas(&mut WeightMeter::max_limit(), now, 0);
+		}
+	
 		assert_eq!(IncompleteSince::<T>::get(), Some(now - One::one()));
 	}
 
-	// `service_agenda` when no work is done.
-	service_agenda_base {
+	/// `service_agenda` when no work is done.
+	#[benchmark]
+	fn service_agenda_base(
+		s: Linear<0, { T::MaxScheduledPerBlock::get() }>
+	) -> Result<(), BenchmarkError> {
 		let now = BLOCK_NUMBER.into();
-		let s in 0 .. T::MaxScheduledPerBlock::get();
 		fill_schedule::<T>(now, s)?;
 		let mut executed = 0;
-	}: {
-		Scheduler::<T>::service_agenda(&mut WeightMeter::max_limit(), &mut executed, now, now, 0);
-	} verify {
+
+		#[block]
+		{
+			Scheduler::<T>::service_agenda(&mut WeightMeter::max_limit(), &mut executed, now, now, 0);
+		}
+
 		assert_eq!(executed, 0);
+		Ok(())
 	}
 
-	// `service_task` when the task is a non-periodic, non-named, non-fetched call which is not
-	// dispatched (e.g. due to being overweight).
-	service_task_base {
+	/// `service_task` when the task is a non-periodic, non-named, non-fetched call which is not
+	/// dispatched (e.g. due to being overweight).
+	#[benchmark]
+	fn service_task_base() {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(false, false, false, None, 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
 		let mut counter = WeightMeter::from_limit(Weight::zero());
-	}: {
-		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
-	} verify {
-		//assert_eq!(result, Ok(()));
+
+		#[block]
+		{
+			Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task).unwrap_err(); // FAIL-CI double check
+		}
 	}
 
-	// `service_task` when the task is a non-periodic, non-named, fetched call (with a known
-	// preimage length) and which is not dispatched (e.g. due to being overweight).
-	#[pov_mode = MaxEncodedLen {
+	/// `service_task` when the task is a non-periodic, non-named, fetched call (with a known
+	/// preimage length) and which is not dispatched (e.g. due to being overweight).
+	#[benchmark(pov_mode = MaxEncodedLen {
 		// Use measured PoV size for the Preimages since we pass in a length witness.
 		Preimage::PreimageFor: Measured
-	}]
-	service_task_fetched {
-		let s in (BoundedInline::bound() as u32) .. (T::Preimages::MAX_LENGTH as u32);
+	})]
+	fn service_task_fetched(
+		s: Linear<{ BoundedInline::bound() as u32 }, { T::Preimages::MAX_LENGTH as u32 }>
+	) {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(false, false, false, Some(s), 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
 		let mut counter = WeightMeter::from_limit(Weight::zero());
-	}: {
-		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
-	} verify {
+		
+		
+		#[block]
+		{
+			Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task).unwrap_err(); // FAIL-CI double check
+		}
 	}
 
-	// `service_task` when the task is a non-periodic, named, non-fetched call which is not
-	// dispatched (e.g. due to being overweight).
-	service_task_named {
+	/// `service_task` when the task is a non-periodic, named, non-fetched call which is not
+	/// dispatched (e.g. due to being overweight).
+	#[benchmark]
+	fn service_task_named() {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(false, true, false, None, 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
 		let mut counter = WeightMeter::from_limit(Weight::zero());
-	}: {
-		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
-	} verify {
+
+		#[block]
+		{
+			Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task).unwrap_err(); // FAIL-CI double check
+		}
 	}
 
-	// `service_task` when the task is a periodic, non-named, non-fetched call which is not
-	// dispatched (e.g. due to being overweight).
-	service_task_periodic {
+	/// `service_task` when the task is a periodic, non-named, non-fetched call which is not
+	/// dispatched (e.g. due to being overweight).
+	#[benchmark]
+	fn service_task_periodic() {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(true, false, false, None, 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
 		let mut counter = WeightMeter::from_limit(Weight::zero());
-	}: {
-		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
-	} verify {
+	
+		#[block]
+		{
+			Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task).unwrap_err();
+		}
 	}
 
-	// `execute_dispatch` when the origin is `Signed`, not counting the dispatable's weight.
-	execute_dispatch_signed {
+	/// `execute_dispatch` when the origin is `Signed`, not counting the dispatable's weight.
+	#[benchmark]
+	fn execute_dispatch_signed() {
 		let mut counter = WeightMeter::max_limit();
 		let origin = make_origin::<T>(true);
 		let call = T::Preimages::realize(&make_call::<T>(None)).unwrap().0;
-	}: {
-		assert!(Scheduler::<T>::execute_dispatch(&mut counter, origin, call).is_ok());
-	}
-	verify {
+	
+		#[block]
+		{
+			Scheduler::<T>::execute_dispatch(&mut counter, origin, call).unwrap().unwrap();
+		}
 	}
 
-	// `execute_dispatch` when the origin is not `Signed`, not counting the dispatable's weight.
-	execute_dispatch_unsigned {
+	/// `execute_dispatch` when the origin is not `Signed`, not counting the dispatable's weight.
+	#[benchmark]
+	fn execute_dispatch_unsigned() {
 		let mut counter = WeightMeter::max_limit();
 		let origin = make_origin::<T>(false);
 		let call = T::Preimages::realize(&make_call::<T>(None)).unwrap().0;
-	}: {
-		assert!(Scheduler::<T>::execute_dispatch(&mut counter, origin, call).is_ok());
-	}
-	verify {
+		
+		#[block]
+		{
+			Scheduler::<T>::execute_dispatch(&mut counter, origin, call).unwrap().unwrap();
+		}
 	}
 
-	schedule {
-		let s in 0 .. (T::MaxScheduledPerBlock::get() - 1);
+	#[benchmark]
+	fn schedule(
+		s: Linear<0, { T::MaxScheduledPerBlock::get() - 1 }>
+	) -> Result<(), BenchmarkError> {
 		let when = BLOCK_NUMBER.into();
 		let periodic = Some((BlockNumberFor::<T>::one(), 100));
 		let priority = 0;
@@ -233,24 +264,31 @@ benchmarks! {
 		let call = Box::new(SystemCall::set_storage { items: vec![] }.into());
 
 		fill_schedule::<T>(when, s)?;
-	}: _(RawOrigin::Root, when, periodic, priority, call)
-	verify {
+		
+		#[extrinsic_call]
+		_(RawOrigin::Root, when, periodic, priority, call);	
+		
 		ensure!(
 			Agenda::<T>::get(when).len() == (s + 1) as usize,
 			"didn't add to schedule"
 		);
+		Ok(())
 	}
 
-	cancel {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+	#[benchmark]
+	fn cancel(
+		s: Linear<1, { T::MaxScheduledPerBlock::get() }>
+	) -> Result<(), BenchmarkError> {
 		let when = BLOCK_NUMBER.into();
 
 		fill_schedule::<T>(when, s)?;
 		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
 		let schedule_origin =
 			T::ScheduleOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
-	}: _<SystemOrigin<T>>(schedule_origin, when, 0)
-	verify {
+		
+		#[extrinsic_call]
+		_(schedule_origin as SystemOrigin<T>, when, 0);
+	
 		ensure!(
 			s == 1 || Lookup::<T>::get(u32_to_name(0)).is_none(),
 			"didn't remove from lookup if more than 1 task scheduled for `when`"
@@ -264,10 +302,14 @@ benchmarks! {
 			s > 1 || Agenda::<T>::get(when).len() == 0,
 			"remove from schedule if only 1 task scheduled for `when`"
 		);
+
+		Ok(())
 	}
 
-	schedule_named {
-		let s in 0 .. (T::MaxScheduledPerBlock::get() - 1);
+	#[benchmark]
+	fn schedule_named(
+		s: Linear<0, { T::MaxScheduledPerBlock::get() - 1 }>
+	) -> Result<(), BenchmarkError> {
 		let id = u32_to_name(s);
 		let when = BLOCK_NUMBER.into();
 		let periodic = Some((BlockNumberFor::<T>::one(), 100));
@@ -276,21 +318,29 @@ benchmarks! {
 		let call = Box::new(SystemCall::set_storage { items: vec![] }.into());
 
 		fill_schedule::<T>(when, s)?;
-	}: _(RawOrigin::Root, id, when, periodic, priority, call)
-	verify {
+		
+		#[extrinsic_call]
+		_(RawOrigin::Root, id, when, periodic, priority, call);
+	
 		ensure!(
 			Agenda::<T>::get(when).len() == (s + 1) as usize,
 			"didn't add to schedule"
 		);
+
+		Ok(())
 	}
 
-	cancel_named {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+	#[benchmark]
+	fn cancel_named(
+		s: Linear<1, { T::MaxScheduledPerBlock::get() }>
+	) -> Result<(), BenchmarkError> {
 		let when = BLOCK_NUMBER.into();
 
 		fill_schedule::<T>(when, s)?;
-	}: _(RawOrigin::Root, u32_to_name(0))
-	verify {
+		
+		#[extrinsic_call]
+		_(RawOrigin::Root, u32_to_name(0));
+
 		ensure!(
 			s == 1 || Lookup::<T>::get(u32_to_name(0)).is_none(),
 			"didn't remove from lookup if more than 1 task scheduled for `when`"
@@ -304,6 +354,8 @@ benchmarks! {
 			s > 1 || Agenda::<T>::get(when).len() == 0,
 			"remove from schedule if only 1 task scheduled for `when`"
 		);
+
+		Ok(())
 	}
 
 	impl_benchmark_test_suite!(Scheduler, crate::mock::new_test_ext(), crate::mock::Test);

@@ -68,10 +68,39 @@ struct RangeArgs {
 	_gt_token: Gt,
 }
 
+/// How the PoV size of a storage item should be estimated.
+#[derive(clap::ValueEnum, Debug, Eq, PartialEq, Clone, Copy)]
+pub enum PovEstimationMode {
+	/// Use the maximal encoded length as provided by [`codec::MaxEncodedLen`].
+	MaxEncodedLen,
+	/// Measure the accessed value size in the pallet benchmarking and add some trie overhead.
+	Measured,
+	/// Do not estimate the PoV size for this storage item or benchmark.
+	Ignored,
+}
+
+impl FromStr for PovEstimationMode {
+	type Err = &'static str;
+
+	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+		match s {
+			"MaxEncodedLen" => Ok(Self::MaxEncodedLen),
+			"Measured" => Ok(Self::Measured),
+			"Ignored" => Ok(Self::Ignored),
+			_ => unreachable!("The benchmark! macro should have prevented this"),
+		}
+	}
+}
+
+/// Maps (pallet, benchmark) -> ((pallet, storage) -> PovEstimationMode)
+pub(crate) type PovModesMap =
+	HashMap<(Vec<u8>, Vec<u8>), HashMap<(String, String), PovEstimationMode>>;
+
 #[derive(Clone, Debug)]
 struct BenchmarkAttrs {
 	skip_meta: bool,
 	extra: bool,
+	pov_mode: Option<PovModesMap>,
 }
 
 /// Represents a single benchmark option
