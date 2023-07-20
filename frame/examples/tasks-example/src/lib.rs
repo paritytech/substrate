@@ -27,6 +27,7 @@ use sp_runtime::DispatchError;
 
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
+
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
@@ -38,6 +39,12 @@ pub mod pallet {
 		#[doc(hidden)]
 		#[codec(skip)]
 		__Ignore(PhantomData<T>, frame_support::Never),
+	}
+
+	impl<T: Config> core::fmt::Debug for Task<T> {
+		fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+			f.debug_struct("Task").field("value", self).finish()
+		}
 	}
 
 	impl<T: Config> frame_support::traits::Task for Task<T> {
@@ -114,6 +121,17 @@ pub mod pallet {
 			Self::deposit_event(Event::Decremented { new_val });
 
 			Ok(())
+		}
+
+		pub fn do_task(origin: OriginFor<T>, task: Task<T>) -> DispatchResult {
+			use frame_support::traits::Task;
+			ensure_root(origin)?;
+			if task.is_valid() {
+				task.run()?;
+				Ok(())
+			} else {
+				Err(DispatchError::Other("Invalid task"))
+			}
 		}
 	}
 
