@@ -390,6 +390,8 @@ pub enum PayoutDestination<AccountId> {
 	/// Pay the specified percentage to the specified account as free balance, and pay the rest, if
 	/// any, into the stash account and add to bond.
 	Split((Perbill, AccountId)),
+	/// Pay into an account as free balance.
+	Free(AccountId),
 	/// Receive no payout.
 	Forgo,
 }
@@ -431,12 +433,9 @@ impl<AccountId: Clone> RewardDestination<AccountId> {
 	) -> PayoutDestination<AccountId> {
 		match self {
 			RewardDestination::Staked => PayoutDestination::Stake,
-			RewardDestination::Stash =>
-				PayoutDestination::Split((Perbill::from_percent(100), stash)),
-			RewardDestination::Controller =>
-				PayoutDestination::Split((Perbill::from_percent(100), controller)),
-			RewardDestination::Account(a) =>
-				PayoutDestination::Split((Perbill::from_percent(100), a.clone())),
+			RewardDestination::Stash => PayoutDestination::Free(stash),
+			RewardDestination::Controller => PayoutDestination::Free(controller),
+			RewardDestination::Account(a) => PayoutDestination::Free(a.clone()),
 			RewardDestination::None => PayoutDestination::Forgo,
 		}
 	}
