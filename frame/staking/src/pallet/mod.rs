@@ -640,7 +640,7 @@ pub mod pallet {
 				frame_support::assert_ok!(<Pallet<T>>::bond(
 					T::RuntimeOrigin::from(Some(stash.clone()).into()),
 					balance,
-					RewardDestination::Staked,
+					PayoutDestination::Stake,
 				));
 				frame_support::assert_ok!(match status {
 					crate::StakerStatus::Validator => <Pallet<T>>::validate(
@@ -846,7 +846,7 @@ pub mod pallet {
 		pub fn bond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			payee: RewardDestination<T::AccountId>,
+			payee: PayoutDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 			let controller_to_be_deprecated = stash.clone();
@@ -869,7 +869,7 @@ pub mod pallet {
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
 			<Bonded<T>>::insert(&stash, &stash);
-			<Payee<T>>::insert(&stash, payee);
+			<Payees<T>>::insert(&stash, payee);
 
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
 			let history_depth = T::HistoryDepth::get();
@@ -1228,16 +1228,18 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_payee())]
 		pub fn set_payee(
 			origin: OriginFor<T>,
-			payee: RewardDestination<T::AccountId>,
+			payee: PayoutDestination<T::AccountId>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
-			Payee::<T>::insert(stash, payee.clone());
+			Payees::<T>::insert(stash.clone(), payee);
 
 			// In-progress lazy migration to `Payees` storage item.
 			// NOTE: To be removed in next runtime upgrade once migration is completed.
-			Payees::<T>::insert(stash, payee.to_payout_destination(stash.clone(), controller));
+			if Payee::<T>::contains_key(&stash) {
+				Payee::<T>::remove(stash);
+			}
 			Ok(())
 		}
 
@@ -1544,7 +1546,7 @@ pub mod pallet {
 		/// 2. or, the `ledger.total` of the stash is below existential deposit.
 		///
 		/// The former can happen in cases like a slash; the latter when a fully unbonded account
-		/// is still receiving staking rewards in `RewardDestination::Staked`.
+		/// is still receiving staking rewards in `PayoutDestination::Staked`.
 		///
 		/// It can be called by anyone, as long as `stash` meets the above requirements.
 		///
@@ -1804,7 +1806,10 @@ pub mod pallet {
 		/// - Writes are limited to the `who` account key.
 		#[pallet::call_index(26)]
 		#[pallet::weight(T::WeightInfo::update_payee())]
-		pub fn update_payee(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResultWithPostInfo {
+		pub fn update_payee(
+			origin: OriginFor<T>,
+			controller: T::AccountId,
+		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
@@ -1817,7 +1822,7 @@ pub mod pallet {
 				stash.clone(),
 				Payee::<T>::get(&stash).to_payout_destination(stash.clone(), controller),
 			);
-			
+
 			Ok(Pays::No.into())
 		}
 	}

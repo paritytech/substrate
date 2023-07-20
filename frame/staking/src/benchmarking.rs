@@ -73,7 +73,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	upper_bound: u32,
 	dead_controller: bool,
 	unique_controller: bool,
-	destination: RewardDestination<T::AccountId>,
+	destination: PayoutDestination<T::AccountId>,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
@@ -223,10 +223,10 @@ const USER_SEED: u32 = 999666;
 benchmarks! {
 	bond {
 		let stash = create_funded_user::<T>("stash", USER_SEED, 100);
-		let reward_destination = RewardDestination::Staked;
+		let payout_destination = PayoutDestination::Stake;
 		let amount = T::Currency::minimum_balance() * 10u32.into();
 		whitelist_account!(stash);
-	}: _(RawOrigin::Signed(stash.clone()), amount, reward_destination)
+	}: _(RawOrigin::Signed(stash.clone()), amount, payout_destination)
 	verify {
 		assert!(Bonded::<T>::contains_key(stash.clone()));
 		assert!(Ledger::<T>::contains_key(stash));
@@ -466,18 +466,22 @@ benchmarks! {
 
 	set_payee {
 		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Staked);
-		Payees::<T>::remove(&stash);
+		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Stake);
+
+		// Payee should exist to be migrated on `update_payee`.
+		Payee::<T>::insert(&stash,RewardDestination::Staked);
+
 		whitelist_account!(controller);
-	}: _(RawOrigin::Signed(controller.clone()), RewardDestination::Controller)
+	}: _(RawOrigin::Signed(controller.clone()), PayoutDestination::Split((Perbill::from_percent(50), controller.clone())))
 	verify {
-		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Controller);
-		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Free(,controller));
+		assert!(!Payee::<T>::contains_key(&stash));
+		assert_eq!(Payees::<T>::get(&stash), PayoutDestination::Split((Perbill::from_percent(50), controller.clone())));
 	}
 
 	update_payee {
 		let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
-		assert_eq!(Payee::<T>::get(&stash), RewardDestination::Staked);
+		// Payee should exist to be migrated on `update_payee`.
+		Payee::<T>::insert(&stash,RewardDestination::Staked);
 		Payees::<T>::remove(&stash);
 		assert!(!Payees::<T>::contains_key(&stash));
 		whitelist_account!(controller);
@@ -572,8 +576,13 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
-			RewardDestination::Controller,
+			PayoutDestination::Stake,
 		)?;
+
+		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
+
+		// Re-set the controller account as reward destination.
+		Staking::<T>::set_payee(RawOrigin::Signed(validator_controller.clone()).into(), PayoutDestination::Free(validator_controller.clone()))?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
@@ -585,6 +594,9 @@ benchmarks! {
 		for (_, controller) in &nominators {
 			let balance = T::Currency::free_balance(controller);
 			ensure!(balance.is_zero(), "Controller has balance, but should be dead.");
+
+			// Re-set the controller account as payout destination.
+			Staking::<T>::set_payee(RawOrigin::Signed(controller.clone()).into(), PayoutDestination::Free(controller.clone()))?;
 		}
 	}: payout_stakers(RawOrigin::Signed(caller), validator, current_era)
 	verify {
@@ -606,7 +618,7 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			false,
 			true,
-			RewardDestination::Staked,
+			PayoutDestination::Stake,
 		)?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
@@ -921,7 +933,7 @@ benchmarks! {
 
 		// Create a validator with a commission of 50%
 		let (stash, controller) =
-			create_stash_controller::<T>(1, 1, RewardDestination::Staked)?;
+			create_stash_controller::<T>(1, 1, PayoutDestination::Stake)?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
@@ -1001,7 +1013,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
-				RewardDestination::Staked,
+				PayoutDestination::Stake,
 			)
 			.unwrap();
 
@@ -1031,7 +1043,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
-				RewardDestination::Staked,
+				PayoutDestination::Stake,
 			)
 			.unwrap();
 

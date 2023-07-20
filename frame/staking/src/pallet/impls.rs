@@ -46,7 +46,7 @@ use sp_std::prelude::*;
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
+	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PayoutDestination, PositiveImbalanceOf,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
@@ -258,7 +258,7 @@ impl<T: Config> Pallet<T> {
 				nominator_exposure_part * validator_leftover_payout;
 			// We can now make nominator payout:
 			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
-				// Note: this logic does not count payouts for `RewardDestination::None`.
+				// Note: this logic does not count payouts for `PayoutDestination::Forgo`.
 				nominator_payout_count += 1;
 				let e =
 					Event::<T>::Rewarded { stash: nominator.who.clone(), amount: imbalance.peek() };
@@ -292,12 +292,13 @@ impl<T: Config> Pallet<T> {
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
-		let dest = Self::payee(stash);
+		// NOTE: temporary getter while lazy migration is taking place.
+		// Can replace with `Self:payees(stash)` once migration is done.
+		let dest =
+			Self::get_payout_destination(stash, Self::bonded(stash).expect("bonded stash, qed."));
+
 		match dest {
-			RewardDestination::Controller => Self::bonded(stash)
-				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
-			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
-			RewardDestination::Staked => Self::bonded(stash)
+			PayoutDestination::Stake => Self::bonded(stash)
 				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
 				.and_then(|(controller, mut l)| {
 					l.active += amount;
@@ -306,9 +307,28 @@ impl<T: Config> Pallet<T> {
 					Self::update_ledger(&controller, &l);
 					r
 				}),
-			RewardDestination::Account(dest_account) =>
+			PayoutDestination::Split((percent_free, dest_account)) => {
+				let amount_free = percent_free * amount;
+				let amount_stake = amount.saturating_sub(amount_free);
+				let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
+
+				let imbalance_stake = Self::bonded(stash)
+					.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
+					.and_then(|(controller, mut l)| {
+						l.active += amount_stake;
+						l.total += amount_stake;
+						let r = T::Currency::deposit_into_existing(stash, amount_stake).ok();
+						Self::update_ledger(&controller, &l);
+						r
+					})?;
+
+				total_imbalance.subsume(imbalance_stake);
+				total_imbalance.subsume(T::Currency::deposit_creating(&dest_account, amount_free));
+				Some(total_imbalance)
+			},
+			PayoutDestination::Free(dest_account) =>
 				Some(T::Currency::deposit_creating(&dest_account, amount)),
-			RewardDestination::None => None,
+			PayoutDestination::Forgo => None,
 		}
 	}
 
@@ -664,7 +684,7 @@ impl<T: Config> Pallet<T> {
 		<Bonded<T>>::remove(stash);
 		<Ledger<T>>::remove(&controller);
 
-		<Payee<T>>::remove(stash);
+		<Payees<T>>::remove(stash);
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
 
@@ -976,6 +996,22 @@ impl<T: Config> Pallet<T> {
 			weight,
 			DispatchClass::Mandatory,
 		);
+	}
+
+	/// Temporary getter for `Payees`.
+	///
+	/// Migrates `Payee` to `Payees` if it has not been migrated already.
+	fn get_payout_destination(
+		stash: &T::AccountId,
+		controller: T::AccountId,
+	) -> PayoutDestination<T::AccountId> {
+		if !Payees::<T>::contains_key(stash) {
+			let current = Payee::<T>::get(stash).to_payout_destination(stash.clone(), controller);
+			Payee::<T>::remove(stash);
+			current
+		} else {
+			Payees::<T>::get(stash)
+		}
 	}
 }
 
@@ -1658,7 +1694,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::bond(
 			RawOrigin::Signed(who.clone()).into(),
 			value,
-			RewardDestination::Account(payee.clone()),
+			PayoutDestination::Free(payee.clone()),
 		)
 	}
 
