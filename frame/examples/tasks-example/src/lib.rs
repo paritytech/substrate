@@ -20,63 +20,65 @@
 use core::marker::PhantomData;
 
 use codec::{Decode, Encode};
-use frame_support::{dispatch::DispatchResult, traits::Task, Never};
+use frame_support::dispatch::DispatchResult;
 // Re-export pallet items so that they can be accessed from the crate namespace.
 pub use pallet::*;
 use sp_runtime::DispatchError;
-
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub enum ExampleTask<T: Config> {
-	Increment,
-	Decrement,
-	#[doc(hidden)]
-	#[codec(skip)]
-	__Ignore(PhantomData<T>, Never),
-}
-
-impl<T: Config> Task for ExampleTask<T> {
-	type Enumeration = std::vec::IntoIter<ExampleTask<T>>;
-
-	const TASK_INDEX: usize = 0;
-
-	fn enumerate() -> Self::Enumeration {
-		vec![ExampleTask::Increment, ExampleTask::Decrement].into_iter()
-	}
-
-	fn is_valid(&self) -> bool {
-		let value = Value::<T>::get().unwrap();
-		match self {
-			ExampleTask::Increment => value < 255,
-			ExampleTask::Decrement => value > 0,
-			ExampleTask::__Ignore(_, _) => unreachable!(),
-		}
-	}
-
-	fn run(&self) -> Result<(), DispatchError> {
-		match self {
-			ExampleTask::Increment => {
-				// Increment the value and emit an event
-				let new_val = Value::<T>::get().unwrap().checked_add(1).ok_or("Value overflow")?;
-				Value::<T>::put(new_val);
-				Pallet::<T>::deposit_event(Event::Incremented { new_val });
-			},
-			ExampleTask::Decrement => {
-				// Decrement the value and emit an event
-				let new_val = Value::<T>::get().unwrap().checked_sub(1).ok_or("Value underflow")?;
-				Value::<T>::put(new_val);
-				Pallet::<T>::deposit_event(Event::Decremented { new_val });
-			},
-			ExampleTask::__Ignore(_, _) => unreachable!(),
-		}
-		Ok(())
-	}
-}
 
 #[frame_support::pallet(dev_mode)]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+	pub enum Task<T: Config> {
+		Increment,
+		Decrement,
+		#[doc(hidden)]
+		#[codec(skip)]
+		__Ignore(PhantomData<T>, frame_support::Never),
+	}
+
+	impl<T: Config> frame_support::traits::Task for Task<T> {
+		type Enumeration = std::vec::IntoIter<Task<T>>;
+
+		const TASK_INDEX: usize = 0;
+
+		fn enumerate() -> Self::Enumeration {
+			vec![Task::Increment, Task::Decrement].into_iter()
+		}
+
+		fn is_valid(&self) -> bool {
+			let value = Value::<T>::get().unwrap();
+			match self {
+				Task::Increment => value < 255,
+				Task::Decrement => value > 0,
+				Task::__Ignore(_, _) => unreachable!(),
+			}
+		}
+
+		fn run(&self) -> Result<(), DispatchError> {
+			match self {
+				Task::Increment => {
+					// Increment the value and emit an event
+					let new_val =
+						Value::<T>::get().unwrap().checked_add(1).ok_or("Value overflow")?;
+					Value::<T>::put(new_val);
+					Pallet::<T>::deposit_event(Event::Incremented { new_val });
+				},
+				Task::Decrement => {
+					// Decrement the value and emit an event
+					let new_val =
+						Value::<T>::get().unwrap().checked_sub(1).ok_or("Value underflow")?;
+					Value::<T>::put(new_val);
+					Pallet::<T>::deposit_event(Event::Decremented { new_val });
+				},
+				Task::__Ignore(_, _) => unreachable!(),
+			}
+			Ok(())
+		}
+	}
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
