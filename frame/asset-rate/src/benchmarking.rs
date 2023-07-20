@@ -26,7 +26,7 @@ use frame_support::assert_ok;
 use frame_system::RawOrigin;
 use sp_core::crypto::FromEntropy;
 
-/// Trait describing the factory function for AssetKind parameter
+/// Trait describing the factory function for the `AssetKind` parameter.
 pub trait AssetKindFactory<AssetKind> {
 	fn create_asset_kind(seed: u32) -> AssetKind;
 }
