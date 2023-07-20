@@ -1,3 +1,4 @@
+;; Simple fixture which requires sign_extension proposal to be enabled.
 (module
 	(import "env" "memory" (memory 1 1))
 	(func (export "deploy"))
