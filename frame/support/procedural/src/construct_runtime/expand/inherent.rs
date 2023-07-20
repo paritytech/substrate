@@ -19,12 +19,12 @@ use crate::construct_runtime::Pallet;
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::str::FromStr;
-use syn::{Ident, TypePath};
+use syn::Ident;
 
 pub fn expand_outer_inherent(
 	runtime: &Ident,
-	block: &TypePath,
-	unchecked_extrinsic: &TypePath,
+	block: &TokenStream,
+	unchecked_extrinsic: &TokenStream,
 	pallet_decls: &[Pallet],
 	scrate: &TokenStream,
 ) -> TokenStream {

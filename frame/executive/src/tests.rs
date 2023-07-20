@@ -27,7 +27,7 @@ use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionValidityError, UnknownTransaction, ValidTransaction,
 	},
-	DispatchError,
+	BuildStorage, DispatchError,
 };
 
 use frame_support::{
@@ -56,17 +56,17 @@ mod custom {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		// module hooks.
 		// one with block number arg and one without
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			println!("on_initialize({})", n);
 			Weight::from_parts(175, 0)
 		}
 
-		fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
+		fn on_idle(n: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			println!("on_idle{}, {})", n, remaining_weight);
 			Weight::from_parts(175, 0)
 		}
 
-		fn on_finalize(n: T::BlockNumber) {
+		fn on_finalize(n: BlockNumberFor<T>) {
 			println!("on_finalize({})", n);
 		}
 
@@ -75,8 +75,8 @@ mod custom {
 			Weight::from_parts(200, 0)
 		}
 
-		fn offchain_worker(n: T::BlockNumber) {
-			assert_eq!(T::BlockNumber::from(1u32), n);
+		fn offchain_worker(n: BlockNumberFor<T>) {
+			assert_eq!(BlockNumberFor::<T>::from(1u32), n);
 		}
 	}
 
@@ -163,12 +163,9 @@ mod custom {
 }
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
-		Block = TestBlock,
-		NodeBlock = TestBlock,
-		UncheckedExtrinsic = TestUncheckedExtrinsic
+	pub struct Runtime
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 		Custom: custom::{Pallet, Call, ValidateUnsigned, Inherent},
@@ -193,14 +190,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
-	type BlockNumber = u64;
 	type Hash = sp_core::H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<u64>;
-	type Header = Header;
+	type Block = TestBlock;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = RuntimeVersion;
@@ -264,7 +260,6 @@ type SignedExtra = (
 );
 type TestXt = sp_runtime::testing::TestXt<RuntimeCall, SignedExtra>;
 type TestBlock = Block<TestXt>;
-type TestUncheckedExtrinsic = TestXt;
 
 // Will contain `true` when the custom runtime logic was called.
 const CUSTOM_ON_RUNTIME_KEY: &[u8] = b":custom:on_runtime";
@@ -313,7 +308,7 @@ fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
 
 #[test]
 fn balance_transfer_dispatch_works() {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 	pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 211)] }
 		.assimilate_storage(&mut t)
 		.unwrap();
@@ -341,7 +336,7 @@ fn balance_transfer_dispatch_works() {
 }
 
 fn new_test_ext(balance_factor: Balance) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 	pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 111 * balance_factor)] }
 		.assimilate_storage(&mut t)
 		.unwrap();
@@ -349,7 +344,7 @@ fn new_test_ext(balance_factor: Balance) -> sp_io::TestExternalities {
 }
 
 fn new_test_ext_v0(balance_factor: Balance) -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 	pallet_balances::GenesisConfig::<Runtime> { balances: vec![(1, 111 * balance_factor)] }
 		.assimilate_storage(&mut t)
 		.unwrap();

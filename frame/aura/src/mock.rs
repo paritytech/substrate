@@ -22,25 +22,18 @@
 use crate as pallet_aura;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, DisabledValidators, GenesisBuild},
+	traits::{ConstU32, ConstU64, DisabledValidators},
 };
 use sp_consensus_aura::{ed25519::AuthorityId, AuthorityIndex};
 use sp_core::H256;
-use sp_runtime::{
-	testing::{Header, UintAuthorityId},
-	traits::IdentityLookup,
-};
+use sp_runtime::{testing::UintAuthorityId, traits::IdentityLookup, BuildStorage};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Aura: pallet_aura::{Pallet, Storage, Config<T>},
 	}
@@ -52,14 +45,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -111,7 +103,7 @@ impl pallet_aura::Config for Test {
 }
 
 fn build_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
-	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	pallet_aura::GenesisConfig::<Test> {
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
 	}

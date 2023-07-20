@@ -33,7 +33,7 @@ pub struct PoolInfo<PoolAssetId> {
 
 /// A trait that converts between a MultiAssetId and either the native currency or an AssetId.
 pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
-	/// Returns the MultiAssetId reperesenting the native currency of the chain.
+	/// Returns the MultiAssetId representing the native currency of the chain.
 	fn get_native() -> MultiAssetId;
 
 	/// Returns true if the given MultiAssetId is the native currency.
@@ -42,7 +42,7 @@ pub trait MultiAssetIdConverter<MultiAssetId, AssetId> {
 	/// If it's not native, returns the AssetId for the given MultiAssetId.
 	fn try_convert(asset: &MultiAssetId) -> Result<AssetId, ()>;
 
-	/// Wrapps an AssetId as a MultiAssetId.
+	/// Wraps an AssetId as a MultiAssetId.
 	fn into_multiasset_id(asset: &AssetId) -> MultiAssetId;
 }
 
@@ -74,6 +74,12 @@ where
 	Native,
 	/// A non-native asset id.
 	Asset(AssetId),
+}
+
+impl<AssetId: Ord> From<AssetId> for NativeOrAssetId<AssetId> {
+	fn from(asset: AssetId) -> Self {
+		Self::Asset(asset)
+	}
 }
 
 impl<AssetId: Ord> Ord for NativeOrAssetId<AssetId> {
@@ -125,4 +131,41 @@ impl<AssetId: Ord + Clone> MultiAssetIdConverter<NativeOrAssetId<AssetId>, Asset
 	fn into_multiasset_id(asset: &AssetId) -> NativeOrAssetId<AssetId> {
 		NativeOrAssetId::Asset((*asset).clone())
 	}
+}
+
+/// Trait for providing methods to swap between the various asset classes.
+pub trait Swap<AccountId, Balance, MultiAssetId> {
+	/// Swap exactly `amount_in` of asset `path[0]` for asset `path[1]`.
+	/// If an `amount_out_min` is specified, it will return an error if it is unable to acquire
+	/// the amount desired.
+	///
+	/// Withdraws the `path[0]` asset from `sender`, deposits the `path[1]` asset to `send_to`,
+	/// respecting `keep_alive`.
+	///
+	/// If successful, returns the amount of `path[1]` acquired for the `amount_in`.
+	fn swap_exact_tokens_for_tokens(
+		sender: AccountId,
+		path: Vec<MultiAssetId>,
+		amount_in: Balance,
+		amount_out_min: Option<Balance>,
+		send_to: AccountId,
+		keep_alive: bool,
+	) -> Result<Balance, DispatchError>;
+
+	/// Take the `path[0]` asset and swap some amount for `amount_out` of the `path[1]`. If an
+	/// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
+	/// too costly.
+	///
+	/// Withdraws `path[0]` asset from `sender`, deposits `path[1]` asset to `send_to`,
+	/// respecting `keep_alive`.
+	///
+	/// If successful returns the amount of the `path[0]` taken to provide `path[1]`.
+	fn swap_tokens_for_exact_tokens(
+		sender: AccountId,
+		path: Vec<MultiAssetId>,
+		amount_out: Balance,
+		amount_in_max: Option<Balance>,
+		send_to: AccountId,
+		keep_alive: bool,
+	) -> Result<Balance, DispatchError>;
 }
