@@ -301,8 +301,8 @@ impl<T: Config> Pallet<T> {
 			PayoutDestination::Stake => Self::bonded(stash)
 				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
 				.and_then(|(controller, mut l)| {
-					l.active += amount;
-					l.total += amount;
+					l.active.saturating_accrue(amount);
+					l.total.saturating_accrue(amount);
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
 					Self::update_ledger(&controller, &l);
 					r
