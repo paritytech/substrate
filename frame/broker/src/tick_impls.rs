@@ -77,7 +77,7 @@ impl<T: Config> Pallet<T> {
 		false
 	}
 
-	fn process_revenue() -> bool {
+	pub(crate) fn process_revenue() -> bool {
 		let (until, amount) = match T::Coretime::check_notify_revenue_info() {
 			Some(x) => x,
 			None => return false,

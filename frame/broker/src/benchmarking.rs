@@ -551,6 +551,77 @@ mod benches {
 		Ok(())
 	}
 
+	#[benchmark]
+	fn rotate_sale(n: Linear<0, { MAX_CORE_COUNT.into() }>) {
+		let core_count = n.try_into().unwrap();
+		let config = new_config_record::<T>();
+
+		let now = frame_system::Pallet::<T>::block_number();
+		let price = 10u32.into();
+		let commit_timeslice = Broker::<T>::latest_timeslice_ready_to_commit(&config);
+		let sale = SaleInfoRecordOf::<T> {
+			sale_start: now,
+			leadin_length: Zero::zero(),
+			price,
+			sellout_price: None,
+			region_begin: commit_timeslice,
+			region_end: commit_timeslice.saturating_add(config.region_length),
+			first_core: 0,
+			ideal_cores_sold: 0,
+			cores_offered: 0,
+			cores_sold: 0,
+		};
+
+		let status = StatusRecord {
+			core_count,
+			private_pool_size: 0,
+			system_pool_size: 0,
+			last_committed_timeslice: commit_timeslice.saturating_sub(1),
+			last_timeslice: Broker::<T>::current_timeslice(),
+		};
+
+		// Assume Reservations to be filled for worst case
+		setup_reservations::<T>(T::MaxReservedCores::get());
+
+		// Assume Leases to be filled for worst case
+		setup_leases::<T>(T::MaxLeasedCores::get(), 1, 10);
+
+		#[block]
+		{
+			Broker::<T>::rotate_sale(sale, &config, &status);
+		}
+
+		assert!(SaleInfo::<T>::get().is_some());
+		assert_last_event::<T>(
+			Event::SaleInitialized {
+				sale_start: 2u32.into(),
+				leadin_length: 1u32.into(),
+				start_price: 20u32.into(),
+				regular_price: 10u32.into(),
+				region_begin: 4,
+				region_end: 7,
+				ideal_cores_sold: 0,
+				cores_offered: n
+					.saturating_sub(T::MaxReservedCores::get())
+					.saturating_sub(T::MaxLeasedCores::get())
+					.try_into()
+					.unwrap(),
+			}
+			.into(),
+		);
+	}
+
+	#[benchmark]
+	fn request_revenue_info_at() {
+		let current_timeslice = Broker::<T>::current_timeslice();
+		let rc_block = T::TimeslicePeriod::get() * current_timeslice.into();
+
+		#[block]
+		{
+			T::Coretime::request_revenue_info_at(rc_block);
+		}
+	}
+
 	// Implements a test for each benchmark. Execute with:
 	// `cargo test -p pallet-broker --features runtime-benchmarks`.
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
