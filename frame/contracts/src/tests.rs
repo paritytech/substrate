@@ -718,12 +718,14 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: deposit_account.clone(),
-						amount: 131,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: deposit_account.clone(),
+							amount: 131,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&deposit_account)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -742,21 +744,25 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: addr.clone(),
-						amount: min_balance,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: addr.clone(),
+							amount: min_balance,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: addr.clone(),
-						amount: value,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: addr.clone(),
+							amount: value,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1200,12 +1206,14 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: deposit_account.clone(),
-						amount: 131,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: deposit_account.clone(),
+							amount: 131,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&deposit_account)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1224,21 +1232,25 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: callee_addr.clone(),
-						amount: min_balance,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: callee_addr.clone(),
+							amount: min_balance,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&callee_addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: caller_addr.clone(),
-						to: callee_addr.clone(),
-						amount: 32768 // hardcoded in wasm
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: caller_addr.clone(),
+							to: callee_addr.clone(),
+							amount: 32768 // hardcoded in wasm
+						}
+					),
+					topics: vec![hash(&caller_addr), hash(&callee_addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1250,12 +1262,14 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: caller_addr.clone(),
-						to: callee_addr.clone(),
-						amount: 32768,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: caller_addr.clone(),
+							to: callee_addr.clone(),
+							amount: 32768,
+						}
+					),
+					topics: vec![hash(&caller_addr), hash(&callee_addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1367,11 +1381,11 @@ fn transfer_allow_death_cannot_kill_account() {
 #[test]
 fn cannot_self_destruct_through_draning() {
 	let (wasm, _code_hash) = compile_module::<Test>("drain").unwrap();
-	let ed = Contracts::min_balance();
-	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let value = 1_000;
-		let initial_storage_deposit = 131;
+		let meter_storage_deposit = 131;
+		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -1406,7 +1420,7 @@ fn cannot_self_destruct_through_draning() {
 		// Make sure the account wasn't remove by sending all free balance away.
 		assert_eq!(
 			<Test as Config>::Currency::total_balance(&addr),
-			value + initial_storage_deposit + ed,
+			value + meter_storage_deposit + min_balance,
 		);
 	});
 }
@@ -1414,10 +1428,10 @@ fn cannot_self_destruct_through_draning() {
 #[test]
 fn cannot_self_destruct_through_storage_refund_after_price_change() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
-	let ed = Contracts::min_balance();
-	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
-		let initial_storage_deposit = 131;
+		let meter_storage_deposit = 131;
+		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -1436,9 +1450,12 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 		.account_id;
 
 		// Check that the contract has been instantiated and has the minimum balance
-		assert_eq!(get_contract(&addr).total_deposit(), initial_storage_deposit);
+		assert_eq!(get_contract(&addr).total_deposit(), meter_storage_deposit);
 		assert_eq!(get_contract(&addr).extra_deposit(), 0);
-		assert_eq!(<Test as Config>::Currency::total_balance(&addr), initial_storage_deposit + ed);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			meter_storage_deposit + min_balance
+		);
 
 		// Create 100 bytes of storage with a price of per byte and a single storage item of price 2
 		assert_ok!(Contracts::call(
@@ -1449,7 +1466,7 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 			None,
 			100u32.to_le_bytes().to_vec()
 		));
-		assert_eq!(get_contract(&addr).total_deposit(), initial_storage_deposit + 102);
+		assert_eq!(get_contract(&addr).total_deposit(), meter_storage_deposit + 102);
 
 		// Increase the byte price and trigger a refund. This should not have any influence because
 		// the removal is pro rata and exactly those 100 bytes should have been removed.
@@ -1466,7 +1483,7 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 		// Make sure the account wasn't removed by the refund
 		assert_eq!(
 			<Test as Config>::Currency::total_balance(&addr),
-			get_contract(&addr).total_deposit() + ed,
+			get_contract(&addr).total_deposit() + min_balance,
 		);
 		assert_eq!(get_contract(&addr).extra_deposit(), 2);
 	});
@@ -1522,6 +1539,7 @@ fn self_destruct_works() {
 	ExtBuilder::default().existential_deposit(1_000).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let _ = <Test as Config>::Currency::set_balance(&DJANGO, 1_000_000);
+		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -1559,8 +1577,10 @@ fn self_destruct_works() {
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), 0);
 
 		// check that the beneficiary (django) got remaining balance
-		let ed = Contracts::min_balance();
-		assert_eq!(<Test as Config>::Currency::free_balance(DJANGO), 1_000_000 + 100_000 + ed);
+		assert_eq!(
+			<Test as Config>::Currency::free_balance(DJANGO),
+			1_000_000 + 100_000 + min_balance
+		);
 
 		pretty_assertions::assert_eq!(
 			System::events(),
@@ -1574,12 +1594,14 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: addr.clone(),
-						to: DJANGO,
-						amount: 100_000 + ed,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: addr.clone(),
+							to: DJANGO,
+							amount: 100_000 + min_balance,
+						}
+					),
+					topics: vec![hash(&addr), hash(&DJANGO)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1606,12 +1628,14 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: contract.deposit_account().deref().clone(),
-						to: ALICE,
-						amount: 1_000,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: contract.deposit_account().deref().clone(),
+							to: ALICE,
+							amount: 1_000,
+						}
+					),
+					topics: vec![hash(&contract.deposit_account().deref()), hash(&ALICE)],
 				},
 			],
 		);
@@ -3724,6 +3748,7 @@ fn instantiate_with_zero_balance_works() {
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = Contracts::min_balance();
+		let meter_storage_deposit = 131;
 
 		// Drop previous events
 		initialize_block(2);
@@ -3744,15 +3769,15 @@ fn instantiate_with_zero_balance_works() {
 		.unwrap()
 		.account_id;
 
-		// Check that the BOB contract has been instantiated.
-		let contract = get_contract(&addr);
-		let deposit_account = contract.deposit_account().deref();
 		// Ensure the contract was stored and get expected deposit amount to be reserved.
 		let deposit_expected = expected_deposit(ensure_stored(code_hash));
 
 		// Make sure the account exists even though no free balance was send
 		assert_eq!(<Test as Config>::Currency::free_balance(&addr), min_balance);
-		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance,);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			min_balance + meter_storage_deposit
+		);
 
 		assert_eq!(
 			System::events(),
@@ -3769,30 +3794,6 @@ fn instantiate_with_zero_balance_works() {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![code_hash],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::NewAccount {
-						account: deposit_account.clone(),
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
-						account: deposit_account.clone(),
-						free_balance: min_balance,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: deposit_account.clone(),
-						amount: min_balance,
-					}),
-					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3817,6 +3818,17 @@ fn instantiate_with_zero_balance_works() {
 						amount: min_balance,
 					}),
 					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: addr.clone(),
+							amount: meter_storage_deposit,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3837,6 +3849,8 @@ fn instantiate_with_below_existential_deposit_works() {
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = Contracts::min_balance();
+		let value = 50;
+		let meter_storage_deposit = 131;
 
 		// Drop previous events
 		initialize_block(2);
@@ -3844,7 +3858,7 @@ fn instantiate_with_below_existential_deposit_works() {
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
 			ALICE,
-			50,
+			value,
 			GAS_LIMIT,
 			None,
 			Code::Upload(wasm),
@@ -3863,8 +3877,11 @@ fn instantiate_with_below_existential_deposit_works() {
 		// Ensure the contract was stored and get expected deposit amount to be reserved.
 		let deposit_expected = expected_deposit(ensure_stored(code_hash));
 		// Make sure the account exists even though not enough free balance was send
-		assert_eq!(<Test as Config>::Currency::free_balance(&addr), min_balance + 50);
-		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance + 50);
+		assert_eq!(<Test as Config>::Currency::free_balance(&addr), min_balance + value);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			min_balance + value + meter_storage_deposit
+		);
 
 		assert_eq!(
 			System::events(),
@@ -3899,12 +3916,14 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: deposit_account.clone(),
-						amount: min_balance,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: deposit_account.clone(),
+							amount: min_balance,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&deposit_account)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3923,21 +3942,25 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: addr.clone(),
-						amount: min_balance,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: addr.clone(),
+							amount: min_balance,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: addr.clone(),
-						amount: 50,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: addr.clone(),
+							amount: 50,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3955,11 +3978,10 @@ fn instantiate_with_below_existential_deposit_works() {
 #[test]
 fn storage_deposit_works() {
 	let (wasm, _code_hash) = compile_module::<Test>("multi_store").unwrap();
-	let ed = Contracts::min_balance();
-	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
-		let initial_storage_deposit = 131;
-		let mut deposit = initial_storage_deposit;
+		let meter_storage_deposit = 131;
+		let mut deposit = meter_storage_deposit;
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -4020,9 +4042,6 @@ fn storage_deposit_works() {
 		deposit -= refunded0;
 		assert_eq!(get_contract(&addr).total_deposit(), deposit);
 
-		let contract = get_contract(&addr);
-		let deposit_account = contract.deposit_account().deref();
-
 		assert_eq!(
 			System::events(),
 			vec![
@@ -4045,12 +4064,14 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: deposit_account.clone(),
-						amount: charged0,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: addr.clone(),
+							amount: charged0,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -4062,12 +4083,14 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: ALICE,
-						to: deposit_account.clone(),
-						amount: charged1,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndHeld {
+							from: ALICE,
+							to: addr.clone(),
+							amount: charged1,
+						}
+					),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -4079,12 +4102,14 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-						from: deposit_account.clone(),
-						to: ALICE,
-						amount: refunded0,
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndReleased {
+							from: addr.clone(),
+							to: ALICE,
+							amount: refunded0,
+						}
+					),
+					topics: vec![hash(&addr.clone()), hash(&ALICE)],
 				},
 			]
 		);
@@ -4095,10 +4120,10 @@ fn storage_deposit_works() {
 fn storage_deposit_callee_works() {
 	let (wasm_caller, _code_hash_caller) = compile_module::<Test>("call").unwrap();
 	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store_call").unwrap();
-	let ed = Contracts::min_balance();
-	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
-		let initial_storage_deposit = 131;
+		let meter_storage_deposit = 131;
+		let min_balance = Contracts::min_balance();
 
 		// Create both contracts: Constructors do nothing.
 		let addr_caller = Contracts::bare_instantiate(
@@ -4142,8 +4167,8 @@ fn storage_deposit_callee_works() {
 		let callee = get_contract(&addr_callee);
 		let deposit = DepositPerByte::get() * 100 + DepositPerItem::get() * 1;
 
-		assert_eq!(test_utils::get_balance(&addr_callee), ed);
-		assert_eq!(callee.total_deposit(), deposit + initial_storage_deposit);
+		assert_eq!(test_utils::get_balance(&addr_callee), min_balance);
+		assert_eq!(callee.total_deposit(), deposit + meter_storage_deposit);
 	});
 }
 
@@ -4239,11 +4264,11 @@ fn set_code_extrinsic() {
 #[test]
 fn slash_cannot_kill_account() {
 	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
-	const ED: u64 = 200;
-	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let value = 700;
-		let balance_held = 500;
+		let meter_storage_deposit = 131;
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
+		let min_balance = Contracts::min_balance();
 
 		let addr = Contracts::bare_instantiate(
 			ALICE,
@@ -4263,16 +4288,12 @@ fn slash_cannot_kill_account() {
 		// Drop previous events
 		initialize_block(2);
 
-		// We need to hold some balances in order to have something to slash. As slashing can only
-		// affect balances held under certain HoldReason.
-		<Test as Config>::Currency::hold(
-			&HoldReason::StorageDepositReserve.into(),
-			&addr,
-			balance_held,
-		)
-		.unwrap();
+		assert_eq!(<Test as Config>::Currency::total_balance_on_hold(&addr), meter_storage_deposit);
 
-		assert_eq!(<Test as Config>::Currency::total_balance_on_hold(&addr), balance_held);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			meter_storage_deposit + value + min_balance
+		);
 
 		// Try to destroy the account of the contract by slashing the total balance.
 		// The account does not get destroyed because of the consumer reference.
@@ -4284,7 +4305,7 @@ fn slash_cannot_kill_account() {
 		);
 
 		// Slashing only removed the balance held.
-		assert_eq!(<Test as Config>::Currency::total_balance(&addr), value + ED - balance_held,);
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), value + min_balance);
 	});
 }
 
@@ -4600,10 +4621,10 @@ fn set_code_hash() {
 
 #[test]
 fn storage_deposit_limit_is_enforced() {
-	let ed = 200;
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
-	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
+		let meter_storage_deposit = 131;
 		let min_balance = Contracts::min_balance();
 
 		// Setting insufficient storage_deposit should fail.
@@ -4612,7 +4633,8 @@ fn storage_deposit_limit_is_enforced() {
 				ALICE,
 				0,
 				GAS_LIMIT,
-				Some((2 * ed + 3 - 1).into()), // expected deposit is 2 * ed + 3 for the call
+				Some((2 * min_balance + 3 - 1).into()), /* expected deposit is 2 * ed + 3 for
+				                                         * the call */
 				Code::Upload(wasm.clone()),
 				vec![],
 				vec![],
@@ -4640,8 +4662,11 @@ fn storage_deposit_limit_is_enforced() {
 		.account_id;
 
 		// Check that the BOB contract has been instantiated and has the minimum balance
-		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
-		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
+		assert_eq!(get_contract(&addr).total_deposit(), meter_storage_deposit);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			meter_storage_deposit + min_balance
+		);
 
 		// Create 1 byte of storage with a price of per byte,
 		// setting insufficient deposit limit, as it requires 3 Balance:
@@ -4992,12 +5017,12 @@ fn deposit_limit_in_nested_instantiate() {
 #[test]
 fn deposit_limit_honors_liquidity_restrictions() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
-	let ed = Contracts::min_balance();
-	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let bobs_balance = 1_000;
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let _ = <Test as Config>::Currency::set_balance(&BOB, bobs_balance);
-		let initial_storage_deposit = 131;
+		let meter_storage_deposit = 131;
+		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -5016,14 +5041,17 @@ fn deposit_limit_honors_liquidity_restrictions() {
 		.account_id;
 
 		// Check that the contract has been instantiated and has the minimum balance
-		assert_eq!(get_contract(&addr).total_deposit(), initial_storage_deposit);
-		assert_eq!(<Test as Config>::Currency::total_balance(&addr), initial_storage_deposit + ed);
+		assert_eq!(get_contract(&addr).total_deposit(), meter_storage_deposit);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			meter_storage_deposit + min_balance
+		);
 
 		// check that the hold is honored
 		<Test as Config>::Currency::hold(
 			&HoldReason::StorageDepositReserve.into(),
 			&BOB,
-			bobs_balance - ed,
+			bobs_balance - min_balance,
 		)
 		.unwrap();
 		assert_err_ignore_postinfo!(
@@ -5037,18 +5065,18 @@ fn deposit_limit_honors_liquidity_restrictions() {
 			),
 			<Error<Test>>::StorageDepositNotEnoughFunds,
 		);
-		assert_eq!(<Test as Config>::Currency::free_balance(&BOB), ed);
+		assert_eq!(<Test as Config>::Currency::free_balance(&BOB), min_balance);
 	});
 }
 
 #[test]
 fn deposit_limit_honors_existential_deposit() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
-	let ed = Contracts::min_balance();
-	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let _ = <Test as Config>::Currency::set_balance(&BOB, 1_000);
-		let initial_storage_deposit = 131;
+		let meter_storage_deposit = 131;
+		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -5067,8 +5095,11 @@ fn deposit_limit_honors_existential_deposit() {
 		.account_id;
 
 		// Check that the contract has been instantiated and has the minimum balance
-		assert_eq!(get_contract(&addr).total_deposit(), initial_storage_deposit);
-		assert_eq!(<Test as Config>::Currency::total_balance(&addr), ed + initial_storage_deposit);
+		assert_eq!(get_contract(&addr).total_deposit(), meter_storage_deposit);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			min_balance + meter_storage_deposit
+		);
 
 		// check that the deposit can't bring the account below the existential deposit
 		assert_err_ignore_postinfo!(
@@ -5089,11 +5120,11 @@ fn deposit_limit_honors_existential_deposit() {
 #[test]
 fn deposit_limit_honors_min_leftover() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
-	let ed = Contracts::min_balance();
-	ExtBuilder::default().existential_deposit(ed).build().execute_with(|| {
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let _ = <Test as Config>::Currency::set_balance(&BOB, 1_000);
-		let initial_storage_deposit = 131;
+		let meter_storage_deposit = 131;
+		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -5113,8 +5144,11 @@ fn deposit_limit_honors_min_leftover() {
 
 		// Check that the contract has been instantiated and has the minimum balance and the storage
 		// deposit
-		assert_eq!(get_contract(&addr).total_deposit(), initial_storage_deposit);
-		assert_eq!(<Test as Config>::Currency::total_balance(&addr), initial_storage_deposit + ed);
+		assert_eq!(get_contract(&addr).total_deposit(), meter_storage_deposit);
+		assert_eq!(
+			<Test as Config>::Currency::total_balance(&addr),
+			meter_storage_deposit + min_balance
+		);
 
 		// check that the minimum leftover (value send) is considered
 		assert_err_ignore_postinfo!(

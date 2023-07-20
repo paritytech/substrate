@@ -889,14 +889,25 @@ pub mod pallet {
 			code_hash: CodeHash<T>,
 		},
 
-		/// Some funds have been held as storage deposit.
+		/// Some storage deposit funds have been held.
 		StorageDepositHeld { who: T::AccountId, amount: BalanceOf<T> },
 
 		/// Some funds have been released as storage deposit.
 		StorageDepositReleased { who: T::AccountId, amount: BalanceOf<T> },
 
-		/// Some funds have been transferred to be used as storage deposit.
-		StorageDepositTransferred { from: T::AccountId, to: T::AccountId, amount: BalanceOf<T> },
+		/// Some funds have been transferred and held as storage deposit.
+		StorageDepositTransferredAndHeld {
+			from: T::AccountId,
+			to: T::AccountId,
+			amount: BalanceOf<T>,
+		},
+
+		/// Some storage deposit funds have been transferred and released.
+		StorageDepositTransferredAndReleased {
+			from: T::AccountId,
+			to: T::AccountId,
+			amount: BalanceOf<T>,
+		},
 	}
 
 	#[pallet::error]

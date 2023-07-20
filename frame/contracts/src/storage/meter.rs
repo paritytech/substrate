@@ -18,7 +18,8 @@
 //! This module contains functions to meter the storage deposit.
 
 use crate::{
-	storage::ContractInfo, BalanceOf, Config, Error, HoldReason, Inspect, Origin, Pallet, System,
+	storage::ContractInfo, BalanceOf, Config, Error, Event, HoldReason, Inspect, Origin, Pallet,
+	System,
 };
 use codec::Encode;
 use frame_support::{
@@ -34,6 +35,7 @@ use frame_support::{
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
+use sp_api::HashT;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	FixedPointNumber, FixedPointOperand, FixedU128,
@@ -565,6 +567,15 @@ impl<T: Config> Ext<T> for ReservingExt {
 					let _ = System::<T>::dec_providers(contract);
 					e
 				})?;
+
+				Pallet::<T>::deposit_event(
+					vec![T::Hashing::hash_of(&origin), T::Hashing::hash_of(&contract)],
+					Event::StorageDepositTransferredAndHeld {
+						from: origin.clone(),
+						to: contract.clone(),
+						amount: *amount,
+					},
+				);
 			},
 			Deposit::Refund(amount) => {
 				let transferred = T::Currency::transfer_on_hold(
@@ -576,6 +587,15 @@ impl<T: Config> Ext<T> for ReservingExt {
 					Restriction::Free,
 					Fortitude::Polite,
 				)?;
+
+				Pallet::<T>::deposit_event(
+					vec![T::Hashing::hash_of(&contract), T::Hashing::hash_of(&origin)],
+					Event::StorageDepositTransferredAndReleased {
+						from: contract.clone(),
+						to: origin.clone(),
+						amount: transferred,
+					},
+				);
 
 				if transferred < *amount {
 					// This should never happen, if it does it means that there is a bug in the
