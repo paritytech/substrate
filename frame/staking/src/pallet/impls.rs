@@ -323,7 +323,7 @@ impl<T: Config> Pallet<T> {
 					});
 
 				total_imbalance
-					.subsume(imbalance_stake.map_or(PositiveImbalanceOf::<T>::zero(), |r| r));
+					.subsume(imbalance_stake.unwrap_or(PositiveImbalanceOf::<T>::zero()));
 				total_imbalance.subsume(T::Currency::deposit_creating(&dest_account, amount_free));
 				Some(total_imbalance)
 			},
