@@ -17,9 +17,11 @@
 
 use crate as example_offchain_worker;
 use crate::*;
+use frame_support::derive_impl;
+use pallet::config_preludes::*;
 use codec::Decode;
 use frame_support::{
-	assert_ok, parameter_types,
+	assert_ok,
 	traits::{ConstU32, ConstU64},
 };
 use sp_core::{
@@ -108,17 +110,12 @@ where
 	}
 }
 
-parameter_types! {
-	pub const UnsignedPriority: u64 = 1 << 20;
-}
 
+#[derive_impl(TestDefaultConfig as pallet::DefaultConfig)]
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type AuthorityId = crypto::TestAuthId;
 	type UnsignedInterval = ConstU64<16>;
-	type UnsignedPriority = UnsignedPriority;
-	type MaxPings = ConstU32<64>;
-	type MaxAuthorities = ConstU32<64>;
 }
 
 fn user_pub() -> sp_core::sr25519::Public {

@@ -489,6 +489,23 @@ pub mod pallet {
 			}
 		}
 	}
+
+	/// Container for different types that implement [`DefaultConfig`]` of this pallet.
+	pub mod config_preludes {
+		// This will help use not need to disambiguate anything when using `derive_impl`.
+		use super::*;
+
+		/// A type providing default configurations for this pallet in testing environment.
+		pub struct TestDefaultConfig;
+		const UNSIGNED_PRIORITY: u64 = 1 << 20;
+
+		#[frame_support::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type UnsignedPriority = frame_support::traits::ConstU64<UNSIGNED_PRIORITY>;
+			type MaxPings = frame_support::traits::ConstU32<64>;
+			type MaxAuthorities = frame_support::traits::ConstU32<64>;
+		}
+	}
 }
 
 /// Payload used by this example crate to hold pong response data required to
