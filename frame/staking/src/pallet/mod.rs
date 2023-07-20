@@ -1233,7 +1233,22 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
-			Payees::<T>::insert(stash.clone(), payee);
+		
+			// Fall back to `Stake` or `Free` variants if a 0% or 100% perbill is provided for an account.
+			let payee_final = match payee {
+				PayoutDestination::Split((percent, account)) => {
+					if percent == Perbill::from_percent(100) {
+						PayoutDestination::Free(account)
+					} else if percent == Perbill::zero() {
+						PayoutDestination::Stake
+					} else {
+						PayoutDestination::Split((percent, account))
+					}
+				},
+				_ => payee,
+			};
+
+			Payees::<T>::insert(stash.clone(), payee_final);
 
 			// In-progress lazy migration to `Payees` storage item.
 			// NOTE: To be removed in next runtime upgrade once migration is completed.
