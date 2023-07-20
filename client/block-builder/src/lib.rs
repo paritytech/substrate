@@ -36,7 +36,7 @@ use sp_core::traits::CallContext;
 use sp_runtime::{
 	legacy,
 	traits::{Block as BlockT, Hash, HashFor, Header as HeaderT, NumberFor, One},
-	Digest, RuntimeExecutiveMode,
+	Digest, ExtrinsicInclusionMode,
 };
 
 use sc_client_api::backend;
@@ -140,7 +140,7 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	/// The estimated size of the block header.
 	estimated_header_size: usize,
 	/// The executive mode of the block that is currently being built.
-	pub executive_mode: RuntimeExecutiveMode,
+	pub executive_mode: ExtrinsicInclusionMode,
 }
 
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
@@ -190,7 +190,7 @@ where
 		} else {
 			#[allow(deprecated)]
 			api.initialize_block_before_version_5(parent_hash, &header)?;
-			RuntimeExecutiveMode::AllExtrinsics
+			ExtrinsicInclusionMode::AllExtrinsics
 		};
 
 		Ok(Self {

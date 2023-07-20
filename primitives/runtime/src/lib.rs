@@ -944,11 +944,9 @@ impl<R> TransactionOutcome<R> {
 	}
 }
 
-/// Confines the logic that can be executed in a block.
-///
-/// The runtime may refuse to import blocks that violate these requirements.
+/// Confines the kind of extrinsics that can be included in a block.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
-pub enum RuntimeExecutiveMode {
+pub enum ExtrinsicInclusionMode {
 	/// All logic is allowed to run.
 	///
 	/// For example:
@@ -970,7 +968,7 @@ pub enum RuntimeExecutiveMode {
 	OnlyInherents,
 }
 
-impl Default for RuntimeExecutiveMode {
+impl Default for ExtrinsicInclusionMode {
 	fn default() -> Self {
 		Self::AllExtrinsics
 	}

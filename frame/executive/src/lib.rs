@@ -138,7 +138,7 @@ use sp_runtime::{
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, RuntimeExecutiveMode,
+	ApplyExtrinsicResult, ExtrinsicInclusionMode,
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -163,6 +163,8 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::RuntimeOrigin;
 ///   used to call hooks e.g. `on_initialize`.
 /// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Modules are
 ///   already called by `AllPalletsWithSystem`. It will be called before all modules will be called.
+/// - `ExtrinsicInclusionModeQuery`: Provides the [`ExtrinsicInclusionMode`] with which a block
+///   should be executed. Defaults to [`ExtrinsicInclusionMode::default()`].
 pub struct Executive<
 	System,
 	Block,
@@ -170,7 +172,7 @@ pub struct Executive<
 	UnsignedValidator,
 	AllPalletsWithSystem,
 	OnRuntimeUpgrade = (),
-	RuntimeExecutiveModeQuery = (),
+	ExtrinsicInclusionModeQuery = (),
 >(
 	PhantomData<(
 		System,
@@ -179,7 +181,7 @@ pub struct Executive<
 		UnsignedValidator,
 		AllPalletsWithSystem,
 		OnRuntimeUpgrade,
-		RuntimeExecutiveModeQuery,
+		ExtrinsicInclusionModeQuery,
 	)>,
 );
 
@@ -194,7 +196,7 @@ impl<
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-		RuntimeExecutiveModeQuery: Get<RuntimeExecutiveMode>,
+		ExtrinsicInclusionModeQuery: Get<ExtrinsicInclusionMode>,
 	> ExecuteBlock<Block>
 	for Executive<
 		System,
@@ -203,7 +205,7 @@ impl<
 		UnsignedValidator,
 		AllPalletsWithSystem,
 		COnRuntimeUpgrade,
-		RuntimeExecutiveModeQuery,
+		ExtrinsicInclusionModeQuery,
 	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
@@ -220,7 +222,7 @@ impl<
 			UnsignedValidator,
 			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
-			RuntimeExecutiveModeQuery,
+			ExtrinsicInclusionModeQuery,
 		>::execute_block(block);
 	}
 }
@@ -238,7 +240,7 @@ impl<
 			+ OffchainWorker<System::BlockNumber>
 			+ frame_support::traits::TryState<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-		RuntimeExecutiveModeQuery: Get<RuntimeExecutiveMode>,
+		ExtrinsicInclusionModeQuery: Get<ExtrinsicInclusionMode>,
 	>
 	Executive<
 		System,
@@ -247,7 +249,7 @@ impl<
 		UnsignedValidator,
 		AllPalletsWithSystem,
 		COnRuntimeUpgrade,
-		RuntimeExecutiveModeQuery,
+		ExtrinsicInclusionModeQuery,
 	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
@@ -281,8 +283,11 @@ impl<
 
 		let mode = Self::initialize_block(block.header());
 		let num_inherents = Self::initial_checks(&block) as usize;
-
 		let (header, extrinsics) = block.deconstruct();
+
+		if mode == ExtrinsicInclusionMode::OnlyInherents && extrinsics.len() > num_inherents {
+			return Err(InvalidTransaction::NotInherent.into())
+		}
 
 		let try_apply_extrinsic = |uxt: Block::Extrinsic| -> ApplyExtrinsicResult {
 			sp_io::init_tracing();
@@ -318,9 +323,7 @@ impl<
 		}
 
 		Self::after_inherents();
-		if mode == RuntimeExecutiveMode::OnlyInherents && extrinsics.len() > num_inherents {
-			return Err(InvalidTransaction::NotInherent.into())
-		}
+
 		// Apply transactions:
 		for e in extrinsics.iter().skip(num_inherents) {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
@@ -429,7 +432,7 @@ impl<
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
-		RuntimeExecutiveModeQuery: Get<RuntimeExecutiveMode>,
+		ExtrinsicInclusionModeQuery: Get<ExtrinsicInclusionMode>,
 	>
 	Executive<
 		System,
@@ -438,7 +441,7 @@ impl<
 		UnsignedValidator,
 		AllPalletsWithSystem,
 		COnRuntimeUpgrade,
-		RuntimeExecutiveModeQuery,
+		ExtrinsicInclusionModeQuery,
 	> where
 	Block::Extrinsic: Checkable<Context> + Codec,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
@@ -453,13 +456,13 @@ impl<
 	}
 
 	/// Start the execution of a particular block.
-	pub fn initialize_block(header: &System::Header) -> RuntimeExecutiveMode {
+	pub fn initialize_block(header: &System::Header) -> ExtrinsicInclusionMode {
 		sp_io::init_tracing();
 		sp_tracing::enter_span!(sp_tracing::Level::TRACE, "init_block");
 		let digests = Self::extract_pre_digest(header);
 		Self::initialize_block_impl(header.number(), header.parent_hash(), &digests);
 
-		RuntimeExecutiveModeQuery::get()
+		ExtrinsicInclusionModeQuery::get()
 	}
 
 	fn extract_pre_digest(header: &System::Header) -> Digest {
@@ -546,14 +549,15 @@ impl<
 			let num_inherents = Self::initial_checks(&block) as usize;
 			let (header, extrinsics) = block.deconstruct();
 
-			// Process inherents (if any).
-			Self::apply_extrinsics(extrinsics.iter().take(num_inherents), mode);
-			Self::after_inherents();
-			if mode == RuntimeExecutiveMode::OnlyInherents && extrinsics.len() > num_inherents {
+			if mode == ExtrinsicInclusionMode::OnlyInherents && extrinsics.len() > num_inherents {
 				// Note: It would be possible to not explicitly panic here since the state-root
 				// check should already catch any mismatch, but this makes it easier to debug.
 				panic!("Only inherents are allowed in this blocks");
 			}
+
+			// Process inherents (if any).
+			Self::apply_extrinsics(extrinsics.iter().take(num_inherents), mode);
+			Self::after_inherents();
 			// Process transactions (if any).
 			Self::apply_extrinsics(extrinsics.iter().skip(num_inherents), mode);
 
@@ -576,7 +580,7 @@ impl<
 	/// Execute given extrinsics.
 	fn apply_extrinsics<'a>(
 		extrinsics: impl Iterator<Item = &'a Block::Extrinsic>,
-		mode: RuntimeExecutiveMode,
+		mode: ExtrinsicInclusionMode,
 	) {
 		extrinsics.into_iter().for_each(|e| {
 			if let Err(e) = Self::apply_extrinsic_with_mode(e.clone(), mode) {
@@ -631,13 +635,13 @@ impl<
 	/// This doesn't attempt to validate anything regarding the block, but it builds a list of uxt
 	/// hashes.
 	pub fn apply_extrinsic(uxt: Block::Extrinsic) -> ApplyExtrinsicResult {
-		Self::apply_extrinsic_with_mode(uxt, RuntimeExecutiveModeQuery::get())
+		Self::apply_extrinsic_with_mode(uxt, ExtrinsicInclusionModeQuery::get())
 	}
 
 	/// Same as `apply_extrinsic` but gets the `mode` directly passed in.
 	pub fn apply_extrinsic_with_mode(
 		uxt: Block::Extrinsic,
-		mode: RuntimeExecutiveMode,
+		mode: ExtrinsicInclusionMode,
 	) -> ApplyExtrinsicResult {
 		sp_io::init_tracing();
 		let encoded = uxt.encode();
@@ -666,7 +670,7 @@ impl<
 		if r.is_err() && mandatory {
 			return Err(InvalidTransaction::BadMandatory.into())
 		}
-		if mode == RuntimeExecutiveMode::OnlyInherents && !mandatory {
+		if mode == ExtrinsicInclusionMode::OnlyInherents && !mandatory {
 			// Note: The block builder should never try to do this.
 			defensive!("Only inherents should be present in this block");
 			return Err(InvalidTransaction::NotInherent.into())

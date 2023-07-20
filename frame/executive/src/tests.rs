@@ -291,7 +291,7 @@ type Executive = super::Executive<
 
 frame_support::parameter_types! {
 	/// Provides the runtime-mode to frame-executive.
-	pub static MockedMode: RuntimeExecutiveMode = RuntimeExecutiveMode::AllExtrinsics;
+	pub static MockedMode: ExtrinsicInclusionMode = ExtrinsicInclusionMode::AllExtrinsics;
 }
 
 fn extra(nonce: u64, fee: Balance) -> SignedExtra {
@@ -1007,7 +1007,7 @@ fn transactions_in_only_inherents_block_errors() {
 	});
 
 	new_test_ext(1).execute_with(|| {
-		MockedMode::set(RuntimeExecutiveMode::OnlyInherents);
+		MockedMode::set(ExtrinsicInclusionMode::OnlyInherents);
 		Executive::execute_block(Block::new(header, vec![xt1, xt2]));
 	});
 }
@@ -1097,7 +1097,7 @@ fn try_execute_tx_forbidden_errors() {
 	});
 
 	new_test_ext(1).execute_with(|| {
-		MockedMode::set(RuntimeExecutiveMode::OnlyInherents);
+		MockedMode::set(ExtrinsicInclusionMode::OnlyInherents);
 		Executive::try_execute_block(
 			Block::new(header, vec![xt1, xt2]),
 			true,

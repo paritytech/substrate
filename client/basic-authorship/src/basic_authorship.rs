@@ -39,7 +39,7 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
-	Digest, Percent, RuntimeExecutiveMode, SaturatedConversion,
+	Digest, ExtrinsicInclusionMode, Percent, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -350,9 +350,9 @@ where
 		let block_timer = time::Instant::now();
 		block_builder.after_inherents()?;
 		let end_reason = match block_builder.executive_mode {
-			RuntimeExecutiveMode::AllExtrinsics =>
+			ExtrinsicInclusionMode::AllExtrinsics =>
 				self.apply_transactions(&mut block_builder, deadline, block_size_limit).await?,
-			RuntimeExecutiveMode::OnlyInherents => EndProposingReason::TransactionsForbidden,
+			ExtrinsicInclusionMode::OnlyInherents => EndProposingReason::TransactionsForbidden,
 		};
 
 		let (block, storage_changes, proof) = block_builder.build()?.into_inner();
