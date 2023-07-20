@@ -114,8 +114,10 @@ pub mod ecdsa_crypto {
 
 #[cfg(feature = "bls-experimental")]
 pub mod bls_crypto {
-	use super::KEY_TYPE as BEEFY_KEY_TYPE;
+	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic, KEY_TYPE as BEEFY_KEY_TYPE};
 	use sp_application_crypto::{app_crypto, bls377};
+	use sp_core::{crypto::Wraps, ByteArray};
+	use w3f_bls::{self, SerializableToBytes};
 	app_crypto!(bls377, BEEFY_KEY_TYPE);
 
 	/// Identity of a BEEFY authority using BLS as its crypto.
@@ -123,6 +125,39 @@ pub mod bls_crypto {
 
 	/// Signature for a BEEFY authority using BLS as its crypto.
 	pub type AuthoritySignature = Signature;
+
+	impl<MsgHash: Hash> BeefyAuthorityId<MsgHash> for AuthorityId
+	where
+		<MsgHash as Hash>::Output: Into<[u8; 32]>,
+	{
+		fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool {
+			//w3f-bls library uses IETF hashing standard and as such does not exposes
+			//a choice of hash to field function.
+			//we are directly calling into the library to avoid introducing new host call.
+			//and because BeefyAuthorityId::verify is being called in the runtime so we don't have
+			let pubkey_array: [u8; bls377::Public::LEN] =
+				match <[u8; bls377::Public::LEN]>::try_from(AsRef::<[u8]>::as_ref(self)) {
+					Ok(pk) => pk,
+					Err(_) => return false,
+				};
+			let public_key =
+				match w3f_bls::double::DoublePublicKey::<w3f_bls::TinyBLS377>::from_bytes(
+					&pubkey_array,
+				) {
+					Ok(pk) => pk,
+					Err(_) => return false,
+				};
+
+			let sig_array = signature.as_inner_ref().as_ref();
+
+			let sig = match w3f_bls::double::DoubleSignature::from_bytes(sig_array) {
+				Ok(s) => s,
+				Err(_) => return false,
+			};
+
+			sig.verify(&w3f_bls::Message::new(b"", msg.as_ref()), &public_key)
+		}
+	}
 }
 
 /// BEEFY cryptographic types for (ECDSA,BLS) crypto
@@ -413,7 +448,7 @@ mod tests {
 	}
 
 	#[test]
-	fn beefy_verify_works() {
+	fn ecdsa_beefy_verify_works() {
 		let msg = &b"test-message"[..];
 		let (pair, _) = ecdsa_crypto::Pair::generate();
 
@@ -450,5 +485,20 @@ mod tests {
 			&blake2_256_signature,
 			msg,
 		));
+	}
+
+	#[test]
+	fn bls_beefy_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = bls_crypto::Pair::generate();
+
+		let signature: bls_crypto::Signature = pair.as_inner_ref().sign(&msg).into();
+
+		// Verification works if same hashing function is used when signing and verifying.
+		assert!(BeefyAuthorityId::<Keccak256>::verify(&pair.public(), &signature, msg));
+
+		// Other public key doesn't work
+		let (other_pair, _) = bls_crypto::Pair::generate();
+		assert!(!BeefyAuthorityId::<Keccak256>::verify(&other_pair.public(), &signature, msg,));
 	}
 }
