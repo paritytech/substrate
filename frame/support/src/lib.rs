@@ -1557,6 +1557,7 @@ pub mod pallet_prelude {
 				StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
 			weak_bounded_vec::WeakBoundedVec,
+			StorageList,
 		},
 		traits::{
 			BuildGenesisConfig, ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks,

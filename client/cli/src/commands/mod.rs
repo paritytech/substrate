@@ -15,6 +15,9 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+//! Various subcommands that can be included in a substrate-based chain's CLI.
+
 mod build_spec_cmd;
 mod chain_info_cmd;
 mod check_block_cmd;

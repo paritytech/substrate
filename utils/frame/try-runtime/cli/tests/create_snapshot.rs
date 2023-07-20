@@ -47,7 +47,7 @@ async fn create_snapshot_works() {
 
 	common::run_with_timeout(Duration::from_secs(60), async move {
 		fn create_snapshot(ws_url: &str, snap_file: &PathBuf, at: Hash) -> Child {
-			Command::new(cargo_bin("substrate"))
+			Command::new(cargo_bin("substrate-node"))
 				.stdout(process::Stdio::piped())
 				.stderr(process::Stdio::piped())
 				.args(&["try-runtime", "--runtime=existing"])
