@@ -103,7 +103,7 @@ fn setup_and_start_sale<T: Config>() -> Result<u16, BenchmarkError> {
 #[benchmarks]
 mod benches {
 	use super::*;
-	use crate::Finality::Final;
+	use crate::Finality::*;
 
 	#[benchmark]
 	fn configure() -> Result<(), BenchmarkError> {
@@ -354,10 +354,12 @@ mod benches {
 			.map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), region, 1000, Final);
+		_(RawOrigin::Signed(caller), region, 1000, Provisional);
 
 		let workplan_key = (region.begin, region.core);
 		assert!(Workplan::<T>::get(workplan_key).is_some());
+
+		assert!(Regions::<T>::get(region).is_some());
 
 		assert_last_event::<T>(
 			Event::Assigned {
