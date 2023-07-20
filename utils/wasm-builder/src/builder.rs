@@ -80,8 +80,8 @@ impl WasmBuilderSelectProject {
 ///
 /// 1. Call [`WasmBuilder::new`] to create a new builder.
 /// 2. Select the project to build using the methods of [`WasmBuilderSelectProject`].
-/// 3. Set additional `RUST_FLAGS` or a different name for the file containing the WASM code
-///    using methods of [`WasmBuilder`].
+/// 3. Set additional `RUST_FLAGS` or a different name for the file containing the WASM code using
+///    methods of [`WasmBuilder`].
 /// 4. Build the WASM binary using [`Self::build`].
 pub struct WasmBuilder {
 	/// Flags that should be appended to `RUST_FLAGS` env variable.

@@ -18,6 +18,7 @@ pallet-example-offchain-worker-ping-pong = { default-features = false, path = ".
 pallet-example-offchain-worker-price-oracle = { default-features = false, path = "./offchain-worker-price-oracle" }
 pallet-example-kitchensink = { default-features = false, path = "./kitchensink" }
 pallet-dev-mode = { default-features = false, path = "./dev-mode" }
+pallet-example-split = { default-features = false, path = "./split" }
 
 [features]
 default = [ "std" ]
@@ -28,6 +29,7 @@ std = [
     "pallet-example-offchain-worker-price-oracle/std",
     "pallet-example-kitchensink/std",
     "pallet-dev-mode/std",
+    "pallet-example-split/std",
 ]
 try-runtime = [
     "pallet-example-basic/try-runtime",
@@ -36,4 +38,5 @@ try-runtime = [
     "pallet-example-offchain-worker-price-oracle/try-runtime",
     "pallet-example-kitchensink/try-runtime",
     "pallet-dev-mode/try-runtime",
+    "pallet-example-split/try-runtime",
 ]

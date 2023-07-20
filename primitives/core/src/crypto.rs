@@ -872,7 +872,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 		(pair, phrase.to_owned(), seed)
 	}
 
-	/// Returns the KeyPair from the English BIP39 seed `phrase`, or `None` if it's invalid.
+	/// Returns the KeyPair from the English BIP39 seed `phrase`, or an error if it's invalid.
 	#[cfg(feature = "std")]
 	fn from_phrase(
 		phrase: &str,
@@ -907,7 +907,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	}
 
 	/// Make a new key pair from secret seed material. The slice must be the correct size or
-	/// it will return `None`.
+	/// an error will be returned.
 	///
 	/// @WARNING: THIS WILL ONLY BE SECURE IF THE `seed` IS SECURE. If it can be guessed
 	/// by an attacker then they can also derive your key.
@@ -949,8 +949,6 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Notably, integer junction indices may be legally prefixed with arbitrary number of zeros.
 	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will
 	/// generally be equivalent to no password at all.
-	///
-	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]
 	fn from_string_with_seed(
 		s: &str,

@@ -24,7 +24,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	traits::{Currency, EnsureOrigin, Get, OnInitialize, UnfilteredDispatchable},
 };
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use sp_core::H256;
 use sp_runtime::{traits::Bounded, BoundedVec};
 
@@ -258,7 +258,7 @@ benchmarks! {
 			.collect::<Vec<_>>()
 			.try_into()
 			.unwrap();
-		Blacklist::<T>::insert(proposal.hash(), (T::BlockNumber::zero(), addresses));
+		Blacklist::<T>::insert(proposal.hash(), (BlockNumberFor::<T>::zero(), addresses));
 	}: _<T::RuntimeOrigin>(origin, proposal)
 	verify {
 		// External proposal created
@@ -332,7 +332,7 @@ benchmarks! {
 			vetoers.try_push(account::<T::AccountId>("vetoer", i, SEED)).unwrap();
 		}
 		vetoers.sort();
-		Blacklist::<T>::insert(proposal_hash, (T::BlockNumber::zero(), vetoers));
+		Blacklist::<T>::insert(proposal_hash, (BlockNumberFor::<T>::zero(), vetoers));
 
 		let origin = T::VetoOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 		ensure!(NextExternal::<T>::get().is_some(), "no external proposal");
@@ -816,7 +816,7 @@ benchmarks! {
 		// create not ongoing referendum.
 		ReferendumInfoOf::<T>::insert(
 			0,
-			ReferendumInfo::Finished { end: T::BlockNumber::zero(), approved: true },
+			ReferendumInfo::Finished { end: BlockNumberFor::<T>::zero(), approved: true },
 		);
 		let owner = MetadataOwner::Referendum(0);
 		let caller = funded_account::<T>("caller", 0);
@@ -833,7 +833,7 @@ benchmarks! {
 		// create not ongoing referendum.
 		ReferendumInfoOf::<T>::insert(
 			0,
-			ReferendumInfo::Finished { end: T::BlockNumber::zero(), approved: true },
+			ReferendumInfo::Finished { end: BlockNumberFor::<T>::zero(), approved: true },
 		);
 		let owner = MetadataOwner::Referendum(0);
 		let hash = note_preimage::<T>();

@@ -13,21 +13,17 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-pallet-beefy-mmr = { version = "4.0.0-dev", default-features = false, path = "../../frame/beefy-mmr" }
 sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
-sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-keyring = { version = "24.0.0", optional = true, path = "../../primitives/keyring" }
-memory-db = { version = "0.32.0", default-features = false }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
 sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime-interface = { version = "17.0.0", default-features = false, path = "../../primitives/runtime-interface" }
 sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
 sp-version = { version = "22.0.0", default-features = false, path = "../../primitives/version" }
@@ -36,8 +32,6 @@ sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primit
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
-pallet-root-testing = { version = "1.0.0-dev", default-features = false, path = "../../frame/root-testing" }
-pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../frame/sudo" }
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../frame/executive" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
@@ -49,12 +43,10 @@ trie-db = { version = "0.27.0", default-features = false }
 sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 sp-state-machine = { version = "0.28.0", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.19.0", default-features = false, path = "../../primitives/externalities" }
-sp-debug-derive = { path = "../../primitives/debug-derive" }
 
 # 3rd party
 array-bytes = { version = "6.1", optional = true }
 log = { version = "0.4.17", default-features = false }
-serde = { version = "1.0.163", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 futures = "0.3.21"
@@ -76,34 +68,27 @@ std = [
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",
-	"sp-consensus-beefy/std",
 	"sp-block-builder/std",
 	"codec/std",
 	"scale-info/std",
 	"sp-inherents/std",
 	"sp-keyring",
 	"log/std",
-	"memory-db/std",
 	"sp-offchain/std",
 	"sp-core/std",
 	"sp-core/std",
 	"sp-std/std",
-	"sp-runtime-interface/std",
 	"sp-io/std",
 	"frame-support/std",
 	"sp-version/std",
-	"serde",
 	"sp-session/std",
 	"sp-api/std",
 	"sp-runtime/std",
 	"sp-externalities/std",
 	"sp-state-machine/std",
 	"pallet-babe/std",
-	"pallet-beefy-mmr/std",
 	"pallet-timestamp/std",
 	"pallet-balances/std",
-	"pallet-sudo/std",
-	"pallet-root-testing/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
 	"sc-service",

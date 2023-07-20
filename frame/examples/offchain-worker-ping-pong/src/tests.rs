@@ -32,20 +32,16 @@ use sp_core::{
 use sp_api_hidden_includes_construct_runtime::hidden_include::traits::Hooks;
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use sp_runtime::{
-	testing::{Header, TestXt},
+	testing::TestXt,
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	RuntimeAppPublic,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // For testing the module, we construct a mock runtime.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		PingPongOcwExample: example_offchain_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
@@ -59,13 +55,12 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();

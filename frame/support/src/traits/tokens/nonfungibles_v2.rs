@@ -180,6 +180,16 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 	) -> Self::OwnedInCollectionIterator;
 }
 
+/// Trait for providing an interface to check the account's role within the collection.
+pub trait InspectRole<AccountId>: Inspect<AccountId> {
+	/// Returns `true` if `who` is the issuer of the `collection`.
+	fn is_issuer(collection: &Self::CollectionId, who: &AccountId) -> bool;
+	/// Returns `true` if `who` is the admin of the `collection`.
+	fn is_admin(collection: &Self::CollectionId, who: &AccountId) -> bool;
+	/// Returns `true` if `who` is the freezer of the `collection`.
+	fn is_freezer(collection: &Self::CollectionId, who: &AccountId) -> bool;
+}
+
 /// Trait for providing the ability to create collections of nonfungible items.
 pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.

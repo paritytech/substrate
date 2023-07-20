@@ -80,7 +80,9 @@ impl<T: Config> MigrationStep for Migration<T> {
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let Some(old_queue) = old::DeletionQueue::<T>::take() else { return (IsFinished::Yes, Weight::zero()) };
+		let Some(old_queue) = old::DeletionQueue::<T>::take() else {
+			return (IsFinished::Yes, Weight::zero())
+		};
 		let len = old_queue.len();
 
 		log::debug!(

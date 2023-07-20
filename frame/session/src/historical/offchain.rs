@@ -149,18 +149,18 @@ mod tests {
 		crypto::key_types::DUMMY,
 		offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt, StorageKind},
 	};
-	use sp_runtime::testing::UintAuthorityId;
+	use sp_runtime::{testing::UintAuthorityId, BuildStorage};
 
 	use frame_support::{
-		traits::{GenesisBuild, KeyOwnerProofSystem, OnInitialize},
+		traits::{KeyOwnerProofSystem, OnInitialize},
 		BasicExternalities,
 	};
 
 	type Historical = Pallet<Test>;
 
 	pub fn new_test_ext() -> sp_io::TestExternalities {
-		let mut t = frame_system::GenesisConfig::default()
-			.build_storage::<Test>()
+		let mut t = frame_system::GenesisConfig::<Test>::default()
+			.build_storage()
 			.expect("Failed to create test externalities.");
 
 		let keys: Vec<_> = NextValidators::get()
