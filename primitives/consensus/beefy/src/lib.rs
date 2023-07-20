@@ -251,26 +251,35 @@ impl<Number, Id, Signature> EquivocationProof<Number, Id, Signature> {
 	}
 }
 
-/// Proof of voter misbehavior on a given set id.
-/// This proof shows voter voted on a different fork than what is included in our chain.
+/// Proof of invalid commitment on a given set id.
+/// This proof shows commitment signed on a different fork than finalized by GRANDPA.
 #[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
-pub struct InvalidForkVoteProof<Number, Id, Signature> {
-	/// Voting for a block on different fork than one finalized by GRANDPA.
-	pub vote: VoteMessage<Number, Id, Signature>,
+pub struct InvalidForkCommitmentProof<Number, Id, Signature> {
+	/// Commitment for a block on different fork than one at the same height in
+	/// this client's chain.
+	/// TODO: maybe replace {commitment, signatories} with SignedCommitment
+	/// (tradeoff: SignedCommitment not ideal since sigs optional, but fewer
+	/// types to juggle around) - check once usage pattern is clear
+	pub commitment: Commitment<Number>,
+	/// Signatures on this block
+	/// TODO: maybe change to HashMap - check once usage pattern is clear
+	pub signatories: Vec<(Id, Signature)>,
+	/// Expected payload
+	pub expected_payload: Payload,
 }
 
-impl<Number, Id, Signature> InvalidForkVoteProof<Number, Id, Signature> {
+impl<Number, Id, Signature> InvalidForkCommitmentProof<Number, Id, Signature> {
 	/// Returns the authority id of the misbehaving voter.
-	pub fn offender_id(&self) -> &Id {
-		&self.vote.id
+	pub fn offender_ids(&self) -> Vec<&Id> {
+		self.signatories.iter().map(|(id, _)| id).collect()
 	}
 	/// Returns the round number at which the infringement occurred.
 	pub fn round_number(&self) -> &Number {
-		&self.vote.commitment.block_number
+		&self.commitment.block_number
 	}
 	/// Returns the set id at which the infringement occurred.
 	pub fn set_id(&self) -> ValidatorSetId {
-		self.vote.commitment.validator_set_id
+		self.commitment.validator_set_id
 	}
 }
 
@@ -337,23 +346,26 @@ where
 /// an incorrect block implies validators will only sign blocks they *know* will be
 /// finalized by GRANDPA.
 pub fn check_invalid_fork_proof<Number, Id, MsgHash>(
-	proof: &InvalidForkVoteProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
-	expected_payload: &Payload,
+	proof: &InvalidForkCommitmentProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
 ) -> bool
 where
 	Id: BeefyAuthorityId<MsgHash> + PartialEq,
 	Number: Clone + Encode + PartialEq,
 	MsgHash: Hash,
 {
-	let InvalidForkVoteProof { vote } = proof;
+	let InvalidForkCommitmentProof { commitment, signatories, expected_payload } = proof;
 
-	// check signature `vote`, if invalid, equivocation report is invalid
-	if !check_commitment_signature(&vote.commitment, &vote.id, &vote.signature) {
-		return false
+	// check that `payload` on the `vote` is different that the `expected_payload` (checked first since cheap failfast).
+	if &commitment.payload != expected_payload {
+		// check check each signatory's signature on the commitment.
+		// if any are invalid, equivocation report is invalid
+		// TODO: refactor check_commitment_signature to take a slice of signatories
+		return signatories.iter().all(|(authority_id, signature)| {
+			check_commitment_signature(&commitment, authority_id, signature)
+		})
+	} else {
+		false
 	}
-
-	// check that `payload` on the `vote` is different that the `expected_payload`.
-	&vote.commitment.payload != expected_payload
 }
 
 /// New BEEFY validator set notification hook.
@@ -418,9 +430,9 @@ sp_api::decl_runtime_apis! {
 			key_owner_proof: OpaqueKeyOwnershipProof,
 		) -> Option<()>;
 
-		/// Submits an unsigned extrinsic to report an vote for an invalid fork.
-		/// The caller must provide the invalid vote proof and a key ownership proof
-		/// (should be obtained using `generate_key_ownership_proof`). The
+		/// Submits an unsigned extrinsic to report commitments to an invalid fork.
+		/// The caller must provide the invalid commitments proof and key ownership proofs
+		/// (should be obtained using `generate_key_ownership_proof`) for the offenders. The
 		/// extrinsic will be unsigned and should only be accepted for local
 		/// authorship (not to be broadcast to the network). This method returns
 		/// `None` when creation of the extrinsic fails, e.g. if equivocation
@@ -428,8 +440,8 @@ sp_api::decl_runtime_apis! {
 		/// hardcoded to return `None`). Only useful in an offchain context.
 		fn submit_report_invalid_fork_unsigned_extrinsic(
 			invalid_fork_proof:
-				InvalidForkVoteProof<NumberFor<Block>, crypto::AuthorityId, crypto::Signature>,
-			key_owner_proof: OpaqueKeyOwnershipProof,
+				InvalidForkCommitmentProof<NumberFor<Block>, crypto::AuthorityId, crypto::Signature>,
+			key_owner_proofs: Vec<OpaqueKeyOwnershipProof>,
 		) -> Option<()>;
 
 		/// Generates a proof of key ownership for the given authority in the

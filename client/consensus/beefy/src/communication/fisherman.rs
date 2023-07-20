@@ -27,7 +27,7 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus_beefy::{
 	check_invalid_fork_proof,
 	crypto::{AuthorityId, Signature},
-	BeefyApi, InvalidForkVoteProof, Payload, PayloadProvider, ValidatorSet, VoteMessage,
+	BeefyApi, InvalidForkCommitmentProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, Commitment, OpaqueKeyOwnershipProof,
 };
 use sp_runtime::{
 	generic::BlockId,
@@ -96,44 +96,46 @@ where
 			.ok_or_else(|| Error::Backend("could not get BEEFY validator set".into()))
 	}
 
-	fn report_invalid_fork_vote(
+	fn report_invalid_fork_commitments(
 		&self,
-		proof: InvalidForkVoteProof<NumberFor<B>, AuthorityId, Signature>,
+		proof: InvalidForkCommitmentProof<NumberFor<B>, AuthorityId, Signature>,
 		correct_header: &B::Header,
-		correct_payload: &Payload,
 		validator_set: &ValidatorSet<AuthorityId>, // validator set active at the time
 	) -> Result<(), Error> {
 		let set_id = validator_set.id();
 
-		if proof.vote.commitment.validator_set_id != set_id ||
-			!check_invalid_fork_proof::<_, _, BeefySignatureHasher>(&proof, correct_payload)
+		if proof.commitment.validator_set_id != set_id ||
+			!check_invalid_fork_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher>(&proof)
 		{
 			debug!(target: LOG_TARGET, "🥩 Skip report for bad invalid fork proof {:?}", proof);
 			return Ok(())
 		}
 
 		let hash = correct_header.hash();
-		let offender_id = proof.vote.id.clone();
+		let offender_ids = proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
 		let runtime_api = self.runtime.runtime_api();
+
 		// generate key ownership proof at that block
-		let key_owner_proof = match runtime_api
-			.generate_key_ownership_proof(hash, set_id, offender_id)
-			.map_err(Error::RuntimeApi)?
-		{
-			Some(proof) => proof,
-			None => {
-				debug!(
-					target: LOG_TARGET,
-					"🥩 Invalid fork vote offender not part of the authority set."
-				);
-				return Ok(())
-			},
-		};
+		let key_owner_proofs = offender_ids.iter()
+										   .filter_map(|id| {
+											   match runtime_api.generate_key_ownership_proof(hash, set_id, id.clone()) {
+												   Ok(Some(proof)) => Some(Ok(proof)),
+												   Ok(None) => {
+													   debug!(
+														   target: LOG_TARGET,
+														   "🥩 Invalid fork vote offender not part of the authority set."
+													   );
+													   None
+												   },
+												   Err(e) => Some(Err(Error::RuntimeApi(e))),
+											   }
+										   })
+										   .collect::<Result<_, _>>()?;
 
 		// submit invalid fork vote report at **best** block
 		let best_block_hash = self.backend.blockchain().info().best_hash;
 		runtime_api
-			.submit_report_invalid_fork_unsigned_extrinsic(best_block_hash, proof, key_owner_proof)
+			.submit_report_invalid_fork_unsigned_extrinsic(best_block_hash, proof, key_owner_proofs)
 			.map_err(Error::RuntimeApi)?;
 
 		Ok(())
@@ -159,8 +161,8 @@ where
 		let (header, expected_payload) = self.expected_header_and_payload(number)?;
 		if vote.commitment.payload != expected_payload {
 			let validator_set = self.active_validator_set_at(&header)?;
-			let proof = InvalidForkVoteProof { vote };
-			self.report_invalid_fork_vote(proof, &header, &expected_payload, &validator_set)?;
+			let proof = InvalidForkCommitmentProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], expected_payload };
+			self.report_invalid_fork_commitments(proof, &header, &validator_set)?;
 		}
 		Ok(())
 	}
@@ -182,20 +184,15 @@ where
 				return Ok(())
 			}
 			// report every signer of the bad justification
-			for signed_pair in validator_set.validators().iter().zip(signatures.into_iter()) {
-				let (id, signature) = signed_pair;
-				if let Some(signature) = signature {
-					let vote =
-						VoteMessage { commitment: commitment.clone(), id: id.clone(), signature };
-					let proof = InvalidForkVoteProof { vote };
-					self.report_invalid_fork_vote(
-						proof,
-						&header,
-						&expected_payload,
-						&validator_set,
-					)?;
-				}
-			}
+			let signatories = validator_set.validators().iter().cloned().zip(signatures.into_iter())
+																		.filter_map(|(id, signature)| signature.map(|sig| (id, sig))).collect();
+
+			let proof = InvalidForkCommitmentProof { commitment, signatories, expected_payload };
+			self.report_invalid_fork_commitments(
+				proof,
+				&header,
+				&validator_set,
+			)?;
 		}
 		Ok(())
 	}
