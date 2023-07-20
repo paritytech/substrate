@@ -292,8 +292,8 @@ impl<T: Config> Pallet<T> {
 	/// Actually make a payment to a staker. This uses the currency's reward function
 	/// to pay the right payee for the given staker account.
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
-		// NOTE: temporary getter while lazy migration is taking place.
-		// Can replace with `Self:payees(stash)` once migration is done.
+		// NOTE: temporary getter while `Payee` -> `Payees` lazy migration is taking place.
+		// Can replace with `dest = Self:payees(stash)` once migration is done.
 		let dest =
 			Self::get_payout_destination(stash, Self::bonded(stash).expect("bonded stash, qed."));
 
@@ -320,9 +320,10 @@ impl<T: Config> Pallet<T> {
 						let r = T::Currency::deposit_into_existing(stash, amount_stake).ok();
 						Self::update_ledger(&controller, &l);
 						r
-					})?;
+					});
 
-				total_imbalance.subsume(imbalance_stake);
+				total_imbalance
+					.subsume(imbalance_stake.map_or(PositiveImbalanceOf::<T>::zero(), |r| r));
 				total_imbalance.subsume(T::Currency::deposit_creating(&dest_account, amount_free));
 				Some(total_imbalance)
 			},
