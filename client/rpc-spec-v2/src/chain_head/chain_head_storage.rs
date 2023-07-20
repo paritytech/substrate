@@ -167,6 +167,9 @@ where
 				QueryResult::Ok(storage_result) => storage_results.push(storage_result),
 				QueryResult::Err(event) => {
 					let _ = sink.send(&event);
+					// If an error is encountered for any of the query items
+					// do not produce any other events.
+					return
 				},
 			}
 		}
