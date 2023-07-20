@@ -1795,7 +1795,7 @@ pub mod pallet {
 		///
 		/// Effects will be felt instantly (as soon as this function is completed successfully).
 		///
-		/// The dispatch origin for this call can be signed by any account.
+		/// This will waive the transaction fee if the payee is successfully migrated.
 		///
 		/// ## Complexity
 		/// - O(1)
@@ -1804,20 +1804,21 @@ pub mod pallet {
 		/// - Writes are limited to the `who` account key.
 		#[pallet::call_index(26)]
 		#[pallet::weight(T::WeightInfo::update_payee())]
-		pub fn update_payee(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
+		pub fn update_payee(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 
-			ensure!(
-				Payee::<T>::contains_key(&stash) && !Payees::<T>::contains_key(&stash),
-				Error::<T>::BadUpdate
-			);
+			if Payee::<T>::contains_key(&stash) && !Payees::<T>::contains_key(&stash) {
+				return Ok(Pays::Yes.into())
+			}
+
 			Payees::<T>::insert(
 				stash.clone(),
 				Payee::<T>::get(&stash).to_payout_destination(stash.clone(), controller),
 			);
-			Ok(())
+			
+			Ok(Pays::No.into())
 		}
 	}
 }
