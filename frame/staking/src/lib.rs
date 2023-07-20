@@ -382,13 +382,18 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 	}
 }
 
-/// A destination account for payment.
+/// Payout destination configuration for an account. 
+/// 
+/// NOTE: Being lazily migrated to. Logic pertaining to this enum will be introduced to `set_payee`
+/// and payout logic in a future update, and will replace `RewardDestination`, once all records have
+/// been lazily migrated to this enum.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PayoutDestination<AccountId> {
 	/// Pay into the stash account and add to bond.
 	Stake,
 	/// Pay the specified percentage to the specified account as free balance, and pay the rest, if
-	/// any, into the stash account and add to bond.
+	/// any, into the stash account and add to bond. 0% and 100% are invalid, and must be handled as
+	/// `Stake` and `Free` respectively.
 	Split((Perbill, AccountId)),
 	/// Pay into an account as free balance.
 	Free(AccountId),
