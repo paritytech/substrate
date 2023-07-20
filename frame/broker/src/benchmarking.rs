@@ -531,6 +531,26 @@ mod benches {
 		Ok(())
 	}
 
+	#[benchmark]
+	fn process_core_count(n: Linear<0, { MAX_CORE_COUNT.into() }>) -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		let core_count = n.try_into().unwrap();
+
+		Broker::<T>::do_request_core_count(core_count).map_err(|_| BenchmarkError::Weightless)?;
+
+		let mut status = Status::<T>::get().ok_or(BenchmarkError::Weightless)?;
+
+		#[block]
+		{
+			Broker::<T>::process_core_count(&mut status);
+		}
+
+		assert_last_event::<T>(Event::CoreCountChanged { core_count }.into());
+
+		Ok(())
+	}
+
 	// Implements a test for each benchmark. Execute with:
 	// `cargo test -p pallet-broker --features runtime-benchmarks`.
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
