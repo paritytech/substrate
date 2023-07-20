@@ -252,13 +252,11 @@ impl<Number, Id, Signature> EquivocationProof<Number, Id, Signature> {
 }
 
 /// Proof of voter misbehavior on a given set id.
-/// This proof shows voter voted on a different fork than finalized by GRANDPA.
+/// This proof shows voter voted on a different fork than what is included in our chain.
 #[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct InvalidForkVoteProof<Number, Id, Signature> {
 	/// Voting for a block on different fork than one finalized by GRANDPA.
 	pub vote: VoteMessage<Number, Id, Signature>,
-	/// TODO: GRANDPA proof that this block is final
-	pub grandpa_proof: (),
 }
 
 impl<Number, Id, Signature> InvalidForkVoteProof<Number, Id, Signature> {
@@ -329,8 +327,15 @@ where
 
 /// Validates [InvalidForkVoteProof] by checking:
 /// 1. `vote` is signed,
-/// 2. GRANDPA proof is provided for block number >= vote.commitment.block_number.
-/// 3. `vote.commitment.payload` != `expected_payload`.
+/// 2. `vote.commitment.payload` != `expected_payload`.
+/// NOTE: GRANDPA finalization proof is not checked, which leads to slashing on forks.
+/// This is fine since honest validators will not be slashed on the chain finalized
+/// by GRANDPA, which is the only chain that ultimately matters.
+/// The only material difference not checking GRANDPA proofs makes is that validators
+/// are not slashed for signing BEEFY commitments prior to the blocks committed to being
+/// finalized by GRANDPA. This is fine too, since the slashing risk of committing to
+/// an incorrect block implies validators will only sign blocks they *know* will be
+/// finalized by GRANDPA.
 pub fn check_invalid_fork_proof<Number, Id, MsgHash>(
 	proof: &InvalidForkVoteProof<Number, Id, <Id as RuntimeAppPublic>::Signature>,
 	expected_payload: &Payload,
@@ -340,19 +345,12 @@ where
 	Number: Clone + Encode + PartialEq,
 	MsgHash: Hash,
 {
-	let InvalidForkVoteProof { vote, grandpa_proof: _ } = proof;
+	let InvalidForkVoteProof { vote } = proof;
 
 	// check signature `vote`, if invalid, equivocation report is invalid
 	if !check_commitment_signature(&vote.commitment, &vote.id, &vote.signature) {
 		return false
 	}
-
-	// TODO: add GRANDPA proof
-	// if GRANDPA proof doesn't show `vote.commitment.block_number` has been finalized,
-	// we cannot safely prove that `vote` payload is invalid.
-	// if grandpa_proof.block_number < vote.commitment.block_number {
-	// 	return false
-	// }
 
 	// check that `payload` on the `vote` is different that the `expected_payload`.
 	&vote.commitment.payload != expected_payload
