@@ -315,8 +315,8 @@ impl<T: Config> Pallet<T> {
 				let imbalance_stake = Self::bonded(stash)
 					.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
 					.and_then(|(controller, mut l)| {
-						l.active += amount_stake;
-						l.total += amount_stake;
+						l.active.saturating_accrue(amount_stake);
+						l.total.saturating_accrue(amount_stake);
 						let r = T::Currency::deposit_into_existing(stash, amount_stake).ok();
 						Self::update_ledger(&controller, &l);
 						r
