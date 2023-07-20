@@ -41,8 +41,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use log::{error, info};
-use sp_application_crypto::key_types::BEEFY as BEEFY_KEY_TYPE;
-use sp_consensus_beefy::{EquivocationProof, ValidatorSetId};
+use sp_consensus_beefy::{EquivocationProof, ValidatorSetId, KEY_TYPE as BEEFY_KEY_TYPE};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,

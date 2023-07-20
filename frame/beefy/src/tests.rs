@@ -18,10 +18,9 @@
 use std::vec;
 
 use codec::Encode;
-use sp_application_crypto::key_types::BEEFY as BEEFY_KEY_TYPE;
 use sp_consensus_beefy::{
 	check_equivocation_proof, generate_equivocation_proof, known_payloads::MMR_ROOT_ID,
-	Keyring as BeefyKeyring, Payload, ValidatorSet,
+	Keyring as BeefyKeyring, Payload, ValidatorSet, KEY_TYPE as BEEFY_KEY_TYPE,
 };
 
 use sp_runtime::DigestItem;

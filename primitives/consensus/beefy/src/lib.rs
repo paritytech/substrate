@@ -50,6 +50,9 @@ use sp_core::H256;
 use sp_runtime::traits::{Hash, Keccak256, NumberFor};
 use sp_std::prelude::*;
 
+/// Key type for BEEFY module.
+pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BEEFY;
+
 /// Trait representing BEEFY authority id, including custom signature verification.
 ///
 /// Accepts custom hashing fn for the message and custom convertor fn for the signer.
@@ -70,8 +73,8 @@ pub trait BeefyAuthorityId<MsgHash: Hash>: RuntimeAppPublic {
 /// Your code should use the above types as concrete types for all crypto related
 /// functionality.
 pub mod ecdsa_crypto {
-	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic};
-	use sp_application_crypto::{app_crypto, ecdsa, key_types::BEEFY as BEEFY_KEY_TYPE};
+	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic, KEY_TYPE as BEEFY_KEY_TYPE};
+	use sp_application_crypto::{app_crypto, ecdsa};
 	use sp_core::crypto::Wraps;
 	app_crypto!(ecdsa, BEEFY_KEY_TYPE);
 
@@ -104,13 +107,15 @@ pub mod ecdsa_crypto {
 /// - `bls_crypto::Pair`
 /// - `bls_crypto::Public`
 /// - `bls_crypto::Signature`
+/// - `bls_crypto::AuthorityId`
 ///
 /// Your code should use the above types as concrete types for all crypto related
 /// functionality.
 
 #[cfg(feature = "bls-experimental")]
 pub mod bls_crypto {
-	use sp_application_crypto::{app_crypto, bls377, key_types::BEEFY as BEEFY_KEY_TYPE};
+	use super::KEY_TYPE as BEEFY_KEY_TYPE;
+	use sp_application_crypto::{app_crypto, bls377};
 	app_crypto!(bls377, BEEFY_KEY_TYPE);
 
 	/// Identity of a BEEFY authority using BLS as its crypto.
@@ -118,6 +123,31 @@ pub mod bls_crypto {
 
 	/// Signature for a BEEFY authority using BLS as its crypto.
 	pub type AuthoritySignature = Signature;
+}
+
+/// BEEFY cryptographic types for (ECDSA,BLS) crypto
+///
+/// This to designed to speed up gossip time while preventing DoS
+/// by verifying only ECDSA signature during gossip and slashing
+/// validators whose BLS signature does not verify during aggregation
+/// by the prover node.
+///
+/// TODO: This module basically introduces three crypto types:
+/// - `ecdsa_n_bls_crypto::Pair`
+/// - `ecdsa_n_bls_crypto::Public`
+/// - `ecdsa_n_bls_crypto::Signature`
+/// - `ecdsa_n_bls_crypto::AuthorityId`
+///
+/// Your code should use the above types as concrete types for all crypto related
+/// functionality.
+#[cfg(feature = "bls-experimental")]
+pub mod ecdsa_n_bls_crypto {
+	use super::{bls_crypto, ecdsa_crypto};
+	/// Identity of a BEEFY authority using BLS as its crypto.
+	pub type AuthorityId = (ecdsa_crypto::Public, bls_crypto::Public);
+
+	/// Signature for a BEEFY authority using BLS as its crypto.
+	pub type AuthoritySignature = (ecdsa_crypto::Signature, bls_crypto::Signature);
 }
 
 /// The `ConsensusEngineId` of BEEFY.

@@ -251,9 +251,10 @@ impl<N, S> From<SignedCommitment<N, S>> for VersionedFinalityProof<N, S> {
 mod tests {
 
 	use super::*;
-	use crate::{ecdsa_crypto, known_payloads};
+	use crate::{
+		ecdsa_crypto::Signature as EcdsaSignature, known_payloads, KEY_TYPE as BEEFY_KEY_TYPE,
+	};
 	use codec::Decode;
-	use sp_application_crypto::key_types::BEEFY as BEEFY_KEY_TYPE;
 	use sp_core::{keccak_256, Pair};
 	use sp_keystore::{testing::MemoryKeystore, KeystorePtr};
 
@@ -266,8 +267,8 @@ mod tests {
 
 	///types for bls-less commitment
 
-	type TestSignedCommitment = SignedCommitment<u128, ecdsa_crypto::Signature>;
-	type TestVersionedFinalityProof = VersionedFinalityProof<u128, ecdsa_crypto::Signature>;
+	type TestEcdsaSignedCommitment = SignedCommitment<u128, EcdsaSignature>;
+	type TestVersionedFinalityProof = VersionedFinalityProof<u128, EcdsaSignature>;
 
 	///types for commitment supporting aggregatable bls signature
 	#[cfg(feature = "bls-experimental")]
@@ -276,13 +277,13 @@ mod tests {
 
 	#[cfg(feature = "bls-experimental")]
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-	struct EcdsaBlsSignaturePair(ecdsa_crypto::Signature, BlsSignature);
+	struct EcdsaBlsSignaturePair(EcdsaSignature, BlsSignature);
 
 	#[cfg(feature = "bls-experimental")]
 	type TestBlsSignedCommitment = SignedCommitment<u128, EcdsaBlsSignaturePair>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
-	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
+	fn mock_ecdsa_signatures() -> (EcdsaSignature, EcdsaSignature) {
 		let store: KeystorePtr = MemoryKeystore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
@@ -360,7 +361,7 @@ mod tests {
 
 		// when
 		let encoded = codec::Encode::encode(&ecdsa_signed);
-		let decoded = TestSignedCommitment::decode(&mut &*encoded);
+		let decoded = TestEcdsaSignedCommitment::decode(&mut &*encoded);
 
 		// then
 		assert_eq!(decoded, Ok(ecdsa_signed));
@@ -508,7 +509,7 @@ mod tests {
 
 		// when
 		let encoded = codec::Encode::encode(&signed);
-		let decoded = TestSignedCommitment::decode(&mut &*encoded);
+		let decoded = TestEcdsaSignedCommitment::decode(&mut &*encoded);
 
 		// then
 		assert_eq!(decoded, Ok(signed));

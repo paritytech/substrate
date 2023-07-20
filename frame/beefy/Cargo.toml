@@ -16,7 +16,6 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
-sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-beefy = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/beefy", features = ["serde"] }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }

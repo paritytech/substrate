@@ -77,14 +77,16 @@ impl<TBlockNumber, TSignatureAccumulator>
 
 #[cfg(test)]
 mod tests {
-	use sp_application_crypto::key_types::BEEFY as BEEFY_KEY_TYPE;
 	use sp_core::{keccak_256, Pair};
 	use sp_keystore::{testing::MemoryKeystore, KeystorePtr};
 
 	use super::*;
 	use codec::Decode;
 
-	use crate::{ecdsa_crypto, known_payloads, Payload};
+	use crate::{
+		ecdsa_crypto::Signature as EcdsaSignature, known_payloads, Payload,
+		KEY_TYPE as BEEFY_KEY_TYPE,
+	};
 
 	#[cfg(feature = "bls-experimental")]
 	use crate::bls_crypto::Signature as BlsSignature;
@@ -98,13 +100,13 @@ mod tests {
 	type TestCommitment = Commitment<u128>;
 
 	/// Types for ecdsa signed commitment.
-	type TestSignedCommitment = SignedCommitment<u128, ecdsa_crypto::Signature>;
-	type TestSignedCommitmentWitness =
-		SignedCommitmentWitness<u128, Vec<Option<ecdsa_crypto::Signature>>>;
+	type TestEcdsaSignedCommitment = SignedCommitment<u128, EcdsaSignature>;
+	type TestEcdsaSignedCommitmentWitness =
+		SignedCommitmentWitness<u128, Vec<Option<EcdsaSignature>>>;
 
 	#[cfg(feature = "bls-experimental")]
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-	struct EcdsaBlsSignaturePair(ecdsa_crypto::Signature, BlsSignature);
+	struct EcdsaBlsSignaturePair(EcdsaSignature, BlsSignature);
 
 	///types for commitment containing  bls signature along side ecdsa signature
 	#[cfg(feature = "bls-experimental")]
@@ -113,7 +115,7 @@ mod tests {
 	type TestBlsSignedCommitmentWitness = SignedCommitmentWitness<u128, Vec<u8>>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
-	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
+	fn mock_ecdsa_signatures() -> (EcdsaSignature, EcdsaSignature) {
 		let store: KeystorePtr = MemoryKeystore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
@@ -152,7 +154,7 @@ mod tests {
 		(sig1.into(), sig2.into())
 	}
 
-	fn ecdsa_signed_commitment() -> TestSignedCommitment {
+	fn ecdsa_signed_commitment() -> TestEcdsaSignedCommitment {
 		let payload = Payload::from_single_entry(
 			known_payloads::MMR_ROOT_ID,
 			"Hello World!".as_bytes().to_vec(),
@@ -195,7 +197,7 @@ mod tests {
 
 		// when
 		let (witness, signatures) =
-			TestSignedCommitmentWitness::from_signed(signed, |sigs| sigs.to_vec());
+			TestEcdsaSignedCommitmentWitness::from_signed(signed, |sigs| sigs.to_vec());
 
 		// then
 		assert_eq!(witness.signature_accumulator, signatures);
@@ -241,14 +243,14 @@ mod tests {
 	fn should_encode_and_decode_witness() {
 		// given
 		let signed = ecdsa_signed_commitment();
-		let (witness, _) = TestSignedCommitmentWitness::from_signed::<_, _>(
+		let (witness, _) = TestEcdsaSignedCommitmentWitness::from_signed::<_, _>(
 			signed,
-			|sigs: &[std::option::Option<ecdsa_crypto::Signature>]| sigs.to_vec(),
+			|sigs: &[std::option::Option<EcdsaSignature>]| sigs.to_vec(),
 		);
 
 		// when
 		let encoded = codec::Encode::encode(&witness);
-		let decoded = TestSignedCommitmentWitness::decode(&mut &*encoded);
+		let decoded = TestEcdsaSignedCommitmentWitness::decode(&mut &*encoded);
 
 		// then
 		assert_eq!(decoded, Ok(witness));
