@@ -119,7 +119,6 @@ impl<T: Config> Pallet<T> {
 		controller: &T::AccountId,
 		num_slashing_spans: u32,
 	) -> Result<Weight, DispatchError> {
-		// TODO_: stash, not controller
 		let mut ledger =
 			Self::ledger(Controller(controller.clone())).ok_or(Error::<T>::NotController)?;
 		let (stash, old_total) = (ledger.stash.clone(), ledger.total);

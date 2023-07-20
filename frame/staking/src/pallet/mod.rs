@@ -910,9 +910,6 @@ pub mod pallet {
 				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
 			}?;
 
-			//let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
-			//let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-
 			let stash_balance = T::Currency::free_balance(&stash);
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
 				let extra = extra.min(max_additional);
@@ -1140,8 +1137,8 @@ pub mod pallet {
 
 			let ledger =
 				match StakingLedger::<T>::get(StakingAccount::Controller(controller.clone())) {
-					None => Err(Error::<T>::NotStash),
-					Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
+					None | Some(StakingLedgerStatus::BondedNotPaired) =>
+						Err(Error::<T>::NotController),
 					Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
 				}?;
 
@@ -1210,8 +1207,7 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 
 			let ledger = match StakingLedger::<T>::get(StakingAccount::Controller(controller)) {
-				None => Err(Error::<T>::NotStash),
-				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
+				None | Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
 				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
 			}?;
 
@@ -1273,7 +1269,7 @@ pub mod pallet {
 					Ok(())
 				},
 				Some(StakingLedgerStatus::Paired(ledger)) => {
-					let controller = ledger.controller().ok_or(Error::<T>::NotController)?; // TODO: correct error to throw here?
+					let controller = ledger.controller().ok_or(Error::<T>::NotController)?;
 					if controller == stash {
 						// stash is already its own controller.
 						return Err(Error::<T>::AlreadyPaired.into())
