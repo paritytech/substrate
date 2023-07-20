@@ -395,8 +395,8 @@ pub enum PayoutDestination<AccountId> {
 	/// any, into the stash account and add to bond. 0% and 100% should be disallowed and handled
 	/// as `Stake` and `Free` respectively.
 	Split((Perbill, AccountId)),
-	/// Pay into an account as free balance.
-	Free(AccountId),
+	/// Credit an account as free balance.
+	Credit(AccountId),
 	/// Receive no payout.
 	Forgo,
 }
