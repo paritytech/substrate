@@ -25,8 +25,7 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
-	BuildStorage,
-	Perbill,
+	BuildStorage, Perbill,
 };
 
 use pallet_staking::{Exposure, IndividualExposure, StakerStatus};

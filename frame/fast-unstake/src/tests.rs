@@ -815,7 +815,11 @@ mod on_idle {
 
 			// create a new validator that 100% not exposed.
 			Balances::make_free_balance_be(&42, 100 + Deposit::get());
-			assert_ok!(Staking::bond(RuntimeOrigin::signed(42), 10, PayoutDestination::Split((Perbill::from_percent(50), 42))));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(42),
+				10,
+				PayoutDestination::Split((Perbill::from_percent(50), 42))
+			));
 			assert_ok!(Staking::validate(RuntimeOrigin::signed(42), Default::default()));
 
 			// let them register:
