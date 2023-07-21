@@ -815,7 +815,18 @@ where
 			if !self.default_peers_set_no_slot_connected_peers.remove(&peer) &&
 				info.inbound && info.info.roles.is_full()
 			{
-				self.num_in_peers = self.num_in_peers.saturating_sub(1);
+				match self.num_in_peers.checked_sub(1) {
+					Some(value) => {
+						self.num_in_peers = value;
+					},
+					None => {
+						log::error!(
+							target: "sync",
+							"trying to disconnect an inbound node which is not counted as inbound"
+						);
+						debug_assert!(false);
+					},
+				}
 			}
 
 			self.chain_sync.peer_disconnected(&peer);
@@ -881,7 +892,10 @@ where
 		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
 
 		// make sure to accept no more than `--in-peers` many full nodes
-		if status.roles.is_full() && inbound && self.num_in_peers == self.max_in_peers {
+		if !no_slot_peer &&
+			status.roles.is_full() &&
+			inbound && self.num_in_peers == self.max_in_peers
+		{
 			log::debug!(target: "sync", "All inbound slots have been consumed, rejecting {who}");
 			return Err(())
 		}
