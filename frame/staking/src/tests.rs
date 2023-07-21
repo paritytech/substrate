@@ -770,6 +770,29 @@ fn update_payee_charges_on_invalid_migration() {
 }
 
 #[test]
+fn get_destination_payout_migrates_payee() {
+	ExtBuilder::default().build_and_execute(|| {
+		// `get_destination_payout` is used as a getter of `Payees`, and also migrates `Payee`
+		// records if they have not already been.
+
+		// Given
+		let (stash, controller) =
+			testing_utils::create_stash_controller::<Test>(12, 13, PayoutDestination::Stake)
+				.unwrap();
+		Payees::<Test>::remove(stash);
+		Payee::<Test>::insert(stash, RewardDestination::Staked);
+
+		// When
+		let dest = Staking::get_payout_destination(&stash, controller);
+
+		// Then
+		assert_eq!(dest, PayoutDestination::Stake,);
+		assert!(!Payee::<Test>::contains_key(stash));
+		assert!(Payees::<Test>::contains_key(stash));
+	});
+}
+
+#[test]
 fn nominators_also_get_slashed_pro_rata() {
 	ExtBuilder::default().build_and_execute(|| {
 		mock::start_active_era(1);

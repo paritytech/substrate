@@ -1002,7 +1002,7 @@ impl<T: Config> Pallet<T> {
 	/// Temporary getter for `Payees`.
 	///
 	/// Migrates `Payee` to `Payees` if it has not been migrated already.
-	fn get_payout_destination(
+	pub fn get_payout_destination(
 		stash: &T::AccountId,
 		controller: T::AccountId,
 	) -> PayoutDestination<T::AccountId> {
