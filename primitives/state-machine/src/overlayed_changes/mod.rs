@@ -520,32 +520,6 @@ impl<H: Hasher> OverlayedChanges<H> {
 	///
 	/// Panics:
 	/// Panics if `transaction_depth() > 0`
-	fn drain_committed(
-		&mut self,
-	) -> (
-		impl Iterator<Item = (StorageKey, Option<StorageValue>)>,
-		impl Iterator<
-			Item = (
-				StorageKey,
-				(impl Iterator<Item = (StorageKey, Option<StorageValue>)>, ChildInfo),
-			),
-		>,
-	) {
-		use sp_std::mem::take;
-		(
-			take(&mut self.top).drain_commited(),
-			take(&mut self.children)
-				.into_iter()
-				.map(|(key, (val, info))| (key, (val.drain_commited(), info))),
-		)
-	}
-
-	/// Consume all changes (top + children) and return them.
-	///
-	/// After calling this function no more changes are contained in this changeset.
-	///
-	/// Panics:
-	/// Panics if `transaction_depth() > 0`
 	pub fn offchain_drain_committed(
 		&mut self,
 	) -> impl Iterator<Item = ((StorageKey, StorageKey), OffchainOverlayedChange)> {
@@ -598,7 +572,12 @@ impl<H: Hasher> OverlayedChanges<H> {
 			},
 		};
 
-		let (main_storage_changes, child_storage_changes) = self.drain_committed();
+		use sp_std::mem::take;
+		let main_storage_changes = take(&mut self.top).drain_commited();
+		let child_storage_changes = take(&mut self.children)
+			.into_iter()
+			.map(|(key, (val, info))| (key, (val.drain_commited(), info)));
+
 		let offchain_storage_changes = self.offchain_drain_committed().collect();
 
 		#[cfg(feature = "std")]
@@ -630,14 +609,11 @@ impl<H: Hasher> OverlayedChanges<H> {
 	/// Changes that are made outside of extrinsics, are marked with
 	/// `NO_EXTRINSIC_INDEX` index.
 	fn extrinsic_index(&self) -> Option<u32> {
-		match self.collect_extrinsics {
-			true => Some(
-				self.storage(EXTRINSIC_INDEX)
-					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx).ok()))
-					.unwrap_or(NO_EXTRINSIC_INDEX),
-			),
-			false => None,
-		}
+		self.collect_extrinsics.then(|| {
+			self.storage(EXTRINSIC_INDEX)
+				.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx).ok()))
+				.unwrap_or(NO_EXTRINSIC_INDEX)
+		})
 	}
 
 	/// Generate the storage root using `backend` and all changes
@@ -712,11 +688,7 @@ impl<H: Hasher> OverlayedChanges<H> {
 			// the trie backend for storage root.
 			// A better design would be to manage 'child_storage_transaction' in a
 			// similar way as 'storage_transaction' but for each child trie.
-			if is_empty {
-				self.set_storage(prefixed_storage_key.into_inner(), None);
-			} else {
-				self.set_storage(prefixed_storage_key.into_inner(), Some(root.encode()));
-			}
+			self.set_storage(prefixed_storage_key.into_inner(), (!is_empty).then(|| root.encode()));
 
 			self.mark_dirty();
 
