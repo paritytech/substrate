@@ -4,6 +4,7 @@ pub use pallet::*;
 pub mod pallet {
 	use frame_support::{
 		dispatch::{Pays, PostDispatchInfo},
+		ensure,
 		pallet_prelude::DispatchResultWithPostInfo,
 		weights::Weight,
 	};
@@ -21,13 +22,15 @@ pub mod pallet {
 		/// values of [`ContractResult::gas_consumed`] and [`ContractResult::gas_required`] in
 		/// tests.
 		#[pallet::call_index(1)]
-		#[pallet::weight(Weight::from_parts(10_000_000, 0))]
-		pub fn overestimate_pre_charge(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		#[pallet::weight(*pre_charge)]
+		pub fn overestimate_pre_charge(
+			origin: OriginFor<T>,
+			pre_charge: Weight,
+			actual_weight: Weight,
+		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
-			Ok(PostDispatchInfo {
-				actual_weight: Some(Weight::from_parts(100, 0)),
-				pays_fee: Pays::Yes,
-			})
+			ensure!(pre_charge.any_gt(actual_weight), "pre_charge must be > actual_weight");
+			Ok(PostDispatchInfo { actual_weight: Some(actual_weight), pays_fee: Pays::Yes })
 		}
 	}
 }
