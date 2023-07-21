@@ -166,7 +166,7 @@ mod benchmarks {
 		}
 
 		assert_eq!(ServiceHead::<T>::get().unwrap(), 10u32.into());
-		assert_eq!(weight.consumed, T::WeightInfo::bump_service_head());
+		assert_eq!(weight.consumed(), T::WeightInfo::bump_service_head());
 	}
 
 	#[benchmark]

@@ -32,7 +32,7 @@ fn benchmark_extrinsic_works() {
 fn benchmark_extrinsic(pallet: &str, extrinsic: &str) {
 	let base_dir = tempdir().expect("could not create a temp dir");
 
-	let status = Command::new(cargo_bin("substrate"))
+	let status = Command::new(cargo_bin("substrate-node"))
 		.args(&["benchmark", "extrinsic", "--dev"])
 		.arg("-d")
 		.arg(base_dir.path())
