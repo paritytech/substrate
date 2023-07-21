@@ -267,7 +267,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Schedule cores for the given `timeslice`.
-	fn process_core_schedule(
+	pub(crate) fn process_core_schedule(
 		timeslice: Timeslice,
 		rc_begin: RelayBlockNumberOf<T>,
 		core: CoreIndex,

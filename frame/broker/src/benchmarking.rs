@@ -663,6 +663,28 @@ mod benches {
 	}
 
 	#[benchmark]
+	fn process_core_schedule() {
+		let timeslice = 10u32.into();
+		let core = 5u16.into();
+		let rc_begin = 1u32.into();
+
+		Workplan::<T>::insert((timeslice, core), new_schedule());
+
+		#[block]
+		{
+			Broker::<T>::process_core_schedule(timeslice, rc_begin, core);
+		}
+
+		assert_eq!(Workload::<T>::get(core).len(), CORE_MASK_BITS);
+
+		let mut assignment: Vec<(CoreAssignment, PartsOf57600)> = vec![];
+		for i in 0..CORE_MASK_BITS {
+			assignment.push((CoreAssignment::Task(i.try_into().unwrap()), 57600));
+		}
+		assert_last_event::<T>(Event::CoreAssigned { core, when: rc_begin, assignment }.into());
+	}
+
+	#[benchmark]
 	fn request_revenue_info_at() {
 		let current_timeslice = Broker::<T>::current_timeslice();
 		let rc_block = T::TimeslicePeriod::get() * current_timeslice.into();
