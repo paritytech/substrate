@@ -543,6 +543,31 @@ mod benches {
 	}
 
 	#[benchmark]
+	fn drop_renewal() -> Result<(), BenchmarkError> {
+		let core = setup_and_start_sale::<T>()?;
+		let when = 5u32.into();
+
+		advance_to::<T>(10);
+
+		let id = AllowedRenewalId { core, when };
+		let record = AllowedRenewalRecord {
+			price: 1u32.into(),
+			completion: CompletionStatus::Complete(new_schedule()),
+		};
+		AllowedRenewals::<T>::insert(id, record);
+
+		let caller: T::AccountId = whitelisted_caller();
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), core, when);
+
+		assert!(AllowedRenewals::<T>::get(id).is_none());
+		assert_last_event::<T>(Event::AllowedRenewalDropped { core, when }.into());
+
+		Ok(())
+	}
+
+	#[benchmark]
 	fn request_core_count(n: Linear<0, { MAX_CORE_COUNT.into() }>) -> Result<(), BenchmarkError> {
 		let admin_origin =
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
