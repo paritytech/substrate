@@ -26,7 +26,7 @@ pub mod genesismap;
 pub mod substrate_test_pallet;
 
 use codec::{Decode, Encode};
-#[cfg(feature = "genesis-builder")]
+#[cfg(not(feature = "disable-genesis-builder"))]
 use frame_support::genesis_builder_helper::{build_config, create_default_config};
 use frame_support::{
 	construct_runtime,
@@ -725,7 +725,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	#[cfg(feature = "genesis-builder")]
+	#[cfg(not(feature = "disable-genesis-builder"))]
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
 		fn create_default_config() -> Vec<u8> {
 			create_default_config::<RuntimeGenesisConfig>()
@@ -1350,7 +1350,7 @@ mod tests {
 
 		#[test]
 		fn write_default_config_to_tmp_file() {
-			if std::env::var("WRITE_DEFAULT_JSON_FOR_SRT_GC").is_ok() {
+			if std::env::var("WRITE_DEFAULT_JSON_FOR_STR_GC").is_ok() {
 				sp_tracing::try_init_simple();
 				let mut file = fs::OpenOptions::new()
 					.create(true)

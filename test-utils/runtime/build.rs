@@ -25,8 +25,19 @@ fn main() {
 			// to this value by default. This is because some of our tests
 			// (`restoration_of_globals`) depend on the stack-size.
 			.append_to_rust_flags("-Clink-arg=-zstack-size=1048576")
-			.enable_feature("genesis-builder")
 			.import_memory()
+			.build();
+	}
+
+	#[cfg(feature = "std")]
+	if std::env::var("BUILD_NO_GENESIS_BUILDER_SUPPORT").is_ok() {
+		substrate_wasm_builder::WasmBuilder::new()
+			.with_current_project()
+			.export_heap_base()
+			.append_to_rust_flags("-Clink-arg=-zstack-size=1048576")
+			.set_file_name("wasm_binary_no_genesis_builder")
+			.import_memory()
+			.enable_feature("disable-genesis-builder")
 			.build();
 	}
 
@@ -36,8 +47,7 @@ fn main() {
 			.with_current_project()
 			.export_heap_base()
 			.import_memory()
-			.set_file_name("wasm_binary_logging_disabled.rs")
-			.enable_feature("genesis-builder")
+			.set_file_name("wasm_binary_logging_disabled")
 			.enable_feature("disable-logging")
 			.build();
 	}
