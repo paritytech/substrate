@@ -292,7 +292,7 @@ mod benches {
 
 	#[benchmark]
 	fn partition() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
@@ -304,6 +304,17 @@ mod benches {
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, 2);
+
+		assert_last_event::<T>(
+			Event::Partitioned {
+				old_region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				new_region_ids: (
+					RegionId { begin: 4, core, part: CoreMask::complete() },
+					RegionId { begin: 6, core, part: CoreMask::complete() },
+				),
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
