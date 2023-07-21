@@ -665,6 +665,7 @@ fn instantiate_and_call_and_deposit_event() {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = Contracts::min_balance();
 		let value = 100;
+		let meter_storage_balance = 131;
 
 		// We determine the storage deposit limit after uploading because it depends on ALICEs free
 		// balance which is changed by uploading a module.
@@ -695,38 +696,9 @@ fn instantiate_and_call_and_deposit_event() {
 		.account_id;
 		assert!(ContractInfoOf::<Test>::contains_key(&addr));
 
-		let contract = get_contract(&addr);
-		let deposit_account = contract.deposit_account().deref();
-
 		assert_eq!(
 			System::events(),
 			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::NewAccount {
-						account: deposit_account.clone(),
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
-						account: deposit_account.clone(),
-						free_balance: 131,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: deposit_account.clone(),
-							amount: 131,
-						}
-					),
-					topics: vec![hash(&ALICE), hash(&deposit_account)],
-				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
@@ -744,14 +716,12 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: addr.clone(),
-							amount: min_balance,
-						}
-					),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -759,10 +729,19 @@ fn instantiate_and_call_and_deposit_event() {
 						pallet_contracts::Event::StorageDepositTransferredAndHeld {
 							from: ALICE,
 							to: addr.clone(),
-							amount: value,
+							amount: meter_storage_balance,
 						}
 					),
 					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: value,
+					}),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1143,6 +1122,7 @@ fn deploy_and_call_other_contract() {
 
 	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
 		let min_balance = Contracts::min_balance();
+		let meter_storage_deposit = 131;
 
 		// Create
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
@@ -1183,38 +1163,9 @@ fn deploy_and_call_other_contract() {
 			callee_code_hash.as_ref().to_vec(),
 		));
 
-		let callee = get_contract(&callee_addr);
-		let deposit_account = callee.deposit_account().deref();
-
 		assert_eq!(
 			System::events(),
 			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::NewAccount {
-						account: deposit_account.clone(),
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
-						account: deposit_account.clone(),
-						free_balance: 131,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: deposit_account.clone(),
-							amount: 131,
-						}
-					),
-					topics: vec![hash(&ALICE), hash(&deposit_account)],
-				},
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
@@ -1232,25 +1183,32 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: callee_addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: RuntimeEvent::Contracts(
 						pallet_contracts::Event::StorageDepositTransferredAndHeld {
 							from: ALICE,
 							to: callee_addr.clone(),
-							amount: min_balance,
+							amount: meter_storage_deposit,
 						}
 					),
 					topics: vec![hash(&ALICE), hash(&callee_addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: caller_addr.clone(),
-							to: callee_addr.clone(),
-							amount: 32768 // hardcoded in wasm
-						}
-					),
-					topics: vec![hash(&caller_addr), hash(&callee_addr)],
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: caller_addr.clone(),
+						to: callee_addr.clone(),
+						amount: 32768 // hardcoded in wasm
+					}),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1262,14 +1220,12 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: caller_addr.clone(),
-							to: callee_addr.clone(),
-							amount: 32768,
-						}
-					),
-					topics: vec![hash(&caller_addr), hash(&callee_addr)],
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: caller_addr.clone(),
+						to: callee_addr.clone(),
+						amount: 32768,
+					}),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3871,9 +3827,6 @@ fn instantiate_with_below_existential_deposit_works() {
 		.unwrap()
 		.account_id;
 
-		// Check that the BOB contract has been instantiated.
-		let contract = get_contract(&addr);
-		let deposit_account = contract.deposit_account().deref();
 		// Ensure the contract was stored and get expected deposit amount to be reserved.
 		let deposit_expected = expected_deposit(ensure_stored(code_hash));
 		// Make sure the account exists even though not enough free balance was send
@@ -3902,32 +3855,6 @@ fn instantiate_with_below_existential_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: RuntimeEvent::System(frame_system::Event::NewAccount {
-						account: deposit_account.clone(),
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
-						account: deposit_account.clone(),
-						free_balance: min_balance,
-					}),
-					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: deposit_account.clone(),
-							amount: min_balance,
-						}
-					),
-					topics: vec![hash(&ALICE), hash(&deposit_account)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::NewAccount {
 						account: addr.clone()
 					}),
 					topics: vec![],
@@ -3942,14 +3869,12 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: ALICE,
-							to: addr.clone(),
-							amount: min_balance,
-						}
-					),
-					topics: vec![hash(&ALICE), hash(&addr)],
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: min_balance,
+					}),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3957,10 +3882,19 @@ fn instantiate_with_below_existential_deposit_works() {
 						pallet_contracts::Event::StorageDepositTransferredAndHeld {
 							from: ALICE,
 							to: addr.clone(),
-							amount: 50,
+							amount: meter_storage_deposit,
 						}
 					),
 					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: ALICE,
+						to: addr.clone(),
+						amount: 50,
+					}),
+					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,

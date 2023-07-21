@@ -2436,6 +2436,7 @@ mod tests {
 				),
 				Ok((address, ref output)) if output.data == vec![80, 65, 83, 83] => address
 			);
+			let meter_storage_deposit = 131;
 
 			// Check that the newly created account has the expected code hash and
 			// there are instantiation event.
@@ -2445,7 +2446,17 @@ mod tests {
 			);
 			assert_eq!(
 				&events(),
-				&[Event::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]
+				&[
+					Event::StorageDepositTransferredAndHeld {
+						from: ALICE,
+						to: instantiated_contract_address.clone(),
+						amount: meter_storage_deposit
+					},
+					Event::Instantiated {
+						deployer: ALICE,
+						contract: instantiated_contract_address
+					}
+				]
 			);
 		});
 	}
@@ -2525,6 +2536,7 @@ mod tests {
 				min_balance * 10,
 			)
 			.unwrap();
+			let meter_storage_deposit = 131;
 
 			assert_matches!(
 				MockStack::run_call(
@@ -2553,6 +2565,11 @@ mod tests {
 			assert_eq!(
 				&events(),
 				&[
+					Event::StorageDepositTransferredAndHeld {
+						from: ALICE,
+						to: instantiated_contract_address.clone(),
+						amount: meter_storage_deposit
+					},
 					Event::Instantiated { deployer: BOB, contract: instantiated_contract_address },
 					Event::Called { caller: Origin::from_account_id(ALICE), contract: BOB },
 				]
