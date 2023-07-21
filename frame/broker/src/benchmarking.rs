@@ -663,6 +663,33 @@ mod benches {
 	}
 
 	#[benchmark]
+	fn process_pool() {
+		let when = 10u32.into();
+		let private_pool_size = 5u32.into();
+		let system_pool_size = 4u32.into();
+
+		let config = new_config_record::<T>();
+		let commit_timeslice = Broker::<T>::latest_timeslice_ready_to_commit(&config);
+		let mut status = StatusRecord {
+			core_count: 5u16.into(),
+			private_pool_size,
+			system_pool_size,
+			last_committed_timeslice: commit_timeslice.saturating_sub(1),
+			last_timeslice: Broker::<T>::current_timeslice(),
+		};
+
+		#[block]
+		{
+			Broker::<T>::process_pool(when, &mut status);
+		}
+
+		assert!(InstaPoolHistory::<T>::get(when).is_some());
+		assert_last_event::<T>(
+			Event::HistoryInitialized { when, private_pool_size, system_pool_size }.into(),
+		);
+	}
+
+	#[benchmark]
 	fn process_core_schedule() {
 		let timeslice = 10u32.into();
 		let core = 5u16.into();

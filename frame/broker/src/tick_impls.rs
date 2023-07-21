@@ -247,7 +247,7 @@ impl<T: Config> Pallet<T> {
 		Some(())
 	}
 
-	fn process_pool(when: Timeslice, status: &mut StatusRecord) {
+	pub(crate) fn process_pool(when: Timeslice, status: &mut StatusRecord) {
 		let pool_io = InstaPoolIo::<T>::take(when);
 		status.private_pool_size = (status.private_pool_size as SignedCoreMaskBitCount)
 			.saturating_add(pool_io.private) as CoreMaskBitCount;
