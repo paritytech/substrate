@@ -38,7 +38,7 @@
         (i32.store (i32.const 0) (i32.const 512))
 
 		;; Read input data.
-		(call $seal_input (i32.const 4) (i32.const 0))
+		(call $input (i32.const 4) (i32.const 0))
 
 		;; Input data layout.
 		;; [0..4) - size of the call
@@ -82,11 +82,11 @@
 		;; Call terminate when action == 3.
 		(if (i32.eq (get_local $action) (i32.const 3))
 		    (then
-				(call $seal_terminate
+				(call $terminate
 					(i32.const 100)	;; Pointer to beneficiary address
 					(i32.const 32)	;; Length of beneficiary address
 				)
-				(unreachable) ;; seal_terminate never returns
+				(unreachable) ;; terminate never returns
 			)
 			(else)
 		)
@@ -102,7 +102,7 @@
 		;; Delegate call into passed code hash.
 		(call $assert
 			(i32.eq
-				(call $seal_delegate_call
+				(call $delegate_call
 					(i32.const 0)	;; Set no call flags.
 					(i32.const 8)	;; Pointer to "callee" code_hash.
 					(i32.const 0)	;; Input is ignored.

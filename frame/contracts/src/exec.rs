@@ -1487,7 +1487,8 @@ where
 
 		let old_base_deposit = info.storage_base_deposit();
 		let new_base_deposit = info.update_base_deposit(&code_info);
-		let deposit = StorageDeposit::Charge(new_base_deposit).saturating_sub( StorageDeposit::Charge(old_base_deposit));
+		let deposit = StorageDeposit::Charge(new_base_deposit)
+			.saturating_sub(&StorageDeposit::Charge(old_base_deposit));
 
 		let deposit_account = info.deposit_account().clone();
 		frame.nested_storage.charge_deposit(deposit_account, deposit);
