@@ -21,7 +21,7 @@ use super::{ConfigOp, Event, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
-	dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
+	dispatch::{extract_actual_weight, GetDispatchInfo, PostDispatchInfo, WithPostDispatchInfo},
 	pallet_prelude::*,
 	traits::{Currency, Get, ReservableCurrency},
 };
@@ -699,38 +699,75 @@ fn nominating_and_rewards_should_work() {
 #[test]
 fn set_payee_also_updates_payee_destination() {
 	ExtBuilder::default().build_and_execute(|| {
+		// Given
+		let (stash, _) =
+			testing_utils::create_stash_controller::<Test>(12, 13, PayoutDestination::Stake)
+				.unwrap();
+		Payees::<Test>::remove(stash);
+		// Value to be migrated
+		Payee::<Test>::insert(stash, RewardDestination::Stash);
+
 		// When
-		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(11), PayoutDestination::Credit(11)));
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(stash), PayoutDestination::Credit(11)));
 
 		// Then
+		assert!(!Payee::<Test>::contains_key(stash));
 		assert_eq!(Payees::<Test>::get(11), PayoutDestination::Credit(11));
 	});
 }
 
-// #[test]
-// fn update_payee_works() {
-// 	ExtBuilder::default().build_and_execute(|| {
-// 		// `update_payee` is used to lazily migrate `Payee` records into `Payees` records. It will
-// 		// fail with `BadState` if a key either does not exist in `Payee`, or already exists in
-// 		// `Payees`.
+#[test]
+fn update_payee_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// `update_payee` is used to lazily migrate `Payee` records into `Payees` records.
 
-// 		// Given
-// 		let (stash, controller) =
-// 			testing_utils::create_stash_controller::<Test>(12, 13, PayoutDestination::Stake)
-// 				.unwrap();
+		// fails when invalid controller is given.
+		assert_noop!(
+			Staking::update_payee(RuntimeOrigin::signed(1), 1),
+			Error::<Test>::NotController,
+		);
 
-// 		// When
-// 		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(controller), PayoutDestination::Stake));
-// 		assert!(Payee::<Test>::contains_key(stash));
-// 		assert!(Payees::<Test>::contains_key(stash));
+		// Given
+		let (stash, controller) =
+			testing_utils::create_stash_controller::<Test>(12, 13, PayoutDestination::Stake)
+				.unwrap();
+		Payees::<Test>::remove(stash);
+		// Value to be migrated
+		Payee::<Test>::insert(stash, RewardDestination::Staked);
 
-// 		// Then
-// 		assert_noop!(
-// 			Staking::update_payee(RuntimeOrigin::signed(stash), controller),
-// 			Error::<Test>::BadUpdate
-// 		);
-// 	});
-// }
+		// When
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(controller), PayoutDestination::Stake));
+		assert!(!Payee::<Test>::contains_key(stash));
+		assert!(Payees::<Test>::contains_key(stash));
+
+		// Then
+		assert_ok!(Staking::update_payee(RuntimeOrigin::signed(stash), controller));
+	});
+}
+
+#[test]
+fn update_payee_charges_on_invalid_migration() {
+	ExtBuilder::default().build_and_execute(|| {
+		// `update_payee` is used to lazily migrate `Payee` records into `Payees` records.
+
+		// Given
+		let (stash, controller) =
+			testing_utils::create_stash_controller::<Test>(12, 13, PayoutDestination::Stake)
+				.unwrap();
+		Payees::<Test>::remove(stash);
+
+		// When
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(controller), PayoutDestination::Stake));
+		assert!(!Payee::<Test>::contains_key(stash));
+		assert!(Payees::<Test>::contains_key(stash));
+
+		// Then
+		assert_eq!(
+			Staking::update_payee(RuntimeOrigin::signed(stash), controller),
+			Ok(PostDispatchInfo { actual_weight: None, pays_fee: Pays::Yes })
+		);
+	});
+}
 
 #[test]
 fn nominators_also_get_slashed_pro_rata() {

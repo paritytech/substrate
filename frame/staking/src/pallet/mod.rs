@@ -766,8 +766,6 @@ pub mod pallet {
 		CommissionTooLow,
 		/// Some bound is not met.
 		BoundNotMet,
-		/// The given staker does not have a payee record, or the payee has already been migrated.
-		BadUpdate,
 	}
 
 	#[pallet::hooks]
@@ -1826,7 +1824,8 @@ pub mod pallet {
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;
 
-			if Payee::<T>::contains_key(&stash) && !Payees::<T>::contains_key(&stash) {
+			// If this stash has already been migrated, return early and charge tx fees.
+			if Payees::<T>::contains_key(&stash) && !Payee::<T>::contains_key(&stash) {
 				return Ok(Pays::Yes.into())
 			}
 
