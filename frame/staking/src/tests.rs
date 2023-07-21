@@ -712,7 +712,7 @@ fn set_payee_also_updates_payee_destination() {
 
 		// Then
 		assert!(!Payee::<Test>::contains_key(stash));
-		assert_eq!(Payees::<Test>::get(11), PayoutDestination::Credit(11));
+		assert_eq!(Payees::<Test>::get(stash), PayoutDestination::Credit(11));
 	});
 }
 
