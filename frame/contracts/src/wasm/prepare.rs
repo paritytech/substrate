@@ -673,6 +673,22 @@ mod tests {
 		);
 
 		prepare_test!(
+			signed_extension_works,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 1))
+				(func (export "deploy"))
+				(func (export "call"))
+				(func (param i32) (result i32)
+					local.get 0
+					i32.extend8_s
+				)
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(
 			omit_memory,
 			r#"
 			(module
