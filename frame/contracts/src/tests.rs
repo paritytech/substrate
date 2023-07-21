@@ -1,4 +1,5 @@
 // This file is part of Substrate.
+mod pallet_dummy;
 
 // Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -50,20 +51,16 @@ use sp_core::ByteArray;
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::MemoryKeystore, KeystoreExt};
 use sp_runtime::{
-	testing::{Header, H256},
+	testing::H256,
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32, BuildStorage, TokenError,
 };
 use std::ops::Deref;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
@@ -72,6 +69,7 @@ frame_support::construct_runtime!(
 		Utility: pallet_utility::{Pallet, Call, Storage, Event},
 		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>},
 		Proxy: pallet_proxy::{Pallet, Call, Storage, Event<T>},
+		Dummy: pallet_dummy
 	}
 );
 
@@ -313,14 +311,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId32;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -377,6 +374,8 @@ impl pallet_proxy::Config for Test {
 	type AnnouncementDepositBase = ConstU64<1>;
 	type AnnouncementDepositFactor = ConstU64<1>;
 }
+
+impl pallet_dummy::Config for Test {}
 
 parameter_types! {
 	pub MySchedule: Schedule<Test> = {
@@ -3004,7 +3003,7 @@ fn gas_estimation_call_runtime() {
 		.unwrap()
 		.account_id;
 
-		let addr_callee = Contracts::bare_instantiate(
+		Contracts::bare_instantiate(
 			ALICE,
 			min_balance * 100,
 			GAS_LIMIT,
@@ -3016,14 +3015,13 @@ fn gas_estimation_call_runtime() {
 			CollectEvents::Skip,
 		)
 		.result
-		.unwrap()
-		.account_id;
+		.unwrap();
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
-			dest: addr_callee,
-			value: min_balance * 10,
+		let call = RuntimeCall::Dummy(pallet_dummy::Call::overestimate_pre_charge {
+			pre_charge: Weight::from_parts(10_000_000, 0),
+			actual_weight: Weight::from_parts(100, 0),
 		});
 		let result = Contracts::bare_call(
 			ALICE,

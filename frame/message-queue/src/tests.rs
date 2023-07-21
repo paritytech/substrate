@@ -381,7 +381,7 @@ fn service_queue_bails() {
 		let mut meter = WeightMeter::from_limit(1.into_weight());
 
 		assert_storage_noop!(MessageQueue::service_queue(0u32.into(), &mut meter, Weight::MAX));
-		assert!(meter.consumed.is_zero());
+		assert!(meter.consumed().is_zero());
 	});
 	// Not enough weight for `ready_ring_unknit`.
 	test_closure(|| {
@@ -389,7 +389,7 @@ fn service_queue_bails() {
 		let mut meter = WeightMeter::from_limit(1.into_weight());
 
 		assert_storage_noop!(MessageQueue::service_queue(0u32.into(), &mut meter, Weight::MAX));
-		assert!(meter.consumed.is_zero());
+		assert!(meter.consumed().is_zero());
 	});
 	// Not enough weight for `service_queue_base` and `ready_ring_unknit`.
 	test_closure(|| {
@@ -398,7 +398,7 @@ fn service_queue_bails() {
 
 		let mut meter = WeightMeter::from_limit(3.into_weight());
 		assert_storage_noop!(MessageQueue::service_queue(0.into(), &mut meter, Weight::MAX));
-		assert!(meter.consumed.is_zero());
+		assert!(meter.consumed().is_zero());
 	});
 }
 
@@ -458,7 +458,7 @@ fn service_page_bails() {
 			&mut meter,
 			Weight::MAX
 		));
-		assert!(meter.consumed.is_zero());
+		assert!(meter.consumed().is_zero());
 	});
 	// Not enough weight for `service_page_base_no_completion`.
 	test_closure(|| {
@@ -475,7 +475,7 @@ fn service_page_bails() {
 			&mut meter,
 			Weight::MAX
 		));
-		assert!(meter.consumed.is_zero());
+		assert!(meter.consumed().is_zero());
 	});
 }
 
@@ -586,7 +586,7 @@ fn bump_service_head_bails() {
 		let _guard = StorageNoopGuard::default();
 		let mut meter = WeightMeter::from_limit(1.into_weight());
 		assert!(MessageQueue::bump_service_head(&mut meter).is_none());
-		assert_eq!(meter.consumed, 0.into_weight());
+		assert_eq!(meter.consumed(), 0.into_weight());
 	});
 }
 
@@ -597,16 +597,16 @@ fn bump_service_head_trivial_works() {
 		let mut meter = WeightMeter::max_limit();
 
 		assert_eq!(MessageQueue::bump_service_head(&mut meter), None, "Cannot bump");
-		assert_eq!(meter.consumed, 2.into_weight());
+		assert_eq!(meter.consumed(), 2.into_weight());
 
 		setup_bump_service_head::<Test>(0.into(), 1.into());
 
 		assert_eq!(MessageQueue::bump_service_head(&mut meter), Some(0.into()));
 		assert_eq!(ServiceHead::<Test>::get().unwrap(), 1.into(), "Bumped the head");
-		assert_eq!(meter.consumed, 4.into_weight());
+		assert_eq!(meter.consumed(), 4.into_weight());
 
 		assert_eq!(MessageQueue::bump_service_head(&mut meter), None, "Cannot bump");
-		assert_eq!(meter.consumed, 6.into_weight());
+		assert_eq!(meter.consumed(), 6.into_weight());
 	});
 }
 
@@ -649,7 +649,7 @@ fn service_page_item_consumes_correct_weight() {
 			),
 			ItemExecutionStatus::Executed(true)
 		);
-		assert_eq!(weight.consumed, 5.into_weight());
+		assert_eq!(weight.consumed(), 5.into_weight());
 	});
 }
 
@@ -673,7 +673,7 @@ fn service_page_item_skips_perm_overweight_message() {
 			),
 			ItemExecutionStatus::Executed(false)
 		);
-		assert_eq!(weight.consumed, 2.into_weight());
+		assert_eq!(weight.consumed(), 2.into_weight());
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
 				id: blake2_256(b"TooMuch"),

@@ -23,17 +23,12 @@ use codec::Encode;
 use sp_runtime::{traits::IdentityLookup, BuildStorage};
 
 type AccountId = u64;
-type AccountIndex = u32;
-type BlockNumber = u64;
+type Nonce = u32;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
@@ -45,14 +40,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
