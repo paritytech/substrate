@@ -47,7 +47,7 @@ fn main() {
 			.with_current_project()
 			.export_heap_base()
 			.import_memory()
-			.set_file_name("wasm_binary_logging_disabled")
+			.set_file_name("wasm_binary_logging_disabled.rs")
 			.enable_feature("disable-logging")
 			.build();
 	}
