@@ -98,6 +98,7 @@ use frame_system::{
 		AppCrypto, CreateSignedTransaction, SendSignedTransaction, SendUnsignedTransaction,
 		SignedPayload, Signer, SigningTypes, SubmitTransaction,
 	},
+	pallet_prelude::*,
 };
 use sp_core::crypto::KeyTypeId;
 use sp_runtime::{
@@ -155,7 +156,6 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	/// This pallet's configuration trait
 	#[pallet::config(with_default)]
@@ -176,7 +176,7 @@ pub mod pallet {
 		/// blocks.
 		#[pallet::no_default]
 		#[pallet::constant]
-		type UnsignedInterval: Get<Self::BlockNumber>;
+		type UnsignedInterval: Get<BlockNumberFor<Self>>;
 
 		/// A configuration for base priority of unsigned transactions.
 		///
@@ -245,7 +245,7 @@ pub mod pallet {
 	/// storage entry defines when new transaction is going to be accepted.
 	#[pallet::storage]
 	#[pallet::getter(fn next_unsigned_at)]
-	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+	pub(super) type NextUnsignedAt<T: Config> = StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -261,7 +261,7 @@ pub mod pallet {
 		/// be cases where some blocks are skipped, or for some the worker runs
 		/// twice (re-orgs), so the code should be able to handle that. You can
 		/// use `Local Storage` API to coordinate runs of the worker.
-		fn offchain_worker(block_number: T::BlockNumber) {
+		fn offchain_worker(block_number: BlockNumberFor<T>) {
 			// Note that having logs compiled to WASM may cause the size of the
 			// blob to increase significantly. You can use `RuntimeDebug` custom
 			// derive to hide details of the types in WASM. The `sp-api` crate
@@ -286,12 +286,12 @@ pub mod pallet {
 					if let Err(e) = Self::ocw_pong_raw_unsigned(block_number) {
 						log::error!("Error: {}", e);
 					}
-				} else if unsigned_type == T::BlockNumber::from(1u32) {
+				} else if unsigned_type == BlockNumberFor::<T>::from(1u32) {
 					// node needs to be loaded with keys as the payload will be signed
 					if let Err(e) = Self::ocw_pong_unsigned_for_any_account(block_number) {
 						log::error!("Error: {}", e);
 					}
-				} else if unsigned_type == T::BlockNumber::from(2u32) {
+				} else if unsigned_type == BlockNumberFor::<T>::from(2u32) {
 					// node needs to be loaded with keys as the payload will be signed
 					if let Err(e) = Self::ocw_pong_unsigned_for_all_accounts(block_number) {
 						log::error!("Error: {}", e);
@@ -307,7 +307,7 @@ pub mod pallet {
 		}
 
 		/// clean Pings
-		fn on_initialize(_: T::BlockNumber) -> Weight {
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			Pings::<T>::kill();
 			Weight::zero()
 		}
@@ -352,7 +352,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn pong_unsigned(
 			origin: OriginFor<T>,
-			_block_number: T::BlockNumber,
+			_block_number: BlockNumberFor<T>,
 			nonce: u32,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned
@@ -376,7 +376,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn pong_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
-			pong_payload: PongPayload<T::Public, T::BlockNumber>,
+			pong_payload: PongPayload<T::Public, BlockNumberFor<T>>,
 			_signature: T::Signature,
 		) -> DispatchResultWithPostInfo {
 			// This ensures that the function can only be called via unsigned
@@ -517,7 +517,7 @@ pub struct PongPayload<Public, BlockNumber> {
 	public: Public,
 }
 
-impl<T: SigningTypes> SignedPayload<T> for PongPayload<T::Public, T::BlockNumber> {
+impl<T: SigningTypes> SignedPayload<T> for PongPayload<T::Public, BlockNumberFor<T>> {
 	fn public(&self) -> T::Public {
 		self.public.clone()
 	}
@@ -528,7 +528,7 @@ impl<T: Config> Pallet<T> {
 		<Authorities<T>>::get().contains(who)
 	}
 
-	fn validate_transaction_parameters(block_number: &T::BlockNumber) -> TransactionValidity {
+	fn validate_transaction_parameters(block_number: &BlockNumberFor<T>) -> TransactionValidity {
 		// Now let's check if the transaction has any chance to succeed.
 		let next_unsigned_at = <NextUnsignedAt<T>>::get();
 		if &next_unsigned_at > block_number {
@@ -603,7 +603,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A helper function to sign payload and send an unsigned pong transaction
-	fn ocw_pong_unsigned_for_any_account(block_number: T::BlockNumber) -> Result<(), &'static str> {
+	fn ocw_pong_unsigned_for_any_account(block_number: BlockNumberFor<T>) -> Result<(), &'static str> {
 		let pings = <Pings<T>>::get();
 		for p in pings {
 			let Ping(nonce) = p;
@@ -626,7 +626,7 @@ impl<T: Config> Pallet<T> {
 
 	/// A helper function to sign payload and send an unsigned pong transaction
 	fn ocw_pong_unsigned_for_all_accounts(
-		block_number: T::BlockNumber,
+		block_number: BlockNumberFor<T>,
 	) -> Result<(), &'static str> {
 		let pings = <Pings<T>>::get();
 		for p in pings {
@@ -652,7 +652,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A helper function to send a raw unsigned pong transaction.
-	fn ocw_pong_raw_unsigned(block_number: T::BlockNumber) -> Result<(), &'static str> {
+	fn ocw_pong_raw_unsigned(block_number: BlockNumberFor<T>) -> Result<(), &'static str> {
 		let pings = <Pings<T>>::get();
 		for p in pings {
 			let Ping(nonce) = p;

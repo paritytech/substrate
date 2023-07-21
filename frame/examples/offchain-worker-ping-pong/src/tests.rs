@@ -36,6 +36,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	RuntimeAppPublic,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -43,7 +44,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 frame_support::construct_runtime!(
 	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		PingPongOcwExample: example_offchain_worker::{Pallet, Call, Storage, Event<T>, ValidateUnsigned},
 	}
 );
@@ -229,7 +230,7 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 			let signature_valid =
 				<PongPayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					BlockNumberFor<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&pong_payload, signature);
 
 			assert!(signature_valid);
@@ -283,7 +284,7 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 			let signature_valid =
 				<PongPayload<
 					<Test as SigningTypes>::Public,
-					<Test as frame_system::Config>::BlockNumber,
+					BlockNumberFor<Test>,
 				> as SignedPayload<Test>>::verify::<crypto::TestAuthId>(&pong_payload, signature);
 
 			assert!(signature_valid);

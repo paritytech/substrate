@@ -150,7 +150,7 @@ pub mod pallet {
 		/// sending between distinct runs of this offchain worker.
 		#[pallet::no_default]
 		#[pallet::constant]
-		type GracePeriod: Get<Self::BlockNumber>;
+		type GracePeriod: Get<BlockNumberFor<Self>>;
 
 		/// Maximum number of prices.
 		#[pallet::constant]
@@ -209,7 +209,7 @@ pub mod pallet {
 		/// handle that.
 		///
 		/// You can use `Local Storage` API to coordinate runs of the worker.
-		fn offchain_worker(block_number: T::BlockNumber) {
+		fn offchain_worker(block_number: BlockNumberFor<T>) {
 			// Note that having logs compiled to WASM may cause the size of the
 			// blob to increase significantly. You can use `RuntimeDebug` custom
 			// derive to hide details of the types in WASM. The `sp-api` crate
@@ -248,7 +248,7 @@ pub mod pallet {
 			// worker will be able to "acquire a lock" and send a transaction if
 			// multiple workers happen to be executed concurrently.
 			let res =
-				val.mutate(|last_send: Result<Option<T::BlockNumber>, StorageRetrievalError>| {
+				val.mutate(|last_send: Result<Option<BlockNumberFor<T>>, StorageRetrievalError>| {
 					match last_send {
 						// If we already have a value in storage and the block
 						// number is recent enough we avoid sending another
