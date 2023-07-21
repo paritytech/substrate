@@ -318,8 +318,9 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{codec::Encode, WarpSyncProof};
+	use super::WarpSyncProof;
 	use crate::{AuthoritySetChanges, GrandpaJustification};
+	use parity_scale_codec::Encode;
 	use rand::prelude::*;
 	use sc_block_builder::BlockBuilderProvider;
 	use sp_blockchain::HeaderBackend;
