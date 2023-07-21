@@ -16,6 +16,7 @@
 // limitations under the License.
 
 //! Add `delegate_dependencies` to `ContractInfo`.
+//! Use `Identity` instead of `Twox64Concat` for hashing keys of the `ContractInfoOf` storage map
 //! See <https://github.com/paritytech/substrate/pull/14079>.
 
 use crate::{
