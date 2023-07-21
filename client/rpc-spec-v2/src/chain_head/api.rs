@@ -101,7 +101,7 @@ pub trait ChainHeadApi<Hash> {
 		follow_subscription: String,
 		hash: Hash,
 		items: Vec<StorageQuery<String>>,
-		child_key: Option<String>,
+		child_trie: Option<String>,
 		network_config: Option<NetworkConfig>,
 	);
 

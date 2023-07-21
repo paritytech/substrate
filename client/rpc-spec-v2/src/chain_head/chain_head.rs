@@ -292,7 +292,7 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 		items: Vec<StorageQuery<String>>,
-		child_key: Option<String>,
+		child_trie: Option<String>,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
 		// Gain control over parameter parsing and returned error.
@@ -316,8 +316,8 @@ where
 			})
 			.collect::<Result<Vec<_>, _>>()?;
 
-		let child_key = child_key
-			.map(|child_key| parse_hex_param(&mut sink, child_key))
+		let child_trie = child_trie
+			.map(|child_trie| parse_hex_param(&mut sink, child_trie))
 			.transpose()?
 			.map(ChildInfo::new_default_from_vec);
 
@@ -349,7 +349,7 @@ where
 		let fut = async move {
 			let _block_guard = block_guard;
 
-			storage_client.generate_events(sink, hash, items, child_key);
+			storage_client.generate_events(sink, hash, items, child_trie);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
