@@ -899,6 +899,7 @@ pub mod tests {
 				endpoint,
 				received_handshake,
 				notifications_sink,
+				inbound: false,
 			}
 		}
 
@@ -1137,7 +1138,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		// remote now tries to open another substream, verify that it is rejected and closed
@@ -1174,7 +1175,7 @@ pub mod tests {
 		.await;
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 	}
 
@@ -1210,7 +1211,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		// accept the substream and move its state to `Open`
@@ -1301,7 +1302,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		handler.on_behaviour_event(NotifsHandlerIn::Close { protocol_index: 0 });
@@ -1361,7 +1362,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		handler.on_behaviour_event(NotifsHandlerIn::Close { protocol_index: 0 });
@@ -1444,7 +1445,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		handler.on_behaviour_event(NotifsHandlerIn::Close { protocol_index: 0 });
@@ -1493,7 +1494,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		handler.on_behaviour_event(NotifsHandlerIn::Close { protocol_index: 0 });
