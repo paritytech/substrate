@@ -285,7 +285,17 @@ mod benches {
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), region, recipient);
+		_(RawOrigin::Signed(caller.clone()), region, recipient.clone());
+
+		assert_last_event::<T>(
+			Event::Transferred {
+				region_id: region,
+				old_owner: caller,
+				owner: recipient,
+				duration: 3u32.into(),
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
