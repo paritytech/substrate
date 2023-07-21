@@ -19,6 +19,7 @@ use super::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use sp_std::{cmp::Ordering, marker::PhantomData};
 
 pub(super) type PoolIdOf<T> = (<T as Config>::MultiAssetId, <T as Config>::MultiAssetId);
 
@@ -113,4 +114,71 @@ pub trait Swap<AccountId, Balance, MultiAssetId> {
 		send_to: AccountId,
 		keep_alive: bool,
 	) -> Result<Balance, DispatchError>;
+}
+
+/// An implementation of MultiAssetId that can be either Native or an asset.
+#[derive(Decode, Encode, Default, MaxEncodedLen, TypeInfo, Clone, Copy, Debug)]
+pub enum NativeOrAssetId<AssetId>
+where
+	AssetId: Ord,
+{
+	/// Native asset. For example, on the Polkadot Asset Hub this would be DOT.
+	#[default]
+	Native,
+	/// A non-native asset id.
+	Asset(AssetId),
+}
+
+impl<AssetId: Ord> From<AssetId> for NativeOrAssetId<AssetId> {
+	fn from(asset: AssetId) -> Self {
+		Self::Asset(asset)
+	}
+}
+
+impl<AssetId: Ord> Ord for NativeOrAssetId<AssetId> {
+	fn cmp(&self, other: &Self) -> Ordering {
+		match (self, other) {
+			(Self::Native, Self::Native) => Ordering::Equal,
+			(Self::Native, Self::Asset(_)) => Ordering::Less,
+			(Self::Asset(_), Self::Native) => Ordering::Greater,
+			(Self::Asset(id1), Self::Asset(id2)) => <AssetId as Ord>::cmp(id1, id2),
+		}
+	}
+}
+impl<AssetId: Ord> PartialOrd for NativeOrAssetId<AssetId> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(<Self as Ord>::cmp(self, other))
+	}
+}
+impl<AssetId: Ord> PartialEq for NativeOrAssetId<AssetId> {
+	fn eq(&self, other: &Self) -> bool {
+		self.cmp(other) == Ordering::Equal
+	}
+}
+impl<AssetId: Ord> Eq for NativeOrAssetId<AssetId> {}
+
+/// Converts between a MultiAssetId and an AssetId (or the native currency).
+pub struct NativeOrAssetIdConverter<AssetId> {
+	_phantom: PhantomData<AssetId>,
+}
+
+impl<AssetId: Ord + Clone> MultiAssetIdConverter<NativeOrAssetId<AssetId>, AssetId>
+	for NativeOrAssetIdConverter<AssetId>
+{
+	fn get_native() -> NativeOrAssetId<AssetId> {
+		NativeOrAssetId::Native
+	}
+
+	fn is_native(asset: &NativeOrAssetId<AssetId>) -> bool {
+		*asset == Self::get_native()
+	}
+
+	fn try_convert(
+		asset: &NativeOrAssetId<AssetId>,
+	) -> MultiAssetIdConversionResult<NativeOrAssetId<AssetId>, AssetId> {
+		match asset {
+			NativeOrAssetId::Asset(asset) => MultiAssetIdConversionResult::Converted(asset.clone()),
+			NativeOrAssetId::Native => MultiAssetIdConversionResult::Native,
+		}
+	}
 }

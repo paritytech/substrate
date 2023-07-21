@@ -24,6 +24,7 @@ use frame_support::{
 };
 use frame_system as system;
 use mock::{ExtrinsicBaseWeight, *};
+use pallet_asset_conversion::NativeOrAssetId;
 use pallet_balances::Call as BalancesCall;
 use sp_runtime::{traits::StaticLookup, BuildStorage};
 
