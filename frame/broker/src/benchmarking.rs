@@ -416,8 +416,10 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn claim_revenue() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+	fn claim_revenue(
+		m: Linear<0, { new_config_record::<T>().region_length }>,
+	) -> Result<(), BenchmarkError> {
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
@@ -429,11 +431,24 @@ mod benches {
 
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 
-		Broker::<T>::do_pool(region, None, recipient, Final)
+		Broker::<T>::do_pool(region, None, recipient.clone(), Final)
 			.map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), region, 100);
+		_(RawOrigin::Signed(caller), region, m);
+
+		assert_last_event::<T>(
+			Event::RevenueClaimPaid {
+				who: recipient,
+				amount: 0u32.into(), // Todo: fix the conditions for this benchmark
+				next: if m < new_config_record::<T>().region_length {
+					Some(RegionId { begin: 4.saturating_add(m), core, part: CoreMask::complete() })
+				} else {
+					None
+				},
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
