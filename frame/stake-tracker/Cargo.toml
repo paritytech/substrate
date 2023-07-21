@@ -1,0 +1,58 @@
+[package]
+name = "pallet-stake-tracker"
+version = "0.1.0"
+description = "FRAME stake tracker pallet"
+authors = ["Parity Technologies <admin@parity.io>"]
+homepage = "https://substrate.io"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/paritytech/substrate"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [ "derive"] }
+scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
+
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking", features = ["serde"] }
+
+sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
+frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support"}
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+
+[dev-dependencies]
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
+sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
+pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+
+[features]
+default = ["std"]
+
+std = [
+	"codec/std",
+	"frame-benchmarking?/std",
+	"frame-support/std",
+	"frame-system/std",
+	"scale-info/std",
+	"sp-runtime/std",
+]
+
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+]
+
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"sp-runtime/try-runtime",
+]
