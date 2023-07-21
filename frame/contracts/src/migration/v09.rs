@@ -18,17 +18,15 @@
 //! Update `CodeStorage` with the new `determinism` field.
 
 use crate::{
-	migration::{IsFinished, Migrate},
+	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
 	CodeHash, Config, Determinism, Pallet, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
-use frame_support::{
-	codec, pallet_prelude::*, storage_alias, BoundedVec, DefaultNoBound, Identity,
-};
+use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound, Identity};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::prelude::*;
 
 mod old {
 	use super::*;
@@ -79,11 +77,10 @@ type CodeStorage<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, Prefa
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config> {
-	last_key: Option<BoundedVec<u8, ConstU32<256>>>,
-	_phantom: PhantomData<T>,
+	last_code_hash: Option<CodeHash<T>>,
 }
 
-impl<T: Config> Migrate for Migration<T> {
+impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 9;
 
 	fn max_step_weight() -> Weight {
@@ -91,8 +88,8 @@ impl<T: Config> Migrate for Migration<T> {
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let mut iter = if let Some(last_key) = self.last_key.take() {
-			old::CodeStorage::<T>::iter_from(last_key.to_vec())
+		let mut iter = if let Some(last_key) = self.last_code_hash.take() {
+			old::CodeStorage::<T>::iter_from(old::CodeStorage::<T>::hashed_key_for(last_key))
 		} else {
 			old::CodeStorage::<T>::iter()
 		};
@@ -108,7 +105,7 @@ impl<T: Config> Migrate for Migration<T> {
 				determinism: Determinism::Enforced,
 			};
 			CodeStorage::<T>::insert(key, module);
-			self.last_key = Some(iter.last_raw_key().to_vec().try_into().unwrap());
+			self.last_code_hash = Some(key);
 			(IsFinished::No, T::WeightInfo::v9_migration_step(len))
 		} else {
 			log::debug!(target: LOG_TARGET, "No more contracts code to migrate");
@@ -126,8 +123,8 @@ impl<T: Config> Migrate for Migration<T> {
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let sample =
-			<Vec<(CodeHash<T>, old::PrefabWasmModule)> as Decode>::decode(&mut &state[..]).unwrap();
+		let sample = <Vec<(CodeHash<T>, old::PrefabWasmModule)> as Decode>::decode(&mut &state[..])
+			.expect("pre_upgrade_step provides a valid state; qed");
 
 		log::debug!(target: LOG_TARGET, "Validating sample of {} contract codes", sample.len());
 		for (code_hash, old) in sample {
@@ -138,8 +135,6 @@ impl<T: Config> Migrate for Migration<T> {
 			);
 			ensure!(module.determinism == Determinism::Enforced, "invalid determinism");
 			ensure!(module.initial == old.initial, "invalid initial");
-			ensure!(module.maximum == old.maximum, "invalid maximum");
-			ensure!(module.code == old.code, "invalid code");
 			ensure!(module.maximum == old.maximum, "invalid maximum");
 			ensure!(module.code == old.code, "invalid code");
 		}

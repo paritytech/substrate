@@ -353,6 +353,8 @@ impl RequestResponsesBehaviour {
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
 	) {
+		log::trace!(target: "sub-libp2p", "send request to {target} ({protocol_name:?}), {} bytes", request.len());
+
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol_name) {
 			if protocol.is_connected(target) || connect.should_connect() {
 				let request_id = protocol.send_request(target, request);
@@ -567,6 +569,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 				if let Ok(payload) = result {
 					if let Some((protocol, _)) = self.protocols.get_mut(&*protocol_name) {
+						log::trace!(target: "sub-libp2p", "send response to {peer} ({protocol_name:?}), {} bytes", payload.len());
+
 						if protocol.send_response(inner_channel, Ok(payload)).is_err() {
 							// Note: Failure is handled further below when receiving
 							// `InboundFailure` event from request-response [`Behaviour`].
@@ -695,6 +699,12 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								.remove(&(protocol.clone(), request_id).into())
 							{
 								Some((started, pending_response)) => {
+									log::trace!(
+										target: "sub-libp2p",
+										"received response from {peer} ({protocol:?}), {} bytes",
+										response.as_ref().map_or(0usize, |response| response.len()),
+									);
+
 									let delivered = pending_response
 										.send(response.map_err(|()| RequestFailure::Refused))
 										.map_err(|_| RequestFailure::Obsolete);

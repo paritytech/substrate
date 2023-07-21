@@ -1,7 +1,7 @@
 error: Unexpected tokens, expected one of `=`, `,`
-  --> tests/construct_runtime_ui/both_use_and_excluded_parts.rs:29:43
+  --> tests/construct_runtime_ui/both_use_and_excluded_parts.rs:26:43
    |
-29 |         Pallet: pallet exclude_parts { Pallet } use_parts { Pallet },
+26 |         Pallet: pallet exclude_parts { Pallet } use_parts { Pallet },
    |                                                 ^^^^^^^^^
 
 error[E0412]: cannot find type `RuntimeCall` in this scope

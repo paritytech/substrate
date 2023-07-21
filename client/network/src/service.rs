@@ -29,7 +29,7 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::{FullNetworkConfiguration, MultiaddrWithPeerId, Params, TransportConfig},
+	config::{parse_addr, FullNetworkConfiguration, MultiaddrWithPeerId, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	event::{DhtEvent, Event},
@@ -374,13 +374,17 @@ where
 			}
 		})?;
 
-		let boot_node_ids = Arc::new(
-			network_config
-				.boot_nodes
-				.iter()
-				.map(|bootnode| bootnode.peer_id)
-				.collect::<HashSet<_>>(),
-		);
+		// List of bootnode multiaddresses.
+		let mut boot_node_ids = HashMap::<PeerId, Vec<Multiaddr>>::new();
+
+		for bootnode in network_config.boot_nodes.iter() {
+			boot_node_ids
+				.entry(bootnode.peer_id)
+				.or_default()
+				.push(bootnode.multiaddr.clone());
+		}
+
+		let boot_node_ids = Arc::new(boot_node_ids);
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
 
@@ -403,6 +407,7 @@ where
 				config.use_kademlia_disjoint_query_paths(
 					network_config.kademlia_disjoint_query_paths,
 				);
+				config.with_kademlia_replication_factor(network_config.kademlia_replication_factor);
 
 				match network_config.transport {
 					TransportConfig::MemoryOnly => {
@@ -531,9 +536,10 @@ where
 			service,
 			from_service,
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
-			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
+			reported_invalid_boot_nodes: Default::default(),
+			peers_notifications_sinks,
 			peer_store_handle: params.peer_store,
 			_marker: Default::default(),
 			_block: Default::default(),
@@ -1229,8 +1235,10 @@ where
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.
 	metrics: Option<Metrics>,
-	/// The `PeerId`'s of all boot nodes.
-	boot_node_ids: Arc<HashSet<PeerId>>,
+	/// The `PeerId`'s of all boot nodes mapped to the registered addresses.
+	boot_node_ids: Arc<HashMap<PeerId, Vec<Multiaddr>>>,
+	/// Boot nodes that we already have reported as invalid.
+	reported_invalid_boot_nodes: HashSet<PeerId>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
@@ -1653,15 +1661,27 @@ where
 						peer_id, error,
 					);
 
-					if self.boot_node_ids.contains(&peer_id) {
+					let not_reported = !self.reported_invalid_boot_nodes.contains(&peer_id);
+
+					if let Some(addresses) =
+						not_reported.then(|| self.boot_node_ids.get(&peer_id)).flatten()
+					{
 						if let DialError::WrongPeerId { obtained, endpoint } = &error {
 							if let ConnectedPoint::Dialer { address, role_override: _ } = endpoint {
-								warn!(
-									"💔 The bootnode you want to connect to at `{}` provided a different peer ID `{}` than the one you expect `{}`.",
-									address,
-									obtained,
-									peer_id,
-								);
+								let address_without_peer_id = parse_addr(address.clone())
+									.map_or_else(|_| address.clone(), |r| r.1);
+
+								// Only report for address of boot node that was added at startup of
+								// the node and not for any address that the node learned of the
+								// boot node.
+								if addresses.iter().any(|a| address_without_peer_id == *a) {
+									warn!(
+										"💔 The bootnode you want to connect to at `{address}` provided a \
+										 different peer ID `{obtained}` than the one you expect `{peer_id}`.",
+									);
+
+									self.reported_invalid_boot_nodes.insert(peer_id);
+								}
 							}
 						}
 					}
