@@ -17,18 +17,19 @@
 
 use crate as example_offchain_worker;
 use crate::*;
-use pallet::config_preludes::*;
 use codec::Decode;
 use frame_support::{
 	assert_ok, derive_impl,
 	traits::{ConstU32, ConstU64},
 };
+use pallet::config_preludes::*;
 use sp_core::{
 	offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
 	sr25519::Signature,
 	H256,
 };
 
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_api_hidden_includes_construct_runtime::hidden_include::traits::Hooks;
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use sp_runtime::{
@@ -36,7 +37,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	RuntimeAppPublic,
 };
-use frame_system::pallet_prelude::BlockNumberFor;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -104,7 +104,6 @@ where
 		Some((call, (nonce, ())))
 	}
 }
-
 
 #[derive_impl(TestDefaultConfig as pallet::DefaultConfig)]
 impl Config for Test {

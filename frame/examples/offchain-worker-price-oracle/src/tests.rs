@@ -18,10 +18,7 @@
 use crate as example_offchain_worker;
 use crate::*;
 use codec::Decode;
-use frame_support::{
-	assert_noop, assert_ok, derive_impl, parameter_types,
-	traits::{ConstU64},
-};
+use frame_support::{assert_noop, assert_ok, derive_impl, parameter_types, traits::ConstU64};
 use pallet::config_preludes::*;
 use sp_core::{
 	offchain::{testing, OffchainWorkerExt, TransactionPoolExt},
@@ -31,7 +28,7 @@ use sp_core::{
 
 use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
 use sp_runtime::{
-	testing::{TestXt},
+	testing::TestXt,
 	traits::{BlakeTwo256, Extrinsic as ExtrinsicT, IdentifyAccount, IdentityLookup, Verify},
 	RuntimeAppPublic,
 };
@@ -91,7 +88,7 @@ where
 
 impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Test
 where
-	RuntimeCall: From<LocalCall>
+	RuntimeCall: From<LocalCall>,
 {
 	fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
 		call: RuntimeCall,

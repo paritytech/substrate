@@ -247,20 +247,20 @@ pub mod pallet {
 			// low-level method of local storage API, which means that only one
 			// worker will be able to "acquire a lock" and send a transaction if
 			// multiple workers happen to be executed concurrently.
-			let res =
-				val.mutate(|last_send: Result<Option<BlockNumberFor<T>>, StorageRetrievalError>| {
+			let res = val.mutate(
+				|last_send: Result<Option<BlockNumberFor<T>>, StorageRetrievalError>| {
 					match last_send {
 						// If we already have a value in storage and the block
 						// number is recent enough we avoid sending another
 						// transaction at this time.
-						Ok(Some(block)) if block_number < block + T::GracePeriod::get() => {
-							Err(RECENTLY_SENT)
-						},
+						Ok(Some(block)) if block_number < block + T::GracePeriod::get() =>
+							Err(RECENTLY_SENT),
 						// In every other case we attempt to acquire the lock
 						// and send a transaction.
 						_ => Ok(block_number),
 					}
-				});
+				},
+			);
 
 			// The result of `mutate` call will give us a nested `Result` type.
 			// The first one matches the return of the closure passed to
@@ -271,11 +271,10 @@ pub mod pallet {
 			match res {
 				// The value has been set correctly, which means we can safely
 				// send a transaction now.
-				Ok(_) => {
+				Ok(_) =>
 					if let Err(e) = Self::fetch_price_and_send_signed() {
 						log::error!("Error: {}", e);
-					}
-				},
+					},
 				// We are in the grace period, we should not send a transaction
 				// this time.
 				Err(MutateStorageError::ValueFunctionFailed(RECENTLY_SENT)) => {
@@ -394,7 +393,7 @@ impl<T: Config> Pallet<T> {
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
-			);
+			)
 		}
 		// Make an external HTTP request to fetch the current price. Note this
 		// call will block until response is received.
@@ -454,7 +453,7 @@ impl<T: Config> Pallet<T> {
 		// response.
 		if response.code != 200 {
 			log::warn!("Unexpected status code: {}", response.code);
-			return Err(http::Error::Unknown);
+			return Err(http::Error::Unknown)
 		}
 
 		// Next we want to fully read the response body and collect it to a

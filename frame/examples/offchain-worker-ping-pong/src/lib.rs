@@ -603,7 +603,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// A helper function to sign payload and send an unsigned pong transaction
-	fn ocw_pong_unsigned_for_any_account(block_number: BlockNumberFor<T>) -> Result<(), &'static str> {
+	fn ocw_pong_unsigned_for_any_account(
+		block_number: BlockNumberFor<T>,
+	) -> Result<(), &'static str> {
 		let pings = <Pings<T>>::get();
 		for p in pings {
 			let Ping(nonce) = p;
