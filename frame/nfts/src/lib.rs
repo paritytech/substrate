@@ -63,6 +63,7 @@ pub use weights::WeightInfo;
 /// The log target of this pallet.
 pub const LOG_TARGET: &'static str = "runtime::nfts";
 
+/// A type alias for the account ID type used in the dispatchable functions of this pallet.
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
