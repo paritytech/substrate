@@ -256,7 +256,7 @@ mod commit_reveal {
 	}
 
 	#[test]
-	fn reveal_secret_differentiates_same_name_commitemnts() {
+	fn reveal_secret_differentiates_same_name_commitments() {
 		new_test_ext().execute_with(|| {
 			let sender = 1;
 			let name = "alice".as_bytes().to_vec();
