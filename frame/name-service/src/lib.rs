@@ -49,7 +49,7 @@
 //! to accounts using registered names as the recipient of the transfer, instead of their public
 //! key.
 //!
-//!  The pallet aims to be para-agnostic; any Para ID can be registered with the name service, and
+//! The pallet aims to be para-agnostic; any Para ID can be registered with the name service, and
 //! provided alongside an address that is being set in the resolver. To register an address with a
 //! corresponding para, that para ID must be registered with the name service.
 //!
