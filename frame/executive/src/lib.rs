@@ -286,6 +286,7 @@ impl<
 		let num_inherents = Self::initial_checks(&block) as usize;
 		let (header, extrinsics) = block.deconstruct();
 
+		// Check if there are any forbidden non-inherents in the block.
 		if mode == ExtrinsicInclusionMode::OnlyInherents && extrinsics.len() > num_inherents {
 			return Err(InvalidTransaction::NotInherent.into())
 		}
@@ -553,6 +554,7 @@ impl<
 			let num_inherents = Self::initial_checks(&block) as usize;
 			let (header, extrinsics) = block.deconstruct();
 
+			// Check if there are any forbidden non-inherents in the block.
 			if mode == ExtrinsicInclusionMode::OnlyInherents && extrinsics.len() > num_inherents {
 				// Note: It would be possible to not explicitly panic here since the state-root
 				// check should already catch any mismatch, but this makes it easier to debug.
@@ -643,7 +645,9 @@ impl<
 	}
 
 	/// Same as `apply_extrinsic` but gets the `mode` directly passed in.
-	pub fn apply_extrinsic_with_mode(
+	///
+	/// This can be used for caching purposes where the `mode` is already known.
+	fn apply_extrinsic_with_mode(
 		uxt: Block::Extrinsic,
 		mode: ExtrinsicInclusionMode,
 	) -> ApplyExtrinsicResult {
