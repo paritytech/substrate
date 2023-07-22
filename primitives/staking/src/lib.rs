@@ -272,28 +272,70 @@ pub trait StakingInterface {
 	fn set_current_era(era: EraIndex);
 }
 
-/// A generic representation of a delegation apis exposed by staking pallet for use by other runtime
-/// pallets.
-pub trait DelegationInterface {
+/// A generic representation of a delegation based staking apis that other runtime pallets can use.
+///
+/// Compared to StakingInterface that allows an account to be a direct nominator,
+/// DelegateStakingInterface allows an account (called delegator) to delegate its stake to another
+/// account (delegatee). The difference with delegation based staking is that the funds are locked
+/// in the delegator's account and gives the delegatee the right to use the funds for staking as if
+/// it is a direct nominator.
+pub trait DelegatedStakeInterface {
 	/// AccountId type used by the runtime.
 	type AccountId: Clone + sp_std::fmt::Debug;
 
 	/// Balance type used by the runtime.
 	type Balance: Sub<Output = Self::Balance>
-	+ Ord
-	+ PartialEq
-	+ Default
-	+ Copy
-	+ MaxEncodedLen
-	+ FullCodec
-	+ TypeInfo
-	+ Saturating;
+		+ Ord
+		+ PartialEq
+		+ Default
+		+ Copy
+		+ MaxEncodedLen
+		+ FullCodec
+		+ TypeInfo
+		+ Saturating;
 
-	/// Delegate some funds or add to an existing delegation.
-	// TODO(ank4n): No restriction to number of delegations per delegator?
-	fn delegate(delegator: Self::AccountId, delegatee: Self::AccountId, value: Self::Balance) -> DispatchResult;
+	/// Delegate some funds to a new staker.
+	///
+	/// Similar to [`StakingInterface::bond`].
+	fn delegated_bond_new(
+		delegator: Self::AccountId,
+		delegatee: Self::AccountId,
+		value: Self::Balance,
+		payee: Self::AccountId,
+	) -> DispatchResult;
+
+	/// Delegate some funds or add to an existing staker.
+	///
+	/// Similar to [`StakingInterface::bond_extra`].
+	fn delegated_bond_extra(
+		delegator: Self::AccountId,
+		delegatee: Self::AccountId,
+		value: Self::Balance,
+	) -> DispatchResult;
+
+	/// Migrate to a delegation based stake.
+	///
+	/// Moves locked funds from the delegatee's account to the delegator's account and restake it as
+	/// a delegator.
+	fn delegated_bond_migrate(
+		delegator: Self::AccountId,
+		delegatee: Self::AccountId,
+		value: Self::Balance,
+	) -> DispatchResult;
+
+	/// Unbond some funds from a delegator.
+	///
+	/// Similar to [`StakingInterface::unbond`].
+	fn unbond(delegatee: &Self::AccountId, value: Self::Balance) -> DispatchResult;
+
 	/// Remove delegation of some or all funds.
-	fn remove_delegate(delegator: Self::AccountId, delegatee: Self::AccountId, value: Self::Balance) -> DispatchResult;
+	///
+	/// Similar to [`StakingInterface::withdraw_unbonded`].
+	fn undelegate_unbonded(
+		delegatee: Self::AccountId,
+		delegator: Self::AccountId,
+		value: Self::Balance,
+	) -> DispatchResult;
 }
 
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);

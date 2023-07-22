@@ -42,7 +42,7 @@ use sp_runtime::{
 use sp_staking::{
 	currency_to_vote::CurrencyToVote,
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	DelegationInterface, EraIndex, SessionIndex, Stake, StakingInterface,
+	DelegatedStakeInterface, EraIndex, SessionIndex, Stake, StakingInterface,
 };
 use sp_std::prelude::*;
 
@@ -55,6 +55,7 @@ delegation, election_size_tracker::StaticTracker, log, slashing, weights::Weight
 
 use super::{pallet::*, STAKING_ID};
 
+use crate::pallet::DELEGATING_ID;
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
 #[cfg(any(test, feature = "try-runtime"))]
@@ -1767,44 +1768,80 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 }
 
-impl<T: Config> DelegationInterface for Pallet<T> {
+impl<T: Config> DelegatedStakeInterface for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = BalanceOf<T>;
 
-	// lock + stake
-	fn delegate(
+	fn delegated_bond_new(
 		delegator: Self::AccountId,
 		delegatee: Self::AccountId,
 		value: Self::Balance,
+		payee: Self::AccountId,
 	) -> sp_runtime::DispatchResult {
 		let delegator_balance = T::Currency::free_balance(&delegator);
 		ensure!(value >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 		ensure!(delegator_balance >= value, Error::<T>::InsufficientBond);
+		let delegation: Delegation<T> =
+			Delegation::delegate(delegator.clone(), delegatee.clone(), value)?;
+		T::Currency::set_lock(
+			DELEGATING_ID,
+			&delegator,
+			delegation.delegator_balance(),
+			WithdrawReasons::all(),
+		);
 
-		let delegation = Delegation::get(delegator.clone(), delegatee.clone());
-		let existing_balance: BalanceOf<T> = delegation.map(|d: Delegation<T>| d.balance).unwrap_or_default();
-		let new_balance = existing_balance + value;
-
-		T::Currency::set_lock(STAKING_ID, &delegator, new_balance, WithdrawReasons::all());
-		// delegation.update_balance(new_balance);
-
-		// try lock value from delegator
-		// add to DelegationLedger and Delegations storage.
-		// stake value to delegatee
-		// delegation::new(delegator, delegatee, value).put();
-		Ok(())
+		Self::bond(
+			RawOrigin::Signed(delegatee.clone()).into(),
+			value,
+			RewardDestination::Account(payee.clone()),
+		)
 	}
 
-	// withdraw + unlock
-	fn remove_delegate(
-		_delegator: Self::AccountId,
+	// Just delegate balance.
+	fn delegated_bond_extra(
+		delegator: Self::AccountId,
+		delegatee: Self::AccountId,
+		extra: Self::Balance,
+	) -> sp_runtime::DispatchResult {
+		let delegator_balance = T::Currency::free_balance(&delegator);
+		ensure!(extra >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
+		ensure!(delegator_balance >= extra, Error::<T>::InsufficientBond);
+
+		let delegation: Delegation<T> =
+			Delegation::delegate(delegator.clone(), delegatee.clone(), extra)?;
+		T::Currency::set_lock(
+			DELEGATING_ID,
+			&delegator,
+			delegation.delegator_balance(),
+			WithdrawReasons::all(),
+		);
+
+		Self::bond_extra(RawOrigin::Signed(delegatee.clone()).into(), extra)
+	}
+
+	fn delegated_bond_migrate(
+		delegator: Self::AccountId,
+		delegatee: Self::AccountId,
+		value: Self::Balance,
+	) -> sp_runtime::DispatchResult {
+		// unlock current staking fund, transfer, lock with delegating id.
+		// should be no change in staking ledger. Need to create delegation.
+		todo!()
+	}
+
+	fn unbond(delegatee: &Self::AccountId, value: Self::Balance) -> sp_runtime::DispatchResult {
+		// should be exactly same as normal unbond.
+		todo!()
+	}
+
+	fn undelegate_unbonded(
 		_delegatee: Self::AccountId,
+		_delegator: Self::AccountId,
 		_value: Self::Balance,
 	) -> sp_runtime::DispatchResult {
-		// let delegation = delegation::get(delegator, delegatee);
-		// ensure!(value >= delegation.value, Error::<T>::InsufficientValue);
-		// try withdraw value from delegatee
-		// if successful, unlock value from delegator.
+		// similar to withdraw_unbonded, but with some differences since unlock will be for
+		// delegator.
+
 		todo!()
 	}
 }

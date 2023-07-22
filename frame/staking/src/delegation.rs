@@ -25,7 +25,9 @@ use crate::{Delegatee, Delegations, BalanceOf, Config};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
+use frame_support::dispatch::DispatchResult;
 use frame_support::traits::Defensive;
+use sp_runtime::DispatchError;
 
 /// A ledger of a delegator.
 ///
@@ -42,20 +44,41 @@ pub struct DelegationLedger<T: Config> {
 	pub pending_slash: BalanceOf<T>,
 }
 
+// Delegation state that is not saved yet in database.
+struct New;
+// Existing delegation state which contains information only about delegatee.
+struct OnlyDelegatee;
+// Delegation state which contains information about both delegator and delegatee.
+struct Full;
+
 pub struct Delegation<T: Config> {
-	pub ledger: DelegationLedger<T>,
-	pub delegator: T::AccountId,
-	pub delegatee: T::AccountId,
-	pub balance: BalanceOf<T>,
+	ledger: DelegationLedger<T>,
+	delegator: T::AccountId,
+	delegatee: T::AccountId,
+	delegator_balance: BalanceOf<T>,
+	// state: sp_std::marker::PhantomData<State>,
 }
 
 impl<T: Config> Delegation<T> {
 	/// The maximum number of delegators that can delegate to a single delegatee.
-	pub fn get(delegator: T::AccountId, delegatee: T::AccountId) -> Option<Self> {
-		let delegated_balance = Delegations::<T>::get(&delegator, &delegatee)?;
-		// since delegated balance exists, delegatee ledger must exist.
-		let ledger = Delegatee::<T>::get(&delegatee).defensive()?;
-
-		Some(Self { ledger, delegator, delegatee, balance: delegated_balance })
+	pub fn delegator_balance(self) -> BalanceOf<T> {
+		// let delegated_balance = Delegations::<T>::get(&delegator, &delegatee)?;
+		// // since delegated balance exists, delegatee ledger must exist.
+		// let ledger = Delegatee::<T>::get(&delegatee).defensive()?;
+		//
+		// Some(Self { ledger, delegator, delegatee, balance: delegated_balance })
+		todo!()
 	}
+
+	pub fn delegate(x: T::AccountId, x0: T::AccountId, value: BalanceOf<T>) -> Result<Self, DispatchError> {
+		// should only delegate to one account.
+		// A delegatee can't be delegator.
+		// A delegator can't be delegatee.
+
+		// let delegation = Delegation::get(delegator.clone(), delegatee.clone());
+		// let existing_balance: BalanceOf<T> = delegation.map(|d: Delegation<T>| d.balance).unwrap_or_default();
+		// let new_balance = existing_balance + value;
+		todo!()
+	}
+
 }
