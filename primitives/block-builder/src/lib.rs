@@ -49,7 +49,7 @@ sp_api::decl_runtime_apis! {
 		/// Check that the inherents are valid. The inherent data will vary from chain to chain.
 		fn check_inherents(block: Block, data: InherentData) -> CheckInherentsResult;
 
-		/// Called after inherents but before extrinsic application.
+		/// Called after inherents but before transaction application.
 		fn after_inherents();
 	}
 }
