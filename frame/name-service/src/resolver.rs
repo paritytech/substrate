@@ -28,7 +28,6 @@ impl<T: Config> NameServiceResolver<T> for Pallet<T> {
 	/// Set the native address associated with this name hash.
 	///
 	/// We allow a user to set this value without paying any additional deposits.
-	/// NOTE: do we want additional deposit here?. already deposited for the name hash itself.
 	fn set_address(
 		name_hash: NameHash,
 		address: T::AccountId,

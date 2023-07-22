@@ -73,11 +73,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		ensure!(!Commitments::<T>::contains_key(commitment_hash), Error::<T>::CommitmentExists);
 
-		let maybe_deposit = CommitmentDeposit::<T>::get();
-		ensure!(maybe_deposit.is_some(), Error::<T>::CommitmentsDisabled);
-
-		let deposit =
-			maybe_deposit.expect("commitment deposit has already been verified to exist, qed.");
+		let deposit = CommitmentDeposit::<T>::get().ok_or(Error::<T>::CommitmentsDisabled)?;
 
 		T::Currency::reserve(&depositor, deposit)?;
 
