@@ -22,16 +22,12 @@
 use super::*;
 use crate as pallet_name_service;
 use frame_support::{
-	parameter_types,
+	derive_impl, parameter_types,
 	traits::{ConstU32, ConstU64},
 	weights::Weight,
 	BoundedVec,
 };
-use sp_core::H256;
-use sp_runtime::{
-	traits::{BlakeTwo256, Identity, IdentityLookup},
-	BuildStorage,
-};
+use sp_runtime::{traits::Identity, BuildStorage};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -53,30 +49,18 @@ parameter_types! {
 		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::pallet::DefaultConfig)]
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Block = Block;
-	type BlockWeights = ();
-	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Hash = H256;
-	type Hashing = BlakeTwo256;
-	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
 	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ConstU64<250>;
-	type DbWeight = ();
-	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<AccountId>;
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
 	type Nonce = u64;
+	type BlockHashCount = ConstU64<250>;
+	type AccountData = pallet_balances::AccountData<AccountId>;
 }
 
 impl pallet_balances::Config for Test {
