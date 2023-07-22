@@ -1205,7 +1205,7 @@ mod tests {
 		})
 	}
 
-    #[cfg(not(feature = "disable-genesis-builder"))]
+	#[cfg(not(feature = "disable-genesis-builder"))]
 	mod genesis_builder_tests {
 		use super::*;
 		use crate::genesismap::GenesisStorageBuilder;
