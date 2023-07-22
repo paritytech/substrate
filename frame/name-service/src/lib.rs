@@ -31,7 +31,7 @@
 //! ## Key Terms
 //!
 //! * commitment: A hash that represents a commitment to purchase a name registration. Any account
-//!   //! can register a commitment by providing an owner address and a commitment hash - a
+//!   can register a commitment by providing an owner address and a commitment hash - a
 //!   bake2_256 hash of the desired name and a secret.
 //! * node: Either a to-level name hash or a subnode record that exists in the service registry.
 //! * name hash: A blake2_256 hash representation of a registered name.
