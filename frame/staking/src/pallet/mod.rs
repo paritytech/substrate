@@ -1240,7 +1240,7 @@ pub mod pallet {
 						PayoutDestination::Split((percent, account))
 					}
 				},
-				_ => payee,
+			PayoutDestination::Stake | PayoutDestination::Credit | PayoutDestination::Forgo => payee,
 			};
 
 			Payees::<T>::insert(stash.clone(), payee_final);
