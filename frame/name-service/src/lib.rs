@@ -61,7 +61,7 @@
 //!
 //! The name service does not handle routing transfers between paras, and assumes the UI will handle
 //! the resolution of public keys from name service nodes, and handle any teleporting required to
-//! transfer funds using the name service.. A future version of the name service could explore such
+//! transfer funds using the name service. A future version of the name service could explore such
 //! functionality.
 //!
 //! ## Usage
