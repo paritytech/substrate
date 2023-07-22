@@ -215,7 +215,18 @@ type Seed = [u8; SEED_SERIALIZED_LEN];
 /// Bandersnatch secret key.
 #[cfg(feature = "full_crypto")]
 #[derive(Clone)]
-pub struct Pair(SecretKey);
+pub struct Pair {
+	secret: SecretKey,
+	seed: Seed,
+}
+
+#[cfg(feature = "full_crypto")]
+impl Pair {
+	/// Get the key seed.
+	pub fn seed(&self) -> Seed {
+		self.seed
+	}
+}
 
 #[cfg(feature = "full_crypto")]
 impl TraitPair for Pair {
@@ -230,10 +241,10 @@ impl TraitPair for Pair {
 		if seed_slice.len() != SEED_SERIALIZED_LEN {
 			return Err(SecretStringError::InvalidSeedLength)
 		}
-		let mut seed_raw = [0; SEED_SERIALIZED_LEN];
-		seed_raw.copy_from_slice(seed_slice);
-		let secret = SecretKey::from_seed(&seed_raw);
-		Ok(Pair(secret))
+		let mut seed = [0; SEED_SERIALIZED_LEN];
+		seed.copy_from_slice(seed_slice);
+		let secret = SecretKey::from_seed(&seed);
+		Ok(Pair { secret, seed })
 	}
 
 	/// Derive a child key from a series of given (hard) junctions.
@@ -244,24 +255,24 @@ impl TraitPair for Pair {
 		path: Iter,
 		_seed: Option<Seed>,
 	) -> Result<(Pair, Option<Seed>), DeriveError> {
-		let derive_hard_junction = |secret_seed, cc| -> Seed {
-			("bandersnatch-vrf-HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
+		let derive_hard = |seed, cc| -> Seed {
+			("bandersnatch-vrf-HDKD", seed, cc).using_encoded(sp_core_hashing::blake2_256)
 		};
 
-		// TODO @burdges : probably we need a serializable dleq_vrf::SecretKey to initialize acc
-		let mut acc = [0; 32];
-		for j in path {
-			match j {
-				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
-				DeriveJunction::Hard(cc) => acc = derive_hard_junction(acc, cc),
+		let mut seed = self.seed();
+		for p in path {
+			if let DeriveJunction::Hard(cc) = p {
+				seed = derive_hard(seed, cc);
+			} else {
+				return Err(DeriveError::SoftKeyInPath)
 			}
 		}
-		Ok((Self::from_seed(&acc), Some(acc)))
+		Ok((Self::from_seed(&seed), Some(seed)))
 	}
 
 	/// Get the public key.
 	fn public(&self) -> Public {
-		let public = self.0.to_public();
+		let public = self.secret.to_public();
 		let mut raw = [0; PUBLIC_SERIALIZED_LEN];
 		public
 			.serialize_compressed(raw.as_mut_slice())
@@ -287,8 +298,7 @@ impl TraitPair for Pair {
 
 	/// Return a vector filled with seed raw data.
 	fn to_raw_vec(&self) -> Vec<u8> {
-		// TODO @burdges: for this we need a serializable dleq_vrfs::SecretKey
-		unimplemented!()
+		self.seed().to_vec()
 	}
 }
 
@@ -323,7 +333,7 @@ pub mod vrf {
 		///
 		/// Each message tuple has the form: message_data := (sub-domain, data).
 		pub fn new(domain: &'static [u8], message_data: &[(&[u8], &[u8])]) -> Self {
-			// ⚠️ TODO @davxy @burdges (temporary hack and probably needs to be fixed)
+			// TODO @burdges (temporary hack?)
 			// In sassafras we want to construct a single `VrfInput` from multiple datas
 			// E.g. the ticket score uses: epoch-randomness, attempt-index, epoch-index
 			// Currently, `bandersnatch_vrfs::Message` has a single (domain, data) fields,
@@ -474,7 +484,7 @@ pub mod vrf {
 		}
 
 		fn vrf_output(&self, input: &Self::VrfInput) -> Self::VrfOutput {
-			let output = self.0 .0.vrf_preout(&input.0);
+			let output = self.secret.0.vrf_preout(&input.0);
 			VrfOutput(output)
 		}
 	}
@@ -510,11 +520,11 @@ pub mod vrf {
 			let ios: Vec<_> = data
 				.vrf_inputs
 				.iter()
-				.map(|i| self.0.clone().0.vrf_inout(i.0.clone()))
+				.map(|i| self.secret.clone().0.vrf_inout(i.0.clone()))
 				.collect();
 
 			let signature: ThinVrfSignature<N> =
-				self.0.sign_thin_vrf(data.transcript.clone(), ios.as_slice());
+				self.secret.sign_thin_vrf(data.transcript.clone(), ios.as_slice());
 
 			let mut sign_bytes = [0; SIGNATURE_SERIALIZED_LEN];
 			signature
@@ -534,7 +544,7 @@ pub mod vrf {
 			input: &VrfInput,
 		) -> [u8; N] {
 			let transcript = Transcript::new_labeled(context);
-			let inout = self.0.clone().0.vrf_inout(input.0.clone());
+			let inout = self.secret.clone().0.vrf_inout(input.0.clone());
 			inout.vrf_output_bytes(transcript)
 		}
 	}
@@ -710,11 +720,11 @@ pub mod ring_vrf {
 			let ios: Vec<_> = data
 				.vrf_inputs
 				.iter()
-				.map(|i| self.0.clone().0.vrf_inout(i.0.clone()))
+				.map(|i| self.secret.clone().0.vrf_inout(i.0.clone()))
 				.collect();
 
 			let ring_signature: bandersnatch_vrfs::RingVrfSignature<N> =
-				self.0.sign_ring_vrf(data.transcript.clone(), ios.as_slice(), prover);
+				self.secret.sign_ring_vrf(data.transcript.clone(), ios.as_slice(), prover);
 
 			let outputs: Vec<_> = ring_signature.preoutputs.into_iter().map(VrfOutput).collect();
 			let outputs = VrfIosVec::truncate_from(outputs);
@@ -814,11 +824,14 @@ mod tests {
 	}
 
 	#[test]
-	fn derive_hard_known_pair() {
-		let pair = Pair::from_string(&format!("{}//Alice", DEV_PHRASE), None).unwrap();
-		// known address of DEV_PHRASE
-		let known = h2b("646b261d8058ba8a3c4ebe152dc837fb2259433270dd5bdc79095874cc78b62f00");
+	fn derive_works() {
+		let pair = Pair::from_string(&format!("{}//Alice//Hard", DEV_PHRASE), None).unwrap();
+		let known = h2b("2b340c18b94dc1916979cb83daf3ed4ac106742ddc06afc42cf26be3b18a523f80");
 		assert_eq!(pair.public().as_ref(), known);
+
+		// Soft derivation not supported
+		let res = Pair::from_string(&format!("{}//Alice/Soft", DEV_PHRASE), None);
+		assert!(res.is_err());
 	}
 
 	#[test]
