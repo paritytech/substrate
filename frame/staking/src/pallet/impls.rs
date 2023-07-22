@@ -685,7 +685,13 @@ impl<T: Config> Pallet<T> {
 		<Bonded<T>>::remove(stash);
 		<Ledger<T>>::remove(&controller);
 
-		<Payees<T>>::remove(stash);
+		// NOTE: Checks both `Payees` and `Payee` records during migration period.
+		if Payees::<T>::contains_key(&stash) {
+			Payees::<T>::remove(stash);
+		} else {
+			Payee::<T>::remove(stash);
+		}
+
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
 

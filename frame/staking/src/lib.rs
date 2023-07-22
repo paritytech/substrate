@@ -389,13 +389,13 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 /// been lazily migrated to this enum.
 #[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PayoutDestination<AccountId> {
-	/// Pay into the stash account and add to bond.
+	/// Deposit payout into the stash account and add to bond.
 	Stake,
-	/// Pay the specified percentage to the specified account as free balance, and pay the rest, if
-	/// any, into the stash account and add to bond. 0% and 100% should be disallowed and handled
-	/// as `Stake` and `Free` respectively.
+	/// Deposit the specified percentage of payout to the specified account as free balance, and
+	/// pay the rest, if any, into the stash account and add to bond. 0% and 100% should be
+	/// disallowed and handled as `Stake` and `Free` respectively.
 	Split((Perbill, AccountId)),
-	/// Credit an account as free balance.
+	/// Deposit payout as free balance to an account.
 	Credit(AccountId),
 	/// Receive no payout.
 	Forgo,

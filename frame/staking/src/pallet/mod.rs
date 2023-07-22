@@ -337,8 +337,13 @@ pub mod pallet {
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	#[pallet::getter(fn payees)]
-	pub type Payees<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, PayoutDestination<T::AccountId>, ValueQuery>;
+	pub type Payees<T: Config> = CountedStorageMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		PayoutDestination<T::AccountId>,
+		ValueQuery,
+	>;
 
 	/// The map from (wannabe) validator stash key to the preferences of that validator.
 	///
@@ -1833,6 +1838,7 @@ pub mod pallet {
 				stash.clone(),
 				Payee::<T>::get(&stash).to_payout_destination(stash.clone(), controller),
 			);
+			Payee::<T>::remove(&stash);
 
 			Ok(Pays::No.into())
 		}
