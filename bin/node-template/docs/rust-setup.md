@@ -91,12 +91,11 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 ```
 
-Configure the Rust toolchain to default to the latest stable version, add nightly and the nightly wasm target:
+Configure the Rust toolchain to default to the latest stable version, and add the wasm target:
 
 ```bash
 rustup default stable
 rustup update
-rustup update nightly
 rustup target add wasm32-unknown-unknown
 ```
 
@@ -159,16 +158,13 @@ compile Substrate runtime code to the Wasm target.
 > There are upstream issues in Rust that need to be resolved before all of Substrate can use the stable Rust toolchain.
 > [This is our tracking issue](https://github.com/paritytech/substrate/issues/1252) if you're curious as to why and how this will be resolved.
 
-#### Latest nightly for Substrate `master`
+#### Latest for Substrate `master`
 
 Developers who are building Substrate _itself_ should always use the latest bug-free versions of
-Rust stable and nightly. This is because the Substrate codebase follows the tip of Rust nightly,
-which means that changes in Substrate often depend on upstream changes in the Rust nightly compiler.
-To ensure your Rust compiler is always up to date, you should run:
+Rust stable. To ensure your Rust compiler is always up to date, you should run:
 
 ```bash
 rustup update
-rustup update nightly
 rustup target add wasm32-unknown-unknown
 ```
 
@@ -179,15 +175,21 @@ rustup target add wasm32-unknown-unknown
 > Be sure to [specify your nightly version](#specifying-nightly-version) if you get WASM build errors
 > from `rustup` and [downgrade nightly as needed](#downgrading-rust-nightly).
 
-#### Rust nightly toolchain
+#### Rust toolchain
 
-If you want to guarantee that your build works on your computer as you update Rust and other
-dependencies, you should use a specific Rust nightly version that is known to be
-compatible with the version of Substrate they are using; this version will vary from project to
-project and different projects may use different mechanisms to communicate this version to
-developers. For instance, the Polkadot client specifies this information in its
-[release notes](https://github.com/paritytech/polkadot/releases).
+If you want to guarantee that your build works on your computer as you update Rust and other dependencies, 
+you should use a specific Rust stable version that is known to be compatible with the version of Substrate 
+they are using; this version will vary from project to project, and different projects may use different 
+mechanisms to communicate this version to developers. For instance, the Polkadot client specifies 
+this information in its [release notes](https://github.com/paritytech/polkadot/releases).
 
+In case you need to specify a specific stable version of Rust, you can use rustup override command as follows:
+```bash
+# Specify the specific stable toolchain version in the command below:
+rustup override set stable-<version>
+```
+
+For older versions of our project that use Rust nightly, you can still specify a version in the following way:
 ```bash
 # Specify the specific nightly toolchain in the date below:
 rustup install nightly-<yyyy-MM-dd>
@@ -195,31 +197,38 @@ rustup install nightly-<yyyy-MM-dd>
 
 #### Wasm toolchain
 
-Now, configure the nightly version to work with the Wasm compilation target:
+Now, configure the stable version to work with the Wasm compilation target:
 
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
 
-### Specifying nightly version
+### Specifying Rust version
 
-Use the `WASM_BUILD_TOOLCHAIN` environment variable to specify the Rust nightly version a Substrate
-project should use for Wasm compilation:
+Use the WASM_BUILD_TOOLCHAIN environment variable to specify the Rust stable version a Substrate project
+ should use for Wasm compilation:
 
 ```bash
-WASM_BUILD_TOOLCHAIN=nightly-<yyyy-MM-dd> cargo build --release
+WASM_BUILD_TOOLCHAIN=stable-<version> cargo build --release
 ```
 
-> Note that this only builds _the runtime_ with the specified nightly. The rest of project will be
-> compiled with **your default toolchain**, i.e. the latest installed stable toolchain.
-
-### Downgrading Rust nightly
-
-If your computer is configured to use the latest Rust nightly and you would like to downgrade to a
-specific nightly version, follow these steps:
+Replace <version> with the desired version number. For example, if you want to use Rust 1.52.1, 
+you would enter:
 
 ```bash
-rustup uninstall nightly
-rustup install nightly-<yyyy-MM-dd>
+WASM_BUILD_TOOLCHAIN=stable-1.52.1 cargo build --release
+```
+
+> Note: This only builds the runtime with the specified stable Rust. The rest of the project will be compiled 
+> with your default toolchain, i.e. the latest installed stable toolchain.
+
+### Changing Rust version
+
+If your computer is configured to use a different version of Rust and you would like to change to a 
+specific stable version, follow these steps:
+
+```bash
+rustup uninstall stable
+rustup install stable-<version>
 rustup target add wasm32-unknown-unknown
 ```
