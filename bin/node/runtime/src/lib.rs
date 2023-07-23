@@ -1910,7 +1910,7 @@ impl CoretimeInterface for CoretimeProvider {
 		Some(CoreCount::get())
 	}
 	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
-		None
+		Some((10u32.into(), 0u32.into()))
 	}
 }
 

@@ -649,13 +649,17 @@ mod benches {
 		Ok(())
 	}
 
-	// Todo: Update Coretime implementation for worst case
+	// Todo: Fix conditions for worst case
 	#[benchmark]
 	fn process_revenue() {
 		#[block]
 		{
 			Broker::<T>::process_revenue();
 		}
+
+		assert_last_event::<T>(
+			Event::HistoryDropped { when: 5u32.into(), revenue: 0u32.into() }.into(),
+		);
 	}
 
 	#[benchmark]
