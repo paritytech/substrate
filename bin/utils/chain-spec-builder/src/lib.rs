@@ -21,7 +21,8 @@
 //! A chain-spec is short for `chain-configuration`. See the [`sc-chain-spec`] for more information.
 //!
 //! Note that this binary is analogous to the `build-spec` subcommand, contained in typical
-//! substrate-based nodes. See [`node-cli`] for more information.
+//! substrate-based nodes. This particular binary is capable of building a more sophisticated chain
+//! specification that can be used with the substrate-node, ie. [`node-cli`].
 //!
 //! See [`ChainSpecBuilder`] for a list of available commands.
 //!

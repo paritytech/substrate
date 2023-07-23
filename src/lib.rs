@@ -127,12 +127,13 @@
 //!
 //! * [`node`] is an extensive substrate node that contains the superset of all runtime and client
 //!   side features. The corresponding runtime, called [`kitchensink_runtime`] contains all of the
-//!   modules that are provided with `FRAME`. This node and runtime is only used for testing.
+//!   modules that are provided with `FRAME`. This node and runtime is only used for testing and
+//!   demonstration.
+//!     * [`chain-spec-builder`]: Utility to build more detailed chain-specs for the aforementioned
+//!       node. Other projects typically contain a `build-spec` subcommand that does the same.
 //! * [`node-template`]: a template node that contains a minimal set of features and can act as a
 //!   starting point of a project.
 //! * [`subkey`]: Substrate's key management utility.
-//! * [`chain-spec-builder`]: Substrate's utility to build *chain specifications*. Such
-//!   specifications can then be used with `--chain` argument of a typical substrate node's CLI.
 //!
 //! ### Anatomy of a Binary Crate
 //!
