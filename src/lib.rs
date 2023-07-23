@@ -107,10 +107,11 @@
 //!
 //! ### Wasm Build
 //!
-//! Many of the Substrate crates, such as entire `sp-*`, need to compile to both Wasm (when a Wasm runtiem is being generated) and native
-///! (for example, when testing). To achive this, Substrate follows the convention of the Rust
-//! community, and uses a `feature = "std"` to signify that a crate is being built with the standard
-//!  library, and is built for native. Otherwise, it is built for `no_std`.
+//! Many of the Substrate crates, such as entire `sp-*`, need to compile to both Wasm (when a Wasm
+//! runtime is being generated) and native ! (for example, when testing). To achieve this, Substrate
+//! follows the convention of the Rust community, and uses a `feature = "std"` to signify that a
+//!  crate is being built with the standard library, and is built for native. Otherwise, it is built
+//!  for `no_std`.
 //!
 //! This can be summarized in `#![cfg_attr(not(feature = "std"), no_std)]`, which you can often find
 //! in any Substrate-based runtime.
