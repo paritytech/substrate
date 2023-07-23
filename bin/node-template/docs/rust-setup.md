@@ -169,8 +169,9 @@ rustup target add wasm32-unknown-unknown
 ```
 
 > NOTE: It may be necessary to occasionally rerun `rustup update` if a change in the upstream Substrate
-> codebase depends on a new feature of the Rust compiler. When you do this, both your toolchain will be pulled 
-> to the most recent release.
+> codebase depends on a new feature of the Rust compiler. When you do this, your toolchain will be updated 
+> to the most recent stable release. Be sure to specify your stable Rust version if you get WASM build errors 
+> from rustup, and switch to an older stable version as needed.
 > Be sure to [specify your nightly version](#specifying-nightly-version) if you get WASM build errors
 > from `rustup` and [downgrade nightly as needed](#downgrading-rust-nightly).
 
