@@ -23,7 +23,10 @@ use crate::{CoreAssignment::Task, Pallet as Broker};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	storage::bounded_vec::BoundedVec,
-	traits::{fungible::Mutate, EnsureOrigin, Hooks},
+	traits::{
+		fungible::{Inspect, Mutate},
+		EnsureOrigin, Hooks,
+	},
 };
 use frame_system::{Pallet as System, RawOrigin};
 use sp_arithmetic::Perbill;
@@ -225,7 +228,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller.clone()), 10u32.into());
@@ -251,7 +257,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 20u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(20u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -277,7 +286,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -307,7 +319,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -336,7 +351,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -369,7 +387,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -401,7 +422,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -434,7 +458,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -470,7 +497,11 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 30u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
+		T::Currency::set_balance(&Broker::<T>::account_id(), T::Currency::minimum_balance());
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -499,7 +530,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -527,7 +561,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
