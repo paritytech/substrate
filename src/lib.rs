@@ -200,7 +200,7 @@
 //! [`node`]: ../node_cli/index.html
 //! [`node-template`]: ../node_template/index.html
 //! [`kitchensink_runtime`]: ../kitchensink_runtime/index.html
-//! [`subkey`]: ..//subkey/index.html
+//! [`subkey`]: ../subkey/index.html
 //! [`chain-spec-builder`]: ../chain_spec_builder/index.html
 
 #![deny(rustdoc::broken_intra_doc_links)]
