@@ -499,7 +499,7 @@ mod benches {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::set_balance(
 			&caller.clone(),
-			T::Currency::minimum_balance().saturating_add(10u32.into()),
+			T::Currency::minimum_balance().saturating_add(30u32.into()),
 		);
 		T::Currency::set_balance(&Broker::<T>::account_id(), T::Currency::minimum_balance());
 
@@ -647,6 +647,15 @@ mod benches {
 		assert_last_event::<T>(Event::CoreCountChanged { core_count }.into());
 
 		Ok(())
+	}
+
+	// Todo: Update Coretime implementation for worst case
+	#[benchmark]
+	fn process_revenue() {
+		#[block]
+		{
+			Broker::<T>::process_revenue();
+		}
 	}
 
 	#[benchmark]
