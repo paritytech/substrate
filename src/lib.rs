@@ -119,6 +119,22 @@
 //! * [`chain-spec-builder`]: Substrate's utility to build *chain specifications*. Such
 //!   specifications can then be used with `--chain` argument of a typical substrate node's CLI.
 //!
+//! #### Anatomy of a Binary Crate
+//!
+//! From the above, [`node`] and [`node-template`] are essentially blueprints of a substrate-based
+//! project, as the name of the latter is implying. Each substrate-based project typically contains
+//! the following:
+//!
+//! * Under `./runtime`, a `./runtime/src/lib.rs` which is the top level runtime amalgamator file.
+//!   This file typically contains the [`frame_support::construct_runtime`] macro, which is the
+//!   final definition of a runtime.
+//!
+//! * Under `./node`, a `main.rs`, which is the point, and a `./service.rs`, which contains all the
+//!   client side components. Skimming this file yield an overview of the networking, database,
+//!   consensus and similar client side components.
+//!
+//! > The above two are conventions, not rules.
+//!
 //! ## Parachain?
 //!
 //! As noted above, Substrate is the main engine behind the Polkadot ecosystem. One of the ways
@@ -132,7 +148,7 @@
 //!
 //! Additional noteworthy crates within substrate:
 //!
-//! - RPC APIs of a Substrate node: [`sc-rpc-api`]
+//! - RPC APIs of a Substrate node: [`sc-rpc-api`]/[`sc-rpc`]
 //! - CLI Options of a Substrate node: [`sc-cli`]
 //! - All of the consensus related crates provided by Substrate:
 //!     - [`sc-consensus-aura`]
@@ -151,6 +167,7 @@
 //!
 //! Notable upstream crates:
 //!
+//! - [`parity-scale-codec`](https://github.com/paritytech/parity-scale-codec)
 //! - [`parity-db`](https://github.com/paritytech/parity-db)
 //! - [`trie`](https://github.com/paritytech/trie)
 //! - [`parity-common`](https://github.com/paritytech/parity-common)
@@ -172,6 +189,7 @@
 //! [`sc-client-db`]: ../sc_client_db/index.html
 //! [`sc-network`]: ../sc_network/index.html
 //! [`sc-rpc-api`]: ../sc_rpc_api/index.html
+//! [`sc-rpc`]: ../sc_rpc/index.html
 //! [`sc-cli`]: ../sc_cli/index.html
 //! [`sc-consensus-aura`]: ../sc_consensus_aura/index.html
 //! [`sc-consensus-babe`]: ../sc_consensus_babe/index.html
@@ -183,7 +201,7 @@
 //! [`node-template`]: ../node_template/index.html
 //! [`kitchensink_runtime`]: ../kitchensink_runtime/index.html
 //! [`subkey`]: ..//subkey/index.html
-//! [`chian-spec-builder`]: ../chain_spec_builder/index.html
+//! [`chain-spec-builder`]: ../chain_spec_builder/index.html
 
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(rustdoc::private_intra_doc_links)]
