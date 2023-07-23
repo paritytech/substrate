@@ -83,7 +83,7 @@ or
 
 If a specific rust is installed with `rustup`, it is important that the wasm target is
 installed as well. For example if installing the rust from 20.02.2020 using `rustup
-install nightly-2020-02-20`, the wasm target needs to be installed as well `rustup target add
-wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
+install`, the wasm target needs to be installed as well `rustup target add
+wasm32-unknown-unknown.
 
 License: Apache-2.0

@@ -97,7 +97,7 @@ Configure the Rust toolchain to default to the latest stable version, add nightl
 rustup default stable
 rustup update
 rustup update nightly
-rustup target add wasm32-unknown-unknown --toolchain nightly
+rustup target add wasm32-unknown-unknown
 ```
 
 ## Test your set-up
@@ -169,7 +169,7 @@ To ensure your Rust compiler is always up to date, you should run:
 ```bash
 rustup update
 rustup update nightly
-rustup target add wasm32-unknown-unknown --toolchain nightly
+rustup target add wasm32-unknown-unknown
 ```
 
 > NOTE: It may be necessary to occasionally rerun `rustup update` if a change in the upstream Substrate
@@ -198,7 +198,7 @@ rustup install nightly-<yyyy-MM-dd>
 Now, configure the nightly version to work with the Wasm compilation target:
 
 ```bash
-rustup target add wasm32-unknown-unknown --toolchain nightly-<yyyy-MM-dd>
+rustup target add wasm32-unknown-unknown
 ```
 
 ### Specifying nightly version
@@ -221,5 +221,5 @@ specific nightly version, follow these steps:
 ```bash
 rustup uninstall nightly
 rustup install nightly-<yyyy-MM-dd>
-rustup target add wasm32-unknown-unknown --toolchain nightly-<yyyy-MM-dd>
+rustup target add wasm32-unknown-unknown
 ```
