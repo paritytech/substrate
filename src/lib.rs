@@ -145,7 +145,7 @@
 //!   final definition of a runtime.
 //!
 //! * Under `./node`, a `main.rs`, which is the point, and a `./service.rs`, which contains all the
-//!   client side components. Skimming this file yield an overview of the networking, database,
+//!   client side components. Skimming this file yields an overview of the networking, database,
 //!   consensus and similar client side components.
 //!
 //! > The above two are conventions, not rules.
