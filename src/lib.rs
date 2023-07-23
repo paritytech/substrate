@@ -105,6 +105,20 @@
 //! * `pallet-*` and `frame-*` crates, located under `./frame` folder. These are the crates related
 //!   to FRAME. See [`frame_support`] for more information.
 //!
+//! ### Wasm Build
+//!
+//! Many of the Substrate crates, such as entire `sp-*`, need to compile to both Wasm (when a Wasm runtiem is being generated) and native
+///! (for example, when testing). To achive this, Substrate follows the convention of the Rust
+//! community, and uses a `feature = "std"` to signify that a crate is being built with the standard
+//!  library, and is built for native. Otherwise, it is built for `no_std`.
+//!
+//! This can be summarized in `#![cfg_attr(not(feature = "std"), no_std)]`, which you can often find
+//! in any Substrate-based runtime.
+//!
+//! Substrate-based runtimes use [`substrate-wasm-builder`] in their `build.rs` to automatically
+//! build their Wasm files as a part of normal build commandsOnce built, the wasm file is placed in
+//! `./target/{debug|release}/wbuild/{runtime_name}.wasm`.
+//!
 //! ### Binaries
 //!
 //! Multiple binaries are shipped with substrate, the most important of which are located in the
@@ -119,7 +133,7 @@
 //! * [`chain-spec-builder`]: Substrate's utility to build *chain specifications*. Such
 //!   specifications can then be used with `--chain` argument of a typical substrate node's CLI.
 //!
-//! #### Anatomy of a Binary Crate
+//! ### Anatomy of a Binary Crate
 //!
 //! From the above, [`node`] and [`node-template`] are essentially blueprints of a substrate-based
 //! project, as the name of the latter is implying. Each substrate-based project typically contains
@@ -202,6 +216,7 @@
 //! [`kitchensink_runtime`]: ../kitchensink_runtime/index.html
 //! [`subkey`]: ../subkey/index.html
 //! [`chain-spec-builder`]: ../chain_spec_builder/index.html
+//! [`substrate-wasm-builder`]: https://crates.io/crates/substrate-wasm-builder
 
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(rustdoc::private_intra_doc_links)]
