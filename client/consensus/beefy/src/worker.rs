@@ -30,7 +30,7 @@ use crate::{
 	round::{Rounds, VoteImportResult},
 	BeefyVoterLinks, LOG_TARGET,
 };
-use codec::{Codec, Decode, Encode};
+use codec::{Codec, Decode, DecodeAll, Encode};
 use futures::{stream::Fuse, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
@@ -810,7 +810,7 @@ where
 			self.gossip_engine
 				.messages_for(votes_topic::<B>())
 				.filter_map(|notification| async move {
-					let vote = GossipMessage::<B>::decode(&mut &notification.message[..])
+					let vote = GossipMessage::<B>::decode_all(&mut &notification.message[..])
 						.ok()
 						.and_then(|message| message.unwrap_vote());
 					trace!(target: LOG_TARGET, "🥩 Got vote message: {:?}", vote);
@@ -822,7 +822,7 @@ where
 			self.gossip_engine
 				.messages_for(proofs_topic::<B>())
 				.filter_map(|notification| async move {
-					let proof = GossipMessage::<B>::decode(&mut &notification.message[..])
+					let proof = GossipMessage::<B>::decode_all(&mut &notification.message[..])
 						.ok()
 						.and_then(|message| message.unwrap_finality_proof());
 					trace!(target: LOG_TARGET, "🥩 Got gossip proof message: {:?}", proof);

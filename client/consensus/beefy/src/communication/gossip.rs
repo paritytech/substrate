@@ -23,7 +23,7 @@ use sc_network_gossip::{MessageIntent, ValidationResult, Validator, ValidatorCon
 use sp_core::hashing::twox_64;
 use sp_runtime::traits::{Block, Hash, Header, NumberFor};
 
-use codec::{Decode, Encode};
+use codec::{Decode, DecodeAll, Encode};
 use log::{debug, trace};
 use parking_lot::{Mutex, RwLock};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -374,7 +374,7 @@ where
 		mut data: &[u8],
 	) -> ValidationResult<B::Hash> {
 		let raw = data;
-		let action = match GossipMessage::<B>::decode(&mut data) {
+		let action = match GossipMessage::<B>::decode_all(&mut data) {
 			Ok(GossipMessage::Vote(msg)) => self.validate_vote(msg, sender, raw),
 			Ok(GossipMessage::FinalityProof(proof)) => self.validate_finality_proof(proof, sender),
 			Err(e) => {
@@ -402,7 +402,7 @@ where
 
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
 		let filter = self.gossip_filter.read();
-		Box::new(move |_topic, mut data| match GossipMessage::<B>::decode(&mut data) {
+		Box::new(move |_topic, mut data| match GossipMessage::<B>::decode_all(&mut data) {
 			Ok(GossipMessage::Vote(msg)) => {
 				let round = msg.commitment.block_number;
 				let set_id = msg.commitment.validator_set_id;
@@ -446,7 +446,7 @@ where
 				return do_rebroadcast
 			}
 
-			match GossipMessage::<B>::decode(&mut data) {
+			match GossipMessage::<B>::decode_all(&mut data) {
 				Ok(GossipMessage::Vote(msg)) => {
 					let round = msg.commitment.block_number;
 					let set_id = msg.commitment.validator_set_id;
