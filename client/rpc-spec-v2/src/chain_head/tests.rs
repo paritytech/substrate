@@ -606,7 +606,6 @@ async fn get_storage_hash() {
 	let child_info = hex_string(&CHILD_STORAGE_KEY);
 	let genesis_hash = format!("{:?}", client.genesis_hash());
 	let expected_hash = format!("{:?}", Blake2Hasher::hash(&CHILD_VALUE));
-	println!("Expe: {:?}", expected_hash);
 	let mut sub = api
 		.subscribe(
 			"chainHead_unstable_storage",
@@ -621,6 +620,96 @@ async fn get_storage_hash() {
 		.unwrap();
 	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash));
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
+}
+
+#[tokio::test]
+async fn get_storage_multi_query_iter() {
+	let (mut client, api, mut block_sub, sub_id, _) = setup_api().await;
+	let key = hex_string(&KEY);
+
+	// Import a new block with storage changes.
+	let mut builder = client.new_block(Default::default()).unwrap();
+	builder.push_storage_change(KEY.to_vec(), Some(VALUE.to_vec())).unwrap();
+	let block = builder.build().unwrap().block;
+	let block_hash = format!("{:?}", block.header.hash());
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	// Ensure the imported block is propagated and pinned for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	// Valid call with storage at the key.
+	let expected_hash = format!("{:?}", Blake2Hasher::hash(&VALUE));
+	let expected_value = hex_string(&VALUE);
+	let mut sub = api
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&block_hash,
+				vec![
+					StorageQuery {
+						key: key.clone(),
+						queue_type: StorageQueryType::DescendantsHashes
+					},
+					StorageQuery {
+						key: key.clone(),
+						queue_type: StorageQueryType::DescendantsValues
+					}
+				]
+			],
+		)
+		.await
+		.unwrap();
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 2 &&
+		res.items[0].key == key &&
+		res.items[1].key == key &&
+		res.items[0].result == StorageResultType::Hash(expected_hash) &&
+		res.items[1].result == StorageResultType::Value(expected_value));
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Done);
+
+	// Child value set in `setup_api`.
+	let child_info = hex_string(&CHILD_STORAGE_KEY);
+	let genesis_hash = format!("{:?}", client.genesis_hash());
+	let expected_hash = format!("{:?}", Blake2Hasher::hash(&CHILD_VALUE));
+	let expected_value = hex_string(&CHILD_VALUE);
+	let mut sub = api
+		.subscribe(
+			"chainHead_unstable_storage",
+			rpc_params![
+				&sub_id,
+				&genesis_hash,
+				vec![
+					StorageQuery {
+						key: key.clone(),
+						queue_type: StorageQueryType::DescendantsHashes
+					},
+					StorageQuery {
+						key: key.clone(),
+						queue_type: StorageQueryType::DescendantsValues
+					}
+				],
+				&child_info
+			],
+		)
+		.await
+		.unwrap();
+	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 2 &&
+		res.items[0].key == key &&
+		res.items[1].key == key &&
+		res.items[0].result == StorageResultType::Hash(expected_hash) &&
+		res.items[1].result == StorageResultType::Value(expected_value));
 	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 }
