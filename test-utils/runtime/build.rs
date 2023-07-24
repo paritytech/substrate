@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+const BUILD_NO_GENESIS_BUILDER_SUPPORT_ENV: &str = "BUILD_NO_GENESIS_BUILDER_SUPPORT";
+
 fn main() {
 	#[cfg(feature = "std")]
 	{
@@ -30,7 +32,7 @@ fn main() {
 	}
 
 	#[cfg(feature = "std")]
-	if std::env::var("BUILD_NO_GENESIS_BUILDER_SUPPORT").is_ok() {
+	if std::env::var(BUILD_NO_GENESIS_BUILDER_SUPPORT_ENV).is_ok() {
 		substrate_wasm_builder::WasmBuilder::new()
 			.with_current_project()
 			.export_heap_base()
@@ -40,6 +42,7 @@ fn main() {
 			.enable_feature("disable-genesis-builder")
 			.build();
 	}
+	println!("cargo:rerun-if-env-changed={}", BUILD_NO_GENESIS_BUILDER_SUPPORT_ENV);
 
 	#[cfg(feature = "std")]
 	{
