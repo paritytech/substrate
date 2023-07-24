@@ -40,11 +40,12 @@ log = { version = "0.4.17", default-features = false }
 sp-core-hashing-proc-macro = { version = "9.0.0", path = "../../primitives/core/hashing/proc-macro" }
 k256 = { version = "0.13.0", default-features = false, features = ["ecdsa"] }
 environmental = { version = "1.1.4", default-features = false }
+sp-genesis-builder = { version = "0.1.0", default-features=false, path = "../../primitives/genesis-builder" }
+serde_json = { version = "1.0.85", default-features = false, features = ["alloc"] }
 
 aquamarine = { version = "0.3.2" }
 
 [dev-dependencies]
-serde_json = "1.0.85"
 assert_matches = "1.3.0"
 pretty_assertions = "1.2.1"
 frame-system = { version = "4.0.0-dev", path = "../system" }
@@ -72,6 +73,7 @@ std = [
 	"frame-support-procedural/std",
 	"log/std",
 	"environmental/std",
+	"sp-genesis-builder/std"
 ]
 runtime-benchmarks = [
 	"frame-system/runtime-benchmarks",

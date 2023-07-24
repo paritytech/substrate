@@ -2865,6 +2865,7 @@ dependencies = [
  "sp-core",
  "sp-core-hashing-proc-macro",
  "sp-debug-derive",
+ "sp-genesis-builder",
  "sp-inherents",
  "sp-io",
  "sp-runtime",
@@ -3914,6 +3915,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f37a4a5928311ac501dee68b3c7613a1037d0edb30c8e5427bd832d55d1b790"
 dependencies = [
  "wasm-bindgen",
+]
+
+[[package]]
+name = "json-patch"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f54898088ccb91df1b492cc80029a6fdf1c48ca0db7c6822a8babad69c94658"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -12153,6 +12165,7 @@ dependencies = [
  "frame-system",
  "frame-system-rpc-runtime-api",
  "futures",
+ "json-patch",
  "log",
  "pallet-babe",
  "pallet-balances",
@@ -12160,8 +12173,11 @@ dependencies = [
  "parity-scale-codec",
  "sc-block-builder",
  "sc-executor",
+ "sc-executor-common",
  "sc-service",
  "scale-info",
+ "serde",
+ "serde_json",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
@@ -12171,6 +12187,7 @@ dependencies = [
  "sp-consensus-grandpa",
  "sp-core",
  "sp-externalities",
+ "sp-genesis-builder",
  "sp-inherents",
  "sp-io",
  "sp-keyring",

@@ -87,7 +87,7 @@
 
 use ahash::{AHashMap, AHashSet};
 use log::{debug, trace};
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, DecodeAll, Encode};
 use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 use rand::seq::SliceRandom;
 use sc_network::{PeerId, ReputationChange};
@@ -546,9 +546,8 @@ impl<N: Ord> Peers<N> {
 		who: &PeerId,
 		update: NeighborPacket<N>,
 	) -> Result<Option<&View<N>>, Misbehavior> {
-		let peer = match self.inner.get_mut(who) {
-			None => return Ok(None),
-			Some(p) => p,
+		let Some(peer) = self.inner.get_mut(who) else {
+			return Ok(None)
 		};
 
 		let invalid_change = peer.view.set_id > update.set_id ||
@@ -1040,9 +1039,8 @@ impl<Block: BlockT> Inner<Block> {
 		request: CatchUpRequestMessage,
 		set_state: &environment::SharedVoterSetState<Block>,
 	) -> (Option<GossipMessage<Block>>, Action<Block::Hash>) {
-		let local_view = match self.local_view {
-			None => return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost())),
-			Some(ref view) => view,
+		let Some(local_view) = &self.local_view else {
+			return (None, Action::Discard(Misbehavior::OutOfScopeMessage.cost()))
 		};
 
 		if request.set_id != local_view.set_id {
@@ -1175,10 +1173,8 @@ impl<Block: BlockT> Inner<Block> {
 			Err(misbehavior) => (misbehavior.cost(), None),
 		};
 
-		let (catch_up, report) = match update_res {
-			Ok(_) => self.try_catch_up(who),
-			_ => (None, None),
-		};
+		let (catch_up, report) =
+			if update_res.is_ok() { self.try_catch_up(who) } else { (None, None) };
 
 		let neighbor_topics = topics.unwrap_or_default();
 
@@ -1435,7 +1431,7 @@ impl<Block: BlockT> GossipValidator<Block> {
 		let message_name;
 
 		let action = {
-			match GossipMessage::<Block>::decode(&mut data) {
+			match GossipMessage::<Block>::decode_all(&mut data) {
 				Ok(GossipMessage::Vote(ref message)) => {
 					message_name = Some("vote");
 					self.inner.write().validate_round_message(who, message)
@@ -1599,9 +1595,8 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
-			let (maybe_round, set_id) = match inner.live_topics.topic_info(topic) {
-				None => return false,
-				Some(x) => x,
+			let Some((maybe_round, set_id)) = inner.live_topics.topic_info(topic) else {
+				return false
 			};
 
 			if let MessageIntent::Broadcast = intent {
@@ -1622,12 +1617,11 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 			}
 
 			// global message.
-			let local_view = match inner.local_view {
-				Some(ref v) => v,
-				None => return false, // cannot evaluate until we have a local view.
+			let Some(local_view) = &inner.local_view else {
+				return false // cannot evaluate until we have a local view.
 			};
 
-			match GossipMessage::<Block>::decode(&mut data) {
+			match GossipMessage::<Block>::decode_all(&mut data) {
 				Err(_) => false,
 				Ok(GossipMessage::Commit(full)) => {
 					// we only broadcast commit messages if they're for the same
@@ -1658,13 +1652,12 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 				Some((None, _)) => {},
 			};
 
-			let local_view = match inner.local_view {
-				Some(ref v) => v,
-				None => return true, // no local view means we can't evaluate or hold any topic.
+			let Some(local_view) = &inner.local_view else {
+				return true // no local view means we can't evaluate or hold any topic.
 			};
 
 			// global messages -- only keep the best commit.
-			match GossipMessage::<Block>::decode(&mut data) {
+			match GossipMessage::<Block>::decode_all(&mut data) {
 				Err(_) => true,
 				Ok(GossipMessage::Commit(full)) => match local_view.last_commit {
 					Some((number, round, set_id)) =>

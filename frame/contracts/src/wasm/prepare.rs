@@ -64,7 +64,7 @@ impl LoadedModule {
 		config
 			.wasm_multi_value(false)
 			.wasm_mutable_global(false)
-			.wasm_sign_extension(false)
+			.wasm_sign_extension(true)
 			.wasm_bulk_memory(false)
 			.wasm_reference_types(false)
 			.wasm_tail_call(false)
@@ -669,6 +669,22 @@ mod tests {
 				(import "env" "memory" (memory 1 1))
 				(func (export "call"))
 				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(
+			signed_extension_works,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 1))
+				(func (export "deploy"))
+				(func (export "call"))
+				(func (param i32) (result i32)
+					local.get 0
+					i32.extend8_s
+				)
 			)
 			"#,
 			Ok(_)
