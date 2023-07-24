@@ -290,13 +290,15 @@ benchmarks! {
 		m.step();
 	}
 
-	// This benchmarks the v13 migration step (Move contracts' reserved balance to be held instead).
+	// This benchmarks the v13 migration step (Move code owners' reserved balance to be held instead).
 	#[pov_mode = Measured]
 	v13_migration_step {
-		<Contract<T>>::with_caller(
-			whitelisted_caller(), WasmModule::dummy(), vec![],
-		)?;
-		let mut m = v13::Migration::<T>::default();
+		v13::store_dummy_code::<
+			T,
+			pallet_balances::Pallet<T>
+		>();
+
+		let mut m = v13::Migration::<T, pallet_balances::Pallet<T>>::default();
 	}: {
 		m.step();
 	}
