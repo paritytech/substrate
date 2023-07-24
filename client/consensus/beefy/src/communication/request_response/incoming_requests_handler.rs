@@ -16,9 +16,9 @@
 
 //! Helper for handling (i.e. answering) BEEFY justifications requests from a remote peer.
 
-use codec::Decode;
+use codec::DecodeAll;
 use futures::{channel::oneshot, StreamExt};
-use log::{debug, trace};
+use log::{debug, error, trace};
 use sc_client_api::BlockBackend;
 use sc_network::{
 	config as netconfig, config::RequestResponseConfig, types::ProtocolName, PeerId,
@@ -77,7 +77,7 @@ impl<B: Block> IncomingRequest<B> {
 		F: FnOnce(usize) -> Vec<ReputationChange>,
 	{
 		let netconfig::IncomingRequest { payload, peer, pending_response } = raw;
-		let payload = match JustificationRequest::decode(&mut payload.as_ref()) {
+		let payload = match JustificationRequest::decode_all(&mut payload.as_ref()) {
 			Ok(payload) => payload,
 			Err(err) => {
 				let response = netconfig::OutgoingResponse {
@@ -215,5 +215,9 @@ where
 				},
 			}
 		}
+		error!(
+			target: crate::LOG_TARGET,
+			"🥩 On-demand requests receiver stream terminated, closing worker."
+		);
 	}
 }

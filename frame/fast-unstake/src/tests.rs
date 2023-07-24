@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::{mock::*, types::*, Event};
-use frame_support::{assert_noop, assert_ok, bounded_vec, pallet_prelude::*, traits::Currency};
+use frame_support::{pallet_prelude::*, testing_prelude::*, traits::Currency};
 use pallet_staking::{CurrentEra, RewardDestination};
 
 use sp_runtime::traits::BadOrigin;
@@ -303,6 +303,7 @@ mod on_idle {
 		});
 	}
 
+	#[docify::export]
 	#[test]
 	fn successful_multi_queue() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -356,6 +357,7 @@ mod on_idle {
 		});
 	}
 
+	#[docify::export]
 	#[test]
 	fn successful_unstake() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -693,6 +695,7 @@ mod on_idle {
 		});
 	}
 
+	#[docify::export]
 	#[test]
 	fn exposed_nominator_cannot_unstake() {
 		ExtBuilder::default().build_and_execute(|| {

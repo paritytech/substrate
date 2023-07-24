@@ -43,6 +43,7 @@ use sp_consensus_beefy::{
 };
 
 use frame_support::{crypto::ecdsa::ECDSAExt, traits::Get};
+use frame_system::pallet_prelude::BlockNumberFor;
 
 pub use pallet::*;
 
@@ -56,7 +57,7 @@ pub struct DepositBeefyDigest<T>(sp_std::marker::PhantomData<T>);
 
 impl<T> pallet_mmr::primitives::OnNewRoot<sp_consensus_beefy::MmrRootHash> for DepositBeefyDigest<T>
 where
-	T: pallet_mmr::Config<Hash = sp_consensus_beefy::MmrRootHash>,
+	T: pallet_mmr::Config<Hashing = sp_consensus_beefy::MmrHashing>,
 	T: pallet_beefy::Config,
 {
 	fn on_new_root(root: &sp_consensus_beefy::MmrRootHash) {
@@ -139,7 +140,7 @@ pub mod pallet {
 
 impl<T: Config> LeafDataProvider for Pallet<T> {
 	type LeafData = MmrLeaf<
-		<T as frame_system::Config>::BlockNumber,
+		BlockNumberFor<T>,
 		<T as frame_system::Config>::Hash,
 		MerkleRootOf<T>,
 		T::LeafExtra,

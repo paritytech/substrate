@@ -243,10 +243,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (B::Hash, Self::Transaction) {
 		self.state.storage_root(delta, state_version)
 	}
 
@@ -255,10 +252,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (B::Hash, bool, Self::Transaction) {
 		self.state.child_storage_root(child_info, delta, state_version)
 	}
 
@@ -1128,6 +1122,13 @@ impl<Block: BlockT> Backend<Block> {
 			};
 
 		Self::from_database(db as Arc<_>, canonicalization_delay, &db_config, needs_init)
+	}
+
+	/// Reset the shared trie cache.
+	pub fn reset_trie_cache(&self) {
+		if let Some(cache) = &self.shared_trie_cache {
+			cache.reset();
+		}
 	}
 
 	/// Create new memory-backed client backend for tests.

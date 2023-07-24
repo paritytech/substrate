@@ -30,13 +30,13 @@ use crate::{
 /// Get the type parameter argument without lifetime or mutability
 /// of a runtime metadata function.
 ///
-/// In the following example, both the `AccountId` and `Index` generic
+/// In the following example, both the `AccountId` and `Nonce` generic
 /// type parameters must implement `scale_info::TypeInfo` because they
 /// are added into the metadata using `scale_info::meta_type`.
 ///
 /// ```ignore
-/// trait ExampleAccountNonceApi<AccountId, Index> {
-///   fn account_nonce<'a>(account: &'a AccountId) -> Index;
+/// trait ExampleAccountNonceApi<AccountId, Nonce> {
+///   fn account_nonce<'a>(account: &'a AccountId) -> Nonce;
 /// }
 /// ```
 ///
@@ -88,9 +88,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream2 {
 	let mut where_clause = Vec::new();
 	for item in &decl.items {
 		// Collect metadata for methods only.
-		let syn::TraitItem::Fn(method) = item else {
-			continue
-		};
+		let syn::TraitItem::Fn(method) = item else { continue };
 
 		// Collect metadata only for the latest methods.
 		let is_changed_in =
@@ -103,9 +101,7 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream2 {
 		let signature = &method.sig;
 		for input in &signature.inputs {
 			// Exclude `self` from metadata collection.
-			let syn::FnArg::Typed(typed) = input else {
-				continue
-			};
+			let syn::FnArg::Typed(typed) = input else { continue };
 
 			let pat = &typed.pat;
 			let name = quote!(#pat).to_string();
@@ -153,24 +149,25 @@ pub fn generate_decl_runtime_metadata(decl: &ItemTrait) -> TokenStream2 {
 	// The trait generics where already extended with `Block: BlockT`.
 	let mut generics = decl.generics.clone();
 	for generic_param in generics.params.iter_mut() {
-		let syn::GenericParam::Type(ty) = generic_param else {
-			continue
-		};
+		let syn::GenericParam::Type(ty) = generic_param else { continue };
 
 		// Default type parameters are not allowed in functions.
 		ty.eq_token = None;
 		ty.default = None;
 	}
 
-	let where_clause = where_clause
-		.iter()
-		.map(|ty| quote!(#ty: #crate_::scale_info::TypeInfo + 'static));
+	where_clause
+		.into_iter()
+		.map(|ty| parse_quote!(#ty: #crate_::scale_info::TypeInfo + 'static))
+		.for_each(|w| generics.make_where_clause().predicates.push(w));
+
+	let (impl_generics, _, where_clause) = generics.split_for_impl();
 
 	quote!(
 		#( #attrs )*
 		#[inline(always)]
-		pub fn runtime_metadata #generics () -> #crate_::metadata_ir::RuntimeApiMetadataIR
-		where #( #where_clause, )*
+		pub fn runtime_metadata #impl_generics () -> #crate_::metadata_ir::RuntimeApiMetadataIR
+		#where_clause
 		{
 			#crate_::metadata_ir::RuntimeApiMetadataIR {
 				name: #trait_name,

@@ -25,9 +25,6 @@ lazy_static! {
 	///
 	/// These values are provided by Parity, however it is possible
 	/// to use your own requirements if you are running a custom chain.
-	///
-	/// The reference hardware is describe here:
-	/// <https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot>
 	pub static ref SUBSTRATE_REFERENCE_HARDWARE: Requirements = {
 		let raw = include_bytes!("reference_hardware.json").as_slice();
 		serde_json::from_slice(raw).expect("Hardcoded data is known good; qed")
@@ -37,13 +34,35 @@ lazy_static! {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sc_sysinfo::{Metric, Requirement, Requirements, Throughput};
 
-	/// `SUBSTRATE_REFERENCE_HARDWARE` can be en- and decoded.
+	/// `SUBSTRATE_REFERENCE_HARDWARE` can be decoded.
 	#[test]
 	fn json_static_data() {
 		let raw = serde_json::to_string(&*SUBSTRATE_REFERENCE_HARDWARE).unwrap();
 		let decoded: Requirements = serde_json::from_str(&raw).unwrap();
 
 		assert_eq!(decoded, SUBSTRATE_REFERENCE_HARDWARE.clone());
+	}
+
+	/// The hard-coded values are correct.
+	#[test]
+	fn json_static_data_is_correct() {
+		assert_eq!(
+			*SUBSTRATE_REFERENCE_HARDWARE,
+			Requirements(vec![
+				Requirement { metric: Metric::Blake2256, minimum: Throughput::from_mibs(783.27) },
+				Requirement {
+					metric: Metric::Sr25519Verify,
+					minimum: Throughput::from_kibs(560.670000128),
+				},
+				Requirement {
+					metric: Metric::MemCopy,
+					minimum: Throughput::from_gibs(11.4925205078125003),
+				},
+				Requirement { metric: Metric::DiskSeqWrite, minimum: Throughput::from_mibs(950.0) },
+				Requirement { metric: Metric::DiskRndWrite, minimum: Throughput::from_mibs(420.0) },
+			])
+		);
 	}
 }

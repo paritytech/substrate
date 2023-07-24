@@ -17,6 +17,8 @@
 
 //! All migrations of this pallet.
 
+/// Migration to unreserve all pallet funds.
+pub mod unlock_and_unreserve_all_funds;
 /// Version 3.
 pub mod v3;
 /// Version 4.

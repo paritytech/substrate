@@ -13,8 +13,8 @@ jobs:
       - name: Get the tags by date
         id: tags
         run: |
-          echo "::set-output name=new::$(date +'monthly-%Y-%m')"
-          echo "::set-output name=old::$(date -d'1 month ago' +'monthly-%Y-%m')"
+          echo "new=$(date +'monthly-%Y-%m')" >> $GITHUB_OUTPUT
+          echo "old=$(date -d'1 month ago' +'monthly-%Y-%m')" >> $GITHUB_OUTPUT
       - name: Checkout branch "master"
         uses: actions/checkout@v3
         with:

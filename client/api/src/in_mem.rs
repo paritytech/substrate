@@ -487,10 +487,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	set_head: Option<Block::Hash>,
 }
 
-impl<Block: BlockT> BlockImportOperation<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> BlockImportOperation<Block> {
 	fn apply_storage(
 		&mut self,
 		storage: Storage,
@@ -519,10 +516,7 @@ where
 	}
 }
 
-impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
 	type State = InMemoryBackend<HashFor<Block>>;
 
 	fn state(&self) -> sp_blockchain::Result<Option<&Self::State>> {
@@ -611,20 +605,14 @@ where
 ///
 /// > **Warning**: Doesn't support all the features necessary for a proper database. Only use this
 /// > struct for testing purposes. Do **NOT** use in production.
-pub struct Backend<Block: BlockT>
-where
-	Block::Hash: Ord,
-{
+pub struct Backend<Block: BlockT> {
 	states: RwLock<HashMap<Block::Hash, InMemoryBackend<HashFor<Block>>>>,
 	blockchain: Blockchain<Block>,
 	import_lock: RwLock<()>,
 	pinned_blocks: RwLock<HashMap<Block::Hash, i64>>,
 }
 
-impl<Block: BlockT> Backend<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of in-mem backend.
 	///
 	/// # Warning
@@ -650,10 +638,7 @@ where
 	}
 }
 
-impl<Block: BlockT> backend::AuxStore for Backend<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> backend::AuxStore for Backend<Block> {
 	fn insert_aux<
 		'a,
 		'b: 'a,
@@ -673,10 +658,7 @@ where
 	}
 }
 
-impl<Block: BlockT> backend::Backend<Block> for Backend<Block>
-where
-	Block::Hash: Ord,
-{
+impl<Block: BlockT> backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemoryBackend<HashFor<Block>>;
@@ -809,7 +791,7 @@ where
 	}
 }
 
-impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block::Hash: Ord {}
+impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> {}
 
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {

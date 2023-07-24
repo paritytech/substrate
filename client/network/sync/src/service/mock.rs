@@ -25,9 +25,8 @@ use sc_network::{
 	request_responses::{IfDisconnected, RequestFailure},
 	types::ProtocolName,
 	NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
-	NotificationSenderError, NotificationSenderT,
+	NotificationSenderError, NotificationSenderT, ReputationChange,
 };
-use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 use std::collections::HashSet;

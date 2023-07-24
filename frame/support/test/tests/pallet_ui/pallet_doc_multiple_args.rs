@@ -5,7 +5,7 @@ mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config
 	where
-		<Self as frame_system::Config>::Index: From<u128>,
+		<Self as frame_system::Config>::Nonce: From<u128>,
 	{
 	}
 

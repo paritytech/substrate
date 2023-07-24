@@ -62,7 +62,7 @@ pub type Statements = Vec<Statement>;
 pub type StatementImportFuture = oneshot::Receiver<SubmitResult>;
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sends us any statement.
 	///
 	/// This forces node to verify it, thus the negative value here. Once statement is verified,

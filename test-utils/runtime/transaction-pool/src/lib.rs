@@ -36,7 +36,7 @@ use sp_runtime::{
 use std::collections::{BTreeMap, HashMap, HashSet};
 use substrate_test_runtime_client::{
 	runtime::{
-		AccountId, Block, BlockNumber, Extrinsic, ExtrinsicBuilder, Hash, Header, Index, Transfer,
+		AccountId, Block, BlockNumber, Extrinsic, ExtrinsicBuilder, Hash, Header, Nonce, Transfer,
 		TransferData,
 	},
 	AccountKeyring::{self, *},
@@ -377,7 +377,7 @@ impl sp_blockchain::HeaderMetadata<Block> for TestApi {
 /// Generate transfer extrinsic with a given nonce.
 ///
 /// Part of the test api.
-pub fn uxt(who: AccountKeyring, nonce: Index) -> Extrinsic {
+pub fn uxt(who: AccountKeyring, nonce: Nonce) -> Extrinsic {
 	let dummy = codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap();
 	let transfer = Transfer { from: who.into(), to: dummy, nonce, amount: 1 };
 	ExtrinsicBuilder::new_transfer(transfer).build()

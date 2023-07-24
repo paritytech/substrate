@@ -46,7 +46,8 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::traits::{
-	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, Incrementable,
+	ReservableCurrency,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -170,7 +171,7 @@ pub mod pallet {
 
 		/// The max duration in blocks for deadlines.
 		#[pallet::constant]
-		type MaxDeadlineDuration: Get<<Self as SystemConfig>::BlockNumber>;
+		type MaxDeadlineDuration: Get<BlockNumberFor<Self>>;
 
 		/// The max number of attributes a user could set per call.
 		#[pallet::constant]
@@ -342,7 +343,7 @@ pub mod pallet {
 			T::CollectionId,
 			T::ItemId,
 			PriceWithDirection<ItemPrice<T, I>>,
-			<T as SystemConfig>::BlockNumber,
+			BlockNumberFor<T>,
 		>,
 		OptionQuery,
 	>;
@@ -413,7 +414,7 @@ pub mod pallet {
 			item: T::ItemId,
 			owner: T::AccountId,
 			delegate: T::AccountId,
-			deadline: Option<<T as SystemConfig>::BlockNumber>,
+			deadline: Option<BlockNumberFor<T>>,
 		},
 		/// An approval for a `delegate` account to transfer the `item` of an item
 		/// `collection` was cancelled by its `owner`.
@@ -508,7 +509,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: <T as SystemConfig>::BlockNumber,
+			deadline: BlockNumberFor<T>,
 		},
 		/// The swap was cancelled.
 		SwapCancelled {
@@ -517,7 +518,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: <T as SystemConfig>::BlockNumber,
+			deadline: BlockNumberFor<T>,
 		},
 		/// The swap has been claimed.
 		SwapClaimed {
@@ -528,7 +529,7 @@ pub mod pallet {
 			received_item: T::ItemId,
 			received_item_owner: T::AccountId,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: <T as SystemConfig>::BlockNumber,
+			deadline: BlockNumberFor<T>,
 		},
 		/// New attributes have been set for an `item` of the `collection`.
 		PreSignedAttributesSet {
@@ -636,6 +637,8 @@ pub mod pallet {
 		WrongNamespace,
 		/// Can't delete non-empty collections.
 		CollectionNotEmpty,
+		/// The witness data should be provided.
+		WitnessRequired,
 	}
 
 	#[pallet::call]
@@ -771,7 +774,8 @@ pub mod pallet {
 		/// - `item`: An identifier of the new item.
 		/// - `mint_to`: Account into which the item will be minted.
 		/// - `witness_data`: When the mint type is `HolderOf(collection_id)`, then the owned
-		///   item_id from that collection needs to be provided within the witness data object.
+		///   item_id from that collection needs to be provided within the witness data object. If
+		///   the mint price is set, then it should be additionally confirmed in the `witness_data`.
 		///
 		/// Note: the deposit will be taken from the `origin` and not the `owner` of the `item`.
 		///
@@ -785,7 +789,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			mint_to: AccountIdLookupOf<T>,
-			witness_data: Option<MintWitness<T::ItemId>>,
+			witness_data: Option<MintWitness<T::ItemId, DepositBalanceOf<T, I>>>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 			let mint_to = T::Lookup::lookup(mint_to)?;
@@ -817,8 +821,8 @@ pub mod pallet {
 							);
 						},
 						MintType::HolderOf(collection_id) => {
-							let MintWitness { owned_item } =
-								witness_data.ok_or(Error::<T, I>::BadWitness)?;
+							let MintWitness { owned_item, .. } =
+								witness_data.clone().ok_or(Error::<T, I>::WitnessRequired)?;
 
 							let owns_item = Account::<T, I>::contains_key((
 								&caller,
@@ -858,6 +862,10 @@ pub mod pallet {
 					}
 
 					if let Some(price) = mint_settings.price {
+						let MintWitness { mint_price, .. } =
+							witness_data.clone().ok_or(Error::<T, I>::WitnessRequired)?;
+						let mint_price = mint_price.ok_or(Error::<T, I>::BadWitness)?;
+						ensure!(mint_price >= price, Error::<T, I>::BadWitness);
 						T::Currency::transfer(
 							&caller,
 							&collection_details.owner,
@@ -1228,7 +1236,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
-			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
+			maybe_deadline: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1651,11 +1659,7 @@ pub mod pallet {
 		pub fn update_mint_settings(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			mint_settings: MintSettings<
-				BalanceOf<T, I>,
-				<T as SystemConfig>::BlockNumber,
-				T::CollectionId,
-			>,
+			mint_settings: MintSettings<BalanceOf<T, I>, BlockNumberFor<T>, T::CollectionId>,
 		) -> DispatchResult {
 			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1751,7 +1755,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			maybe_desired_item: Option<T::ItemId>,
 			maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			duration: <T as SystemConfig>::BlockNumber,
+			duration: BlockNumberFor<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_create_swap(
@@ -1835,13 +1839,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mint_pre_signed(mint_data.attributes.len() as u32))]
 		pub fn mint_pre_signed(
 			origin: OriginFor<T>,
-			mint_data: PreSignedMintOf<T, I>,
+			mint_data: Box<PreSignedMintOf<T, I>>,
 			signature: T::OffchainSignature,
 			signer: T::AccountId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::validate_signature(&Encode::encode(&mint_data), &signature, &signer)?;
-			Self::do_mint_pre_signed(origin, mint_data, signer)
+			Self::do_mint_pre_signed(origin, *mint_data, signer)
 		}
 
 		/// Set attributes for an item by providing the pre-signed approval.

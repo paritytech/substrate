@@ -257,6 +257,7 @@ impl<T: Config<I>, I: 'static> fungibles::approvals::Inspect<<T as SystemConfig>
 impl<T: Config<I>, I: 'static> fungibles::approvals::Mutate<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
+	// Approve spending tokens from a given account
 	fn approve(
 		asset: T::AssetId,
 		owner: &<T as SystemConfig>::AccountId,
@@ -266,7 +267,6 @@ impl<T: Config<I>, I: 'static> fungibles::approvals::Mutate<<T as SystemConfig>:
 		Self::do_approve_transfer(asset, owner, delegate, amount)
 	}
 
-	// Aprove spending tokens from a given account
 	fn transfer_from(
 		asset: T::AssetId,
 		owner: &<T as SystemConfig>::AccountId,

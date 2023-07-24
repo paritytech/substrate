@@ -62,7 +62,8 @@ pub trait Inspect<AccountId>: Sized {
 	/// The minimum balance any single account may have.
 	fn minimum_balance(asset: Self::AssetId) -> Self::Balance;
 
-	/// Get the total amount of funds whose ultimate bneficial ownership can be determined as `who`.
+	/// Get the total amount of funds whose ultimate beneficial ownership can be determined as
+	/// `who`.
 	///
 	/// This may include funds which are wholly inaccessible to `who`, either temporarily or even
 	/// indefinitely.
@@ -121,7 +122,7 @@ pub trait Inspect<AccountId>: Sized {
 
 /// Special dust type which can be type-safely converted into a `Credit`.
 #[must_use]
-pub struct Dust<A, T: Unbalanced<A>>(pub(crate) T::AssetId, pub(crate) T::Balance);
+pub struct Dust<A, T: Unbalanced<A>>(pub T::AssetId, pub T::Balance);
 
 impl<A, T: Balanced<A>> Dust<A, T> {
 	/// Convert `Dust` into an instance of `Credit`.

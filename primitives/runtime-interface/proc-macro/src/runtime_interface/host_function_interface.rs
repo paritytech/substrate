@@ -96,6 +96,7 @@ fn generate_extern_host_function(
 		method.sig.ident,
 	);
 	let return_value = &method.sig.output;
+	let cfg_attrs = method.attrs.iter().filter(|a| a.path().is_ident("cfg"));
 
 	let ffi_return_value = match method.sig.output {
 		ReturnType::Default => quote!(),
@@ -112,6 +113,7 @@ fn generate_extern_host_function(
 	};
 
 	Ok(quote! {
+		#(#cfg_attrs)*
 		#[doc = #doc_string]
 		pub fn #function ( #( #args ),* ) #return_value {
 			extern "C" {
@@ -143,8 +145,10 @@ fn generate_exchangeable_host_function(method: &TraitItemFn) -> Result<TokenStre
 	let exchangeable_function = create_exchangeable_host_function_ident(&method.sig.ident);
 	let doc_string = format!(" Exchangeable host function used by [`{}`].", method.sig.ident);
 	let output = &method.sig.output;
+	let cfg_attrs = method.attrs.iter().filter(|a| a.path().is_ident("cfg"));
 
 	Ok(quote! {
+		#(#cfg_attrs)*
 		#[cfg(not(feature = "std"))]
 		#[allow(non_upper_case_globals)]
 		#[doc = #doc_string]
@@ -163,14 +167,15 @@ fn generate_host_functions_struct(
 	let crate_ = generate_crate_access();
 
 	let mut host_function_impls = Vec::new();
-	let mut host_function_names = Vec::new();
 	let mut register_bodies = Vec::new();
+	let mut append_hf_bodies = Vec::new();
+
 	for (version, method) in get_runtime_interface(trait_def)?.all_versions() {
-		let (implementation, name, register_body) =
+		let (implementation, register_body, append_hf_body) =
 			generate_host_function_implementation(&trait_def.ident, method, version, is_wasm_only)?;
 		host_function_impls.push(implementation);
-		host_function_names.push(name);
 		register_bodies.push(register_body);
+		append_hf_bodies.push(append_hf_body);
 	}
 
 	Ok(quote! {
@@ -183,7 +188,9 @@ fn generate_host_functions_struct(
 		#[cfg(feature = "std")]
 		impl #crate_::sp_wasm_interface::HostFunctions for HostFunctions {
 			fn host_functions() -> Vec<&'static dyn #crate_::sp_wasm_interface::Function> {
-				vec![ #( &#host_function_names as &dyn #crate_::sp_wasm_interface::Function ),* ]
+				let mut host_functions_list = Vec::new();
+				#(#append_hf_bodies)*
+				host_functions_list
 			}
 
 			#crate_::sp_wasm_interface::if_wasmtime_is_enabled! {
@@ -208,7 +215,7 @@ fn generate_host_function_implementation(
 	method: &RuntimeInterfaceFunction,
 	version: u32,
 	is_wasm_only: bool,
-) -> Result<(TokenStream, Ident, TokenStream)> {
+) -> Result<(TokenStream, TokenStream, TokenStream)> {
 	let name = create_host_function_ident(&method.sig.ident, version, trait_name).to_string();
 	let struct_name = Ident::new(&name.to_pascal_case(), Span::call_site());
 	let crate_ = generate_crate_access();
@@ -323,10 +330,21 @@ fn generate_host_function_implementation(
 		});
 	}
 
+	let cfg_attrs: Vec<_> =
+		method.attrs.iter().filter(|a| a.path().is_ident("cfg")).cloned().collect();
+	if version > 1 && !cfg_attrs.is_empty() {
+		return Err(Error::new(
+			method.span(),
+			"Conditional compilation is not supported for versioned functions",
+		))
+	}
+
 	let implementation = quote! {
+		#(#cfg_attrs)*
 		#[cfg(feature = "std")]
 		struct #struct_name;
 
+		#(#cfg_attrs)*
 		#[cfg(feature = "std")]
 		impl #struct_name {
 			fn call(
@@ -341,6 +359,7 @@ fn generate_host_function_implementation(
 			}
 		}
 
+		#(#cfg_attrs)*
 		#[cfg(feature = "std")]
 		impl #crate_::sp_wasm_interface::Function for #struct_name {
 			fn name(&self) -> &str {
@@ -368,6 +387,7 @@ fn generate_host_function_implementation(
 	};
 
 	let register_body = quote! {
+		#(#cfg_attrs)*
 		registry.register_static(
 			#crate_::sp_wasm_interface::Function::name(&#struct_name),
 			|mut caller: #crate_::sp_wasm_interface::wasmtime::Caller<T::State>, #(#ffi_args_prototype),*|
@@ -399,7 +419,12 @@ fn generate_host_function_implementation(
 		)?;
 	};
 
-	Ok((implementation, struct_name, register_body))
+	let append_hf_body = quote! {
+		#(#cfg_attrs)*
+		host_functions_list.push(&#struct_name as &dyn #crate_::sp_wasm_interface::Function);
+	};
+
+	Ok((implementation, register_body, append_hf_body))
 }
 
 /// Generate the `wasm_interface::Signature` for the given host function `sig`.

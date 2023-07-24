@@ -22,7 +22,7 @@ parking_lot = "0.12.1"
 pin-project = "1.0.12"
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 rand = "0.8.5"
-serde = { version = "1.0.136", features = ["derive"] }
+serde = { version = "1.0.163", features = ["derive"] }
 serde_json = "1.0.85"
 thiserror = "1.0.30"
 wasm-timer = "0.2.5"

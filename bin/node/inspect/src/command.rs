@@ -25,14 +25,12 @@ use crate::{
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_runtime::traits::Block;
-use std::str::FromStr;
 
 impl InspectCmd {
 	/// Run the inspect command, passing the inspector.
 	pub fn run<B, RA, D>(&self, config: Configuration) -> Result<()>
 	where
 		B: Block,
-		B::Hash: FromStr,
 		RA: Send + Sync + 'static,
 		D: NativeExecutionDispatch + 'static,
 	{
