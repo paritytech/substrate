@@ -159,32 +159,6 @@ pub mod bls_crypto {
 		}
 	}
 }
-
-/// BEEFY cryptographic types for (ECDSA,BLS) crypto
-///
-/// This to designed to speed up gossip time while preventing DoS
-/// by verifying only ECDSA signature during gossip and slashing
-/// validators whose BLS signature does not verify during aggregation
-/// by the prover node.
-///
-/// TODO: This module basically introduces three crypto types:
-/// - `ecdsa_n_bls_crypto::Pair`
-/// - `ecdsa_n_bls_crypto::Public`
-/// - `ecdsa_n_bls_crypto::Signature`
-/// - `ecdsa_n_bls_crypto::AuthorityId`
-///
-/// Your code should use the above types as concrete types for all crypto related
-/// functionality.
-#[cfg(feature = "bls-experimental")]
-pub mod ecdsa_n_bls_crypto {
-	use super::{bls_crypto, ecdsa_crypto};
-	/// Identity of a BEEFY authority using BLS as its crypto.
-	pub type AuthorityId = (ecdsa_crypto::Public, bls_crypto::Public);
-
-	/// Signature for a BEEFY authority using BLS as its crypto.
-	pub type AuthoritySignature = (ecdsa_crypto::Signature, bls_crypto::Signature);
-}
-
 /// The `ConsensusEngineId` of BEEFY.
 pub const BEEFY_ENGINE_ID: sp_runtime::ConsensusEngineId = *b"BEEF";
 
