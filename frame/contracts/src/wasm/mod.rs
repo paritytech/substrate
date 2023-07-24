@@ -3363,8 +3363,8 @@ mod tests {
 	fn add_remove_delegate_dependency() {
 		const CODE_ADD_REMOVE_DELEGATE_DEPENDENCY: &str = r#"
 (module
-	(import "seal0" "add_delegate_dependency" (func $add_delegate_dependency (param i32) (result i32)))
-	(import "seal0" "remove_delegate_dependency" (func $remove_delegate_dependency (param i32) (result i32)))
+	(import "seal0" "add_delegate_dependency" (func $add_delegate_dependency (param i32)))
+	(import "seal0" "remove_delegate_dependency" (func $remove_delegate_dependency (param i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop (call $add_delegate_dependency (i32.const 0)))

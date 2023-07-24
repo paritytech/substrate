@@ -886,7 +886,6 @@ benchmarks! {
 			deploy_body: Some(body::repeated_dyn(r, vec![
 				Counter(beneficiary_len as u32, code_hash_len as u32), // code_hash_ptr
 				Regular(Instruction::Call(1)),
-				Regular(Instruction::Drop),
 			])),
 			call_body: Some(body::repeated(r, &[
 				Instruction::I32Const(0), // beneficiary_ptr
@@ -2399,7 +2398,6 @@ benchmarks! {
 			call_body: Some(body::repeated_dyn(r, vec![
 				Counter(0, code_hash_len as u32), // code_hash_ptr
 				Regular(Instruction::Call(0)),
-				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
@@ -2442,12 +2440,10 @@ benchmarks! {
 			deploy_body: Some(body::repeated_dyn(r, vec![
 				Counter(0, code_hash_len as u32), // code_hash_ptr
 				Regular(Instruction::Call(1)),
-				Regular(Instruction::Drop),
 			])),
 			call_body: Some(body::repeated_dyn(r, vec![
 				Counter(0, code_hash_len as u32), // code_hash_ptr
 				Regular(Instruction::Call(0)),
-				Regular(Instruction::Drop),
 			])),
 			.. Default::default()
 		});
