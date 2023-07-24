@@ -462,6 +462,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg(feature = "bls-experimental")]
 	fn bls_beefy_verify_works() {
 		let msg = &b"test-message"[..];
 		let (pair, _) = bls_crypto::Pair::generate();
