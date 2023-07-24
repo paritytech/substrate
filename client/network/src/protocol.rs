@@ -473,6 +473,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				received_handshake,
 				notifications_sink,
 				negotiated_fallback,
+				..
 			} => {
 				if set_id != HARDCODED_PEERSETS_SYNC {
 					match (

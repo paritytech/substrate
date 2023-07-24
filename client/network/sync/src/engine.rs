@@ -181,6 +181,8 @@ pub struct Peer<B: BlockT> {
 	last_notification_sent: Instant,
 	/// Instant when the last notification was received from peer.
 	last_notification_received: Instant,
+	/// Is the peer inbound.
+	inbound: bool,
 }
 
 pub struct SyncingEngine<B: BlockT, Client> {
@@ -237,6 +239,12 @@ pub struct SyncingEngine<B: BlockT, Client> {
 
 	/// Number of slots to allocate to light nodes.
 	default_peers_set_num_light: usize,
+
+	/// Maximum number of inbound peers.
+	max_in_peers: usize,
+
+	/// Number of inbound peers accepted so far.
+	num_in_peers: usize,
 
 	/// A cache for the data that was associated to a block announcement.
 	block_announce_data_cache: LruMap<B::Hash, Vec<u8>>,
@@ -373,6 +381,12 @@ where
 			.flatten()
 			.expect("Genesis block exists; qed");
 
+		// `default_peers_set.in_peers` contains an unspecified amount of light peers so the number
+		// of full inbound peers must be calculated from the total full peer count
+		let max_full_peers = net_config.network_config.default_peers_set_num_full;
+		let max_out_peers = net_config.network_config.default_peers_set.out_peers;
+		let max_in_peers = (max_full_peers - max_out_peers) as usize;
+
 		Ok((
 			Self {
 				roles,
@@ -393,6 +407,8 @@ where
 				default_peers_set_no_slot_peers,
 				default_peers_set_num_full,
 				default_peers_set_num_light,
+				num_in_peers: 0usize,
+				max_in_peers,
 				event_streams: Vec::new(),
 				notification_service,
 				tick_timeout: Delay::new(TICK_TIMEOUT),
@@ -738,7 +754,8 @@ where
 
 					match self.validate_handshake(&peer, handshake) {
 						Ok(handshake) =>
-							if self.on_sync_peer_connected(peer, &handshake).is_err() {
+						// TODO: fix inbound
+							if self.on_sync_peer_connected(peer, &handshake, false).is_err() {
 								log::debug!(target: LOG_TARGET, "failed to register peer");
 								self.network_service.disconnect_peer(
 									peer,
@@ -794,15 +811,32 @@ where
 	///
 	/// Returns a result if the handshake of this peer was indeed accepted.
 	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) {
-		if !self.peers.remove(&peer).is_some() {
+		let Some(info) = self.peers.remove(&peer) else {
 			log::error!(target: LOG_TARGET, "{peer} does not exist in `SyncingEngine`");
 			return
-		}
+		};
 
 		if self.important_peers.contains(&peer) {
 			log::warn!(target: "sync", "Reserved peer {} disconnected", peer);
 		} else {
 			log::debug!(target: "sync", "{} disconnected", peer);
+		}
+
+		if !self.default_peers_set_no_slot_connected_peers.remove(&peer) &&
+			info.inbound && info.info.roles.is_full()
+		{
+			match self.num_in_peers.checked_sub(1) {
+				Some(value) => {
+					self.num_in_peers = value;
+				},
+				None => {
+					log::error!(
+						target: "sync",
+						"trying to disconnect an inbound node which is not counted as inbound"
+					);
+					debug_assert!(false);
+				},
+			}
 		}
 
 		self.chain_sync.peer_disconnected(&peer);
@@ -896,7 +930,76 @@ where
 		&mut self,
 		who: PeerId,
 		status: &BlockAnnouncesHandshake<B>,
+		inbound: bool,
 	) -> Result<(), ()> {
+		log::trace!(target: "sync", "New peer {} {:?}", who, status);
+
+		if self.peers.contains_key(&who) {
+			log::error!(target: "sync", "Called on_sync_peer_connected with already connected peer {}", who);
+			debug_assert!(false);
+			return Err(())
+		}
+
+		if status.genesis_hash != self.genesis_hash {
+			self.network_service.report_peer(who, rep::GENESIS_MISMATCH);
+
+			if self.important_peers.contains(&who) {
+				log::error!(
+					target: "sync",
+					"Reserved peer id `{}` is on a different chain (our genesis: {} theirs: {})",
+					who,
+					self.genesis_hash,
+					status.genesis_hash,
+				);
+			} else if self.boot_node_ids.contains(&who) {
+				log::error!(
+					target: "sync",
+					"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
+					who,
+					self.genesis_hash,
+					status.genesis_hash,
+				);
+			} else {
+				log::debug!(
+					target: "sync",
+					"Peer is on different chain (our genesis: {} theirs: {})",
+					self.genesis_hash, status.genesis_hash
+				);
+			}
+
+			return Err(())
+		}
+
+		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
+		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
+
+		// make sure to accept no more than `--in-peers` many full nodes
+		if !no_slot_peer &&
+			status.roles.is_full() &&
+			inbound && self.num_in_peers == self.max_in_peers
+		{
+			log::debug!(target: "sync", "All inbound slots have been consumed, rejecting {who}");
+			return Err(())
+		}
+
+		if status.roles.is_full() &&
+			self.chain_sync.num_peers() >=
+				self.default_peers_set_num_full +
+					self.default_peers_set_no_slot_connected_peers.len() +
+					this_peer_reserved_slot
+		{
+			log::debug!(target: "sync", "Too many full nodes, rejecting {}", who);
+			return Err(())
+		}
+
+		if status.roles.is_light() &&
+			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
+		{
+			// Make sure that not all slots are occupied by light clients.
+			log::debug!(target: "sync", "Too many light nodes, rejecting {}", who);
+			return Err(())
+		}
+
 		let peer = Peer {
 			info: ExtendedPeerInfo {
 				roles: status.roles,
@@ -908,6 +1011,7 @@ where
 			),
 			last_notification_sent: Instant::now(),
 			last_notification_received: Instant::now(),
+			inbound,
 		};
 
 		let req = if peer.info.roles.is_full() {
@@ -925,9 +1029,11 @@ where
 		log::debug!(target: LOG_TARGET, "connected {}", who);
 
 		self.peers.insert(who, peer);
-		// TODO(aaro): remove these bookkeepings once `ProtocolController` is ready
-		if self.default_peers_set_no_slot_peers.contains(&who) {
+
+		if no_slot_peer {
 			self.default_peers_set_no_slot_connected_peers.insert(who);
+		} else if inbound && status.roles.is_full() {
+			self.num_in_peers += 1;
 		}
 
 		if let Some(req) = req {

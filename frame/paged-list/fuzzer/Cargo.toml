@@ -1,0 +1,22 @@
+[package]
+name = "pallet-paged-list-fuzzer"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Fuzz storage types of pallet-paged-list"
+publish = false
+
+[[bin]]
+name = "pallet-paged-list"
+path = "src/paged_list.rs"
+
+[dependencies]
+arbitrary = "1.3.0"
+honggfuzz = "0.5.49"
+
+frame-support = { version = "4.0.0-dev", default-features = false, features = [ "std" ], path = "../../support" }
+sp-io = { path = "../../../primitives/io", default-features = false, features = [ "std" ] }
+pallet-paged-list = { path = "../", default-features = false, features = [ "std" ] }
