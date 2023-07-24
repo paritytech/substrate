@@ -30,6 +30,21 @@
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
 # parent-child pipelines but that's more complicated.
 
+check-dependant-runtime-upgrade-polkadot:
+  extends: .check-dependent-project
+  variables:
+    DEPENDENT_REPO: polkadot
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      polkadot: release-v*
+    COMPANION_CHECK_COMMAND: >
+      time cargo build --release --locked -p polkadot-runtime &&
+      time cargo run --locked --release --features try-runtime try-runtime \
+          --runtime ./target/release/wbuild/polkadot-runtime/target/wasm32-unknown-unknown/release/polkadot_runtime.wasm \
+          on-runtime-upgrade --checks=pre-and-post live --uri wss://polkadot-try-runtime-node.parity-chains.parity.io:443
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
+
 check-dependent-polkadot:
   extends: .check-dependent-project
   variables:
