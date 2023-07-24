@@ -290,7 +290,7 @@ benchmarks! {
 		m.step();
 	}
 
-	// This benchmarks the v13 migration step (Move contracts' reserved balance to be held instead).
+	// This benchmarks the v13 migration step (Move code owners' reserved balance to be held instead).
 	#[pov_mode = Measured]
 	v13_migration_step {
 		<Contract<T>>::with_caller(

@@ -24,15 +24,25 @@ use crate::{
 	BalanceOf, CodeHash, Config, Determinism, HoldReason, Pallet, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
+#[cfg(feature = "try-runtime")]
+use environmental::Vec;
+#[cfg(feature = "try-runtime")]
+use frame_support::traits::fungible::Inspect;
+#[cfg(feature = "try-runtime")]
+use frame_support::traits::fungible::InspectHold;
 use frame_support::{
 	codec,
 	pallet_prelude::*,
 	storage_alias,
 	traits::{fungible::MutateHold, ReservableCurrency},
-	DefaultNoBound, Identity,
+	DefaultNoBound,
 };
 use sp_core::hexdisplay::HexDisplay;
-use sp_runtime::Saturating;
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+use sp_runtime::{traits::Zero, Saturating};
+#[cfg(feature = "try-runtime")]
+use sp_std::collections::btree_map::BTreeMap;
 
 mod old {
 	use super::*;
@@ -41,39 +51,56 @@ mod old {
 		<T as frame_system::Config>::AccountId,
 	>>::Balance;
 
-	#[derive(Clone, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+	#[derive(Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
 	#[codec(mel_bound())]
 	#[scale_info(skip_type_params(T, OldCurrency))]
-	pub struct CodeInfo<T: Config, OldCurrency>
+	pub struct CodeInfo<T, OldCurrency>
 	where
+		T: Config,
 		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 	{
 		pub owner: AccountIdOf<T>,
 		#[codec(compact)]
-		pub deposit: BalanceOf<T, OldCurrency>,
+		pub deposit: old::BalanceOf<T, OldCurrency>,
 		#[codec(compact)]
 		refcount: u64,
 		determinism: Determinism,
-		pub code_len: u32,
+		code_len: u32,
 	}
 
 	#[storage_alias]
 	pub type CodeInfoOf<T: Config, OldCurrency> =
-		StorageMap<Pallet<T>, Identity, CodeHash<T>, CodeInfo<T, OldCurrency>>;
+		StorageMap<Pallet<T>, Twox64Concat, CodeHash<T>, CodeInfo<T, OldCurrency>>;
+}
+
+#[cfg(feature = "try-runtime")]
+#[derive(Encode, Decode)]
+/// Accounts for the balance allocation of a code owner.
+struct BalanceAllocation<T, OldCurrency>
+where
+	T: Config,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
+{
+	/// Total reserved balance as storage deposit for the owner.
+	reserved: old::BalanceOf<T, OldCurrency>,
+	/// Total balance of the owner.
+	total: old::BalanceOf<T, OldCurrency>,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
-pub struct Migration<T: Config, OldCurrency>
+pub struct Migration<T, OldCurrency>
 where
+	T: Config,
 	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 {
 	last_code_hash: Option<CodeHash<T>>,
 	_phantom: PhantomData<(T, OldCurrency)>,
 }
 
-impl<T: Config, OldCurrency: 'static> MigrationStep for Migration<T, OldCurrency>
+impl<T, OldCurrency> MigrationStep for Migration<T, OldCurrency>
 where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
+	T: Config,
+	OldCurrency: 'static + ReservableCurrency<<T as frame_system::Config>::AccountId>,
 	BalanceOf<T>: From<old::BalanceOf<T, OldCurrency>>,
 {
 	const VERSION: u16 = 13;
@@ -83,29 +110,31 @@ where
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let mut iter = if let Some(last_key) = self.last_code_hash.take() {
+		let mut iter = if let Some(last_hash) = self.last_code_hash.take() {
 			old::CodeInfoOf::<T, OldCurrency>::iter_from(
-				old::CodeInfoOf::<T, OldCurrency>::hashed_key_for(last_key),
+				old::CodeInfoOf::<T, OldCurrency>::hashed_key_for(last_hash),
 			)
 		} else {
 			old::CodeInfoOf::<T, OldCurrency>::iter()
 		};
 
-		if let Some((key, code_info)) = iter.next() {
-			log::debug!(target: LOG_TARGET, "Migrating storage deposit for {:?}", code_info.owner);
-			let len = code_info.code_len as u32;
-			let unreserved = OldCurrency::unreserve(&code_info.owner, code_info.deposit);
+		if let Some((hash, code_info)) = iter.next() {
+			log::debug!(target: LOG_TARGET, "Migrating storage deposit for 0x{:?}", HexDisplay::from(&code_info.owner.encode()));
 
-			if code_info.deposit > unreserved {
+			let remaining = OldCurrency::unreserve(&code_info.owner, code_info.deposit);
+
+			if remaining > Zero::zero() {
 				log::warn!(
 					target: LOG_TARGET,
 					"Code owner's account 0x{:?} for code {:?} has some non-unreservable deposit {:?} from a total of {:?} that will remain in reserved.",
 					HexDisplay::from(&code_info.owner.encode()),
-					key,
-					code_info.deposit.saturating_sub(unreserved),
+					hash,
+					remaining,
 					code_info.deposit
 				);
 			}
+
+			let unreserved = code_info.deposit.saturating_sub(remaining);
 
 			T::Currency::hold(
 				&HoldReason::StorageDepositReserve.into(),
@@ -118,7 +147,7 @@ where
 					"{:?} held on the code owner's account 0x{:?} for code {:?}.",
 					unreserved,
 					HexDisplay::from(&code_info.owner.encode()),
-					key,
+					hash,
 				);
 			})
 			.unwrap_or_else(|err| {
@@ -127,13 +156,13 @@ where
 					"Failed to hold {:?} from the code owner's account 0x{:?} for code {:?}, reason: {:?}.",
 					unreserved,
 					HexDisplay::from(&code_info.owner.encode()),
-					key,
+					hash,
 					err
 				);
 			});
 
-			self.last_code_hash = Some(key);
-			(IsFinished::No, T::WeightInfo::v9_migration_step(len)) // TODO
+			self.last_code_hash = Some(hash);
+			(IsFinished::No, T::WeightInfo::v9_migration_step(0)) // TODO
 		} else {
 			log::debug!(target: LOG_TARGET, "No more storage deposit to migrate");
 			(IsFinished::Yes, T::WeightInfo::v9_migration_step(0)) // TODO
@@ -142,48 +171,75 @@ where
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
-		let sample: Vec<_> = old::CodeInfoOf::<T, OldCurrency>::iter().take(100).collect();
+		let info: Vec<_> = old::CodeInfoOf::<T, OldCurrency>::iter().collect();
 
-		log::debug!(target: LOG_TARGET, "Taking sample of {} contracts", sample.len());
-		Ok(sample.encode())
+		let mut owner_balance_allocation =
+			BTreeMap::<AccountIdOf<T>, BalanceAllocation<T, OldCurrency>>::new();
+
+		// Calculates the balance allocation by accumulating the storage deposits of all codes owned
+		// by an owner.
+		for (_, code_info) in info {
+			owner_balance_allocation
+				.entry(code_info.owner.clone())
+				.and_modify(|alloc| {
+					alloc.reserved = alloc.reserved.saturating_add(code_info.deposit);
+				})
+				.or_insert(BalanceAllocation {
+					reserved: code_info.deposit,
+					total: OldCurrency::total_balance(&code_info.owner),
+				});
+		}
+
+		Ok(owner_balance_allocation.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let sample = <Vec<(CodeHash<T>, old::CodeInfoOf<T, OldCurrency>)> as Decode>::decode(
-			&mut &state[..],
-		)
-		.expect("pre_upgrade_step provides a valid state; qed");
+		let owner_balance_allocation =
+			<BTreeMap<AccountIdOf<T>, BalanceAllocation<T, OldCurrency>> as Decode>::decode(
+				&mut &state[..],
+			)
+			.expect("pre_upgrade_step provides a valid state; qed");
 
-		log::debug!(target: LOG_TARGET, "Validating sample of {} contracts", sample.len());
-
-		// Keep the sum of the storage deposits of all codes owned by an owner.
-		let mut owner_storage_deposits = HashMap::<T::AccountId, BalanceOf<T>>::new();
-
-		for (_, old_code_info) in sample {
-			*owner_storage_deposits
-				.entry(old_code_info.owner)
-				.or_insert(BalanceOf::<T>::zero()) += old_code_info.deposit.into();
-		}
-
-		for (&owner, &reserved) in owner_storage_deposits {
+		let mut total_held: BalanceOf<T> = Zero::zero();
+		let count = owner_balance_allocation.len();
+		for (owner, old_balance_allocation) in owner_balance_allocation {
 			let held =
 				T::Currency::balance_on_hold(&HoldReason::StorageDepositReserve.into(), &owner);
-			ensure!(
-				held == reserved,
-				"Held amount mismatch for owner 0x{:?}: expected {:?}, got {:?}",
+			log::debug!(
+				target: LOG_TARGET,
+				"Validating storage deposit for owner 0x{:?}, reserved: {:?}, held: {:?}",
 				HexDisplay::from(&owner.encode()),
-				reserved,
+				old_balance_allocation.reserved,
 				held
 			);
-			ensure!(
-				OldCurrency::total_balance(owner).into() == T::Currency::balance(owner),
-				"Balance mismatch for owner 0x{:?}: old balance {:?}, new balance {:?}",
+			ensure!(held == old_balance_allocation.reserved.into(), "Held amount mismatch");
+
+			log::debug!(
+				target: LOG_TARGET,
+				"Validating total balance for owner 0x{:?}, new: {:?}, old: {:?}",
 				HexDisplay::from(&owner.encode()),
-				OldCurrency::total_balance(owner),
-				T::Currency::balance(owner)
+				T::Currency::total_balance(&owner),
+				old_balance_allocation.total
 			);
+			ensure!(
+				T::Currency::total_balance(&owner) == old_balance_allocation.total.into(),
+				"Balance mismatch "
+			);
+			total_held += held;
 		}
+
+		log::info!(
+			target: LOG_TARGET,
+			"Code owners processed: {:?}.",
+			count
+		);
+
+		log::info!(
+			target: LOG_TARGET,
+			"Total held amount for storage deposit: {:?}",
+			total_held
+		);
 
 		Ok(())
 	}
