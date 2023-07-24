@@ -637,7 +637,7 @@ where
 						.disconnect_peer(*peer, self.block_announce_protocol_name.clone());
 				}
 
-				// after all the peers have been evicted, start timers ago to prevent evicting
+				// after all the peers have been evicted, start timers again to prevent evicting
 				// new peers that join after the old peer have been evicted
 				self.last_notification_received = Instant::now();
 				self.last_notification_sent = Instant::now();
