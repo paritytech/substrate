@@ -409,8 +409,8 @@ where
 	///
 	/// Use this method instead of [`Self::charge`] when the charge is not the result of a storage
 	/// change. This is the case when a `delegate_dependency` is added or removed, or when the
-	/// `code_hash` is updated. `[Self::charge]` can not be used here because we keep track of the
-	/// deposit charge separately from the storage charge.
+	/// `code_hash` is updated. [`Self::charge`] cannot be used here because we keep track of the
+	/// deposit charg separately from the storage charge.
 	pub fn charge_deposit(&mut self, deposit_account: DepositAccount<T>, amount: DepositOf<T>) {
 		self.total_deposit = self.total_deposit.saturating_add(&amount);
 		self.charges.push(Charge { deposit_account, amount, terminated: false });
