@@ -319,6 +319,8 @@ pub enum NotificationsOut {
 		received_handshake: Vec<u8>,
 		/// Object that permits sending notifications to the peer.
 		notifications_sink: NotificationsSink,
+		/// Is the connection inbound.
+		inbound: bool,
 	},
 
 	/// The [`NotificationsSink`] object used to send notifications with the given peer must be
@@ -1810,6 +1812,7 @@ impl NetworkBehaviour for Notifications {
 				negotiated_fallback,
 				received_handshake,
 				notifications_sink,
+				inbound,
 				..
 			} => {
 				let set_id = crate::peerset::SetId::from(protocol_index);
@@ -1834,6 +1837,7 @@ impl NetworkBehaviour for Notifications {
 								let event = NotificationsOut::CustomProtocolOpen {
 									peer_id,
 									set_id,
+									inbound,
 									negotiated_fallback,
 									received_handshake,
 									notifications_sink: notifications_sink.clone(),

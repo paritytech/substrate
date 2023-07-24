@@ -39,6 +39,9 @@ pub enum Error {
 	/// Invalid subscription ID provided by the RPC server.
 	#[error("Invalid subscription ID")]
 	InvalidSubscriptionID,
+	/// Wait-for-continue event not generated.
+	#[error("Wait for continue event was not generated for the subscription")]
+	InvalidContinue,
 }
 
 // Base code for all `chainHead` errors.
@@ -51,6 +54,8 @@ const FETCH_BLOCK_HEADER_ERROR: i32 = BASE_ERROR + 2;
 const INVALID_PARAM_ERROR: i32 = BASE_ERROR + 3;
 /// Invalid subscription ID.
 const INVALID_SUB_ID: i32 = BASE_ERROR + 4;
+/// Wait-for-continue event not generated.
+const INVALID_CONTINUE: i32 = BASE_ERROR + 5;
 
 impl From<Error> for ErrorObject<'static> {
 	fn from(e: Error) -> Self {
@@ -62,6 +67,7 @@ impl From<Error> for ErrorObject<'static> {
 				ErrorObject::owned(FETCH_BLOCK_HEADER_ERROR, msg, None::<()>),
 			Error::InvalidParam(_) => ErrorObject::owned(INVALID_PARAM_ERROR, msg, None::<()>),
 			Error::InvalidSubscriptionID => ErrorObject::owned(INVALID_SUB_ID, msg, None::<()>),
+			Error::InvalidContinue => ErrorObject::owned(INVALID_CONTINUE, msg, None::<()>),
 		}
 		.into()
 	}
