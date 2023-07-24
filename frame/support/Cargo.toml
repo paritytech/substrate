@@ -29,7 +29,7 @@ sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-weights = { version = "20.0.0", default-features = false, path = "../../primitives/weights" }
 sp-debug-derive = { default-features = false, path = "../../primitives/debug-derive" }
 tt-call = "1.0.8"
-macro_magic = "0.4.1"
+macro_magic = "0.4.2"
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
 paste = "1.0"
 sp-state-machine = { version = "0.28.0", default-features = false, optional = true, path = "../../primitives/state-machine" }
