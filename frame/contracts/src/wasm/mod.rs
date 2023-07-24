@@ -3367,9 +3367,9 @@ mod tests {
 	(import "seal0" "remove_delegate_dependency" (func $remove_delegate_dependency (param i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(drop (call $add_delegate_dependency (i32.const 0)))
-		(drop (call $add_delegate_dependency (i32.const 32)))
-		(drop (call $remove_delegate_dependency (i32.const 32)))
+		(call $add_delegate_dependency (i32.const 0))
+		(call $add_delegate_dependency (i32.const 32))
+		(call $remove_delegate_dependency (i32.const 32))
 	)
 	(func (export "deploy"))
 
