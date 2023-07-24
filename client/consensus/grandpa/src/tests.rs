@@ -69,6 +69,8 @@ type GrandpaBlockImport = crate::GrandpaBlockImport<
 	LongestChain<substrate_test_runtime_client::Backend, Block>,
 >;
 
+const JUSTIFICATION_IMPORT_PERIOD: u32 = 32;
+
 #[derive(Default)]
 struct GrandpaTestNet {
 	peers: Vec<GrandpaPeer>,
@@ -126,6 +128,7 @@ impl TestNetFactory for GrandpaTestNet {
 		let (client, backend) = (client.as_client(), client.as_backend());
 		let (import, link) = block_import(
 			client.clone(),
+			JUSTIFICATION_IMPORT_PERIOD,
 			&self.test_config,
 			LongestChain::new(backend.clone()),
 			None,
@@ -318,7 +321,7 @@ fn initialize_grandpa(
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
 				local_role: Role::Authority,
@@ -446,11 +449,14 @@ async fn finalize_3_voters_no_observers() {
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(20, net.clone(), peers).await;
 
-	// normally there's no justification for finalized blocks
-	assert!(
-		net.lock().peer(0).client().justifications(hashof20).unwrap().is_none(),
-		"Extra justification for block#1",
-	);
+	// all peers should have stored the justification for the best finalized block #20
+	for peer_id in 0..3 {
+		let client = net.lock().peers[peer_id].client().as_client();
+		let justification =
+			crate::aux_schema::best_justification::<_, Block>(&*client).unwrap().unwrap();
+
+		assert_eq!(justification.justification.commit.target_number, 20);
+	}
 }
 
 #[tokio::test]
@@ -470,7 +476,7 @@ async fn finalize_3_voters_1_full_observer() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: None,
 				name: Some(format!("peer#{}", peer_id)),
 				local_role: Role::Authority,
@@ -565,7 +571,7 @@ async fn transition_3_voters_twice_1_full_observer() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
 				local_role: Role::Authority,
@@ -695,8 +701,8 @@ async fn justification_is_generated_periodically() {
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(32, net.clone(), peers).await;
 
-	// when block#32 (justification_period) is finalized, justification
-	// is required => generated
+	// when block#32 (justification_generation_period) is finalized,
+	// justification is required => generated
 	for i in 0..3 {
 		assert!(net.lock().peer(i).client().justifications(hashof32).unwrap().is_some());
 	}
@@ -993,7 +999,7 @@ async fn voter_persists_its_votes() {
 	let bob_network = {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
-			justification_period: 32,
+			justification_generation_period: 32,
 			keystore: Some(bob_keystore.clone()),
 			name: Some(format!("peer#{}", 1)),
 			local_role: Role::Authority,
@@ -1035,7 +1041,7 @@ async fn voter_persists_its_votes() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", 0)),
 				local_role: Role::Authority,
@@ -1081,7 +1087,7 @@ async fn voter_persists_its_votes() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", 0)),
 				local_role: Role::Authority,
@@ -1246,7 +1252,7 @@ async fn finalize_3_voters_1_light_observer() {
 	let observer = observer::run_grandpa_observer(
 		Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
-			justification_period: 32,
+			justification_generation_period: 32,
 			keystore: None,
 			name: Some("observer".to_string()),
 			local_role: Role::Full,
@@ -1294,7 +1300,7 @@ async fn voter_catches_up_to_latest_round_when_behind() {
 		let grandpa_params = GrandpaParams {
 			config: Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
-				justification_period: 32,
+				justification_generation_period: 32,
 				keystore,
 				name: Some(format!("peer#{}", peer_id)),
 				local_role: Role::Authority,
@@ -1409,7 +1415,7 @@ where
 
 	let config = Config {
 		gossip_duration: TEST_GOSSIP_DURATION,
-		justification_period: 32,
+		justification_generation_period: 32,
 		keystore,
 		name: None,
 		local_role: Role::Authority,
@@ -1903,24 +1909,19 @@ async fn imports_justification_for_regular_blocks_on_import() {
 
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
-
 	let full_client = client.as_client();
-	let builder = full_client
-		.new_block_at(full_client.chain_info().genesis_hash, Default::default(), false)
-		.unwrap();
-	let block = builder.build().unwrap().block;
 
-	let block_hash = block.hash();
+	// create a new block (without importing it)
+	let generate_block = |parent| {
+		let builder = full_client.new_block_at(parent, Default::default(), false).unwrap();
+		builder.build().unwrap().block
+	};
 
 	// create a valid justification, with one precommit targeting the block
-	let justification = {
-		let round = 1;
+	let make_justification = |round, hash, number| {
 		let set_id = 0;
 
-		let precommit = finality_grandpa::Precommit {
-			target_hash: block_hash,
-			target_number: *block.header.number(),
-		};
+		let precommit = finality_grandpa::Precommit { target_hash: hash, target_number: number };
 
 		let msg = finality_grandpa::Message::Precommit(precommit.clone());
 		let encoded = sp_consensus_grandpa::localized_payload(round, set_id, &msg);
@@ -1933,33 +1934,59 @@ async fn imports_justification_for_regular_blocks_on_import() {
 		};
 
 		let commit = finality_grandpa::Commit {
-			target_hash: block_hash,
-			target_number: *block.header.number(),
+			target_hash: hash,
+			target_number: number,
 			precommits: vec![precommit],
 		};
 
 		GrandpaJustification::from_commit(&full_client, round, commit).unwrap()
 	};
 
-	// we import the block with justification attached
-	let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
-	import.justifications = Some((GRANDPA_ENGINE_ID, justification.encode()).into());
-	import.body = Some(block.extrinsics);
-	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+	let mut generate_and_import_block_with_justification = |parent| {
+		// we import the block with justification attached
+		let block = generate_block(parent);
+		let block_hash = block.hash();
+		let justification = make_justification(1, block_hash, *block.header.number());
 
-	assert_eq!(
-		block_import.import_block(import).await.unwrap(),
-		ImportResult::Imported(ImportedAux {
-			needs_justification: false,
-			clear_justification_requests: false,
-			bad_justification: false,
-			is_new_best: true,
-			..Default::default()
-		}),
-	);
+		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
+		import.justifications = Some((GRANDPA_ENGINE_ID, justification.encode()).into());
+		import.body = Some(block.extrinsics);
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+
+		assert_eq!(
+			// NOTE: we use `block_on` here because async closures are
+			// unsupported and it doesn't matter if we block in a test
+			futures::executor::block_on(block_import.import_block(import)).unwrap(),
+			ImportResult::Imported(ImportedAux {
+				needs_justification: false,
+				clear_justification_requests: false,
+				bad_justification: false,
+				is_new_best: true,
+				..Default::default()
+			}),
+		);
+
+		block_hash
+	};
+
+	let block1 =
+		generate_and_import_block_with_justification(full_client.chain_info().genesis_hash);
 
 	// the justification should be imported and available from the client
-	assert!(client.justifications(block_hash).unwrap().is_some());
+	assert!(client.justifications(block1).unwrap().is_some());
+
+	// subsequent justifications should be ignored and not imported
+	let mut parent = block1;
+	for _ in 2..JUSTIFICATION_IMPORT_PERIOD {
+		parent = generate_and_import_block_with_justification(parent);
+		assert!(client.justifications(parent).unwrap().is_none());
+	}
+
+	let block32 = generate_and_import_block_with_justification(parent);
+
+	// until we reach a block in the next justification import period, at
+	// which point we should import it
+	assert!(client.justifications(block32).unwrap().is_some());
 }
 
 #[tokio::test]

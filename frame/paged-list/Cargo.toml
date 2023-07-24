@@ -1,0 +1,35 @@
+[package]
+name = "pallet-paged-list"
+version = "0.1.0"
+description = "FRAME pallet that provides a paged list data structure."
+authors = ["Parity Technologies <admin@parity.io>"]
+homepage = "https://substrate.io"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/paritytech/substrate"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [ "derive"] }
+docify = "0.1.13"
+scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
+
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "21.0.0", path = "../../primitives/core", default-features = false }
+sp-io = { version = "23.0.0", path = "../../primitives/io", default-features = false }
+
+[features]
+default = ["std"]
+
+std = ["codec/std", "frame-benchmarking?/std", "frame-support/std", "frame-system/std", "scale-info/std", "sp-core/std", "sp-io/std", "sp-runtime/std", "sp-std/std"]
+
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "frame-support/runtime-benchmarks", "frame-system/runtime-benchmarks", "sp-runtime/runtime-benchmarks"]
+
+try-runtime = ["frame-support/try-runtime"]
