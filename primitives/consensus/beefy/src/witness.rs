@@ -78,15 +78,11 @@ impl<TBlockNumber, TSignatureAccumulator>
 #[cfg(test)]
 mod tests {
 	use sp_core::{keccak_256, Pair};
-	use sp_keystore::{testing::MemoryKeystore, KeystorePtr};
 
 	use super::*;
 	use codec::Decode;
 
-	use crate::{
-		ecdsa_crypto::Signature as EcdsaSignature, known_payloads, Payload,
-		KEY_TYPE as BEEFY_KEY_TYPE,
-	};
+	use crate::{ecdsa_crypto::Signature as EcdsaSignature, known_payloads, Payload};
 
 	#[cfg(feature = "bls-experimental")]
 	use crate::bls_crypto::Signature as BlsSignature;
@@ -116,22 +112,13 @@ mod tests {
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_ecdsa_signatures() -> (EcdsaSignature, EcdsaSignature) {
-		let store: KeystorePtr = MemoryKeystore::new().into();
-
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
-		store.insert(BEEFY_KEY_TYPE, "//Alice", alice.public().as_ref()).unwrap();
 
 		let msg = keccak_256(b"This is the first message");
-		let sig1 = store
-			.ecdsa_sign_prehashed(BEEFY_KEY_TYPE, &alice.public(), &msg)
-			.unwrap()
-			.unwrap();
+		let sig1 = alice.sign_prehashed(&msg);
 
 		let msg = keccak_256(b"This is the second message");
-		let sig2 = store
-			.ecdsa_sign_prehashed(BEEFY_KEY_TYPE, &alice.public(), &msg)
-			.unwrap()
-			.unwrap();
+		let sig2 = alice.sign_prehashed(&msg);
 
 		(sig1.into(), sig2.into())
 	}
@@ -140,10 +127,7 @@ mod tests {
 	///BLS signatures
 	#[cfg(feature = "bls-experimental")]
 	fn mock_bls_signatures() -> (BlsSignature, BlsSignature) {
-		let store: KeystorePtr = MemoryKeystore::new().into();
-
 		let alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
-		store.insert(BEEFY_KEY_TYPE, "//Alice", alice.public().as_ref()).unwrap();
 
 		let msg = b"This is the first message";
 		let sig1 = alice.sign(msg);
