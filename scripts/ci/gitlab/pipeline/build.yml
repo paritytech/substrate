@@ -153,7 +153,7 @@ build-rustdoc:
     - .test-refs
   variables:
     SKIP_WASM_BUILD: 1
-    DOC_INDEX_PAGE: "sc_service/index.html" # default redirected page
+    DOC_INDEX_PAGE: "substrate/index.html" # default redirected page
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
   artifacts:
