@@ -397,7 +397,7 @@ where
 	T: Config,
 	E: Ext<T>,
 {
-	/// Charge `diff` from the meter.
+	/// Charges `diff` from the meter.
 	pub fn charge(&mut self, diff: &Diff) {
 		match &mut self.own_contribution {
 			Contribution::Alive(own) => *own = own.saturating_add(diff),
@@ -409,13 +409,14 @@ where
 	///
 	/// Use this method instead of [`Self::charge`] when the charge is not the result of a storage
 	/// change. This is the case when a `delegate_dependency` is added or removed, or when the
-	/// `code_hash` is updated.
+	/// `code_hash` is updated. `[Self::charge]` can not be used here because we keep track of the
+	/// deposit charge separately from the storage charge.
 	pub fn charge_deposit(&mut self, deposit_account: DepositAccount<T>, amount: DepositOf<T>) {
 		self.total_deposit = self.total_deposit.saturating_add(&amount);
 		self.charges.push(Charge { deposit_account, amount, terminated: false });
 	}
 
-	/// Charge from `origin` a storage deposit for contract instantiation.
+	/// Charges from `origin` a storage deposit for contract instantiation.
 	///
 	/// This immediately transfers the balance in order to create the account.
 	pub fn charge_instantiate(
