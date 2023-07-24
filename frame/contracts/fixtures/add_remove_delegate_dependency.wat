@@ -1,7 +1,7 @@
 ;; This contract tests the behavior of adding / removing delegate_dependencies when delegate calling into a contract.
 (module
-	(import "seal0" "add_delegate_dependency" (func $add_delegate_dependency (param i32) (result i32)))
-	(import "seal0" "remove_delegate_dependency" (func $remove_delegate_dependency (param i32) (result i32)))
+	(import "seal0" "add_delegate_dependency" (func $add_delegate_dependency (param i32)))
+	(import "seal0" "remove_delegate_dependency" (func $remove_delegate_dependency (param i32)))
 	(import "seal0" "input" (func $input (param i32 i32)))
 	(import "seal0" "terminate" (func $terminate (param i32 i32)))
 	(import "seal0" "delegate_call" (func $delegate_call (param i32 i32 i32 i32 i32 i32) (result i32)))
