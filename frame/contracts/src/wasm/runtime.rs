@@ -1579,9 +1579,6 @@ pub mod env {
 	/// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
 	/// supplying the sentinel value of `SENTINEL` to `output_ptr` or `address_ptr`.
 	///
-	/// `value` must be at least the minimum balance. Otherwise the instantiation fails and the
-	/// contract is not created.
-	///
 	/// # Parameters
 	///
 	/// - `code_hash_ptr`: a pointer to the buffer that contains the initializer code.
