@@ -30,7 +30,7 @@
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
 # parent-child pipelines but that's more complicated.
 
-check-dependant-runtime-upgrade-polkadot:
+check-dependent-runtime-upgrade-polkadot:
   extends: .check-dependent-project
   variables:
     DEPENDENT_REPO: polkadot
