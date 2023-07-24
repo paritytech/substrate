@@ -58,11 +58,7 @@
 		;; Call add_delegate_dependency when action == 1.
 		(if (i32.eq (get_local $action) (i32.const 1))
 		    (then
-				(call $assert (i32.eqz
-					(call $add_delegate_dependency
-						(get_local $code_hash_ptr)
-					)
-				))
+				(call $add_delegate_dependency (get_local $code_hash_ptr))
 			)
 			(else)
 		)
@@ -70,11 +66,9 @@
 		;; Call remove_delegate_dependency when action == 2.
 		(if (i32.eq (get_local $action) (i32.const 2))
 		    (then
-				(call $assert (i32.eqz
-					(call $remove_delegate_dependency
-						(get_local $code_hash_ptr)
-					)
-				))
+				(call $remove_delegate_dependency
+					(get_local $code_hash_ptr)
+				)
 			)
 			(else)
 		)

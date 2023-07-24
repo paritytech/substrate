@@ -870,7 +870,7 @@ benchmarks! {
 					module: "seal0",
 					name: "add_delegate_dependency",
 					params: vec![ValueType::I32],
-					return_type: Some(ValueType::I32),
+					return_type: None,
 				}
 			],
 			data_segments: vec![
@@ -2388,7 +2388,7 @@ benchmarks! {
 				module: "seal0",
 				name: "add_delegate_dependency",
 				params: vec![ValueType::I32],
-				return_type: Some(ValueType::I32),
+				return_type: None,
 			}],
 			data_segments: vec![
 				DataSegment {
@@ -2426,12 +2426,12 @@ benchmarks! {
 				module: "seal0",
 				name: "remove_delegate_dependency",
 				params: vec![ValueType::I32],
-				return_type: Some(ValueType::I32),
+				return_type: None,
 			}, ImportedFunction {
 				module: "seal0",
 				name: "add_delegate_dependency",
 				params: vec![ValueType::I32],
-				return_type: Some(ValueType::I32),
+				return_type: None
 			}],
 			data_segments: vec![
 				DataSegment {
