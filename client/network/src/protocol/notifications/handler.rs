@@ -203,6 +203,8 @@ enum State {
 	Opening {
 		/// Substream opened by the remote. If `Some`, has been accepted.
 		in_substream: Option<NotificationsInSubstream<NegotiatedSubstream>>,
+		/// Is the connection inbound.
+		inbound: bool,
 	},
 
 	/// Protocol is in the "Open" state.
@@ -276,6 +278,8 @@ pub enum NotifsHandlerOut {
 		received_handshake: Vec<u8>,
 		/// How notifications can be sent to this node.
 		notifications_sink: NotificationsSink,
+		/// Is the connection inbound.
+		inbound: bool,
 	},
 
 	/// Acknowledges a [`NotifsHandlerIn::Open`]. The remote has refused the attempt to open
@@ -518,7 +522,7 @@ impl ConnectionHandler for NotifsHandler {
 						error!(target: "sub-libp2p", "☎️ State mismatch in notifications handler");
 						debug_assert!(false);
 					},
-					State::Opening { ref mut in_substream } => {
+					State::Opening { ref mut in_substream, inbound } => {
 						let (async_tx, async_rx) = mpsc::channel(ASYNC_NOTIFICATIONS_BUFFER_SIZE);
 						let (sync_tx, sync_rx) = mpsc::channel(SYNC_NOTIFICATIONS_BUFFER_SIZE);
 						let notifications_sink = NotificationsSink {
@@ -543,6 +547,7 @@ impl ConnectionHandler for NotifsHandler {
 								endpoint: self.endpoint.clone(),
 								received_handshake: new_open.handshake,
 								notifications_sink,
+								inbound,
 							},
 						));
 					},
@@ -597,7 +602,7 @@ impl ConnectionHandler for NotifsHandler {
 							);
 						}
 
-						protocol_info.state = State::Opening { in_substream: None };
+						protocol_info.state = State::Opening { in_substream: None, inbound: false };
 					},
 					State::OpenDesiredByRemote { pending_opening, in_substream } => {
 						let handshake_message = protocol_info.config.handshake.read().clone();
@@ -623,12 +628,13 @@ impl ConnectionHandler for NotifsHandler {
 						// The state change is done in two steps because of borrowing issues.
 						let in_substream = match mem::replace(
 							&mut protocol_info.state,
-							State::Opening { in_substream: None },
+							State::Opening { in_substream: None, inbound: false },
 						) {
 							State::OpenDesiredByRemote { in_substream, .. } => in_substream,
 							_ => unreachable!(),
 						};
-						protocol_info.state = State::Opening { in_substream: Some(in_substream) };
+						protocol_info.state =
+							State::Opening { in_substream: Some(in_substream), inbound: true };
 					},
 					State::Opening { .. } | State::Open { .. } => {
 						// As documented, it is forbidden to send an `Open` while there is already
@@ -772,7 +778,7 @@ impl ConnectionHandler for NotifsHandler {
 			match &mut self.protocols[protocol_index].state {
 				State::Closed { .. } |
 				State::Open { in_substream: None, .. } |
-				State::Opening { in_substream: None } => {},
+				State::Opening { in_substream: None, .. } => {},
 
 				State::Open { in_substream: in_substream @ Some(_), .. } =>
 					match Stream::poll_next(Pin::new(in_substream.as_mut().unwrap()), cx) {
@@ -893,6 +899,7 @@ pub mod tests {
 				endpoint,
 				received_handshake,
 				notifications_sink,
+				inbound: false,
 			}
 		}
 
@@ -1131,7 +1138,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		// remote now tries to open another substream, verify that it is rejected and closed
@@ -1168,7 +1175,7 @@ pub mod tests {
 		.await;
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 	}
 
@@ -1204,7 +1211,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		// accept the substream and move its state to `Open`
@@ -1295,7 +1302,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		handler.on_behaviour_event(NotifsHandlerIn::Close { protocol_index: 0 });
@@ -1355,7 +1362,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		handler.on_behaviour_event(NotifsHandlerIn::Close { protocol_index: 0 });
@@ -1438,7 +1445,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		handler.on_behaviour_event(NotifsHandlerIn::Close { protocol_index: 0 });
@@ -1487,7 +1494,7 @@ pub mod tests {
 		handler.on_behaviour_event(NotifsHandlerIn::Open { protocol_index: 0 });
 		assert!(std::matches!(
 			handler.protocols[0].state,
-			State::Opening { in_substream: Some(_) }
+			State::Opening { in_substream: Some(_), .. }
 		));
 
 		handler.on_behaviour_event(NotifsHandlerIn::Close { protocol_index: 0 });

@@ -451,6 +451,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 				received_handshake,
 				notifications_sink,
 				negotiated_fallback,
+				inbound,
 			} => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
@@ -470,6 +471,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 							let (tx, rx) = oneshot::channel();
 							let _ = self.tx.unbounded_send(
 								crate::SyncEvent::NotificationStreamOpened {
+									inbound,
 									remote: peer_id,
 									received_handshake: handshake,
 									sink: notifications_sink,
@@ -510,6 +512,7 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 									let (tx, rx) = oneshot::channel();
 									let _ = self.tx.unbounded_send(
 										crate::SyncEvent::NotificationStreamOpened {
+											inbound,
 											remote: peer_id,
 											received_handshake: handshake,
 											sink: notifications_sink,

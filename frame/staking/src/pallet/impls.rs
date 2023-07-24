@@ -789,8 +789,14 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
+			let voter_weight = weight_of(&voter);
+			// if voter weight is zero, do not consider this voter for the snapshot.
+			if voter_weight.is_zero() {
+				log!(debug, "voter's active balance is 0. skip this voter.");
+				continue
+			}
+
 			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
-				let voter_weight = weight_of(&voter);
 				if !targets.is_empty() {
 					all_voters.push((voter.clone(), voter_weight, targets));
 					nominators_taken.saturating_inc();
@@ -803,7 +809,7 @@ impl<T: Config> Pallet<T> {
 				// if this voter is a validator:
 				let self_vote = (
 					voter.clone(),
-					weight_of(&voter),
+					voter_weight,
 					vec![voter.clone()]
 						.try_into()
 						.expect("`MaxVotesPerVoter` must be greater than or equal to 1"),
@@ -830,7 +836,7 @@ impl<T: Config> Pallet<T> {
 		Self::register_weight(T::WeightInfo::get_npos_voters(validators_taken, nominators_taken));
 
 		let min_active_stake: T::CurrencyBalance =
-			if all_voters.len() == 0 { 0u64.into() } else { min_active_stake.into() };
+			if all_voters.is_empty() { Zero::zero() } else { min_active_stake.into() };
 
 		MinimumActiveStake::<T>::put(min_active_stake);
 
