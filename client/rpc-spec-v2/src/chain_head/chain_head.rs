@@ -300,9 +300,7 @@ where
 		let items = items
 			.into_iter()
 			.map(|query| {
-				if query.queue_type != StorageQueryType::Value &&
-					query.queue_type != StorageQueryType::Hash
-				{
+				if query.queue_type == StorageQueryType::ClosestDescendantMerkleValue {
 					// Note: remove this once all types are implemented.
 					let _ = sink.reject(ChainHeadRpcError::InvalidParam(
 						"Storage query type not supported".into(),
