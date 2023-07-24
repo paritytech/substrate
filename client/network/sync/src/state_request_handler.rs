@@ -131,7 +131,8 @@ where
 	) -> (Self, ProtocolConfig) {
 		// Reserve enough request slots for one request per peer when we are at the maximum
 		// number of peers.
-		let (tx, request_receiver) = async_channel::bounded(num_peer_hint);
+		let capacity = std::cmp::max(num_peer_hint, 1);
+		let (tx, request_receiver) = async_channel::bounded(capacity);
 
 		let mut protocol_config = generate_protocol_config(
 			protocol_id,
