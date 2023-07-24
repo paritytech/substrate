@@ -81,6 +81,7 @@ where
 {
 	use frame_benchmarking::account;
 	use sp_runtime::traits::Hash;
+	use sp_std::vec;
 
 	let len = T::MaxCodeLen::get();
 	let code = vec![42u8; len as usize];
