@@ -2020,7 +2020,7 @@ impl NetworkBehaviour for Notifications {
 				Poll::Ready(None) => {
 					error!(
 						target: "sub-libp2p",
-						"Protocol controllers receiver stream has returned None",
+						"Protocol controllers receiver stream has returned `None`. Ignore this error if the node is shutting down.",
 					);
 					break
 				},
