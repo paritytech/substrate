@@ -19,13 +19,14 @@
 //! service work, and supporting types.
 
 use codec::FullCodec;
+use scale_info::TypeInfo;
 use sp_runtime::DispatchError;
 use sp_std::iter::Iterator;
 
 /// A general-purpose trait which defines a type of service work (i.e., work to performed by an
 /// off-chain worker) including methods for enumerating, validating, indexing, and running
 /// tasks of this type.
-pub trait Task: Sized + FullCodec {
+pub trait Task: Sized + FullCodec + TypeInfo {
 	type Enumeration: Iterator<Item = Self>;
 
 	/// A unique value representing this `Task`. Analogous to `call_index`, but for tasks.

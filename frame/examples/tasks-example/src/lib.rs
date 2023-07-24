@@ -32,7 +32,7 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+	#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum Task<T: Config> {
 		Increment,
 		Decrement,
@@ -47,7 +47,10 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> frame_support::traits::Task for Task<T> {
+	impl<T: Config> frame_support::traits::Task for Task<T>
+	where
+		T: TypeInfo,
+	{
 		type Enumeration = std::vec::IntoIter<Task<T>>;
 
 		const TASK_INDEX: usize = 0;
@@ -100,7 +103,10 @@ pub mod pallet {
 	pub type Value<T: Config> = StorageValue<_, u8>;
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
+	impl<T: Config> Pallet<T>
+	where
+		T: TypeInfo,
+	{
 		pub fn increment(origin: OriginFor<T>) -> DispatchResult {
 			ensure_root(origin)?;
 
