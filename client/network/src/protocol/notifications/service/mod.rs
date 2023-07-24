@@ -47,6 +47,9 @@ mod tests;
 /// Logging target for the file.
 const LOG_TARGET: &str = "notification-service";
 
+/// Default command queue size.
+const COMMAND_QUEUE_SIZE: usize = 64;
+
 /// Type representing subscribers of a notification protocol.
 type Subscribers = Arc<Mutex<Vec<TracingUnboundedSender<InnerNotificationEvent>>>>;
 
@@ -156,7 +159,7 @@ pub enum NotificationCommand {
 /// if it wishes to send notifications through `NotificationsSink` directly.
 ///
 /// The distributable `NoticationsSink` is wrapped in an `Arc<Mutex<>>` to allow
-/// `NotificationsService` to swap underlying sink in case the sink is replaced.
+/// `NotificationsService` to swap the underlying sink in case it's replaced.
 #[derive(Debug, Clone)]
 struct PeerContext {
 	/// Sink for sending notificaitons.
@@ -210,7 +213,7 @@ impl NotificationService for NotificationHandle {
 
 	/// Instruct `Notifications` to close substream for `peer`.
 	async fn close_substream(&mut self, _peer: PeerId) -> Result<(), ()> {
-		todo!("support for closing substreams not implemented yet");
+		todo!("support for closing substreams not implemented yet, call `NetworkService::disconnect_peer()` instead");
 	}
 
 	/// Send synchronous `notification` to `peer`.
@@ -221,13 +224,13 @@ impl NotificationService for NotificationHandle {
 	) -> Result<(), error::Error> {
 		log::trace!(target: LOG_TARGET, "{}: send sync notification to {peer:?}", self.protocol);
 
-		self.peers
-			.get(&peer)
-			// TODO(aaro): check what the current implementation does in case the peer doesn't exist
-			.ok_or_else(|| error::Error::PeerDoesntExist(*peer))?
-			.sink
-			.send_sync_notification(notification);
-		Ok(())
+		match self.peers.get(&peer) {
+			Some(info) => {
+				let _ = info.sink.send_sync_notification(notification);
+				Ok(())
+			},
+			None => Ok(()),
+		}
 	}
 
 	/// Send asynchronous `notification` to `peer`, allowing sender to exercise backpressure.
@@ -240,7 +243,6 @@ impl NotificationService for NotificationHandle {
 
 		self.peers
 			.get(&peer)
-			// TODO(aaro): check what the current implementation does in case the peer doesn't exist
 			.ok_or_else(|| error::Error::PeerDoesntExist(*peer))?
 			.sink
 			.reserve_notification()
@@ -581,7 +583,7 @@ pub fn notification_service(
 	protocol: ProtocolName,
 	metrics: Option<Registry>,
 ) -> (ProtocolHandlePair, Box<dyn NotificationService>) {
-	let (cmd_tx, cmd_rx) = mpsc::channel(64); // TODO: zzz
+	let (cmd_tx, cmd_rx) = mpsc::channel(COMMAND_QUEUE_SIZE);
 	let (event_tx, event_rx) = tracing_unbounded("mpsc-notification-to-protocol", 100_000);
 	let subscribers = Arc::new(Mutex::new(vec![event_tx]));
 	let metrics = metrics.map_or(None, |registry| metrics::register(&registry).ok());

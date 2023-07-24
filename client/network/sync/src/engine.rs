@@ -738,8 +738,6 @@ where
 
 			match event {
 				NotificationEvent::ValidateInboundSubstream { peer, handshake, result_tx } => {
-					// TODO(aaro): put peer on probation and wait to receive
-					// `NotificationStreamOpened` from them
 					let validation_result = self
 						.validate_handshake(&peer, handshake)
 						.map_or(ValidationResult::Reject, |_| ValidationResult::Accept);
@@ -840,7 +838,6 @@ where
 		}
 
 		self.chain_sync.peer_disconnected(&peer);
-		// TODO(aaro): remove this bookkeeping when `ProtocolController` is ready
 		self.default_peers_set_no_slot_connected_peers.remove(&peer);
 		self.event_streams
 			.retain(|stream| stream.unbounded_send(SyncEvent::PeerDisconnected(peer)).is_ok());
