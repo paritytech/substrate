@@ -22,7 +22,7 @@ use crate::{self as pallet_stake_tracker, *};
 use frame_election_provider_support::{ScoreProvider, VoteWeight};
 use frame_support::{derive_impl, parameter_types, traits::ConstU32};
 use sp_runtime::BuildStorage;
-use sp_staking::StakingInterface;
+use sp_staking::{Stake, StakingInterface};
 
 pub(crate) type AccountId = u64;
 pub(crate) type Balance = u64;
@@ -97,7 +97,7 @@ impl pallet_bags_list::Config<TargetBagsListInstance> for Test {
 	type WeightInfo = ();
 	type ScoreProvider = StakingMock;
 	type BagThresholds = BagThresholds;
-	type Score = <StakingMock as StakingInterface>::Balance;
+	type Score = VoteWeight;
 }
 
 impl pallet_stake_tracker::Config for Test {
@@ -127,6 +127,32 @@ impl StakingInterface for StakingMock {
 	type AccountId = AccountId;
 	type CurrencyToVote = ();
 
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self::Balance>, sp_runtime::DispatchError> {
+		let n = TestNominators::get();
+		match n.get(who) {
+			Some(nominator) => Some(nominator.0),
+			None => {
+				let v = TestValidators::get();
+				v.get(who).copied()
+			},
+		}
+		.ok_or("not a staker".into())
+	}
+
+	fn status(
+		who: &Self::AccountId,
+	) -> Result<sp_staking::StakerStatus<Self::AccountId>, sp_runtime::DispatchError> {
+		let n = TestNominators::get();
+
+		if n.contains_key(who) {
+			Ok(StakerStatus::Nominator(n.get(&who).expect("exists").1.clone()))
+		} else if TestValidators::get().contains_key(who) {
+			Ok(StakerStatus::Validator)
+		} else {
+			Err("not a staker".into())
+		}
+	}
+
 	fn minimum_nominator_bond() -> Self::Balance {
 		unreachable!();
 	}
@@ -146,12 +172,6 @@ impl StakingInterface for StakingMock {
 	}
 
 	fn current_era() -> sp_staking::EraIndex {
-		unreachable!();
-	}
-
-	fn stake(
-		_who: &Self::AccountId,
-	) -> Result<sp_staking::Stake<Self::Balance>, sp_runtime::DispatchError> {
 		unreachable!();
 	}
 
@@ -201,24 +221,117 @@ impl StakingInterface for StakingMock {
 		unreachable!();
 	}
 
-	fn status(
-		_who: &Self::AccountId,
-	) -> Result<sp_staking::StakerStatus<Self::AccountId>, sp_runtime::DispatchError> {
-		unreachable!();
-	}
-
 	fn unbond(_stash: &Self::AccountId, _value: Self::Balance) -> sp_runtime::DispatchResult {
 		unreachable!();
 	}
 }
 
-#[derive(Default)]
-pub struct ExtBuilder {}
+type Nominations = Vec<AccountId>;
+
+parameter_types! {
+	pub static TestNominators: BTreeMap<AccountId, (Stake<Balance>, Nominations)> = Default::default();
+	pub static TestValidators: BTreeMap<AccountId, Stake<Balance>> = Default::default();
+}
+
+pub(crate) fn get_scores<L: SortedListProvider<AccountId, Score = VoteWeight>>(
+) -> Vec<(AccountId, Balance)> {
+	let scores: Vec<_> = L::iter().map(|e| (e, L::get_score(&e).unwrap())).collect();
+	scores
+}
+
+pub(crate) fn populate_lists() {
+	add_validator(10, 100);
+	add_validator(11, 100);
+
+	add_nominator_with_nominations(1, 100, vec![10]);
+	add_nominator_with_nominations(2, 100, vec![10, 11]);
+}
+
+pub(crate) fn add_nominator(who: AccountId, stake: Balance) {
+	TestNominators::mutate(|n| {
+		n.insert(who, (Stake::<Balance> { active: stake, total: stake }, vec![]));
+	});
+
+	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_add(&who);
+}
+
+pub(crate) fn add_nominator_with_nominations(
+	who: AccountId,
+	stake: Balance,
+	nominations: Nominations,
+) {
+	TestNominators::mutate(|n| {
+		n.insert(who, (Stake::<Balance> { active: stake, total: stake }, nominations));
+	});
+
+	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_add(&who);
+}
+
+pub(crate) fn add_validator(who: AccountId, stake: Balance) {
+	TestValidators::mutate(|v| {
+		v.insert(who, Stake::<Balance> { active: stake, total: stake });
+	});
+
+	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_validator_add(&who);
+}
+
+pub(crate) fn update_stake(who: AccountId, new: Balance) {
+	match StakingMock::status(&who) {
+		Ok(StakerStatus::Nominator(nominations)) => {
+			TestNominators::mutate(|n| {
+				n.insert(who, (Stake { active: new, total: new }, nominations));
+			});
+		},
+		Ok(StakerStatus::Validator) => {
+			TestValidators::mutate(|n| {
+				n.insert(who, Stake { active: new, total: new });
+			});
+		},
+		Ok(StakerStatus::Idle) | Err(_) => panic!("not a staker"),
+	}
+
+	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_stake_update(&who, None);
+}
+
+pub(crate) fn remove_staker(who: AccountId) {
+	if TestNominators::get().contains_key(&who) {
+		<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_remove(&who, vec![]);
+		TestNominators::mutate(|n| {
+			n.remove(&who);
+		});
+	} else if TestValidators::get().contains_key(&who) {
+		<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_validator_remove(&who);
+		TestValidators::mutate(|v| v.remove(&who));
+	};
+}
+
+pub(crate) fn slash(
+	who: AccountId,
+	slashed_active: Balance,
+	slashed_unlocking: BTreeMap<sp_staking::EraIndex, Balance>,
+) {
+	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_slash(
+		&who,
+		slashed_active,
+		&slashed_unlocking,
+	);
+}
+
+#[derive(Default, Copy, Clone)]
+pub struct ExtBuilder {
+	populate_lists: bool,
+}
 
 impl ExtBuilder {
+	pub fn populate_lists(mut self) -> Self {
+		self.populate_lists = true;
+		self
+	}
+
 	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+
 		sp_io::TestExternalities::from(storage)
 	}
 
@@ -226,6 +339,11 @@ impl ExtBuilder {
 		sp_tracing::try_init_simple();
 
 		let mut ext = self.build();
-		ext.execute_with(test);
+		ext.execute_with(|| {
+			if self.populate_lists {
+				populate_lists();
+			}
+			test()
+		});
 	}
 }

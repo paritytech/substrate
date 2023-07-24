@@ -15,7 +15,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [ "derive"] }
 scale-info = { version = "2.0.0", default-features = false, features = ["derive"] }
 
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking", features = ["serde"] }
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 
 sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
@@ -42,6 +44,7 @@ std = [
 	"frame-system/std",
 	"scale-info/std",
 	"sp-runtime/std",
+	"sp-std/std",
 ]
 
 runtime-benchmarks = [
