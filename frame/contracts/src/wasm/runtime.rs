@@ -2829,26 +2829,18 @@ pub mod env {
 	}
 
 	#[unstable]
-	fn add_delegate_dependency(
-		ctx: _,
-		memory: _,
-		code_hash_ptr: u32,
-	) -> Result<ReturnCode, TrapReason> {
+	fn add_delegate_dependency(ctx: _, memory: _, code_hash_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::AddDelegateDependency)?;
 		let code_hash = ctx.read_sandbox_memory_as(memory, code_hash_ptr)?;
 		ctx.ext.add_delegate_dependency(code_hash)?;
-		Ok(ReturnCode::Success)
+		Ok(())
 	}
 
 	#[unstable]
-	fn remove_delegate_dependency(
-		ctx: _,
-		memory: _,
-		code_hash_ptr: u32,
-	) -> Result<ReturnCode, TrapReason> {
+	fn remove_delegate_dependency(ctx: _, memory: _, code_hash_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::RemoveDelegateDependency)?;
 		let code_hash = ctx.read_sandbox_memory_as(memory, code_hash_ptr)?;
 		ctx.ext.remove_delegate_dependency(&code_hash)?;
-		Ok(ReturnCode::Success)
+		Ok(())
 	}
 }
