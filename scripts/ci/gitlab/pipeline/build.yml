@@ -26,7 +26,7 @@
       --extra-dependencies "$EXTRA_DEPENDENCIES"
       --companion-overrides "$COMPANION_OVERRIDES"
 
-.check-runtime-upgrade:
+.check-runtime-migration:
   extends: .check-dependent-project
   variables:
     DEPENDENT_REPO: polkadot
@@ -44,11 +44,35 @@
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
 # parent-child pipelines but that's more complicated.
 
-check-runtime-upgrade-polkadot:
+check-runtime-migration-polkadot:
   extends:
-    - .check-runtime-upgrade
+    - .check-runtime-migration
   variables:
     NETWORK: polkadot
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
+
+check-runtime-migration-kusama:
+  extends:
+    - .check-runtime-migration
+  variables:
+    NETWORK: kusama
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
+
+check-runtime-migration-rococo:
+  extends:
+    - .check-runtime-migration
+  variables:
+    NETWORK: rococo
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
+
+check-runtime-migration-westend:
+  extends:
+    - .check-runtime-migration
+  variables:
+    NETWORK: westend
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
