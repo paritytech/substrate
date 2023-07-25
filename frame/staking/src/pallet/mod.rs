@@ -1236,13 +1236,13 @@ pub mod pallet {
 			// Fall back to `Stake` or `Free` variants if a 0% or 100% perbill is provided for an
 			// account respectively.
 			let payee_final = match payee {
-				PayoutDestination::Split((percent, account)) => {
-					if percent == Perbill::from_percent(100) {
-						PayoutDestination::Deposit(account)
-					} else if percent == Perbill::zero() {
+				PayoutDestination::Split((share, deposit_to)) => {
+					if share == Perbill::from_percent(100) {
+						PayoutDestination::Deposit(deposit_to)
+					} else if share == Perbill::zero() {
 						PayoutDestination::Stake
 					} else {
-						PayoutDestination::Split((percent, account))
+						PayoutDestination::Split((share, deposit_to))
 					}
 				},
 				PayoutDestination::Stake |
