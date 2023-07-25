@@ -392,8 +392,8 @@ pub enum PayoutDestination<AccountId> {
 	/// Deposit payout into the stash account and add to bond.
 	Stake,
 	/// Deposit the specified percentage of payout to the specified account as free balance, and
-	/// pay the rest, if any, into the stash account and add to bond. 0% and 100% should be
-	/// disallowed and handled as `Stake` and `Free` respectively.
+	/// pay the rest into the stash account and add to bond. 0% and 100% should be disallowed and
+	/// handled as `Stake` and `Free` respectively.
 	Split((Perbill, AccountId)),
 	/// Deposit payout as free balance to an account.
 	Deposit(AccountId),
