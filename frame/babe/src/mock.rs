@@ -223,6 +223,7 @@ impl Config for Test {
 	type DisabledValidators = Session;
 	type WeightInfo = ();
 	type MaxAuthorities = ConstU32<10>;
+	type MaxNominators = ConstU32<100>;
 	type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, AuthorityId)>>::Proof;
 	type EquivocationReportSystem =
 		super::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;

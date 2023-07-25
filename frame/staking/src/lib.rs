@@ -159,7 +159,7 @@
 //! ```
 //! use pallet_staking::{self as staking};
 //!
-//! #[frame_support::pallet]
+//! #[frame_support::pallet(dev_mode)]
 //! pub mod pallet {
 //! 	use super::*;
 //! 	use frame_support::pallet_prelude::*;
