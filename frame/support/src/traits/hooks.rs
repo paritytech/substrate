@@ -101,7 +101,46 @@ pub trait OnGenesis {
 
 /// See [`Hooks::on_runtime_upgrade`].
 pub trait OnRuntimeUpgrade {
+	/// Advanced lifecycle hook called for all pallets and custom migrations before any other
+	/// [`OnRuntimeUpgrade`] hooks.
+	///
+	/// Sometimes it is useful to have some logic execute prior to any other [`OnRuntimeUpgrade`]
+	/// hooks being called, which [`OnRuntimeUpgrade::before_all`] allows for.
+	///
+	/// When the Executive pallet executes runtime upgrades, hooks are called in this order:
+	/// 1. [`OnRuntimeUpgrade::before_all`] for all custom migrations
+	/// 2. [`OnRuntimeUpgrade::before_all`] for all pallet migrations
+	/// 3. For each custom migration:
+	/// 	1. [`OnRuntimeUpgrade::pre_upgrade`]
+	/// 	2. [`OnRuntimeUpgrade::on_runtime_upgrade`]
+	/// 	3. [`OnRuntimeUpgrade::post_upgrade`]
+	/// 4. For each pallet:
+	/// 	1. [`OnRuntimeUpgrade::pre_upgrade`]
+	/// 	2. [`OnRuntimeUpgrade::on_runtime_upgrade`]
+	/// 	3. [`OnRuntimeUpgrade::post_upgrade`]
+	///
+	/// An example of when this hook is useful is initializing the on-chain storage version of a
+	/// pallet when it is added to the runtime in a way which will not break
+	/// [`OnRuntimeUpgrade::post_upgrade`] checks.
+	///
+	/// This is an advanced hook unlikely to be needed in most [`OnRuntimeUpgrade`] implementations,
+	/// you can probably ignore it.
+	///
+	/// Returns the non-negotiable weight consumed by the checks.
+	fn before_all() -> Weight {
+		Weight::zero()
+	}
+
 	/// See [`Hooks::on_runtime_upgrade`].
+	/// Perform a module upgrade.
+	///
+	/// # Warning
+	///
+	/// This function will be called before we initialized any runtime state, aka `on_initialize`
+	/// wasn't called yet. So, information like the block number and any other
+	/// block local data are not accessible.
+	///
+	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> Weight {
 		Weight::zero()
 	}
@@ -145,6 +184,12 @@ pub trait OnRuntimeUpgrade {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
+	fn before_all() -> Weight {
+		let mut weight = Weight::zero();
+		for_tuples!( #( weight = weight.saturating_add(Tuple::before_all()); )* );
+		weight
+	}
+
 	fn on_runtime_upgrade() -> Weight {
 		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );

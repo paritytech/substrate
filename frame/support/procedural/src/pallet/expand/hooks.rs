@@ -35,6 +35,31 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_ident = &def.pallet_struct.pallet;
 	let frame_system = &def.frame_system;
 
+	let initialize_on_chain_storage_version = if let Some(current_version) =
+		def.pallet_struct.storage_version.as_ref()
+	{
+		quote::quote! {
+			#frame_support::log::info!(
+				target: #frame_support::LOG_TARGET,
+				"🐥 Pallet {:?} has no on-chain storage version. Initializing the on-chain storage version to match the storage version defined in the pallet: {:?}",
+				pallet_name,
+				#current_version
+			);
+			#current_version.put::<Self>();
+		}
+	} else {
+		quote::quote! {
+			let default_version = #frame_support::traits::StorageVersion::new(0);
+			#frame_support::log::info!(
+				target: #frame_support::LOG_TARGET,
+				"🐥 Pallet {:?} has no on-chain storage version. The pallet has not defined storage version, so the on-chain version is being initialized to {:?}.",
+				pallet_name,
+				default_version,
+			);
+			default_version.put::<Self>();
+		}
+	};
+
 	let log_runtime_upgrade = if has_runtime_upgrade {
 		// a migration is defined here.
 		quote::quote! {
@@ -190,6 +215,26 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::traits::OnRuntimeUpgrade
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
+			fn before_all() -> Weight {
+				#frame_support::sp_tracing::enter_span!(
+					#frame_support::sp_tracing::trace_span!("before_all")
+				);
+
+				// Check if the on-chain version has been set yet
+				let exists = #frame_support::traits::StorageVersion::exists::<Self>();
+				if !exists {
+					let pallet_name = <
+						<T as #frame_system::Config>::PalletInfo
+						as
+						#frame_support::traits::PalletInfo
+					>::name::<Self>().unwrap_or("<unknown pallet name>");
+					#initialize_on_chain_storage_version
+					Weight::zero() // TODO: Return weight of 1 read 1 write
+				} else {
+					Weight::zero() // TODO: Return weight of 1 read
+				}
+			}
+
 			fn on_runtime_upgrade() -> #frame_support::weights::Weight {
 				#frame_support::sp_tracing::enter_span!(
 					#frame_support::sp_tracing::trace_span!("on_runtime_update")
