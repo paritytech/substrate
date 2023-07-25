@@ -45,7 +45,12 @@ pub struct GenesisParameters;
 
 impl substrate_test_client::GenesisInit for GenesisParameters {
 	fn genesis_storage(&self) -> Storage {
-		crate::genesis::config().build_storage().unwrap()
+		let mut storage = crate::genesis::config().build_storage().unwrap();
+		storage.top.insert(
+			sp_core::storage::well_known_keys::CODE.to_vec(),
+			kitchensink_runtime::wasm_binary_unwrap().into(),
+		);
+		storage
 	}
 }
 
