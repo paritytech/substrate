@@ -246,7 +246,6 @@ impl<T: Config> WasmBlob<T> {
 						&self.code_info.owner,
 						deposit,
 					)
-					// TODO: better error mapping
 					.map_err(|_| {
 						let _ = System::<T>::dec_providers(&self.code_info.owner);
 						<Error<T>>::StorageDepositNotHeld
