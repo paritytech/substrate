@@ -34,6 +34,7 @@ use sp_runtime::{
 	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(

@@ -24,6 +24,7 @@ use crate::{
 		chain_head_follow::ChainHeadFollower,
 		error::Error as ChainHeadRpcError,
 		event::{ChainHeadEvent, ChainHeadResult, ErrorEvent, FollowEvent, NetworkConfig},
+		hex_string,
 		subscription::{SubscriptionManagement, SubscriptionManagementError},
 	},
 	SubscriptionTaskExecutor,
@@ -42,9 +43,14 @@ use sc_client_api::{
 };
 use sp_api::CallApiAt;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, traits::CallContext, Bytes};
+use sp_core::{traits::CallContext, Bytes};
 use sp_runtime::traits::Block as BlockT;
 use std::{marker::PhantomData, sync::Arc, time::Duration};
+
+use super::{
+	chain_head_storage::ChainHeadStorage,
+	event::{ChainHeadStorageEvent, StorageQuery, StorageQueryType},
+};
 
 pub(crate) const LOG_TARGET: &str = "rpc-spec-v2";
 
@@ -74,7 +80,7 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 		max_pinned_blocks: usize,
 		max_pinned_duration: Duration,
 	) -> Self {
-		let genesis_hash = format!("0x{:?}", HexDisplay::from(&genesis_hash.as_ref()));
+		let genesis_hash = hex_string(&genesis_hash.as_ref());
 
 		Self {
 			client,
@@ -229,7 +235,7 @@ where
 			let event = match client.block(hash) {
 				Ok(Some(signed_block)) => {
 					let extrinsics = signed_block.block.extrinsics();
-					let result = format!("0x{:?}", HexDisplay::from(&extrinsics.encode()));
+					let result = hex_string(&extrinsics.encode());
 					ChainHeadEvent::Done(ChainHeadResult { result })
 				},
 				Ok(None) => {
@@ -272,7 +278,7 @@ where
 
 		self.client
 			.header(hash)
-			.map(|opt_header| opt_header.map(|h| format!("0x{:?}", HexDisplay::from(&h.encode()))))
+			.map(|opt_header| opt_header.map(|h| hex_string(&h.encode())))
 			.map_err(ChainHeadRpcError::FetchBlockHeader)
 			.map_err(Into::into)
 	}
@@ -286,14 +292,33 @@ where
 		mut sink: SubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
-		key: String,
-		child_key: Option<String>,
+		items: Vec<StorageQuery<String>>,
+		child_trie: Option<String>,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
-		let key = StorageKey(parse_hex_param(&mut sink, key)?);
+		// Gain control over parameter parsing and returned error.
+		let items = items
+			.into_iter()
+			.map(|query| {
+				if query.queue_type != StorageQueryType::Value &&
+					query.queue_type != StorageQueryType::Hash
+				{
+					// Note: remove this once all types are implemented.
+					let _ = sink.reject(ChainHeadRpcError::InvalidParam(
+						"Storage query type not supported".into(),
+					));
+					return Err(SubscriptionEmptyError)
+				}
 
-		let child_key = child_key
-			.map(|child_key| parse_hex_param(&mut sink, child_key))
+				Ok(StorageQuery {
+					key: StorageKey(parse_hex_param(&mut sink, query.key)?),
+					queue_type: query.queue_type,
+				})
+			})
+			.collect::<Result<Vec<_>, _>>()?;
+
+		let child_trie = child_trie
+			.map(|child_trie| parse_hex_param(&mut sink, child_trie))
 			.transpose()?
 			.map(ChildInfo::new_default_from_vec);
 
@@ -304,7 +329,7 @@ where
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) => {
 				// Invalid invalid subscription ID.
-				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
+				let _ = sink.send(&ChainHeadStorageEvent::<String>::Disjoint);
 				return Ok(())
 			},
 			Err(SubscriptionManagementError::BlockHashAbsent) => {
@@ -313,63 +338,19 @@ where
 				return Ok(())
 			},
 			Err(error) => {
-				let _ = sink.send(&ChainHeadEvent::<String>::Error(ErrorEvent {
+				let _ = sink.send(&ChainHeadStorageEvent::<String>::Error(ErrorEvent {
 					error: error.to_string(),
 				}));
 				return Ok(())
 			},
 		};
 
+		let storage_client = ChainHeadStorage::<Client, Block, BE>::new(client);
+
 		let fut = async move {
 			let _block_guard = block_guard;
-			// The child key is provided, use the key to query the child trie.
-			if let Some(child_key) = child_key {
-				// The child key must not be prefixed with ":child_storage:" nor
-				// ":child_storage:default:".
-				if well_known_keys::is_default_child_storage_key(child_key.storage_key()) ||
-					well_known_keys::is_child_storage_key(child_key.storage_key())
-				{
-					let _ = sink
-						.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
-					return
-				}
 
-				let res = client
-					.child_storage(hash, &child_key, &key)
-					.map(|result| {
-						let result =
-							result.map(|storage| format!("0x{:?}", HexDisplay::from(&storage.0)));
-						ChainHeadEvent::Done(ChainHeadResult { result })
-					})
-					.unwrap_or_else(|error| {
-						ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
-					});
-				let _ = sink.send(&res);
-				return
-			}
-
-			// The main key must not be prefixed with b":child_storage:" nor
-			// b":child_storage:default:".
-			if well_known_keys::is_default_child_storage_key(&key.0) ||
-				well_known_keys::is_child_storage_key(&key.0)
-			{
-				let _ =
-					sink.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
-				return
-			}
-
-			// Main root trie storage query.
-			let res = client
-				.storage(hash, &key)
-				.map(|result| {
-					let result =
-						result.map(|storage| format!("0x{:?}", HexDisplay::from(&storage.0)));
-					ChainHeadEvent::Done(ChainHeadResult { result })
-				})
-				.unwrap_or_else(|error| {
-					ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
-				});
-			let _ = sink.send(&res);
+			storage_client.generate_events(sink, hash, items, child_trie);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
@@ -423,7 +404,7 @@ where
 				.executor()
 				.call(hash, &function, &call_parameters, CallContext::Offchain)
 				.map(|result| {
-					let result = format!("0x{:?}", HexDisplay::from(&result));
+					let result = hex_string(&result);
 					ChainHeadEvent::Done(ChainHeadResult { result })
 				})
 				.unwrap_or_else(|error| {

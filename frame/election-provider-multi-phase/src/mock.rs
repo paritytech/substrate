@@ -501,12 +501,6 @@ impl ElectionDataProvider for StakingMock {
 		let mut current = Targets::get();
 		current.push(target);
 		Targets::set(current);
-
-		// to be on-par with staking, we add a self vote as well. the stake is really not that
-		// important.
-		let mut current = Voters::get();
-		current.push((target, ExistentialDeposit::get() as u64, bounded_vec![target]));
-		Voters::set(current);
 	}
 }
 
