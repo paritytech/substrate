@@ -358,7 +358,8 @@ impl OpaqueKeyOwnershipProof {
 }
 
 sp_api::decl_runtime_apis! {
-	/// API necessary for BEEFY voters.
+		/// API necessary for BEEFY voters.
+		#[api_version(3)]
 	pub trait BeefyApi<AuthorityId> where
 	AuthorityId : Codec + RuntimeAppPublic,
 	{
