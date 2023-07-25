@@ -1,7 +1,7 @@
 use super::*;
 use frame_support::{pallet_prelude::*, weights::WeightMeter};
 use sp_arithmetic::{
-	traits::{SaturatedConversion, Saturating, Zero},
+	traits::{SaturatedConversion, Saturating, Zero, One},
 	FixedPointNumber,
 };
 use sp_runtime::traits::ConvertBack;
@@ -57,10 +57,11 @@ impl<T: Config> Pallet<T> {
 
 		let current_timeslice = Self::current_timeslice();
 		if status.last_timeslice < current_timeslice {
-			let rc_block = T::TimeslicePeriod::get() * current_timeslice.into();
+			// TODO: FIX: this should be the block directly after the end of the timeslice.
+			status.last_timeslice.saturating_inc();
+			let rc_block = T::TimeslicePeriod::get() * status.last_timeslice.into();
 			T::Coretime::request_revenue_info_at(rc_block);
 			meter.consume(T::WeightInfo::request_revenue_info_at());
-			status.last_timeslice.saturating_inc();
 		}
 
 		Status::<T>::put(&status);
@@ -82,7 +83,8 @@ impl<T: Config> Pallet<T> {
 			Some(x) => x,
 			None => return false,
 		};
-		let when: Timeslice = (until / T::TimeslicePeriod::get()).saturated_into();
+		// TODO: FIX: this should be the block directly after the end of the timeslice.
+		let when: Timeslice = (until / T::TimeslicePeriod::get()).saturating_sub(One::one()).saturated_into();
 		let mut revenue = T::ConvertBalance::convert_back(amount);
 		if revenue.is_zero() {
 			Self::deposit_event(Event::<T>::HistoryDropped { when, revenue });

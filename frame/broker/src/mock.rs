@@ -107,6 +107,9 @@ impl CoretimeInterface for TestCoretimeProvider {
 		NotifyCoreCount::mutate(|s| s.insert(0, count));
 	}
 	fn request_revenue_info_at(when: Self::BlockNumber) {
+		if when > Self::latest() {
+			panic!("Asking for revenue info in the future {:?} {:?}", when, Self::latest());
+		}
 		let mut total = 0;
 		CoretimeSpending::mutate(|s| {
 			s.retain(|(n, a)| {

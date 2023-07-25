@@ -27,6 +27,8 @@ mod coretime_interface;
 mod dispatchable_impls;
 mod nonfungible_impl;
 #[cfg(test)]
+mod mock;
+#[cfg(test)]
 mod test_fungibles;
 #[cfg(test)]
 mod tests;

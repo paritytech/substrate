@@ -3,7 +3,7 @@ use frame_support::{
 	pallet_prelude::{DispatchResult, *},
 	traits::{fungible::Mutate, tokens::Preservation::Expendable, DefensiveResult},
 };
-use sp_arithmetic::traits::{Saturating, Zero};
+use sp_arithmetic::traits::{Saturating, Zero, CheckedDiv};
 use sp_runtime::traits::Convert;
 use CompletionStatus::{Complete, Partial};
 
@@ -319,8 +319,8 @@ impl<T: Config> Pallet<T> {
 				Some(x) => x,
 				None => break,
 			};
-			let p = total_payout.saturating_mul(contributed_parts.into()) /
-				pool_record.private_contributions.into();
+			let p = total_payout.saturating_mul(contributed_parts.into())
+				.checked_div(&pool_record.private_contributions.into()).unwrap_or_default();
 
 			payout.saturating_accrue(p);
 			pool_record.private_contributions.saturating_reduce(contributed_parts);

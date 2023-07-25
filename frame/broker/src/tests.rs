@@ -100,37 +100,62 @@ fn drop_contribution_works() {
 #[test]
 fn drop_history_works() {
 	TestExt::new()
-		.contribution_timeout(3)
+		.contribution_timeout(4)
 		.endow(1, 1000)
-		.endow(2, 10)
+		.endow(2, 30)
 		.execute_with(|| {
 			assert_ok!(Broker::do_start_sales(100, 1));
 			advance_to(2);
 			let mut region = Broker::do_purchase(1, u64::max_value()).unwrap();
+			// Place region in pool. Active in pool timeslices 4, 5, 6 = rcblocks 8, 10, 12; we
+			// expect to make/receive revenue reports on blocks 10, 12, 14.
 			assert_ok!(Broker::do_pool(region, Some(1), 1, Final));
-			assert_ok!(Broker::do_purchase_credit(1, 20, 1));
-			advance_to(8);
-			assert_ok!(TestCoretimeProvider::spend_instantaneous(2, 10));
-			advance_to(15);
+			assert_ok!(Broker::do_purchase_credit(2, 30, 2));
+			advance_to(6);
+			// In the stable state with no pending payouts, we expect to see 3 items in
+			// InstaPoolHistory here since there is a latency of 1 timeslice (for generating the
+			// revenue report), the forward notice period (equivalent to another timeslice) and a
+			// block between the revenue report being requested and the response being processed.
 			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 3);
-			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
-			advance_to(16);
-			assert_ok!(Broker::do_drop_history(region.begin));
+			advance_to(7);
+			// One block later, the most recent report will have been processed, so the effective
+			// queue drops to 2 items.
 			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 2);
-			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
+			advance_to(8);
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 3);
+			assert_ok!(TestCoretimeProvider::spend_instantaneous(2, 10));
+			advance_to(10);
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 3);
+			assert_ok!(TestCoretimeProvider::spend_instantaneous(2, 10));
+			advance_to(12);
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 4);
+			assert_ok!(TestCoretimeProvider::spend_instantaneous(2, 10));
+			advance_to(14);
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 5);
+			advance_to(16);
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 6);
 			advance_to(17);
-			region.begin += 1;
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
 			advance_to(18);
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 6);
+			// Block 18 is 8 blocks ()= 4 timeslices = contribution timeout) after first region.
+			// Its revenue should now be droppable.
 			assert_ok!(Broker::do_drop_history(region.begin));
-			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 1);
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 5);
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
 			advance_to(19);
 			region.begin += 1;
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
 			advance_to(20);
 			assert_ok!(Broker::do_drop_history(region.begin));
-			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 0);
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 4);
+			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
+			advance_to(21);
+			region.begin += 1;
+			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::StillValid);
+			advance_to(22);
+			assert_ok!(Broker::do_drop_history(region.begin));
+			assert_eq!(InstaPoolHistory::<Test>::iter().count(), 3);
 			assert_noop!(Broker::do_drop_history(region.begin), Error::<Test>::NoHistory);
 		});
 }
