@@ -143,7 +143,7 @@ where
 		child_key: Option<&ChildInfo>,
 		ty: IterQueryType,
 	) -> QueryIterResult {
-		let mut keys_iter = if let Some(child_key) = child_key {
+		let keys_iter = if let Some(child_key) = child_key {
 			self.client.child_storage_keys(hash, child_key.to_owned(), Some(key), None)
 		} else {
 			self.client.storage_keys(hash, Some(key), None)
@@ -153,22 +153,16 @@ where
 		})?;
 
 		let mut ret = Vec::with_capacity(MAX_ITER_ITEMS);
-		let mut maximum_iters = MAX_ITER_ITEMS;
+		let mut keys_iter = keys_iter.take(MAX_ITER_ITEMS);
 		while let Some(key) = keys_iter.next() {
-			if maximum_iters > 0 {
-				maximum_iters -= 1;
-			}
-
 			let result = match ty {
 				IterQueryType::Value => self.query_storage_value(hash, &key, child_key),
 				IterQueryType::Hash => self.query_storage_hash(hash, &key, child_key),
 			}?;
 
-			let Some(result) = result else {
-				continue
-			};
-
-			ret.push(result);
+			if let Some(result) = result {
+				ret.push(result);
+			}
 		}
 
 		QueryIterResult::Ok(ret)
