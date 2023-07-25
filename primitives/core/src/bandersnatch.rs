@@ -42,8 +42,8 @@ pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"band");
 #[cfg(feature = "full_crypto")]
 pub const SIGNING_CTX: &[u8] = b"SigningContext";
 
-// Max ring domain size
-const RING_MAX_SIZE: u32 = 1024;
+// Max ring domain size.
+const RING_DOMAIN_SIZE: usize = 1024;
 
 #[cfg(feature = "full_crypto")]
 const SEED_SERIALIZED_LEN: usize = 32;
@@ -115,7 +115,7 @@ impl TryFrom<&[u8]> for Public {
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
 		if data.len() != PUBLIC_SERIALIZED_LEN {
-			return Err(())
+			return Err(());
 		}
 		let mut r = [0u8; PUBLIC_SERIALIZED_LEN];
 		r.copy_from_slice(data);
@@ -179,7 +179,7 @@ impl TryFrom<&[u8]> for Signature {
 
 	fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
 		if data.len() != SIGNATURE_SERIALIZED_LEN {
-			return Err(())
+			return Err(());
 		}
 		let mut r = [0u8; SIGNATURE_SERIALIZED_LEN];
 		r.copy_from_slice(data);
@@ -239,7 +239,7 @@ impl TraitPair for Pair {
 	/// The slice must be 64 bytes long or it will return an error.
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
 		if seed_slice.len() != SEED_SERIALIZED_LEN {
-			return Err(SecretStringError::InvalidSeedLength)
+			return Err(SecretStringError::InvalidSeedLength);
 		}
 		let mut seed = [0; SEED_SERIALIZED_LEN];
 		seed.copy_from_slice(seed_slice);
@@ -264,7 +264,7 @@ impl TraitPair for Pair {
 			if let DeriveJunction::Hard(cc) = p {
 				seed = derive_hard(seed, cc);
 			} else {
-				return Err(DeriveError::SoftKeyInPath)
+				return Err(DeriveError::SoftKeyInPath);
 			}
 		}
 		Ok((Self::from_seed(&seed), Some(seed)))
@@ -500,7 +500,7 @@ pub mod vrf {
 		fn vrf_verify(&self, data: &Self::VrfSignData, signature: &Self::VrfSignature) -> bool {
 			let preouts_len = signature.vrf_outputs.len();
 			if preouts_len != data.vrf_inputs.len() {
-				return false
+				return false;
 			}
 			// Hack used because backend signature type is generic over the number of ios
 			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
@@ -609,16 +609,15 @@ pub mod ring_vrf {
 
 	/// Context used to produce ring signatures.
 	#[derive(Clone)]
-	pub struct RingVrfContext(KZG);
+	pub struct RingContext(KZG);
 
-	impl RingVrfContext {
+	impl RingContext {
 		/// Build an dummy instance used for testing purposes.
 		pub fn new_testing() -> Self {
-			Self(KZG::testing_kzg_setup([0; 32], RING_MAX_SIZE))
+			Self(KZG::testing_kzg_setup([0; 32], RING_DOMAIN_SIZE as u32))
 		}
 
-		/// Get the keyset size.
-		/// TODO @swasilyev: shouldn't this be equal to the domain_size used at init time?
+		/// Get the keyset max size.
 		pub fn max_keyset_size(&self) -> usize {
 			self.0.max_keyset_size()
 		}
@@ -650,7 +649,7 @@ pub mod ring_vrf {
 		}
 	}
 
-	impl Encode for RingVrfContext {
+	impl Encode for RingContext {
 		fn encode(&self) -> Vec<u8> {
 			let mut buf = Box::new([0; RING_CONTEXT_SERIALIZED_LEN]);
 			self.0
@@ -660,22 +659,22 @@ pub mod ring_vrf {
 		}
 	}
 
-	impl Decode for RingVrfContext {
+	impl Decode for RingContext {
 		fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
 			let buf = <Box<[u8; RING_CONTEXT_SERIALIZED_LEN]>>::decode(i)?;
 			let kzg =
 				KZG::deserialize_compressed(buf.as_slice()).map_err(|_| "KZG decode error")?;
-			Ok(RingVrfContext(kzg))
+			Ok(RingContext(kzg))
 		}
 	}
 
-	impl MaxEncodedLen for RingVrfContext {
+	impl MaxEncodedLen for RingContext {
 		fn max_encoded_len() -> usize {
 			<[u8; RING_CONTEXT_SERIALIZED_LEN]>::max_encoded_len()
 		}
 	}
 
-	impl TypeInfo for RingVrfContext {
+	impl TypeInfo for RingContext {
 		type Identity = [u8; RING_CONTEXT_SERIALIZED_LEN];
 
 		fn type_info() -> scale_info::Type {
@@ -753,7 +752,7 @@ pub mod ring_vrf {
 		pub fn verify(&self, data: &VrfSignData, verifier: &RingVerifier) -> bool {
 			let preouts_len = self.outputs.len();
 			if preouts_len != data.vrf_inputs.len() {
-				return false
+				return false;
 			}
 			// Hack used because backend signature type is generic over the number of ios.
 			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
@@ -817,10 +816,12 @@ mod tests {
 
 	#[test]
 	fn backend_assumptions_check() {
+		let ring_ctx = RingContext::new_testing();
 		let pair = SecretKey::from_seed(DEV_SEED);
 		let public = pair.to_public();
 
 		assert_eq!(public.0.size_of_serialized(), PUBLIC_SERIALIZED_LEN);
+		assert_eq!(ring_ctx.max_keyset_size(), RING_DOMAIN_SIZE - 257);
 	}
 
 	#[test]
@@ -931,7 +932,7 @@ mod tests {
 
 	#[test]
 	fn ring_vrf_sign_verify() {
-		let ring_ctx = RingVrfContext::new_testing();
+		let ring_ctx = RingContext::new_testing();
 
 		let mut pks: Vec<_> = (0..16).map(|i| Pair::from_seed(&[i as u8; 32]).public()).collect();
 		assert!(pks.len() <= ring_ctx.max_keyset_size());
@@ -957,7 +958,7 @@ mod tests {
 
 	#[test]
 	fn encode_decode_ring_vrf_signature() {
-		let ring_ctx = RingVrfContext::new_testing();
+		let ring_ctx = RingContext::new_testing();
 
 		let mut pks: Vec<_> = (0..16).map(|i| Pair::from_seed(&[i as u8; 32]).public()).collect();
 		assert!(pks.len() <= ring_ctx.max_keyset_size());
@@ -979,10 +980,10 @@ mod tests {
 
 		let bytes = expected.encode();
 
-		let expected_len = data.vrf_inputs.len() * PREOUT_SERIALIZED_LEN +
-			PEDERSEN_SIGNATURE_SERIALIZED_LEN +
-			RING_PROOF_SERIALIZED_LEN +
-			1;
+		let expected_len = data.vrf_inputs.len() * PREOUT_SERIALIZED_LEN
+			+ PEDERSEN_SIGNATURE_SERIALIZED_LEN
+			+ RING_PROOF_SERIALIZED_LEN
+			+ 1;
 		assert_eq!(bytes.len(), expected_len);
 
 		let decoded = RingVrfSignature::decode(&mut bytes.as_slice()).unwrap();
@@ -991,13 +992,13 @@ mod tests {
 
 	#[test]
 	fn encode_decode_ring_vrf_context() {
-		let ctx1 = RingVrfContext::new_testing();
+		let ctx1 = RingContext::new_testing();
 		let enc1 = ctx1.encode();
 
 		println!("SIZE: {}", enc1.len());
-		assert_eq!(enc1.len(), RingVrfContext::max_encoded_len());
+		assert_eq!(enc1.len(), RingContext::max_encoded_len());
 
-		let ctx2 = RingVrfContext::decode(&mut enc1.as_slice()).unwrap();
+		let ctx2 = RingContext::decode(&mut enc1.as_slice()).unwrap();
 		let enc2 = ctx2.encode();
 
 		assert_eq!(enc1, enc2);
