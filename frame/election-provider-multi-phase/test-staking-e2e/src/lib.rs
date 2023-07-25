@@ -20,7 +20,7 @@ mod mock;
 
 pub(crate) const LOG_TARGET: &str = "tests::e2e-epm";
 
-use frame_support::assert_ok;
+use frame_support::{assert_err, assert_noop, assert_ok};
 use mock::*;
 use sp_core::Get;
 use sp_npos_elections::{to_supports, StakedAssignment};
@@ -253,6 +253,8 @@ fn continous_slashes_below_offending_threshold() {
 }
 
 #[test]
+/// Slashed validator sets intentions in the same era of slashing.
+///
 /// When validators are slashed, they are chilled and removed from the current `VoterList`. Thus,
 /// the slashed validator should not be considered in the next validator set. However, if the
 /// slashed validator sets its intention to validate again in the same era when it was slashed and
@@ -318,4 +320,70 @@ fn set_validation_intention_after_chilled() {
 		// nominations are still active as before the slash.
 		assert_eq!(Nominators::<Runtime>::get(21).unwrap().targets, vec![41]);
 	})
+}
+
+#[test]
+/// Active ledger balance may fall below ED if account chills before unbounding.
+///
+/// Unbonding call fails if the remaining ledger's stash balance falls below the existential
+/// deposit. However, if the stash is chilled before unbonding, the ledger's active balance may
+/// be below ED. In that case, only the stash (or root) can kill the ledger entry by calling
+/// `withdraw_unbonded` after the bonding period has passed.
+///
+/// Related to <https://github.com/paritytech/substrate/issues/14246>.
+fn ledger_consistency_active_balance_below_ed() {
+	use pallet_staking::{Error, Event};
+
+	let (mut ext, pool_state, _) =
+		ExtBuilder::default().staking(StakingExtBuilder::default()).build_offchainify();
+
+	ext.execute_with(|| {
+		assert_eq!(Staking::ledger(&11).unwrap().active, 1000);
+
+		// unbonding total of active stake fails because the active ledger balance would fall
+		// below the `MinNominatorBond`.
+		assert_noop!(
+			Staking::unbond(RuntimeOrigin::signed(11), 1000),
+			Error::<Runtime>::InsufficientBond
+		);
+
+		// however, chilling works as expected.
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(11)));
+
+		// now unbonding the full active balance works, since remainer of the active balance is
+		// not enforced to be below `MinNominatorBond` if the stash has been chilled.
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(11), 1000));
+
+		// the active balance of the ledger entry is 0, while total balance is 1000 until
+		// `withdraw_unbonded` is called.
+		assert_eq!(Staking::ledger(&11).unwrap().active, 0);
+		assert_eq!(Staking::ledger(&11).unwrap().total, 1000);
+
+		// trying to withdraw the unbonded balance won't work yet because not enough bonding
+		// eras have passed.
+		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(11), 0));
+		assert_eq!(Staking::ledger(&11).unwrap().total, 1000);
+
+		// tries to reap stash after chilling, which fails since the stash total balance is
+		// above ED.
+		assert_err!(
+			Staking::reap_stash(RuntimeOrigin::signed(11), 21, 0),
+			Error::<Runtime>::FundedTarget,
+		);
+
+		// check the events so far: 1x Chilled and 1x Unbounded
+		assert_eq!(
+			staking_events(),
+			[Event::Chilled { stash: 11 }, Event::Unbonded { stash: 11, amount: 1000 }]
+		);
+
+		// after advancing `BondingDuration` eras, the `withdraw_unbonded` will unlock the
+		// chunks and the ledger entry will be cleared, since the ledger active balance is 0.
+		advance_eras(
+			<Runtime as pallet_staking::Config>::BondingDuration::get() as usize,
+			pool_state,
+		);
+		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(11), 0));
+		assert_eq!(Staking::ledger(&11), None);
+	});
 }
