@@ -719,11 +719,7 @@ pub trait NotificationService: Debug + Send {
 	async fn close_substream(&mut self, peer: PeerId) -> Result<(), ()>;
 
 	/// Send synchronous `notification` to `peer`.
-	fn send_sync_notification(
-		&self,
-		peer: &PeerId,
-		notification: Vec<u8>,
-	) -> Result<(), error::Error>;
+	fn send_sync_notification(&self, peer: &PeerId, notification: Vec<u8>);
 
 	/// Send asynchronous `notification` to `peer`, allowing sender to exercise backpressure.
 	///

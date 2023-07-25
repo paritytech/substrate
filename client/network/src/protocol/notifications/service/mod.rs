@@ -217,19 +217,11 @@ impl NotificationService for NotificationHandle {
 	}
 
 	/// Send synchronous `notification` to `peer`.
-	fn send_sync_notification(
-		&self,
-		peer: &PeerId,
-		notification: Vec<u8>,
-	) -> Result<(), error::Error> {
+	fn send_sync_notification(&self, peer: &PeerId, notification: Vec<u8>) {
 		log::trace!(target: LOG_TARGET, "{}: send sync notification to {peer:?}", self.protocol);
 
-		match self.peers.get(&peer) {
-			Some(info) => {
-				let _ = info.sink.send_sync_notification(notification);
-				Ok(())
-			},
-			None => Ok(()),
+		if let Some(info) = self.peers.get(&peer) {
+			let _ = info.sink.send_sync_notification(notification);
 		}
 	}
 

@@ -512,7 +512,6 @@ impl Notifications {
 					let event =
 						NotificationsOut::CustomProtocolClosed { peer_id: *peer_id, set_id };
 					self.events.push_back(ToSwarm::GenerateEvent(event));
-					// TODO(aaro): error handling?
 					let _ = self.protocol_handles[usize::from(set_id)]
 						.report_substream_closed(*peer_id);
 				}
@@ -830,7 +829,6 @@ impl Notifications {
 					let event =
 						NotificationsOut::CustomProtocolClosed { peer_id: entry.key().0, set_id };
 					self.events.push_back(ToSwarm::GenerateEvent(event));
-					// TODO(aaro): error handling?
 					let _ = self.protocol_handles[usize::from(set_id)]
 						.report_substream_closed(entry.key().0);
 				}
@@ -1420,7 +1418,6 @@ impl NetworkBehaviour for Notifications {
 												notifications_sink: replacement_sink.clone(),
 											};
 											self.events.push_back(ToSwarm::GenerateEvent(event));
-											// TODO(aaro): check error
 											let _ = self.protocol_handles[usize::from(set_id)]
 												.report_notification_sink_replaced(
 													peer_id,
@@ -1437,7 +1434,6 @@ impl NetworkBehaviour for Notifications {
 											set_id,
 										};
 										self.events.push_back(ToSwarm::GenerateEvent(event));
-										// TODO(aaro): error handling?
 										let _ = self.protocol_handles[usize::from(set_id)]
 											.report_substream_closed(peer_id);
 									}
@@ -1859,7 +1855,6 @@ impl NetworkBehaviour for Notifications {
 							trace!(target: "sub-libp2p", "External API <= Closed({}, {:?})", peer_id, set_id);
 							let event = NotificationsOut::CustomProtocolClosed { peer_id, set_id };
 							self.events.push_back(ToSwarm::GenerateEvent(event));
-							// TODO(aaro): error handling?
 							let _ = self.protocol_handles[usize::from(set_id)]
 								.report_substream_closed(peer_id);
 						}
@@ -2107,7 +2102,6 @@ impl NetworkBehaviour for Notifications {
 						message: message.clone(),
 					};
 					self.events.push_back(ToSwarm::GenerateEvent(event));
-					// TODO(aaro): error handling
 					let _ = self.protocol_handles[protocol_index]
 						.report_notification_received(peer_id, message.to_vec());
 				} else {

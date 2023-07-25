@@ -112,7 +112,7 @@ async fn send_sync_notification() {
 		panic!("invalid event received");
 	}
 
-	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]).unwrap();
+	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]);
 	assert_eq!(
 		sync_rx.next().await,
 		Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, 8] })
@@ -174,13 +174,8 @@ async fn send_sync_notification_to_non_existent_peer() {
 	let (_handle, _stream) = proto.split();
 	let peer = PeerId::random();
 
-	if let Err(error::Error::PeerDoesntExist(peer_id)) =
-		notif.send_sync_notification(&peer, vec![1, 3, 3, 7])
-	{
-		assert_eq!(peer, peer_id);
-	} else {
-		panic!("invalid error received from `send_sync_notification()`");
-	}
+	// as per the original implementation, the call doesn't fail
+	notif.send_sync_notification(&peer, vec![1, 3, 3, 7])
 }
 
 #[tokio::test]
@@ -195,7 +190,7 @@ async fn send_async_notification_to_non_existent_peer() {
 	{
 		assert_eq!(peer, peer_id);
 	} else {
-		panic!("invalid error received from `send_sync_notification()`");
+		panic!("invalid error received from `send_async_notification()`");
 	}
 }
 
@@ -360,7 +355,7 @@ async fn peer_disconnects_then_sync_notification_is_sent() {
 	drop(sync_rx);
 
 	// as per documentation, error is not reported but the notification is silently dropped
-	assert!(notif.send_sync_notification(&peer_id, vec![1, 3, 3, 7]).is_ok());
+	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 7]);
 }
 
 #[tokio::test]
@@ -560,7 +555,7 @@ async fn cloned_service_opening_substream_sending_and_receiving_notifications_wo
 
 	for (i, notif) in vec![&mut notif1, &mut notif2, &mut notif3].iter().enumerate() {
 		// send notification from each service and verify peer receives it
-		notif.send_sync_notification(&peer_id, vec![1, 3, 3, i as u8]).unwrap();
+		notif.send_sync_notification(&peer_id, vec![1, 3, 3, i as u8]);
 		assert_eq!(
 			sync_rx.next().await,
 			Some(NotificationsSinkMessage::Notification { message: vec![1, 3, 3, i as u8] })
@@ -626,7 +621,7 @@ async fn sending_notifications_using_notifications_sink_works() {
 	sink.send_sync_notification(vec![1, 3, 3, 6]);
 
 	// send an asynchronous notification using the acquired notifications sink.
-	let sender = sink.send_async_notification(vec![1, 3, 3, 7]).await.unwrap();
+	let _ = sink.send_async_notification(vec![1, 3, 3, 7]).await.unwrap();
 
 	assert_eq!(
 		sync_rx.next().await,
@@ -638,7 +633,7 @@ async fn sending_notifications_using_notifications_sink_works() {
 	);
 
 	// send notifications using the stored notification sink as well.
-	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]).unwrap();
+	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]);
 	notif.send_async_notification(&peer_id, vec![1, 3, 3, 9]).await.unwrap();
 
 	assert_eq!(
@@ -703,7 +698,7 @@ async fn notification_sink_replaced() {
 	sink.send_sync_notification(vec![1, 3, 3, 6]);
 
 	// send an asynchronous notification using the acquired notifications sink.
-	let sender = sink.send_async_notification(vec![1, 3, 3, 7]).await.unwrap();
+	let _ = sink.send_async_notification(vec![1, 3, 3, 7]).await.unwrap();
 
 	assert_eq!(
 		sync_rx.next().await,
@@ -715,7 +710,7 @@ async fn notification_sink_replaced() {
 	);
 
 	// send notifications using the stored notification sink as well.
-	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]).unwrap();
+	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]);
 	notif.send_async_notification(&peer_id, vec![1, 3, 3, 9]).await.unwrap();
 
 	assert_eq!(
@@ -745,7 +740,7 @@ async fn notification_sink_replaced() {
 
 	// verify that using the `NotificationService` API automatically results in using the correct
 	// sink
-	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]).unwrap();
+	notif.send_sync_notification(&peer_id, vec![1, 3, 3, 8]);
 	notif.send_async_notification(&peer_id, vec![1, 3, 3, 9]).await.unwrap();
 
 	assert_eq!(
@@ -762,7 +757,7 @@ async fn notification_sink_replaced() {
 	sink.send_sync_notification(vec![1, 3, 3, 6]);
 
 	// send an asynchronous notification using the acquired notifications sink.
-	let sender = sink.send_async_notification(vec![1, 3, 3, 7]).await.unwrap();
+	let _ = sink.send_async_notification(vec![1, 3, 3, 7]).await.unwrap();
 
 	assert_eq!(
 		new_sync_rx.next().await,
