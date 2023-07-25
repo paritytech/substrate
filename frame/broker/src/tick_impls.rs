@@ -290,8 +290,8 @@ impl<T: Config> Pallet<T> {
 			.map(|i| (i.assignment, i.mask.count_ones() as u16 * (57_600 / 80)))
 			.inspect(|i| total_used.saturating_accrue(i.1))
 			.collect::<Vec<_>>();
-		if total_used < 80 {
-			intermediate.push((CoreAssignment::Idle, 80 - total_used));
+		if total_used < 57_600 {
+			intermediate.push((CoreAssignment::Idle, 57_600 - total_used));
 		}
 		intermediate.sort();
 		let mut assignment: Vec<(CoreAssignment, PartsOf57600)> =
