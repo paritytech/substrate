@@ -312,20 +312,21 @@ impl<T: Config> Pallet<T> {
 
 		match dest {
 			PayoutDestination::Stake => payout_destination_stake(amount),
-			PayoutDestination::Split((share, dest_account)) => {
+			PayoutDestination::Split((share, deposit_to)) => {
 				let amount_free = share * amount;
 				let amount_stake = amount.saturating_sub(amount_free);
-
 				let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
+
 				total_imbalance.subsume(
 					payout_destination_stake(amount_stake)
 						.unwrap_or(PositiveImbalanceOf::<T>::zero()),
 				);
-				total_imbalance.subsume(T::Currency::deposit_creating(&dest_account, amount_free));
+				total_imbalance.subsume(T::Currency::deposit_creating(&deposit_to, amount_free));
+
 				Some(total_imbalance)
 			},
-			PayoutDestination::Deposit(dest_account) =>
-				Some(T::Currency::deposit_creating(&dest_account, amount)),
+			PayoutDestination::Deposit(deposit_to) =>
+				Some(T::Currency::deposit_creating(&deposit_to, amount)),
 			PayoutDestination::Forgo => None,
 		}
 	}
