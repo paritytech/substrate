@@ -1497,6 +1497,7 @@ fn self_destruct_works() {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let _ = <Test as Config>::Currency::set_balance(&DJANGO, 1_000_000);
 		let min_balance = Contracts::min_balance();
+		let meter_storage_deposit = 131;
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -1515,7 +1516,7 @@ fn self_destruct_works() {
 		.account_id;
 
 		// Check that the BOB contract has been instantiated.
-		let contract = get_contract(&addr);
+		// let contract = get_contract(&addr);
 
 		// Drop all previous events
 		initialize_block(2);
@@ -1539,26 +1540,23 @@ fn self_destruct_works() {
 			1_000_000 + 100_000 + min_balance
 		);
 
+		// check that the Alice is missing Django's benefit
+		assert_eq!(
+			<Test as Config>::Currency::free_balance(ALICE),
+			1_000_000 - (100_000 + min_balance)
+		);
+
 		pretty_assertions::assert_eq!(
 			System::events(),
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::KilledAccount {
-						account: addr.clone()
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
+						from: addr.clone(),
+						to: DJANGO,
+						amount: 100_000 + min_balance,
 					}),
 					topics: vec![],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: addr.clone(),
-							to: DJANGO,
-							amount: 100_000 + min_balance,
-						}
-					),
-					topics: vec![hash(&addr), hash(&DJANGO)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1578,21 +1576,21 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::KilledAccount {
-						account: contract.deposit_account().deref().clone(),
-					}),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(
+						pallet_contracts::Event::StorageDepositTransferredAndReleased {
+							from: addr.clone(),
+							to: ALICE,
+							amount: meter_storage_deposit,
+						}
+					),
+					topics: vec![hash(&addr), hash(&ALICE)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositTransferredAndHeld {
-							from: contract.deposit_account().deref().clone(),
-							to: ALICE,
-							amount: 1_000,
-						}
-					),
-					topics: vec![hash(&contract.deposit_account().deref()), hash(&ALICE)],
+					event: RuntimeEvent::System(frame_system::Event::KilledAccount {
+						account: addr.clone()
+					}),
+					topics: vec![],
 				},
 			],
 		);

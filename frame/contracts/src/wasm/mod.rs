@@ -248,11 +248,7 @@ impl<T: Config> WasmBlob<T> {
 					)
 					.map_err(|_| {
 						let _ = System::<T>::dec_providers(&self.code_info.owner);
-<<<<<<< HEAD
-						<Error<T>>::StorageDepositNotEnoughFunds
-=======
 						<Error<T>>::StorageDepositNotHeld
->>>>>>> jg/13643-contracts-migrate-to-fungible-traits
 					})?;
 
 					<Pallet<T>>::deposit_event(
