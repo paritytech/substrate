@@ -203,13 +203,13 @@ impl<T: Config> Pallet<T> {
 			ensure!(check_owner == region.owner, Error::<T>::NotOwner);
 		}
 
-		ensure!((pivot & !region_id.part).is_void(), Error::<T>::ExteriorPivot);
+		ensure!((pivot & !region_id.mask).is_void(), Error::<T>::ExteriorPivot);
 		ensure!(!pivot.is_void(), Error::<T>::VoidPivot);
-		ensure!(pivot != region_id.part, Error::<T>::CompletePivot);
+		ensure!(pivot != region_id.mask, Error::<T>::CompletePivot);
 
-		let one = RegionId { part: pivot, ..region_id };
+		let one = RegionId { mask: pivot, ..region_id };
 		Regions::<T>::insert(&one, &region);
-		let other = RegionId { part: region_id.part ^ pivot, ..region_id };
+		let other = RegionId { mask: region_id.mask ^ pivot, ..region_id };
 		Regions::<T>::insert(&other, &region);
 
 		let new_region_ids = (one, other);
@@ -228,10 +228,10 @@ impl<T: Config> Pallet<T> {
 			let workplan_key = (region_id.begin, region_id.core);
 			let mut workplan = Workplan::<T>::get(&workplan_key).unwrap_or_default();
 			// Ensure no previous allocations exist.
-			workplan.retain(|i| (i.part & region_id.part).is_void());
+			workplan.retain(|i| (i.mask & region_id.mask).is_void());
 			if workplan
 				.try_push(ScheduleItem {
-					part: region_id.part,
+					mask: region_id.mask,
 					assignment: CoreAssignment::Task(target),
 				})
 				.is_ok()
@@ -248,7 +248,7 @@ impl<T: Config> Pallet<T> {
 							if price == p =>
 							w,
 						_ => CoreMask::void(),
-					} | region_id.part;
+					} | region_id.mask;
 					let workload =
 						if assigned.is_complete() { Complete(workplan) } else { Partial(assigned) };
 					let record = AllowedRenewalRecord { price, completion: workload };
@@ -279,11 +279,11 @@ impl<T: Config> Pallet<T> {
 			let mut workplan = Workplan::<T>::get(&workplan_key).unwrap_or_default();
 			let duration = region.end.saturating_sub(region_id.begin);
 			if workplan
-				.try_push(ScheduleItem { part: region_id.part, assignment: CoreAssignment::Pool })
+				.try_push(ScheduleItem { mask: region_id.mask, assignment: CoreAssignment::Pool })
 				.is_ok()
 			{
 				Workplan::<T>::insert(&workplan_key, &workplan);
-				let size = region_id.part.count_ones() as i32;
+				let size = region_id.mask.count_ones() as i32;
 				InstaPoolIo::<T>::mutate(region_id.begin, |a| a.private.saturating_accrue(size));
 				InstaPoolIo::<T>::mutate(region.end, |a| a.private.saturating_reduce(size));
 				let record = ContributionRecord { length: duration, payee };
@@ -301,7 +301,7 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let mut contribution =
 			InstaPoolContribution::<T>::take(region).ok_or(Error::<T>::UnknownContribution)?;
-		let contributed_parts = region.part.count_ones();
+		let contributed_parts = region.mask.count_ones();
 
 		Self::deposit_event(Event::RevenueClaimBegun { region, max_timeslices });
 

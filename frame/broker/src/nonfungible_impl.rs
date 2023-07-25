@@ -20,7 +20,7 @@ impl<T: Config> Inspect<T::AccountId> for Pallet<T> {
 			b"end" => Some(item.end.encode()),
 			b"length" => Some(item.end.saturating_sub(id.begin).encode()),
 			b"core" => Some(id.core.encode()),
-			b"part" => Some(id.part.encode()),
+			b"part" => Some(id.mask.encode()),
 			b"owner" => Some(item.owner.encode()),
 			b"paid" => Some(item.paid.encode()),
 			_ => None,

@@ -332,7 +332,7 @@ fn renewal_works() {
 #[test]
 fn instapool_payouts_work() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		let item = ScheduleItem { assignment: Pool, part: CoreMask::complete() };
+		let item = ScheduleItem { assignment: Pool, mask: CoreMask::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		assert_ok!(Broker::do_start_sales(100, 3));
 		advance_to(2);
@@ -353,7 +353,7 @@ fn instapool_payouts_work() {
 #[test]
 fn instapool_partial_core_payouts_work() {
 	TestExt::new().endow(1, 1000).execute_with(|| {
-		let item = ScheduleItem { assignment: Pool, part: CoreMask::complete() };
+		let item = ScheduleItem { assignment: Pool, mask: CoreMask::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		assert_ok!(Broker::do_start_sales(100, 2));
 		advance_to(2);
@@ -378,12 +378,12 @@ fn instapool_partial_core_payouts_work() {
 #[test]
 fn initialize_with_system_paras_works() {
 	TestExt::new().execute_with(|| {
-		let item = ScheduleItem { assignment: Task(1u32), part: CoreMask::complete() };
+		let item = ScheduleItem { assignment: Task(1u32), mask: CoreMask::complete() };
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(vec![item])));
 		let items = vec![
-			ScheduleItem { assignment: Task(2u32), part: 0xfffff_fffff_00000_00000.into() },
-			ScheduleItem { assignment: Task(3u32), part: 0x00000_00000_fffff_00000.into() },
-			ScheduleItem { assignment: Task(4u32), part: 0x00000_00000_00000_fffff.into() },
+			ScheduleItem { assignment: Task(2u32), mask: 0xfffff_fffff_00000_00000.into() },
+			ScheduleItem { assignment: Task(3u32), mask: 0x00000_00000_fffff_00000.into() },
+			ScheduleItem { assignment: Task(4u32), mask: 0x00000_00000_00000_fffff.into() },
 		];
 		assert_ok!(Broker::do_reserve(Schedule::truncate_from(items)));
 		assert_ok!(Broker::do_start_sales(100, 2));

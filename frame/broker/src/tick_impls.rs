@@ -128,7 +128,7 @@ impl<T: Config> Pallet<T> {
 		let now = frame_system::Pallet::<T>::block_number();
 
 		let pool_item =
-			ScheduleItem { assignment: CoreAssignment::Pool, part: CoreMask::complete() };
+			ScheduleItem { assignment: CoreAssignment::Pool, mask: CoreMask::complete() };
 		let just_pool = Schedule::truncate_from(vec![pool_item]);
 
 		// Clean up the old sale - we need to use up any unused cores by putting them into the
@@ -178,7 +178,7 @@ impl<T: Config> Pallet<T> {
 			let parts: u32 = schedule
 				.iter()
 				.filter(|i| matches!(i.assignment, CoreAssignment::Pool))
-				.map(|i| i.part.count_ones())
+				.map(|i| i.mask.count_ones())
 				.sum();
 			total_pooled.saturating_accrue(parts as i32);
 
@@ -191,9 +191,9 @@ impl<T: Config> Pallet<T> {
 		let mut leases = Leases::<T>::get();
 		// Can morph to a renewable as long as it's >=begin and <end.
 		leases.retain(|&LeaseRecordItem { until, task }| {
-			let part = CoreMask::complete();
+			let mask = CoreMask::complete();
 			let assignment = CoreAssignment::Task(task);
-			let schedule = BoundedVec::truncate_from(vec![ScheduleItem { part, assignment }]);
+			let schedule = BoundedVec::truncate_from(vec![ScheduleItem { mask, assignment }]);
 			Workplan::<T>::insert((region_begin, first_core), &schedule);
 			let expiring = until >= region_begin && until < region_end;
 			if expiring {
@@ -278,16 +278,16 @@ impl<T: Config> Pallet<T> {
 			None => return,
 		};
 		let workload = Workload::<T>::get(core);
-		let parts_used = workplan.iter().map(|i| i.part).fold(CoreMask::void(), |a, i| a | i);
+		let parts_used = workplan.iter().map(|i| i.mask).fold(CoreMask::void(), |a, i| a | i);
 		let mut workplan = workplan.into_inner();
-		workplan.extend(workload.into_iter().filter(|i| (i.part & parts_used).is_void()));
+		workplan.extend(workload.into_iter().filter(|i| (i.mask & parts_used).is_void()));
 		let workplan = Schedule::truncate_from(workplan);
 		Workload::<T>::insert(core, &workplan);
 
 		let mut total_used = 0;
 		let mut intermediate = workplan
 			.into_iter()
-			.map(|i| (i.assignment, i.part.count_ones() as u16 * (57_600 / 80)))
+			.map(|i| (i.assignment, i.mask.count_ones() as u16 * (57_600 / 80)))
 			.inspect(|i| total_used.saturating_accrue(i.1))
 			.collect::<Vec<_>>();
 		if total_used < 80 {

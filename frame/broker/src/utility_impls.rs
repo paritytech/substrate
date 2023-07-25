@@ -62,7 +62,7 @@ impl<T: Config> Pallet<T> {
 		owner: T::AccountId,
 		paid: Option<BalanceOf<T>>,
 	) -> RegionId {
-		let id = RegionId { begin, core, part: CoreMask::complete() };
+		let id = RegionId { begin, core, mask: CoreMask::complete() };
 		let record = RegionRecord { end, owner, paid };
 		Regions::<T>::insert(&id, &record);
 		id
@@ -92,7 +92,7 @@ impl<T: Config> Pallet<T> {
 			}
 		} else {
 			Workplan::<T>::mutate_extant((region_id.begin, region_id.core), |p| {
-				p.retain(|i| (i.part & region_id.part).is_void())
+				p.retain(|i| (i.mask & region_id.mask).is_void())
 			});
 		}
 		if finality == Finality::Provisional {

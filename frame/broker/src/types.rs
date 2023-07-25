@@ -40,21 +40,21 @@ pub struct RegionId {
 	/// The index of the Polakdot Core on which this Region will be scheduled.
 	pub core: CoreIndex,
 	/// The regularity parts in which this Region will be scheduled.
-	pub part: CoreMask,
+	pub mask: CoreMask,
 }
 impl From<u128> for RegionId {
 	fn from(x: u128) -> Self {
-		Self { begin: (x >> 96) as u32, core: (x >> 80) as u16, part: x.into() }
+		Self { begin: (x >> 96) as u32, core: (x >> 80) as u16, mask: x.into() }
 	}
 }
 impl From<RegionId> for u128 {
 	fn from(x: RegionId) -> Self {
-		(x.begin as u128) << 96 | (x.core as u128) << 80 | u128::from(x.part)
+		(x.begin as u128) << 96 | (x.core as u128) << 80 | u128::from(x.mask)
 	}
 }
 #[test]
 fn region_id_converts_u128() {
-	let r = RegionId { begin: 0x12345678u32, core: 0xabcdu16, part: 0xdeadbeefcafef00d0123.into() };
+	let r = RegionId { begin: 0x12345678u32, core: 0xabcdu16, mask: 0xdeadbeefcafef00d0123.into() };
 	let u = 0x12345678_abcd_deadbeefcafef00d0123u128;
 	assert_eq!(RegionId::from(u), r);
 	assert_eq!(u128::from(r), u);
@@ -76,7 +76,7 @@ pub type RegionRecordOf<T> = RegionRecord<<T as SConfig>::AccountId, BalanceOf<T
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ScheduleItem {
 	/// The regularity parts in which this Item will be scheduled on the Core.
-	pub part: CoreMask,
+	pub mask: CoreMask,
 	/// The job that the Core should be doing.
 	pub assignment: CoreAssignment,
 }

@@ -59,7 +59,7 @@ fn new_schedule() -> Schedule {
 	for i in 0..CORE_MASK_BITS {
 		items.push(ScheduleItem {
 			assignment: Task(i.try_into().unwrap()),
-			part: CoreMask::complete(),
+			mask: CoreMask::complete(),
 		});
 	}
 	Schedule::truncate_from(items)
@@ -240,7 +240,7 @@ mod benches {
 		assert_last_event::<T>(
 			Event::Purchased {
 				who: caller,
-				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				region_id: RegionId { begin: 4, core, mask: CoreMask::complete() },
 				price: 10u32.into(),
 				duration: 3u32.into(),
 			}
@@ -332,10 +332,10 @@ mod benches {
 
 		assert_last_event::<T>(
 			Event::Partitioned {
-				old_region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				old_region_id: RegionId { begin: 4, core, mask: CoreMask::complete() },
 				new_region_ids: (
-					RegionId { begin: 4, core, part: CoreMask::complete() },
-					RegionId { begin: 6, core, part: CoreMask::complete() },
+					RegionId { begin: 4, core, mask: CoreMask::complete() },
+					RegionId { begin: 6, core, mask: CoreMask::complete() },
 				),
 			}
 			.into(),
@@ -364,13 +364,13 @@ mod benches {
 
 		assert_last_event::<T>(
 			Event::Interlaced {
-				old_region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				old_region_id: RegionId { begin: 4, core, mask: CoreMask::complete() },
 				new_region_ids: (
-					RegionId { begin: 4, core, part: 0x00000_fffff_fffff_00000.into() },
+					RegionId { begin: 4, core, mask: 0x00000_fffff_fffff_00000.into() },
 					RegionId {
 						begin: 4,
 						core,
-						part: CoreMask::complete() ^ 0x00000_fffff_fffff_00000.into(),
+						mask: CoreMask::complete() ^ 0x00000_fffff_fffff_00000.into(),
 					},
 				),
 			}
@@ -405,7 +405,7 @@ mod benches {
 
 		assert_last_event::<T>(
 			Event::Assigned {
-				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				region_id: RegionId { begin: 4, core, mask: CoreMask::complete() },
 				task: 1000,
 				duration: 3u32.into(),
 			}
@@ -440,7 +440,7 @@ mod benches {
 
 		assert_last_event::<T>(
 			Event::Pooled {
-				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				region_id: RegionId { begin: 4, core, mask: CoreMask::complete() },
 				duration: 3u32.into(),
 			}
 			.into(),
@@ -479,7 +479,7 @@ mod benches {
 				who: recipient,
 				amount: 0u32.into(), // Todo: fix the conditions for this benchmark
 				next: if m < new_config_record::<T>().region_length {
-					Some(RegionId { begin: 4.saturating_add(m), core, part: CoreMask::complete() })
+					Some(RegionId { begin: 4.saturating_add(m), core, mask: CoreMask::complete() })
 				} else {
 					None
 				},
@@ -545,7 +545,7 @@ mod benches {
 
 		assert_last_event::<T>(
 			Event::RegionDropped {
-				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				region_id: RegionId { begin: 4, core, mask: CoreMask::complete() },
 				duration: 3u32.into(),
 			}
 			.into(),
@@ -581,7 +581,7 @@ mod benches {
 
 		assert_last_event::<T>(
 			Event::ContributionDropped {
-				region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				region_id: RegionId { begin: 4, core, mask: CoreMask::complete() },
 			}
 			.into(),
 		);
