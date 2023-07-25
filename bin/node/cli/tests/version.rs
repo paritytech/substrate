@@ -21,17 +21,17 @@ use regex::Regex;
 use std::process::Command;
 
 fn expected_regex() -> Regex {
-	Regex::new(r"^substrate (.+)-([a-f\d]+)$").unwrap()
+	Regex::new(r"^substrate-node (.+)-([a-f\d]+)$").unwrap()
 }
 
 #[test]
 fn version_is_full() {
 	let expected = expected_regex();
-	let output = Command::new(cargo_bin("substrate")).args(&["--version"]).output().unwrap();
+	let output = Command::new(cargo_bin("substrate-node")).args(&["--version"]).output().unwrap();
 
 	assert!(output.status.success(), "command returned with non-success exit code");
 
-	let output = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+	let output = dbg!(String::from_utf8_lossy(&output.stdout).trim().to_owned());
 	let captures = expected.captures(output.as_str()).expect("could not parse version in output");
 
 	assert_eq!(&captures[1], env!("CARGO_PKG_VERSION"));
@@ -41,11 +41,11 @@ fn version_is_full() {
 fn test_regex_matches_properly() {
 	let expected = expected_regex();
 
-	let captures = expected.captures("substrate 2.0.0-da487d19d").unwrap();
+	let captures = expected.captures("substrate-node 2.0.0-da487d19d").unwrap();
 	assert_eq!(&captures[1], "2.0.0");
 	assert_eq!(&captures[2], "da487d19d");
 
-	let captures = expected.captures("substrate 2.0.0-alpha.5-da487d19d").unwrap();
+	let captures = expected.captures("substrate-node 2.0.0-alpha.5-da487d19d").unwrap();
 	assert_eq!(&captures[1], "2.0.0-alpha.5");
 	assert_eq!(&captures[2], "da487d19d");
 }

@@ -388,21 +388,21 @@ pub mod pallet {
 		// dispatched.
 		//
 		// This function must return the weight consumed by `on_initialize` and `on_finalize`.
-		fn on_initialize(_n: T::BlockNumber) -> Weight {
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
 			Weight::zero()
 		}
 
 		// `on_finalize` is executed at the end of block after all extrinsic are dispatched.
-		fn on_finalize(_n: T::BlockNumber) {
+		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Perform necessary data/state clean up here.
 		}
 
 		// A runtime code run after every block and have access to extended set of APIs.
 		//
 		// For instance you can generate extrinsics for the upcoming produced block.
-		fn offchain_worker(_n: T::BlockNumber) {
+		fn offchain_worker(_n: BlockNumberFor<T>) {
 			// We don't do anything here.
 			// but we could dispatch extrinsic (transaction/unsigned/inherent) using
 			// sp_io::submit_extrinsic.

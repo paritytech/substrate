@@ -31,7 +31,7 @@ use frame_support::{
 	codec::Decode,
 	traits::{Get, KeyOwnerProofSystem, OnInitialize},
 };
-use frame_system::RawOrigin;
+use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::{historical::Pallet as Historical, Pallet as Session, *};
 use pallet_staking::{
 	benchmarking::create_validator_with_nominators, testing_utils::create_validators,
@@ -46,8 +46,8 @@ pub trait Config:
 {
 }
 
-impl<T: Config> OnInitialize<T::BlockNumber> for Pallet<T> {
-	fn on_initialize(n: T::BlockNumber) -> frame_support::weights::Weight {
+impl<T: Config> OnInitialize<BlockNumberFor<T>> for Pallet<T> {
+	fn on_initialize(n: BlockNumberFor<T>) -> frame_support::weights::Weight {
 		pallet_session::Pallet::<T>::on_initialize(n)
 	}
 }
@@ -156,7 +156,7 @@ fn check_membership_proof_setup<T: Config>(
 		Session::<T>::set_keys(RawOrigin::Signed(controller).into(), keys, proof).unwrap();
 	}
 
-	Pallet::<T>::on_initialize(T::BlockNumber::one());
+	Pallet::<T>::on_initialize(frame_system::pallet_prelude::BlockNumberFor::<T>::one());
 
 	// skip sessions until the new validator set is enacted
 	while Session::<T>::validators().len() < n as usize {

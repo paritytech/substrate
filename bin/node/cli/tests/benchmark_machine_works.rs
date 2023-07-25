@@ -22,7 +22,7 @@ use std::process::Command;
 /// Tests that the `benchmark machine` command works for the substrate dev runtime.
 #[test]
 fn benchmark_machine_works() {
-	let status = Command::new(cargo_bin("substrate"))
+	let status = Command::new(cargo_bin("substrate-node"))
 		.args(["benchmark", "machine", "--dev"])
 		.args([
 			"--verify-duration",
@@ -48,7 +48,7 @@ fn benchmark_machine_works() {
 #[test]
 #[cfg(debug_assertions)]
 fn benchmark_machine_fails_with_slow_hardware() {
-	let output = Command::new(cargo_bin("substrate"))
+	let output = Command::new(cargo_bin("substrate-node"))
 		.args(["benchmark", "machine", "--dev"])
 		.args([
 			"--verify-duration",
