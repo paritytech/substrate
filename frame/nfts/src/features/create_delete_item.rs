@@ -15,10 +15,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! This module contains helper methods to perform functionality associated with minting and burning items for the NFTs pallet.
+
 use crate::*;
 use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Mints a new item in the specified collection and assigns it to the `mint_to` account.
+    ///
+    /// This function is used to mint a new item in the specified `collection` and assign it to the
+    /// `mint_to` account. The minting process involves creating the item, setting its attributes and
+    /// metadata, and reserving the required deposit amount from the `mint_to` account. The minting
+    /// process is configurable through the provided `item_config` parameter. The `with_details_and_config`
+    /// closure is called to validate the provided `collection_details` and `collection_config` before
+    /// minting the item.
+    ///
+    /// - `collection`: The collection ID in which the item is minted.
+    /// - `item`: The ID of the newly minted item.
+    /// - `maybe_depositor`: The optional account that deposits the required amount for the item.
+    /// - `mint_to`: The account that receives the newly minted item.
+    /// - `item_config`: The configuration settings for the newly minted item.
+    /// - `with_details_and_config`: A closure to perform custom validation for minting the item. It
+    ///    is called with the `collection_details` and `collection_config`, allowing custom checks to
+    ///    be performed.
 	pub fn do_mint(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -86,6 +105,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+    /// Mints a new item using a pre-signed message.
+    ///
+    /// This function allows minting a new item using a pre-signed message. The minting process is
+    /// similar to the regular minting process, but it is performed by a pre-authorized account. The
+    /// `mint_to` account receives the newly minted item. The minting process is configurable through
+    /// the provided `mint_data`. The attributes, metadata, and price of the item are set according to
+    /// the provided `mint_data`. The `with_details_and_config` closure is called to validate the
+    /// provided `collection_details` and `collection_config` before minting the item.
+    ///
+    /// - `mint_to`: The account that receives the newly minted item.
+    /// - `mint_data`: The pre-signed minting data containing the `collection`, `item`, `attributes`,
+    ///    `metadata`, `deadline`, `only_account`, and `mint_price`.
+    /// - `signer`: The account that is authorized to mint the item using the pre-signed message.
 	pub(crate) fn do_mint_pre_signed(
 		mint_to: T::AccountId,
 		mint_data: PreSignedMintOf<T, I>,
@@ -163,6 +195,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+    /// Burns the specified item from the collection.
+    ///
+    /// This function burns the specified `item` from the specified `collection`. The item's owner
+    /// can call this function to remove the item permanently from the collection. Any associated
+    /// deposit and metadata will be cleared from the item. Custom logic can be executed using the
+    /// `with_details` closure to perform additional checks or actions before burning the item.
+    ///
+    /// - `collection`: The ID of the collection from which the item will be burned.
+    /// - `item`: The ID of the item to be burned.
+    /// - `with_details`: A closure to perform custom validation or actions before burning the item.
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,
