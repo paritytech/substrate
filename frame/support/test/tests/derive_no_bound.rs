@@ -15,11 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound, and
-//! RuntimeDebugNoBound
+//! Tests for DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound,
+//! RuntimeDebugNoBound, PartialOrdNoBound and OrdNoBound
 
 use frame_support::{
-	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	CloneNoBound, DebugNoBound, DefaultNoBound, EqNoBound, OrdNoBound, PartialEqNoBound,
+	PartialOrdNoBound, RuntimeDebugNoBound,
 };
 
 #[derive(RuntimeDebugNoBound)]
@@ -32,7 +33,7 @@ fn runtime_debug_no_bound_display_correctly() {
 }
 
 trait Config {
-	type C: std::fmt::Debug + Clone + Eq + PartialEq + Default;
+	type C: std::fmt::Debug + Clone + Eq + PartialEq + Default + PartialOrd + Ord;
 }
 
 struct Runtime;
@@ -42,7 +43,15 @@ impl Config for Runtime {
 	type C = u32;
 }
 
-#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
+#[derive(
+	DebugNoBound,
+	CloneNoBound,
+	EqNoBound,
+	PartialEqNoBound,
+	DefaultNoBound,
+	PartialOrdNoBound,
+	OrdNoBound,
+)]
 struct StructNamed<T: Config, U, V> {
 	a: u32,
 	b: u64,
@@ -96,9 +105,18 @@ fn test_struct_named() {
 	};
 
 	assert!(b != a_1);
+	assert!(b > a_1);
 }
 
-#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
+#[derive(
+	DebugNoBound,
+	CloneNoBound,
+	EqNoBound,
+	PartialEqNoBound,
+	DefaultNoBound,
+	PartialOrdNoBound,
+	OrdNoBound,
+)]
 struct StructUnnamed<T: Config, U, V>(u32, u64, T::C, core::marker::PhantomData<(U, V)>);
 
 #[rustversion::attr(not(stable), ignore)]
@@ -128,9 +146,18 @@ fn test_struct_unnamed() {
 	let b = StructUnnamed::<Runtime, ImplNone, ImplNone>(1, 2, 4, Default::default());
 
 	assert!(b != a_1);
+	assert!(b > a_1);
 }
 
-#[derive(DebugNoBound, CloneNoBound, EqNoBound, PartialEqNoBound, DefaultNoBound)]
+#[derive(
+	DebugNoBound,
+	CloneNoBound,
+	EqNoBound,
+	PartialEqNoBound,
+	DefaultNoBound,
+	PartialOrdNoBound,
+	OrdNoBound,
+)]
 struct StructNoGenerics {
 	field1: u32,
 	field2: u64,

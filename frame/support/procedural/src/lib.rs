@@ -29,9 +29,11 @@ mod derive_impl;
 mod dummy_part_checker;
 mod key_prefix;
 mod match_and_insert;
+mod ord_no_bound;
 mod pallet;
 mod pallet_error;
 mod partial_eq_no_bound;
+mod partial_ord_no_bound;
 mod storage;
 mod storage_alias;
 mod transactional;
@@ -707,6 +709,19 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 		};
 	)
 	.into()
+}
+
+/// Derive [`PartialOrd`] but do not bound any generic. Docs are at
+/// `frame_support::PartialOrdNoBound`.
+#[proc_macro_derive(PartialOrdNoBound)]
+pub fn derive_partial_ord_no_bound(input: TokenStream) -> TokenStream {
+	partial_ord_no_bound::derive_partial_ord_no_bound(input)
+}
+
+/// derive Ord but do no bound any generic. Docs are at `frame_support::OrdNoBound`.
+#[proc_macro_derive(OrdNoBound)]
+pub fn derive_ord_no_bound(input: TokenStream) -> TokenStream {
+	ord_no_bound::derive_ord_no_bound(input)
 }
 
 /// derive `Default` but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
