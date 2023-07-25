@@ -195,7 +195,7 @@ where
 				continue
 			}
 
-			match item.queue_type {
+			match item.query_type {
 				StorageQueryType::Value => {
 					match self.query_storage_value(hash, &item.key, child_key.as_ref()) {
 						Ok(Some(value)) => storage_results.push(value),

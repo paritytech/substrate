@@ -527,7 +527,7 @@ async fn get_storage_hash() {
 			rpc_params![
 				"invalid_sub_id",
 				&invalid_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Hash }]
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Hash }]
 			],
 		)
 		.await
@@ -542,7 +542,7 @@ async fn get_storage_hash() {
 			rpc_params![
 				&sub_id,
 				&invalid_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Hash }]
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Hash }]
 			],
 		)
 		.await
@@ -558,7 +558,7 @@ async fn get_storage_hash() {
 			rpc_params![
 				&sub_id,
 				&block_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Hash }]
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Hash }]
 			],
 		)
 		.await
@@ -592,7 +592,7 @@ async fn get_storage_hash() {
 			rpc_params![
 				&sub_id,
 				&block_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Hash }]
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Hash }]
 			],
 		)
 		.await
@@ -612,7 +612,7 @@ async fn get_storage_hash() {
 			rpc_params![
 				&sub_id,
 				&genesis_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Hash }],
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Hash }],
 				&child_info
 			],
 		)
@@ -658,11 +658,11 @@ async fn get_storage_multi_query_iter() {
 				vec![
 					StorageQuery {
 						key: key.clone(),
-						queue_type: StorageQueryType::DescendantsHashes
+						query_type: StorageQueryType::DescendantsHashes
 					},
 					StorageQuery {
 						key: key.clone(),
-						queue_type: StorageQueryType::DescendantsValues
+						query_type: StorageQueryType::DescendantsValues
 					}
 				]
 			],
@@ -692,11 +692,11 @@ async fn get_storage_multi_query_iter() {
 				vec![
 					StorageQuery {
 						key: key.clone(),
-						queue_type: StorageQueryType::DescendantsHashes
+						query_type: StorageQueryType::DescendantsHashes
 					},
 					StorageQuery {
 						key: key.clone(),
-						queue_type: StorageQueryType::DescendantsValues
+						query_type: StorageQueryType::DescendantsValues
 					}
 				],
 				&child_info
@@ -728,7 +728,7 @@ async fn get_storage_value() {
 			rpc_params![
 				"invalid_sub_id",
 				&invalid_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Value }]
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Value }]
 			],
 		)
 		.await
@@ -743,7 +743,7 @@ async fn get_storage_value() {
 			rpc_params![
 				&sub_id,
 				&invalid_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Value }]
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Value }]
 			],
 		)
 		.await
@@ -759,7 +759,7 @@ async fn get_storage_value() {
 			rpc_params![
 				&sub_id,
 				&block_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Value }]
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Value }]
 			],
 		)
 		.await
@@ -793,7 +793,7 @@ async fn get_storage_value() {
 			rpc_params![
 				&sub_id,
 				&block_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Value }]
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Value }]
 			],
 		)
 		.await
@@ -813,7 +813,7 @@ async fn get_storage_value() {
 			rpc_params![
 				&sub_id,
 				&genesis_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Value }],
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Value }],
 				&child_info
 			],
 		)
@@ -841,7 +841,7 @@ async fn get_storage_wrong_key() {
 			rpc_params![
 				&sub_id,
 				&block_hash,
-				vec![StorageQuery { key: prefixed_key, queue_type: StorageQueryType::Value }]
+				vec![StorageQuery { key: prefixed_key, query_type: StorageQueryType::Value }]
 			],
 		)
 		.await
@@ -859,7 +859,7 @@ async fn get_storage_wrong_key() {
 			rpc_params![
 				&sub_id,
 				&block_hash,
-				vec![StorageQuery { key: prefixed_key, queue_type: StorageQueryType::Value }]
+				vec![StorageQuery { key: prefixed_key, query_type: StorageQueryType::Value }]
 			],
 		)
 		.await
@@ -877,7 +877,7 @@ async fn get_storage_wrong_key() {
 			rpc_params![
 				&sub_id,
 				&block_hash,
-				vec![StorageQuery { key: key.clone(), queue_type: StorageQueryType::Value }],
+				vec![StorageQuery { key: key.clone(), query_type: StorageQueryType::Value }],
 				&prefixed_key
 			],
 		)
@@ -896,7 +896,7 @@ async fn get_storage_wrong_key() {
 			rpc_params![
 				&sub_id,
 				&block_hash,
-				vec![StorageQuery { key, queue_type: StorageQueryType::Value }],
+				vec![StorageQuery { key, query_type: StorageQueryType::Value }],
 				&prefixed_key
 			],
 		)
