@@ -73,10 +73,10 @@ impl Default for GenesisStorageBuilder {
 }
 
 impl GenesisStorageBuilder {
-	/// Creates a storage builder for genesis config. `substrage test runtime` `GenesisConfig` is
-	/// initialized with provided `authorities`, `endowed_accounts` with given balance. Key-pairs
-	/// from `extra_storage` will be injected into built storage. `HEAP_PAGES` key and value will
-	/// also be placed into storage.
+	/// Creates a storage builder for genesis config. `substrage test runtime`
+	/// [`RuntimeGenesisConfig`] is initialized with provided `authorities`, `endowed_accounts` with
+	/// given balance. Key-value pairs from `extra_storage` will be injected into built storage.
+	/// `HEAP_PAGES` key and value will also be placed into storage.
 	pub fn new(
 		authorities: Vec<AccountId>,
 		endowed_accounts: Vec<AccountId>,
@@ -91,7 +91,7 @@ impl GenesisStorageBuilder {
 		}
 	}
 
-	/// Override default wasm code to be placed into GenesisConfig.
+	/// Override default wasm code to be placed into RuntimeGenesisConfig.
 	pub fn with_wasm_code(mut self, wasm_code: &Option<Vec<u8>>) -> Self {
 		self.wasm_code = wasm_code.clone();
 		self
@@ -107,8 +107,8 @@ impl GenesisStorageBuilder {
 		self
 	}
 
-	/// Builds the `GenesisConfig` and returns its storage.
-	pub fn build(self) -> Storage {
+	/// A `RuntimeGenesisConfig` from internal configuration
+	pub fn genesis_config(&self) -> RuntimeGenesisConfig {
 		let authorities_sr25519: Vec<_> = self
 			.authorities
 			.clone()
@@ -116,7 +116,7 @@ impl GenesisStorageBuilder {
 			.map(|id| sr25519::Public::from(id))
 			.collect();
 
-		let genesis_config = RuntimeGenesisConfig {
+		RuntimeGenesisConfig {
 			system: frame_system::GenesisConfig {
 				code: self.wasm_code.clone().unwrap_or(wasm_binary_unwrap().to_vec()),
 				..Default::default()
@@ -135,11 +135,15 @@ impl GenesisStorageBuilder {
 				..Default::default()
 			},
 			balances: pallet_balances::GenesisConfig { balances: self.balances.clone() },
-		};
+		}
+	}
 
-		let mut storage = genesis_config
+	/// Builds the `RuntimeGenesisConfig` and returns its storage.
+	pub fn build(self) -> Storage {
+		let mut storage = self
+			.genesis_config()
 			.build_storage()
-			.expect("Build storage from substrate-test-runtime GenesisConfig");
+			.expect("Build storage from substrate-test-runtime RuntimeGenesisConfig");
 
 		if let Some(heap_pages) = self.heap_pages_override {
 			storage.top.insert(well_known_keys::HEAP_PAGES.into(), heap_pages.encode());

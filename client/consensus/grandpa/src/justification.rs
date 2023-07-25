@@ -23,7 +23,7 @@ use std::{
 };
 
 use finality_grandpa::{voter_set::VoterSet, Error as GrandpaError};
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, DecodeAll, Encode};
 use sp_blockchain::{Error as ClientError, HeaderBackend};
 use sp_consensus_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -136,7 +136,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 	where
 		NumberFor<Block>: finality_grandpa::BlockNumberOps,
 	{
-		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded)
+		let justification = GrandpaJustification::<Block>::decode_all(&mut &*encoded)
 			.map_err(|_| ClientError::JustificationDecode)?;
 
 		if (

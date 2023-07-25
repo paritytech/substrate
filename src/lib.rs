@@ -105,6 +105,21 @@
 //! * `pallet-*` and `frame-*` crates, located under `./frame` folder. These are the crates related
 //!   to FRAME. See [`frame_support`] for more information.
 //!
+//! ### Wasm Build
+//!
+//! Many of the Substrate crates, such as entire `sp-*`, need to compile to both Wasm (when a Wasm
+//! runtime is being generated) and native (for example, when testing). To achieve this, Substrate
+//! follows the convention of the Rust community, and uses a `feature = "std"` to signify that a
+//!  crate is being built with the standard library, and is built for native. Otherwise, it is built
+//!  for `no_std`.
+//!
+//! This can be summarized in `#![cfg_attr(not(feature = "std"), no_std)]`, which you can often find
+//! in any Substrate-based runtime.
+//!
+//! Substrate-based runtimes use [`substrate-wasm-builder`] in their `build.rs` to automatically
+//! build their Wasm files as a part of normal build commandsOnce built, the wasm file is placed in
+//! `./target/{debug|release}/wbuild/{runtime_name}.wasm`.
+//!
 //! ### Binaries
 //!
 //! Multiple binaries are shipped with substrate, the most important of which are located in the
@@ -112,12 +127,29 @@
 //!
 //! * [`node`] is an extensive substrate node that contains the superset of all runtime and client
 //!   side features. The corresponding runtime, called [`kitchensink_runtime`] contains all of the
-//!   modules that are provided with `FRAME`. This node and runtime is only used for testing.
+//!   modules that are provided with `FRAME`. This node and runtime is only used for testing and
+//!   demonstration.
+//!     * [`chain-spec-builder`]: Utility to build more detailed chain-specs for the aforementioned
+//!       node. Other projects typically contain a `build-spec` subcommand that does the same.
 //! * [`node-template`]: a template node that contains a minimal set of features and can act as a
 //!   starting point of a project.
 //! * [`subkey`]: Substrate's key management utility.
-//! * [`chain-spec-builder`]: Substrate's utility to build *chain specifications*. Such
-//!   specifications can then be used with `--chain` argument of a typical substrate node's CLI.
+//!
+//! ### Anatomy of a Binary Crate
+//!
+//! From the above, [`node`] and [`node-template`] are essentially blueprints of a substrate-based
+//! project, as the name of the latter is implying. Each substrate-based project typically contains
+//! the following:
+//!
+//! * Under `./runtime`, a `./runtime/src/lib.rs` which is the top level runtime amalgamator file.
+//!   This file typically contains the [`frame_support::construct_runtime`] macro, which is the
+//!   final definition of a runtime.
+//!
+//! * Under `./node`, a `main.rs`, which is the point, and a `./service.rs`, which contains all the
+//!   client side components. Skimming this file yields an overview of the networking, database,
+//!   consensus and similar client side components.
+//!
+//! > The above two are conventions, not rules.
 //!
 //! ## Parachain?
 //!
@@ -132,7 +164,7 @@
 //!
 //! Additional noteworthy crates within substrate:
 //!
-//! - RPC APIs of a Substrate node: [`sc-rpc-api`]
+//! - RPC APIs of a Substrate node: [`sc-rpc-api`]/[`sc-rpc`]
 //! - CLI Options of a Substrate node: [`sc-cli`]
 //! - All of the consensus related crates provided by Substrate:
 //!     - [`sc-consensus-aura`]
@@ -151,6 +183,7 @@
 //!
 //! Notable upstream crates:
 //!
+//! - [`parity-scale-codec`](https://github.com/paritytech/parity-scale-codec)
 //! - [`parity-db`](https://github.com/paritytech/parity-db)
 //! - [`trie`](https://github.com/paritytech/trie)
 //! - [`parity-common`](https://github.com/paritytech/parity-common)
@@ -172,6 +205,7 @@
 //! [`sc-client-db`]: ../sc_client_db/index.html
 //! [`sc-network`]: ../sc_network/index.html
 //! [`sc-rpc-api`]: ../sc_rpc_api/index.html
+//! [`sc-rpc`]: ../sc_rpc/index.html
 //! [`sc-cli`]: ../sc_cli/index.html
 //! [`sc-consensus-aura`]: ../sc_consensus_aura/index.html
 //! [`sc-consensus-babe`]: ../sc_consensus_babe/index.html
@@ -182,8 +216,9 @@
 //! [`node`]: ../node_cli/index.html
 //! [`node-template`]: ../node_template/index.html
 //! [`kitchensink_runtime`]: ../kitchensink_runtime/index.html
-//! [`subkey`]: ..//subkey/index.html
-//! [`chian-spec-builder`]: ../chain_spec_builder/index.html
+//! [`subkey`]: ../subkey/index.html
+//! [`chain-spec-builder`]: ../chain_spec_builder/index.html
+//! [`substrate-wasm-builder`]: https://crates.io/crates/substrate-wasm-builder
 
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(rustdoc::private_intra_doc_links)]
