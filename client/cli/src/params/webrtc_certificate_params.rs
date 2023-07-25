@@ -94,7 +94,7 @@ impl WebRTCCertificateParams {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use libp2p::webrtc::tokio::Certificate as WebRTCCertificate;
+	use libp2p_webrtc::tokio::Certificate as WebRTCCertificate;
 	use rand::thread_rng;
 	use std::fs;
 
