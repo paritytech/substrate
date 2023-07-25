@@ -3561,7 +3561,7 @@ fn upload_code_not_enough_balance() {
 				Some(codec::Compact(1_000)),
 				Determinism::Enforced
 			),
-			<Error<Test>>::StorageDepositNotEnoughFunds,
+			<Error<Test>>::StorageDepositNotHeld,
 		);
 
 		assert_eq!(System::events(), vec![]);

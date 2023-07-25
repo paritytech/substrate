@@ -249,8 +249,7 @@ impl<T: Config> WasmBlob<T> {
 					// TODO: better error mapping
 					.map_err(|_| {
 						let _ = System::<T>::dec_providers(&self.code_info.owner);
-
-						<Error<T>>::StorageDepositNotEnoughFunds
+						<Error<T>>::StorageDepositNotHeld
 					})?;
 
 					<Pallet<T>>::deposit_event(
