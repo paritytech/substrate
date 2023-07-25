@@ -525,7 +525,8 @@ pub mod pallet {
 		/// - `call_hash`: The hash of the call to be executed.
 		/// - `expiry`: An optional expiry of the multisig operation defined in block number.
 		///
-		/// NOTE: If this is the final approval, you will want to use `as_multi` instead.
+		/// NOTE: This extrinsic is only intended to be used for creating a multisig with an expiry. 
+		/// It should not be used for approving existing multisigs.
 		///
 		/// ## Complexity
 		/// - `O(S)`.
