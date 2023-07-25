@@ -382,7 +382,7 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 	}
 }
 
-/// Payout destination configuration for an account.
+/// The payout destination for an account.
 ///
 /// NOTE: Being lazily migrated to. Logic pertaining to this enum will be introduced to `set_payee`
 /// and payout logic in a future update, and will replace `RewardDestination`, once all records have
