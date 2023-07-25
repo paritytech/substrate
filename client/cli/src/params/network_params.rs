@@ -204,13 +204,13 @@ impl NetworkParams {
 					Multiaddr::empty()
 						.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
 						.with(Protocol::Udp(port))
-						.with(Protocol::WebRTC),
+						.with(Protocol::WebRTCDirect),
 				);
 				addrs.push(
 					Multiaddr::empty()
 						.with(Protocol::Ip4([0, 0, 0, 0].into()))
 						.with(Protocol::Udp(port))
-						.with(Protocol::WebRTC),
+						.with(Protocol::WebRTCDirect),
 				);
 			}
 
