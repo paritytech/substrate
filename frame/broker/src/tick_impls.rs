@@ -1,7 +1,7 @@
 use super::*;
 use frame_support::{pallet_prelude::*, weights::WeightMeter};
 use sp_arithmetic::{
-	traits::{SaturatedConversion, Saturating, Zero, One},
+	traits::{One, SaturatedConversion, Saturating, Zero},
 	FixedPointNumber,
 };
 use sp_runtime::traits::ConvertBack;
@@ -82,7 +82,8 @@ impl<T: Config> Pallet<T> {
 			Some(x) => x,
 			None => return false,
 		};
-		let when: Timeslice = (until / T::TimeslicePeriod::get()).saturating_sub(One::one()).saturated_into();
+		let when: Timeslice =
+			(until / T::TimeslicePeriod::get()).saturating_sub(One::one()).saturated_into();
 		let mut revenue = T::ConvertBalance::convert_back(amount);
 		if revenue.is_zero() {
 			Self::deposit_event(Event::<T>::HistoryDropped { when, revenue });
