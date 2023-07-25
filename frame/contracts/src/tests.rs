@@ -5444,7 +5444,7 @@ fn add_remove_delegate_dependency_works() {
 			Contracts::bare_upload_code(ALICE, wasm_callee.clone(), None, Determinism::Enforced)
 				.unwrap();
 
-		// Instantiate should now works.
+		// Instantiate should now work.
 		let addr_caller = instantiate(&add_delegate_dependency_input).result.unwrap().account_id;
 
 		// There should be a dependency and a deposit.
@@ -5493,7 +5493,7 @@ fn add_remove_delegate_dependency_works() {
 			Error::<Test>::DelegateDependencyNotFound
 		);
 
-		// Adding a depedendency with a storage limit too low should fail.
+		// Adding a dependency with a storage limit too low should fail.
 		DEFAULT_DEPOSIT_LIMIT.with(|c| *c.borrow_mut() = dependency_deposit - 1);
 		assert_err!(
 			call(&addr_caller, &add_delegate_dependency_input).result,
@@ -5511,7 +5511,7 @@ fn add_remove_delegate_dependency_works() {
 		Contracts::bare_upload_code(ALICE, wasm_callee, None, Determinism::Enforced).unwrap();
 		call(&addr_caller, &add_delegate_dependency_input).result.unwrap();
 
-		// Call terninate should work, and return the deposit.
+		// Call terminate should work, and return the deposit.
 		let balance_before = test_utils::get_balance(&ALICE);
 		assert_ok!(call(&addr_caller, &terminate_input).result);
 		assert_eq!(test_utils::get_balance(&ALICE), balance_before + 2 * ED + dependency_deposit);

@@ -227,7 +227,7 @@ impl<T: Config> ContractInfo<T> {
 				.update_contract::<T>(None)
 				.charge_or_zero();
 
-		// Instantiating the contract, prevent it to be deleted, therefore the base deposit includes
+		// Instantiating the contract prevents its code to be deleted, therefore the base deposit includes
 		// a fraction (`T::CodeHashLockupDepositPercent`) of the original storage deposit to prevent
 		// abuse.
 		let upload_deposit = T::CodeHashLockupDepositPercent::get().mul_ceil(code_info.deposit());
@@ -258,7 +258,7 @@ impl<T: Config> ContractInfo<T> {
 			.map_err(Into::into)
 	}
 
-	/// Removes a delegate dependency from the contract.
+	/// Removes the delegate dependency from the contract and returns the deposit held for this dependency.
 	///
 	/// Returns an error if the entry doesn't exist.
 	pub fn remove_delegate_dependency(

@@ -58,7 +58,7 @@ mod old {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_contrat_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
 	let info = old::ContractInfo {
 		trie_id: info.trie_id.clone(),
 		deposit_account: info.deposit_account().clone(),
