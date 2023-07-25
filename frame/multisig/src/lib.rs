@@ -257,7 +257,6 @@ pub mod pallet {
 		},
 		/// A multisig operation has been cancelled.
 		MultisigCancelled {
-			cancelling: T::AccountId,
 			timepoint: Timepoint<T::BlockNumber>,
 			multisig: T::AccountId,
 			call_hash: CallHash,
@@ -504,12 +503,7 @@ pub mod pallet {
 			debug_assert!(err_amount.is_zero());
 			<Multisigs<T>>::remove(&id, &call_hash);
 
-			Self::deposit_event(Event::MultisigCancelled {
-				cancelling: who,
-				timepoint,
-				multisig: id,
-				call_hash,
-			});
+			Self::deposit_event(Event::MultisigCancelled { timepoint, multisig: id, call_hash });
 			Ok(())
 		}
 
@@ -606,7 +600,7 @@ pub mod pallet {
 			timepoint: Timepoint<T::BlockNumber>,
 			call_hash: [u8; 32],
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
+			let _ = ensure_signed(origin)?;
 
 			let id = Self::multi_account_id(&signatories, threshold);
 
@@ -626,12 +620,7 @@ pub mod pallet {
 
 			T::Currency::unreserve(&m.depositor, m.deposit);
 
-			Self::deposit_event(Event::MultisigCancelled {
-				cancelling: who,
-				timepoint,
-				multisig: id,
-				call_hash,
-			});
+			Self::deposit_event(Event::MultisigCancelled { timepoint, multisig: id, call_hash });
 
 			Ok(())
 		}
