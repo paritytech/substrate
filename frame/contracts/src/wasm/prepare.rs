@@ -25,10 +25,10 @@ use crate::{
 		runtime::AllowDeprecatedInterface, CodeInfo, Determinism, Environment, WasmBlob,
 		BYTES_PER_PAGE,
 	},
-	AccountIdOf, BalanceOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
+	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
 use codec::MaxEncodedLen;
-use sp_runtime::{traits::Hash, DispatchError, FixedPointOperand};
+use sp_runtime::{traits::Hash, DispatchError};
 #[cfg(any(test, feature = "runtime-benchmarks"))]
 use sp_std::prelude::Vec;
 use wasmi::{
@@ -281,7 +281,6 @@ pub fn prepare<E, T>(
 where
 	E: Environment<()>,
 	T: Config,
-	BalanceOf<T>: FixedPointOperand,
 {
 	validate::<E, T>(code.as_ref(), schedule, determinism)?;
 

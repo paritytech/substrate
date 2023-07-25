@@ -126,6 +126,7 @@ use frame_support::{
 	error::BadOrigin,
 	traits::{
 		fungible::{Inspect, Mutate, MutateHold},
+		tokens::Balance,
 		ConstU32, Contains, Get, Randomness, Time,
 	},
 	weights::Weight,
@@ -151,8 +152,7 @@ pub use crate::wasm::api_doc;
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
 type TrieId = BoundedVec<u8, ConstU32<128>>;
-type BalanceOf<T> =
-	<<T as Config>::Currency as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T> = <T as Config>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
@@ -214,9 +214,12 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
 
 		/// The fungible in which fees are paid and contract balances are held.
-		type Currency: Inspect<Self::AccountId>
+		type Currency: Inspect<Self::AccountId, Balance = Self::Balance>
 			+ Mutate<Self::AccountId>
 			+ MutateHold<Self::AccountId, Reason = Self::RuntimeHoldReason>;
+
+		/// The units in which we record balances.
+		type Balance: Balance + FixedPointOperand;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -444,7 +447,6 @@ pub mod pallet {
 	impl<T: Config> Pallet<T>
 	where
 		<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
-		BalanceOf<T>: FixedPointOperand,
 	{
 		/// Deprecated version if [`Self::call`] for use in an in-storage `Call`.
 		#[pallet::call_index(0)]
@@ -553,10 +555,7 @@ pub mod pallet {
 			code: Vec<u8>,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			determinism: Determinism,
-		) -> DispatchResult
-		where
-			BalanceOf<T>: FixedPointOperand,
-		{
+		) -> DispatchResult {
 			Migration::<T>::ensure_migrated()?;
 			let origin = ensure_signed(origin)?;
 			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into), determinism)
@@ -1158,10 +1157,7 @@ trait Invokable<T: Config>: Sized {
 	///
 	/// We enforce a re-entrancy guard here by initializing and checking a boolean flag through a
 	/// global reference.
-	fn run_guarded(self, common: CommonInput<T>) -> InternalOutput<T, Self::Output>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	fn run_guarded(self, common: CommonInput<T>) -> InternalOutput<T, Self::Output> {
 		// Set up a global reference to the boolean flag used for the re-entrancy guard.
 		environmental!(executing_contract: bool);
 
@@ -1209,9 +1205,8 @@ trait Invokable<T: Config>: Sized {
 	/// contract or a instantiation of a new one.
 	///
 	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
-	fn run(self, common: CommonInput<T>, gas_meter: GasMeter<T>) -> InternalOutput<T, Self::Output>
-	where
-		BalanceOf<T>: FixedPointOperand;
+	fn run(self, common: CommonInput<T>, gas_meter: GasMeter<T>)
+		-> InternalOutput<T, Self::Output>;
 
 	/// This method ensures that the given `origin` is allowed to invoke the current `Invokable`.
 	///
@@ -1226,10 +1221,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 		self,
 		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
-	) -> InternalOutput<T, Self::Output>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> InternalOutput<T, Self::Output> {
 		let CallInput { dest, determinism } = self;
 		let CommonInput { origin, value, data, debug_message, .. } = common;
 		let mut storage_meter =
@@ -1277,10 +1269,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 		self,
 		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
-	) -> InternalOutput<T, Self::Output>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> InternalOutput<T, Self::Output> {
 		let mut storage_deposit = Default::default();
 		let try_exec = || {
 			let schedule = T::Schedule::get();
@@ -1361,10 +1350,7 @@ impl<T: Config> Pallet<T> {
 		debug: DebugInfo,
 		collect_events: CollectEvents,
 		determinism: Determinism,
-	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> ContractExecResult<BalanceOf<T>, EventRecordOf<T>> {
 		ensure_no_migration_in_progress!();
 
 		let mut debug_message = if matches!(debug, DebugInfo::UnsafeDebug) {
@@ -1422,10 +1408,7 @@ impl<T: Config> Pallet<T> {
 		salt: Vec<u8>,
 		debug: DebugInfo,
 		collect_events: CollectEvents,
-	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> ContractInstantiateResult<T::AccountId, BalanceOf<T>, EventRecordOf<T>> {
 		ensure_no_migration_in_progress!();
 
 		let mut debug_message = if debug == DebugInfo::UnsafeDebug {
@@ -1506,10 +1489,7 @@ impl<T: Config> Pallet<T> {
 		code: Vec<u8>,
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		determinism: Determinism,
-	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		Migration::<T>::ensure_migrated()?;
 		let (module, deposit) =
 			Self::try_upload_code(origin, code, storage_deposit_limit, determinism, None)?;
@@ -1523,10 +1503,7 @@ impl<T: Config> Pallet<T> {
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		determinism: Determinism,
 		mut debug_message: Option<&mut DebugBufferVec<T>>,
-	) -> Result<(WasmBlob<T>, BalanceOf<T>), DispatchError>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> Result<(WasmBlob<T>, BalanceOf<T>), DispatchError> {
 		let schedule = T::Schedule::get();
 		let mut module =
 			WasmBlob::from_code(code, &schedule, origin, determinism).map_err(|(err, msg)| {

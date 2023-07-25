@@ -30,10 +30,7 @@ use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weigh
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pallet_contracts_proc_macro::define_env;
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
-use sp_runtime::{
-	traits::{Bounded, Zero},
-	FixedPointOperand,
-};
+use sp_runtime::traits::{Bounded, Zero};
 use sp_std::{fmt, prelude::*};
 use wasmi::{core::HostError, errors::LinkerError, Linker, Memory, Store};
 
@@ -456,20 +453,14 @@ fn already_charged(_: u32) -> Option<RuntimeCosts> {
 }
 
 /// Can only be used for one call.
-pub struct Runtime<'a, E: Ext + 'a>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: Option<Vec<u8>>,
 	memory: Option<Memory>,
 	chain_extension: Option<Box<<E::T as Config>::ChainExtension>>,
 }
 
-impl<'a, E: Ext + 'a> Runtime<'a, E>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	pub fn new(ext: &'a mut E, input_data: Vec<u8>) -> Self {
 		Runtime {
 			ext,
@@ -881,10 +872,7 @@ where
 		input_data_len: u32,
 		output_ptr: u32,
 		output_len_ptr: u32,
-	) -> Result<ReturnCode, TrapReason>
-	where
-		BalanceOf<<E as Ext>::T>: FixedPointOperand,
-	{
+	) -> Result<ReturnCode, TrapReason> {
 		self.charge_gas(call_type.cost())?;
 		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
 			let input = self.input_data.as_ref().ok_or(Error::<E::T>::InputForwarded)?;
@@ -968,10 +956,7 @@ where
 		output_len_ptr: u32,
 		salt_ptr: u32,
 		salt_len: u32,
-	) -> Result<ReturnCode, TrapReason>
-	where
-		BalanceOf<<E as Ext>::T>: FixedPointOperand,
-	{
+	) -> Result<ReturnCode, TrapReason> {
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
 		let deposit_limit: BalanceOf<<E as Ext>::T> = if deposit_ptr == SENTINEL {
 			BalanceOf::<<E as Ext>::T>::zero()
