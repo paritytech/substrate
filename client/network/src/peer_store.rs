@@ -20,7 +20,7 @@ use libp2p::PeerId;
 use log::trace;
 use parking_lot::Mutex;
 use partial_sort::PartialSort;
-use sc_network_common::types::ReputationChange;
+use sc_network_common::{role::ObservedRole, types::ReputationChange};
 use std::{
 	cmp::{Ord, Ordering, PartialOrd},
 	collections::{hash_map::Entry, HashMap, HashSet},
@@ -62,8 +62,14 @@ pub trait PeerStoreProvider: Debug + Send {
 	/// Adjust peer reputation.
 	fn report_peer(&mut self, peer_id: PeerId, change: ReputationChange);
 
+	/// Set peer role.
+	fn set_peer_role(&mut self, peer_id: &PeerId, role: ObservedRole);
+
 	/// Get peer reputation.
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32;
+
+	/// Get peer role, if available.
+	fn peer_role(&self, peer_id: &PeerId) -> Option<ObservedRole>;
 
 	/// Get candidates with highest reputations for initiating outgoing connections.
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId>;
@@ -91,8 +97,16 @@ impl PeerStoreProvider for PeerStoreHandle {
 		self.inner.lock().report_peer(peer_id, change)
 	}
 
+	fn set_peer_role(&mut self, peer_id: &PeerId, role: ObservedRole) {
+		self.inner.lock().set_peer_role(peer_id, role)
+	}
+
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
 		self.inner.lock().peer_reputation(peer_id)
+	}
+
+	fn peer_role(&self, peer_id: &PeerId) -> Option<ObservedRole> {
+		self.inner.lock().peer_role(peer_id)
 	}
 
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {
@@ -117,13 +131,19 @@ impl PeerStoreHandle {
 
 #[derive(Debug, Clone, Copy)]
 struct PeerInfo {
+	/// Reputation of the peer.
 	reputation: i32,
+
+	/// Instant when the peer was last updated.
 	last_updated: Instant,
+
+	/// Role of the peer, if known.
+	role: Option<ObservedRole>,
 }
 
 impl Default for PeerInfo {
 	fn default() -> Self {
-		Self { reputation: 0, last_updated: Instant::now() }
+		Self { reputation: 0, last_updated: Instant::now(), role: None }
 	}
 }
 
@@ -237,8 +257,24 @@ impl PeerStoreInner {
 		}
 	}
 
+	fn set_peer_role(&mut self, peer_id: &PeerId, role: ObservedRole) {
+		log::trace!(target: LOG_TARGET, "Set {peer_id} role to {role:?}");
+
+		match self.peers.get_mut(peer_id) {
+			Some(info) => {
+				info.role = Some(role);
+			},
+			None =>
+				log::debug!(target: LOG_TARGET, "Failed to set role for {peer_id}, peer doesn't exist"),
+		}
+	}
+
 	fn peer_reputation(&self, peer_id: &PeerId) -> i32 {
 		self.peers.get(peer_id).map_or(0, |info| info.reputation)
+	}
+
+	fn peer_role(&self, peer_id: &PeerId) -> Option<ObservedRole> {
+		self.peers.get(peer_id).map_or(None, |info| info.role)
 	}
 
 	fn outgoing_candidates(&self, count: usize, ignored: HashSet<&PeerId>) -> Vec<PeerId> {
