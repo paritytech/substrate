@@ -1837,10 +1837,6 @@ impl<T: Config> Pallet<T> {
 			ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
 		ensure!(real_total == ledger.total, "ledger.total corrupt");
 
-		if !(ledger.active >= T::Currency::minimum_balance() || ledger.active.is_zero()) {
-			log!(warn, "ledger.active less than ED: {:?}, {:?}", ctrl, ledger)
-		}
-
 		Ok(())
 	}
 }
