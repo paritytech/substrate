@@ -69,7 +69,7 @@ impl<T: Config> Pallet<T> {
 		meter.consumed()
 	}
 
-	fn process_core_count(status: &mut StatusRecord) -> bool {
+	pub(crate) fn process_core_count(status: &mut StatusRecord) -> bool {
 		if let Some(core_count) = T::Coretime::check_notify_core_count() {
 			status.core_count = core_count;
 			Self::deposit_event(Event::<T>::CoreCountChanged { core_count });
@@ -78,7 +78,7 @@ impl<T: Config> Pallet<T> {
 		false
 	}
 
-	fn process_revenue() -> bool {
+	pub(crate) fn process_revenue() -> bool {
 		let (until, amount) = match T::Coretime::check_notify_revenue_info() {
 			Some(x) => x,
 			None => return false,
@@ -249,7 +249,7 @@ impl<T: Config> Pallet<T> {
 		Some(())
 	}
 
-	fn process_pool(when: Timeslice, status: &mut StatusRecord) {
+	pub(crate) fn process_pool(when: Timeslice, status: &mut StatusRecord) {
 		let pool_io = InstaPoolIo::<T>::take(when);
 		status.private_pool_size = (status.private_pool_size as SignedCoreMaskBitCount)
 			.saturating_add(pool_io.private) as CoreMaskBitCount;
@@ -269,7 +269,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Schedule cores for the given `timeslice`.
-	fn process_core_schedule(
+	pub(crate) fn process_core_schedule(
 		timeslice: Timeslice,
 		rc_begin: RelayBlockNumberOf<T>,
 		core: CoreIndex,

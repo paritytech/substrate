@@ -23,7 +23,10 @@ use crate::{CoreAssignment::Task, Pallet as Broker};
 use frame_benchmarking::v2::*;
 use frame_support::{
 	storage::bounded_vec::BoundedVec,
-	traits::{fungible::Mutate, EnsureOrigin, Hooks},
+	traits::{
+		fungible::{Inspect, Mutate},
+		EnsureOrigin, Hooks,
+	},
 };
 use frame_system::{Pallet as System, RawOrigin};
 use sp_arithmetic::Perbill;
@@ -103,7 +106,7 @@ fn setup_and_start_sale<T: Config>() -> Result<u16, BenchmarkError> {
 #[benchmarks]
 mod benches {
 	use super::*;
-	use crate::Finality::Final;
+	use crate::Finality::*;
 
 	#[benchmark]
 	fn configure() -> Result<(), BenchmarkError> {
@@ -225,7 +228,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller.clone()), 10u32.into());
@@ -251,7 +257,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 20u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(20u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -277,7 +286,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -285,25 +297,49 @@ mod benches {
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), region, recipient);
+		_(RawOrigin::Signed(caller.clone()), region, recipient.clone());
+
+		assert_last_event::<T>(
+			Event::Transferred {
+				region_id: region,
+				old_owner: caller,
+				owner: recipient,
+				duration: 3u32.into(),
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
 
 	#[benchmark]
 	fn partition() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, 2);
+
+		assert_last_event::<T>(
+			Event::Partitioned {
+				old_region_id: RegionId { begin: 4, core, part: CoreMask::complete() },
+				new_region_ids: (
+					RegionId { begin: 4, core, part: CoreMask::complete() },
+					RegionId { begin: 6, core, part: CoreMask::complete() },
+				),
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
@@ -315,7 +351,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -348,16 +387,21 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), region, 1000, Final);
+		_(RawOrigin::Signed(caller), region, 1000, Provisional);
 
 		let workplan_key = (region.begin, region.core);
 		assert!(Workplan::<T>::get(workplan_key).is_some());
+
+		assert!(Regions::<T>::get(region).is_some());
 
 		assert_last_event::<T>(
 			Event::Assigned {
@@ -378,7 +422,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -403,24 +450,42 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn claim_revenue() -> Result<(), BenchmarkError> {
-		setup_and_start_sale::<T>()?;
+	fn claim_revenue(
+		m: Linear<0, { new_config_record::<T>().region_length }>,
+	) -> Result<(), BenchmarkError> {
+		let core = setup_and_start_sale::<T>()?;
 
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let recipient: T::AccountId = account("recipient", 0, SEED);
 
-		Broker::<T>::do_pool(region, None, recipient, Final)
+		Broker::<T>::do_pool(region, None, recipient.clone(), Final)
 			.map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
-		_(RawOrigin::Signed(caller), region, 100);
+		_(RawOrigin::Signed(caller), region, m);
+
+		assert_last_event::<T>(
+			Event::RevenueClaimPaid {
+				who: recipient,
+				amount: 0u32.into(), // Todo: fix the conditions for this benchmark
+				next: if m < new_config_record::<T>().region_length {
+					Some(RegionId { begin: 4.saturating_add(m), core, part: CoreMask::complete() })
+				} else {
+					None
+				},
+			}
+			.into(),
+		);
 
 		Ok(())
 	}
@@ -432,7 +497,11 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 30u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(30u32.into()),
+		);
+		T::Currency::set_balance(&Broker::<T>::account_id(), T::Currency::minimum_balance());
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -461,7 +530,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -489,7 +561,10 @@ mod benches {
 		advance_to::<T>(2);
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::set_balance(&caller.clone(), 10u32.into());
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(10u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
@@ -515,6 +590,31 @@ mod benches {
 	}
 
 	#[benchmark]
+	fn drop_renewal() -> Result<(), BenchmarkError> {
+		let core = setup_and_start_sale::<T>()?;
+		let when = 5u32.into();
+
+		advance_to::<T>(10);
+
+		let id = AllowedRenewalId { core, when };
+		let record = AllowedRenewalRecord {
+			price: 1u32.into(),
+			completion: CompletionStatus::Complete(new_schedule()),
+		};
+		AllowedRenewals::<T>::insert(id, record);
+
+		let caller: T::AccountId = whitelisted_caller();
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), core, when);
+
+		assert!(AllowedRenewals::<T>::get(id).is_none());
+		assert_last_event::<T>(Event::AllowedRenewalDropped { core, when }.into());
+
+		Ok(())
+	}
+
+	#[benchmark]
 	fn request_core_count(n: Linear<0, { MAX_CORE_COUNT.into() }>) -> Result<(), BenchmarkError> {
 		let admin_origin =
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
@@ -527,6 +627,159 @@ mod benches {
 		);
 
 		Ok(())
+	}
+
+	#[benchmark]
+	fn process_core_count(n: Linear<0, { MAX_CORE_COUNT.into() }>) -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		let core_count = n.try_into().unwrap();
+
+		Broker::<T>::do_request_core_count(core_count).map_err(|_| BenchmarkError::Weightless)?;
+
+		let mut status = Status::<T>::get().ok_or(BenchmarkError::Weightless)?;
+
+		#[block]
+		{
+			Broker::<T>::process_core_count(&mut status);
+		}
+
+		assert_last_event::<T>(Event::CoreCountChanged { core_count }.into());
+
+		Ok(())
+	}
+
+	// Todo: Fix conditions for worst case
+	#[benchmark]
+	fn process_revenue() {
+		#[block]
+		{
+			Broker::<T>::process_revenue();
+		}
+
+		assert_last_event::<T>(
+			Event::HistoryDropped { when: 5u32.into(), revenue: 0u32.into() }.into(),
+		);
+	}
+
+	#[benchmark]
+	fn rotate_sale(n: Linear<0, { MAX_CORE_COUNT.into() }>) {
+		let core_count = n.try_into().unwrap();
+		let config = new_config_record::<T>();
+
+		let now = frame_system::Pallet::<T>::block_number();
+		let price = 10u32.into();
+		let commit_timeslice = Broker::<T>::latest_timeslice_ready_to_commit(&config);
+		let sale = SaleInfoRecordOf::<T> {
+			sale_start: now,
+			leadin_length: Zero::zero(),
+			price,
+			sellout_price: None,
+			region_begin: commit_timeslice,
+			region_end: commit_timeslice.saturating_add(config.region_length),
+			first_core: 0,
+			ideal_cores_sold: 0,
+			cores_offered: 0,
+			cores_sold: 0,
+		};
+
+		let status = StatusRecord {
+			core_count,
+			private_pool_size: 0,
+			system_pool_size: 0,
+			last_committed_timeslice: commit_timeslice.saturating_sub(1),
+			last_timeslice: Broker::<T>::current_timeslice(),
+		};
+
+		// Assume Reservations to be filled for worst case
+		setup_reservations::<T>(T::MaxReservedCores::get());
+
+		// Assume Leases to be filled for worst case
+		setup_leases::<T>(T::MaxLeasedCores::get(), 1, 10);
+
+		#[block]
+		{
+			Broker::<T>::rotate_sale(sale, &config, &status);
+		}
+
+		assert!(SaleInfo::<T>::get().is_some());
+		assert_last_event::<T>(
+			Event::SaleInitialized {
+				sale_start: 2u32.into(),
+				leadin_length: 1u32.into(),
+				start_price: 20u32.into(),
+				regular_price: 10u32.into(),
+				region_begin: 4,
+				region_end: 7,
+				ideal_cores_sold: 0,
+				cores_offered: n
+					.saturating_sub(T::MaxReservedCores::get())
+					.saturating_sub(T::MaxLeasedCores::get())
+					.try_into()
+					.unwrap(),
+			}
+			.into(),
+		);
+	}
+
+	#[benchmark]
+	fn process_pool() {
+		let when = 10u32.into();
+		let private_pool_size = 5u32.into();
+		let system_pool_size = 4u32.into();
+
+		let config = new_config_record::<T>();
+		let commit_timeslice = Broker::<T>::latest_timeslice_ready_to_commit(&config);
+		let mut status = StatusRecord {
+			core_count: 5u16.into(),
+			private_pool_size,
+			system_pool_size,
+			last_committed_timeslice: commit_timeslice.saturating_sub(1),
+			last_timeslice: Broker::<T>::current_timeslice(),
+		};
+
+		#[block]
+		{
+			Broker::<T>::process_pool(when, &mut status);
+		}
+
+		assert!(InstaPoolHistory::<T>::get(when).is_some());
+		assert_last_event::<T>(
+			Event::HistoryInitialized { when, private_pool_size, system_pool_size }.into(),
+		);
+	}
+
+	#[benchmark]
+	fn process_core_schedule() {
+		let timeslice = 10u32.into();
+		let core = 5u16.into();
+		let rc_begin = 1u32.into();
+
+		Workplan::<T>::insert((timeslice, core), new_schedule());
+
+		#[block]
+		{
+			Broker::<T>::process_core_schedule(timeslice, rc_begin, core);
+		}
+
+		assert_eq!(Workload::<T>::get(core).len(), CORE_MASK_BITS);
+
+		let mut assignment: Vec<(CoreAssignment, PartsOf57600)> = vec![];
+		for i in 0..CORE_MASK_BITS {
+			assignment.push((CoreAssignment::Task(i.try_into().unwrap()), 57600));
+		}
+		assert_last_event::<T>(Event::CoreAssigned { core, when: rc_begin, assignment }.into());
+	}
+
+	#[benchmark]
+	fn request_revenue_info_at() {
+		let current_timeslice = Broker::<T>::current_timeslice();
+		let rc_block = T::TimeslicePeriod::get() * current_timeslice.into();
+
+		#[block]
+		{
+			T::Coretime::request_revenue_info_at(rc_block);
+		}
 	}
 
 	// Implements a test for each benchmark. Execute with:

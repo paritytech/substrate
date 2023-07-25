@@ -52,7 +52,7 @@ pub trait CoretimeInterface {
 }
 impl CoretimeInterface for () {
 	type AccountId = ();
-	type Balance = u128;
+	type Balance = u64;
 	type BlockNumber = u32;
 	fn latest() -> Self::BlockNumber {
 		0

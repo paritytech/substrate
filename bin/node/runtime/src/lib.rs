@@ -55,6 +55,7 @@ use frame_system::{
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Moment, Nonce};
 use pallet_asset_conversion::{NativeOrAssetId, NativeOrAssetIdConverter};
+use pallet_broker::{CoreAssignment, CoreIndex, CoretimeInterface, PartsOf57600};
 #[cfg(feature = "runtime-benchmarks")]
 use pallet_contracts::NoopMigration;
 use pallet_election_provider_multi_phase::SolutionAccuracyOf;
@@ -1881,6 +1882,38 @@ impl OnUnbalanced<Credit<AccountId, Balances>> for IntoAuthor {
 	}
 }
 
+parameter_types! {
+	pub storage CoreCount: CoreIndex = 20;
+}
+
+pub struct CoretimeProvider;
+impl CoretimeInterface for CoretimeProvider {
+	type AccountId = AccountId;
+	type Balance = Balance;
+	type BlockNumber = BlockNumber;
+	fn latest() -> Self::BlockNumber {
+		System::block_number()
+	}
+	fn request_core_count(count: CoreIndex) {
+		CoreCount::set(&count);
+	}
+	fn request_revenue_info_at(_when: Self::BlockNumber) {}
+	fn credit_account(_who: Self::AccountId, _amount: Self::Balance) {}
+	fn assign_core(
+		_core: CoreIndex,
+		_begin: Self::BlockNumber,
+		_assignment: Vec<(CoreAssignment, PartsOf57600)>,
+		_end_hint: Option<Self::BlockNumber>,
+	) {
+	}
+	fn check_notify_core_count() -> Option<u16> {
+		Some(CoreCount::get())
+	}
+	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
+		Some((10u32.into(), 0u32.into()))
+	}
+}
+
 impl pallet_broker::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
@@ -1888,8 +1921,8 @@ impl pallet_broker::Config for Runtime {
 	type TimeslicePeriod = ConstU32<2>;
 	type MaxLeasedCores = ConstU32<5>;
 	type MaxReservedCores = ConstU32<5>;
-	type Coretime = ();
-	type ConvertBalance = sp_runtime::traits::Identity;
+	type Coretime = CoretimeProvider;
+	type ConvertBalance = traits::Identity;
 	type WeightInfo = ();
 	type PalletId = BrokerPalletId;
 	type AdminOrigin = EnsureRoot<AccountId>;
