@@ -73,13 +73,13 @@
 pub use crate::{exec::Ext, gas::ChargedAmount, Config};
 use crate::{
 	wasm::{Runtime, RuntimeCosts},
-	BalanceOf, Error,
+	Error,
 };
 use codec::{Decode, MaxEncodedLen};
 use frame_support::weights::Weight;
 pub use frame_system::Config as SysConfig;
 pub use pallet_contracts_primitives::ReturnFlags;
-use sp_runtime::{DispatchError, FixedPointOperand};
+use sp_runtime::DispatchError;
 use sp_std::{marker::PhantomData, vec::Vec};
 
 /// Result that returns a [`DispatchError`] on error.
@@ -111,9 +111,7 @@ pub trait ChainExtension<C: Config> {
 	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
-	fn call<E: Ext<T = C>>(&mut self, env: Environment<E, InitState>) -> Result<RetVal>
-	where
-		BalanceOf<C>: FixedPointOperand;
+	fn call<E: Ext<T = C>>(&mut self, env: Environment<E, InitState>) -> Result<RetVal>;
 
 	/// Determines whether chain extensions are enabled for this chain.
 	///
@@ -149,10 +147,7 @@ pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 #[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
 impl<C: Config> ChainExtension<C> for Tuple {
-	fn call<E: Ext<T = C>>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal>
-	where
-		BalanceOf<C>: FixedPointOperand,
-	{
+	fn call<E: Ext<T = C>>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal> {
 		for_tuples!(
 			#(
 				if (Tuple::ID == env.ext_id()) && Tuple::enabled() {
@@ -192,10 +187,7 @@ pub enum RetVal {
 ///
 /// It uses [typestate programming](https://docs.rust-embedded.org/book/static-guarantees/typestate-programming.html)
 /// to enforce the correct usage of the parameters passed to the chain extension.
-pub struct Environment<'a, 'b, E: Ext, S: State>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+pub struct Environment<'a, 'b, E: Ext, S: State> {
 	/// The actual data of this type.
 	inner: Inner<'a, 'b, E>,
 	/// `S` is only used in the type system but never as value.
@@ -203,10 +195,7 @@ where
 }
 
 /// Functions that are available in every state of this type.
-impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S> {
 	/// The function id within the `id` passed by a contract.
 	///
 	/// It returns the two least significant bytes of the `id` passed by a contract as the other
@@ -261,10 +250,7 @@ where
 ///
 /// Those are the functions that determine how the arguments to the chain extensions
 /// should be consumed.
-impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
 	/// Creates a new environment for consumption by a chain extension.
 	///
 	/// It is only available to this crate because only the wasm runtime module needs to
@@ -277,10 +263,7 @@ where
 		input_len: u32,
 		output_ptr: u32,
 		output_len_ptr: u32,
-	) -> Self
-	where
-		BalanceOf<E::T>: FixedPointOperand,
-	{
+	) -> Self {
 		Environment {
 			inner: Inner { runtime, memory, id, input_ptr, input_len, output_ptr, output_len_ptr },
 			phantom: PhantomData,
@@ -304,10 +287,7 @@ where
 }
 
 /// Functions to use the input arguments as integers.
-impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S> {
 	/// The `input_ptr` argument.
 	pub fn val0(&self) -> u32 {
 		self.inner.input_ptr
@@ -320,10 +300,7 @@ where
 }
 
 /// Functions to use the output arguments as integers.
-impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S> {
 	/// The `output_ptr` argument.
 	pub fn val2(&self) -> u32 {
 		self.inner.output_ptr
@@ -336,10 +313,7 @@ where
 }
 
 /// Functions to use the input arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S> {
 	/// Reads `min(max_len, in_len)` from contract memory.
 	///
 	/// This does **not** charge any weight. The caller must make sure that the an
@@ -411,10 +385,7 @@ where
 }
 
 /// Functions to use the output arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S> {
 	/// Write the supplied buffer to contract memory.
 	///
 	/// If the contract supplied buffer is smaller than the passed `buffer` an `Err` is returned.
@@ -446,10 +417,7 @@ where
 /// All data is put into this struct to easily pass it around as part of the typestate
 /// pattern. Also it creates the opportunity to box this struct in the future in case it
 /// gets too large.
-struct Inner<'a, 'b, E: Ext>
-where
-	BalanceOf<E::T>: FixedPointOperand,
-{
+struct Inner<'a, 'b, E: Ext> {
 	/// The runtime contains all necessary functions to interact with the running contract.
 	runtime: &'a mut Runtime<'b, E>,
 	/// Reference to the contracts memory.

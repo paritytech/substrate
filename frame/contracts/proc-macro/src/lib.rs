@@ -564,7 +564,7 @@ fn expand_impls(def: &EnvDef) -> TokenStream2 {
 	let dummy_impls = expand_functions(def, false, quote! { () });
 
 	quote! {
-		impl<'a, E: Ext> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env where BalanceOf<E::T>: FixedPointOperand
+		impl<'a, E: Ext> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
 		{
 			fn define(
 				store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>,

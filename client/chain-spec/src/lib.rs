@@ -116,15 +116,19 @@
 //! ```json
 //! // The human readable name of the chain.
 //! "name": "Flaming Fir",
+//!
 //! // The id of the chain.
 //! "id": "flamingfir9",
+//!
 //! // The chain type of this chain.
 //! // Possible values are `Live`, `Development`, `Local`.
 //! "chainType": "Live",
+//!
 //! // A list of multi addresses that belong to boot nodes of the chain.
 //! "bootNodes": [
 //!   "/dns/0.flamingfir.paritytech.net/tcp/30333/p2p/12D3KooWLK2gMLhWsYJzjW3q35zAs9FDDVqfqVfVuskiGZGRSMvR",
 //! ],
+//!
 //! // Optional list of "multi address, verbosity" of telemetry endpoints.
 //! // The verbosity goes from `0` to `9`. With `0` being the mode with the lowest verbosity.
 //! "telemetryEndpoints": [
@@ -133,19 +137,24 @@
 //!     0
 //!   ]
 //! ],
+//!
 //! // Optional networking protocol id that identifies the chain.
 //! "protocolId": "fir9",
+//!
 //! // Optional fork id. Should most likely be left empty.
 //! // Can be used to signal a fork on the network level when two chains have the
 //! // same genesis hash.
 //! "forkId": "random_fork",
+//!
 //! // Custom properties.
 //! "properties": {
 //!   "tokenDecimals": 15,
 //!   "tokenSymbol": "FIR"
 //! },
+//!
 //! // Deprecated field. Should be ignored.
 //! "consensusEngine": null,
+//!
 //! // The genesis declaration of the chain.
 //! //
 //! // `runtime`, `raw`, `stateRootHash` denote the type of the genesis declaration.
@@ -159,6 +168,7 @@
 //! //   type depends on the hash used by the chain.
 //! //
 //! "genesis": { "runtime": {} },
+//!
 //! /// Optional map of `block_number` to `wasm_code`.
 //! ///
 //! /// The given `wasm_code` will be used to substitute the on-chain wasm code starting with the
@@ -171,6 +181,8 @@
 //! /// with a on-chain runtime upgrade.
 //! "codeSubstitutes": [],
 //! ```
+//!
+//! See [`ChainSpec`] for a trait representation of the above.
 //!
 //! The chain spec can be extended with other fields that are opaque to the default chain spec.
 //! Specific node implementations will need to be able to deserialize these extensions.

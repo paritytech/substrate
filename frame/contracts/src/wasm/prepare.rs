@@ -25,10 +25,10 @@ use crate::{
 		runtime::AllowDeprecatedInterface, CodeInfo, Determinism, Environment, WasmBlob,
 		BYTES_PER_PAGE,
 	},
-	AccountIdOf, BalanceOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
+	AccountIdOf, CodeVec, Config, Error, Schedule, LOG_TARGET,
 };
 use codec::MaxEncodedLen;
-use sp_runtime::{traits::Hash, DispatchError, FixedPointOperand};
+use sp_runtime::{traits::Hash, DispatchError};
 #[cfg(any(test, feature = "runtime-benchmarks"))]
 use sp_std::prelude::Vec;
 use wasmi::{
@@ -63,7 +63,7 @@ impl LoadedModule {
 		config
 			.wasm_multi_value(false)
 			.wasm_mutable_global(false)
-			.wasm_sign_extension(false)
+			.wasm_sign_extension(true)
 			.wasm_bulk_memory(false)
 			.wasm_reference_types(false)
 			.wasm_tail_call(false)
@@ -281,7 +281,6 @@ pub fn prepare<E, T>(
 where
 	E: Environment<()>,
 	T: Config,
-	BalanceOf<T>: FixedPointOperand,
 {
 	validate::<E, T>(code.as_ref(), schedule, determinism)?;
 
@@ -669,6 +668,22 @@ mod tests {
 				(import "env" "memory" (memory 1 1))
 				(func (export "call"))
 				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(
+			signed_extension_works,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 1))
+				(func (export "deploy"))
+				(func (export "call"))
+				(func (param i32) (result i32)
+					local.get 0
+					i32.extend8_s
+				)
 			)
 			"#,
 			Ok(_)

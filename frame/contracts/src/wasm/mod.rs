@@ -48,7 +48,7 @@ use frame_support::{
 };
 use sp_api::HashT;
 use sp_core::Get;
-use sp_runtime::{FixedPointOperand, RuntimeDebug};
+use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 use wasmi::{Instance, Linker, Memory, MemoryType, StackLimits, Store};
 
@@ -152,10 +152,7 @@ impl<T: Config> WasmBlob<T> {
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
 		determinism: Determinism,
-	) -> Result<Self, (DispatchError, &'static str)>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> Result<Self, (DispatchError, &'static str)> {
 		prepare::prepare::<runtime::Env, T>(
 			code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 			schedule,
@@ -249,10 +246,13 @@ impl<T: Config> WasmBlob<T> {
 						&self.code_info.owner,
 						deposit,
 					)
-					// TODO: better error mapping
 					.map_err(|_| {
 						let _ = System::<T>::dec_providers(&self.code_info.owner);
+<<<<<<< HEAD
 						<Error<T>>::StorageDepositNotEnoughFunds
+=======
+						<Error<T>>::StorageDepositNotHeld
+>>>>>>> jg/13643-contracts-migrate-to-fungible-traits
 					})?;
 
 					<Pallet<T>>::deposit_event(
@@ -375,10 +375,7 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		ext: &mut E,
 		function: &ExportedFunction,
 		input_data: Vec<u8>,
-	) -> ExecResult
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> ExecResult {
 		let code = self.code.as_slice();
 		// Instantiate the Wasm module to the engine.
 		let runtime = Runtime::new(ext, input_data);
@@ -564,10 +561,7 @@ mod tests {
 			value: u64,
 			data: Vec<u8>,
 			allows_reentry: bool,
-		) -> Result<ExecReturnValue, ExecError>
-		where
-			BalanceOf<Self::T>: FixedPointOperand,
-		{
+		) -> Result<ExecReturnValue, ExecError> {
 			self.calls.push(CallEntry { to, value, data, allows_reentry });
 			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: call_return_data() })
 		}
@@ -587,10 +581,7 @@ mod tests {
 			value: u64,
 			data: Vec<u8>,
 			salt: &[u8],
-		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError>
-		where
-			BalanceOf<Self::T>: FixedPointOperand,
-		{
+		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
 				code_hash,
 				value,

@@ -38,7 +38,7 @@ use pallet_contracts_primitives::StorageDeposit as Deposit;
 use sp_api::HashT;
 use sp_runtime::{
 	traits::{Saturating, Zero},
-	FixedPointNumber, FixedPointOperand, FixedU128,
+	FixedPointNumber, FixedU128,
 };
 use sp_std::{marker::PhantomData, vec::Vec};
 
@@ -171,10 +171,7 @@ impl Diff {
 	/// In case `None` is passed for `info` only charges are calculated. This is because refunds
 	/// are calculated pro rata of the existing storage within a contract and hence need extract
 	/// this information from the passed `info`.
-	pub fn update_contract<T: Config>(&self, info: Option<&mut ContractInfo<T>>) -> DepositOf<T>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	pub fn update_contract<T: Config>(&self, info: Option<&mut ContractInfo<T>>) -> DepositOf<T> {
 		let per_byte = T::DepositPerByte::get();
 		let per_item = T::DepositPerItem::get();
 		let bytes_added = self.bytes_added.saturating_sub(self.bytes_removed);
@@ -269,10 +266,7 @@ enum Contribution<T: Config> {
 
 impl<T: Config> Contribution<T> {
 	/// See [`Diff::update_contract`].
-	fn update_contract(&self, info: Option<&mut ContractInfo<T>>) -> DepositOf<T>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	fn update_contract(&self, info: Option<&mut ContractInfo<T>>) -> DepositOf<T> {
 		match self {
 			Self::Alive(diff) => diff.update_contract::<T>(info),
 			Self::Terminated(deposit) | Self::Checked(deposit) => deposit.clone(),
@@ -331,9 +325,7 @@ where
 		absorbed: RawMeter<T, E, Nested>,
 		contract: &T::AccountId,
 		info: Option<&mut ContractInfo<T>>,
-	) where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) {
 		let own_deposit = absorbed.own_contribution.update_contract(info);
 		self.total_deposit = self
 			.total_deposit
@@ -437,10 +429,7 @@ where
 		origin: &T::AccountId,
 		contract: &T::AccountId,
 		info: &mut ContractInfo<T>,
-	) -> Result<DepositOf<T>, DispatchError>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> Result<DepositOf<T>, DispatchError> {
 		debug_assert!(self.is_alive());
 
 		let ed = Pallet::<T>::min_balance();
@@ -487,10 +476,10 @@ where
 	/// call. However, if a dedicated limit is specified for a sub-call, this needs to be called
 	/// once the sub-call has returned. For this, the [`Self::enforce_subcall_limit`] wrapper is
 	/// used.
-	pub fn enforce_limit(&mut self, info: Option<&mut ContractInfo<T>>) -> Result<(), DispatchError>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	pub fn enforce_limit(
+		&mut self,
+		info: Option<&mut ContractInfo<T>>,
+	) -> Result<(), DispatchError> {
 		let deposit = self.own_contribution.update_contract(info);
 		let total_deposit = self.total_deposit.saturating_add(&deposit);
 		// We don't want to override a `Terminated` with a `Checked`.
@@ -510,10 +499,7 @@ where
 	pub fn enforce_subcall_limit(
 		&mut self,
 		info: Option<&mut ContractInfo<T>>,
-	) -> Result<(), DispatchError>
-	where
-		BalanceOf<T>: FixedPointOperand,
-	{
+	) -> Result<(), DispatchError> {
 		match self.nested {
 			Nested::OwnLimit => self.enforce_limit(info),
 			Nested::DerivedLimit => Ok(()),

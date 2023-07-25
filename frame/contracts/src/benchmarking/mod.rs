@@ -73,7 +73,6 @@ impl<T> Contract<T>
 where
 	T: Config + pallet_balances::Config,
 	<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
-	BalanceOf<T>: FixedPointOperand,
 {
 	/// Create new contract and use a default account id as instantiator.
 	fn new(module: WasmModule<T>, data: Vec<u8>) -> Result<Contract<T>, &'static str> {
@@ -202,7 +201,6 @@ macro_rules! load_benchmark {
 benchmarks! {
 	where_clause { where
 		<BalanceOf<T> as codec::HasCompact>::Type: Clone + Eq + PartialEq + sp_std::fmt::Debug + scale_info::TypeInfo + codec::Encode,
-		BalanceOf<T>: FixedPointOperand,
 		T: Config + pallet_balances::Config,
 	}
 
