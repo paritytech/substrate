@@ -863,13 +863,15 @@ fn default_config_as_json_works() {
 	sp_tracing::try_init_simple();
 	// let mut t = BasicExternalities::new_empty();
 	let mut t = new_test_ext(compact_code_unwrap());
-	let r = executor_call(&mut t, "GenesisBuilder_get_default_as_json", &vec![], false)
+	let r = executor_call(&mut t, "GenesisBuilder_create_default_config", &vec![], false)
 		.0
 		.unwrap();
 	let r = Vec::<u8>::decode(&mut &r[..]).unwrap();
 	let json = String::from_utf8(r.into()).expect("returned value is json. qed.");
+	let mut expected = include_str!("res/default_genesis_config.json").to_string();
 
-	let expected = r#"{"system":{"code":"0x"},"babe":{"authorities":[],"epochConfig":null},"indices":{"indices":[]},"balances":{"balances":[]},"transactionPayment":{"multiplier":"1000000000000000000"},"staking":{"validatorCount":0,"minimumValidatorCount":0,"invulnerables":[],"forceEra":"NotForcing","slashRewardFraction":0,"canceledPayout":0,"stakers":[],"minNominatorBond":0,"minValidatorBond":0,"maxValidatorCount":null,"maxNominatorCount":null},"session":{"keys":[]},"democracy":{},"council":{"members":[]},"technicalCommittee":{"members":[]},"elections":{"members":[]},"technicalMembership":{"members":[]},"grandpa":{"authorities":[]},"treasury":{},"sudo":{"key":null},"imOnline":{"keys":[]},"authorityDiscovery":{"keys":[]},"society":{"pot":0},"vesting":{"vesting":[]},"glutton":{"compute":"0","storage":"0","trashDataCount":0},"assets":{"assets":[],"metadata":[],"accounts":[]},"poolAssets":{"assets":[],"metadata":[],"accounts":[]},"transactionStorage":{"byteFee":10,"entryFee":1000,"storagePeriod":100800},"allianceMotion":{"members":[]},"alliance":{"fellows":[],"allies":[]},"nominationPools":{"minJoinBond":0,"minCreateBond":0,"maxPools":16,"maxMembersPerPool":32,"maxMembers":512,"globalMaxCommission":null}}"#;
-	log::info!("---> json: {:#?}", json);
-	assert_eq!(expected.to_string(), json);
+	//remove "\n":
+	expected.pop();
+
+	assert_eq!(expected, json);
 }
