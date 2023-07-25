@@ -162,8 +162,9 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 			Error::<T, I>::WrongSetting
 		);
 
-		let collection =
-			NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
+		let collection = NextCollectionId::<T, I>::get()
+			.or(T::CollectionId::initial_value())
+			.ok_or(Error::<T, I>::UnknownCollection)?;
 
 		Self::do_create_collection(
 			collection,
@@ -173,7 +174,39 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 			T::CollectionDeposit::get(),
 			Event::Created { collection, creator: who.clone(), owner: admin.clone() },
 		)?;
+
+		Self::set_next_collection_id(collection);
+
 		Ok(collection)
+	}
+
+	/// Create a collection of nonfungible items with `collection` Id to be owned by `who` and
+	/// managed by `admin`. Should be only used for applications that do not have an
+	/// incremental order for the collection IDs and is a replacement for the auto id creation.
+	///
+	///
+	/// SAFETY: This function can break the pallet if it is used in combination with the auto
+	/// increment functionality, as it can claim a value in the ID sequence.
+	fn create_collection_with_id(
+		collection: T::CollectionId,
+		who: &T::AccountId,
+		admin: &T::AccountId,
+		config: &CollectionConfigFor<T, I>,
+	) -> Result<(), DispatchError> {
+		// DepositRequired can be disabled by calling the force_create() only
+		ensure!(
+			!config.has_disabled_setting(CollectionSetting::DepositRequired),
+			Error::<T, I>::WrongSetting
+		);
+
+		Self::do_create_collection(
+			collection,
+			who.clone(),
+			admin.clone(),
+			*config,
+			T::CollectionDeposit::get(),
+			Event::Created { collection, creator: who.clone(), owner: admin.clone() },
+		)
 	}
 }
 
