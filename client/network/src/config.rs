@@ -22,6 +22,7 @@
 //! See the documentation of [`Params`].
 
 pub use crate::{
+	discovery::DEFAULT_KADEMLIA_REPLICATION_FACTOR,
 	protocol::NotificationsSink,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
@@ -40,7 +41,7 @@ use zeroize::Zeroize;
 
 pub use sc_network_common::{
 	role::{Role, Roles},
-	sync::warp::WarpSyncProvider,
+	sync::{warp::WarpSyncProvider, SyncMode},
 	ExHashT,
 };
 use sc_utils::mpsc::TracingUnboundedSender;
@@ -53,6 +54,7 @@ use std::{
 	io::{self, Write},
 	iter,
 	net::Ipv4Addr,
+	num::NonZeroUsize,
 	path::{Path, PathBuf},
 	pin::Pin,
 	str::{self, FromStr},
@@ -110,8 +112,7 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 /// Splits a Multiaddress into a Multiaddress and PeerId.
 pub fn parse_addr(mut addr: Multiaddr) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) =>
-			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?,
+		Some(multiaddr::Protocol::P2p(peer_id)) => peer_id,
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
@@ -144,7 +145,7 @@ pub struct MultiaddrWithPeerId {
 impl MultiaddrWithPeerId {
 	/// Concatenates the multiaddress and peer ID into one multiaddress containing both.
 	pub fn concat(&self) -> Multiaddr {
-		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id));
+		let proto = multiaddr::Protocol::P2p(self.peer_id);
 		self.multiaddr.clone().with(proto)
 	}
 }
@@ -182,8 +183,6 @@ impl TryFrom<String> for MultiaddrWithPeerId {
 pub enum ParseErr {
 	/// Error while parsing the multiaddress.
 	MultiaddrParse(multiaddr::Error),
-	/// Multihash of the peer ID is invalid.
-	InvalidPeerId,
 	/// The peer ID is missing from the address.
 	PeerIdMissing,
 }
@@ -192,7 +191,6 @@ impl fmt::Display for ParseErr {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::MultiaddrParse(err) => write!(f, "{}", err),
-			Self::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
 			Self::PeerIdMissing => write!(f, "Peer id is missing from the address"),
 		}
 	}
@@ -202,7 +200,6 @@ impl std::error::Error for ParseErr {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
 			Self::MultiaddrParse(err) => Some(err),
-			Self::InvalidPeerId => None,
 			Self::PeerIdMissing => None,
 		}
 	}
@@ -275,40 +272,6 @@ impl NonReservedPeerMode {
 			"deny" => Some(Self::Deny),
 			_ => None,
 		}
-	}
-}
-
-/// Sync operation mode.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SyncMode {
-	/// Full block download and verification.
-	Full,
-	/// Download blocks and the latest state.
-	Fast {
-		/// Skip state proof download and verification.
-		skip_proofs: bool,
-		/// Download indexed transactions for recent blocks.
-		storage_chain_mode: bool,
-	},
-	/// Warp sync - verify authority set transitions and the latest state.
-	Warp,
-}
-
-impl SyncMode {
-	/// Returns if `self` is [`Self::Warp`].
-	pub fn is_warp(&self) -> bool {
-		matches!(self, Self::Warp)
-	}
-
-	/// Returns if `self` is [`Self::Fast`].
-	pub fn is_fast(&self) -> bool {
-		matches!(self, Self::Fast { .. })
-	}
-}
-
-impl Default for SyncMode {
-	fn default() -> Self {
-		Self::Full
 	}
 }
 
@@ -677,6 +640,12 @@ pub struct NetworkConfiguration {
 	/// the presence of potentially adversarial nodes.
 	pub kademlia_disjoint_query_paths: bool,
 
+	/// Kademlia replication factor determines to how many closest peers a record is replicated to.
+	///
+	/// Discovery mechanism requires successful replication to all
+	/// `kademlia_replication_factor` peers to consider record successfully put.
+	pub kademlia_replication_factor: NonZeroUsize,
+
 	/// Enable serving block data over IPFS bitswap.
 	pub ipfs_server: bool,
 
@@ -730,6 +699,8 @@ impl NetworkConfiguration {
 			enable_dht_random_walk: true,
 			allow_non_globals_in_dht: false,
 			kademlia_disjoint_query_paths: false,
+			kademlia_replication_factor: NonZeroUsize::new(DEFAULT_KADEMLIA_REPLICATION_FACTOR)
+				.expect("value is a constant; constant is non-zero; qed."),
 			yamux_window_size: None,
 			ipfs_server: false,
 		}

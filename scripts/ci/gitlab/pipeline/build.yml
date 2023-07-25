@@ -77,8 +77,8 @@ build-linux-substrate:
     - git checkout -B "$CI_COMMIT_REF_NAME" "$CI_COMMIT_SHA"
   script:
     - rusty-cachier snapshot create
-    - WASM_BUILD_NO_COLOR=1 time cargo build --locked --release --verbose
-    - mv $CARGO_TARGET_DIR/release/substrate ./artifacts/substrate/.
+    - WASM_BUILD_NO_COLOR=1 time cargo build --locked --release -p node-cli --verbose
+    - mv $CARGO_TARGET_DIR/release/substrate-node ./artifacts/substrate/substrate
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
       echo "${CI_COMMIT_TAG}" | tee ./artifacts/substrate/VERSION;
@@ -153,7 +153,7 @@ build-rustdoc:
     - .test-refs
   variables:
     SKIP_WASM_BUILD: 1
-    DOC_INDEX_PAGE: "sc_service/index.html" # default redirected page
+    DOC_INDEX_PAGE: "substrate/index.html" # default redirected page
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
   artifacts:

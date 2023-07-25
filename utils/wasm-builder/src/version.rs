@@ -24,9 +24,9 @@ pub struct Version {
 	pub minor: u32,
 	pub patch: u32,
 	pub is_nightly: bool,
-	pub year: u32,
-	pub month: u32,
-	pub day: u32,
+	pub year: Option<u32>,
+	pub month: Option<u32>,
+	pub day: Option<u32>,
 }
 
 impl Version {
@@ -62,25 +62,24 @@ impl Version {
 			return None
 		}
 
-		let date = version.split(" ").nth(3)?;
-
-		let date_parts = date
-			.split("-")
-			.filter_map(|v| v.trim().strip_suffix(")").unwrap_or(v).parse().ok())
-			.collect::<Vec<u32>>();
-
-		if date_parts.len() != 3 {
-			return None
-		}
+		let date_parts = version
+			.split(" ")
+			.nth(3)
+			.map(|date| {
+				date.split("-")
+					.filter_map(|v| v.trim().strip_suffix(")").unwrap_or(v).parse().ok())
+					.collect::<Vec<u32>>()
+			})
+			.unwrap_or_default();
 
 		Some(Version {
 			major: version_parts[0],
 			minor: version_parts[1],
 			patch: version_parts[2],
 			is_nightly,
-			year: date_parts[0],
-			month: date_parts[1],
-			day: date_parts[2],
+			year: date_parts.get(0).copied(),
+			month: date_parts.get(1).copied(),
+			day: date_parts.get(2).copied(),
 		})
 	}
 }
@@ -104,9 +103,9 @@ impl Ord for Version {
 		}
 
 		let to_compare = [
-			(self.major, other.major),
-			(self.minor, other.minor),
-			(self.patch, other.patch),
+			(Some(self.major), Some(other.major)),
+			(Some(self.minor), Some(other.minor)),
+			(Some(self.patch), Some(other.patch)),
 			(self.year, other.year),
 			(self.month, other.month),
 			(self.day, other.day),
@@ -188,11 +187,29 @@ mod tests {
 				minor: 66,
 				patch: 0,
 				is_nightly: false,
-				year: 2022,
-				month: 11,
-				day: 15
+				year: Some(2022),
+				month: Some(11),
+				day: Some(15),
 			},
-			version_1_66_0
+			version_1_66_0,
+		);
+	}
+
+	#[test]
+	fn version_without_hash_and_date() {
+		// Apparently there are installations that print without the hash and date.
+		let version_1_69_0 = Version::extract("cargo 1.69.0-nightly").unwrap();
+		assert_eq!(
+			Version {
+				major: 1,
+				minor: 69,
+				patch: 0,
+				is_nightly: true,
+				year: None,
+				month: None,
+				day: None,
+			},
+			version_1_69_0,
 		);
 	}
 }

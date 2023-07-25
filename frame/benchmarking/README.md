@@ -175,7 +175,6 @@ Then you can run a benchmark like so:
 ```bash
 ./target/production/substrate benchmark pallet \
     --chain dev \                  # Configurable Chain Spec
-    --execution=wasm \             # Always test with Wasm
     --wasm-execution=compiled \    # Always used `wasm-time`
     --pallet pallet_balances \     # Select the pallet
     --extrinsic transfer \         # Select the extrinsic

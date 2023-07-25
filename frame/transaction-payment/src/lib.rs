@@ -380,18 +380,20 @@ pub mod pallet {
 	pub(super) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig {
+	pub struct GenesisConfig<T: Config> {
 		pub multiplier: Multiplier,
+		#[serde(skip)]
+		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
-	impl Default for GenesisConfig {
+	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { multiplier: MULTIPLIER_DEFAULT_VALUE }
+			Self { multiplier: MULTIPLIER_DEFAULT_VALUE, _config: Default::default() }
 		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			StorageVersion::<T>::put(Releases::V2);
 			NextFeeMultiplier::<T>::put(self.multiplier);
@@ -408,12 +410,13 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_finalize(_: T::BlockNumber) {
+		fn on_finalize(_: frame_system::pallet_prelude::BlockNumberFor<T>) {
 			<NextFeeMultiplier<T>>::mutate(|fm| {
 				*fm = T::FeeMultiplierUpdate::convert(*fm);
 			});
 		}
 
+		#[cfg(feature = "std")]
 		fn integrity_test() {
 			// given weight == u64, we build multipliers from `diff` of two weight values, which can
 			// at most be maximum block weight. Make sure that this can fit in a multiplier without
@@ -439,25 +442,21 @@ pub mod pallet {
 				return
 			}
 
-			#[cfg(any(feature = "std", test))]
-			sp_io::TestExternalities::new_empty().execute_with(|| {
-				// This is the minimum value of the multiplier. Make sure that if we collapse to
-				// this value, we can recover with a reasonable amount of traffic. For this test we
-				// assert that if we collapse to minimum, the trend will be positive with a weight
-				// value which is 1% more than the target.
-				let min_value = T::FeeMultiplierUpdate::min();
+			// This is the minimum value of the multiplier. Make sure that if we collapse to this
+			// value, we can recover with a reasonable amount of traffic. For this test we assert
+			// that if we collapse to minimum, the trend will be positive with a weight value which
+			// is 1% more than the target.
+			let min_value = T::FeeMultiplierUpdate::min();
+			let target = target + addition;
 
-				let target = target + addition;
-
-				<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
-				let next = T::FeeMultiplierUpdate::convert(min_value);
-				assert!(
-					next > min_value,
-					"The minimum bound of the multiplier is too low. When \
-					block saturation is more than target by 1% and multiplier is minimal then \
-					the multiplier doesn't increase."
-				);
-			});
+			<frame_system::Pallet<T>>::set_block_consumed_resources(target, 0);
+			let next = T::FeeMultiplierUpdate::convert(min_value);
+			assert!(
+				next > min_value,
+				"The minimum bound of the multiplier is too low. When \
+				block saturation is more than target by 1% and multiplier is minimal then \
+				the multiplier doesn't increase."
+			);
 		}
 	}
 }

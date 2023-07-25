@@ -1,0 +1,13 @@
+error[E0432]: unresolved import `pallet`
+ --> tests/split_ui/no_section_found.rs:5:9
+  |
+5 | pub use pallet::*;
+  |         ^^^^^^ help: a similar path exists: `test_pallet::pallet`
+
+error: cannot find macro `__export_tokens_tt_storages_dev` in this scope
+ --> tests/split_ui/no_section_found.rs:7:1
+  |
+7 | #[import_section(storages_dev)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `frame_support::macro_magic::forward_tokens` (in Nightly builds, run with -Z macro-backtrace for more info)

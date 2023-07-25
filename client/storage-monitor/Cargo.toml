@@ -10,11 +10,9 @@ homepage = "https://substrate.io"
 
 [dependencies]
 clap = { version = "4.2.5", features = ["derive", "string"] }
-futures = "0.3.21"
 log = "0.4.17"
 fs4 = "0.6.3"
 sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../db" }
-sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
 tokio = "1.22.0"
 thiserror = "1.0.30"

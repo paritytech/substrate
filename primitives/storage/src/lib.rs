@@ -205,6 +205,8 @@ pub mod well_known_keys {
 	pub const EXTRINSIC_INDEX: &[u8] = b":extrinsic_index";
 
 	/// Current intra-block entropy (a universally unique `[u8; 32]` value) is stored here.
+	///
+	/// Encodes to `0x3a696e747261626c6f636b5f656e74726f7079`.
 	pub const INTRABLOCK_ENTROPY: &[u8] = b":intrablock_entropy";
 
 	/// Prefix of child storage keys.
