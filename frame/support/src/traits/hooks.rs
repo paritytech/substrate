@@ -132,15 +132,6 @@ pub trait OnRuntimeUpgrade {
 	}
 
 	/// See [`Hooks::on_runtime_upgrade`].
-	/// Perform a module upgrade.
-	///
-	/// # Warning
-	///
-	/// This function will be called before we initialized any runtime state, aka `on_initialize`
-	/// wasn't called yet. So, information like the block number and any other
-	/// block local data are not accessible.
-	///
-	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> Weight {
 		Weight::zero()
 	}
