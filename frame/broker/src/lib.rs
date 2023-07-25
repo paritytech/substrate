@@ -466,6 +466,8 @@ pub mod pallet {
 		UnknownReservation,
 		/// The renewal record cannot be found.
 		UnknownRenewal,
+		/// The lease expiry time has already passed.
+		AlreadyExpired,
 	}
 
 	#[pallet::hooks]
