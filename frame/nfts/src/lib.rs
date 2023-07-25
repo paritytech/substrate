@@ -37,8 +37,8 @@ pub mod mock;
 mod tests;
 
 mod common_functions;
-/// A library providing the feature set of this pallet. It contains modules with helper methods that perform
-/// storage updates and checks required by this pallet's dispatchables.
+/// A library providing the feature set of this pallet. It contains modules with helper methods that
+/// perform storage updates and checks required by this pallet's dispatchables.
 mod features;
 mod impl_nonfungibles;
 mod types;

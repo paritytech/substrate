@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This module contains helper functions for performing atomic swaps implemented in the NFTs pallet.
+//! This module contains helper functions for performing atomic swaps implemented in the NFTs
+//! pallet.
 
 use crate::*;
 use frame_support::{
@@ -29,12 +30,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// This function is used to create a new swap offer for the specified item. The `caller`
 	/// account must be the owner of the item. The swap offer specifies the `offered_collection`,
 	/// `offered_item`, `desired_collection`, `maybe_desired_item`, `maybe_price`, and `duration`.
-	/// The `duration` specifies the deadline by which the swap must be claimed. If `maybe_desired_item`
-	/// is `Some`, the specified item is expected in return for the swap. If `maybe_desired_item` is
-	/// `None`, it indicates that any item from the `desired_collection` can be offered in return.
-	/// The `maybe_price` specifies an optional price for the swap. If specified, the other party must
-	/// offer the specified `price` or higher for the swap. After creating the swap, the function emits
-	/// the `SwapCreated` event.
+	/// The `duration` specifies the deadline by which the swap must be claimed. If
+	/// `maybe_desired_item` is `Some`, the specified item is expected in return for the swap. If
+	/// `maybe_desired_item` is `None`, it indicates that any item from the `desired_collection` can
+	/// be offered in return. The `maybe_price` specifies an optional price for the swap. If
+	/// specified, the other party must offer the specified `price` or higher for the swap. After
+	/// creating the swap, the function emits the `SwapCreated` event.
 	///
 	/// - `caller`: The account creating the swap offer, which must be the owner of the item.
 	/// - `offered_collection_id`: The collection ID containing the offered item.
@@ -100,9 +101,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 	/// Cancels the specified swap offer.
 	///
-	/// This function is used to cancel the specified swap offer created by the `caller` account. If the
-	/// swap offer's deadline has not yet passed, the `caller` must be the owner of the offered item. After
-	/// canceling the swap offer, the function emits the `SwapCancelled` event.
+	/// This function is used to cancel the specified swap offer created by the `caller` account. If
+	/// the swap offer's deadline has not yet passed, the `caller` must be the owner of the offered
+	/// item. After canceling the swap offer, the function emits the `SwapCancelled` event.
 	///
 	/// - `caller`: The account canceling the swap offer.
 	/// - `offered_collection_id`: The collection ID containing the offered item.
@@ -138,18 +139,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Claims the specified swap offer.
 	///
-	/// This function is used to claim a swap offer specified by the `send_collection_id`, `send_item_id`,
-	/// `receive_collection_id`, and `receive_item_id`. The `caller` account must be the owner of the item
-	/// specified by `send_collection_id` and `send_item_id`. If the claimed swap has an associated `price`,
-	/// it will be transferred between the owners of the two items based on the `price.direction`. After
-	/// the swap is completed, the function emits the `SwapClaimed` event.
+	/// This function is used to claim a swap offer specified by the `send_collection_id`,
+	/// `send_item_id`, `receive_collection_id`, and `receive_item_id`. The `caller` account must be
+	/// the owner of the item specified by `send_collection_id` and `send_item_id`. If the claimed
+	/// swap has an associated `price`, it will be transferred between the owners of the two items
+	/// based on the `price.direction`. After the swap is completed, the function emits the
+	/// `SwapClaimed` event.
 	///
 	/// - `caller`: The account claiming the swap offer, which must be the owner of the sent item.
 	/// - `send_collection_id`: The identifier of the collection containing the item being sent.
 	/// - `send_item_id`: The identifier of the item being sent for the swap.
-	/// - `receive_collection_id`: The identifier of the collection containing the item being received.
+	/// - `receive_collection_id`: The identifier of the collection containing the item being
+	///   received.
 	/// - `receive_item_id`: The identifier of the item being received in the swap.
-	/// - `witness_price`: The optional witness price for the swap (price that was offered in the swap).
+	/// - `witness_price`: The optional witness price for the swap (price that was offered in the
+	///   swap).
 	pub(crate) fn do_claim_swap(
 		caller: T::AccountId,
 		send_collection_id: T::CollectionId,

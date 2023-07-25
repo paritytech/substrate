@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This module contains helper methods to configure locks on collections and items for the NFTs pallet.
+//! This module contains helper methods to configure locks on collections and items for the NFTs
+//! pallet.
 
 use crate::*;
 use frame_support::pallet_prelude::*;
@@ -55,9 +56,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Locks the transfer of an item within a collection.
 	///
-	/// The origin must have the `Freezer` role within the collection to lock the transfer of the item.
-	/// This function disables the `Transferable` setting on the item, preventing it from being
-	/// transferred to other accounts.
+	/// The origin must have the `Freezer` role within the collection to lock the transfer of the
+	/// item. This function disables the `Transferable` setting on the item, preventing it from
+	/// being transferred to other accounts.
 	///
 	/// - `origin`: The origin of the transaction, representing the account attempting to lock
 	/// the item transfer.
@@ -85,9 +86,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Unlocks the transfer of an item within a collection.
 	///
-	/// The origin must have the `Freezer` role within the collection to unlock the transfer of the item.
-	/// This function enables the `Transferable` setting on the item, allowing it to be transferred
-	/// to other accounts.
+	/// The origin must have the `Freezer` role within the collection to unlock the transfer of the
+	/// item. This function enables the `Transferable` setting on the item, allowing it to be
+	/// transferred to other accounts.
 	///
 	/// - `origin`: The origin of the transaction, representing the account attempting to unlock
 	/// the item transfer.
@@ -115,9 +116,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Locks the metadata and attributes of an item within a collection.
 	///
-	/// The origin must have the `Admin` role within the collection to lock the metadata and attributes
-	/// of the item. This function disables the `UnlockedMetadata` and `UnlockedAttributes` settings on
-	/// the item, preventing modifications to its metadata and attributes.
+	/// The origin must have the `Admin` role within the collection to lock the metadata and
+	/// attributes of the item. This function disables the `UnlockedMetadata` and
+	/// `UnlockedAttributes` settings on the item, preventing modifications to its metadata and
+	/// attributes.
 	///
 	/// - `maybe_check_origin`: An optional origin representing the account attempting to lock the
 	/// item properties. If provided, this account must have the `Admin` role within the collection.

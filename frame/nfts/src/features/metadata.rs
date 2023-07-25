@@ -23,11 +23,13 @@ use frame_support::pallet_prelude::*;
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Sets the metadata for a specific item within a collection.
 	///
-	/// - `maybe_check_origin`: An optional account ID that is allowed to set the metadata. If `None`, it's considered the root account.
+	/// - `maybe_check_origin`: An optional account ID that is allowed to set the metadata. If
+	///   `None`, it's considered the root account.
 	/// - `collection`: The ID of the collection to which the item belongs.
 	/// - `item`: The ID of the item to set the metadata for.
 	/// - `data`: The metadata to set for the item.
-	/// - `maybe_depositor`: An optional account ID that will provide the deposit for the metadata. If `None`, the collection's owner provides the deposit.
+	/// - `maybe_depositor`: An optional account ID that will provide the deposit for the metadata.
+	///   If `None`, the collection's owner provides the deposit.
 	///
 	/// Emits `ItemMetadataSet` event upon successful setting of the metadata.
 	/// Returns `Ok(())` on success, or one of the following dispatch errors:
@@ -109,7 +111,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Clears the metadata for a specific item within a collection.
 	///
-	/// - `maybe_check_origin`: An optional account ID that is allowed to clear the metadata. If `None`, it's considered the root account.
+	/// - `maybe_check_origin`: An optional account ID that is allowed to clear the metadata. If
+	///   `None`, it's considered the root account.
 	/// - `collection`: The ID of the collection to which the item belongs.
 	/// - `item`: The ID of the item for which to clear the metadata.
 	///
@@ -161,14 +164,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Sets the metadata for a specific collection.
 	///
-	/// - `maybe_check_origin`: An optional account ID that is allowed to set the collection metadata. If `None`, it's considered the root account.
+	/// - `maybe_check_origin`: An optional account ID that is allowed to set the collection
+	///   metadata. If `None`, it's considered the root account.
 	/// - `collection`: The ID of the collection for which to set the metadata.
 	/// - `data`: The metadata to set for the collection.
 	///
 	/// Emits `CollectionMetadataSet` event upon successful setting of the metadata.
 	/// Returns `Ok(())` on success, or one of the following dispatch errors:
 	/// - `UnknownCollection`: The specified collection does not exist.
-	/// - `LockedCollectionMetadata`: The metadata for the collection is locked and cannot be modified.
+	/// - `LockedCollectionMetadata`: The metadata for the collection is locked and cannot be
+	///   modified.
 	/// - `NoPermission`: The caller does not have the required permission to set the metadata.
 	pub(crate) fn do_set_collection_metadata(
 		maybe_check_origin: Option<T::AccountId>,
@@ -220,14 +225,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Clears the metadata for a specific collection.
 	///
-	/// - `maybe_check_origin`: An optional account ID that is allowed to clear the collection metadata. If `None`, it's considered the root account.
+	/// - `maybe_check_origin`: An optional account ID that is allowed to clear the collection
+	///   metadata. If `None`, it's considered the root account.
 	/// - `collection`: The ID of the collection for which to clear the metadata.
 	///
 	/// Emits `CollectionMetadataCleared` event upon successful clearing of the metadata.
 	/// Returns `Ok(())` on success, or one of the following dispatch errors:
 	/// - `UnknownCollection`: The specified collection does not exist.
 	/// - `MetadataNotFound`: The metadata for the collection was not found.
-	/// - `LockedCollectionMetadata`: The metadata for the collection is locked and cannot be modified.
+	/// - `LockedCollectionMetadata`: The metadata for the collection is locked and cannot be
+	///   modified.
 	/// - `NoPermission`: The caller does not have the required permission to clear the metadata.
 	pub(crate) fn do_clear_collection_metadata(
 		maybe_check_origin: Option<T::AccountId>,
@@ -262,7 +269,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// - `metadata`: A vector of bytes representing the metadata.
 	///
-	/// Returns `Ok(BoundedVec)` on successful construction, or `Error::IncorrectMetadata` 
+	/// Returns `Ok(BoundedVec)` on successful construction, or `Error::IncorrectMetadata`
 	/// if the metadata length exceeds the allowed limit.
 	pub fn construct_metadata(
 		metadata: Vec<u8>,
