@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This module contains helper functions to configure account roles for existing collections.
+//! This module contains helper methods to configure account roles for existing collections.
 
 use crate::*;
 use frame_support::pallet_prelude::*;

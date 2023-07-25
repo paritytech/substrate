@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This module provides helper functions to configure collection settings for the NFTs pallet.
+//! This module provides helper methods to configure collection settings for the NFTs pallet.
 
 use crate::*;
 use frame_support::pallet_prelude::*;
