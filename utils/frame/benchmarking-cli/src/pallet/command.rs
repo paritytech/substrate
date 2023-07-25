@@ -147,6 +147,16 @@ impl PalletCmd {
 		<<<BB as BlockT>::Header as HeaderT>::Number as std::str::FromStr>::Err: std::fmt::Debug,
 		ExtraHostFunctions: sp_wasm_interface::HostFunctions,
 	{
+		let _d = self.execution.as_ref().map(|exec| {
+			// We print the warning at the end, since there is often A LOT of output.
+			sp_core::defer::DeferGuard::new(move || {
+				log::warn!(
+					target: LOG_TARGET,
+					"⚠️  Argument `--execution` is deprecated. Its value of `{exec}` has on effect.",
+				)
+			})
+		});
+
 		if let Some(output_path) = &self.output {
 			if !output_path.is_dir() && output_path.file_name().is_none() {
 				return Err("Output file or path is invalid!".into())

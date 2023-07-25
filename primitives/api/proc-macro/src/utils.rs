@@ -266,9 +266,7 @@ pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
 	attrs
 		.iter()
 		.filter_map(|attr| {
-			let syn::Meta::NameValue(meta) = &attr.meta else {
-				return None
-			};
+			let syn::Meta::NameValue(meta) = &attr.meta else { return None };
 			let Ok(lit) = syn::parse2::<syn::Lit>(meta.value.to_token_stream()) else {
 				unreachable!("non-lit doc attribute values do not exist");
 			};

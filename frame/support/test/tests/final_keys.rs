@@ -16,8 +16,10 @@
 // limitations under the License.
 
 use codec::Encode;
-use frame_support::{storage::unhashed, StoragePrefixedMap};
-use sp_core::sr25519;
+use frame_support::{derive_impl, storage::unhashed, StoragePrefixedMap};
+use frame_system::pallet_prelude::BlockNumberFor;
+
+use sp_core::{sr25519, ConstU32};
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
@@ -31,7 +33,6 @@ use sp_runtime::{
 mod no_instance {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -59,7 +60,7 @@ mod no_instance {
 
 	#[pallet::storage]
 	#[pallet::getter(fn test_generic_value)]
-	pub type TestGenericValue<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
+	pub type TestGenericValue<T: Config> = StorageValue<_, BlockNumberFor<T>, OptionQuery>;
 	#[pallet::storage]
 	#[pallet::getter(fn foo2)]
 	pub type TestGenericDoubleMap<T: Config> = StorageDoubleMap<
@@ -67,7 +68,7 @@ mod no_instance {
 		Blake2_128Concat,
 		u32,
 		Blake2_128Concat,
-		T::BlockNumber,
+		BlockNumberFor<T>,
 		u32,
 		ValueQuery,
 	>;
@@ -75,8 +76,8 @@ mod no_instance {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub value: u32,
-		pub test_generic_value: T::BlockNumber,
-		pub test_generic_double_map: Vec<(u32, T::BlockNumber, u32)>,
+		pub test_generic_value: BlockNumberFor<T>,
+		pub test_generic_double_map: Vec<(u32, BlockNumberFor<T>, u32)>,
 	}
 
 	impl<T: Config> Default for GenesisConfig<T> {
@@ -105,7 +106,6 @@ mod no_instance {
 mod instance {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_support_test as frame_system;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -136,7 +136,7 @@ mod instance {
 	#[pallet::storage]
 	#[pallet::getter(fn test_generic_value)]
 	pub type TestGenericValue<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, T::BlockNumber, OptionQuery>;
+		StorageValue<_, BlockNumberFor<T>, OptionQuery>;
 	#[pallet::storage]
 	#[pallet::getter(fn foo2)]
 	pub type TestGenericDoubleMap<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
@@ -144,7 +144,7 @@ mod instance {
 		Blake2_128Concat,
 		u32,
 		Blake2_128Concat,
-		T::BlockNumber,
+		BlockNumberFor<T>,
 		u32,
 		ValueQuery,
 	>;
@@ -152,8 +152,8 @@ mod instance {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
 		pub value: u32,
-		pub test_generic_value: T::BlockNumber,
-		pub test_generic_double_map: Vec<(u32, T::BlockNumber, u32)>,
+		pub test_generic_value: BlockNumberFor<T>,
+		pub test_generic_double_map: Vec<(u32, BlockNumberFor<T>, u32)>,
 		pub phantom: PhantomData<I>,
 	}
 
@@ -201,27 +201,25 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime
-	where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+
 	{
-		System: frame_support_test,
+		System: frame_system,
 		FinalKeysNone: no_instance,
 		FinalKeysSome: instance,
 		Instance2FinalKeysSome: instance::<Instance2>,
 	}
 );
 
-impl frame_support_test::Config for Runtime {
-	type BlockNumber = BlockNumber;
-	type AccountId = AccountId;
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type DbWeight = ();
+	type OnSetCode = ();
 }
 
 impl no_instance::Config for Runtime {}

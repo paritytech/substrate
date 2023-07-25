@@ -24,12 +24,16 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 
+/// A type alias for handling balance deposits.
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+/// A type alias representing the details of a collection.
 pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+/// A type alias for the details of a single item.
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+/// A type alias to represent the price of an item.
 pub(super) type ItemPrice<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 

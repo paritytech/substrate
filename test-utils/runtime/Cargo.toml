@@ -13,9 +13,10 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
-sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
+sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../primitives/application-crypto", features = ["serde"]  }
+sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura", features = ["serde"] }
+sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe", features = ["serde"] }
+sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../primitives/genesis-builder" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
 codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
@@ -29,14 +30,14 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../..
 sp-version = { version = "22.0.0", default-features = false, path = "../../primitives/version" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime", features = ["serde"] }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../frame/balances" }
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../frame/executive" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
-sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/grandpa" }
+sp-consensus-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/consensus/grandpa", features = ["serde"] }
 sp-trie = { version = "22.0.0", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.27.0", default-features = false }
@@ -47,14 +48,18 @@ sp-externalities = { version = "0.19.0", default-features = false, path = "../..
 # 3rd party
 array-bytes = { version = "6.1", optional = true }
 log = { version = "0.4.17", default-features = false }
+serde = { version = "1.0.163", features = ["alloc", "derive"], default-features = false }
+serde_json = { version = "1.0.85", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 futures = "0.3.21"
 sc-block-builder = { version = "0.10.0-dev", path = "../../client/block-builder" }
 sc-executor = { version = "0.10.0-dev", path = "../../client/executor" }
+sc-executor-common = { version = "0.10.0-dev", path = "../../client/executor/common" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
 sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
+json-patch = { version = "1.0.0", default-features = false }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-builder", optional = true }
@@ -63,8 +68,10 @@ substrate-wasm-builder = { version = "5.0.0-dev", path = "../../utils/wasm-build
 default = [
 	"std",
 ]
+
 std = [
 	"array-bytes",
+	"sp-genesis-builder/std",
 	"sp-application-crypto/std",
 	"sp-consensus-aura/std",
 	"sp-consensus-babe/std",
@@ -100,3 +107,6 @@ std = [
 ]
 # Special feature to disable logging
 disable-logging = [ "sp-api/disable-logging" ]
+
+#Enabling this flag will disable GenesisBuilder API implementation in runtime.
+disable-genesis-builder = []
