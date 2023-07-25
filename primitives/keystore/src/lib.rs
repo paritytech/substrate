@@ -243,7 +243,7 @@ pub trait Keystore: Send + Sync {
 	/// them to a private key that exists in the keystore.
 	///
 	/// Also takes a [`bandersnatch::ring_vrf::RingProver`] instance obtained from
-	/// a valid [`bandersnatch::ring_vrf::RingVrfContext`].
+	/// a valid [`bandersnatch::ring_vrf::RingContext`].
 	///
 	/// The signature is valid if the signing key is part of the ring from which
 	/// the `RingProver` has been derived.
