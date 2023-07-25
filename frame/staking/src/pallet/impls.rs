@@ -297,33 +297,30 @@ impl<T: Config> Pallet<T> {
 		let dest =
 			Self::get_payout_destination(stash, Self::bonded(stash).expect("bonded stash, qed."));
 
-		match dest {
-			PayoutDestination::Stake => Self::bonded(stash)
-				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
-				.and_then(|(controller, mut l)| {
-					l.active.saturating_accrue(amount);
-					l.total.saturating_accrue(amount);
-					let r = T::Currency::deposit_into_existing(stash, amount).ok();
+		// Closure to handle the `Stake` payout destination, used in `Stake` and `Split` variants.
+		let payout_destination_stake = |a: BalanceOf<T>| -> Option<PositiveImbalanceOf<T>> {
+			Self::bonded(stash).and_then(|c| Self::ledger(&c).map(|l| (c, l))).and_then(
+				|(controller, mut l)| {
+					l.active.saturating_accrue(a);
+					l.total.saturating_accrue(a);
+					let r = T::Currency::deposit_into_existing(stash, a).ok();
 					Self::update_ledger(&controller, &l);
 					r
-				}),
+				},
+			)
+		};
+
+		match dest {
+			PayoutDestination::Stake => payout_destination_stake(amount),
 			PayoutDestination::Split((share, dest_account)) => {
 				let amount_free = share * amount;
 				let amount_stake = amount.saturating_sub(amount_free);
+
 				let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
-
-				let imbalance_stake = Self::bonded(stash)
-					.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
-					.and_then(|(controller, mut l)| {
-						l.active.saturating_accrue(amount_stake);
-						l.total.saturating_accrue(amount_stake);
-						let r = T::Currency::deposit_into_existing(stash, amount_stake).ok();
-						Self::update_ledger(&controller, &l);
-						r
-					});
-
-				total_imbalance
-					.subsume(imbalance_stake.unwrap_or(PositiveImbalanceOf::<T>::zero()));
+				total_imbalance.subsume(
+					payout_destination_stake(amount_stake)
+						.unwrap_or(PositiveImbalanceOf::<T>::zero()),
+				);
 				total_imbalance.subsume(T::Currency::deposit_creating(&dest_account, amount_free));
 				Some(total_imbalance)
 			},
