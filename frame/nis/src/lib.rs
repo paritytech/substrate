@@ -178,7 +178,7 @@ pub mod pallet {
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::{
 		traits::{AccountIdConversion, Bounded, Convert, ConvertBack, Saturating, Zero},
-		Rounding, TokenError,
+		FixedPointOperand, Rounding, TokenError,
 	};
 	use sp_std::prelude::*;
 
@@ -224,7 +224,8 @@ pub mod pallet {
 			+ Default
 			+ From<u64>
 			+ TypeInfo
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ FixedPointOperand;
 
 		/// Origin required for auto-funding the deficit.
 		type FundOrigin: EnsureOrigin<Self::RuntimeOrigin>;
