@@ -975,24 +975,9 @@ impl<R> TransactionOutcome<R> {
 /// Confines the kind of extrinsics that can be included in a block.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode, TypeInfo)]
 pub enum ExtrinsicInclusionMode {
-	/// All logic is allowed to run.
-	///
-	/// For example:
-	/// - Extrinsics with dispatch class `Normal`.
-	/// - `on_idle` hook.
+	/// All extrinsics are allowed to be included in this block.
 	AllExtrinsics,
-	/// Only _necessary_ logic is allowed to run.
-	///
-	/// Explicitly forbidden are:
-	/// - Extrinsics with dispatch classes `Normal` and `Operational`.
-	/// - `on_idle` and `poll` hooks.
-	///
-	/// Explicitly allowed are:
-	/// - Mandatory extrinsics (i.e. via OCW).
-	/// - `on_initialize` and `on_finalize` hooks.
-	/// - Storage migrations.
-	///
-	/// Everything in between is to be judged by the runtime.
+	/// Inherents are allowed to be included.
 	OnlyInherents,
 }
 
