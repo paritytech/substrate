@@ -381,7 +381,7 @@ impl<T: Config> Pallet<T> {
 			InstaPoolContribution::<T>::get(&region_id).ok_or(Error::<T>::UnknownContribution)?;
 		let end = region_id.begin.saturating_add(contrib.length);
 		ensure!(
-			status.last_timeslice > end.saturating_add(config.contribution_timeout),
+			status.last_timeslice >= end.saturating_add(config.contribution_timeout),
 			Error::<T>::StillValid
 		);
 		InstaPoolContribution::<T>::remove(region_id);

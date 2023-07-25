@@ -86,6 +86,8 @@ fn drop_contribution_works() {
 		assert_ok!(Broker::do_start_sales(100, 1));
 		advance_to(2);
 		let region = Broker::do_purchase(1, u64::max_value()).unwrap();
+		// Place region in pool. Active in pool timeslices 4, 5, 6 = rcblocks 8, 10, 12; we
+		// expect the contribution record to timeout 3 timeslices following 7 = 10
 		assert_ok!(Broker::do_pool(region, Some(1), 1, Final));
 		assert_eq!(InstaPoolContribution::<Test>::iter().count(), 1);
 		advance_to(19);

@@ -658,7 +658,7 @@ mod benches {
 		}
 
 		assert_last_event::<T>(
-			Event::HistoryDropped { when: 5u32.into(), revenue: 0u32.into() }.into(),
+			Event::HistoryDropped { when: 4u32.into(), revenue: 0u32.into() }.into(),
 		);
 	}
 
