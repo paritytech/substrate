@@ -433,7 +433,7 @@ impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
 	type Currency = Balances;
-	type Balance = <Balances as Inspect<<Test as frame_system::Config>::AccountId>>::Balance;
+	type Balance = u64;
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type CallFilter = TestFilter;
