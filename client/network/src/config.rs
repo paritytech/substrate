@@ -500,7 +500,7 @@ impl NonDefaultSetConfig {
 		set_config: SetConfig,
 	) -> (Self, Box<dyn NotificationService>) {
 		let (protocol_handle_pair, notification_service) =
-			notification_service(protocol_name.clone(), None); // TODO(aaro): fix, needs `FullNetworkConfig`
+			notification_service(protocol_name.clone());
 		(
 			Self {
 				protocol_name,

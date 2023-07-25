@@ -84,11 +84,12 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 				}],
 			});
 		let (protocol_handle_pair, _notif_service) =
-			crate::protocol::notifications::service::notification_service("/foo".into(), None);
+			crate::protocol::notifications::service::notification_service("/foo".into());
 
 		let behaviour = CustomProtoWithAddr {
 			inner: Notifications::new(
 				peerset,
+				&None,
 				iter::once((
 					ProtocolConfig {
 						name: "/foo".into(),

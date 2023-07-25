@@ -41,6 +41,7 @@ use libp2p::{
 };
 use log::{debug, error, info, trace, warn};
 use parking_lot::RwLock;
+use prometheus_endpoint::Registry;
 use rand::distributions::{Distribution as _, Uniform};
 use smallvec::SmallVec;
 use tokio::sync::oneshot::error::RecvError;
@@ -395,6 +396,7 @@ impl Notifications {
 	/// Creates a `CustomProtos`.
 	pub fn new(
 		peerset: crate::peerset::Peerset,
+		registry: &Option<Registry>,
 		notif_protocols: impl Iterator<Item = (ProtocolConfig, ProtocolHandlePair)>,
 	) -> Self {
 		let (notif_protocols, protocol_handle_pairs): (Vec<_>, Vec<_>) = notif_protocols
@@ -416,7 +418,8 @@ impl Notifications {
 			.into_iter()
 			.enumerate()
 			.map(|(set_id, protocol_handle_pair)| {
-				let (protocol_handle, command_stream) = protocol_handle_pair.split();
+				let (mut protocol_handle, command_stream) = protocol_handle_pair.split();
+				protocol_handle.set_metrics(registry.clone());
 
 				(protocol_handle, (set_id, command_stream))
 			})
@@ -2312,7 +2315,7 @@ mod tests {
 		Box<dyn crate::service::traits::NotificationService>,
 	) {
 		let (protocol_handle_pair, notif_service) =
-			crate::protocol::notifications::service::notification_service("/proto/1".into(), None);
+			crate::protocol::notifications::service::notification_service("/proto/1".into());
 		let (peerset, peerset_handle) = {
 			let mut sets = Vec::with_capacity(1);
 
@@ -2330,6 +2333,7 @@ mod tests {
 		(
 			Notifications::new(
 				peerset,
+				&None,
 				iter::once((
 					ProtocolConfig {
 						name: "/foo".into(),

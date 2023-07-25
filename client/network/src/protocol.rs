@@ -36,6 +36,7 @@ use libp2p::{
 };
 use log::{debug, error, warn};
 
+use prometheus_endpoint::Registry;
 use sc_network_common::role::Roles;
 use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::Block as BlockT;
@@ -103,6 +104,7 @@ impl<B: BlockT> Protocol<B> {
 	pub fn new(
 		roles: Roles,
 		network_config: &config::NetworkConfiguration,
+		registry: &Option<Registry>,
 		notification_protocols: Vec<config::NonDefaultSetConfig>,
 		block_announces_protocol: config::NonDefaultSetConfig,
 		_tx: TracingUnboundedSender<crate::event::SyncEvent<B>>,
@@ -167,6 +169,7 @@ impl<B: BlockT> Protocol<B> {
 			(
 				Notifications::new(
 					peerset,
+					registry,
 					// NOTE: Block announcement protocol is still very much hardcoded into
 					// `Protocol`. 	This protocol must be the first notification protocol given to
 					// `Notifications`

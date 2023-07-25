@@ -265,6 +265,7 @@ where
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
 			&network_config,
+			&params.metrics_registry,
 			notification_protocols,
 			params.block_announce_config,
 			params.tx,
