@@ -25,10 +25,9 @@ use libp2p::{
 		transport::{Boxed, OptionalTransport, OrTransport},
 		upgrade,
 	},
-	dns, identity, noise, tcp,
-	webrtc::tokio::{Certificate as WebRTCCertificate, Transport as WebRTCTransport},
-	websocket, PeerId, Transport, TransportExt,
+	dns, identity, noise, tcp, websocket, PeerId, Transport, TransportExt,
 };
+use libp2p_webrtc::tokio::{Certificate as WebRTCCertificate, Transport as WebRTCTransport};
 use std::{sync::Arc, time::Duration};
 
 pub use libp2p::bandwidth::BandwidthSinks;

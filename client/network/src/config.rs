@@ -30,10 +30,8 @@ pub use crate::{
 	types::ProtocolName,
 };
 
-pub use libp2p::{
-	identity::Keypair, multiaddr, webrtc::tokio::certificate::Certificate as WebRTCCertificate,
-	Multiaddr, PeerId,
-};
+pub use libp2p::{identity::Keypair, multiaddr, Multiaddr, PeerId};
+pub use libp2p_webrtc::tokio::certificate::Certificate as WebRTCCertificate;
 
 use codec::Encode;
 use prometheus_endpoint::Registry;
