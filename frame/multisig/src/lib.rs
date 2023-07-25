@@ -189,8 +189,14 @@ pub mod pallet {
 	/// A mapping containing information on whether a multisig has an expiry
 	/// time or not.
 	#[pallet::storage]
-	pub type MultisigExpiries<T: Config> =
-		StorageDoubleMap<_, Twox64Concat, T::AccountId, Blake2_128Concat, [u8; 32], T::BlockNumber>;
+	pub type MultisigExpiries<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		[u8; 32],
+		BlockNumberFor<T>,
+	>;
 
 	#[pallet::error]
 	pub enum Error<T> {
@@ -238,7 +244,7 @@ pub mod pallet {
 			approving: T::AccountId,
 			multisig: T::AccountId,
 			call_hash: CallHash,
-			expiry: Option<T::BlockNumber>,
+			expiry: Option<BlockNumberFor<T>>,
 		},
 		/// A multisig operation has been approved by someone.
 		MultisigApproval {
@@ -525,7 +531,7 @@ pub mod pallet {
 		/// - `call_hash`: The hash of the call to be executed.
 		/// - `expiry`: An optional expiry of the multisig operation defined in block number.
 		///
-		/// NOTE: This extrinsic is only intended to be used for creating a multisig with an expiry. 
+		/// NOTE: This extrinsic is only intended to be used for creating a multisig with an expiry.
 		/// It should not be used for approving existing multisigs.
 		///
 		/// ## Complexity
@@ -554,10 +560,10 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
-			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
+			maybe_timepoint: Option<Timepoint<BlockNumberFor<T>>>,
 			call_hash: [u8; 32],
 			max_weight: Weight,
-			expiry: T::BlockNumber,
+			expiry: BlockNumberFor<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			Self::operate(
@@ -598,7 +604,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			threshold: u16,
 			signatories: Vec<T::AccountId>,
-			timepoint: Timepoint<T::BlockNumber>,
+			timepoint: Timepoint<BlockNumberFor<T>>,
 			call_hash: [u8; 32],
 		) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
@@ -646,7 +652,7 @@ impl<T: Config> Pallet<T> {
 		maybe_timepoint: Option<Timepoint<BlockNumberFor<T>>>,
 		call_or_hash: CallOrHash<T>,
 		max_weight: Weight,
-		maybe_expiry: Option<T::BlockNumber>,
+		maybe_expiry: Option<BlockNumberFor<T>>,
 	) -> DispatchResultWithPostInfo {
 		ensure!(threshold >= 2, Error::<T>::MinimumThreshold);
 		let max_sigs = T::MaxSignatories::get() as usize;
