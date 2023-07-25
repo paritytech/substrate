@@ -67,7 +67,7 @@ async fn telemetry_works() {
 			}
 		});
 
-		let mut substrate = process::Command::new(cargo_bin("substrate"));
+		let mut substrate = process::Command::new(cargo_bin("substrate-node"));
 
 		let mut substrate = KillChildOnDrop(
 			substrate

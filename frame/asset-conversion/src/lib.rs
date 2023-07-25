@@ -143,9 +143,10 @@ pub mod pallet {
 		/// Identifier for the class of non-native asset.
 		/// Note: A `From<u32>` bound here would prevent `MultiLocation` from being used as an
 		/// `AssetId`.
-		type AssetId: AssetId + PartialOrd;
+		type AssetId: AssetId;
 
 		/// Type that identifies either the native currency or a token class from `Assets`.
+		/// `Ord` is added because of `get_pool_id`.
 		type MultiAssetId: AssetId + Ord + From<Self::AssetId>;
 
 		/// Type to convert an `AssetId` into `MultiAssetId`.
@@ -203,7 +204,7 @@ pub mod pallet {
 
 		/// The benchmarks need a way to create asset ids from u32s.
 		#[cfg(feature = "runtime-benchmarks")]
-		type BenchmarkHelper: BenchmarkHelper<Self::AssetId>;
+		type BenchmarkHelper: BenchmarkHelper<Self::AssetId, Self::MultiAssetId>;
 	}
 
 	/// Map from `PoolAssetId` to `PoolInfo`. This establishes whether a pool has been officially
@@ -228,6 +229,8 @@ pub mod pallet {
 			/// The pool id associated with the pool. Note that the order of the assets may not be
 			/// the same as the order specified in the create pool extrinsic.
 			pool_id: PoolIdOf<T>,
+			/// The account ID of the pool.
+			pool_account: T::AccountId,
 			/// The id of the liquidity tokens that will be minted when assets are added to this
 			/// pool.
 			lp_token: T::PoolAssetId,
@@ -302,6 +305,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Provided assets are equal.
 		EqualAssets,
+		/// Provided asset is not supported for pool.
+		UnsupportedAsset,
 		/// Pool already exists.
 		PoolExists,
 		/// Desired amount can't be zero.
@@ -384,14 +389,13 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			ensure!(asset1 != asset2, Error::<T>::EqualAssets);
 
-			let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-			let (asset1, asset2) = pool_id.clone();
-
-			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(&asset1) {
+			// prepare pool_id
+			let pool_id = Self::get_pool_id(asset1, asset2);
+			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
+			let (asset1, asset2) = &pool_id;
+			if !T::AllowMultiAssetPools::get() && !T::MultiAssetIdConverter::is_native(asset1) {
 				Err(Error::<T>::PoolMustContainNativeCurrency)?;
 			}
-
-			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
 			let pool_account = Self::get_pool_account(&pool_id);
 			frame_system::Pallet::<T>::inc_providers(&pool_account);
@@ -404,15 +408,22 @@ pub mod pallet {
 				Preserve,
 			)?;
 
-			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset1) {
-				if !T::Assets::contains(&asset, &pool_account) {
-					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
-				}
+			// try to convert both assets
+			match T::MultiAssetIdConverter::try_convert(asset1) {
+				MultiAssetIdConversionResult::Converted(asset) =>
+					if !T::Assets::contains(&asset, &pool_account) {
+						T::Assets::touch(asset, pool_account.clone(), sender.clone())?
+					},
+				MultiAssetIdConversionResult::Unsupported(_) => Err(Error::<T>::UnsupportedAsset)?,
+				MultiAssetIdConversionResult::Native => (),
 			}
-			if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset2) {
-				if !T::Assets::contains(&asset, &pool_account) {
-					T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
-				}
+			match T::MultiAssetIdConverter::try_convert(asset2) {
+				MultiAssetIdConversionResult::Converted(asset) =>
+					if !T::Assets::contains(&asset, &pool_account) {
+						T::Assets::touch(asset, pool_account.clone(), sender.clone())?
+					},
+				MultiAssetIdConversionResult::Unsupported(_) => Err(Error::<T>::UnsupportedAsset)?,
+				MultiAssetIdConversionResult::Native => (),
 			}
 
 			let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
@@ -425,7 +436,12 @@ pub mod pallet {
 			let pool_info = PoolInfo { lp_token: lp_token.clone() };
 			Pools::<T>::insert(pool_id.clone(), pool_info);
 
-			Self::deposit_event(Event::PoolCreated { creator: sender, pool_id, lp_token });
+			Self::deposit_event(Event::PoolCreated {
+				creator: sender,
+				pool_id,
+				pool_account,
+				lp_token,
+			});
 
 			Ok(())
 		}
@@ -767,34 +783,35 @@ pub mod pallet {
 			amount: T::AssetBalance,
 			keep_alive: bool,
 		) -> Result<T::AssetBalance, DispatchError> {
-			Self::deposit_event(Event::Transfer {
-				from: from.clone(),
-				to: to.clone(),
-				asset: (*asset_id).clone(),
-				amount,
-			});
-			if T::MultiAssetIdConverter::is_native(asset_id) {
-				let preservation = match keep_alive {
-					true => Preserve,
-					false => Expendable,
-				};
-				let amount = Self::convert_asset_balance_to_native_balance(amount)?;
-				Ok(Self::convert_native_balance_to_asset_balance(T::Currency::transfer(
-					from,
-					to,
+			let result = match T::MultiAssetIdConverter::try_convert(asset_id) {
+				MultiAssetIdConversionResult::Converted(asset_id) =>
+					T::Assets::transfer(asset_id, from, to, amount, Expendable),
+				MultiAssetIdConversionResult::Native => {
+					let preservation = match keep_alive {
+						true => Preserve,
+						false => Expendable,
+					};
+					let amount = Self::convert_asset_balance_to_native_balance(amount)?;
+					Ok(Self::convert_native_balance_to_asset_balance(T::Currency::transfer(
+						from,
+						to,
+						amount,
+						preservation,
+					)?)?)
+				},
+				MultiAssetIdConversionResult::Unsupported(_) =>
+					Err(Error::<T>::UnsupportedAsset.into()),
+			};
+
+			if result.is_ok() {
+				Self::deposit_event(Event::Transfer {
+					from: from.clone(),
+					to: to.clone(),
+					asset: (*asset_id).clone(),
 					amount,
-					preservation,
-				)?)?)
-			} else {
-				T::Assets::transfer(
-					T::MultiAssetIdConverter::try_convert(&asset_id)
-						.map_err(|_| Error::<T>::Overflow)?,
-					from,
-					to,
-					amount,
-					Expendable,
-				)
+				});
 			}
+			result
 		}
 
 		/// Convert a `Balance` type to an `AssetBalance`.
@@ -898,28 +915,40 @@ pub mod pallet {
 			owner: &T::AccountId,
 			asset: &T::MultiAssetId,
 		) -> Result<T::AssetBalance, Error<T>> {
-			if T::MultiAssetIdConverter::is_native(asset) {
-				Self::convert_native_balance_to_asset_balance(
-					<<T as Config>::Currency>::reducible_balance(owner, Expendable, Polite),
-				)
-			} else {
-				Ok(<<T as Config>::Assets>::reducible_balance(
-					T::MultiAssetIdConverter::try_convert(asset)
-						.map_err(|_| Error::<T>::Overflow)?,
-					owner,
-					Expendable,
-					Polite,
-				))
+			match T::MultiAssetIdConverter::try_convert(asset) {
+				MultiAssetIdConversionResult::Converted(asset_id) => Ok(
+					<<T as Config>::Assets>::reducible_balance(asset_id, owner, Expendable, Polite),
+				),
+				MultiAssetIdConversionResult::Native =>
+					Self::convert_native_balance_to_asset_balance(
+						<<T as Config>::Currency>::reducible_balance(owner, Expendable, Polite),
+					),
+				MultiAssetIdConversionResult::Unsupported(_) =>
+					Err(Error::<T>::UnsupportedAsset.into()),
 			}
 		}
 
-		/// Returns a pool id constructed from 2 sorted assets.
-		/// Native asset should be lower than the other asset ids.
+		/// Returns a pool id constructed from 2 assets.
+		/// 1. Native asset should be lower than the other asset ids.
+		/// 2. Two native or two non-native assets are compared by their `Ord` implementation.
+		///
+		/// We expect deterministic order, so (asset1, asset2) or (asset2, asset1) returns the same
+		/// result.
 		pub fn get_pool_id(asset1: T::MultiAssetId, asset2: T::MultiAssetId) -> PoolIdOf<T> {
-			if asset1 <= asset2 {
-				(asset1, asset2)
-			} else {
-				(asset2, asset1)
+			match (
+				T::MultiAssetIdConverter::is_native(&asset1),
+				T::MultiAssetIdConverter::is_native(&asset2),
+			) {
+				(true, false) => return (asset1, asset2),
+				(false, true) => return (asset2, asset1),
+				_ => {
+					// else we want to be deterministic based on `Ord` implementation
+					if asset1 <= asset2 {
+						(asset1, asset2)
+					} else {
+						(asset2, asset1)
+					}
+				},
 			}
 		}
 
@@ -1161,7 +1190,9 @@ pub mod pallet {
 					()
 				);
 			} else {
-				let asset_id = T::MultiAssetIdConverter::try_convert(asset).map_err(|_| ())?;
+				let MultiAssetIdConversionResult::Converted(asset_id) = T::MultiAssetIdConverter::try_convert(asset) else {
+					return Err(())
+				};
 				let minimal = T::Assets::minimum_balance(asset_id);
 				ensure!(value >= minimal, ());
 			}
@@ -1179,7 +1210,8 @@ pub mod pallet {
 			for assets_pair in path.windows(2) {
 				if let [asset1, asset2] = assets_pair {
 					let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-					let new_element = pools.try_insert(pool_id).expect("can't get here");
+					let new_element =
+						pools.try_insert(pool_id).map_err(|_| Error::<T>::Overflow)?;
 					if !new_element {
 						return Err(Error::<T>::NonUniquePath.into())
 					}

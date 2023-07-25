@@ -106,6 +106,8 @@ pub enum SyncEvent<B: BlockT> {
 		received_handshake: BlockAnnouncesHandshake<B>,
 		/// Notification sink.
 		sink: NotificationsSink,
+		/// Is the connection inbound.
+		inbound: bool,
 		/// Channel for reporting accept/reject of the substream.
 		tx: oneshot::Sender<bool>,
 	},
