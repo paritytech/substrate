@@ -2825,6 +2825,11 @@ pub mod env {
 		Ok(ctx.ext.nonce())
 	}
 
+	/// Adds a new delegate dependency to the contract.
+	///
+	/// # Parameters
+	///
+	/// - `code_hash_ptr`: A pointer to the code hash of the dependency.
 	#[unstable]
 	fn add_delegate_dependency(ctx: _, memory: _, code_hash_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::AddDelegateDependency)?;
@@ -2833,6 +2838,11 @@ pub mod env {
 		Ok(())
 	}
 
+	/// Removes the delegate dependency from the contract.
+	///
+	/// # Parameters
+	///
+	/// - `code_hash_ptr`: A pointer to the code hash of the dependency.
 	#[unstable]
 	fn remove_delegate_dependency(ctx: _, memory: _, code_hash_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::RemoveDelegateDependency)?;
