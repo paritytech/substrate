@@ -566,7 +566,7 @@ pub(crate) fn current_era() -> EraIndex {
 
 pub(crate) fn bond(who: AccountId, val: Balance) {
 	let _ = Balances::make_free_balance_be(&who, val);
-	assert_ok!(Staking::bond(RuntimeOrigin::signed(who), val, PayoutDestination::Credit(who)));
+	assert_ok!(Staking::bond(RuntimeOrigin::signed(who), val, PayoutDestination::Deposit(who)));
 }
 
 pub(crate) fn bond_validator(who: AccountId, val: Balance) {

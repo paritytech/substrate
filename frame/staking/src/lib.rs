@@ -396,7 +396,7 @@ pub enum PayoutDestination<AccountId> {
 	/// disallowed and handled as `Stake` and `Free` respectively.
 	Split((Perbill, AccountId)),
 	/// Deposit payout as free balance to an account.
-	Credit(AccountId),
+	Deposit(AccountId),
 	/// Receive no payout.
 	Forgo,
 }
@@ -438,9 +438,9 @@ impl<AccountId: Clone> RewardDestination<AccountId> {
 	) -> PayoutDestination<AccountId> {
 		match self {
 			RewardDestination::Staked => PayoutDestination::Stake,
-			RewardDestination::Stash => PayoutDestination::Credit(stash),
-			RewardDestination::Controller => PayoutDestination::Credit(controller),
-			RewardDestination::Account(a) => PayoutDestination::Credit(a.clone()),
+			RewardDestination::Stash => PayoutDestination::Deposit(stash),
+			RewardDestination::Controller => PayoutDestination::Deposit(controller),
+			RewardDestination::Account(a) => PayoutDestination::Deposit(a.clone()),
 			RewardDestination::None => PayoutDestination::Forgo,
 		}
 	}

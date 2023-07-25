@@ -214,7 +214,7 @@ fn pool_slash_e2e() {
 			]
 		);
 
-		assert_eq!(Payees::<Runtime>::get(POOL1_BONDED), PayoutDestination::Credit(POOL1_REWARD));
+		assert_eq!(Payees::<Runtime>::get(POOL1_BONDED), PayoutDestination::Deposit(POOL1_REWARD));
 
 		// have two members join
 		assert_ok!(Pools::join(RuntimeOrigin::signed(20), 20, 1));

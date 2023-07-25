@@ -327,7 +327,7 @@ impl<T: Config> Pallet<T> {
 				total_imbalance.subsume(T::Currency::deposit_creating(&dest_account, amount_free));
 				Some(total_imbalance)
 			},
-			PayoutDestination::Credit(dest_account) =>
+			PayoutDestination::Deposit(dest_account) =>
 				Some(T::Currency::deposit_creating(&dest_account, amount)),
 			PayoutDestination::Forgo => None,
 		}
@@ -1702,7 +1702,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::bond(
 			RawOrigin::Signed(who.clone()).into(),
 			value,
-			PayoutDestination::Credit(payee.clone()),
+			PayoutDestination::Deposit(payee.clone()),
 		)
 	}
 
