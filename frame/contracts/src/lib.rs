@@ -293,7 +293,7 @@ pub mod pallet {
 
 		/// The percentage of the storage deposit that should be held for using a code hash.
 		/// Instantiating a contract, or calling [`chain_extension::Ext::add_delegate_dependency`]
-		/// protects the code from being removed, In order to prevent abuse these actions are
+		/// protects the code from being removed. In order to prevent abuse these actions are
 		/// protected with a percentage of the code deposit.
 		#[pallet::constant]
 		type CodeHashLockupDepositPercent: Get<Perbill>;
