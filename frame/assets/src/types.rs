@@ -293,8 +293,6 @@ where
 	T: Config<I>,
 	I: 'static,
 	CON: Convert<BalanceOf<F, T>, AssetBalanceOf<T, I>>,
-	BalanceOf<F, T>: Zero,
-	AssetBalanceOf<T, I>: Zero,
 {
 	type Error = ConversionError;
 
