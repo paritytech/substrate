@@ -600,7 +600,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		delegation::DelegationLedger<T>,
+		delegation::DelegationAggregate<T>,
 		OptionQuery,
 	>;
 

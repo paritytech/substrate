@@ -47,7 +47,7 @@ const DELEGATING_ID: LockIdentifier = *b"delegate";
 /// currently delegated to a delegatee. It also tracks the slashes yet to be applied.
 #[derive(Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
-pub struct DelegationLedger<T: Config> {
+pub struct DelegationAggregate<T: Config> {
 	/// Sum of all delegated funds to this delegatee.
 	#[codec(compact)]
 	pub balance: BalanceOf<T>,
@@ -64,7 +64,7 @@ struct OnlyDelegatee;
 struct Full;
 
 pub struct Delegation<T: Config> {
-	ledger: DelegationLedger<T>,
+	ledger: DelegationAggregate<T>,
 	delegator: T::AccountId,
 	delegatee: T::AccountId,
 	delegator_balance: BalanceOf<T>,
@@ -108,7 +108,7 @@ impl<T: Config> Delegation<T> {
 			Some(ledger) => ledger.balance.saturating_accrue(value),
 			None =>
 				*maybe_ledger =
-					Some(DelegationLedger { balance: new_delegation_amount, pending_slash: Default::default() }),
+					Some(DelegationAggregate { balance: new_delegation_amount, pending_slash: Default::default() }),
 		});
 		T::Currency::set_lock(DELEGATING_ID, &delegator, value, WithdrawReasons::all());
 
