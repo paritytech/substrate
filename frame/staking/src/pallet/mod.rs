@@ -581,21 +581,22 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
-	/// Map of delegatee account + delegator account to the amount of funds staked.
+	/// Map of Delegators to their delegation.
+	///
+	/// Note: We are not using a double map with delegator and delegatee account as keys since we
+	/// want to restrict delegators to delegate only to one account.
 	#[pallet::storage]
-	pub(crate) type Delegations<T: Config> = StorageDoubleMap<
+	pub(crate) type Delegators<T: Config> = CountedStorageMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Twox64Concat,
-		T::AccountId,
-		BalanceOf<T>,
+		(T::AccountId, BalanceOf<T>),
 		OptionQuery,
 	>;
 
-	/// Map of delegator account to their Ledger.
+	/// Map of Delegatee to their Ledger.
 	#[pallet::storage]
-	pub(crate) type DelegationLedgerStorage<T: Config> = CountedStorageMap<
+	pub(crate) type Delegatees<T: Config> = CountedStorageMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
@@ -783,6 +784,14 @@ pub mod pallet {
 		CommissionTooLow,
 		/// Some bound is not met.
 		BoundNotMet,
+		/// Can not delegate to multiple Delegatees.
+		MultipleDelegationTargets,
+		/// Can not delegate to another delegator.
+		CannotReceiveDelegation,
+		/// A delegatee cannot delegate.
+		CannotDelegate,
+		/// Can't delegate to self.
+		CannotDelegateSelf,
 	}
 
 	#[pallet::hooks]
