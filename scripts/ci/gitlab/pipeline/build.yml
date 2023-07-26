@@ -66,8 +66,6 @@ check-runtime-migration-westend:
   extends: .check-runtime-migration
   variables:
     NETWORK: westend
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
 check-dependent-polkadot:
   extends: .check-dependent-project
