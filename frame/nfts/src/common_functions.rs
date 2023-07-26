@@ -35,7 +35,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns a `WrongSignature` error if the signature is invalid or the verification process fails.
+	/// This function returns a `WrongSignature` error if the signature is invalid or the
+	/// verification process fails.
 	pub fn validate_signature(
 		data: &Vec<u8>,
 		signature: &T::OffchainSignature,

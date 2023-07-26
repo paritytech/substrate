@@ -65,8 +65,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(event);
 		Ok(())
 	}
-	
-	/// Destroy the specified collection with the given `collection`, `witness`, and `maybe_check_owner`.
+
+	/// Destroy the specified collection with the given `collection`, `witness`, and
+	/// `maybe_check_owner`.
 	///
 	/// This function destroys the specified collection if it exists and meets the necessary
 	/// conditions. It checks the provided `witness` against the actual collection details and
