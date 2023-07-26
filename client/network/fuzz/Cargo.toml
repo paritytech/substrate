@@ -1,0 +1,44 @@
+[package]
+name = "sc-network-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+tokio = "1.22.0"
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+libp2p = "0.51.3"
+async-std = "1.9"
+async-trait = "0.1"
+futures = "0.3"
+futures-timer = "3.0"
+rand = "0.8"
+sc-network = { version = "0.10.0-dev", path = "../../network" }
+#sc-network-test = { version = "0.8.0", path = "../test" }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.dev]
+debug-assertions = false
+
+[profile.release]
+debug-assertions = false
+debug = 1
+
+[[bin]]
+name = "service"
+path = "fuzz_targets/service.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "notifications"
+path = "fuzz_targets/notifications.rs"
+test = false
+doc = false
