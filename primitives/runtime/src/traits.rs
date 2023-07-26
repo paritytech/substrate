@@ -33,9 +33,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_application_crypto::AppCrypto;
 pub use sp_arithmetic::traits::{
 	checked_pow, ensure_pow, AtLeast32Bit, AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedDiv,
-	CheckedMul, CheckedShl, CheckedShr, CheckedSub, Ensure, EnsureAdd, EnsureAddAssign, EnsureDiv,
-	EnsureDivAssign, EnsureFixedPointNumber, EnsureFrom, EnsureInto, EnsureMul, EnsureMulAssign,
-	EnsureOp, EnsureOpAssign, EnsureSub, EnsureSubAssign, IntegerSquareRoot, One,
+	CheckedMul, CheckedNeg, CheckedShl, CheckedShr, CheckedSub, Ensure, EnsureAdd, EnsureAddAssign,
+	EnsureDiv, EnsureDivAssign, EnsureFixedPointNumber, EnsureFrom, EnsureInto, EnsureMul,
+	EnsureMulAssign, EnsureOp, EnsureOpAssign, EnsureSub, EnsureSubAssign, IntegerSquareRoot, One,
 	SaturatedConversion, Saturating, UniqueSaturatedFrom, UniqueSaturatedInto, Zero,
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};

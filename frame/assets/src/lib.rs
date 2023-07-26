@@ -159,8 +159,10 @@ pub use types::*;
 
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedAdd, CheckedSub, Saturating, StaticLookup, Zero},
-	ArithmeticError, FixedPointOperand, TokenError,
+	traits::{
+		AtLeast32BitUnsigned, CheckedAdd, CheckedNeg, CheckedSub, Saturating, StaticLookup, Zero,
+	},
+	ArithmeticError, TokenError,
 };
 use sp_std::prelude::*;
 
@@ -241,7 +243,8 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen
-			+ TypeInfo;
+			+ TypeInfo
+			+ CheckedNeg;
 
 		/// Max number of items to destroy per `destroy_accounts` and `destroy_approvals` call.
 		///
