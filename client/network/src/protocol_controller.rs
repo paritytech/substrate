@@ -232,7 +232,7 @@ impl ProtocolHandle {
 
 /// Direction of a connection
 #[derive(Clone, Copy, Debug)]
-enum Direction {
+pub(crate) enum Direction {
 	Inbound,
 	Outbound,
 }
@@ -832,6 +832,17 @@ impl ProtocolController {
 			self.nodes.insert(peer_id, Direction::Outbound);
 			self.start_connection(peer_id);
 		})
+	}
+
+	/// Return all connected nodes for testing purposes.
+	#[cfg(test)]
+	pub(crate) fn connected_peers(&self) -> impl Iterator<Item = (&PeerId, &Direction)> {
+		self.nodes.iter().chain(self.reserved_nodes.iter().filter_map(
+			|(peer, state)| match state {
+				PeerState::Connected(direction) => Some((peer, direction)),
+				PeerState::NotConnected => None,
+			},
+		))
 	}
 }
 

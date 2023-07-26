@@ -247,6 +247,8 @@ mod protocol;
 mod service;
 
 #[cfg(test)]
+mod fuzz;
+#[cfg(test)]
 mod mock;
 
 pub mod config;
