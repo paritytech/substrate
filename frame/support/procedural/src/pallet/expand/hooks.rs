@@ -56,10 +56,12 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	} else {
 		quote::quote! {
-			#frame_support::log::debug!(
+			let default_version = #frame_support::traits::StorageVersion::new(0);
+			#frame_support::log::info!(
 				target: #frame_support::LOG_TARGET,
-				"🐥 Pallet {:?} has no on-chain storage version, but the pallet has no defined storage version so the on-chain version will not be initialized and implicitly remain 0.",
-				#pallet_name
+				"🐥 Pallet {:?} has no on-chain storage version. The pallet has not defined storage version, so the on-chain version is being initialized to {:?}.",
+				#pallet_name,
+				default_version
 			);
 		}
 	};
