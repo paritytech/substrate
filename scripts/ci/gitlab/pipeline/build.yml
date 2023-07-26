@@ -56,8 +56,6 @@ check-runtime-migration-kusama:
   extends: .check-runtime-migration
   variables:
     NETWORK: kusama
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
 check-runtime-migration-rococo:
   extends: .check-runtime-migration
