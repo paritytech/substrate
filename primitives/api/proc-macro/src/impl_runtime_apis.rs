@@ -592,7 +592,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 		where_clause.predicates.push(parse_quote! {
 			RuntimeApiImplCall::StateBackend:
-				#crate_::StateBackend<#crate_::HashFor<__SrApiBlock__>>
+				#crate_::StateBackend<#crate_::HashingFor<__SrApiBlock__>>
 		});
 
 		where_clause.predicates.push(parse_quote! { &'static RuntimeApiImplCall: Send });
