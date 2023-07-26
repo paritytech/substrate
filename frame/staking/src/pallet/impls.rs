@@ -1809,19 +1809,21 @@ impl<T: Config> DelegatedStakeInterface for Pallet<T> {
 	}
 
 	fn unbond(delegatee: &Self::AccountId, value: Self::Balance) -> sp_runtime::DispatchResult {
-		// should be exactly same as normal unbond.
-		todo!()
+		Self::unbond(RawOrigin::Signed(delegatee).into(), value)
+			.map_err(|with_post| with_post.error)
+			.map(|_| ())
 	}
 
 	fn withdraw_unbonded(
-		_delegatee: Self::AccountId,
-		_delegator: Self::AccountId,
-		_value: Self::Balance,
-	) -> sp_runtime::DispatchResult {
-		// similar to withdraw_unbonded, but with some differences since unlock will be for
-		// delegator.
-
-		todo!()
+		delegatee: Self::AccountId,
+		delegator: Self::AccountId,
+		value: Self::Balance,
+		num_slashing_spans: u32,
+	) -> Result<bool, DispatchError> {
+		// cannot call `Self::withdraw_unbonded` since it does full withdraw. This function though
+		// would be a partial withdraw. The delegatee might have more funds than value waiting to be
+		// unbonded, but only delegator value would be unbonded at a time.
+		Delegation::<T>::withdraw(delegator, delegatee, value, num_slashing_spans)
 	}
 }
 

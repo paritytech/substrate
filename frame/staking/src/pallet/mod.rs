@@ -595,7 +595,7 @@ pub mod pallet {
 
 	/// Map of delegator account to their Ledger.
 	#[pallet::storage]
-	pub(crate) type Delegatee<T: Config> = CountedStorageMap<
+	pub(crate) type DelegationLedgerStorage<T: Config> = CountedStorageMap<
 		_,
 		Twox64Concat,
 		T::AccountId,

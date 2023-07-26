@@ -328,14 +328,17 @@ pub trait DelegatedStakeInterface {
 	/// Similar to [`StakingInterface::unbond`].
 	fn unbond(delegatee: &Self::AccountId, value: Self::Balance) -> DispatchResult;
 
-	/// Remove delegation of some or all funds.
+	/// Remove delegation of some or all funds available for unlock at the current era.
+	///
+	/// Returns whether the stash was killed because of this withdraw or not.
 	///
 	/// Similar to [`StakingInterface::withdraw_unbonded`].
 	fn withdraw_unbonded(
 		delegatee: Self::AccountId,
 		delegator: Self::AccountId,
 		value: Self::Balance,
-	) -> DispatchResult;
+		num_slashing_spans: u32,
+	) -> Result<bool, DispatchError>;
 }
 
 sp_core::generate_feature_enabled_macro!(runtime_benchmarks_enabled, feature = "runtime-benchmarks", $);
