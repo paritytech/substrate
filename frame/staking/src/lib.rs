@@ -306,7 +306,7 @@ use frame_support::{
 	weights::Weight,
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use ledger::{StakingLedger, StakingLedgerStatus};
+use ledger::StakingLedger;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -646,7 +646,7 @@ pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
 		match StakingLedger::<T>::get(StakingAccount::Controller(controller)) {
-			Some(StakingLedgerStatus::Paired(ledger)) => Some(ledger.stash),
+			Some(ledger) => Some(ledger.stash),
 			_ => None,
 		}
 	}

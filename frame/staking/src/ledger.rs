@@ -51,17 +51,8 @@ pub struct StakingLedger<T: Config> {
 	controller: Option<T::AccountId>,
 }
 
-/// Represents the status of a ledger.
-pub(crate) enum StakingLedgerStatus<T: Config> {
-	/// A bond exists but the staking ledger is not stored in the `Ledger` storage.
-	BondedNotPaired,
-	/// The controller of the ledger is bonded and the staking ledger is initialized in storage. It
-	/// wraps the staking ledger itself.
-	Paired(StakingLedger<T>),
-}
-
 impl<T: Config> StakingLedger<T> {
-	#[cfg(feature = "runtime-benchmarks")]
+	#[cfg(any(test, runtime_benchmarks))]
 	pub fn default_from(stash: T::AccountId) -> Self {
 		Self {
 			stash,
@@ -114,6 +105,42 @@ impl<T: Config> StakingLedger<T> {
 		}
 	}
 
+	/// Returns whether a given account is bonded.
+	pub(crate) fn is_bonded(account: StakingAccount<T::AccountId>) -> bool {
+		match account {
+			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash).is_some(),
+			StakingAccount::Controller(controller) => <Ledger<T>>::get(controller).is_some(),
+		}
+	}
+
+	/// Returns a staking ledger, if it is bonded and it exists.
+	///
+	/// This getter can be called with either a controller or stash account, provided that the
+	/// account is properly wrapped in the respective [`StakingAccount`] variant. This is meant to
+	/// abstract the concept of controller/stash accounts to the caller.
+	pub(crate) fn get(account: StakingAccount<T::AccountId>) -> Option<StakingLedger<T>> {
+		let controller = if let Some(controller) = match account {
+			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash),
+			StakingAccount::Controller(controller) => Some(controller),
+		} {
+			controller
+		} else {
+			return None
+		};
+
+		match <Ledger<T>>::get(&controller).map(|mut ledger| {
+			ledger.controller = Some(controller.clone());
+			ledger
+		}) {
+			Some(ledger) => Some(ledger),
+			None => {
+				// this should not happen.
+				log!(debug, "staking account is bonded but ledger does not exist, unexpected.");
+				None
+			},
+		}
+	}
+
 	/// Returns the controller account of a staking ledger.
 	///
 	/// Note: it will fallback into querying the `Bonded` storage with the ledger stash if the
@@ -147,30 +174,6 @@ impl<T: Config> StakingLedger<T> {
 		<Bonded<T>>::insert(&self.stash, &self.stash);
 
 		Ok(())
-	}
-
-	/// Returns a staking ledger wrapped in a [`StakingLedgerStatus`], if it exists.
-	///
-	/// This getter can be called with either a controller or stash account, provided that the
-	/// account is properly wrapped in the respective [`StakingAccount`] variant. This is meant to
-	/// abstract the concept of controller/stash accounts to the caller.
-	pub(crate) fn get(account: StakingAccount<T::AccountId>) -> Option<StakingLedgerStatus<T>> {
-		let controller = if let Some(controller) = match account {
-			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash),
-			StakingAccount::Controller(controller) => Some(controller),
-		} {
-			controller
-		} else {
-			return None
-		};
-
-		match <Ledger<T>>::get(&controller).map(|mut ledger| {
-			ledger.controller = Some(controller.clone());
-			ledger
-		}) {
-			Some(ledger) => Some(StakingLedgerStatus::Paired(ledger)),
-			None => Some(StakingLedgerStatus::BondedNotPaired),
-		}
 	}
 
 	/// Clears all data related to a staking ledger and its bond in both [`Ledger`] and [`Bonded`]

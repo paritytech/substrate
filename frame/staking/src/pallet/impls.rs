@@ -47,9 +47,9 @@ use sp_staking::{
 use sp_std::prelude::*;
 
 use crate::{
-	ledger::StakingLedgerStatus, log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf,
-	EraPayout, Exposure, ExposureOf, Forcing, IndividualExposure, MaxWinnersOf, Nominations,
-	PositiveImbalanceOf, RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
+	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
+	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::pallet::*;
@@ -70,10 +70,10 @@ const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 impl<T: Config> Pallet<T> {
 	/// Fetches the ledger associated with a controller or stash account, if any.
 	pub fn ledger(account: StakingAccount<T::AccountId>) -> Option<StakingLedger<T>> {
-		match StakingLedger::<T>::get(account) {
-			None => None,
-			Some(StakingLedgerStatus::BondedNotPaired) => None,
-			Some(StakingLedgerStatus::Paired(ledger)) => Some(ledger),
+		if let Some(ledger) = StakingLedger::<T>::get(account) {
+			Some(ledger)
+		} else {
+			None
 		}
 	}
 
@@ -176,14 +176,14 @@ impl<T: Config> Pallet<T> {
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		})?;
 
-		let mut ledger =
-			match StakingLedger::<T>::get(StakingAccount::Stash(validator_stash.clone())) {
-				None =>
-					Err(Error::<T>::NotStash
-						.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
-				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController.into()),
-				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
-			}?;
+		let account = StakingAccount::Stash(validator_stash.clone());
+		let mut ledger = StakingLedger::<T>::get(account.clone()).ok_or_else(|| {
+			if StakingLedger::<T>::is_bonded(account) {
+				Error::<T>::NotController.into()
+			} else {
+				Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+			}
+		})?;
 
 		ledger
 			.claimed_rewards
@@ -1838,12 +1838,8 @@ impl<T: Config> Pallet<T> {
 
 	fn ensure_ledger_consistent(ctrl: T::AccountId) -> Result<(), TryRuntimeError> {
 		// ensures ledger.total == ledger.active + sum(ledger.unlocking).
-		let ledger = match StakingLedger::<T>::get(StakingAccount::Controller(ctrl.clone()))
-			.ok_or("Not a controller")?
-		{
-			StakingLedgerStatus::Paired(l) => Ok(l),
-			_ => Err("Not a controller"),
-		}?;
+		let ledger = StakingLedger::<T>::get(StakingAccount::Controller(ctrl.clone()))
+			.ok_or("Not a controller")?;
 
 		let real_total: BalanceOf<T> =
 			ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);

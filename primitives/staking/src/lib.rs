@@ -41,6 +41,7 @@ pub type EraIndex = u32;
 ///
 /// Note: once the controller is completely deprecated, this enum can also be deprecated in favor of
 /// the stash account.
+#[derive(Copy, Clone, Debug)]
 pub enum StakingAccount<AccountId> {
 	Stash(AccountId),
 	Controller(AccountId),

@@ -48,8 +48,8 @@ pub use impls::*;
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
 	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
-	RewardDestination, SessionInterface, StakingLedger, StakingLedgerStatus, UnappliedSlash,
-	UnlockChunk, ValidatorPrefs,
+	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	ValidatorPrefs,
 };
 
 // The speculative number of spans are used as an input of the weight annotation of
@@ -842,8 +842,7 @@ pub mod pallet {
 
 			match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
 				None => Ok(()),
-				Some(StakingLedgerStatus::BondedNotPaired) |
-				Some(StakingLedgerStatus::Paired(_)) => Err(Error::<T>::AlreadyBonded),
+				Some(_) => Err(Error::<T>::AlreadyBonded),
 			}?;
 
 			// Reject a bond which is considered to be _dust_.
@@ -906,8 +905,7 @@ pub mod pallet {
 
 			let mut ledger = match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
 				None => Err(Error::<T>::NotStash),
-				Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
-				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
+				Some(ledger) => Ok(ledger),
 			}?;
 
 			let stash_balance = T::Currency::free_balance(&stash);
@@ -1137,9 +1135,8 @@ pub mod pallet {
 
 			let ledger =
 				match StakingLedger::<T>::get(StakingAccount::Controller(controller.clone())) {
-					None | Some(StakingLedgerStatus::BondedNotPaired) =>
-						Err(Error::<T>::NotController),
-					Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
+					Some(ledger) => Ok(ledger),
+					None => Err(Error::<T>::NotController),
 				}?;
 
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
@@ -1207,8 +1204,8 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 
 			let ledger = match StakingLedger::<T>::get(StakingAccount::Controller(controller)) {
-				None | Some(StakingLedgerStatus::BondedNotPaired) => Err(Error::<T>::NotController),
-				Some(StakingLedgerStatus::Paired(ledger)) => Ok(ledger),
+				Some(ledger) => Ok(ledger),
+				None => Err(Error::<T>::NotController),
 			}?;
 
 			Self::chill_stash(&ledger.stash);
@@ -1263,12 +1260,7 @@ pub mod pallet {
 			// (temporary) passive migration.
 			match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
 				None => Err(Error::<T>::NotStash.into()),
-				Some(StakingLedgerStatus::BondedNotPaired) => {
-					// update bond only.
-					<Bonded<T>>::insert(&stash, &stash);
-					Ok(())
-				},
-				Some(StakingLedgerStatus::Paired(ledger)) => {
+				Some(ledger) => {
 					let controller = ledger.controller().ok_or(Error::<T>::NotController)?;
 					if controller == stash {
 						// stash is already its own controller.

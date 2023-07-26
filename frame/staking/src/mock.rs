@@ -763,6 +763,16 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 	}
 }
 
+pub(crate) fn bond_controller_stash(controller: AccountId, stash: AccountId) -> Result<(), String> {
+	<Bonded<Test>>::get(&stash).map_or(Ok(()), |_| Err("stash already bonded"))?;
+	<Ledger<Test>>::get(&controller).map_or(Ok(()), |_| Err("controller already bonded"))?;
+
+	<Bonded<Test>>::insert(stash, controller);
+	<Ledger<Test>>::insert(controller, StakingLedger::<Test>::default_from(stash));
+
+	Ok(())
+}
+
 #[macro_export]
 macro_rules! assert_session_era {
 	($session:expr, $era:expr) => {

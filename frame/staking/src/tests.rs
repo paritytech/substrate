@@ -5828,3 +5828,100 @@ mod staking_interface {
 		})
 	}
 }
+
+mod ledger {
+	use super::*;
+
+	#[test]
+	fn paired_account_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(10),
+				100,
+				RewardDestination::Controller
+			));
+
+			assert_eq!(<Bonded<Test>>::get(&10), Some(10));
+			assert_eq!(
+				StakingLedger::<Test>::paired_account(StakingAccount::Controller(10)),
+				Some(10)
+			);
+			assert_eq!(StakingLedger::<Test>::paired_account(StakingAccount::Stash(10)), Some(10));
+
+			assert_eq!(<Bonded<Test>>::get(&42), None);
+			assert_eq!(StakingLedger::<Test>::paired_account(StakingAccount::Controller(42)), None);
+			assert_eq!(StakingLedger::<Test>::paired_account(StakingAccount::Stash(42)), None);
+
+			// bond manually stash with different controller. This is deprecated but the migration
+			// has not been complete yet (controller: 100, stash: 200)
+			assert_ok!(bond_controller_stash(100, 200));
+			assert_eq!(<Bonded<Test>>::get(&200), Some(100));
+			assert_eq!(
+				StakingLedger::<Test>::paired_account(StakingAccount::Controller(100)),
+				Some(200)
+			);
+			assert_eq!(
+				StakingLedger::<Test>::paired_account(StakingAccount::Stash(200)),
+				Some(100)
+			);
+		})
+	}
+
+	#[test]
+	fn get_ledger_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// stash does not exist
+			assert_eq!(StakingLedger::<Test>::get(StakingAccount::Stash(42)), None);
+
+			// bonded and paired
+			assert_eq!(<Bonded<Test>>::get(&11), Some(11));
+
+			match StakingLedger::<Test>::get(StakingAccount::Stash(11)) {
+				Some(ledger) => {
+					assert_eq!(ledger.controller(), Some(11));
+					assert_eq!(ledger.stash, 11);
+				},
+				None => panic!("staking ledger must exist"),
+			};
+
+			// bond manually stash with different controller. This is deprecated but the migration
+			// has not been complete yet (controller: 100, stash: 200)
+			assert_ok!(bond_controller_stash(100, 200));
+			assert_eq!(<Bonded<Test>>::get(&200), Some(100));
+
+			match StakingLedger::<Test>::get(StakingAccount::Stash(200)) {
+				Some(ledger) => {
+					assert_eq!(ledger.controller(), Some(100));
+					assert_eq!(ledger.stash, 200);
+				},
+				None => panic!("staking ledger must exist"),
+			};
+
+			match StakingLedger::<Test>::get(StakingAccount::Controller(100)) {
+				Some(ledger) => {
+					assert_eq!(ledger.controller(), Some(100));
+					assert_eq!(ledger.stash, 200);
+				},
+				None => panic!("staking ledger must exist"),
+			};
+		})
+	}
+
+	#[test]
+	fn is_bonded_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert!(!StakingLedger::<Test>::is_bonded(StakingAccount::Stash(42)));
+			assert!(!StakingLedger::<Test>::is_bonded(StakingAccount::Controller(42)));
+
+			// adds entry to Bonded without Ledger pair (should not happen).
+			<Bonded<Test>>::insert(42, 42);
+			assert!(!StakingLedger::<Test>::is_bonded(StakingAccount::Controller(42)));
+
+			assert_eq!(<Bonded<Test>>::get(&11), Some(11));
+			assert!(StakingLedger::<Test>::is_bonded(StakingAccount::Stash(11)));
+			assert!(StakingLedger::<Test>::is_bonded(StakingAccount::Controller(11)));
+
+			<Bonded<Test>>::remove(42); // ensures try-state checks pass.
+		})
+	}
+}
