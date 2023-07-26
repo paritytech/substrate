@@ -203,6 +203,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn before_all() -> #frame_support::weights::Weight {
+				use #frame_support::traits::Get;
 				#frame_support::sp_tracing::enter_span!(
 					#frame_support::sp_tracing::trace_span!("before_all")
 				);
