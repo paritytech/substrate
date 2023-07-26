@@ -22,7 +22,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "21.0.0", default-features = false, optional = true, path = "../../primitives/core" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
