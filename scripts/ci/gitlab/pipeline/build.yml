@@ -51,8 +51,6 @@ check-runtime-migration-polkadot:
     - .check-runtime-migration
   variables:
     NETWORK: polkadot
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
 check-runtime-migration-kusama:
   extends: .check-runtime-migration
