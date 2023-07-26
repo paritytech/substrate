@@ -2211,7 +2211,7 @@ fn post_runtime_upgrade_detects_storage_version_issues() {
 
 	TestExternalities::default().execute_with(|| {
 		// Call `on_genesis` to put the storage version of `Example` into the storage.
-		// Example::on_genesis();
+		Example::on_genesis();
 
 		// Set the on-chain version to something different to the current version
 		StorageVersion::new(100).put::<Example>();
