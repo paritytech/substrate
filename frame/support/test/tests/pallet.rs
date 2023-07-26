@@ -2110,6 +2110,54 @@ fn test_storage_alias() {
 	})
 }
 
+#[test]
+fn pallet_on_chain_storage_version_initializes_correctly() {
+	type Executive = frame_executive::Executive<
+		Runtime,
+		Block,
+		frame_system::ChainContext<Runtime>,
+		Runtime,
+		AllPalletsWithSystem,
+	>;
+
+	// Simple example of a pallet with current version 10 being added to the runtime for the first
+	// time.
+	TestExternalities::default().execute_with(|| {
+		let current_version = Example::current_storage_version();
+
+		// Check the on-chain storage version initially is not set and does not match the current
+		// version.
+		let on_chain_version_before = StorageVersion::get::<Example>();
+		assert_eq!(StorageVersion::exists::<Example>(), false);
+		assert_ne!(on_chain_version_before, current_version);
+
+		// OnRuntimeUpgrade calls pallet `before_all` hook which initializes the storage version.
+		Executive::execute_on_runtime_upgrade();
+
+		// Check that the storage version was initialized to the current version
+		let on_chain_version_after = StorageVersion::get::<Example>();
+		assert_eq!(on_chain_version_after, current_version);
+	});
+
+	// Pallet with no current storage version should have the on-chain version initialized to 0.
+	TestExternalities::default().execute_with(|| {
+		// Example4 current_storage_version is NoStorageVersionSet.
+
+		// Check the storage version is not set and implicitly 0.
+		let on_chain_version_before = StorageVersion::get::<Example4>();
+		assert_eq!(StorageVersion::exists::<Example4>(), false);
+		assert_eq!(on_chain_version_before, StorageVersion::new(0));
+
+		// OnRuntimeUpgrade calls pallet `before_all` hook which initializes the storage version.
+		Executive::execute_on_runtime_upgrade();
+
+		// Check that the storage version now exists and was initialized to 0.
+		let on_chain_version_after = StorageVersion::get::<Example4>();
+		assert_eq!(StorageVersion::exists::<Example>(), true);
+		assert_eq!(on_chain_version_after, StorageVersion::new(0));
+	});
+}
+
 #[cfg(feature = "try-runtime")]
 #[test]
 fn post_runtime_upgrade_detects_storage_version_issues() {
@@ -2163,7 +2211,11 @@ fn post_runtime_upgrade_detects_storage_version_issues() {
 
 	TestExternalities::default().execute_with(|| {
 		// Call `on_genesis` to put the storage version of `Example` into the storage.
-		Example::on_genesis();
+		// Example::on_genesis();
+
+		// Set the on-chain version to something different to the current version
+		StorageVersion::new(100).put::<Example>();
+
 		// The version isn't changed, we should detect it.
 		assert!(
 			Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap_err() ==
