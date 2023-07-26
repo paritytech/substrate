@@ -38,14 +38,14 @@ pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
 /// System RPC methods.
 #[rpc(client, server)]
-pub trait SystemApi<BlockHash, AccountId, Index> {
+pub trait SystemApi<BlockHash, AccountId, Nonce> {
 	/// Returns the next valid index (aka nonce) for given account.
 	///
 	/// This method takes into consideration all pending transactions
 	/// currently in the pool and if no transactions are found in the pool
 	/// it fallbacks to query the index from the runtime (aka. state nonce).
 	#[method(name = "system_accountNextIndex", aliases = ["account_nextIndex"])]
-	async fn nonce(&self, account: AccountId) -> RpcResult<Index>;
+	async fn nonce(&self, account: AccountId) -> RpcResult<Nonce>;
 
 	/// Dry run an extrinsic at a given block. Return SCALE encoded ApplyExtrinsicResult.
 	#[method(name = "system_dryRun", aliases = ["system_dryRunAt"])]
@@ -85,20 +85,20 @@ impl<P: TransactionPool, C, B> System<P, C, B> {
 }
 
 #[async_trait]
-impl<P, C, Block, AccountId, Index>
-	SystemApiServer<<Block as traits::Block>::Hash, AccountId, Index> for System<P, C, Block>
+impl<P, C, Block, AccountId, Nonce>
+	SystemApiServer<<Block as traits::Block>::Hash, AccountId, Nonce> for System<P, C, Block>
 where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
 	C: Send + Sync + 'static,
-	C::Api: AccountNonceApi<Block, AccountId, Index>,
+	C::Api: AccountNonceApi<Block, AccountId, Nonce>,
 	C::Api: BlockBuilder<Block>,
 	P: TransactionPool + 'static,
 	Block: traits::Block,
 	AccountId: Clone + Display + Codec + Send + 'static,
-	Index: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
+	Nonce: Clone + Display + Codec + Send + traits::AtLeast32Bit + 'static,
 {
-	async fn nonce(&self, account: AccountId) -> RpcResult<Index> {
+	async fn nonce(&self, account: AccountId) -> RpcResult<Nonce> {
 		let api = self.client.runtime_api();
 		let best = self.client.info().best_hash;
 
@@ -176,11 +176,11 @@ where
 
 /// Adjust account nonce from state, so that tx with the nonce will be
 /// placed after all ready txpool transactions.
-fn adjust_nonce<P, AccountId, Index>(pool: &P, account: AccountId, nonce: Index) -> Index
+fn adjust_nonce<P, AccountId, Nonce>(pool: &P, account: AccountId, nonce: Nonce) -> Nonce
 where
 	P: TransactionPool,
 	AccountId: Clone + std::fmt::Display + Encode,
-	Index: Clone + std::fmt::Display + Encode + traits::AtLeast32Bit + 'static,
+	Nonce: Clone + std::fmt::Display + Encode + traits::AtLeast32Bit + 'static,
 {
 	log::debug!(target: "rpc", "State nonce for {}: {}", account, nonce);
 	// Now we need to query the transaction pool

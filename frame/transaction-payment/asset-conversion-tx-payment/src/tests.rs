@@ -26,7 +26,7 @@ use frame_system as system;
 use mock::{ExtrinsicBaseWeight, *};
 use pallet_asset_conversion::NativeOrAssetId;
 use pallet_balances::Call as BalancesCall;
-use sp_runtime::traits::StaticLookup;
+use sp_runtime::{traits::StaticLookup, BuildStorage};
 
 const CALL: &<Runtime as frame_system::Config>::RuntimeCall =
 	&RuntimeCall::Balances(BalancesCall::transfer_allow_death { dest: 2, value: 69 });
@@ -65,7 +65,7 @@ impl ExtBuilder {
 	}
 	pub fn build(self) -> sp_io::TestExternalities {
 		self.set_constants();
-		let mut t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		pallet_balances::GenesisConfig::<Runtime> {
 			balances: if self.balance_factor > 0 {
 				vec![
