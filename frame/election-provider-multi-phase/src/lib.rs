@@ -1173,9 +1173,9 @@ pub mod pallet {
 		},
 		/// There was a phase transition in a given round.
 		PhaseTransitioned {
-			/// The current phase.
+			/// The previous phase.
 			from: Phase<BlockNumberFor<T>>,
-			/// The next phase.
+			/// The current phase.
 			to: Phase<BlockNumberFor<T>>,
 			/// The current round.
 			round: u32,
