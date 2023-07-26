@@ -66,7 +66,7 @@ const LOG_TARGET: &str = "runtime::aura";
 ///
 /// This was the default behavior of the Aura pallet and may be used for
 /// backwards compatibility.
-pub struct MinimumPeriodTimesTwo<T>(sp_std::marker::PhantomData::<T>);
+pub struct MinimumPeriodTimesTwo<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: pallet_timestamp::Config> Get<T::Moment> for MinimumPeriodTimesTwo<T> {
 	fn get() -> T::Moment {
@@ -113,8 +113,8 @@ pub mod pallet {
 		/// The slot duration Aura should run with, expressed in milliseconds.
 		/// The effective value of this type should not change while the chain is running.
 		///
-		/// This associated type is only present when compiled with the `explicit-slot-duration` flag
-		/// is present.
+		/// This associated type is only present when compiled with the `explicit-slot-duration`
+		/// feature is present.
 		#[cfg(feature = "explicit-slot-duration")]
 		type SlotDuration: Get<<Self as pallet_timestamp::Config>::Moment>;
 	}
