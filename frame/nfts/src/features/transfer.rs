@@ -19,6 +19,15 @@ use crate::*;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Performs the transfer action for the given `collection`, `item`, `dest`, and `event`.
+	///
+	/// # Errors
+	///
+	/// This function returns an error in the following cases:
+	/// - If the collection ID is invalid (`UnknownCollection`)
+	/// - If the item ID is invalid (`UnknownItem`).
+	/// - If the item is locked or transferring it is disabled (`ItemLocked`).
+	/// - If the collection or item is non-transferable (`ItemsNonTransferable`).
 	pub fn do_transfer(
 		collection: T::CollectionId,
 		item: T::ItemId,

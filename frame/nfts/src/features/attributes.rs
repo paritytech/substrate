@@ -381,14 +381,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(result)
 	}
 
-	/// A helper method to construct attribute's key.
+	/// A helper method to construct an attribute's key.
+	///
+	/// # Errors
+	///
+	/// This function returns an `IncorrectData` error if the provided attribute `key` is incorrectly formatted.
 	pub fn construct_attribute_key(
 		key: Vec<u8>,
 	) -> Result<BoundedVec<u8, T::KeyLimit>, DispatchError> {
 		Ok(BoundedVec::try_from(key).map_err(|_| Error::<T, I>::IncorrectData)?)
 	}
 
-	/// A helper method to construct attribute's value.
+	/// A helper method to construct an attribute's value.
+	///
+	/// # Errors
+	///
+	/// This function returns an `IncorrectData` error if the provided `value` is incorrectly formatted.
 	pub fn construct_attribute_value(
 		value: Vec<u8>,
 	) -> Result<BoundedVec<u8, T::ValueLimit>, DispatchError> {
@@ -396,6 +404,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// A helper method to check whether a system attribute is set for a given item.
+	///
+	/// # Errors
+	///
+	/// This function returns an `IncorrectData` error if the provided pallet attribute is incorrectly formatted.
 	pub fn has_system_attribute(
 		collection: &T::CollectionId,
 		item: &T::ItemId,

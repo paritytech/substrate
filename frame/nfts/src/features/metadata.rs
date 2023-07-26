@@ -209,6 +209,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// A helper method to construct metadata.
+	///
+	/// # Errors
+	///
+	/// This function returns a `IncorrectMetadata` error if the provided metadata is incorrectly formatted.
 	pub fn construct_metadata(
 		metadata: Vec<u8>,
 	) -> Result<BoundedVec<u8, T::StringLimit>, DispatchError> {

@@ -19,6 +19,16 @@ use crate::*;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Create a new collection with the given `collection`, `owner`, `admin`, `config`, `deposit`,
+	/// and `event`.
+	///
+	/// This function creates a new collection with the provided parameters. It reserves the
+	/// required deposit from the owner's account, sets the collection details, assigns admin roles,
+	/// and inserts the provided configuration. Finally, it emits the specified event upon success.
+	///
+	/// # Errors
+	///
+	/// This function returns a `CollectionIdInUse` error if the collection ID is already in use.
 	pub fn do_create_collection(
 		collection: T::CollectionId,
 		owner: T::AccountId,
@@ -55,7 +65,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(event);
 		Ok(())
 	}
-
+	
+	/// Destroy the specified collection with the given `collection`, `witness`, and `maybe_check_owner`.
+	///
+	/// This function destroys the specified collection if it exists and meets the necessary
+	/// conditions. It checks the provided `witness` against the actual collection details and
+	/// removes the collection along with its associated metadata, attributes, and configurations.
+	/// The necessary deposits are returned to the corresponding accounts, and the roles and
+	/// configurations for the collection are cleared. Finally, it emits the `Destroyed` event upon
+	/// successful destruction.
+	///
+	/// # Errors
+	///
+	/// This function returns an error in the following cases:
+	/// - If the collection ID is not found (`UnknownCollection`).
+	/// - If the provided `maybe_check_owner` does not match the actual owner (`NoPermission`).
+	/// - If the collection is not empty (contains items) (`CollectionNotEmpty`).
+	/// - If the `witness` does not match the actual collection details (`BadWitness`).
 	pub fn do_destroy_collection(
 		collection: T::CollectionId,
 		witness: DestroyWitness,
