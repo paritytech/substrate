@@ -47,6 +47,8 @@ mod tests;
 
 /// The balance type of this pallet.
 pub type BalanceOf<T> = <<T as Config>::Staking as StakingInterface>::Balance;
+/// The account id of this pallet.
+pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
 #[derive(Copy, Clone, Debug)]
 pub enum StakeImbalance<Balance> {
@@ -112,16 +114,21 @@ pub mod pallet {
 			)
 		}
 
-		pub(crate) fn update_target_stake(
-			who: &T::AccountId,
-			imbalance: StakeImbalance<VoteWeight>,
-		) {
+		/// Updates a staker's score by increasing/decreasing an imbalance in the list.
+		pub(crate) fn update_score<L>(who: &T::AccountId, imbalance: StakeImbalance<VoteWeight>)
+		where
+			L: SortedListProvider<AccountIdOf<T>, Score = VoteWeight>,
+		{
 			match imbalance {
 				StakeImbalance::Positive(imbalance) => {
-					let _ = T::TargetList::on_increase(who, imbalance);
+					let _ = L::on_increase(who, imbalance).defensive_proof(
+						"the staker exists in the list as per the contract with staking; qed.",
+					);
 				},
 				StakeImbalance::Negative(imbalance) => {
-					let _ = T::TargetList::on_decrease(who, imbalance);
+					let _ = L::on_decrease(who, imbalance).defensive_proof(
+						"the staker exists in the list as per the contract with staking; qed.",
+					);
 				},
 			}
 		}
@@ -155,7 +162,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 							.unwrap_or_default()
 							.into_iter()
 						{
-							Self::update_target_stake(&target, stake_imbalance);
+							Self::update_score::<T::TargetList>(&target, stake_imbalance);
 						}
 					}
 				},
@@ -187,7 +194,9 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 
 		let _: Vec<_> = nominations
 			.into_iter()
-			.map(|t| Self::update_target_stake(&t, StakeImbalance::Negative(nominator_vote)))
+			.map(|t| {
+				Self::update_score::<T::TargetList>(&t, StakeImbalance::Negative(nominator_vote))
+			})
 			.collect();
 
 		let _ = T::VoterList::on_remove(&who).defensive_proof(
@@ -212,7 +221,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			.collect();
 
 		for target in new_nominations {
-			Self::update_target_stake(&target, StakeImbalance::Positive(nominator_vote));
+			Self::update_score::<T::TargetList>(&target, StakeImbalance::Positive(nominator_vote));
 		}
 	}
 
@@ -229,7 +238,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		match T::Staking::status(stash).defensive_unwrap_or(StakerStatus::Idle) {
 			StakerStatus::Validator => {
 				// the slashed target's approval voting must be updated upon slashing.
-				Self::update_target_stake(
+				Self::update_score::<T::TargetList>(
 					&stash,
 					StakeImbalance::Negative(Self::to_vote(slashed_amount)),
 				);
@@ -243,7 +252,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 					.unwrap_or_default()
 					.into_iter()
 					.map(|t| {
-						Self::update_target_stake(
+						Self::update_score::<T::TargetList>(
 							&t,
 							StakeImbalance::Negative(Self::to_vote(slashed_amount)),
 						)
