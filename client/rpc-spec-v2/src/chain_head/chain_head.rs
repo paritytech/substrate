@@ -325,7 +325,7 @@ where
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) => {
 				// Invalid invalid subscription ID.
-				let _ = sink.send(&ChainHeadStorageEvent::<String>::Disjoint);
+				let _ = sink.send(&ChainHeadStorageEvent::Disjoint);
 				return Ok(())
 			},
 			Err(SubscriptionManagementError::BlockHashAbsent) => {
@@ -334,9 +334,8 @@ where
 				return Ok(())
 			},
 			Err(error) => {
-				let _ = sink.send(&ChainHeadStorageEvent::<String>::Error(ErrorEvent {
-					error: error.to_string(),
-				}));
+				let _ = sink
+					.send(&ChainHeadStorageEvent::Error(ErrorEvent { error: error.to_string() }));
 				return Ok(())
 			},
 		};
