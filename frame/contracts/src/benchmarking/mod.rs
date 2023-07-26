@@ -30,7 +30,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{v09, v10, v11, v12, v14, MigrationStep},
+	migration::{v09, v10, v11, v12, v13, v14, MigrationStep},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -297,6 +297,19 @@ benchmarks! {
 		>();
 
 		let mut m = v14::Migration::<T, pallet_balances::Pallet<T>>::default();
+	}: {
+		m.step();
+	}
+
+	// This benchmarks the v13 migration step (Add delegate_dependencies field).
+	#[pov_mode = Measured]
+	v13_migration_step {
+		let contract = <Contract<T>>::with_caller(
+			whitelisted_caller(), WasmModule::dummy(), vec![],
+		)?;
+
+		v13::store_old_contract_info::<T>(contract.account_id.clone(), contract.info()?);
+		let mut m = v13::Migration::<T>::default();
 	}: {
 		m.step();
 	}
@@ -876,20 +889,48 @@ benchmarks! {
 		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
 		let beneficiary_bytes = beneficiary.encode();
 		let beneficiary_len = beneficiary_bytes.len();
+
+		// Maximize the delegate_dependencies to account for the worst-case scenario.
+		let code_hashes = (0..T::MaxDelegateDependencies::get())
+			.map(|i| {
+				let new_code = WasmModule::<T>::dummy_with_bytes(65 + i);
+				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Ok(new_code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		let code_hash_len = code_hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let code_hashes_bytes = code_hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_terminate",
-				params: vec![ValueType::I32, ValueType::I32],
-				return_type: None,
-			}],
+			imported_functions: vec![
+				ImportedFunction {
+					module: "seal0",
+					name: "seal_terminate",
+					params: vec![ValueType::I32, ValueType::I32],
+					return_type: None,
+				},
+				ImportedFunction {
+					module: "seal0",
+					name: "add_delegate_dependency",
+					params: vec![ValueType::I32],
+					return_type: None,
+				}
+			],
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
 					value: beneficiary_bytes,
 				},
+				DataSegment {
+					offset: beneficiary_len as u32,
+					value: code_hashes_bytes,
+				},
 			],
+			deploy_body: Some(body::repeated_dyn(r, vec![
+				Counter(beneficiary_len as u32, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(1)),
+			])),
 			call_body: Some(body::repeated(r, &[
 				Instruction::I32Const(0), // beneficiary_ptr
 				Instruction::I32Const(beneficiary_len as i32), // beneficiary_len
@@ -2364,6 +2405,89 @@ benchmarks! {
 				Counter(0, code_hash_len as u32), // code_hash_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	#[pov_mode = Measured]
+	add_delegate_dependency {
+		let r in 0 .. T::MaxDelegateDependencies::get();
+		let code_hashes = (0..r)
+			.map(|i| {
+				let new_code = WasmModule::<T>::dummy_with_bytes(65 + i);
+				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Ok(new_code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		let code_hash_len = code_hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let code_hashes_bytes = code_hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "add_delegate_dependency",
+				params: vec![ValueType::I32],
+				return_type: None,
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: code_hashes_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r, vec![
+				Counter(0, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(0)),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	remove_delegate_dependency {
+		let r in 0 .. T::MaxDelegateDependencies::get();
+		let code_hashes = (0..r)
+			.map(|i| {
+				let new_code = WasmModule::<T>::dummy_with_bytes(65 + i);
+				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Ok(new_code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+
+		let code_hash_len = code_hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let code_hashes_bytes = code_hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "remove_delegate_dependency",
+				params: vec![ValueType::I32],
+				return_type: None,
+			}, ImportedFunction {
+				module: "seal0",
+				name: "add_delegate_dependency",
+				params: vec![ValueType::I32],
+				return_type: None
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: code_hashes_bytes,
+				},
+			],
+			deploy_body: Some(body::repeated_dyn(r, vec![
+				Counter(0, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(1)),
+			])),
+			call_body: Some(body::repeated_dyn(r, vec![
+				Counter(0, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(0)),
 			])),
 			.. Default::default()
 		});

@@ -1345,7 +1345,7 @@ pub trait ExtrinsicMetadata {
 }
 
 /// Extract the hashing type for a block.
-pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
+pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Extract the digest type for a block.

@@ -185,6 +185,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::Perbill;
 
 	/// The current storage version.
 	#[cfg(not(any(test, feature = "runtime-benchmarks")))]
@@ -296,6 +297,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type DepositPerItem: Get<BalanceOf<Self>>;
 
+		/// The percentage of the storage deposit that should be held for using a code hash.
+		/// Instantiating a contract, or calling [`chain_extension::Ext::add_delegate_dependency`]
+		/// protects the code from being removed. In order to prevent abuse these actions are
+		/// protected with a percentage of the code deposit.
+		#[pallet::constant]
+		type CodeHashLockupDepositPercent: Get<Perbill>;
+
 		/// The address generator used to generate the addresses of contracts.
 		type AddressGenerator: AddressGenerator<Self>;
 
@@ -310,6 +318,11 @@ pub mod pallet {
 		/// The maximum allowable length in bytes for storage keys.
 		#[pallet::constant]
 		type MaxStorageKeyLen: Get<u32>;
+
+		/// The maximum number of delegate_dependencies that a contract can lock with
+		/// [`chain_extension::Ext::add_delegate_dependency`].
+		#[pallet::constant]
+		type MaxDelegateDependencies: Get<u32>;
 
 		/// Make contract callable functions marked as `#[unstable]` available.
 		///
@@ -741,7 +754,7 @@ pub mod pallet {
 			}
 
 			output.gas_meter.into_dispatch_result(
-				output.result.map(|(_address, result)| result),
+				output.result.map(|(_address, output)| output),
 				T::WeightInfo::instantiate_with_code(code_len, data_len, salt_len),
 			)
 		}
@@ -980,6 +993,14 @@ pub mod pallet {
 		MigrationInProgress,
 		/// Migrate dispatch call was attempted but no migration was performed.
 		NoMigrationPerformed,
+		/// The contract has reached its maximum number of delegate dependencies.
+		MaxDelegateDependenciesReached,
+		/// The dependency was not found in the contract's delegate dependencies.
+		DelegateDependencyNotFound,
+		/// The contract already depends on the given delegate dependency.
+		DelegateDependencyAlreadyExists,
+		/// Can not add a delegate dependency to the code hash of the contract itself.
+		CannotAddSelfAsDelegateDependency,
 	}
 
 	/// A reason for the pallet contracts placing a hold on funds.
@@ -1027,7 +1048,7 @@ pub mod pallet {
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	pub(crate) type ContractInfoOf<T: Config> =
-		StorageMap<_, Twox64Concat, T::AccountId, ContractInfo<T>>;
+		StorageMap<_, Identity, T::AccountId, ContractInfo<T>>;
 
 	/// Evicted contracts that await child trie deletion.
 	///
