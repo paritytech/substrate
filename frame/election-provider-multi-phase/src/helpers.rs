@@ -42,9 +42,10 @@ macro_rules! log {
 /// Macro to log messages without including the system block number in the log.
 ///
 /// This macro is a logging utility used within the crate. It allows logging messages without
-/// including the system block number as part of the log message. It is particularly useful for log messages related to voting, as it includes an emoji "🗳️" to
-/// indicate their association with voting operations.
-/// 
+/// including the system block number as part of the log message. It is particularly useful for log
+/// messages related to voting, as it includes an emoji "🗳️" to indicate their association with
+/// voting operations.
+///
 /// Note: this is only useful for a context where a `<T: Config>` is not in scope.
 #[macro_export]
 macro_rules! log_no_system {

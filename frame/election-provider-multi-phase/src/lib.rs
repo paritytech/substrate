@@ -1135,23 +1135,24 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
 		///
-		/// If `origin` is `Some(AccountId)`, the stored solution was submitted in the signed phase by a miner with the `AccountId`. 
-		/// Otherwise, the solution was stored either during the unsigned phase or by
-		/// `T::ForceOrigin`.
+		/// If `origin` is `Some(AccountId)`, the stored solution was submitted in the signed phase
+		/// by a miner with the `AccountId`. Otherwise, the solution was stored either during the
+		/// unsigned phase or by `T::ForceOrigin`.
 		SolutionStored {
 			/// How the election was computed.
 			compute: ElectionCompute,
-			/// The origin of the solution. 
+			/// The origin of the solution.
 			origin: Option<T::AccountId>,
 			/// The previous solution was ejected to make room for this one.
 			prev_ejected: bool,
 		},
 		/// The election has been finalized, with the given computation and score.
-		ElectionFinalized { 
+		ElectionFinalized {
 			/// How the election was computed.
-			compute: ElectionCompute, 
+			compute: ElectionCompute,
 			/// The final election score.
-			score: ElectionScore },
+			score: ElectionScore,
+		},
 		/// An election failed.
 		///
 		/// Not much can be said about which computes failed in the process.
@@ -1159,15 +1160,16 @@ pub mod pallet {
 		/// An account has been rewarded for their signed submission being finalized.
 		Rewarded {
 			/// The account being rewarded.
-			account: <T as frame_system::Config>::AccountId, 
+			account: <T as frame_system::Config>::AccountId,
 			/// The amount being rewarded.
-			value: BalanceOf<T> },
+			value: BalanceOf<T>,
+		},
 		/// An account has been slashed for submitting an invalid signed submission.
-		Slashed { 
+		Slashed {
 			/// The account that has been slashed.
 			account: <T as frame_system::Config>::AccountId,
 			/// The amount being slashed.
-			value: BalanceOf<T> 
+			value: BalanceOf<T>,
 		},
 		/// There was a phase transition in a given round.
 		PhaseTransitioned {

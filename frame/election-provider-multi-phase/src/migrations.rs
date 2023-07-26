@@ -25,7 +25,8 @@
 //! Each runtime upgrade may introduce changes to the storage layout, and to ensure
 //! smooth upgrades, a migration strategy is used.
 
-/// This module contains the migration logic for transitioning the storage from version 0 to version 1.
+/// This module contains the migration logic for transitioning the storage from version 0 to version
+/// 1.
 ///
 ///
 /// The `MigrateToV1` struct implements the `OnRuntimeUpgrade` trait, which is called
@@ -58,7 +59,7 @@ pub mod v1 {
 	use sp_std::collections::btree_map::BTreeMap;
 
 	use crate::*;
-	
+
 	/// The migration struct to perform storage updates from storage V0 to V1.
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
