@@ -198,6 +198,13 @@ pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 		admin: &AccountId,
 		config: &CollectionConfig,
 	) -> Result<Self::CollectionId, DispatchError>;
+
+	fn create_collection_with_id(
+		collection: Self::CollectionId,
+		who: &AccountId,
+		admin: &AccountId,
+		config: &CollectionConfig,
+	) -> Result<(), DispatchError>;
 }
 
 /// Trait for providing the ability to destroy collections of nonfungible items.
