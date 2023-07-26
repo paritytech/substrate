@@ -143,7 +143,7 @@ impl<'a> Arbitrary<'a> for NOut {
 
 #[derive(Arbitrary, Debug)]
 enum Action {
-	//SetHandshake(usize, Vec<u8>),
+	SetHandshake(usize, Vec<u8>),
 	Disconnect(PId, usize),
 	ConnectionEstablished(PId, usize),
 	ConnectionClosed(PId, usize),
@@ -157,21 +157,19 @@ fuzz_target!(|actions: Vec<Action>| {
 		local_addr: Multiaddr::empty(),
 		send_back_addr: Multiaddr::empty(),
 	};
-	let mut connected_peers = HashSet::new();
+	// let mut connected_peers = HashSet::new();
 	for action in actions {
 		match action {
-			// Action::SetHandshake(id, message) => {
-			// 	let id = 0;
-			// 	notifs.set_notif_protocol_handshake(id.into(), message);
-			// }
+			Action::SetHandshake(id, message) => {
+				let _ = notifs.try_set_notif_protocol_handshake(id.into(), message);
+			}
 			Action::Disconnect(pid, id) => {
-				notifs.disconnect_peer(&pid.0, id.into());
+				let _ = notifs.try_disconnect_peer(&pid.0, id.into());
 			},
 			Action::ConnectionEstablished(pid, id) => {
 				let peer = pid.0;
 				let conn = ConnectionId::new_unchecked(id);
-				connected_peers.insert((peer.clone(), conn));
-				notifs.on_swarm_event(FromSwarm::ConnectionEstablished(
+				let _ = notifs.try_on_swarm_event(FromSwarm::ConnectionEstablished(
 					libp2p::swarm::behaviour::ConnectionEstablished {
 						peer_id: peer,
 						connection_id: conn,
@@ -184,40 +182,20 @@ fuzz_target!(|actions: Vec<Action>| {
 			Action::ConnectionClosed(pid, id) => {
 				let peer = pid.0;
 				let conn = ConnectionId::new_unchecked(id);
-				let had_peer = connected_peers.remove(&(peer, conn));
-				if had_peer {
-					notifs.on_swarm_event(FromSwarm::ConnectionClosed(
-						libp2p::swarm::behaviour::ConnectionClosed {
-							peer_id: peer,
-							connection_id: conn,
-							endpoint: &connected,
-							handler: NotifsHandler::new(peer, connected.clone(), vec![]),
-							remaining_established: 0usize,
-						},
-					));
-				}
+				let _ = notifs.try_on_swarm_event(FromSwarm::ConnectionClosed(
+					libp2p::swarm::behaviour::ConnectionClosed {
+						peer_id: peer,
+						connection_id: conn,
+						endpoint: &connected,
+						handler: NotifsHandler::new(peer, connected.clone(), vec![]),
+						remaining_established: 0usize,
+					},
+				));
 			},
 			Action::OutEvent(NOut(pid, id, event)) => {
 				let peer = pid.0;
 				let conn = ConnectionId::new_unchecked(id);
-				match &event {
-					| NotifsHandlerOut::OpenResultErr { .. }
-					| NotifsHandlerOut::CloseResult { .. }
-					=> {
-						break; // TODO
-					}
-					| NotifsHandlerOut::CloseDesired { .. }
-					//| NotifsHandlerOut::CloseResult { .. }
-					//| NotifsHandlerOut::OpenResultErr { .. }
-					| NotifsHandlerOut::OpenDesiredByRemote { .. }
-					=> {
-						if !connected_peers.contains(&(peer, conn)) {
-							break;
-						}
-					},
-					_ => {}
-				}
-				notifs.on_connection_handler_event(peer, conn, event);
+				let _ = notifs.try_on_connection_handler_event(peer, conn, event);
 			},
 			Action::Poll => {
 				struct Notifs<'a> {

@@ -4429,6 +4429,7 @@ dependencies = [
 name = "sc-network"
 version = "0.10.0-dev"
 dependencies = [
+ "anyhow",
  "array-bytes",
  "async-channel",
  "async-trait",

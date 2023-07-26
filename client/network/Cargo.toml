@@ -14,6 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+anyhow = "1"
 array-bytes = "6.1"
 async-channel = "1.8.0"
 async-trait = "0.1"
