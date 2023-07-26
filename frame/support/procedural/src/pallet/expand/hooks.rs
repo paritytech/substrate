@@ -34,6 +34,13 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	let type_use_gen = &def.type_use_generics(span);
 	let pallet_ident = &def.pallet_struct.pallet;
 	let frame_system = &def.frame_system;
+	let pallet_name = quote::quote! {
+		<
+			<T as #frame_system::Config>::PalletInfo
+			as
+			#frame_support::traits::PalletInfo
+		>::name::<Self>().unwrap_or("<unknown pallet name>")
+	};
 
 	let initialize_on_chain_storage_version = if let Some(current_version) =
 		def.pallet_struct.storage_version.as_ref()
@@ -42,21 +49,18 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::log::info!(
 				target: #frame_support::LOG_TARGET,
 				"🐥 Pallet {:?} has no on-chain storage version. Initializing the on-chain storage version to match the storage version defined in the pallet: {:?}",
-				pallet_name,
+				#pallet_name,
 				#current_version
 			);
 			#current_version.put::<Self>();
 		}
 	} else {
 		quote::quote! {
-			let default_version = #frame_support::traits::StorageVersion::new(0);
-			#frame_support::log::info!(
+			#frame_support::log::debug!(
 				target: #frame_support::LOG_TARGET,
-				"🐥 Pallet {:?} has no on-chain storage version. The pallet has not defined storage version, so the on-chain version is being initialized to {:?}.",
-				pallet_name,
-				default_version,
+				"🐥 Pallet {:?} has no on-chain storage version, but the pallet has no defined storage version so the on-chain version will not be initialized and implicitly remain 0.",
+				#pallet_name
 			);
-			default_version.put::<Self>();
 		}
 	};
 
@@ -67,7 +71,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				target: #frame_support::LOG_TARGET,
 				"⚠️ {} declares internal migrations (which *might* execute). \
 				 On-chain `{:?}` vs current storage version `{:?}`",
-				pallet_name,
+				#pallet_name,
 				<Self as #frame_support::traits::GetStorageVersion>::on_chain_storage_version(),
 				<Self as #frame_support::traits::GetStorageVersion>::current_storage_version(),
 			);
@@ -78,21 +82,16 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::log::debug!(
 				target: #frame_support::LOG_TARGET,
 				"✅ no migration for {}",
-				pallet_name,
+				#pallet_name,
 			);
 		}
 	};
 
 	let log_try_state = quote::quote! {
-		let pallet_name = <
-			<T as #frame_system::Config>::PalletInfo
-			as
-			#frame_support::traits::PalletInfo
-		>::name::<Self>().expect("No name found for the pallet! This usually means that the pallet wasn't added to `construct_runtime!`.");
 		#frame_support::log::debug!(
 			target: #frame_support::LOG_TARGET,
 			"🩺 try-state pallet {:?}",
-			pallet_name,
+			#pallet_name,
 		);
 	};
 
@@ -116,16 +115,10 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			let current_version = <Self as #frame_support::traits::GetStorageVersion>::current_storage_version();
 
 			if on_chain_version != current_version {
-				let pallet_name = <
-					<T as #frame_system::Config>::PalletInfo
-					as
-					#frame_support::traits::PalletInfo
-				>::name::<Self>().unwrap_or("<unknown pallet name>");
-
 				#frame_support::log::error!(
 					target: #frame_support::LOG_TARGET,
 					"{}: On chain storage version {:?} doesn't match current storage version {:?}.",
-					pallet_name,
+					#pallet_name,
 					on_chain_version,
 					current_version,
 				);
@@ -138,17 +131,11 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			let on_chain_version = <Self as #frame_support::traits::GetStorageVersion>::on_chain_storage_version();
 
 			if on_chain_version != #frame_support::traits::StorageVersion::new(0) {
-				let pallet_name = <
-					<T as #frame_system::Config>::PalletInfo
-					as
-					#frame_support::traits::PalletInfo
-				>::name::<Self>().unwrap_or("<unknown pallet name>");
-
 				#frame_support::log::error!(
 					target: #frame_support::LOG_TARGET,
 					"{}: On chain storage version {:?} is set to non zero, \
 					 while the pallet is missing the `#[pallet::storage_version(VERSION)]` attribute.",
-					pallet_name,
+					#pallet_name,
 					on_chain_version,
 				);
 
@@ -215,7 +202,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::traits::OnRuntimeUpgrade
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
-			fn before_all() -> Weight {
+			fn before_all() -> #frame_support::weights::Weight {
 				#frame_support::sp_tracing::enter_span!(
 					#frame_support::sp_tracing::trace_span!("before_all")
 				);
@@ -223,15 +210,10 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				// Check if the on-chain version has been set yet
 				let exists = #frame_support::traits::StorageVersion::exists::<Self>();
 				if !exists {
-					let pallet_name = <
-						<T as #frame_system::Config>::PalletInfo
-						as
-						#frame_support::traits::PalletInfo
-					>::name::<Self>().unwrap_or("<unknown pallet name>");
 					#initialize_on_chain_storage_version
-					Weight::zero() // TODO: Return weight of 1 read 1 write
+					<T as #frame_system::Config>::DbWeight::get().reads_writes(1, 1)
 				} else {
-					Weight::zero() // TODO: Return weight of 1 read
+					<T as #frame_system::Config>::DbWeight::get().reads(1)
 				}
 			}
 
@@ -241,11 +223,6 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				);
 
 				// log info about the upgrade.
-				let pallet_name = <
-					<T as #frame_system::Config>::PalletInfo
-					as
-					#frame_support::traits::PalletInfo
-				>::name::<Self>().unwrap_or("<unknown pallet name>");
 				#log_runtime_upgrade
 
 				<
