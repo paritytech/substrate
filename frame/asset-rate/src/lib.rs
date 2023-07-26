@@ -218,7 +218,6 @@ pub mod pallet {
 impl<T> ConversionFromAssetBalance<BalanceOf<T>, AssetIdOf<T>, BalanceOf<T>> for Pallet<T>
 where
 	T: Config,
-	BalanceOf<T>: Zero,
 {
 	type Error = pallet::Error<T>;
 
