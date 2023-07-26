@@ -538,6 +538,109 @@ mod tests {
 	}
 
 	#[test]
+	fn follow_op_body_event() {
+		let event: FollowEvent<String> = FollowEvent::OperationBodyDone(OperationBodyDone {
+			operation_id: "123".into(),
+			value: vec!["0x1".into()],
+		});
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"operationBodyDone","operationId":"123","value":["0x1"]}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_op_call_event() {
+		let event: FollowEvent<String> = FollowEvent::OperationCallDone(OperationCallDone {
+			operation_id: "123".into(),
+			output: "0x1".into(),
+		});
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"operationCallDone","operationId":"123","output":"0x1"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_op_storage_items_event() {
+		let event: FollowEvent<String> =
+			FollowEvent::OperationStorageItems(OperationStorageItems {
+				operation_id: "123".into(),
+				items: vec![StorageResult {
+					key: "0x1".into(),
+					result: StorageResultType::Value("0x123".to_string()),
+				}],
+			});
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"operationStorageItems","operationId":"123","items":[{"key":"0x1","value":"0x123"}]}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_op_wait_event() {
+		let event: FollowEvent<String> =
+			FollowEvent::OperationWaitingForContinue(OperationId { operation_id: "123".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"operationWaitingForContinue","operationId":"123"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_op_storage_done_event() {
+		let event: FollowEvent<String> =
+			FollowEvent::OperationStorageDone(OperationId { operation_id: "123".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"operationStorageDone","operationId":"123"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_op_inaccessible_event() {
+		let event: FollowEvent<String> =
+			FollowEvent::OperationInaccessible(OperationId { operation_id: "123".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"operationInaccessible","operationId":"123"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_op_error_event() {
+		let event: FollowEvent<String> = FollowEvent::OperationError(OperationError {
+			operation_id: "123".into(),
+			error: "reason".into(),
+		});
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"operationError","operationId":"123","error":"reason"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
 	fn follow_stop_event() {
 		let event: FollowEvent<String> = FollowEvent::Stop;
 
