@@ -23,7 +23,7 @@ use crate::{
 		api::ChainHeadApiServer,
 		chain_head_follow::ChainHeadFollower,
 		error::Error as ChainHeadRpcError,
-		event::{ChainHeadEvent, ChainHeadResult, ErrorEvent, FollowEvent, NetworkConfig},
+		event::{ChainHeadEvent, ChainHeadResult, ErrorEvent, FollowEvent},
 		hex_string,
 		subscription::{SubscriptionManagement, SubscriptionManagementError},
 	},
@@ -205,7 +205,6 @@ where
 		mut sink: SubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
-		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
@@ -294,7 +293,6 @@ where
 		hash: Block::Hash,
 		items: Vec<StorageQuery<String>>,
 		child_trie: Option<String>,
-		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
 		// Gain control over parameter parsing and returned error.
 		let items = items
@@ -362,7 +360,6 @@ where
 		hash: Block::Hash,
 		function: String,
 		call_parameters: String,
-		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
 		let call_parameters = Bytes::from(parse_hex_param(&mut sink, call_parameters)?);
 
