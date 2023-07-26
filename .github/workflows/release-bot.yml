@@ -23,4 +23,9 @@ jobs:
           access_token: ${{ secrets.RELEASENOTES_MATRIX_V2_ACCESS_TOKEN }}
           server: "m.parity.io"
           message: |
-            "**${{github.event.repository.full_name}}:** A release has been ${{github.event.action}}<br/>Release version [${{github.event.release.tag_name}}](${{github.event.release.html_url}})<br/><br/>***Description:***<br/>${{github.event.release.body}}<br/>"
+            ***${{github.event.repository.full_name}}:*** A release has been ${{github.event.action}}<br/>
+            Release version [${{github.event.release.tag_name}}](${{github.event.release.html_url}})
+
+            -----
+
+            ${{github.event.release.body}}<br/>

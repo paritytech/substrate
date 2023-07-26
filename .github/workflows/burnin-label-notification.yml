@@ -21,4 +21,4 @@ jobs:
           access_token: ${{ secrets.RELEASENOTES_MATRIX_V2_ACCESS_TOKEN }}
           server: "m.parity.io"
           message: |
-            "@room Burn-in request received for [${{ github.event.pull_request.title }}](${{ github.event.pull_request.html_url }})"
+            @room Burn-in request received for [${{ github.event.pull_request.title }}](${{ github.event.pull_request.html_url }})
