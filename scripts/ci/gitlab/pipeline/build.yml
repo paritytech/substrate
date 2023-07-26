@@ -27,7 +27,9 @@
       --companion-overrides "$COMPANION_OVERRIDES"
 
 .check-runtime-migration:
-  extends: .check-dependent-project
+  extends:
+    - .check-dependent-project
+    - .test-refs-no-trigger-prs-only
   variables:
     DEPENDENT_REPO: polkadot
     COMPANION_OVERRIDES: |
@@ -53,24 +55,21 @@ check-runtime-migration-polkadot:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
 check-runtime-migration-kusama:
-  extends:
-    - .check-runtime-migration
+  extends: .check-runtime-migration
   variables:
     NETWORK: kusama
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
 check-runtime-migration-rococo:
-  extends:
-    - .check-runtime-migration
+  extends: .check-runtime-migration
   variables:
     NETWORK: rococo
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
 check-runtime-migration-westend:
-  extends:
-    - .check-runtime-migration
+  extends: .check-runtime-migration
   variables:
     NETWORK: westend
   rules:
