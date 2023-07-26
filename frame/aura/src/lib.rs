@@ -60,6 +60,20 @@ pub use pallet::*;
 
 const LOG_TARGET: &str = "runtime::aura";
 
+/// A slot duration provider which infers the slot duration from the
+/// [`pallet_timestamp::Config::MinimumPeriod`] by multiplying it by two, to ensure
+/// that authors have the majority of their slot to author within.
+///
+/// This was the default behavior of the Aura pallet and may be used for
+/// backwards compatibility.
+pub struct MinimumPeriodTimesTwo<T>(sp_std::marker::PhantomData::<T>);
+
+impl<T: pallet_timestamp::Config> Get<T::Moment> for MinimumPeriodTimesTwo<T> {
+	fn get() -> T::Moment {
+		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -95,6 +109,14 @@ pub mod pallet {
 		/// another pallet which enforces some limitation on the number of blocks authors can create
 		/// using the same slot.
 		type AllowMultipleBlocksPerSlot: Get<bool>;
+
+		/// The slot duration Aura should run with, expressed in milliseconds.
+		/// The effective value of this type should not change while the chain is running.
+		///
+		/// This associated type is only present when compiled with the `explicit-slot-duration` flag
+		/// is present.
+		#[cfg(feature = "explicit-slot-duration")]
+		type SlotDuration: Get<<Self as pallet_timestamp::Config>::Moment>;
 	}
 
 	#[pallet::pallet]
@@ -218,9 +240,17 @@ impl<T: Config> Pallet<T> {
 
 	/// Determine the Aura slot-duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
-		// we double the minimum block-period so each author can always propose within
-		// the majority of its slot.
-		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+		#[cfg(feature = "explicit-slot-duration")]
+		{
+			T::SlotDuration::get()
+		}
+
+		#[cfg(not(feature = "explicit-slot-duration"))]
+		{
+			// we double the minimum block-period so each author can always propose within
+			// the majority of its slot.
+			<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+		}
 	}
 
 	/// Ensure the correctness of the state of this pallet.
