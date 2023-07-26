@@ -63,6 +63,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				#pallet_name,
 				default_version
 			);
+			default_version.put::<Self>();
 		}
 	};
 

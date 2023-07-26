@@ -2153,7 +2153,7 @@ fn pallet_on_chain_storage_version_initializes_correctly() {
 
 		// Check that the storage version now exists and was initialized to 0.
 		let on_chain_version_after = StorageVersion::get::<Example4>();
-		assert_eq!(StorageVersion::exists::<Example>(), true);
+		assert_eq!(StorageVersion::exists::<Example4>(), true);
 		assert_eq!(on_chain_version_after, StorageVersion::new(0));
 	});
 }
