@@ -61,8 +61,6 @@ check-runtime-migration-rococo:
   extends: .check-runtime-migration
   variables:
     NETWORK: rococo
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/ #PRs
 
 check-runtime-migration-westend:
   extends: .check-runtime-migration
