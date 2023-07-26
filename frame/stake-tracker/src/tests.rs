@@ -20,7 +20,7 @@
 use crate::mock::*;
 
 use frame_election_provider_support::SortedListProvider;
-use sp_staking::Stake;
+use sp_staking::{Stake, StakingInterface};
 
 #[test]
 fn setup_works() {
@@ -86,7 +86,7 @@ fn on_update_stake_works() {
 }
 
 #[test]
-fn on_remove_stakers_work() {
+fn on_remove_stakers_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		add_nominator(1, 100);
 		assert!(VoterBagsList::contains(&1));
@@ -101,15 +101,35 @@ fn on_remove_stakers_work() {
 }
 
 #[test]
+fn on_remove_stakers_with_nominations_works() {
+	ExtBuilder::default().populate_lists().build_and_execute(|| {
+		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 300), (11, 200)]);
+
+		assert!(VoterBagsList::contains(&1));
+		assert_eq!(VoterBagsList::get_score(&1), Ok(100));
+		assert_eq!(TargetBagsList::get_score(&10), Ok(300));
+
+		// remove nominator deletes node from voter list and updates the stake of its nominations.
+		remove_staker(1);
+		assert!(!VoterBagsList::contains(&1));
+		assert_eq!(TargetBagsList::get_score(&10), Ok(200));
+	})
+}
+
+#[test]
 fn on_slash_works() {
 	ExtBuilder::default().populate_lists().build_and_execute(|| {
 		assert_eq!(get_scores::<VoterBagsList>(), vec![(1, 100), (2, 100)]);
-		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 100), (11, 100)]);
+		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 300), (11, 200)]);
 
-		println!("before: {:?}", get_scores::<VoterBagsList>());
+		// slash nominator 2.
+		slash(2, 10, Default::default());
 
-		// slash nominator 1.
-		slash(1, 10, Default::default());
-		println!("after: {:?}", get_scores::<VoterBagsList>());
+		// voters list is not updated automatically upon slash.
+		assert_eq!(get_scores::<VoterBagsList>(), vec![(1, 100), (2, 100)]);
+
+		// targets list nominated by the slashed nominator are affected.
+		assert_eq!(<StakingMock as StakingInterface>::nominations(&2).unwrap(), vec![10, 11]);
+		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 290), (11, 190)]);
 	})
 }

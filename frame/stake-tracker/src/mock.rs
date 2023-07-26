@@ -153,6 +153,15 @@ impl StakingInterface for StakingMock {
 		}
 	}
 
+	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
+		let n = TestNominators::get();
+		if let Some(nominator) = n.get(&who) {
+			Some(nominator.1.clone())
+		} else {
+			None
+		}
+	}
+
 	fn minimum_nominator_bond() -> Self::Balance {
 		unreachable!();
 	}
@@ -252,6 +261,7 @@ pub(crate) fn add_nominator(who: AccountId, stake: Balance) {
 		n.insert(who, (Stake::<Balance> { active: stake, total: stake }, vec![]));
 	});
 
+	// add new nominator (called at `fn bond` in staking)
 	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_add(&who);
 }
 
@@ -260,11 +270,15 @@ pub(crate) fn add_nominator_with_nominations(
 	stake: Balance,
 	nominations: Nominations,
 ) {
+	// add new nominator (called at `fn bond` in staking)
+	add_nominator(who, stake);
+
+	// add nominations (called at `fn nominate` in staking)
 	TestNominators::mutate(|n| {
 		n.insert(who, (Stake::<Balance> { active: stake, total: stake }, nominations));
 	});
 
-	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_add(&who);
+	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_update(&who, vec![]);
 }
 
 pub(crate) fn add_validator(who: AccountId, stake: Balance) {
@@ -295,7 +309,12 @@ pub(crate) fn update_stake(who: AccountId, new: Balance) {
 
 pub(crate) fn remove_staker(who: AccountId) {
 	if TestNominators::get().contains_key(&who) {
-		<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_remove(&who, vec![]);
+		let nominations = <StakingMock as StakingInterface>::nominations(&who).unwrap();
+
+		<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_remove(
+			&who,
+			nominations,
+		);
 		TestNominators::mutate(|n| {
 			n.remove(&who);
 		});

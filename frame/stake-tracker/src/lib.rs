@@ -22,9 +22,12 @@
 //! ## Overview
 //!
 //! The stake-tracker pallet is listens to staking events through implemeting the
-//! [`OnStakingUpdate`] trait and forwards those events to one or multiple types (e.g. pallets). It
-//! works as a multiplexer of staking events and it is used to update semi-sorted target and voter
-//! lists implemented with bags lists.
+//! [`OnStakingUpdate`] trait and forwards those events to one or multiple types (e.g. pallets) that
+//! must be kept up to date with certain updates in staking. The pallet does not expose any
+//! callables and acts as a multiplexer of staking events.
+//!
+//! Currently, the stake trakcer pallet is used to update the semi-sorted target and votee lists
+//! implemented through bags lists.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
@@ -44,6 +47,14 @@ mod tests;
 
 /// The balance type of this pallet.
 pub type BalanceOf<T> = <<T as Config>::Staking as StakingInterface>::Balance;
+
+#[derive(Copy, Clone, Debug)]
+pub enum StakeImbalance<Balance> {
+	// Represents the reduction of stake by `Balance`.
+	Negative(Balance),
+	// Represents the increase of stake by `Balance`.
+	Positive(Balance),
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -101,21 +112,24 @@ pub mod pallet {
 			)
 		}
 
-		// Decreases the approval voting of a target by `amount`.
-		pub(crate) fn decrease_target_score(stash: &T::AccountId, amount: BalanceOf<T>) {
-			let _ = T::TargetList::on_decrease(
-				stash,
-				Self::active_vote_of(stash).saturating_sub(Self::to_vote(amount)),
-			)
-			.defensive_proof(
-				"the validator exists in the list as per the contract with staking; qed.",
-			);
+		pub(crate) fn update_target_stake(
+			who: &T::AccountId,
+			imbalance: StakeImbalance<VoteWeight>,
+		) {
+			match imbalance {
+				StakeImbalance::Positive(imbalance) => {
+					let _ = T::TargetList::on_increase(who, imbalance);
+				},
+				StakeImbalance::Negative(imbalance) => {
+					let _ = T::TargetList::on_decrease(who, imbalance);
+				},
+			}
 		}
 	}
 }
 
 impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
-	fn on_stake_update(who: &T::AccountId, _prev_stake: Option<sp_staking::Stake<BalanceOf<T>>>) {
+	fn on_stake_update(who: &T::AccountId, prev_stake: Option<sp_staking::Stake<BalanceOf<T>>>) {
 		// note: it's safe to assume that who's stake is up to date because the ledger is updated
 		// *before* calling the staking update. This is part of the contract between the staking
 		// interface and its listeners.
@@ -126,6 +140,24 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 				StakerStatus::Nominator(_) => {
 					let _ = T::VoterList::on_update(who, voter_weight)
 						.defensive_proof("Nominator's position in voter list updated; qed.");
+
+					if let Some(prev_stake) = prev_stake {
+						// updates vote weight of nominatied targets accordingly.
+						let prev_voter_weight = Self::to_vote(prev_stake.active);
+
+						let stake_imbalance = if prev_voter_weight > voter_weight {
+							StakeImbalance::Negative(prev_voter_weight - voter_weight)
+						} else {
+							StakeImbalance::Positive(voter_weight - prev_voter_weight)
+						};
+
+						for target in <T::Staking as StakingInterface>::nominations(who)
+							.unwrap_or_default()
+							.into_iter()
+						{
+							Self::update_target_stake(&target, stake_imbalance);
+						}
+					}
 				},
 				StakerStatus::Validator => {
 					let _ = T::TargetList::on_update(who, voter_weight)
@@ -150,7 +182,14 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		);
 	}
 
-	fn on_nominator_remove(who: &T::AccountId, _nominations: Vec<T::AccountId>) {
+	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>) {
+		let nominator_vote = Self::active_vote_of(who);
+
+		let _: Vec<_> = nominations
+			.into_iter()
+			.map(|t| Self::update_target_stake(&t, StakeImbalance::Negative(nominator_vote)))
+			.collect();
+
 		let _ = T::VoterList::on_remove(&who).defensive_proof(
 			"the nominator exists in the list as per the contract with staking; qed.",
 		);
@@ -160,6 +199,21 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		let _ = T::TargetList::on_remove(&who).defensive_proof(
 			"the validator exists in the list as per the contract with staking; qed.",
 		);
+	}
+
+	// Note: this is called upon added or removed nominations, nominator's stake remains the same.
+	fn on_nominator_update(who: &T::AccountId, prev_nominations: Vec<T::AccountId>) {
+		let nominator_vote = Self::active_vote_of(who);
+
+		let new_nominations: Vec<_> = <T::Staking as StakingInterface>::nominations(&who)
+			.unwrap_or_default()
+			.into_iter()
+			.filter(|n| !prev_nominations.contains(n))
+			.collect();
+
+		for target in new_nominations {
+			Self::update_target_stake(&target, StakeImbalance::Positive(nominator_vote));
+		}
 	}
 
 	fn on_slash(
@@ -175,17 +229,25 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		match T::Staking::status(stash).defensive_unwrap_or(StakerStatus::Idle) {
 			StakerStatus::Validator => {
 				// the slashed target's approval voting must be updated upon slashing.
-				Self::decrease_target_score(stash, slashed_amount);
+				Self::update_target_stake(
+					&stash,
+					StakeImbalance::Negative(Self::to_vote(slashed_amount)),
+				);
 			},
 			// the nominators stake is not updated automatically when slashed. However, the
-			// nominators to be always up to date as well (re. slashes and rewards).
+			// targets list should be kept updated.
 			// TODO(gpestana): consider a multi-block approach to spread the computational burden
 			// of this loop in multiple blocks.
 			StakerStatus::Nominator(_) => {
 				let _: Vec<_> = <T::Staking as StakingInterface>::nominations(stash)
 					.unwrap_or_default()
 					.into_iter()
-					.map(|t| Self::decrease_target_score(&t, slashed_amount))
+					.map(|t| {
+						Self::update_target_stake(
+							&t,
+							StakeImbalance::Negative(Self::to_vote(slashed_amount)),
+						)
+					})
 					.collect();
 			},
 			StakerStatus::Idle => {},
