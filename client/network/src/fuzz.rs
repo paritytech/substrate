@@ -571,7 +571,7 @@ impl ConnectionFuzzer {
 		});
 
 		// Make sure only disconnected nodes are left.
-		
+
 		let mut more_nodes = false;
 		self.known_nodes.iter().for_each(|(peer_id, state)| {
 			if !matches!(state, State::Disconnected) {
