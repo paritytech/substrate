@@ -30,7 +30,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{v09, v10, v11, v12, v13, MigrationStep},
+	migration::{v09, v10, v11, v12, v14, MigrationStep},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -288,15 +288,15 @@ benchmarks! {
 		m.step();
 	}
 
-	// This benchmarks the v13 migration step (Move code owners' reserved balance to be held instead).
+	// This benchmarks the v14 migration step (Move code owners' reserved balance to be held instead).
 	#[pov_mode = Measured]
-	v13_migration_step {
-		v13::store_dummy_code::<
+	v14_migration_step {
+		v14::store_dummy_code::<
 			T,
 			pallet_balances::Pallet<T>
 		>();
 
-		let mut m = v13::Migration::<T, pallet_balances::Pallet<T>>::default();
+		let mut m = v14::Migration::<T, pallet_balances::Pallet<T>>::default();
 	}: {
 		m.step();
 	}
