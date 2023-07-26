@@ -52,10 +52,6 @@ use crate::{
 
 const STAKING_ID: LockIdentifier = *b"staking ";
 
-// An account could technically be a direct nominator as well as participating through a delegation
-// implementation such as Nomination Pool. We don't want to mix the two locks.
-const DELEGATING_ID: LockIdentifier = *b"delegate";
-
 // The speculative number of spans are used as an input of the weight annotation of
 // [`Call::unbond`], as the post dipatch weight may depend on the number of slashing span on the
 // account which is not provided as an input. The value set should be conservative but sensible.

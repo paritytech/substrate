@@ -21,13 +21,21 @@
 //! (delegatee). Multiple delegators can delegate to the same delegatee. The delegatee is then able
 //! to use the funds of all delegators to nominate a set of validators.
 
-use crate::{Delegatee, Delegations, BalanceOf, Config};
+use crate::{Delegatee, Delegations, BalanceOf, Config, Error};
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::RuntimeDebug;
+use frame_support::{ensure, RuntimeDebug};
 use scale_info::TypeInfo;
 use frame_support::dispatch::DispatchResult;
-use frame_support::traits::Defensive;
-use sp_runtime::DispatchError;
+use frame_support::traits::{Currency, Defensive, LockableCurrency, LockIdentifier, WithdrawReasons};
+
+/// Lock identifier for funds delegated to another account.
+///
+/// This helps us differentiate the locks used for direct nomination and delegation based nomination
+/// and technically allows a direct nominator to be a delegator as well. We don't strictly need to
+/// support this but before delegation based staking were a thing, above was possible and we would
+/// like to keep things consistent and compatible once user of this pallet (NominationPools) moves
+/// to delegation based staking.
+const DELEGATING_ID: LockIdentifier = *b"delegate";
 
 /// A ledger of a delegator.
 ///
@@ -70,7 +78,7 @@ impl<T: Config> Delegation<T> {
 		todo!()
 	}
 
-	pub fn delegate(x: T::AccountId, x0: T::AccountId, value: BalanceOf<T>) -> Result<Self, DispatchError> {
+	pub fn delegate(delegator: T::AccountId, delegatee: T::AccountId, value: BalanceOf<T>) -> DispatchResult {
 		// should only delegate to one account.
 		// A delegatee can't be delegator.
 		// A delegator can't be delegatee.
@@ -78,6 +86,26 @@ impl<T: Config> Delegation<T> {
 		// let delegation = Delegation::get(delegator.clone(), delegatee.clone());
 		// let existing_balance: BalanceOf<T> = delegation.map(|d: Delegation<T>| d.balance).unwrap_or_default();
 		// let new_balance = existing_balance + value;
+
+		let delegator_balance = T::Currency::free_balance(&delegator);
+		ensure!(value >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
+		ensure!(delegator_balance >= value, Error::<T>::InsufficientBond);
+
+		T::Currency::set_lock(
+			DELEGATING_ID,
+			&delegator,
+			value,
+			WithdrawReasons::all(),
+		);
+		todo!()
+	}
+
+	pub fn migrate_into(delegatee: T::AccountId, delegator: T::AccountId, value: BalanceOf<T>) -> DispatchResult {
+		// (1) Unlock value at delegatee with StakingID.
+		// (2) transfer to delegator.
+		// (3) lock with delegating_id.
+		// (4) Update Ledger
+		// (5) Verify no changes needed in Staking Ledger
 		todo!()
 	}
 

@@ -331,7 +331,7 @@ pub trait DelegatedStakeInterface {
 	/// Remove delegation of some or all funds.
 	///
 	/// Similar to [`StakingInterface::withdraw_unbonded`].
-	fn undelegate_unbonded(
+	fn withdraw_unbonded(
 		delegatee: Self::AccountId,
 		delegator: Self::AccountId,
 		value: Self::Balance,
