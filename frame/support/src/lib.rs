@@ -2915,3 +2915,6 @@ pub use frame_support_procedural::register_default_impl;
 
 // Generate a macro that will enable/disable code based on `std` feature being active.
 sp_core::generate_feature_enabled_macro!(std_enabled, feature = "std", $);
+
+// Helper for implementing GenesisBuilder runtime API
+pub mod genesis_builder_helper;

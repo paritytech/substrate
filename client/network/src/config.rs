@@ -110,8 +110,7 @@ pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
 /// Splits a Multiaddress into a Multiaddress and PeerId.
 pub fn parse_addr(mut addr: Multiaddr) -> Result<(PeerId, Multiaddr), ParseErr> {
 	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) =>
-			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?,
+		Some(multiaddr::Protocol::P2p(peer_id)) => peer_id,
 		_ => return Err(ParseErr::PeerIdMissing),
 	};
 
@@ -144,7 +143,7 @@ pub struct MultiaddrWithPeerId {
 impl MultiaddrWithPeerId {
 	/// Concatenates the multiaddress and peer ID into one multiaddress containing both.
 	pub fn concat(&self) -> Multiaddr {
-		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id));
+		let proto = multiaddr::Protocol::P2p(self.peer_id);
 		self.multiaddr.clone().with(proto)
 	}
 }
@@ -182,8 +181,6 @@ impl TryFrom<String> for MultiaddrWithPeerId {
 pub enum ParseErr {
 	/// Error while parsing the multiaddress.
 	MultiaddrParse(multiaddr::Error),
-	/// Multihash of the peer ID is invalid.
-	InvalidPeerId,
 	/// The peer ID is missing from the address.
 	PeerIdMissing,
 }
@@ -192,7 +189,6 @@ impl fmt::Display for ParseErr {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::MultiaddrParse(err) => write!(f, "{}", err),
-			Self::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
 			Self::PeerIdMissing => write!(f, "Peer id is missing from the address"),
 		}
 	}
@@ -202,7 +198,6 @@ impl std::error::Error for ParseErr {
 	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 		match self {
 			Self::MultiaddrParse(err) => Some(err),
-			Self::InvalidPeerId => None,
 			Self::PeerIdMissing => None,
 		}
 	}
