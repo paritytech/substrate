@@ -5452,7 +5452,7 @@ fn add_remove_delegate_dependency_works() {
 
 	const ED: u64 = 2000;
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = Balances::set_balance(&ALICE, 1_000_000);
 
 		// Instantiate with add_delegate_dependency should fail since the code is not yet on chain.
 		assert_err!(
@@ -5557,7 +5557,7 @@ fn native_dependency_deposit_works() {
 	// Test with both existing and uploaded code
 	for code in [Code::Upload(wasm.clone()), Code::Existing(code_hash)] {
 		ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
-			let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+			let _ = Balances::set_balance(&ALICE, 1_000_000);
 			let lockup_deposit_percent = CodeHashLockupDepositPercent::get();
 			let per_byte = DepositPerByte::get();
 			let per_item = DepositPerItem::get();

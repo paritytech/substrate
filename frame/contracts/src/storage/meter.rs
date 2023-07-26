@@ -538,6 +538,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 		terminated: bool,
 	) -> Result<(), DispatchError> {
 		match amount {
+			Deposit::Charge(amount) | Deposit::Refund(amount) if amount.is_zero() => return Ok(()),
 			Deposit::Charge(amount) => {
 				T::Currency::transfer(origin, deposit_account, *amount, Preservation::Protect)?;
 				Ok(())
