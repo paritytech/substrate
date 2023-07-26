@@ -57,6 +57,7 @@ impl From<sp_npos_elections::Error> for Error {
 pub struct OnChainExecution<T: Config>(PhantomData<T>);
 
 #[deprecated(note = "use OnChainExecution, which is bounded by default")]
+/// A simple on-chain implementation of the election provider trait.
 pub type BoundedExecution<T> = OnChainExecution<T>;
 
 /// Configuration trait for an onchain election execution.

@@ -52,7 +52,7 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	pub deposit: Balance,
 	/// The raw solution itself.
 	pub raw_solution: RawSolution<Solution>,
-	// The estimated fee `who` paid to submit the solution.
+	/// The estimated fee the account paid to submit the solution.
 	pub call_fee: Balance,
 }
 
@@ -84,15 +84,18 @@ where
 		Some(self.cmp(other))
 	}
 }
-
+/// A type alias for the balance of an account.
 pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+/// A type alias for the positive currency imbalance of an account.
 pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::PositiveImbalance;
+/// A type alias for the negative currency imbalance of an account.
 pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+/// A type alias for a given `SignedSubmission`.
 pub type SignedSubmissionOf<T> = SignedSubmission<
 	<T as frame_system::Config>::AccountId,
 	BalanceOf<T>,
