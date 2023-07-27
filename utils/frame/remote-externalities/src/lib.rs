@@ -776,10 +776,7 @@ where
 			.collect::<Vec<_>>();
 
 		if child_roots.is_empty() {
-			info!(
-				target: LOG_TARGET,
-				"👩‍👦 no child roots found to scrape",
-			);
+			info!(target: LOG_TARGET, "👩‍👦 no child roots found to scrape",);
 			return Ok(Default::default())
 		}
 

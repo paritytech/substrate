@@ -57,8 +57,10 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
+/// The log target for this pallet.
 const LOG_TARGET: &str = "runtime::uniques";
 
+/// A type alias for the account ID type used in the dispatchable functions of this pallet.
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
