@@ -219,7 +219,11 @@ impl<Number, Id, Signature> EquivocationProof<Number, Id, Signature> {
 /// This proof shows commitment signed on a different fork than finalized by GRANDPA.
 #[derive(Clone, Debug, Decode, Encode, PartialEq, TypeInfo)]
 pub struct InvalidForkCommitmentProof<Number, Id, Signature> {
-	/// Commitment for a block on different fork than one at the same height in this client's chain.
+	/// Commitment for a block on different fork than one at the same height in
+	/// this client's chain.
+	/// TODO: maybe replace {commitment, signatories} with SignedCommitment
+	/// (tradeoff: SignedCommitment not ideal since sigs optional, but fewer
+	/// types to juggle around) - check once usage pattern is clear
 	pub commitment: Commitment<Number>,
 	/// Signatures on this block
 	/// TODO: maybe change to HashMap - check once usage pattern is clear
@@ -228,18 +232,18 @@ pub struct InvalidForkCommitmentProof<Number, Id, Signature> {
 	pub expected_payload: Payload,
 }
 
-impl<Number, Id, Signature> InvalidForkVoteProof<Number, Id, Signature> {
+impl<Number, Id, Signature> InvalidForkCommitmentProof<Number, Id, Signature> {
 	/// Returns the authority id of the misbehaving voter.
-	pub fn offender_id(&self) -> &Id {
-		&self.vote.id
+	pub fn offender_ids(&self) -> Vec<&Id> {
+		self.signatories.iter().map(|(id, _)| id).collect()
 	}
 	/// Returns the round number at which the infringement occurred.
 	pub fn round_number(&self) -> &Number {
-		&self.vote.commitment.block_number
+		&self.commitment.block_number
 	}
 	/// Returns the set id at which the infringement occurred.
 	pub fn set_id(&self) -> ValidatorSetId {
-		self.vote.commitment.validator_set_id
+		self.commitment.validator_set_id
 	}
 }
 

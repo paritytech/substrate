@@ -27,7 +27,7 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus_beefy::{
 	check_invalid_fork_proof,
 	crypto::{AuthorityId, Signature},
-	BeefyApi, InvalidForkVoteProof, Payload, PayloadProvider, ValidatorSet, VoteMessage,
+	BeefyApi, InvalidForkCommitmentProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, Commitment, OpaqueKeyOwnershipProof,
 };
 use sp_runtime::{
 	generic::BlockId,
