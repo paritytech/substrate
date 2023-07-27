@@ -172,7 +172,7 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, Error>(
 ) -> Result<impl Future<Output = ()>, ConsensusError>
 where
 	P: Pair,
-	P::Public: AppPublic + Hash + Member + Codec,
+	P::Public: AppPublic + Hash + Member,
 	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Codec,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
