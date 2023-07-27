@@ -165,6 +165,7 @@ pub mod pallet {
 			fungible::{self, hold::Mutate as FunHoldMutate, Balanced as FunBalanced},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
 			tokens::{
+				Balance,
 				Fortitude::Polite,
 				Precision::{BestEffort, Exact},
 				Preservation::Expendable,
@@ -177,9 +178,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::{
-		traits::{
-			AccountIdConversion, Bounded, CheckedNeg, Convert, ConvertBack, Saturating, Zero,
-		},
+		traits::{AccountIdConversion, Bounded, Convert, ConvertBack, Saturating, Zero},
 		Rounding, TokenError,
 	};
 	use sp_std::prelude::*;
@@ -216,18 +215,9 @@ pub mod pallet {
 		/// Overarching hold reason.
 		type RuntimeHoldReason: From<HoldReason>;
 
-		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
-		/// `From<u64>`.
-		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
-			+ codec::FullCodec
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ sp_std::fmt::Debug
-			+ Default
-			+ From<u64>
-			+ TypeInfo
-			+ MaxEncodedLen
-			+ CheckedNeg;
+		/// Just the [`Balance`] type; we have this item to allow us to constrain it to
+		/// [`From<u64>`].
+		type CurrencyBalance: Balance + From<u64>;
 
 		/// Origin required for auto-funding the deficit.
 		type FundOrigin: EnsureOrigin<Self::RuntimeOrigin>;
