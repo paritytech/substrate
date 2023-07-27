@@ -973,7 +973,6 @@ pub mod unbalanced {
 			),
 			Ok(account_0_initial_balance - T::minimum_balance()),
 		);
-		// Balance should not have changed.
 		assert_eq!(T::balance(&account_0), T::minimum_balance());
 	}
 
