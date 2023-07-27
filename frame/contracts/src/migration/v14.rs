@@ -44,7 +44,7 @@ use sp_runtime::{traits::Zero, Saturating};
 #[cfg(feature = "try-runtime")]
 use sp_std::collections::btree_map::BTreeMap;
 
-mod old {
+pub mod old {
 	use super::*;
 
 	pub type BalanceOf<T, OldCurrency> = <OldCurrency as frame_support::traits::Currency<
@@ -74,11 +74,7 @@ mod old {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_dummy_code<T, OldCurrency>()
-where
-	T: Config,
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
-{
+pub fn store_dummy_code<T: Config>() {
 	use frame_benchmarking::account;
 	use sp_runtime::traits::Hash;
 	use sp_std::vec;
@@ -94,7 +90,7 @@ where
 		determinism: Determinism::Enforced,
 		code_len: len,
 	};
-	old::CodeInfoOf::<T, OldCurrency>::insert(hash, info);
+	old::CodeInfoOf::<T, ()>::insert(hash, info);
 }
 
 #[cfg(feature = "try-runtime")]
@@ -125,6 +121,7 @@ impl<T, OldCurrency> MigrationStep for Migration<T, OldCurrency>
 where
 	T: Config,
 	OldCurrency: 'static + ReservableCurrency<<T as frame_system::Config>::AccountId>,
+	BalanceOf<T>: From<old::BalanceOf<T, OldCurrency>>,
 {
 	const VERSION: u16 = 14;
 
@@ -159,38 +156,30 @@ where
 
 			let unreserved = code_info.deposit.saturating_sub(remaining);
 
-			let amount = if let Ok(amount) = BalanceOf::<T>::decode(&mut &unreserved.encode()[..]) {
-				amount
-			} else {
+			T::Currency::hold(
+				&HoldReason::StorageDepositReserve.into(),
+				&code_info.owner,
+				unreserved.into(),
+			)
+			.map(|_| {
+				log::debug!(
+					target: LOG_TARGET,
+					"{:?} held on the code owner's account 0x{:?} for code {:?}.",
+					unreserved,
+					HexDisplay::from(&code_info.owner.encode()),
+					hash,
+				);
+			})
+			.unwrap_or_else(|err| {
 				log::error!(
 					target: LOG_TARGET,
-					"Failed to decode unreserved amount {:?} for code {:?}.",
+					"Failed to hold {:?} from the code owner's account 0x{:?} for code {:?}, reason: {:?}.",
 					unreserved,
-					hash
+					HexDisplay::from(&code_info.owner.encode()),
+					hash,
+					err
 				);
-				Zero::zero()
-			};
-
-			T::Currency::hold(&HoldReason::StorageDepositReserve.into(), &code_info.owner, amount)
-				.map(|_| {
-					log::debug!(
-						target: LOG_TARGET,
-						"{:?} held on the code owner's account 0x{:?} for code {:?}.",
-						unreserved,
-						HexDisplay::from(&code_info.owner.encode()),
-						hash,
-					);
-				})
-				.unwrap_or_else(|err| {
-					log::error!(
-						target: LOG_TARGET,
-						"Failed to hold {:?} from the code owner's account 0x{:?} for code {:?}, reason: {:?}.",
-						unreserved,
-						HexDisplay::from(&code_info.owner.encode()),
-						hash,
-						err
-					);
-				});
+			});
 
 			self.last_code_hash = Some(hash);
 			(IsFinished::No, T::WeightInfo::v14_migration_step())
@@ -244,11 +233,7 @@ where
 				old_balance_allocation.reserved,
 				held
 			);
-			ensure!(
-				held == BalanceOf::<T>::decode(&mut &old_balance_allocation.reserved.encode()[..])
-					.unwrap(),
-				"Held amount mismatch"
-			);
+			ensure!(held == old_balance_allocation.reserved.into(), "Held amount mismatch");
 
 			log::debug!(
 				target: LOG_TARGET,

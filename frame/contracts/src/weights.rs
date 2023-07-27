@@ -55,8 +55,8 @@ pub trait WeightInfo {
 	fn v10_migration_step() -> Weight;
 	fn v11_migration_step(k: u32, ) -> Weight;
 	fn v12_migration_step(c: u32, ) -> Weight;
-	fn v14_migration_step() -> Weight;
 	fn v13_migration_step() -> Weight;
+	fn v14_migration_step() -> Weight;
 	fn migration_noop() -> Weight;
 	fn migrate() -> Weight;
 	fn on_runtime_upgrade_noop() -> Weight;

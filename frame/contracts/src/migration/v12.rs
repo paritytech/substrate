@@ -25,11 +25,7 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	codec,
-	pallet_prelude::*,
-	storage_alias,
-	traits::{fungible::Inspect, ReservableCurrency},
-	DefaultNoBound, Identity,
+	codec, pallet_prelude::*, storage_alias, traits::ReservableCurrency, DefaultNoBound, Identity,
 };
 use scale_info::prelude::format;
 use sp_core::hexdisplay::HexDisplay;
@@ -50,11 +46,7 @@ pub mod old {
 	#[scale_info(skip_type_params(T, OldCurrency))]
 	pub struct OwnerInfo<T: Config, OldCurrency>
 	where
-		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-			+ Inspect<
-				<T as frame_system::Config>::AccountId,
-				Balance = old::BalanceOf<T, OldCurrency>,
-			>,
+		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 	{
 		pub owner: AccountIdOf<T>,
 		#[codec(compact)]
@@ -91,8 +83,7 @@ pub mod old {
 #[scale_info(skip_type_params(T, OldCurrency))]
 pub struct CodeInfo<T: Config, OldCurrency>
 where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 {
 	owner: AccountIdOf<T>,
 	#[codec(compact)]
@@ -111,12 +102,7 @@ pub type CodeInfoOf<T: Config, OldCurrency> =
 pub type PristineCode<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, Vec<u8>>;
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_dummy_code<T: Config, OldCurrency>(len: usize, account: T::AccountId)
-where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>
-		+ 'static,
-{
+pub fn store_old_dummy_code<T: Config>(len: usize, account: T::AccountId) {
 	use sp_runtime::traits::Hash;
 
 	let code = vec![42u8; len];
@@ -133,14 +119,13 @@ where
 	old::CodeStorage::<T>::insert(hash, module);
 
 	let info = old::OwnerInfo { owner: account, deposit: u32::MAX.into(), refcount: u64::MAX };
-	old::OwnerInfoOf::<T, OldCurrency>::insert(hash, info);
+	old::OwnerInfoOf::<T, ()>::insert(hash, info);
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
 pub struct Migration<T: Config, OldCurrency, OldDepositPerByte, OldDepositPerItem>
 where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 	OldDepositPerByte: Get<old::BalanceOf<T, OldCurrency>>,
 	OldDepositPerItem: Get<old::BalanceOf<T, OldCurrency>>,
 {
@@ -151,9 +136,7 @@ where
 impl<T: Config, OldCurrency, OldDepositPerByte, OldDepositPerItem> MigrationStep
 	for Migration<T, OldCurrency, OldDepositPerByte, OldDepositPerItem>
 where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>
-		+ 'static,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
 	OldDepositPerByte: Get<old::BalanceOf<T, OldCurrency>>,
 	OldDepositPerItem: Get<old::BalanceOf<T, OldCurrency>>,
 {

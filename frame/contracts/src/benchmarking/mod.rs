@@ -37,10 +37,7 @@ use crate::{
 use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::{
-	self,
-	pallet_prelude::StorageVersion,
-	traits::{fungible::InspectHold, ReservableCurrency},
-	weights::Weight,
+	self, pallet_prelude::StorageVersion, traits::fungible::InspectHold, weights::Weight,
 };
 use frame_system::RawOrigin;
 use pallet_balances;
@@ -261,44 +258,9 @@ benchmarks! {
 	#[pov_mode = Measured]
 	v12_migration_step {
 		let c in 0 .. T::MaxCodeLen::get();
-		v12::store_old_dummy_code::<
-			T,
-			pallet_balances::Pallet<T>
-		>(c as usize, account::<T::AccountId>("account", 0, 0));
-
-		struct OldDepositPerItem<T, Currency>(PhantomData<(T,Currency)>);
-
-		type OldDepositPerByte<T, Currency> = OldDepositPerItem<T, Currency>;
-
-		impl<T, Currency> Get<v12::old::BalanceOf<T, Currency>> for OldDepositPerItem<T, Currency>
-		where
-			T: Config,
-			Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
-		{
-			fn get() -> v12::old::BalanceOf<T, Currency> {
-				v12::old::BalanceOf::<T, Currency>::default()
-			}
-		}
-
-		let mut m = v12::Migration::<
-			T,
-			pallet_balances::Pallet<T>,
-			OldDepositPerItem<T, pallet_balances::Pallet<T>>,
-			OldDepositPerByte<T, pallet_balances::Pallet<T>>
-		>::default();
-	}: {
-		m.step();
-	}
-
-	// This benchmarks the v14 migration step (Move code owners' reserved balance to be held instead).
-	#[pov_mode = Measured]
-	v14_migration_step {
-		v14::store_dummy_code::<
-			T,
-			pallet_balances::Pallet<T>
-		>();
-
-		let mut m = v14::Migration::<T, pallet_balances::Pallet<T>>::default();
+		type Balances = ();
+		v12::store_old_dummy_code::<T>(c as usize, account::<T::AccountId>("account", 0, 0));
+		let mut m = v12::Migration::<T, Balances, Balances, Balances>::default();
 	}: {
 		m.step();
 	}
@@ -312,6 +274,16 @@ benchmarks! {
 
 		v13::store_old_contract_info::<T>(contract.account_id.clone(), contract.info()?);
 		let mut m = v13::Migration::<T>::default();
+	}: {
+		m.step();
+	}
+
+	// This benchmarks the v14 migration step (Move code owners' reserved balance to be held instead).
+	#[pov_mode = Measured]
+	v14_migration_step {
+		type Balances = ();
+		v14::store_dummy_code::<T>();
+		let mut m = v14::Migration::<T, Balances>::default();
 	}: {
 		m.step();
 	}
