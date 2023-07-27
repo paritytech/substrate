@@ -20,7 +20,7 @@
 use sp_core::crypto::KeyTypeId;
 use sp_core::{
 	crypto::{Pair, Public, CryptoTypePublicPair},
-	ed25519, sr25519, ecdsa,
+	ed25519, sr25519, ecdsa, redjubjub
 };
 use crate::{
 	{CryptoStore, SyncCryptoStorePtr, Error, SyncCryptoStore},
@@ -67,6 +67,17 @@ impl KeyStore {
 			)
 	}
 
+    fn redjubjub_key_pair(
+        &self,
+        id: KeyTypeId,
+        pub_key: &redjubjub::Public,
+    ) -> Option<redjubjub::Pair> {
+        self.keys.read().get(&id).and_then(|inner| {
+            inner.get(pub_key.as_slice()).map(|s| {
+                redjubjub::Pair::from_string(s, None).expect("`redjubjub` seed slice is valid")
+            })
+        })
+    }
 }
 
 #[async_trait]
@@ -110,6 +121,18 @@ impl CryptoStore for KeyStore {
 	) -> Result<ecdsa::Public, Error> {
 		SyncCryptoStore::ecdsa_generate_new(self, id, seed)
 	}
+
+    async fn redjubjub_public_keys(&self, id: KeyTypeId) -> Vec<redjubjub::Public> {
+        SyncCryptoStore::redjubjub_public_keys(self, id)
+    }
+
+    async fn redjubjub_generate_new(
+        &self,
+        id: KeyTypeId,
+        seed: Option<&str>,
+    ) -> Result<redjubjub::Public, Error> {
+        SyncCryptoStore::redjubjub_generate_new(self, id, seed)
+    }
 
 	async fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		SyncCryptoStore::insert_unknown(self, id, suri, public)
@@ -156,6 +179,7 @@ impl SyncCryptoStore for KeyStore {
 						v.push(CryptoTypePublicPair(sr25519::CRYPTO_ID, k.clone()));
 						v.push(CryptoTypePublicPair(ed25519::CRYPTO_ID, k.clone()));
 						v.push(CryptoTypePublicPair(ecdsa::CRYPTO_ID, k.clone()));
+						v.push(CryptoTypePublicPair(redjubjub::CRYPTO_ID, k.clone()));
 						v
 					}))
 			})
@@ -255,6 +279,51 @@ impl SyncCryptoStore for KeyStore {
 		}
 	}
 
+    fn redjubjub_public_keys(&self, id: KeyTypeId) -> Vec<redjubjub::Public> {
+        self.keys
+            .read()
+            .get(&id)
+            .map(|keys| {
+                keys.values()
+                    .map(|s| {
+                        redjubjub::Pair::from_string(s, None)
+                            .expect("`redjubjub` seed slice is valid")
+                    })
+                    .map(|p| p.public())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn redjubjub_generate_new(
+        &self,
+        id: KeyTypeId,
+        seed: Option<&str>,
+    ) -> Result<redjubjub::Public, Error> {
+        match seed {
+            Some(seed) => {
+                let pair = redjubjub::Pair::from_string(seed, None).map_err(|_| {
+                    Error::ValidationError("Generates an `redjubjub` pair.".to_owned())
+                })?;
+                self.keys
+                    .write()
+                    .entry(id)
+                    .or_default()
+                    .insert(pair.public().to_raw_vec(), seed.into());
+                Ok(pair.public())
+            }
+            None => {
+                let (pair, phrase, _) = redjubjub::Pair::generate_with_phrase(None);
+                self.keys
+                    .write()
+                    .entry(id)
+                    .or_default()
+                    .insert(pair.public().to_raw_vec(), phrase);
+                Ok(pair.public())
+            }
+        }
+    }
+
 	fn insert_unknown(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
 		self.keys.write().entry(id).or_default().insert(public.to_owned(), suri.to_string());
 		Ok(())
@@ -302,6 +371,12 @@ impl SyncCryptoStore for KeyStore {
 					.ok_or_else(|| Error::PairNotFound("ecdsa".to_owned()))?;
 				return Ok(key_pair.sign(msg).encode());
 			}
+			redjubjub::CRYPTO_ID => {
+				let key_pair: redjubjub::Pair = self
+					.redjubjub_key_pair(id, &redjubjub::Public::from_slice(key.1.as_slice()))
+					.ok_or_else(|| Error::PairNotFound("redjubjub".to_owned()))?;
+				return Ok(key_pair.sign(msg).encode());
+			}
 			_ => Err(Error::KeyNotSupported(id))
 		}
 	}
@@ -338,7 +413,7 @@ impl Into<Arc<dyn CryptoStore>> for KeyStore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_core::{sr25519, testing::{ED25519, SR25519}};
+	use sp_core::{sr25519, testing::{ED25519, SR25519, REDJUBJUB}};
 	use crate::{SyncCryptoStore, vrf::VRFTranscriptValue};
 
 	#[test]
@@ -368,6 +443,25 @@ mod tests {
 		).expect("Inserts unknown key");
 
 		let public_keys = SyncCryptoStore::keys(&store, SR25519).unwrap();
+
+		assert!(public_keys.contains(&key_pair.public().into()));
+	}
+
+	#[test]
+	fn store_redjubjub_unknown_and_extract_it() {
+		let store = KeyStore::new();
+
+		let secret_uri = "//Alice";
+		let key_pair = redjubjub::Pair::from_string(secret_uri, None).expect("Generates key pair");
+
+		SyncCryptoStore::insert_unknown(
+			&store,
+			REDJUBJUB,
+			secret_uri,
+			key_pair.public().as_ref(),
+		).expect("Inserts unknown key");
+
+		let public_keys = SyncCryptoStore::keys(&store, REDJUBJUB).unwrap();
 
 		assert!(public_keys.contains(&key_pair.public().into()));
 	}
