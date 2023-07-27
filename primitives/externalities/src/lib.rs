@@ -291,7 +291,7 @@ pub trait ExternalitiesExt {
 
 impl ExternalitiesExt for &mut dyn Externalities {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
-		self.extension_by_type_id(TypeId::of::<T>()).and_then(Any::downcast_mut)
+		self.extension_by_type_id(TypeId::of::<T>()).and_then(<dyn Any>::downcast_mut)
 	}
 
 	fn register_extension<T: Extension>(&mut self, ext: T) -> Result<(), Error> {

@@ -62,6 +62,7 @@ pub mod u32_trait;
 pub mod ed25519;
 pub mod sr25519;
 pub mod ecdsa;
+pub mod redjubjub;
 pub mod hash;
 #[cfg(feature = "std")]
 mod hasher;
