@@ -244,7 +244,7 @@ where
 	}
 	/// Set a conversion rate to `1` for the `asset_id`.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(asset_id: AssetIdOf<T>) {
+	fn ensure_successful(asset_id: AssetKindOf<T>) {
 		pallet::ConversionRateToNative::<T>::set(asset_id.clone(), Some(1.into()));
 	}
 }

@@ -283,7 +283,7 @@ pub mod pallet {
 
 		/// The period during which an approved treasury spend has to be claimed.
 		#[pallet::constant]
-		type PayoutPeriod: Get<Self::BlockNumber>;
+		type PayoutPeriod: Get<BlockNumberFor<Self>>;
 
 		/// Helper type for benchmarks.
 		#[cfg(feature = "runtime-benchmarks")]
@@ -332,7 +332,7 @@ pub mod pallet {
 			T::AssetKind,
 			AssetBalanceOf<T, I>,
 			T::Beneficiary,
-			T::BlockNumber,
+			BlockNumberFor<T>,
 			<T::Paymaster as Pay>::Id,
 		>,
 		OptionQuery,
@@ -388,8 +388,8 @@ pub mod pallet {
 			asset_kind: T::AssetKind,
 			amount: AssetBalanceOf<T, I>,
 			beneficiary: T::Beneficiary,
-			valid_from: T::BlockNumber,
-			expire_at: T::BlockNumber,
+			valid_from: BlockNumberFor<T>,
+			expire_at: BlockNumberFor<T>,
 		},
 		/// An approved spend was voided.
 		AssetSpendVoided { index: SpendIndex },
@@ -708,7 +708,7 @@ pub mod pallet {
 			asset_kind: T::AssetKind,
 			#[pallet::compact] amount: AssetBalanceOf<T, I>,
 			beneficiary: BeneficiaryLookupOf<T, I>,
-			valid_from: Option<T::BlockNumber>,
+			valid_from: Option<BlockNumberFor<T>>,
 		) -> DispatchResult {
 			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
 			let beneficiary = T::BeneficiaryLookup::lookup(beneficiary)?;
