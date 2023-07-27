@@ -24,7 +24,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use crate::{columns, utils::DatabaseType};
+use crate::columns;
 use codec::{Decode, Encode};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 use sp_runtime::traits::Block as BlockT;
@@ -87,21 +87,21 @@ impl fmt::Display for UpgradeError {
 }
 
 /// Upgrade database to current version.
-pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> UpgradeResult<()> {
+pub fn upgrade_db<Block: BlockT>(db_path: &Path) -> UpgradeResult<()> {
 	let db_version = current_version(db_path)?;
 	match db_version {
 		0 => return Err(UpgradeError::UnsupportedVersion(db_version)),
 		1 => {
-			migrate_1_to_2::<Block>(db_path, db_type)?;
-			migrate_2_to_3::<Block>(db_path, db_type)?;
-			migrate_3_to_4::<Block>(db_path, db_type)?;
+			migrate_1_to_2::<Block>(db_path)?;
+			migrate_2_to_3::<Block>(db_path)?;
+			migrate_3_to_4::<Block>(db_path)?;
 		},
 		2 => {
-			migrate_2_to_3::<Block>(db_path, db_type)?;
-			migrate_3_to_4::<Block>(db_path, db_type)?;
+			migrate_2_to_3::<Block>(db_path)?;
+			migrate_3_to_4::<Block>(db_path)?;
 		},
 		3 => {
-			migrate_3_to_4::<Block>(db_path, db_type)?;
+			migrate_3_to_4::<Block>(db_path)?;
 		},
 		CURRENT_VERSION => (),
 		_ => return Err(UpgradeError::FutureDatabaseVersion(db_version)),
@@ -113,7 +113,7 @@ pub fn upgrade_db<Block: BlockT>(db_path: &Path, db_type: DatabaseType) -> Upgra
 /// Migration from version1 to version2:
 /// 1) the number of columns has changed from 11 to 12;
 /// 2) transactions column is added;
-fn migrate_1_to_2<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> UpgradeResult<()> {
+fn migrate_1_to_2<Block: BlockT>(db_path: &Path) -> UpgradeResult<()> {
 	let db_cfg = DatabaseConfig::with_columns(V1_NUM_COLUMNS);
 	let mut db = Database::open(&db_cfg, db_path)?;
 	db.add_column().map_err(Into::into)
@@ -121,7 +121,7 @@ fn migrate_1_to_2<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> Upgr
 
 /// Migration from version2 to version3:
 /// - The format of the stored Justification changed to support multiple Justifications.
-fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> UpgradeResult<()> {
+fn migrate_2_to_3<Block: BlockT>(db_path: &Path) -> UpgradeResult<()> {
 	let db_cfg = DatabaseConfig::with_columns(V2_NUM_COLUMNS);
 	let db = Database::open(&db_cfg, db_path)?;
 
@@ -153,7 +153,7 @@ fn migrate_2_to_3<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> Upgr
 /// Migration from version3 to version4:
 /// 1) the number of columns has changed from 12 to 13;
 /// 2) BODY_INDEX column is added;
-fn migrate_3_to_4<Block: BlockT>(db_path: &Path, _db_type: DatabaseType) -> UpgradeResult<()> {
+fn migrate_3_to_4<Block: BlockT>(db_path: &Path) -> UpgradeResult<()> {
 	let db_cfg = DatabaseConfig::with_columns(V3_NUM_COLUMNS);
 	let mut db = Database::open(&db_cfg, db_path)?;
 	db.add_column().map_err(Into::into)
@@ -194,6 +194,7 @@ fn version_file_path(path: &Path) -> PathBuf {
 mod tests {
 	use super::*;
 	use crate::{tests::Block, DatabaseSource};
+	const FULL_DB_DIR: &str = "full";
 
 	fn create_db(db_path: &Path, version: Option<u32>) {
 		if let Some(version) = version {
@@ -203,11 +204,11 @@ mod tests {
 		}
 	}
 
-	fn open_database(db_path: &Path, db_type: DatabaseType) -> sp_blockchain::Result<()> {
+	fn open_database(db_path: &Path) -> sp_blockchain::Result<()> {
 		crate::utils::open_database::<Block>(
 			&DatabaseSource::RocksDb { path: db_path.to_owned(), cache_size: 128 },
-			db_type,
 			true,
+			false,
 		)
 		.map(|_| ())
 		.map_err(|e| sp_blockchain::Error::Backend(e.to_string()))
@@ -217,39 +218,36 @@ mod tests {
 	fn downgrade_never_happens() {
 		let db_dir = tempfile::TempDir::new().unwrap();
 		create_db(db_dir.path(), Some(CURRENT_VERSION + 1));
-		assert!(open_database(db_dir.path(), DatabaseType::Full).is_err());
+		assert!(open_database(db_dir.path()).is_err());
 	}
 
 	#[test]
 	fn open_empty_database_works() {
-		let db_type = DatabaseType::Full;
 		let db_dir = tempfile::TempDir::new().unwrap();
-		let db_dir = db_dir.path().join(db_type.as_str());
-		open_database(&db_dir, db_type).unwrap();
-		open_database(&db_dir, db_type).unwrap();
+		let db_dir = db_dir.path().join(FULL_DB_DIR);
+		open_database(&db_dir).unwrap();
+		open_database(&db_dir).unwrap();
 		assert_eq!(current_version(&db_dir).unwrap(), CURRENT_VERSION);
 	}
 
 	#[test]
 	fn upgrade_to_3_works() {
-		let db_type = DatabaseType::Full;
 		for version_from_file in &[None, Some(1), Some(2)] {
 			let db_dir = tempfile::TempDir::new().unwrap();
-			let db_path = db_dir.path().join(db_type.as_str());
+			let db_path = db_dir.path().join(FULL_DB_DIR);
 			create_db(&db_path, *version_from_file);
-			open_database(&db_path, db_type).unwrap();
+			open_database(&db_path).unwrap();
 			assert_eq!(current_version(&db_path).unwrap(), CURRENT_VERSION);
 		}
 	}
 
 	#[test]
 	fn upgrade_to_4_works() {
-		let db_type = DatabaseType::Full;
 		for version_from_file in &[None, Some(1), Some(2), Some(3)] {
 			let db_dir = tempfile::TempDir::new().unwrap();
-			let db_path = db_dir.path().join(db_type.as_str());
+			let db_path = db_dir.path().join(FULL_DB_DIR);
 			create_db(&db_path, *version_from_file);
-			open_database(&db_path, db_type).unwrap();
+			open_database(&db_path).unwrap();
 			assert_eq!(current_version(&db_path).unwrap(), CURRENT_VERSION);
 		}
 	}

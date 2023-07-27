@@ -273,10 +273,9 @@ where
 		ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>> + BlockBuilderApi<Block>,
 	PR: ProofRecording,
 {
-	type Transaction = backend::TransactionFor<B, Block>;
 	type Proposal = Pin<
 		Box<
-			dyn Future<Output = Result<Proposal<Block, Self::Transaction, PR::Proof>, Self::Error>>
+			dyn Future<Output = Result<Proposal<Block, PR::Proof>, Self::Error>>
 				+ Send,
 		>,
 	>;
@@ -342,7 +341,7 @@ where
 		inherent_digests: Digest,
 		deadline: time::Instant,
 		block_size_limit: Option<usize>,
-	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
+	) -> Result<Proposal<Block, PR::Proof>, sp_blockchain::Error>
 	{
 		let propose_with_timer = time::Instant::now();
 		let mut block_builder =

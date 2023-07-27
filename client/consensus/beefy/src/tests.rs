@@ -42,7 +42,7 @@ use sc_consensus::{
 };
 use sc_network::{config::RequestResponseConfig, ProtocolName};
 use sc_network_test::{
-	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
+	Block, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
@@ -83,7 +83,7 @@ type BeefyBlockImport = crate::BeefyBlockImport<
 	Block,
 	substrate_test_runtime_client::Backend,
 	TestApi,
-	BlockImportAdapter<PeersClient, sp_api::TransactionFor<TestApi, Block>>,
+	PeersClient,
 >;
 
 pub(crate) type BeefyValidatorSet = ValidatorSet<AuthorityId>;
@@ -204,14 +204,14 @@ impl TestNetFactory for BeefyTestNet {
 		&self,
 		client: PeersClient,
 	) -> (
-		BlockImportAdapter<Self::BlockImport>,
+		Self::BlockImport,
 		Option<BoxJustificationImport<Block>>,
 		Self::PeerData,
 	) {
 		let keys = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let api = Arc::new(TestApi::new(self.beefy_genesis, &validator_set, GOOD_MMR_ROOT));
-		let inner = BlockImportAdapter::new(client.clone());
+		let inner = client.clone();
 		let (block_import, voter_links, rpc_links) =
 			beefy_block_import_and_links(inner, client.as_backend(), api, None);
 		let peer_data = PeerData {
@@ -219,7 +219,7 @@ impl TestNetFactory for BeefyTestNet {
 			beefy_voter_links: Mutex::new(Some(voter_links)),
 			..Default::default()
 		};
-		(BlockImportAdapter::new(block_import), None, peer_data)
+		(block_import, None, peer_data)
 	}
 
 	fn peer(&mut self, i: usize) -> &mut BeefyPeer {

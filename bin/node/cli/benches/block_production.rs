@@ -115,10 +115,7 @@ fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {
 
 fn import_block(
 	mut client: &FullClient,
-	built: BuiltBlock<
-		node_primitives::Block,
-		<FullClient as sp_api::CallApiAt<node_primitives::Block>>::StateBackend,
-	>,
+	built: BuiltBlock<node_primitives::Block>,
 ) {
 	let mut params = BlockImportParams::new(BlockOrigin::File, built.block.header);
 	params.state_action =

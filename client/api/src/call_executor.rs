@@ -73,11 +73,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: Option<
-			&RefCell<
-				StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
-			>,
-		>,
+		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<B>>>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		call_context: CallContext,
 		extensions: &RefCell<Extensions>,

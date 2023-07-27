@@ -41,7 +41,7 @@ use parking_lot::{Mutex, MutexGuard};
 use schnellru::LruMap;
 use shared_cache::{ValueCacheKey, ValueCacheRef};
 use std::{
-	collections::HashMap,
+	collections::{HashSet, HashMap},
 	sync::{
 		atomic::{AtomicU64, Ordering},
 		Arc,
@@ -124,11 +124,11 @@ pub struct LocalNodeCacheLimiter {
 	current_heap_size: usize,
 }
 
-impl<H> schnellru::Limiter<H, NodeCached<H>> for LocalNodeCacheLimiter
+impl<H, L> schnellru::Limiter<(H, L), NodeCached<H, L>> for LocalNodeCacheLimiter
 where
 	H: AsRef<[u8]> + std::fmt::Debug,
 {
-	type KeyToInsert<'a> = H;
+	type KeyToInsert<'a> = (H, L);
 	type LinkType = u32;
 
 	#[inline]
@@ -146,9 +146,9 @@ where
 	fn on_insert<'a>(
 		&mut self,
 		_length: usize,
-		key: H,
-		cached_node: NodeCached<H>,
-	) -> Option<(H, NodeCached<H>)> {
+		key: (H, L),
+		cached_node: NodeCached<H, L>,
+	) -> Option<((H, L), NodeCached<H, L>)> {
 		self.current_heap_size += cached_node.heap_size();
 		Some((key, cached_node))
 	}
@@ -157,19 +157,18 @@ where
 	fn on_replace(
 		&mut self,
 		_length: usize,
-		_old_key: &mut H,
-		_new_key: H,
-		old_node: &mut NodeCached<H>,
-		new_node: &mut NodeCached<H>,
+		_old_key: &mut (H, L),
+		_new_key: (H, L),
+		old_node: &mut NodeCached<H, L>,
+		new_node: &mut NodeCached<H, L>,
 	) -> bool {
-		debug_assert_eq!(_old_key.as_ref().len(), _new_key.as_ref().len());
 		self.current_heap_size =
 			self.current_heap_size + new_node.heap_size() - old_node.heap_size();
 		true
 	}
 
 	#[inline]
-	fn on_removed(&mut self, _key: &mut H, cached_node: &mut NodeCached<H>) {
+	fn on_removed(&mut self, _key: &mut (H, L), cached_node: &mut NodeCached<H, L>) {
 		self.current_heap_size -= cached_node.heap_size();
 	}
 
@@ -193,7 +192,7 @@ pub struct LocalValueCacheLimiter {
 	current_heap_size: usize,
 }
 
-impl<H> schnellru::Limiter<ValueCacheKey<H>, CachedValue<H>> for LocalValueCacheLimiter
+impl<H, L> schnellru::Limiter<ValueCacheKey<H>, CachedValue<H, L>> for LocalValueCacheLimiter
 where
 	H: AsRef<[u8]>,
 {
@@ -216,8 +215,8 @@ where
 		&mut self,
 		_length: usize,
 		key: Self::KeyToInsert<'_>,
-		value: CachedValue<H>,
-	) -> Option<(ValueCacheKey<H>, CachedValue<H>)> {
+		value: CachedValue<H, L>,
+	) -> Option<(ValueCacheKey<H>, CachedValue<H, L>)> {
 		self.current_heap_size += key.storage_key.len();
 		Some((key.into(), value))
 	}
@@ -228,15 +227,15 @@ where
 		_length: usize,
 		_old_key: &mut ValueCacheKey<H>,
 		_new_key: ValueCacheRef<H>,
-		_old_value: &mut CachedValue<H>,
-		_new_value: &mut CachedValue<H>,
+		_old_value: &mut CachedValue<H, L>,
+		_new_value: &mut CachedValue<H, L>,
 	) -> bool {
 		debug_assert_eq!(_old_key.storage_key.len(), _new_key.storage_key.len());
 		true
 	}
 
 	#[inline]
-	fn on_removed(&mut self, key: &mut ValueCacheKey<H>, _: &mut CachedValue<H>) {
+	fn on_removed(&mut self, key: &mut ValueCacheKey<H>, _: &mut CachedValue<H, L>) {
 		self.current_heap_size -= key.storage_key.len();
 	}
 
@@ -293,25 +292,25 @@ struct TrieHitStats {
 }
 
 /// An internal struct to store the cached trie nodes.
-pub(crate) struct NodeCached<H> {
+pub(crate) struct NodeCached<H, L> {
 	/// The cached node.
-	pub node: NodeOwned<H>,
+	pub node: NodeOwned<H, L>,
 	/// Whether this node was fetched from the shared cache or not.
 	pub is_from_shared_cache: bool,
 }
 
-impl<H> NodeCached<H> {
+impl<H, L> NodeCached<H, L> {
 	/// Returns the number of bytes allocated on the heap by this node.
 	fn heap_size(&self) -> usize {
-		self.node.size_in_bytes() - std::mem::size_of::<NodeOwned<H>>()
+		self.node.size_in_bytes() - std::mem::size_of::<NodeOwned<H, L>>()
 	}
 }
 
-type NodeCacheMap<H> = LruMap<H, NodeCached<H>, LocalNodeCacheLimiter, schnellru::RandomState>;
+type NodeCacheMap<H, L> = LruMap<(H, L), NodeCached<H, L>, LocalNodeCacheLimiter, schnellru::RandomState>;
 
-type ValueCacheMap<H> = LruMap<
+type ValueCacheMap<H, L> = LruMap<
 	ValueCacheKey<H>,
-	CachedValue<H>,
+	CachedValue<H, L>,
 	LocalValueCacheLimiter,
 	BuildNoHashHasher<ValueCacheKey<H>>,
 >;
@@ -329,15 +328,15 @@ type ValueAccessSet =
 /// When using [`Self::as_trie_db_cache`] or [`Self::as_trie_db_mut_cache`], it will lock Mutexes.
 /// So, it is important that these methods are not called multiple times, because they otherwise
 /// deadlock.
-pub struct LocalTrieCache<H: Hasher> {
+pub struct LocalTrieCache<H: Hasher, L: Copy + Default + Eq + PartialEq + std::hash::Hash> {
 	/// The shared trie cache that created this instance.
-	shared: SharedTrieCache<H>,
+	shared: SharedTrieCache<H, L>,
 
 	/// The local cache for the trie nodes.
-	node_cache: Mutex<NodeCacheMap<H::Out>>,
+	node_cache: Mutex<NodeCacheMap<H::Out, L>>,
 
 	/// The local cache for the values.
-	value_cache: Mutex<ValueCacheMap<H::Out>>,
+	value_cache: Mutex<ValueCacheMap<H::Out, L>>,
 
 	/// Keeps track of all values accessed in the shared cache.
 	///
@@ -349,14 +348,16 @@ pub struct LocalTrieCache<H: Hasher> {
 	/// cache for a given key.
 	shared_value_cache_access: Mutex<ValueAccessSet>,
 
+	new_nodes: Mutex<HashSet<H::Out>>,
+
 	stats: TrieHitStats,
 }
 
-impl<H: Hasher> LocalTrieCache<H> {
+impl<H: Hasher, L: Copy + Default + Eq + PartialEq + std::hash::Hash> LocalTrieCache<H, L> {
 	/// Return self as a [`TrieDB`](trie_db::TrieDB) compatible cache.
 	///
 	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
-	pub fn as_trie_db_cache(&self, storage_root: H::Out) -> TrieCache<'_, H> {
+	pub fn as_trie_db_cache(&self, storage_root: H::Out) -> TrieCache<'_, H, L> {
 		let value_cache = ValueCache::ForStorageRoot {
 			storage_root,
 			local_value_cache: self.value_cache.lock(),
@@ -367,6 +368,7 @@ impl<H: Hasher> LocalTrieCache<H> {
 		TrieCache {
 			shared_cache: self.shared.clone(),
 			local_cache: self.node_cache.lock(),
+			new_nodes: self.new_nodes.lock(),
 			value_cache,
 			stats: &self.stats,
 		}
@@ -379,17 +381,18 @@ impl<H: Hasher> LocalTrieCache<H> {
 	/// cache instance. If the function is not called, cached data is just thrown away and not
 	/// propagated to the shared cache. So, accessing these new items will be slower, but nothing
 	/// would break because of this.
-	pub fn as_trie_db_mut_cache(&self) -> TrieCache<'_, H> {
+	pub fn as_trie_db_mut_cache(&self) -> TrieCache<'_, H, L> {
 		TrieCache {
 			shared_cache: self.shared.clone(),
 			local_cache: self.node_cache.lock(),
+			new_nodes: self.new_nodes.lock(),
 			value_cache: ValueCache::Fresh(Default::default()),
 			stats: &self.stats,
 		}
 	}
 }
 
-impl<H: Hasher> Drop for LocalTrieCache<H> {
+impl<H: Hasher, L: Copy + Default + Eq + PartialEq + std::hash::Hash> Drop for LocalTrieCache<H, L> {
 	fn drop(&mut self) {
 		tracing::debug!(
 			target: LOG_TARGET,
@@ -414,7 +417,7 @@ impl<H: Hasher> Drop for LocalTrieCache<H> {
 			},
 		};
 
-		shared_inner.node_cache_mut().update(self.node_cache.get_mut().drain());
+		shared_inner.node_cache_mut().update(self.node_cache.get_mut().drain(), self.new_nodes.get_mut().drain());
 
 		shared_inner.value_cache_mut().update(
 			self.value_cache.get_mut().drain(),
@@ -424,30 +427,30 @@ impl<H: Hasher> Drop for LocalTrieCache<H> {
 }
 
 /// The abstraction of the value cache for the [`TrieCache`].
-enum ValueCache<'a, H: Hasher> {
+enum ValueCache<'a, H: Hasher, L> {
 	/// The value cache is fresh, aka not yet associated to any storage root.
 	/// This is used for example when a new trie is being build, to cache new values.
-	Fresh(HashMap<Arc<[u8]>, CachedValue<H::Out>>),
+	Fresh(HashMap<Arc<[u8]>, CachedValue<H::Out, L>>),
 	/// The value cache is already bound to a specific storage root.
 	ForStorageRoot {
 		shared_value_cache_access: MutexGuard<'a, ValueAccessSet>,
-		local_value_cache: MutexGuard<'a, ValueCacheMap<H::Out>>,
+		local_value_cache: MutexGuard<'a, ValueCacheMap<H::Out, L>>,
 		storage_root: H::Out,
 		// The shared value cache needs to be temporarily locked when reading from it
 		// so we need to clone the value that is returned, but we need to be able to
 		// return a reference to the value, so we just buffer it here.
-		buffered_value: Option<CachedValue<H::Out>>,
+		buffered_value: Option<CachedValue<H::Out, L>>,
 	},
 }
 
-impl<H: Hasher> ValueCache<'_, H> {
+impl<H: Hasher, L: Copy + Default + Eq + PartialEq + std::hash::Hash> ValueCache<'_, H, L> {
 	/// Get the value for the given `key`.
 	fn get(
 		&mut self,
 		key: &[u8],
-		shared_cache: &SharedTrieCache<H>,
+		shared_cache: &SharedTrieCache<H, L>,
 		stats: &HitStats,
-	) -> Option<&CachedValue<H::Out>> {
+	) -> Option<&CachedValue<H::Out, L>> {
 		stats.local_fetch_attempts.fetch_add(1, Ordering::Relaxed);
 
 		match self {
@@ -497,7 +500,7 @@ impl<H: Hasher> ValueCache<'_, H> {
 	}
 
 	/// Insert some new `value` under the given `key`.
-	fn insert(&mut self, key: &[u8], value: CachedValue<H::Out>) {
+	fn insert(&mut self, key: &[u8], value: CachedValue<H::Out, L>) {
 		match self {
 			Self::Fresh(map) => {
 				map.insert(key.into(), value);
@@ -514,21 +517,22 @@ impl<H: Hasher> ValueCache<'_, H> {
 /// If this instance was created for using it with a [`TrieDBMut`](trie_db::TrieDBMut), it needs to
 /// be merged back into the [`LocalTrieCache`] with [`Self::merge_into`] after all operations are
 /// done.
-pub struct TrieCache<'a, H: Hasher> {
-	shared_cache: SharedTrieCache<H>,
-	local_cache: MutexGuard<'a, NodeCacheMap<H::Out>>,
-	value_cache: ValueCache<'a, H>,
+pub struct TrieCache<'a, H: Hasher, L> {
+	shared_cache: SharedTrieCache<H, L>,
+	local_cache: MutexGuard<'a, NodeCacheMap<H::Out, L>>,
+	value_cache: ValueCache<'a, H, L>,
+	new_nodes: MutexGuard<'a, HashSet<H::Out>>,
 	stats: &'a TrieHitStats,
 }
 
-impl<'a, H: Hasher> TrieCache<'a, H> {
+impl<'a, H: Hasher, L: Copy + Default + Eq + PartialEq + std::hash::Hash> TrieCache<'a, H, L> {
 	/// Merge this cache into the given [`LocalTrieCache`].
 	///
 	/// This function is only required to be called when this instance was created through
 	/// [`LocalTrieCache::as_trie_db_mut_cache`], otherwise this method is a no-op. The given
 	/// `storage_root` is the new storage root that was obtained after finishing all operations
 	/// using the [`TrieDBMut`](trie_db::TrieDBMut).
-	pub fn merge_into(self, local: &LocalTrieCache<H>, storage_root: H::Out) {
+	pub fn merge_into(self, local: &LocalTrieCache<H, L>, storage_root: H::Out) {
 		let ValueCache::Fresh(cache) = self.value_cache else { return };
 
 		if !cache.is_empty() {
@@ -544,33 +548,34 @@ impl<'a, H: Hasher> TrieCache<'a, H> {
 	}
 }
 
-impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
+impl<'a, H: Hasher, L: Copy + Default + Eq + PartialEq + std::hash::Hash> trie_db::TrieCache<NodeCodec<H>, L> for TrieCache<'a, H, L> {
 	fn get_or_insert_node(
 		&mut self,
 		hash: H::Out,
-		fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out>, H::Out, Error<H::Out>>,
-	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, Error<H::Out>> {
+		location: L,
+		fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out, L>, H::Out, Error<H::Out>>,
+	) -> trie_db::Result<&NodeOwned<H::Out, L>, H::Out, Error<H::Out>> {
 		let mut is_local_cache_hit = true;
 		self.stats.node_cache.local_fetch_attempts.fetch_add(1, Ordering::Relaxed);
 
 		// First try to grab the node from the local cache.
-		let node = self.local_cache.get_or_insert_fallible(hash, || {
+		let node = self.local_cache.get_or_insert_fallible((hash, location), || {
 			is_local_cache_hit = false;
 
 			// It was not in the local cache; try the shared cache.
 			self.stats.node_cache.shared_fetch_attempts.fetch_add(1, Ordering::Relaxed);
-			if let Some(node) = self.shared_cache.peek_node(&hash) {
+			if let Some(node) = self.shared_cache.peek_node(&hash, location) {
 				self.stats.node_cache.shared_hits.fetch_add(1, Ordering::Relaxed);
 				tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from shared cache");
 
-				return Ok(NodeCached::<H::Out> { node: node.clone(), is_from_shared_cache: true })
+				return Ok(NodeCached::<H::Out, L> { node: node.clone(), is_from_shared_cache: true })
 			}
 
 			// It was not in the shared cache; try fetching it from the database.
 			match fetch_node() {
 				Ok(node) => {
 					tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from database");
-					Ok(NodeCached::<H::Out> { node, is_from_shared_cache: false })
+					Ok(NodeCached::<H::Out, L> { node, is_from_shared_cache: false })
 				},
 				Err(error) => {
 					tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from database failed");
@@ -589,21 +594,21 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 			.node)
 	}
 
-	fn get_node(&mut self, hash: &H::Out) -> Option<&NodeOwned<H::Out>> {
+	fn get_node(&mut self, hash: &H::Out, location: L) -> Option<&NodeOwned<H::Out, L>> {
 		let mut is_local_cache_hit = true;
 		self.stats.node_cache.local_fetch_attempts.fetch_add(1, Ordering::Relaxed);
 
 		// First try to grab the node from the local cache.
-		let cached_node = self.local_cache.get_or_insert_fallible(*hash, || {
+		let cached_node = self.local_cache.get_or_insert_fallible((*hash, location), || {
 			is_local_cache_hit = false;
 
 			// It was not in the local cache; try the shared cache.
 			self.stats.node_cache.shared_fetch_attempts.fetch_add(1, Ordering::Relaxed);
-			if let Some(node) = self.shared_cache.peek_node(&hash) {
+			if let Some(node) = self.shared_cache.peek_node(hash, location) {
 				self.stats.node_cache.shared_hits.fetch_add(1, Ordering::Relaxed);
 				tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from shared cache");
 
-				Ok(NodeCached::<H::Out> { node: node.clone(), is_from_shared_cache: true })
+				Ok(NodeCached::<H::Out, L> { node: node.clone(), is_from_shared_cache: true })
 			} else {
 				tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from cache failed");
 
@@ -627,7 +632,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 		}
 	}
 
-	fn lookup_value_for_key(&mut self, key: &[u8]) -> Option<&CachedValue<H::Out>> {
+	fn lookup_value_for_key(&mut self, key: &[u8]) -> Option<&CachedValue<H::Out, L>> {
 		let res = self.value_cache.get(key, &self.shared_cache, &self.stats.value_cache);
 
 		tracing::trace!(
@@ -640,7 +645,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 		res
 	}
 
-	fn cache_value_for_key(&mut self, key: &[u8], data: CachedValue<H::Out>) {
+	fn cache_value_for_key(&mut self, key: &[u8], data: CachedValue<H::Out, L>) {
 		tracing::trace!(
 			target: LOG_TARGET,
 			key = ?sp_core::hexdisplay::HexDisplay::from(&key),
@@ -649,16 +654,20 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 
 		self.value_cache.insert(key, data);
 	}
+
+	fn insert_new_node(&mut self, hash: &H::Out) {
+		self.new_nodes.insert(*hash);
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use trie_db::{Bytes, Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut};
+	use trie_db::{Bytes, Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash};
 
 	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
-	type Layout = crate::LayoutV1<sp_core::Blake2Hasher>;
-	type Cache = super::SharedTrieCache<sp_core::Blake2Hasher>;
+	type Layout = crate::LayoutV1<sp_core::Blake2Hasher, ()>;
+	type Cache = super::SharedTrieCache<sp_core::Blake2Hasher, ()>;
 	type Recorder = crate::recorder::Recorder<sp_core::Blake2Hasher>;
 
 	const TEST_DATA: &[(&[u8], &[u8])] =
@@ -668,15 +677,11 @@ mod tests {
 
 	fn create_trie() -> (MemoryDB, TrieHash<Layout>) {
 		let mut db = MemoryDB::default();
-		let mut root = Default::default();
-
-		{
-			let mut trie = TrieDBMutBuilder::<Layout>::new(&mut db, &mut root).build();
-			for (k, v) in TEST_DATA {
-				trie.insert(k, v).expect("Inserts data");
-			}
+		let mut trie = TrieDBMutBuilder::<Layout>::new(&db).build();
+		for (k, v) in TEST_DATA {
+			trie.insert(k, v).expect("Inserts data");
 		}
-
+		let root = trie.commit().apply_to(&mut db);
 		(db, root)
 	}
 
@@ -736,23 +741,26 @@ mod tests {
 		let new_value = vec![23; 64];
 
 		let shared_cache = Cache::new(CACHE_SIZE);
-		let mut new_root = root;
 
-		{
+		let new_root = {
 			let local_cache = shared_cache.local_cache();
 
 			let mut cache = local_cache.as_trie_db_mut_cache();
 
-			{
-				let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
-					.with_cache(&mut cache)
-					.build();
+			let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, root)
+				.with_cache(&mut cache)
+				.build();
 
-				trie.insert(&new_key, &new_value).unwrap();
-			}
+			trie.insert(&new_key, &new_value).unwrap();
+			let new_root = trie.commit().apply_to(&mut db);
+			let trie = TrieDBBuilder::<Layout>::new(&db, &new_root)
+				.with_cache(&mut cache)
+				.build();
+			trie.get(&new_key).unwrap().unwrap();
 
 			cache.merge_into(&local_cache, new_root);
-		}
+			new_root
+		};
 
 		// After the local cache is dropped, all changes should have been merged back to the shared
 		// cache.
@@ -828,13 +836,12 @@ mod tests {
 
 			let recorder = Recorder::default();
 			let local_cache = shared_cache.local_cache();
-			let mut new_root = root;
 
-			{
+			let new_root = {
 				let mut db = db.clone();
 				let mut cache = local_cache.as_trie_db_cache(root);
 				let mut recorder = recorder.as_trie_recorder(root);
-				let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
+				let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, root)
 					.with_cache(&mut cache)
 					.with_recorder(&mut recorder)
 					.build();
@@ -842,21 +849,20 @@ mod tests {
 				for (key, value) in DATA_TO_ADD {
 					trie.insert(key, value).unwrap();
 				}
-			}
+				trie.commit().root_hash()
+			};
 
 			let storage_proof = recorder.drain_storage_proof();
 			let mut memory_db: MemoryDB = storage_proof.into_memory_db();
-			let mut proof_root = root;
 
-			{
-				let mut trie =
-					TrieDBMutBuilder::<Layout>::from_existing(&mut memory_db, &mut proof_root)
-						.build();
+			let mut trie =
+				TrieDBMutBuilder::<Layout>::from_existing(&mut memory_db, root)
+					.build();
 
-				for (key, value) in DATA_TO_ADD {
-					trie.insert(key, value).unwrap();
-				}
+			for (key, value) in DATA_TO_ADD {
+				trie.insert(key, value).unwrap();
 			}
+			let proof_root = trie.commit().root_hash();
 
 			assert_eq!(new_root, proof_root)
 		}
@@ -958,22 +964,19 @@ mod tests {
 		{
 			let local_cache = shared_cache.local_cache();
 
-			let mut new_root = root;
-
 			{
 				let mut cache = local_cache.as_trie_db_cache(root);
-				{
-					let mut trie =
-						TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
-							.with_cache(&mut cache)
-							.build();
+				let mut trie =
+					TrieDBMutBuilder::<Layout>::from_existing(&mut db, root)
+						.with_cache(&mut cache)
+						.build();
 
-					let value = vec![10u8; 100];
-					// Ensure we add enough data that would overflow the cache.
-					for i in 0..CACHE_SIZE_RAW / 100 * 2 {
-						trie.insert(format!("key{}", i).as_bytes(), &value).unwrap();
-					}
+				let value = vec![10u8; 100];
+				// Ensure we add enough data that would overflow the cache.
+				for i in 0..CACHE_SIZE_RAW / 100 * 2 {
+					trie.insert(format!("key{}", i).as_bytes(), &value).unwrap();
 				}
+				let new_root = trie.commit().root_hash();
 
 				cache.merge_into(&local_cache, new_root);
 			}

@@ -561,7 +561,7 @@ pub trait Trie {
 	fn blake2_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
 		match version {
 			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::trie_root(input),
-			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher, ()>::trie_root(input),
 		}
 	}
 
@@ -575,7 +575,7 @@ pub trait Trie {
 	fn blake2_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
 		match version {
 			StateVersion::V0 => LayoutV0::<sp_core::Blake2Hasher>::ordered_trie_root(input),
-			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake2Hasher, ()>::ordered_trie_root(input),
 		}
 	}
 
@@ -589,7 +589,7 @@ pub trait Trie {
 	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
 		match version {
 			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::trie_root(input),
-			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher, ()>::trie_root(input),
 		}
 	}
 
@@ -603,7 +603,7 @@ pub trait Trie {
 	fn keccak_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
 		match version {
 			StateVersion::V0 => LayoutV0::<sp_core::KeccakHasher>::ordered_trie_root(input),
-			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::KeccakHasher, ()>::ordered_trie_root(input),
 		}
 	}
 
@@ -635,7 +635,7 @@ pub trait Trie {
 			>(&root, proof, &[(key, Some(value))])
 			.is_ok(),
 			StateVersion::V1 => sp_trie::verify_trie_proof::<
-				LayoutV1<sp_core::Blake2Hasher>,
+				LayoutV1<sp_core::Blake2Hasher, ()>,
 				_,
 				_,
 				_,
@@ -672,7 +672,7 @@ pub trait Trie {
 			>(&root, proof, &[(key, Some(value))])
 			.is_ok(),
 			StateVersion::V1 => sp_trie::verify_trie_proof::<
-				LayoutV1<sp_core::KeccakHasher>,
+				LayoutV1<sp_core::KeccakHasher, ()>,
 				_,
 				_,
 				_,

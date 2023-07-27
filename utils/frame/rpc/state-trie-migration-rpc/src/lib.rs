@@ -42,7 +42,7 @@ use trie_db::{
 };
 
 fn count_migrate<'a, H: Hasher>(
-	storage: &'a dyn trie_db::HashDBRef<H, Vec<u8>>,
+	storage: &'a dyn trie_db::HashDB<H, Vec<u8>, sp_state_machine::DBLocation>,
 	root: &'a H::Out,
 ) -> std::result::Result<(u64, u64, TrieDB<'a, 'a, H>), String> {
 	let mut nb = 0u64;

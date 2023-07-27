@@ -19,12 +19,12 @@
 //! from storage.
 
 use crate::{
-	backend::{Consolidate, IterArgs, StorageIterator},
-	trie_backend::TrieCacheProvider,
+	backend::{IterArgs, StorageIterator, TrieCommit},
+	trie_backend::{AsDB, TrieCacheProvider},
 	warn, StorageKey, StorageValue,
 };
 use codec::Codec;
-use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
+use hash_db::{self, HashDB, Hasher, Prefix};
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
 use sp_core::storage::{ChildInfo, ChildType, StateVersion};
@@ -38,7 +38,7 @@ use sp_trie::{
 	DBValue, KeySpacedDB, NodeCodec, Trie, TrieCache, TrieDBRawIterator, TrieRecorder,
 };
 #[cfg(feature = "std")]
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 // In this module, we only use layout for read operation and empty root,
 // where V1 and V0 are equivalent.
 use sp_trie::LayoutV1 as Layout;
@@ -54,12 +54,7 @@ macro_rules! format {
 }
 
 type Result<V> = sp_std::result::Result<V, crate::DefaultError>;
-
-/// Patricia trie-based storage trait.
-pub trait Storage<H: Hasher>: Send + Sync {
-	/// Get a trie node.
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
-}
+type DBLocation = sp_trie::DBLocation;
 
 /// Local cache for child root.
 #[cfg(feature = "std")]
@@ -81,7 +76,7 @@ enum IterState {
 }
 
 /// A raw iterator over the storage.
-pub struct RawIter<S, H, C>
+pub struct RawIter<H, C>
 where
 	H: Hasher,
 {
@@ -89,25 +84,24 @@ where
 	skip_if_first: Option<StorageKey>,
 	root: H::Out,
 	child_info: Option<ChildInfo>,
-	trie_iter: TrieDBRawIterator<Layout<H>>,
+	trie_iter: TrieDBRawIterator<Layout<H, DBLocation>>,
 	state: IterState,
-	_phantom: PhantomData<(S, C)>,
+	_phantom: PhantomData<C>,
 }
 
-impl<S, H, C> RawIter<S, H, C>
+impl<H, C> RawIter<H, C>
 where
 	H: Hasher,
-	S: TrieBackendStorage<H>,
 	H::Out: Codec + Ord,
 	C: TrieCacheProvider<H> + Send + Sync,
 {
 	#[inline]
 	fn prepare<R>(
 		&mut self,
-		backend: &TrieBackendEssence<S, H, C>,
+		backend: &TrieBackendEssence<H, C>,
 		callback: impl FnOnce(
-			&sp_trie::TrieDB<Layout<H>>,
-			&mut TrieDBRawIterator<Layout<H>>,
+			&sp_trie::TrieDB<Layout<H, DBLocation>>,
+			&mut TrieDBRawIterator<Layout<H, DBLocation>>,
 		) -> Option<core::result::Result<R, Box<TrieError<<H as Hasher>::Out>>>>,
 	) -> Option<Result<R>> {
 		if !matches!(self.state, IterState::Pending) {
@@ -137,7 +131,7 @@ where
 	}
 }
 
-impl<S, H, C> Default for RawIter<S, H, C>
+impl<H, C> Default for RawIter<H, C>
 where
 	H: Hasher,
 {
@@ -154,14 +148,13 @@ where
 	}
 }
 
-impl<S, H, C> StorageIterator<H> for RawIter<S, H, C>
+impl<H, C> StorageIterator<H> for RawIter<H, C>
 where
 	H: Hasher,
-	S: TrieBackendStorage<H>,
 	H::Out: Codec + Ord,
 	C: TrieCacheProvider<H> + Send + Sync,
 {
-	type Backend = crate::TrieBackend<S, H, C>;
+	type Backend = crate::TrieBackend<H, C>;
 	type Error = crate::DefaultError;
 
 	#[inline]
@@ -202,41 +195,41 @@ where
 }
 
 /// Patricia trie-based pairs storage essence.
-pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher, C> {
-	storage: S,
+pub struct TrieBackendEssence<H: Hasher, C> {
+	pub (crate) storage: Box<dyn AsDB<H>>,
 	root: H::Out,
 	empty: H::Out,
 	#[cfg(feature = "std")]
-	pub(crate) cache: Arc<RwLock<Cache<H::Out>>>,
+	pub(crate) cache: RwLock<Cache<H::Out>>,
 	pub(crate) trie_node_cache: Option<C>,
 	#[cfg(feature = "std")]
-	pub(crate) recorder: Option<Recorder<H>>,
+	pub(crate) recorder: RwLock<Option<Recorder<H>>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
+impl<H: Hasher, C> TrieBackendEssence<H, C> {
 	/// Create new trie-based backend.
-	pub fn new(storage: S, root: H::Out) -> Self {
+	pub fn new(storage: Box<dyn AsDB<H>>, root: H::Out) -> Self {
 		Self::new_with_cache(storage, root, None)
 	}
 
 	/// Create new trie-based backend.
-	pub fn new_with_cache(storage: S, root: H::Out, cache: Option<C>) -> Self {
+	pub fn new_with_cache(storage: Box<dyn AsDB<H>>, root: H::Out, cache: Option<C>) -> Self {
 		TrieBackendEssence {
 			storage,
 			root,
 			empty: H::hash(&[0u8]),
 			#[cfg(feature = "std")]
-			cache: Arc::new(RwLock::new(Cache::new())),
+			cache: RwLock::new(Cache::new()),
 			trie_node_cache: cache,
 			#[cfg(feature = "std")]
-			recorder: None,
+			recorder: RwLock::new(None),
 		}
 	}
 
 	/// Create new trie-based backend.
 	#[cfg(feature = "std")]
 	pub fn new_with_cache_and_recorder(
-		storage: S,
+		storage: Box<dyn AsDB<H>>,
 		root: H::Out,
 		cache: Option<C>,
 		recorder: Option<Recorder<H>>,
@@ -245,22 +238,20 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
 			storage,
 			root,
 			empty: H::hash(&[0u8]),
-			cache: Arc::new(RwLock::new(Cache::new())),
+			cache: RwLock::new(Cache::new()),
 			trie_node_cache: cache,
-			recorder,
+			recorder: RwLock::new(recorder),
 		}
 	}
 
 	/// Get backend storage reference.
-	pub fn backend_storage(&self) -> &S {
-		&self.storage
+	pub fn backend_storage(&self) -> &dyn AsDB<H> {
+		&*self.storage
 	}
 
-	/// Get backend storage mutable reference.
-	pub fn backend_storage_mut(&mut self) -> &mut S {
-		&mut self.storage
+	pub fn backend_storage_mut(&mut self) -> &mut dyn AsDB<H> {
+		&mut *self.storage
 	}
-
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
 		&self.root
@@ -273,21 +264,31 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> TrieBackendEssence<S, H, C> {
 		self.root = root;
 	}
 
+	/// Get estimated proof size if recording is enabled.
 	#[cfg(feature = "std")]
-	fn reset_cache(&mut self) {
-		self.cache = Arc::new(RwLock::new(Cache::new()));
+	pub fn estimate_proof_size(&self) -> Option<usize> {
+		self.recorder.read().as_ref().map(|r| r.estimate_encoded_size())
+	}
+
+	/// Set recorder. Returns old recorder if any.
+	#[cfg(feature = "std")]
+	pub fn set_recorder(&self, recorder: Option<Recorder<H>>) -> Option<Recorder<H>> {
+		if recorder.is_some() {
+			self.reset_cache();
+		}
+		core::mem::replace(&mut *self.recorder.write(), recorder)
+	}
+
+	#[cfg(feature = "std")]
+	fn reset_cache(&self) {
+		*self.cache.write() = Cache::new();
 	}
 
 	#[cfg(not(feature = "std"))]
-	fn reset_cache(&mut self) {}
-
-	/// Consumes self and returns underlying storage.
-	pub fn into_storage(self) -> S {
-		self.storage
-	}
+	fn reset_cache(&self) {}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEssence<S, H, C> {
+impl<H: Hasher, C: TrieCacheProvider<H>> TrieBackendEssence<H, C> {
 	/// Call the given closure passing it the recorder and the cache.
 	///
 	/// If the given `storage_root` is `None`, `self.root` will be used.
@@ -296,8 +297,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEs
 		&self,
 		storage_root: Option<H::Out>,
 		callback: impl FnOnce(
-			Option<&mut dyn TrieRecorder<H::Out>>,
-			Option<&mut dyn TrieCache<NodeCodec<H>>>,
+			Option<&mut dyn TrieRecorder<H::Out, DBLocation>>,
+			Option<&mut dyn TrieCache<NodeCodec<H>, DBLocation>>,
 		) -> R,
 	) -> R {
 		let storage_root = storage_root.unwrap_or_else(|| self.root);
@@ -306,9 +307,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEs
 
 		#[cfg(feature = "std")]
 		{
-			let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder(storage_root));
+			let recorder = self.recorder.read();
+			let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder(storage_root));
 			let recorder = match recorder.as_mut() {
-				Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out>),
+				Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out, DBLocation>),
 				None => None,
 			};
 			callback(recorder, cache)
@@ -332,14 +334,15 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEs
 		&self,
 		storage_root: Option<H::Out>,
 		callback: impl FnOnce(
-			Option<&mut dyn TrieRecorder<H::Out>>,
-			Option<&mut dyn TrieCache<NodeCodec<H>>>,
+			Option<&mut dyn TrieRecorder<H::Out, DBLocation>>,
+			Option<&mut dyn TrieCache<NodeCodec<H>, DBLocation>>,
 		) -> (Option<H::Out>, R),
 	) -> R {
 		let storage_root = storage_root.unwrap_or_else(|| self.root);
-		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder(storage_root));
+		let recorder = self.recorder.read();
+		let mut recorder = recorder.as_ref().map(|r| r.as_trie_recorder(storage_root));
 		let recorder = match recorder.as_mut() {
-			Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out>),
+			Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out, DBLocation>),
 			None => None,
 		};
 
@@ -365,8 +368,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEs
 		&self,
 		_storage_root: Option<H::Out>,
 		callback: impl FnOnce(
-			Option<&mut dyn TrieRecorder<H::Out>>,
-			Option<&mut dyn TrieCache<NodeCodec<H>>>,
+			Option<&mut dyn TrieRecorder<H::Out, DBLocation>>,
+			Option<&mut dyn TrieCache<NodeCodec<H>, DBLocation>>,
 		) -> (Option<H::Out>, R),
 	) -> R {
 		if let Some(local_cache) = self.trie_node_cache.as_ref() {
@@ -385,8 +388,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H>> TrieBackendEs
 	}
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
-	TrieBackendEssence<S, H, C>
+impl<H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
+	TrieBackendEssence<H, C>
 where
 	H::Out: Codec + Ord,
 {
@@ -397,13 +400,13 @@ where
 		&self,
 		root: H::Out,
 		child_info: Option<&ChildInfo>,
-		callback: impl FnOnce(&sp_trie::TrieDB<Layout<H>>) -> R,
+		callback: impl FnOnce(&sp_trie::TrieDB<Layout<H, DBLocation>>) -> R,
 	) -> R {
-		let backend = self as &dyn HashDBRef<H, Vec<u8>>;
+		let backend = self as &dyn HashDB<H, Vec<u8>, DBLocation>;
 		let db = child_info
 			.as_ref()
 			.map(|child_info| KeySpacedDB::new(backend, child_info.keyspace()));
-		let db = db.as_ref().map(|db| db as &dyn HashDBRef<H, Vec<u8>>).unwrap_or(backend);
+		let db = db.as_ref().map(|db| db as &dyn HashDB<_, _, _>).unwrap_or(backend);
 
 		self.with_recorder_and_cache(Some(root), |recorder, cache| {
 			let trie = TrieDBBuilder::<H>::new(db, &root)
@@ -521,7 +524,7 @@ where
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		self.with_recorder_and_cache(None, |recorder, cache| {
-			read_trie_value::<Layout<H>, _>(self, &self.root, key, recorder, cache).map_err(map_e)
+			read_trie_value::<Layout<H, DBLocation>, _>(self, &self.root, key, recorder, cache).map_err(map_e)
 		})
 	}
 
@@ -535,7 +538,7 @@ where
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		self.with_recorder_and_cache(Some(child_root), |recorder, cache| {
-			read_child_trie_hash::<Layout<H>, _>(
+			read_child_trie_hash::<Layout<H, DBLocation>>(
 				child_info.keyspace(),
 				self,
 				&child_root,
@@ -561,7 +564,7 @@ where
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		self.with_recorder_and_cache(Some(child_root), |recorder, cache| {
-			read_child_trie_value::<Layout<H>, _>(
+			read_child_trie_value::<Layout<H, DBLocation>>(
 				child_info.keyspace(),
 				self,
 				&child_root,
@@ -574,7 +577,7 @@ where
 	}
 
 	/// Create a raw iterator over the storage.
-	pub fn raw_iter(&self, args: IterArgs) -> Result<RawIter<S, H, C>> {
+	pub fn raw_iter(&self, args: IterArgs) -> Result<RawIter<H, C>> {
 		let root = if let Some(child_info) = args.child_info.as_ref() {
 			let root = match self.child_root(&child_info)? {
 				Some(root) => root,
@@ -621,30 +624,29 @@ where
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, S::Overlay) {
-		let mut write_overlay = S::Overlay::default();
-
-		let root = self.with_recorder_and_cache_for_storage_root(None, |recorder, cache| {
-			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
-			let res = match state_version {
-				StateVersion::V0 => delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _>(
-					&mut eph, self.root, delta, recorder, cache,
+	) -> TrieCommit<H::Out> {
+		self.with_recorder_and_cache_for_storage_root(None, |recorder, cache| {
+			let backend = self as &dyn HashDB<H, Vec<u8>, DBLocation>;
+			let commit = match state_version {
+				StateVersion::V0 => delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _>(
+					backend, self.root, delta, recorder, cache,
 				),
-				StateVersion::V1 => delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _>(
-					&mut eph, self.root, delta, recorder, cache,
+				StateVersion::V1 => delta_trie_root::<sp_trie::LayoutV1<H, DBLocation>, _, _, _, _>(
+					backend, self.root, delta, recorder, cache,
 				),
 			};
-
-			match res {
-				Ok(ret) => (Some(ret), ret),
+			
+			match commit {
+				Ok(commit) => (Some(commit.root_hash()), TrieCommit {
+					main: commit,
+					child: Default::default(),
+				}),
 				Err(e) => {
 					warn!(target: "trie", "Failed to write to trie: {}", e);
-					(None, self.root)
+					(None, TrieCommit::empty(self.root))
 				},
 			}
-		});
-
-		(root, write_overlay)
+		})
 	}
 
 	/// Returns the child storage root for the child trie `child_info` after applying the given
@@ -654,11 +656,10 @@ where
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, bool, S::Overlay) {
+	) -> (TrieCommit<H::Out>, bool) {
 		let default_root = match child_info.child_type() {
-			ChildType::ParentKeyId => empty_child_trie_root::<sp_trie::LayoutV1<H>>(),
+			ChildType::ParentKeyId => empty_child_trie_root::<sp_trie::LayoutV1<H, DBLocation>>(),
 		};
-		let mut write_overlay = S::Overlay::default();
 		let child_root = match self.child_root(child_info) {
 			Ok(Some(hash)) => hash,
 			Ok(None) => default_root,
@@ -668,196 +669,61 @@ where
 			},
 		};
 
-		let new_child_root =
+		let commit =
 			self.with_recorder_and_cache_for_storage_root(Some(child_root), |recorder, cache| {
-				let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
+				let backend = self as &dyn HashDB<H, Vec<u8>, DBLocation>;
 				match match state_version {
 					StateVersion::V0 =>
-						child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
+						child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _>(
 							child_info.keyspace(),
-							&mut eph,
+							backend,
 							child_root,
 							delta,
 							recorder,
 							cache,
 						),
 					StateVersion::V1 =>
-						child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
+						child_delta_trie_root::<sp_trie::LayoutV1<H, DBLocation>, _, _, _, _, _>(
 							child_info.keyspace(),
-							&mut eph,
+							backend,
 							child_root,
 							delta,
 							recorder,
 							cache,
 						),
 				} {
-					Ok(ret) => (Some(ret), ret),
+					Ok(commit) => (Some(commit.root_hash()), TrieCommit {
+						main: commit,
+						child: Default::default(),
+					}),
 					Err(e) => {
 						warn!(target: "trie", "Failed to write to trie: {}", e);
-						(None, child_root)
+						(None, TrieCommit::empty(self.root))
 					},
 				}
 			});
 
-		let is_default = new_child_root == default_root;
+		let is_default = commit.main.root_hash() == default_root;
 
-		(new_child_root, is_default, write_overlay)
+		(commit, is_default)
 	}
 }
 
-pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
-	storage: &'a S,
-	overlay: &'a mut S::Overlay,
-}
-
-impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> AsHashDB<H, DBValue>
-	for Ephemeral<'a, S, H>
+impl<H: Hasher, C: TrieCacheProvider<H> + Send + Sync> HashDB<H, DBValue, DBLocation>
+	for TrieBackendEssence<H, C>
 {
-	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
-		self
-	}
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<H, DBValue> + 'b) {
-		self
-	}
-}
-
-impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
-	pub fn new(storage: &'a S, overlay: &'a mut S::Overlay) -> Self {
-		Ephemeral { storage, overlay }
-	}
-}
-
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> hash_db::HashDB<H, DBValue>
-	for Ephemeral<'a, S, H>
-{
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		HashDB::get(self.overlay, key, prefix).or_else(|| {
-			self.storage.get(key, prefix).unwrap_or_else(|e| {
-				warn!(target: "trie", "Failed to read from DB: {}", e);
-				None
-			})
-		})
-	}
-
-	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		HashDB::get(self, key, prefix).is_some()
-	}
-
-	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H::Out {
-		HashDB::insert(self.overlay, prefix, value)
-	}
-
-	fn emplace(&mut self, key: H::Out, prefix: Prefix, value: DBValue) {
-		HashDB::emplace(self.overlay, key, prefix, value)
-	}
-
-	fn remove(&mut self, key: &H::Out, prefix: Prefix) {
-		HashDB::remove(self.overlay, key, prefix)
-	}
-}
-
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> HashDBRef<H, DBValue> for Ephemeral<'a, S, H> {
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		HashDB::get(self, key, prefix)
-	}
-
-	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		HashDB::contains(self, key, prefix)
-	}
-}
-
-/// Key-value pairs storage that is used by trie backend essence.
-pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
-	/// Type of in-memory overlay.
-	type Overlay: HashDB<H, DBValue> + Default + Consolidate;
-
-	/// Get the value stored at key.
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>>;
-}
-
-impl<T: TrieBackendStorage<H>, H: Hasher> TrieBackendStorage<H> for &T {
-	type Overlay = T::Overlay;
-
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
-		(*self).get(key, prefix)
-	}
-}
-
-// This implementation is used by normal storage trie clients.
-#[cfg(feature = "std")]
-impl<H: Hasher> TrieBackendStorage<H> for Arc<dyn Storage<H>> {
-	type Overlay = sp_trie::PrefixedMemoryDB<H>;
-
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
-		Storage::<H>::get(std::ops::Deref::deref(self), key, prefix)
-	}
-}
-
-impl<H, KF> TrieBackendStorage<H> for sp_trie::GenericMemoryDB<H, KF>
-where
-	H: Hasher,
-	KF: sp_trie::KeyFunction<H> + Send + Sync,
-{
-	type Overlay = Self;
-
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>> {
-		Ok(hash_db::HashDB::get(self, key, prefix))
-	}
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
-	AsHashDB<H, DBValue> for TrieBackendEssence<S, H, C>
-{
-	fn as_hash_db<'b>(&'b self) -> &'b (dyn HashDB<H, DBValue> + 'b) {
-		self
-	}
-	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<H, DBValue> + 'b) {
-		self
-	}
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync> HashDB<H, DBValue>
-	for TrieBackendEssence<S, H, C>
-{
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
+	fn get(&self, key: &H::Out, prefix: Prefix, location: DBLocation) -> Option<(DBValue, Vec<DBLocation>)> {
 		if *key == self.empty {
-			return Some([0u8].to_vec())
+			return Some(([0u8].to_vec(), Default::default()))
 		}
-		match self.storage.get(key, prefix) {
-			Ok(x) => x,
-			Err(e) => {
-				warn!(target: "trie", "Failed to read from DB: {}", e);
-				None
-			},
+		self.storage.get(key, prefix, location)
+	}
+
+	fn contains(&self, key: &H::Out, prefix: Prefix, location: DBLocation) -> bool {
+		if *key == self.empty {
+			return true
 		}
-	}
-
-	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		HashDB::get(self, key, prefix).is_some()
-	}
-
-	fn insert(&mut self, _prefix: Prefix, _value: &[u8]) -> H::Out {
-		unimplemented!();
-	}
-
-	fn emplace(&mut self, _key: H::Out, _prefix: Prefix, _value: DBValue) {
-		unimplemented!();
-	}
-
-	fn remove(&mut self, _key: &H::Out, _prefix: Prefix) {
-		unimplemented!();
-	}
-}
-
-impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
-	HashDBRef<H, DBValue> for TrieBackendEssence<S, H, C>
-{
-	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
-		HashDB::get(self, key, prefix)
-	}
-
-	fn contains(&self, key: &H::Out, prefix: Prefix) -> bool {
-		HashDB::contains(self, key, prefix)
+		self.storage.contains(key, prefix, location)
 	}
 }
 
@@ -865,10 +731,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: TrieCacheProvider<H> + Send + Sync>
 mod test {
 	use super::*;
 	use crate::{Backend, TrieBackend};
-	use sp_core::{Blake2Hasher, H256};
+	use sp_core::Blake2Hasher;
 	use sp_trie::{
-		cache::LocalTrieCache, trie_types::TrieDBMutBuilderV1 as TrieDBMutBuilder, KeySpacedDBMut,
-		PrefixedMemoryDB, TrieMut,
+		cache::LocalTrieCache, trie_types::TrieDBMutBuilderV1 as TrieDBMutBuilder, KeySpacedDB,
+		MemoryDB,
 	};
 
 	#[test]
@@ -876,34 +742,30 @@ mod test {
 		let child_info = ChildInfo::new_default(b"MyChild");
 		let child_info = &child_info;
 		// Contains values
-		let mut root_1 = H256::default();
+		let mut mdb = MemoryDB::<Blake2Hasher>::default();
+		let mut trie = TrieDBMutBuilder::new(&mdb).build();
+		trie.insert(b"3", &[1]).expect("insert failed");
+		trie.insert(b"4", &[1]).expect("insert failed");
+		trie.insert(b"6", &[1]).expect("insert failed");
+		let mut _root_1 = trie.commit().apply_to(&mut mdb);
+		let kdb = KeySpacedDB::new(&mdb, child_info.keyspace());
+		// implicitly assert child trie root is same
+		// as top trie (contents must remain the same).
+		let mut trie = TrieDBMutBuilder::new(&kdb).build();
+		trie.insert(b"3", &[1]).expect("insert failed");
+		trie.insert(b"4", &[1]).expect("insert failed");
+		trie.insert(b"6", &[1]).expect("insert failed");
+		let commit = trie.commit();
+		let root_1 = commit.apply_to(&mut mdb);
+
 		// Contains child trie
-		let mut root_2 = H256::default();
+		let mut trie = TrieDBMutBuilder::new(&mut mdb).build();
+		trie.insert(child_info.prefixed_storage_key().as_slice(), root_1.as_ref())
+			.expect("insert failed");
+		let root_2 = trie.commit().apply_to(&mut mdb);
 
-		let mut mdb = PrefixedMemoryDB::<Blake2Hasher>::default();
-		{
-			let mut trie = TrieDBMutBuilder::new(&mut mdb, &mut root_1).build();
-			trie.insert(b"3", &[1]).expect("insert failed");
-			trie.insert(b"4", &[1]).expect("insert failed");
-			trie.insert(b"6", &[1]).expect("insert failed");
-		}
-		{
-			let mut mdb = KeySpacedDBMut::new(&mut mdb, child_info.keyspace());
-			// reuse of root_1 implicitly assert child trie root is same
-			// as top trie (contents must remain the same).
-			let mut trie = TrieDBMutBuilder::new(&mut mdb, &mut root_1).build();
-			trie.insert(b"3", &[1]).expect("insert failed");
-			trie.insert(b"4", &[1]).expect("insert failed");
-			trie.insert(b"6", &[1]).expect("insert failed");
-		}
-		{
-			let mut trie = TrieDBMutBuilder::new(&mut mdb, &mut root_2).build();
-			trie.insert(child_info.prefixed_storage_key().as_slice(), root_1.as_ref())
-				.expect("insert failed");
-		};
-
-		let essence_1 = TrieBackendEssence::<_, _, LocalTrieCache<_>>::new(mdb, root_1);
-		let mdb = essence_1.backend_storage().clone();
+		let essence_1 = TrieBackendEssence::<_, LocalTrieCache<_, DBLocation>>::new(Box::new(mdb), root_1);
+		let mdb = essence_1.backend_storage().as_mem_db().unwrap().clone();
 		let essence_1 = TrieBackend::from_essence(essence_1);
 
 		assert_eq!(essence_1.next_storage_key(b"2"), Ok(Some(b"3".to_vec())));
@@ -912,7 +774,7 @@ mod test {
 		assert_eq!(essence_1.next_storage_key(b"5"), Ok(Some(b"6".to_vec())));
 		assert_eq!(essence_1.next_storage_key(b"6"), Ok(None));
 
-		let essence_2 = TrieBackendEssence::<_, _, LocalTrieCache<_>>::new(mdb, root_2);
+		let essence_2 = TrieBackendEssence::<_, LocalTrieCache<_, DBLocation>>::new(Box::new(mdb), root_2);
 
 		assert_eq!(essence_2.next_child_storage_key(child_info, b"2"), Ok(Some(b"3".to_vec())));
 		assert_eq!(essence_2.next_child_storage_key(child_info, b"3"), Ok(Some(b"4".to_vec())));

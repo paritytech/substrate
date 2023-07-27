@@ -5118,6 +5118,7 @@ dependencies = [
  "rand 0.8.5",
  "sc-basic-authorship",
  "sc-client-api",
+ "sc-client-db",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "serde",
@@ -8755,7 +8756,6 @@ dependencies = [
  "array-bytes",
  "criterion",
  "hash-db",
- "kitchensink-runtime",
  "kvdb",
  "kvdb-memorydb",
  "kvdb-rocksdb",
@@ -8777,7 +8777,6 @@ dependencies = [
  "sp-state-machine",
  "sp-tracing",
  "sp-trie",
- "substrate-test-runtime-client",
  "tempfile",
 ]
 
@@ -10850,7 +10849,9 @@ name = "sp-database"
 version = "4.0.0-dev"
 dependencies = [
  "kvdb",
+ "parity-db",
  "parking_lot 0.12.1",
+ "trie-db",
 ]
 
 [[package]]

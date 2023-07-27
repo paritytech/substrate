@@ -374,7 +374,7 @@ fn ordered_trie_root_should_work(wasm_method: WasmExecutionMethod) {
 	let trie_input = vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()];
 	assert_eq!(
 		call_in_wasm("test_ordered_trie_root", &[0], wasm_method, &mut ext.ext(),).unwrap(),
-		Layout::<BlakeTwo256>::ordered_trie_root(trie_input.iter()).as_bytes().encode(),
+		Layout::<BlakeTwo256, ()>::ordered_trie_root(trie_input.iter()).as_bytes().encode(),
 	);
 }
 

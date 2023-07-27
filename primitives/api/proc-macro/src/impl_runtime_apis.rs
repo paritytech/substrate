@@ -231,7 +231,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				transaction_depth: std::cell::RefCell<u16>,
 				changes: std::cell::RefCell<#crate_::OverlayedChanges>,
 				storage_transaction_cache: std::cell::RefCell<
-					#crate_::StorageTransactionCache<Block, C::StateBackend>
+					#crate_::StorageTransactionCache<Block>
 				>,
 				recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
 				call_context: #crate_::CallContext,
@@ -310,7 +310,7 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 					backend: &Self::StateBackend,
 					parent_hash: Block::Hash,
 				) -> core::result::Result<
-					#crate_::StorageChanges<C::StateBackend, Block>,
+					#crate_::StorageChanges<Block>,
 				String
 					> where Self: Sized {
 						let state_version = #crate_::CallApiAt::<Block>::runtime_version_at(self.call, std::clone::Clone::clone(&parent_hash))

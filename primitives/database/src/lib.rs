@@ -23,24 +23,30 @@ mod mem;
 
 pub use crate::kvdb::as_database;
 pub use mem::MemDb;
+pub use parity_db::{NewNode, NodeAddress, NodeRef};
 
 /// An identifier for a column.
 pub type ColumnId = u32;
 
+/// Node location hint.
+pub type DBLocation = u64;
+
 /// An alteration to the database.
-#[derive(Clone)]
 pub enum Change<H> {
 	Set(ColumnId, Vec<u8>, Vec<u8>),
 	Remove(ColumnId, Vec<u8>),
 	Store(ColumnId, H, Vec<u8>),
 	Reference(ColumnId, H),
 	Release(ColumnId, H),
+	StoreTree(ColumnId, H, NewTree),
 }
 
 /// A series of changes to the database that can be committed atomically. They do not take effect
 /// until passed into `Database::commit`.
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct Transaction<H>(pub Vec<Change<H>>);
+
+pub type NewTree = parity_db::NewNode;
 
 impl<H> Transaction<H> {
 	/// Create a new transaction to be prepared and committed atomically.
@@ -75,6 +81,11 @@ impl<H> Transaction<H> {
 	pub fn release(&mut self, col: ColumnId, hash: H) {
 		self.0.push(Change::Release(col, hash))
 	}
+
+	/// Insert a new new tree into the database.
+	pub fn insert_tree(&mut self, col: ColumnId, hash: H, tree: NewTree) {
+		self.0.push(Change::StoreTree(col, hash, tree))
+	}
 }
 
 pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
@@ -104,10 +115,10 @@ pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
 		self.get(col, key).map(|v| f(&v));
 	}
 
-	/// Check if database supports internal ref counting for state data.
+	/// Check if database supports tree columns.
 	///
 	/// For backwards compatibility returns `false` by default.
-	fn supports_ref_counting(&self) -> bool {
+	fn supports_tree_column(&self) -> bool {
 		false
 	}
 
@@ -115,6 +126,10 @@ pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
 	///
 	/// Not all database implementations use a prefix for keys, so this function may be a noop.
 	fn sanitize_key(&self, _key: &mut Vec<u8>) {}
+
+	/// Retrieve the tree node previously stored against `key` and `location` or `None` if
+	/// if no such node exists.
+	fn get_node(&self, col: ColumnId, key: &[u8], location: DBLocation) -> Option<(Vec<u8>, Vec<DBLocation>)>;
 }
 
 impl<H> std::fmt::Debug for dyn Database<H> {

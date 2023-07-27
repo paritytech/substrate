@@ -146,7 +146,7 @@ pub fn construct_block(
 
 	// calculate the header fields that we can.
 	let extrinsics_root =
-		Layout::<BlakeTwo256>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
+		Layout::<BlakeTwo256, ()>::ordered_trie_root(extrinsics.iter().map(Encode::encode))
 			.to_fixed_bytes()
 			.into();
 

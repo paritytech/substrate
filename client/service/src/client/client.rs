@@ -148,9 +148,9 @@ impl<H> PrePostHeader<H> {
 	}
 }
 
-enum PrepareStorageChangesResult<B: backend::Backend<Block>, Block: BlockT> {
+enum PrepareStorageChangesResult<Block: BlockT> {
 	Discard(ImportResult),
-	Import(Option<sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>>),
+	Import(Option<sc_consensus::StorageChanges<Block>>),
 }
 
 /// Create an instance of in-memory client.
@@ -489,9 +489,9 @@ where
 	fn apply_block(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
+		import_block: BlockImportParams<Block>,
 		storage_changes: Option<
-			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
+			sc_consensus::StorageChanges<Block>,
 		>,
 	) -> sp_blockchain::Result<ImportResult>
 	where
@@ -581,7 +581,7 @@ where
 		body: Option<Vec<Block::Extrinsic>>,
 		indexed_body: Option<Vec<Vec<u8>>>,
 		storage_changes: Option<
-			sc_consensus::StorageChanges<Block, backend::TransactionFor<B, Block>>,
+			sc_consensus::StorageChanges<Block>,
 		>,
 		finalized: bool,
 		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -830,8 +830,8 @@ where
 	/// provided, the block is re-executed to get the storage changes.
 	fn prepare_block_storage_changes(
 		&self,
-		import_block: &mut BlockImportParams<Block, backend::TransactionFor<B, Block>>,
-	) -> sp_blockchain::Result<PrepareStorageChangesResult<B, Block>>
+		import_block: &mut BlockImportParams<Block>,
+	) -> sp_blockchain::Result<PrepareStorageChangesResult<Block>>
 	where
 		Self: ProvideRuntimeApi<Block>,
 		<Self as ProvideRuntimeApi<Block>>::Api:
@@ -1265,7 +1265,7 @@ where
 	) -> sp_blockchain::Result<(CompactProof, u32)> {
 		let state = self.state_at(hash)?;
 		// this is a read proof, using version V0 or V1 is equivalent.
-		let root = state.storage_root(std::iter::empty(), StateVersion::V0).0;
+		let root = state.storage_root(std::iter::empty(), StateVersion::V0).main.root_hash();
 
 		let (proof, count) = prove_range_read_with_child_with_size::<_, HashingFor<Block>>(
 			state, size_limit, start_key,
@@ -1396,13 +1396,13 @@ where
 	) -> sp_blockchain::Result<(KeyValueStates, usize)> {
 		let mut db = sp_state_machine::MemoryDB::<HashingFor<Block>>::new(&[]);
 		// Compact encoding
-		let _ = sp_trie::decode_compact::<sp_state_machine::LayoutV0<HashingFor<Block>>, _, _>(
+		let _ = sp_trie::decode_compact::<sp_state_machine::LayoutV0<HashingFor<Block>>, _>(
 			&mut db,
 			proof.iter_compact_encoded_nodes(),
 			Some(&root),
 		)
 		.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
-		let proving_backend = sp_state_machine::TrieBackendBuilder::new(db, root).build();
+		let proving_backend = sp_state_machine::TrieBackendBuilder::new(Box::new(db), root).build();
 		let state = read_range_proof_check_with_child_on_proving_backend::<HashingFor<Block>>(
 			&proving_backend,
 			start_key,
@@ -1707,7 +1707,7 @@ where
 
 	fn call_api_at(
 		&self,
-		params: CallApiAtParams<Block, B::State>,
+		params: CallApiAtParams<Block>,
 	) -> Result<Vec<u8>, sp_api::ApiError> {
 		self.executor
 			.contextual_call(
@@ -1757,10 +1757,8 @@ where
 	<Client<B, E, Block, RA> as ProvideRuntimeApi<Block>>::Api:
 		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	RA: Sync + Send,
-	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
-	type Transaction = backend::TransactionFor<B, Block>;
 
 	/// Import a checked and validated block. If a justification is provided in
 	/// `BlockImportParams` then `finalized` *must* be true.
@@ -1773,7 +1771,7 @@ where
 	/// algorithm, don't use this function.
 	async fn import_block(
 		&mut self,
-		mut import_block: BlockImportParams<Block, backend::TransactionFor<B, Block>>,
+		mut import_block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		let span = tracing::span!(tracing::Level::DEBUG, "import_block");
 		let _enter = span.enter();
@@ -1870,14 +1868,12 @@ where
 	<Self as ProvideRuntimeApi<Block>>::Api:
 		CoreApi<Block> + ApiExt<Block, StateBackend = B::State>,
 	RA: Sync + Send,
-	backend::TransactionFor<B, Block>: Send + 'static,
 {
 	type Error = ConsensusError;
-	type Transaction = backend::TransactionFor<B, Block>;
 
 	async fn import_block(
 		&mut self,
-		import_block: BlockImportParams<Block, Self::Transaction>,
+		import_block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		(&*self).import_block(import_block).await
 	}

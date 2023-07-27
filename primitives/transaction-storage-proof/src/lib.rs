@@ -140,10 +140,9 @@ pub trait IndexedBody<B: BlockT> {
 pub mod registration {
 	use super::*;
 	use sp_runtime::traits::{Block as BlockT, One, Saturating, Zero};
-	use sp_trie::TrieMut;
 
 	type Hasher = sp_core::Blake2Hasher;
-	type TrieLayout = sp_trie::LayoutV1<Hasher>;
+	type TrieLayout = sp_trie::LayoutV1<Hasher, ()>;
 
 	/// Create a new inherent data provider instance for a given parent block hash.
 	pub fn new_data_provider<B, C>(
@@ -197,23 +196,20 @@ pub mod registration {
 		// Generate tries for each transaction.
 		let mut chunk_index = 0;
 		for transaction in transactions {
-			let mut transaction_root = sp_trie::empty_trie_root::<TrieLayout>();
-			{
-				let mut trie =
-					sp_trie::TrieDBMutBuilder::<TrieLayout>::new(&mut db, &mut transaction_root)
-						.build();
-				let chunks = transaction.chunks(CHUNK_SIZE).map(|c| c.to_vec());
-				for (index, chunk) in chunks.enumerate() {
-					let index = encode_index(index as u32);
-					trie.insert(&index, &chunk).map_err(|e| Error::Application(Box::new(e)))?;
-					if chunk_index == target_chunk_index {
-						target_chunk = Some(chunk);
-						target_chunk_key = index;
-					}
-					chunk_index += 1;
+			let mut trie =
+				sp_trie::TrieDBMutBuilder::<TrieLayout>::new(&mut db).build();
+			let chunks = transaction.chunks(CHUNK_SIZE).map(|c| c.to_vec());
+			for (index, chunk) in chunks.enumerate() {
+				let index = encode_index(index as u32);
+				trie.insert(&index, &chunk).map_err(|e| Error::Application(Box::new(e)))?;
+				if chunk_index == target_chunk_index {
+					target_chunk = Some(chunk);
+					target_chunk_key = index;
 				}
-				trie.commit();
+				chunk_index += 1;
 			}
+			let transaction_root = trie.commit().apply_to(&mut db);
+
 			if target_chunk.is_some() && target_root == Default::default() {
 				target_root = transaction_root;
 				chunk_proof = sp_trie::generate_trie_proof::<TrieLayout, _, _, _>(

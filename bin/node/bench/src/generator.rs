@@ -16,54 +16,46 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashMap, sync::Arc};
 
-use kvdb::KeyValueDB;
-use node_primitives::Hash;
-use sp_trie::{trie_types::TrieDBMutBuilderV1, TrieMut};
-
-use crate::simple_trie::SimpleTrie;
+use node_primitives::{Block, Hash};
+use sp_runtime::traits::BlakeTwo256;
+use sp_trie::trie_types::TrieDBMutBuilderV1;
 
 /// Generate trie from given `key_values`.
 ///
 /// Will fill your database `db` with trie data from `key_values` and
 /// return root.
 pub fn generate_trie(
-	db: Arc<dyn KeyValueDB>,
+	db: sc_client_db::StorageDb<Block>,
 	key_values: impl IntoIterator<Item = (Vec<u8>, Vec<u8>)>,
 ) -> Hash {
-	let mut root = Hash::default();
-
-	let (db, overlay) = {
-		let mut overlay = HashMap::new();
-		overlay.insert(
-			array_bytes::hex2bytes(
-				"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
-			)
-			.expect("null key is valid"),
-			Some(vec![0]),
-		);
-		let mut trie = SimpleTrie { db, overlay: &mut overlay };
-		{
-			let mut trie_db =
-				TrieDBMutBuilderV1::<crate::simple_trie::Hasher>::new(&mut trie, &mut root).build();
-			for (key, value) in key_values {
-				trie_db.insert(&key, &value).expect("trie insertion failed");
-			}
-
-			trie_db.commit();
-		}
-		(trie.db, overlay)
-	};
-
-	let mut transaction = db.transaction();
-	for (key, value) in overlay.into_iter() {
-		match value {
-			Some(value) => transaction.put(0, &key[..], &value[..]),
-			None => transaction.delete(0, &key[..]),
-		}
+	/*
+	overlay.emplace(
+		array_bytes::hex2bytes(
+			"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+		)
+		.expect("null key is valid"),
+		Default::default(),
+		vec![0],
+	);
+	*/
+	let mut trie_db =
+		TrieDBMutBuilderV1::<BlakeTwo256>::new(&db).build();
+	for (key, value) in key_values {
+		trie_db.insert(&key, &value).expect("trie insertion failed");
 	}
-	db.write(transaction).expect("Failed to write transaction");
+
+	let commit = trie_db.commit();
+	let root = commit.root_hash();
+
+	let mut transaction = sc_client_db::Transaction::default();
+	let trie_commit = sp_state_machine::TrieCommit {
+		main: commit,
+		child: Default::default(),
+	};
+	sc_client_db::apply_tree_commit::<BlakeTwo256>(trie_commit, db.state_db.is_none(),  &mut transaction);
+	
+	db.db.commit(transaction).expect("Failed to write transaction");
 
 	root
 }

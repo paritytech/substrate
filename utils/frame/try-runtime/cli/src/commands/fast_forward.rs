@@ -132,7 +132,7 @@ async fn run<Block: BlockT, HostFns: HostFunctions>(
 
 	externalities
 		.backend
-		.apply_transaction(storage_changes.transaction_storage_root, storage_changes.transaction);
+		.apply_transaction(storage_changes.transaction);
 
 	Ok(())
 }
@@ -230,7 +230,7 @@ where
 
 	for _ in 1..=command.n_blocks.unwrap_or(u64::MAX) {
 		// We are saving state before we overwrite it while producing new block.
-		let backend = ext.as_backend();
+		let backend = ext.as_backend().unwrap();
 
 		log::info!("Producing new empty block at height {:?}", last_block_number + One::one());
 

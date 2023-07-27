@@ -18,20 +18,18 @@
 
 //! Trie benchmark (integrated).
 
-use hash_db::Prefix;
-use kvdb::KeyValueDB;
 use lazy_static::lazy_static;
 use rand::Rng;
+use sp_runtime::traits::BlakeTwo256;
 use sp_state_machine::Backend as _;
-use sp_trie::{trie_types::TrieDBMutBuilderV1, TrieMut as _};
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use sp_trie::trie_types::TrieDBMutBuilderV1;
+use std::borrow::Cow;
 
 use node_primitives::Hash;
 
 use crate::{
 	core::{self, Mode, Path},
 	generator::generate_trie,
-	simple_trie::SimpleTrie,
 	tempdb::{DatabaseType, TempDatabase},
 };
 
@@ -164,23 +162,12 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 	}
 }
 
-struct Storage(Arc<dyn KeyValueDB>);
-
-impl sp_state_machine::Storage<sp_core::Blake2Hasher> for Storage {
-	fn get(&self, key: &Hash, prefix: Prefix) -> Result<Option<Vec<u8>>, String> {
-		let key = sp_trie::prefixed_key::<sp_core::Blake2Hasher>(key, prefix);
-		self.0.get(0, &key).map_err(|e| format!("Database backend error: {:?}", e))
-	}
-}
-
 impl core::Benchmark for TrieReadBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut db = self.database.clone();
 
-		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
-			Arc::new(Storage(db.open(self.database_type)));
-
-		let trie_backend = sp_state_machine::TrieBackendBuilder::new(storage, self.root).build();
+		let db = db.open(self.database_type);
+		let trie_backend = sp_state_machine::TrieBackendBuilder::new(Box::new(db), self.root).build();
 		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
 			let value = trie_backend
 				.storage(&warmup_key[..])
@@ -280,13 +267,9 @@ impl core::Benchmark for TrieWriteBenchmark {
 	fn run(&mut self, mode: Mode) -> std::time::Duration {
 		let mut rng = rand::thread_rng();
 		let mut db = self.database.clone();
-		let kvdb = db.open(self.database_type);
+		let db = db.open(self.database_type);
 
-		let mut new_root = self.root;
-
-		let mut overlay = HashMap::new();
-		let mut trie = SimpleTrie { db: kvdb.clone(), overlay: &mut overlay };
-		let mut trie_db_mut = TrieDBMutBuilderV1::from_existing(&mut trie, &mut new_root).build();
+		let mut trie_db_mut = TrieDBMutBuilderV1::from_existing(&db, self.root).build();
 
 		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
 			let value = trie_db_mut
@@ -308,17 +291,16 @@ impl core::Benchmark for TrieWriteBenchmark {
 		let started = std::time::Instant::now();
 
 		trie_db_mut.insert(&test_key, &test_val).expect("Should be inserted ok");
-		trie_db_mut.commit();
-		drop(trie_db_mut);
+		let commit = trie_db_mut.commit();
+		let new_root = commit.root_hash();
 
-		let mut transaction = kvdb.transaction();
-		for (key, value) in overlay.into_iter() {
-			match value {
-				Some(value) => transaction.put(0, &key[..], &value[..]),
-				None => transaction.delete(0, &key[..]),
-			}
-		}
-		kvdb.write(transaction).expect("Failed to write transaction");
+		let mut transaction = sc_client_db::Transaction::default();
+		let trie_commit = sp_state_machine::TrieCommit {
+			main: commit,
+			child: Default::default(),
+		};
+		sc_client_db::apply_tree_commit::<BlakeTwo256>(trie_commit, db.state_db.is_none(), &mut transaction);
+		db.db.commit(transaction).expect("Failed to write transaction");
 
 		let elapsed = started.elapsed();
 

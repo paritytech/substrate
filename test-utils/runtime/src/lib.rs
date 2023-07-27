@@ -51,9 +51,9 @@ use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{OpaqueMetadata, RuntimeDebug};
 use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieDBMutBuilderV1},
-	PrefixedMemoryDB, StorageProof,
+	MemoryDB, StorageProof,
 };
-use trie_db::{Trie, TrieMut};
+use trie_db::Trie;
 
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
@@ -439,16 +439,14 @@ fn code_using_trie() -> u64 {
 	]
 	.to_vec();
 
-	let mut mdb = PrefixedMemoryDB::default();
-	let mut root = sp_std::default::Default::default();
-	{
-		let mut t = TrieDBMutBuilderV1::<Hashing>::new(&mut mdb, &mut root).build();
-		for (key, value) in &pairs {
-			if t.insert(key, value).is_err() {
-				return 101
-			}
+	let mut mdb = MemoryDB::default();
+	let mut t = TrieDBMutBuilderV1::<Hashing>::new(&mut mdb).build();
+	for (key, value) in &pairs {
+		if t.insert(key, value).is_err() {
+			return 101
 		}
 	}
+	let root = t.commit().apply_to(&mut mdb);
 
 	let trie = TrieDBBuilder::<Hashing>::new(&mdb, &root).build();
 	let res = if let Ok(iter) = trie.iter() { iter.flatten().count() as u64 } else { 102 };
@@ -814,9 +812,9 @@ fn test_read_child_storage() {
 fn test_witness(proof: StorageProof, root: crate::Hash) {
 	use sp_externalities::Externalities;
 	let db: sp_trie::MemoryDB<crate::Hashing> = proof.into_memory_db();
-	let backend = sp_state_machine::TrieBackendBuilder::<_, crate::Hashing>::new(db, root).build();
+	let backend = sp_state_machine::TrieBackendBuilder::<crate::Hashing>::new(Box::new(db), root).build();
 	let mut overlay = sp_state_machine::OverlayedChanges::default();
-	let mut cache = sp_state_machine::StorageTransactionCache::<_, _>::default();
+	let mut cache = sp_state_machine::StorageTransactionCache::default();
 	let mut ext = sp_state_machine::Ext::new(
 		&mut overlay,
 		&mut cache,
@@ -1077,16 +1075,14 @@ mod tests {
 
 		runtime_api.test_storage(best_hash).unwrap();
 	}
-
+	
 	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
-		let mut root = crate::Hash::default();
 		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
-		{
-			let mut trie =
-				sp_trie::trie_types::TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
-			trie.insert(b"value3", &[142]).expect("insert failed");
-			trie.insert(b"value4", &[124]).expect("insert failed");
-		};
+		let mut trie =
+			sp_trie::trie_types::TrieDBMutBuilderV1::new(&mut mdb).build();
+		trie.insert(b"value3", &[142]).expect("insert failed");
+		trie.insert(b"value4", &[124]).expect("insert failed");
+		let root = trie.commit().apply_to(&mut mdb);
 		(mdb, root)
 	}
 
@@ -1094,7 +1090,7 @@ mod tests {
 	fn witness_backend_works() {
 		let (db, root) = witness_backend();
 		let backend =
-			sp_state_machine::TrieBackendBuilder::<_, crate::Hashing>::new(db, root).build();
+			sp_state_machine::TrieBackendBuilder::<crate::Hashing>::new(Box::new(db), root).build();
 		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
 		let client = TestClientBuilder::new().build();
 		let runtime_api = client.runtime_api();

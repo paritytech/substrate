@@ -21,14 +21,14 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 use log::debug;
 use parity_scale_codec::Decode;
 
-use sc_client_api::{backend::Backend, utils::is_descendent_of};
+use sc_client_api::{backend::Backend, utils::is_descendent_of, HeaderBackend};
 use sc_consensus::{
 	shared_data::{SharedDataLocked, SharedDataLockedUpgradable},
 	BlockCheckParams, BlockImport, BlockImportParams, ImportResult, JustificationImport,
 };
 use sc_telemetry::TelemetryHandle;
 use sc_utils::mpsc::TracingUnboundedSender;
-use sp_api::{Core, RuntimeApiInfo, TransactionFor};
+use sp_api::{Core, RuntimeApiInfo};
 use sp_blockchain::BlockStatus;
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
 use sp_consensus_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
@@ -234,9 +234,7 @@ where
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,
-	for<'a> &'a Client:
-		BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
-	TransactionFor<Client, Block>: 'static,
+	for<'a> &'a Client: BlockImport<Block, Error = ConsensusError>,
 {
 	// check for a new authority set change.
 	fn check_new_change(
@@ -273,7 +271,7 @@ where
 
 	fn make_authorities_changes(
 		&self,
-		block: &mut BlockImportParams<Block, TransactionFor<Client, Block>>,
+		block: &mut BlockImportParams<Block>,
 		hash: Block::Hash,
 		initial_sync: bool,
 	) -> Result<PendingSetChanges<Block>, ConsensusError> {
@@ -366,7 +364,7 @@ where
 					// best finalized block.
 					let best_finalized_number = self.inner.info().finalized_number;
 					let canon_number = best_finalized_number.min(median_last_finalized_number);
-					let canon_hash = self.inner.hash(canon_number)
+					let canon_hash = HeaderBackend::hash(&*self.inner, canon_number)
 							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 							.expect(
 								"the given block number is less or equal than the current best finalized number; \
@@ -461,7 +459,7 @@ where
 	/// Import whole new state and reset authority set.
 	async fn import_state(
 		&mut self,
-		mut block: BlockImportParams<Block, TransactionFor<Client, Block>>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, ConsensusError> {
 		let hash = block.post_hash();
 		let number = *block.header.number();
@@ -517,16 +515,14 @@ where
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,
 	for<'a> &'a Client:
-		BlockImport<Block, Error = ConsensusError, Transaction = TransactionFor<Client, Block>>,
-	TransactionFor<Client, Block>: 'static,
+		BlockImport<Block, Error = ConsensusError>,
 	SC: Send,
 {
 	type Error = ConsensusError;
-	type Transaction = TransactionFor<Client, Block>;
 
 	async fn import_block(
 		&mut self,
-		mut block: BlockImportParams<Block, Self::Transaction>,
+		mut block: BlockImportParams<Block>,
 	) -> Result<ImportResult, Self::Error> {
 		let hash = block.post_hash();
 		let number = *block.header.number();

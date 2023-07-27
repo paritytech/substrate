@@ -24,10 +24,10 @@ use std::{
 
 use crate::{
 	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue, TrieBackendBuilder,
+	StorageTransactionCache, StorageValue,
 };
 
-use hash_db::{HashDB, Hasher};
+use hash_db::Hasher;
 use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
@@ -47,8 +47,7 @@ where
 	/// The overlay changed storage.
 	overlay: OverlayedChanges,
 	offchain_db: TestPersistentOffchainDB,
-	storage_transaction_cache:
-		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H>,
+	storage_transaction_cache: StorageTransactionCache<H>,
 	/// Storage backend.
 	pub backend: InMemoryBackend<H>,
 	/// Extensions.
@@ -169,11 +168,13 @@ where
 		raw_storage: Vec<(H::Out, (Vec<u8>, i32))>,
 		storage_root: H::Out,
 	) {
-		for (k, (v, ref_count)) in raw_storage {
-			// Each time .emplace is called the internal MemoryDb ref count increments.
-			// Repeatedly call emplace to initialise the ref count to the correct value.
-			for _ in 0..ref_count {
-				self.backend.backend_storage_mut().emplace(k, hash_db::EMPTY_PREFIX, v.clone());
+		if let Some(mdb) = self.backend.backend_storage_mut().as_mem_db_mut() {
+			for (k, (v, ref_count)) in raw_storage {
+				// Each time .emplace is called the internal MemoryDb ref count increments.
+				// Repeatedly call emplace to initialise the ref count to the correct value.
+				for _ in 0..ref_count {
+					mdb.emplace(k, hash_db::EMPTY_PREFIX, v.clone());
+				}
 			}
 		}
 		self.backend.set_root(storage_root);
@@ -185,21 +186,23 @@ where
 	///
 	/// Note: This DB will be inoperable after this call.
 	pub fn into_raw_snapshot(mut self) -> (Vec<(H::Out, (Vec<u8>, i32))>, H::Out) {
-		let raw_key_values = self
-			.backend
-			.backend_storage_mut()
-			.drain()
-			.into_iter()
-			.collect::<Vec<(H::Out, (Vec<u8>, i32))>>();
+		if let Some(mdb) = self.backend.backend_storage_mut().as_mem_db_mut() {
+			let raw_key_values = mdb
+				.drain()
+				.into_iter()
+				.collect::<Vec<(H::Out, (Vec<u8>, i32))>>();
 
-		(raw_key_values, *self.backend.root())
+			(raw_key_values, *self.backend.root())
+		} else {
+			Default::default()
+		}
 	}
 
 	/// Return a new backend with all pending changes.
 	///
 	/// In contrast to [`commit_all`](Self::commit_all) this will not panic if there are open
 	/// transactions.
-	pub fn as_backend(&self) -> InMemoryBackend<H> {
+	pub fn as_backend(&self) -> Option<InMemoryBackend<H>> {
 		let top: Vec<_> =
 			self.overlay.changes().map(|(k, v)| (k.clone(), v.value().cloned())).collect();
 		let mut transaction = vec![(None, top)];
@@ -227,7 +230,7 @@ where
 		)?;
 
 		self.backend
-			.apply_transaction(changes.transaction_storage_root, changes.transaction);
+			.apply_transaction(changes.transaction);
 		Ok(())
 	}
 
@@ -245,13 +248,11 @@ where
 	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
 	/// get their own proof from scratch.
 	pub fn execute_and_prove<R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
-		let proving_backend = TrieBackendBuilder::wrap(&self.backend)
-			.with_recorder(Default::default())
-			.build();
+		let proving_backend = self.backend.with_recorder(Default::default());
 		let mut proving_ext = Ext::new(
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,
-			&proving_backend,
+			&*proving_backend,
 			Some(&mut self.extensions),
 		);
 
@@ -298,7 +299,13 @@ where
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
 	fn eq(&self, other: &TestExternalities<H>) -> bool {
-		self.as_backend().eq(&other.as_backend())
+		let this_backend = self.as_backend();
+		let other_backend = other.as_backend();
+		match (this_backend, other_backend) {
+			(Some(this_backend), Some(other_backend)) => other_backend.backend_storage().as_mem_db()
+				== this_backend.backend_storage().as_mem_db(),
+			_ => false,
+		}
 	}
 }
 
@@ -411,11 +418,11 @@ mod tests {
 
 		// Call emplace on one of the keys to increment the MemoryDb refcount, so we can check
 		// that it is intact in the recovered_ext.
-		let keys = original_ext.backend.backend_storage_mut().keys();
+		let keys = original_ext.backend.backend_storage_mut().as_mem_db().unwrap().keys();
 		let expected_ref_count = 5;
 		let ref_count_key = keys.into_iter().next().unwrap().0;
 		for _ in 0..expected_ref_count - 1 {
-			original_ext.backend.backend_storage_mut().emplace(
+			original_ext.backend.backend_storage_mut().as_mem_db_mut().unwrap().emplace(
 				ref_count_key,
 				hash_db::EMPTY_PREFIX,
 				// We can use anything for the 'value' because it does not affect behavior when
@@ -426,6 +433,8 @@ mod tests {
 		let refcount = original_ext
 			.backend
 			.backend_storage()
+			.as_mem_db()
+			.unwrap()
 			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
 			.unwrap()
 			.1;
@@ -462,6 +471,8 @@ mod tests {
 		let refcount = recovered_ext
 			.backend
 			.backend_storage()
+			.as_mem_db()
+			.unwrap()
 			.raw(&ref_count_key, hash_db::EMPTY_PREFIX)
 			.unwrap()
 			.1;
@@ -523,7 +534,7 @@ mod tests {
 			ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		}
 
-		let backend = ext.as_backend();
+		let backend = ext.as_backend().unwrap();
 
 		ext.commit_all().unwrap();
 		assert!(ext.backend.eq(&backend), "Both backend should be equal.");

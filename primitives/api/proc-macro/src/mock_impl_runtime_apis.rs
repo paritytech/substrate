@@ -116,7 +116,7 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 				_: &Self::StateBackend,
 				_: <#block_type as #crate_::BlockT>::Hash,
 			) -> std::result::Result<
-				#crate_::StorageChanges<Self::StateBackend, #block_type>,
+				#crate_::StorageChanges<#block_type>,
 				String
 			> where Self: Sized {
 				unimplemented!("`into_storage_changes` not implemented for runtime api mocks")

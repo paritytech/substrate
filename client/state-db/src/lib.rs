@@ -537,7 +537,20 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 		ref_counting: bool,
 		should_init: bool,
 	) -> Result<(CommitSet<Key>, StateDb<BlockHash, Key, D>), Error<D::Error>> {
-		let stored_mode = fetch_stored_pruning_mode(&db)?;
+		let (db_init_commit_set, selected_mode) = Self::open_meta(&db, requested_mode, should_init)?;
+		let state_db =
+			StateDb { db: RwLock::new(StateDbSync::new(selected_mode, ref_counting, db)?) };
+
+		Ok((db_init_commit_set, state_db))
+	}
+
+	/// Read or initalize metadata.
+	pub fn open_meta(
+		db: &D,
+		requested_mode: Option<PruningMode>,
+		should_init: bool,
+	) -> Result<(CommitSet<Key>, PruningMode), Error<D::Error>> {
+		let stored_mode = fetch_stored_pruning_mode(db)?;
 
 		let selected_mode = match (should_init, stored_mode, requested_mode) {
 			(true, stored_mode, requested_mode) => {
@@ -568,12 +581,9 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> StateDb<BlockHash, Key, D> {
 		} else {
 			Default::default()
 		};
-
-		let state_db =
-			StateDb { db: RwLock::new(StateDbSync::new(selected_mode, ref_counting, db)?) };
-
-		Ok((db_init_commit_set, state_db))
+		Ok((db_init_commit_set, selected_mode))
 	}
+
 
 	pub fn pruning_mode(&self) -> PruningMode {
 		self.db.read().mode.clone()

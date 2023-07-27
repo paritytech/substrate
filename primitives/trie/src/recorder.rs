@@ -112,10 +112,10 @@ impl<H: Hasher> Recorder<H> {
 	///
 	/// NOTE: This locks a mutex that stays locked until the return value is dropped.
 	#[inline]
-	pub fn as_trie_recorder(
+	pub fn as_trie_recorder<L: Copy + Default>(
 		&self,
 		storage_root: H::Out,
-	) -> impl trie_db::TrieRecorder<H::Out> + '_ {
+	) -> impl trie_db::TrieRecorder<H::Out, L> + '_ {
 		TrieRecorder::<H, _> {
 			inner: self.inner.lock(),
 			storage_root,
@@ -283,10 +283,10 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> TrieRecorder<H, I> 
 	}
 }
 
-impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecorder<H::Out>
+impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>, L: Copy + Default> trie_db::TrieRecorder<H::Out, L>
 	for TrieRecorder<H, I>
 {
-	fn record(&mut self, access: TrieAccess<H::Out>) {
+	fn record(&mut self, access: TrieAccess<H::Out, L>) {
 		let mut encoded_size_update = 0;
 
 		match access {
@@ -396,10 +396,10 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use trie_db::{Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut, TrieRecorder};
+	use trie_db::{Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieRecorder};
 
 	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
-	type Layout = crate::LayoutV1<sp_core::Blake2Hasher>;
+	type Layout = crate::LayoutV1<sp_core::Blake2Hasher, ()>;
 	type Recorder = super::Recorder<sp_core::Blake2Hasher>;
 
 	const TEST_DATA: &[(&[u8], &[u8])] =
@@ -407,15 +407,11 @@ mod tests {
 
 	fn create_trie() -> (MemoryDB, TrieHash<Layout>) {
 		let mut db = MemoryDB::default();
-		let mut root = Default::default();
-
-		{
-			let mut trie = TrieDBMutBuilder::<Layout>::new(&mut db, &mut root).build();
-			for (k, v) in TEST_DATA {
-				trie.insert(k, v).expect("Inserts data");
-			}
+		let mut trie = TrieDBMutBuilder::<Layout>::new(&mut db).build();
+		for (k, v) in TEST_DATA {
+			trie.insert(k, v).expect("Inserts data");
 		}
-
+		let root = trie.commit().apply_to(&mut db);
 		(db, root)
 	}
 
@@ -617,7 +613,7 @@ mod tests {
 		let recorder = Recorder::default();
 
 		{
-			let trie_recorder = recorder.as_trie_recorder(root);
+			let trie_recorder = recorder.as_trie_recorder::<()>(root);
 			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::None));
 		}
 
@@ -651,19 +647,19 @@ mod tests {
 
 		recorder.rollback_transaction().unwrap();
 		{
-			let trie_recorder = recorder.as_trie_recorder(root);
+			let trie_recorder = recorder.as_trie_recorder::<()>(root);
 			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::Hash));
 		}
 
 		recorder.rollback_transaction().unwrap();
 		{
-			let trie_recorder = recorder.as_trie_recorder(root);
+			let trie_recorder = recorder.as_trie_recorder::<()>(root);
 			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::None));
 		}
 
 		recorder.start_transaction();
 		{
-			let mut trie_recorder = recorder.as_trie_recorder(root);
+			let mut trie_recorder = recorder.as_trie_recorder::<()>(root);
 			let trie = TrieDBBuilder::<Layout>::new(&db, &root)
 				.with_recorder(&mut trie_recorder)
 				.build();
@@ -694,7 +690,7 @@ mod tests {
 
 		recorder.rollback_transaction().unwrap();
 		{
-			let trie_recorder = recorder.as_trie_recorder(root);
+			let trie_recorder = recorder.as_trie_recorder::<()>(root);
 			assert!(matches!(
 				trie_recorder.trie_nodes_recorded_for_key(key),
 				RecordedForKey::Value
@@ -703,7 +699,7 @@ mod tests {
 
 		recorder.rollback_transaction().unwrap();
 		{
-			let trie_recorder = recorder.as_trie_recorder(root);
+			let trie_recorder = recorder.as_trie_recorder::<()>(root);
 			assert!(matches!(trie_recorder.trie_nodes_recorded_for_key(key), RecordedForKey::None));
 		}
 	}

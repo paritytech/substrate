@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{
 	Backend as StateBackend, ChildStorageCollection, InMemoryBackend, IndexOperation,
-	StorageCollection,
+	StorageCollection, backend::TrieCommit,
 };
 use std::{
 	collections::{HashMap, HashSet},
@@ -480,9 +480,7 @@ impl<Block: BlockT> backend::AuxStore for Blockchain<Block> {
 pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
 	old_state: InMemoryBackend<HashingFor<Block>>,
-	new_state: Option<
-		<InMemoryBackend<HashingFor<Block>> as StateBackend<HashingFor<Block>>>::Transaction,
-	>,
+	trie_commit: Option<TrieCommit<Block::Hash>>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	finalized_blocks: Vec<(Block::Hash, Option<Justification>)>,
 	set_head: Option<Block::Hash>,
@@ -504,14 +502,15 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			)
 		});
 
-		let (root, transaction) = self.old_state.full_storage_root(
+		let transaction = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
 			state_version,
 		);
+		let root = transaction.main.root_hash();
 
 		if commit {
-			self.new_state = Some(transaction);
+			self.trie_commit = Some(transaction);
 		}
 		Ok(root)
 	}
@@ -540,9 +539,9 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 
 	fn update_db_storage(
 		&mut self,
-		update: <InMemoryBackend<HashingFor<Block>> as StateBackend<HashingFor<Block>>>::Transaction,
+		update: TrieCommit<Block::Hash>,
 	) -> sp_blockchain::Result<()> {
-		self.new_state = Some(update);
+		self.trie_commit = Some(update);
 		Ok(())
 	}
 
@@ -670,7 +669,7 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> {
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
-			new_state: None,
+			trie_commit: None,
 			aux: Default::default(),
 			finalized_blocks: Default::default(),
 			set_head: None,
@@ -694,15 +693,14 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> {
 		}
 
 		if let Some(pending_block) = operation.pending_block {
-			let old_state = &operation.old_state;
 			let (header, body, justification) = pending_block.block.into_inner();
 
 			let hash = header.hash();
 
-			let new_state = match operation.new_state {
-				Some(state) => old_state.update_backend(*header.state_root(), state),
-				None => old_state.clone(),
-			};
+			let mut new_state = operation.old_state.clone_in_mem().expect("Backend is MemoryDB; qed");
+			if let Some(commit) = operation.trie_commit {
+				new_state.apply_transaction(commit);
+			}
 
 			self.states.write().insert(hash, new_state);
 
@@ -756,7 +754,7 @@ impl<Block: BlockT> backend::Backend<Block> for Backend<Block> {
 		self.states
 			.read()
 			.get(&hash)
-			.cloned()
+			.and_then(|s| s.clone_in_mem())
 			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", hash)))
 	}
 

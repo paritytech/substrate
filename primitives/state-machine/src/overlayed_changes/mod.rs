@@ -21,7 +21,7 @@ mod changeset;
 mod offchain;
 
 use self::changeset::OverlayedChangeSet;
-use crate::{backend::Backend, stats::StateMachineStats, DefaultError};
+use crate::{backend::{Backend, TrieCommit}, stats::StateMachineStats, DefaultError};
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 pub use offchain::OffchainOverlayedChanges;
@@ -129,7 +129,7 @@ pub enum IndexOperation {
 ///
 /// This contains all the changes to the storage and transactions to apply theses changes to the
 /// backend.
-pub struct StorageChanges<Transaction, H: Hasher> {
+pub struct StorageChanges<H: Hasher> {
 	/// All changes to the main storage.
 	///
 	/// A value of `None` means that it was deleted.
@@ -142,7 +142,7 @@ pub struct StorageChanges<Transaction, H: Hasher> {
 	/// [`main_storage_changes`](StorageChanges::main_storage_changes) and from
 	/// [`child_storage_changes`](StorageChanges::child_storage_changes).
 	/// [`offchain_storage_changes`](StorageChanges::offchain_storage_changes).
-	pub transaction: Transaction,
+	pub transaction: TrieCommit<H::Out>,
 	/// The storage root after applying the transaction.
 	pub transaction_storage_root: H::Out,
 	/// Changes to the transaction index,
@@ -151,7 +151,7 @@ pub struct StorageChanges<Transaction, H: Hasher> {
 }
 
 #[cfg(feature = "std")]
-impl<Transaction, H: Hasher> StorageChanges<Transaction, H> {
+impl<H: Hasher> StorageChanges<H> {
 	/// Deconstruct into the inner values
 	pub fn into_inner(
 		self,
@@ -159,7 +159,7 @@ impl<Transaction, H: Hasher> StorageChanges<Transaction, H> {
 		StorageCollection,
 		ChildStorageCollection,
 		OffchainChangesCollection,
-		Transaction,
+		TrieCommit<H::Out>,
 		H::Out,
 		Vec<IndexOperation>,
 	) {
@@ -177,33 +177,33 @@ impl<Transaction, H: Hasher> StorageChanges<Transaction, H> {
 /// Storage transactions are calculated as part of the `storage_root`.
 /// These transactions can be reused for importing the block into the
 /// storage. So, we cache them to not require a recomputation of those transactions.
-pub struct StorageTransactionCache<Transaction, H: Hasher> {
+pub struct StorageTransactionCache<H: Hasher> {
 	/// Contains the changes for the main and the child storages as one transaction.
-	pub(crate) transaction: Option<Transaction>,
+	pub(crate) transaction: Option<TrieCommit<H::Out>>,
 	/// The storage root after applying the transaction.
 	pub(crate) transaction_storage_root: Option<H::Out>,
 }
 
-impl<Transaction, H: Hasher> StorageTransactionCache<Transaction, H> {
+impl<H: Hasher> StorageTransactionCache<H> {
 	/// Reset the cached transactions.
 	pub fn reset(&mut self) {
 		*self = Self::default();
 	}
 }
 
-impl<Transaction, H: Hasher> Default for StorageTransactionCache<Transaction, H> {
+impl<H: Hasher> Default for StorageTransactionCache<H> {
 	fn default() -> Self {
 		Self { transaction: None, transaction_storage_root: None }
 	}
 }
 
-impl<Transaction: Default, H: Hasher> Default for StorageChanges<Transaction, H> {
+impl<H: Hasher> Default for StorageChanges<H> {
 	fn default() -> Self {
 		Self {
 			main_storage_changes: Default::default(),
 			child_storage_changes: Default::default(),
 			offchain_storage_changes: Default::default(),
-			transaction: Default::default(),
+			transaction: TrieCommit::empty(Default::default()),
 			transaction_storage_root: Default::default(),
 			#[cfg(feature = "std")]
 			transaction_index_changes: Default::default(),
@@ -500,9 +500,9 @@ impl OverlayedChanges {
 	pub fn into_storage_changes<B: Backend<H>, H: Hasher>(
 		mut self,
 		backend: &B,
-		mut cache: StorageTransactionCache<B::Transaction, H>,
+		mut cache: StorageTransactionCache<H>,
 		state_version: StateVersion,
-	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
+	) -> Result<StorageChanges<H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
@@ -513,9 +513,9 @@ impl OverlayedChanges {
 	pub fn drain_storage_changes<B: Backend<H>, H: Hasher>(
 		&mut self,
 		backend: &B,
-		cache: &mut StorageTransactionCache<B::Transaction, H>,
+		cache: &mut StorageTransactionCache<H>,
 		state_version: StateVersion,
-	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
+	) -> Result<StorageChanges<H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
@@ -579,7 +579,7 @@ impl OverlayedChanges {
 	pub fn storage_root<H: Hasher, B: Backend<H>>(
 		&self,
 		backend: &B,
-		cache: &mut StorageTransactionCache<B::Transaction, H>,
+		cache: &mut StorageTransactionCache<H>,
 		state_version: StateVersion,
 	) -> H::Out
 	where
@@ -590,7 +590,8 @@ impl OverlayedChanges {
 			(info, changes.map(|(k, v)| (&k[..], v.value().map(|v| &v[..]))))
 		});
 
-		let (root, transaction) = backend.full_storage_root(delta, child_delta, state_version);
+		let transaction = backend.full_storage_root(delta, child_delta, state_version);
+		let root = transaction.main.root_hash();
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);

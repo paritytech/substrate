@@ -19,8 +19,6 @@
 //! State backend that's useful for benchmarking
 
 use crate::{DbState, DbStateBuilder};
-use hash_db::{Hasher, Prefix};
-use kvdb::{DBTransaction, KeyValueDB};
 use linked_hash_map::LinkedHashMap;
 use parking_lot::Mutex;
 use sp_core::{
@@ -32,34 +30,19 @@ use sp_runtime::{
 	StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, ChildStorageCollection, DBValue, IterArgs, StorageCollection,
-	StorageIterator, StorageKey, StorageValue,
+	backend::{Backend as StateBackend, DBLocation}, ChildStorageCollection, IterArgs, StorageCollection,
+	StorageIterator, StorageKey, StorageValue, TrieCommit,
 };
 use sp_trie::{
 	cache::{CacheSize, SharedTrieCache},
-	prefixed_key, MemoryDB,
+	MemoryDB,
 };
 use std::{
 	cell::{Cell, RefCell},
-	collections::HashMap,
 	sync::Arc,
 };
 
 type State<B> = DbState<B>;
-
-struct StorageDb<Block: BlockT> {
-	db: Arc<dyn KeyValueDB>,
-	_block: std::marker::PhantomData<Block>,
-}
-
-impl<Block: BlockT> sp_state_machine::Storage<HashingFor<Block>> for StorageDb<Block> {
-	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		let prefixed_key = prefixed_key::<HashingFor<Block>>(key, prefix);
-		self.db
-			.get(0, &prefixed_key)
-			.map_err(|e| format!("Database backend error: {:?}", e))
-	}
-}
 
 struct KeyTracker {
 	enable_tracking: bool,
@@ -78,15 +61,13 @@ struct KeyTracker {
 pub struct BenchmarkingState<B: BlockT> {
 	root: Cell<B::Hash>,
 	genesis_root: B::Hash,
+	genesis: MemoryDB<HashingFor<B>>,
 	state: RefCell<Option<State<B>>>,
-	db: Cell<Option<Arc<dyn KeyValueDB>>>,
-	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
-	record: Cell<Vec<Vec<u8>>>,
 	key_tracker: Arc<Mutex<KeyTracker>>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
 	proof_recorder: Option<sp_trie::recorder::Recorder<HashingFor<B>>>,
 	proof_recorder_root: Cell<B::Hash>,
-	shared_trie_cache: SharedTrieCache<HashingFor<B>>,
+	shared_trie_cache: SharedTrieCache<HashingFor<B>, DBLocation>,
 }
 
 /// A raw iterator over the `BenchmarkingState`.
@@ -137,17 +118,14 @@ impl<B: BlockT> BenchmarkingState<B> {
 		enable_tracking: bool,
 	) -> Result<Self, String> {
 		let state_version = sp_runtime::StateVersion::default();
-		let mut root = B::Hash::default();
-		let mut mdb = MemoryDB::<HashingFor<B>>::default();
-		sp_trie::trie_types::TrieDBMutBuilderV1::<HashingFor<B>>::new(&mut mdb, &mut root).build();
+		let mdb = MemoryDB::<HashingFor<B>>::default();
+		let root = sp_trie::trie_types::TrieDBMutBuilderV1::<HashingFor<B>>::new(&mdb).build().commit().root_hash();
 
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
-			db: Cell::new(None),
 			root: Cell::new(root),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
-			record: Default::default(),
 			key_tracker: Arc::new(Mutex::new(KeyTracker {
 				main_keys: Default::default(),
 				child_keys: Default::default(),
@@ -161,41 +139,41 @@ impl<B: BlockT> BenchmarkingState<B> {
 		};
 
 		state.add_whitelist_to_tracker();
+		
+		*state.state.borrow_mut() = Some(
+			DbStateBuilder::<B>::new(Box::new(mdb), root).build()
+		);
 
-		state.reopen()?;
 		let child_delta = genesis.children_default.values().map(|child_content| {
 			(
 				&child_content.child_info,
 				child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			)
 		});
-		let (root, transaction): (B::Hash, _) =
+		let transaction =
 			state.state.borrow().as_ref().unwrap().full_storage_root(
 				genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 				child_delta,
 				state_version,
 			);
-		state.genesis = transaction.clone().drain();
-		state.genesis_root = root;
-		state.commit(root, transaction, Vec::new(), Vec::new())?;
-		state.record.take();
+		let mut genesis = MemoryDB::<HashingFor<B>>::default();
+		let genesis_root = transaction.main.apply_to(&mut genesis);
+		for (child, _) in transaction.child {
+			child.apply_to(&mut genesis);
+		}
+
+		state.genesis = genesis;
+		state.genesis_root = genesis_root;
+		state.reopen()?;
 		Ok(state)
 	}
 
 	fn reopen(&self) -> Result<(), String> {
 		*self.state.borrow_mut() = None;
-		let db = match self.db.take() {
-			Some(db) => db,
-			None => Arc::new(kvdb_memorydb::create(1)),
-		};
-		self.db.set(Some(db.clone()));
-		if let Some(recorder) = &self.proof_recorder {
-			recorder.reset();
-			self.proof_recorder_root.set(self.root.get());
-		}
-		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
+		self.root.set(self.genesis_root);
+		let db = Box::new(self.genesis.clone());
 		*self.state.borrow_mut() = Some(
-			DbStateBuilder::<B>::new(storage_db, self.root.get())
+			DbStateBuilder::<B>::new(db, self.root.get())
 				.with_optional_recorder(self.proof_recorder.clone())
 				.with_cache(self.shared_trie_cache.local_cache())
 				.build(),
@@ -343,8 +321,6 @@ fn state_err() -> String {
 
 impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 	type Error = <DbState<B> as StateBackend<HashingFor<B>>>::Error;
-	type Transaction = <DbState<B> as StateBackend<HashingFor<B>>>::Transaction;
-	type TrieBackendStorage = <DbState<B> as StateBackend<HashingFor<B>>>::TrieBackendStorage;
 	type RawIter = RawIter<B>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -423,11 +399,11 @@ impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, Self::Transaction) {
+	) -> TrieCommit<B::Hash> {
 		self.state
 			.borrow()
 			.as_ref()
-			.map_or(Default::default(), |s| s.storage_root(delta, state_version))
+			.map_or(TrieCommit::empty(self.genesis_root), |s| s.storage_root(delta, state_version))
 	}
 
 	fn child_storage_root<'a>(
@@ -435,11 +411,11 @@ impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction) {
+	) -> (TrieCommit<B::Hash>, bool) {
 		self.state
 			.borrow()
 			.as_ref()
-			.map_or(Default::default(), |s| s.child_storage_root(child_info, delta, state_version))
+			.map_or_else(|| (TrieCommit::empty(self.genesis_root), true), |s| s.child_storage_root(child_info, delta, state_version))
 	}
 
 	fn raw_iter(&self, args: IterArgs) -> Result<Self::RawIter, Self::Error> {
@@ -459,31 +435,16 @@ impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 
 	fn commit(
 		&self,
-		storage_root: <HashingFor<B> as Hasher>::Out,
-		mut transaction: Self::Transaction,
+		transaction: TrieCommit<B::Hash>,
 		main_storage_changes: StorageCollection,
 		child_storage_changes: ChildStorageCollection,
 	) -> Result<(), Self::Error> {
-		if let Some(db) = self.db.take() {
-			let mut db_transaction = DBTransaction::new();
-			let changes = transaction.drain();
-			let mut keys = Vec::with_capacity(changes.len());
-			for (key, (val, rc)) in changes {
-				if rc > 0 {
-					db_transaction.put(0, &key, &val);
-				} else if rc < 0 {
-					db_transaction.delete(0, &key);
-				}
-				keys.push(key);
-			}
-			let mut record = self.record.take();
-			record.extend(keys);
-			self.record.set(record);
-			db.write(db_transaction)
-				.map_err(|_| String::from("Error committing transaction"))?;
-			self.root.set(storage_root);
-			self.db.set(Some(db));
 
+		if let Some(ref mut state) = *self.state.borrow_mut() {
+			if let Some(mut db) = state.backend_storage_mut().as_mem_db_mut() {
+				let root = transaction.main.apply_to(&mut db);
+				self.root.set(root);
+			}
 			// Track DB Writes
 			main_storage_changes.iter().for_each(|(key, _)| {
 				self.add_write_key(None, key);
@@ -493,28 +454,12 @@ impl<B: BlockT> StateBackend<HashingFor<B>> for BenchmarkingState<B> {
 					self.add_write_key(Some(child_storage_key), key);
 				})
 			});
-		} else {
-			return Err("Trying to commit to a closed db".into())
 		}
-		self.reopen()
+		Ok(())
 	}
 
 	fn wipe(&self) -> Result<(), Self::Error> {
 		// Restore to genesis
-		let record = self.record.take();
-		if let Some(db) = self.db.take() {
-			let mut db_transaction = DBTransaction::new();
-			for key in record {
-				match self.genesis.get(&key) {
-					Some((v, _)) => db_transaction.put(0, &key, v),
-					None => db_transaction.delete(0, &key),
-				}
-			}
-			db.write(db_transaction)
-				.map_err(|_| String::from("Error committing transaction"))?;
-			self.db.set(Some(db));
-		}
-
 		self.root.set(self.genesis_root);
 		self.reopen()?;
 		self.wipe_tracker();
@@ -643,7 +588,7 @@ impl<Block: BlockT> std::fmt::Debug for BenchmarkingState<Block> {
 #[cfg(test)]
 mod test {
 	use crate::bench::BenchmarkingState;
-	use sp_state_machine::backend::Backend as _;
+	use sp_state_machine::{backend::Backend as _, TrieCommit};
 
 	fn hex(hex: &str) -> Vec<u8> {
 		array_bytes::hex2bytes(hex).unwrap()
@@ -688,8 +633,7 @@ mod test {
 
 			bench_state
 				.commit(
-					Default::default(),
-					Default::default(),
+					TrieCommit::empty(Default::default()),
 					vec![("foo".as_bytes().to_vec(), None)],
 					vec![("child1".as_bytes().to_vec(), vec![("foo".as_bytes().to_vec(), None)])],
 				)

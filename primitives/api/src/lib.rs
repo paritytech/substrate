@@ -458,14 +458,12 @@ pub type ProofRecorder<B> = sp_trie::recorder::Recorder<HashingFor<B>>;
 
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
-pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
-	<Backend as StateBackend<HashingFor<Block>>>::Transaction,
+pub type StorageTransactionCache<Block> = sp_state_machine::StorageTransactionCache<
 	HashingFor<Block>,
 >;
 
 #[cfg(feature = "std")]
-pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
-	<SBackend as StateBackend<HashingFor<Block>>>::Transaction,
+pub type StorageChanges<Block> = sp_state_machine::StorageChanges<
 	HashingFor<Block>,
 >;
 
@@ -476,8 +474,7 @@ pub type StateBackendFor<P, Block> =
 
 /// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
-pub type TransactionFor<P, Block> =
-	<StateBackendFor<P, Block> as StateBackend<HashingFor<Block>>>::Transaction;
+pub type TransactionFor<Block> = sp_state_machine::backend::TrieCommit<HashingFor<Block>>;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
@@ -586,7 +583,7 @@ pub trait ApiExt<Block: BlockT> {
 		&self,
 		backend: &Self::StateBackend,
 		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
+	) -> Result<StorageChanges<Block>, String>
 	where
 		Self: Sized;
 
@@ -599,7 +596,7 @@ pub trait ApiExt<Block: BlockT> {
 
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashingFor<Block>>> {
+pub struct CallApiAtParams<'a, Block: BlockT> {
 	/// The block id that determines the state that should be setup when calling the function.
 	pub at: Block::Hash,
 	/// The name of the function that should be called.
@@ -609,7 +606,7 @@ pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashingFor<B
 	/// The overlayed changes that are on top of the state.
 	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
 	/// The cache for storage transactions.
-	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
+	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block>>,
 	/// The call context of this call.
 	pub call_context: CallContext,
 	/// The optional proof recorder for recording storage accesses.
@@ -628,7 +625,7 @@ pub trait CallApiAt<Block: BlockT> {
 	/// the encoded result.
 	fn call_api_at(
 		&self,
-		params: CallApiAtParams<Block, Self::StateBackend>,
+		params: CallApiAtParams<Block>,
 	) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.

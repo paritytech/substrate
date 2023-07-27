@@ -30,7 +30,7 @@ use sc_consensus::{
 };
 use sc_network::config::Role;
 use sc_network_test::{
-	Block, BlockImportAdapter, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
+	Block, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestClient, TestNetFactory,
 };
 use sc_transaction_pool_api::RejectAllTxPool;
@@ -124,7 +124,7 @@ impl TestNetFactory for GrandpaTestNet {
 	fn make_block_import(
 		&self,
 		client: PeersClient,
-	) -> (BlockImportAdapter<Self::BlockImport>, Option<BoxJustificationImport<Block>>, PeerData) {
+	) -> (Self::BlockImport, Option<BoxJustificationImport<Block>>, PeerData) {
 		let (client, backend) = (client.as_client(), client.as_backend());
 		let (import, link) = block_import(
 			client.clone(),
@@ -135,7 +135,7 @@ impl TestNetFactory for GrandpaTestNet {
 		)
 		.expect("Could not create block import for fresh peer.");
 		let justification_import = Box::new(import.clone());
-		(BlockImportAdapter::new(import), Some(justification_import), Mutex::new(Some(link)))
+		(import, Some(justification_import), Mutex::new(Some(link)))
 	}
 
 	fn peer(&mut self, i: usize) -> &mut GrandpaPeer {

@@ -139,7 +139,7 @@ pub fn beefy_block_import_and_links<B, BE, RuntimeApi, I>(
 where
 	B: Block,
 	BE: Backend<B>,
-	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<RuntimeApi, B>>
+	I: BlockImport<B, Error = ConsensusError>
 		+ Send
 		+ Sync,
 	RuntimeApi: ProvideRuntimeApi<B> + Send + Sync,

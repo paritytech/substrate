@@ -20,7 +20,8 @@
 #[cfg(feature = "std")]
 use crate::overlayed_changes::OverlayedExtensions;
 use crate::{
-	backend::Backend, IndexOperation, IterArgs, OverlayedChanges, StorageKey, StorageValue,
+	backend::Backend,
+	IndexOperation, IterArgs, OverlayedChanges, StorageKey, StorageValue, DBLocation,
 };
 use codec::{Decode, Encode, EncodeAppend};
 use hash_db::Hasher;
@@ -102,7 +103,7 @@ where
 	/// The storage backend to read from.
 	backend: &'a B,
 	/// The cache for the storage transactions.
-	storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H>,
+	storage_transaction_cache: &'a mut StorageTransactionCache<H>,
 	/// Pseudo-unique id used for tracing.
 	pub id: u16,
 	/// Extensions registered with this instance.
@@ -119,7 +120,7 @@ where
 	#[cfg(not(feature = "std"))]
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
-		storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H>,
+		storage_transaction_cache: &'a mut StorageTransactionCache<H>,
 		backend: &'a B,
 	) -> Self {
 		Ext { overlay, backend, id: 0, storage_transaction_cache }
@@ -129,7 +130,7 @@ where
 	#[cfg(feature = "std")]
 	pub fn new(
 		overlay: &'a mut OverlayedChanges,
-		storage_transaction_cache: &'a mut StorageTransactionCache<B::Transaction, H>,
+		storage_transaction_cache: &'a mut StorageTransactionCache<H>,
 		backend: &'a B,
 		extensions: Option<&'a mut sp_externalities::Extensions>,
 	) -> Self {
@@ -570,7 +571,7 @@ where
 				.storage(prefixed_storage_key.as_slice())
 				.and_then(|k| Decode::decode(&mut &k[..]).ok())
 				// V1 is equivalent to V0 on empty root.
-				.unwrap_or_else(empty_child_trie_root::<LayoutV1<H>>);
+				.unwrap_or_else(empty_child_trie_root::<LayoutV1<H, DBLocation>>);
 			trace!(
 				target: "state",
 				method = "ChildStorageRoot",
@@ -581,15 +582,15 @@ where
 			);
 			root.encode()
 		} else {
-			let root = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
+			let commit = if let Some((changes, info)) = self.overlay.child_changes(storage_key) {
 				let delta = changes.map(|(k, v)| (k.as_ref(), v.value().map(AsRef::as_ref)));
 				Some(self.backend.child_storage_root(info, delta, state_version))
 			} else {
 				None
 			};
 
-			if let Some((root, is_empty, _)) = root {
-				let root = root.encode();
+			if let Some((commit, is_empty)) = commit {
+				let root = commit.main.root_hash().encode();
 				// We store update in the overlay in order to be able to use
 				// 'self.storage_transaction' cache. This is brittle as it rely on Ext only querying
 				// the trie backend for storage root.
@@ -617,7 +618,7 @@ where
 					.storage(prefixed_storage_key.as_slice())
 					.and_then(|k| Decode::decode(&mut &k[..]).ok())
 					// V1 is equivalent to V0 on empty root.
-					.unwrap_or_else(empty_child_trie_root::<LayoutV1<H>>);
+					.unwrap_or_else(empty_child_trie_root::<LayoutV1<H, ()>>);
 
 				trace!(
 					target: "state",
@@ -707,7 +708,6 @@ where
 			.expect(EXT_NOT_ALLOWED_TO_FAIL);
 		self.backend
 			.commit(
-				changes.transaction_storage_root,
 				changes.transaction,
 				changes.main_storage_changes,
 				changes.child_storage_changes,

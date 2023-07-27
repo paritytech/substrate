@@ -30,9 +30,6 @@ pub mod timestamp;
 /// Consensus data provider, manual seal uses this trait object for authoring blocks valid
 /// for any runtime.
 pub trait ConsensusDataProvider<B: BlockT>: Send + Sync {
-	/// Block import transaction type
-	type Transaction;
-
 	/// The proof type.
 	type Proof;
 
@@ -43,7 +40,7 @@ pub trait ConsensusDataProvider<B: BlockT>: Send + Sync {
 	fn append_block_import(
 		&self,
 		parent: &B::Header,
-		params: &mut BlockImportParams<B, Self::Transaction>,
+		params: &mut BlockImportParams<B>,
 		inherents: &InherentData,
 		proof: Self::Proof,
 	) -> Result<(), Error>;

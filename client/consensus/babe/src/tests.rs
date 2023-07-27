@@ -21,7 +21,7 @@
 use super::*;
 use authorship::claim_slot;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
-use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
+use sc_client_api::{BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_epochs::{EpochIdentifier, EpochIdentifierPosition};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
@@ -101,7 +101,6 @@ impl DummyProposer {
 		Result<
 			Proposal<
 				TestBlock,
-				sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>,
 				(),
 			>,
 			Error,
@@ -110,23 +109,21 @@ impl DummyProposer {
 		let block_builder =
 			self.factory.client.new_block_at(self.parent_hash, pre_digests, false).unwrap();
 
-		let mut block = match block_builder.build().map_err(|e| e.into()) {
-			Ok(b) => b.block,
+		let (mut block, storage_changes) = match block_builder.build().map_err(|e| e.into()) {
+			Ok(b) => (b.block, b.storage_changes),
 			Err(e) => return future::ready(Err(e)),
 		};
 
 		// mutate the block header according to the mutator.
 		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
 
-		future::ready(Ok(Proposal { block, proof: (), storage_changes: Default::default() }))
+		future::ready(Ok(Proposal { block, proof: (), storage_changes }))
 	}
 }
 
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
-	type Transaction =
-		sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>;
-	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Error>>;
+	type Proposal = future::Ready<Result<Proposal<TestBlock, ()>, Error>>;
 	type ProofRecording = DisableProofRecording;
 	type Proof = ();
 
@@ -151,15 +148,13 @@ pub struct PanickingBlockImport<B>(B);
 #[async_trait::async_trait]
 impl<B: BlockImport<TestBlock>> BlockImport<TestBlock> for PanickingBlockImport<B>
 where
-	B::Transaction: Send,
 	B: Send,
 {
 	type Error = B::Error;
-	type Transaction = B::Transaction;
 
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<TestBlock, Self::Transaction>,
+		block: BlockImportParams<TestBlock>,
 	) -> Result<ImportResult, Self::Error> {
 		Ok(self.0.import_block(block).await.expect("importing block failed"))
 	}
@@ -207,8 +202,8 @@ impl Verifier<TestBlock> for TestVerifier {
 	/// presented to the User in the logs.
 	async fn verify(
 		&mut self,
-		mut block: BlockImportParams<TestBlock, ()>,
-	) -> Result<BlockImportParams<TestBlock, ()>, String> {
+		mut block: BlockImportParams<TestBlock>,
+	) -> Result<BlockImportParams<TestBlock>, String> {
 		// apply post-sealing mutations (i.e. stripping seal, if desired).
 		(self.mutator)(&mut block.header, Stage::PostSeal);
 		self.inner.verify(block).await
@@ -219,10 +214,7 @@ pub struct PeerData {
 	link: BabeLink<TestBlock>,
 	block_import: Mutex<
 		Option<
-			BoxBlockImport<
-				TestBlock,
-				TransactionFor<substrate_test_runtime_client::Backend, TestBlock>,
-			>,
+			BoxBlockImport<TestBlock>,
 		>,
 	>,
 }
@@ -236,7 +228,7 @@ impl TestNetFactory for BabeTestNet {
 		&self,
 		client: PeersClient,
 	) -> (
-		BlockImportAdapter<Self::BlockImport>,
+		Self::BlockImport,
 		Option<BoxJustificationImport<Block>>,
 		Option<PeerData>,
 	) {
@@ -249,9 +241,9 @@ impl TestNetFactory for BabeTestNet {
 		let block_import = PanickingBlockImport(block_import);
 
 		let data_block_import =
-			Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_, _>));
+			Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_>));
 		(
-			BlockImportAdapter::new(block_import),
+			block_import,
 			None,
 			Some(PeerData { link, block_import: data_block_import }),
 		)
@@ -630,11 +622,11 @@ fn claim_vrf_check() {
 }
 
 // Propose and import a new BABE block on top of the given parent.
-async fn propose_and_import_block<Transaction: Send + 'static>(
+async fn propose_and_import_block(
 	parent: &TestHeader,
 	slot: Option<Slot>,
 	proposer_factory: &mut DummyFactory,
-	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
+	block_import: &mut BoxBlockImport<TestBlock>,
 ) -> Hash {
 	let mut proposer = proposer_factory.init(parent).await.unwrap();
 
@@ -701,10 +693,10 @@ async fn propose_and_import_block<Transaction: Send + 'static>(
 // Propose and import n valid BABE blocks that are built on top of the given parent.
 // The proposer takes care of producing epoch change digests according to the epoch
 // duration (which is set to 6 slots in the test runtime).
-async fn propose_and_import_blocks<Transaction: Send + 'static>(
+async fn propose_and_import_blocks(
 	client: &PeersFullClient,
 	proposer_factory: &mut DummyFactory,
-	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
+	block_import: &mut BoxBlockImport<TestBlock>,
 	parent_hash: Hash,
 	n: usize,
 ) -> Vec<Hash> {

@@ -17,7 +17,7 @@
 
 //! In-memory implementation of `Database`
 
-use crate::{error, Change, ColumnId, Database, Transaction};
+use crate::{error, Change, ColumnId, Database, Transaction, DBLocation};
 use parking_lot::RwLock;
 use std::collections::{hash_map::Entry, HashMap};
 
@@ -63,6 +63,9 @@ where
 						}
 					}
 				},
+				Change::StoreTree(_, _, _) => {
+					unimplemented!("MemDb does not support tree storage");
+				}
 			}
 		}
 
@@ -72,6 +75,11 @@ where
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
 		let s = self.0.read();
 		s.get(&col).and_then(|c| c.get(key).map(|(_, v)| v.clone()))
+	}
+
+	fn get_node(&self, col: ColumnId, key: &[u8], _location: DBLocation) -> Option<(Vec<u8>, Vec<DBLocation>)> {
+		let s = self.0.read();
+		s.get(&col).and_then(|c| c.get(key).map(|(_, v)| (v.clone(), Default::default())))
 	}
 }
 

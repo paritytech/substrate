@@ -40,7 +40,7 @@ use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieDBMutBuilderV0},
-	LayoutV0, MemoryDB, Recorder, Trie, TrieMut, EMPTY_PREFIX,
+	LayoutV0, MemoryDB, Recorder, Trie, EMPTY_PREFIX,
 };
 
 use frame_support::{
@@ -232,44 +232,39 @@ impl<T: Config> ProvingTrie<T> {
 		I: IntoIterator<Item = (T::ValidatorId, T::FullIdentification)>,
 	{
 		let mut db = MemoryDB::default();
-		let mut root = Default::default();
+		let mut trie = TrieDBMutBuilderV0::new(&mut db).build();
+		for (i, (validator, full_id)) in validators.into_iter().enumerate() {
+			let i = i as u32;
+			let keys = match <Session<T>>::load_keys(&validator) {
+				None => continue,
+				Some(k) => k,
+			};
 
-		{
-			let mut trie = TrieDBMutBuilderV0::new(&mut db, &mut root).build();
-			for (i, (validator, full_id)) in validators.into_iter().enumerate() {
-				let i = i as u32;
-				let keys = match <Session<T>>::load_keys(&validator) {
-					None => continue,
-					Some(k) => k,
-				};
+			let full_id = (validator, full_id);
 
-				let full_id = (validator, full_id);
+			// map each key to the owner index.
+			for key_id in T::Keys::key_ids() {
+				let key = keys.get_raw(*key_id);
+				let res =
+					(key_id, key).using_encoded(|k| i.using_encoded(|v| trie.insert(k, v)));
 
-				// map each key to the owner index.
-				for key_id in T::Keys::key_ids() {
-					let key = keys.get_raw(*key_id);
-					let res =
-						(key_id, key).using_encoded(|k| i.using_encoded(|v| trie.insert(k, v)));
-
-					let _ = res.map_err(|_| "failed to insert into trie")?;
-				}
-
-				// map each owner index to the full identification.
-				let _ = i
-					.using_encoded(|k| full_id.using_encoded(|v| trie.insert(k, v)))
-					.map_err(|_| "failed to insert into trie")?;
+				let _ = res.map_err(|_| "failed to insert into trie")?;
 			}
+
+			// map each owner index to the full identification.
+			let _ = i
+				.using_encoded(|k| full_id.using_encoded(|v| trie.insert(k, v)))
+				.map_err(|_| "failed to insert into trie")?;
 		}
+		let root = trie.commit().apply_to(&mut db);
 
 		Ok(ProvingTrie { db, root })
 	}
 
 	fn from_nodes(root: T::Hash, nodes: &[Vec<u8>]) -> Self {
-		use sp_trie::HashDBT;
-
 		let mut memory_db = MemoryDB::default();
 		for node in nodes {
-			HashDBT::insert(&mut memory_db, EMPTY_PREFIX, &node[..]);
+			memory_db.insert(EMPTY_PREFIX, &node[..]);
 		}
 
 		ProvingTrie { db: memory_db, root }

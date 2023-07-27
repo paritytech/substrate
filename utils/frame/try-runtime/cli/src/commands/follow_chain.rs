@@ -186,7 +186,6 @@ where
 			.unwrap();
 
 		state_ext.backend.apply_transaction(
-			storage_changes.transaction_storage_root,
 			storage_changes.transaction,
 		);
 
@@ -195,7 +194,7 @@ where
 			"executed block {}, consumed weight {}, new storage root {:?}",
 			number,
 			consumed_weight,
-			state_ext.as_backend().root(),
+			state_ext.as_backend().unwrap().root(),
 		);
 	}
 

@@ -16,9 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use kvdb::{DBKeyValue, DBTransaction, KeyValueDB};
-use kvdb_rocksdb::{Database, DatabaseConfig};
-use std::{io, path::PathBuf, sync::Arc};
+use sc_client_db::DatabaseSource;
+use node_primitives::Block;
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug)]
 pub enum DatabaseType {
@@ -27,47 +27,6 @@ pub enum DatabaseType {
 }
 
 pub struct TempDatabase(tempfile::TempDir);
-
-struct ParityDbWrapper(parity_db::Db);
-
-impl KeyValueDB for ParityDbWrapper {
-	/// Get a value by key.
-	fn get(&self, col: u32, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
-		Ok(self.0.get(col as u8, &key[key.len() - 32..]).expect("db error"))
-	}
-
-	/// Get a value by partial key. Only works for flushed data.
-	fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> io::Result<Option<Vec<u8>>> {
-		unimplemented!()
-	}
-
-	/// Write a transaction of changes to the buffer.
-	fn write(&self, transaction: DBTransaction) -> io::Result<()> {
-		self.0
-			.commit(transaction.ops.iter().map(|op| match op {
-				kvdb::DBOp::Insert { col, key, value } =>
-					(*col as u8, &key[key.len() - 32..], Some(value.to_vec())),
-				kvdb::DBOp::Delete { col, key } => (*col as u8, &key[key.len() - 32..], None),
-				kvdb::DBOp::DeletePrefix { col: _, prefix: _ } => unimplemented!(),
-			}))
-			.expect("db error");
-		Ok(())
-	}
-
-	/// Iterate over flushed data for a given column.
-	fn iter<'a>(&'a self, _col: u32) -> Box<dyn Iterator<Item = io::Result<DBKeyValue>> + 'a> {
-		unimplemented!()
-	}
-
-	/// Iterate over flushed data for a given column, starting from a given prefix.
-	fn iter_with_prefix<'a>(
-		&'a self,
-		_col: u32,
-		_prefix: &'a [u8],
-	) -> Box<dyn Iterator<Item = io::Result<DBKeyValue>> + 'a> {
-		unimplemented!()
-	}
-}
 
 impl TempDatabase {
 	pub fn new() -> Self {
@@ -81,21 +40,24 @@ impl TempDatabase {
 		TempDatabase(dir)
 	}
 
-	pub fn open(&mut self, db_type: DatabaseType) -> Arc<dyn KeyValueDB> {
+	pub fn open(&mut self, db_type: DatabaseType) -> sc_client_db::StorageDb<Block> {
 		match db_type {
 			DatabaseType::RocksDb => {
-				let db_cfg = DatabaseConfig::with_columns(1);
-				let db = Database::open(&db_cfg, &self.0.path()).expect("Database backend error");
-				Arc::new(db)
+				let db = sc_client_db::open_database::<Block>(
+					&DatabaseSource::RocksDb { path: self.0.path().into(), cache_size: 128*1024*1024 },
+					true,
+					false,
+				).expect("Database backend error");
+				sc_client_db::StorageDb::<Block> { db, state_db: None }
 			},
-			DatabaseType::ParityDb => Arc::new(ParityDbWrapper({
-				let mut options = parity_db::Options::with_columns(self.0.path(), 1);
-				let column_options = &mut options.columns[0];
-				column_options.ref_counted = true;
-				column_options.preimage = true;
-				column_options.uniform = true;
-				parity_db::Db::open_or_create(&options).expect("db open error")
-			})),
+			DatabaseType::ParityDb => {
+				let db = sc_client_db::open_database::<Block>(
+					&DatabaseSource::ParityDb { path: self.0.path().into() },
+					true,
+					false,
+				).expect("Database backend error");
+				sc_client_db::StorageDb::<Block> { db, state_db: None }
+			},
 		}
 	}
 }

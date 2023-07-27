@@ -19,9 +19,9 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-use std::{fmt, fs, io, path::Path, sync::Arc};
+use std::{fmt, io, path::Path, sync::Arc};
 
-use log::{debug, info};
+use log::debug;
 
 use crate::{Database, DatabaseSource, DbHash};
 use codec::Decode;
@@ -40,8 +40,6 @@ pub const COLUMN_META: u32 = 0;
 
 /// Keys of entries in COLUMN_META.
 pub mod meta_keys {
-	/// Type of storage (full or light).
-	pub const TYPE: &[u8; 4] = b"type";
 	/// Best block key.
 	pub const BEST_BLOCK: &[u8; 4] = b"best";
 	/// Last finalized block key.
@@ -79,13 +77,6 @@ pub struct Meta<N, H> {
 
 /// A block lookup key: used for canonical lookup from block number to hash
 pub type NumberIndexKey = [u8; 4];
-
-/// Database type.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum DatabaseType {
-	/// Full node database.
-	Full,
-}
 
 /// Convert block number into short lookup key (LE representation) for
 /// blocks that are in the canonical chain.
@@ -174,27 +165,22 @@ where
 /// Opens the configured database.
 pub fn open_database<Block: BlockT>(
 	db_source: &DatabaseSource,
-	db_type: DatabaseType,
 	create: bool,
+	archive: bool,
 ) -> OpenDbResult {
-	// Maybe migrate (copy) the database to a type specific subdirectory to make it
-	// possible that light and full databases coexist
-	// NOTE: This function can be removed in a few releases
-	maybe_migrate_to_type_subdir::<Block>(db_source, db_type)?;
-
-	open_database_at::<Block>(db_source, db_type, create)
+	open_database_at::<Block>(db_source, create, archive)
 }
 
 fn open_database_at<Block: BlockT>(
 	db_source: &DatabaseSource,
-	db_type: DatabaseType,
 	create: bool,
+	archive: bool,
 ) -> OpenDbResult {
 	let db: Arc<dyn Database<DbHash>> = match &db_source {
-		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(path, db_type, create)?,
+		DatabaseSource::ParityDb { path } => open_parity_db::<Block>(path, create, archive)?,
 		#[cfg(feature = "rocksdb")]
 		DatabaseSource::RocksDb { path, cache_size } =>
-			open_kvdb_rocksdb::<Block>(path, db_type, create, *cache_size)?,
+			open_kvdb_rocksdb::<Block>(path, create, *cache_size)?,
 		DatabaseSource::Custom { db, require_create_flag } => {
 			if *require_create_flag && !create {
 				return Err(OpenDbError::DoesNotExist)
@@ -203,16 +189,15 @@ fn open_database_at<Block: BlockT>(
 		},
 		DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size } => {
 			// check if rocksdb exists first, if not, open paritydb
-			match open_kvdb_rocksdb::<Block>(rocksdb_path, db_type, false, *cache_size) {
+			match open_kvdb_rocksdb::<Block>(rocksdb_path, false, *cache_size) {
 				Ok(db) => db,
 				Err(OpenDbError::NotEnabled(_)) | Err(OpenDbError::DoesNotExist) =>
-					open_parity_db::<Block>(paritydb_path, db_type, create)?,
+					open_parity_db::<Block>(paritydb_path, create, archive)?,
 				Err(as_is) => return Err(as_is),
 			}
 		},
 	};
 
-	check_database_type(&*db, db_type)?;
 	Ok(db)
 }
 
@@ -224,10 +209,6 @@ pub enum OpenDbError {
 	DoesNotExist,
 	Internal(String),
 	DatabaseError(sp_database::error::DatabaseError),
-	UnexpectedDbType {
-		expected: DatabaseType,
-		found: Vec<u8>,
-	},
 }
 
 type OpenDbResult = Result<Arc<dyn Database<DbHash>>, OpenDbError>;
@@ -242,14 +223,6 @@ impl fmt::Display for OpenDbError {
 			},
 			OpenDbError::DatabaseError(db_error) => {
 				write!(f, "Database Error: {}", db_error)
-			},
-			OpenDbError::UnexpectedDbType { expected, found } => {
-				write!(
-					f,
-					"Unexpected DB-Type. Expected: {:?}, Found: {:?}",
-					expected.as_str().as_bytes(),
-					found
-				)
 			},
 		}
 	}
@@ -281,13 +254,13 @@ impl From<io::Error> for OpenDbError {
 	}
 }
 
-fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: bool) -> OpenDbResult {
-	match crate::parity_db::open(path, db_type, create, false) {
+fn open_parity_db<Block: BlockT>(path: &Path, create: bool, archive: bool) -> OpenDbResult {
+	match crate::parity_db::open(path, create, false, archive) {
 		Ok(db) => Ok(db),
 		Err(parity_db::Error::InvalidConfiguration(_)) => {
 			log::warn!("Invalid parity db configuration, attempting database metadata update.");
 			// Try to update the database with the new config
-			Ok(crate::parity_db::open(path, db_type, create, true)?)
+			Ok(crate::parity_db::open(path, create, true, archive)?)
 		},
 		Err(e) => Err(e.into()),
 	}
@@ -296,12 +269,11 @@ fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: boo
 #[cfg(any(feature = "rocksdb", test))]
 fn open_kvdb_rocksdb<Block: BlockT>(
 	path: &Path,
-	db_type: DatabaseType,
 	create: bool,
 	cache_size: usize,
 ) -> OpenDbResult {
 	// first upgrade database to required version
-	match crate::upgrade::upgrade_db::<Block>(path, db_type) {
+	match crate::upgrade::upgrade_db::<Block>(path) {
 		// in case of missing version file, assume that database simply does not exist at given
 		// location
 		Ok(_) | Err(crate::upgrade::UpgradeError::MissingDatabaseVersionFile) => (),
@@ -313,28 +285,25 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	db_config.create_if_missing = create;
 
 	let mut memory_budget = std::collections::HashMap::new();
-	match db_type {
-		DatabaseType::Full => {
-			let state_col_budget = (cache_size as f64 * 0.9) as usize;
-			let other_col_budget = (cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
+	let state_col_budget = (cache_size as f64 * 0.9) as usize;
+	let other_col_budget = (cache_size - state_col_budget) / (NUM_COLUMNS as usize - 1);
 
-			for i in 0..NUM_COLUMNS {
-				if i == crate::columns::STATE {
-					memory_budget.insert(i, state_col_budget);
-				} else {
-					memory_budget.insert(i, other_col_budget);
-				}
-			}
-			log::trace!(
-				target: "db",
-				"Open RocksDB database at {:?}, state column budget: {} MiB, others({}) column cache: {} MiB",
-				path,
-				state_col_budget,
-				NUM_COLUMNS,
-				other_col_budget,
-			);
-		},
+	for i in 0..NUM_COLUMNS {
+		if i == crate::columns::STATE {
+			memory_budget.insert(i, state_col_budget);
+		} else {
+			memory_budget.insert(i, other_col_budget);
+		}
 	}
+	log::trace!(
+		target: "db",
+		"Open RocksDB database at {:?}, state column budget: {} MiB, others({}) column cache: {} MiB",
+		path,
+		state_col_budget,
+		NUM_COLUMNS,
+		other_col_budget,
+	);
+
 	db_config.memory_budget = memory_budget;
 
 	let db = kvdb_rocksdb::Database::open(&db_config, path)?;
@@ -346,73 +315,10 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 #[cfg(not(any(feature = "rocksdb", test)))]
 fn open_kvdb_rocksdb<Block: BlockT>(
 	_path: &Path,
-	_db_type: DatabaseType,
 	_create: bool,
 	_cache_size: usize,
 ) -> OpenDbResult {
 	Err(OpenDbError::NotEnabled("with-kvdb-rocksdb"))
-}
-
-/// Check database type.
-pub fn check_database_type(
-	db: &dyn Database<DbHash>,
-	db_type: DatabaseType,
-) -> Result<(), OpenDbError> {
-	match db.get(COLUMN_META, meta_keys::TYPE) {
-		Some(stored_type) =>
-			if db_type.as_str().as_bytes() != &*stored_type {
-				return Err(OpenDbError::UnexpectedDbType {
-					expected: db_type,
-					found: stored_type.to_owned(),
-				})
-			},
-		None => {
-			let mut transaction = Transaction::new();
-			transaction.set(COLUMN_META, meta_keys::TYPE, db_type.as_str().as_bytes());
-			db.commit(transaction).map_err(OpenDbError::DatabaseError)?;
-		},
-	}
-
-	Ok(())
-}
-
-fn maybe_migrate_to_type_subdir<Block: BlockT>(
-	source: &DatabaseSource,
-	db_type: DatabaseType,
-) -> Result<(), OpenDbError> {
-	if let Some(p) = source.path() {
-		let mut basedir = p.to_path_buf();
-		basedir.pop();
-
-		// Do we have to migrate to a database-type-based subdirectory layout:
-		// See if there's a file identifying a rocksdb or paritydb folder in the parent dir and
-		// the target path ends in a role specific directory
-		if (basedir.join("db_version").exists() || basedir.join("metadata").exists()) &&
-			(p.ends_with(DatabaseType::Full.as_str()))
-		{
-			// Try to open the database to check if the current `DatabaseType` matches the type of
-			// database stored in the target directory and close the database on success.
-			let mut old_source = source.clone();
-			old_source.set_path(&basedir);
-			open_database_at::<Block>(&old_source, db_type, false)?;
-
-			info!(
-				"Migrating database to a database-type-based subdirectory: '{:?}' -> '{:?}'",
-				basedir,
-				basedir.join(db_type.as_str())
-			);
-
-			let mut tmp_dir = basedir.clone();
-			tmp_dir.pop();
-			tmp_dir.push("tmp");
-
-			fs::rename(&basedir, &tmp_dir)?;
-			fs::create_dir_all(&p)?;
-			fs::rename(tmp_dir, &p)?;
-		}
-	}
-
-	Ok(())
 }
 
 /// Read database column entry for the given block.
@@ -545,15 +451,6 @@ pub fn read_genesis_hash<Hash: Decode>(
 	}
 }
 
-impl DatabaseType {
-	/// Returns str representation of the type.
-	pub fn as_str(&self) -> &'static str {
-		match *self {
-			DatabaseType::Full => "full",
-		}
-	}
-}
-
 pub(crate) struct JoinInput<'a, 'b>(&'a [u8], &'b [u8]);
 
 pub(crate) fn join_input<'a, 'b>(i1: &'a [u8], i2: &'b [u8]) -> JoinInput<'a, 'b> {
@@ -585,71 +482,6 @@ mod tests {
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
-	#[cfg(feature = "rocksdb")]
-	#[test]
-	fn database_type_subdir_migration() {
-		use std::path::PathBuf;
-		type Block = RawBlock<ExtrinsicWrapper<u64>>;
-
-		fn check_dir_for_db_type(
-			db_type: DatabaseType,
-			mut source: DatabaseSource,
-			db_check_file: &str,
-		) {
-			let base_path = tempfile::TempDir::new().unwrap();
-			let old_db_path = base_path.path().join("chains/dev/db");
-
-			source.set_path(&old_db_path);
-
-			{
-				let db_res = open_database::<Block>(&source, db_type, true);
-				assert!(db_res.is_ok(), "New database should be created.");
-				assert!(old_db_path.join(db_check_file).exists());
-				assert!(!old_db_path.join(db_type.as_str()).join("db_version").exists());
-			}
-
-			source.set_path(&old_db_path.join(db_type.as_str()));
-
-			let db_res = open_database::<Block>(&source, db_type, true);
-			assert!(db_res.is_ok(), "Reopening the db with the same role should work");
-			// check if the database dir had been migrated
-			assert!(!old_db_path.join(db_check_file).exists());
-			assert!(old_db_path.join(db_type.as_str()).join(db_check_file).exists());
-		}
-
-		check_dir_for_db_type(
-			DatabaseType::Full,
-			DatabaseSource::RocksDb { path: PathBuf::new(), cache_size: 128 },
-			"db_version",
-		);
-
-		check_dir_for_db_type(
-			DatabaseType::Full,
-			DatabaseSource::ParityDb { path: PathBuf::new() },
-			"metadata",
-		);
-
-		// check failure on reopening with wrong role
-		{
-			let base_path = tempfile::TempDir::new().unwrap();
-			let old_db_path = base_path.path().join("chains/dev/db");
-
-			let source = DatabaseSource::RocksDb { path: old_db_path.clone(), cache_size: 128 };
-			{
-				let db_res = open_database::<Block>(&source, DatabaseType::Full, true);
-				assert!(db_res.is_ok(), "New database should be created.");
-
-				// check if the database dir had been migrated
-				assert!(old_db_path.join("db_version").exists());
-				assert!(!old_db_path.join("light/db_version").exists());
-				assert!(!old_db_path.join("full/db_version").exists());
-			}
-			// assert nothing was changed
-			assert!(old_db_path.join("db_version").exists());
-			assert!(!old_db_path.join("full/db_version").exists());
-		}
-	}
-
 	#[test]
 	fn number_index_key_doesnt_panic() {
 		let id = BlockId::<Block>::Number(72340207214430721);
@@ -657,11 +489,6 @@ mod tests {
 			BlockId::Number(n) => number_index_key(n).expect_err("number should overflow u32"),
 			_ => unreachable!(),
 		};
-	}
-
-	#[test]
-	fn database_type_as_str_works() {
-		assert_eq!(DatabaseType::Full.as_str(), "full");
 	}
 
 	#[test]
@@ -700,13 +527,13 @@ mod tests {
 
 		// it should create new auto (paritydb) database
 		{
-			let db_res = open_database::<Block>(&source, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(&source, true, false);
 			assert!(db_res.is_ok(), "New database should be created.");
 		}
 
 		// it should reopen existing auto (pairtydb) database
 		{
-			let db_res = open_database::<Block>(&source, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(&source, true, false);
 			assert!(db_res.is_ok(), "Existing parity database should be reopened");
 		}
 
@@ -714,8 +541,8 @@ mod tests {
 		{
 			let db_res = open_database::<Block>(
 				&DatabaseSource::RocksDb { path: rocksdb_path, cache_size: 128 },
-				DatabaseType::Full,
 				true,
+				false,
 			);
 			assert!(db_res.is_ok(), "New database should be opened.");
 		}
@@ -724,8 +551,8 @@ mod tests {
 		{
 			let db_res = open_database::<Block>(
 				&DatabaseSource::ParityDb { path: paritydb_path },
-				DatabaseType::Full,
 				true,
+				false,
 			);
 			assert!(db_res.is_ok(), "Existing parity database should be reopened");
 		}
@@ -743,7 +570,7 @@ mod tests {
 
 		// it should create new rocksdb database
 		{
-			let db_res = open_database::<Block>(&source, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(&source, true, false);
 			assert!(db_res.is_ok(), "New rocksdb database should be created");
 		}
 
@@ -755,8 +582,8 @@ mod tests {
 					rocksdb_path: rocksdb_path.clone(),
 					cache_size: 128,
 				},
-				DatabaseType::Full,
 				true,
+				false,
 			);
 			assert!(db_res.is_ok(), "Existing rocksdb database should be reopened");
 		}
@@ -765,8 +592,8 @@ mod tests {
 		{
 			let db_res = open_database::<Block>(
 				&DatabaseSource::ParityDb { path: paritydb_path },
-				DatabaseType::Full,
 				true,
+				false,
 			);
 			assert!(db_res.is_ok(), "New paritydb database should be created");
 		}
@@ -775,8 +602,8 @@ mod tests {
 		{
 			let db_res = open_database::<Block>(
 				&DatabaseSource::RocksDb { path: rocksdb_path, cache_size: 128 },
-				DatabaseType::Full,
 				true,
+				false,
 			);
 			assert!(db_res.is_ok(), "Existing rocksdb database should be reopened");
 		}
@@ -794,13 +621,13 @@ mod tests {
 
 		// it should create new paritydb database
 		{
-			let db_res = open_database::<Block>(&source, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(&source, true, false);
 			assert!(db_res.is_ok(), "New database should be created.");
 		}
 
 		// it should reopen existing pairtydb database
 		{
-			let db_res = open_database::<Block>(&source, DatabaseType::Full, true);
+			let db_res = open_database::<Block>(&source, true, false);
 			assert!(db_res.is_ok(), "Existing parity database should be reopened");
 		}
 
@@ -808,8 +635,8 @@ mod tests {
 		{
 			let db_res = open_database::<Block>(
 				&DatabaseSource::RocksDb { path: rocksdb_path.clone(), cache_size: 128 },
-				DatabaseType::Full,
 				true,
+				false,
 			);
 			assert!(db_res.is_ok(), "New rocksdb database should be created");
 		}
@@ -818,8 +645,8 @@ mod tests {
 		{
 			let db_res = open_database::<Block>(
 				&DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size: 128 },
-				DatabaseType::Full,
 				true,
+				false,
 			);
 			assert!(db_res.is_ok(), "Existing parity database should be reopened");
 		}

@@ -96,14 +96,14 @@ mod tests {
 		let mut children1 = Vec::new();
 		children1.push(1_3);
 		children1.push(1_5);
-		write_children(&mut tx, 0, PREFIX, 1_1, children1);
+		write_children(&mut tx, 0, PREFIX, 1_1, children1.clone());
 
 		let mut children2 = Vec::new();
 		children2.push(1_4);
 		children2.push(1_6);
 		write_children(&mut tx, 0, PREFIX, 1_2, children2);
 
-		db.commit(tx.clone()).unwrap();
+		db.commit(tx).unwrap();
 
 		let r1: Vec<u32> = read_children(&*db, 0, PREFIX, 1_1).expect("(1) Getting r1 failed");
 		let r2: Vec<u32> = read_children(&*db, 0, PREFIX, 1_2).expect("(1) Getting r2 failed");
@@ -111,6 +111,8 @@ mod tests {
 		assert_eq!(r1, vec![1_3, 1_5]);
 		assert_eq!(r2, vec![1_4, 1_6]);
 
+		let mut tx = Transaction::new();
+		write_children(&mut tx, 0, PREFIX, 1_1, children1);
 		remove_children(&mut tx, 0, PREFIX, 1_2);
 		db.commit(tx).unwrap();
 

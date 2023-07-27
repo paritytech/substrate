@@ -119,7 +119,7 @@ where
 	) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 
-		let mut cache = StorageTransactionCache::<Block, B::State>::default();
+		let mut cache = StorageTransactionCache::<Block>::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, state, None);
 
 		self.executor
@@ -198,14 +198,15 @@ where
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
+		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block>>>,
 		recorder: &Option<ProofRecorder<Block>>,
 		call_context: CallContext,
 		extensions: &RefCell<Extensions>,
 	) -> Result<Vec<u8>, sp_blockchain::Error> {
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let state = self.backend.state_at(at_hash)?;
+		let mut state = self.backend.state_at(at_hash)?;
+		state.as_trie_backend_mut().set_recorder(recorder.clone());
 
 		let changes = &mut *changes.borrow_mut();
 
@@ -221,14 +222,10 @@ where
 
 		match recorder {
 			Some(recorder) => {
-				let trie_state = state.as_trie_backend();
-
-				let backend = sp_state_machine::TrieBackendBuilder::wrap(&trie_state)
-					.with_recorder(recorder.clone())
-					.build();
-
+				let backend = state.as_trie_backend();
+				let backend = backend.with_recorder(recorder.clone());
 				let mut state_machine = StateMachine::new(
-					&backend,
+					&*backend,
 					changes,
 					&self.executor,
 					method,
@@ -278,7 +275,6 @@ where
 		let at_number =
 			self.backend.blockchain().expect_block_number_from_id(&BlockId::Hash(at_hash))?;
 		let state = self.backend.state_at(at_hash)?;
-
 		let trie_backend = state.as_trie_backend();
 
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);

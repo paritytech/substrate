@@ -50,16 +50,15 @@ const LOG_TARGET: &str = "sync::import-queue";
 /// A commonly-used Import Queue type.
 ///
 /// This defines the transaction type of the `BasicQueue` to be the transaction type for a client.
-pub type DefaultImportQueue<Block, Client> =
-	BasicQueue<Block, sp_api::TransactionFor<Client, Block>>;
+pub type DefaultImportQueue<Block> = BasicQueue<Block>;
 
 mod basic_queue;
 pub mod buffered_link;
 pub mod mock;
 
 /// Shared block import struct used by the queue.
-pub type BoxBlockImport<B, Transaction> =
-	Box<dyn BlockImport<B, Error = ConsensusError, Transaction = Transaction> + Send + Sync>;
+pub type BoxBlockImport<B> =
+	Box<dyn BlockImport<B, Error = ConsensusError> + Send + Sync>;
 
 /// Shared justification import struct used by the queue.
 pub type BoxJustificationImport<B> =
@@ -100,8 +99,8 @@ pub trait Verifier<B: BlockT>: Send {
 	/// continue the block import process.
 	async fn verify(
 		&mut self,
-		block: BlockImportParams<B, ()>,
-	) -> Result<BlockImportParams<B, ()>, String>;
+		block: BlockImportParams<B>,
+	) -> Result<BlockImportParams<B>, String>;
 }
 
 /// Blocks import queue API.
@@ -221,8 +220,8 @@ pub enum BlockImportError {
 type BlockImportResult<B> = Result<BlockImportStatus<NumberFor<B>>, BlockImportError>;
 
 /// Single block import function.
-pub async fn import_single_block<B: BlockT, V: Verifier<B>, Transaction: Send + 'static>(
-	import_handle: &mut impl BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
+pub async fn import_single_block<B: BlockT, V: Verifier<B>>(
+	import_handle: &mut impl BlockImport<B, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: &mut V,
@@ -234,9 +233,8 @@ pub async fn import_single_block<B: BlockT, V: Verifier<B>, Transaction: Send + 
 pub(crate) async fn import_single_block_metered<
 	B: BlockT,
 	V: Verifier<B>,
-	Transaction: Send + 'static,
 >(
-	import_handle: &mut impl BlockImport<B, Transaction = Transaction, Error = ConsensusError>,
+	import_handle: &mut impl BlockImport<B, Error = ConsensusError>,
 	block_origin: BlockOrigin,
 	block: IncomingBlock<B>,
 	verifier: &mut V,
@@ -327,7 +325,7 @@ pub(crate) async fn import_single_block_metered<
 		import_block.state_action = StateAction::ExecuteIfPossible;
 	}
 
-	let import_block = verifier.verify(import_block).await.map_err(|msg| {
+	let mut import_block = verifier.verify(import_block).await.map_err(|msg| {
 		if let Some(ref peer) = peer {
 			trace!(
 				target: LOG_TARGET,
@@ -350,7 +348,7 @@ pub(crate) async fn import_single_block_metered<
 		metrics.report_verification(true, started.elapsed());
 	}
 
-	let import_block = import_block.clear_storage_changes_and_mutate();
+	import_block.clear_storage_changes();
 	let imported = import_handle.import_block(import_block).await;
 	if let Some(metrics) = metrics.as_ref() {
 		metrics.report_verification_and_import(started.elapsed());

@@ -58,7 +58,7 @@ pub struct SharedNodeCacheLimiter {
 	max_items_evicted: usize,
 }
 
-impl<H> schnellru::Limiter<H, NodeOwned<H>> for SharedNodeCacheLimiter
+impl<H, L> schnellru::Limiter<H, (NodeOwned<H, L>, L)> for SharedNodeCacheLimiter
 where
 	H: AsRef<[u8]>,
 {
@@ -78,9 +78,9 @@ where
 		&mut self,
 		_length: usize,
 		key: Self::KeyToInsert<'_>,
-		node: NodeOwned<H>,
-	) -> Option<(H, NodeOwned<H>)> {
-		let new_item_heap_size = node.size_in_bytes() - std::mem::size_of::<NodeOwned<H>>();
+		node: (NodeOwned<H, L>, L),
+	) -> Option<(H, (NodeOwned<H, L>, L))> {
+		let new_item_heap_size = node.0.size_in_bytes() - std::mem::size_of::<NodeOwned<H, L>>();
 		if new_item_heap_size > self.max_heap_size {
 			// Item's too big to add even if the cache's empty; bail.
 			return None
@@ -96,18 +96,16 @@ where
 		_length: usize,
 		_old_key: &mut H,
 		_new_key: H,
-		old_node: &mut NodeOwned<H>,
-		new_node: &mut NodeOwned<H>,
+		old_node: &mut (NodeOwned<H, L>, L),
+		new_node: &mut (NodeOwned<H, L>, L),
 	) -> bool {
-		debug_assert_eq!(_old_key.as_ref(), _new_key.as_ref());
-
-		let new_item_heap_size = new_node.size_in_bytes() - std::mem::size_of::<NodeOwned<H>>();
+		let new_item_heap_size = new_node.0.size_in_bytes() - std::mem::size_of::<NodeOwned<H, L>>();
 		if new_item_heap_size > self.max_heap_size {
 			// Item's too big to add even if the cache's empty; bail.
 			return false
 		}
 
-		let old_item_heap_size = old_node.size_in_bytes() - std::mem::size_of::<NodeOwned<H>>();
+		let old_item_heap_size = old_node.0.size_in_bytes() - std::mem::size_of::<NodeOwned<H, L>>();
 		self.heap_size = self.heap_size - old_item_heap_size + new_item_heap_size;
 		true
 	}
@@ -118,8 +116,8 @@ where
 	}
 
 	#[inline]
-	fn on_removed(&mut self, _: &mut H, node: &mut NodeOwned<H>) {
-		self.heap_size -= node.size_in_bytes() - std::mem::size_of::<NodeOwned<H>>();
+	fn on_removed(&mut self, _: &mut H, node: &mut (NodeOwned<H, L>, L)) {
+		self.heap_size -= node.0.size_in_bytes() - std::mem::size_of::<NodeOwned<H, L>>();
 		self.items_evicted += 1;
 	}
 
@@ -157,7 +155,7 @@ pub struct SharedValueCacheLimiter {
 	max_items_evicted: usize,
 }
 
-impl<H> schnellru::Limiter<ValueCacheKey<H>, CachedValue<H>> for SharedValueCacheLimiter
+impl<H, L> schnellru::Limiter<ValueCacheKey<H>, CachedValue<H, L>> for SharedValueCacheLimiter
 where
 	H: AsRef<[u8]>,
 {
@@ -174,8 +172,8 @@ where
 		&mut self,
 		_length: usize,
 		mut key: Self::KeyToInsert<'_>,
-		value: CachedValue<H>,
-	) -> Option<(ValueCacheKey<H>, CachedValue<H>)> {
+		value: CachedValue<H, L>,
+	) -> Option<(ValueCacheKey<H>, CachedValue<H, L>)> {
 		match self.known_storage_keys.entry(key.storage_key.clone()) {
 			SetEntry::Vacant(entry) => {
 				let new_item_heap_size = key.storage_key.len();
@@ -201,15 +199,15 @@ where
 		_length: usize,
 		_old_key: &mut ValueCacheKey<H>,
 		_new_key: ValueCacheKey<H>,
-		_old_value: &mut CachedValue<H>,
-		_new_value: &mut CachedValue<H>,
+		_old_value: &mut CachedValue<H, L>,
+		_new_value: &mut CachedValue<H, L>,
 	) -> bool {
 		debug_assert_eq!(_new_key.storage_key, _old_key.storage_key);
 		true
 	}
 
 	#[inline]
-	fn on_removed(&mut self, key: &mut ValueCacheKey<H>, _: &mut CachedValue<H>) {
+	fn on_removed(&mut self, key: &mut ValueCacheKey<H>, _: &mut CachedValue<H, L>) {
 		if Arc::strong_count(&key.storage_key) == 2 {
 			// There are only two instances of this key:
 			//   1) one memoized in `known_storage_keys`,
@@ -234,22 +232,22 @@ where
 	}
 }
 
-type SharedNodeCacheMap<H> =
-	LruMap<H, NodeOwned<H>, SharedNodeCacheLimiter, schnellru::RandomState>;
+type SharedNodeCacheMap<H, L> =
+	LruMap<H, (NodeOwned<H, L>, L), SharedNodeCacheLimiter, schnellru::RandomState>;
 
 /// The shared node cache.
 ///
 /// Internally this stores all cached nodes in a [`LruMap`]. It ensures that when updating the
 /// cache, that the cache stays within its allowed bounds.
-pub(super) struct SharedNodeCache<H>
+pub(super) struct SharedNodeCache<H, L>
 where
 	H: AsRef<[u8]>,
 {
 	/// The cached nodes, ordered by least recently used.
-	pub(super) lru: SharedNodeCacheMap<H>,
+	pub(super) lru: SharedNodeCacheMap<H, L>,
 }
 
-impl<H: AsRef<[u8]> + Eq + std::hash::Hash> SharedNodeCache<H> {
+impl<H: AsRef<[u8]> + Eq + std::hash::Hash, L: Copy + Default + Eq + PartialEq> SharedNodeCache<H, L> {
 	/// Create a new instance.
 	fn new(max_inline_size: usize, max_heap_size: usize) -> Self {
 		Self {
@@ -264,7 +262,11 @@ impl<H: AsRef<[u8]> + Eq + std::hash::Hash> SharedNodeCache<H> {
 	}
 
 	/// Update the cache with the `list` of nodes which were either newly added or accessed.
-	pub fn update(&mut self, list: impl IntoIterator<Item = (H, NodeCached<H>)>) {
+	pub fn update(
+		&mut self,
+		list: impl IntoIterator<Item = ((H, L), NodeCached<H, L>)>,
+		new_nodes: impl IntoIterator<Item = H>,
+	) {
 		let mut access_count = 0;
 		let mut add_count = 0;
 
@@ -272,7 +274,7 @@ impl<H: AsRef<[u8]> + Eq + std::hash::Hash> SharedNodeCache<H> {
 		self.lru.limiter_mut().max_items_evicted =
 			self.lru.len() * 100 / super::SHARED_NODE_CACHE_MAX_REPLACE_PERCENT;
 
-		for (key, cached_node) in list {
+		for ((key, location), cached_node) in list {
 			if cached_node.is_from_shared_cache {
 				if self.lru.get(&key).is_some() {
 					access_count += 1;
@@ -286,7 +288,7 @@ impl<H: AsRef<[u8]> + Eq + std::hash::Hash> SharedNodeCache<H> {
 				}
 			}
 
-			self.lru.insert(key, cached_node.node);
+			self.lru.insert(key, (cached_node.node, location));
 			add_count += 1;
 
 			if self.lru.limiter().items_evicted > self.lru.limiter().max_items_evicted {
@@ -295,11 +297,19 @@ impl<H: AsRef<[u8]> + Eq + std::hash::Hash> SharedNodeCache<H> {
 			}
 		}
 
+		let mut removed_new = 0;
+		for key in new_nodes {
+			if self.lru.remove(&key).is_some() {
+				removed_new += 1;
+			}
+		}
+
 		tracing::debug!(
 			target: super::LOG_TARGET,
-			"Updated the shared node cache: {} accesses, {} new values, {}/{} evicted (length = {}, inline size={}/{}, heap size={}/{})",
+			"Updated the shared node cache: {} accesses, {} new values, {} cleanded, {}/{} evicted (length = {}, inline size={}/{}, heap size={}/{})",
 			access_count,
 			add_count,
+			removed_new,
 			self.lru.limiter().items_evicted,
 			self.lru.limiter().max_items_evicted,
 			self.lru.len(),
@@ -460,9 +470,9 @@ impl<H: PartialEq> PartialEq for ValueCacheKey<H> {
 	}
 }
 
-type SharedValueCacheMap<H> = schnellru::LruMap<
+type SharedValueCacheMap<H, L> = schnellru::LruMap<
 	ValueCacheKey<H>,
-	CachedValue<H>,
+	CachedValue<H, L>,
 	SharedValueCacheLimiter,
 	BuildNoHashHasher<ValueCacheKey<H>>,
 >;
@@ -470,15 +480,15 @@ type SharedValueCacheMap<H> = schnellru::LruMap<
 /// The shared value cache.
 ///
 /// The cache ensures that it stays in the configured size bounds.
-pub(super) struct SharedValueCache<H>
+pub(super) struct SharedValueCache<H, L>
 where
 	H: AsRef<[u8]>,
 {
 	/// The cached nodes, ordered by least recently used.
-	pub(super) lru: SharedValueCacheMap<H>,
+	pub(super) lru: SharedValueCacheMap<H, L>,
 }
 
-impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
+impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>, L> SharedValueCache<H, L> {
 	/// Create a new instance.
 	fn new(max_inline_size: usize, max_heap_size: usize) -> Self {
 		Self {
@@ -505,7 +515,7 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 	/// `added` ones.
 	pub fn update(
 		&mut self,
-		added: impl IntoIterator<Item = (ValueCacheKey<H>, CachedValue<H>)>,
+		added: impl IntoIterator<Item = (ValueCacheKey<H>, CachedValue<H, L>)>,
 		accessed: impl IntoIterator<Item = ValueCacheKeyHash>,
 	) {
 		let mut access_count = 0;
@@ -564,31 +574,31 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 }
 
 /// The inner of [`SharedTrieCache`].
-pub(super) struct SharedTrieCacheInner<H: Hasher> {
-	node_cache: SharedNodeCache<H::Out>,
-	value_cache: SharedValueCache<H::Out>,
+pub(super) struct SharedTrieCacheInner<H: Hasher, L> {
+	node_cache: SharedNodeCache<H::Out, L>,
+	value_cache: SharedValueCache<H::Out, L>,
 }
 
-impl<H: Hasher> SharedTrieCacheInner<H> {
+impl<H: Hasher, L> SharedTrieCacheInner<H, L> {
 	/// Returns a reference to the [`SharedValueCache`].
 	#[cfg(test)]
-	pub(super) fn value_cache(&self) -> &SharedValueCache<H::Out> {
+	pub(super) fn value_cache(&self) -> &SharedValueCache<H::Out, L> {
 		&self.value_cache
 	}
 
 	/// Returns a mutable reference to the [`SharedValueCache`].
-	pub(super) fn value_cache_mut(&mut self) -> &mut SharedValueCache<H::Out> {
+	pub(super) fn value_cache_mut(&mut self) -> &mut SharedValueCache<H::Out, L> {
 		&mut self.value_cache
 	}
 
 	/// Returns a reference to the [`SharedNodeCache`].
 	#[cfg(test)]
-	pub(super) fn node_cache(&self) -> &SharedNodeCache<H::Out> {
+	pub(super) fn node_cache(&self) -> &SharedNodeCache<H::Out, L> {
 		&self.node_cache
 	}
 
 	/// Returns a mutable reference to the [`SharedNodeCache`].
-	pub(super) fn node_cache_mut(&mut self) -> &mut SharedNodeCache<H::Out> {
+	pub(super) fn node_cache_mut(&mut self) -> &mut SharedNodeCache<H::Out, L> {
 		&mut self.node_cache
 	}
 }
@@ -600,17 +610,17 @@ impl<H: Hasher> SharedTrieCacheInner<H> {
 /// bounds given via the [`CacheSize`] at startup.
 ///
 /// The instance of this object can be shared between multiple threads.
-pub struct SharedTrieCache<H: Hasher> {
-	inner: Arc<RwLock<SharedTrieCacheInner<H>>>,
+pub struct SharedTrieCache<H: Hasher, L> {
+	inner: Arc<RwLock<SharedTrieCacheInner<H, L>>>,
 }
 
-impl<H: Hasher> Clone for SharedTrieCache<H> {
+impl<H: Hasher, L> Clone for SharedTrieCache<H, L> {
 	fn clone(&self) -> Self {
 		Self { inner: self.inner.clone() }
 	}
 }
 
-impl<H: Hasher> SharedTrieCache<H> {
+impl<H: Hasher, L: Copy + Default + Eq + PartialEq + std::hash::Hash> SharedTrieCache<H, L> {
 	/// Create a new [`SharedTrieCache`].
 	pub fn new(cache_size: CacheSize) -> Self {
 		let total_budget = cache_size.0;
@@ -626,12 +636,12 @@ impl<H: Hasher> SharedTrieCache<H> {
 
 		// Calculate how much memory the maps will be allowed to hold inline given our budget.
 		let value_cache_max_inline_size =
-			SharedValueCacheMap::<H::Out>::memory_usage_for_memory_budget(
+			SharedValueCacheMap::<H::Out, L>::memory_usage_for_memory_budget(
 				value_cache_inline_budget,
 			);
 
 		let node_cache_max_inline_size =
-			SharedNodeCacheMap::<H::Out>::memory_usage_for_memory_budget(node_cache_inline_budget);
+			SharedNodeCacheMap::<H::Out, L>::memory_usage_for_memory_budget(node_cache_inline_budget);
 
 		// And this is how much data we'll at most keep on the heap for each cache.
 		let value_cache_max_heap_size = value_cache_budget - value_cache_max_inline_size;
@@ -662,11 +672,12 @@ impl<H: Hasher> SharedTrieCache<H> {
 	}
 
 	/// Create a new [`LocalTrieCache`](super::LocalTrieCache) instance from this shared cache.
-	pub fn local_cache(&self) -> super::LocalTrieCache<H> {
+	pub fn local_cache(&self) -> super::LocalTrieCache<H, L> {
 		super::LocalTrieCache {
 			shared: self.clone(),
 			node_cache: Default::default(),
 			value_cache: Default::default(),
+			new_nodes: Default::default(),
 			shared_value_cache_access: Mutex::new(super::ValueAccessSet::with_hasher(
 				schnellru::ByLength::new(super::SHARED_VALUE_CACHE_MAX_PROMOTED_KEYS),
 				Default::default(),
@@ -681,8 +692,16 @@ impl<H: Hasher> SharedTrieCache<H> {
 	///
 	/// This doesn't change the least recently order in the internal [`LruMap`].
 	#[inline]
-	pub fn peek_node(&self, key: &H::Out) -> Option<NodeOwned<H::Out>> {
-		self.inner.read().node_cache.lru.peek(key).cloned()
+	pub fn peek_node(&self, key: &H::Out, location: L) -> Option<NodeOwned<H::Out, L>> {
+		if let Some((val, loc)) = self.inner.read().node_cache.lru.peek(key).cloned() {
+			if loc == location {
+				Some(val)
+			} else {
+				None
+			}
+		} else {
+			None
+		}
 	}
 
 	/// Get a copy of the [`CachedValue`] for `key`.
@@ -695,7 +714,7 @@ impl<H: Hasher> SharedTrieCache<H> {
 		hash: ValueCacheKeyHash,
 		storage_root: &H::Out,
 		storage_key: &[u8],
-	) -> Option<CachedValue<H::Out>> {
+	) -> Option<CachedValue<H::Out, L>> {
 		self.inner
 			.read()
 			.value_cache
@@ -735,12 +754,12 @@ impl<H: Hasher> SharedTrieCache<H> {
 	#[cfg(test)]
 	pub(super) fn read_lock_inner(
 		&self,
-	) -> parking_lot::RwLockReadGuard<'_, SharedTrieCacheInner<H>> {
+	) -> parking_lot::RwLockReadGuard<'_, SharedTrieCacheInner<H, L>> {
 		self.inner.read()
 	}
 
 	/// Returns the write locked inner.
-	pub(super) fn write_lock_inner(&self) -> Option<RwLockWriteGuard<'_, SharedTrieCacheInner<H>>> {
+	pub(super) fn write_lock_inner(&self) -> Option<RwLockWriteGuard<'_, SharedTrieCacheInner<H, L>>> {
 		// This should never happen, but we *really* don't want to deadlock. So let's have it
 		// timeout, just in case. At worst it'll do nothing, and at best it'll avert a catastrophe
 		// and notify us that there's a problem.
@@ -755,7 +774,7 @@ mod tests {
 
 	#[test]
 	fn shared_value_cache_works() {
-		let mut cache = SharedValueCache::<sp_core::H256>::new(usize::MAX, 10 * 10);
+		let mut cache = SharedValueCache::<sp_core::H256, ()>::new(usize::MAX, 10 * 10);
 
 		let key = vec![0; 10];
 
@@ -837,7 +856,7 @@ mod tests {
 
 		assert!(matches!(
 			cache.lru.peek(&ValueCacheKey::new_value(&[1; 10][..], root0)).unwrap(),
-			CachedValue::<Hash>::NonExisting
+			CachedValue::<Hash, _>::NonExisting
 		));
 
 		assert!(cache.lru.peek(&ValueCacheKey::new_value(&[1; 10][..], root1)).is_none(),);

@@ -13,3 +13,5 @@ readme = "README.md"
 [dependencies]
 kvdb = "0.13.0"
 parking_lot = "0.12.1"
+trie-db = { version = "0.27.1", default-features = false }
+parity-db = "0.4.8"
