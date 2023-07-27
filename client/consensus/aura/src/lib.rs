@@ -30,7 +30,7 @@
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
-use std::{fmt::Debug, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
+use std::{fmt::Debug, marker::PhantomData, pin::Pin, sync::Arc};
 
 use codec::Codec;
 use futures::prelude::*;
@@ -172,8 +172,8 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, Error>(
 ) -> Result<impl Future<Output = ()>, ConsensusError>
 where
 	P: Pair,
-	P::Public: AppPublic + Hash + Member,
-	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Codec,
+	P::Public: AppPublic + Member,
+	P::Signature: TryFrom<Vec<u8>> + Member + Codec,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
@@ -281,8 +281,8 @@ where
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	P: Pair,
-	P::Public: AppPublic + Hash + Member + Codec,
-	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Codec,
+	P::Public: AppPublic + Member,
+	P::Signature: TryFrom<Vec<u8>> + Member + Codec,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
@@ -333,8 +333,8 @@ where
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	P: Pair,
-	P::Public: AppPublic + Member + Codec + Hash,
-	P::Signature: TryFrom<Vec<u8>> + Member + Codec + Hash + Debug,
+	P::Public: AppPublic + Member,
+	P::Signature: TryFrom<Vec<u8>> + Member + Codec,
 	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,

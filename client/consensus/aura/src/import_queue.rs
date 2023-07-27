@@ -44,7 +44,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header, NumberFor},
 	DigestItem,
 };
-use std::{fmt::Debug, hash::Hash, marker::PhantomData, sync::Arc};
+use std::{fmt::Debug, marker::PhantomData, sync::Arc};
 
 /// check a header has been signed by the right key. If the slot is too far in the future, an error
 /// will be returned. If it's successful, returns the pre-header and the digest item
@@ -168,7 +168,7 @@ where
 	C: ProvideRuntimeApi<B> + Send + Sync + sc_client_api::backend::AuxStore,
 	C::Api: BlockBuilderApi<B> + AuraApi<B, AuthorityId<P>> + ApiExt<B>,
 	P: Pair,
-	P::Public: Hash + Codec + Debug,
+	P::Public: Codec + Debug,
 	P::Signature: Codec,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
@@ -365,7 +365,7 @@ where
 		+ Sync
 		+ 'static,
 	P: Pair + 'static,
-	P::Public: Hash + Debug + Codec,
+	P::Public: Codec + Debug,
 	P::Signature: Codec,
 	S: sp_core::traits::SpawnEssentialNamed,
 	CIDP: CreateInherentDataProviders<Block, ()> + Sync + Send + 'static,
