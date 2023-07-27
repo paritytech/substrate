@@ -618,23 +618,15 @@ where
 		peer.known_blocks.insert(hash);
 		peer.last_notification_received = Instant::now();
 
-		if peer.info.roles.is_full() {
-			let is_best = match announce.state.unwrap_or(BlockState::Best) {
-				BlockState::Best => true,
-				BlockState::Normal => false,
-			};
-
-			self.push_block_announce_validation_inner(who, hash, announce, is_best);
+		if !peer.info.roles.is_full() {
+			return
 		}
-	}
 
-	fn push_block_announce_validation_inner(
-		&mut self,
-		who: PeerId,
-		hash: B::Hash,
-		announce: BlockAnnounce<B::Header>,
-		is_best: bool,
-	) {
+		let is_best = match announce.state.unwrap_or(BlockState::Best) {
+			BlockState::Best => true,
+			BlockState::Normal => false,
+		};
+
 		let header = &announce.header;
 		let number = *header.number();
 		debug!(
@@ -731,6 +723,7 @@ where
 		);
 	}
 
+	/// Poll for finished block announce validations and notify `ChainSync`.
 	fn poll_block_announce_validation(
 		&mut self,
 		cx: &mut std::task::Context,
