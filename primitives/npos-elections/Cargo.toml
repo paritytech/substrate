@@ -32,7 +32,6 @@ std = [
 	"codec/std",
 	"scale-info/std",
 	"serde/std",
-	"sp-arithmetic/std",
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-std/std",
