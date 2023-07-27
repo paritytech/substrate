@@ -24,7 +24,7 @@ use crate::chain_head::{
 		BestBlockChanged, Finalized, FollowEvent, Initialized, NewBlock, RuntimeEvent,
 		RuntimeVersionEvent,
 	},
-	subscription::{SubscriptionManagement, SubscriptionManagementError},
+	subscription::{InsertedSubscriptionData, SubscriptionManagement, SubscriptionManagementError},
 };
 use futures::{
 	channel::oneshot,
@@ -572,7 +572,7 @@ where
 	pub async fn generate_events(
 		&mut self,
 		mut sink: SubscriptionSink,
-		rx_stop: oneshot::Receiver<()>,
+		sub_data: InsertedSubscriptionData<Block>,
 	) {
 		// Register for the new block and finalized notifications.
 		let stream_import = self
@@ -604,7 +604,7 @@ where
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
 		let stream = stream::once(futures::future::ready(initial)).chain(merged);
 
-		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, rx_stop)
+		self.submit_events(&startup_point, stream.boxed(), pruned_forks, sink, sub_data.rx_stop)
 			.await;
 	}
 }
