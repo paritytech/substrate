@@ -310,7 +310,10 @@ where
 			let discovery_config = {
 				let mut config = DiscoveryConfig::new(local_public.to_peer_id());
 				config.with_permanent_addresses(known_addresses);
-				config.discovery_limit(u64::from(network_config.default_peers_set.out_peers) + 15);
+				config.discovery_limit(
+					u64::from(network_config.default_peers_set.out_peers) +
+						network_config.discovery_limit,
+				);
 				config.with_kademlia(
 					params.genesis_hash,
 					params.fork_id.as_deref(),

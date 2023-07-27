@@ -553,6 +553,9 @@ pub struct NetworkConfiguration {
 	/// Maximum number of blocks per request.
 	pub max_blocks_per_request: u32,
 
+	/// Discovery limit.
+	pub discovery_limit: u64,
+
 	/// Initial syncing mode.
 	pub sync_mode: SyncMode,
 
@@ -629,6 +632,7 @@ impl NetworkConfiguration {
 				.expect("value is a constant; constant is non-zero; qed."),
 			yamux_window_size: None,
 			ipfs_server: false,
+			discovery_limit: 15,
 		}
 	}
 

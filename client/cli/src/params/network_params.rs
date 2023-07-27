@@ -149,6 +149,13 @@ pub struct NetworkParams {
 	/// and observe block requests timing out.
 	#[arg(long, value_name = "COUNT", default_value_t = 64)]
 	pub max_blocks_per_request: u32,
+
+	/// Discovery limit.
+	///
+	/// How many additional connections should Kademlia be allowed to make when doing peer
+	/// discoveries. The final value is `--discovery_limit + --out-peers`.
+	#[arg(long, value_name = "COUNT", default_value_t = 15)]
+	pub discovery_limit: u64,
 }
 
 impl NetworkParams {
@@ -244,6 +251,7 @@ impl NetworkParams {
 			yamux_window_size: None,
 			ipfs_server: self.ipfs_server,
 			sync_mode: self.sync.into(),
+			discovery_limit: self.discovery_limit,
 		}
 	}
 }
