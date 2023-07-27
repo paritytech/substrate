@@ -331,13 +331,13 @@ impl RequestResponsesBehaviour {
 				ProtocolSupport::Outbound
 			};
 
-			let rq_rp = Behaviour::new(
+			let rq_rp = Behaviour::with_codec(
 				GenericCodec {
 					max_request_size: protocol.max_request_size,
 					max_response_size: protocol.max_response_size,
 				},
-				iter::once(protocol.name.as_bytes().to_vec())
-					.chain(protocol.fallback_names.iter().map(|name| name.as_bytes().to_vec()))
+				iter::once(protocol.name.clone())
+					.chain(protocol.fallback_names)
 					.zip(iter::repeat(protocol_support)),
 				cfg,
 			);
@@ -405,7 +405,7 @@ impl RequestResponsesBehaviour {
 impl NetworkBehaviour for RequestResponsesBehaviour {
 	type ConnectionHandler =
 		MultiHandler<String, <Behaviour<GenericCodec> as NetworkBehaviour>::ConnectionHandler>;
-	type OutEvent = Event;
+	type ToSwarm = Event;
 
 	fn handle_pending_inbound_connection(
 		&mut self,
@@ -521,9 +521,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 				for (p, _) in self.protocols.values_mut() {
 					NetworkBehaviour::on_swarm_event(p, FromSwarm::ListenerError(e));
 				},
-			FromSwarm::ExpiredExternalAddr(e) =>
+			FromSwarm::ExternalAddrExpired(e) =>
 				for (p, _) in self.protocols.values_mut() {
-					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExpiredExternalAddr(e));
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExternalAddrExpired(e));
 				},
 			FromSwarm::NewListener(e) =>
 				for (p, _) in self.protocols.values_mut() {
@@ -533,9 +533,13 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 				for (p, _) in self.protocols.values_mut() {
 					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExpiredListenAddr(e));
 				},
-			FromSwarm::NewExternalAddr(e) =>
+			FromSwarm::NewExternalAddrCandidate(e) =>
 				for (p, _) in self.protocols.values_mut() {
-					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewExternalAddr(e));
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewExternalAddrCandidate(e));
+				},
+			FromSwarm::ExternalAddrConfirmed(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExternalAddrConfirmed(e));
 				},
 			FromSwarm::AddressChange(e) =>
 				for (p, _) in self.protocols.values_mut() {
@@ -570,7 +574,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
 		'poll_all: loop {
 			if let Some(message_request) = self.message_request.take() {
 				// Now we can can poll `MessageRequest` until we get the reputation
@@ -729,10 +733,18 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								handler,
 								event: ((*protocol).to_string(), event),
 							}),
-						ToSwarm::ReportObservedAddr { address, score } =>
-							return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
 						ToSwarm::CloseConnection { peer_id, connection } =>
 							return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
+						ToSwarm::NewExternalAddrCandidate(observed) =>
+							return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
+						ToSwarm::ExternalAddrConfirmed(addr) =>
+							return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
+						ToSwarm::ExternalAddrExpired(addr) =>
+							return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
+						ToSwarm::ListenOn { opts } =>
+							return Poll::Ready(ToSwarm::ListenOn { opts }),
+						ToSwarm::RemoveListener { id } =>
+							return Poll::Ready(ToSwarm::RemoveListener { id }),
 					};
 
 					match ev {
@@ -934,7 +946,7 @@ pub struct GenericCodec {
 
 #[async_trait::async_trait]
 impl Codec for GenericCodec {
-	type Protocol = Vec<u8>;
+	type Protocol = ProtocolName;
 	type Request = Vec<u8>;
 	type Response = Result<Vec<u8>, ()>;
 

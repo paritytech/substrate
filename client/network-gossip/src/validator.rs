@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use libp2p::PeerId;
+use libp2p_identity::PeerId;
 use sc_network_common::role::ObservedRole;
 use sp_runtime::traits::Block as BlockT;
 
