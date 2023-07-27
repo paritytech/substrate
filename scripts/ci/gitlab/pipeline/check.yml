@@ -47,6 +47,18 @@ test-rust-features:
       https://github.com/paritytech/pipeline-scripts
     - bash ./pipeline-scripts/rust-features.sh .
 
+test-rust-feature-propagation:
+  stage: check
+  extends:
+    - .kubernetes-env
+    - .test-refs-no-trigger-prs-only
+  script:
+    - cargo install --locked --version 0.7.0 -q zepter && zepter --version
+    - zepter lint propagate-feature --feature try-runtime --left-side-feature-missing=ignore --workspace --feature-enables-dep="try-runtime:frame-try-runtime"
+    - zepter lint propagate-feature --feature runtime-benchmarks --left-side-feature-missing=ignore --workspace --feature-enables-dep="runtime-benchmarks:frame-benchmarking"
+    - zepter lint propagate-feature --feature std --left-side-feature-missing=ignore --workspace
+  allow_failure: true # Experimental
+
 test-prometheus-alerting-rules:
   stage: check
   extends: .kubernetes-env
