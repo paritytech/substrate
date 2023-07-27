@@ -18,6 +18,7 @@
 
 use futures::channel::oneshot;
 use sc_client_api::Backend;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -25,7 +26,10 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use crate::chain_head::subscription::SubscriptionManagementError;
+use crate::chain_head::{subscription::SubscriptionManagementError, FollowEvent};
+
+/// The queue size after which the `sc_utils::mpsc::tracing_unbounded` would produce warnings.
+const QUEUE_SIZE_WARNING: usize = 512;
 
 /// The state machine of a block of a single subscription ID.
 ///
@@ -116,6 +120,10 @@ struct SubscriptionState<Block: BlockT> {
 	with_runtime: bool,
 	/// Signals the "Stop" event.
 	tx_stop: Option<oneshot::Sender<()>>,
+	/// The sender of message responses to the `chainHead_follow` events.
+	///
+	/// This object is cloned between methods.
+	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
 	/// Track the block hashes available for this subscription.
 	///
 	/// This implementation assumes:
@@ -272,6 +280,15 @@ impl<Block: BlockT, BE: Backend<Block>> Drop for BlockGuard<Block, BE> {
 	}
 }
 
+/// The data propagated back to the `chainHead_follow` method after
+/// the subscription is successfully inserted.
+pub struct InsertedSubscriptionData<Block: BlockT> {
+	/// Signal that the subscription must stop.
+	pub rx_stop: oneshot::Receiver<()>,
+	/// Receive message responses from the `chainHead` methods.
+	pub response_receiver: TracingUnboundedReceiver<FollowEvent<Block::Hash>>,
+}
+
 pub struct SubscriptionsInner<Block: BlockT, BE: Backend<Block>> {
 	/// Reference count the block hashes across all subscriptions.
 	///
@@ -311,16 +328,20 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		&mut self,
 		sub_id: String,
 		with_runtime: bool,
-	) -> Option<oneshot::Receiver<()>> {
+	) -> Option<InsertedSubscriptionData<Block>> {
 		if let Entry::Vacant(entry) = self.subs.entry(sub_id) {
 			let (tx_stop, rx_stop) = oneshot::channel();
+			let (response_sender, response_receiver) =
+				tracing_unbounded("chain-head-method-responses", QUEUE_SIZE_WARNING);
 			let state = SubscriptionState::<Block> {
 				with_runtime,
 				tx_stop: Some(tx_stop),
+				response_sender,
 				blocks: Default::default(),
 			};
 			entry.insert(state);
-			Some(rx_stop)
+
+			Some(InsertedSubscriptionData { rx_stop, response_receiver })
 		} else {
 			None
 		}
@@ -604,9 +625,12 @@ mod tests {
 
 	#[test]
 	fn sub_state_register_twice() {
+		let (response_sender, _response_receiver) =
+			tracing_unbounded("test-chain-head-method-responses", QUEUE_SIZE_WARNING);
 		let mut sub_state = SubscriptionState::<Block> {
 			with_runtime: false,
 			tx_stop: None,
+			response_sender,
 			blocks: Default::default(),
 		};
 
@@ -629,9 +653,12 @@ mod tests {
 
 	#[test]
 	fn sub_state_register_unregister() {
+		let (response_sender, _response_receiver) =
+			tracing_unbounded("test-chain-head-method-responses", QUEUE_SIZE_WARNING);
 		let mut sub_state = SubscriptionState::<Block> {
 			with_runtime: false,
 			tx_stop: None,
+			response_sender,
 			blocks: Default::default(),
 		};
 

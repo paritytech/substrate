@@ -45,6 +45,7 @@ use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ChildInfo, ExecutorProvider, StorageKey,
 	StorageProvider,
 };
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_api::CallApiAt;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_core::{traits::CallContext, Bytes};
@@ -80,7 +81,6 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 		max_pinned_duration: Duration,
 	) -> Self {
 		let genesis_hash = hex_string(&genesis_hash.as_ref());
-
 		Self {
 			client,
 			backend: backend.clone(),
@@ -161,7 +161,7 @@ where
 			},
 		};
 		// Keep track of the subscription.
-		let Some(rx_stop) = self.subscriptions.insert_subscription(sub_id.clone(), with_runtime)
+		let Some(sub_data) = self.subscriptions.insert_subscription(sub_id.clone(), with_runtime)
 		else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
@@ -183,7 +183,7 @@ where
 				sub_id.clone(),
 			);
 
-			chain_head_follow.generate_events(sink, rx_stop).await;
+			chain_head_follow.generate_events(sink, sub_data).await;
 
 			subscriptions.remove_subscription(&sub_id);
 			debug!(target: LOG_TARGET, "[follow][id={:?}] Subscription removed", sub_id);
