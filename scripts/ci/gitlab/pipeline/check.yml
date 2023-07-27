@@ -54,6 +54,7 @@ test-rust-feature-propagation:
     - .test-refs-no-trigger-prs-only
   script:
     - cargo install --locked --version 0.7.1 -q zepter && zepter --version
+    - echo "\n👉 Hello developer!\nIf you see this CI check failing then it means that one of the crates is missing a feature for one of its dependencies.\nThe output below tells you which feature needs to be added for which dependency to which crate.\nFor more context see the MR where this check was introduced https://github.com/paritytech/substrate/pull/14660\n"
     - zepter lint propagate-feature --feature try-runtime --left-side-feature-missing=ignore --workspace --feature-enables-dep="try-runtime:frame-try-runtime" --locked
     - zepter lint propagate-feature --feature runtime-benchmarks --left-side-feature-missing=ignore --workspace --feature-enables-dep="runtime-benchmarks:frame-benchmarking" --locked
     - zepter lint propagate-feature --feature std --left-side-feature-missing=ignore --workspace --locked
