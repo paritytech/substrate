@@ -124,6 +124,8 @@ struct SubscriptionState<Block: BlockT> {
 	///
 	/// This object is cloned between methods.
 	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+	/// The next operation ID.
+	next_operation_id: usize,
 	/// Track the block hashes available for this subscription.
 	///
 	/// This implementation assumes:
@@ -235,6 +237,13 @@ impl<Block: BlockT> SubscriptionState<Block> {
 		}
 		timestamp
 	}
+
+	/// Generate the next operation ID for this subscription.
+	fn next_operation_id(&mut self) -> usize {
+		let op_id = self.next_operation_id;
+		self.next_operation_id += 1;
+		op_id
+	}
 }
 
 /// Keeps a specific block pinned while the handle is alive.
@@ -244,6 +253,7 @@ pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 	hash: Block::Hash,
 	with_runtime: bool,
 	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+	operation_id: String,
 	backend: Arc<BE>,
 }
 
@@ -261,13 +271,20 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 		hash: Block::Hash,
 		with_runtime: bool,
 		response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+		operation_id: usize,
 		backend: Arc<BE>,
 	) -> Result<Self, SubscriptionManagementError> {
 		backend
 			.pin_block(hash)
 			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
 
-		Ok(Self { hash, with_runtime, response_sender, backend })
+		Ok(Self {
+			hash,
+			with_runtime,
+			response_sender,
+			operation_id: operation_id.to_string(),
+			backend,
+		})
 	}
 
 	/// The `with_runtime` flag of the subscription.
@@ -278,6 +295,11 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 	/// Send message responses from the `chainHead` methods to `chainHead_follow`.
 	pub fn response_sender(&self) -> TracingUnboundedSender<FollowEvent<Block::Hash>> {
 		self.response_sender.clone()
+	}
+
+	/// The operation ID of this method.
+	pub fn operation_id(&self) -> String {
+		self.operation_id.clone()
 	}
 }
 
@@ -344,6 +366,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 				with_runtime,
 				tx_stop: Some(tx_stop),
 				response_sender,
+				next_operation_id: 0,
 				blocks: Default::default(),
 			};
 			entry.insert(state);
@@ -519,7 +542,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		sub_id: &str,
 		hash: Block::Hash,
 	) -> Result<BlockGuard<Block, BE>, SubscriptionManagementError> {
-		let Some(sub) = self.subs.get(sub_id) else {
+		let Some(sub) = self.subs.get_mut(sub_id) else {
 			return Err(SubscriptionManagementError::SubscriptionAbsent)
 		};
 
@@ -527,7 +550,14 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		}
 
-		BlockGuard::new(hash, sub.with_runtime, sub.response_sender.clone(), self.backend.clone())
+		let operation_id = sub.next_operation_id();
+		BlockGuard::new(
+			hash,
+			sub.with_runtime,
+			sub.response_sender.clone(),
+			operation_id,
+			self.backend.clone(),
+		)
 	}
 }
 
@@ -638,6 +668,7 @@ mod tests {
 			with_runtime: false,
 			tx_stop: None,
 			response_sender,
+			next_operation_id: 0,
 			blocks: Default::default(),
 		};
 
@@ -666,6 +697,7 @@ mod tests {
 			with_runtime: false,
 			tx_stop: None,
 			response_sender,
+			next_operation_id: 0,
 			blocks: Default::default(),
 		};
 
