@@ -20,17 +20,21 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
-use jsonrpsee::SubscriptionSink;
 use sc_client_api::{Backend, ChildInfo, StorageKey, StorageProvider};
+use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::BlockT;
 use sp_core::storage::well_known_keys;
 
+use crate::chain_head::event::OperationStorageItems;
+
 use super::{
 	event::{
-		ChainHeadStorageEvent, ItemsEvent, StorageQuery, StorageQueryType, StorageResult,
+		OperationError, OperationId, StorageQuery, StorageQueryType, StorageResult,
 		StorageResultType,
 	},
-	hex_string, ErrorEvent,
+	hex_string,
+	subscription::BlockGuard,
+	FollowEvent,
 };
 
 /// The maximum number of items the `chainHead_storage` can return
@@ -70,10 +74,10 @@ fn is_key_queryable(key: &[u8]) -> bool {
 }
 
 /// The result of making a query call.
-type QueryResult = Result<Option<StorageResult>, ChainHeadStorageEvent>;
+type QueryResult = Result<Option<StorageResult>, String>;
 
 /// The result of iterating over keys.
-type QueryIterResult = Result<Vec<StorageResult>, ChainHeadStorageEvent>;
+type QueryIterResult = Result<Vec<StorageResult>, String>;
 
 impl<Client, Block, BE> ChainHeadStorage<Client, Block, BE>
 where
@@ -101,11 +105,7 @@ where
 					result: StorageResultType::Value(hex_string(&storage_data.0)),
 				}))
 			})
-			.unwrap_or_else(|err| {
-				QueryResult::Err(ChainHeadStorageEvent::Error(ErrorEvent {
-					error: err.to_string(),
-				}))
-			})
+			.unwrap_or_else(|error| QueryResult::Err(error.to_string()))
 	}
 
 	/// Fetch the hash of a value from storage.
@@ -128,11 +128,7 @@ where
 					result: StorageResultType::Hash(hex_string(&storage_data.as_ref())),
 				}))
 			})
-			.unwrap_or_else(|err| {
-				QueryResult::Err(ChainHeadStorageEvent::Error(ErrorEvent {
-					error: err.to_string(),
-				}))
-			})
+			.unwrap_or_else(|error| QueryResult::Err(error.to_string()))
 	}
 
 	/// Handle iterating over (key, value) or (key, hash) pairs.
@@ -148,7 +144,7 @@ where
 		} else {
 			self.client.storage_keys(hash, Some(key), None)
 		}
-		.map_err(|err| ChainHeadStorageEvent::Error(ErrorEvent { error: err.to_string() }))?;
+		.map_err(|error| error.to_string())?;
 
 		let mut ret = Vec::with_capacity(MAX_ITER_ITEMS);
 		let mut keys_iter = keys_iter.take(MAX_ITER_ITEMS);
@@ -169,14 +165,31 @@ where
 	/// Generate the block events for the `chainHead_storage` method.
 	pub fn generate_events(
 		&self,
-		mut sink: SubscriptionSink,
+		block_guard: BlockGuard<Block, BE>,
 		hash: Block::Hash,
 		items: Vec<StorageQuery<StorageKey>>,
 		child_key: Option<ChildInfo>,
 	) {
+		/// Build and send the opaque error back to the `chainHead_follow` method.
+		fn send_error<Block: BlockT>(
+			sender: &TracingUnboundedSender<FollowEvent<Block::Hash>>,
+			operation_id: String,
+			error: String,
+		) {
+			let _ =
+				sender.unbounded_send(FollowEvent::<Block::Hash>::OperationError(OperationError {
+					operation_id,
+					error,
+				}));
+		}
+
+		let sender = block_guard.response_sender();
+
 		if let Some(child_key) = child_key.as_ref() {
 			if !is_key_queryable(child_key.storage_key()) {
-				let _ = sink.send(&ChainHeadStorageEvent::Done);
+				let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageDone(
+					OperationId { operation_id: block_guard.operation_id() },
+				));
 				return
 			}
 		}
@@ -192,8 +205,8 @@ where
 					match self.query_storage_value(hash, &item.key, child_key.as_ref()) {
 						Ok(Some(value)) => storage_results.push(value),
 						Ok(None) => continue,
-						Err(err) => {
-							let _ = sink.send(&err);
+						Err(error) => {
+							send_error::<Block>(&sender, block_guard.operation_id(), error);
 							return
 						},
 					}
@@ -202,8 +215,8 @@ where
 					match self.query_storage_hash(hash, &item.key, child_key.as_ref()) {
 						Ok(Some(value)) => storage_results.push(value),
 						Ok(None) => continue,
-						Err(err) => {
-							let _ = sink.send(&err);
+						Err(error) => {
+							send_error::<Block>(&sender, block_guard.operation_id(), error);
 							return
 						},
 					},
@@ -214,8 +227,8 @@ where
 					IterQueryType::Value,
 				) {
 					Ok(values) => storage_results.extend(values),
-					Err(err) => {
-						let _ = sink.send(&err);
+					Err(error) => {
+						send_error::<Block>(&sender, block_guard.operation_id(), error);
 						return
 					},
 				},
@@ -226,8 +239,8 @@ where
 					IterQueryType::Hash,
 				) {
 					Ok(values) => storage_results.extend(values),
-					Err(err) => {
-						let _ = sink.send(&err);
+					Err(error) => {
+						send_error::<Block>(&sender, block_guard.operation_id(), error);
 						return
 					},
 				},
@@ -236,10 +249,17 @@ where
 		}
 
 		if !storage_results.is_empty() {
-			let event = ChainHeadStorageEvent::Items(ItemsEvent { items: storage_results });
-			let _ = sink.send(&event);
+			let _ = sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageItems(
+				OperationStorageItems {
+					operation_id: block_guard.operation_id(),
+					items: storage_results,
+				},
+			));
 		}
 
-		let _ = sink.send(&ChainHeadStorageEvent::Done);
+		let _ =
+			sender.unbounded_send(FollowEvent::<Block::Hash>::OperationStorageDone(OperationId {
+				operation_id: block_guard.operation_id(),
+			}));
 	}
 }

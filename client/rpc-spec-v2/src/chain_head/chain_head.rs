@@ -21,17 +21,13 @@
 use super::{
 	chain_head_storage::ChainHeadStorage,
 	event::{MethodResponseStarted, OperationBodyDone, OperationCallDone},
-	subscription::BlockGuard,
 };
 use crate::{
 	chain_head::{
 		api::ChainHeadApiServer,
 		chain_head_follow::ChainHeadFollower,
 		error::Error as ChainHeadRpcError,
-		event::{
-			ChainHeadEvent, ChainHeadResult, ChainHeadStorageEvent, ErrorEvent, FollowEvent,
-			MethodResponse, OperationError, StorageQuery, StorageQueryType,
-		},
+		event::{FollowEvent, MethodResponse, OperationError, StorageQuery, StorageQueryType},
 		hex_string,
 		subscription::{SubscriptionManagement, SubscriptionManagementError},
 	},
@@ -49,7 +45,6 @@ use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ChildInfo, ExecutorProvider, StorageKey,
 	StorageProvider,
 };
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_api::CallApiAt;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_core::{traits::CallContext, Bytes};
@@ -314,8 +309,6 @@ where
 			.transpose()?
 			.map(ChildInfo::new_default_from_vec);
 
-		let client = self.client.clone();
-
 		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) => {
@@ -328,16 +321,19 @@ where
 			},
 			Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
 		};
-		// let storage_client = ChainHeadStorage::<Client, Block, BE>::new(client);
 
-		// let fut = async move {
-		// 	let _block_guard = block_guard;
+		let storage_client = ChainHeadStorage::<Client, Block, BE>::new(self.client.clone());
+		let operation_id = block_guard.operation_id();
+		let fut = async move {
+			storage_client.generate_events(block_guard, hash, items, child_trie);
+		};
 
-		// 	storage_client.generate_events(sink, hash, items, child_trie);
-		// };
-
-		// self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
-		Ok(MethodResponse::LimitReached)
+		self.executor
+			.spawn_blocking("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		Ok(MethodResponse::Started(MethodResponseStarted {
+			operation_id,
+			discarded_items: Some(0),
+		}))
 	}
 
 	fn chain_head_unstable_call(
