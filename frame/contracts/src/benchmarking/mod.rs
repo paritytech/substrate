@@ -177,6 +177,7 @@ where
 
 /// The funding that each account that either calls or instantiates contracts is funded with.
 fn caller_funding<T: Config>() -> BalanceOf<T> {
+	// Minting can overflow, so we can't abuse of the funding.
 	BalanceOf::<T>::max_value() / 10_000u32.into()
 }
 

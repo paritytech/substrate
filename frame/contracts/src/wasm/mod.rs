@@ -239,8 +239,6 @@ impl<T: Config> WasmBlob<T> {
 				None => {
 					let deposit = self.code_info.deposit;
 					System::<T>::inc_providers(&self.code_info.owner);
-					// This `None` case happens only in freshly uploaded modules. This means that
-					// the `owner` is always the origin of the current transaction.
 					T::Currency::hold(
 						&HoldReason::StorageDepositReserve.into(),
 						&self.code_info.owner,
