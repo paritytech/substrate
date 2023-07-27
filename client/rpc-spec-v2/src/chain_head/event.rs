@@ -380,6 +380,29 @@ pub struct ItemsEvent {
 	pub items: Vec<StorageResult>,
 }
 
+/// The method respose of `chainHead_body`, `chainHead_call` and `chainHead_storage`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "result")]
+pub enum MethodResponse {
+	/// The method has started.
+	Started(MethodResponseStarted),
+	/// The RPC server cannot handle the request at the moment.
+	LimitReached,
+}
+
+/// The `started` result of a method.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MethodResponseStarted {
+	/// The operation id of the response.
+	pub operation_id: String,
+	/// The number of items from the back of the `chainHead_storage` that have been discarded.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[serde(default)]
+	pub discarded_items: Option<usize>,
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -649,6 +672,45 @@ mod tests {
 		assert_eq!(ser, exp);
 
 		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn method_response() {
+		// Response of `call` and `body`
+		let event = MethodResponse::Started(MethodResponseStarted {
+			operation_id: "123".into(),
+			discarded_items: None,
+		});
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"result":"started","operationId":"123"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: MethodResponse = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+
+		// Response of `storage`
+		let event = MethodResponse::Started(MethodResponseStarted {
+			operation_id: "123".into(),
+			discarded_items: Some(1),
+		});
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"result":"started","operationId":"123","discardedItems":1}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: MethodResponse = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+
+		// Limit reached.
+		let event = MethodResponse::LimitReached;
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"result":"limitReached"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: MethodResponse = serde_json::from_str(exp).unwrap();
 		assert_eq!(event_dec, event);
 	}
 
