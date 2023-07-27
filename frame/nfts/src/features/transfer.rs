@@ -23,7 +23,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns an error in the following cases:
+	/// This function returns a `Dispatch` error in the following cases:
 	/// - If the collection ID is invalid (`UnknownCollection`)
 	/// - If the item ID is invalid (`UnknownItem`).
 	/// - If the item is locked or transferring it is disabled (`ItemLocked`).
