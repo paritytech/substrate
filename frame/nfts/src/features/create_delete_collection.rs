@@ -78,7 +78,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// # Errors
 	///
-	/// This function returns an error in the following cases:
+	/// This function returns a `Dispatch` error in the following cases:
 	/// - If the collection ID is not found (`UnknownCollection`).
 	/// - If the provided `maybe_check_owner` does not match the actual owner (`NoPermission`).
 	/// - If the collection is not empty (contains items) (`CollectionNotEmpty`).
