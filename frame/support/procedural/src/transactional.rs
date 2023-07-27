@@ -15,44 +15,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{ItemFn, Result};
-use frame_support_procedural_tools::generate_crate_access_2018;
 
 pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
-	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
+    let ItemFn {
+        attrs,
+        vis,
+        sig,
+        block,
+    } = syn::parse(input)?;
 
-	let crate_ = generate_crate_access_2018("frame-support")?;
-	let output = quote! {
-		#(#attrs)*
-		#vis #sig {
-			use #crate_::storage::{with_transaction, TransactionOutcome};
-			with_transaction(|| {
-				let r = (|| { #block })();
-				if r.is_ok() {
-					TransactionOutcome::Commit(r)
-				} else {
-					TransactionOutcome::Rollback(r)
-				}
-			})
-		}
-	};
+    let crate_ = generate_crate_access_2018("frame-support")?;
+    let output = quote! {
+        #(#attrs)*
+        #vis #sig {
+            use #crate_::storage::{with_transaction, TransactionOutcome};
+            with_transaction(|| {
+                let r = (|| { #block })();
+                if r.is_ok() {
+                    TransactionOutcome::Commit(r)
+                } else {
+                    TransactionOutcome::Rollback(r)
+                }
+            })
+        }
+    };
 
-	Ok(output.into())
+    Ok(output.into())
 }
 
 pub fn require_transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
-	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;
+    let ItemFn {
+        attrs,
+        vis,
+        sig,
+        block,
+    } = syn::parse(input)?;
 
-	let crate_ = generate_crate_access_2018("frame-support")?;
-	let output = quote! {
-		#(#attrs)*
-		#vis #sig {
-			#crate_::storage::require_transaction();
-			#block
-		}
-	};
+    let crate_ = generate_crate_access_2018("frame-support")?;
+    let output = quote! {
+        #(#attrs)*
+        #vis #sig {
+            #crate_::storage::require_transaction();
+            #block
+        }
+    };
 
-	Ok(output.into())
+    Ok(output.into())
 }

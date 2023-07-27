@@ -63,11 +63,13 @@
 
 pub use self::bridge::GossipEngine;
 pub use self::state_machine::TopicNotification;
-pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext, ValidationResult};
+pub use self::validator::{
+    DiscardAll, MessageIntent, ValidationResult, Validator, ValidatorContext,
+};
 
 use futures::prelude::*;
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId, ReputationChange};
-use sp_runtime::{traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use std::{borrow::Cow, iter, pin::Pin, sync::Arc};
 
 mod bridge;
@@ -76,67 +78,72 @@ mod validator;
 
 /// Abstraction over a network.
 pub trait Network<B: BlockT> {
-	/// Returns a stream of events representing what happens on the network.
-	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
+    /// Returns a stream of events representing what happens on the network.
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>>;
 
-	/// Adjust the reputation of a node.
-	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
+    /// Adjust the reputation of a node.
+    fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange);
 
-	/// Adds the peer to the set of peers to be connected to with this protocol.
-	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
+    /// Adds the peer to the set of peers to be connected to with this protocol.
+    fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
 
-	/// Removes the peer from the set of peers to be connected to with this protocol.
-	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
+    /// Removes the peer from the set of peers to be connected to with this protocol.
+    fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>);
 
-	/// Force-disconnect a peer.
-	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>);
+    /// Force-disconnect a peer.
+    fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>);
 
-	/// Send a notification to a peer.
-	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>);
+    /// Send a notification to a peer.
+    fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>);
 
-	/// Notify everyone we're connected to that we have the given block.
-	///
-	/// Note: this method isn't strictly related to gossiping and should eventually be moved
-	/// somewhere else.
-	fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>);
+    /// Notify everyone we're connected to that we have the given block.
+    ///
+    /// Note: this method isn't strictly related to gossiping and should eventually be moved
+    /// somewhere else.
+    fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>);
 }
 
 impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
-	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
-		Box::pin(NetworkService::event_stream(self, "network-gossip"))
-	}
+    fn event_stream(&self) -> Pin<Box<dyn Stream<Item = Event> + Send>> {
+        Box::pin(NetworkService::event_stream(self, "network-gossip"))
+    }
 
-	fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {
-		NetworkService::report_peer(self, peer_id, reputation);
-	}
+    fn report_peer(&self, peer_id: PeerId, reputation: ReputationChange) {
+        NetworkService::report_peer(self, peer_id, reputation);
+    }
 
-	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
-		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
-			.collect::<multiaddr::Multiaddr>();
-		let result = NetworkService::add_peers_to_reserved_set(self, protocol, iter::once(addr).collect());
-		if let Err(err) = result {
-			log::error!(target: "gossip", "add_set_reserved failed: {}", err);
-		}
-	}
+    fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
+        let addr =
+            iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
+        let result =
+            NetworkService::add_peers_to_reserved_set(self, protocol, iter::once(addr).collect());
+        if let Err(err) = result {
+            log::error!(target: "gossip", "add_set_reserved failed: {}", err);
+        }
+    }
 
-	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
-		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
-			.collect::<multiaddr::Multiaddr>();
-		let result = NetworkService::remove_peers_from_reserved_set(self, protocol, iter::once(addr).collect());
-		if let Err(err) = result {
-			log::error!(target: "gossip", "remove_set_reserved failed: {}", err);
-		}
-	}
+    fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
+        let addr =
+            iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
+        let result = NetworkService::remove_peers_from_reserved_set(
+            self,
+            protocol,
+            iter::once(addr).collect(),
+        );
+        if let Err(err) = result {
+            log::error!(target: "gossip", "remove_set_reserved failed: {}", err);
+        }
+    }
 
-	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {
-		NetworkService::disconnect_peer(self, who, protocol)
-	}
+    fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {
+        NetworkService::disconnect_peer(self, who, protocol)
+    }
 
-	fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
-		NetworkService::write_notification(self, who, protocol, message)
-	}
+    fn write_notification(&self, who: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
+        NetworkService::write_notification(self, who, protocol, message)
+    }
 
-	fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>) {
-		NetworkService::announce_block(self, block, associated_data)
-	}
+    fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>) {
+        NetworkService::announce_block(self, block, associated_data)
+    }
 }

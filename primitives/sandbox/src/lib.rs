@@ -41,35 +41,35 @@
 use sp_std::prelude::*;
 
 pub use sp_core::sandbox::HostError;
-pub use sp_wasm_interface::{Value, ReturnValue};
+pub use sp_wasm_interface::{ReturnValue, Value};
 
 mod imp {
-	#[cfg(feature = "std")]
-	include!("../with_std.rs");
+    #[cfg(feature = "std")]
+    include!("../with_std.rs");
 
-	#[cfg(not(feature = "std"))]
-	include!("../without_std.rs");
+    #[cfg(not(feature = "std"))]
+    include!("../without_std.rs");
 }
 
 /// Error that can occur while using this crate.
 #[derive(sp_core::RuntimeDebug)]
 pub enum Error {
-	/// Module is not valid, couldn't be instantiated.
-	Module,
+    /// Module is not valid, couldn't be instantiated.
+    Module,
 
-	/// Access to a memory or table was made with an address or an index which is out of bounds.
-	///
-	/// Note that if wasm module makes an out-of-bounds access then trap will occur.
-	OutOfBounds,
+    /// Access to a memory or table was made with an address or an index which is out of bounds.
+    ///
+    /// Note that if wasm module makes an out-of-bounds access then trap will occur.
+    OutOfBounds,
 
-	/// Failed to invoke the start function or an exported function for some reason.
-	Execution,
+    /// Failed to invoke the start function or an exported function for some reason.
+    Execution,
 }
 
 impl From<Error> for HostError {
-	fn from(_e: Error) -> HostError {
-		HostError
-	}
+    fn from(_e: Error) -> HostError {
+        HostError
+    }
 }
 
 /// Function pointer for specifying functions by the
@@ -85,39 +85,39 @@ pub type HostFuncType<T> = fn(&mut T, &[Value]) -> Result<ReturnValue, HostError
 /// through designated functions [`get`](Memory::get) and [`set`](Memory::set).
 #[derive(Clone)]
 pub struct Memory {
-	inner: imp::Memory,
+    inner: imp::Memory,
 }
 
 impl Memory {
-	/// Construct a new linear memory instance.
-	///
-	/// The memory allocated with initial number of pages specified by `initial`.
-	/// Minimal possible value for `initial` is 0 and maximum possible is `65536`.
-	/// (Since maximum addressable memory is 2<sup>32</sup> = 4GiB = 65536 * 64KiB).
-	///
-	/// It is possible to limit maximum number of pages this memory instance can have by specifying
-	/// `maximum`. If not specified, this memory instance would be able to allocate up to 4GiB.
-	///
-	/// Allocated memory is always zeroed.
-	pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
-		Ok(Memory {
-			inner: imp::Memory::new(initial, maximum)?,
-		})
-	}
+    /// Construct a new linear memory instance.
+    ///
+    /// The memory allocated with initial number of pages specified by `initial`.
+    /// Minimal possible value for `initial` is 0 and maximum possible is `65536`.
+    /// (Since maximum addressable memory is 2<sup>32</sup> = 4GiB = 65536 * 64KiB).
+    ///
+    /// It is possible to limit maximum number of pages this memory instance can have by specifying
+    /// `maximum`. If not specified, this memory instance would be able to allocate up to 4GiB.
+    ///
+    /// Allocated memory is always zeroed.
+    pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
+        Ok(Memory {
+            inner: imp::Memory::new(initial, maximum)?,
+        })
+    }
 
-	/// Read a memory area at the address `ptr` with the size of the provided slice `buf`.
-	///
-	/// Returns `Err` if the range is out-of-bounds.
-	pub fn get(&self, ptr: u32, buf: &mut [u8]) -> Result<(), Error> {
-		self.inner.get(ptr, buf)
-	}
+    /// Read a memory area at the address `ptr` with the size of the provided slice `buf`.
+    ///
+    /// Returns `Err` if the range is out-of-bounds.
+    pub fn get(&self, ptr: u32, buf: &mut [u8]) -> Result<(), Error> {
+        self.inner.get(ptr, buf)
+    }
 
-	/// Write a memory area at the address `ptr` with contents of the provided slice `buf`.
-	///
-	/// Returns `Err` if the range is out-of-bounds.
-	pub fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error> {
-		self.inner.set(ptr, value)
-	}
+    /// Write a memory area at the address `ptr` with contents of the provided slice `buf`.
+    ///
+    /// Returns `Err` if the range is out-of-bounds.
+    pub fn set(&self, ptr: u32, value: &[u8]) -> Result<(), Error> {
+        self.inner.set(ptr, value)
+    }
 }
 
 /// Struct that can be used for defining an environment for a sandboxed module.
@@ -125,89 +125,91 @@ impl Memory {
 /// The sandboxed module can access only the entities which were defined and passed
 /// to the module at the instantiation time.
 pub struct EnvironmentDefinitionBuilder<T> {
-	inner: imp::EnvironmentDefinitionBuilder<T>,
+    inner: imp::EnvironmentDefinitionBuilder<T>,
 }
 
 impl<T> EnvironmentDefinitionBuilder<T> {
-	/// Construct a new `EnvironmentDefinitionBuilder`.
-	pub fn new() -> EnvironmentDefinitionBuilder<T> {
-		EnvironmentDefinitionBuilder {
-			inner: imp::EnvironmentDefinitionBuilder::new(),
-		}
-	}
+    /// Construct a new `EnvironmentDefinitionBuilder`.
+    pub fn new() -> EnvironmentDefinitionBuilder<T> {
+        EnvironmentDefinitionBuilder {
+            inner: imp::EnvironmentDefinitionBuilder::new(),
+        }
+    }
 
-	/// Register a host function in this environment definition.
-	///
-	/// NOTE that there is no constraints on type of this function. An instance
-	/// can import function passed here with any signature it wants. It can even import
-	/// the same function (i.e. with same `module` and `field`) several times. It's up to
-	/// the user code to check or constrain the types of signatures.
-	pub fn add_host_func<N1, N2>(&mut self, module: N1, field: N2, f: HostFuncType<T>)
-	where
-		N1: Into<Vec<u8>>,
-		N2: Into<Vec<u8>>,
-	{
-		self.inner.add_host_func(module, field, f);
-	}
+    /// Register a host function in this environment definition.
+    ///
+    /// NOTE that there is no constraints on type of this function. An instance
+    /// can import function passed here with any signature it wants. It can even import
+    /// the same function (i.e. with same `module` and `field`) several times. It's up to
+    /// the user code to check or constrain the types of signatures.
+    pub fn add_host_func<N1, N2>(&mut self, module: N1, field: N2, f: HostFuncType<T>)
+    where
+        N1: Into<Vec<u8>>,
+        N2: Into<Vec<u8>>,
+    {
+        self.inner.add_host_func(module, field, f);
+    }
 
-	/// Register a memory in this environment definition.
-	pub fn add_memory<N1, N2>(&mut self, module: N1, field: N2, mem: Memory)
-	where
-		N1: Into<Vec<u8>>,
-		N2: Into<Vec<u8>>,
-	{
-		self.inner.add_memory(module, field, mem.inner);
-	}
+    /// Register a memory in this environment definition.
+    pub fn add_memory<N1, N2>(&mut self, module: N1, field: N2, mem: Memory)
+    where
+        N1: Into<Vec<u8>>,
+        N2: Into<Vec<u8>>,
+    {
+        self.inner.add_memory(module, field, mem.inner);
+    }
 }
 
 /// Sandboxed instance of a wasm module.
 ///
 /// This instance can be used for invoking exported functions.
 pub struct Instance<T> {
-	inner: imp::Instance<T>,
+    inner: imp::Instance<T>,
 }
 
 impl<T> Instance<T> {
-	/// Instantiate a module with the given [`EnvironmentDefinitionBuilder`]. It will
-	/// run the `start` function (if it is present in the module) with the given `state`.
-	///
-	/// Returns `Err(Error::Module)` if this module can't be instantiated with the given
-	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)` will
-	/// be returned.
-	///
-	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
-	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T)
-		-> Result<Instance<T>, Error>
-	{
-		Ok(Instance {
-			inner: imp::Instance::new(code, &env_def_builder.inner, state)?,
-		})
-	}
+    /// Instantiate a module with the given [`EnvironmentDefinitionBuilder`]. It will
+    /// run the `start` function (if it is present in the module) with the given `state`.
+    ///
+    /// Returns `Err(Error::Module)` if this module can't be instantiated with the given
+    /// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)` will
+    /// be returned.
+    ///
+    /// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
+    pub fn new(
+        code: &[u8],
+        env_def_builder: &EnvironmentDefinitionBuilder<T>,
+        state: &mut T,
+    ) -> Result<Instance<T>, Error> {
+        Ok(Instance {
+            inner: imp::Instance::new(code, &env_def_builder.inner, state)?,
+        })
+    }
 
-	/// Invoke an exported function with the given name.
-	///
-	/// # Errors
-	///
-	/// Returns `Err(Error::Execution)` if:
-	///
-	/// - An export function name isn't a proper utf8 byte sequence,
-	/// - This module doesn't have an exported function with the given name,
-	/// - If types of the arguments passed to the function doesn't match function signature
-	///   then trap occurs (as if the exported function was called via call_indirect),
-	/// - Trap occurred at the execution time.
-	pub fn invoke(
-		&mut self,
-		name: &str,
-		args: &[Value],
-		state: &mut T,
-	) -> Result<ReturnValue, Error> {
-		self.inner.invoke(name, args, state)
-	}
+    /// Invoke an exported function with the given name.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(Error::Execution)` if:
+    ///
+    /// - An export function name isn't a proper utf8 byte sequence,
+    /// - This module doesn't have an exported function with the given name,
+    /// - If types of the arguments passed to the function doesn't match function signature
+    ///   then trap occurs (as if the exported function was called via call_indirect),
+    /// - Trap occurred at the execution time.
+    pub fn invoke(
+        &mut self,
+        name: &str,
+        args: &[Value],
+        state: &mut T,
+    ) -> Result<ReturnValue, Error> {
+        self.inner.invoke(name, args, state)
+    }
 
-	/// Get the value from a global with the given `name`.
-	///
-	/// Returns `Some(_)` if the global could be found.
-	pub fn get_global_val(&self, name: &str) -> Option<Value> {
-		self.inner.get_global_val(name)
-	}
+    /// Get the value from a global with the given `name`.
+    ///
+    /// Returns `Some(_)` if the global could be found.
+    pub fn get_global_val(&self, name: &str) -> Option<Value> {
+        self.inner.get_global_val(name)
+    }
 }

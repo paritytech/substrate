@@ -26,34 +26,34 @@ use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 pub struct MetricsLink(Arc<Option<Metrics>>);
 
 impl MetricsLink {
-	pub fn new(registry: Option<&Registry>) -> Self {
-		Self(Arc::new(
-			registry.and_then(|registry|
-				Metrics::register(registry)
-					.map_err(|err| { log::warn!("Failed to register prometheus metrics: {}", err); })
-					.ok()
-			)
-		))
-	}
+    pub fn new(registry: Option<&Registry>) -> Self {
+        Self(Arc::new(registry.and_then(|registry| {
+            Metrics::register(registry)
+                .map_err(|err| {
+                    log::warn!("Failed to register prometheus metrics: {}", err);
+                })
+                .ok()
+        })))
+    }
 
-	pub fn report(&self, do_this: impl FnOnce(&Metrics)) {
-		if let Some(metrics) = self.0.as_ref() {
-			do_this(metrics);
-		}
-	}
+    pub fn report(&self, do_this: impl FnOnce(&Metrics)) {
+        if let Some(metrics) = self.0.as_ref() {
+            do_this(metrics);
+        }
+    }
 }
 
 /// Transaction pool Prometheus metrics.
 pub struct Metrics {
-	pub submitted_transactions: Counter<U64>,
-	pub validations_invalid: Counter<U64>,
-	pub block_transactions_pruned: Counter<U64>,
-	pub block_transactions_resubmitted: Counter<U64>,
+    pub submitted_transactions: Counter<U64>,
+    pub validations_invalid: Counter<U64>,
+    pub block_transactions_pruned: Counter<U64>,
+    pub block_transactions_resubmitted: Counter<U64>,
 }
 
 impl Metrics {
-	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Self {
+    pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+        Ok(Self {
 			submitted_transactions: register(
 				Counter::new(
 					"sub_txpool_submitted_transactions",
@@ -83,47 +83,47 @@ impl Metrics {
 				registry,
 			)?,
 		})
-	}
+    }
 }
 
 /// Transaction pool api Prometheus metrics.
 pub struct ApiMetrics {
-	pub validations_scheduled: Counter<U64>,
-	pub validations_finished: Counter<U64>,
+    pub validations_scheduled: Counter<U64>,
+    pub validations_finished: Counter<U64>,
 }
 
 impl ApiMetrics {
-	/// Register the metrics at the given Prometheus registry.
-	pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Self {
-			validations_scheduled: register(
-				Counter::new(
-					"sub_txpool_validations_scheduled",
-					"Total number of transactions scheduled for validation",
-				)?,
-				registry,
-			)?,
-			validations_finished: register(
-				Counter::new(
-					"sub_txpool_validations_finished",
-					"Total number of transactions that finished validation",
-				)?,
-				registry,
-			)?,
-		})
-	}
+    /// Register the metrics at the given Prometheus registry.
+    pub fn register(registry: &Registry) -> Result<Self, PrometheusError> {
+        Ok(Self {
+            validations_scheduled: register(
+                Counter::new(
+                    "sub_txpool_validations_scheduled",
+                    "Total number of transactions scheduled for validation",
+                )?,
+                registry,
+            )?,
+            validations_finished: register(
+                Counter::new(
+                    "sub_txpool_validations_finished",
+                    "Total number of transactions that finished validation",
+                )?,
+                registry,
+            )?,
+        })
+    }
 }
 
 /// An extension trait for [`ApiMetrics`].
 pub trait ApiMetricsExt {
-	/// Report an event to the metrics.
-	fn report(&self, report: impl FnOnce(&ApiMetrics));
+    /// Report an event to the metrics.
+    fn report(&self, report: impl FnOnce(&ApiMetrics));
 }
 
 impl ApiMetricsExt for Option<Arc<ApiMetrics>> {
-	fn report(&self, report: impl FnOnce(&ApiMetrics)) {
-		if let Some(metrics) = self.as_ref() {
-			report(metrics)
-		}
-	}
+    fn report(&self, report: impl FnOnce(&ApiMetrics)) {
+        if let Some(metrics) = self.as_ref() {
+            report(metrics)
+        }
+    }
 }

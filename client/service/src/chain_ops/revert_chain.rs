@@ -18,28 +18,31 @@
 
 use crate::error::Error;
 use log::info;
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use sc_client_api::{Backend, UsageProvider};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::sync::Arc;
 
 /// Performs a revert of `blocks` blocks.
 pub fn revert_chain<B, BA, C>(
-	client: Arc<C>,
-	backend: Arc<BA>,
-	blocks: NumberFor<B>
+    client: Arc<C>,
+    backend: Arc<BA>,
+    blocks: NumberFor<B>,
 ) -> Result<(), Error>
 where
-	B: BlockT,
-	C: UsageProvider<B>,
-	BA: Backend<B>,
+    B: BlockT,
+    C: UsageProvider<B>,
+    BA: Backend<B>,
 {
-	let reverted = backend.revert(blocks, false)?;
-	let info = client.usage_info().chain;
+    let reverted = backend.revert(blocks, false)?;
+    let info = client.usage_info().chain;
 
-	if reverted.0.is_zero() {
-		info!("There aren't any non-finalized blocks to revert.");
-	} else {
-		info!("Reverted {} blocks. Best: #{} ({})", reverted.0, info.best_number, info.best_hash);
-	}
-	Ok(())
+    if reverted.0.is_zero() {
+        info!("There aren't any non-finalized blocks to revert.");
+    } else {
+        info!(
+            "Reverted {} blocks. Best: #{} ({})",
+            reverted.0, info.best_number, info.best_hash
+        );
+    }
+    Ok(())
 }

@@ -20,121 +20,118 @@ use crate::pallet::Def;
 /// * impl various trait on Error
 /// * impl ModuleErrorMetadata for Error
 pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
-	let error = if let Some(error) = &def.error {
-		error
-	} else {
-		return Default::default()
-	};
+    let error = if let Some(error) = &def.error {
+        error
+    } else {
+        return Default::default();
+    };
 
-	let error_ident = &error.error;
-	let frame_support = &def.frame_support;
-	let frame_system = &def.frame_system;
-	let type_impl_gen = &def.type_impl_generics(error.attr_span);
-	let type_use_gen = &def.type_use_generics(error.attr_span);
-	let config_where_clause = &def.config.where_clause;
+    let error_ident = &error.error;
+    let frame_support = &def.frame_support;
+    let frame_system = &def.frame_system;
+    let type_impl_gen = &def.type_impl_generics(error.attr_span);
+    let type_use_gen = &def.type_use_generics(error.attr_span);
+    let config_where_clause = &def.config.where_clause;
 
-	let phantom_variant: syn::Variant = syn::parse_quote!(
-		#[doc(hidden)]
-		__Ignore(
-			#frame_support::sp_std::marker::PhantomData<(#type_use_gen)>,
-			#frame_support::Never,
-		)
-	);
+    let phantom_variant: syn::Variant = syn::parse_quote!(
+        #[doc(hidden)]
+        __Ignore(
+            #frame_support::sp_std::marker::PhantomData<(#type_use_gen)>,
+            #frame_support::Never,
+        )
+    );
 
-	let as_u8_matches = error.variants.iter().enumerate()
-		.map(|(i, (variant, _))| {
-			quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,)
-		});
+    let as_u8_matches = error.variants.iter().enumerate().map(
+        |(i, (variant, _))| quote::quote_spanned!(error.attr_span => Self::#variant => #i as u8,),
+    );
 
-	let as_str_matches = error.variants.iter()
-		.map(|(variant, _)| {
-			let variant_str = format!("{}", variant);
-			quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
-		});
+    let as_str_matches = error.variants.iter().map(|(variant, _)| {
+        let variant_str = format!("{}", variant);
+        quote::quote_spanned!(error.attr_span => Self::#variant => #variant_str,)
+    });
 
-	let metadata = error.variants.iter()
-		.map(|(variant, doc)| {
-			let variant_str = format!("{}", variant);
-			quote::quote_spanned!(error.attr_span =>
-				#frame_support::error::ErrorMetadata {
-					name: #frame_support::error::DecodeDifferent::Encode(#variant_str),
-					documentation: #frame_support::error::DecodeDifferent::Encode(&[ #( #doc, )* ]),
-				},
-			)
-		});
+    let metadata = error.variants.iter().map(|(variant, doc)| {
+        let variant_str = format!("{}", variant);
+        quote::quote_spanned!(error.attr_span =>
+            #frame_support::error::ErrorMetadata {
+                name: #frame_support::error::DecodeDifferent::Encode(#variant_str),
+                documentation: #frame_support::error::DecodeDifferent::Encode(&[ #( #doc, )* ]),
+            },
+        )
+    });
 
-	let error_item = {
-		let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[error.index];
-		if let syn::Item::Enum(item) = item {
-			item
-		} else {
-			unreachable!("Checked by error parser")
-		}
-	};
+    let error_item = {
+        let item = &mut def.item.content.as_mut().expect("Checked by def parser").1[error.index];
+        if let syn::Item::Enum(item) = item {
+            item
+        } else {
+            unreachable!("Checked by error parser")
+        }
+    };
 
-	error_item.variants.insert(0, phantom_variant);
+    error_item.variants.insert(0, phantom_variant);
 
-	quote::quote_spanned!(error.attr_span =>
-		impl<#type_impl_gen> #frame_support::sp_std::fmt::Debug for #error_ident<#type_use_gen>
-			#config_where_clause
-		{
-			fn fmt(&self, f: &mut #frame_support::sp_std::fmt::Formatter<'_>)
-				-> #frame_support::sp_std::fmt::Result
-			{
-				f.write_str(self.as_str())
-			}
-		}
+    quote::quote_spanned!(error.attr_span =>
+        impl<#type_impl_gen> #frame_support::sp_std::fmt::Debug for #error_ident<#type_use_gen>
+            #config_where_clause
+        {
+            fn fmt(&self, f: &mut #frame_support::sp_std::fmt::Formatter<'_>)
+                -> #frame_support::sp_std::fmt::Result
+            {
+                f.write_str(self.as_str())
+            }
+        }
 
-		impl<#type_impl_gen> #error_ident<#type_use_gen> #config_where_clause {
-			pub fn as_u8(&self) -> u8 {
-				match &self {
-					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
-					#( #as_u8_matches )*
-				}
-			}
+        impl<#type_impl_gen> #error_ident<#type_use_gen> #config_where_clause {
+            pub fn as_u8(&self) -> u8 {
+                match &self {
+                    Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
+                    #( #as_u8_matches )*
+                }
+            }
 
-			pub fn as_str(&self) -> &'static str {
-				match &self {
-					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
-					#( #as_str_matches )*
-				}
-			}
-		}
+            pub fn as_str(&self) -> &'static str {
+                match &self {
+                    Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
+                    #( #as_str_matches )*
+                }
+            }
+        }
 
-		impl<#type_impl_gen> From<#error_ident<#type_use_gen>> for &'static str
-			#config_where_clause
-		{
-			fn from(err: #error_ident<#type_use_gen>) -> &'static str {
-				err.as_str()
-			}
-		}
+        impl<#type_impl_gen> From<#error_ident<#type_use_gen>> for &'static str
+            #config_where_clause
+        {
+            fn from(err: #error_ident<#type_use_gen>) -> &'static str {
+                err.as_str()
+            }
+        }
 
-		impl<#type_impl_gen> From<#error_ident<#type_use_gen>>
-			for #frame_support::sp_runtime::DispatchError
-			#config_where_clause
-		{
-			fn from(err: #error_ident<#type_use_gen>) -> Self {
-				let index = <
-					<T as #frame_system::Config>::PalletInfo
-					as #frame_support::traits::PalletInfo
-				>::index::<Pallet<#type_use_gen>>()
-					.expect("Every active module has an index in the runtime; qed") as u8;
+        impl<#type_impl_gen> From<#error_ident<#type_use_gen>>
+            for #frame_support::sp_runtime::DispatchError
+            #config_where_clause
+        {
+            fn from(err: #error_ident<#type_use_gen>) -> Self {
+                let index = <
+                    <T as #frame_system::Config>::PalletInfo
+                    as #frame_support::traits::PalletInfo
+                >::index::<Pallet<#type_use_gen>>()
+                    .expect("Every active module has an index in the runtime; qed") as u8;
 
-				#frame_support::sp_runtime::DispatchError::Module {
-					index,
-					error: err.as_u8(),
-					message: Some(err.as_str()),
-				}
-			}
-		}
+                #frame_support::sp_runtime::DispatchError::Module {
+                    index,
+                    error: err.as_u8(),
+                    message: Some(err.as_str()),
+                }
+            }
+        }
 
-		impl<#type_impl_gen> #frame_support::error::ModuleErrorMetadata
-			for #error_ident<#type_use_gen>
-			#config_where_clause
-		{
-			fn metadata() -> &'static [#frame_support::error::ErrorMetadata] {
-				&[ #( #metadata )* ]
-			}
-		}
-	)
+        impl<#type_impl_gen> #frame_support::error::ModuleErrorMetadata
+            for #error_ident<#type_use_gen>
+            #config_where_clause
+        {
+            fn metadata() -> &'static [#frame_support::error::ErrorMetadata] {
+                &[ #( #metadata )* ]
+            }
+        }
+    )
 }

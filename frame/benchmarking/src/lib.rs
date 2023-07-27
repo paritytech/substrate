@@ -19,20 +19,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
-mod utils;
 #[cfg(feature = "std")]
 mod analysis;
+mod tests;
+mod utils;
 
-pub use utils::*;
 #[cfg(feature = "std")]
 pub use analysis::{Analysis, BenchmarkSelector, RegressionModel};
+pub use frame_support;
+pub use paste;
 #[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 pub use sp_runtime::traits::Zero;
-pub use frame_support;
-pub use paste;
 pub use sp_storage::TrackedStorageKey;
+pub use utils::*;
 
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
@@ -906,17 +906,17 @@ macro_rules! impl_benchmark_test {
 /// show error message and debugging info for the case of an error happening
 /// during a benchmark
 pub fn show_benchmark_debug_info(
-	instance_string: &[u8],
-	benchmark: &[u8],
-	lowest_range_values: &sp_std::prelude::Vec<u32>,
-	highest_range_values: &sp_std::prelude::Vec<u32>,
-	steps: &sp_std::prelude::Vec<u32>,
-	repeat: &u32,
-	verify: &bool,
-	error_message: &str,
+    instance_string: &[u8],
+    benchmark: &[u8],
+    lowest_range_values: &sp_std::prelude::Vec<u32>,
+    highest_range_values: &sp_std::prelude::Vec<u32>,
+    steps: &sp_std::prelude::Vec<u32>,
+    repeat: &u32,
+    verify: &bool,
+    error_message: &str,
 ) -> sp_runtime::RuntimeString {
-	sp_runtime::format_runtime_string!(
-		"\n* Pallet: {}\n\
+    sp_runtime::format_runtime_string!(
+        "\n* Pallet: {}\n\
 		* Benchmark: {}\n\
 		* Lowest_range_values: {:?}\n\
 		* Highest_range_values: {:?}\n\
@@ -924,17 +924,17 @@ pub fn show_benchmark_debug_info(
 		* Repeat: {:?}\n\
 		* Verify: {:?}\n\
 		* Error message: {}",
-		sp_std::str::from_utf8(instance_string)
-		.expect("it's all just strings ran through the wasm interface. qed"),
-		sp_std::str::from_utf8(benchmark)
-		.expect("it's all just strings ran through the wasm interface. qed"),
-		lowest_range_values,
-		highest_range_values,
-		steps,
-		repeat,
-		verify,
-		error_message,
-	)
+        sp_std::str::from_utf8(instance_string)
+            .expect("it's all just strings ran through the wasm interface. qed"),
+        sp_std::str::from_utf8(benchmark)
+            .expect("it's all just strings ran through the wasm interface. qed"),
+        lowest_range_values,
+        highest_range_values,
+        steps,
+        repeat,
+        verify,
+        error_message,
+    )
 }
 
 /// This macro adds pallet benchmarks to a `Vec<BenchmarkBatch>` object.
@@ -1031,7 +1031,7 @@ macro_rules! add_benchmark {
 							*repeat,
 							whitelist,
 							*verify,
-						).map_err(|e| { 
+						).map_err(|e| {
 							$crate::show_benchmark_debug_info(
 								instance_string,
 								benchmark,
@@ -1058,7 +1058,7 @@ macro_rules! add_benchmark {
 						*repeat,
 						whitelist,
 						*verify,
-					).map_err(|e| { 
+					).map_err(|e| {
 						$crate::show_benchmark_debug_info(
 							instance_string,
 							benchmark,

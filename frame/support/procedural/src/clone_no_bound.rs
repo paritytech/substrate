@@ -19,40 +19,46 @@ use syn::spanned::Spanned;
 
 /// Derive Clone but do not bound any generic.
 pub fn derive_clone_no_bound(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-	let input: syn::DeriveInput = match syn::parse(input) {
-		Ok(input) => input,
-		Err(e) => return e.to_compile_error().into(),
-	};
+    let input: syn::DeriveInput = match syn::parse(input) {
+        Ok(input) => input,
+        Err(e) => return e.to_compile_error().into(),
+    };
 
-	let name = &input.ident;
-	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-	let impl_ = match input.data {
-		syn::Data::Struct(struct_) => match struct_.fields {
-			syn::Fields::Named(named) => {
-				let fields = named.named.iter()
-					.map(|i| &i.ident)
-					.map(|i| quote::quote_spanned!(i.span() =>
-						#i: core::clone::Clone::clone(&self.#i)
-					));
+    let impl_ =
+        match input.data {
+            syn::Data::Struct(struct_) => match struct_.fields {
+                syn::Fields::Named(named) => {
+                    let fields = named.named.iter().map(|i| &i.ident).map(|i| {
+                        quote::quote_spanned!(i.span() =>
+                            #i: core::clone::Clone::clone(&self.#i)
+                        )
+                    });
 
-				quote::quote!( Self { #( #fields, )* } )
-			},
-			syn::Fields::Unnamed(unnamed) => {
-				let fields = unnamed.unnamed.iter().enumerate()
-					.map(|(i, _)| syn::Index::from(i))
-					.map(|i| quote::quote_spanned!(i.span() =>
-						core::clone::Clone::clone(&self.#i)
-					));
+                    quote::quote!( Self { #( #fields, )* } )
+                }
+                syn::Fields::Unnamed(unnamed) => {
+                    let fields = unnamed
+                        .unnamed
+                        .iter()
+                        .enumerate()
+                        .map(|(i, _)| syn::Index::from(i))
+                        .map(|i| {
+                            quote::quote_spanned!(i.span() =>
+                                core::clone::Clone::clone(&self.#i)
+                            )
+                        });
 
-				quote::quote!( Self ( #( #fields, )* ) )
-			},
-			syn::Fields::Unit => {
-				quote::quote!( Self )
-			}
-		},
-		syn::Data::Enum(enum_) => {
-			let variants = enum_.variants.iter()
+                    quote::quote!( Self ( #( #fields, )* ) )
+                }
+                syn::Fields::Unit => {
+                    quote::quote!(Self)
+                }
+            },
+            syn::Data::Enum(enum_) => {
+                let variants = enum_.variants.iter()
 				.map(|variant| {
 					let ident = &variant.ident;
 					match &variant.fields {
@@ -81,23 +87,24 @@ pub fn derive_clone_no_bound(input: proc_macro::TokenStream) -> proc_macro::Toke
 					}
 				});
 
-			quote::quote!(match self {
-				#( #variants, )*
-			})
-		},
-		syn::Data::Union(_) => {
-			let msg = "Union type not supported by `derive(CloneNoBound)`";
-			return syn::Error::new(input.span(), msg).to_compile_error().into()
-		},
-	};
+                quote::quote!(match self {
+                    #( #variants, )*
+                })
+            }
+            syn::Data::Union(_) => {
+                let msg = "Union type not supported by `derive(CloneNoBound)`";
+                return syn::Error::new(input.span(), msg).to_compile_error().into();
+            }
+        };
 
-	quote::quote!(
-		const _: () = {
-			impl #impl_generics core::clone::Clone for #name #ty_generics #where_clause {
-				fn clone(&self) -> Self {
-					#impl_
-				}
-			}
-		};
-	).into()
+    quote::quote!(
+        const _: () = {
+            impl #impl_generics core::clone::Clone for #name #ty_generics #where_clause {
+                fn clone(&self) -> Self {
+                    #impl_
+                }
+            }
+        };
+    )
+    .into()
 }

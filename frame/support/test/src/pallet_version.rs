@@ -19,14 +19,11 @@ use frame_support::{crate_to_pallet_version, traits::PalletVersion};
 
 #[test]
 fn ensure_that_current_pallet_version_is_correct() {
-	let expected = PalletVersion {
-		major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
-		minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
-		patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
-	};
+    let expected = PalletVersion {
+        major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
+        minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
+        patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
+    };
 
-	assert_eq!(
-		expected,
-		crate_to_pallet_version!(),
-	)
+    assert_eq!(expected, crate_to_pallet_version!(),)
 }

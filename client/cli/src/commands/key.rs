@@ -21,42 +21,39 @@ use crate::{Error, SubstrateCli};
 use structopt::StructOpt;
 
 use super::{
-	insert_key::InsertKeyCmd,
-	inspect_key::InspectKeyCmd,
-	generate::GenerateCmd,
-	inspect_node_key::InspectNodeKeyCmd,
-	generate_node_key::GenerateNodeKeyCmd,
+    generate::GenerateCmd, generate_node_key::GenerateNodeKeyCmd, insert_key::InsertKeyCmd,
+    inspect_key::InspectKeyCmd, inspect_node_key::InspectNodeKeyCmd,
 };
 
 /// Key utilities for the cli.
 #[derive(Debug, StructOpt)]
 pub enum KeySubcommand {
-	/// Generate a random node libp2p key, save it to file or print it to stdout
-	/// and print its peer ID to stderr.
-	GenerateNodeKey(GenerateNodeKeyCmd),
+    /// Generate a random node libp2p key, save it to file or print it to stdout
+    /// and print its peer ID to stderr.
+    GenerateNodeKey(GenerateNodeKeyCmd),
 
-	/// Generate a random account
-	Generate(GenerateCmd),
+    /// Generate a random account
+    Generate(GenerateCmd),
 
-	/// Gets a public key and a SS58 address from the provided Secret URI
-	InspectKey(InspectKeyCmd),
+    /// Gets a public key and a SS58 address from the provided Secret URI
+    InspectKey(InspectKeyCmd),
 
-	/// Print the peer ID corresponding to the node key in the given file
-	InspectNodeKey(InspectNodeKeyCmd),
+    /// Print the peer ID corresponding to the node key in the given file
+    InspectNodeKey(InspectNodeKeyCmd),
 
-	/// Insert a key to the keystore of a node.
-	Insert(InsertKeyCmd),
+    /// Insert a key to the keystore of a node.
+    Insert(InsertKeyCmd),
 }
 
 impl KeySubcommand {
-	/// run the key subcommands
-	pub fn run<C: SubstrateCli>(&self, cli: &C) -> Result<(), Error> {
-		match self {
-			KeySubcommand::GenerateNodeKey(cmd) => cmd.run(),
-			KeySubcommand::Generate(cmd) => cmd.run(),
-			KeySubcommand::InspectKey(cmd) => cmd.run(),
-			KeySubcommand::Insert(cmd) => cmd.run(cli),
-			KeySubcommand::InspectNodeKey(cmd) => cmd.run(),
-		}
-	}
+    /// run the key subcommands
+    pub fn run<C: SubstrateCli>(&self, cli: &C) -> Result<(), Error> {
+        match self {
+            KeySubcommand::GenerateNodeKey(cmd) => cmd.run(),
+            KeySubcommand::Generate(cmd) => cmd.run(),
+            KeySubcommand::InspectKey(cmd) => cmd.run(),
+            KeySubcommand::Insert(cmd) => cmd.run(cli),
+            KeySubcommand::InspectNodeKey(cmd) => cmd.run(),
+        }
+    }
 }

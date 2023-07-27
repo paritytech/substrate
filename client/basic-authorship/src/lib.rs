@@ -72,4 +72,4 @@
 
 mod basic_authorship;
 
-pub use crate::basic_authorship::{ProposerFactory, Proposer, DEFAULT_MAX_BLOCK_SIZE};
+pub use crate::basic_authorship::{Proposer, ProposerFactory, DEFAULT_MAX_BLOCK_SIZE};

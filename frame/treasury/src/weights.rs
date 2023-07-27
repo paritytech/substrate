@@ -35,74 +35,76 @@
 // --output=./frame/treasury/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
-
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{
+    traits::Get,
+    weights::{constants::RocksDbWeight, Weight},
+};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_treasury.
 pub trait WeightInfo {
-	fn propose_spend() -> Weight;
-	fn reject_proposal() -> Weight;
-	fn approve_proposal() -> Weight;
-	fn on_initialize_proposals(p: u32, ) -> Weight;
+    fn propose_spend() -> Weight;
+    fn reject_proposal() -> Weight;
+    fn approve_proposal() -> Weight;
+    fn on_initialize_proposals(p: u32) -> Weight;
 }
 
 /// Weights for pallet_treasury using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn propose_spend() -> Weight {
-		(59_986_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-	}
-	fn reject_proposal() -> Weight {
-		(48_300_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-	}
-	fn approve_proposal() -> Weight {
-		(14_054_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn on_initialize_proposals(p: u32, ) -> Weight {
-		(86_038_000 as Weight)
-			// Standard Error: 18_000
-			.saturating_add((78_781_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(p as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(p as Weight)))
-	}
+    fn propose_spend() -> Weight {
+        (59_986_000 as Weight)
+            .saturating_add(T::DbWeight::get().reads(1 as Weight))
+            .saturating_add(T::DbWeight::get().writes(2 as Weight))
+    }
+    fn reject_proposal() -> Weight {
+        (48_300_000 as Weight)
+            .saturating_add(T::DbWeight::get().reads(2 as Weight))
+            .saturating_add(T::DbWeight::get().writes(2 as Weight))
+    }
+    fn approve_proposal() -> Weight {
+        (14_054_000 as Weight)
+            .saturating_add(T::DbWeight::get().reads(2 as Weight))
+            .saturating_add(T::DbWeight::get().writes(1 as Weight))
+    }
+    fn on_initialize_proposals(p: u32) -> Weight {
+        (86_038_000 as Weight)
+            // Standard Error: 18_000
+            .saturating_add((78_781_000 as Weight).saturating_mul(p as Weight))
+            .saturating_add(T::DbWeight::get().reads(2 as Weight))
+            .saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(p as Weight)))
+            .saturating_add(T::DbWeight::get().writes(2 as Weight))
+            .saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(p as Weight)))
+    }
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn propose_spend() -> Weight {
-		(59_986_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-	}
-	fn reject_proposal() -> Weight {
-		(48_300_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-	}
-	fn approve_proposal() -> Weight {
-		(14_054_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn on_initialize_proposals(p: u32, ) -> Weight {
-		(86_038_000 as Weight)
-			// Standard Error: 18_000
-			.saturating_add((78_781_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(p as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(p as Weight)))
-	}
+    fn propose_spend() -> Weight {
+        (59_986_000 as Weight)
+            .saturating_add(RocksDbWeight::get().reads(1 as Weight))
+            .saturating_add(RocksDbWeight::get().writes(2 as Weight))
+    }
+    fn reject_proposal() -> Weight {
+        (48_300_000 as Weight)
+            .saturating_add(RocksDbWeight::get().reads(2 as Weight))
+            .saturating_add(RocksDbWeight::get().writes(2 as Weight))
+    }
+    fn approve_proposal() -> Weight {
+        (14_054_000 as Weight)
+            .saturating_add(RocksDbWeight::get().reads(2 as Weight))
+            .saturating_add(RocksDbWeight::get().writes(1 as Weight))
+    }
+    fn on_initialize_proposals(p: u32) -> Weight {
+        (86_038_000 as Weight)
+            // Standard Error: 18_000
+            .saturating_add((78_781_000 as Weight).saturating_mul(p as Weight))
+            .saturating_add(RocksDbWeight::get().reads(2 as Weight))
+            .saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(p as Weight)))
+            .saturating_add(RocksDbWeight::get().writes(2 as Weight))
+            .saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(p as Weight)))
+    }
 }

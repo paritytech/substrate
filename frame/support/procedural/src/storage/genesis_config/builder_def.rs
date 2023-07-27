@@ -17,67 +17,69 @@
 
 //! Builder logic definition used to build genesis storage.
 
+use super::super::{DeclStorageDefExt, StorageLineTypeDef};
 use frame_support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream;
-use syn::spanned::Spanned;
 use quote::{quote, quote_spanned};
-use super::super::{DeclStorageDefExt, StorageLineTypeDef};
+use syn::spanned::Spanned;
 
 /// Definition of builder blocks, each block insert some value in the storage.
 /// They must be called inside externalities, and with `self` being the genesis config.
 pub struct BuilderDef {
-	/// Contains:
-	/// * build block for storage with build attribute.
-	/// * build block for storage with config attribute and no build attribute.
-	/// * build block for extra genesis build expression.
-	pub blocks: Vec<TokenStream>,
-	/// The build blocks requires generic traits.
-	pub is_generic: bool,
+    /// Contains:
+    /// * build block for storage with build attribute.
+    /// * build block for storage with config attribute and no build attribute.
+    /// * build block for extra genesis build expression.
+    pub blocks: Vec<TokenStream>,
+    /// The build blocks requires generic traits.
+    pub is_generic: bool,
 }
 
 impl BuilderDef {
-	pub fn from_def(scrate: &TokenStream, def: &DeclStorageDefExt) -> Self {
-		let mut blocks = Vec::new();
-		let mut is_generic = false;
+    pub fn from_def(scrate: &TokenStream, def: &DeclStorageDefExt) -> Self {
+        let mut blocks = Vec::new();
+        let mut is_generic = false;
 
-		for line in def.storage_lines.iter() {
-			let storage_struct = &line.storage_struct;
-			let storage_trait = &line.storage_trait;
-			let value_type = &line.value_type;
+        for line in def.storage_lines.iter() {
+            let storage_struct = &line.storage_struct;
+            let storage_trait = &line.storage_trait;
+            let value_type = &line.value_type;
 
-			// Defines the data variable to use for insert at genesis either from build or config.
-			let mut data = None;
+            // Defines the data variable to use for insert at genesis either from build or config.
+            let mut data = None;
 
-			if let Some(builder) = &line.build {
-				is_generic |= ext::expr_contains_ident(&builder, &def.module_runtime_generic);
-				is_generic |= line.is_generic;
+            if let Some(builder) = &line.build {
+                is_generic |= ext::expr_contains_ident(&builder, &def.module_runtime_generic);
+                is_generic |= line.is_generic;
 
-				data = Some(match &line.storage_type {
-					StorageLineTypeDef::Simple(_) if line.is_option =>
-						quote_spanned!(builder.span() =>
-							// NOTE: the type of `data` is specified when used later in the code
-							let builder: fn(&Self) -> _ = #builder;
-							let data = builder(self);
-							let data = Option::as_ref(&data);
-						),
-					_ => quote_spanned!(builder.span() =>
-						// NOTE: the type of `data` is specified when used later in the code
-						let builder: fn(&Self) -> _ = #builder;
-						let data = &builder(self);
-					),
-				});
-			} else if let Some(config) = &line.config {
-				is_generic |= line.is_generic;
+                data = Some(match &line.storage_type {
+                    StorageLineTypeDef::Simple(_) if line.is_option => {
+                        quote_spanned!(builder.span() =>
+                            // NOTE: the type of `data` is specified when used later in the code
+                            let builder: fn(&Self) -> _ = #builder;
+                            let data = builder(self);
+                            let data = Option::as_ref(&data);
+                        )
+                    }
+                    _ => quote_spanned!(builder.span() =>
+                        // NOTE: the type of `data` is specified when used later in the code
+                        let builder: fn(&Self) -> _ = #builder;
+                        let data = &builder(self);
+                    ),
+                });
+            } else if let Some(config) = &line.config {
+                is_generic |= line.is_generic;
 
-				data = Some(match &line.storage_type {
-					StorageLineTypeDef::Simple(_) if line.is_option =>
-						quote!( let data = Some(&self.#config); ),
-					_ => quote!( let data = &self.#config; ),
-				});
-			};
+                data = Some(match &line.storage_type {
+                    StorageLineTypeDef::Simple(_) if line.is_option => {
+                        quote!( let data = Some(&self.#config); )
+                    }
+                    _ => quote!( let data = &self.#config; ),
+                });
+            };
 
-			if let Some(data) = data {
-				blocks.push(match &line.storage_type {
+            if let Some(data) = data {
+                blocks.push(match &line.storage_type {
 					StorageLineTypeDef::Simple(_) if line.is_option => {
 						quote!{{
 							#data
@@ -121,22 +123,18 @@ impl BuilderDef {
 						}}
 					},
 				});
-			}
-		}
+            }
+        }
 
-		if let Some(builder) = def.extra_genesis_build.as_ref() {
-			is_generic |= ext::expr_contains_ident(&builder, &def.module_runtime_generic);
+        if let Some(builder) = def.extra_genesis_build.as_ref() {
+            is_generic |= ext::expr_contains_ident(&builder, &def.module_runtime_generic);
 
-			blocks.push(quote_spanned! { builder.span() =>
-				let extra_genesis_builder: fn(&Self) = #builder;
-				extra_genesis_builder(self);
-			});
-		}
+            blocks.push(quote_spanned! { builder.span() =>
+                let extra_genesis_builder: fn(&Self) = #builder;
+                extra_genesis_builder(self);
+            });
+        }
 
-
-		Self {
-			blocks,
-			is_generic,
-		}
-	}
+        Self { blocks, is_generic }
+    }
 }

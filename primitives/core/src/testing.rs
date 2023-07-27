@@ -138,19 +138,24 @@ pub struct TaskExecutor(futures::executor::ThreadPool);
 
 #[cfg(feature = "std")]
 impl TaskExecutor {
-	/// Create a new instance of `Self`.
-	pub fn new() -> Self {
-		let mut builder = futures::executor::ThreadPoolBuilder::new();
-		Self(builder.pool_size(8).create().expect("Failed to create thread pool"))
-	}
+    /// Create a new instance of `Self`.
+    pub fn new() -> Self {
+        let mut builder = futures::executor::ThreadPoolBuilder::new();
+        Self(
+            builder
+                .pool_size(8)
+                .create()
+                .expect("Failed to create thread pool"),
+        )
+    }
 }
 
 #[cfg(feature = "std")]
 impl crate::traits::SpawnNamed for TaskExecutor {
-	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		self.0.spawn_ok(future);
-	}
-	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
-		self.0.spawn_ok(future);
-	}
+    fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+        self.0.spawn_ok(future);
+    }
+    fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+        self.0.spawn_ok(future);
+    }
 }

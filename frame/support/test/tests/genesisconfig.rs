@@ -18,29 +18,29 @@
 pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
+    pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 }
 
 frame_support::decl_storage! {
-	trait Store for Module<T: Config> as Test {
-		pub AppendableDM config(t): double_map hasher(identity) u32, hasher(identity) T::BlockNumber => Vec<u32>;
-	}
+    trait Store for Module<T: Config> as Test {
+        pub AppendableDM config(t): double_map hasher(identity) u32, hasher(identity) T::BlockNumber => Vec<u32>;
+    }
 }
 
 struct Test;
 
 impl frame_support_test::Config for Test {
-	type BlockNumber = u32;
-	type Origin = ();
-	type PalletInfo = frame_support_test::PanicPalletInfo;
-	type DbWeight = ();
+    type BlockNumber = u32;
+    type Origin = ();
+    type PalletInfo = frame_support_test::PanicPalletInfo;
+    type DbWeight = ();
 }
 
 impl Config for Test {}
 
 #[test]
 fn init_genesis_config() {
-	GenesisConfig::<Test> {
-		t: Default::default(),
-	};
+    GenesisConfig::<Test> {
+        t: Default::default(),
+    };
 }

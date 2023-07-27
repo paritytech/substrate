@@ -17,45 +17,42 @@
 
 //! Tests for the generic implementations of Extrinsic/Header/Block.
 
+use super::DigestItem;
 use crate::codec::{Decode, Encode};
 use sp_core::H256;
-use super::DigestItem;
 
 #[test]
 fn system_digest_item_encoding() {
-	let item = DigestItem::ChangesTrieRoot::<H256>(H256::default());
-	let encoded = item.encode();
-	assert_eq!(encoded, vec![
-		// type = DigestItemType::ChangesTrieRoot
-		2,
-		// trie root
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 0,
-	]);
+    let item = DigestItem::ChangesTrieRoot::<H256>(H256::default());
+    let encoded = item.encode();
+    assert_eq!(
+        encoded,
+        vec![
+            // type = DigestItemType::ChangesTrieRoot
+            2, // trie root
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ]
+    );
 
-	let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
-	assert_eq!(item, decoded);
+    let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
+    assert_eq!(item, decoded);
 }
 
 #[test]
 fn non_system_digest_item_encoding() {
-	let item = DigestItem::Other::<H256>(vec![10, 20, 30]);
-	let encoded = item.encode();
-	assert_eq!(encoded, vec![
-		// type = DigestItemType::Other
-		0,
-		// length of other data
-		12,
-		// authorities
-		10, 20, 30,
-	]);
+    let item = DigestItem::Other::<H256>(vec![10, 20, 30]);
+    let encoded = item.encode();
+    assert_eq!(
+        encoded,
+        vec![
+            // type = DigestItemType::Other
+            0, // length of other data
+            12, // authorities
+            10, 20, 30,
+        ]
+    );
 
-	let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
-	assert_eq!(item, decoded);
+    let decoded: DigestItem<H256> = Decode::decode(&mut &encoded[..]).unwrap();
+    assert_eq!(item, decoded);
 }

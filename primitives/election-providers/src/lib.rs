@@ -159,7 +159,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod onchain;
-use sp_std::{prelude::*, fmt::Debug};
+use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
@@ -167,49 +167,49 @@ pub use sp_npos_elections::{Assignment, ExtendedBalance, PerThing128, Supports, 
 
 /// Something that can provide the data to an [`ElectionProvider`].
 pub trait ElectionDataProvider<AccountId, BlockNumber> {
-	/// All possible targets for the election, i.e. the candidates.
-	fn targets() -> Vec<AccountId>;
+    /// All possible targets for the election, i.e. the candidates.
+    fn targets() -> Vec<AccountId>;
 
-	/// All possible voters for the election.
-	///
-	/// Note that if a notion of self-vote exists, it should be represented here.
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)>;
+    /// All possible voters for the election.
+    ///
+    /// Note that if a notion of self-vote exists, it should be represented here.
+    fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)>;
 
-	/// The number of targets to elect.
-	fn desired_targets() -> u32;
+    /// The number of targets to elect.
+    fn desired_targets() -> u32;
 
-	/// Provide a best effort prediction about when the next election is about to happen.
-	///
-	/// In essence, the implementor should predict with this function when it will trigger the
-	/// [`ElectionProvider::elect`].
-	///
-	/// This is only useful for stateful election providers.
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber;
+    /// Provide a best effort prediction about when the next election is about to happen.
+    ///
+    /// In essence, the implementor should predict with this function when it will trigger the
+    /// [`ElectionProvider::elect`].
+    ///
+    /// This is only useful for stateful election providers.
+    fn next_election_prediction(now: BlockNumber) -> BlockNumber;
 
-	/// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
-	/// else a noop.
-	#[cfg(any(feature = "runtime-benchmarks", test))]
-	fn put_snapshot(
-		_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-		_targets: Vec<AccountId>,
-	) {
-	}
+    /// Utility function only to be used in benchmarking scenarios, to be implemented optionally,
+    /// else a noop.
+    #[cfg(any(feature = "runtime-benchmarks", test))]
+    fn put_snapshot(
+        _voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+        _targets: Vec<AccountId>,
+    ) {
+    }
 }
 
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for () {
-	fn targets() -> Vec<AccountId> {
-		Default::default()
-	}
-	fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
-		Default::default()
-	}
-	fn desired_targets() -> u32 {
-		Default::default()
-	}
-	fn next_election_prediction(now: BlockNumber) -> BlockNumber {
-		now
-	}
+    fn targets() -> Vec<AccountId> {
+        Default::default()
+    }
+    fn voters() -> Vec<(AccountId, VoteWeight, Vec<AccountId>)> {
+        Default::default()
+    }
+    fn desired_targets() -> u32 {
+        Default::default()
+    }
+    fn next_election_prediction(now: BlockNumber) -> BlockNumber {
+        now
+    }
 }
 
 /// Something that can compute the result of an election and pass it back to the caller.
@@ -218,24 +218,24 @@ impl<AccountId, BlockNumber> ElectionDataProvider<AccountId, BlockNumber> for ()
 /// [`ElectionProvider::elect`]. That data required for the election need to be passed to the
 /// implemented of this trait through [`ElectionProvider::DataProvider`].
 pub trait ElectionProvider<AccountId, BlockNumber> {
-	/// The error type that is returned by the provider.
-	type Error: Debug;
+    /// The error type that is returned by the provider.
+    type Error: Debug;
 
-	/// The data provider of the election.
-	type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
+    /// The data provider of the election.
+    type DataProvider: ElectionDataProvider<AccountId, BlockNumber>;
 
-	/// Elect a new set of winners.
-	///
-	/// The result is returned in a target major format, namely as vector of  supports.
-	fn elect() -> Result<Supports<AccountId>, Self::Error>;
+    /// Elect a new set of winners.
+    ///
+    /// The result is returned in a target major format, namely as vector of  supports.
+    fn elect() -> Result<Supports<AccountId>, Self::Error>;
 }
 
 #[cfg(feature = "std")]
 impl<AccountId, BlockNumber> ElectionProvider<AccountId, BlockNumber> for () {
-	type Error = &'static str;
-	type DataProvider = ();
+    type Error = &'static str;
+    type DataProvider = ();
 
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		Err("<() as ElectionProvider> cannot do anything.")
-	}
+    fn elect() -> Result<Supports<AccountId>, Self::Error> {
+        Err("<() as ElectionProvider> cannot do anything.")
+    }
 }

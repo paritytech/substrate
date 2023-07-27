@@ -50,99 +50,92 @@
 use crate::{ExHashT, NetworkService};
 
 use async_std::sync::{Mutex, MutexGuard};
-use futures::prelude::*;
 use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures::prelude::*;
 use libp2p::PeerId;
 use sp_runtime::traits::Block as BlockT;
-use std::{
-	borrow::Cow,
-	collections::VecDeque,
-	fmt,
-	sync::Arc,
-};
+use std::{borrow::Cow, collections::VecDeque, fmt, sync::Arc};
 
 #[cfg(test)]
 mod tests;
 
 /// Notifications sender for a specific combination of network service, peer, and protocol.
 pub struct QueuedSender<M> {
-	/// Shared between the user-facing [`QueuedSender`] and the background future.
-	shared_message_queue: SharedMessageQueue<M>,
-	/// Used to notify the background future to check for new messages in the message queue.
-	notify_background_future: Sender<()>,
-	/// Maximum number of elements in [`QueuedSender::shared_message_queue`].
-	queue_size_limit: usize,
+    /// Shared between the user-facing [`QueuedSender`] and the background future.
+    shared_message_queue: SharedMessageQueue<M>,
+    /// Used to notify the background future to check for new messages in the message queue.
+    notify_background_future: Sender<()>,
+    /// Maximum number of elements in [`QueuedSender::shared_message_queue`].
+    queue_size_limit: usize,
 }
 
 impl<M> QueuedSender<M> {
-	/// Returns a new [`QueuedSender`] containing a queue of message for this specific
-	/// combination of peer and protocol.
-	///
-	/// In addition to the [`QueuedSender`], also returns a `Future` whose role is to drive
-	/// the messages sending forward.
-	pub fn new<B, H, F>(
-		service: Arc<NetworkService<B, H>>,
-		peer_id: PeerId,
-		protocol: Cow<'static, str>,
-		queue_size_limit: usize,
-		messages_encode: F
-	) -> (Self, impl Future<Output = ()> + Send + 'static)
-	where
-		M: Send + 'static,
-		B: BlockT + 'static,
-		H: ExHashT,
-		F: Fn(M) -> Vec<u8> + Send + 'static,
-	{
-		let (notify_background_future, wait_for_sender) = channel(0);
+    /// Returns a new [`QueuedSender`] containing a queue of message for this specific
+    /// combination of peer and protocol.
+    ///
+    /// In addition to the [`QueuedSender`], also returns a `Future` whose role is to drive
+    /// the messages sending forward.
+    pub fn new<B, H, F>(
+        service: Arc<NetworkService<B, H>>,
+        peer_id: PeerId,
+        protocol: Cow<'static, str>,
+        queue_size_limit: usize,
+        messages_encode: F,
+    ) -> (Self, impl Future<Output = ()> + Send + 'static)
+    where
+        M: Send + 'static,
+        B: BlockT + 'static,
+        H: ExHashT,
+        F: Fn(M) -> Vec<u8> + Send + 'static,
+    {
+        let (notify_background_future, wait_for_sender) = channel(0);
 
-		let shared_message_queue = Arc::new(Mutex::new(
-			VecDeque::with_capacity(queue_size_limit),
-		));
+        let shared_message_queue = Arc::new(Mutex::new(VecDeque::with_capacity(queue_size_limit)));
 
-		let background_future = create_background_future(
-			wait_for_sender,
-			service,
-			peer_id,
-			protocol,
-			shared_message_queue.clone(),
-			messages_encode
-		);
+        let background_future = create_background_future(
+            wait_for_sender,
+            service,
+            peer_id,
+            protocol,
+            shared_message_queue.clone(),
+            messages_encode,
+        );
 
-		let sender = QueuedSender {
-			shared_message_queue,
-			notify_background_future,
-			queue_size_limit,
-		};
+        let sender = QueuedSender {
+            shared_message_queue,
+            notify_background_future,
+            queue_size_limit,
+        };
 
-		(sender, background_future)
-	}
+        (sender, background_future)
+    }
 
-	/// Locks the queue of messages towards this peer.
-	///
-	/// The returned `Future` is expected to be ready quite quickly.
-	pub async fn lock_queue<'a>(&'a mut self) -> QueueGuard<'a, M> {
-		QueueGuard {
-			message_queue: self.shared_message_queue.lock().await,
-			queue_size_limit: self.queue_size_limit,
-			notify_background_future: &mut self.notify_background_future,
-		}
-	}
+    /// Locks the queue of messages towards this peer.
+    ///
+    /// The returned `Future` is expected to be ready quite quickly.
+    pub async fn lock_queue<'a>(&'a mut self) -> QueueGuard<'a, M> {
+        QueueGuard {
+            message_queue: self.shared_message_queue.lock().await,
+            queue_size_limit: self.queue_size_limit,
+            notify_background_future: &mut self.notify_background_future,
+        }
+    }
 
-	/// Pushes a message to the queue, or discards it if the queue is full.
-	///
-	/// The returned `Future` is expected to be ready quite quickly.
-	pub async fn queue_or_discard(&mut self, message: M)
-	where
-		M: Send + 'static
-	{
-		self.lock_queue().await.push_or_discard(message);
-	}
+    /// Pushes a message to the queue, or discards it if the queue is full.
+    ///
+    /// The returned `Future` is expected to be ready quite quickly.
+    pub async fn queue_or_discard(&mut self, message: M)
+    where
+        M: Send + 'static,
+    {
+        self.lock_queue().await.push_or_discard(message);
+    }
 }
 
 impl<M> fmt::Debug for QueuedSender<M> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_struct("QueuedSender").finish()
-	}
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("QueuedSender").finish()
+    }
 }
 
 /// Locked queue of messages to the given peer.
@@ -152,37 +145,37 @@ impl<M> fmt::Debug for QueuedSender<M> {
 /// the network after the [`QueueGuard`] is dropped.
 #[must_use]
 pub struct QueueGuard<'a, M> {
-	message_queue: MutexGuard<'a, MessageQueue<M>>,
-	/// Same as [`QueuedSender::queue_size_limit`].
-	queue_size_limit: usize,
-	notify_background_future: &'a mut Sender<()>,
+    message_queue: MutexGuard<'a, MessageQueue<M>>,
+    /// Same as [`QueuedSender::queue_size_limit`].
+    queue_size_limit: usize,
+    notify_background_future: &'a mut Sender<()>,
 }
 
 impl<'a, M: Send + 'static> QueueGuard<'a, M> {
-	/// Pushes a message to the queue, or discards it if the queue is full.
-	///
-	/// The message will only start being sent out after the [`QueueGuard`] is dropped.
-	pub fn push_or_discard(&mut self, message: M) {
-		if self.message_queue.len() < self.queue_size_limit {
-			self.message_queue.push_back(message);
-		}
-	}
+    /// Pushes a message to the queue, or discards it if the queue is full.
+    ///
+    /// The message will only start being sent out after the [`QueueGuard`] is dropped.
+    pub fn push_or_discard(&mut self, message: M) {
+        if self.message_queue.len() < self.queue_size_limit {
+            self.message_queue.push_back(message);
+        }
+    }
 
-	/// Calls `filter` for each message in the queue, and removes the ones for which `false` is
-	/// returned.
-	///
-	/// > **Note**: The parameter of `filter` is a `&M` and not a `&mut M` (which would be
-	/// >           better) because the underlying implementation relies on `VecDeque::retain`.
-	pub fn retain(&mut self, filter: impl FnMut(&M) -> bool) {
-		self.message_queue.retain(filter);
-	}
+    /// Calls `filter` for each message in the queue, and removes the ones for which `false` is
+    /// returned.
+    ///
+    /// > **Note**: The parameter of `filter` is a `&M` and not a `&mut M` (which would be
+    /// >           better) because the underlying implementation relies on `VecDeque::retain`.
+    pub fn retain(&mut self, filter: impl FnMut(&M) -> bool) {
+        self.message_queue.retain(filter);
+    }
 }
 
 impl<'a, M> Drop for QueueGuard<'a, M> {
-	fn drop(&mut self) {
-		// Notify background future to check for new messages in the message queue.
-		let _ = self.notify_background_future.try_send(());
-	}
+    fn drop(&mut self) {
+        // Notify background future to check for new messages in the message queue.
+        let _ = self.notify_background_future.try_send(());
+    }
 }
 
 type MessageQueue<M> = VecDeque<M>;
@@ -191,39 +184,39 @@ type MessageQueue<M> = VecDeque<M>;
 type SharedMessageQueue<M> = Arc<Mutex<MessageQueue<M>>>;
 
 async fn create_background_future<B: BlockT, H: ExHashT, M, F: Fn(M) -> Vec<u8>>(
-	mut wait_for_sender: Receiver<()>,
-	service: Arc<NetworkService<B, H>>,
-	peer_id: PeerId,
-	protocol: Cow<'static, str>,
-	shared_message_queue: SharedMessageQueue<M>,
-	messages_encode: F,
+    mut wait_for_sender: Receiver<()>,
+    service: Arc<NetworkService<B, H>>,
+    peer_id: PeerId,
+    protocol: Cow<'static, str>,
+    shared_message_queue: SharedMessageQueue<M>,
+    messages_encode: F,
 ) {
-	loop {
-		if wait_for_sender.next().await.is_none() {
-			return
-		}
+    loop {
+        if wait_for_sender.next().await.is_none() {
+            return;
+        }
 
-		loop {
-			let mut queue_guard = shared_message_queue.lock().await;
-			let next_message = match queue_guard.pop_front() {
-				Some(msg) => msg,
-				None => break,
-			};
-			drop(queue_guard);
+        loop {
+            let mut queue_guard = shared_message_queue.lock().await;
+            let next_message = match queue_guard.pop_front() {
+                Some(msg) => msg,
+                None => break,
+            };
+            drop(queue_guard);
 
-			// Starting from below, we try to send the message. If an error happens when sending,
-			// the only sane option we have is to silently discard the message.
-			let sender = match service.notification_sender(peer_id.clone(), protocol.clone()) {
-				Ok(s) => s,
-				Err(_) => continue,
-			};
+            // Starting from below, we try to send the message. If an error happens when sending,
+            // the only sane option we have is to silently discard the message.
+            let sender = match service.notification_sender(peer_id.clone(), protocol.clone()) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
 
-			let ready = match sender.ready().await {
-				Ok(r) => r,
-				Err(_) => continue,
-			};
+            let ready = match sender.ready().await {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
 
-			let _ = ready.send(messages_encode(next_message));
-		}
-	}
+            let _ = ready.send(messages_encode(next_message));
+        }
+    }
 }

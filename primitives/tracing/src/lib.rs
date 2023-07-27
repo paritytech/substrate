@@ -87,36 +87,33 @@
 /// the default subscriber is doing nothing, so any spans or events happening before
 /// will not be recorded!
 ///
-
 mod types;
 
 #[cfg(feature = "std")]
 use tracing;
 
 pub use tracing::{
-	debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
-	span, event, Level, Span,
+    debug, debug_span, error, error_span, event, info, info_span, span, trace, trace_span, warn,
+    warn_span, Level, Span,
 };
 
 pub use crate::types::{
-	WasmMetadata, WasmEntryAttributes, WasmValuesSet, WasmValue, WasmFields, WasmLevel, WasmFieldName
+    WasmEntryAttributes, WasmFieldName, WasmFields, WasmLevel, WasmMetadata, WasmValue,
+    WasmValuesSet,
 };
-
 
 /// Try to init a simple tracing subscriber with log compatibility layer.
 /// Ignores any error. Useful for testing.
 #[cfg(feature = "std")]
 pub fn try_init_simple() {
-	let _ = tracing_subscriber::fmt()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.with_writer(std::io::stderr).try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
+        .try_init();
 }
 
 #[cfg(feature = "std")]
-pub use crate::types::{
-	WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER
-};
-
+pub use crate::types::{WASM_NAME_KEY, WASM_TARGET_KEY, WASM_TRACE_IDENTIFIER};
 
 /// Runs given code within a tracing span, measuring it's execution time.
 ///
@@ -187,13 +184,12 @@ macro_rules! within_span {
 	};
 }
 
-
 /// Enter a span - noop for `no_std` without `with-tracing`
 #[cfg(all(not(feature = "std"), not(feature = "with-tracing")))]
 #[macro_export]
 macro_rules! enter_span {
-	( $lvl:expr, $name:expr ) => ( );
-	( $name:expr ) => ( ) // no-op
+    ( $lvl:expr, $name:expr ) => {};
+    ( $name:expr ) => {}; // no-op
 }
 
 /// Enter a span.
@@ -226,13 +222,13 @@ macro_rules! enter_span {
 #[cfg(any(feature = "std", feature = "with-tracing"))]
 #[macro_export]
 macro_rules! enter_span {
-	( $span:expr ) => {
-		// Calling this twice in a row will overwrite (and drop) the earlier
-		// that is a _documented feature_!
-		let __within_span__ = $span;
-		let __tracing_guard__ = __within_span__.enter();
-	};
-	( $lvl:expr, $name:expr ) => {
-		$crate::enter_span!($crate::span!($lvl, $name))
-	};
+    ( $span:expr ) => {
+        // Calling this twice in a row will overwrite (and drop) the earlier
+        // that is a _documented feature_!
+        let __within_span__ = $span;
+        let __tracing_guard__ = __within_span__.enter();
+    };
+    ( $lvl:expr, $name:expr ) => {
+        $crate::enter_span!($crate::span!($lvl, $name))
+    };
 }

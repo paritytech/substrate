@@ -19,73 +19,73 @@
 //! Defines the compiled Wasm runtime that uses Wasmtime internally.
 
 use crate::host::HostState;
-use crate::imports::{Imports, resolve_imports};
-use crate::instance_wrapper::{ModuleWrapper, InstanceWrapper, GlobalsSnapshot, EntryPoint};
+use crate::imports::{resolve_imports, Imports};
+use crate::instance_wrapper::{EntryPoint, GlobalsSnapshot, InstanceWrapper, ModuleWrapper};
 use crate::state_holder;
 
-use std::rc::Rc;
-use std::sync::Arc;
-use std::path::Path;
 use sc_executor_common::{
-	error::{Result, WasmError},
-	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
+    error::{Result, WasmError},
+    wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
-use sp_wasm_interface::{Function, Pointer, WordSize, Value};
+use sp_wasm_interface::{Function, Pointer, Value, WordSize};
+use std::path::Path;
+use std::rc::Rc;
+use std::sync::Arc;
 use wasmtime::{Config, Engine, Store};
 
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
-	module_wrapper: Arc<ModuleWrapper>,
-	heap_pages: u32,
-	allow_missing_func_imports: bool,
-	host_functions: Vec<&'static dyn Function>,
-	engine: Engine,
+    module_wrapper: Arc<ModuleWrapper>,
+    heap_pages: u32,
+    allow_missing_func_imports: bool,
+    host_functions: Vec<&'static dyn Function>,
+    engine: Engine,
 }
 
 impl WasmModule for WasmtimeRuntime {
-	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
-		let store = Store::new(&self.engine);
+    fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
+        let store = Store::new(&self.engine);
 
-		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
-		// and results.
-		let imports = resolve_imports(
-			&store,
-			self.module_wrapper.module(),
-			&self.host_functions,
-			self.heap_pages,
-			self.allow_missing_func_imports,
-		)?;
+        // Scan all imports, find the matching host functions, and create stubs that adapt arguments
+        // and results.
+        let imports = resolve_imports(
+            &store,
+            self.module_wrapper.module(),
+            &self.host_functions,
+            self.heap_pages,
+            self.allow_missing_func_imports,
+        )?;
 
-		let instance_wrapper =
-			InstanceWrapper::new(&store, &self.module_wrapper, &imports, self.heap_pages)?;
-		let heap_base = instance_wrapper.extract_heap_base()?;
-		let globals_snapshot = GlobalsSnapshot::take(&instance_wrapper)?;
+        let instance_wrapper =
+            InstanceWrapper::new(&store, &self.module_wrapper, &imports, self.heap_pages)?;
+        let heap_base = instance_wrapper.extract_heap_base()?;
+        let globals_snapshot = GlobalsSnapshot::take(&instance_wrapper)?;
 
-		Ok(Box::new(WasmtimeInstance {
-			store,
-			instance_wrapper: Rc::new(instance_wrapper),
-			module_wrapper: Arc::clone(&self.module_wrapper),
-			imports,
-			globals_snapshot,
-			heap_pages: self.heap_pages,
-			heap_base,
-		}))
-	}
+        Ok(Box::new(WasmtimeInstance {
+            store,
+            instance_wrapper: Rc::new(instance_wrapper),
+            module_wrapper: Arc::clone(&self.module_wrapper),
+            imports,
+            globals_snapshot,
+            heap_pages: self.heap_pages,
+            heap_base,
+        }))
+    }
 }
 
 /// A `WasmInstance` implementation that reuses compiled module and spawns instances
 /// to execute the compiled code.
 pub struct WasmtimeInstance {
-	store: Store,
-	module_wrapper: Arc<ModuleWrapper>,
-	instance_wrapper: Rc<InstanceWrapper>,
-	globals_snapshot: GlobalsSnapshot,
-	imports: Imports,
-	heap_pages: u32,
-	heap_base: u32,
+    store: Store,
+    module_wrapper: Arc<ModuleWrapper>,
+    instance_wrapper: Rc<InstanceWrapper>,
+    globals_snapshot: GlobalsSnapshot,
+    imports: Imports,
+    heap_pages: u32,
+    heap_base: u32,
 }
 
 // This is safe because `WasmtimeInstance` does not leak reference to `self.imports`
@@ -93,69 +93,74 @@ pub struct WasmtimeInstance {
 unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
-	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
-		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
-		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
+    fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
+        let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
+        let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
 
-		self.module_wrapper
-			.data_segments_snapshot()
-			.apply(|offset, contents| {
-				self.instance_wrapper
-					.write_memory_from(Pointer::new(offset), contents)
-			})?;
+        self.module_wrapper
+            .data_segments_snapshot()
+            .apply(|offset, contents| {
+                self.instance_wrapper
+                    .write_memory_from(Pointer::new(offset), contents)
+            })?;
 
-		self.globals_snapshot.apply(&*self.instance_wrapper)?;
+        self.globals_snapshot.apply(&*self.instance_wrapper)?;
 
-		perform_call(
-			data,
-			Rc::clone(&self.instance_wrapper),
-			entrypoint,
-			allocator,
-		)
-	}
+        perform_call(
+            data,
+            Rc::clone(&self.instance_wrapper),
+            entrypoint,
+            allocator,
+        )
+    }
 
-	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
-		let instance = InstanceWrapper::new(&self.store, &self.module_wrapper, &self.imports, self.heap_pages)?;
-		instance.get_global_val(name)
-	}
+    fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
+        let instance = InstanceWrapper::new(
+            &self.store,
+            &self.module_wrapper,
+            &self.imports,
+            self.heap_pages,
+        )?;
+        instance.get_global_val(name)
+    }
 }
 
 /// Prepare a directory structure and a config file to enable wasmtime caching.
 ///
 /// In case of an error the caching will not be enabled.
 fn setup_wasmtime_caching(
-	cache_path: &Path,
-	config: &mut Config,
+    cache_path: &Path,
+    config: &mut Config,
 ) -> std::result::Result<(), String> {
-	use std::fs;
+    use std::fs;
 
-	let wasmtime_cache_root = cache_path.join("wasmtime");
-	fs::create_dir_all(&wasmtime_cache_root)
-		.map_err(|err| format!("cannot create the dirs to cache: {:?}", err))?;
+    let wasmtime_cache_root = cache_path.join("wasmtime");
+    fs::create_dir_all(&wasmtime_cache_root)
+        .map_err(|err| format!("cannot create the dirs to cache: {:?}", err))?;
 
-	// Canonicalize the path after creating the directories.
-	let wasmtime_cache_root = wasmtime_cache_root
-		.canonicalize()
-		.map_err(|err| format!("failed to canonicalize the path: {:?}", err))?;
+    // Canonicalize the path after creating the directories.
+    let wasmtime_cache_root = wasmtime_cache_root
+        .canonicalize()
+        .map_err(|err| format!("failed to canonicalize the path: {:?}", err))?;
 
-	// Write the cache config file
-	let cache_config_path = wasmtime_cache_root.join("cache-config.toml");
-	let config_content = format!(
-		"\
+    // Write the cache config file
+    let cache_config_path = wasmtime_cache_root.join("cache-config.toml");
+    let config_content = format!(
+        "\
 [cache]
 enabled = true
 directory = \"{cache_dir}\"
 ",
-		cache_dir = wasmtime_cache_root.display()
-	);
-	fs::write(&cache_config_path, config_content)
-		.map_err(|err| format!("cannot write the cache config: {:?}", err))?;
+        cache_dir = wasmtime_cache_root.display()
+    );
+    fs::write(&cache_config_path, config_content)
+        .map_err(|err| format!("cannot write the cache config: {:?}", err))?;
 
-	config
-		.cache_config_load(cache_config_path)
-		.map_err(|err| format!("failed to parse the config: {:?}", err))?;
+    config
+        .cache_config_load(cache_config_path)
+        .map_err(|err| format!("failed to parse the config: {:?}", err))?;
 
-	Ok(())
+    Ok(())
 }
 
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
@@ -163,72 +168,72 @@ directory = \"{cache_dir}\"
 ///
 /// The `cache_path` designates where this executor implementation can put compiled artifacts.
 pub fn create_runtime(
-	code: &[u8],
-	heap_pages: u64,
-	host_functions: Vec<&'static dyn Function>,
-	allow_missing_func_imports: bool,
-	cache_path: Option<&Path>,
+    code: &[u8],
+    heap_pages: u64,
+    host_functions: Vec<&'static dyn Function>,
+    allow_missing_func_imports: bool,
+    cache_path: Option<&Path>,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
-	// Create the engine, store and finally the module from the given code.
-	let mut config = Config::new();
-	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
-	if let Some(cache_path) = cache_path {
-		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut config) {
-			log::warn!(
-				"failed to setup wasmtime cache. Performance may degrade significantly: {}.",
-				reason,
-			);
-		}
-	}
+    // Create the engine, store and finally the module from the given code.
+    let mut config = Config::new();
+    config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
+    if let Some(cache_path) = cache_path {
+        if let Err(reason) = setup_wasmtime_caching(cache_path, &mut config) {
+            log::warn!(
+                "failed to setup wasmtime cache. Performance may degrade significantly: {}.",
+                reason,
+            );
+        }
+    }
 
-	let engine = Engine::new(&config);
-	let module_wrapper = ModuleWrapper::new(&engine, code)
-		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
+    let engine = Engine::new(&config);
+    let module_wrapper = ModuleWrapper::new(&engine, code)
+        .map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
 
-	Ok(WasmtimeRuntime {
-		module_wrapper: Arc::new(module_wrapper),
-		heap_pages: heap_pages as u32,
-		allow_missing_func_imports,
-		host_functions,
-		engine,
-	})
+    Ok(WasmtimeRuntime {
+        module_wrapper: Arc::new(module_wrapper),
+        heap_pages: heap_pages as u32,
+        allow_missing_func_imports,
+        host_functions,
+        engine,
+    })
 }
 
 fn perform_call(
-	data: &[u8],
-	instance_wrapper: Rc<InstanceWrapper>,
-	entrypoint: EntryPoint,
-	mut allocator: FreeingBumpHeapAllocator,
+    data: &[u8],
+    instance_wrapper: Rc<InstanceWrapper>,
+    entrypoint: EntryPoint,
+    mut allocator: FreeingBumpHeapAllocator,
 ) -> Result<Vec<u8>> {
-	let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
+    let (data_ptr, data_len) = inject_input_data(&instance_wrapper, &mut allocator, data)?;
 
-	let host_state = HostState::new(allocator, instance_wrapper.clone());
-	let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
-		Ok(unpack_ptr_and_len(entrypoint.call(data_ptr, data_len)?))
-	});
-	let (output_ptr, output_len) = ret?;
-	let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;
+    let host_state = HostState::new(allocator, instance_wrapper.clone());
+    let ret = state_holder::with_initialized_state(&host_state, || -> Result<_> {
+        Ok(unpack_ptr_and_len(entrypoint.call(data_ptr, data_len)?))
+    });
+    let (output_ptr, output_len) = ret?;
+    let output = extract_output_data(&instance_wrapper, output_ptr, output_len)?;
 
-	Ok(output)
+    Ok(output)
 }
 
 fn inject_input_data(
-	instance: &InstanceWrapper,
-	allocator: &mut FreeingBumpHeapAllocator,
-	data: &[u8],
+    instance: &InstanceWrapper,
+    allocator: &mut FreeingBumpHeapAllocator,
+    data: &[u8],
 ) -> Result<(Pointer<u8>, WordSize)> {
-	let data_len = data.len() as WordSize;
-	let data_ptr = instance.allocate(allocator, data_len)?;
-	instance.write_memory_from(data_ptr, data)?;
-	Ok((data_ptr, data_len))
+    let data_len = data.len() as WordSize;
+    let data_ptr = instance.allocate(allocator, data_len)?;
+    instance.write_memory_from(data_ptr, data)?;
+    Ok((data_ptr, data_len))
 }
 
 fn extract_output_data(
-	instance: &InstanceWrapper,
-	output_ptr: u32,
-	output_len: u32,
+    instance: &InstanceWrapper,
+    output_ptr: u32,
+    output_len: u32,
 ) -> Result<Vec<u8>> {
-	let mut output = vec![0; output_len as usize];
-	instance.read_memory_into(Pointer::new(output_ptr), &mut output)?;
-	Ok(output)
+    let mut output = vec![0; output_len as usize];
+    instance.read_memory_into(Pointer::new(output_ptr), &mut output)?;
+    Ok(output)
 }

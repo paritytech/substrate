@@ -89,8 +89,8 @@
 
 use sp_std::fmt::{self, Debug};
 
-pub use log::{info, debug, error, trace, warn};
 pub use crate::runtime_print as print;
+pub use log::{debug, error, info, trace, warn};
 pub use sp_std::Writer;
 
 /// Native-only logging.
@@ -99,7 +99,7 @@ pub use sp_std::Writer;
 /// only if the runtime is running natively (i.e. not via WASM)
 #[cfg(feature = "std")]
 pub mod native {
-	pub use super::{info, debug, error, trace, warn, print};
+    pub use super::{debug, error, info, print, trace, warn};
 }
 
 /// Native-only logging.
@@ -108,16 +108,16 @@ pub mod native {
 /// only if the runtime is running natively (i.e. not via WASM)
 #[cfg(not(feature = "std"))]
 pub mod native {
-	#[macro_export]
-	macro_rules! noop {
-		($($arg:tt)+) => {}
-	}
-	pub use noop as info;
-	pub use noop as debug;
-	pub use noop as error;
-	pub use noop as trace;
-	pub use noop as warn;
-	pub use noop as print;
+    #[macro_export]
+    macro_rules! noop {
+        ($($arg:tt)+) => {};
+    }
+    pub use noop as info;
+    pub use noop as debug;
+    pub use noop as error;
+    pub use noop as trace;
+    pub use noop as warn;
+    pub use noop as print;
 }
 
 /// Print out a formatted message.
@@ -141,7 +141,7 @@ macro_rules! runtime_print {
 
 /// Print out the debuggable type.
 pub fn debug(data: &impl Debug) {
-	runtime_print!("{:?}", data);
+    runtime_print!("{:?}", data);
 }
 
 /// Runtime logger implementation - `log` crate backend.
@@ -159,89 +159,89 @@ pub fn debug(data: &impl Debug) {
 pub struct RuntimeLogger;
 
 impl RuntimeLogger {
-	/// Initialize the logger.
-	///
-	/// This is a no-op when running natively (`std`).
-	#[cfg(feature = "std")]
-	pub fn init() {}
+    /// Initialize the logger.
+    ///
+    /// This is a no-op when running natively (`std`).
+    #[cfg(feature = "std")]
+    pub fn init() {}
 
-	/// Initialize the logger.
-	///
-	/// This is a no-op when running natively (`std`).
-	#[cfg(not(feature = "std"))]
-	pub fn init() {
-		static LOGGER: RuntimeLogger = RuntimeLogger;
-		let _ = log::set_logger(&LOGGER);
+    /// Initialize the logger.
+    ///
+    /// This is a no-op when running natively (`std`).
+    #[cfg(not(feature = "std"))]
+    pub fn init() {
+        static LOGGER: RuntimeLogger = RuntimeLogger;
+        let _ = log::set_logger(&LOGGER);
 
-		// Set max level to `TRACE` to ensure we propagate
-		// all log entries to the native side that will do the
-		// final filtering on what should be printed.
-		//
-		// If we don't set any level, logging is disabled
-		// completly.
-		log::set_max_level(log::LevelFilter::Trace);
-	}
+        // Set max level to `TRACE` to ensure we propagate
+        // all log entries to the native side that will do the
+        // final filtering on what should be printed.
+        //
+        // If we don't set any level, logging is disabled
+        // completly.
+        log::set_max_level(log::LevelFilter::Trace);
+    }
 }
 
 impl log::Log for RuntimeLogger {
-	fn enabled(&self, _metadata: &log::Metadata) -> bool {
-		// to avoid calling to host twice, we pass everything
-		// and let the host decide what to print.
-		// If someone is initializing the logger they should
-		// know what they are doing.
-		true
-	}
+    fn enabled(&self, _metadata: &log::Metadata) -> bool {
+        // to avoid calling to host twice, we pass everything
+        // and let the host decide what to print.
+        // If someone is initializing the logger they should
+        // know what they are doing.
+        true
+    }
 
-	fn log(&self, record: &log::Record) {
-		use fmt::Write;
-		let mut w = sp_std::Writer::default();
-		let _ = core::write!(&mut w, "{}", record.args());
+    fn log(&self, record: &log::Record) {
+        use fmt::Write;
+        let mut w = sp_std::Writer::default();
+        let _ = core::write!(&mut w, "{}", record.args());
 
-		sp_io::logging::log(
-			record.level().into(),
-			record.target(),
-			w.inner(),
-		);
-	}
+        sp_io::logging::log(record.level().into(), record.target(), w.inner());
+    }
 
-	fn flush(&self) {}
+    fn flush(&self) {}
 }
 
 #[cfg(test)]
 mod tests {
-	use substrate_test_runtime_client::{
-		ExecutionStrategy, TestClientBuilderExt, DefaultTestClientBuilderExt,
-		TestClientBuilder, runtime::TestAPI,
-	};
-	use sp_api::ProvideRuntimeApi;
-	use sp_runtime::generic::BlockId;
+    use sp_api::ProvideRuntimeApi;
+    use sp_runtime::generic::BlockId;
+    use substrate_test_runtime_client::{
+        runtime::TestAPI, DefaultTestClientBuilderExt, ExecutionStrategy, TestClientBuilder,
+        TestClientBuilderExt,
+    };
 
-	#[test]
-	fn ensure_runtime_logger_works() {
-		let executable = std::env::current_exe().unwrap();
-		let output = std::process::Command::new(executable)
-			.env("RUN_TEST", "1")
-			.env("RUST_LOG", "trace")
-			.args(&["--nocapture", "ensure_runtime_logger_works_implementation"])
-			.output()
-			.unwrap();
+    #[test]
+    fn ensure_runtime_logger_works() {
+        let executable = std::env::current_exe().unwrap();
+        let output = std::process::Command::new(executable)
+            .env("RUN_TEST", "1")
+            .env("RUST_LOG", "trace")
+            .args(&["--nocapture", "ensure_runtime_logger_works_implementation"])
+            .output()
+            .unwrap();
 
-		let output = dbg!(String::from_utf8(output.stderr).unwrap());
-		assert!(output.contains("Hey I'm runtime"));
-	}
+        let output = dbg!(String::from_utf8(output.stderr).unwrap());
+        assert!(output.contains("Hey I'm runtime"));
+    }
 
-	/// This is no actual test. It will be called by `ensure_runtime_logger_works`
-	/// to check that the runtime can print from the wasm side using the
-	/// `RuntimeLogger`.
-	#[test]
-	fn ensure_runtime_logger_works_implementation() {
-		if std::env::var("RUN_TEST").is_ok() {
-			sp_tracing::try_init_simple();
+    /// This is no actual test. It will be called by `ensure_runtime_logger_works`
+    /// to check that the runtime can print from the wasm side using the
+    /// `RuntimeLogger`.
+    #[test]
+    fn ensure_runtime_logger_works_implementation() {
+        if std::env::var("RUN_TEST").is_ok() {
+            sp_tracing::try_init_simple();
 
-			let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
-			let runtime_api = client.runtime_api();
-			let block_id = BlockId::Number(0);
-			runtime_api.do_trace_log(&block_id).expect("Logging should not fail");
-		}
-	}
+            let client = TestClientBuilder::new()
+                .set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+                .build();
+            let runtime_api = client.runtime_api();
+            let block_id = BlockId::Number(0);
+            runtime_api
+                .do_trace_log(&block_id)
+                .expect("Logging should not fail");
+        }
+    }
 }

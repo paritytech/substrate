@@ -111,17 +111,17 @@ mod chain_spec;
 mod extension;
 
 pub use chain_spec::{
-	ChainSpec as GenericChainSpec, NoExtension, LightSyncState, SerializableLightSyncState,
+    ChainSpec as GenericChainSpec, LightSyncState, NoExtension, SerializableLightSyncState,
 };
-pub use extension::{Group, Fork, Forks, Extension, GetExtension, get_extension};
+pub use extension::{get_extension, Extension, Fork, Forks, GetExtension, Group};
 pub use sc_chain_spec_derive::{ChainSpecExtension, ChainSpecGroup};
-pub use sp_chain_spec::{Properties, ChainType};
+pub use sp_chain_spec::{ChainType, Properties};
 
-use serde::{Serialize, de::DeserializeOwned};
-use sp_runtime::BuildStorage;
 use sc_network::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
+use serde::{de::DeserializeOwned, Serialize};
 use sp_core::storage::Storage;
+use sp_runtime::BuildStorage;
 
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
@@ -129,42 +129,47 @@ impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// Common interface of a chain specification.
 pub trait ChainSpec: BuildStorage + Send + Sync {
-	/// Spec name.
-	fn name(&self) -> &str;
-	/// Spec id.
-	fn id(&self) -> &str;
-	/// Type of the chain.
-	fn chain_type(&self) -> ChainType;
-	/// A list of bootnode addresses.
-	fn boot_nodes(&self) -> &[MultiaddrWithPeerId];
-	/// Telemetry endpoints (if any)
-	fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints>;
-	/// Network protocol id.
-	fn protocol_id(&self) -> Option<&str>;
-	/// Additional loosly-typed properties of the chain.
-	///
-	/// Returns an empty JSON object if 'properties' not defined in config
-	fn properties(&self) -> Properties;
-	/// Returns a reference to defined chain spec extensions.
-	fn extensions(&self) -> &dyn GetExtension;
-	/// Add a bootnode to the list.
-	fn add_boot_node(&mut self, addr: MultiaddrWithPeerId);
-	/// Return spec as JSON.
-	fn as_json(&self, raw: bool) -> Result<String, String>;
-	/// Return StorageBuilder for this spec.
-	fn as_storage_builder(&self) -> &dyn BuildStorage;
-	/// Returns a cloned `Box<dyn ChainSpec>`.
-	fn cloned_box(&self) -> Box<dyn ChainSpec>;
-	/// Set the storage that should be used by this chain spec.
-	///
-	/// This will be used as storage at genesis.
-	fn set_storage(&mut self, storage: Storage);
-	/// Hardcode infomation to allow light clients to sync quickly into the chain spec.
-	fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState);
+    /// Spec name.
+    fn name(&self) -> &str;
+    /// Spec id.
+    fn id(&self) -> &str;
+    /// Type of the chain.
+    fn chain_type(&self) -> ChainType;
+    /// A list of bootnode addresses.
+    fn boot_nodes(&self) -> &[MultiaddrWithPeerId];
+    /// Telemetry endpoints (if any)
+    fn telemetry_endpoints(&self) -> &Option<TelemetryEndpoints>;
+    /// Network protocol id.
+    fn protocol_id(&self) -> Option<&str>;
+    /// Additional loosly-typed properties of the chain.
+    ///
+    /// Returns an empty JSON object if 'properties' not defined in config
+    fn properties(&self) -> Properties;
+    /// Returns a reference to defined chain spec extensions.
+    fn extensions(&self) -> &dyn GetExtension;
+    /// Add a bootnode to the list.
+    fn add_boot_node(&mut self, addr: MultiaddrWithPeerId);
+    /// Return spec as JSON.
+    fn as_json(&self, raw: bool) -> Result<String, String>;
+    /// Return StorageBuilder for this spec.
+    fn as_storage_builder(&self) -> &dyn BuildStorage;
+    /// Returns a cloned `Box<dyn ChainSpec>`.
+    fn cloned_box(&self) -> Box<dyn ChainSpec>;
+    /// Set the storage that should be used by this chain spec.
+    ///
+    /// This will be used as storage at genesis.
+    fn set_storage(&mut self, storage: Storage);
+    /// Hardcode infomation to allow light clients to sync quickly into the chain spec.
+    fn set_light_sync_state(&mut self, light_sync_state: SerializableLightSyncState);
 }
 
 impl std::fmt::Debug for dyn ChainSpec {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-		write!(f, "ChainSpec(name = {:?}, id = {:?})", self.name(), self.id())
-	}
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "ChainSpec(name = {:?}, id = {:?})",
+            self.name(),
+            self.id()
+        )
+    }
 }

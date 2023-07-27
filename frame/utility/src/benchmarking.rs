@@ -20,67 +20,67 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::{RawOrigin, EventRecord};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_system::{EventRecord, RawOrigin};
 
 const SEED: u32 = 0;
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
-	let events = frame_system::Module::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
-	// compare to the last event record
-	let EventRecord { event, .. } = &events[events.len() - 1];
-	assert_eq!(event, &system_event);
+    let events = frame_system::Module::<T>::events();
+    let system_event: <T as frame_system::Config>::Event = generic_event.into();
+    // compare to the last event record
+    let EventRecord { event, .. } = &events[events.len() - 1];
+    assert_eq!(event, &system_event);
 }
 
 benchmarks! {
-	batch {
-		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::Call> = Vec::new();
-		for i in 0 .. c {
-			let call = frame_system::Call::remark(vec![]).into();
-			calls.push(call);
-		}
-		let caller = whitelisted_caller();
-	}: _(RawOrigin::Signed(caller), calls)
-	verify {
-		assert_last_event::<T>(Event::BatchCompleted.into())
-	}
+    batch {
+        let c in 0 .. 1000;
+        let mut calls: Vec<<T as Config>::Call> = Vec::new();
+        for i in 0 .. c {
+            let call = frame_system::Call::remark(vec![]).into();
+            calls.push(call);
+        }
+        let caller = whitelisted_caller();
+    }: _(RawOrigin::Signed(caller), calls)
+    verify {
+        assert_last_event::<T>(Event::BatchCompleted.into())
+    }
 
-	as_derivative {
-		let caller = account("caller", SEED, SEED);
-		let call = Box::new(frame_system::Call::remark(vec![]).into());
-		// Whitelist caller account from further DB operations.
-		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
-		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
-	}: _(RawOrigin::Signed(caller), SEED as u16, call)
+    as_derivative {
+        let caller = account("caller", SEED, SEED);
+        let call = Box::new(frame_system::Call::remark(vec![]).into());
+        // Whitelist caller account from further DB operations.
+        let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
+        frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
+    }: _(RawOrigin::Signed(caller), SEED as u16, call)
 
-	batch_all {
-		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::Call> = Vec::new();
-		for i in 0 .. c {
-			let call = frame_system::Call::remark(vec![]).into();
-			calls.push(call);
-		}
-		let caller = whitelisted_caller();
-	}: _(RawOrigin::Signed(caller), calls)
-	verify {
-		assert_last_event::<T>(Event::BatchCompleted.into())
-	}
+    batch_all {
+        let c in 0 .. 1000;
+        let mut calls: Vec<<T as Config>::Call> = Vec::new();
+        for i in 0 .. c {
+            let call = frame_system::Call::remark(vec![]).into();
+            calls.push(call);
+        }
+        let caller = whitelisted_caller();
+    }: _(RawOrigin::Signed(caller), calls)
+    verify {
+        assert_last_event::<T>(Event::BatchCompleted.into())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
+    use super::*;
+    use crate::tests::{new_test_ext, Test};
+    use frame_support::assert_ok;
 
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_batch::<Test>());
-			assert_ok!(test_benchmark_as_derivative::<Test>());
-			assert_ok!(test_benchmark_batch_all::<Test>());
-		});
-	}
+    #[test]
+    fn test_benchmarks() {
+        new_test_ext().execute_with(|| {
+            assert_ok!(test_benchmark_batch::<Test>());
+            assert_ok!(test_benchmark_as_derivative::<Test>());
+            assert_ok!(test_benchmark_batch_all::<Test>());
+        });
+    }
 }

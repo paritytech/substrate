@@ -16,51 +16,51 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use structopt::StructOpt;
 use sc_cli::{
-	Error, VanityCmd, SignCmd, VerifyCmd, GenerateNodeKeyCmd, GenerateCmd, InspectKeyCmd,
-	InspectNodeKeyCmd
+    Error, GenerateCmd, GenerateNodeKeyCmd, InspectKeyCmd, InspectNodeKeyCmd, SignCmd, VanityCmd,
+    VerifyCmd,
 };
+use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
-	name = "subkey",
-	author = "Parity Team <admin@parity.io>",
-	about = "Utility for generating and restoring with Substrate keys",
+    name = "subkey",
+    author = "Parity Team <admin@parity.io>",
+    about = "Utility for generating and restoring with Substrate keys"
 )]
 pub enum Subkey {
-	/// Generate a random node libp2p key, save it to file or print it to stdout
-	/// and print its peer ID to stderr.
-	GenerateNodeKey(GenerateNodeKeyCmd),
+    /// Generate a random node libp2p key, save it to file or print it to stdout
+    /// and print its peer ID to stderr.
+    GenerateNodeKey(GenerateNodeKeyCmd),
 
-	/// Generate a random account
-	Generate(GenerateCmd),
+    /// Generate a random account
+    Generate(GenerateCmd),
 
-	/// Gets a public key and a SS58 address from the provided Secret URI
-	Inspect(InspectKeyCmd),
+    /// Gets a public key and a SS58 address from the provided Secret URI
+    Inspect(InspectKeyCmd),
 
-	/// Print the peer ID corresponding to the node key in the given file
-	InspectNodeKey(InspectNodeKeyCmd),
+    /// Print the peer ID corresponding to the node key in the given file
+    InspectNodeKey(InspectNodeKeyCmd),
 
-	/// Sign a message, with a given (secret) key.
-	Sign(SignCmd),
+    /// Sign a message, with a given (secret) key.
+    Sign(SignCmd),
 
-	/// Generate a seed that provides a vanity address.
-	Vanity(VanityCmd),
+    /// Generate a seed that provides a vanity address.
+    Vanity(VanityCmd),
 
-	/// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
-	Verify(VerifyCmd),
+    /// Verify a signature for a message, provided on STDIN, with a given (public or secret) key.
+    Verify(VerifyCmd),
 }
 
 /// Run the subkey command, given the apropriate runtime.
 pub fn run() -> Result<(), Error> {
-	match Subkey::from_args() {
-		Subkey::GenerateNodeKey(cmd) => cmd.run(),
-		Subkey::Generate(cmd) => cmd.run(),
-		Subkey::Inspect(cmd) => cmd.run(),
-		Subkey::InspectNodeKey(cmd) => cmd.run(),
-		Subkey::Vanity(cmd) => cmd.run(),
-		Subkey::Verify(cmd) => cmd.run(),
-		Subkey::Sign(cmd) => cmd.run(),
-	}
+    match Subkey::from_args() {
+        Subkey::GenerateNodeKey(cmd) => cmd.run(),
+        Subkey::Generate(cmd) => cmd.run(),
+        Subkey::Inspect(cmd) => cmd.run(),
+        Subkey::InspectNodeKey(cmd) => cmd.run(),
+        Subkey::Vanity(cmd) => cmd.run(),
+        Subkey::Verify(cmd) => cmd.run(),
+        Subkey::Sign(cmd) => cmd.run(),
+    }
 }

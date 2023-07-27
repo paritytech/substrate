@@ -29,8 +29,10 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 /// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
-	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
-						supported with the flag disabled.")
+    WASM_BINARY.expect(
+        "Development wasm binary is not available. Testing is only \
+						supported with the flag disabled.",
+    )
 }
 
 /// This function is not used, but we require it for the compiler to include `sp-io`.
@@ -38,24 +40,24 @@ pub fn wasm_binary_unwrap() -> &'static [u8] {
 #[cfg(not(feature = "std"))]
 #[no_mangle]
 pub fn import_sp_io() {
-	sp_io::misc::print_utf8(&[]);
+    sp_io::misc::print_utf8(&[]);
 }
 
 #[runtime_interface]
 pub trait TestApi {
-	fn test_versionning(&self, _data: u32) -> bool {
-		// should not be called
-		unimplemented!()
-	}
+    fn test_versionning(&self, _data: u32) -> bool {
+        // should not be called
+        unimplemented!()
+    }
 }
 
 wasm_export_functions! {
-	fn test_versionning_works() {
-		// old api allows only 42 and 50
-		assert!(test_api::test_versionning(42));
-		assert!(test_api::test_versionning(50));
+    fn test_versionning_works() {
+        // old api allows only 42 and 50
+        assert!(test_api::test_versionning(42));
+        assert!(test_api::test_versionning(50));
 
-		assert!(!test_api::test_versionning(142));
-		assert!(!test_api::test_versionning(0));
-	}
+        assert!(!test_api::test_versionning(142));
+        assert!(!test_api::test_versionning(0));
+    }
 }

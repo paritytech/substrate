@@ -21,13 +21,13 @@
 //! to the Maximin problem.
 
 use crate::{
-	balancing, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT,
-	PerThing128, VoteWeight, Voter,
+    balancing, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT,
+    PerThing128, VoteWeight, Voter,
 };
 use sp_arithmetic::{
-	helpers_128bit::multiply_by_rational,
-	traits::{Bounded, Zero},
-	Rational128,
+    helpers_128bit::multiply_by_rational,
+    traits::{Bounded, Zero},
+    Rational128,
 };
 use sp_std::prelude::*;
 
@@ -64,47 +64,51 @@ const DEN: ExtendedBalance = ExtendedBalance::max_value();
 ///
 /// This can only fail if the normalization fails.
 pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
-	rounds: usize,
-	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	balance: Option<(usize, ExtendedBalance)>,
+    rounds: usize,
+    initial_candidates: Vec<AccountId>,
+    initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+    balance: Option<(usize, ExtendedBalance)>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
-	let (candidates, voters) = setup_inputs(initial_candidates, initial_voters);
+    let (candidates, voters) = setup_inputs(initial_candidates, initial_voters);
 
-	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(
-		rounds,
-		candidates,
-		voters,
-	)?;
+    let (candidates, mut voters) = seq_phragmen_core::<AccountId>(rounds, candidates, voters)?;
 
-	if let Some((iterations, tolerance)) = balance {
-		// NOTE: might create zero-edges, but we will strip them again when we convert voter into
-		// assignment.
-		let _iters = balancing::balance::<AccountId>(&mut voters, iterations, tolerance);
-	}
+    if let Some((iterations, tolerance)) = balance {
+        // NOTE: might create zero-edges, but we will strip them again when we convert voter into
+        // assignment.
+        let _iters = balancing::balance::<AccountId>(&mut voters, iterations, tolerance);
+    }
 
-	let mut winners = candidates
-		.into_iter()
-		.filter(|c_ptr| c_ptr.borrow().elected)
-		// defensive only: seq-phragmen-core returns only up to rounds.
-		.take(rounds)
-		.collect::<Vec<_>>();
+    let mut winners = candidates
+        .into_iter()
+        .filter(|c_ptr| c_ptr.borrow().elected)
+        // defensive only: seq-phragmen-core returns only up to rounds.
+        .take(rounds)
+        .collect::<Vec<_>>();
 
-	// sort winners based on desirability.
-	winners.sort_by_key(|c_ptr| c_ptr.borrow().round);
+    // sort winners based on desirability.
+    winners.sort_by_key(|c_ptr| c_ptr.borrow().round);
 
-	let mut assignments =
-		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
-	let _ = assignments
-		.iter_mut()
-		.map(|a| a.try_normalize().map_err(|e| crate::Error::ArithmeticError(e)))
-		.collect::<Result<(), _>>()?;
-	let winners = winners
-		.into_iter()
-		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
-		.collect();
+    let mut assignments = voters
+        .into_iter()
+        .filter_map(|v| v.into_assignment())
+        .collect::<Vec<_>>();
+    let _ = assignments
+        .iter_mut()
+        .map(|a| {
+            a.try_normalize()
+                .map_err(|e| crate::Error::ArithmeticError(e))
+        })
+        .collect::<Result<(), _>>()?;
+    let winners = winners
+        .into_iter()
+        .map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
+        .collect();
 
-	Ok(ElectionResult { winners, assignments })
+    Ok(ElectionResult {
+        winners,
+        assignments,
+    })
 }
 
 /// Core implementation of seq-phragmen.
@@ -116,95 +120,94 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 /// This can only fail if the normalization fails.
 // To create the inputs needed for this function, see [`crate::setup_inputs`].
 pub fn seq_phragmen_core<AccountId: IdentifierT>(
-	rounds: usize,
-	candidates: Vec<CandidatePtr<AccountId>>,
-	mut voters: Vec<Voter<AccountId>>,
+    rounds: usize,
+    candidates: Vec<CandidatePtr<AccountId>>,
+    mut voters: Vec<Voter<AccountId>>,
 ) -> Result<(Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>), crate::Error> {
-	// we have already checked that we have more candidates than minimum_candidate_count.
-	let to_elect = rounds.min(candidates.len());
+    // we have already checked that we have more candidates than minimum_candidate_count.
+    let to_elect = rounds.min(candidates.len());
 
-	// main election loop
-	for round in 0..to_elect {
-		// loop 1: initialize score
-		for c_ptr in &candidates {
-			let mut candidate = c_ptr.borrow_mut();
-			if !candidate.elected {
-				// 1 / approval_stake == (DEN / approval_stake) / DEN. If approval_stake is zero,
-				// then the ratio should be as large as possible, essentially `infinity`.
-				if candidate.approval_stake.is_zero() {
-					candidate.score = Bounded::max_value();
-				} else {
-					candidate.score = Rational128::from(DEN / candidate.approval_stake, DEN);
-				}
-			}
-		}
+    // main election loop
+    for round in 0..to_elect {
+        // loop 1: initialize score
+        for c_ptr in &candidates {
+            let mut candidate = c_ptr.borrow_mut();
+            if !candidate.elected {
+                // 1 / approval_stake == (DEN / approval_stake) / DEN. If approval_stake is zero,
+                // then the ratio should be as large as possible, essentially `infinity`.
+                if candidate.approval_stake.is_zero() {
+                    candidate.score = Bounded::max_value();
+                } else {
+                    candidate.score = Rational128::from(DEN / candidate.approval_stake, DEN);
+                }
+            }
+        }
 
-		// loop 2: increment score
-		for voter in &voters {
-			for edge in &voter.edges {
-				let mut candidate = edge.candidate.borrow_mut();
-				if !candidate.elected && !candidate.approval_stake.is_zero() {
-					let temp_n = multiply_by_rational(
-						voter.load.n(),
-						voter.budget,
-						candidate.approval_stake,
-					).unwrap_or(Bounded::max_value());
-					let temp_d = voter.load.d();
-					let temp = Rational128::from(temp_n, temp_d);
-					candidate.score = candidate.score.lazy_saturating_add(temp);
-				}
-			}
-		}
+        // loop 2: increment score
+        for voter in &voters {
+            for edge in &voter.edges {
+                let mut candidate = edge.candidate.borrow_mut();
+                if !candidate.elected && !candidate.approval_stake.is_zero() {
+                    let temp_n = multiply_by_rational(
+                        voter.load.n(),
+                        voter.budget,
+                        candidate.approval_stake,
+                    )
+                    .unwrap_or(Bounded::max_value());
+                    let temp_d = voter.load.d();
+                    let temp = Rational128::from(temp_n, temp_d);
+                    candidate.score = candidate.score.lazy_saturating_add(temp);
+                }
+            }
+        }
 
-		// loop 3: find the best
-		if let Some(winner_ptr) = candidates
-			.iter()
-			.filter(|c| !c.borrow().elected)
-			.min_by_key(|c| c.borrow().score)
-		{
-			let mut winner = winner_ptr.borrow_mut();
-			// loop 3: update voter and edge load
-			winner.elected = true;
-			winner.round = round;
-			for voter in &mut voters {
-				for edge in &mut voter.edges {
-					if edge.who == winner.who {
-						edge.load = winner.score.lazy_saturating_sub(voter.load);
-						voter.load = winner.score;
-					}
-				}
-			}
-		} else {
-			break
-		}
-	}
+        // loop 3: find the best
+        if let Some(winner_ptr) = candidates
+            .iter()
+            .filter(|c| !c.borrow().elected)
+            .min_by_key(|c| c.borrow().score)
+        {
+            let mut winner = winner_ptr.borrow_mut();
+            // loop 3: update voter and edge load
+            winner.elected = true;
+            winner.round = round;
+            for voter in &mut voters {
+                for edge in &mut voter.edges {
+                    if edge.who == winner.who {
+                        edge.load = winner.score.lazy_saturating_sub(voter.load);
+                        voter.load = winner.score;
+                    }
+                }
+            }
+        } else {
+            break;
+        }
+    }
 
-	// update backing stake of candidates and voters
-	for voter in &mut voters {
-		for edge in &mut voter.edges {
-			if edge.candidate.borrow().elected {
-				// update internal state.
-				edge.weight = multiply_by_rational(
-					voter.budget,
-					edge.load.n(),
-					voter.load.n(),
-				)
-				// If result cannot fit in u128. Not much we can do about it.
-				.unwrap_or(Bounded::max_value());
-			} else {
-				edge.weight = 0
-			}
-			let mut candidate = edge.candidate.borrow_mut();
-			candidate.backed_stake = candidate.backed_stake.saturating_add(edge.weight);
-		}
+    // update backing stake of candidates and voters
+    for voter in &mut voters {
+        for edge in &mut voter.edges {
+            if edge.candidate.borrow().elected {
+                // update internal state.
+                edge.weight = multiply_by_rational(voter.budget, edge.load.n(), voter.load.n())
+                    // If result cannot fit in u128. Not much we can do about it.
+                    .unwrap_or(Bounded::max_value());
+            } else {
+                edge.weight = 0
+            }
+            let mut candidate = edge.candidate.borrow_mut();
+            candidate.backed_stake = candidate.backed_stake.saturating_add(edge.weight);
+        }
 
-		// remove all zero edges. These can become phantom edges during normalization.
-		voter.edges.retain(|e| e.weight > 0);
-		// edge of all candidates that eventually have a non-zero weight must be elected.
-		debug_assert!(voter.edges.iter().all(|e| e.candidate.borrow().elected));
-		// inc budget to sum the budget.
-		voter.try_normalize_elected().map_err(|e| crate::Error::ArithmeticError(e))?;
-	}
+        // remove all zero edges. These can become phantom edges during normalization.
+        voter.edges.retain(|e| e.weight > 0);
+        // edge of all candidates that eventually have a non-zero weight must be elected.
+        debug_assert!(voter.edges.iter().all(|e| e.candidate.borrow().elected));
+        // inc budget to sum the budget.
+        voter
+            .try_normalize_elected()
+            .map_err(|e| crate::Error::ArithmeticError(e))?;
+    }
 
-	Ok((candidates, voters))
+    Ok((candidates, voters))
 }

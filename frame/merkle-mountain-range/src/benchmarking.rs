@@ -20,35 +20,35 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use crate::*;
-use frame_support::traits::OnInitialize;
 use frame_benchmarking::benchmarks;
+use frame_support::traits::OnInitialize;
 use sp_std::prelude::*;
 
 benchmarks! {
-	on_initialize {
-		let x in 1 .. 1_000;
+    on_initialize {
+        let x in 1 .. 1_000;
 
-		let leaves = x as u64;
-	}: {
-		for b in 0..leaves {
-			Module::<T>::on_initialize((b as u32).into());
-		}
-	} verify {
-		assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), leaves);
-	}
+        let leaves = x as u64;
+    }: {
+        for b in 0..leaves {
+            Module::<T>::on_initialize((b as u32).into());
+        }
+    } verify {
+        assert_eq!(crate::NumberOfLeaves::<DefaultInstance>::get(), leaves);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::mock::*;
-	use crate::tests::new_test_ext;
-	use frame_support::assert_ok;
+    use super::*;
+    use crate::mock::*;
+    use crate::tests::new_test_ext;
+    use frame_support::assert_ok;
 
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_on_initialize::<Test>());
-		})
-	}
+    #[test]
+    fn test_benchmarks() {
+        new_test_ext().execute_with(|| {
+            assert_ok!(test_benchmark_on_initialize::<Test>());
+        })
+    }
 }

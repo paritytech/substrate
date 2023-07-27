@@ -383,151 +383,158 @@ macro_rules! impl_outer_origin {
 
 #[cfg(test)]
 mod tests {
-	use codec::{Encode, Decode};
-	use crate::traits::{Filter, OriginTrait};
-	mod frame_system {
-		use super::*;
+    use crate::traits::{Filter, OriginTrait};
+    use codec::{Decode, Encode};
+    mod frame_system {
+        use super::*;
 
-		pub trait Config {
-			type AccountId;
-			type Call;
-			type BaseCallFilter;
-		}
+        pub trait Config {
+            type AccountId;
+            type Call;
+            type BaseCallFilter;
+        }
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
-		pub enum RawOrigin<AccountId> {
-			Root,
-			Signed(AccountId),
-			None,
-		}
+        #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+        pub enum RawOrigin<AccountId> {
+            Root,
+            Signed(AccountId),
+            None,
+        }
 
-		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-				match s {
-					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::None,
-				}
-			}
-		}
+        impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+            fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+                match s {
+                    Some(who) => RawOrigin::Signed(who),
+                    None => RawOrigin::None,
+                }
+            }
+        }
 
-		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
-	}
+        pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+    }
 
-	mod origin_without_generic {
-		use super::*;
+    mod origin_without_generic {
+        use super::*;
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
-		pub struct Origin;
-	}
+        #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+        pub struct Origin;
+    }
 
-	mod origin_with_generic {
-		use super::*;
+    mod origin_with_generic {
+        use super::*;
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
-		pub struct Origin<T> {
-			t: T
-		}
-	}
+        #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+        pub struct Origin<T> {
+            t: T,
+        }
+    }
 
-	#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
-	pub struct TestRuntime;
+    #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+    pub struct TestRuntime;
 
-	pub struct BaseCallFilter;
-	impl Filter<u32> for BaseCallFilter {
-		fn filter(c: &u32) -> bool {
-			*c % 2 == 0
-		}
-	}
+    pub struct BaseCallFilter;
+    impl Filter<u32> for BaseCallFilter {
+        fn filter(c: &u32) -> bool {
+            *c % 2 == 0
+        }
+    }
 
-	impl frame_system::Config for TestRuntime {
-		type AccountId = u32;
-		type Call = u32;
-		type BaseCallFilter = BaseCallFilter;
-	}
+    impl frame_system::Config for TestRuntime {
+        type AccountId = u32;
+        type Call = u32;
+        type BaseCallFilter = BaseCallFilter;
+    }
 
-	impl_outer_origin!(
-		pub enum OriginWithoutSystem for TestRuntime {
-			origin_without_generic,
-			origin_with_generic<T>,
-		}
-	);
+    impl_outer_origin!(
+        pub enum OriginWithoutSystem for TestRuntime {
+            origin_without_generic,
+            origin_with_generic<T>,
+        }
+    );
 
-	impl_outer_origin!(
-		pub enum OriginWithoutSystem2 for TestRuntime {
-			origin_with_generic<T>,
-			origin_without_generic
-		}
-	);
+    impl_outer_origin!(
+        pub enum OriginWithoutSystem2 for TestRuntime {
+            origin_with_generic<T>,
+            origin_without_generic
+        }
+    );
 
-	impl_outer_origin!(
-		pub enum OriginWithSystem for TestRuntime where system = frame_system {
-			origin_without_generic,
-			origin_with_generic<T>
-		}
-	);
+    impl_outer_origin!(
+        pub enum OriginWithSystem for TestRuntime where system = frame_system {
+            origin_without_generic,
+            origin_with_generic<T>
+        }
+    );
 
-	impl_outer_origin!(
-		pub enum OriginWithSystem2 for TestRuntime where system = frame_system {
-			origin_with_generic<T>,
-			origin_without_generic,
-		}
-	);
+    impl_outer_origin!(
+        pub enum OriginWithSystem2 for TestRuntime where system = frame_system {
+            origin_with_generic<T>,
+            origin_without_generic,
+        }
+    );
 
-	impl_outer_origin!(
-		pub enum OriginEmpty for TestRuntime where system = frame_system {}
-	);
+    impl_outer_origin!(
+        pub enum OriginEmpty for TestRuntime where system = frame_system {}
+    );
 
-	impl_outer_origin!(
-		pub enum OriginIndices for TestRuntime where system = frame_system, system_index = 11 {
-			origin_with_generic<T>,
-			#[codec(index = 10)] origin_without_generic,
-		}
-	);
+    impl_outer_origin!(
+        pub enum OriginIndices for TestRuntime where system = frame_system, system_index = 11 {
+            origin_with_generic<T>,
+            #[codec(index = 10)] origin_without_generic,
+        }
+    );
 
-	#[test]
-	fn test_default_filter() {
-		assert_eq!(OriginWithSystem::root().filter_call(&0), true);
-		assert_eq!(OriginWithSystem::root().filter_call(&1), true);
-		assert_eq!(OriginWithSystem::none().filter_call(&0), true);
-		assert_eq!(OriginWithSystem::none().filter_call(&1), false);
-		assert_eq!(OriginWithSystem::signed(0).filter_call(&0), true);
-		assert_eq!(OriginWithSystem::signed(0).filter_call(&1), false);
-		assert_eq!(OriginWithSystem::from(Some(0)).filter_call(&0), true);
-		assert_eq!(OriginWithSystem::from(Some(0)).filter_call(&1), false);
-		assert_eq!(OriginWithSystem::from(None).filter_call(&0), true);
-		assert_eq!(OriginWithSystem::from(None).filter_call(&1), false);
-		assert_eq!(OriginWithSystem::from(origin_without_generic::Origin).filter_call(&0), true);
-		assert_eq!(OriginWithSystem::from(origin_without_generic::Origin).filter_call(&1), false);
+    #[test]
+    fn test_default_filter() {
+        assert_eq!(OriginWithSystem::root().filter_call(&0), true);
+        assert_eq!(OriginWithSystem::root().filter_call(&1), true);
+        assert_eq!(OriginWithSystem::none().filter_call(&0), true);
+        assert_eq!(OriginWithSystem::none().filter_call(&1), false);
+        assert_eq!(OriginWithSystem::signed(0).filter_call(&0), true);
+        assert_eq!(OriginWithSystem::signed(0).filter_call(&1), false);
+        assert_eq!(OriginWithSystem::from(Some(0)).filter_call(&0), true);
+        assert_eq!(OriginWithSystem::from(Some(0)).filter_call(&1), false);
+        assert_eq!(OriginWithSystem::from(None).filter_call(&0), true);
+        assert_eq!(OriginWithSystem::from(None).filter_call(&1), false);
+        assert_eq!(
+            OriginWithSystem::from(origin_without_generic::Origin).filter_call(&0),
+            true
+        );
+        assert_eq!(
+            OriginWithSystem::from(origin_without_generic::Origin).filter_call(&1),
+            false
+        );
 
-		let mut origin = OriginWithSystem::from(Some(0));
+        let mut origin = OriginWithSystem::from(Some(0));
 
-		origin.add_filter(|c| *c % 2 == 1);
-		assert_eq!(origin.filter_call(&0), false);
-		assert_eq!(origin.filter_call(&1), false);
+        origin.add_filter(|c| *c % 2 == 1);
+        assert_eq!(origin.filter_call(&0), false);
+        assert_eq!(origin.filter_call(&1), false);
 
-		origin.set_caller_from(OriginWithSystem::root());
-		assert!(matches!(origin.caller, OriginWithSystemCaller::system(frame_system::RawOrigin::Root)));
-		assert_eq!(origin.filter_call(&0), false);
-		assert_eq!(origin.filter_call(&1), false);
+        origin.set_caller_from(OriginWithSystem::root());
+        assert!(matches!(
+            origin.caller,
+            OriginWithSystemCaller::system(frame_system::RawOrigin::Root)
+        ));
+        assert_eq!(origin.filter_call(&0), false);
+        assert_eq!(origin.filter_call(&1), false);
 
-		origin.reset_filter();
-		assert_eq!(origin.filter_call(&0), true);
-		assert_eq!(origin.filter_call(&1), false);
-	}
+        origin.reset_filter();
+        assert_eq!(origin.filter_call(&0), true);
+        assert_eq!(origin.filter_call(&1), false);
+    }
 
-	#[test]
-	fn test_codec() {
-		use codec::Encode;
-		assert_eq!(OriginIndices::root().caller.encode()[0], 11);
-		let without_generic_variant = OriginIndicesCaller::origin_without_generic(
-			origin_without_generic::Origin
-		);
-		assert_eq!(without_generic_variant.encode()[0], 10);
+    #[test]
+    fn test_codec() {
+        use codec::Encode;
+        assert_eq!(OriginIndices::root().caller.encode()[0], 11);
+        let without_generic_variant =
+            OriginIndicesCaller::origin_without_generic(origin_without_generic::Origin);
+        assert_eq!(without_generic_variant.encode()[0], 10);
 
-		assert_eq!(OriginWithoutSystem::root().caller.encode()[0], 0);
-		let without_generic_variant = OriginWithoutSystemCaller::origin_without_generic(
-			origin_without_generic::Origin
-		);
-		assert_eq!(without_generic_variant.encode()[0], 1);
-	}
+        assert_eq!(OriginWithoutSystem::root().caller.encode()[0], 0);
+        let without_generic_variant =
+            OriginWithoutSystemCaller::origin_without_generic(origin_without_generic::Origin);
+        assert_eq!(without_generic_variant.encode()[0], 1);
+    }
 }

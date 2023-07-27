@@ -17,90 +17,88 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error::Error;
-use log::info;
-use futures::{future, prelude::*};
-use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, SaturatedConversion
-};
-use sp_runtime::generic::BlockId;
 use codec::Encode;
+use futures::{future, prelude::*};
+use log::info;
+use sp_runtime::generic::BlockId;
+use sp_runtime::traits::{Block as BlockT, NumberFor, One, SaturatedConversion, Zero};
 
-use std::{io::Write, pin::Pin};
 use sc_client_api::{BlockBackend, UsageProvider};
 use std::sync::Arc;
 use std::task::Poll;
+use std::{io::Write, pin::Pin};
 
 /// Performs the blocks export.
 pub fn export_blocks<B, C>(
-	client: Arc<C>,
-	mut output: impl Write + 'static,
-	from: NumberFor<B>,
-	to: Option<NumberFor<B>>,
-	binary: bool
+    client: Arc<C>,
+    mut output: impl Write + 'static,
+    from: NumberFor<B>,
+    to: Option<NumberFor<B>>,
+    binary: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>
 where
-	C: BlockBackend<B> + UsageProvider<B> + 'static,
-	B: BlockT,
+    C: BlockBackend<B> + UsageProvider<B> + 'static,
+    B: BlockT,
 {
-	let mut block = from;
+    let mut block = from;
 
-	let last = match to {
-		Some(v) if v.is_zero() => One::one(),
-		Some(v) => v,
-		None => client.usage_info().chain.best_number,
-	};
+    let last = match to {
+        Some(v) if v.is_zero() => One::one(),
+        Some(v) => v,
+        None => client.usage_info().chain.best_number,
+    };
 
-	let mut wrote_header = false;
+    let mut wrote_header = false;
 
-	// Exporting blocks is implemented as a future, because we want the operation to be
-	// interruptible.
-	//
-	// Every time we write a block to the output, the `Future` re-schedules itself and returns
-	// `Poll::Pending`.
-	// This makes it possible either to interleave other operations in-between the block exports,
-	// or to stop the operation completely.
-	let export = future::poll_fn(move |cx| {
-		let client = &client;
+    // Exporting blocks is implemented as a future, because we want the operation to be
+    // interruptible.
+    //
+    // Every time we write a block to the output, the `Future` re-schedules itself and returns
+    // `Poll::Pending`.
+    // This makes it possible either to interleave other operations in-between the block exports,
+    // or to stop the operation completely.
+    let export = future::poll_fn(move |cx| {
+        let client = &client;
 
-		if last < block {
-			return Poll::Ready(Err("Invalid block range specified".into()));
-		}
+        if last < block {
+            return Poll::Ready(Err("Invalid block range specified".into()));
+        }
 
-		if !wrote_header {
-			info!("Exporting blocks from #{} to #{}", block, last);
-			if binary {
-				let last_: u64 = last.saturated_into::<u64>();
-				let block_: u64 = block.saturated_into::<u64>();
-				let len: u64 = last_ - block_ + 1;
-				output.write_all(&len.encode())?;
-			}
-			wrote_header = true;
-		}
+        if !wrote_header {
+            info!("Exporting blocks from #{} to #{}", block, last);
+            if binary {
+                let last_: u64 = last.saturated_into::<u64>();
+                let block_: u64 = block.saturated_into::<u64>();
+                let len: u64 = last_ - block_ + 1;
+                output.write_all(&len.encode())?;
+            }
+            wrote_header = true;
+        }
 
-		match client.block(&BlockId::number(block))? {
-			Some(block) => {
-				if binary {
-					output.write_all(&block.encode())?;
-				} else {
-					serde_json::to_writer(&mut output, &block)
-						.map_err(|e| format!("Error writing JSON: {}", e))?;
-				}
-		},
-			// Reached end of the chain.
-			None => return Poll::Ready(Ok(())),
-		}
-		if (block % 10000u32.into()).is_zero() {
-			info!("#{}", block);
-		}
-		if block == last {
-			return Poll::Ready(Ok(()));
-		}
-		block += One::one();
+        match client.block(&BlockId::number(block))? {
+            Some(block) => {
+                if binary {
+                    output.write_all(&block.encode())?;
+                } else {
+                    serde_json::to_writer(&mut output, &block)
+                        .map_err(|e| format!("Error writing JSON: {}", e))?;
+                }
+            }
+            // Reached end of the chain.
+            None => return Poll::Ready(Ok(())),
+        }
+        if (block % 10000u32.into()).is_zero() {
+            info!("#{}", block);
+        }
+        if block == last {
+            return Poll::Ready(Ok(()));
+        }
+        block += One::one();
 
-		// Re-schedule the task in order to continue the operation.
-		cx.waker().wake_by_ref();
-		Poll::Pending
-	});
+        // Re-schedule the task in order to continue the operation.
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    });
 
-	Box::pin(export)
+    Box::pin(export)
 }

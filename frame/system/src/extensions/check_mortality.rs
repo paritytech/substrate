@@ -15,14 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
-use crate::{Config, Module, BlockHash};
+use crate::{BlockHash, Config, Module};
+use codec::{Decode, Encode};
 use sp_runtime::{
-	generic::Era,
-	traits::{SignedExtension, DispatchInfoOf, SaturatedConversion},
-	transaction_validity::{
-		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
-	},
+    generic::Era,
+    traits::{DispatchInfoOf, SaturatedConversion, SignedExtension},
+    transaction_validity::{
+        InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
+    },
 };
 
 /// Check for transaction mortality.
@@ -30,93 +30,102 @@ use sp_runtime::{
 pub struct CheckMortality<T: Config + Send + Sync>(Era, sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> CheckMortality<T> {
-	/// utility constructor. Used only in client/factory code.
-	pub fn from(era: Era) -> Self {
-		Self(era, sp_std::marker::PhantomData)
-	}
+    /// utility constructor. Used only in client/factory code.
+    pub fn from(era: Era) -> Self {
+        Self(era, sp_std::marker::PhantomData)
+    }
 }
 
 impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckMortality({:?})", self.0)
-	}
+    #[cfg(feature = "std")]
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+        write!(f, "CheckMortality({:?})", self.0)
+    }
 
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
+    #[cfg(not(feature = "std"))]
+    fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+        Ok(())
+    }
 }
 
 impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
-	type AccountId = T::AccountId;
-	type Call = T::Call;
-	type AdditionalSigned = T::Hash;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckMortality";
+    type AccountId = T::AccountId;
+    type Call = T::Call;
+    type AdditionalSigned = T::Hash;
+    type Pre = ();
+    const IDENTIFIER: &'static str = "CheckMortality";
 
-	fn validate(
-		&self,
-		_who: &Self::AccountId,
-		_call: &Self::Call,
-		_info: &DispatchInfoOf<Self::Call>,
-		_len: usize,
-	) -> TransactionValidity {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let valid_till = self.0.death(current_u64);
-		Ok(ValidTransaction {
-			longevity: valid_till.saturating_sub(current_u64),
-			..Default::default()
-		})
-	}
+    fn validate(
+        &self,
+        _who: &Self::AccountId,
+        _call: &Self::Call,
+        _info: &DispatchInfoOf<Self::Call>,
+        _len: usize,
+    ) -> TransactionValidity {
+        let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+        let valid_till = self.0.death(current_u64);
+        Ok(ValidTransaction {
+            longevity: valid_till.saturating_sub(current_u64),
+            ..Default::default()
+        })
+    }
 
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
-		let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
-		if !<BlockHash<T>>::contains_key(n) {
-			Err(InvalidTransaction::AncientBirthBlock.into())
-		} else {
-			Ok(<Module<T>>::block_hash(n))
-		}
-	}
+    fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+        let current_u64 = <Module<T>>::block_number().saturated_into::<u64>();
+        let n = self.0.birth(current_u64).saturated_into::<T::BlockNumber>();
+        if !<BlockHash<T>>::contains_key(n) {
+            Err(InvalidTransaction::AncientBirthBlock.into())
+        } else {
+            Ok(<Module<T>>::block_hash(n))
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::mock::{Test, new_test_ext, System, CALL};
-	use frame_support::weights::{DispatchClass, DispatchInfo, Pays};
-	use sp_core::H256;
+    use super::*;
+    use crate::mock::{new_test_ext, System, Test, CALL};
+    use frame_support::weights::{DispatchClass, DispatchInfo, Pays};
+    use sp_core::H256;
 
-	#[test]
-	fn signed_ext_check_era_should_work() {
-		new_test_ext().execute_with(|| {
-			// future
-			assert_eq!(
-				CheckMortality::<Test>::from(Era::mortal(4, 2)).additional_signed().err().unwrap(),
-				InvalidTransaction::AncientBirthBlock.into(),
-			);
+    #[test]
+    fn signed_ext_check_era_should_work() {
+        new_test_ext().execute_with(|| {
+            // future
+            assert_eq!(
+                CheckMortality::<Test>::from(Era::mortal(4, 2))
+                    .additional_signed()
+                    .err()
+                    .unwrap(),
+                InvalidTransaction::AncientBirthBlock.into(),
+            );
 
-			// correct
-			System::set_block_number(13);
-			<BlockHash<Test>>::insert(12, H256::repeat_byte(1));
-			assert!(CheckMortality::<Test>::from(Era::mortal(4, 12)).additional_signed().is_ok());
-		})
-	}
+            // correct
+            System::set_block_number(13);
+            <BlockHash<Test>>::insert(12, H256::repeat_byte(1));
+            assert!(CheckMortality::<Test>::from(Era::mortal(4, 12))
+                .additional_signed()
+                .is_ok());
+        })
+    }
 
-	#[test]
-	fn signed_ext_check_era_should_change_longevity() {
-		new_test_ext().execute_with(|| {
-			let normal = DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
-			let len = 0_usize;
-			let ext = (
-				crate::CheckWeight::<Test>::new(),
-				CheckMortality::<Test>::from(Era::mortal(16, 256)),
-			);
-			System::set_block_number(17);
-			<BlockHash<Test>>::insert(16, H256::repeat_byte(1));
+    #[test]
+    fn signed_ext_check_era_should_change_longevity() {
+        new_test_ext().execute_with(|| {
+            let normal = DispatchInfo {
+                weight: 100,
+                class: DispatchClass::Normal,
+                pays_fee: Pays::Yes,
+            };
+            let len = 0_usize;
+            let ext = (
+                crate::CheckWeight::<Test>::new(),
+                CheckMortality::<Test>::from(Era::mortal(16, 256)),
+            );
+            System::set_block_number(17);
+            <BlockHash<Test>>::insert(16, H256::repeat_byte(1));
 
-			assert_eq!(ext.validate(&1, CALL, &normal, len).unwrap().longevity, 15);
-		})
-	}
+            assert_eq!(ext.validate(&1, CALL, &normal, len).unwrap().longevity, 15);
+        })
+    }
 }

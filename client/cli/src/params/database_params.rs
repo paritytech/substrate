@@ -17,52 +17,47 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::arg_enums::Database;
-use structopt::StructOpt;
 use sc_service::TransactionStorageMode;
+use structopt::StructOpt;
 
 /// Parameters for block import.
 #[derive(Debug, StructOpt)]
 pub struct DatabaseParams {
-	/// Select database backend to use.
-	#[structopt(
-		long,
-		alias = "db",
-		value_name = "DB",
-		case_insensitive = true,
-	)]
-	pub database: Option<Database>,
+    /// Select database backend to use.
+    #[structopt(long, alias = "db", value_name = "DB", case_insensitive = true)]
+    pub database: Option<Database>,
 
-	/// Limit the memory the database cache can use.
-	#[structopt(long = "db-cache", value_name = "MiB")]
-	pub database_cache_size: Option<usize>,
+    /// Limit the memory the database cache can use.
+    #[structopt(long = "db-cache", value_name = "MiB")]
+    pub database_cache_size: Option<usize>,
 
-	/// Enable storage chain mode
-	///
-	/// This changes the storage format for blocks bodys. 
-	/// If this is enabled, each transaction is stored separately in the
-	/// transaction database column and is only referenced by hash
-	/// in the block body column.
-	#[structopt(long)]
-	pub storage_chain: bool,
+    /// Enable storage chain mode
+    ///
+    /// This changes the storage format for blocks bodys.
+    /// If this is enabled, each transaction is stored separately in the
+    /// transaction database column and is only referenced by hash
+    /// in the block body column.
+    #[structopt(long)]
+    pub storage_chain: bool,
 }
 
 impl DatabaseParams {
-	/// Limit the memory the database cache can use.
-	pub fn database(&self) -> Option<Database> {
-		self.database
-	}
+    /// Limit the memory the database cache can use.
+    pub fn database(&self) -> Option<Database> {
+        self.database
+    }
 
-	/// Limit the memory the database cache can use.
-	pub fn database_cache_size(&self) -> Option<usize> {
-		self.database_cache_size
-	}
+    /// Limit the memory the database cache can use.
+    pub fn database_cache_size(&self) -> Option<usize> {
+        self.database_cache_size
+    }
 
-	/// Transaction storage scheme.
-	pub fn transaction_storage(&self) -> TransactionStorageMode {
-		if self.storage_chain {
-			TransactionStorageMode::StorageChain
-		} else {
-			TransactionStorageMode::BlockBody
-		}
-	}
+    /// Transaction storage scheme.
+    pub fn transaction_storage(&self) -> TransactionStorageMode {
+        if self.storage_chain {
+            TransactionStorageMode::StorageChain
+        } else {
+            TransactionStorageMode::BlockBody
+        }
+    }
 }

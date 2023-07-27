@@ -34,56 +34,45 @@
 // --output=./frame/utility/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
-
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{
+    traits::Get,
+    weights::{constants::RocksDbWeight, Weight},
+};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_utility.
 pub trait WeightInfo {
-	fn batch(c: u32, ) -> Weight;
-	fn as_derivative() -> Weight;
-	fn batch_all(c: u32, ) -> Weight;
-	
+    fn batch(c: u32) -> Weight;
+    fn as_derivative() -> Weight;
+    fn batch_all(c: u32) -> Weight;
 }
 
 /// Weights for pallet_utility using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn batch(c: u32, ) -> Weight {
-		(20_071_000 as Weight)
-			.saturating_add((2_739_000 as Weight).saturating_mul(c as Weight))
-			
-	}
-	fn as_derivative() -> Weight {
-		(5_721_000 as Weight)
-			
-	}
-	fn batch_all(c: u32, ) -> Weight {
-		(21_440_000 as Weight)
-			.saturating_add((2_738_000 as Weight).saturating_mul(c as Weight))
-			
-	}
-	
+    fn batch(c: u32) -> Weight {
+        (20_071_000 as Weight).saturating_add((2_739_000 as Weight).saturating_mul(c as Weight))
+    }
+    fn as_derivative() -> Weight {
+        (5_721_000 as Weight)
+    }
+    fn batch_all(c: u32) -> Weight {
+        (21_440_000 as Weight).saturating_add((2_738_000 as Weight).saturating_mul(c as Weight))
+    }
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn batch(c: u32, ) -> Weight {
-		(20_071_000 as Weight)
-			.saturating_add((2_739_000 as Weight).saturating_mul(c as Weight))
-			
-	}
-	fn as_derivative() -> Weight {
-		(5_721_000 as Weight)
-			
-	}
-	fn batch_all(c: u32, ) -> Weight {
-		(21_440_000 as Weight)
-			.saturating_add((2_738_000 as Weight).saturating_mul(c as Weight))
-			
-	}
-	
+    fn batch(c: u32) -> Weight {
+        (20_071_000 as Weight).saturating_add((2_739_000 as Weight).saturating_mul(c as Weight))
+    }
+    fn as_derivative() -> Weight {
+        (5_721_000 as Weight)
+    }
+    fn batch_all(c: u32) -> Weight {
+        (21_440_000 as Weight).saturating_add((2_738_000 as Weight).saturating_mul(c as Weight))
+    }
 }

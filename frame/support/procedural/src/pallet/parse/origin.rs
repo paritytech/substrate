@@ -15,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use syn::spanned::Spanned;
 use super::helper;
+use syn::spanned::Spanned;
 
 /// Definition of the pallet origin type.
 ///
@@ -25,56 +25,56 @@ use super::helper;
 /// * `struct Origin`
 /// * `enum Origin`
 pub struct OriginDef {
-	/// The index of item in pallet module.
-	pub index: usize,
-	pub has_instance: bool,
-	pub is_generic: bool,
-	/// A set of usage of instance, must be check for consistency with trait.
-	pub instances: Vec<helper::InstanceUsage>,
+    /// The index of item in pallet module.
+    pub index: usize,
+    pub has_instance: bool,
+    pub is_generic: bool,
+    /// A set of usage of instance, must be check for consistency with trait.
+    pub instances: Vec<helper::InstanceUsage>,
 }
 
 impl OriginDef {
-	pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
-		let item_span = item.span();
-		let (vis, ident, generics) = match &item {
-			syn::Item::Enum(item) => (&item.vis, &item.ident, &item.generics),
-			syn::Item::Struct(item) => (&item.vis, &item.ident, &item.generics),
-			syn::Item::Type(item) => (&item.vis, &item.ident, &item.generics),
-			_ => {
-				let msg = "Invalid pallet::origin, expected enum or struct or type";
-				return Err(syn::Error::new(item.span(), msg));
-			},
-		};
+    pub fn try_from(index: usize, item: &mut syn::Item) -> syn::Result<Self> {
+        let item_span = item.span();
+        let (vis, ident, generics) = match &item {
+            syn::Item::Enum(item) => (&item.vis, &item.ident, &item.generics),
+            syn::Item::Struct(item) => (&item.vis, &item.ident, &item.generics),
+            syn::Item::Type(item) => (&item.vis, &item.ident, &item.generics),
+            _ => {
+                let msg = "Invalid pallet::origin, expected enum or struct or type";
+                return Err(syn::Error::new(item.span(), msg));
+            }
+        };
 
-		let has_instance = generics.params.len() == 2;
-		let is_generic = !generics.params.is_empty();
+        let has_instance = generics.params.len() == 2;
+        let is_generic = !generics.params.is_empty();
 
-		let mut instances = vec![];
-		if let Some(u) = helper::check_type_def_optional_gen(&generics, item.span())? {
-			instances.push(u);
-		} else {
-			// construct_runtime only allow generic event for instantiable pallet.
-			instances.push(helper::InstanceUsage {
-				has_instance: false,
-				span: ident.span(),
-			})
-		}
+        let mut instances = vec![];
+        if let Some(u) = helper::check_type_def_optional_gen(&generics, item.span())? {
+            instances.push(u);
+        } else {
+            // construct_runtime only allow generic event for instantiable pallet.
+            instances.push(helper::InstanceUsage {
+                has_instance: false,
+                span: ident.span(),
+            })
+        }
 
-		if !matches!(vis, syn::Visibility::Public(_)) {
-			let msg = "Invalid pallet::origin, Origin must be public";
-			return Err(syn::Error::new(item_span, msg));
-		}
+        if !matches!(vis, syn::Visibility::Public(_)) {
+            let msg = "Invalid pallet::origin, Origin must be public";
+            return Err(syn::Error::new(item_span, msg));
+        }
 
-		if ident != "Origin" {
-			let msg = "Invalid pallet::origin, ident must `Origin`";
-			return Err(syn::Error::new(ident.span(), msg));
-		}
+        if ident != "Origin" {
+            let msg = "Invalid pallet::origin, ident must `Origin`";
+            return Err(syn::Error::new(ident.span(), msg));
+        }
 
-		Ok(OriginDef {
-			index,
-			has_instance,
-			is_generic,
-			instances,
-		})
-	}
+        Ok(OriginDef {
+            index,
+            has_instance,
+            is_generic,
+            instances,
+        })
+    }
 }

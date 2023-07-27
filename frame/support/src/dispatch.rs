@@ -18,26 +18,30 @@
 //! Dispatch system. Contains a macro for defining runtime modules and
 //! generating values representing lazy module function calls.
 
-pub use crate::sp_std::{result, fmt, prelude::{Vec, Clone, Eq, PartialEq}, marker};
-pub use crate::codec::{Codec, EncodeLike, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
-pub use frame_metadata::{
-	FunctionMetadata, DecodeDifferent, DecodeDifferentArray, FunctionArgumentMetadata,
-	ModuleConstantMetadata, DefaultByte, DefaultByteGetter, ModuleErrorMetadata, ErrorMetadata
+pub use crate::codec::{Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, Output};
+pub use crate::sp_std::{
+    fmt, marker,
+    prelude::{Clone, Eq, PartialEq, Vec},
+    result,
+};
+pub use crate::traits::{
+    CallMetadata, GetCallMetadata, GetCallName, GetPalletVersion, UnfilteredDispatchable,
 };
 pub use crate::weights::{
-	GetDispatchInfo, DispatchInfo, WeighData, ClassifyDispatch, TransactionPriority, Weight,
-	PaysFee, PostDispatchInfo, WithPostDispatchInfo,
+    ClassifyDispatch, DispatchInfo, GetDispatchInfo, PaysFee, PostDispatchInfo,
+    TransactionPriority, WeighData, Weight, WithPostDispatchInfo,
+};
+pub use frame_metadata::{
+    DecodeDifferent, DecodeDifferentArray, DefaultByte, DefaultByteGetter, ErrorMetadata,
+    FunctionArgumentMetadata, FunctionMetadata, ModuleConstantMetadata, ModuleErrorMetadata,
 };
 pub use sp_runtime::{traits::Dispatchable, DispatchError};
-pub use crate::traits::{
-	CallMetadata, GetCallMetadata, GetCallName, UnfilteredDispatchable, GetPalletVersion,
-};
 
 /// The return typ of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
 /// returned from a dispatch.
 pub type DispatchResultWithPostInfo =
-	sp_runtime::DispatchResultWithInfo<crate::weights::PostDispatchInfo>;
+    sp_runtime::DispatchResultWithInfo<crate::weights::PostDispatchInfo>;
 
 /// Unaugmented version of `DispatchResultWithPostInfo` that can be returned from
 /// dispatchable functions and is automatically converted to the augmented type. Should be
@@ -47,11 +51,11 @@ pub type DispatchResult = Result<(), sp_runtime::DispatchError>;
 
 /// The error type contained in a `DispatchResultWithPostInfo`.
 pub type DispatchErrorWithPostInfo =
-	sp_runtime::DispatchErrorWithPostInfo<crate::weights::PostDispatchInfo>;
+    sp_runtime::DispatchErrorWithPostInfo<crate::weights::PostDispatchInfo>;
 
 /// Serializable version of pallet dispatchable.
 pub trait Callable<T> {
-	type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
+    type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
@@ -2275,7 +2279,6 @@ macro_rules! __call_to_functions {
 	};
 }
 
-
 /// Convert a list of functions into a list of `FunctionMetadata` items.
 #[macro_export]
 #[doc(hidden)]
@@ -2405,293 +2408,319 @@ macro_rules! __check_reserved_fn_name {
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use super::*;
-	use crate::weights::{DispatchInfo, DispatchClass, Pays, RuntimeDbWeight};
-	use crate::traits::{
-		CallMetadata, GetCallMetadata, GetCallName, OnInitialize, OnFinalize, OnRuntimeUpgrade,
-		IntegrityTest, Get, PalletInfo,
-	};
+    use super::*;
+    use crate::traits::{
+        CallMetadata, Get, GetCallMetadata, GetCallName, IntegrityTest, OnFinalize, OnInitialize,
+        OnRuntimeUpgrade, PalletInfo,
+    };
+    use crate::weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight};
 
-	pub trait Config: system::Config + Sized where Self::AccountId: From<u32> { }
+    pub trait Config: system::Config + Sized
+    where
+        Self::AccountId: From<u32>,
+    {
+    }
 
-	pub mod system {
-		use super::*;
+    pub mod system {
+        use super::*;
 
-		pub trait Config: 'static {
-			type AccountId;
-			type Call;
-			type BaseCallFilter;
-			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
-			type BlockNumber: Into<u32>;
-			type PalletInfo: crate::traits::PalletInfo;
-			type DbWeight: Get<RuntimeDbWeight>;
-		}
+        pub trait Config: 'static {
+            type AccountId;
+            type Call;
+            type BaseCallFilter;
+            type Origin: crate::traits::OriginTrait<Call = Self::Call>;
+            type BlockNumber: Into<u32>;
+            type PalletInfo: crate::traits::PalletInfo;
+            type DbWeight: Get<RuntimeDbWeight>;
+        }
 
-		#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
-		pub enum RawOrigin<AccountId> {
-			Root,
-			Signed(AccountId),
-			None,
-		}
+        #[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+        pub enum RawOrigin<AccountId> {
+            Root,
+            Signed(AccountId),
+            None,
+        }
 
-		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-				match s {
-					Some(who) => RawOrigin::Signed(who),
-					None => RawOrigin::None,
-				}
-			}
-		}
+        impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+            fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+                match s {
+                    Some(who) => RawOrigin::Signed(who),
+                    None => RawOrigin::None,
+                }
+            }
+        }
 
-		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
-	}
+        pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+    }
 
-	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system = system, T::AccountId: From<u32> {
-			/// Hi, this is a comment.
-			#[weight = 0]
-			fn aux_0(_origin) -> DispatchResult { unreachable!() }
+    decl_module! {
+        pub struct Module<T: Config> for enum Call where origin: T::Origin, system = system, T::AccountId: From<u32> {
+            /// Hi, this is a comment.
+            #[weight = 0]
+            fn aux_0(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = 0]
-			fn aux_1(_origin, #[compact] _data: u32,) -> DispatchResult { unreachable!() }
+            #[weight = 0]
+            fn aux_1(_origin, #[compact] _data: u32,) -> DispatchResult { unreachable!() }
 
-			#[weight = 0]
-			fn aux_2(_origin, _data: i32, _data2: String) -> DispatchResult { unreachable!() }
+            #[weight = 0]
+            fn aux_2(_origin, _data: i32, _data2: String) -> DispatchResult { unreachable!() }
 
-			#[weight = 3]
-			fn aux_3(_origin) -> DispatchResult { unreachable!() }
+            #[weight = 3]
+            fn aux_3(_origin) -> DispatchResult { unreachable!() }
 
-			#[weight = 0]
-			fn aux_4(_origin, _data: i32) -> DispatchResult { unreachable!() }
+            #[weight = 0]
+            fn aux_4(_origin, _data: i32) -> DispatchResult { unreachable!() }
 
-			#[weight = 0]
-			fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> DispatchResult { unreachable!() }
+            #[weight = 0]
+            fn aux_5(_origin, _data: i32, #[compact] _data2: u32,) -> DispatchResult { unreachable!() }
 
-			#[weight = (5, DispatchClass::Operational)]
-			fn operational(_origin) { unreachable!() }
+            #[weight = (5, DispatchClass::Operational)]
+            fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
-			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
-			fn on_runtime_upgrade() -> Weight { 10 }
-			fn offchain_worker() {}
-			/// Some doc
-			fn integrity_test() { panic!("integrity_test") }
-		}
-	}
+            fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
+            fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
+            fn on_runtime_upgrade() -> Weight { 10 }
+            fn offchain_worker() {}
+            /// Some doc
+            fn integrity_test() { panic!("integrity_test") }
+        }
+    }
 
-	const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_0"),
-			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[
-				" Hi, this is a comment."
-			])
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_1"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("Compact<u32>")
-				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_2"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
-				},
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data2"),
-					ty: DecodeDifferent::Encode("String"),
-				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_3"),
-			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_4"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
-				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("aux_5"),
-			arguments: DecodeDifferent::Encode(&[
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data"),
-					ty: DecodeDifferent::Encode("i32"),
-				},
-				FunctionArgumentMetadata {
-					name: DecodeDifferent::Encode("_data2"),
-					ty: DecodeDifferent::Encode("Compact<u32>")
-				}
-			]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-		FunctionMetadata {
-			name: DecodeDifferent::Encode("operational"),
-			arguments: DecodeDifferent::Encode(&[]),
-			documentation: DecodeDifferent::Encode(&[]),
-		},
-	];
+    const EXPECTED_METADATA: &'static [FunctionMetadata] = &[
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_0"),
+            arguments: DecodeDifferent::Encode(&[]),
+            documentation: DecodeDifferent::Encode(&[" Hi, this is a comment."]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_1"),
+            arguments: DecodeDifferent::Encode(&[FunctionArgumentMetadata {
+                name: DecodeDifferent::Encode("_data"),
+                ty: DecodeDifferent::Encode("Compact<u32>"),
+            }]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_2"),
+            arguments: DecodeDifferent::Encode(&[
+                FunctionArgumentMetadata {
+                    name: DecodeDifferent::Encode("_data"),
+                    ty: DecodeDifferent::Encode("i32"),
+                },
+                FunctionArgumentMetadata {
+                    name: DecodeDifferent::Encode("_data2"),
+                    ty: DecodeDifferent::Encode("String"),
+                },
+            ]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_3"),
+            arguments: DecodeDifferent::Encode(&[]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_4"),
+            arguments: DecodeDifferent::Encode(&[FunctionArgumentMetadata {
+                name: DecodeDifferent::Encode("_data"),
+                ty: DecodeDifferent::Encode("i32"),
+            }]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("aux_5"),
+            arguments: DecodeDifferent::Encode(&[
+                FunctionArgumentMetadata {
+                    name: DecodeDifferent::Encode("_data"),
+                    ty: DecodeDifferent::Encode("i32"),
+                },
+                FunctionArgumentMetadata {
+                    name: DecodeDifferent::Encode("_data2"),
+                    ty: DecodeDifferent::Encode("Compact<u32>"),
+                },
+            ]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+        FunctionMetadata {
+            name: DecodeDifferent::Encode("operational"),
+            arguments: DecodeDifferent::Encode(&[]),
+            documentation: DecodeDifferent::Encode(&[]),
+        },
+    ];
 
-	pub struct TraitImpl {}
-	impl Config for TraitImpl { }
+    pub struct TraitImpl {}
+    impl Config for TraitImpl {}
 
-	type Test = Module<TraitImpl>;
+    type Test = Module<TraitImpl>;
 
-	impl_outer_origin!{
-		pub enum OuterOrigin for TraitImpl where system = system {}
-	}
+    impl_outer_origin! {
+        pub enum OuterOrigin for TraitImpl where system = system {}
+    }
 
-	impl_outer_dispatch! {
-		pub enum OuterCall for TraitImpl where origin: OuterOrigin {
-			self::Test,
-		}
-	}
+    impl_outer_dispatch! {
+        pub enum OuterCall for TraitImpl where origin: OuterOrigin {
+            self::Test,
+        }
+    }
 
-	impl PalletInfo for TraitImpl {
-		fn index<P: 'static>() -> Option<usize> {
-			let type_id = sp_std::any::TypeId::of::<P>();
-			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some(0)
-			}
+    impl PalletInfo for TraitImpl {
+        fn index<P: 'static>() -> Option<usize> {
+            let type_id = sp_std::any::TypeId::of::<P>();
+            if type_id == sp_std::any::TypeId::of::<Test>() {
+                return Some(0);
+            }
 
-			None
-		}
-		fn name<P: 'static>() -> Option<&'static str> {
-			let type_id = sp_std::any::TypeId::of::<P>();
-			if type_id == sp_std::any::TypeId::of::<Test>() {
-				return Some("Test")
-			}
+            None
+        }
+        fn name<P: 'static>() -> Option<&'static str> {
+            let type_id = sp_std::any::TypeId::of::<P>();
+            if type_id == sp_std::any::TypeId::of::<Test>() {
+                return Some("Test");
+            }
 
-			None
-		}
-	}
+            None
+        }
+    }
 
-	impl system::Config for TraitImpl {
-		type Origin = OuterOrigin;
-		type AccountId = u32;
-		type Call = OuterCall;
-		type BaseCallFilter = ();
-		type BlockNumber = u32;
-		type PalletInfo = Self;
-		type DbWeight = ();
-	}
+    impl system::Config for TraitImpl {
+        type Origin = OuterOrigin;
+        type AccountId = u32;
+        type Call = OuterCall;
+        type BaseCallFilter = ();
+        type BlockNumber = u32;
+        type PalletInfo = Self;
+        type DbWeight = ();
+    }
 
-	#[test]
-	fn module_json_metadata() {
-		let metadata = Module::<TraitImpl>::call_functions();
-		assert_eq!(EXPECTED_METADATA, metadata);
-	}
+    #[test]
+    fn module_json_metadata() {
+        let metadata = Module::<TraitImpl>::call_functions();
+        assert_eq!(EXPECTED_METADATA, metadata);
+    }
 
-	#[test]
-	fn compact_attr() {
-		let call: Call<TraitImpl> = Call::aux_1(1);
-		let encoded = call.encode();
-		assert_eq!(2, encoded.len());
-		assert_eq!(vec![1, 4], encoded);
+    #[test]
+    fn compact_attr() {
+        let call: Call<TraitImpl> = Call::aux_1(1);
+        let encoded = call.encode();
+        assert_eq!(2, encoded.len());
+        assert_eq!(vec![1, 4], encoded);
 
-		let call: Call<TraitImpl> = Call::aux_5(1, 2);
-		let encoded = call.encode();
-		assert_eq!(6, encoded.len());
-		assert_eq!(vec![5, 1, 0, 0, 0, 8], encoded);
-	}
+        let call: Call<TraitImpl> = Call::aux_5(1, 2);
+        let encoded = call.encode();
+        assert_eq!(6, encoded.len());
+        assert_eq!(vec![5, 1, 0, 0, 0, 8], encoded);
+    }
 
-	#[test]
-	fn encode_is_correct_and_decode_works() {
-		let call: Call<TraitImpl> = Call::aux_0();
-		let encoded = call.encode();
-		assert_eq!(vec![0], encoded);
-		let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(decoded, call);
+    #[test]
+    fn encode_is_correct_and_decode_works() {
+        let call: Call<TraitImpl> = Call::aux_0();
+        let encoded = call.encode();
+        assert_eq!(vec![0], encoded);
+        let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
+        assert_eq!(decoded, call);
 
-		let call: Call<TraitImpl> = Call::aux_2(32, "hello".into());
-		let encoded = call.encode();
-		assert_eq!(vec![2, 32, 0, 0, 0, 20, 104, 101, 108, 108, 111], encoded);
-		let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(decoded, call);
-	}
+        let call: Call<TraitImpl> = Call::aux_2(32, "hello".into());
+        let encoded = call.encode();
+        assert_eq!(vec![2, 32, 0, 0, 0, 20, 104, 101, 108, 108, 111], encoded);
+        let decoded = Call::<TraitImpl>::decode(&mut &encoded[..]).unwrap();
+        assert_eq!(decoded, call);
+    }
 
-	#[test]
-	#[should_panic(expected = "on_initialize")]
-	fn on_initialize_should_work_1() {
-		<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(42);
-	}
+    #[test]
+    #[should_panic(expected = "on_initialize")]
+    fn on_initialize_should_work_1() {
+        <Module<TraitImpl> as OnInitialize<u32>>::on_initialize(42);
+    }
 
-	#[test]
-	fn on_initialize_should_work_2() {
-		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), 7);
-	}
+    #[test]
+    fn on_initialize_should_work_2() {
+        assert_eq!(
+            <Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10),
+            7
+        );
+    }
 
-	#[test]
-	#[should_panic(expected = "on_finalize")]
-	fn on_finalize_should_work() {
-		<Module<TraitImpl> as OnFinalize<u32>>::on_finalize(42);
-	}
+    #[test]
+    #[should_panic(expected = "on_finalize")]
+    fn on_finalize_should_work() {
+        <Module<TraitImpl> as OnFinalize<u32>>::on_finalize(42);
+    }
 
-	#[test]
-	fn on_runtime_upgrade_should_work() {
-		sp_io::TestExternalities::default().execute_with(||
-			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
-		);
-	}
+    #[test]
+    fn on_runtime_upgrade_should_work() {
+        sp_io::TestExternalities::default().execute_with(|| {
+            assert_eq!(
+                <Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(),
+                10
+            )
+        });
+    }
 
-	#[test]
-	fn weight_should_attach_to_call_enum() {
-		// operational.
-		assert_eq!(
-			Call::<TraitImpl>::operational().get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
-		);
-		// custom basic
-		assert_eq!(
-			Call::<TraitImpl>::aux_3().get_dispatch_info(),
-			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
-		);
-	}
+    #[test]
+    fn weight_should_attach_to_call_enum() {
+        // operational.
+        assert_eq!(
+            Call::<TraitImpl>::operational().get_dispatch_info(),
+            DispatchInfo {
+                weight: 5,
+                class: DispatchClass::Operational,
+                pays_fee: Pays::Yes
+            },
+        );
+        // custom basic
+        assert_eq!(
+            Call::<TraitImpl>::aux_3().get_dispatch_info(),
+            DispatchInfo {
+                weight: 3,
+                class: DispatchClass::Normal,
+                pays_fee: Pays::Yes
+            },
+        );
+    }
 
-	#[test]
-	fn call_name() {
-		let name = Call::<TraitImpl>::aux_3().get_call_name();
-		assert_eq!("aux_3", name);
-	}
+    #[test]
+    fn call_name() {
+        let name = Call::<TraitImpl>::aux_3().get_call_name();
+        assert_eq!("aux_3", name);
+    }
 
-	#[test]
-	fn call_metadata() {
-		let call = OuterCall::Test(Call::<TraitImpl>::aux_3());
-		let metadata = call.get_call_metadata();
-		let expected = CallMetadata { function_name: "aux_3".into(), pallet_name: "Test".into() };
-		assert_eq!(metadata, expected);
-	}
+    #[test]
+    fn call_metadata() {
+        let call = OuterCall::Test(Call::<TraitImpl>::aux_3());
+        let metadata = call.get_call_metadata();
+        let expected = CallMetadata {
+            function_name: "aux_3".into(),
+            pallet_name: "Test".into(),
+        };
+        assert_eq!(metadata, expected);
+    }
 
-	#[test]
-	fn get_call_names() {
-		let call_names = Call::<TraitImpl>::get_call_names();
-		assert_eq!(["aux_0", "aux_1", "aux_2", "aux_3", "aux_4", "aux_5", "operational"], call_names);
-	}
+    #[test]
+    fn get_call_names() {
+        let call_names = Call::<TraitImpl>::get_call_names();
+        assert_eq!(
+            [
+                "aux_0",
+                "aux_1",
+                "aux_2",
+                "aux_3",
+                "aux_4",
+                "aux_5",
+                "operational"
+            ],
+            call_names
+        );
+    }
 
-	#[test]
-	fn get_module_names() {
-		let module_names = OuterCall::get_module_names();
-		assert_eq!(["Test"], module_names);
-	}
+    #[test]
+    fn get_module_names() {
+        let module_names = OuterCall::get_module_names();
+        assert_eq!(["Test"], module_names);
+    }
 
-	#[test]
-	#[should_panic(expected = "integrity_test")]
-	fn integrity_test_should_work() {
-		<Module<TraitImpl> as IntegrityTest>::integrity_test();
-	}
+    #[test]
+    #[should_panic(expected = "integrity_test")]
+    fn integrity_test_should_work() {
+        <Module<TraitImpl> as IntegrityTest>::integrity_test();
+    }
 }

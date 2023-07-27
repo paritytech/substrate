@@ -19,13 +19,13 @@
 #[derive(sp_core::RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum Error {
-	/// Someone tried to allocate more memory than the allowed maximum per allocation.
-	#[cfg_attr(feature = "std", error("Requested allocation size is too large"))]
-	RequestedAllocationTooLarge,
-	/// Allocator run out of space.
-	#[cfg_attr(feature = "std", error("Allocator ran out of space"))]
-	AllocatorOutOfSpace,
-	/// Some other error occurred.
-	#[cfg_attr(feature = "std", error("Other: {0}"))]
-	Other(&'static str)
+    /// Someone tried to allocate more memory than the allowed maximum per allocation.
+    #[cfg_attr(feature = "std", error("Requested allocation size is too large"))]
+    RequestedAllocationTooLarge,
+    /// Allocator run out of space.
+    #[cfg_attr(feature = "std", error("Allocator ran out of space"))]
+    AllocatorOutOfSpace,
+    /// Some other error occurred.
+    #[cfg_attr(feature = "std", error("Other: {0}"))]
+    Other(&'static str),
 }

@@ -17,7 +17,7 @@
 
 //! RPC a lenient list or value type.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// RPC list or value wrapper.
 ///
@@ -32,45 +32,45 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(untagged)]
 pub enum ListOrValue<T> {
-	/// A list of values of given type.
-	List(Vec<T>),
-	/// A single value of given type.
-	Value(T),
+    /// A list of values of given type.
+    List(Vec<T>),
+    /// A single value of given type.
+    Value(T),
 }
 
 impl<T> ListOrValue<T> {
-	/// Map every contained value using function `F`.
-	///
-	/// This allows to easily convert all values in any of the variants.
-	pub fn map<F: Fn(T) -> X, X>(self, f: F) -> ListOrValue<X> {
-		match self {
-			ListOrValue::List(v) => ListOrValue::List(v.into_iter().map(f).collect()),
-			ListOrValue::Value(v) => ListOrValue::Value(f(v)),
-		}
-	}
+    /// Map every contained value using function `F`.
+    ///
+    /// This allows to easily convert all values in any of the variants.
+    pub fn map<F: Fn(T) -> X, X>(self, f: F) -> ListOrValue<X> {
+        match self {
+            ListOrValue::List(v) => ListOrValue::List(v.into_iter().map(f).collect()),
+            ListOrValue::Value(v) => ListOrValue::Value(f(v)),
+        }
+    }
 }
 
 impl<T> From<T> for ListOrValue<T> {
-	fn from(n: T) -> Self {
-		ListOrValue::Value(n)
-	}
+    fn from(n: T) -> Self {
+        ListOrValue::Value(n)
+    }
 }
 
 impl<T> From<Vec<T>> for ListOrValue<T> {
-	fn from(n: Vec<T>) -> Self {
-		ListOrValue::List(n)
-	}
+    fn from(n: Vec<T>) -> Self {
+        ListOrValue::List(n)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::assert_deser;
+    use super::*;
+    use crate::assert_deser;
 
-	#[test]
-	fn should_serialize_and_deserialize() {
-		assert_deser(r#"5"#, ListOrValue::Value(5_u64));
-		assert_deser(r#""str""#, ListOrValue::Value("str".to_string()));
-		assert_deser(r#"[1,2,3]"#, ListOrValue::List(vec![1_u64, 2_u64, 3_u64]));
-	}
+    #[test]
+    fn should_serialize_and_deserialize() {
+        assert_deser(r#"5"#, ListOrValue::Value(5_u64));
+        assert_deser(r#""str""#, ListOrValue::Value("str".to_string()));
+        assert_deser(r#"[1,2,3]"#, ListOrValue::List(vec![1_u64, 2_u64, 3_u64]));
+    }
 }

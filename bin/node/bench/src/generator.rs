@@ -29,38 +29,42 @@ use crate::simple_trie::SimpleTrie;
 /// Will fill your database `db` with trie data from `key_values` and
 /// return root.
 pub fn generate_trie(
-	db: Arc<dyn KeyValueDB>,
-	key_values: impl IntoIterator<Item=(Vec<u8>, Vec<u8>)>,
+    db: Arc<dyn KeyValueDB>,
+    key_values: impl IntoIterator<Item = (Vec<u8>, Vec<u8>)>,
 ) -> Hash {
-	let mut root = Hash::default();
+    let mut root = Hash::default();
 
-	let (db, overlay) = {
-		let mut overlay = HashMap::new();
-		overlay.insert(
-			hex::decode("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").expect("null key is valid"),
-			Some(vec![0]),
-		);
-		let mut trie = SimpleTrie { db, overlay: &mut overlay };
-		{
-			let mut trie_db = TrieDBMut::new(&mut trie, &mut root);
+    let (db, overlay) = {
+        let mut overlay = HashMap::new();
+        overlay.insert(
+            hex::decode("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
+                .expect("null key is valid"),
+            Some(vec![0]),
+        );
+        let mut trie = SimpleTrie {
+            db,
+            overlay: &mut overlay,
+        };
+        {
+            let mut trie_db = TrieDBMut::new(&mut trie, &mut root);
 
-			for (key, value) in key_values {
-				trie_db.insert(&key, &value).expect("trie insertion failed");
-			}
+            for (key, value) in key_values {
+                trie_db.insert(&key, &value).expect("trie insertion failed");
+            }
 
-			trie_db.commit();
-		}
-		( trie.db, overlay )
-	};
+            trie_db.commit();
+        }
+        (trie.db, overlay)
+    };
 
-	let mut transaction = db.transaction();
-	for (key, value) in overlay.into_iter() {
-		match value {
-			Some(value) => transaction.put(0, &key[..], &value[..]),
-			None => transaction.delete(0, &key[..]),
-		}
-	}
-	db.write(transaction).expect("Failed to write transaction");
+    let mut transaction = db.transaction();
+    for (key, value) in overlay.into_iter() {
+        match value {
+            Some(value) => transaction.put(0, &key[..], &value[..]),
+            None => transaction.delete(0, &key[..]),
+        }
+    }
+    db.write(transaction).expect("Failed to write transaction");
 
-	root
+    root
 }

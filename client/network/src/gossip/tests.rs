@@ -17,9 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::block_request_handler::BlockRequestHandler;
-use crate::light_client_requests::handler::LightClientRequestHandler;
 use crate::gossip::QueuedSender;
-use crate::{config,  Event, NetworkService, NetworkWorker};
+use crate::light_client_requests::handler::LightClientRequestHandler;
+use crate::{config, Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -27,8 +27,8 @@ use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
 
 type TestNetworkService = NetworkService<
-	substrate_test_runtime_client::runtime::Block,
-	substrate_test_runtime_client::runtime::Hash,
+    substrate_test_runtime_client::runtime::Block,
+    substrate_test_runtime_client::runtime::Hash,
 >;
 
 /// Builds a full node to be used for testing. Returns the node service and its associated events
@@ -36,202 +36,198 @@ type TestNetworkService = NetworkService<
 ///
 /// > **Note**: We return the events stream in order to not possibly lose events between the
 /// >			construction of the service and the moment the events stream is grabbed.
-fn build_test_full_node(network_config: config::NetworkConfiguration)
-	-> (Arc<TestNetworkService>, impl Stream<Item = Event>)
-{
-	let client = Arc::new(
-		TestClientBuilder::with_default_backend()
-			.build_with_longest_chain()
-			.0,
-	);
+fn build_test_full_node(
+    network_config: config::NetworkConfiguration,
+) -> (Arc<TestNetworkService>, impl Stream<Item = Event>) {
+    let client = Arc::new(
+        TestClientBuilder::with_default_backend()
+            .build_with_longest_chain()
+            .0,
+    );
 
-	#[derive(Clone)]
-	struct PassThroughVerifier(bool);
-	impl<B: BlockT> sp_consensus::import_queue::Verifier<B> for PassThroughVerifier {
-		fn verify(
-			&mut self,
-			origin: sp_consensus::BlockOrigin,
-			header: B::Header,
-			justification: Option<sp_runtime::Justification>,
-			body: Option<Vec<B::Extrinsic>>,
-		) -> Result<
-			(
-				sp_consensus::BlockImportParams<B, ()>,
-				Option<Vec<(sp_blockchain::well_known_cache_keys::Id, Vec<u8>)>>,
-			),
-			String,
-		> {
-			let maybe_keys = header
-				.digest()
-				.log(|l| {
-					l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"aura"))
-						.or_else(|| {
-							l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"babe"))
-						})
-				})
-				.map(|blob| {
-					vec![(
-						sp_blockchain::well_known_cache_keys::AUTHORITIES,
-						blob.to_vec(),
-					)]
-				});
+    #[derive(Clone)]
+    struct PassThroughVerifier(bool);
+    impl<B: BlockT> sp_consensus::import_queue::Verifier<B> for PassThroughVerifier {
+        fn verify(
+            &mut self,
+            origin: sp_consensus::BlockOrigin,
+            header: B::Header,
+            justification: Option<sp_runtime::Justification>,
+            body: Option<Vec<B::Extrinsic>>,
+        ) -> Result<
+            (
+                sp_consensus::BlockImportParams<B, ()>,
+                Option<Vec<(sp_blockchain::well_known_cache_keys::Id, Vec<u8>)>>,
+            ),
+            String,
+        > {
+            let maybe_keys = header
+                .digest()
+                .log(|l| {
+                    l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"aura"))
+                        .or_else(|| {
+                            l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(
+                                b"babe",
+                            ))
+                        })
+                })
+                .map(|blob| {
+                    vec![(
+                        sp_blockchain::well_known_cache_keys::AUTHORITIES,
+                        blob.to_vec(),
+                    )]
+                });
 
-			let mut import = sp_consensus::BlockImportParams::new(origin, header);
-			import.body = body;
-			import.finalized = self.0;
-			import.justification = justification;
-			import.fork_choice = Some(sp_consensus::ForkChoiceStrategy::LongestChain);
-			Ok((import, maybe_keys))
-		}
-	}
+            let mut import = sp_consensus::BlockImportParams::new(origin, header);
+            import.body = body;
+            import.finalized = self.0;
+            import.justification = justification;
+            import.fork_choice = Some(sp_consensus::ForkChoiceStrategy::LongestChain);
+            Ok((import, maybe_keys))
+        }
+    }
 
-	let import_queue = Box::new(sp_consensus::import_queue::BasicQueue::new(
-		PassThroughVerifier(false),
-		Box::new(client.clone()),
-		None,
-		&sp_core::testing::TaskExecutor::new(),
-		None,
-	));
+    let import_queue = Box::new(sp_consensus::import_queue::BasicQueue::new(
+        PassThroughVerifier(false),
+        Box::new(client.clone()),
+        None,
+        &sp_core::testing::TaskExecutor::new(),
+        None,
+    ));
 
-	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+    let protocol_id = config::ProtocolId::from("/test-protocol-name");
 
-	let block_request_protocol_config = {
-		let (handler, protocol_config) = BlockRequestHandler::new(
-			&protocol_id,
-			client.clone(),
-		);
-		async_std::task::spawn(handler.run().boxed());
-		protocol_config
-	};
+    let block_request_protocol_config = {
+        let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone());
+        async_std::task::spawn(handler.run().boxed());
+        protocol_config
+    };
 
-	let light_client_request_protocol_config = {
-		let (handler, protocol_config) = LightClientRequestHandler::new(
-			&protocol_id,
-			client.clone(),
-		);
-		async_std::task::spawn(handler.run().boxed());
-		protocol_config
-	};
+    let light_client_request_protocol_config = {
+        let (handler, protocol_config) =
+            LightClientRequestHandler::new(&protocol_id, client.clone());
+        async_std::task::spawn(handler.run().boxed());
+        protocol_config
+    };
 
-	let worker = NetworkWorker::new(config::Params {
-		role: config::Role::Full,
-		executor: None,
-		network_config,
-		chain: client.clone(),
-		on_demand: None,
-		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
-		protocol_id,
-		import_queue,
-		block_announce_validator: Box::new(
-			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
-		),
-		metrics_registry: None,
-		block_request_protocol_config,
-		light_client_request_protocol_config,
-	})
-	.unwrap();
+    let worker = NetworkWorker::new(config::Params {
+        role: config::Role::Full,
+        executor: None,
+        network_config,
+        chain: client.clone(),
+        on_demand: None,
+        transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
+        protocol_id,
+        import_queue,
+        block_announce_validator: Box::new(
+            sp_consensus::block_validation::DefaultBlockAnnounceValidator,
+        ),
+        metrics_registry: None,
+        block_request_protocol_config,
+        light_client_request_protocol_config,
+    })
+    .unwrap();
 
-	let service = worker.service().clone();
-	let event_stream = service.event_stream("test");
+    let service = worker.service().clone();
+    let event_stream = service.event_stream("test");
 
-	async_std::task::spawn(async move {
-		futures::pin_mut!(worker);
-		let _ = worker.await;
-	});
+    async_std::task::spawn(async move {
+        futures::pin_mut!(worker);
+        let _ = worker.await;
+    });
 
-	(service, event_stream)
+    (service, event_stream)
 }
 
 const PROTOCOL_NAME: Cow<'static, str> = Cow::Borrowed("/foo");
 
 /// Builds two nodes and their associated events stream.
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
-fn build_nodes_one_proto()
-	-> (Arc<TestNetworkService>, impl Stream<Item = Event>, Arc<TestNetworkService>, impl Stream<Item = Event>)
-{
-	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+fn build_nodes_one_proto() -> (
+    Arc<TestNetworkService>,
+    impl Stream<Item = Event>,
+    Arc<TestNetworkService>,
+    impl Stream<Item = Event>,
+) {
+    let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
-	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		extra_sets: vec![
-			config::NonDefaultSetConfig {
-				notifications_protocol: PROTOCOL_NAME,
-				max_notification_size: 1024 * 1024,
-				set_config: Default::default()
-			}
-		],
-		listen_addresses: vec![listen_addr.clone()],
-		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new_local()
-	});
+    let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
+        extra_sets: vec![config::NonDefaultSetConfig {
+            notifications_protocol: PROTOCOL_NAME,
+            max_notification_size: 1024 * 1024,
+            set_config: Default::default(),
+        }],
+        listen_addresses: vec![listen_addr.clone()],
+        transport: config::TransportConfig::MemoryOnly,
+        ..config::NetworkConfiguration::new_local()
+    });
 
-	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		listen_addresses: vec![],
-		extra_sets: vec![
-			config::NonDefaultSetConfig {
-				notifications_protocol: PROTOCOL_NAME,
-				max_notification_size: 1024 * 1024,
-				set_config: config::SetConfig {
-					reserved_nodes: vec![config::MultiaddrWithPeerId {
-						multiaddr: listen_addr,
-						peer_id: node1.local_peer_id().clone(),
-					}],
-					.. Default::default()
-				},
-			}
-		],
-		transport: config::TransportConfig::MemoryOnly,
-		.. config::NetworkConfiguration::new_local()
-	});
+    let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
+        listen_addresses: vec![],
+        extra_sets: vec![config::NonDefaultSetConfig {
+            notifications_protocol: PROTOCOL_NAME,
+            max_notification_size: 1024 * 1024,
+            set_config: config::SetConfig {
+                reserved_nodes: vec![config::MultiaddrWithPeerId {
+                    multiaddr: listen_addr,
+                    peer_id: node1.local_peer_id().clone(),
+                }],
+                ..Default::default()
+            },
+        }],
+        transport: config::TransportConfig::MemoryOnly,
+        ..config::NetworkConfiguration::new_local()
+    });
 
-	(node1, events_stream1, node2, events_stream2)
+    (node1, events_stream1, node2, events_stream2)
 }
 
 #[test]
 fn basic_works() {
-	const NUM_NOTIFS: usize = 256;
+    const NUM_NOTIFS: usize = 256;
 
-	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
-	let node2_id = node2.local_peer_id().clone();
+    let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
+    let node2_id = node2.local_peer_id().clone();
 
-	let receiver = async_std::task::spawn(async move {
-		let mut received_notifications = 0;
+    let receiver = async_std::task::spawn(async move {
+        let mut received_notifications = 0;
 
-		while received_notifications < NUM_NOTIFS {
-			match events_stream2.next().await.unwrap() {
-				Event::NotificationStreamClosed { .. } => panic!(),
-				Event::NotificationsReceived { messages, .. } => {
-					for message in messages {
-						assert_eq!(message.0, PROTOCOL_NAME);
-						assert_eq!(message.1, &b"message"[..]);
-						received_notifications += 1;
-					}
-				}
-				_ => {}
-			};
+        while received_notifications < NUM_NOTIFS {
+            match events_stream2.next().await.unwrap() {
+                Event::NotificationStreamClosed { .. } => panic!(),
+                Event::NotificationsReceived { messages, .. } => {
+                    for message in messages {
+                        assert_eq!(message.0, PROTOCOL_NAME);
+                        assert_eq!(message.1, &b"message"[..]);
+                        received_notifications += 1;
+                    }
+                }
+                _ => {}
+            };
 
-			if rand::random::<u8>() < 2 {
-				async_std::task::sleep(Duration::from_millis(rand::random::<u64>() % 750)).await;
-			}
-		}
-	});
+            if rand::random::<u8>() < 2 {
+                async_std::task::sleep(Duration::from_millis(rand::random::<u64>() % 750)).await;
+            }
+        }
+    });
 
-	async_std::task::block_on(async move {
-		let (mut sender, bg_future) =
-			QueuedSender::new(node1, node2_id, PROTOCOL_NAME, NUM_NOTIFS, |msg| msg);
-		async_std::task::spawn(bg_future);
+    async_std::task::block_on(async move {
+        let (mut sender, bg_future) =
+            QueuedSender::new(node1, node2_id, PROTOCOL_NAME, NUM_NOTIFS, |msg| msg);
+        async_std::task::spawn(bg_future);
 
-		// Wait for the `NotificationStreamOpened`.
-		loop {
-			match events_stream1.next().await.unwrap() {
-				Event::NotificationStreamOpened { .. } => break,
-				_ => {}
-			};
-		}
+        // Wait for the `NotificationStreamOpened`.
+        loop {
+            match events_stream1.next().await.unwrap() {
+                Event::NotificationStreamOpened { .. } => break,
+                _ => {}
+            };
+        }
 
-		for _ in 0..NUM_NOTIFS {
-			sender.queue_or_discard(b"message".to_vec()).await;
-		}
+        for _ in 0..NUM_NOTIFS {
+            sender.queue_or_discard(b"message".to_vec()).await;
+        }
 
-		receiver.await;
-	});
+        receiver.await;
+    });
 }

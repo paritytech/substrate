@@ -37,13 +37,7 @@
 extern crate self as sp_api;
 
 #[doc(hidden)]
-#[cfg(feature = "std")]
-pub use sp_state_machine::{
-	OverlayedChanges, StorageProof, Backend as StateBackend, ChangesTrieState, InMemoryBackend,
-};
-#[doc(hidden)]
-#[cfg(feature = "std")]
-pub use sp_core::NativeOrEncoded;
+pub use codec::{Decode, DecodeLimit, Encode};
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use hash_db::Hasher;
@@ -51,27 +45,34 @@ pub use hash_db::Hasher;
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
-pub use sp_runtime::{
-	traits::{
-		Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, HashFor, NumberFor,
-		Header as HeaderT, Hash as HashT,
-	},
-	generic::BlockId, transaction_validity::TransactionValidity, RuntimeString, TransactionOutcome,
-};
+#[cfg(feature = "std")]
+pub use sp_core::NativeOrEncoded;
+use sp_core::OpaqueMetadata;
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
 #[doc(hidden)]
-pub use sp_version::{ApiId, RuntimeVersion, ApisVec, create_apis_vec};
+pub use sp_runtime::{
+    generic::BlockId,
+    traits::{
+        Block as BlockT, GetNodeBlockType, GetRuntimeBlockType, Hash as HashT, HashFor,
+        Header as HeaderT, NumberFor,
+    },
+    transaction_validity::TransactionValidity,
+    RuntimeString, TransactionOutcome,
+};
 #[doc(hidden)]
-pub use sp_std::{slice, mem};
+#[cfg(feature = "std")]
+pub use sp_state_machine::{
+    Backend as StateBackend, ChangesTrieState, InMemoryBackend, OverlayedChanges, StorageProof,
+};
 #[cfg(feature = "std")]
 use sp_std::result;
 #[doc(hidden)]
-pub use codec::{Encode, Decode, DecodeLimit};
-use sp_core::OpaqueMetadata;
+pub use sp_std::{mem, slice};
+#[doc(hidden)]
+pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion};
 #[cfg(feature = "std")]
-use std::{panic::UnwindSafe, cell::RefCell};
-
+use std::{cell::RefCell, panic::UnwindSafe};
 
 /// Maximum nesting level for extrinsics.
 pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
@@ -359,37 +360,37 @@ pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<HashFor<B>>;
 
 /// A type that is used as cache for the storage transactions.
 #[cfg(feature = "std")]
-pub type StorageTransactionCache<Block, Backend> =
-	sp_state_machine::StorageTransactionCache<
-		<Backend as StateBackend<HashFor<Block>>>::Transaction, HashFor<Block>, NumberFor<Block>
-	>;
+pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
+    <Backend as StateBackend<HashFor<Block>>>::Transaction,
+    HashFor<Block>,
+    NumberFor<Block>,
+>;
 
 #[cfg(feature = "std")]
-pub type StorageChanges<SBackend, Block> =
-	sp_state_machine::StorageChanges<
-		<SBackend as StateBackend<HashFor<Block>>>::Transaction,
-		HashFor<Block>,
-		NumberFor<Block>
-	>;
+pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
+    <SBackend as StateBackend<HashFor<Block>>>::Transaction,
+    HashFor<Block>,
+    NumberFor<Block>,
+>;
 
 /// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
 pub type StateBackendFor<P, Block> =
-	<<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
+    <<P as ProvideRuntimeApi<Block>>::Api as ApiExt<Block>>::StateBackend;
 
 /// Extract the state backend transaction type for a type that implements `ProvideRuntimeApi`.
 #[cfg(feature = "std")]
 pub type TransactionFor<P, Block> =
-	<StateBackendFor<P, Block> as StateBackend<HashFor<Block>>>::Transaction;
+    <StateBackendFor<P, Block> as StateBackend<HashFor<Block>>>::Transaction;
 
 /// Something that can be constructed to a runtime api.
 #[cfg(feature = "std")]
 pub trait ConstructRuntimeApi<Block: BlockT, C: CallApiAt<Block>> {
-	/// The actual runtime api that will be constructed.
-	type RuntimeApi: ApiExt<Block>;
+    /// The actual runtime api that will be constructed.
+    type RuntimeApi: ApiExt<Block>;
 
-	/// Construct an instance of the runtime api.
-	fn construct_runtime_api<'a>(call: &'a C) -> ApiRef<'a, Self::RuntimeApi>;
+    /// Construct an instance of the runtime api.
+    fn construct_runtime_api<'a>(call: &'a C) -> ApiRef<'a, Self::RuntimeApi>;
 }
 
 /// An error describing which API call failed.
@@ -405,80 +406,76 @@ pub struct ApiError {
 #[cfg(feature = "std")]
 impl From<(&'static str, codec::Error)> for ApiError {
     fn from((tag, error): (&'static str, codec::Error)) -> Self {
-        Self {
-            tag,
-            error,
-        }
+        Self { tag, error }
     }
 }
 
 #[cfg(feature = "std")]
 impl ApiError {
-	pub fn new(tag: &'static str, error: codec::Error) -> Self {
-		Self {
-			tag,
-			error,
-		}
-	}
+    pub fn new(tag: &'static str, error: codec::Error) -> Self {
+        Self { tag, error }
+    }
 }
 
 /// Extends the runtime api traits with an associated error type. This trait is given as super
 /// trait to every runtime api trait.
 #[cfg(feature = "std")]
 pub trait ApiErrorExt {
-	/// Error type used by the runtime apis.
-	type Error: std::fmt::Debug + From<ApiError>;
+    /// Error type used by the runtime apis.
+    type Error: std::fmt::Debug + From<ApiError>;
 }
 
 /// Extends the runtime api implementation with some common functionality.
 #[cfg(feature = "std")]
 pub trait ApiExt<Block: BlockT>: ApiErrorExt {
-	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashFor<Block>>;
+    /// The state backend that is used to store the block states.
+    type StateBackend: StateBackend<HashFor<Block>>;
 
-	/// Execute the given closure inside a new transaction.
-	///
-	/// Depending on the outcome of the closure, the transaction is committed or rolled-back.
-	///
-	/// The internal result of the closure is returned afterwards.
-	fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(
-		&self,
-		call: F,
-	) -> R where Self: Sized;
+    /// Execute the given closure inside a new transaction.
+    ///
+    /// Depending on the outcome of the closure, the transaction is committed or rolled-back.
+    ///
+    /// The internal result of the closure is returned afterwards.
+    fn execute_in_transaction<F: FnOnce(&Self) -> TransactionOutcome<R>, R>(&self, call: F) -> R
+    where
+        Self: Sized;
 
-	/// Checks if the given api is implemented and versions match.
-	fn has_api<A: RuntimeApiInfo + ?Sized>(
-		&self,
-		at: &BlockId<Block>,
-	) -> Result<bool, Self::Error> where Self: Sized;
+    /// Checks if the given api is implemented and versions match.
+    fn has_api<A: RuntimeApiInfo + ?Sized>(&self, at: &BlockId<Block>) -> Result<bool, Self::Error>
+    where
+        Self: Sized;
 
-	/// Check if the given api is implemented and the version passes a predicate.
-	fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
-		&self,
-		at: &BlockId<Block>,
-		pred: P,
-	) -> Result<bool, Self::Error> where Self: Sized;
+    /// Check if the given api is implemented and the version passes a predicate.
+    fn has_api_with<A: RuntimeApiInfo + ?Sized, P: Fn(u32) -> bool>(
+        &self,
+        at: &BlockId<Block>,
+        pred: P,
+    ) -> Result<bool, Self::Error>
+    where
+        Self: Sized;
 
-	/// Start recording all accessed trie nodes for generating proofs.
-	fn record_proof(&mut self);
+    /// Start recording all accessed trie nodes for generating proofs.
+    fn record_proof(&mut self);
 
-	/// Extract the recorded proof.
-	///
-	/// This stops the proof recording.
-	///
-	/// If `record_proof` was not called before, this will return `None`.
-	fn extract_proof(&mut self) -> Option<StorageProof>;
+    /// Extract the recorded proof.
+    ///
+    /// This stops the proof recording.
+    ///
+    /// If `record_proof` was not called before, this will return `None`.
+    fn extract_proof(&mut self) -> Option<StorageProof>;
 
-	/// Convert the api object into the storage changes that were done while executing runtime
-	/// api functions.
-	///
-	/// After executing this function, all collected changes are reset.
-	fn into_storage_changes(
-		&self,
-		backend: &Self::StateBackend,
-		changes_trie_state: Option<&ChangesTrieState<HashFor<Block>, NumberFor<Block>>>,
-		parent_hash: Block::Hash,
-	) -> Result<StorageChanges<Self::StateBackend, Block>, String> where Self: Sized;
+    /// Convert the api object into the storage changes that were done while executing runtime
+    /// api functions.
+    ///
+    /// After executing this function, all collected changes are reset.
+    fn into_storage_changes(
+        &self,
+        backend: &Self::StateBackend,
+        changes_trie_state: Option<&ChangesTrieState<HashFor<Block>, NumberFor<Block>>>,
+        parent_hash: Block::Hash,
+    ) -> Result<StorageChanges<Self::StateBackend, Block>, String>
+    where
+        Self: Sized;
 }
 
 /// Before calling any runtime api function, the runtime need to be initialized
@@ -491,68 +488,68 @@ pub trait ApiExt<Block: BlockT>: ApiErrorExt {
 #[cfg(feature = "std")]
 #[derive(Clone, Copy)]
 pub enum InitializeBlock<'a, Block: BlockT> {
-	/// Skip initializing the runtime for a given block.
-	///
-	/// This is used by functions who do the initialization by themselves or don't require it.
-	Skip,
-	/// Initialize the runtime for a given block.
-	///
-	/// If the stored `BlockId` is `Some(_)`, the runtime is currently initialized at this block.
-	Do(&'a RefCell<Option<BlockId<Block>>>),
+    /// Skip initializing the runtime for a given block.
+    ///
+    /// This is used by functions who do the initialization by themselves or don't require it.
+    Skip,
+    /// Initialize the runtime for a given block.
+    ///
+    /// If the stored `BlockId` is `Some(_)`, the runtime is currently initialized at this block.
+    Do(&'a RefCell<Option<BlockId<Block>>>),
 }
 
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
 pub struct CallApiAtParams<'a, Block: BlockT, C, NC, Backend: StateBackend<HashFor<Block>>> {
-	/// A reference to something that implements the [`Core`] api.
-	pub core_api: &'a C,
-	/// The block id that determines the state that should be setup when calling the function.
-	pub at: &'a BlockId<Block>,
-	/// The name of the function that should be called.
-	pub function: &'static str,
-	/// An optional native call that calls the `function`. This is an optimization to call into a
-	/// native runtime without requiring to encode/decode the parameters. The native runtime can
-	/// still be called when this value is `None`, we then just fallback to encoding/decoding the
-	/// parameters.
-	pub native_call: Option<NC>,
-	/// The encoded arguments of the function.
-	pub arguments: Vec<u8>,
-	/// The overlayed changes that are on top of the state.
-	pub overlayed_changes: &'a RefCell<OverlayedChanges>,
-	/// The cache for storage transactions.
-	pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
-	/// Determines if the function requires that `initialize_block` should be called before calling
-	/// the actual function.
-	pub initialize_block: InitializeBlock<'a, Block>,
-	/// The context this function is executed in.
-	pub context: ExecutionContext,
-	/// The optional proof recorder for recording storage accesses.
-	pub recorder: &'a Option<ProofRecorder<Block>>,
+    /// A reference to something that implements the [`Core`] api.
+    pub core_api: &'a C,
+    /// The block id that determines the state that should be setup when calling the function.
+    pub at: &'a BlockId<Block>,
+    /// The name of the function that should be called.
+    pub function: &'static str,
+    /// An optional native call that calls the `function`. This is an optimization to call into a
+    /// native runtime without requiring to encode/decode the parameters. The native runtime can
+    /// still be called when this value is `None`, we then just fallback to encoding/decoding the
+    /// parameters.
+    pub native_call: Option<NC>,
+    /// The encoded arguments of the function.
+    pub arguments: Vec<u8>,
+    /// The overlayed changes that are on top of the state.
+    pub overlayed_changes: &'a RefCell<OverlayedChanges>,
+    /// The cache for storage transactions.
+    pub storage_transaction_cache: &'a RefCell<StorageTransactionCache<Block, Backend>>,
+    /// Determines if the function requires that `initialize_block` should be called before calling
+    /// the actual function.
+    pub initialize_block: InitializeBlock<'a, Block>,
+    /// The context this function is executed in.
+    pub context: ExecutionContext,
+    /// The optional proof recorder for recording storage accesses.
+    pub recorder: &'a Option<ProofRecorder<Block>>,
 }
 
 /// Something that can call into the an api at a given block.
 #[cfg(feature = "std")]
 pub trait CallApiAt<Block: BlockT> {
-	/// Error type used by the implementation.
-	type Error: std::fmt::Debug + From<ApiError>;
+    /// Error type used by the implementation.
+    type Error: std::fmt::Debug + From<ApiError>;
 
-	/// The state backend that is used to store the block states.
-	type StateBackend: StateBackend<HashFor<Block>>;
+    /// The state backend that is used to store the block states.
+    type StateBackend: StateBackend<HashFor<Block>>;
 
-	/// Calls the given api function with the given encoded arguments at the given block and returns
-	/// the encoded result.
-	fn call_api_at<
-		'a,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
-		C: Core<Block, Error = Self::Error>,
-	>(
-		&self,
-		params: CallApiAtParams<'a, Block, C, NC, Self::StateBackend>,
-	) -> Result<NativeOrEncoded<R>, Self::Error>;
+    /// Calls the given api function with the given encoded arguments at the given block and returns
+    /// the encoded result.
+    fn call_api_at<
+        'a,
+        R: Encode + Decode + PartialEq,
+        NC: FnOnce() -> result::Result<R, String> + UnwindSafe,
+        C: Core<Block, Error = Self::Error>,
+    >(
+        &self,
+        params: CallApiAtParams<'a, Block, C, NC, Self::StateBackend>,
+    ) -> Result<NativeOrEncoded<R>, Self::Error>;
 
-	/// Returns the runtime version at the given block.
-	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error>;
+    /// Returns the runtime version at the given block.
+    fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error>;
 }
 
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
@@ -561,48 +558,48 @@ pub struct ApiRef<'a, T>(T, std::marker::PhantomData<&'a ()>);
 
 #[cfg(feature = "std")]
 impl<'a, T> From<T> for ApiRef<'a, T> {
-	fn from(api: T) -> Self {
-		ApiRef(api, Default::default())
-	}
+    fn from(api: T) -> Self {
+        ApiRef(api, Default::default())
+    }
 }
 
 #[cfg(feature = "std")]
 impl<'a, T> std::ops::Deref for ApiRef<'a, T> {
-	type Target = T;
+    type Target = T;
 
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[cfg(feature = "std")]
 impl<'a, T> std::ops::DerefMut for ApiRef<'a, T> {
-	fn deref_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.0
+    }
 }
 
 /// Something that provides a runtime api.
 #[cfg(feature = "std")]
 pub trait ProvideRuntimeApi<Block: BlockT> {
-	/// The concrete type that provides the api.
-	type Api: ApiExt<Block>;
+    /// The concrete type that provides the api.
+    type Api: ApiExt<Block>;
 
-	/// Returns the runtime api.
-	/// The returned instance will keep track of modifications to the storage. Any successful
-	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
-	/// the modifications will be `discarded`. The modifications will not be applied to the
-	/// storage, even on a `commit`.
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
+    /// Returns the runtime api.
+    /// The returned instance will keep track of modifications to the storage. Any successful
+    /// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
+    /// the modifications will be `discarded`. The modifications will not be applied to the
+    /// storage, even on a `commit`.
+    fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
 }
 
 /// Something that provides information about a runtime api.
 #[cfg(feature = "std")]
 pub trait RuntimeApiInfo {
-	/// The identifier of the runtime api.
-	const ID: [u8; 8];
-	/// The version of the runtime api.
-	const VERSION: u32;
+    /// The identifier of the runtime api.
+    const ID: [u8; 8];
+    /// The version of the runtime api.
+    const VERSION: u32;
 }
 
 /// Extracts the `Api::Error` for a type that provides a runtime api.
@@ -611,64 +608,64 @@ pub type ApiErrorFor<T, Block> = <<T as ProvideRuntimeApi<Block>>::Api as ApiErr
 
 #[derive(codec::Encode, codec::Decode)]
 pub struct OldRuntimeVersion {
-	pub spec_name: RuntimeString,
-	pub impl_name: RuntimeString,
-	pub authoring_version: u32,
-	pub spec_version: u32,
-	pub impl_version: u32,
-	pub apis: ApisVec,
+    pub spec_name: RuntimeString,
+    pub impl_name: RuntimeString,
+    pub authoring_version: u32,
+    pub spec_version: u32,
+    pub impl_version: u32,
+    pub apis: ApisVec,
 }
 
 impl From<OldRuntimeVersion> for RuntimeVersion {
-	fn from(x: OldRuntimeVersion) -> Self {
-		Self {
-			spec_name: x.spec_name,
-			impl_name: x.impl_name,
-			authoring_version: x.authoring_version,
-			spec_version: x.spec_version,
-			impl_version: x.impl_version,
-			apis: x.apis,
-			transaction_version: 1,
-		}
-	}
+    fn from(x: OldRuntimeVersion) -> Self {
+        Self {
+            spec_name: x.spec_name,
+            impl_name: x.impl_name,
+            authoring_version: x.authoring_version,
+            spec_version: x.spec_version,
+            impl_version: x.impl_version,
+            apis: x.apis,
+            transaction_version: 1,
+        }
+    }
 }
 
 impl From<RuntimeVersion> for OldRuntimeVersion {
-	fn from(x: RuntimeVersion) -> Self {
-		Self {
-			spec_name: x.spec_name,
-			impl_name: x.impl_name,
-			authoring_version: x.authoring_version,
-			spec_version: x.spec_version,
-			impl_version: x.impl_version,
-			apis: x.apis,
-		}
-	}
+    fn from(x: RuntimeVersion) -> Self {
+        Self {
+            spec_name: x.spec_name,
+            impl_name: x.impl_name,
+            authoring_version: x.authoring_version,
+            spec_version: x.spec_version,
+            impl_version: x.impl_version,
+            apis: x.apis,
+        }
+    }
 }
 
 decl_runtime_apis! {
-	/// The `Core` runtime api that every Substrate runtime needs to implement.
-	#[core_trait]
-	#[api_version(3)]
-	pub trait Core {
-		/// Returns the version of the runtime.
-		fn version() -> RuntimeVersion;
-		/// Returns the version of the runtime.
-		#[changed_in(3)]
-		fn version() -> OldRuntimeVersion;
-		/// Execute the given block.
-		#[skip_initialize_block]
-		fn execute_block(block: Block);
-		/// Initialize a block with the given header.
-		#[renamed("initialise_block", 2)]
-		#[skip_initialize_block]
-		#[initialize_block]
-		fn initialize_block(header: &<Block as BlockT>::Header);
-	}
+    /// The `Core` runtime api that every Substrate runtime needs to implement.
+    #[core_trait]
+    #[api_version(3)]
+    pub trait Core {
+        /// Returns the version of the runtime.
+        fn version() -> RuntimeVersion;
+        /// Returns the version of the runtime.
+        #[changed_in(3)]
+        fn version() -> OldRuntimeVersion;
+        /// Execute the given block.
+        #[skip_initialize_block]
+        fn execute_block(block: Block);
+        /// Initialize a block with the given header.
+        #[renamed("initialise_block", 2)]
+        #[skip_initialize_block]
+        #[initialize_block]
+        fn initialize_block(header: &<Block as BlockT>::Header);
+    }
 
-	/// The `Metadata` api trait that returns metadata for the runtime.
-	pub trait Metadata {
-		/// Returns the metadata of a runtime.
-		fn metadata() -> OpaqueMetadata;
-	}
+    /// The `Metadata` api trait that returns metadata for the runtime.
+    pub trait Metadata {
+        /// Returns the metadata of a runtime.
+        fn metadata() -> OpaqueMetadata;
+    }
 }

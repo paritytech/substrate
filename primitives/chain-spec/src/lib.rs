@@ -23,20 +23,20 @@
 /// additional information or enabling additional features.
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub enum ChainType {
-	/// A development chain that runs mainly on one node.
-	Development,
-	/// A local chain that runs locally on multiple nodes for testing purposes.
-	Local,
-	/// A live chain.
-	Live,
-	/// Some custom chain type.
-	Custom(String),
+    /// A development chain that runs mainly on one node.
+    Development,
+    /// A local chain that runs locally on multiple nodes for testing purposes.
+    Local,
+    /// A live chain.
+    Live,
+    /// Some custom chain type.
+    Custom(String),
 }
 
 impl Default for ChainType {
-	fn default() -> Self {
-		Self::Live
-	}
+    fn default() -> Self {
+        Self::Live
+    }
 }
 
 /// Arbitrary properties defined in chain spec as a JSON object

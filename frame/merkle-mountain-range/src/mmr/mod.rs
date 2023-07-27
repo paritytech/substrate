@@ -15,14 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod mmr;
 pub mod storage;
 pub mod utils;
-mod mmr;
 
 use crate::primitives::FullLeaf;
 use sp_runtime::traits;
 
-pub use self::mmr::{Mmr, verify_leaf_proof};
+pub use self::mmr::{verify_leaf_proof, Mmr};
 
 /// Node type for runtime `T`.
 pub type NodeOf<T, I, L> = Node<<T as crate::Config<I>>::Hashing, L>;
@@ -34,12 +34,12 @@ pub type Node<H, L> = crate::primitives::DataOrHash<H, L>;
 pub struct Hasher<H, L>(sp_std::marker::PhantomData<(H, L)>);
 
 impl<H: traits::Hash, L: FullLeaf> mmr_lib::Merge for Hasher<H, L> {
-	type Item = Node<H, L>;
+    type Item = Node<H, L>;
 
-	fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
-		let mut concat = left.hash().as_ref().to_vec();
-		concat.extend_from_slice(right.hash().as_ref());
+    fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
+        let mut concat = left.hash().as_ref().to_vec();
+        concat.extend_from_slice(right.hash().as_ref());
 
-		Node::Hash(<H as traits::Hash>::hash(&concat))
-	}
+        Node::Hash(<H as traits::Hash>::hash(&concat))
+    }
 }

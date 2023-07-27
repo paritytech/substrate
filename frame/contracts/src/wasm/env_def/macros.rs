@@ -97,9 +97,9 @@ macro_rules! unmarshall_then_body {
 #[inline(always)]
 pub fn constrain_closure<R, F>(f: F) -> F
 where
-	F: FnOnce() -> Result<R, crate::wasm::runtime::TrapReason>,
+    F: FnOnce() -> Result<R, crate::wasm::runtime::TrapReason>,
 {
-	f
+    f
 }
 
 #[macro_export]
@@ -210,140 +210,148 @@ macro_rules! define_env {
 
 #[cfg(test)]
 mod tests {
-	use parity_wasm::elements::FunctionType;
-	use parity_wasm::elements::ValueType;
-	use sp_runtime::traits::Zero;
-	use sp_sandbox::{ReturnValue, Value};
-	use crate::{
-		wasm::{Runtime, runtime::TrapReason, tests::MockExt},
-		exec::Ext,
-		gas::Gas,
-	};
+    use crate::{
+        exec::Ext,
+        gas::Gas,
+        wasm::{runtime::TrapReason, tests::MockExt, Runtime},
+    };
+    use parity_wasm::elements::FunctionType;
+    use parity_wasm::elements::ValueType;
+    use sp_runtime::traits::Zero;
+    use sp_sandbox::{ReturnValue, Value};
 
-	struct TestRuntime {
-		value: u32,
-	}
+    struct TestRuntime {
+        value: u32,
+    }
 
-	impl TestRuntime {
-		fn set_trap_reason(&mut self, _reason: TrapReason) {}
-	}
+    impl TestRuntime {
+        fn set_trap_reason(&mut self, _reason: TrapReason) {}
+    }
 
-	#[test]
-	fn macro_unmarshall_then_body_then_marshall_value_or_trap() {
-		fn test_value(
-			_ctx: &mut TestRuntime,
-			args: &[sp_sandbox::Value],
-		) -> Result<ReturnValue, sp_sandbox::HostError> {
-			let mut args = args.iter();
-			unmarshall_then_body_then_marshall!(
-				args,
-				_ctx,
-				(a: u32, b: u32) -> u32 => {
-					if b == 0 {
-						Err(crate::wasm::runtime::TrapReason::Termination)
-					} else {
-						Ok(a / b)
-					}
-				}
-			)
-		}
+    #[test]
+    fn macro_unmarshall_then_body_then_marshall_value_or_trap() {
+        fn test_value(
+            _ctx: &mut TestRuntime,
+            args: &[sp_sandbox::Value],
+        ) -> Result<ReturnValue, sp_sandbox::HostError> {
+            let mut args = args.iter();
+            unmarshall_then_body_then_marshall!(
+                args,
+                _ctx,
+                (a: u32, b: u32) -> u32 => {
+                    if b == 0 {
+                        Err(crate::wasm::runtime::TrapReason::Termination)
+                    } else {
+                        Ok(a / b)
+                    }
+                }
+            )
+        }
 
-		let ctx = &mut TestRuntime { value: 0 };
-		assert_eq!(
-			test_value(ctx, &[Value::I32(15), Value::I32(3)]).unwrap(),
-			ReturnValue::Value(Value::I32(5)),
-		);
-		assert!(test_value(ctx, &[Value::I32(15), Value::I32(0)]).is_err());
-	}
+        let ctx = &mut TestRuntime { value: 0 };
+        assert_eq!(
+            test_value(ctx, &[Value::I32(15), Value::I32(3)]).unwrap(),
+            ReturnValue::Value(Value::I32(5)),
+        );
+        assert!(test_value(ctx, &[Value::I32(15), Value::I32(0)]).is_err());
+    }
 
-	#[test]
-	fn macro_unmarshall_then_body_then_marshall_unit() {
-		fn test_unit(
-			ctx: &mut TestRuntime,
-			args: &[sp_sandbox::Value],
-		) -> Result<ReturnValue, sp_sandbox::HostError> {
-			let mut args = args.iter();
-			unmarshall_then_body_then_marshall!(
-				args,
-				ctx,
-				(a: u32, b: u32) => {
-					ctx.value = a + b;
-					Ok(())
-				}
-			)
-		}
+    #[test]
+    fn macro_unmarshall_then_body_then_marshall_unit() {
+        fn test_unit(
+            ctx: &mut TestRuntime,
+            args: &[sp_sandbox::Value],
+        ) -> Result<ReturnValue, sp_sandbox::HostError> {
+            let mut args = args.iter();
+            unmarshall_then_body_then_marshall!(
+                args,
+                ctx,
+                (a: u32, b: u32) => {
+                    ctx.value = a + b;
+                    Ok(())
+                }
+            )
+        }
 
-		let ctx = &mut TestRuntime { value: 0 };
-		let result = test_unit(ctx, &[Value::I32(2), Value::I32(3)]).unwrap();
-		assert_eq!(result, ReturnValue::Unit);
-		assert_eq!(ctx.value, 5);
-	}
+        let ctx = &mut TestRuntime { value: 0 };
+        let result = test_unit(ctx, &[Value::I32(2), Value::I32(3)]).unwrap();
+        assert_eq!(result, ReturnValue::Unit);
+        assert_eq!(ctx.value, 5);
+    }
 
-	#[test]
-	fn macro_define_func() {
-		define_func!( <E: Ext> seal_gas (_ctx, amount: u32) => {
-			let amount = Gas::from(amount);
-			if !amount.is_zero() {
-				Ok(())
-			} else {
-				Err(TrapReason::Termination)
-			}
-		});
-		let _f: fn(&mut Runtime<MockExt>, &[sp_sandbox::Value])
-			-> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> = seal_gas::<MockExt>;
-	}
+    #[test]
+    fn macro_define_func() {
+        define_func!( <E: Ext> seal_gas (_ctx, amount: u32) => {
+            let amount = Gas::from(amount);
+            if !amount.is_zero() {
+                Ok(())
+            } else {
+                Err(TrapReason::Termination)
+            }
+        });
+        let _f: fn(
+            &mut Runtime<MockExt>,
+            &[sp_sandbox::Value],
+        ) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError> = seal_gas::<MockExt>;
+    }
 
-	#[test]
-	fn macro_gen_signature() {
-		assert_eq!(
-			gen_signature!((i32)),
-			FunctionType::new(vec![ValueType::I32], None),
-		);
+    #[test]
+    fn macro_gen_signature() {
+        assert_eq!(
+            gen_signature!((i32)),
+            FunctionType::new(vec![ValueType::I32], None),
+        );
 
-		assert_eq!(
-			gen_signature!( (i32, u32) -> u32 ),
-			FunctionType::new(vec![ValueType::I32, ValueType::I32], Some(ValueType::I32)),
-		);
-	}
+        assert_eq!(
+            gen_signature!( (i32, u32) -> u32 ),
+            FunctionType::new(vec![ValueType::I32, ValueType::I32], Some(ValueType::I32)),
+        );
+    }
 
-	#[test]
-	fn macro_unmarshall_then_body() {
-		let args = vec![Value::I32(5), Value::I32(3)];
-		let mut args = args.iter();
+    #[test]
+    fn macro_unmarshall_then_body() {
+        let args = vec![Value::I32(5), Value::I32(3)];
+        let mut args = args.iter();
 
-		let ctx: &mut u32 = &mut 0;
+        let ctx: &mut u32 = &mut 0;
 
-		let r = unmarshall_then_body!(
-			{
-				*ctx = a + b;
-				a * b
-			},
-			ctx,
-			args,
-			a: u32,
-			b: u32
-		);
+        let r = unmarshall_then_body!(
+            {
+                *ctx = a + b;
+                a * b
+            },
+            ctx,
+            args,
+            a: u32,
+            b: u32
+        );
 
-		assert_eq!(*ctx, 8);
-		assert_eq!(r, 15);
-	}
+        assert_eq!(*ctx, 8);
+        assert_eq!(r, 15);
+    }
 
-	#[test]
-	fn macro_define_env() {
-		use crate::wasm::env_def::ImportSatisfyCheck;
+    #[test]
+    fn macro_define_env() {
+        use crate::wasm::env_def::ImportSatisfyCheck;
 
-		define_env!(Env, <E: Ext>,
-			seal_gas( _ctx, amount: u32 ) => {
-				let amount = Gas::from(amount);
-				if !amount.is_zero() {
-					Ok(())
-				} else {
-					Err(crate::wasm::runtime::TrapReason::Termination)
-				}
-			},
-		);
+        define_env!(Env, <E: Ext>,
+            seal_gas( _ctx, amount: u32 ) => {
+                let amount = Gas::from(amount);
+                if !amount.is_zero() {
+                    Ok(())
+                } else {
+                    Err(crate::wasm::runtime::TrapReason::Termination)
+                }
+            },
+        );
 
-		assert!(Env::can_satisfy(b"seal_gas", &FunctionType::new(vec![ValueType::I32], None)));
-		assert!(!Env::can_satisfy(b"not_exists", &FunctionType::new(vec![], None)));
-	}
+        assert!(Env::can_satisfy(
+            b"seal_gas",
+            &FunctionType::new(vec![ValueType::I32], None)
+        ));
+        assert!(!Env::can_satisfy(
+            b"not_exists",
+            &FunctionType::new(vec![], None)
+        ));
+    }
 }

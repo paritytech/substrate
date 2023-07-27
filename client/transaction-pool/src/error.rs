@@ -27,25 +27,24 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
-	#[error("Transaction pool error")]
-	Pool(#[from] TxPoolError),
+    #[error("Transaction pool error")]
+    Pool(#[from] TxPoolError),
 
-	#[error("Blockchain error")]
-	Blockchain(#[from] sp_blockchain::Error),
+    #[error("Blockchain error")]
+    Blockchain(#[from] sp_blockchain::Error),
 
-	#[error("Block conversion error: {0}")]
-	BlockIdConversion(String),
+    #[error("Block conversion error: {0}")]
+    BlockIdConversion(String),
 
-	#[error("Runtime error: {0}")]
-	RuntimeApi(String),
+    #[error("Runtime error: {0}")]
+    RuntimeApi(String),
 }
 
-
 impl sp_transaction_pool::error::IntoPoolError for Error {
-	fn into_pool_error(self) -> std::result::Result<TxPoolError, Self> {
-		match self {
-			Error::Pool(e) => Ok(e),
-			e => Err(e),
-		}
-	}
+    fn into_pool_error(self) -> std::result::Result<TxPoolError, Self> {
+        match self {
+            Error::Pool(e) => Ok(e),
+            e => Err(e),
+        }
+    }
 }

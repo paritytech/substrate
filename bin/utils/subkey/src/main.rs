@@ -19,5 +19,5 @@
 //! Subkey utility, based on node_runtime.
 
 fn main() -> Result<(), sc_cli::Error> {
-	subkey::run()
+    subkey::run()
 }

@@ -17,58 +17,58 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use sc_service::{PruningMode, Role, KeepBlocks};
+use sc_service::{KeepBlocks, PruningMode, Role};
 use structopt::StructOpt;
 
 /// Parameters to define the pruning mode
 #[derive(Debug, StructOpt)]
 pub struct PruningParams {
-	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
-	///
-	/// Default is to keep all block states if the node is running as a
-	/// validator (i.e. 'archive'), otherwise state is only kept for the last
-	/// 256 blocks.
-	#[structopt(long = "pruning", value_name = "PRUNING_MODE")]
-	pub pruning: Option<String>,
-	/// Specify the number of finalized blocks to keep in the database.
-	///
-	/// Default is to keep all blocks.
-	#[structopt(long, value_name = "COUNT")]
-	pub keep_blocks: Option<u32>,
+    /// Specify the state pruning mode, a number of blocks to keep or 'archive'.
+    ///
+    /// Default is to keep all block states if the node is running as a
+    /// validator (i.e. 'archive'), otherwise state is only kept for the last
+    /// 256 blocks.
+    #[structopt(long = "pruning", value_name = "PRUNING_MODE")]
+    pub pruning: Option<String>,
+    /// Specify the number of finalized blocks to keep in the database.
+    ///
+    /// Default is to keep all blocks.
+    #[structopt(long, value_name = "COUNT")]
+    pub keep_blocks: Option<u32>,
 }
 
 impl PruningParams {
-	/// Get the pruning value from the parameters
-	pub fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> error::Result<PruningMode> {
-		// by default we disable pruning if the node is an authority (i.e.
-		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
-		// node is an authority and pruning is enabled explicitly, then we error
-		// unless `unsafe_pruning` is set.
-		Ok(match &self.pruning {
-			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-			None if role.is_network_authority() => PruningMode::ArchiveAll,
-			None => PruningMode::default(),
-			Some(s) => {
-				if role.is_network_authority() && !unsafe_pruning {
-					return Err(error::Error::Input(
-						"Validators should run with state pruning disabled (i.e. archive). \
+    /// Get the pruning value from the parameters
+    pub fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> error::Result<PruningMode> {
+        // by default we disable pruning if the node is an authority (i.e.
+        // `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
+        // node is an authority and pruning is enabled explicitly, then we error
+        // unless `unsafe_pruning` is set.
+        Ok(match &self.pruning {
+            Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
+            None if role.is_network_authority() => PruningMode::ArchiveAll,
+            None => PruningMode::default(),
+            Some(s) => {
+                if role.is_network_authority() && !unsafe_pruning {
+                    return Err(error::Error::Input(
+                        "Validators should run with state pruning disabled (i.e. archive). \
 						You can ignore this check with `--unsafe-pruning`."
-							.to_string(),
-					));
-				}
+                            .to_string(),
+                    ));
+                }
 
-				PruningMode::keep_blocks(s.parse().map_err(|_| {
-					error::Error::Input("Invalid pruning mode specified".to_string())
-				})?)
-			}
-		})
-	}
+                PruningMode::keep_blocks(s.parse().map_err(|_| {
+                    error::Error::Input("Invalid pruning mode specified".to_string())
+                })?)
+            }
+        })
+    }
 
-	/// Get the block pruning value from the parameters
-	pub fn keep_blocks(&self) -> error::Result<KeepBlocks> {
-		Ok(match self.keep_blocks {
-			Some(n) => KeepBlocks::Some(n),
-			None => KeepBlocks::All,
-		})
-	}
+    /// Get the block pruning value from the parameters
+    pub fn keep_blocks(&self) -> error::Result<KeepBlocks> {
+        Ok(match self.keep_blocks {
+            Some(n) => KeepBlocks::Some(n),
+            None => KeepBlocks::All,
+        })
+    }
 }

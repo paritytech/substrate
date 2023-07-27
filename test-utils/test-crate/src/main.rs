@@ -19,7 +19,7 @@
 #[cfg(test)]
 #[test_utils::test]
 async fn basic_test(_: sc_service::TaskExecutor) {
-	assert!(true);
+    assert!(true);
 }
 
 fn main() {}

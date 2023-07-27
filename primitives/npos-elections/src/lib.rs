@@ -74,20 +74,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use sp_arithmetic::{
-	traits::{Bounded, UniqueSaturatedInto, Zero},
-	Normalizable, PerThing, Rational128, ThresholdOrd,
-};
-use sp_std::{
-	cell::RefCell,
-	cmp::Ordering,
-	collections::btree_map::BTreeMap,
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	ops::Mul,
-	prelude::*,
-	rc::Rc,
+    traits::{Bounded, UniqueSaturatedInto, Zero},
+    Normalizable, PerThing, Rational128, ThresholdOrd,
 };
 use sp_core::RuntimeDebug;
+use sp_std::{
+    cell::RefCell,
+    cmp::Ordering,
+    collections::btree_map::BTreeMap,
+    convert::{TryFrom, TryInto},
+    fmt::Debug,
+    ops::Mul,
+    prelude::*,
+    rc::Rc,
+};
 
 use codec::{Decode, Encode};
 #[cfg(feature = "std")]
@@ -98,18 +98,18 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-mod phragmen;
 mod balancing;
-mod phragmms;
-mod node;
-mod reduce;
 mod helpers;
+mod node;
+mod phragmen;
+mod phragmms;
+mod reduce;
 
-pub use reduce::reduce;
+pub use balancing::*;
 pub use helpers::*;
 pub use phragmen::*;
 pub use phragmms::*;
-pub use balancing::*;
+pub use reduce::reduce;
 
 // re-export the compact macro, with the dependencies of the macro.
 #[doc(hidden)]
@@ -122,99 +122,99 @@ pub use sp_arithmetic;
 /// This is only generated and re-exported for the compact solution code to use.
 #[doc(hidden)]
 pub trait __OrInvalidIndex<T> {
-	fn or_invalid_index(self) -> Result<T, Error>;
+    fn or_invalid_index(self) -> Result<T, Error>;
 }
 
 impl<T> __OrInvalidIndex<T> for Option<T> {
-	fn or_invalid_index(self) -> Result<T, Error> {
-		self.ok_or(Error::CompactInvalidIndex)
-	}
+    fn or_invalid_index(self) -> Result<T, Error> {
+        self.ok_or(Error::CompactInvalidIndex)
+    }
 }
 
 /// A common interface for all compact solutions.
 ///
 /// See [`sp-npos-elections-compact`] for more info.
 pub trait CompactSolution: Sized {
-	/// The maximum number of votes that are allowed.
-	const LIMIT: usize;
+    /// The maximum number of votes that are allowed.
+    const LIMIT: usize;
 
-	/// The voter type. Needs to be an index (convert to usize).
-	type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
+    /// The voter type. Needs to be an index (convert to usize).
+    type Voter: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
 
-	/// The target type. Needs to be an index (convert to usize).
-	type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
+    /// The target type. Needs to be an index (convert to usize).
+    type Target: UniqueSaturatedInto<usize> + TryInto<usize> + TryFrom<usize> + Debug + Copy + Clone;
 
-	/// The weight/accuracy type of each vote.
-	type Accuracy: PerThing128;
+    /// The weight/accuracy type of each vote.
+    type Accuracy: PerThing128;
 
-	/// Build self from a `assignments: Vec<Assignment<A, Self::Accuracy>>`.
-	fn from_assignment<FV, FT, A>(
-		assignments: Vec<Assignment<A, Self::Accuracy>>,
-		voter_index: FV,
-		target_index: FT,
-	) -> Result<Self, Error>
-	where
-		A: IdentifierT,
-		for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
-		for<'r> FT: Fn(&'r A) -> Option<Self::Target>;
+    /// Build self from a `assignments: Vec<Assignment<A, Self::Accuracy>>`.
+    fn from_assignment<FV, FT, A>(
+        assignments: Vec<Assignment<A, Self::Accuracy>>,
+        voter_index: FV,
+        target_index: FT,
+    ) -> Result<Self, Error>
+    where
+        A: IdentifierT,
+        for<'r> FV: Fn(&'r A) -> Option<Self::Voter>,
+        for<'r> FT: Fn(&'r A) -> Option<Self::Target>;
 
-	/// Convert self into a `Vec<Assignment<A, Self::Accuracy>>`
-	fn into_assignment<A: IdentifierT>(
-		self,
-		voter_at: impl Fn(Self::Voter) -> Option<A>,
-		target_at: impl Fn(Self::Target) -> Option<A>,
-	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
+    /// Convert self into a `Vec<Assignment<A, Self::Accuracy>>`
+    fn into_assignment<A: IdentifierT>(
+        self,
+        voter_at: impl Fn(Self::Voter) -> Option<A>,
+        target_at: impl Fn(Self::Target) -> Option<A>,
+    ) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
 
-	/// Get the length of all the voters that this type is encoding.
-	///
-	/// This is basically the same as the number of assignments, or number of active voters.
-	fn voter_count(&self) -> usize;
+    /// Get the length of all the voters that this type is encoding.
+    ///
+    /// This is basically the same as the number of assignments, or number of active voters.
+    fn voter_count(&self) -> usize;
 
-	/// Get the total count of edges.
-	///
-	/// This is effectively in the range of {[`Self::voter_count`], [`Self::voter_count`] *
-	/// [`Self::LIMIT`]}.
-	fn edge_count(&self) -> usize;
+    /// Get the total count of edges.
+    ///
+    /// This is effectively in the range of {[`Self::voter_count`], [`Self::voter_count`] *
+    /// [`Self::LIMIT`]}.
+    fn edge_count(&self) -> usize;
 
-	/// Get the number of unique targets in the whole struct.
-	///
-	/// Once presented with a list of winners, this set and the set of winners must be
-	/// equal.
-	fn unique_targets(&self) -> Vec<Self::Target>;
+    /// Get the number of unique targets in the whole struct.
+    ///
+    /// Once presented with a list of winners, this set and the set of winners must be
+    /// equal.
+    fn unique_targets(&self) -> Vec<Self::Target>;
 
-	/// Get the average edge count.
-	fn average_edge_count(&self) -> usize {
-		self.edge_count()
-			.checked_div(self.voter_count())
-			.unwrap_or(0)
-	}
+    /// Get the average edge count.
+    fn average_edge_count(&self) -> usize {
+        self.edge_count()
+            .checked_div(self.voter_count())
+            .unwrap_or(0)
+    }
 
-	/// Remove a certain voter.
-	///
-	/// This will only search until the first instance of `to_remove`, and return true. If
-	/// no instance is found (no-op), then it returns false.
-	///
-	/// In other words, if this return true, exactly **one** element must have been removed from
-	/// `self.len()`.
-	fn remove_voter(&mut self, to_remove: Self::Voter) -> bool;
+    /// Remove a certain voter.
+    ///
+    /// This will only search until the first instance of `to_remove`, and return true. If
+    /// no instance is found (no-op), then it returns false.
+    ///
+    /// In other words, if this return true, exactly **one** element must have been removed from
+    /// `self.len()`.
+    fn remove_voter(&mut self, to_remove: Self::Voter) -> bool;
 
-	/// Compute the score of this compact solution type.
-	fn score<A, FS>(
-		self,
-		winners: &[A],
-		stake_of: FS,
-		voter_at: impl Fn(Self::Voter) -> Option<A>,
-		target_at: impl Fn(Self::Target) -> Option<A>,
-	) -> Result<ElectionScore, Error>
-	where
-		for<'r> FS: Fn(&'r A) -> VoteWeight,
-		A: IdentifierT,
-	{
-		let ratio = self.into_assignment(voter_at, target_at)?;
-		let staked = helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
-		let supports = to_supports(winners, &staked)?;
-		Ok(supports.evaluate())
-	}
+    /// Compute the score of this compact solution type.
+    fn score<A, FS>(
+        self,
+        winners: &[A],
+        stake_of: FS,
+        voter_at: impl Fn(Self::Voter) -> Option<A>,
+        target_at: impl Fn(Self::Target) -> Option<A>,
+    ) -> Result<ElectionScore, Error>
+    where
+        for<'r> FS: Fn(&'r A) -> VoteWeight,
+        A: IdentifierT,
+    {
+        let ratio = self.into_assignment(voter_at, target_at)?;
+        let staked = helpers::assignment_ratio_to_staked_normalized(ratio, stake_of)?;
+        let supports = to_supports(winners, &staked)?;
+        Ok(supports.evaluate())
+    }
 }
 
 // re-export the compact solution type.
@@ -232,17 +232,17 @@ impl<T: PerThing + Mul<ExtendedBalance, Output = ExtendedBalance>> PerThing128 f
 /// The errors that might occur in the this crate and compact.
 #[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum Error {
-	/// While going from compact to staked, the stake of all the edges has gone above the total and
-	/// the last stake cannot be assigned.
-	CompactStakeOverflow,
-	/// The compact type has a voter who's number of targets is out of bound.
-	CompactTargetOverflow,
-	/// One of the index functions returned none.
-	CompactInvalidIndex,
-	/// An error occurred in some arithmetic operation.
-	ArithmeticError(&'static str),
-	/// The data provided to create support map was invalid.
-	InvalidSupportEdge,
+    /// While going from compact to staked, the stake of all the edges has gone above the total and
+    /// the last stake cannot be assigned.
+    CompactStakeOverflow,
+    /// The compact type has a voter who's number of targets is out of bound.
+    CompactTargetOverflow,
+    /// One of the index functions returned none.
+    CompactInvalidIndex,
+    /// An error occurred in some arithmetic operation.
+    ArithmeticError(&'static str),
+    /// The data provided to create support map was invalid.
+    InvalidSupportEdge,
 }
 
 /// A type which is used in the API of this crate as a numeric weight of a vote, most often the
@@ -265,222 +265,241 @@ pub type CandidatePtr<A> = Rc<RefCell<Candidate<A>>>;
 /// A candidate entity for the election.
 #[derive(RuntimeDebug, Clone, Default)]
 pub struct Candidate<AccountId> {
-	/// Identifier.
-	who: AccountId,
-	/// Score of the candidate.
-	///
-	/// Used differently in seq-phragmen and max-score.
-	score: Rational128,
-	/// Approval stake of the candidate. Merely the sum of all the voter's stake who approve this
-	/// candidate.
-	approval_stake: ExtendedBalance,
-	/// The final stake of this candidate. Will be equal to a subset of approval stake.
-	backed_stake: ExtendedBalance,
-	/// True if this candidate is already elected in the current election.
-	elected: bool,
-	/// The round index at which this candidate was elected.
-	round: usize,
+    /// Identifier.
+    who: AccountId,
+    /// Score of the candidate.
+    ///
+    /// Used differently in seq-phragmen and max-score.
+    score: Rational128,
+    /// Approval stake of the candidate. Merely the sum of all the voter's stake who approve this
+    /// candidate.
+    approval_stake: ExtendedBalance,
+    /// The final stake of this candidate. Will be equal to a subset of approval stake.
+    backed_stake: ExtendedBalance,
+    /// True if this candidate is already elected in the current election.
+    elected: bool,
+    /// The round index at which this candidate was elected.
+    round: usize,
 }
 
 /// A vote being casted by a [`Voter`] to a [`Candidate`] is an `Edge`.
 #[derive(Clone, Default)]
 pub struct Edge<AccountId> {
-	/// Identifier of the target.
-	///
-	/// This is equivalent of `self.candidate.borrow().who`, yet it helps to avoid double borrow
-	/// errors of the candidate pointer.
-	who: AccountId,
-	/// Load of this edge.
-	load: Rational128,
-	/// Pointer to the candidate.
-	candidate: CandidatePtr<AccountId>,
-	/// The weight (i.e. stake given to `who`) of this edge.
-	weight: ExtendedBalance,
+    /// Identifier of the target.
+    ///
+    /// This is equivalent of `self.candidate.borrow().who`, yet it helps to avoid double borrow
+    /// errors of the candidate pointer.
+    who: AccountId,
+    /// Load of this edge.
+    load: Rational128,
+    /// Pointer to the candidate.
+    candidate: CandidatePtr<AccountId>,
+    /// The weight (i.e. stake given to `who`) of this edge.
+    weight: ExtendedBalance,
 }
 
 #[cfg(feature = "std")]
 impl<A: IdentifierT> sp_std::fmt::Debug for Edge<A> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		write!(f, "Edge({:?}, weight = {:?})", self.who, self.weight)
-	}
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+        write!(f, "Edge({:?}, weight = {:?})", self.who, self.weight)
+    }
 }
 
 /// A voter entity.
 #[derive(Clone, Default)]
 pub struct Voter<AccountId> {
-	/// Identifier.
-	who: AccountId,
-	/// List of candidates approved by this voter.
-	edges: Vec<Edge<AccountId>>,
-	/// The stake of this voter.
-	budget: ExtendedBalance,
-	/// Load of the voter.
-	load: Rational128,
+    /// Identifier.
+    who: AccountId,
+    /// List of candidates approved by this voter.
+    edges: Vec<Edge<AccountId>>,
+    /// The stake of this voter.
+    budget: ExtendedBalance,
+    /// Load of the voter.
+    load: Rational128,
 }
 
 #[cfg(feature = "std")]
 impl<A: IdentifierT> std::fmt::Debug for Voter<A> {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		write!(f, "Voter({:?}, budget = {}, edges = {:?})", self.who, self.budget, self.edges)
-	}
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+        write!(
+            f,
+            "Voter({:?}, budget = {}, edges = {:?})",
+            self.who, self.budget, self.edges
+        )
+    }
 }
 
 impl<AccountId: IdentifierT> Voter<AccountId> {
-	/// Returns none if this voter does not have any non-zero distributions.
-	///
-	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
-	/// site might compensate by calling `normalize()` on the returned `Assignment` as a
-	/// post-precessing.
-	pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>> {
-		let who = self.who;
-		let budget = self.budget;
-		let distribution = self
-			.edges
-			.into_iter()
-			.filter_map(|e| {
-				let per_thing = P::from_rational_approximation(e.weight, budget);
-			// trim zero edges.
-			if per_thing.is_zero() { None } else { Some((e.who, per_thing)) }
-		}).collect::<Vec<_>>();
+    /// Returns none if this voter does not have any non-zero distributions.
+    ///
+    /// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
+    /// site might compensate by calling `normalize()` on the returned `Assignment` as a
+    /// post-precessing.
+    pub fn into_assignment<P: PerThing>(self) -> Option<Assignment<AccountId, P>> {
+        let who = self.who;
+        let budget = self.budget;
+        let distribution = self
+            .edges
+            .into_iter()
+            .filter_map(|e| {
+                let per_thing = P::from_rational_approximation(e.weight, budget);
+                // trim zero edges.
+                if per_thing.is_zero() {
+                    None
+                } else {
+                    Some((e.who, per_thing))
+                }
+            })
+            .collect::<Vec<_>>();
 
-		if distribution.len() > 0 {
-			Some(Assignment { who, distribution })
-		} else {
-			None
-		}
-	}
+        if distribution.len() > 0 {
+            Some(Assignment { who, distribution })
+        } else {
+            None
+        }
+    }
 
-	/// Try and normalize the votes of self.
-	///
-	/// If the normalization is successful then `Ok(())` is returned.
-	///
-	/// Note that this will not distinguish between elected and unelected edges. Thus, it should
-	/// only be called on a voter who has already been reduced to only elected edges.
-	///
-	/// ### Errors
-	///
-	/// This will return only if the internal `normalize` fails. This can happen if the sum of the
-	/// weights exceeds `ExtendedBalance::max_value()`.
-	pub fn try_normalize(&mut self) -> Result<(), &'static str> {
-		let edge_weights = self.edges.iter().map(|e| e.weight).collect::<Vec<_>>();
-		edge_weights.normalize(self.budget).map(|normalized| {
-			// here we count on the fact that normalize does not change the order.
-			for (edge, corrected) in self.edges.iter_mut().zip(normalized.into_iter()) {
-				let mut candidate = edge.candidate.borrow_mut();
-				// first, subtract the incorrect weight
-				candidate.backed_stake = candidate.backed_stake.saturating_sub(edge.weight);
-				edge.weight = corrected;
-				// Then add the correct one again.
-				candidate.backed_stake = candidate.backed_stake.saturating_add(edge.weight);
-			}
-		})
-	}
+    /// Try and normalize the votes of self.
+    ///
+    /// If the normalization is successful then `Ok(())` is returned.
+    ///
+    /// Note that this will not distinguish between elected and unelected edges. Thus, it should
+    /// only be called on a voter who has already been reduced to only elected edges.
+    ///
+    /// ### Errors
+    ///
+    /// This will return only if the internal `normalize` fails. This can happen if the sum of the
+    /// weights exceeds `ExtendedBalance::max_value()`.
+    pub fn try_normalize(&mut self) -> Result<(), &'static str> {
+        let edge_weights = self.edges.iter().map(|e| e.weight).collect::<Vec<_>>();
+        edge_weights.normalize(self.budget).map(|normalized| {
+            // here we count on the fact that normalize does not change the order.
+            for (edge, corrected) in self.edges.iter_mut().zip(normalized.into_iter()) {
+                let mut candidate = edge.candidate.borrow_mut();
+                // first, subtract the incorrect weight
+                candidate.backed_stake = candidate.backed_stake.saturating_sub(edge.weight);
+                edge.weight = corrected;
+                // Then add the correct one again.
+                candidate.backed_stake = candidate.backed_stake.saturating_add(edge.weight);
+            }
+        })
+    }
 
-	/// Same as [`Self::try_normalize`] but the normalization is only limited between elected edges.
-	pub fn try_normalize_elected(&mut self) -> Result<(), &'static str> {
-		let elected_edge_weights = self
-			.edges
-			.iter()
-			.filter_map(|e| if e.candidate.borrow().elected { Some(e.weight) } else { None })
-			.collect::<Vec<_>>();
-		elected_edge_weights.normalize(self.budget).map(|normalized| {
-			// here we count on the fact that normalize does not change the order, and that vector
-			// iteration is deterministic.
-			for (edge, corrected) in self
-				.edges
-				.iter_mut()
-				.filter(|e| e.candidate.borrow().elected)
-				.zip(normalized.into_iter())
-			{
-				let mut candidate = edge.candidate.borrow_mut();
-				// first, subtract the incorrect weight
-				candidate.backed_stake = candidate.backed_stake.saturating_sub(edge.weight);
-				edge.weight = corrected;
-				// Then add the correct one again.
-				candidate.backed_stake = candidate.backed_stake.saturating_add(edge.weight);
-			}
-		})
-	}
+    /// Same as [`Self::try_normalize`] but the normalization is only limited between elected edges.
+    pub fn try_normalize_elected(&mut self) -> Result<(), &'static str> {
+        let elected_edge_weights = self
+            .edges
+            .iter()
+            .filter_map(|e| {
+                if e.candidate.borrow().elected {
+                    Some(e.weight)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        elected_edge_weights
+            .normalize(self.budget)
+            .map(|normalized| {
+                // here we count on the fact that normalize does not change the order, and that vector
+                // iteration is deterministic.
+                for (edge, corrected) in self
+                    .edges
+                    .iter_mut()
+                    .filter(|e| e.candidate.borrow().elected)
+                    .zip(normalized.into_iter())
+                {
+                    let mut candidate = edge.candidate.borrow_mut();
+                    // first, subtract the incorrect weight
+                    candidate.backed_stake = candidate.backed_stake.saturating_sub(edge.weight);
+                    edge.weight = corrected;
+                    // Then add the correct one again.
+                    candidate.backed_stake = candidate.backed_stake.saturating_add(edge.weight);
+                }
+            })
+    }
 }
 
 /// Final result of the election.
 #[derive(RuntimeDebug)]
 pub struct ElectionResult<AccountId, P: PerThing> {
-	/// Just winners zipped with their approval stake. Note that the approval stake is merely the
-	/// sub of their received stake and could be used for very basic sorting and approval voting.
-	pub winners: Vec<WithApprovalOf<AccountId>>,
-	/// Individual assignments. for each tuple, the first elements is a voter and the second is the
-	/// list of candidates that it supports.
-	pub assignments: Vec<Assignment<AccountId, P>>,
+    /// Just winners zipped with their approval stake. Note that the approval stake is merely the
+    /// sub of their received stake and could be used for very basic sorting and approval voting.
+    pub winners: Vec<WithApprovalOf<AccountId>>,
+    /// Individual assignments. for each tuple, the first elements is a voter and the second is the
+    /// list of candidates that it supports.
+    pub assignments: Vec<Assignment<AccountId, P>>,
 }
 
 /// A voter's stake assignment among a set of targets, represented as ratios.
 #[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct Assignment<AccountId, P: PerThing> {
-	/// Voter's identifier.
-	pub who: AccountId,
-	/// The distribution of the voter's stake.
-	pub distribution: Vec<(AccountId, P)>,
+    /// Voter's identifier.
+    pub who: AccountId,
+    /// The distribution of the voter's stake.
+    pub distribution: Vec<(AccountId, P)>,
 }
 
 impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
-	/// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
-	///
-	/// It needs `stake` which is the total budget of the voter.
-	///
-	/// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
-	/// site might compensate by calling `try_normalize()` on the returned `StakedAssignment` as a
-	/// post-precessing.
-	///
-	/// If an edge ratio is [`Bounded::min_value()`], it is dropped. This edge can never mean
-	/// anything useful.
-	pub fn into_staked(self, stake: ExtendedBalance) -> StakedAssignment<AccountId> {
-		let distribution = self
-			.distribution
-			.into_iter()
-			.filter_map(|(target, p)| {
-				// if this ratio is zero, then skip it.
-				if p.is_zero() {
-					None
-				} else {
-					// NOTE: this mul impl will always round to the nearest number, so we might both
-					// overflow and underflow.
-					let distribution_stake = p * stake;
-					Some((target, distribution_stake))
-				}
-			})
-			.collect::<Vec<(AccountId, ExtendedBalance)>>();
+    /// Convert from a ratio assignment into one with absolute values aka. [`StakedAssignment`].
+    ///
+    /// It needs `stake` which is the total budget of the voter.
+    ///
+    /// Note that this might create _un-normalized_ assignments, due to accuracy loss of `P`. Call
+    /// site might compensate by calling `try_normalize()` on the returned `StakedAssignment` as a
+    /// post-precessing.
+    ///
+    /// If an edge ratio is [`Bounded::min_value()`], it is dropped. This edge can never mean
+    /// anything useful.
+    pub fn into_staked(self, stake: ExtendedBalance) -> StakedAssignment<AccountId> {
+        let distribution = self
+            .distribution
+            .into_iter()
+            .filter_map(|(target, p)| {
+                // if this ratio is zero, then skip it.
+                if p.is_zero() {
+                    None
+                } else {
+                    // NOTE: this mul impl will always round to the nearest number, so we might both
+                    // overflow and underflow.
+                    let distribution_stake = p * stake;
+                    Some((target, distribution_stake))
+                }
+            })
+            .collect::<Vec<(AccountId, ExtendedBalance)>>();
 
-		StakedAssignment {
-			who: self.who,
-			distribution,
-		}
-	}
+        StakedAssignment {
+            who: self.who,
+            distribution,
+        }
+    }
 
-	/// Try and normalize this assignment.
-	///
-	/// If `Ok(())` is returned, then the assignment MUST have been successfully normalized to 100%.
-	///
-	/// ### Errors
-	///
-	/// This will return only if the internal `normalize` fails. This can happen if sum of
-	/// `self.distribution.map(|p| p.deconstruct())` fails to fit inside `UpperOf<P>`. A user of
-	/// this crate may statically assert that this can never happen and safely `expect` this to
-	/// return `Ok`.
-	pub fn try_normalize(&mut self) -> Result<(), &'static str> {
-		self.distribution
-			.iter()
-			.map(|(_, p)| *p)
-			.collect::<Vec<_>>()
-			.normalize(P::one())
-			.map(|normalized_ratios|
-				self.distribution
-					.iter_mut()
-					.zip(normalized_ratios)
-					.for_each(|((_, old), corrected)| { *old = corrected; })
-			)
-	}
+    /// Try and normalize this assignment.
+    ///
+    /// If `Ok(())` is returned, then the assignment MUST have been successfully normalized to 100%.
+    ///
+    /// ### Errors
+    ///
+    /// This will return only if the internal `normalize` fails. This can happen if sum of
+    /// `self.distribution.map(|p| p.deconstruct())` fails to fit inside `UpperOf<P>`. A user of
+    /// this crate may statically assert that this can never happen and safely `expect` this to
+    /// return `Ok`.
+    pub fn try_normalize(&mut self) -> Result<(), &'static str> {
+        self.distribution
+            .iter()
+            .map(|(_, p)| *p)
+            .collect::<Vec<_>>()
+            .normalize(P::one())
+            .map(|normalized_ratios| {
+                self.distribution
+                    .iter_mut()
+                    .zip(normalized_ratios)
+                    .for_each(|((_, old), corrected)| {
+                        *old = corrected;
+                    })
+            })
+    }
 }
 
 /// A voter's stake assignment among a set of targets, represented as absolute values in the scale
@@ -488,73 +507,78 @@ impl<AccountId: IdentifierT, P: PerThing128> Assignment<AccountId, P> {
 #[derive(RuntimeDebug, Clone, Default)]
 #[cfg_attr(feature = "std", derive(PartialEq, Eq, Encode, Decode))]
 pub struct StakedAssignment<AccountId> {
-	/// Voter's identifier
-	pub who: AccountId,
-	/// The distribution of the voter's stake.
-	pub distribution: Vec<(AccountId, ExtendedBalance)>,
+    /// Voter's identifier
+    pub who: AccountId,
+    /// The distribution of the voter's stake.
+    pub distribution: Vec<(AccountId, ExtendedBalance)>,
 }
 
 impl<AccountId> StakedAssignment<AccountId> {
-	/// Converts self into the normal [`Assignment`] type.
-	///
-	/// NOTE: This will always round down, and thus the results might be less than a full 100% `P`.
-	/// Use a normalization post-processing to fix this. The data type returned here will
-	/// potentially get used to create a compact type; a compact type requires sum of ratios to be
-	/// less than 100% upon un-compacting.
-	///
-	/// If an edge stake is so small that it cannot be represented in `T`, it is ignored. This edge
-	/// can never be re-created and does not mean anything useful anymore.
-	pub fn into_assignment<P: PerThing>(self) -> Assignment<AccountId, P>
-	where
-		AccountId: IdentifierT,
-	{
-		let stake = self.total();
-		let distribution = self.distribution
-			.into_iter()
-			.filter_map(|(target, w)| {
-				let per_thing = P::from_rational_approximation(w, stake);
-				if per_thing == Bounded::min_value() {
-					None
-				} else {
-					Some((target, per_thing))
-				}
-			})
-			.collect::<Vec<(AccountId, P)>>();
+    /// Converts self into the normal [`Assignment`] type.
+    ///
+    /// NOTE: This will always round down, and thus the results might be less than a full 100% `P`.
+    /// Use a normalization post-processing to fix this. The data type returned here will
+    /// potentially get used to create a compact type; a compact type requires sum of ratios to be
+    /// less than 100% upon un-compacting.
+    ///
+    /// If an edge stake is so small that it cannot be represented in `T`, it is ignored. This edge
+    /// can never be re-created and does not mean anything useful anymore.
+    pub fn into_assignment<P: PerThing>(self) -> Assignment<AccountId, P>
+    where
+        AccountId: IdentifierT,
+    {
+        let stake = self.total();
+        let distribution = self
+            .distribution
+            .into_iter()
+            .filter_map(|(target, w)| {
+                let per_thing = P::from_rational_approximation(w, stake);
+                if per_thing == Bounded::min_value() {
+                    None
+                } else {
+                    Some((target, per_thing))
+                }
+            })
+            .collect::<Vec<(AccountId, P)>>();
 
-		Assignment {
-			who: self.who,
-			distribution,
-		}
-	}
+        Assignment {
+            who: self.who,
+            distribution,
+        }
+    }
 
-	/// Try and normalize this assignment.
-	///
-	/// If `Ok(())` is returned, then the assignment MUST have been successfully normalized to
-	/// `stake`.
-	///
-	/// NOTE: current implementation of `.normalize` is almost safe to `expect()` upon. The only
-	/// error case is when the input cannot fit in `T`, or the sum of input cannot fit in `T`.
-	/// Sadly, both of these are dependent upon the implementation of `VoteLimit`, i.e. the limit of
-	/// edges per voter which is enforced from upstream. Hence, at this crate, we prefer returning a
-	/// result and a use the name prefix `try_`.
-	pub fn try_normalize(&mut self, stake: ExtendedBalance) -> Result<(), &'static str> {
-		self.distribution
-			.iter()
-			.map(|(_, ref weight)| *weight)
-			.collect::<Vec<_>>()
-			.normalize(stake)
-			.map(|normalized_weights|
-				self.distribution
-					.iter_mut()
-					.zip(normalized_weights.into_iter())
-					.for_each(|((_, weight), corrected)| { *weight = corrected; })
-			)
-	}
+    /// Try and normalize this assignment.
+    ///
+    /// If `Ok(())` is returned, then the assignment MUST have been successfully normalized to
+    /// `stake`.
+    ///
+    /// NOTE: current implementation of `.normalize` is almost safe to `expect()` upon. The only
+    /// error case is when the input cannot fit in `T`, or the sum of input cannot fit in `T`.
+    /// Sadly, both of these are dependent upon the implementation of `VoteLimit`, i.e. the limit of
+    /// edges per voter which is enforced from upstream. Hence, at this crate, we prefer returning a
+    /// result and a use the name prefix `try_`.
+    pub fn try_normalize(&mut self, stake: ExtendedBalance) -> Result<(), &'static str> {
+        self.distribution
+            .iter()
+            .map(|(_, ref weight)| *weight)
+            .collect::<Vec<_>>()
+            .normalize(stake)
+            .map(|normalized_weights| {
+                self.distribution
+                    .iter_mut()
+                    .zip(normalized_weights.into_iter())
+                    .for_each(|((_, weight), corrected)| {
+                        *weight = corrected;
+                    })
+            })
+    }
 
-	/// Get the total stake of this assignment (aka voter budget).
-	pub fn total(&self) -> ExtendedBalance {
-		self.distribution.iter().fold(Zero::zero(), |a, b| a.saturating_add(b.1))
-	}
+    /// Get the total stake of this assignment (aka voter budget).
+    pub fn total(&self) -> ExtendedBalance {
+        self.distribution
+            .iter()
+            .fold(Zero::zero(), |a, b| a.saturating_add(b.1))
+    }
 }
 
 /// A structure to demonstrate the election result from the perspective of the candidate, i.e. how
@@ -567,10 +591,10 @@ impl<AccountId> StakedAssignment<AccountId> {
 #[derive(Default, RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Support<AccountId> {
-	/// Total support.
-	pub total: ExtendedBalance,
-	/// Support from voters.
-	pub voters: Vec<(AccountId, ExtendedBalance)>,
+    /// Total support.
+    pub total: ExtendedBalance,
+    /// Support from voters.
+    pub voters: Vec<(AccountId, ExtendedBalance)>,
 }
 
 /// A target-major representation of the the election outcome.
@@ -587,14 +611,14 @@ pub type SupportMap<A> = BTreeMap<A, Support<A>>;
 
 /// Helper trait to convert from a support map to a flat support vector.
 pub trait FlattenSupportMap<A> {
-	/// Flatten the support.
-	fn flatten(self) -> Supports<A>;
+    /// Flatten the support.
+    fn flatten(self) -> Supports<A>;
 }
 
 impl<A> FlattenSupportMap<A> for SupportMap<A> {
-	fn flatten(self) -> Supports<A> {
-		self.into_iter().collect::<Vec<_>>()
-	}
+    fn flatten(self) -> Supports<A> {
+        self.into_iter().collect::<Vec<_>>()
+    }
 }
 
 /// Build the support map from the winners and assignments.
@@ -602,27 +626,27 @@ impl<A> FlattenSupportMap<A> for SupportMap<A> {
 /// The list of winners is basically a redundancy for error checking only; It ensures that all the
 /// targets pointed to by the [`Assignment`] are present in the `winners`.
 pub fn to_support_map<A: IdentifierT>(
-	winners: &[A],
-	assignments: &[StakedAssignment<A>],
+    winners: &[A],
+    assignments: &[StakedAssignment<A>],
 ) -> Result<SupportMap<A>, Error> {
-	// Initialize the support of each candidate.
-	let mut supports = <SupportMap<A>>::new();
-	winners.iter().for_each(|e| {
-		supports.insert(e.clone(), Default::default());
-	});
+    // Initialize the support of each candidate.
+    let mut supports = <SupportMap<A>>::new();
+    winners.iter().for_each(|e| {
+        supports.insert(e.clone(), Default::default());
+    });
 
-	// build support struct.
-	for StakedAssignment { who, distribution } in assignments.iter() {
-		for (c, weight_extended) in distribution.iter() {
-			if let Some(support) = supports.get_mut(c) {
-				support.total = support.total.saturating_add(*weight_extended);
-				support.voters.push((who.clone(), *weight_extended));
-			} else {
-				return Err(Error::InvalidSupportEdge)
-			}
-		}
-	}
-	Ok(supports)
+    // build support struct.
+    for StakedAssignment { who, distribution } in assignments.iter() {
+        for (c, weight_extended) in distribution.iter() {
+            if let Some(support) = supports.get_mut(c) {
+                support.total = support.total.saturating_add(*weight_extended);
+                support.voters.push((who.clone(), *weight_extended));
+            } else {
+                return Err(Error::InvalidSupportEdge);
+            }
+        }
+    }
+    Ok(supports)
 }
 
 /// Same as [`to_support_map`] except it calls `FlattenSupportMap` on top of the result to return a
@@ -630,20 +654,20 @@ pub fn to_support_map<A: IdentifierT>(
 ///
 /// Similar to [`to_support_map`], `winners` is used for error checking.
 pub fn to_supports<A: IdentifierT>(
-	winners: &[A],
-	assignments: &[StakedAssignment<A>],
+    winners: &[A],
+    assignments: &[StakedAssignment<A>],
 ) -> Result<Supports<A>, Error> {
-	to_support_map(winners, assignments).map(FlattenSupportMap::flatten)
+    to_support_map(winners, assignments).map(FlattenSupportMap::flatten)
 }
 
 /// Extension trait for evaluating a support map or vector.
 pub trait EvaluateSupport<K> {
-	/// Evaluate a support map. The returned tuple contains:
-	///
-	/// - Minimum support. This value must be **maximized**.
-	/// - Sum of all supports. This value must be **maximized**.
-	/// - Sum of all supports squared. This value must be **minimized**.
-	fn evaluate(self) -> ElectionScore;
+    /// Evaluate a support map. The returned tuple contains:
+    ///
+    /// - Minimum support. This value must be **maximized**.
+    /// - Sum of all supports. This value must be **maximized**.
+    /// - Sum of all supports squared. This value must be **minimized**.
+    fn evaluate(self) -> ElectionScore;
 }
 
 /// A common wrapper trait for both (&A, &B) and &(A, B).
@@ -651,50 +675,50 @@ pub trait EvaluateSupport<K> {
 /// This allows us to implemented something for both `Vec<_>` and `BTreeMap<_>`, such as
 /// [`EvaluateSupport`].
 pub trait TupleRef<K, V> {
-	fn extract(&self) -> (&K, &V);
+    fn extract(&self) -> (&K, &V);
 }
 
 impl<K, V> TupleRef<K, V> for &(K, V) {
-	fn extract(&self) -> (&K, &V) {
-		(&self.0, &self.1)
-	}
+    fn extract(&self) -> (&K, &V) {
+        (&self.0, &self.1)
+    }
 }
 
 impl<K, V> TupleRef<K, V> for (K, V) {
-	fn extract(&self) -> (&K, &V) {
-		(&self.0, &self.1)
-	}
+    fn extract(&self) -> (&K, &V) {
+        (&self.0, &self.1)
+    }
 }
 
 impl<K, V> TupleRef<K, V> for (&K, &V) {
-	fn extract(&self) -> (&K, &V) {
-		(self.0, self.1)
-	}
+    fn extract(&self) -> (&K, &V) {
+        (self.0, self.1)
+    }
 }
 
 impl<A, C, I> EvaluateSupport<A> for C
 where
-	C: IntoIterator<Item = I>,
-	I: TupleRef<A, Support<A>>,
-	A: IdentifierT,
+    C: IntoIterator<Item = I>,
+    I: TupleRef<A, Support<A>>,
+    A: IdentifierT,
 {
-	fn evaluate(self) -> ElectionScore {
-		let mut min_support = ExtendedBalance::max_value();
-		let mut sum: ExtendedBalance = Zero::zero();
-		// NOTE: The third element might saturate but fine for now since this will run on-chain and
-		// need to be fast.
-		let mut sum_squared: ExtendedBalance = Zero::zero();
-		for item in self {
-			let (_, support) = item.extract();
-			sum = sum.saturating_add(support.total);
-			let squared = support.total.saturating_mul(support.total);
-			sum_squared = sum_squared.saturating_add(squared);
-			if support.total < min_support {
-				min_support = support.total;
-			}
-		}
-		[min_support, sum, sum_squared]
-	}
+    fn evaluate(self) -> ElectionScore {
+        let mut min_support = ExtendedBalance::max_value();
+        let mut sum: ExtendedBalance = Zero::zero();
+        // NOTE: The third element might saturate but fine for now since this will run on-chain and
+        // need to be fast.
+        let mut sum_squared: ExtendedBalance = Zero::zero();
+        for item in self {
+            let (_, support) = item.extract();
+            sum = sum.saturating_add(support.total);
+            let squared = support.total.saturating_mul(support.total);
+            sum_squared = sum_squared.saturating_add(squared);
+            if support.total < min_support {
+                min_support = support.total;
+            }
+        }
+        [min_support, sum, sum_squared]
+    }
 }
 
 /// Compares two sets of election scores based on desirability and returns true if `this` is better
@@ -705,28 +729,25 @@ where
 ///
 /// Note that the third component should be minimized.
 pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, epsilon: P) -> bool {
-	match this
-		.iter()
-		.zip(that.iter())
-		.map(|(thi, tha)| (
-			thi.ge(&tha),
-			thi.tcmp(&tha, epsilon.mul_ceil(*tha)),
-		))
-		.collect::<Vec<(bool, Ordering)>>()
-		.as_slice()
-	{
-		// epsilon better in the score[0], accept.
-		[(_, Ordering::Greater), _, _] => true,
+    match this
+        .iter()
+        .zip(that.iter())
+        .map(|(thi, tha)| (thi.ge(&tha), thi.tcmp(&tha, epsilon.mul_ceil(*tha))))
+        .collect::<Vec<(bool, Ordering)>>()
+        .as_slice()
+    {
+        // epsilon better in the score[0], accept.
+        [(_, Ordering::Greater), _, _] => true,
 
-		// less than epsilon better in score[0], but more than epsilon better in the second.
-		[(true, Ordering::Equal), (_, Ordering::Greater), _] => true,
+        // less than epsilon better in score[0], but more than epsilon better in the second.
+        [(true, Ordering::Equal), (_, Ordering::Greater), _] => true,
 
-		// less than epsilon better in score[0, 1], but more than epsilon better in the third
-		[(true, Ordering::Equal), (true, Ordering::Equal), (_, Ordering::Less)] => true,
+        // less than epsilon better in score[0, 1], but more than epsilon better in the third
+        [(true, Ordering::Equal), (true, Ordering::Equal), (_, Ordering::Less)] => true,
 
-		// anything else is not a good score.
-		_ => false,
-	}
+        // anything else is not a good score.
+        _ => false,
+    }
 }
 
 /// Converts raw inputs to types used in this crate.
@@ -735,55 +756,57 @@ pub fn is_score_better<P: PerThing>(this: ElectionScore, that: ElectionScore, ep
 /// - It drops any votes that are pointing to non-candidates.
 /// - It drops duplicate targets within a voter.
 pub(crate) fn setup_inputs<AccountId: IdentifierT>(
-	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+    initial_candidates: Vec<AccountId>,
+    initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
 ) -> (Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>) {
-	// used to cache and access candidates index.
-	let mut c_idx_cache = BTreeMap::<AccountId, usize>::new();
+    // used to cache and access candidates index.
+    let mut c_idx_cache = BTreeMap::<AccountId, usize>::new();
 
-	let candidates = initial_candidates
-		.into_iter()
-		.enumerate()
-		.map(|(idx, who)| {
-			c_idx_cache.insert(who.clone(), idx);
-			Rc::new(RefCell::new(Candidate { who, ..Default::default() }))
-		})
-		.collect::<Vec<CandidatePtr<AccountId>>>();
+    let candidates = initial_candidates
+        .into_iter()
+        .enumerate()
+        .map(|(idx, who)| {
+            c_idx_cache.insert(who.clone(), idx);
+            Rc::new(RefCell::new(Candidate {
+                who,
+                ..Default::default()
+            }))
+        })
+        .collect::<Vec<CandidatePtr<AccountId>>>();
 
-	let voters = initial_voters.into_iter().filter_map(|(who, voter_stake, votes)| {
-		let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
-		for v in votes {
-			if edges.iter().any(|e| e.who == v) {
-				// duplicate edge.
-				continue;
-			}
-			if let Some(idx) = c_idx_cache.get(&v) {
-				// This candidate is valid + already cached.
-				let mut candidate = candidates[*idx].borrow_mut();
-				candidate.approval_stake =
-					candidate.approval_stake.saturating_add(voter_stake.into());
-				edges.push(
-					Edge {
-						who: v.clone(),
-						candidate: Rc::clone(&candidates[*idx]),
-						..Default::default()
-					}
-				);
-			} // else {} would be wrong votes. We don't really care about it.
-		}
-		if edges.is_empty() {
-			None
-		}
-		else {
-			Some(Voter {
-				who,
-				edges: edges,
-				budget: voter_stake.into(),
-				load: Rational128::zero(),
-			})
-		}
+    let voters = initial_voters
+        .into_iter()
+        .filter_map(|(who, voter_stake, votes)| {
+            let mut edges: Vec<Edge<AccountId>> = Vec::with_capacity(votes.len());
+            for v in votes {
+                if edges.iter().any(|e| e.who == v) {
+                    // duplicate edge.
+                    continue;
+                }
+                if let Some(idx) = c_idx_cache.get(&v) {
+                    // This candidate is valid + already cached.
+                    let mut candidate = candidates[*idx].borrow_mut();
+                    candidate.approval_stake =
+                        candidate.approval_stake.saturating_add(voter_stake.into());
+                    edges.push(Edge {
+                        who: v.clone(),
+                        candidate: Rc::clone(&candidates[*idx]),
+                        ..Default::default()
+                    });
+                } // else {} would be wrong votes. We don't really care about it.
+            }
+            if edges.is_empty() {
+                None
+            } else {
+                Some(Voter {
+                    who,
+                    edges: edges,
+                    budget: voter_stake.into(),
+                    load: Rational128::zero(),
+                })
+            }
+        })
+        .collect::<Vec<_>>();
 
-	}).collect::<Vec<_>>();
-
-	(candidates, voters,)
+    (candidates, voters)
 }

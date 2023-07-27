@@ -18,9 +18,9 @@
 
 //! Substrate state API.
 
-use jsonrpc_derive::rpc;
-use sp_core::storage::{StorageKey, PrefixedStorageKey, StorageData};
 use crate::state::error::FutureResult;
+use jsonrpc_derive::rpc;
+use sp_core::storage::{PrefixedStorageKey, StorageData, StorageKey};
 
 pub use self::gen_client::Client as ChildStateClient;
 
@@ -30,42 +30,42 @@ pub use self::gen_client::Client as ChildStateClient;
 /// from json and not guaranted valid.
 #[rpc]
 pub trait ChildStateApi<Hash> {
-	/// RPC Metadata
-	type Metadata;
+    /// RPC Metadata
+    type Metadata;
 
-	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
-	#[rpc(name = "childstate_getKeys")]
-	fn storage_keys(
-		&self,
-		child_storage_key: PrefixedStorageKey,
-		prefix: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Vec<StorageKey>>;
+    /// Returns the keys with prefix from a child storage, leave empty to get all the keys
+    #[rpc(name = "childstate_getKeys")]
+    fn storage_keys(
+        &self,
+        child_storage_key: PrefixedStorageKey,
+        prefix: StorageKey,
+        hash: Option<Hash>,
+    ) -> FutureResult<Vec<StorageKey>>;
 
-	/// Returns a child storage entry at a specific block's state.
-	#[rpc(name = "childstate_getStorage")]
-	fn storage(
-		&self,
-		child_storage_key: PrefixedStorageKey,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<StorageData>>;
+    /// Returns a child storage entry at a specific block's state.
+    #[rpc(name = "childstate_getStorage")]
+    fn storage(
+        &self,
+        child_storage_key: PrefixedStorageKey,
+        key: StorageKey,
+        hash: Option<Hash>,
+    ) -> FutureResult<Option<StorageData>>;
 
-	/// Returns the hash of a child storage entry at a block's state.
-	#[rpc(name = "childstate_getStorageHash")]
-	fn storage_hash(
-		&self,
-		child_storage_key: PrefixedStorageKey,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<Hash>>;
+    /// Returns the hash of a child storage entry at a block's state.
+    #[rpc(name = "childstate_getStorageHash")]
+    fn storage_hash(
+        &self,
+        child_storage_key: PrefixedStorageKey,
+        key: StorageKey,
+        hash: Option<Hash>,
+    ) -> FutureResult<Option<Hash>>;
 
-	/// Returns the size of a child storage entry at a block's state.
-	#[rpc(name = "childstate_getStorageSize")]
-	fn storage_size(
-		&self,
-		child_storage_key: PrefixedStorageKey,
-		key: StorageKey,
-		hash: Option<Hash>
-	) -> FutureResult<Option<u64>>;
+    /// Returns the size of a child storage entry at a block's state.
+    #[rpc(name = "childstate_getStorageSize")]
+    fn storage_size(
+        &self,
+        child_storage_key: PrefixedStorageKey,
+        key: StorageKey,
+        hash: Option<Hash>,
+    ) -> FutureResult<Option<u64>>;
 }

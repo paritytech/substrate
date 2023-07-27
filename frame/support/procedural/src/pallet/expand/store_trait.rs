@@ -22,34 +22,38 @@ use syn::spanned::Spanned;
 /// * generate Store trait with all storages,
 /// * implement Store trait for Pallet.
 pub fn expand_store_trait(def: &mut Def) -> proc_macro2::TokenStream {
-	let (trait_vis, trait_store) = if let Some(store) = &def.pallet_struct.store {
-		store
-	} else {
-		return Default::default()
-	};
+    let (trait_vis, trait_store) = if let Some(store) = &def.pallet_struct.store {
+        store
+    } else {
+        return Default::default();
+    };
 
-	let type_impl_gen = &def.type_impl_generics(trait_store.span());
-	let type_use_gen = &def.type_use_generics(trait_store.span());
-	let pallet_ident = &def.pallet_struct.pallet;
+    let type_impl_gen = &def.type_impl_generics(trait_store.span());
+    let type_use_gen = &def.type_use_generics(trait_store.span());
+    let pallet_ident = &def.pallet_struct.pallet;
 
-	let mut where_clauses = vec![&def.config.where_clause];
-	where_clauses.extend(def.storages.iter().map(|storage| &storage.where_clause));
-	let completed_where_clause = super::merge_where_clauses(&where_clauses);
+    let mut where_clauses = vec![&def.config.where_clause];
+    where_clauses.extend(def.storages.iter().map(|storage| &storage.where_clause));
+    let completed_where_clause = super::merge_where_clauses(&where_clauses);
 
-	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
+    let storage_names = &def
+        .storages
+        .iter()
+        .map(|storage| &storage.ident)
+        .collect::<Vec<_>>();
 
-	quote::quote_spanned!(trait_store.span() =>
-		#trait_vis trait #trait_store {
-			#(
-				type #storage_names;
-			)*
-		}
-		impl<#type_impl_gen> #trait_store for #pallet_ident<#type_use_gen>
-			#completed_where_clause
-		{
-			#(
-				type #storage_names = #storage_names<#type_use_gen>;
-			)*
-		}
-	)
+    quote::quote_spanned!(trait_store.span() =>
+        #trait_vis trait #trait_store {
+            #(
+                type #storage_names;
+            )*
+        }
+        impl<#type_impl_gen> #trait_store for #pallet_ident<#type_use_gen>
+            #completed_where_clause
+        {
+            #(
+                type #storage_names = #storage_names<#type_use_gen>;
+            )*
+        }
+    )
 }

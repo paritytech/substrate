@@ -79,43 +79,43 @@ pub(crate) type TelemetryMessage = (Id, u8, String);
 pub struct TelemetrySpan(tracing::Span);
 
 impl TelemetrySpan {
-	/// Enters this span, returning a guard that will exit the span when dropped.
-	pub fn enter(&self) -> tracing::span::Entered {
-		self.0.enter()
-	}
+    /// Enters this span, returning a guard that will exit the span when dropped.
+    pub fn enter(&self) -> tracing::span::Entered {
+        self.0.enter()
+    }
 
-	/// Constructs a new [`TelemetrySpan`].
-	pub fn new() -> Self {
-		Self(tracing::error_span!(TELEMETRY_LOG_SPAN))
-	}
+    /// Constructs a new [`TelemetrySpan`].
+    pub fn new() -> Self {
+        Self(tracing::error_span!(TELEMETRY_LOG_SPAN))
+    }
 
-	/// Return a clone of the underlying `tracing::Span` instance.
-	pub fn span(&self) -> tracing::Span {
-		self.0.clone()
-	}
+    /// Return a clone of the underlying `tracing::Span` instance.
+    pub fn span(&self) -> tracing::Span {
+        self.0.clone()
+    }
 }
 
 /// Message sent when the connection (re-)establishes.
 #[derive(Debug, Serialize)]
 pub struct ConnectionMessage {
-	/// Node's name.
-	pub name: String,
-	/// Node's implementation.
-	pub implementation: String,
-	/// Node's version.
-	pub version: String,
-	/// Node's configuration.
-	pub config: String,
-	/// Node's chain.
-	pub chain: String,
-	/// Node's genesis hash.
-	pub genesis_hash: String,
-	/// Node is an authority.
-	pub authority: bool,
-	/// Node's startup time.
-	pub startup_time: String,
-	/// Node's network ID.
-	pub network_id: String,
+    /// Node's name.
+    pub name: String,
+    /// Node's implementation.
+    pub implementation: String,
+    /// Node's version.
+    pub version: String,
+    /// Node's configuration.
+    pub config: String,
+    /// Node's chain.
+    pub chain: String,
+    /// Node's genesis hash.
+    pub genesis_hash: String,
+    /// Node is an authority.
+    pub authority: bool,
+    /// Node's startup time.
+    pub startup_time: String,
+    /// Node's network ID.
+    pub network_id: String,
 }
 
 /// Telemetry worker.
@@ -125,294 +125,294 @@ pub struct ConnectionMessage {
 /// handle will fail (without being fatal).
 #[derive(Debug)]
 pub struct TelemetryWorker {
-	message_receiver: mpsc::Receiver<TelemetryMessage>,
-	message_sender: mpsc::Sender<TelemetryMessage>,
-	register_receiver: mpsc::UnboundedReceiver<Register>,
-	register_sender: mpsc::UnboundedSender<Register>,
-	transport: WsTrans,
+    message_receiver: mpsc::Receiver<TelemetryMessage>,
+    message_sender: mpsc::Sender<TelemetryMessage>,
+    register_receiver: mpsc::UnboundedReceiver<Register>,
+    register_sender: mpsc::UnboundedSender<Register>,
+    transport: WsTrans,
 }
 
 impl TelemetryWorker {
-	pub(crate) fn new(buffer_size: usize, transport: WsTrans) -> Self {
-		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
-		let (register_sender, register_receiver) = mpsc::unbounded();
+    pub(crate) fn new(buffer_size: usize, transport: WsTrans) -> Self {
+        let (message_sender, message_receiver) = mpsc::channel(buffer_size);
+        let (register_sender, register_receiver) = mpsc::unbounded();
 
-		Self {
-			message_receiver,
-			message_sender,
-			register_receiver,
-			register_sender,
-			transport,
-		}
-	}
+        Self {
+            message_receiver,
+            message_sender,
+            register_receiver,
+            register_sender,
+            transport,
+        }
+    }
 
-	/// Get a new [`TelemetryHandle`].
-	///
-	/// This is used when you want to register with the [`TelemetryWorker`].
-	pub fn handle(&self) -> TelemetryHandle {
-		TelemetryHandle {
-			message_sender: self.register_sender.clone(),
-		}
-	}
+    /// Get a new [`TelemetryHandle`].
+    ///
+    /// This is used when you want to register with the [`TelemetryWorker`].
+    pub fn handle(&self) -> TelemetryHandle {
+        TelemetryHandle {
+            message_sender: self.register_sender.clone(),
+        }
+    }
 
-	/// Get a clone of the channel's `Sender` used to send telemetry events.
-	pub(crate) fn message_sender(&self) -> mpsc::Sender<TelemetryMessage> {
-		self.message_sender.clone()
-	}
+    /// Get a clone of the channel's `Sender` used to send telemetry events.
+    pub(crate) fn message_sender(&self) -> mpsc::Sender<TelemetryMessage> {
+        self.message_sender.clone()
+    }
 
-	/// Run the telemetry worker.
-	///
-	/// This should be run in a background task.
-	pub async fn run(self) {
-		let Self {
-			mut message_receiver,
-			message_sender: _,
-			mut register_receiver,
-			register_sender: _,
-			transport,
-		} = self;
+    /// Run the telemetry worker.
+    ///
+    /// This should be run in a background task.
+    pub async fn run(self) {
+        let Self {
+            mut message_receiver,
+            message_sender: _,
+            mut register_receiver,
+            register_sender: _,
+            transport,
+        } = self;
 
-		let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
-		let mut node_pool: HashMap<Multiaddr, _> = HashMap::new();
+        let mut node_map: HashMap<Id, Vec<(u8, Multiaddr)>> = HashMap::new();
+        let mut node_pool: HashMap<Multiaddr, _> = HashMap::new();
 
-		loop {
-			futures::select! {
-				message = message_receiver.next() => Self::process_message(
-					message,
-					&mut node_pool,
-					&node_map,
-				).await,
-				init_payload = register_receiver.next() => Self::process_register(
-					init_payload,
-					&mut node_pool,
-					&mut node_map,
-					transport.clone(),
-				).await,
-			}
-		}
-	}
+        loop {
+            futures::select! {
+                message = message_receiver.next() => Self::process_message(
+                    message,
+                    &mut node_pool,
+                    &node_map,
+                ).await,
+                init_payload = register_receiver.next() => Self::process_register(
+                    init_payload,
+                    &mut node_pool,
+                    &mut node_map,
+                    transport.clone(),
+                ).await,
+            }
+        }
+    }
 
-	async fn process_register(
-		input: Option<Register>,
-		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
-		node_map: &mut HashMap<Id, Vec<(u8, Multiaddr)>>,
-		transport: WsTrans,
-	) {
-		let input = input.expect("the stream is never closed; qed");
+    async fn process_register(
+        input: Option<Register>,
+        node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
+        node_map: &mut HashMap<Id, Vec<(u8, Multiaddr)>>,
+        transport: WsTrans,
+    ) {
+        let input = input.expect("the stream is never closed; qed");
 
-		match input {
-			Register::Telemetry {
-				id,
-				endpoints,
-				connection_message,
-			} => {
-				let endpoints = endpoints.0;
+        match input {
+            Register::Telemetry {
+                id,
+                endpoints,
+                connection_message,
+            } => {
+                let endpoints = endpoints.0;
 
-				let connection_message = match serde_json::to_value(&connection_message) {
-					Ok(serde_json::Value::Object(mut value)) => {
-						value.insert("msg".into(), "system.connected".into());
-						let mut obj = serde_json::Map::new();
-						obj.insert("id".to_string(), id.into_u64().into());
-						obj.insert("payload".to_string(), value.into());
-						Some(obj)
-					}
-					Ok(_) => {
-						unreachable!("ConnectionMessage always serialize to an object; qed")
-					}
-					Err(err) => {
-						log::error!(
-							target: "telemetry",
-							"Could not serialize connection message: {}",
-							err,
-						);
-						None
-					}
-				};
+                let connection_message = match serde_json::to_value(&connection_message) {
+                    Ok(serde_json::Value::Object(mut value)) => {
+                        value.insert("msg".into(), "system.connected".into());
+                        let mut obj = serde_json::Map::new();
+                        obj.insert("id".to_string(), id.into_u64().into());
+                        obj.insert("payload".to_string(), value.into());
+                        Some(obj)
+                    }
+                    Ok(_) => {
+                        unreachable!("ConnectionMessage always serialize to an object; qed")
+                    }
+                    Err(err) => {
+                        log::error!(
+                            target: "telemetry",
+                            "Could not serialize connection message: {}",
+                            err,
+                        );
+                        None
+                    }
+                };
 
-				for (addr, verbosity) in endpoints {
-					log::trace!(
-						target: "telemetry",
-						"Initializing telemetry for: {:?}",
-						addr,
-					);
-					node_map
-						.entry(id.clone())
-						.or_default()
-						.push((verbosity, addr.clone()));
+                for (addr, verbosity) in endpoints {
+                    log::trace!(
+                        target: "telemetry",
+                        "Initializing telemetry for: {:?}",
+                        addr,
+                    );
+                    node_map
+                        .entry(id.clone())
+                        .or_default()
+                        .push((verbosity, addr.clone()));
 
-					let node = node_pool.entry(addr.clone()).or_insert_with(|| {
-						Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
-					});
+                    let node = node_pool.entry(addr.clone()).or_insert_with(|| {
+                        Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
+                    });
 
-					node.connection_messages.extend(connection_message.clone());
-				}
-			}
-			Register::Notifier {
-				addresses,
-				connection_notifier,
-			} => {
-				for addr in addresses {
-					if let Some(node) = node_pool.get_mut(&addr) {
-						node.telemetry_connection_notifier
-							.push(connection_notifier.clone());
-					} else {
-						log::error!(
-							target: "telemetry",
-							"Received connection notifier for unknown node ({}). This is a bug.",
-							addr,
-						);
-					}
-				}
-			}
-		}
-	}
+                    node.connection_messages.extend(connection_message.clone());
+                }
+            }
+            Register::Notifier {
+                addresses,
+                connection_notifier,
+            } => {
+                for addr in addresses {
+                    if let Some(node) = node_pool.get_mut(&addr) {
+                        node.telemetry_connection_notifier
+                            .push(connection_notifier.clone());
+                    } else {
+                        log::error!(
+                            target: "telemetry",
+                            "Received connection notifier for unknown node ({}). This is a bug.",
+                            addr,
+                        );
+                    }
+                }
+            }
+        }
+    }
 
-	// dispatch messages to the telemetry nodes
-	async fn process_message(
-		input: Option<TelemetryMessage>,
-		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
-		node_map: &HashMap<Id, Vec<(u8, Multiaddr)>>,
-	) {
-		let (id, verbosity, message) = input.expect("the stream is never closed; qed");
+    // dispatch messages to the telemetry nodes
+    async fn process_message(
+        input: Option<TelemetryMessage>,
+        node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
+        node_map: &HashMap<Id, Vec<(u8, Multiaddr)>>,
+    ) {
+        let (id, verbosity, message) = input.expect("the stream is never closed; qed");
 
-		let nodes = if let Some(nodes) = node_map.get(&id) {
-			nodes
-		} else {
-			// This is a normal error because the telemetry span is entered before the telemetry
-			// is initialized so it is possible that some messages in the beginning don't get
-			// through.
-			log::trace!(
-				target: "telemetry",
-				"Received telemetry log for unknown id ({:?}): {}",
-				id,
-				message,
-			);
-			return;
-		};
+        let nodes = if let Some(nodes) = node_map.get(&id) {
+            nodes
+        } else {
+            // This is a normal error because the telemetry span is entered before the telemetry
+            // is initialized so it is possible that some messages in the beginning don't get
+            // through.
+            log::trace!(
+                target: "telemetry",
+                "Received telemetry log for unknown id ({:?}): {}",
+                id,
+                message,
+            );
+            return;
+        };
 
-		for (node_max_verbosity, addr) in nodes {
-			if verbosity > *node_max_verbosity {
-				log::trace!(
-					target: "telemetry",
-					"Skipping {} for log entry with verbosity {:?}",
-					addr,
-					verbosity,
-				);
-				continue;
-			}
+        for (node_max_verbosity, addr) in nodes {
+            if verbosity > *node_max_verbosity {
+                log::trace!(
+                    target: "telemetry",
+                    "Skipping {} for log entry with verbosity {:?}",
+                    addr,
+                    verbosity,
+                );
+                continue;
+            }
 
-			if let Some(node) = node_pool.get_mut(&addr) {
-				let _ = node.send(message.clone()).await;
-			} else {
-				log::error!(
-					target: "telemetry",
-					"Received message for unknown node ({}). This is a bug. \
-					Message sent: {}",
-					addr,
-					message,
-				);
-			}
-		}
-	}
+            if let Some(node) = node_pool.get_mut(&addr) {
+                let _ = node.send(message.clone()).await;
+            } else {
+                log::error!(
+                    target: "telemetry",
+                    "Received message for unknown node ({}). This is a bug. \
+                    Message sent: {}",
+                    addr,
+                    message,
+                );
+            }
+        }
+    }
 }
 
 /// Handle to the [`TelemetryWorker`] thats allows initializing the telemetry for a Substrate node.
 #[derive(Debug, Clone)]
 pub struct TelemetryHandle {
-	message_sender: mpsc::UnboundedSender<Register>,
+    message_sender: mpsc::UnboundedSender<Register>,
 }
 
 impl TelemetryHandle {
-	/// Initialize the telemetry with the endpoints provided in argument for the current substrate
-	/// node.
-	///
-	/// This method must be called during the substrate node initialization.
-	///
-	/// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
-	/// verbosity level.
-	///
-	/// The `connection_message` argument is a JSON object that is sent every time the connection
-	/// (re-)establishes.
-	pub fn start_telemetry(
-		&mut self,
-		span: TelemetrySpan,
-		endpoints: TelemetryEndpoints,
-		connection_message: ConnectionMessage,
-	) -> TelemetryConnectionNotifier {
-		let Self { message_sender } = self;
+    /// Initialize the telemetry with the endpoints provided in argument for the current substrate
+    /// node.
+    ///
+    /// This method must be called during the substrate node initialization.
+    ///
+    /// The `endpoints` argument is a collection of telemetry WebSocket servers with a corresponding
+    /// verbosity level.
+    ///
+    /// The `connection_message` argument is a JSON object that is sent every time the connection
+    /// (re-)establishes.
+    pub fn start_telemetry(
+        &mut self,
+        span: TelemetrySpan,
+        endpoints: TelemetryEndpoints,
+        connection_message: ConnectionMessage,
+    ) -> TelemetryConnectionNotifier {
+        let Self { message_sender } = self;
 
-		let connection_notifier = TelemetryConnectionNotifier {
-			message_sender: message_sender.clone(),
-			addresses: endpoints.0.iter().map(|(addr, _)| addr.clone()).collect(),
-		};
+        let connection_notifier = TelemetryConnectionNotifier {
+            message_sender: message_sender.clone(),
+            addresses: endpoints.0.iter().map(|(addr, _)| addr.clone()).collect(),
+        };
 
-		match span.0.id() {
-			Some(id) => {
-				match message_sender.unbounded_send(Register::Telemetry {
-					id,
-					endpoints,
-					connection_message,
-				}) {
-					Ok(()) => {}
-					Err(err) => error!(
-						target: "telemetry",
-						"Could not initialize telemetry: \
-						the telemetry is probably already running: {}",
-						err,
-					),
-				}
-			}
-			None => error!(
-				target: "telemetry",
-				"Could not initialize telemetry: the span could not be entered",
-			),
-		}
+        match span.0.id() {
+            Some(id) => {
+                match message_sender.unbounded_send(Register::Telemetry {
+                    id,
+                    endpoints,
+                    connection_message,
+                }) {
+                    Ok(()) => {}
+                    Err(err) => error!(
+                        target: "telemetry",
+                        "Could not initialize telemetry: \
+                        the telemetry is probably already running: {}",
+                        err,
+                    ),
+                }
+            }
+            None => error!(
+                target: "telemetry",
+                "Could not initialize telemetry: the span could not be entered",
+            ),
+        }
 
-		connection_notifier
-	}
+        connection_notifier
+    }
 }
 
 /// Used to create a stream of events with only one event: when a telemetry connection
 /// (re-)establishes.
 #[derive(Clone, Debug)]
 pub struct TelemetryConnectionNotifier {
-	message_sender: mpsc::UnboundedSender<Register>,
-	addresses: Vec<Multiaddr>,
+    message_sender: mpsc::UnboundedSender<Register>,
+    addresses: Vec<Multiaddr>,
 }
 
 impl TelemetryConnectionNotifier {
-	/// Get event stream for telemetry connection established events.
-	///
-	/// This function will return an error if the telemetry has already been started by
-	/// [`TelemetryHandle::start_telemetry`].
-	pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
-		let (message_sender, message_receiver) = tracing_unbounded("mpsc_telemetry_on_connect");
-		if let Err(err) = self.message_sender.unbounded_send(Register::Notifier {
-			addresses: self.addresses.clone(),
-			connection_notifier: message_sender,
-		}) {
-			error!(
-				target: "telemetry",
-				"Could not create a telemetry connection notifier: \
-				the telemetry is probably already running: {}",
-				err,
-			);
-		}
-		message_receiver
-	}
+    /// Get event stream for telemetry connection established events.
+    ///
+    /// This function will return an error if the telemetry has already been started by
+    /// [`TelemetryHandle::start_telemetry`].
+    pub fn on_connect_stream(&self) -> TracingUnboundedReceiver<()> {
+        let (message_sender, message_receiver) = tracing_unbounded("mpsc_telemetry_on_connect");
+        if let Err(err) = self.message_sender.unbounded_send(Register::Notifier {
+            addresses: self.addresses.clone(),
+            connection_notifier: message_sender,
+        }) {
+            error!(
+                target: "telemetry",
+                "Could not create a telemetry connection notifier: \
+                the telemetry is probably already running: {}",
+                err,
+            );
+        }
+        message_receiver
+    }
 }
 
 #[derive(Debug)]
 enum Register {
-	Telemetry {
-		id: Id,
-		endpoints: TelemetryEndpoints,
-		connection_message: ConnectionMessage,
-	},
-	Notifier {
-		addresses: Vec<Multiaddr>,
-		connection_notifier: ConnectionNotifierSender,
-	},
+    Telemetry {
+        id: Id,
+        endpoints: TelemetryEndpoints,
+        connection_message: ConnectionMessage,
+    },
+    Notifier {
+        addresses: Vec<Multiaddr>,
+        connection_notifier: ConnectionNotifierSender,
+    },
 }
 
 /// Report a telemetry.

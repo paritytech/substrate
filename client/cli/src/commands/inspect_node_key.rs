@@ -18,58 +18,62 @@
 //! Implementation of the `inspect-node-key` subcommand
 
 use crate::{Error, NetworkSchemeFlag};
+use libp2p::identity::{ed25519, PublicKey};
 use std::fs;
-use libp2p::identity::{PublicKey, ed25519};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
 /// The `inspect-node-key` command
 #[derive(Debug, StructOpt)]
 #[structopt(
-	name = "inspect-node-key",
-	about = "Print the peer ID corresponding to the node key in the given file."
+    name = "inspect-node-key",
+    about = "Print the peer ID corresponding to the node key in the given file."
 )]
 pub struct InspectNodeKeyCmd {
-	/// Name of file to read the secret key from.
-	#[structopt(long)]
-	file: PathBuf,
+    /// Name of file to read the secret key from.
+    #[structopt(long)]
+    file: PathBuf,
 
-	#[allow(missing_docs)]
-	#[structopt(flatten)]
-	pub network_scheme: NetworkSchemeFlag,
+    #[allow(missing_docs)]
+    #[structopt(flatten)]
+    pub network_scheme: NetworkSchemeFlag,
 }
 
 impl InspectNodeKeyCmd {
-	/// runs the command
-	pub fn run(&self) -> Result<(), Error> {
-		let mut file_content = hex::decode(fs::read(&self.file)?)
-			.map_err(|_| "failed to decode secret as hex")?;
-		let secret = ed25519::SecretKey::from_bytes(&mut file_content)
-			.map_err(|_| "Bad node key file")?;
+    /// runs the command
+    pub fn run(&self) -> Result<(), Error> {
+        let mut file_content =
+            hex::decode(fs::read(&self.file)?).map_err(|_| "failed to decode secret as hex")?;
+        let secret =
+            ed25519::SecretKey::from_bytes(&mut file_content).map_err(|_| "Bad node key file")?;
 
-		let keypair = ed25519::Keypair::from(secret);
-		let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
+        let keypair = ed25519::Keypair::from(secret);
+        let peer_id = PublicKey::Ed25519(keypair.public()).into_peer_id();
 
-		println!("{}", peer_id);
+        println!("{}", peer_id);
 
-		Ok(())
-	}
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use super::super::GenerateNodeKeyCmd;
+    use super::super::GenerateNodeKeyCmd;
+    use super::*;
 
-	#[test]
-	fn inspect_node_key() {
-		let path = tempfile::tempdir().unwrap().into_path().join("node-id").into_os_string();
-		let path = path.to_str().unwrap();
-		let cmd = GenerateNodeKeyCmd::from_iter(&["generate-node-key", "--file", path.clone()]);
+    #[test]
+    fn inspect_node_key() {
+        let path = tempfile::tempdir()
+            .unwrap()
+            .into_path()
+            .join("node-id")
+            .into_os_string();
+        let path = path.to_str().unwrap();
+        let cmd = GenerateNodeKeyCmd::from_iter(&["generate-node-key", "--file", path.clone()]);
 
-		assert!(cmd.run().is_ok());
+        assert!(cmd.run().is_ok());
 
-		let cmd = InspectNodeKeyCmd::from_iter(&["inspect-node-key", "--file", path]);
-		assert!(cmd.run().is_ok());
-	}
+        let cmd = InspectNodeKeyCmd::from_iter(&["inspect-node-key", "--file", path]);
+        assert!(cmd.run().is_ok());
+    }
 }

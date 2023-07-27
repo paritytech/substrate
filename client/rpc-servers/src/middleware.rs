@@ -19,74 +19,71 @@
 //! Middleware for RPC requests.
 
 use jsonrpc_core::{
-	Middleware as RequestMiddleware, Metadata,
-	Request, Response, FutureResponse, FutureOutput
+    FutureOutput, FutureResponse, Metadata, Middleware as RequestMiddleware, Request, Response,
 };
-use prometheus_endpoint::{
-	Registry, CounterVec, PrometheusError,
-	Opts, register, U64
-};
+use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 
 use futures::{future::Either, Future};
 
 /// Metrics for RPC middleware
 #[derive(Debug, Clone)]
 pub struct RpcMetrics {
-	rpc_calls: Option<CounterVec<U64>>,
+    rpc_calls: Option<CounterVec<U64>>,
 }
 
 impl RpcMetrics {
-	/// Create an instance of metrics
-	pub fn new(metrics_registry: Option<&Registry>) -> Result<Self, PrometheusError> {
-		Ok(Self {
-			rpc_calls: metrics_registry.map(|r|
-				register(
-					CounterVec::new(
-						Opts::new(
-							"rpc_calls_total",
-							"Number of rpc calls received",
-						),
-						&["protocol"]
-					)?,
-					r,
-				)
-			).transpose()?,
-		})
-	}
+    /// Create an instance of metrics
+    pub fn new(metrics_registry: Option<&Registry>) -> Result<Self, PrometheusError> {
+        Ok(Self {
+            rpc_calls: metrics_registry
+                .map(|r| {
+                    register(
+                        CounterVec::new(
+                            Opts::new("rpc_calls_total", "Number of rpc calls received"),
+                            &["protocol"],
+                        )?,
+                        r,
+                    )
+                })
+                .transpose()?,
+        })
+    }
 }
 
 /// Middleware for RPC calls
 pub struct RpcMiddleware {
-	metrics: RpcMetrics,
-	transport_label: String,
+    metrics: RpcMetrics,
+    transport_label: String,
 }
 
 impl RpcMiddleware {
-	/// Create an instance of middleware.
-	///
-	/// - `metrics`: Will be used to report statistics.
-	/// - `transport_label`: The label that is used when reporting the statistics.
-	pub fn new(metrics: RpcMetrics, transport_label: &str) -> Self {
-		RpcMiddleware {
-			metrics,
-			transport_label: String::from(transport_label),
-		}
-	}
+    /// Create an instance of middleware.
+    ///
+    /// - `metrics`: Will be used to report statistics.
+    /// - `transport_label`: The label that is used when reporting the statistics.
+    pub fn new(metrics: RpcMetrics, transport_label: &str) -> Self {
+        RpcMiddleware {
+            metrics,
+            transport_label: String::from(transport_label),
+        }
+    }
 }
 
 impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
-	type Future = FutureResponse;
-	type CallFuture = FutureOutput;
+    type Future = FutureResponse;
+    type CallFuture = FutureOutput;
 
-	fn on_request<F, X>(&self, request: Request, meta: M, next: F) -> Either<FutureResponse, X>
-	where
-		F: Fn(Request, M) -> X + Send + Sync,
-		X: Future<Item = Option<Response>, Error = ()> + Send + 'static,
-	{
-		if let Some(ref rpc_calls) = self.metrics.rpc_calls {
-			rpc_calls.with_label_values(&[self.transport_label.as_str()]).inc();
-		}
+    fn on_request<F, X>(&self, request: Request, meta: M, next: F) -> Either<FutureResponse, X>
+    where
+        F: Fn(Request, M) -> X + Send + Sync,
+        X: Future<Item = Option<Response>, Error = ()> + Send + 'static,
+    {
+        if let Some(ref rpc_calls) = self.metrics.rpc_calls {
+            rpc_calls
+                .with_label_values(&[self.transport_label.as_str()])
+                .inc();
+        }
 
-		Either::B(next(request, meta))
-	}
+        Either::B(next(request, meta))
+    }
 }

@@ -95,300 +95,319 @@
 mod benchmarking;
 pub mod weights;
 
-use sp_std::{result, cmp};
-use sp_inherents::InherentData;
 #[cfg(feature = "std")]
 use frame_support::debug;
 use frame_support::traits::{Time, UnixTime};
+use sp_inherents::InherentData;
 use sp_runtime::{
-	RuntimeString,
-	traits::{
-		AtLeast32Bit, Zero, SaturatedConversion, Scale,
-	}
+    traits::{AtLeast32Bit, SaturatedConversion, Scale, Zero},
+    RuntimeString,
 };
-use sp_timestamp::{
-	InherentError, INHERENT_IDENTIFIER, InherentType,
-	OnTimestampSet,
-};
+use sp_std::{cmp, result};
+use sp_timestamp::{InherentError, InherentType, OnTimestampSet, INHERENT_IDENTIFIER};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
-	use super::*;
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-	/// The pallet configuration trait
-	#[pallet::config]
-	pub trait Config: frame_system::Config {
-		/// Type used for expressing timestamp.
-		type Moment: Parameter + Default + AtLeast32Bit
-			+ Scale<Self::BlockNumber, Output = Self::Moment> + Copy;
+    /// The pallet configuration trait
+    #[pallet::config]
+    pub trait Config: frame_system::Config {
+        /// Type used for expressing timestamp.
+        type Moment: Parameter
+            + Default
+            + AtLeast32Bit
+            + Scale<Self::BlockNumber, Output = Self::Moment>
+            + Copy;
 
-		/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
-		type OnTimestampSet: OnTimestampSet<Self::Moment>;
+        /// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
+        type OnTimestampSet: OnTimestampSet<Self::Moment>;
 
-		/// The minimum period between blocks. Beware that this is different to the *expected* period
-		/// that the block production apparatus provides. Your chosen consensus system will generally
-		/// work with this to determine a sensible block time. e.g. For Aura, it will be double this
-		/// period on default settings.
-		#[pallet::constant]
-		type MinimumPeriod: Get<Self::Moment>;
+        /// The minimum period between blocks. Beware that this is different to the *expected* period
+        /// that the block production apparatus provides. Your chosen consensus system will generally
+        /// work with this to determine a sensible block time. e.g. For Aura, it will be double this
+        /// period on default settings.
+        #[pallet::constant]
+        type MinimumPeriod: Get<Self::Moment>;
 
-		/// Weight information for extrinsics in this pallet.
-		type WeightInfo: WeightInfo;
-	}
+        /// Weight information for extrinsics in this pallet.
+        type WeightInfo: WeightInfo;
+    }
 
-	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+    #[pallet::pallet]
+    #[pallet::generate_store(pub(super) trait Store)]
+    pub struct Pallet<T>(PhantomData<T>);
 
-	/// Current time for the current block.
-	#[pallet::storage]
-	#[pallet::getter(fn now)]
-	pub type Now<T: Config> = StorageValue<_, T::Moment, ValueQuery>;
+    /// Current time for the current block.
+    #[pallet::storage]
+    #[pallet::getter(fn now)]
+    pub type Now<T: Config> = StorageValue<_, T::Moment, ValueQuery>;
 
-	/// Did the timestamp get updated in this block?
-	#[pallet::storage]
-	pub(super) type DidUpdate<T: Config> = StorageValue<_, bool, ValueQuery>;
+    /// Did the timestamp get updated in this block?
+    #[pallet::storage]
+    pub(super) type DidUpdate<T: Config> = StorageValue<_, bool, ValueQuery>;
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// dummy `on_initialize` to return the weight used in `on_finalize`.
-		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			// weight of `on_finalize`
-			T::WeightInfo::on_finalize()
-		}
+    #[pallet::hooks]
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        /// dummy `on_initialize` to return the weight used in `on_finalize`.
+        fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
+            // weight of `on_finalize`
+            T::WeightInfo::on_finalize()
+        }
 
-		/// # <weight>
-		/// - `O(1)`
-		/// - 1 storage deletion (codec `O(1)`).
-		/// # </weight>
-		fn on_finalize(_n: BlockNumberFor<T>) {
-			assert!(DidUpdate::<T>::take(), "Timestamp must be updated once in the block");
-		}
-	}
+        /// # <weight>
+        /// - `O(1)`
+        /// - 1 storage deletion (codec `O(1)`).
+        /// # </weight>
+        fn on_finalize(_n: BlockNumberFor<T>) {
+            assert!(
+                DidUpdate::<T>::take(),
+                "Timestamp must be updated once in the block"
+            );
+        }
+    }
 
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {
-		/// Set the current time.
-		///
-		/// This call should be invoked exactly once per block. It will panic at the finalization
-		/// phase, if this call hasn't been invoked by that time.
-		///
-		/// The timestamp should be greater than the previous one by the amount specified by
-		/// `MinimumPeriod`.
-		///
-		/// The dispatch origin for this call must be `Inherent`.
-		///
-		/// # <weight>
-		/// - `O(1)` (Note that implementations of `OnTimestampSet` must also be `O(1)`)
-		/// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
-		/// - 1 event handler `on_timestamp_set`. Must be `O(1)`.
-		/// # </weight>
-		#[pallet::weight((
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        /// Set the current time.
+        ///
+        /// This call should be invoked exactly once per block. It will panic at the finalization
+        /// phase, if this call hasn't been invoked by that time.
+        ///
+        /// The timestamp should be greater than the previous one by the amount specified by
+        /// `MinimumPeriod`.
+        ///
+        /// The dispatch origin for this call must be `Inherent`.
+        ///
+        /// # <weight>
+        /// - `O(1)` (Note that implementations of `OnTimestampSet` must also be `O(1)`)
+        /// - 1 storage read and 1 storage mutation (codec `O(1)`). (because of `DidUpdate::take` in `on_finalize`)
+        /// - 1 event handler `on_timestamp_set`. Must be `O(1)`.
+        /// # </weight>
+        #[pallet::weight((
 			T::WeightInfo::set(),
 			DispatchClass::Mandatory
 		))]
-		pub(super) fn set(origin: OriginFor<T>, #[pallet::compact] now: T::Moment) -> DispatchResultWithPostInfo {
-			ensure_none(origin)?;
-			assert!(!DidUpdate::<T>::exists(), "Timestamp must be updated only once in the block");
-			let prev = Self::now();
-			assert!(
-				prev.is_zero() || now >= prev + T::MinimumPeriod::get(),
-				"Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
-			);
-			Now::<T>::put(now);
-			DidUpdate::<T>::put(true);
+        pub(super) fn set(
+            origin: OriginFor<T>,
+            #[pallet::compact] now: T::Moment,
+        ) -> DispatchResultWithPostInfo {
+            ensure_none(origin)?;
+            assert!(
+                !DidUpdate::<T>::exists(),
+                "Timestamp must be updated only once in the block"
+            );
+            let prev = Self::now();
+            assert!(
+                prev.is_zero() || now >= prev + T::MinimumPeriod::get(),
+                "Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
+            );
+            Now::<T>::put(now);
+            DidUpdate::<T>::put(true);
 
-			<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
+            <T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 
-			Ok(().into())
-		}
-	}
+            Ok(().into())
+        }
+    }
 
-	#[pallet::inherent]
-	impl<T: Config> ProvideInherent for Pallet<T> {
-		type Call = Call<T>;
-		type Error = InherentError;
-		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
+    #[pallet::inherent]
+    impl<T: Config> ProvideInherent for Pallet<T> {
+        type Call = Call<T>;
+        type Error = InherentError;
+        const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
-			let data: T::Moment = extract_inherent_data(data)
-				.expect("Gets and decodes timestamp inherent data")
-				.saturated_into();
+        fn create_inherent(data: &InherentData) -> Option<Self::Call> {
+            let data: T::Moment = extract_inherent_data(data)
+                .expect("Gets and decodes timestamp inherent data")
+                .saturated_into();
 
-			let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
-			Some(Call::set(next_time.into()))
-		}
+            let next_time = cmp::max(data, Self::now() + T::MinimumPeriod::get());
+            Some(Call::set(next_time.into()))
+        }
 
-		fn check_inherent(call: &Self::Call, data: &InherentData) -> result::Result<(), Self::Error> {
-			const MAX_TIMESTAMP_DRIFT_MILLIS: u64 = 30 * 1000;
+        fn check_inherent(
+            call: &Self::Call,
+            data: &InherentData,
+        ) -> result::Result<(), Self::Error> {
+            const MAX_TIMESTAMP_DRIFT_MILLIS: u64 = 30 * 1000;
 
-			let t: u64 = match call {
-				Call::set(ref t) => t.clone().saturated_into::<u64>(),
-				_ => return Ok(()),
-			};
+            let t: u64 = match call {
+                Call::set(ref t) => t.clone().saturated_into::<u64>(),
+                _ => return Ok(()),
+            };
 
-			let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
+            let data = extract_inherent_data(data).map_err(|e| InherentError::Other(e))?;
 
-			let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
-			if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
-				Err(InherentError::Other("Timestamp too far in future to accept".into()))
-			} else if t < minimum {
-				Err(InherentError::ValidAtTimestamp(minimum))
-			} else {
-				Ok(())
-			}
-		}
-	}
+            let minimum = (Self::now() + T::MinimumPeriod::get()).saturated_into::<u64>();
+            if t > data + MAX_TIMESTAMP_DRIFT_MILLIS {
+                Err(InherentError::Other(
+                    "Timestamp too far in future to accept".into(),
+                ))
+            } else if t < minimum {
+                Err(InherentError::ValidAtTimestamp(minimum))
+            } else {
+                Ok(())
+            }
+        }
+    }
 }
 
 impl<T: Config> Pallet<T> {
-	/// Get the current time for the current block.
-	///
-	/// NOTE: if this function is called prior to setting the timestamp,
-	/// it will return the timestamp of the previous block.
-	pub fn get() -> T::Moment {
-		Self::now()
-	}
+    /// Get the current time for the current block.
+    ///
+    /// NOTE: if this function is called prior to setting the timestamp,
+    /// it will return the timestamp of the previous block.
+    pub fn get() -> T::Moment {
+        Self::now()
+    }
 
-	/// Set the timestamp to something in particular. Only used for tests.
-	#[cfg(feature = "std")]
-	pub fn set_timestamp(now: T::Moment) {
-		Now::<T>::put(now);
-	}
+    /// Set the timestamp to something in particular. Only used for tests.
+    #[cfg(feature = "std")]
+    pub fn set_timestamp(now: T::Moment) {
+        Now::<T>::put(now);
+    }
 }
 
 fn extract_inherent_data(data: &InherentData) -> Result<InherentType, RuntimeString> {
-	data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
-		.map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
-		.ok_or_else(|| "Timestamp inherent data is not provided.".into())
+    data.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+        .map_err(|_| RuntimeString::from("Invalid timestamp inherent data encoding."))?
+        .ok_or_else(|| "Timestamp inherent data is not provided.".into())
 }
 
 impl<T: Config> Time for Pallet<T> {
-	type Moment = T::Moment;
+    type Moment = T::Moment;
 
-	/// Before the first set of now with inherent the value returned is zero.
-	fn now() -> Self::Moment {
-		Self::now()
-	}
+    /// Before the first set of now with inherent the value returned is zero.
+    fn now() -> Self::Moment {
+        Self::now()
+    }
 }
 
 /// Before the timestamp inherent is applied, it returns the time of previous block.
 ///
 /// On genesis the time returned is not valid.
 impl<T: Config> UnixTime for Pallet<T> {
-	fn now() -> core::time::Duration {
-		// now is duration since unix epoch in millisecond as documented in
-		// `sp_timestamp::InherentDataProvider`.
-		let now = Self::now();
-		sp_std::if_std! {
-			if now == T::Moment::zero() {
-				debug::error!(
-					"`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
-				);
-			}
-		}
-		core::time::Duration::from_millis(now.saturated_into::<u64>())
-	}
+    fn now() -> core::time::Duration {
+        // now is duration since unix epoch in millisecond as documented in
+        // `sp_timestamp::InherentDataProvider`.
+        let now = Self::now();
+        sp_std::if_std! {
+            if now == T::Moment::zero() {
+                debug::error!(
+                    "`pallet_timestamp::UnixTime::now` is called at genesis, invalid value returned: 0"
+                );
+            }
+        }
+        core::time::Duration::from_millis(now.saturated_into::<u64>())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use crate as pallet_timestamp;
-	use super::*;
+    use super::*;
+    use crate as pallet_timestamp;
 
-	use frame_support::{assert_ok, parameter_types};
-	use sp_io::TestExternalities;
-	use sp_core::H256;
-	use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+    use frame_support::{assert_ok, parameter_types};
+    use sp_core::H256;
+    use sp_io::TestExternalities;
+    use sp_runtime::{
+        testing::Header,
+        traits::{BlakeTwo256, IdentityLookup},
+    };
 
-	pub fn new_test_ext() -> TestExternalities {
-		let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		TestExternalities::new(t)
-	}
+    pub fn new_test_ext() -> TestExternalities {
+        let t = frame_system::GenesisConfig::default()
+            .build_storage::<Test>()
+            .unwrap();
+        TestExternalities::new(t)
+    }
 
-	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-	type Block = frame_system::mocking::MockBlock<Test>;
+    type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+    type Block = frame_system::mocking::MockBlock<Test>;
 
-	frame_support::construct_runtime!(
-		pub enum Test where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
-		{
-			System: frame_system::{Module, Call, Config, Storage, Event<T>},
-			Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-		}
-	);
+    frame_support::construct_runtime!(
+        pub enum Test where
+            Block = Block,
+            NodeBlock = Block,
+            UncheckedExtrinsic = UncheckedExtrinsic,
+        {
+            System: frame_system::{Module, Call, Config, Storage, Event<T>},
+            Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+        }
+    );
 
-	parameter_types! {
-		pub const BlockHashCount: u64 = 250;
-		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(1024);
-	}
-	impl frame_system::Config for Test {
-		type BaseCallFilter = ();
-		type BlockWeights = ();
-		type BlockLength = ();
-		type DbWeight = ();
-		type Origin = Origin;
-		type Index = u64;
-		type BlockNumber = u64;
-		type Call = Call;
-		type Hash = H256;
-		type Hashing = BlakeTwo256;
-		type AccountId = u64;
-		type Lookup = IdentityLookup<Self::AccountId>;
-		type Header = Header;
-		type Event = Event;
-		type BlockHashCount = BlockHashCount;
-		type Version = ();
-		type PalletInfo = PalletInfo;
-		type AccountData = ();
-		type OnNewAccount = ();
-		type OnKilledAccount = ();
-		type SystemWeightInfo = ();
-		type SS58Prefix = ();
-	}
-	parameter_types! {
-		pub const MinimumPeriod: u64 = 5;
-	}
-	impl Config for Test {
-		type Moment = u64;
-		type OnTimestampSet = ();
-		type MinimumPeriod = MinimumPeriod;
-		type WeightInfo = ();
-	}
+    parameter_types! {
+        pub const BlockHashCount: u64 = 250;
+        pub BlockWeights: frame_system::limits::BlockWeights =
+            frame_system::limits::BlockWeights::simple_max(1024);
+    }
+    impl frame_system::Config for Test {
+        type BaseCallFilter = ();
+        type BlockWeights = ();
+        type BlockLength = ();
+        type DbWeight = ();
+        type Origin = Origin;
+        type Index = u64;
+        type BlockNumber = u64;
+        type Call = Call;
+        type Hash = H256;
+        type Hashing = BlakeTwo256;
+        type AccountId = u64;
+        type Lookup = IdentityLookup<Self::AccountId>;
+        type Header = Header;
+        type Event = Event;
+        type BlockHashCount = BlockHashCount;
+        type Version = ();
+        type PalletInfo = PalletInfo;
+        type AccountData = ();
+        type OnNewAccount = ();
+        type OnKilledAccount = ();
+        type SystemWeightInfo = ();
+        type SS58Prefix = ();
+    }
+    parameter_types! {
+        pub const MinimumPeriod: u64 = 5;
+    }
+    impl Config for Test {
+        type Moment = u64;
+        type OnTimestampSet = ();
+        type MinimumPeriod = MinimumPeriod;
+        type WeightInfo = ();
+    }
 
-	#[test]
-	fn timestamp_works() {
-		new_test_ext().execute_with(|| {
-			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::set(Origin::none(), 69));
-			assert_eq!(Timestamp::now(), 69);
-		});
-	}
+    #[test]
+    fn timestamp_works() {
+        new_test_ext().execute_with(|| {
+            Timestamp::set_timestamp(42);
+            assert_ok!(Timestamp::set(Origin::none(), 69));
+            assert_eq!(Timestamp::now(), 69);
+        });
+    }
 
-	#[test]
-	#[should_panic(expected = "Timestamp must be updated only once in the block")]
-	fn double_timestamp_should_fail() {
-		new_test_ext().execute_with(|| {
-			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::set(Origin::none(), 69));
-			let _ = Timestamp::set(Origin::none(), 70);
-		});
-	}
+    #[test]
+    #[should_panic(expected = "Timestamp must be updated only once in the block")]
+    fn double_timestamp_should_fail() {
+        new_test_ext().execute_with(|| {
+            Timestamp::set_timestamp(42);
+            assert_ok!(Timestamp::set(Origin::none(), 69));
+            let _ = Timestamp::set(Origin::none(), 70);
+        });
+    }
 
-	#[test]
-	#[should_panic(expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks")]
-	fn block_period_minimum_enforced() {
-		new_test_ext().execute_with(|| {
-			Timestamp::set_timestamp(42);
-			let _ = Timestamp::set(Origin::none(), 46);
-		});
-	}
+    #[test]
+    #[should_panic(
+        expected = "Timestamp must increment by at least <MinimumPeriod> between sequential blocks"
+    )]
+    fn block_period_minimum_enforced() {
+        new_test_ext().execute_with(|| {
+            Timestamp::set_timestamp(42);
+            let _ = Timestamp::set(Origin::none(), 46);
+        });
+    }
 }

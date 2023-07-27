@@ -29,43 +29,45 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-	}
+    pub enum Test where
+        Block = Block,
+        NodeBlock = Block,
+        UncheckedExtrinsic = UncheckedExtrinsic,
+    {
+        System: frame_system::{Module, Call, Config, Storage, Event<T>},
+    }
 );
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
-	type Origin = Origin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
-	type Call = Call;
-	type Hash = sp_core::H256;
-	type Hashing = ::sp_runtime::traits::BlakeTwo256;
-	type AccountId = AccountId;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
-	type Event = Event;
-	type BlockHashCount = ();
-	type Version = ();
-	type PalletInfo = PalletInfo;
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
+    type BaseCallFilter = ();
+    type BlockWeights = ();
+    type BlockLength = ();
+    type DbWeight = ();
+    type Origin = Origin;
+    type Index = AccountIndex;
+    type BlockNumber = BlockNumber;
+    type Call = Call;
+    type Hash = sp_core::H256;
+    type Hashing = ::sp_runtime::traits::BlakeTwo256;
+    type AccountId = AccountId;
+    type Lookup = IdentityLookup<Self::AccountId>;
+    type Header = sp_runtime::testing::Header;
+    type Event = Event;
+    type BlockHashCount = ();
+    type Version = ();
+    type PalletInfo = PalletInfo;
+    type AccountData = ();
+    type OnNewAccount = ();
+    type OnKilledAccount = ();
+    type SystemWeightInfo = ();
+    type SS58Prefix = ();
 }
 
 impl crate::Config for Test {}
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	sp_io::TestExternalities::new(t)
+    let t = frame_system::GenesisConfig::default()
+        .build_storage::<Test>()
+        .unwrap();
+    sp_io::TestExternalities::new(t)
 }

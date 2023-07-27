@@ -17,46 +17,46 @@
 
 //! Sr25519 crypto types.
 
-use crate::{RuntimePublic, KeyTypeId};
+use crate::{KeyTypeId, RuntimePublic};
 
 use sp_std::vec::Vec;
 
 pub use sp_core::sr25519::*;
 
 mod app {
-	use sp_core::testing::SR25519;
+    use sp_core::testing::SR25519;
 
-	crate::app_crypto!(super, SR25519);
+    crate::app_crypto!(super, SR25519);
 
-	impl crate::traits::BoundToRuntimeAppPublic for Public {
-		type Public = Self;
-	}
+    impl crate::traits::BoundToRuntimeAppPublic for Public {
+        type Public = Self;
+    }
 }
 
-pub use app::{Public as AppPublic, Signature as AppSignature};
 #[cfg(feature = "full_crypto")]
 pub use app::Pair as AppPair;
+pub use app::{Public as AppPublic, Signature as AppSignature};
 
 impl RuntimePublic for Public {
-	type Signature = Signature;
+    type Signature = Signature;
 
-	fn all(key_type: KeyTypeId) -> crate::Vec<Self> {
-		sp_io::crypto::sr25519_public_keys(key_type)
-	}
+    fn all(key_type: KeyTypeId) -> crate::Vec<Self> {
+        sp_io::crypto::sr25519_public_keys(key_type)
+    }
 
-	fn generate_pair(key_type: KeyTypeId, seed: Option<Vec<u8>>) -> Self {
-		sp_io::crypto::sr25519_generate(key_type, seed)
-	}
+    fn generate_pair(key_type: KeyTypeId, seed: Option<Vec<u8>>) -> Self {
+        sp_io::crypto::sr25519_generate(key_type, seed)
+    }
 
-	fn sign<M: AsRef<[u8]>>(&self, key_type: KeyTypeId, msg: &M) -> Option<Self::Signature> {
-		sp_io::crypto::sr25519_sign(key_type, self, msg.as_ref())
-	}
+    fn sign<M: AsRef<[u8]>>(&self, key_type: KeyTypeId, msg: &M) -> Option<Self::Signature> {
+        sp_io::crypto::sr25519_sign(key_type, self, msg.as_ref())
+    }
 
-	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
-		sp_io::crypto::sr25519_verify(&signature, msg.as_ref(), self)
-	}
+    fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
+        sp_io::crypto::sr25519_verify(&signature, msg.as_ref(), self)
+    }
 
-	fn to_raw_vec(&self) -> Vec<u8> {
-		sp_core::crypto::Public::to_raw_vec(self)
-	}
+    fn to_raw_vec(&self) -> Vec<u8> {
+        sp_core::crypto::Public::to_raw_vec(self)
+    }
 }

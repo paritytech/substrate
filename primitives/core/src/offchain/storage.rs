@@ -17,69 +17,73 @@
 
 //! In-memory implementation of offchain workers database.
 
-use std::collections::hash_map::{HashMap, Entry};
 use crate::offchain::OffchainStorage;
+use std::collections::hash_map::{Entry, HashMap};
 use std::iter::Iterator;
 
 /// In-memory storage for offchain workers.
 #[derive(Debug, Clone, Default)]
 pub struct InMemOffchainStorage {
-	storage: HashMap<Vec<u8>, Vec<u8>>,
+    storage: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl InMemOffchainStorage {
-	/// Consume the offchain storage and iterate over all key value pairs.
-	pub fn into_iter(self) -> impl Iterator<Item=(Vec<u8>,Vec<u8>)> {
-		self.storage.into_iter()
-	}
+    /// Consume the offchain storage and iterate over all key value pairs.
+    pub fn into_iter(self) -> impl Iterator<Item = (Vec<u8>, Vec<u8>)> {
+        self.storage.into_iter()
+    }
 
-	/// Iterate over all key value pairs by reference.
-	pub fn iter<'a>(&'a self) -> impl Iterator<Item=(&'a Vec<u8>,&'a Vec<u8>)> {
-		self.storage.iter()
-	}
+    /// Iterate over all key value pairs by reference.
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (&'a Vec<u8>, &'a Vec<u8>)> {
+        self.storage.iter()
+    }
 
-	/// Remove a key and its associated value from the offchain database.
-	pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		self.storage.remove(&key);
-	}
+    /// Remove a key and its associated value from the offchain database.
+    pub fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+        let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+        self.storage.remove(&key);
+    }
 }
 
 impl OffchainStorage for InMemOffchainStorage {
-	fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
-		let key = prefix.iter().chain(key).cloned().collect();
-		self.storage.insert(key, value.to_vec());
-	}
+    fn set(&mut self, prefix: &[u8], key: &[u8], value: &[u8]) {
+        let key = prefix.iter().chain(key).cloned().collect();
+        self.storage.insert(key, value.to_vec());
+    }
 
-	fn remove(&mut self, prefix: &[u8], key: &[u8]) {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		self.storage.remove(&key);
-	}
+    fn remove(&mut self, prefix: &[u8], key: &[u8]) {
+        let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+        self.storage.remove(&key);
+    }
 
-	fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
-		let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
-		self.storage.get(&key).cloned()
-	}
+    fn get(&self, prefix: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+        let key: Vec<u8> = prefix.iter().chain(key).cloned().collect();
+        self.storage.get(&key).cloned()
+    }
 
-	fn compare_and_set(
-		&mut self,
-		prefix: &[u8],
-		key: &[u8],
-		old_value: Option<&[u8]>,
-		new_value: &[u8],
-	) -> bool {
-		let key = prefix.iter().chain(key).cloned().collect();
+    fn compare_and_set(
+        &mut self,
+        prefix: &[u8],
+        key: &[u8],
+        old_value: Option<&[u8]>,
+        new_value: &[u8],
+    ) -> bool {
+        let key = prefix.iter().chain(key).cloned().collect();
 
-		match self.storage.entry(key) {
-			Entry::Vacant(entry) => if old_value.is_none() {
-				entry.insert(new_value.to_vec());
-				true
-			} else { false },
-			Entry::Occupied(ref mut entry) if Some(entry.get().as_slice()) == old_value => {
-				entry.insert(new_value.to_vec());
-				true
-			},
-			_ => false,
-		}
-	}
+        match self.storage.entry(key) {
+            Entry::Vacant(entry) => {
+                if old_value.is_none() {
+                    entry.insert(new_value.to_vec());
+                    true
+                } else {
+                    false
+                }
+            }
+            Entry::Occupied(ref mut entry) if Some(entry.get().as_slice()) == old_value => {
+                entry.insert(new_value.to_vec());
+                true
+            }
+            _ => false,
+        }
+    }
 }

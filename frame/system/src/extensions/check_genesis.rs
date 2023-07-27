@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
 use crate::{Config, Module};
+use codec::{Decode, Encode};
 use sp_runtime::{
-	traits::{SignedExtension, Zero},
-	transaction_validity::TransactionValidityError,
+    traits::{SignedExtension, Zero},
+    transaction_validity::TransactionValidityError,
 };
 
 /// Genesis hash check to provide replay protection between different networks.
@@ -27,32 +27,32 @@ use sp_runtime::{
 pub struct CheckGenesis<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckGenesis<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckGenesis")
-	}
+    #[cfg(feature = "std")]
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+        write!(f, "CheckGenesis")
+    }
 
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
+    #[cfg(not(feature = "std"))]
+    fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+        Ok(())
+    }
 }
 
 impl<T: Config + Send + Sync> CheckGenesis<T> {
-	/// Creates new `SignedExtension` to check genesis hash.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
+    /// Creates new `SignedExtension` to check genesis hash.
+    pub fn new() -> Self {
+        Self(sp_std::marker::PhantomData)
+    }
 }
 
 impl<T: Config + Send + Sync> SignedExtension for CheckGenesis<T> {
-	type AccountId = T::AccountId;
-	type Call = <T as Config>::Call;
-	type AdditionalSigned = T::Hash;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckGenesis";
+    type AccountId = T::AccountId;
+    type Call = <T as Config>::Call;
+    type AdditionalSigned = T::Hash;
+    type Pre = ();
+    const IDENTIFIER: &'static str = "CheckGenesis";
 
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
-	}
+    fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+        Ok(<Module<T>>::block_hash(T::BlockNumber::zero()))
+    }
 }

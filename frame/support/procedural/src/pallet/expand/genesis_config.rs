@@ -19,31 +19,31 @@ use crate::pallet::Def;
 
 /// * add various derive trait on GenesisConfig struct.
 pub fn expand_genesis_config(def: &mut Def) -> proc_macro2::TokenStream {
-	let genesis_config = if let Some(genesis_config) = &def.genesis_config {
-		genesis_config
-	} else {
-		return Default::default()
-	};
-	let frame_support = &def.frame_support;
+    let genesis_config = if let Some(genesis_config) = &def.genesis_config {
+        genesis_config
+    } else {
+        return Default::default();
+    };
+    let frame_support = &def.frame_support;
 
-	let genesis_config_item = &mut def.item.content.as_mut()
-		.expect("Checked by def parser").1[genesis_config.index];
+    let genesis_config_item =
+        &mut def.item.content.as_mut().expect("Checked by def parser").1[genesis_config.index];
 
-	match genesis_config_item {
-		syn::Item::Enum(syn::ItemEnum { attrs, ..}) |
-		syn::Item::Struct(syn::ItemStruct { attrs, .. }) |
-		syn::Item::Type(syn::ItemType { attrs, .. }) => {
-			attrs.push(syn::parse_quote!( #[cfg(feature = "std")] ));
-			attrs.push(syn::parse_quote!(
-				#[derive(#frame_support::Serialize, #frame_support::Deserialize)]
-			));
-			attrs.push(syn::parse_quote!( #[serde(rename_all = "camelCase")] ));
-			attrs.push(syn::parse_quote!( #[serde(deny_unknown_fields)] ));
-			attrs.push(syn::parse_quote!( #[serde(bound(serialize = ""))] ));
-			attrs.push(syn::parse_quote!( #[serde(bound(deserialize = ""))] ));
-		},
-		_ => unreachable!("Checked by genesis_config parser"),
-	}
+    match genesis_config_item {
+        syn::Item::Enum(syn::ItemEnum { attrs, .. })
+        | syn::Item::Struct(syn::ItemStruct { attrs, .. })
+        | syn::Item::Type(syn::ItemType { attrs, .. }) => {
+            attrs.push(syn::parse_quote!( #[cfg(feature = "std")] ));
+            attrs.push(syn::parse_quote!(
+                #[derive(#frame_support::Serialize, #frame_support::Deserialize)]
+            ));
+            attrs.push(syn::parse_quote!( #[serde(rename_all = "camelCase")] ));
+            attrs.push(syn::parse_quote!( #[serde(deny_unknown_fields)] ));
+            attrs.push(syn::parse_quote!( #[serde(bound(serialize = ""))] ));
+            attrs.push(syn::parse_quote!( #[serde(bound(deserialize = ""))] ));
+        }
+        _ => unreachable!("Checked by genesis_config parser"),
+    }
 
-	Default::default()
+    Default::default()
 }

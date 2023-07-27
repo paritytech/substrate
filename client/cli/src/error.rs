@@ -27,75 +27,75 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
-	#[error(transparent)]
-	Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 
-	#[error(transparent)]
-	Cli(#[from] structopt::clap::Error),
+    #[error(transparent)]
+    Cli(#[from] structopt::clap::Error),
 
-	#[error(transparent)]
-	Service(#[from] sc_service::Error),
+    #[error(transparent)]
+    Service(#[from] sc_service::Error),
 
-	#[error(transparent)]
-	Client(#[from] sp_blockchain::Error),
+    #[error(transparent)]
+    Client(#[from] sp_blockchain::Error),
 
-	#[error(transparent)]
-	Codec(#[from] parity_scale_codec::Error),
+    #[error(transparent)]
+    Codec(#[from] parity_scale_codec::Error),
 
-	#[error("Invalid input: {0}")]
-	Input(String),
+    #[error("Invalid input: {0}")]
+    Input(String),
 
-	#[error("Invalid listen multiaddress")]
-	InvalidListenMultiaddress,
+    #[error("Invalid listen multiaddress")]
+    InvalidListenMultiaddress,
 
-	#[error("Invalid URI; expecting either a secret URI or a public URI.")]
-	InvalidUri(crypto::PublicError),
+    #[error("Invalid URI; expecting either a secret URI or a public URI.")]
+    InvalidUri(crypto::PublicError),
 
-	#[error("Signature has an invalid length. Read {read} bytes, expected {expected} bytes")]
-	SignatureInvalidLength {
-		/// Amount of signature bytes read.
-		read: usize,
-		/// Expected number of signature bytes.
-		expected: usize,
-	},
+    #[error("Signature has an invalid length. Read {read} bytes, expected {expected} bytes")]
+    SignatureInvalidLength {
+        /// Amount of signature bytes read.
+        read: usize,
+        /// Expected number of signature bytes.
+        expected: usize,
+    },
 
-	#[error("Unknown key type, must be a known 4-character sequence")]
-	KeyTypeInvalid,
+    #[error("Unknown key type, must be a known 4-character sequence")]
+    KeyTypeInvalid,
 
-	#[error("Signature verification failed")]
-	SignatureInvalid,
+    #[error("Signature verification failed")]
+    SignatureInvalid,
 
-	#[error("Key store operation failed")]
-	KeyStoreOperation,
+    #[error("Key store operation failed")]
+    KeyStoreOperation,
 
-	#[error("Key storage issue encountered")]
-	KeyStorage(#[from] sc_keystore::Error),
+    #[error("Key storage issue encountered")]
+    KeyStorage(#[from] sc_keystore::Error),
 
-	#[error("Invalid hexadecimal string data")]
-	HexDataConversion(#[from] hex::FromHexError),
+    #[error("Invalid hexadecimal string data")]
+    HexDataConversion(#[from] hex::FromHexError),
 
-	/// Application specific error chain sequence forwarder.
-	#[error(transparent)]
-	Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+    /// Application specific error chain sequence forwarder.
+    #[error(transparent)]
+    Application(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 
-	#[error(transparent)]
-	GlobalLoggerError(#[from] sc_tracing::logging::Error),
+    #[error(transparent)]
+    GlobalLoggerError(#[from] sc_tracing::logging::Error),
 }
 
 impl std::convert::From<&str> for Error {
-	fn from(s: &str) -> Error {
-		Error::Input(s.to_string())
-	}
+    fn from(s: &str) -> Error {
+        Error::Input(s.to_string())
+    }
 }
 
 impl std::convert::From<String> for Error {
-	fn from(s: String) -> Error {
-		Error::Input(s)
-	}
+    fn from(s: String) -> Error {
+        Error::Input(s)
+    }
 }
 
 impl std::convert::From<crypto::PublicError> for Error {
-	fn from(e: crypto::PublicError) -> Error {
-		Error::InvalidUri(e)
-	}
+    fn from(e: crypto::PublicError) -> Error {
+        Error::InvalidUri(e)
+    }
 }

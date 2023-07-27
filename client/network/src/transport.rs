@@ -17,15 +17,18 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use libp2p::{
-	PeerId, Transport,
-	core::{
-		self, either::EitherTransport, muxing::StreamMuxerBox,
-		transport::{Boxed, OptionalTransport}, upgrade
-	},
-	mplex, identity, bandwidth, wasm_ext, noise
+    bandwidth,
+    core::{
+        self,
+        either::EitherTransport,
+        muxing::StreamMuxerBox,
+        transport::{Boxed, OptionalTransport},
+        upgrade,
+    },
+    identity, mplex, noise, wasm_ext, PeerId, Transport,
 };
 #[cfg(not(target_os = "unknown"))]
-use libp2p::{tcp, dns, websocket};
+use libp2p::{dns, tcp, websocket};
 use std::{sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
@@ -46,81 +49,85 @@ pub use self::bandwidth::BandwidthSinks;
 /// Returns a `BandwidthSinks` object that allows querying the average bandwidth produced by all
 /// the connections spawned with this transport.
 pub fn build_transport(
-	keypair: identity::Keypair,
-	memory_only: bool,
-	wasm_external_transport: Option<wasm_ext::ExtTransport>,
-	yamux_window_size: Option<u32>,
-	yamux_maximum_buffer_size: usize,
+    keypair: identity::Keypair,
+    memory_only: bool,
+    wasm_external_transport: Option<wasm_ext::ExtTransport>,
+    yamux_window_size: Option<u32>,
+    yamux_maximum_buffer_size: usize,
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
-	// Build the base layer of the transport.
-	let transport = if let Some(t) = wasm_external_transport {
-		OptionalTransport::some(t)
-	} else {
-		OptionalTransport::none()
-	};
-	#[cfg(not(target_os = "unknown"))]
-	let transport = transport.or_transport(if !memory_only {
-		let desktop_trans = tcp::TcpConfig::new().nodelay(true);
-		let desktop_trans = websocket::WsConfig::new(desktop_trans.clone())
-			.or_transport(desktop_trans);
-		OptionalTransport::some(if let Ok(dns) = dns::DnsConfig::new(desktop_trans.clone()) {
-			EitherTransport::Left(dns)
-		} else {
-			EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Underlying))
-		})
-	} else {
-		OptionalTransport::none()
-	});
+    // Build the base layer of the transport.
+    let transport = if let Some(t) = wasm_external_transport {
+        OptionalTransport::some(t)
+    } else {
+        OptionalTransport::none()
+    };
+    #[cfg(not(target_os = "unknown"))]
+    let transport = transport.or_transport(if !memory_only {
+        let desktop_trans = tcp::TcpConfig::new().nodelay(true);
+        let desktop_trans =
+            websocket::WsConfig::new(desktop_trans.clone()).or_transport(desktop_trans);
+        OptionalTransport::some(
+            if let Ok(dns) = dns::DnsConfig::new(desktop_trans.clone()) {
+                EitherTransport::Left(dns)
+            } else {
+                EitherTransport::Right(desktop_trans.map_err(dns::DnsErr::Underlying))
+            },
+        )
+    } else {
+        OptionalTransport::none()
+    });
 
-	let transport = transport.or_transport(if memory_only {
-		OptionalTransport::some(libp2p::core::transport::MemoryTransport::default())
-	} else {
-		OptionalTransport::none()
-	});
+    let transport = transport.or_transport(if memory_only {
+        OptionalTransport::some(libp2p::core::transport::MemoryTransport::default())
+    } else {
+        OptionalTransport::none()
+    });
 
-	let (transport, bandwidth) = bandwidth::BandwidthLogging::new(transport);
+    let (transport, bandwidth) = bandwidth::BandwidthLogging::new(transport);
 
-	let authentication_config = {
-		// For more information about these two panics, see in "On the Importance of
-		// Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
-		// and Richard J. Lipton.
-		let noise_keypair = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
+    let authentication_config =
+        {
+            // For more information about these two panics, see in "On the Importance of
+            // Checking Cryptographic Protocols for Faults" by Dan Boneh, Richard A. DeMillo,
+            // and Richard J. Lipton.
+            let noise_keypair = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair)
 			.expect("can only fail in case of a hardware bug; since this signing is performed only \
 				once and at initialization, we're taking the bet that the inconvenience of a very \
 				rare panic here is basically zero");
 
-		// Legacy noise configurations for backward compatibility.
-		let mut noise_legacy = noise::LegacyConfig::default();
-		noise_legacy.recv_legacy_handshake = true;
+            // Legacy noise configurations for backward compatibility.
+            let mut noise_legacy = noise::LegacyConfig::default();
+            noise_legacy.recv_legacy_handshake = true;
 
-		let mut xx_config = noise::NoiseConfig::xx(noise_keypair);
-		xx_config.set_legacy_config(noise_legacy.clone());
-		xx_config.into_authenticated()
-	};
+            let mut xx_config = noise::NoiseConfig::xx(noise_keypair);
+            xx_config.set_legacy_config(noise_legacy.clone());
+            xx_config.into_authenticated()
+        };
 
-	let multiplexing_config = {
-		let mut mplex_config = mplex::MplexConfig::new();
-		mplex_config.set_max_buffer_behaviour(mplex::MaxBufferBehaviour::Block);
-		mplex_config.set_max_buffer_size(usize::MAX);
+    let multiplexing_config = {
+        let mut mplex_config = mplex::MplexConfig::new();
+        mplex_config.set_max_buffer_behaviour(mplex::MaxBufferBehaviour::Block);
+        mplex_config.set_max_buffer_size(usize::MAX);
 
-		let mut yamux_config = libp2p::yamux::YamuxConfig::default();
-		// Enable proper flow-control: window updates are only sent when
-		// buffered data has been consumed.
-		yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::on_read());
-		yamux_config.set_max_buffer_size(yamux_maximum_buffer_size);
+        let mut yamux_config = libp2p::yamux::YamuxConfig::default();
+        // Enable proper flow-control: window updates are only sent when
+        // buffered data has been consumed.
+        yamux_config.set_window_update_mode(libp2p::yamux::WindowUpdateMode::on_read());
+        yamux_config.set_max_buffer_size(yamux_maximum_buffer_size);
 
-		if let Some(yamux_window_size) = yamux_window_size {
-			yamux_config.set_receive_window_size(yamux_window_size);
-		}
+        if let Some(yamux_window_size) = yamux_window_size {
+            yamux_config.set_receive_window_size(yamux_window_size);
+        }
 
-		core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
-	};
+        core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+    };
 
-	let transport = transport.upgrade(upgrade::Version::V1Lazy)
-		.authenticate(authentication_config)
-		.multiplex(multiplexing_config)
-		.timeout(Duration::from_secs(20))
-		.boxed();
+    let transport = transport
+        .upgrade(upgrade::Version::V1Lazy)
+        .authenticate(authentication_config)
+        .multiplex(multiplexing_config)
+        .timeout(Duration::from_secs(20))
+        .boxed();
 
-	(transport, bandwidth)
+    (transport, bandwidth)
 }

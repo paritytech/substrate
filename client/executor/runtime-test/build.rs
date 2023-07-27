@@ -19,19 +19,19 @@
 use substrate_wasm_builder::WasmBuilder;
 
 fn main() {
-	// regular build
-	WasmBuilder::new()
-		.with_current_project()
-		.export_heap_base()
-		.import_memory()
-		.build();
+    // regular build
+    WasmBuilder::new()
+        .with_current_project()
+        .export_heap_base()
+        .import_memory()
+        .build();
 
-	// and building with tracing activated
-	WasmBuilder::new()
-		.with_current_project()
-		.export_heap_base()
-		.import_memory()
-		.set_file_name("wasm_binary_with_tracing.rs")
-		.append_to_rust_flags(r#"--cfg feature="with-tracing""#)
-		.build();
+    // and building with tracing activated
+    WasmBuilder::new()
+        .with_current_project()
+        .export_heap_base()
+        .import_memory()
+        .set_file_name("wasm_binary_with_tracing.rs")
+        .append_to_rust_flags(r#"--cfg feature="with-tracing""#)
+        .build();
 }

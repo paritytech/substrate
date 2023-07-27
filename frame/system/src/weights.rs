@@ -34,89 +34,89 @@
 // --output=./frame/system/src/weights.rs
 // --template=./.maintain/frame-weight-template.hbs
 
-
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{
+    traits::Get,
+    weights::{constants::RocksDbWeight, Weight},
+};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for frame_system.
 pub trait WeightInfo {
-	fn remark(b: u32, ) -> Weight;
-	fn set_heap_pages() -> Weight;
-	fn set_changes_trie_config() -> Weight;
-	fn set_storage(i: u32, ) -> Weight;
-	fn kill_storage(i: u32, ) -> Weight;
-	fn kill_prefix(p: u32, ) -> Weight;
-	fn suicide() -> Weight;
+    fn remark(b: u32) -> Weight;
+    fn set_heap_pages() -> Weight;
+    fn set_changes_trie_config() -> Weight;
+    fn set_storage(i: u32) -> Weight;
+    fn kill_storage(i: u32) -> Weight;
+    fn kill_prefix(p: u32) -> Weight;
+    fn suicide() -> Weight;
 }
 
 /// Weights for frame_system using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
-	fn remark(_b: u32, ) -> Weight {
-		(1_973_000 as Weight)
-	}
-	fn set_heap_pages() -> Weight {
-		(2_816_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	fn set_changes_trie_config() -> Weight {
-		(11_539_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-	}
-	fn set_storage(i: u32, ) -> Weight {
-		(0 as Weight)
-			.saturating_add((833_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
-	}
-	fn kill_storage(i: u32, ) -> Weight {
-		(2_131_000 as Weight)
-			.saturating_add((597_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
-	}
-	fn kill_prefix(p: u32, ) -> Weight {
-		(11_844_000 as Weight)
-			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
-	}
-	fn suicide() -> Weight {
-		(37_209_000 as Weight)
-	}
+    fn remark(_b: u32) -> Weight {
+        (1_973_000 as Weight)
+    }
+    fn set_heap_pages() -> Weight {
+        (2_816_000 as Weight).saturating_add(T::DbWeight::get().writes(1 as Weight))
+    }
+    fn set_changes_trie_config() -> Weight {
+        (11_539_000 as Weight)
+            .saturating_add(T::DbWeight::get().reads(1 as Weight))
+            .saturating_add(T::DbWeight::get().writes(2 as Weight))
+    }
+    fn set_storage(i: u32) -> Weight {
+        (0 as Weight)
+            .saturating_add((833_000 as Weight).saturating_mul(i as Weight))
+            .saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+    }
+    fn kill_storage(i: u32) -> Weight {
+        (2_131_000 as Weight)
+            .saturating_add((597_000 as Weight).saturating_mul(i as Weight))
+            .saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+    }
+    fn kill_prefix(p: u32) -> Weight {
+        (11_844_000 as Weight)
+            .saturating_add((857_000 as Weight).saturating_mul(p as Weight))
+            .saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
+    }
+    fn suicide() -> Weight {
+        (37_209_000 as Weight)
+    }
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn remark(_b: u32, ) -> Weight {
-		(1_973_000 as Weight)
-	}
-	fn set_heap_pages() -> Weight {
-		(2_816_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	fn set_changes_trie_config() -> Weight {
-		(11_539_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-	}
-	fn set_storage(i: u32, ) -> Weight {
-		(0 as Weight)
-			.saturating_add((833_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
-	}
-	fn kill_storage(i: u32, ) -> Weight {
-		(2_131_000 as Weight)
-			.saturating_add((597_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
-	}
-	fn kill_prefix(p: u32, ) -> Weight {
-		(11_844_000 as Weight)
-			.saturating_add((857_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
-	}
-	fn suicide() -> Weight {
-		(37_209_000 as Weight)
-	}
+    fn remark(_b: u32) -> Weight {
+        (1_973_000 as Weight)
+    }
+    fn set_heap_pages() -> Weight {
+        (2_816_000 as Weight).saturating_add(RocksDbWeight::get().writes(1 as Weight))
+    }
+    fn set_changes_trie_config() -> Weight {
+        (11_539_000 as Weight)
+            .saturating_add(RocksDbWeight::get().reads(1 as Weight))
+            .saturating_add(RocksDbWeight::get().writes(2 as Weight))
+    }
+    fn set_storage(i: u32) -> Weight {
+        (0 as Weight)
+            .saturating_add((833_000 as Weight).saturating_mul(i as Weight))
+            .saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+    }
+    fn kill_storage(i: u32) -> Weight {
+        (2_131_000 as Weight)
+            .saturating_add((597_000 as Weight).saturating_mul(i as Weight))
+            .saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+    }
+    fn kill_prefix(p: u32) -> Weight {
+        (11_844_000 as Weight)
+            .saturating_add((857_000 as Weight).saturating_mul(p as Weight))
+            .saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
+    }
+    fn suicide() -> Weight {
+        (37_209_000 as Weight)
+    }
 }

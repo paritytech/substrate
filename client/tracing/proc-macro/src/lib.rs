@@ -105,51 +105,51 @@ use syn::{Error, Expr, Ident, ItemFn};
 /// ```
 #[proc_macro_attribute]
 pub fn prefix_logs_with(arg: TokenStream, item: TokenStream) -> TokenStream {
-	let item_fn = syn::parse_macro_input!(item as ItemFn);
+    let item_fn = syn::parse_macro_input!(item as ItemFn);
 
-	if arg.is_empty() {
-		return Error::new(
-			Span::call_site(),
-			"missing argument: name of the node. Example: sc_cli::prefix_logs_with(<expr>)",
-		)
-		.to_compile_error()
-		.into();
-	}
+    if arg.is_empty() {
+        return Error::new(
+            Span::call_site(),
+            "missing argument: name of the node. Example: sc_cli::prefix_logs_with(<expr>)",
+        )
+        .to_compile_error()
+        .into();
+    }
 
-	let name = syn::parse_macro_input!(arg as Expr);
+    let name = syn::parse_macro_input!(arg as Expr);
 
-	let crate_name = if std::env::var("CARGO_PKG_NAME")
-		.expect("cargo env var always there when compiling; qed")
-		== "sc-tracing"
-	{
-		Ident::from(Ident::new("sc_tracing", Span::call_site()))
-	} else {
-		let crate_name = match crate_name("sc-tracing") {
-			Ok(x) => x,
-			Err(err) => return Error::new(Span::call_site(), err).to_compile_error().into(),
-		};
+    let crate_name = if std::env::var("CARGO_PKG_NAME")
+        .expect("cargo env var always there when compiling; qed")
+        == "sc-tracing"
+    {
+        Ident::from(Ident::new("sc_tracing", Span::call_site()))
+    } else {
+        let crate_name = match crate_name("sc-tracing") {
+            Ok(x) => x,
+            Err(err) => return Error::new(Span::call_site(), err).to_compile_error().into(),
+        };
 
-		Ident::new(&crate_name, Span::call_site())
-	};
+        Ident::new(&crate_name, Span::call_site())
+    };
 
-	let ItemFn {
-		attrs,
-		vis,
-		sig,
-		block,
-	} = item_fn;
+    let ItemFn {
+        attrs,
+        vis,
+        sig,
+        block,
+    } = item_fn;
 
-	(quote! {
-		#(#attrs)*
-		#vis #sig {
-			let span = #crate_name::tracing::info_span!(
-				#crate_name::logging::PREFIX_LOG_SPAN,
-				name = #name,
-			);
-			let _enter = span.enter();
+    (quote! {
+        #(#attrs)*
+        #vis #sig {
+            let span = #crate_name::tracing::info_span!(
+                #crate_name::logging::PREFIX_LOG_SPAN,
+                name = #name,
+            );
+            let _enter = span.enter();
 
-			#block
-		}
-	})
-	.into()
+            #block
+        }
+    })
+    .into()
 }

@@ -20,9 +20,9 @@ use std::env;
 #[rustversion::attr(not(stable), ignore)]
 #[test]
 fn ui() {
-	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
-	env::set_var("SKIP_WASM_BUILD", "1");
+    // As trybuild is using `cargo check`, we don't need the real WASM binaries.
+    env::set_var("SKIP_WASM_BUILD", "1");
 
-	let t = trybuild::TestCases::new();
-	t.compile_fail("tests/construct_runtime_ui/*.rs");
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/construct_runtime_ui/*.rs");
 }

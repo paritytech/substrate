@@ -16,43 +16,40 @@
 // limitations under the License.
 
 use crate::{Config, Module};
-use codec::{Encode, Decode};
-use sp_runtime::{
-	traits::SignedExtension,
-	transaction_validity::TransactionValidityError,
-};
+use codec::{Decode, Encode};
+use sp_runtime::{traits::SignedExtension, transaction_validity::TransactionValidityError};
 
 /// Ensure the runtime version registered in the transaction is the same as at present.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
 pub struct CheckSpecVersion<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckSpecVersion<T> {
-	#[cfg(feature = "std")]
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		write!(f, "CheckSpecVersion")
-	}
+    #[cfg(feature = "std")]
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+        write!(f, "CheckSpecVersion")
+    }
 
-	#[cfg(not(feature = "std"))]
-	fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
-		Ok(())
-	}
+    #[cfg(not(feature = "std"))]
+    fn fmt(&self, _: &mut sp_std::fmt::Formatter) -> sp_std::fmt::Result {
+        Ok(())
+    }
 }
 
 impl<T: Config + Send + Sync> CheckSpecVersion<T> {
-	/// Create new `SignedExtension` to check runtime version.
-	pub fn new() -> Self {
-		Self(sp_std::marker::PhantomData)
-	}
+    /// Create new `SignedExtension` to check runtime version.
+    pub fn new() -> Self {
+        Self(sp_std::marker::PhantomData)
+    }
 }
 
 impl<T: Config + Send + Sync> SignedExtension for CheckSpecVersion<T> {
-	type AccountId = T::AccountId;
-	type Call = <T as Config>::Call;
-	type AdditionalSigned = u32;
-	type Pre = ();
-	const IDENTIFIER: &'static str = "CheckSpecVersion";
+    type AccountId = T::AccountId;
+    type Call = <T as Config>::Call;
+    type AdditionalSigned = u32;
+    type Pre = ();
+    const IDENTIFIER: &'static str = "CheckSpecVersion";
 
-	fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-		Ok(<Module<T>>::runtime_version().spec_version)
-	}
+    fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
+        Ok(<Module<T>>::runtime_version().spec_version)
+    }
 }

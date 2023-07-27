@@ -25,26 +25,27 @@
 //!   This step will modify the ItemMod by adding some derive attributes or phantom data variants
 //!   to user defined types. And also crate new types and implement block.
 
-mod parse;
 mod expand;
+mod parse;
 
 pub use parse::Def;
 use syn::spanned::Spanned;
 
 pub fn pallet(
-	attr: proc_macro::TokenStream,
-	item: proc_macro::TokenStream
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-	if !attr.is_empty() {
-		let msg = "Invalid pallet macro call: expected no attributes, e.g. macro call must be just \
+    if !attr.is_empty() {
+        let msg =
+            "Invalid pallet macro call: expected no attributes, e.g. macro call must be just \
 			`#[frame_support::pallet]` or `#[pallet]`";
-		let span = proc_macro2::TokenStream::from(attr).span();
-		return syn::Error::new(span, msg).to_compile_error().into();
-	}
+        let span = proc_macro2::TokenStream::from(attr).span();
+        return syn::Error::new(span, msg).to_compile_error().into();
+    }
 
-	let item = syn::parse_macro_input!(item as syn::ItemMod);
-	match parse::Def::try_from(item) {
-		Ok(def) => expand::expand(def).into(),
-		Err(e) => e.to_compile_error().into(),
-	}
+    let item = syn::parse_macro_input!(item as syn::ItemMod);
+    match parse::Def::try_from(item) {
+        Ok(def) => expand::expand(def).into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }

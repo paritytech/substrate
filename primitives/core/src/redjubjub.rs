@@ -1,13 +1,15 @@
-use codec::{Decode, Encode};
 use crate::crypto::{
     CryptoType, CryptoTypeId, CryptoTypePublicPair, Derive, Public as TraitPublic, UncheckedFrom,
 };
 use crate::hash::{H256, H512};
+use codec::{Decode, Encode};
 use sp_runtime_interface::pass_by::PassByInner;
 use sp_std::ops::Deref;
 
+#[cfg(feature = "full_crypto")]
+use crate::crypto::{DeriveJunction, Pair as TraitPair, PublicError, SecretStringError};
 #[cfg(feature = "std")]
-use std::convert::TryFrom;
+use crate::{crypto::Ss58Codec, hexdisplay::HexDisplay};
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
 #[cfg(feature = "full_crypto")]
@@ -18,10 +20,8 @@ use rand_xorshift::XorShiftRng;
 use schnorrkel::SignatureResult;
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-#[cfg(feature = "full_crypto")]
-use crate::crypto::{DeriveJunction, Pair as TraitPair, PublicError, SecretStringError};
 #[cfg(feature = "std")]
-use crate::{crypto::Ss58Codec, hexdisplay::HexDisplay};
+use std::convert::TryFrom;
 #[cfg(feature = "std")]
 use substrate_bip39::mini_secret_from_entropy;
 
@@ -575,10 +575,10 @@ impl CryptoType for Pair {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hex_literal::hex;
-    use serde_json;
     use crate::crypto::{Derive, Ss58Codec, DEV_ADDRESS, DEV_PHRASE};
     use crate::{DeriveJunction, Pair as TraitPair};
+    use hex_literal::hex;
+    use serde_json;
 
     #[test]
     fn default_phrase_should_be_used() {
