@@ -27,7 +27,7 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus_beefy::{
 	check_invalid_fork_proof,
 	crypto::{AuthorityId, Signature},
-	BeefyApi, InvalidForkCommitmentProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, Commitment, OpaqueKeyOwnershipProof,
+	BeefyApi, InvalidForkCommitmentProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, Commitment, OpaqueKeyOwnershipProof, SignedCommitment,
 };
 use sp_runtime::{
 	generic::BlockId,
@@ -42,6 +42,11 @@ pub(crate) trait BeefyFisherman<B: Block>: Send + Sync {
 	fn check_vote(
 		&self,
 		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
+	) -> Result<(), Error>;
+
+	fn check_signed_commitment(
+		&self,
+		signed_commitment: SignedCommitment<NumberFor<B>, Signature>,
 	) -> Result<(), Error>;
 
 	/// Check `proof` for contained finalized block against expected payload.
@@ -96,12 +101,64 @@ where
 			.ok_or_else(|| Error::Backend("could not get BEEFY validator set".into()))
 	}
 
+	fn report_invalid_payload(
+		&self,
+		signed_commitment: SignedCommitment<NumberFor<B>, Signature>,
+		correct_payload: &Payload,
+		correct_header: &B::Header,
+	) -> Result<(), Error> {
+		let validator_set = self.active_validator_set_at(correct_header)?;
+		let set_id = validator_set.id();
+
+		let proof = InvalidForkCommitmentProof {
+			commitment: signed_commitment.commitment.clone(),
+			signatories: vec![],
+			expected_payload: correct_payload.clone(),
+		};
+
+		if signed_commitment.commitment.validator_set_id != set_id ||
+			signed_commitment.commitment.payload != *correct_payload ||
+			!check_invalid_fork_proof::<NumberFor<B>, AuthorityId, BeefySignatureHasher>(&proof)
+		{
+			debug!(target: LOG_TARGET, "🥩 Skip report for bad invalid fork proof {:?}", proof);
+			return Ok(())
+		}
+
+		let offender_ids = proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
+		let runtime_api = self.runtime.runtime_api();
+
+		// generate key ownership proof at that block
+		let key_owner_proofs = offender_ids.iter()
+										   .filter_map(|id| {
+											   match runtime_api.generate_key_ownership_proof(correct_header.hash(), set_id, id.clone()) {
+												   Ok(Some(proof)) => Some(Ok(proof)),
+												   Ok(None) => {
+													   debug!(
+														   target: LOG_TARGET,
+														   "🥩 Invalid fork vote offender not part of the authority set."
+													   );
+													   None
+												   },
+												   Err(e) => Some(Err(Error::RuntimeApi(e))),
+											   }
+										   })
+										   .collect::<Result<_, _>>()?;
+
+		// submit invalid fork vote report at **best** block
+		let best_block_hash = self.backend.blockchain().info().best_hash;
+		runtime_api
+			.submit_report_invalid_fork_unsigned_extrinsic(best_block_hash, proof, key_owner_proofs)
+			.map_err(Error::RuntimeApi)?;
+
+		Ok(())
+	}
+
 	fn report_invalid_fork_commitments(
 		&self,
 		proof: InvalidForkCommitmentProof<NumberFor<B>, AuthorityId, Signature>,
 		correct_header: &B::Header,
-		validator_set: &ValidatorSet<AuthorityId>, // validator set active at the time
 	) -> Result<(), Error> {
+		let validator_set = self.active_validator_set_at(correct_header)?;
 		let set_id = validator_set.id();
 
 		if proof.commitment.validator_set_id != set_id ||
@@ -162,7 +219,21 @@ where
 		if vote.commitment.payload != expected_payload {
 			let validator_set = self.active_validator_set_at(&header)?;
 			let proof = InvalidForkCommitmentProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], expected_payload };
-			self.report_invalid_fork_commitments(proof, &header, &validator_set)?;
+			self.report_invalid_fork_commitments(proof, &header)?;
+		}
+		Ok(())
+	}
+
+	/// Check `commitment` for contained block against expected payload.
+	fn check_signed_commitment(
+		&self,
+		signed_commitment: SignedCommitment<NumberFor<B>, Signature>,
+	) -> Result<(), Error> {
+		let number = signed_commitment.commitment.block_number;
+		let (header, expected_payload) = self.expected_header_and_payload(number)?;
+		if signed_commitment.commitment.payload != expected_payload {
+			let validator_set = self.active_validator_set_at(&header)?;
+			self.report_invalid_payload(signed_commitment, &expected_payload, &header)?;
 		}
 		Ok(())
 	}
@@ -191,7 +262,6 @@ where
 			self.report_invalid_fork_commitments(
 				proof,
 				&header,
-				&validator_set,
 			)?;
 		}
 		Ok(())

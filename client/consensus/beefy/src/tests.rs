@@ -254,6 +254,9 @@ impl<B: BlockT> BeefyFisherman<B> for DummyFisherman<B> {
 	fn check_proof(&self, _: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
 		Ok(())
 	}
+	fn check_signed_commitment(&self, _: SignedCommitment<NumberFor<B>, Signature>) -> Result<(), Error> {
+		Ok(())
+	}
 	fn check_vote(
 		&self,
 		_: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
