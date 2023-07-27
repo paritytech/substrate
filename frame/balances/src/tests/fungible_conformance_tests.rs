@@ -19,12 +19,13 @@ use super::*;
 use frame_support::traits::fungible::{conformance_tests, Inspect, Mutate};
 use paste::paste;
 
-macro_rules! run_tests {
+macro_rules! regular_mutate_tests {
     ($path:path, $ext_deposit:expr, $($name:ident),*) => {
 		$(
 			paste! {
 				#[test]
-				fn [< $name _existential_deposit_ $ext_deposit _dust_trap_on >]() {
+				fn [<regular_mutate_ $name _existential_deposit_ $ext_deposit _dust_trap_on >]() {
+					// Some random trap account.
 					let trap_account = <Test as frame_system::Config>::AccountId::from(65174286u64);
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit).dust_trap(trap_account);
 					builder.build_and_execute_with(|| {
@@ -37,7 +38,7 @@ macro_rules! run_tests {
 				}
 
 				#[test]
-				fn [< $name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
+				fn [< regular_mutate_ $name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
 					builder.build_and_execute_with(|| {
 						$path::$name::<
@@ -50,7 +51,7 @@ macro_rules! run_tests {
 		)*
 	};
 	($path:path, $ext_deposit:expr) => {
-		run_tests!(
+		regular_mutate_tests!(
 			$path,
 			$ext_deposit,
 			mint_into_success,
@@ -82,7 +83,41 @@ macro_rules! run_tests {
 	};
 }
 
-run_tests!(conformance_tests::inspect_mutate, 1);
-run_tests!(conformance_tests::inspect_mutate, 2);
-run_tests!(conformance_tests::inspect_mutate, 5);
-run_tests!(conformance_tests::inspect_mutate, 1000);
+macro_rules! regular_unbalanced_tests {
+    ($path:path, $ext_deposit:expr, $($name:ident),*) => {
+		$(
+			paste! {
+				#[test]
+				fn [< regular_unbalanced_ $name _existential_deposit_ $ext_deposit>]() {
+					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
+					builder.build_and_execute_with(|| {
+						$path::$name::<
+							Balances,
+							<Test as frame_system::Config>::AccountId,
+						>();
+					});
+				}
+			}
+		)*
+	};
+	($path:path, $ext_deposit:expr) => {
+		regular_unbalanced_tests!(
+			$path,
+			$ext_deposit,
+			write_balance,
+			decrease_balance_expendable,
+			decrease_balance_preserve,
+			increase_balance,
+			set_total_issuance,
+			deactivate_and_reactivate
+		);
+	};
+}
+
+regular_mutate_tests!(conformance_tests::regular::mutate, 1);
+regular_mutate_tests!(conformance_tests::regular::mutate, 5);
+regular_mutate_tests!(conformance_tests::regular::mutate, 1000);
+
+regular_unbalanced_tests!(conformance_tests::regular::unbalanced, 1);
+regular_unbalanced_tests!(conformance_tests::regular::unbalanced, 5);
+regular_unbalanced_tests!(conformance_tests::regular::unbalanced, 1000);

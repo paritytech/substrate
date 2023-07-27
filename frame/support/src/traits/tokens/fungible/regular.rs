@@ -152,9 +152,10 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// If this cannot be done for some reason (e.g. because the account cannot be created, deleted
 	/// or would overflow) then an `Err` is returned.
 	///
-	/// If `Ok` is returned then its inner, if `Some` is the amount which was discarded as dust due
-	/// to existential deposit requirements. The default implementation of `decrease_balance` and
-	/// `increase_balance` converts this into an `Imbalance` and then passes it into `handle_dust`.
+	/// If `Ok` is returned then its inner, then `Some` is the amount which was discarded as dust
+	/// due to existential deposit requirements. The default implementation of `decrease_balance`
+	/// and `increase_balance` converts this into an `Imbalance` and then passes it into
+	/// `handle_dust`.
 	fn write_balance(
 		who: &AccountId,
 		amount: Self::Balance,
@@ -182,8 +183,13 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(who);
 		let free = Self::reducible_balance(who, preservation, force);
-		if let BestEffort = precision {
+		if precision == BestEffort {
 			amount = amount.min(free);
+		}
+		// Under no circumsances should the account go below free when preservation is Preserve.
+		// TODO BEFORE MERGING: Confirm with Gav this is correct behavior
+		if amount > free && preservation == Preservation::Preserve {
+			return Err(TokenError::BelowMinimum.into())
 		}
 		let new_balance = old_balance.checked_sub(&amount).ok_or(TokenError::FundsUnavailable)?;
 		if let Some(dust) = Self::write_balance(who, new_balance)? {
