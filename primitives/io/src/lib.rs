@@ -47,7 +47,7 @@ use sp_core::{
 use sp_keystore::{KeystoreExt, SyncCryptoStore};
 
 use sp_core::{
-	OpaquePeerId, crypto::KeyTypeId, ed25519, sr25519, ecdsa, H256, LogLevel,
+	OpaquePeerId, crypto::KeyTypeId, ed25519, sr25519, ecdsa, redjubjub, H256, LogLevel,
 	offchain::{
 		Timestamp, HttpRequestId, HttpRequestStatus, HttpError, StorageKind, OpaqueNetworkState,
 	},
@@ -720,6 +720,60 @@ pub trait Crypto {
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize_compressed())
 	}
+
+    /// Returns all `redjubjub` public keys for the given key id from the keystore.
+    fn redjubjub_public_keys(&mut self, id: KeyTypeId) -> Vec<redjubjub::Public> {
+        let keystore = &***self
+            .extension::<KeystoreExt>()
+            .expect("No `keystore` associated for the current context!");
+        SyncCryptoStore::redjubjub_public_keys(keystore, id)
+    }
+
+    /// Generate an `ed22519` key for the given key type using an optional `seed` and
+    /// store it in the keystore.
+    ///
+    /// The `seed` needs to be a valid utf8.
+    ///
+    /// Returns the public key.
+    fn redjubjub_generate(&mut self, id: KeyTypeId, seed: Option<Vec<u8>>) -> redjubjub::Public {
+        let seed = seed
+            .as_ref()
+            .map(|s| std::str::from_utf8(&s).expect("Seed is valid utf8!"));
+        let keystore = &***self
+            .extension::<KeystoreExt>()
+            .expect("No `keystore` associated for the current context!");
+        SyncCryptoStore::redjubjub_generate_new(keystore, id, seed)
+            .expect("`redjubjub_generate` failed")
+    }
+
+    /// Sign the given `msg` with the `redjubjub` key that corresponds to the given public key and
+    /// key type in the keystore.
+    ///
+    /// Returns the signature.
+    fn redjubjub_sign(
+        &mut self,
+        id: KeyTypeId,
+        pub_key: &redjubjub::Public,
+        msg: &[u8],
+    ) -> Option<redjubjub::Signature> {
+        let keystore = &***self
+            .extension::<KeystoreExt>()
+            .expect("No `keystore` associated for the current context!");
+        SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
+            .map(|sig| redjubjub::Signature::from_slice(sig.as_slice()))
+            .ok()
+    }
+
+    /// Verify `redjubjub` signature.
+    ///
+    /// Returns `true` when the verification was successful.
+    fn redjubjub_verify(
+        sig: &redjubjub::Signature,
+        msg: &[u8],
+        pub_key: &redjubjub::Public,
+    ) -> bool {
+        redjubjub::Pair::verify(sig, msg, pub_key)
+    }
 }
 
 /// Interface that provides functions for hashing with different algorithms.
@@ -1481,6 +1535,20 @@ mod tests {
 				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
 			}
 			assert!(crypto::finish_batch_verify());
+		});
+	}
+
+	#[test]
+	fn verify_redjubjub() {
+		let mut ext = BasicExternalities::default();
+		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
+		ext.execute_with(|| {
+			let pair = redjubjub::Pair::generate_with_phrase(None).0;
+			for it in 0..70 {
+				let msg = format!("Schnorrkel {}!", it);
+				let signature = pair.sign(msg.as_bytes());
+				assert!(crypto::redjubjub_verify(&signature, msg.as_bytes(), &pair.public()));
+			}
 		});
 	}
 
