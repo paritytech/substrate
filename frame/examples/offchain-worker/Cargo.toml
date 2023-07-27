@@ -39,5 +39,10 @@ std = [
 	"sp-keystore",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-keystore?/std",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+	"sp-runtime/try-runtime",
+]

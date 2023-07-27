@@ -45,7 +45,6 @@ std = [
 	"sp-api/std",
 	"sp-application-crypto/std",
 	"thiserror",
-
 	"ed25519-dalek",
 	"x25519-dalek",
 	"curve25519-dalek",
@@ -53,6 +52,7 @@ std = [
 	"hkdf",
 	"sha2",
 	"rand",
+	"sp-externalities/std",
 ]
 serde = [
         "scale-info/serde",

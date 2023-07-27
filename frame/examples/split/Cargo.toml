@@ -34,14 +34,19 @@ std = [
 	"codec/std",
 	"log/std",
 	"scale-info/std",
-
 	"frame-support/std",
 	"frame-system/std",
-
 	"sp-io/std",
 	"sp-std/std",
-
 	"frame-benchmarking?/std",
+	"sp-core/std",
 ]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
-try-runtime = ["frame-support/try-runtime"]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+]
+try-runtime = [
+	"frame-support/try-runtime",
+	"frame-system/try-runtime",
+]
