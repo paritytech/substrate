@@ -314,7 +314,7 @@ pub struct StorageQuery<Key> {
 
 /// The type of the storage query.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "camelCase")]
 pub enum StorageQueryType {
 	/// Fetch the value of the provided key.
 	Value,
@@ -341,7 +341,7 @@ pub struct StorageResult {
 
 /// The type of the storage query.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "camelCase")]
 pub enum StorageResultType {
 	/// Fetch the value of the provided key.
 	Value(String),
@@ -728,7 +728,7 @@ mod tests {
 		let item = StorageQuery { key: "0x1", query_type: StorageQueryType::DescendantsValues };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
-		let exp = r#"{"key":"0x1","type":"descendants-values"}"#;
+		let exp = r#"{"key":"0x1","type":"descendantsValues"}"#;
 		assert_eq!(ser, exp);
 		// Decode
 		let dec: StorageQuery<&str> = serde_json::from_str(exp).unwrap();
@@ -738,7 +738,7 @@ mod tests {
 		let item = StorageQuery { key: "0x1", query_type: StorageQueryType::DescendantsHashes };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
-		let exp = r#"{"key":"0x1","type":"descendants-hashes"}"#;
+		let exp = r#"{"key":"0x1","type":"descendantsHashes"}"#;
 		assert_eq!(ser, exp);
 		// Decode
 		let dec: StorageQuery<&str> = serde_json::from_str(exp).unwrap();
@@ -749,7 +749,7 @@ mod tests {
 			StorageQuery { key: "0x1", query_type: StorageQueryType::ClosestDescendantMerkleValue };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
-		let exp = r#"{"key":"0x1","type":"closest-descendant-merkle-value"}"#;
+		let exp = r#"{"key":"0x1","type":"closestDescendantMerkleValue"}"#;
 		assert_eq!(ser, exp);
 		// Decode
 		let dec: StorageQuery<&str> = serde_json::from_str(exp).unwrap();
@@ -787,7 +787,7 @@ mod tests {
 		};
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
-		let exp = r#"{"key":"0x1","closest-descendant-merkle-value":"res"}"#;
+		let exp = r#"{"key":"0x1","closestDescendantMerkleValue":"res"}"#;
 		assert_eq!(ser, exp);
 		// Decode
 		let dec: StorageResult = serde_json::from_str(exp).unwrap();
