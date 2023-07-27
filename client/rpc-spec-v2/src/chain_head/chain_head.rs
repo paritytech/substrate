@@ -20,7 +20,7 @@
 
 use super::{
 	chain_head_storage::ChainHeadStorage,
-	event::{MethodResponseStarted, OperationBodyDone},
+	event::{MethodResponseStarted, OperationBodyDone, OperationCallDone},
 	subscription::BlockGuard,
 };
 use crate::{
@@ -349,8 +349,6 @@ where
 	) -> RpcResult<MethodResponse> {
 		let call_parameters = Bytes::from(parse_hex_param(call_parameters)?);
 
-		let client = self.client.clone();
-
 		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
 			Ok(block) => block,
 			Err(SubscriptionManagementError::SubscriptionAbsent) => {
@@ -364,31 +362,36 @@ where
 			Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
 		};
 
-		// let fut = async move {
-		// 	// Reject subscription if with_runtime is false.
-		// 	if !block_guard.has_runtime() {
-		// 		let _ = sink.reject(ChainHeadRpcError::InvalidParam(
-		// 			"The runtime updates flag must be set".into(),
-		// 		));
-		// 		return
-		// 	}
+		// Reject subscription if with_runtime is false.
+		if !block_guard.has_runtime() {
+			return Err(ChainHeadRpcError::InvalidParam(
+				"The runtime updates flag must be set".to_string(),
+			)
+			.into())
+		}
 
-		// 	let res = client
-		// 		.executor()
-		// 		.call(hash, &function, &call_parameters, CallContext::Offchain)
-		// 		.map(|result| {
-		// 			let result = hex_string(&result);
-		// 			ChainHeadEvent::Done(ChainHeadResult { result })
-		// 		})
-		// 		.unwrap_or_else(|error| {
-		// 			ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
-		// 		});
+		let event = self
+			.client
+			.executor()
+			.call(hash, &function, &call_parameters, CallContext::Offchain)
+			.map(|result| {
+				FollowEvent::<Block::Hash>::OperationCallDone(OperationCallDone {
+					operation_id: block_guard.operation_id(),
+					output: hex_string(&result),
+				})
+			})
+			.unwrap_or_else(|error| {
+				FollowEvent::<Block::Hash>::OperationError(OperationError {
+					operation_id: block_guard.operation_id(),
+					error: error.to_string(),
+				})
+			});
 
-		// 	let _ = sink.send(&res);
-		// };
-
-		// self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
-		Ok(MethodResponse::LimitReached)
+		let _ = block_guard.response_sender().unbounded_send(event);
+		Ok(MethodResponse::Started(MethodResponseStarted {
+			operation_id: block_guard.operation_id(),
+			discarded_items: None,
+		}))
 	}
 
 	fn chain_head_unstable_unpin(
