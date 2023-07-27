@@ -222,7 +222,7 @@ fn get_rustup_command() -> Option<CargoCommand> {
 			continue
 		}
 
-		let Some(cargo_version) = cmd.version() else { continue; };
+		let Some(cargo_version) = cmd.version() else { continue };
 
 		versions.push((cargo_version, rustup_version.to_string()));
 	}

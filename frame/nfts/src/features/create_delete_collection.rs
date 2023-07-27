@@ -50,13 +50,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			),
 		);
 
-		let next_id = collection.increment();
-
 		CollectionConfigOf::<T, I>::insert(&collection, config);
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
-		NextCollectionId::<T, I>::set(Some(next_id));
-
-		Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
 		Self::deposit_event(event);
 		Ok(())
 	}

@@ -22,7 +22,6 @@
 use core::{cell::RefCell, marker::PhantomData};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, Dispatchable, IdentityLookup},
 	BuildStorage,
 };
@@ -41,16 +40,12 @@ use frame_support::{
 use super::*;
 use crate as treasury;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 type UtilityCall = pallet_utility::Call<Test>;
 type TreasuryCall = crate::Call<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
@@ -65,14 +60,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();

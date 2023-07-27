@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 async-trait = "0.1.57"
 futures = { version = "0.3.21", features = ["thread-pool"] }
 futures-timer = "3.0.1"
-libp2p-identity = { version = "0.1.2", features = ["peerid", "ed25519"] }
+libp2p-identity = { version = "0.2.0", features = ["peerid", "ed25519"] }
 log = "0.4.17"
 mockall = "0.11.3"
 parking_lot = "0.12.1"

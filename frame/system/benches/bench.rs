@@ -19,7 +19,6 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill,
 };
@@ -42,14 +41,10 @@ mod module {
 	}
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub struct Runtime
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Module: module::{Pallet, Event},
@@ -68,14 +63,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = BlockLength;
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
