@@ -262,12 +262,11 @@ mod tests {
 
 	const LARGE_RAW_COMMITMENT: &[u8] = include_bytes!("../test-res/large-raw-commitment");
 
-	///types for bls-less commitment
-
+	// Types for bls-less commitment
 	type TestEcdsaSignedCommitment = SignedCommitment<u128, EcdsaSignature>;
 	type TestVersionedFinalityProof = VersionedFinalityProof<u128, EcdsaSignature>;
 
-	///types for commitment supporting aggregatable bls signature
+	// Types for commitment supporting aggregatable bls signature
 	#[cfg(feature = "bls-experimental")]
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
 	struct BlsAggregatableSignature(BlsSignature);
@@ -279,8 +278,8 @@ mod tests {
 	#[cfg(feature = "bls-experimental")]
 	type TestBlsSignedCommitment = SignedCommitment<u128, EcdsaBlsSignaturePair>;
 
-	///generates mock aggregatable ecdsa signature for generating test commitment
-	///BLS signatures
+	// Generates mock aggregatable ecdsa signature for generating test commitment
+	// BLS signatures
 	fn mock_ecdsa_signatures() -> (EcdsaSignature, EcdsaSignature) {
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
 
@@ -293,8 +292,8 @@ mod tests {
 		(sig1.into(), sig2.into())
 	}
 
-	///generates mock aggregatable bls signature for generating test commitment
-	///BLS signatures
+	// Generates mock aggregatable bls signature for generating test commitment
+	// BLS signatures
 	#[cfg(feature = "bls-experimental")]
 	fn mock_bls_signatures() -> (BlsSignature, BlsSignature) {
 		let alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();

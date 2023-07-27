@@ -95,7 +95,7 @@ mod tests {
 
 	type TestCommitment = Commitment<u128>;
 
-	/// Types for ecdsa signed commitment.
+	// Types for ecdsa signed commitment.
 	type TestEcdsaSignedCommitment = SignedCommitment<u128, EcdsaSignature>;
 	type TestEcdsaSignedCommitmentWitness =
 		SignedCommitmentWitness<u128, Vec<Option<EcdsaSignature>>>;
@@ -104,7 +104,7 @@ mod tests {
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
 	struct EcdsaBlsSignaturePair(EcdsaSignature, BlsSignature);
 
-	///types for commitment containing  bls signature along side ecdsa signature
+	// types for commitment containing  bls signature along side ecdsa signature
 	#[cfg(feature = "bls-experimental")]
 	type TestBlsSignedCommitment = SignedCommitment<u128, EcdsaBlsSignaturePair>;
 	#[cfg(feature = "bls-experimental")]
@@ -123,8 +123,8 @@ mod tests {
 		(sig1.into(), sig2.into())
 	}
 
-	///generates mock aggregatable bls signature for generating test commitment
-	///BLS signatures
+	// Generates mock aggregatable bls signature for generating test commitment
+	// BLS signatures
 	#[cfg(feature = "bls-experimental")]
 	fn mock_bls_signatures() -> (BlsSignature, BlsSignature) {
 		let alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
@@ -217,7 +217,7 @@ mod tests {
 			    (&aggregatedsigs).signature().to_bytes()
 			});
 
-		//We can't use BlsSignature::try_from because it expected 112Bytes (CP (64) + BLS 48)
+		// We can't use BlsSignature::try_from because it expected 112Bytes (CP (64) + BLS 48)
 		// single signature while we are having a BLS aggregated signature corresponding to no CP.
 		w3f_bls::Signature::<TinyBLS377>::from_bytes(witness.signature_accumulator.as_slice())
 			.unwrap();
@@ -225,18 +225,18 @@ mod tests {
 
 	#[test]
 	fn should_encode_and_decode_witness() {
-		// given
+		// Given
 		let signed = ecdsa_signed_commitment();
 		let (witness, _) = TestEcdsaSignedCommitmentWitness::from_signed::<_, _>(
 			signed,
 			|sigs: &[std::option::Option<EcdsaSignature>]| sigs.to_vec(),
 		);
 
-		// when
+		// When
 		let encoded = codec::Encode::encode(&witness);
 		let decoded = TestEcdsaSignedCommitmentWitness::decode(&mut &*encoded);
 
-		// then
+		// Then
 		assert_eq!(decoded, Ok(witness));
 		assert_eq!(
 			encoded,
