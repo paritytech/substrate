@@ -243,6 +243,7 @@ impl<Block: BlockT> SubscriptionState<Block> {
 pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 	hash: Block::Hash,
 	with_runtime: bool,
+	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
 	backend: Arc<BE>,
 }
 
@@ -259,18 +260,24 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 	fn new(
 		hash: Block::Hash,
 		with_runtime: bool,
+		response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
 		backend: Arc<BE>,
 	) -> Result<Self, SubscriptionManagementError> {
 		backend
 			.pin_block(hash)
 			.map_err(|err| SubscriptionManagementError::Custom(err.to_string()))?;
 
-		Ok(Self { hash, with_runtime, backend })
+		Ok(Self { hash, with_runtime, response_sender, backend })
 	}
 
 	/// The `with_runtime` flag of the subscription.
 	pub fn has_runtime(&self) -> bool {
 		self.with_runtime
+	}
+
+	/// Send message responses from the `chainHead` methods to `chainHead_follow`.
+	pub fn response_sender(&self) -> TracingUnboundedSender<FollowEvent<Block::Hash>> {
+		self.response_sender.clone()
 	}
 }
 
@@ -520,7 +527,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		}
 
-		BlockGuard::new(hash, sub.with_runtime, self.backend.clone())
+		BlockGuard::new(hash, sub.with_runtime, sub.response_sender.clone(), self.backend.clone())
 	}
 }
 
@@ -948,17 +955,17 @@ mod tests {
 
 		let id = "abc".to_string();
 
-		let mut rx_stop = subs.insert_subscription(id.clone(), true).unwrap();
+		let mut sub_data = subs.insert_subscription(id.clone(), true).unwrap();
 
 		// Check the stop signal was not received.
-		let res = rx_stop.try_recv().unwrap();
+		let res = sub_data.rx_stop.try_recv().unwrap();
 		assert!(res.is_none());
 
 		let sub = subs.subs.get_mut(&id).unwrap();
 		sub.stop();
 
 		// Check the signal was received.
-		let res = rx_stop.try_recv().unwrap();
+		let res = sub_data.rx_stop.try_recv().unwrap();
 		assert!(res.is_some());
 	}
 }
