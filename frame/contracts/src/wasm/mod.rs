@@ -38,7 +38,7 @@ use crate::{
 	wasm::prepare::LoadedModule,
 	weights::WeightInfo,
 	AccountIdOf, BadOrigin, BalanceOf, CodeHash, CodeInfoOf, CodeVec, Config, Error, Event,
-	HoldReason, Pallet, PristineCode, Schedule, System, Weight, LOG_TARGET,
+	HoldReason, Pallet, PristineCode, Schedule, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -238,16 +238,12 @@ impl<T: Config> WasmBlob<T> {
 				// the `owner` is always the origin of the current transaction.
 				None => {
 					let deposit = self.code_info.deposit;
-					System::<T>::inc_providers(&self.code_info.owner);
 					T::Currency::hold(
 						&HoldReason::StorageDepositReserve.into(),
 						&self.code_info.owner,
 						deposit,
 					)
-					.map_err(|_| {
-						let _ = System::<T>::dec_providers(&self.code_info.owner);
-						<Error<T>>::StorageDepositNotHeld
-					})?;
+					.map_err(|_| <Error<T>>::StorageDepositNotHeld)?;
 
 					<Pallet<T>>::deposit_event(
 						vec![T::Hashing::hash_of(&self.code_info.owner)],
@@ -279,8 +275,6 @@ impl<T: Config> WasmBlob<T> {
 					code_info.deposit,
 					BestEffort,
 				);
-
-				let _ = System::<T>::dec_providers(&code_info.owner);
 
 				<Pallet<T>>::deposit_event(
 					vec![T::Hashing::hash_of(&code_info.owner)],
