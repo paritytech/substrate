@@ -25,7 +25,6 @@ use frame_support::{
 use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-
 	/// Perform a transfer of an item from one account to another within a collection.
 	///
 	/// # Errors
@@ -58,8 +57,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let origin = details.owner;
 		details.owner = dest;
 
-		// The approved account has to be reset to `None`, because otherwise pre-approve attack would
-		// be possible, where the owner can approve their second account before making the
+		// The approved account has to be reset to `None`, because otherwise pre-approve attack
+		// would be possible, where the owner can approve their second account before making the
 		// transaction and then claiming the item back.
 		details.approved = None;
 
@@ -256,7 +255,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
 	}
-	
+
 	/// Set or remove the price for an item in a collection.
 	///
 	/// # Errors
