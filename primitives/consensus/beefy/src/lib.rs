@@ -116,8 +116,7 @@ pub mod ecdsa_crypto {
 pub mod bls_crypto {
 	use super::{BeefyAuthorityId, Hash, RuntimeAppPublic, KEY_TYPE as BEEFY_KEY_TYPE};
 	use sp_application_crypto::{app_crypto, bls377};
-	use sp_core::{crypto::Wraps, ByteArray};
-	use w3f_bls::{self, SerializableToBytes};
+	use sp_core::{bls377::Pair as BlsPair, crypto::Wraps, Pair as _};
 	app_crypto!(bls377, BEEFY_KEY_TYPE);
 
 	/// Identity of a BEEFY authority using BLS as its crypto.
@@ -131,31 +130,12 @@ pub mod bls_crypto {
 		<MsgHash as Hash>::Output: Into<[u8; 32]>,
 	{
 		fn verify(&self, signature: &<Self as RuntimeAppPublic>::Signature, msg: &[u8]) -> bool {
-			//w3f-bls library uses IETF hashing standard and as such does not exposes
-			//a choice of hash to field function.
-			//we are directly calling into the library to avoid introducing new host call.
-			//and because BeefyAuthorityId::verify is being called in the runtime so we don't have
-			let pubkey_array: [u8; bls377::Public::LEN] =
-				match <[u8; bls377::Public::LEN]>::try_from(AsRef::<[u8]>::as_ref(self)) {
-					Ok(pk) => pk,
-					Err(_) => return false,
-				};
-			let public_key =
-				match w3f_bls::double::DoublePublicKey::<w3f_bls::TinyBLS377>::from_bytes(
-					&pubkey_array,
-				) {
-					Ok(pk) => pk,
-					Err(_) => return false,
-				};
+			// `w3f-bls` library uses IETF hashing standard and as such does not exposes
+			// a choice of hash to field function.
+			// We are directly calling into the library to avoid introducing new host call.
+			// and because BeefyAuthorityId::verify is being called in the runtime so we don't have
 
-			let sig_array = signature.as_inner_ref().as_ref();
-
-			let sig = match w3f_bls::double::DoubleSignature::from_bytes(sig_array) {
-				Ok(s) => s,
-				Err(_) => return false,
-			};
-
-			sig.verify(&w3f_bls::Message::new(b"", msg.as_ref()), &public_key)
+			BlsPair::verify(signature.as_inner_ref(), msg, self.as_inner_ref())
 		}
 	}
 }
