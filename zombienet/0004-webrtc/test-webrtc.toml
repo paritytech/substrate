@@ -40,5 +40,5 @@ args = [
   "--listen-addr",
   "/ip4/0.0.0.0/udp/30333/webrtc-direct",
   "--sync warp",
-  "-l webrtc_sctp=trace,webrtc_data=trace,sub-libp2p=trace",
+  "-l webrtc_sctp=debug,sub-libp2p=trace",
 ]
