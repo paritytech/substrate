@@ -86,33 +86,34 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A name was set.
-		NameSet { 
+		NameSet {
 			/// The account for which the name was set.
-			who: T::AccountId
+			who: T::AccountId,
 		},
 		/// A name was forcibly set.
-		NameForced { 
+		NameForced {
 			/// The account whose name was forcibly set.
-			target: T::AccountId
+			target: T::AccountId,
 		},
 		/// A name was changed.
 		NameChanged {
 			/// The account for which the name was changed.
-			who: T::AccountId
+			who: T::AccountId,
 		},
 		/// A name was cleared, and the given balance returned.
 		NameCleared {
 			/// The account for which the name was cleared.
 			who: T::AccountId,
 			/// The deposit returned.
-			deposit: BalanceOf<T>
+			deposit: BalanceOf<T>,
 		},
 		/// A name was removed and the given balance slashed.
 		NameKilled {
 			/// The account for which the name was removed.
 			target: T::AccountId,
 			/// The deposit returned.
-			deposit: BalanceOf<T> },
+			deposit: BalanceOf<T>,
+		},
 	}
 
 	/// Error for the Nicks pallet.
