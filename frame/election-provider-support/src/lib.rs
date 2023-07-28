@@ -242,8 +242,8 @@ pub struct IndexAssignment<VoterIndex, TargetIndex, P: PerThing> {
 }
 
 impl<VoterIndex, TargetIndex, P: PerThing> IndexAssignment<VoterIndex, TargetIndex, P> {
-	/// Represents a new index assignment, mapping voter and target accounts to their respective indices
-	/// in the assignment's snapshot.
+	/// Represents a new index assignment, mapping voter and target accounts to their respective
+	/// indices in the assignment's snapshot.
 	pub fn new<AccountId: IdentifierT>(
 		assignment: &Assignment<AccountId, P>,
 		voter_index: impl Fn(&AccountId) -> Option<VoterIndex>,
@@ -427,14 +427,14 @@ pub trait ElectionProvider: ElectionProviderBase {
 /// data provider at runtime via `forced_input_voters_bound` and `forced_input_target_bound`.
 pub trait InstantElectionProvider: ElectionProviderBase {
 	/// Perform an instant election and return the result.
-    ///
-    /// The `forced_input_voters_bound` and `forced_input_target_bound` parameters are optional
-    /// and allow overriding the number of voters and targets fetched from the data provider. If
-    /// `None` is provided for these parameters, the election provider will use its default
-    /// settings to fetch voters and targets.
-    ///
-    /// The function returns the result of the election as [`BoundedSupportsOf<Self>`], representing
-    /// the elected candidates and their respective supports.
+	///
+	/// The `forced_input_voters_bound` and `forced_input_target_bound` parameters are optional
+	/// and allow overriding the number of voters and targets fetched from the data provider. If
+	/// `None` is provided for these parameters, the election provider will use its default
+	/// settings to fetch voters and targets.
+	///
+	/// The function returns the result of the election as [`BoundedSupportsOf<Self>`], representing
+	/// the elected candidates and their respective supports.
 	fn instant_elect(
 		forced_input_voters_bound: Option<u32>,
 		forced_input_target_bound: Option<u32>,
