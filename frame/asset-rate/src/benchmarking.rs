@@ -20,28 +20,43 @@
 use super::*;
 use crate::{pallet as pallet_asset_rate, Pallet as AssetRate};
 
+use codec::Encode;
 use frame_benchmarking::v2::*;
 use frame_support::assert_ok;
 use frame_system::RawOrigin;
+use sp_core::crypto::FromEntropy;
 
-const ASSET_ID: u32 = 1;
+/// Trait describing the factory function for the `AssetKind` parameter.
+pub trait AssetKindFactory<AssetKind> {
+	fn create_asset_kind(seed: u32) -> AssetKind;
+}
+impl<AssetKind> AssetKindFactory<AssetKind> for ()
+where
+	AssetKind: FromEntropy,
+{
+	fn create_asset_kind(seed: u32) -> AssetKind {
+		AssetKind::from_entropy(&mut seed.encode().as_slice()).unwrap()
+	}
+}
+
+const SEED: u32 = 1;
 
 fn default_conversion_rate() -> FixedU128 {
 	FixedU128::from_u32(1u32)
 }
 
-#[benchmarks(where <T as Config>::AssetId: From<u32>)]
+#[benchmarks]
 mod benchmarks {
 	use super::*;
 
 	#[benchmark]
 	fn create() -> Result<(), BenchmarkError> {
-		let asset_id: T::AssetId = ASSET_ID.into();
+		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(SEED);
 		#[extrinsic_call]
-		_(RawOrigin::Root, asset_id.clone(), default_conversion_rate());
+		_(RawOrigin::Root, asset_kind.clone(), default_conversion_rate());
 
 		assert_eq!(
-			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id),
+			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_kind),
 			Some(default_conversion_rate())
 		);
 		Ok(())
@@ -49,18 +64,18 @@ mod benchmarks {
 
 	#[benchmark]
 	fn update() -> Result<(), BenchmarkError> {
-		let asset_id: T::AssetId = ASSET_ID.into();
+		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(SEED);
 		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
-			asset_id.clone(),
+			asset_kind.clone(),
 			default_conversion_rate()
 		));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, asset_id.clone(), FixedU128::from_u32(2));
+		_(RawOrigin::Root, asset_kind.clone(), FixedU128::from_u32(2));
 
 		assert_eq!(
-			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id),
+			pallet_asset_rate::ConversionRateToNative::<T>::get(asset_kind),
 			Some(FixedU128::from_u32(2))
 		);
 		Ok(())
@@ -68,17 +83,17 @@ mod benchmarks {
 
 	#[benchmark]
 	fn remove() -> Result<(), BenchmarkError> {
-		let asset_id: T::AssetId = ASSET_ID.into();
+		let asset_kind: T::AssetKind = T::BenchmarkHelper::create_asset_kind(SEED);
 		assert_ok!(AssetRate::<T>::create(
 			RawOrigin::Root.into(),
-			ASSET_ID.into(),
+			asset_kind.clone(),
 			default_conversion_rate()
 		));
 
 		#[extrinsic_call]
-		_(RawOrigin::Root, asset_id.clone());
+		_(RawOrigin::Root, asset_kind.clone());
 
-		assert!(pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id).is_none());
+		assert!(pallet_asset_rate::ConversionRateToNative::<T>::get(asset_kind).is_none());
 		Ok(())
 	}
 

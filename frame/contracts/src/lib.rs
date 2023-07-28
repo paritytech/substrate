@@ -1048,7 +1048,7 @@ pub mod pallet {
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	pub(crate) type ContractInfoOf<T: Config> =
-		StorageMap<_, Identity, T::AccountId, ContractInfo<T>>;
+		StorageMap<_, Twox64Concat, T::AccountId, ContractInfo<T>>;
 
 	/// Evicted contracts that await child trie deletion.
 	///

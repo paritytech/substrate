@@ -86,7 +86,9 @@ impl pallet_asset_rate::Config for Test {
 	type UpdateOrigin = frame_system::EnsureRoot<u64>;
 	type Balance = u64;
 	type Currency = Balances;
-	type AssetId = u32;
+	type AssetKind = u32;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 // Build genesis storage according to the mock runtime.
