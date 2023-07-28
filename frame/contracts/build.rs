@@ -45,10 +45,10 @@ fn main() {
 	let path = std::path::Path::new(&out_dir).join("generated_version.rs");
 	let mut f = std::fs::File::create(&path).unwrap();
 
-	let code = format!(
+	write!(
+		f,
 		"pub mod generated_version {{ pub const LATEST_MIGRATION_VERSION: u16 = {}; }}",
 		get_latest_version()
-	);
-
-	write!(f, "{}", code).unwrap();
+	)
+	.unwrap();
 }
