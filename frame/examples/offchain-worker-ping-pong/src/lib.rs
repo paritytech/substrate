@@ -317,7 +317,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::call_index(0)]
-		#[pallet::weight(0)]
 		pub fn ping(origin: OriginFor<T>, nonce: u32) -> DispatchResultWithPostInfo {
 			let _who = ensure_signed(origin)?;
 
