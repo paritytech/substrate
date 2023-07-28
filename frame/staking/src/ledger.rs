@@ -52,7 +52,7 @@ pub struct StakingLedger<T: Config> {
 }
 
 impl<T: Config> StakingLedger<T> {
-	#[cfg(any(test, runtime_benchmarks))]
+	#[cfg(any(feature = "runtime-benchmarks", test))]
 	pub fn default_from(stash: T::AccountId) -> Self {
 		Self {
 			stash,
@@ -155,23 +155,20 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Inserts/updates a staking ledger account.
 	///
-	/// The staking locks of the stash account are updated accordingly.
+	/// Bonds the ledger if it was not bonded yet, signaling that this is a new ledger. The staking
+	/// locks of the stash account are updated accordingly.
 	///
 	/// Note: To ensure lock consistency, all the [`Ledger`] storage updates should be made through
 	/// this helper function.
 	pub(crate) fn update(&self) -> Result<(), Error<T>> {
+		if <Bonded<T>>::get(&self.stash).is_none() {
+			// not bonded yet, new ledger. Note: controllers are deprecated, stash is the
+			// controller.
+			<Bonded<T>>::insert(&self.stash, &self.stash);
+		}
+
 		T::Currency::set_lock(STAKING_ID, &self.stash, self.total, WithdrawReasons::all());
 		Ledger::<T>::insert(&self.controller().ok_or(Error::<T>::NotController)?, &self);
-
-		Ok(())
-	}
-
-	/// Helper to bond a new stash.
-	///
-	/// Note: as the controller accounts are being deprecated, the stash account is the same as the
-	/// controller account.
-	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
-		<Bonded<T>>::insert(&self.stash, &self.stash);
 
 		Ok(())
 	}

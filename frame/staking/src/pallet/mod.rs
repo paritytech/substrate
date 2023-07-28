@@ -871,11 +871,10 @@ pub mod pallet {
 					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			);
-			ledger.update()?;
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
-			ledger.bond()?;
+			ledger.update()?;
 			<Payee<T>>::insert(&stash, payee);
 
 			Ok(())
