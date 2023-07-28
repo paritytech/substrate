@@ -1,0 +1,36 @@
+error: `Pallet` does not have #[pallet::origin] defined, perhaps you should remove `Origin` from construct_runtime?
+  --> tests/construct_runtime_ui/undefined_origin_part.rs:5:1
+   |
+5  |   #[frame_support::pallet]
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+48 | / construct_runtime! {
+49 | |     pub struct Runtime
+50 | |     {
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config<T>, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Origin},
+53 | |     }
+54 | | }
+   | |_- in this macro invocation
+   |
+   = note: this error originates in the macro `pallet::__substrate_origin_check::is_origin_part_defined` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0412]: cannot find type `Origin` in module `pallet`
+  --> tests/construct_runtime_ui/undefined_origin_part.rs:48:1
+   |
+48 | / construct_runtime! {
+49 | |     pub struct Runtime
+50 | |     {
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config<T>, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Origin},
+53 | |     }
+54 | | }
+   | |_^ not found in `pallet`
+   |
+   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing one of these items
+   |
+1  + use frame_support_test::Origin;
+   |
+1  + use frame_system::Origin;
+   |

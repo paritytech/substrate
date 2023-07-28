@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -23,56 +23,43 @@
 //! targeted at handling input parameter parsing providing
 //! a reasonable abstraction.
 
-use structopt::StructOpt;
-use sc_service::config::OffchainWorkerConfig;
+use clap::{ArgAction, Args};
 use sc_network::config::Role;
+use sc_service::config::OffchainWorkerConfig;
 
-use crate::error;
-use crate::OffchainWorkerEnabled;
-
+use crate::{error, OffchainWorkerEnabled};
 
 /// Offchain worker related parameters.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Clone, Args)]
 pub struct OffchainWorkerParams {
 	/// Should execute offchain workers on every block.
-	///
 	/// By default it's only enabled for nodes that are authoring new blocks.
-	#[structopt(
+	#[arg(
 		long = "offchain-worker",
 		value_name = "ENABLED",
-		possible_values = &OffchainWorkerEnabled::variants(),
-		case_insensitive = true,
-		default_value = "WhenValidating"
+		value_enum,
+		ignore_case = true,
+		default_value_t = OffchainWorkerEnabled::WhenAuthority
 	)]
 	pub enabled: OffchainWorkerEnabled,
 
 	/// Enable Offchain Indexing API, which allows block import to write to Offchain DB.
-	///
-	/// Enables a runtime to write directly to a offchain workers
-	/// DB during block import.
-	#[structopt(
-		long = "enable-offchain-indexing",
-		value_name = "ENABLE_OFFCHAIN_INDEXING"
-	)]
+	/// Enables a runtime to write directly to a offchain workers DB during block import.
+	#[arg(long = "enable-offchain-indexing", value_name = "ENABLE_OFFCHAIN_INDEXING", default_value_t = false, action = ArgAction::Set)]
 	pub indexing_enabled: bool,
 }
 
 impl OffchainWorkerParams {
 	/// Load spec to `Configuration` from `OffchainWorkerParams` and spec factory.
-	pub fn offchain_worker(
-		&self,
-		role: &Role,
-	) -> error::Result<OffchainWorkerConfig>
-	{
+	pub fn offchain_worker(&self, role: &Role) -> error::Result<OffchainWorkerConfig> {
 		let enabled = match (&self.enabled, role) {
-			(OffchainWorkerEnabled::WhenValidating, Role::Authority { .. }) => true,
+			(OffchainWorkerEnabled::WhenAuthority, Role::Authority { .. }) => true,
 			(OffchainWorkerEnabled::Always, _) => true,
 			(OffchainWorkerEnabled::Never, _) => false,
-			(OffchainWorkerEnabled::WhenValidating, _) => false,
+			(OffchainWorkerEnabled::WhenAuthority, _) => false,
 		};
 
-		let indexing_enabled = enabled && self.indexing_enabled;
-
+		let indexing_enabled = self.indexing_enabled;
 		Ok(OffchainWorkerConfig { enabled, indexing_enabled })
 	}
 }

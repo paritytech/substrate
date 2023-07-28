@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,98 +17,46 @@
 
 //! Stuff to do with the runtime's storage.
 
-use sp_core::storage::ChildInfo;
-use sp_std::prelude::*;
-use codec::{FullCodec, FullEncode, Encode, EncodeLike, Decode};
 use crate::{
-	hash::{Twox128, StorageHasher, ReversibleStorageHasher},
-	traits::Get,
+	hash::{ReversibleStorageHasher, StorageHasher},
+	storage::types::{
+		EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, KeyGenerator,
+		ReversibleKeyGenerator, TupleToEncodedIter,
+	},
 };
+use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
+use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
-pub use sp_runtime::TransactionOutcome;
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 
-pub mod unhashed;
-pub mod hashed;
+pub use self::{
+	stream_iter::StorageStreamIter,
+	transactional::{
+		in_storage_layer, with_storage_layer, with_transaction, with_transaction_unchecked,
+	},
+	types::StorageEntryMetadataBuilder,
+};
+pub use sp_runtime::TransactionOutcome;
+pub use types::Key;
+
+pub mod bounded_btree_map;
+pub mod bounded_btree_set;
 pub mod bounded_vec;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
+pub mod hashed;
 pub mod migration;
+pub mod storage_noop_guard;
+mod stream_iter;
+pub mod transactional;
 pub mod types;
+pub mod unhashed;
+pub mod weak_bounded_vec;
 
-#[cfg(all(feature = "std", any(test, debug_assertions)))]
-mod debug_helper {
-	use std::cell::RefCell;
-
-	thread_local! {
-		static TRANSACTION_LEVEL: RefCell<u32> = RefCell::new(0);
-	}
-
-	pub fn require_transaction() {
-		let level = TRANSACTION_LEVEL.with(|v| *v.borrow());
-		if level == 0 {
-			panic!("Require transaction not called within with_transaction");
-		}
-	}
-
-	pub struct TransactionLevelGuard;
-
-	impl Drop for TransactionLevelGuard {
-		fn drop(&mut self) {
-			TRANSACTION_LEVEL.with(|v| *v.borrow_mut() -= 1);
-		}
-	}
-
-	/// Increments the transaction level.
-	///
-	/// Returns a guard that when dropped decrements the transaction level automatically.
-	pub fn inc_transaction_level() -> TransactionLevelGuard {
-		TRANSACTION_LEVEL.with(|v| {
-			let mut val = v.borrow_mut();
-			*val += 1;
-			if *val > 10 {
-				log::warn!(
-					"Detected with_transaction with nest level {}. Nested usage of with_transaction is not recommended.",
-					*val
-				);
-			}
-		});
-
-		TransactionLevelGuard
-	}
-}
-
-/// Assert this method is called within a storage transaction.
-/// This will **panic** if is not called within a storage transaction.
-///
-/// This assertion is enabled for native execution and when `debug_assertions` are enabled.
-pub fn require_transaction() {
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	debug_helper::require_transaction();
-}
-
-/// Execute the supplied function in a new storage transaction.
-///
-/// All changes to storage performed by the supplied function are discarded if the returned
-/// outcome is `TransactionOutcome::Rollback`.
-///
-/// Transactions can be nested to any depth. Commits happen to the parent transaction.
-pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
-	use sp_io::storage::{
-		start_transaction, commit_transaction, rollback_transaction,
-	};
-	use TransactionOutcome::*;
-
-	start_transaction();
-
-	#[cfg(all(feature = "std", any(test, debug_assertions)))]
-	let _guard = debug_helper::inc_transaction_level();
-
-	match f() {
-		Commit(res) => { commit_transaction(); res },
-		Rollback(res) => { rollback_transaction(); res },
-	}
-}
+/// Utility type for converting a storage map into a `Get<u32>` impl which returns the maximum
+/// key size.
+pub struct KeyLenOf<M>(PhantomData<M>);
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -149,8 +97,8 @@ pub trait StorageValue<T: FullCodec> {
 	/// # Usage
 	///
 	/// This would typically be called inside the module implementation of on_runtime_upgrade, while
-	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**. (More
-	/// precisely prior initialized modules doesn't make use of this storage).
+	/// ensuring **no usage of this storage are made before the call to `on_runtime_upgrade`**.
+	/// (More precisely prior initialized modules doesn't make use of this storage).
 	fn translate<O: Decode, F: FnOnce(Option<O>) -> Option<T>>(f: F) -> Result<Option<T>, ()>;
 
 	/// Store a value under this key into the provided storage instance.
@@ -165,6 +113,12 @@ pub trait StorageValue<T: FullCodec> {
 
 	/// Mutate the value if closure returns `Ok`
 	fn try_mutate<R, E, F: FnOnce(&mut Self::Query) -> Result<R, E>>(f: F) -> Result<R, E>;
+
+	/// Mutate the value. Deletes the item if mutated to a `None`.
+	fn mutate_exists<R, F: FnOnce(&mut Option<T>) -> R>(f: F) -> R;
+
+	/// Mutate the value if closure returns `Ok`. Deletes the item if mutated to a `None`.
+	fn try_mutate_exists<R, E, F: FnOnce(&mut Option<T>) -> Result<R, E>>(f: F) -> Result<R, E>;
 
 	/// Clear the storage value.
 	fn kill();
@@ -198,8 +152,80 @@ pub trait StorageValue<T: FullCodec> {
 	///
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
-	fn decode_len() -> Option<usize> where T: StorageDecodeLength {
+	fn decode_len() -> Option<usize>
+	where
+		T: StorageDecodeLength,
+	{
 		T::decode_len(&Self::hashed_key())
+	}
+}
+
+/// A non-continuous container type.
+pub trait StorageList<V: FullCodec> {
+	/// Iterator for normal and draining iteration.
+	type Iterator: Iterator<Item = V>;
+
+	/// Append iterator for fast append operations.
+	type Appender: StorageAppender<V>;
+
+	/// List the elements in append order.
+	fn iter() -> Self::Iterator;
+
+	/// Drain the elements in append order.
+	///
+	/// Note that this drains a value as soon as it is being inspected. For example `take_while(|_|
+	/// false)` still drains the first element. This also applies to `peek()`.
+	fn drain() -> Self::Iterator;
+
+	/// A fast append iterator.
+	fn appender() -> Self::Appender;
+
+	/// Append a single element.
+	///
+	/// Should not be called repeatedly; use `append_many` instead.  
+	/// Worst case linear `O(len)` with `len` being the number if elements in the list.
+	fn append_one<EncodeLikeValue>(item: EncodeLikeValue)
+	where
+		EncodeLikeValue: EncodeLike<V>,
+	{
+		Self::append_many(core::iter::once(item));
+	}
+
+	/// Append many elements.
+	///
+	/// Should not be called repeatedly; use `appender` instead.  
+	/// Worst case linear `O(len + items.count())` with `len` beings the number if elements in the
+	/// list.
+	fn append_many<EncodeLikeValue, I>(items: I)
+	where
+		EncodeLikeValue: EncodeLike<V>,
+		I: IntoIterator<Item = EncodeLikeValue>,
+	{
+		let mut ap = Self::appender();
+		ap.append_many(items);
+	}
+}
+
+/// Append iterator to append values to a storage struct.
+///
+/// Can be used in situations where appending does not have constant time complexity.
+pub trait StorageAppender<V: FullCodec> {
+	/// Append a single item in constant time `O(1)`.
+	fn append<EncodeLikeValue>(&mut self, item: EncodeLikeValue)
+	where
+		EncodeLikeValue: EncodeLike<V>;
+
+	/// Append many items in linear time `O(items.count())`.
+	// Note: a default impl is provided since `Self` is already assumed to be optimal for single
+	// append operations.
+	fn append_many<EncodeLikeValue, I>(&mut self, items: I)
+	where
+		EncodeLikeValue: EncodeLike<V>,
+		I: IntoIterator<Item = EncodeLikeValue>,
+	{
+		for item in items.into_iter() {
+			self.append(item);
+		}
 	}
 }
 
@@ -218,6 +244,9 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
+
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KeyArg: EncodeLike<K>>(key: KeyArg, query: Self::Query);
 
 	/// Try to get the value for the given key from the map.
 	///
@@ -242,12 +271,29 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		f: F,
 	) -> Result<R, E>;
 
+	/// Mutate the value under a key if the value already exists. Do nothing and return the default
+	/// value if not.
+	fn mutate_extant<KeyArg: EncodeLike<K>, R: Default, F: FnOnce(&mut V) -> R>(
+		key: KeyArg,
+		f: F,
+	) -> R {
+		Self::mutate_exists(key, |maybe_v| match maybe_v {
+			Some(ref mut value) => f(value),
+			None => R::default(),
+		})
+	}
+
 	/// Mutate the value under a key.
 	///
 	/// Deletes the item if mutated to a `None`.
-	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R;
+	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(
+		key: KeyArg,
+		f: F,
+	) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	fn try_mutate_exists<KeyArg: EncodeLike<K>, R, E, F: FnOnce(&mut Option<V>) -> Result<R, E>>(
 		key: KeyArg,
 		f: F,
@@ -285,7 +331,8 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
 	fn decode_len<KeyArg: EncodeLike<K>>(key: KeyArg) -> Option<usize>
-		where V: StorageDecodeLength,
+	where
+		V: StorageDecodeLength,
 	{
 		V::decode_len(&Self::hashed_key_for(key))
 	}
@@ -307,63 +354,203 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// The type that iterates over all `(key, value)`.
 	type Iterator: Iterator<Item = (K, V)>;
+	/// The type that itereates over all `key`s.
+	type KeyIterator: Iterator<Item = K>;
 
-	/// Enumerate all elements in the map in no particular order. If you alter the map while doing
-	/// this, you'll get undefined results.
+	/// Enumerate all elements in the map in lexicographical order of the encoded key. If you
+	/// alter the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
-	/// Remove all elements from the map and iterate through them in no particular order. If you
-	/// add elements to the map while doing this, you'll get undefined results.
+	/// Enumerate all elements in the map after a specified `starting_raw_key` in lexicographical
+	/// order of the encoded key. If you alter the map while doing this, you'll get undefined
+	/// results.
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator;
+
+	/// Enumerate all keys in the map in lexicographical order of the encoded key, skipping over
+	/// the elements. If you alter the map while doing this, you'll get undefined results.
+	fn iter_keys() -> Self::KeyIterator;
+
+	/// Enumerate all keys in the map after a specified `starting_raw_key` in lexicographical order
+	/// of the encoded key. If you alter the map while doing this, you'll get undefined results.
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator;
+
+	/// Remove all elements from the map and iterate through them in lexicographical order of the
+	/// encoded key. If you add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
 
-	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// Translate the values of all elements by a function `f`, in the map in lexicographical order
+	/// of the encoded key.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(f: F);
+
+	/// Translate the next entry following `previous_key` by a function `f`.
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	///
+	/// Returns the next key to iterate from in lexicographical order of the encoded key.
+	fn translate_next<O: Decode, F: FnMut(K, O) -> Option<V>>(
+		previous_key: Option<Vec<u8>>,
+		f: F,
+	) -> Option<Vec<u8>>;
 }
 
 /// A strongly-typed double map in storage whose secondary keys and values can be iterated over.
-pub trait IterableStorageDoubleMap<
-	K1: FullCodec,
-	K2: FullCodec,
-	V: FullCodec
->: StorageDoubleMap<K1, K2, V> {
+pub trait IterableStorageDoubleMap<K1: FullCodec, K2: FullCodec, V: FullCodec>:
+	StorageDoubleMap<K1, K2, V>
+{
+	/// The type that iterates over all `key2`.
+	type PartialKeyIterator: Iterator<Item = K2>;
+
 	/// The type that iterates over all `(key2, value)`.
 	type PrefixIterator: Iterator<Item = (K2, V)>;
+
+	/// The type that iterates over all `(key1, key2)`.
+	type FullKeyIterator: Iterator<Item = (K1, K2)>;
 
 	/// The type that iterates over all `(key1, key2, value)`.
 	type Iterator: Iterator<Item = (K1, K2, V)>;
 
-	/// Enumerate all elements in the map with first key `k1` in no particular order. If you add or
-	/// remove values whose first key is `k1` to the map while doing this, you'll get undefined
-	/// results.
+	/// Enumerate all elements in the map with first key `k1` in lexicographical order of the
+	/// encoded key. If you add or remove values whose first key is `k1` to the map while doing
+	/// this, you'll get undefined results.
 	fn iter_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
 
-	/// Remove all elements from the map with first key `k1` and iterate through them in no
-	/// particular order. If you add elements with first key `k1` to the map while doing this,
-	/// you'll get undefined results.
+	/// Enumerate all elements in the map with first key `k1` after a specified `starting_raw_key`
+	/// in lexicographical order of the encoded key. If you add or remove values whose first key is
+	/// `k1` to the map while doing this, you'll get undefined results.
+	fn iter_prefix_from(k1: impl EncodeLike<K1>, starting_raw_key: Vec<u8>)
+		-> Self::PrefixIterator;
+
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` in lexicographical
+	/// order of the encoded key. If you add or remove values whose first key is `k1` to the map
+	/// while doing this, you'll get undefined results.
+	fn iter_key_prefix(k1: impl EncodeLike<K1>) -> Self::PartialKeyIterator;
+
+	/// Enumerate all second keys `k2` in the map with the same first key `k1` after a specified
+	/// `starting_raw_key` in lexicographical order of the encoded key. If you add or remove values
+	/// whose first key is `k1` to the map while doing this, you'll get undefined results.
+	fn iter_key_prefix_from(
+		k1: impl EncodeLike<K1>,
+		starting_raw_key: Vec<u8>,
+	) -> Self::PartialKeyIterator;
+
+	/// Remove all elements from the map with first key `k1` and iterate through them in
+	/// lexicographical order of the encoded key. If you add elements with first key `k1` to the
+	/// map while doing this, you'll get undefined results.
 	fn drain_prefix(k1: impl EncodeLike<K1>) -> Self::PrefixIterator;
 
-	/// Enumerate all elements in the map in no particular order. If you add or remove values to
-	/// the map while doing this, you'll get undefined results.
+	/// Enumerate all elements in the map in lexicographical order of the encoded key. If you add
+	/// or remove values to the map while doing this, you'll get undefined results.
 	fn iter() -> Self::Iterator;
 
-	/// Remove all elements from the map and iterate through them in no particular order. If you
-	/// add elements to the map while doing this, you'll get undefined results.
+	/// Enumerate all elements in the map after a specified `starting_raw_key` in lexicographical
+	/// order of the encoded key. If you add or remove values to the map while doing this, you'll
+	/// get undefined results.
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator;
+
+	/// Enumerate all keys `k1` and `k2` in the map in lexicographical order of the encoded key. If
+	/// you add or remove values to the map while doing this, you'll get undefined results.
+	fn iter_keys() -> Self::FullKeyIterator;
+
+	/// Enumerate all keys `k1` and `k2` in the map after a specified `starting_raw_key` in
+	/// lexicographical order of the encoded key. If you add or remove values to the map while
+	/// doing this, you'll get undefined results.
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::FullKeyIterator;
+
+	/// Remove all elements from the map and iterate through them in lexicographical order of the
+	/// encoded key. If you add elements to the map while doing this, you'll get undefined results.
 	fn drain() -> Self::Iterator;
 
-	/// Translate the values of all elements by a function `f`, in the map in no particular order.
+	/// Translate the values of all elements by a function `f`, in the map in lexicographical order
+	/// of the encoded key.
 	/// By returning `None` from `f` for an element, you'll remove it from the map.
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(f: F);
 }
 
+/// A strongly-typed map with arbitrary number of keys in storage whose keys and values can be
+/// iterated over.
+pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageNMap<K, V> {
+	/// The type that iterates over all `(key1, key2, key3, ... keyN)` tuples.
+	type KeyIterator: Iterator<Item = K::Key>;
+
+	/// The type that iterates over all `(key1, key2, key3, ... keyN), value)` tuples.
+	type Iterator: Iterator<Item = (K::Key, V)>;
+
+	/// Enumerate all elements in the map with prefix key `kp` in lexicographical order of the
+	/// encoded key. If you add or remove values whose prefix is `kp` to the map while doing this,
+	/// you'll get undefined results.
+	fn iter_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where
+		K: HasReversibleKeyPrefix<KP>;
+
+	/// Enumerate all elements in the map with prefix key `kp` after a specified `starting_raw_key`
+	/// in lexicographical order of the encoded key. If you add or remove values whose prefix is
+	/// `kp` to the map while doing this, you'll get undefined results.
+	fn iter_prefix_from<KP>(
+		kp: KP,
+		starting_raw_key: Vec<u8>,
+	) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where
+		K: HasReversibleKeyPrefix<KP>;
+
+	/// Enumerate all suffix keys in the map with prefix key `kp` in lexicographical order of the
+	/// encoded key. If you add or remove values whose prefix is `kp` to the map while doing this,
+	/// you'll get undefined results.
+	fn iter_key_prefix<KP>(kp: KP) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where
+		K: HasReversibleKeyPrefix<KP>;
+
+	/// Enumerate all suffix keys in the map with prefix key `kp` after a specified
+	/// `starting_raw_key` in lexicographical order of the encoded key. If you add or remove values
+	/// whose prefix is `kp` to the map while doing this, you'll get undefined results.
+	fn iter_key_prefix_from<KP>(
+		kp: KP,
+		starting_raw_key: Vec<u8>,
+	) -> KeyPrefixIterator<<K as HasKeyPrefix<KP>>::Suffix>
+	where
+		K: HasReversibleKeyPrefix<KP>;
+
+	/// Remove all elements from the map with prefix key `kp` and iterate through them in
+	/// lexicographical order of the encoded key. If you add elements with prefix key `kp` to the
+	/// map while doing this, you'll get undefined results.
+	fn drain_prefix<KP>(kp: KP) -> PrefixIterator<(<K as HasKeyPrefix<KP>>::Suffix, V)>
+	where
+		K: HasReversibleKeyPrefix<KP>;
+
+	/// Enumerate all elements in the map in lexicographical order of the encoded key. If you add
+	/// or remove values to the map while doing this, you'll get undefined results.
+	fn iter() -> Self::Iterator;
+
+	/// Enumerate all elements in the map after a specified `starting_raw_key` in lexicographical
+	/// order of the encoded key. If you add or remove values to the map while doing this, you'll
+	/// get undefined results.
+	fn iter_from(starting_raw_key: Vec<u8>) -> Self::Iterator;
+
+	/// Enumerate all keys in the map in lexicographical order of the encoded key. If you add or
+	/// remove values to the map while doing this, you'll get undefined results.
+	fn iter_keys() -> Self::KeyIterator;
+
+	/// Enumerate all keys in the map after `starting_raw_key` in lexicographical order of the
+	/// encoded key. If you add or remove values to the map while doing this, you'll get undefined
+	/// results.
+	fn iter_keys_from(starting_raw_key: Vec<u8>) -> Self::KeyIterator;
+
+	/// Remove all elements from the map and iterate through them in lexicographical order of the
+	/// encoded key. If you add elements to the map while doing this, you'll get undefined results.
+	fn drain() -> Self::Iterator;
+
+	/// Translate the values of all elements by a function `f`, in the map in lexicographical order
+	/// of the encoded key.
+	/// By returning `None` from `f` for an element, you'll remove it from the map.
+	///
+	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
+	fn translate<O: Decode, F: FnMut(K::Key, O) -> Option<V>>(f: F);
+}
+
 /// An implementation of a map with a two keys.
-///
-/// It provides an important ability to efficiently remove all entries
-/// that have a common first key.
 ///
 /// Details on implementation can be found at [`generator::StorageDoubleMap`].
 pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
@@ -396,6 +583,9 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KArg1: EncodeLike<K1>, KArg2: EncodeLike<K2>>(k1: KArg1, k2: KArg2, query: Self::Query);
+
 	/// Take a value from storage, removing it afterwards.
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
@@ -423,12 +613,56 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
-	/// Remove all values under the first key.
-	fn remove_prefix<KArg1>(k1: KArg1) where KArg1: ?Sized + EncodeLike<K1>;
+	/// Remove all values under the first key `k1` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
+	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+	where
+		KArg1: ?Sized + EncodeLike<K1>;
+
+	/// Remove all values under the first key `k1` in the overlay and up to `maybe_limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if `maybe_limit` is `Some` then up to
+	/// that number of values are deleted from the client backend, otherwise all values in the
+	/// client backend are deleted.
+	///
+	/// ## Cursors
+	///
+	/// The `maybe_cursor` parameter should be `None` for the first call to initial removal.
+	/// If the resultant `maybe_cursor` is `Some`, then another call is required to complete the
+	/// removal operation. This value must be passed in as the subsequent call's `maybe_cursor`
+	/// parameter. If the resultant `maybe_cursor` is `None`, then the operation is complete and no
+	/// items remain in storage provided that no items were added between the first calls and the
+	/// final call.
+	fn clear_prefix<KArg1>(
+		k1: KArg1,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::MultiRemovalResults
+	where
+		KArg1: ?Sized + EncodeLike<K1>;
+
+	/// Does any value under the first key `k1` (explicitly) exist in storage?
+	/// Might have unexpected behaviour with empty keys, e.g. `[]`.
+	fn contains_prefix<KArg1>(k1: KArg1) -> bool
+	where
+		KArg1: EncodeLike<K1>;
 
 	/// Iterate over values that share the first key.
 	fn iter_prefix_values<KArg1>(k1: KArg1) -> PrefixIterator<V>
-		where KArg1: ?Sized + EncodeLike<K1>;
+	where
+		KArg1: ?Sized + EncodeLike<K1>;
 
 	/// Mutate the value under the given keys.
 	fn mutate<KArg1, KArg2, R, F>(k1: KArg1, k2: KArg2, f: F) -> R
@@ -452,6 +686,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		F: FnOnce(&mut Option<V>) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	fn try_mutate_exists<KArg1, KArg2, R, E, F>(k1: KArg1, k2: KArg2, f: F) -> Result<R, E>
 	where
 		KArg1: EncodeLike<K1>,
@@ -467,11 +703,8 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// If the storage item is not encoded properly, the storage will be overwritten
 	/// and set to `[item]`. Any default value set for the storage item will be ignored
 	/// on overwrite.
-	fn append<Item, EncodeLikeItem, KArg1, KArg2>(
-		k1: KArg1,
-		k2: KArg2,
-		item: EncodeLikeItem,
-	) where
+	fn append<Item, EncodeLikeItem, KArg1, KArg2>(k1: KArg1, k2: KArg2, item: EncodeLikeItem)
+	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>,
 		Item: Encode,
@@ -491,10 +724,10 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// `None` does not mean that `get()` does not return a value. The default value is completly
 	/// ignored by this function.
 	fn decode_len<KArg1, KArg2>(key1: KArg1, key2: KArg2) -> Option<usize>
-		where
-			KArg1: EncodeLike<K1>,
-			KArg2: EncodeLike<K2>,
-			V: StorageDecodeLength,
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>,
+		V: StorageDecodeLength,
 	{
 		V::decode_len(&Self::hashed_key_for(key1, key2))
 	}
@@ -508,13 +741,191 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		OldHasher2: StorageHasher,
 		KeyArg1: EncodeLike<K1>,
 		KeyArg2: EncodeLike<K2>,
-	>(key1: KeyArg1, key2: KeyArg2) -> Option<V>;
+	>(
+		key1: KeyArg1,
+		key2: KeyArg2,
+	) -> Option<V>;
 }
 
-/// Iterate over a prefix and decode raw_key and raw_value into `T`.
+/// An implementation of a map with an arbitrary number of keys.
+///
+/// Details of implementation can be found at [`generator::StorageNMap`].
+pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
+	/// The type that get/take returns.
+	type Query;
+
+	/// Get the storage key used to fetch a value corresponding to a specific key.
+	fn hashed_key_for<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Vec<u8>;
+
+	/// Does the value (explicitly) exist in storage?
+	fn contains_key<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> bool;
+
+	/// Load the value associated with the given key from the map.
+	fn get<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query;
+
+	/// Try to get the value for the given key from the map.
+	///
+	/// Returns `Ok` if it exists, `Err` if not.
+	fn try_get<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Result<V, ()>;
+
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg, query: Self::Query);
+
+	/// Swap the values of two keys.
+	fn swap<KOther, KArg1, KArg2>(key1: KArg1, key2: KArg2)
+	where
+		KOther: KeyGenerator,
+		KArg1: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		KArg2: EncodeLikeTuple<KOther::KArg> + TupleToEncodedIter;
+
+	/// Store a value to be associated with the given key from the map.
+	fn insert<KArg, VArg>(key: KArg, val: VArg)
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		VArg: EncodeLike<V>;
+
+	/// Remove the value under a key.
+	fn remove<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg);
+
+	/// Remove all values starting with `partial_key` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
+	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
+	where
+		K: HasKeyPrefix<KP>;
+
+	/// Attempt to remove items from the map matching a `partial_key` prefix.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map which match the `partial key`. If so, then the map may not be
+	/// empty when the resultant `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must be provided in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map and `partial_key`. Subsequent
+	/// calls operating on the same map/`partial_key` should always pass `Some`, and this should be
+	/// equal to the previous call result's `maybe_cursor` field.
+	fn clear_prefix<KP>(
+		partial_key: KP,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::MultiRemovalResults
+	where
+		K: HasKeyPrefix<KP>;
+
+	/// Does any value under a `partial_key` prefix (explicitly) exist in storage?
+	/// Might have unexpected behaviour with empty keys, e.g. `[]`.
+	fn contains_prefix<KP>(partial_key: KP) -> bool
+	where
+		K: HasKeyPrefix<KP>;
+
+	/// Iterate over values that share the partial prefix key.
+	fn iter_prefix_values<KP>(partial_key: KP) -> PrefixIterator<V>
+	where
+		K: HasKeyPrefix<KP>;
+
+	/// Mutate the value under a key.
+	fn mutate<KArg, R, F>(key: KArg, f: F) -> R
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Self::Query) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned.
+	fn try_mutate<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Self::Query) -> Result<R, E>;
+
+	/// Mutate the value under a key.
+	///
+	/// Deletes the item if mutated to a `None`.
+	fn mutate_exists<KArg, R, F>(key: KArg, f: F) -> R
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Option<V>) -> R;
+
+	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
+	fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		F: FnOnce(&mut Option<V>) -> Result<R, E>;
+
+	/// Take the value under a key.
+	fn take<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Self::Query;
+
+	/// Append the given items to the value in the storage.
+	///
+	/// `V` is required to implement `codec::EncodeAppend`.
+	///
+	/// # Warning
+	///
+	/// If the storage item is not encoded properly, the storage will be overwritten
+	/// and set to `[item]`. Any default value set for the storage item will be ignored
+	/// on overwrite.
+	fn append<Item, EncodeLikeItem, KArg>(key: KArg, item: EncodeLikeItem)
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		V: StorageAppend<Item>;
+
+	/// Read the length of the storage value without decoding the entire value under the
+	/// given `key`.
+	///
+	/// `V` is required to implement [`StorageDecodeLength`].
+	///
+	/// If the value does not exists or it fails to decode the length, `None` is returned.
+	/// Otherwise `Some(len)` is returned.
+	///
+	/// # Warning
+	///
+	/// `None` does not mean that `get()` does not return a value. The default value is completly
+	/// ignored by this function.
+	fn decode_len<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Option<usize>
+	where
+		V: StorageDecodeLength,
+	{
+		V::decode_len(&Self::hashed_key_for(key))
+	}
+
+	/// Migrate an item with the given `key` from defunct `hash_fns` to the current hashers.
+	///
+	/// If the key doesn't exist, then it's a no-op. If it does, then it returns its value.
+	fn migrate_keys<KArg>(key: KArg, hash_fns: K::HArg) -> Option<V>
+	where
+		KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter;
+}
+
+/// Iterate or drain over a prefix and decode raw_key and raw_value into `T`.
 ///
 /// If any decoding fails it skips it and continues to the next key.
-pub struct PrefixIterator<T> {
+///
+/// If draining, then the hook `OnRemoval::on_removal` is called after each removal.
+pub struct PrefixIterator<T, OnRemoval = ()> {
 	prefix: Vec<u8>,
 	previous_key: Vec<u8>,
 	/// If true then value are removed while iterating
@@ -522,9 +933,71 @@ pub struct PrefixIterator<T> {
 	/// Function that take `(raw_key_without_prefix, raw_value)` and decode `T`.
 	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
 	closure: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
+	phantom: core::marker::PhantomData<OnRemoval>,
 }
 
-impl<T> PrefixIterator<T> {
+impl<T, OnRemoval1> PrefixIterator<T, OnRemoval1> {
+	/// Converts to the same iterator but with the different 'OnRemoval' type
+	pub fn convert_on_removal<OnRemoval2>(self) -> PrefixIterator<T, OnRemoval2> {
+		PrefixIterator::<T, OnRemoval2> {
+			prefix: self.prefix,
+			previous_key: self.previous_key,
+			drain: self.drain,
+			closure: self.closure,
+			phantom: Default::default(),
+		}
+	}
+}
+
+/// Trait for specialising on removal logic of [`PrefixIterator`].
+pub trait PrefixIteratorOnRemoval {
+	/// This function is called whenever a key/value is removed.
+	fn on_removal(key: &[u8], value: &[u8]);
+}
+
+/// No-op implementation.
+impl PrefixIteratorOnRemoval for () {
+	fn on_removal(_key: &[u8], _value: &[u8]) {}
+}
+
+impl<T, OnRemoval> PrefixIterator<T, OnRemoval> {
+	/// Creates a new `PrefixIterator`, iterating after `previous_key` and filtering out keys that
+	/// are not prefixed with `prefix`.
+	///
+	/// A `decode_fn` function must also be supplied, and it takes in two `&[u8]` parameters,
+	/// returning a `Result` containing the decoded type `T` if successful, and a `codec::Error` on
+	/// failure. The first `&[u8]` argument represents the raw, undecoded key without the prefix of
+	/// the current item, while the second `&[u8]` argument denotes the corresponding raw,
+	/// undecoded value.
+	pub fn new(
+		prefix: Vec<u8>,
+		previous_key: Vec<u8>,
+		decode_fn: fn(&[u8], &[u8]) -> Result<T, codec::Error>,
+	) -> Self {
+		PrefixIterator {
+			prefix,
+			previous_key,
+			drain: false,
+			closure: decode_fn,
+			phantom: Default::default(),
+		}
+	}
+
+	/// Get the last key that has been iterated upon and return it.
+	pub fn last_raw_key(&self) -> &[u8] {
+		&self.previous_key
+	}
+
+	/// Get the prefix that is being iterated upon for this iterator and return it.
+	pub fn prefix(&self) -> &[u8] {
+		&self.prefix
+	}
+
+	/// Set the key that the iterator should start iterating after.
+	pub fn set_last_raw_key(&mut self, previous_key: Vec<u8>) {
+		self.previous_key = previous_key;
+	}
+
 	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
 	pub fn drain(mut self) -> Self {
 		self.drain = true;
@@ -532,7 +1005,7 @@ impl<T> PrefixIterator<T> {
 	}
 }
 
-impl<T> Iterator for PrefixIterator<T> {
+impl<T, OnRemoval: PrefixIteratorOnRemoval> Iterator for PrefixIterator<T, OnRemoval> {
 	type Item = T;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -550,10 +1023,11 @@ impl<T> Iterator for PrefixIterator<T> {
 								self.previous_key,
 							);
 							continue
-						}
+						},
 					};
 					if self.drain {
-						unhashed::kill(&self.previous_key)
+						unhashed::kill(&self.previous_key);
+						OnRemoval::on_removal(&self.previous_key, &raw_value);
 					}
 					let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
 					let item = match (self.closure)(raw_key_without_prefix, &raw_value[..]) {
@@ -565,13 +1039,93 @@ impl<T> Iterator for PrefixIterator<T> {
 								e,
 							);
 							continue
-						}
+						},
 					};
 
 					Some(item)
-				}
+				},
 				None => None,
 			}
+		}
+	}
+}
+
+/// Iterate over a prefix and decode raw_key into `T`.
+///
+/// If any decoding fails it skips it and continues to the next key.
+pub struct KeyPrefixIterator<T> {
+	prefix: Vec<u8>,
+	previous_key: Vec<u8>,
+	/// If true then value are removed while iterating
+	drain: bool,
+	/// Function that take `raw_key_without_prefix` and decode `T`.
+	/// `raw_key_without_prefix` is the raw storage key without the prefix iterated on.
+	closure: fn(&[u8]) -> Result<T, codec::Error>,
+}
+
+impl<T> KeyPrefixIterator<T> {
+	/// Creates a new `KeyPrefixIterator`, iterating after `previous_key` and filtering out keys
+	/// that are not prefixed with `prefix`.
+	///
+	/// A `decode_fn` function must also be supplied, and it takes in a `&[u8]` parameter, returning
+	/// a `Result` containing the decoded key type `T` if successful, and a `codec::Error` on
+	/// failure. The `&[u8]` argument represents the raw, undecoded key without the prefix of the
+	/// current item.
+	pub fn new(
+		prefix: Vec<u8>,
+		previous_key: Vec<u8>,
+		decode_fn: fn(&[u8]) -> Result<T, codec::Error>,
+	) -> Self {
+		KeyPrefixIterator { prefix, previous_key, drain: false, closure: decode_fn }
+	}
+
+	/// Get the last key that has been iterated upon and return it.
+	pub fn last_raw_key(&self) -> &[u8] {
+		&self.previous_key
+	}
+
+	/// Get the prefix that is being iterated upon for this iterator and return it.
+	pub fn prefix(&self) -> &[u8] {
+		&self.prefix
+	}
+
+	/// Set the key that the iterator should start iterating after.
+	pub fn set_last_raw_key(&mut self, previous_key: Vec<u8>) {
+		self.previous_key = previous_key;
+	}
+
+	/// Mutate this iterator into a draining iterator; items iterated are removed from storage.
+	pub fn drain(mut self) -> Self {
+		self.drain = true;
+		self
+	}
+}
+
+impl<T> Iterator for KeyPrefixIterator<T> {
+	type Item = T;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		loop {
+			let maybe_next = sp_io::storage::next_key(&self.previous_key)
+				.filter(|n| n.starts_with(&self.prefix));
+
+			if let Some(next) = maybe_next {
+				self.previous_key = next;
+				if self.drain {
+					unhashed::kill(&self.previous_key);
+				}
+				let raw_key_without_prefix = &self.previous_key[self.prefix.len()..];
+
+				match (self.closure)(raw_key_without_prefix) {
+					Ok(item) => return Some(item),
+					Err(e) => {
+						log::error!("key failed to decode at {:?}: {:?}", self.previous_key, e);
+						continue
+					},
+				}
+			}
+
+			return None
 		}
 	}
 }
@@ -604,14 +1158,15 @@ impl<T> ChildTriePrefixIterator<T> {
 }
 
 impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
-	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
+	/// Construct iterator to iterate over child trie items in `child_info` with the prefix
+	/// `prefix`.
 	///
 	/// NOTE: Iterator with [`Self::drain`] will remove any value who failed to decode
 	pub fn with_prefix(child_info: &ChildInfo, prefix: &[u8]) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
-		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
-			let value = T::decode(&mut &raw_value[..])?;
+		let closure = |raw_key_without_prefix: &[u8], mut raw_value: &[u8]| {
+			let value = T::decode(&mut raw_value)?;
 			Ok((raw_key_without_prefix.to_vec(), value))
 		};
 
@@ -627,16 +1182,20 @@ impl<T: Decode + Sized> ChildTriePrefixIterator<(Vec<u8>, T)> {
 }
 
 impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
-	/// Construct iterator to iterate over child trie items in `child_info` with the prefix `prefix`.
+	/// Construct iterator to iterate over child trie items in `child_info` with the prefix
+	/// `prefix`.
 	///
 	/// NOTE: Iterator with [`Self::drain`] will remove any key or value who failed to decode
-	pub fn with_prefix_over_key<H: ReversibleStorageHasher>(child_info: &ChildInfo, prefix: &[u8]) -> Self {
+	pub fn with_prefix_over_key<H: ReversibleStorageHasher>(
+		child_info: &ChildInfo,
+		prefix: &[u8],
+	) -> Self {
 		let prefix = prefix.to_vec();
 		let previous_key = prefix.clone();
-		let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
+		let closure = |raw_key_without_prefix: &[u8], mut raw_value: &[u8]| {
 			let mut key_material = H::reverse(raw_key_without_prefix);
 			let key = K::decode(&mut key_material)?;
-			let value = T::decode(&mut &raw_value[..])?;
+			let value = T::decode(&mut raw_value)?;
 			Ok((key, value))
 		};
 
@@ -647,7 +1206,7 @@ impl<K: Decode + Sized, T: Decode + Sized> ChildTriePrefixIterator<(K, T)> {
 			drain: false,
 			fetch_previous_key: true,
 			closure,
-		 }
+		}
 	}
 }
 
@@ -661,10 +1220,10 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 				Some(self.previous_key.clone())
 			} else {
 				sp_io::default_child_storage::next_key(
-					&self.child_info.storage_key(),
+					self.child_info.storage_key(),
 					&self.previous_key,
 				)
-					.filter(|n| n.starts_with(&self.prefix))
+				.filter(|n| n.starts_with(&self.prefix))
 			};
 			break match maybe_next {
 				Some(next) => {
@@ -677,7 +1236,7 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 								self.previous_key,
 							);
 							continue
-						}
+						},
 					};
 					if self.drain {
 						child::kill(&self.child_info, &self.previous_key)
@@ -692,14 +1251,28 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 								e,
 							);
 							continue
-						}
+						},
 					};
 
 					Some(item)
-				}
+				},
 				None => None,
 			}
 		}
+	}
+}
+
+/// Trait for storage types that store all its value after a unique prefix.
+pub trait StoragePrefixedContainer {
+	/// Module prefix. Used for generating final key.
+	fn module_prefix() -> &'static [u8];
+
+	/// Storage prefix. Used for generating final key.
+	fn storage_prefix() -> &'static [u8];
+
+	/// Final full prefix that prefixes all keys.
+	fn final_prefix() -> [u8; 32] {
+		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 }
 
@@ -711,27 +1284,62 @@ impl<T> Iterator for ChildTriePrefixIterator<T> {
 /// ```
 pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// Module prefix. Used for generating final key.
-	fn module_prefix() -> &'static [u8];
+	fn module_prefix() -> &'static [u8]; // TODO move to StoragePrefixedContainer
 
 	/// Storage prefix. Used for generating final key.
 	fn storage_prefix() -> &'static [u8];
 
 	/// Final full prefix that prefixes all keys.
 	fn final_prefix() -> [u8; 32] {
-		let mut final_key = [0u8; 32];
-		final_key[0..16].copy_from_slice(&Twox128::hash(Self::module_prefix()));
-		final_key[16..32].copy_from_slice(&Twox128::hash(Self::storage_prefix()));
-		final_key
+		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
 	}
 
-	/// Remove all value of the storage.
-	fn remove_all() {
-		sp_io::storage::clear_prefix(&Self::final_prefix())
+	/// Remove all values in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear` instead"]
+	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
+		unhashed::clear_prefix(&Self::final_prefix(), limit, None).into()
+	}
+
+	/// Attempt to remove all items from the map.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be empty when the resultant
+	/// `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must always be provided through in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map. Subsequent calls
+	/// operating on the same map should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_cursor` field.
+	fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
+		unhashed::clear_prefix(&Self::final_prefix(), Some(limit), maybe_cursor)
 	}
 
 	/// Iter over all value of the storage.
 	///
-	/// NOTE: If a value failed to decode becaues storage is corrupted then it is skipped.
+	/// NOTE: If a value failed to decode because storage is corrupted then it is skipped.
 	fn iter_values() -> PrefixIterator<Value> {
 		let prefix = Self::final_prefix();
 		PrefixIterator {
@@ -739,6 +1347,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 			previous_key: prefix.to_vec(),
 			drain: false,
 			closure: |_raw_key, mut raw_value| Value::decode(&mut raw_value),
+			phantom: Default::default(),
 		}
 	}
 
@@ -758,8 +1367,8 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(mut f: F) {
 		let prefix = Self::final_prefix();
 		let mut previous_key = prefix.clone().to_vec();
-		while let Some(next) = sp_io::storage::next_key(&previous_key)
-			.filter(|n| n.starts_with(&prefix))
+		while let Some(next) =
+			sp_io::storage::next_key(&previous_key).filter(|n| n.starts_with(&prefix))
 		{
 			previous_key = next;
 			let maybe_value = unhashed::get::<OldValue>(&previous_key);
@@ -769,10 +1378,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 					None => unhashed::kill(&previous_key),
 				},
 				None => {
-					log::error!(
-						"old key failed to decode at {:?}",
-						previous_key,
-					);
+					log::error!("old key failed to decode at {:?}", previous_key);
 					continue
 				},
 			}
@@ -786,7 +1392,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 pub trait StorageAppend<Item: Encode>: private::Sealed {}
 
 /// Marker trait that will be implemented for types that support to decode their length in an
-/// effificent way. It is expected that the length is at the beginning of the encoded object
+/// efficient way. It is expected that the length is at the beginning of the encoded object
 /// and that the length is a `Compact<u32>`.
 ///
 /// This trait is sealed.
@@ -807,33 +1413,201 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 }
 
 /// Provides `Sealed` trait to prevent implementing trait `StorageAppend` & `StorageDecodeLength`
-/// outside of this crate.
+/// & `EncodeLikeTuple` outside of this crate.
 mod private {
 	use super::*;
-	use bounded_vec::{BoundedVecValue, BoundedVec};
+	use bounded_vec::BoundedVec;
+	use weak_bounded_vec::WeakBoundedVec;
 
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
-	impl<Hash: Encode> Sealed for Digest<Hash> {}
-	impl<T: BoundedVecValue, S: Get<u32>> Sealed for BoundedVec<T, S> {}
+	impl Sealed for Digest {}
+	impl<T, S> Sealed for BoundedVec<T, S> {}
+	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
+	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
+	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
+	impl<T: Encode> Sealed for BTreeSet<T> {}
+
+	macro_rules! impl_sealed_for_tuple {
+		($($elem:ident),+) => {
+			paste::paste! {
+				impl<$($elem: Encode,)+> Sealed for ($($elem,)+) {}
+				impl<$($elem: Encode,)+> Sealed for &($($elem,)+) {}
+			}
+		};
+	}
+
+	impl_sealed_for_tuple!(A);
+	impl_sealed_for_tuple!(A, B);
+	impl_sealed_for_tuple!(A, B, C);
+	impl_sealed_for_tuple!(A, B, C, D);
+	impl_sealed_for_tuple!(A, B, C, D, E);
+	impl_sealed_for_tuple!(A, B, C, D, E, F);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q);
+	impl_sealed_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, O, P, Q, R);
 }
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
 impl<T: Encode> StorageDecodeLength for Vec<T> {}
 
+impl<T: Encode> StorageAppend<T> for BTreeSet<T> {}
+impl<T: Encode> StorageDecodeLength for BTreeSet<T> {}
+
 /// We abuse the fact that SCALE does not put any marker into the encoding, i.e. we only encode the
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
 /// format ever changes, we need to remove this here.
-impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
+impl StorageAppend<DigestItem> for Digest {}
+
+/// Marker trait that is implemented for types that support the `storage::append` api with a limit
+/// on the number of element.
+///
+/// This trait is sealed.
+pub trait StorageTryAppend<Item>: StorageDecodeLength + private::Sealed {
+	fn bound() -> usize;
+}
+
+/// Storage value that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
+pub trait TryAppendValue<T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage item.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<LikeI: EncodeLike<I>>(item: LikeI) -> Result<(), ()>;
+}
+
+impl<T, I, StorageValueT> TryAppendValue<T, I> for StorageValueT
+where
+	I: Encode,
+	T: FullCodec + StorageTryAppend<I>,
+	StorageValueT: generator::StorageValue<T>,
+{
+	fn try_append<LikeI: EncodeLike<I>>(item: LikeI) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len().unwrap_or_default();
+		if current < bound {
+			// NOTE: we cannot reuse the implementation for `Vec<T>` here because we never want to
+			// mark `BoundedVec<T, S>` as `StorageAppend`.
+			let key = Self::storage_value_final_key();
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Storage map that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
+pub trait TryAppendMap<K: Encode, T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage map at the given `key`.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<LikeK: EncodeLike<K> + Clone, LikeI: EncodeLike<I>>(
+		key: LikeK,
+		item: LikeI,
+	) -> Result<(), ()>;
+}
+
+impl<K, T, I, StorageMapT> TryAppendMap<K, T, I> for StorageMapT
+where
+	K: FullCodec,
+	T: FullCodec + StorageTryAppend<I>,
+	I: Encode,
+	StorageMapT: generator::StorageMap<K, T>,
+{
+	fn try_append<LikeK: EncodeLike<K> + Clone, LikeI: EncodeLike<I>>(
+		key: LikeK,
+		item: LikeI,
+	) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len(key.clone()).unwrap_or_default();
+		if current < bound {
+			let key = Self::storage_map_final_key(key);
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Storage double map that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
+pub trait TryAppendDoubleMap<K1: Encode, K2: Encode, T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage double map at the given `key`.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<
+		LikeK1: EncodeLike<K1> + Clone,
+		LikeK2: EncodeLike<K2> + Clone,
+		LikeI: EncodeLike<I>,
+	>(
+		key1: LikeK1,
+		key2: LikeK2,
+		item: LikeI,
+	) -> Result<(), ()>;
+}
+
+impl<K1, K2, T, I, StorageDoubleMapT> TryAppendDoubleMap<K1, K2, T, I> for StorageDoubleMapT
+where
+	K1: FullCodec,
+	K2: FullCodec,
+	T: FullCodec + StorageTryAppend<I>,
+	I: Encode,
+	StorageDoubleMapT: generator::StorageDoubleMap<K1, K2, T>,
+{
+	fn try_append<
+		LikeK1: EncodeLike<K1> + Clone,
+		LikeK2: EncodeLike<K2> + Clone,
+		LikeI: EncodeLike<I>,
+	>(
+		key1: LikeK1,
+		key2: LikeK2,
+		item: LikeI,
+	) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len(key1.clone(), key2.clone()).unwrap_or_default();
+		if current < bound {
+			let double_map_key = Self::storage_double_map_final_key(key1, key2);
+			sp_io::storage::append(&double_map_key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Returns the storage prefix for a specific pallet name and storage name.
+///
+/// The storage prefix is `concat(twox_128(pallet_name), twox_128(storage_name))`.
+pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
+	let pallet_hash = sp_io::hashing::twox_128(pallet_name);
+	let storage_hash = sp_io::hashing::twox_128(storage_name);
+
+	let mut final_key = [0u8; 32];
+	final_key[..16].copy_from_slice(&pallet_hash);
+	final_key[16..].copy_from_slice(&storage_hash);
+
+	final_key
+}
 
 #[cfg(test)]
 mod test {
 	use super::*;
-	use sp_core::hashing::twox_128;
-	use crate::hash::Identity;
-	use sp_io::TestExternalities;
+	use crate::{assert_ok, hash::Identity, pallet_prelude::NMapKey, Twox128};
+	use bounded_vec::BoundedVec;
+	use frame_support::traits::ConstU32;
 	use generator::StorageValue as _;
+	use sp_core::hashing::twox_128;
+	use sp_io::TestExternalities;
+	use weak_bounded_vec::WeakBoundedVec;
 
 	#[test]
 	fn prefixed_map_works() {
@@ -879,7 +1653,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
 
 			// test removal
-			MyStorage::remove_all();
+			let _ = MyStorage::clear(u32::max_value(), None);
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 
 			// test migration
@@ -889,7 +1663,7 @@ mod test {
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 			MyStorage::translate_values(|v: u32| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2]);
-			MyStorage::remove_all();
+			let _ = MyStorage::clear(u32::max_value(), None);
 
 			// test migration 2
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u128);
@@ -901,7 +1675,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
 			MyStorage::translate_values(|v: u128| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
-			MyStorage::remove_all();
+			let _ = MyStorage::clear(u32::max_value(), None);
 
 			// test that other values are not modified.
 			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));
@@ -914,8 +1688,8 @@ mod test {
 	fn digest_storage_append_works_as_expected() {
 		TestExternalities::default().execute_with(|| {
 			struct Storage;
-			impl generator::StorageValue<Digest<u32>> for Storage {
-				type Query = Digest<u32>;
+			impl generator::StorageValue<Digest> for Storage {
+				type Query = Digest;
 
 				fn module_prefix() -> &'static [u8] {
 					b"MyModule"
@@ -925,47 +1699,135 @@ mod test {
 					b"Storage"
 				}
 
-				fn from_optional_value_to_query(v: Option<Digest<u32>>) -> Self::Query {
+				fn from_optional_value_to_query(v: Option<Digest>) -> Self::Query {
 					v.unwrap()
 				}
 
-				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest<u32>> {
+				fn from_query_to_optional_value(v: Self::Query) -> Option<Digest> {
 					Some(v)
 				}
 			}
 
-			Storage::append(DigestItem::ChangesTrieRoot(1));
 			Storage::append(DigestItem::Other(Vec::new()));
 
 			let value = unhashed::get_raw(&Storage::storage_value_final_key()).unwrap();
 
-			let expected = Digest {
-				logs: vec![DigestItem::ChangesTrieRoot(1), DigestItem::Other(Vec::new())],
-			};
+			let expected = Digest { logs: vec![DigestItem::Other(Vec::new())] };
 			assert_eq!(Digest::decode(&mut &value[..]).unwrap(), expected);
 		});
 	}
 
 	#[test]
-	#[should_panic(expected = "Require transaction not called within with_transaction")]
-	fn require_transaction_should_panic() {
+	fn key_prefix_iterator_works() {
 		TestExternalities::default().execute_with(|| {
-			require_transaction();
+			use crate::{hash::Twox64Concat, storage::generator::StorageMap};
+			struct MyStorageMap;
+			impl StorageMap<u64, u64> for MyStorageMap {
+				type Query = u64;
+				type Hasher = Twox64Concat;
+
+				fn module_prefix() -> &'static [u8] {
+					b"MyModule"
+				}
+
+				fn storage_prefix() -> &'static [u8] {
+					b"MyStorageMap"
+				}
+
+				fn from_optional_value_to_query(v: Option<u64>) -> Self::Query {
+					v.unwrap_or_default()
+				}
+
+				fn from_query_to_optional_value(v: Self::Query) -> Option<u64> {
+					Some(v)
+				}
+			}
+
+			let k = [twox_128(b"MyModule"), twox_128(b"MyStorageMap")].concat();
+			assert_eq!(MyStorageMap::prefix_hash().to_vec(), k);
+
+			// empty to start
+			assert!(MyStorageMap::iter_keys().collect::<Vec<_>>().is_empty());
+
+			MyStorageMap::insert(1, 10);
+			MyStorageMap::insert(2, 20);
+			MyStorageMap::insert(3, 30);
+			MyStorageMap::insert(4, 40);
+
+			// just looking
+			let mut keys = MyStorageMap::iter_keys().collect::<Vec<_>>();
+			keys.sort();
+			assert_eq!(keys, vec![1, 2, 3, 4]);
+
+			// draining the keys and values
+			let mut drained_keys = MyStorageMap::iter_keys().drain().collect::<Vec<_>>();
+			drained_keys.sort();
+			assert_eq!(drained_keys, vec![1, 2, 3, 4]);
+
+			// empty again
+			assert!(MyStorageMap::iter_keys().collect::<Vec<_>>().is_empty());
 		});
 	}
 
 	#[test]
-	fn require_transaction_should_not_panic_in_with_transaction() {
+	fn prefix_iterator_pagination_works() {
 		TestExternalities::default().execute_with(|| {
-			with_transaction(|| {
-				require_transaction();
-				TransactionOutcome::Commit(())
-			});
+			use crate::{hash::Identity, storage::generator::map::StorageMap};
+			#[crate::storage_alias]
+			type MyStorageMap = StorageMap<MyModule, Identity, u64, u64>;
 
-			with_transaction(|| {
-				require_transaction();
-				TransactionOutcome::Rollback(())
-			});
+			MyStorageMap::insert(1, 10);
+			MyStorageMap::insert(2, 20);
+			MyStorageMap::insert(3, 30);
+			MyStorageMap::insert(4, 40);
+			MyStorageMap::insert(5, 50);
+			MyStorageMap::insert(6, 60);
+			MyStorageMap::insert(7, 70);
+			MyStorageMap::insert(8, 80);
+			MyStorageMap::insert(9, 90);
+			MyStorageMap::insert(10, 100);
+
+			let op = |(_, v)| v / 10;
+			let mut final_vec = vec![];
+			let mut iter = MyStorageMap::iter();
+
+			let elem = iter.next().unwrap();
+			assert_eq!(elem, (1, 10));
+			final_vec.push(op(elem));
+
+			let elem = iter.next().unwrap();
+			assert_eq!(elem, (2, 20));
+			final_vec.push(op(elem));
+
+			let stored_key = iter.last_raw_key().to_owned();
+			assert_eq!(stored_key, MyStorageMap::storage_map_final_key(2));
+
+			let mut iter = MyStorageMap::iter_from(stored_key.clone());
+
+			final_vec.push(op(iter.next().unwrap()));
+			final_vec.push(op(iter.next().unwrap()));
+			final_vec.push(op(iter.next().unwrap()));
+
+			assert_eq!(final_vec, vec![1, 2, 3, 4, 5]);
+
+			let mut iter = PrefixIterator::<_>::new(
+				iter.prefix().to_vec(),
+				stored_key,
+				|mut raw_key_without_prefix, mut raw_value| {
+					let key = u64::decode(&mut raw_key_without_prefix)?;
+					Ok((key, u64::decode(&mut raw_value)?))
+				},
+			);
+			let previous_key = MyStorageMap::storage_map_final_key(5);
+			iter.set_last_raw_key(previous_key);
+
+			let remaining = iter.map(op).collect::<Vec<_>>();
+			assert_eq!(remaining.len(), 5);
+			assert_eq!(remaining, vec![6, 7, 8, 9, 10]);
+
+			final_vec.extend_from_slice(&remaining);
+
+			assert_eq!(final_vec, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 		});
 	}
 
@@ -982,30 +1844,21 @@ mod test {
 			assert_eq!(
 				ChildTriePrefixIterator::with_prefix(&child_info_a, &[2])
 					.collect::<Vec<(Vec<u8>, u16)>>(),
-				vec![
-					(vec![], 8),
-					(vec![2, 3], 8),
-				],
+				vec![(vec![], 8), (vec![2, 3], 8),],
 			);
 
 			assert_eq!(
 				ChildTriePrefixIterator::with_prefix(&child_info_a, &[2])
 					.drain()
 					.collect::<Vec<(Vec<u8>, u16)>>(),
-				vec![
-					(vec![], 8),
-					(vec![2, 3], 8),
-				],
+				vec![(vec![], 8), (vec![2, 3], 8),],
 			);
 
 			// The only remaining is the ones outside prefix
 			assert_eq!(
 				ChildTriePrefixIterator::with_prefix(&child_info_a, &[])
 					.collect::<Vec<(Vec<u8>, u8)>>(),
-				vec![
-					(vec![1, 2, 3], 8),
-					(vec![3], 8),
-				],
+				vec![(vec![1, 2, 3], 8), (vec![3], 8),],
 			);
 
 			child::put(&child_info_a, &[1, 2, 3], &8u16);
@@ -1017,29 +1870,145 @@ mod test {
 			assert_eq!(
 				ChildTriePrefixIterator::with_prefix_over_key::<Identity>(&child_info_a, &[2])
 					.collect::<Vec<(u16, u16)>>(),
-				vec![
-					(u16::decode(&mut &[2, 3][..]).unwrap(), 8),
-				],
+				vec![(u16::decode(&mut &[2, 3][..]).unwrap(), 8),],
 			);
 
 			assert_eq!(
 				ChildTriePrefixIterator::with_prefix_over_key::<Identity>(&child_info_a, &[2])
 					.drain()
 					.collect::<Vec<(u16, u16)>>(),
-				vec![
-					(u16::decode(&mut &[2, 3][..]).unwrap(), 8),
-				],
+				vec![(u16::decode(&mut &[2, 3][..]).unwrap(), 8),],
 			);
 
 			// The only remaining is the ones outside prefix
 			assert_eq!(
 				ChildTriePrefixIterator::with_prefix(&child_info_a, &[])
 					.collect::<Vec<(Vec<u8>, u8)>>(),
-				vec![
-					(vec![1, 2, 3], 8),
-					(vec![3], 8),
-				],
+				vec![(vec![1, 2, 3], 8), (vec![3], 8),],
 			);
+		});
+	}
+
+	#[crate::storage_alias]
+	type Foo = StorageValue<Prefix, WeakBoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooMap = StorageMap<Prefix, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooTripleMap = StorageNMap<
+		Prefix,
+		(NMapKey<Twox128, u32>, NMapKey<Twox128, u32>, NMapKey<Twox128, u32>),
+		u64,
+	>;
+
+	#[test]
+	fn contains_prefix_works() {
+		TestExternalities::default().execute_with(|| {
+			// Test double maps
+			assert!(FooDoubleMap::iter_prefix_values(1).next().is_none());
+			assert_eq!(FooDoubleMap::contains_prefix(1), false);
+
+			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
+			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
+			assert!(FooDoubleMap::iter_prefix_values(1).next().is_some());
+			assert!(FooDoubleMap::contains_prefix(1));
+			FooDoubleMap::remove(1, 1);
+			assert_eq!(FooDoubleMap::contains_prefix(1), false);
+
+			// Test N Maps
+			assert!(FooTripleMap::iter_prefix_values((1,)).next().is_none());
+			assert_eq!(FooTripleMap::contains_prefix((1,)), false);
+
+			FooTripleMap::insert((1, 1, 1), 4);
+			FooTripleMap::insert((2, 1, 1), 4);
+			assert!(FooTripleMap::iter_prefix_values((1,)).next().is_some());
+			assert!(FooTripleMap::contains_prefix((1,)));
+			FooTripleMap::remove((1, 1, 1));
+			assert_eq!(FooTripleMap::contains_prefix((1,)), false);
+		});
+	}
+
+	#[test]
+	fn try_append_works() {
+		TestExternalities::default().execute_with(|| {
+			let bounded: WeakBoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
+			Foo::put(bounded);
+			assert_ok!(Foo::try_append(4));
+			assert_ok!(Foo::try_append(5));
+			assert_ok!(Foo::try_append(6));
+			assert_ok!(Foo::try_append(7));
+			assert_eq!(Foo::decode_len().unwrap(), 7);
+			assert!(Foo::try_append(8).is_err());
+		});
+
+		TestExternalities::default().execute_with(|| {
+			let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
+			FooMap::insert(1, bounded);
+
+			assert_ok!(FooMap::try_append(1, 4));
+			assert_ok!(FooMap::try_append(1, 5));
+			assert_ok!(FooMap::try_append(1, 6));
+			assert_ok!(FooMap::try_append(1, 7));
+			assert_eq!(FooMap::decode_len(1).unwrap(), 7);
+			assert!(FooMap::try_append(1, 8).is_err());
+
+			// append to a non-existing
+			assert!(FooMap::get(2).is_none());
+			assert_ok!(FooMap::try_append(2, 4));
+			assert_eq!(
+				FooMap::get(2).unwrap(),
+				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4]).unwrap(),
+			);
+			assert_ok!(FooMap::try_append(2, 5));
+			assert_eq!(
+				FooMap::get(2).unwrap(),
+				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
+			);
+		});
+
+		TestExternalities::default().execute_with(|| {
+			let bounded: BoundedVec<u32, ConstU32<7>> = vec![1, 2, 3].try_into().unwrap();
+			FooDoubleMap::insert(1, 1, bounded);
+
+			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
+			assert_ok!(FooDoubleMap::try_append(1, 1, 5));
+			assert_ok!(FooDoubleMap::try_append(1, 1, 6));
+			assert_ok!(FooDoubleMap::try_append(1, 1, 7));
+			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 7);
+			assert!(FooDoubleMap::try_append(1, 1, 8).is_err());
+
+			// append to a non-existing
+			assert!(FooDoubleMap::get(2, 1).is_none());
+			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
+			assert_eq!(
+				FooDoubleMap::get(2, 1).unwrap(),
+				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4]).unwrap(),
+			);
+			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
+			assert_eq!(
+				FooDoubleMap::get(2, 1).unwrap(),
+				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
+			);
+		});
+	}
+
+	#[crate::storage_alias]
+	type FooSet = StorageValue<Prefix, BTreeSet<u32>>;
+
+	#[test]
+	fn btree_set_append_and_decode_len_works() {
+		TestExternalities::default().execute_with(|| {
+			let btree = BTreeSet::from([1, 2, 3]);
+			FooSet::put(btree);
+
+			FooSet::append(4);
+			FooSet::append(5);
+			FooSet::append(6);
+			FooSet::append(7);
+
+			assert_eq!(FooSet::decode_len().unwrap(), 7);
 		});
 	}
 }

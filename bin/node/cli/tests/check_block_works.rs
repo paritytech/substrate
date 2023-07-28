@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -22,16 +22,16 @@ use assert_cmd::cargo::cargo_bin;
 use std::process::Command;
 use tempfile::tempdir;
 
-pub mod common;
+use substrate_cli_test_utils as common;
 
-#[test]
-fn check_block_works() {
+#[tokio::test]
+async fn check_block_works() {
 	let base_path = tempdir().expect("could not create a temp dir");
 
-	common::run_dev_node_for_a_while(base_path.path());
+	common::run_node_for_a_while(base_path.path(), &["--dev", "--no-hardware-benchmarks"]).await;
 
-	let status = Command::new(cargo_bin("substrate"))
-		.args(&["check-block", "--dev", "--pruning", "archive", "-d"])
+	let status = Command::new(cargo_bin("substrate-node"))
+		.args(&["check-block", "--dev", "-d"])
 		.arg(base_path.path())
 		.arg("1")
 		.status()

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,19 +18,19 @@
 //! Block announcement validation.
 
 use crate::BlockStatus;
-use sp_runtime::{generic::BlockId, traits::Block};
-use std::{error::Error, future::Future, pin::Pin, sync::Arc};
 use futures::FutureExt as _;
+use sp_runtime::traits::Block;
+use std::{error::Error, future::Future, pin::Pin, sync::Arc};
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
-	/// Retrieve the status of the block denoted by the given [`BlockId`].
-	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn Error + Send>>;
+	/// Retrieve the status of the block denoted by the given [`Block::Hash`].
+	fn block_status(&self, hash: B::Hash) -> Result<BlockStatus, Box<dyn Error + Send>>;
 }
 
 impl<T: Chain<B>, B: Block> Chain<B> for Arc<T> {
-	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn Error + Send>> {
-		(&**self).block_status(id)
+	fn block_status(&self, hash: B::Hash) -> Result<BlockStatus, Box<dyn Error + Send>> {
+		(&**self).block_status(hash)
 	}
 }
 
@@ -60,9 +60,9 @@ pub trait BlockAnnounceValidator<B: Block> {
 	/// Returning [`Validation::Failure`] will lead to a decrease of the
 	/// peers reputation as it sent us invalid data.
 	///
-	/// The returned future should only resolve to an error iff there was an internal error validating
-	/// the block announcement. If the block announcement itself is invalid, this should *always*
-	/// return [`Validation::Failure`].
+	/// The returned future should only resolve to an error if there was an internal error
+	/// validating the block announcement. If the block announcement itself is invalid, this should
+	/// *always* return [`Validation::Failure`].
 	fn validate(
 		&mut self,
 		header: &B::Header,
@@ -92,6 +92,7 @@ impl<B: Block> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator {
 			} else {
 				Ok(Validation::Success { is_new_best: false })
 			}
-		}.boxed()
+		}
+		.boxed()
 	}
 }

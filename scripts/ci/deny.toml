@@ -1,0 +1,118 @@
+[licenses]
+# The lint level for crates which do not have a detectable license
+unlicensed = "deny"
+# List of explicitly allowed licenses
+# See https://spdx.org/licenses/ for list of possible licenses
+# [possible values: any SPDX 3.11 short identifier (+ optional exception)].
+allow = [
+    "MPL-2.0",
+]
+# List of explicitly disallowed licenses
+# See https://spdx.org/licenses/ for list of possible licenses
+# [possible values: any SPDX 3.11 short identifier (+ optional exception)].
+deny = [
+]
+# Lint level for licenses considered copyleft
+copyleft = "deny"
+# Blanket approval or denial for OSI-approved or FSF Free/Libre licenses
+# * both - The license will be approved if it is both OSI-approved *AND* FSF
+# * either - The license will be approved if it is either OSI-approved *OR* FSF
+# * osi-only - The license will be approved if is OSI-approved *AND NOT* FSF
+# * fsf-only - The license will be approved if is FSF *AND NOT* OSI-approved
+# * neither - This predicate is ignored and the default lint level is used
+allow-osi-fsf-free = "either"
+# Lint level used when no other predicates are matched
+# 1. License isn't in the allow or deny lists
+# 2. License isn't copyleft
+# 3. License isn't OSI/FSF, or allow-osi-fsf-free = "neither"
+default = "deny"
+# The confidence threshold for detecting a license from license text.
+# The higher the value, the more closely the license text must be to the
+# canonical license text of a valid SPDX license file.
+# [possible values: any between 0.0 and 1.0].
+confidence-threshold = 0.8
+# Allow 1 or more licenses on a per-crate basis, so that particular licenses
+# aren't accepted for every possible crate as with the normal allow list
+exceptions = [
+    # Each entry is the crate and version constraint, and its specific allow list
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "chain-spec-builder" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "mmr-gadget" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-bench" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-cli" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-inspect" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-template-release" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "node-testing" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-authority-discovery" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-basic-authorship" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-block-builder" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-chain-spec" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-chain-spec-derive" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-cli" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-client-api" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-client-db" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-aura" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-babe" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-babe-rpc" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-beefy" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-beefy-rpc" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-epochs" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-grandpa" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-grandpa-rpc" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-manual-seal" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-pow" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-consensus-slots" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-executor" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-executor-common" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-executor-wasmi" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-executor-wasmtime" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-informant" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-keystore" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-network" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-network-bitswap" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-network-common" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-network-gossip" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-network-light" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-network-sync" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-network-test" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-network-transactions" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-network-statement" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-offchain" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-peerset" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-proposer-metrics" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-rpc" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-rpc-api" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-rpc-server" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-rpc-spec-v2" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-runtime-test" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-service" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-service-test" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-state-db" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-statement-store" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-storage-monitor" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-sysinfo" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-telemetry" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-tracing" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-transaction-pool" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-transaction-pool-api" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "subkey" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "substrate" },
+]
+
+# Some crates don't have (easily) machine readable licensing information,
+# adding a clarification entry for it allows you to manually specify the
+# licensing information
+[[licenses.clarify]]
+# The name of the crate the clarification applies to
+name = "ring"
+# The SPDX expression for the license requirements of the crate
+expression = "MIT AND ISC AND OpenSSL"
+# One or more files in the crate's source used as the "source of truth" for
+# the license expression. If the contents match, the clarification will be used
+# when running the license check, otherwise the clarification will be ignored
+# and the crate will be checked normally, which may produce warnings or errors
+# depending on the rest of your configuration
+license-files = [
+    # Each entry is a crate relative path, and the (opaque) hash of its contents
+    { path = "LICENSE", hash = 0xbd0eed23 }
+]

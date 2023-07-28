@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,57 +18,12 @@
 //! Macro for declaring a module error.
 
 #[doc(hidden)]
-pub use sp_runtime::traits::{LookupError, BadOrigin};
-#[doc(hidden)]
-pub use frame_metadata::{ModuleErrorMetadata, ErrorMetadata, DecodeDifferent};
+pub use sp_runtime::traits::{BadOrigin, LookupError};
 
 /// Declare an error type for a runtime module.
-///
-/// `decl_error!` supports only variants that do not hold any data. The dispatchable
-/// functions return [`DispatchResult`](sp_runtime::DispatchResult). The error type
-/// implements `From<ErrorType> for DispatchResult` to make the error type usable as error
-/// in the dispatchable functions.
-///
-/// It is required that the error type is registered in `decl_module!` to make the error
-/// exported in the metadata.
-///
-/// # Usage
-///
-/// ```
-/// # use frame_support::{decl_error, decl_module};
-/// #
-/// decl_error! {
-///     /// Errors that can occur in my module.
-///     pub enum MyError for Module<T: Config> {
-///         /// Hey this is an error message that indicates bla.
-///         MyCoolErrorMessage,
-///         /// You are just not cool enough for my module!
-///         YouAreNotCoolEnough,
-///     }
-/// }
-///
-/// # use frame_system::Config;
-///
-/// // You need to register the error type in `decl_module!` as well to make the error
-/// // exported in the metadata.
-///
-/// decl_module! {
-///     pub struct Module<T: Config> for enum Call where origin: T::Origin {
-///         type Error = MyError<T>;
-///
-///         #[weight = 0]
-///         fn do_something(origin) -> frame_support::dispatch::DispatchResult {
-///             Err(MyError::<T>::YouAreNotCoolEnough.into())
-///         }
-///     }
-/// }
-///
-/// # fn main() {}
-/// ```
-///
-/// For instantiable modules you also need to give the instance generic type and bound to the
-/// error declaration.
 #[macro_export]
+#[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
+	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 macro_rules! decl_error {
 	(
 		$(#[$attr:meta])*
@@ -87,10 +42,18 @@ macro_rules! decl_error {
 		}
 	) => {
 		$(#[$attr])*
+		#[derive(
+			$crate::codec::Encode,
+			$crate::codec::Decode,
+			$crate::scale_info::TypeInfo,
+			$crate::PalletError,
+		)]
+		#[scale_info(skip_type_params($generic $(, $inst_generic)?), capture_docs = "always")]
 		pub enum $error<$generic: $trait $(, $inst_generic: $instance)?>
 		$( where $( $where_ty: $where_bound ),* )?
 		{
 			#[doc(hidden)]
+			#[codec(skip)]
 			__Ignore(
 				$crate::sp_std::marker::PhantomData<($generic, $( $inst_generic)?)>,
 				$crate::Never,
@@ -113,17 +76,6 @@ macro_rules! decl_error {
 		impl<$generic: $trait $(, $inst_generic: $instance)?> $error<$generic $(, $inst_generic)?>
 		$( where $( $where_ty: $where_bound ),* )?
 		{
-			fn as_u8(&self) -> u8 {
-				$crate::decl_error! {
-					@GENERATE_AS_U8
-					self
-					$error
-					{}
-					0,
-					$( $name ),*
-				}
-			}
-
 			fn as_str(&self) -> &'static str {
 				match self {
 					Self::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
@@ -148,65 +100,19 @@ macro_rules! decl_error {
 		$( where $( $where_ty: $where_bound ),* )?
 		{
 			fn from(err: $error<$generic $(, $inst_generic)?>) -> Self {
+				use $crate::codec::Encode;
 				let index = <$generic::PalletInfo as $crate::traits::PalletInfo>
 					::index::<$module<$generic $(, $inst_generic)?>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
+				let mut error = err.encode();
+				error.resize($crate::MAX_MODULE_ERROR_ENCODED_SIZE, 0);
 
-				$crate::sp_runtime::DispatchError::Module {
+				$crate::sp_runtime::DispatchError::Module($crate::sp_runtime::ModuleError {
 					index,
-					error: err.as_u8(),
+					error: TryInto::try_into(error).expect("encoded error is resized to be equal to the maximum encoded error size; qed"),
 					message: Some(err.as_str()),
-				}
-			}
-		}
-
-		impl<$generic: $trait $(, $inst_generic: $instance)?> $crate::error::ModuleErrorMetadata
-			for $error<$generic $(, $inst_generic)?>
-		$( where $( $where_ty: $where_bound ),* )?
-		{
-			fn metadata() -> &'static [$crate::error::ErrorMetadata] {
-				&[
-					$(
-						$crate::error::ErrorMetadata {
-							name: $crate::error::DecodeDifferent::Encode(stringify!($name)),
-							documentation: $crate::error::DecodeDifferent::Encode(&[
-								$( $doc_attr ),*
-							]),
-						}
-					),*
-				]
+				})
 			}
 		}
 	};
-	(@GENERATE_AS_U8
-		$self:ident
-		$error:ident
-		{ $( $generated:tt )* }
-		$index:expr,
-		$name:ident
-		$( , $rest:ident )*
-	) => {
-		$crate::decl_error! {
-			@GENERATE_AS_U8
-			$self
-			$error
-			{
-				$( $generated )*
-				$error::$name => $index,
-			}
-			$index + 1,
-			$( $rest ),*
-		}
-	};
-	(@GENERATE_AS_U8
-		$self:ident
-		$error:ident
-		{ $( $generated:tt )* }
-		$index:expr,
-	) => {
-		match $self {
-			$error::__Ignore(_, _) => unreachable!("`__Ignore` can never be constructed"),
-			$( $generated )*
-		}
-	}
 }

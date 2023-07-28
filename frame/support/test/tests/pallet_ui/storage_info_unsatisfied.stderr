@@ -1,0 +1,17 @@
+error[E0277]: the trait bound `Bar: MaxEncodedLen` is not satisfied
+ --> tests/pallet_ui/storage_info_unsatisfied.rs:9:12
+  |
+9 |     #[pallet::pallet]
+  |               ^^^^^^ the trait `MaxEncodedLen` is not implemented for `Bar`
+  |
+  = help: the following other types implement trait `MaxEncodedLen`:
+            ()
+            (TupleElement0, TupleElement1)
+            (TupleElement0, TupleElement1, TupleElement2)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6, TupleElement7)
+          and $N others
+  = note: required for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>` to implement `StorageInfoTrait`

@@ -1,3 +1,42 @@
+[package]
+name = "substrate"
+description = "Next-generation framework for blockchain innovation"
+license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+version = "0.0.0"
+
+# This list of dependencies is for documentation purposes only.
+[dependencies]
+aquamarine = "0.3.2"
+
+subkey = { path = "bin/utils/subkey" }
+chain-spec-builder = { path = "bin/utils/chain-spec-builder" }
+
+sc-service = { path = "client/service" }
+sc-cli = { path = "client/cli" }
+sc-consensus-aura = { path = "client/consensus/aura" }
+sc-consensus-babe = { path = "client/consensus/babe" }
+sc-consensus-grandpa = { path = "client/consensus/grandpa" }
+sc-consensus-beefy = { path = "client/consensus/beefy" }
+sc-consensus-manual-seal = { path = "client/consensus/manual-seal" }
+sc-consensus-pow = { path = "client/consensus/pow" }
+
+sp-runtime = { path = "primitives/runtime" }
+frame-support = { path = "frame/support" }
+
+node-cli = { path = "bin/node/cli" }
+
+# Exists here to be backwards compatible and to support `cargo run` in the workspace.
+#
+# Just uses the `node-cli` main binary. `node-cli` itself also again exposes the node as
+# `substrate-node`. Using `node-cli` directly you can also enable features.
+[[bin]]
+name = "substrate"
+path = "bin/node/cli/bin/main.rs"
+
 [workspace]
 resolver = "2"
 
@@ -6,13 +45,11 @@ members = [
 	"bin/node-template/pallets/template",
 	"bin/node-template/runtime",
 	"bin/node/bench",
-	"bin/node/browser-testing",
 	"bin/node/cli",
-	"bin/node/test-runner-example",
 	"bin/node/executor",
+	"bin/node/inspect",
 	"bin/node/primitives",
 	"bin/node/rpc",
-	"bin/node/rpc-client",
 	"bin/node/runtime",
 	"bin/node/testing",
 	"bin/utils/chain-spec-builder",
@@ -27,64 +64,96 @@ members = [
 	"client/consensus/aura",
 	"client/consensus/babe",
 	"client/consensus/babe/rpc",
+	"client/consensus/beefy",
+	"client/consensus/beefy/rpc",
 	"client/consensus/common",
 	"client/consensus/epochs",
+	"client/consensus/grandpa",
+	"client/consensus/grandpa/rpc",
 	"client/consensus/manual-seal",
 	"client/consensus/pow",
 	"client/consensus/slots",
-	"client/consensus/uncles",
 	"client/db",
 	"client/executor",
 	"client/executor/common",
 	"client/executor/runtime-test",
-	"client/executor/wasmi",
 	"client/executor/wasmtime",
-	"client/finality-grandpa",
-	"client/finality-grandpa-warp-sync",
 	"client/informant",
 	"client/keystore",
-	"client/light",
+	"client/merkle-mountain-range",
+	"client/merkle-mountain-range/rpc",
 	"client/network",
+	"client/network/transactions",
+	"client/network/statement",
 	"client/network-gossip",
+	"client/network/bitswap",
+	"client/network/common",
+	"client/network/light",
+	"client/network/sync",
 	"client/network/test",
 	"client/offchain",
-	"client/peerset",
+	"client/allocator",
 	"client/proposer-metrics",
 	"client/rpc",
 	"client/rpc-api",
 	"client/rpc-servers",
+	"client/rpc-spec-v2",
 	"client/service",
 	"client/service/test",
 	"client/state-db",
+	"client/statement-store",
+	"client/storage-monitor",
+	"client/sysinfo",
 	"client/sync-state-rpc",
 	"client/telemetry",
 	"client/tracing",
 	"client/tracing/proc-macro",
 	"client/transaction-pool",
-	"client/transaction-pool/graph",
+	"client/transaction-pool/api",
+	"client/utils",
+	"frame/alliance",
+	"frame/asset-conversion",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",
 	"frame/authority-discovery",
 	"frame/authorship",
 	"frame/babe",
+	"frame/bags-list",
+	"frame/bags-list/fuzzer",
+	"frame/bags-list/remote-tests",
 	"frame/balances",
+	"frame/beefy",
+	"frame/beefy-mmr",
 	"frame/benchmarking",
+	"frame/benchmarking/pov",
 	"frame/bounties",
+	"frame/child-bounties",
 	"frame/collective",
 	"frame/contracts",
-	"frame/contracts/rpc",
-	"frame/contracts/rpc/runtime-api",
+	"frame/contracts/proc-macro",
+	"frame/contracts/primitives",
+	"frame/conviction-voting",
+	"frame/core-fellowship",
 	"frame/democracy",
+	"frame/fast-unstake",
 	"frame/try-runtime",
-	"frame/elections",
+	"frame/elections-phragmen",
 	"frame/election-provider-multi-phase",
+	"frame/election-provider-multi-phase/test-staking-e2e",
 	"frame/election-provider-support",
-	"frame/example",
-	"frame/example-offchain-worker",
-	"frame/example-parallel",
+	"frame/election-provider-support/benchmarking",
+	"frame/election-provider-support/solution-type",
+	"frame/election-provider-support/solution-type/fuzzer",
+	"frame/examples",
+	"frame/examples/basic",
+	"frame/examples/offchain-worker",
+	"frame/examples/kitchensink",
+	"frame/examples/dev-mode",
+	"frame/examples/split",
+	"frame/examples/default-config",
 	"frame/executive",
-	"frame/gilt",
+	"frame/nis",
 	"frame/grandpa",
 	"frame/identity",
 	"frame/im-online",
@@ -92,16 +161,30 @@ members = [
 	"frame/lottery",
 	"frame/membership",
 	"frame/merkle-mountain-range",
-	"frame/merkle-mountain-range/primitives",
-	"frame/merkle-mountain-range/rpc",
-	"frame/metadata",
 	"frame/multisig",
 	"frame/nicks",
 	"frame/node-authorization",
 	"frame/offences",
+	"frame/offences/benchmarking",
+	"frame/preimage",
 	"frame/proxy",
-	"frame/randomness-collective-flip",
+	"frame/message-queue",
+	"frame/nfts",
+	"frame/nfts/runtime-api",
+	"frame/nft-fractionalization",
+	"frame/nomination-pools",
+	"frame/nomination-pools/fuzzer",
+	"frame/nomination-pools/benchmarking",
+	"frame/nomination-pools/test-staking",
+	"frame/nomination-pools/runtime-api",
+	"frame/paged-list",
+	"frame/paged-list/fuzzer",
+	"frame/insecure-randomness-collective-flip",
+	"frame/ranked-collective",
 	"frame/recovery",
+	"frame/referenda",
+	"frame/remark",
+	"frame/salary",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",
@@ -110,24 +193,37 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/staking/runtime-api",
+	"frame/state-trie-migration",
 	"frame/sudo",
+	"frame/root-offences",
+	"frame/root-testing",
+	"frame/statement",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",
 	"frame/support/procedural/tools/derive",
 	"frame/support/test",
+	"frame/support/test/compile_pass",
+	"frame/support/test/pallet",
 	"frame/system",
 	"frame/system/benchmarking",
 	"frame/system/rpc/runtime-api",
 	"frame/timestamp",
 	"frame/transaction-payment",
+	"frame/transaction-payment/asset-conversion-tx-payment",
+	"frame/transaction-payment/asset-tx-payment",
 	"frame/transaction-payment/rpc",
 	"frame/transaction-payment/rpc/runtime-api",
+	"frame/transaction-storage",
 	"frame/treasury",
+	"frame/asset-rate",
 	"frame/tips",
+	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
-	"primitives/allocator",
+	"frame/glutton",
+	"frame/whitelist",
 	"primitives/api",
 	"primitives/api/proc-macro",
 	"primitives/api/test",
@@ -136,27 +232,31 @@ members = [
 	"primitives/arithmetic",
 	"primitives/arithmetic/fuzzer",
 	"primitives/authority-discovery",
-	"primitives/authorship",
 	"primitives/block-builder",
 	"primitives/blockchain",
-	"primitives/chain-spec",
 	"primitives/consensus/aura",
 	"primitives/consensus/babe",
+	"primitives/consensus/beefy",
 	"primitives/consensus/common",
+	"primitives/consensus/grandpa",
 	"primitives/consensus/pow",
-	"primitives/consensus/vrf",
+	"primitives/consensus/slots",
 	"primitives/core",
+	"primitives/core/hashing",
+	"primitives/core/hashing/proc-macro",
+	"primitives/crypto/ec-utils",
 	"primitives/database",
 	"primitives/debug-derive",
 	"primitives/externalities",
-	"primitives/finality-grandpa",
+	"primitives/genesis-builder",
 	"primitives/inherents",
 	"primitives/io",
 	"primitives/keyring",
 	"primitives/keystore",
 	"primitives/maybe-compressed-blob",
+	"primitives/merkle-mountain-range",
+	"primitives/metadata-ir",
 	"primitives/npos-elections",
-	"primitives/npos-elections/compact",
 	"primitives/npos-elections/fuzzer",
 	"primitives/offchain",
 	"primitives/panic-handler",
@@ -167,40 +267,46 @@ members = [
 	"primitives/runtime-interface/test",
 	"primitives/runtime-interface/test-wasm",
 	"primitives/runtime-interface/test-wasm-deprecated",
-	"primitives/sandbox",
-	"primitives/serializer",
 	"primitives/session",
 	"primitives/staking",
 	"primitives/state-machine",
+	"primitives/statement-store",
 	"primitives/std",
 	"primitives/storage",
-	"primitives/tasks",
 	"primitives/test-primitives",
 	"primitives/timestamp",
 	"primitives/tracing",
 	"primitives/transaction-pool",
+	"primitives/transaction-storage-proof",
 	"primitives/trie",
-	"primitives/utils",
 	"primitives/version",
+	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
+	"primitives/weights",
+	"scripts/ci/node-template-release",
+	"test-utils",
+	"test-utils/cli",
 	"test-utils/client",
 	"test-utils/derive",
 	"test-utils/runtime",
 	"test-utils/runtime/client",
 	"test-utils/runtime/transaction-pool",
-	"test-utils/test-runner",
 	"test-utils/test-crate",
-	"utils/browser",
 	"utils/build-script-utils",
 	"utils/fork-tree",
 	"utils/frame/benchmarking-cli",
 	"utils/frame/remote-externalities",
 	"utils/frame/frame-utilities-cli",
 	"utils/frame/try-runtime/cli",
+	"utils/frame/rpc/state-trie-migration-rpc",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
+	"utils/frame/generate-bags",
+	"utils/frame/generate-bags/node-runtime",
+	"utils/frame/rpc/client",
 	"utils/prometheus",
 	"utils/wasm-builder",
+	"utils/binary-merkle-tree",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates
@@ -219,28 +325,24 @@ members = [
 #
 # This list is ordered alphabetically.
 [profile.dev.package]
-aes-soft = { opt-level = 3 }
-aesni = { opt-level = 3 }
 blake2 = { opt-level = 3 }
-blake2-rfc = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
 chacha20poly1305 = { opt-level = 3 }
 cranelift-codegen = { opt-level = 3 }
 cranelift-wasm = { opt-level = 3 }
 crc32fast = { opt-level = 3 }
 crossbeam-deque = { opt-level = 3 }
-crossbeam-queue = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
-ed25519-dalek = { opt-level = 3 }
+ed25519-zebra = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
 hashbrown = { opt-level = 3 }
-h2 = { opt-level = 3 }
 hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
 integer-sqrt = { opt-level = 3 }
+k256 = { opt-level = 3 }
 keccak = { opt-level = 3 }
 libm = { opt-level = 3 }
 librocksdb-sys = { opt-level = 3 }
@@ -255,6 +357,7 @@ percent-encoding = { opt-level = 3 }
 primitive-types = { opt-level = 3 }
 ring = { opt-level = 3 }
 rustls = { opt-level = 3 }
+secp256k1 = { opt-level = 3 }
 sha2 = { opt-level = 3 }
 sha3 = { opt-level = 3 }
 smallvec = { opt-level = 3 }
@@ -269,3 +372,13 @@ zeroize = { opt-level = 3 }
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"
+
+[profile.production]
+inherits = "release"
+
+# Sacrifice compile speed for execution speed by using optimization flags:
+
+# https://doc.rust-lang.org/rustc/linker-plugin-lto.html
+lto = "fat"
+# https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
+codegen-units = 1

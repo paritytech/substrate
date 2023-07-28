@@ -1,5 +1,5 @@
-error: expected `::`
- --> $DIR/invalid_token_after_module.rs:9:18
+error: Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `use_parts`, `=`, `,`
+ --> tests/construct_runtime_ui/invalid_token_after_module.rs:6:18
   |
-9 |         system: System ?
+6 |         system: System ?
   |                        ^

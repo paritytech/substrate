@@ -1,0 +1,39 @@
+# 🔒 PROTECTED: Changes to locks-review-team should be approved by the current locks-review-team
+locks-review-team: locks-review
+team-leads-team: polkadot-review
+action-review-team: ci
+
+rules:
+  - name: Core developers
+    check_type: changed_files
+    condition:
+      include: .*
+      # excluding files from 'CI team' and 'FRAME coders' rules
+      exclude: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*|^\.config/nextest.toml|^frame/(?!.*(nfts/.*|uniques/.*|babe/.*|grandpa/.*|beefy|merkle-mountain-range/.*|contracts/.*|election|nomination-pools/.*|staking/.*|aura/.*))
+    min_approvals: 2
+    teams:
+      - core-devs
+
+  - name: FRAME coders
+    check_type: changed_files
+    condition:
+      include: ^frame/(?!.*(nfts/.*|uniques/.*|babe/.*|grandpa/.*|beefy|merkle-mountain-range/.*|contracts/.*|election|nomination-pools/.*|staking/.*|aura/.*))
+    all:
+      - min_approvals: 2
+        teams:
+          - core-devs
+      - min_approvals: 1
+        teams:
+          - frame-coders
+
+  - name: CI team
+    check_type: changed_files
+    condition:
+      include: ^\.gitlab-ci\.yml|^scripts/ci/.*|^\.github/.*|^\.config/nextest.toml
+    min_approvals: 2
+    teams:
+      - ci
+
+prevent-review-request:
+  teams:
+    - core-devs

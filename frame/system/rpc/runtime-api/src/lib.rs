@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,12 +24,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 sp_api::decl_runtime_apis! {
-	/// The API to query account nonce (aka transaction index).
-	pub trait AccountNonceApi<AccountId, Index> where
+	/// The API to query account nonce.
+	pub trait AccountNonceApi<AccountId, Nonce> where
 		AccountId: codec::Codec,
-		Index: codec::Codec,
+		Nonce: codec::Codec,
 	{
 		/// Get current account nonce of given `AccountId`.
-		fn account_nonce(account: AccountId) -> Index;
+		fn account_nonce(account: AccountId) -> Nonce;
 	}
 }

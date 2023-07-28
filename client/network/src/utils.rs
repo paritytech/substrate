@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,11 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! `sc-network` utilities
+
 use futures::{stream::unfold, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
 use linked_hash_set::LinkedHashSet;
-use std::time::Duration;
-use std::{hash::Hash, num::NonZeroUsize};
+
+use std::{hash::Hash, num::NonZeroUsize, time::Duration};
 
 /// Creates a stream that returns a new value every `duration`.
 pub fn interval(duration: Duration) -> impl Stream<Item = ()> + Unpin {
@@ -39,10 +41,7 @@ pub struct LruHashSet<T: Hash + Eq> {
 impl<T: Hash + Eq> LruHashSet<T> {
 	/// Create a new `LruHashSet` with the given (exclusive) limit.
 	pub fn new(limit: NonZeroUsize) -> Self {
-		Self {
-			set: LinkedHashSet::new(),
-			limit,
-		}
+		Self { set: LinkedHashSet::new(), limit }
 	}
 
 	/// Insert element into the set.
@@ -55,14 +54,9 @@ impl<T: Hash + Eq> LruHashSet<T> {
 			if self.set.len() == usize::from(self.limit) {
 				self.set.pop_front(); // remove oldest entry
 			}
-			return true;
+			return true
 		}
 		false
-	}
-
-	/// Removes an element from the set if it is present.
-	pub fn remove(&mut self, e: &T) -> bool {
-		self.set.remove(e)
 	}
 }
 

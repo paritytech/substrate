@@ -1,0 +1,21 @@
+[package]
+name = "generate-bags"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Bag threshold generation script for pallet-bag-list"
+
+[dependencies]
+# FRAME
+frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../../../frame/election-provider-support" }
+frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
+pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
+sp-staking = { version = "4.0.0-dev", path = "../../../primitives/staking" }
+
+# third party
+chrono = { version = "0.4.19" }
+num-format = "0.4.3"

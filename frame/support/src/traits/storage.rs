@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,16 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
+use crate::sp_std::collections::btree_set::BTreeSet;
+use impl_trait_for_tuples::impl_for_tuples;
+pub use sp_core::storage::TrackedStorageKey;
+use sp_runtime::traits::Saturating;
+use sp_std::prelude::*;
+
 /// An instance of a pallet in the storage.
 ///
-/// It is required that these instances are unique, to support multiple instances per pallet in the same runtime!
+/// It is required that these instances are unique, to support multiple instances per pallet in the
+/// same runtime!
 ///
 /// E.g. for module MyModule default instance will have prefix "MyModule" and other instances
 /// "InstanceNMyModule".
@@ -28,6 +35,12 @@ pub trait Instance: 'static {
 	const PREFIX: &'static str;
 	/// Unique numerical identifier for an instance.
 	const INDEX: u8;
+}
+
+// Dummy implementation for `()`.
+impl Instance for () {
+	const PREFIX: &'static str = "";
+	const INDEX: u8 = 0;
 }
 
 /// An instance of a storage in a pallet.
@@ -45,3 +58,111 @@ pub trait StorageInstance {
 	/// Prefix given to a storage to isolate from other storages in the pallet.
 	const STORAGE_PREFIX: &'static str;
 }
+
+/// Metadata about storage from the runtime.
+#[derive(
+	codec::Encode, codec::Decode, crate::RuntimeDebug, Eq, PartialEq, Clone, scale_info::TypeInfo,
+)]
+pub struct StorageInfo {
+	/// Encoded string of pallet name.
+	pub pallet_name: Vec<u8>,
+	/// Encoded string of storage name.
+	pub storage_name: Vec<u8>,
+	/// The prefix of the storage. All keys after the prefix are considered part of this storage.
+	pub prefix: Vec<u8>,
+	/// The maximum number of values in the storage, or none if no maximum specified.
+	pub max_values: Option<u32>,
+	/// The maximum size of key/values in the storage, or none if no maximum specified.
+	pub max_size: Option<u32>,
+}
+
+/// A trait to give information about storage.
+///
+/// It can be used to calculate PoV worst case size.
+pub trait StorageInfoTrait {
+	fn storage_info() -> Vec<StorageInfo>;
+}
+
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+impl StorageInfoTrait for Tuple {
+	fn storage_info() -> Vec<StorageInfo> {
+		let mut res = vec![];
+		for_tuples!( #( res.extend_from_slice(&Tuple::storage_info()); )* );
+		res
+	}
+}
+
+/// Similar to [`StorageInfoTrait`], a trait to give partial information about storage.
+///
+/// This is useful when a type can give some partial information with its generic parameter doesn't
+/// implement some bounds.
+pub trait PartialStorageInfoTrait {
+	fn partial_storage_info() -> Vec<StorageInfo>;
+}
+
+/// Allows a pallet to specify storage keys to whitelist during benchmarking.
+/// This means those keys will be excluded from the benchmarking performance
+/// calculation.
+pub trait WhitelistedStorageKeys {
+	/// Returns a [`Vec<TrackedStorageKey>`] indicating the storage keys that
+	/// should be whitelisted during benchmarking. This means that those keys
+	/// will be excluded from the benchmarking performance calculation.
+	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey>;
+}
+
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+impl WhitelistedStorageKeys for Tuple {
+	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey> {
+		// de-duplicate the storage keys
+		let mut combined_keys: BTreeSet<TrackedStorageKey> = BTreeSet::new();
+		for_tuples!( #(
+			for storage_key in Tuple::whitelisted_storage_keys() {
+				combined_keys.insert(storage_key);
+			}
+		 )* );
+		combined_keys.into_iter().collect::<Vec<_>>()
+	}
+}
+
+macro_rules! impl_incrementable {
+	($($type:ty),+) => {
+		$(
+			impl Incrementable for $type {
+				fn increment(&self) -> Option<Self> {
+					let mut val = self.clone();
+					val.saturating_inc();
+					Some(val)
+				}
+
+				fn initial_value() -> Option<Self> {
+					Some(0)
+				}
+			}
+		)+
+	};
+}
+
+/// A trait representing an incrementable type.
+///
+/// The `increment` and `initial_value` functions are fallible.
+/// They should either both return `Some` with a valid value, or `None`.
+pub trait Incrementable
+where
+	Self: Sized,
+{
+	/// Increments the value.
+	///
+	/// Returns `Some` with the incremented value if it is possible, or `None` if it is not.
+	fn increment(&self) -> Option<Self>;
+
+	/// Returns the initial value.
+	///
+	/// Returns `Some` with the initial value if it is available, or `None` if it is not.
+	fn initial_value() -> Option<Self>;
+}
+
+impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);

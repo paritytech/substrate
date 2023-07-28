@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,46 +15,89 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Disable warnings for #\[transactional\] being deprecated.
+#![allow(deprecated)]
+
 use frame_support::{
-	assert_ok, assert_noop, transactional, StorageMap, StorageValue,
-	dispatch::{DispatchError, DispatchResult}, storage::{with_transaction, TransactionOutcome::*},
+	assert_noop, assert_ok, assert_storage_noop, derive_impl,
+	dispatch::DispatchResult,
+	storage::{with_transaction, TransactionOutcome::*},
+	transactional,
 };
+use sp_core::{sr25519, ConstU32};
 use sp_io::TestExternalities;
-use sp_std::result;
+use sp_runtime::{
+	generic,
+	traits::{BlakeTwo256, Verify},
+	TransactionOutcome,
+};
 
-pub trait Config: frame_support_test::Config {}
+pub use self::pallet::*;
 
-frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {
-		#[weight = 0]
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
+
+	#[pallet::pallet]
+	#[pallet::generate_store(pub (super) trait Store)]
+	pub struct Pallet<T>(_);
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		#[pallet::weight(0)]
 		#[transactional]
-		fn value_commits(_origin, v: u32) {
-			Value::set(v);
+		pub fn value_commits(_origin: OriginFor<T>, v: u32) -> DispatchResult {
+			<Value<T>>::set(v);
+			Ok(())
 		}
 
-		#[weight = 0]
+		#[pallet::weight(0)]
 		#[transactional]
-		fn value_rollbacks(_origin, v: u32) -> DispatchResult {
-			Value::set(v);
+		pub fn value_rollbacks(_origin: OriginFor<T>, v: u32) -> DispatchResult {
+			<Value<T>>::set(v);
 			Err(DispatchError::Other("nah"))
 		}
 	}
+
+	#[pallet::storage]
+	pub type Value<T: Config> = StorageValue<_, u32, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type Map<T: Config> = StorageMap<_, Twox64Concat, String, u32, ValueQuery>;
 }
 
-frame_support::decl_storage!{
-	trait Store for Module<T: Config> as StorageTransactions {
-		pub Value: u32;
-		pub Map: map hasher(twox_64_concat) String => u32;
+pub type BlockNumber = u32;
+pub type Signature = sr25519::Signature;
+pub type AccountId = <Signature as Verify>::Signer;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+
+frame_support::construct_runtime!(
+	pub enum Runtime
+
+	{
+		System: frame_system,
+		MyPallet: pallet,
 	}
-}
+);
 
-struct Runtime;
-
-impl frame_support_test::Config for Runtime {
-	type Origin = u32;
-	type BlockNumber = u32;
-	type PalletInfo = frame_support_test::PanicPalletInfo;
-	type DbWeight = ();
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Runtime {
+	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type PalletInfo = PalletInfo;
+	type OnSetCode = ();
 }
 
 impl Config for Runtime {}
@@ -62,17 +105,19 @@ impl Config for Runtime {}
 #[test]
 fn storage_transaction_basic_commit() {
 	TestExternalities::default().execute_with(|| {
+		type Value = pallet::Value<Runtime>;
+		type Map = pallet::Map<Runtime>;
 
 		assert_eq!(Value::get(), 0);
 		assert!(!Map::contains_key("val0"));
 
-		with_transaction(|| {
+		assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 			Value::set(99);
 			Map::insert("val0", 99);
 			assert_eq!(Value::get(), 99);
 			assert_eq!(Map::get("val0"), 99);
-			Commit(())
-		});
+			Commit(Ok(()))
+		}));
 
 		assert_eq!(Value::get(), 99);
 		assert_eq!(Map::get("val0"), 99);
@@ -82,17 +127,32 @@ fn storage_transaction_basic_commit() {
 #[test]
 fn storage_transaction_basic_rollback() {
 	TestExternalities::default().execute_with(|| {
+		type Value = pallet::Value<Runtime>;
+		type Map = pallet::Map<Runtime>;
 
 		assert_eq!(Value::get(), 0);
 		assert_eq!(Map::get("val0"), 0);
 
-		with_transaction(|| {
-			Value::set(99);
-			Map::insert("val0", 99);
-			assert_eq!(Value::get(), 99);
-			assert_eq!(Map::get("val0"), 99);
-			Rollback(())
-		});
+		assert_noop!(
+			with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				Value::set(99);
+				Map::insert("val0", 99);
+				assert_eq!(Value::get(), 99);
+				assert_eq!(Map::get("val0"), 99);
+				Rollback(Err("revert".into()))
+			}),
+			"revert"
+		);
+
+		assert_storage_noop!(assert_ok!(with_transaction(
+			|| -> TransactionOutcome<DispatchResult> {
+				Value::set(99);
+				Map::insert("val0", 99);
+				assert_eq!(Value::get(), 99);
+				assert_eq!(Map::get("val0"), 99);
+				Rollback(Ok(()))
+			}
+		)));
 
 		assert_eq!(Value::get(), 0);
 		assert_eq!(Map::get("val0"), 0);
@@ -102,35 +162,41 @@ fn storage_transaction_basic_rollback() {
 #[test]
 fn storage_transaction_rollback_then_commit() {
 	TestExternalities::default().execute_with(|| {
+		type Value = pallet::Value<Runtime>;
+		type Map = pallet::Map<Runtime>;
+
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		with_transaction(|| {
+		assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 			Value::set(2);
 			Map::insert("val1", 2);
 			Map::insert("val2", 2);
 
-			with_transaction(|| {
-				Value::set(3);
-				Map::insert("val1", 3);
-				Map::insert("val2", 3);
-				Map::insert("val3", 3);
+			assert_noop!(
+				with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					Value::set(3);
+					Map::insert("val1", 3);
+					Map::insert("val2", 3);
+					Map::insert("val3", 3);
 
-				assert_eq!(Value::get(), 3);
-				assert_eq!(Map::get("val1"), 3);
-				assert_eq!(Map::get("val2"), 3);
-				assert_eq!(Map::get("val3"), 3);
+					assert_eq!(Value::get(), 3);
+					assert_eq!(Map::get("val1"), 3);
+					assert_eq!(Map::get("val2"), 3);
+					assert_eq!(Map::get("val3"), 3);
 
-				Rollback(())
-			});
+					Rollback(Err("revert".into()))
+				}),
+				"revert"
+			);
 
 			assert_eq!(Value::get(), 2);
 			assert_eq!(Map::get("val1"), 2);
 			assert_eq!(Map::get("val2"), 2);
 			assert_eq!(Map::get("val3"), 0);
 
-			Commit(())
-		});
+			Commit(Ok(()))
+		}));
 
 		assert_eq!(Value::get(), 2);
 		assert_eq!(Map::get("val1"), 2);
@@ -142,35 +208,41 @@ fn storage_transaction_rollback_then_commit() {
 #[test]
 fn storage_transaction_commit_then_rollback() {
 	TestExternalities::default().execute_with(|| {
+		type Value = pallet::Value<Runtime>;
+		type Map = pallet::Map<Runtime>;
+
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		with_transaction(|| {
-			Value::set(2);
-			Map::insert("val1", 2);
-			Map::insert("val2", 2);
+		assert_noop!(
+			with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				Value::set(2);
+				Map::insert("val1", 2);
+				Map::insert("val2", 2);
 
-			with_transaction(|| {
-				Value::set(3);
-				Map::insert("val1", 3);
-				Map::insert("val2", 3);
-				Map::insert("val3", 3);
+				assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					Value::set(3);
+					Map::insert("val1", 3);
+					Map::insert("val2", 3);
+					Map::insert("val3", 3);
+
+					assert_eq!(Value::get(), 3);
+					assert_eq!(Map::get("val1"), 3);
+					assert_eq!(Map::get("val2"), 3);
+					assert_eq!(Map::get("val3"), 3);
+
+					Commit(Ok(()))
+				}));
 
 				assert_eq!(Value::get(), 3);
 				assert_eq!(Map::get("val1"), 3);
 				assert_eq!(Map::get("val2"), 3);
 				assert_eq!(Map::get("val3"), 3);
 
-				Commit(())
-			});
-
-			assert_eq!(Value::get(), 3);
-			assert_eq!(Map::get("val1"), 3);
-			assert_eq!(Map::get("val2"), 3);
-			assert_eq!(Map::get("val3"), 3);
-
-			Rollback(())
-		});
+				Rollback(Err("revert".into()))
+			}),
+			"revert"
+		);
 
 		assert_eq!(Value::get(), 1);
 		assert_eq!(Map::get("val1"), 1);
@@ -181,19 +253,21 @@ fn storage_transaction_commit_then_rollback() {
 
 #[test]
 fn transactional_annotation() {
+	type Value = pallet::Value<Runtime>;
+
 	fn set_value(v: u32) -> DispatchResult {
 		Value::set(v);
 		Ok(())
 	}
 
 	#[transactional]
-	fn value_commits(v: u32) -> result::Result<u32, &'static str> {
+	fn value_commits(v: u32) -> Result<u32, &'static str> {
 		set_value(v)?;
 		Ok(v)
 	}
 
 	#[transactional]
-	fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
+	fn value_rollbacks(v: u32) -> Result<u32, &'static str> {
 		set_value(v)?;
 		Err("nah")?;
 		Ok(v)
@@ -204,16 +278,5 @@ fn transactional_annotation() {
 		assert_eq!(Value::get(), 2);
 
 		assert_noop!(value_rollbacks(3), "nah");
-	});
-}
-
-#[test]
-fn transactional_annotation_in_decl_module() {
-	TestExternalities::default().execute_with(|| {
-		let origin = 0;
-		assert_ok!(<Module<Runtime>>::value_commits(origin, 2));
-		assert_eq!(Value::get(), 2);
-
-		assert_noop!(<Module<Runtime>>::value_rollbacks(origin, 3), "nah");
 	});
 }

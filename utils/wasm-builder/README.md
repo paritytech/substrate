@@ -8,23 +8,24 @@ The Wasm builder is a tool that integrates the process of building the WASM bina
 A project that should be compiled as a Wasm binary needs to:
 
 1. Add a `build.rs` file.
-2. Add `wasm-builder` as dependency into `build-dependencies`.
+2. Add `wasm-builder` as dependency into `build-dependencies` (can be made optional and only enabled when `std` feature is used).
 
 The `build.rs` file needs to contain the following code:
 
 ```rust
-use substrate_wasm_builder::WasmBuilder;
-
 fn main() {
-    WasmBuilder::new()
-        // Tell the builder to build the project (crate) this `build.rs` is part of.
-        .with_current_project()
-        // Make sure to export the `heap_base` global, this is required by Substrate
-        .export_heap_base()
-        // Build the Wasm file so that it imports the memory (need to be provided by at instantiation)
-        .import_memory()
-        // Build it.
-        .build()
+    #[cfg(feature = "std")]
+    {
+        substrate_wasm_builder::WasmBuilder::new()
+            // Tell the builder to build the project (crate) this `build.rs` is part of.
+            .with_current_project()
+            // Make sure to export the `heap_base` global, this is required by Substrate
+            .export_heap_base()
+            // Build the Wasm file so that it imports the memory (need to be provided by at instantiation)
+            .import_memory()
+            // Build it.
+            .build();
+    }
 }
 ```
 
@@ -64,6 +65,7 @@ By using environment variables, you can configure which Wasm binaries are built 
                            to be absolute.
 - `WASM_BUILD_TOOLCHAIN` - The toolchain that should be used to build the Wasm binaries. The
                            format needs to be the same as used by cargo, e.g. `nightly-2020-02-20`.
+- `CARGO_NET_OFFLINE` - If `true`, `--offline` will be passed to all processes launched to prevent network access. Useful in offline environments.
 
 Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
@@ -75,8 +77,13 @@ Wasm builder requires the following prerequisites for building the Wasm binary:
 
 - rust nightly + `wasm32-unknown-unknown` toolchain
 
-If a specific rust nightly is installed with `rustup`, it is important that the wasm target is installed
-as well. For example if installing the rust nightly from 20.02.2020 using `rustup install nightly-2020-02-20`,
-the wasm target needs to be installed as well `rustup target add wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
+or
+
+- rust stable and version at least 1.68.0 + `wasm32-unknown-unknown` toolchain
+
+If a specific rust is installed with `rustup`, it is important that the wasm target is
+installed as well. For example if installing the rust from 20.02.2020 using `rustup
+install nightly-2020-02-20`, the wasm target needs to be installed as well `rustup target add
+wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
 
 License: Apache-2.0

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +28,8 @@
 //!
 //! ### Public Functions
 //!
-//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module configuration.
+//! - `slot_duration` - Determine the Aura slot-duration based on the Timestamp module
+//!   configuration.
 //!
 //! ## Related Modules
 //!
@@ -37,22 +38,27 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use sp_std::prelude::*;
-use codec::{Encode, Decode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	Parameter, traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet}, ConsensusEngineId,
+	log,
+	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
+	BoundedSlice, BoundedVec, ConsensusEngineId, Parameter,
 };
+use sp_consensus_aura::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
 use sp_runtime::{
+	generic::DigestItem,
+	traits::{IsMember, Member, SaturatedConversion, Saturating, Zero},
 	RuntimeAppPublic,
-	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
-use sp_consensus_aura::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex, Slot};
+use sp_std::prelude::*;
 
+pub mod migrations;
 mod mock;
 mod tests;
-pub mod migrations;
 
 pub use pallet::*;
+
+const LOG_TARGET: &str = "runtime::aura";
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -63,7 +69,32 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: pallet_timestamp::Config + frame_system::Config {
 		/// The identifier type for an authority.
-		type AuthorityId: Member + Parameter + RuntimeAppPublic + Default + MaybeSerializeDeserialize;
+		type AuthorityId: Member
+			+ Parameter
+			+ RuntimeAppPublic
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen;
+		/// The maximum number of authorities that the pallet can hold.
+		type MaxAuthorities: Get<u32>;
+
+		/// A way to check whether a given validator is disabled and should not be authoring blocks.
+		/// Blocks authored by a disabled validator will lead to a panic as part of this module's
+		/// initialization.
+		type DisabledValidators: DisabledValidators;
+
+		/// Whether to allow block authors to create multiple blocks per slot.
+		///
+		/// If this is `true`, the pallet will allow slots to stay the same across sequential
+		/// blocks. If this is `false`, the pallet will require that subsequent blocks always have
+		/// higher slots than previous ones.
+		///
+		/// Regardless of the setting of this storage value, the pallet will always enforce the
+		/// invariant that slots don't move backwards as the chain progresses.
+		///
+		/// The typical value for this should be 'false' unless this pallet is being augmented by
+		/// another pallet which enforces some limitation on the number of blocks authors can create
+		/// using the same slot.
+		type AllowMultipleBlocksPerSlot: Get<bool>;
 	}
 
 	#[pallet::pallet]
@@ -71,29 +102,48 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(_: T::BlockNumber) -> Weight {
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if let Some(new_slot) = Self::current_slot_from_digests() {
 				let current_slot = CurrentSlot::<T>::get();
 
-				assert!(current_slot < new_slot, "Slot must increase");
+				if T::AllowMultipleBlocksPerSlot::get() {
+					assert!(current_slot <= new_slot, "Slot must not decrease");
+				} else {
+					assert!(current_slot < new_slot, "Slot must increase");
+				}
+
 				CurrentSlot::<T>::put(new_slot);
 
-				// TODO [#3398] Generate offence report for all authorities that skipped their slots.
+				if let Some(n_authorities) = <Authorities<T>>::decode_len() {
+					let authority_index = *new_slot % n_authorities as u64;
+					if T::DisabledValidators::is_disabled(authority_index as u32) {
+						panic!(
+							"Validator with index {:?} is disabled and should not be attempting to author blocks.",
+							authority_index,
+						);
+					}
+				}
+
+				// TODO [#3398] Generate offence report for all authorities that skipped their
+				// slots.
 
 				T::DbWeight::get().reads_writes(2, 1)
 			} else {
 				T::DbWeight::get().reads(1)
 			}
 		}
-	}
 
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
+			Self::do_try_state()
+		}
+	}
 
 	/// The current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
-	pub(super) type Authorities<T: Config> = StorageValue<_, Vec<T::AuthorityId>, ValueQuery>;
+	pub(super) type Authorities<T: Config> =
+		StorageValue<_, BoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The current slot of this block.
 	///
@@ -103,19 +153,13 @@ pub mod pallet {
 	pub(super) type CurrentSlot<T: Config> = StorageValue<_, Slot, ValueQuery>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub authorities: Vec<T::AuthorityId>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { authorities: Vec::new() }
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			Pallet::<T>::initialize_authorities(&self.authorities);
 		}
@@ -123,20 +167,39 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn change_authorities(new: Vec<T::AuthorityId>) {
+	/// Change authorities.
+	///
+	/// The storage will be applied immediately.
+	/// And aura consensus log will be appended to block's log.
+	///
+	/// This is a no-op if `new` is empty.
+	pub fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>) {
+		if new.is_empty() {
+			log::warn!(target: LOG_TARGET, "Ignoring empty authority change.");
+
+			return
+		}
+
 		<Authorities<T>>::put(&new);
 
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+		let log = DigestItem::Consensus(
 			AURA_ENGINE_ID,
-			ConsensusLog::AuthoritiesChange(new).encode()
+			ConsensusLog::AuthoritiesChange(new.into_inner()).encode(),
 		);
-		<frame_system::Pallet<T>>::deposit_log(log.into());
+		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 
-	fn initialize_authorities(authorities: &[T::AuthorityId]) {
+	/// Initial authorities.
+	///
+	/// The storage will be applied immediately.
+	///
+	/// The authorities length must be equal or less than T::MaxAuthorities.
+	pub fn initialize_authorities(authorities: &[T::AuthorityId]) {
 		if !authorities.is_empty() {
 			assert!(<Authorities<T>>::get().is_empty(), "Authorities are already initialized!");
-			<Authorities<T>>::put(authorities);
+			let bounded = <BoundedSlice<'_, _, T::MaxAuthorities>>::try_from(authorities)
+				.expect("Initial authority set must be less than T::MaxAuthorities");
+			<Authorities<T>>::put(bounded);
 		}
 	}
 
@@ -146,7 +209,7 @@ impl<T: Config> Pallet<T> {
 		let pre_runtime_digests = digest.logs.iter().filter_map(|d| d.as_pre_runtime());
 		for (id, mut data) in pre_runtime_digests {
 			if id == AURA_ENGINE_ID {
-				return Slot::decode(&mut data).ok();
+				return Slot::decode(&mut data).ok()
 			}
 		}
 
@@ -159,6 +222,55 @@ impl<T: Config> Pallet<T> {
 		// the majority of its slot.
 		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
 	}
+
+	/// Ensure the correctness of the state of this pallet.
+	///
+	/// This should be valid before or after each state transition of this pallet.
+	///
+	/// # Invariants
+	///
+	/// ## `CurrentSlot`
+	///
+	/// If we don't allow for multiple blocks per slot, then the current slot must be less than the
+	/// maximal slot number. Otherwise, it can be arbitrary.
+	///
+	/// ## `Authorities`
+	///
+	/// * The authorities must be non-empty.
+	/// * The current authority cannot be disabled.
+	/// * The number of authorities must be less than or equal to `T::MaxAuthorities`. This however,
+	///   is guarded by the type system.
+	#[cfg(any(test, feature = "try-runtime"))]
+	pub fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
+		// We don't have any guarantee that we are already after `on_initialize` and thus we have to
+		// check the current slot from the digest or take the last known slot.
+		let current_slot =
+			Self::current_slot_from_digests().unwrap_or_else(|| CurrentSlot::<T>::get());
+
+		// Check that the current slot is less than the maximal slot number, unless we allow for
+		// multiple blocks per slot.
+		if !T::AllowMultipleBlocksPerSlot::get() {
+			frame_support::ensure!(
+				current_slot < u64::MAX,
+				"Current slot has reached maximum value and cannot be incremented further.",
+			);
+		}
+
+		let authorities_len =
+			<Authorities<T>>::decode_len().ok_or("Failed to decode authorities length")?;
+
+		// Check that the authorities are non-empty.
+		frame_support::ensure!(!authorities_len.is_zero(), "Authorities must be non-empty.");
+
+		// Check that the current authority is not disabled.
+		let authority_index = *current_slot % authorities_len as u64;
+		frame_support::ensure!(
+			!T::DisabledValidators::is_disabled(authority_index as u32),
+			"Current validator is disabled and should not be attempting to author blocks.",
+		);
+
+		Ok(())
+	}
 }
 
 impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Pallet<T> {
@@ -169,38 +281,49 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 	type Key = T::AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
 	{
 		let authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 		Self::initialize_authorities(&authorities);
 	}
 
 	fn on_new_session<'a, I: 'a>(changed: bool, validators: I, _queued_validators: I)
-		where I: Iterator<Item=(&'a T::AccountId, T::AuthorityId)>
+	where
+		I: Iterator<Item = (&'a T::AccountId, T::AuthorityId)>,
 	{
 		// instant changes
 		if changed {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 			let last_authorities = Self::authorities();
-			if next_authorities != last_authorities {
-				Self::change_authorities(next_authorities);
+			if last_authorities != next_authorities {
+				if next_authorities.len() as u32 > T::MaxAuthorities::get() {
+					log::warn!(
+						target: LOG_TARGET,
+						"next authorities list larger than {}, truncating",
+						T::MaxAuthorities::get(),
+					);
+				}
+				let bounded = <BoundedVec<_, T::MaxAuthorities>>::truncate_from(next_authorities);
+				Self::change_authorities(bounded);
 			}
 		}
 	}
 
-	fn on_disabled(i: usize) {
-		let log: DigestItem<T::Hash> = DigestItem::Consensus(
+	fn on_disabled(i: u32) {
+		let log = DigestItem::Consensus(
 			AURA_ENGINE_ID,
 			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
 		);
 
-		<frame_system::Pallet<T>>::deposit_log(log.into());
+		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 }
 
 impl<T: Config> FindAuthor<u32> for Pallet<T> {
-	fn find_author<'a, I>(digests: I) -> Option<u32> where
-		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	fn find_author<'a, I>(digests: I) -> Option<u32>
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
 		for (id, mut data) in digests.into_iter() {
 			if id == AURA_ENGINE_ID {
@@ -223,12 +346,13 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 	for FindAccountFromAuthorIndex<T, Inner>
 {
 	fn find_author<'a, I>(digests: I) -> Option<T::AuthorityId>
-		where I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
+	where
+		I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
 	{
 		let i = Inner::find_author(digests)?;
 
 		let validators = <Pallet<T>>::authorities();
-		validators.get(i as usize).map(|k| k.clone())
+		validators.get(i as usize).cloned()
 	}
 }
 
@@ -237,9 +361,7 @@ pub type AuraAuthorId<T> = FindAccountFromAuthorIndex<T, Pallet<T>>;
 
 impl<T: Config> IsMember<T::AuthorityId> for Pallet<T> {
 	fn is_member(authority_id: &T::AuthorityId) -> bool {
-		Self::authorities()
-			.iter()
-			.any(|id| id == authority_id)
+		Self::authorities().iter().any(|id| id == authority_id)
 	}
 }
 
@@ -251,6 +373,9 @@ impl<T: Config> OnTimestampSet<T::Moment> for Pallet<T> {
 		let timestamp_slot = moment / slot_duration;
 		let timestamp_slot = Slot::from(timestamp_slot.saturated_into::<u64>());
 
-		assert!(CurrentSlot::<T>::get() == timestamp_slot, "Timestamp slot must match `CurrentSlot`");
+		assert!(
+			CurrentSlot::<T>::get() == timestamp_slot,
+			"Timestamp slot must match `CurrentSlot`"
+		);
 	}
 }

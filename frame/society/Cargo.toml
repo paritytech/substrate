@@ -1,10 +1,10 @@
 [package]
 name = "pallet-society"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME society pallet"
 readme = "README.md"
@@ -13,31 +13,49 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-frame-support = { version = "3.0.0", default-features = false, path = "../support" }
-frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+hex-literal = "0.3.4"
+log = { version = "0.4.17", default-features = false }
 rand_chacha = { version = "0.2", default-features = false }
+scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive"] }
+
+sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "23.0.0", default-features = false, path = "../../primitives/io" }
+sp-arithmetic = { version = "16.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-runtime = { version = "24.0.0", default-features = false, path = "../../primitives/runtime" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 [dev-dependencies]
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
-sp-io ={ version = "3.0.0", path = "../../primitives/io" }
 frame-support-test = { version = "3.0.0", path = "../support/test" }
-pallet-balances = { version = "3.0.0", path = "../balances" }
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-io = { version = "23.0.0", path = "../../primitives/io" }
 
 [features]
 default = ["std"]
+# Enable `VersionedRuntimeUpgrade` for the migrations that is currently still experimental.
+experimental = [
+	"frame-support/experimental"
+]
 std = [
 	"codec/std",
-	"sp-runtime/std",
-	"rand_chacha/std",
-	"sp-std/std",
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
+	"rand_chacha/std",
+	"scale-info/std",
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-io/std",
 ]
 runtime-benchmarks = [
+	"frame-benchmarking",
 	"sp-runtime/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
+	"pallet-balances/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]

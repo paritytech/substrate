@@ -1,5 +1,0 @@
-error: expected `where`
- --> $DIR/missing_where_block.rs:4:19
-  |
-4 |     pub enum Runtime {}
-  |                      ^^

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,61 +24,142 @@
 //!
 //! This is internal api and is subject to change.
 
-mod map;
 mod double_map;
+pub(crate) mod map;
+mod nmap;
 mod value;
 
-pub use map::StorageMap;
 pub use double_map::StorageDoubleMap;
+pub use map::StorageMap;
+pub use nmap::StorageNMap;
 pub use value::StorageValue;
 
 #[cfg(test)]
-#[allow(dead_code)]
 mod tests {
-	use sp_io::TestExternalities;
 	use codec::Encode;
-	use crate::storage::{unhashed, generator::StorageValue, IterableStorageMap};
-	use crate::{assert_noop, assert_ok};
+	use sp_io::TestExternalities;
+	use sp_runtime::{generic, traits::BlakeTwo256, BuildStorage};
 
-	struct Runtime;
+	use crate::{
+		assert_noop, assert_ok,
+		storage::{generator::StorageValue, unhashed},
+	};
 
-	pub trait Config: 'static {
-		type Origin;
-		type BlockNumber;
-		type PalletInfo: crate::traits::PalletInfo;
-		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
+	#[crate::pallet]
+	pub mod frame_system {
+		#[allow(unused)]
+		use super::{frame_system, frame_system::pallet_prelude::*};
+		pub use crate::dispatch::RawOrigin;
+		use crate::pallet_prelude::*;
+
+		#[pallet::pallet]
+		pub struct Pallet<T>(_);
+
+		#[pallet::config]
+		#[pallet::disable_frame_system_supertrait_check]
+		pub trait Config: 'static {
+			type Block: sp_runtime::traits::Block;
+			type AccountId;
+			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
+			type RuntimeOrigin;
+			type RuntimeCall;
+			type PalletInfo: crate::traits::PalletInfo;
+			type DbWeight: Get<crate::weights::RuntimeDbWeight>;
+		}
+
+		#[pallet::origin]
+		pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
+
+		#[pallet::error]
+		pub enum Error<T> {
+			/// Required by construct_runtime
+			CallFiltered,
+		}
+
+		#[pallet::call]
+		impl<T: Config> Pallet<T> {}
+
+		#[pallet::storage]
+		pub type Value<T> = StorageValue<_, (u64, u64), ValueQuery>;
+
+		#[pallet::storage]
+		pub type Map<T> = StorageMap<_, Blake2_128Concat, u16, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type NumberMap<T> = StorageMap<_, Identity, u32, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type DoubleMap<T> =
+			StorageDoubleMap<_, Blake2_128Concat, u16, Twox64Concat, u32, u64, ValueQuery>;
+
+		#[pallet::storage]
+		pub type NMap<T> = StorageNMap<
+			_,
+			(storage::Key<Blake2_128Concat, u16>, storage::Key<Twox64Concat, u32>),
+			u64,
+			ValueQuery,
+		>;
+
+		pub mod pallet_prelude {
+			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
+
+			pub type HeaderFor<T> =
+				<<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+
+			pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
+		}
 	}
 
-	impl Config for Runtime {
-		type Origin = u32;
-		type BlockNumber = u32;
-		type PalletInfo = crate::tests::PanicPalletInfo;
+	type BlockNumber = u32;
+	type AccountId = u32;
+	type Header = generic::Header<BlockNumber, BlakeTwo256>;
+	type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+	type Block = generic::Block<Header, UncheckedExtrinsic>;
+
+	crate::construct_runtime!(
+		pub enum Runtime
+		{
+			System: self::frame_system,
+		}
+	);
+
+	impl self::frame_system::Config for Runtime {
+		type AccountId = AccountId;
+		type Block = Block;
+		type BaseCallFilter = crate::traits::Everything;
+		type RuntimeOrigin = RuntimeOrigin;
+		type RuntimeCall = RuntimeCall;
+		type PalletInfo = PalletInfo;
 		type DbWeight = ();
 	}
 
-	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
+	pub fn key_before_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert_ne!(*last, 0, "mock function not implemented for this prefix");
+		*last -= 1;
+		prefix
 	}
 
-	crate::decl_storage! {
-		trait Store for Module<T: Config> as Runtime {
-			Value get(fn value) config(): (u64, u64);
-			NumberMap: map hasher(identity) u32 => u64;
-			DoubleMap: double_map hasher(identity) u32, hasher(identity) u32 => u64;
-		}
+	pub fn key_after_prefix(mut prefix: Vec<u8>) -> Vec<u8> {
+		let last = prefix.iter_mut().last().unwrap();
+		assert_ne!(*last, 255, "mock function not implemented for this prefix");
+		*last += 1;
+		prefix
 	}
 
 	#[test]
 	fn value_translate_works() {
-		let t = GenesisConfig::default().build_storage().unwrap();
+		let t = RuntimeGenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
+			type Value = self::frame_system::Value<Runtime>;
+
 			// put the old value `1111u32` in the storage.
 			let key = Value::storage_value_final_key();
 			unhashed::put_raw(&key, &1111u32.encode());
 
 			// translate
 			let translate_fn = |old: Option<u32>| -> Option<(u64, u64)> {
-				old.map(|o| (o.into(), (o*2).into()))
+				old.map(|o| (o.into(), (o * 2).into()))
 			};
 			let res = Value::translate(translate_fn);
 			debug_assert!(res.is_ok());
@@ -90,9 +171,11 @@ mod tests {
 
 	#[test]
 	fn map_translate_works() {
-		let t = GenesisConfig::default().build_storage().unwrap();
+		let t = RuntimeGenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
-			// start with a map of u32 -> u32.
+			type NumberMap = self::frame_system::NumberMap<Runtime>;
+
+			// start with a map of u32 -> u64.
 			for i in 0u32..100u32 {
 				unhashed::put(&NumberMap::hashed_key_for(&i), &(i as u64));
 			}
@@ -103,38 +186,56 @@ mod tests {
 			);
 
 			// do translation.
-			NumberMap::translate(|k: u32, v: u64| if k % 2 == 0 { Some((k as u64) << 32 | v) } else { None });
+			NumberMap::translate(
+				|k: u32, v: u64| if k % 2 == 0 { Some((k as u64) << 32 | v) } else { None },
+			);
 
 			assert_eq!(
 				NumberMap::iter().collect::<Vec<_>>(),
-				(0..50u32).map(|x| x * 2).map(|x| (x, (x as u64) << 32 | x as u64)).collect::<Vec<_>>(),
+				(0..50u32)
+					.map(|x| x * 2)
+					.map(|x| (x, (x as u64) << 32 | x as u64))
+					.collect::<Vec<_>>(),
 			);
 		})
 	}
 
 	#[test]
 	fn try_mutate_works() {
-		let t = GenesisConfig::default().build_storage().unwrap();
+		let t = RuntimeGenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
+			type Value = self::frame_system::Value<Runtime>;
+			type NumberMap = self::frame_system::NumberMap<Runtime>;
+			type DoubleMap = self::frame_system::DoubleMap<Runtime>;
+
 			assert_eq!(Value::get(), (0, 0));
 			assert_eq!(NumberMap::get(0), 0);
 			assert_eq!(DoubleMap::get(0, 0), 0);
 
 			// `assert_noop` ensures that the state does not change
-			assert_noop!(Value::try_mutate(|value| -> Result<(), &'static str> {
-				*value = (2, 2);
-				Err("don't change value")
-			}), "don't change value");
+			assert_noop!(
+				Value::try_mutate(|value| -> Result<(), &'static str> {
+					*value = (2, 2);
+					Err("don't change value")
+				}),
+				"don't change value"
+			);
 
-			assert_noop!(NumberMap::try_mutate(0, |value| -> Result<(), &'static str> {
-				*value = 4;
-				Err("don't change value")
-			}), "don't change value");
+			assert_noop!(
+				NumberMap::try_mutate(0, |value| -> Result<(), &'static str> {
+					*value = 4;
+					Err("don't change value")
+				}),
+				"don't change value"
+			);
 
-			assert_noop!(DoubleMap::try_mutate(0, 0, |value| -> Result<(), &'static str> {
-				*value = 6;
-				Err("don't change value")
-			}), "don't change value");
+			assert_noop!(
+				DoubleMap::try_mutate(0, 0, |value| -> Result<(), &'static str> {
+					*value = 6;
+					Err("don't change value")
+				}),
+				"don't change value"
+			);
 
 			// Showing this explicitly for clarity
 			assert_eq!(Value::get(), (0, 0));

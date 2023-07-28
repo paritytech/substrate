@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,13 +18,13 @@
 //! The imbalance type and its associates, which handles keeps everything adding up properly with
 //! unbalanced operations.
 
-use super::*;
+use super::{super::Imbalance as ImbalanceT, Balanced, *};
+use crate::traits::{
+	misc::{SameOrOther, TryDrop},
+	tokens::Balance,
+};
+use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::marker::PhantomData;
-use sp_runtime::traits::Zero;
-use super::misc::Balance;
-use super::balanced::Balanced;
-use crate::traits::misc::{TryDrop, SameOrOther};
-use super::super::Imbalance as ImbalanceT;
 
 /// Handler for when an imbalance gets dropped. This could handle either a credit (negative) or
 /// debt (positive) imbalance.
@@ -33,12 +33,17 @@ pub trait HandleImbalanceDrop<Balance> {
 	fn handle(amount: Balance);
 }
 
+impl<Balance> HandleImbalanceDrop<Balance> for () {
+	fn handle(_: Balance) {}
+}
+
 /// An imbalance in the system, representing a divergence of recorded token supply from the sum of
 /// the balances of all accounts. This is `must_use` in order to ensure it gets handled (placing
 /// into an account, settling from an account or altering the supply).
 ///
 /// Importantly, it has a special `Drop` impl, and cannot be created outside of this module.
 #[must_use]
+#[derive(RuntimeDebug, Eq, PartialEq)]
 pub struct Imbalance<
 	B: Balance,
 	OnDrop: HandleImbalanceDrop<B>,
@@ -48,11 +53,9 @@ pub struct Imbalance<
 	_phantom: PhantomData<(OnDrop, OppositeOnDrop)>,
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>
-> Drop for Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>> Drop
+	for Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	fn drop(&mut self) {
 		if !self.amount.is_zero() {
 			OnDrop::handle(self.amount)
@@ -60,42 +63,34 @@ impl<
 	}
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>,
-> TryDrop for Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>> TryDrop
+	for Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	/// Drop an instance cleanly. Only works if its value represents "no-operation".
 	fn try_drop(self) -> Result<(), Self> {
 		self.drop_zero()
 	}
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>,
-> Default for Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>> Default
+	for Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	fn default() -> Self {
 		Self::zero()
 	}
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>,
-> Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>>
+	Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	pub(crate) fn new(amount: B) -> Self {
 		Self { amount, _phantom: PhantomData }
 	}
 }
 
-impl<
-	B: Balance,
-	OnDrop: HandleImbalanceDrop<B>,
-	OppositeOnDrop: HandleImbalanceDrop<B>,
-> ImbalanceT<B> for Imbalance<B, OnDrop, OppositeOnDrop> {
+impl<B: Balance, OnDrop: HandleImbalanceDrop<B>, OppositeOnDrop: HandleImbalanceDrop<B>>
+	ImbalanceT<B> for Imbalance<B, OnDrop, OppositeOnDrop>
+{
 	type Opposite = Imbalance<B, OppositeOnDrop, OnDrop>;
 
 	fn zero() -> Self {
@@ -126,9 +121,10 @@ impl<
 		self.amount = self.amount.saturating_add(other.amount);
 		sp_std::mem::forget(other);
 	}
-	fn offset(self, other: Imbalance<B, OppositeOnDrop, OnDrop>)
-		-> SameOrOther<Self, Imbalance<B, OppositeOnDrop, OnDrop>>
-	{
+	fn offset(
+		self,
+		other: Imbalance<B, OppositeOnDrop, OnDrop>,
+	) -> SameOrOther<Self, Imbalance<B, OppositeOnDrop, OnDrop>> {
 		let (a, b) = (self.amount, other.amount);
 		sp_std::mem::forget((self, other));
 
@@ -146,15 +142,16 @@ impl<
 }
 
 /// Imbalance implying that the total_issuance value is less than the sum of all account balances.
-pub type DebtOf<AccountId, B> = Imbalance<
+pub type Debt<AccountId, B> = Imbalance<
 	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by increasing the total_issuance value.
 	<B as Balanced<AccountId>>::OnDropDebt,
 	<B as Balanced<AccountId>>::OnDropCredit,
 >;
 
-/// Imbalance implying that the total_issuance value is greater than the sum of all account balances.
-pub type CreditOf<AccountId, B> = Imbalance<
+/// Imbalance implying that the total_issuance value is greater than the sum of all account
+/// balances.
+pub type Credit<AccountId, B> = Imbalance<
 	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by decreasing the total_issuance value.
 	<B as Balanced<AccountId>>::OnDropCredit,

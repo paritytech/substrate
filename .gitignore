@@ -21,7 +21,10 @@ rls*.log
 .local
 **/hfuzz_target/
 **/hfuzz_workspace/
-.cargo/
 .cargo-remote.toml
 *.bin
 *.iml
+bin/node-template/Cargo.lock
+substrate.code-workspace
+.direnv/
+/.envrc

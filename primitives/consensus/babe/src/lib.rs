@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,20 +23,18 @@
 pub mod digests;
 pub mod inherents;
 
-pub use merlin::Transcript;
-pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
-};
-
-use codec::{Decode, Encode};
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
-#[cfg(feature = "std")]
-use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use sp_runtime::{traits::Header, ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 use crate::digests::{NextConfigDescriptor, NextEpochDescriptor};
+
+pub use sp_core::sr25519::vrf::{
+	VrfInput, VrfOutput, VrfProof, VrfSignData, VrfSignature, VrfTranscript,
+};
 
 /// Key type for BABE module.
 pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::BABE;
@@ -46,11 +44,14 @@ mod app {
 	app_crypto!(sr25519, BABE);
 }
 
-/// The prefix used by BABE for its VRF keys.
-pub const BABE_VRF_PREFIX: &[u8] = b"substrate-babe-vrf";
+/// VRF context used for per-slot randomness generation.
+pub const RANDOMNESS_VRF_CONTEXT: &[u8] = b"BabeVRFInOutContext";
 
-/// BABE VRFInOut context.
-pub static BABE_VRF_INOUT_CONTEXT: &[u8] = b"BabeVRFInOutContext";
+/// VRF output length for per-slot randomness.
+pub const RANDOMNESS_LENGTH: usize = 32;
+
+/// Randomness type required by BABE operations.
+pub type Randomness = [u8; RANDOMNESS_LENGTH];
 
 /// A Babe authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Babe module. If that ever changes, then this must, too.
@@ -78,7 +79,7 @@ pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by
 /// The index of an authority.
 pub type AuthorityIndex = u32;
 
-pub use sp_consensus_slots::Slot;
+pub use sp_consensus_slots::{Slot, SlotDuration};
 
 /// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
 pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, AuthorityId>;
@@ -88,37 +89,28 @@ pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, Authori
 //       `Weight` types, since the metadata isn't able to disambiguate.
 pub type BabeAuthorityWeight = u64;
 
-/// The weight of a BABE block.
+/// The cumulative weight of a BABE block, i.e. sum of block weights starting
+/// at this block until the genesis block.
+///
+/// Primary blocks have a weight of 1 whereas secondary blocks have a weight
+/// of 0 (regardless of whether they are plain or vrf secondary blocks).
 pub type BabeBlockWeight = u32;
 
-/// Make a VRF transcript from given randomness, slot number and epoch.
-pub fn make_transcript(
-	randomness: &Randomness,
-	slot: Slot,
-	epoch: u64,
-) -> Transcript {
-	let mut transcript = Transcript::new(&BABE_ENGINE_ID);
-	transcript.append_u64(b"slot number", *slot);
-	transcript.append_u64(b"current epoch", epoch);
-	transcript.append_message(b"chain randomness", &randomness[..]);
-	transcript
+/// Make VRF input suitable for BABE's randomness generation.
+pub fn make_vrf_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfInput {
+	VrfInput::new(
+		&BABE_ENGINE_ID,
+		&[
+			(b"slot number", &slot.to_le_bytes()),
+			(b"current epoch", &epoch.to_le_bytes()),
+			(b"chain randomness", randomness),
+		],
+	)
 }
 
-/// Make a VRF transcript data container
-#[cfg(feature = "std")]
-pub fn make_transcript_data(
-	randomness: &Randomness,
-	slot: Slot,
-	epoch: u64,
-) -> VRFTranscriptData {
-	VRFTranscriptData {
-		label: &BABE_ENGINE_ID,
-		items: vec![
-			("slot number", VRFTranscriptValue::U64(*slot)),
-			("current epoch", VRFTranscriptValue::U64(epoch)),
-			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
-		]
-	}
+/// Make VRF signing data suitable for BABE's protocol.
+pub fn make_vrf_sign_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VrfSignData {
+	make_vrf_transcript(randomness, slot, epoch).into()
 }
 
 /// An consensus log item for BABE.
@@ -140,7 +132,7 @@ pub enum ConsensusLog {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeGenesisConfigurationV1 {
+pub struct BabeConfigurationV1 {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
@@ -159,7 +151,7 @@ pub struct BabeGenesisConfigurationV1 {
 	pub c: (u64, u64),
 
 	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
 	/// The randomness for the genesis epoch.
 	pub randomness: Randomness,
@@ -169,13 +161,13 @@ pub struct BabeGenesisConfigurationV1 {
 	pub secondary_slots: bool,
 }
 
-impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
-	fn from(v1: BabeGenesisConfigurationV1) -> Self {
+impl From<BabeConfigurationV1> for BabeConfiguration {
+	fn from(v1: BabeConfigurationV1) -> Self {
 		Self {
 			slot_duration: v1.slot_duration,
 			epoch_length: v1.epoch_length,
 			c: v1.c,
-			genesis_authorities: v1.genesis_authorities,
+			authorities: v1.authorities,
 			randomness: v1.randomness,
 			allowed_slots: if v1.secondary_slots {
 				AllowedSlots::PrimaryAndSecondaryPlainSlots
@@ -187,8 +179,8 @@ impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
 }
 
 /// Configuration data used by the BABE consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeGenesisConfiguration {
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct BabeConfiguration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
@@ -206,19 +198,26 @@ pub struct BabeGenesisConfiguration {
 	/// of a slot being empty.
 	pub c: (u64, u64),
 
-	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	/// The authorities
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
-	/// The randomness for the genesis epoch.
+	/// The randomness
 	pub randomness: Randomness,
 
 	/// Type of allowed slots.
 	pub allowed_slots: AllowedSlots,
 }
 
+impl BabeConfiguration {
+	/// Convenience method to get the slot duration as a `SlotDuration` value.
+	pub fn slot_duration(&self) -> SlotDuration {
+		SlotDuration::from_millis(self.slot_duration)
+	}
+}
+
 /// Types of allowed slots.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AllowedSlots {
 	/// Only allow primary slots.
 	PrimarySlots,
@@ -240,18 +239,9 @@ impl AllowedSlots {
 	}
 }
 
-#[cfg(feature = "std")]
-impl sp_consensus::SlotData for BabeGenesisConfiguration {
-	fn slot_duration(&self) -> std::time::Duration {
-		std::time::Duration::from_millis(self.slot_duration)
-	}
-
-	const SLOT_KEY: &'static [u8] = b"babe_configuration";
-}
-
-/// Configuration data used by the BABE consensus engine.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+/// Configuration data used by the BABE consensus engine that may change with epochs.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BabeEpochConfiguration {
 	/// A constant value that is used in the threshold calculation formula.
 	/// Expressed as a rational where the first member of the tuple is the
@@ -276,20 +266,15 @@ where
 	use digests::*;
 	use sp_application_crypto::RuntimeAppPublic;
 
-	let find_pre_digest = |header: &H| {
-		header
-			.digest()
-			.logs()
-			.iter()
-			.find_map(|log| log.as_babe_pre_digest())
-	};
+	let find_pre_digest =
+		|header: &H| header.digest().logs().iter().find_map(|log| log.as_babe_pre_digest());
 
 	let verify_seal_signature = |mut header: H, offender: &AuthorityId| {
 		let seal = header.digest_mut().pop()?.as_babe_seal()?;
 		let pre_hash = header.hash();
 
 		if !offender.verify(&pre_hash.as_ref(), &seal) {
-			return None;
+			return None
 		}
 
 		Some(())
@@ -298,7 +283,7 @@ where
 	let verify_proof = || {
 		// we must have different headers for the equivocation to be valid
 		if proof.first_header.hash() == proof.second_header.hash() {
-			return None;
+			return None
 		}
 
 		let first_pre_digest = find_pre_digest(&proof.first_header)?;
@@ -309,12 +294,12 @@ where
 		if proof.slot != first_pre_digest.slot() ||
 			first_pre_digest.slot() != second_pre_digest.slot()
 		{
-			return None;
+			return None
 		}
 
 		// both headers must have been authored by the same authority
 		if first_pre_digest.authority_index() != second_pre_digest.authority_index() {
-			return None;
+			return None
 		}
 
 		// we finally verify that the expected authority has signed both headers and
@@ -337,7 +322,7 @@ where
 /// the runtime API boundary this type is unknown and as such we keep this
 /// opaque representation, implementors of the runtime API will have to make
 /// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
-#[derive(Decode, Encode, PartialEq)]
+#[derive(Decode, Encode, PartialEq, TypeInfo)]
 pub struct OpaqueKeyOwnershipProof(Vec<u8>);
 impl OpaqueKeyOwnershipProof {
 	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
@@ -354,7 +339,7 @@ impl OpaqueKeyOwnershipProof {
 }
 
 /// BABE epoch information
-#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug)]
+#[derive(Decode, Encode, PartialEq, Eq, Clone, Debug, TypeInfo)]
 pub struct Epoch {
 	/// The epoch index.
 	pub epoch_index: u64,
@@ -365,21 +350,40 @@ pub struct Epoch {
 	/// The authorities and their weights.
 	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
+	pub randomness: Randomness,
 	/// Configuration of the epoch.
 	pub config: BabeEpochConfiguration,
+}
+
+/// Returns the epoch index the given slot belongs to.
+pub fn epoch_index(slot: Slot, genesis_slot: Slot, epoch_duration: u64) -> u64 {
+	*slot.saturating_sub(genesis_slot) / epoch_duration
+}
+
+/// Returns the first slot at the given epoch index.
+pub fn epoch_start_slot(epoch_index: u64, genesis_slot: Slot, epoch_duration: u64) -> Slot {
+	// (epoch_index * epoch_duration) + genesis_slot
+
+	const PROOF: &str = "slot number is u64; it should relate in some way to wall clock time; \
+						 if u64 is not enough we should crash for safety; qed.";
+
+	epoch_index
+		.checked_mul(epoch_duration)
+		.and_then(|slot| slot.checked_add(*genesis_slot))
+		.expect(PROOF)
+		.into()
 }
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	#[api_version(2)]
 	pub trait BabeApi {
-		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
-		fn configuration() -> BabeGenesisConfiguration;
+		/// Return the configuration for BABE.
+		fn configuration() -> BabeConfiguration;
 
 		/// Return the configuration for BABE. Version 1.
 		#[changed_in(2)]
-		fn configuration() -> BabeGenesisConfigurationV1;
+		fn configuration() -> BabeConfigurationV1;
 
 		/// Returns the slot that started the current epoch.
 		fn current_epoch_start() -> Slot;

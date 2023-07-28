@@ -1,7 +1,7 @@
 # Scheduler
 A module for scheduling dispatches.
 
-- [`scheduler::Trait`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/trait.Trait.html)
+- [`scheduler::Config`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-scheduler/latest/pallet_scheduler/struct.Module.html)
 
@@ -31,4 +31,4 @@ then those filter will not be used when dispatching the schedule call.
   `Vec<u8>` parameter that can be used for identification.
 * `cancel_named` - the named complement to the cancel function.
 
-License: Unlicense
+License: Apache 2.0

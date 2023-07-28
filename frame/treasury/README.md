@@ -1,11 +1,11 @@
-# Treasury Module
+# Treasury Pallet
 
-The Treasury module provides a "pot" of funds that can be managed by stakeholders in the system and
+The Treasury pallet provides a "pot" of funds that can be managed by stakeholders in the system and
 a structure for making spending proposals from this pot.
 
 ## Overview
 
-The Treasury Module itself provides the pot to store funds, and a means for stakeholders to propose,
+The Treasury Pallet itself provides the pot to store funds, and a means for stakeholders to propose,
 approve, and deny expenditures. The chain will need to provide a method (e.g.inflation, fees) for
 collecting funds.
 
@@ -19,7 +19,7 @@ and use the funds to pay developers.
   approved.
 - **Deposit:** Funds that a proposer must lock when making a proposal. The deposit will be returned
   or slashed if the proposal is approved or rejected respectively.
-- **Pot:** Unspent funds accumulated by the treasury module.
+- **Pot:** Unspent funds accumulated by the treasury pallet.
 
 ## Interface
 

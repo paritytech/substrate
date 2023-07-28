@@ -1,0 +1,5 @@
+error: compact solution can accept only #[compact]
+ --> $DIR/wrong_attribute.rs:4:2
+  |
+4 |     #[pages(1)] pub struct TestSolution::<
+  |     ^^^^^^^^^^^

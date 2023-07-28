@@ -1,0 +1,106 @@
+// Schema definition for block request/response messages.
+
+syntax = "proto3";
+
+package api.v1;
+
+// Block enumeration direction.
+enum Direction {
+	// Enumerate in ascending order (from child to parent).
+	Ascending = 0;
+	// Enumerate in descending order (from parent to canonical child).
+	Descending = 1;
+}
+
+// Request block data from a peer.
+message BlockRequest {
+	// Bits of block data to request.
+	uint32 fields = 1;
+	// Start from this block.
+	oneof from_block {
+		// Start with given hash.
+		bytes hash = 2;
+		// Start with given block number.
+		bytes number = 3;
+	}
+	// Sequence direction.
+	// If missing, should be interpreted as "Ascending".
+	Direction direction = 5;
+	// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
+	uint32 max_blocks = 6; // optional
+	// Indicate to the receiver that we support multiple justifications. If the responder also
+	// supports this it will populate the multiple justifications field in `BlockData` instead of
+	// the single justification field.
+	bool support_multiple_justifications = 7; // optional
+}
+
+// Response to `BlockRequest`
+message BlockResponse {
+	// Block data for the requested sequence.
+	repeated BlockData blocks = 1;
+}
+
+// Block data sent in the response.
+message BlockData {
+	// Block header hash.
+	bytes hash = 1;
+	// Block header if requested.
+	bytes header = 2; // optional
+	// Block body if requested.
+	repeated bytes body = 3; // optional
+	// Block receipt if requested.
+	bytes receipt = 4; // optional
+	// Block message queue if requested.
+	bytes message_queue = 5; // optional
+	// Justification if requested.
+	bytes justification = 6; // optional
+	// True if justification should be treated as present but empty.
+	// This hack is unfortunately necessary because shortcomings in the protobuf format otherwise
+	// doesn't make in possible to differentiate between a lack of justification and an empty
+	// justification.
+	bool is_empty_justification = 7; // optional, false if absent
+	// Justifications if requested.
+	// Unlike the field for a single justification, this field does not required an associated
+	// boolean to differentiate between the lack of justifications and empty justification(s). This
+	// is because empty justifications, like all justifications, are paired with a non-empty
+	// consensus engine ID.
+	bytes justifications = 8; // optional
+	// Indexed block body if requestd.
+	repeated bytes indexed_body = 9; // optional
+}
+
+// Request storage data from a peer.
+message StateRequest {
+	// Block header hash.
+	bytes block = 1;
+	// Start from this key.
+	// Multiple keys used for nested state start.
+	repeated bytes start = 2; // optional
+	// if 'true' indicates that response should contain raw key-values, rather than proof.
+	bool no_proof = 3;
+}
+
+message StateResponse {
+	// A collection of keys-values states. Only populated if `no_proof` is `true`
+	repeated KeyValueStateEntry entries = 1;
+	// If `no_proof` is false in request, this contains proof nodes.
+	bytes proof = 2;
+}
+
+// A key value state.
+message KeyValueStateEntry {
+	// Root of for this level, empty length bytes
+	// if top level.
+	bytes state_root = 1;
+	// A collection of keys-values.
+	repeated StateEntry entries = 2;
+	// Set to true when there are no more keys to return.
+	bool complete = 3;
+}
+
+// A key-value pair.
+message StateEntry {
+	bytes key = 1;
+	bytes value = 2;
+}
+

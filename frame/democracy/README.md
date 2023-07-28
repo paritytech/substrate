@@ -1,6 +1,6 @@
 # Democracy Pallet
 
-- [`democracy::Trait`](https://docs.rs/pallet-democracy/latest/pallet_democracy/trait.Trait.html)
+- [`democracy::Config`](https://docs.rs/pallet-democracy/latest/pallet_democracy/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-democracy/latest/pallet_democracy/enum.Call.html)
 
 ## Overview

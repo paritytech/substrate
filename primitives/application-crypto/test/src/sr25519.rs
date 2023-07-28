@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,32 +17,31 @@
 
 //! Integration tests for sr25519
 
-use std::sync::Arc;
-use sp_runtime::generic::BlockId;
+use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_application_crypto::sr25519::AppPair;
 use sp_core::{
-	crypto::Pair,
+	crypto::{ByteArray, Pair},
 	testing::SR25519,
 };
-use sp_keystore::{
-	SyncCryptoStore,
-	testing::KeyStore,
-};
+use sp_keystore::{testing::MemoryKeystore, Keystore, KeystoreExt};
+use std::sync::Arc;
 use substrate_test_runtime_client::{
-	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
-	runtime::TestAPI,
+	runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
 };
-use sp_api::ProvideRuntimeApi;
-use sp_application_crypto::sr25519::{AppPair, AppPublic};
 
 #[test]
 fn sr25519_works_in_runtime() {
-	let keystore = Arc::new(KeyStore::new());
-	let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
-	let (signature, public) = test_client.runtime_api()
-		.test_sr25519_crypto(&BlockId::Number(0))
+	let keystore = Arc::new(MemoryKeystore::new());
+	let test_client = TestClientBuilder::new().build();
+
+	let mut runtime_api = test_client.runtime_api();
+	runtime_api.register_extension(KeystoreExt::new(keystore.clone()));
+
+	let (signature, public) = runtime_api
+		.test_sr25519_crypto(test_client.chain_info().genesis_hash)
 		.expect("Tests `sr25519` crypto.");
 
-	let supported_keys = SyncCryptoStore::keys(&*keystore, SR25519).unwrap();
-	assert!(supported_keys.contains(&public.clone().into()));
-	assert!(AppPair::verify(&signature, "sr25519", &AppPublic::from(public)));
+	let supported_keys = keystore.keys(SR25519).unwrap();
+	assert!(supported_keys.contains(&public.to_raw_vec()));
+	assert!(AppPair::verify(&signature, "sr25519", &public));
 }

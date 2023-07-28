@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -87,8 +87,6 @@
 //!
 //! The following multiplexing protocols are supported:
 //!
-//! - [Mplex](https://github.com/libp2p/specs/tree/master/mplex). Support for mplex will likely
-//! be deprecated in the future.
 //! - [Yamux](https://github.com/hashicorp/yamux/blob/master/spec.md).
 //!
 //! ## Substreams
@@ -103,8 +101,8 @@
 //! protocol ID.
 //!
 //! > **Note**: It is possible for the same connection to be used for multiple chains. For example,
-//! >           one can use both the `/dot/sync/2` and `/sub/sync/2` protocols on the same
-//! >           connection, provided that the remote supports them.
+//! > one can use both the `/dot/sync/2` and `/sub/sync/2` protocols on the same
+//! > connection, provided that the remote supports them.
 //!
 //! Substrate uses the following standard libp2p protocols:
 //!
@@ -121,10 +119,10 @@
 //!
 //! - **`/substrate/<protocol-id>/<version>`** (where `<protocol-id>` must be replaced with the
 //! protocol ID of the targeted chain, and `<version>` is a number between 2 and 6). For each
-//! connection we optionally keep an additional substream for all Substrate-based communications alive.
-//! This protocol is considered legacy, and is progressively being replaced with alternatives.
-//! This is designated as "The legacy Substrate substream" in this documentation. See below for
-//! more details.
+//! connection we optionally keep an additional substream for all Substrate-based communications
+//! alive. This protocol is considered legacy, and is progressively being replaced with
+//! alternatives. This is designated as "The legacy Substrate substream" in this documentation. See
+//! below for more details.
 //! - **`/<protocol-id>/sync/2`** is a request-response protocol (see below) that lets one perform
 //! requests for information about blocks. Each request is the encoding of a `BlockRequest` and
 //! each response is the encoding of a `BlockResponse`, as defined in the `api.v1.proto` file in
@@ -212,7 +210,7 @@
 //! `sc-network` automatically tries to open a substream towards each node for which the legacy
 //! Substream substream is open. The handshake is then performed automatically.
 //!
-//! For example, the `sc-finality-grandpa` crate registers the `/paritytech/grandpa/1`
+//! For example, the `sc-consensus-grandpa` crate registers the `/paritytech/grandpa/1`
 //! notifications protocol.
 //!
 //! At the moment, for backwards-compatibility, notification protocols are tied to the legacy
@@ -243,39 +241,49 @@
 //! - Calling `trigger_repropagate` when a transaction is added to the pool.
 //!
 //! More precise usage details are still being worked on and will likely change in the future.
-//!
 
 mod behaviour;
-mod chain;
-mod peer_info;
-mod discovery;
-mod on_demand_layer;
+mod peer_store;
+mod peerset;
 mod protocol;
-mod request_responses;
-mod schema;
+mod protocol_controller;
 mod service;
-mod transport;
-mod utils;
 
-pub mod block_request_handler;
-pub mod bitswap;
-pub mod light_client_requests;
 pub mod config;
+pub mod discovery;
 pub mod error;
-pub mod gossip;
+pub mod event;
 pub mod network_state;
-pub mod transactions;
+pub mod peer_info;
+pub mod request_responses;
+pub mod transport;
+pub mod types;
+pub mod utils;
 
+pub use event::{DhtEvent, Event, SyncEvent};
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{event::{DhtEvent, Event, ObservedRole}, sync::SyncState, PeerInfo};
-pub use service::{
-	NetworkService, NetworkWorker, RequestFailure, OutboundFailure, NotificationSender,
-	NotificationSenderReady, IfDisconnected,
+pub use request_responses::{Config, IfDisconnected, RequestFailure};
+pub use sc_network_common::{
+	role::ObservedRole,
+	sync::{
+		warp::{WarpSyncPhase, WarpSyncProgress},
+		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
+	},
+	types::ReputationChange,
 };
-
-pub use sc_peerset::ReputationChange;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+pub use service::{
+	signature::Signature,
+	traits::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkEventStream, NetworkNotification,
+		NetworkPeers, NetworkRequest, NetworkSigner, NetworkStateInfo, NetworkStatus,
+		NetworkStatusProvider, NetworkSyncForkRequest, NotificationSender as NotificationSenderT,
+		NotificationSenderError, NotificationSenderReady,
+	},
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender, NotificationsSink,
+	OutboundFailure, PublicKey,
+};
+pub use types::ProtocolName;
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -288,37 +296,3 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
-
-/// Minimum Requirements for a Hash within Networking
-pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
-
-impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
-{}
-
-/// Trait for providing information about the local network state
-pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
-
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
-}
-
-/// Overview status of the network.
-#[derive(Clone)]
-pub struct NetworkStatus<B: BlockT> {
-	/// Current global sync state.
-	pub sync_state: SyncState,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_sync_peers: u32,
-	/// Total number of connected peers
-	pub num_connected_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
-	/// The total number of bytes received.
-	pub total_bytes_inbound: u64,
-	/// The total number of bytes sent.
-	pub total_bytes_outbound: u64,
-}

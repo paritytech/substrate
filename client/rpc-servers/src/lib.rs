@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -20,142 +20,163 @@
 
 #![warn(missing_docs)]
 
-mod middleware;
+pub mod middleware;
 
-use std::io;
-use jsonrpc_core::{IoHandlerExtension, MetaIoHandler};
-use log::error;
-use pubsub::PubSubMetadata;
+use http::header::HeaderValue;
+use jsonrpsee::{
+	server::{
+		middleware::proxy_get_request::ProxyGetRequestLayer, AllowHosts, ServerBuilder,
+		ServerHandle,
+	},
+	RpcModule,
+};
+use std::{error::Error as StdError, net::SocketAddr};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
-/// Maximal payload accepted by RPC servers.
-const MAX_PAYLOAD: usize = 15 * 1024 * 1024;
+pub use crate::middleware::RpcMetrics;
+pub use jsonrpsee::core::{
+	id_providers::{RandomIntegerIdProvider, RandomStringIdProvider},
+	traits::IdProvider,
+};
 
-/// Default maximum number of connections for WS RPC servers.
-const WS_MAX_CONNECTIONS: usize = 100;
+const MEGABYTE: u32 = 1024 * 1024;
 
-/// The RPC IoHandler containing all requested APIs.
-pub type RpcHandler<T> = pubsub::PubSubHandler<T, RpcMiddleware>;
+/// Type alias for the JSON-RPC server.
+pub type Server = ServerHandle;
 
-pub use self::inner::*;
-pub use middleware::{RpcMiddleware, RpcMetrics};
-
-/// Construct rpc `IoHandler`
-pub fn rpc_handler<M: PubSubMetadata>(
-	extension: impl IoHandlerExtension<M>,
-	rpc_middleware: RpcMiddleware,
-) -> RpcHandler<M> {
-	let io_handler = MetaIoHandler::with_middleware(rpc_middleware);
-	let mut io = pubsub::PubSubHandler::new(io_handler);
-	extension.augment(&mut io);
-
-	// add an endpoint to list all available methods.
-	let mut methods = io.iter().map(|x| x.0.clone()).collect::<Vec<String>>();
-	io.add_method("rpc_methods", {
-		methods.sort();
-		let methods = serde_json::to_value(&methods)
-			.expect("Serialization of Vec<String> is infallible; qed");
-
-		move |_| Ok(serde_json::json!({
-			"version": 1,
-			"methods": methods.clone(),
-		}))
-	});
-	io
+/// RPC server configuration.
+#[derive(Debug)]
+pub struct Config<'a, M: Send + Sync + 'static> {
+	/// Socket addresses.
+	pub addrs: [SocketAddr; 2],
+	/// CORS.
+	pub cors: Option<&'a Vec<String>>,
+	/// Maximum connections.
+	pub max_connections: u32,
+	/// Maximum subscriptions per connection.
+	pub max_subs_per_conn: u32,
+	/// Maximum rpc request payload size.
+	pub max_payload_in_mb: u32,
+	/// Maximum rpc response payload size.
+	pub max_payload_out_mb: u32,
+	/// Metrics.
+	pub metrics: Option<RpcMetrics>,
+	/// RPC API.
+	pub rpc_api: RpcModule<M>,
+	/// Subscription ID provider.
+	pub id_provider: Option<Box<dyn IdProvider>>,
+	/// Tokio runtime handle.
+	pub tokio_handle: tokio::runtime::Handle,
 }
 
-#[cfg(not(target_os = "unknown"))]
-mod inner {
-	use super::*;
+/// Start RPC server listening on given address.
+pub async fn start_server<M: Send + Sync + 'static>(
+	config: Config<'_, M>,
+) -> Result<ServerHandle, Box<dyn StdError + Send + Sync>> {
+	let Config {
+		addrs,
+		cors,
+		max_payload_in_mb,
+		max_payload_out_mb,
+		max_connections,
+		max_subs_per_conn,
+		metrics,
+		id_provider,
+		tokio_handle,
+		rpc_api,
+	} = config;
 
-	/// Type alias for ipc server
-	pub type IpcServer = ipc::Server;
-	/// Type alias for http server
-	pub type HttpServer = http::Server;
-	/// Type alias for ws server
-	pub type WsServer = ws::Server;
+	let host_filter = hosts_filtering(cors.is_some(), &addrs);
 
-	/// Start HTTP server listening on given address.
-	///
-	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_http<M: pubsub::PubSubMetadata + Default>(
-		addr: &std::net::SocketAddr,
-		cors: Option<&Vec<String>>,
-		io: RpcHandler<M>,
-	) -> io::Result<http::Server> {
-		http::ServerBuilder::new(io)
-			.threads(4)
-			.health_api(("/health", "system_health"))
-			.allowed_hosts(hosts_filtering(cors.is_some()))
-			.rest_api(if cors.is_some() {
-				http::RestApi::Secure
-			} else {
-				http::RestApi::Unsecure
-			})
-			.cors(map_cors::<http::AccessControlAllowOrigin>(cors))
-			.max_request_body_size(MAX_PAYLOAD)
-			.start_http(addr)
-	}
+	let middleware = tower::ServiceBuilder::new()
+		// Proxy `GET /health` requests to internal `system_health` method.
+		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
+		.layer(try_into_cors(cors)?);
 
-	/// Start IPC server listening on given path.
-	///
-	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ipc<M: pubsub::PubSubMetadata + Default>(
-		addr: &str,
-		io: RpcHandler<M>,
-	) -> io::Result<ipc::Server> {
-		let builder = ipc::ServerBuilder::new(io);
-		#[cfg(target_os = "unix")]
-		builder.set_security_attributes({
-			let security_attributes = ipc::SecurityAttributes::empty();
-			security_attributes.set_mode(0o600)?;
-			security_attributes
-		});
-		builder.start(addr)
-	}
+	let mut builder = ServerBuilder::new()
+		.max_request_body_size(max_payload_in_mb.saturating_mul(MEGABYTE))
+		.max_response_body_size(max_payload_out_mb.saturating_mul(MEGABYTE))
+		.max_connections(max_connections)
+		.max_subscriptions_per_connection(max_subs_per_conn)
+		.ping_interval(std::time::Duration::from_secs(30))
+		.set_host_filtering(host_filter)
+		.set_middleware(middleware)
+		.custom_tokio_runtime(tokio_handle);
 
-	/// Start WS server listening on given address.
-	///
-	/// **Note**: Only available if `not(target_os = "unknown")`.
-	pub fn start_ws<M: pubsub::PubSubMetadata + From<jsonrpc_core::futures::sync::mpsc::Sender<String>>> (
-		addr: &std::net::SocketAddr,
-		max_connections: Option<usize>,
-		cors: Option<&Vec<String>>,
-		io: RpcHandler<M>,
-	) -> io::Result<ws::Server> {
-		ws::ServerBuilder::with_meta_extractor(io, |context: &ws::RequestContext| context.sender().into())
-			.max_payload(MAX_PAYLOAD)
-			.max_connections(max_connections.unwrap_or(WS_MAX_CONNECTIONS))
-			.allowed_origins(map_cors(cors))
-			.allowed_hosts(hosts_filtering(cors.is_some()))
-			.start(addr)
-			.map_err(|err| match err {
-				ws::Error::Io(io) => io,
-				ws::Error::ConnectionClosed => io::ErrorKind::BrokenPipe.into(),
-				e => {
-					error!("{}", e);
-					io::ErrorKind::Other.into()
-				}
-			})
-	}
+	if let Some(provider) = id_provider {
+		builder = builder.set_id_provider(provider);
+	} else {
+		builder = builder.set_id_provider(RandomStringIdProvider::new(16));
+	};
 
-	fn map_cors<T: for<'a> From<&'a str>>(
-		cors: Option<&Vec<String>>
-	) -> http::DomainsValidation<T> {
-		cors.map(|x| x.iter().map(AsRef::as_ref).map(Into::into).collect::<Vec<_>>()).into()
-	}
+	let rpc_api = build_rpc_api(rpc_api);
+	let (handle, addr) = if let Some(metrics) = metrics {
+		let server = builder.set_logger(metrics).build(&addrs[..]).await?;
+		let addr = server.local_addr();
+		(server.start(rpc_api)?, addr)
+	} else {
+		let server = builder.build(&addrs[..]).await?;
+		let addr = server.local_addr();
+		(server.start(rpc_api)?, addr)
+	};
 
-	fn hosts_filtering(enable: bool) -> http::DomainsValidation<http::Host> {
-		if enable {
-			// NOTE The listening address is whitelisted by default.
-			// Setting an empty vector here enables the validation
-			// and allows only the listening address.
-			http::DomainsValidation::AllowOnly(vec![])
-		} else {
-			http::DomainsValidation::Disabled
+	log::info!(
+		"Running JSON-RPC server: addr={}, allowed origins={}",
+		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
+		format_cors(cors)
+	);
+
+	Ok(handle)
+}
+
+fn hosts_filtering(enabled: bool, addrs: &[SocketAddr]) -> AllowHosts {
+	if enabled {
+		// NOTE The listening addresses are whitelisted by default.
+		let mut hosts = Vec::with_capacity(addrs.len() * 2);
+		for addr in addrs {
+			hosts.push(format!("localhost:{}", addr.port()).into());
+			hosts.push(format!("127.0.0.1:{}", addr.port()).into());
 		}
+		AllowHosts::Only(hosts)
+	} else {
+		AllowHosts::Any
 	}
 }
 
-#[cfg(target_os = "unknown")]
-mod inner {
+fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
+	let mut available_methods = rpc_api.method_names().collect::<Vec<_>>();
+	available_methods.sort();
+
+	rpc_api
+		.register_method("rpc_methods", move |_, _| {
+			Ok(serde_json::json!({
+				"methods": available_methods,
+			}))
+		})
+		.expect("infallible all other methods have their own address space; qed");
+
+	rpc_api
+}
+
+fn try_into_cors(
+	maybe_cors: Option<&Vec<String>>,
+) -> Result<CorsLayer, Box<dyn StdError + Send + Sync>> {
+	if let Some(cors) = maybe_cors {
+		let mut list = Vec::new();
+		for origin in cors {
+			list.push(HeaderValue::from_str(origin)?);
+		}
+		Ok(CorsLayer::new().allow_origin(AllowOrigin::list(list)))
+	} else {
+		// allow all cors
+		Ok(CorsLayer::permissive())
+	}
+}
+
+fn format_cors(maybe_cors: Option<&Vec<String>>) -> String {
+	if let Some(cors) = maybe_cors {
+		format!("{:?}", cors)
+	} else {
+		format!("{:?}", ["*"])
+	}
 }

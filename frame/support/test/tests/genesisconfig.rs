@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,32 +15,85 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait Config: frame_support_test::Config {}
+use frame_support::derive_impl;
+use frame_system::pallet_prelude::BlockNumberFor;
+use sp_core::{sr25519, ConstU32};
+use sp_runtime::{
+	generic,
+	traits::{BlakeTwo256, Verify},
+};
 
-frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
-}
+#[frame_support::pallet]
+pub mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
 
-frame_support::decl_storage! {
-	trait Store for Module<T: Config> as Test {
-		pub AppendableDM config(t): double_map hasher(identity) u32, hasher(identity) T::BlockNumber => Vec<u32>;
+	#[pallet::pallet]
+	pub struct Pallet<T>(_);
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {}
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {}
+
+	#[pallet::storage]
+	#[pallet::unbounded]
+	pub type AppendableDM<T: Config> =
+		StorageDoubleMap<_, Identity, u32, Identity, BlockNumberFor<T>, Vec<u32>>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub t: Vec<(u32, BlockNumberFor<T>, Vec<u32>)>,
+	}
+
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { t: Default::default() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+		fn build(&self) {
+			for (k1, k2, v) in &self.t {
+				<AppendableDM<T>>::insert(k1, k2, v);
+			}
+		}
 	}
 }
 
-struct Test;
+pub type BlockNumber = u32;
+pub type Signature = sr25519::Signature;
+pub type AccountId = <Signature as Verify>::Signer;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
-impl frame_support_test::Config for Test {
-	type BlockNumber = u32;
-	type Origin = ();
-	type PalletInfo = frame_support_test::PanicPalletInfo;
-	type DbWeight = ();
+frame_support::construct_runtime!(
+	pub enum Test
+
+	{
+		System: frame_system,
+		MyPallet: pallet,
+	}
+);
+
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
+impl frame_system::Config for Test {
+	type BaseCallFilter = frame_support::traits::Everything;
+	type Block = Block;
+	type BlockHashCount = ConstU32<10>;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type PalletInfo = PalletInfo;
+	type OnSetCode = ();
 }
 
-impl Config for Test {}
+impl pallet::Config for Test {}
 
 #[test]
 fn init_genesis_config() {
-	GenesisConfig::<Test> {
-		t: Default::default(),
-	};
+	pallet::GenesisConfig::<Test>::default();
 }

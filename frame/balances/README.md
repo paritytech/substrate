@@ -2,9 +2,9 @@
 
 The Balances module provides functionality for handling accounts and balances.
 
-- [`balances::Trait`](https://docs.rs/pallet-balances/latest/pallet_balances/trait.Trait.html)
-- [`Call`](https://docs.rs/pallet-balances/latest/pallet_balances/enum.Call.html)
-- [`Module`](https://docs.rs/pallet-balances/latest/pallet_balances/struct.Module.html)
+- [`Config`](https://docs.rs/pallet-balances/latest/pallet_balances/pallet/trait.Config.html)
+- [`Call`](https://docs.rs/pallet-balances/latest/pallet_balances/pallet/enum.Call.html)
+- [`Pallet`](https://docs.rs/pallet-balances/latest/pallet_balances/pallet/struct.Pallet.html)
 
 ## Overview
 
@@ -70,7 +70,7 @@ given account is unused.
 ### Dispatchable Functions
 
 - `transfer` - Transfer some liquid free balance to another account.
-- `set_balance` - Set the balances of a given account. The origin of this call must be root.
+- `force_set_balance` - Set the balances of a given account. The origin of this call must be root.
 
 ## Usage
 
@@ -94,7 +94,7 @@ The Staking module uses the `LockableCurrency` trait to lock a stash account's f
 use frame_support::traits::{WithdrawReasons, LockableCurrency};
 use sp_runtime::traits::Bounded;
 pub trait Config: frame_system::Config {
-	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+	type Currency: LockableCurrency<Self::AccountId, Moment=frame_system::pallet_prelude::BlockNumberFor<Self>>;
 }
 
 fn update_ledger<T: Config>(
@@ -113,7 +113,7 @@ fn update_ledger<T: Config>(
 
 ## Genesis config
 
-The Balances module depends on the [`GenesisConfig`](https://docs.rs/pallet-balances/latest/pallet_balances/struct.GenesisConfig.html).
+The Balances module depends on the [`GenesisConfig`](https://docs.rs/pallet-balances/latest/pallet_balances/pallet/struct.GenesisConfig.html).
 
 ## Assumptions
 

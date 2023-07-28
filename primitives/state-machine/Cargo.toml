@@ -1,11 +1,11 @@
 [package]
 name = "sp-state-machine"
-version = "0.9.0"
+version = "0.28.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 documentation = "https://docs.rs/sp-state-machine"
 readme = "README.md"
@@ -14,42 +14,42 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-log = { version = "0.4.11", optional = true }
-thiserror = { version = "1.0.21", optional = true }
-parking_lot = { version = "0.11.1", optional = true }
-hash-db = { version = "0.15.2", default-features = false }
-trie-db = { version = "0.22.2", default-features = false }
-trie-root = { version = "0.16.0", default-features = false }
-sp-trie = { version = "3.0.0", path = "../trie", default-features = false }
-sp-core = { version = "3.0.0", path = "../core", default-features = false }
-sp-panic-handler = { version = "3.0.0", path = "../panic-handler", optional = true }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-num-traits = { version = "0.2.8", default-features = false }
-rand = { version = "0.7.2", optional = true }
-sp-externalities = { version = "0.9.0", path = "../externalities", default-features = false }
-smallvec = "1.4.1"
-sp-std = { version = "3.0.0", default-features = false, path = "../std" }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false }
+hash-db = { version = "0.16.0", default-features = false }
+log = { version = "0.4.17", default-features = false }
+parking_lot = { version = "0.12.1", optional = true }
+rand = { version = "0.8.5", optional = true }
+smallvec = "1.11.0"
+thiserror = { version = "1.0.30", optional = true }
+tracing = { version = "0.1.29", optional = true }
+sp-core = { version = "21.0.0", default-features = false, path = "../core" }
+sp-externalities = { version = "0.19.0", default-features = false, path = "../externalities" }
+sp-panic-handler = { version = "8.0.0", optional = true, path = "../panic-handler" }
+sp-std = { version = "8.0.0", default-features = false, path = "../std" }
+sp-trie = { version = "22.0.0", default-features = false, path = "../trie" }
+trie-db = { version = "0.27.1", default-features = false }
 
 [dev-dependencies]
-hex-literal = "0.3.1"
-sp-runtime = { version = "3.0.0", path = "../runtime" }
-pretty_assertions = "0.6.1"
+array-bytes = "6.1"
+pretty_assertions = "1.2.1"
+rand = "0.8.5"
+sp-runtime = { version = "24.0.0", path = "../runtime" }
+assert_matches = "1.5"
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
 	"hash-db/std",
-	"num-traits/std",
+	"log/std",
+	"parking_lot",
+	"rand",
 	"sp-core/std",
 	"sp-externalities/std",
+	"sp-panic-handler",
 	"sp-std/std",
 	"sp-trie/std",
 	"trie-db/std",
-	"trie-root/std",
-	"log",
 	"thiserror",
-	"parking_lot",
-	"rand",
-	"sp-panic-handler",
+	"tracing",
 ]

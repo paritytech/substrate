@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,20 +18,15 @@
 
 //! A method call executor interface.
 
-use std::{panic::UnwindSafe, result, cell::RefCell};
-use codec::{Encode, Decode};
-use sp_runtime::{
-	generic::BlockId, traits::{Block as BlockT, HashFor},
-};
-use sp_state_machine::{
-	OverlayedChanges, ExecutionManager, ExecutionStrategy, StorageProof,
-};
-use sc_executor::{RuntimeVersion, NativeVersion};
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
+use sp_core::traits::CallContext;
 use sp_externalities::Extensions;
-use sp_core::NativeOrEncoded;
+use sp_runtime::traits::Block as BlockT;
+use sp_state_machine::{OverlayedChanges, StorageProof};
+use std::cell::RefCell;
 
-use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
 use crate::execution_extensions::ExecutionExtensions;
+use sp_api::{ProofRecorder, StorageTransactionCache};
 
 /// Executor Provider
 pub trait ExecutorProvider<Block: BlockT> {
@@ -46,23 +41,25 @@ pub trait ExecutorProvider<Block: BlockT> {
 }
 
 /// Method call executor.
-pub trait CallExecutor<B: BlockT> {
+pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// Externalities error type.
 	type Error: sp_state_machine::Error;
 
 	/// The backend used by the node.
 	type Backend: crate::backend::Backend<B>;
 
+	/// Returns the [`ExecutionExtensions`].
+	fn execution_extensions(&self) -> &ExecutionExtensions<B>;
+
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
 	fn call(
 		&self,
-		id: &BlockId<B>,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
-		strategy: ExecutionStrategy,
-		extensions: Option<Extensions>,
+		context: CallContext,
 	) -> Result<Vec<u8>, sp_blockchain::Error>;
 
 	/// Execute a contextual call on top of state in a block of a given hash.
@@ -70,65 +67,34 @@ pub trait CallExecutor<B: BlockT> {
 	/// No changes are made.
 	/// Before executing the method, passed header is installed as the current header
 	/// of the execution context.
-	fn contextual_call<
-		'a,
-		IB: Fn() -> sp_blockchain::Result<()>,
-		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
-	>(
+	fn contextual_call(
 		&self,
-		initialize_block_fn: IB,
-		at: &BlockId<B>,
+		at_hash: B::Hash,
 		method: &str,
 		call_data: &[u8],
 		changes: &RefCell<OverlayedChanges>,
-		storage_transaction_cache: Option<&RefCell<
-			StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
-		>>,
-		initialize_block: InitializeBlock<'a, B>,
-		execution_manager: ExecutionManager<EM>,
-		native_call: Option<NC>,
+		storage_transaction_cache: Option<
+			&RefCell<
+				StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
+			>,
+		>,
 		proof_recorder: &Option<ProofRecorder<B>>,
-		extensions: Option<Extensions>,
-	) -> sp_blockchain::Result<NativeOrEncoded<R>> where ExecutionManager<EM>: Clone;
+		call_context: CallContext,
+		extensions: &RefCell<Extensions>,
+	) -> sp_blockchain::Result<Vec<u8>>;
 
 	/// Extract RuntimeVersion of given block
 	///
 	/// No changes are made.
-	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, sp_blockchain::Error>;
+	fn runtime_version(&self, at_hash: B::Hash) -> Result<RuntimeVersion, sp_blockchain::Error>;
 
-	/// Execute a call to a contract on top of given state, gathering execution proof.
+	/// Prove the execution of the given `method`.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: sp_state_machine::Backend<HashFor<B>>>(
+	fn prove_execution(
 		&self,
-		mut state: S,
-		overlay: &mut OverlayedChanges,
+		at_hash: B::Hash,
 		method: &str,
-		call_data: &[u8]
-	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
-		let trie_state = state.as_trie_backend()
-			.ok_or_else(||
-				sp_blockchain::Error::from_state(Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<_>)
-			)?;
-		self.prove_at_trie_state(trie_state, overlay, method, call_data)
-	}
-
-	/// Execute a call to a contract on top of given trie state, gathering execution proof.
-	///
-	/// No changes are made.
-	fn prove_at_trie_state<S: sp_state_machine::TrieBackendStorage<HashFor<B>>>(
-		&self,
-		trie_state: &sp_state_machine::TrieBackend<S, HashFor<B>>,
-		overlay: &mut OverlayedChanges,
-		method: &str,
-		call_data: &[u8]
+		call_data: &[u8],
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error>;
-
-	/// Get runtime version if supported.
-	fn native_runtime_version(&self) -> Option<&NativeVersion>;
 }

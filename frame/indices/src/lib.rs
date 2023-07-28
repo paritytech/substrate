@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,36 +20,45 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
 mod mock;
 mod tests;
-mod benchmarking;
 pub mod weights;
 
-use sp_std::prelude::*;
 use codec::Codec;
-use sp_runtime::MultiAddress;
-use sp_runtime::traits::{
-	StaticLookup, LookupError, Zero, Saturating, AtLeast32Bit
+use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
+use sp_runtime::{
+	traits::{AtLeast32Bit, LookupError, Saturating, StaticLookup, Zero},
+	MultiAddress,
 };
-use frame_support::traits::{Currency, ReservableCurrency, BalanceStatus::Reserved};
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
-type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	/// The module's config trait.
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// Type used for storing an account's index; implies the maximum number of accounts the system
-		/// can hold.
-		type AccountIndex: Parameter + Member + MaybeSerializeDeserialize + Codec + Default + AtLeast32Bit + Copy;
+		/// Type used for storing an account's index; implies the maximum number of accounts the
+		/// system can hold.
+		type AccountIndex: Parameter
+			+ Member
+			+ MaybeSerializeDeserialize
+			+ Codec
+			+ Default
+			+ AtLeast32Bit
+			+ Copy
+			+ MaxEncodedLen;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -59,18 +68,14 @@ pub mod pallet {
 		type Deposit: Get<BalanceOf<Self>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
-
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+	pub struct Pallet<T>(_);
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -84,16 +89,11 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
+		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::claim())]
-		pub(crate) fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
+		pub fn claim(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| {
@@ -101,7 +101,7 @@ pub mod pallet {
 				*maybe_value = Some((who.clone(), T::Deposit::get(), false));
 				T::Currency::reserve(&who, T::Deposit::get())
 			})?;
-			Self::deposit_event(Event::IndexAssigned(who, index));
+			Self::deposit_event(Event::IndexAssigned { who, index });
 			Ok(())
 		}
 
@@ -115,34 +115,28 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One transfer operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight:
-		///    - Reads: Indices Accounts, System Account (recipient)
-		///    - Writes: Indices Accounts, System Account (recipient)
-		/// # </weight>
+		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::transfer())]
-		pub(crate) fn transfer(
+		pub fn transfer(
 			origin: OriginFor<T>,
-			new: T::AccountId,
+			new: AccountIdLookupOf<T>,
 			index: T::AccountIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let new = T::Lookup::lookup(new)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
 				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
 				ensure!(!perm, Error::<T>::Permanent);
-				ensure!(&account == &who, Error::<T>::NotOwner);
+				ensure!(account == who, Error::<T>::NotOwner);
 				let lost = T::Currency::repatriate_reserved(&who, &new, amount, Reserved)?;
 				*maybe_value = Some((new.clone(), amount.saturating_sub(lost), false));
 				Ok(())
 			})?;
-			Self::deposit_event(Event::IndexAssigned(new, index));
+			Self::deposit_event(Event::IndexAssigned { who: new, index });
 			Ok(())
 		}
 
@@ -156,26 +150,21 @@ pub mod pallet {
 		///
 		/// Emits `IndexFreed` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - One reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
+		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::free())]
-		pub(crate) fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
+		pub fn free(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
 				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
 				ensure!(!perm, Error::<T>::Permanent);
-				ensure!(&account == &who, Error::<T>::NotOwner);
+				ensure!(account == who, Error::<T>::NotOwner);
 				T::Currency::unreserve(&who, amount);
 				Ok(())
 			})?;
-			Self::deposit_event(Event::IndexFreed(index));
+			Self::deposit_event(Event::IndexFreed { index });
 			Ok(())
 		}
 
@@ -190,24 +179,18 @@ pub mod pallet {
 		///
 		/// Emits `IndexAssigned` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - Up to one reserve operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight:
-		///    - Reads: Indices Accounts, System Account (original owner)
-		///    - Writes: Indices Accounts, System Account (original owner)
-		/// # </weight>
+		#[pallet::call_index(3)]
 		#[pallet::weight(T::WeightInfo::force_transfer())]
-		pub(crate) fn force_transfer(
+		pub fn force_transfer(
 			origin: OriginFor<T>,
-			new: T::AccountId,
+			new: AccountIdLookupOf<T>,
 			index: T::AccountIndex,
 			freeze: bool,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			let new = T::Lookup::lookup(new)?;
 
 			Accounts::<T>::mutate(index, |maybe_value| {
 				if let Some((account, amount, _)) = maybe_value.take() {
@@ -215,11 +198,12 @@ pub mod pallet {
 				}
 				*maybe_value = Some((new.clone(), Zero::zero(), freeze));
 			});
-			Self::deposit_event(Event::IndexAssigned(new, index));
+			Self::deposit_event(Event::IndexAssigned { who: new, index });
 			Ok(())
 		}
 
-		/// Freeze an index so it will always point to the sender account. This consumes the deposit.
+		/// Freeze an index so it will always point to the sender account. This consumes the
+		/// deposit.
 		///
 		/// The dispatch origin for this call must be _Signed_ and the signing account must have a
 		/// non-frozen account `index`.
@@ -228,46 +212,36 @@ pub mod pallet {
 		///
 		/// Emits `IndexFrozen` if successful.
 		///
-		/// # <weight>
+		/// ## Complexity
 		/// - `O(1)`.
-		/// - One storage mutation (codec `O(1)`).
-		/// - Up to one slash operation.
-		/// - One event.
-		/// -------------------
-		/// - DB Weight: 1 Read/Write (Accounts)
-		/// # </weight>
+		#[pallet::call_index(4)]
 		#[pallet::weight(T::WeightInfo::freeze())]
-		pub(crate) fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
+		pub fn freeze(origin: OriginFor<T>, index: T::AccountIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
 				let (account, amount, perm) = maybe_value.take().ok_or(Error::<T>::NotAssigned)?;
 				ensure!(!perm, Error::<T>::Permanent);
-				ensure!(&account == &who, Error::<T>::NotOwner);
+				ensure!(account == who, Error::<T>::NotOwner);
 				T::Currency::slash_reserved(&who, amount);
 				*maybe_value = Some((account, Zero::zero(), true));
 				Ok(())
 			})?;
-			Self::deposit_event(Event::IndexFrozen(index, who));
+			Self::deposit_event(Event::IndexFrozen { index, who });
 			Ok(())
 		}
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(T::AccountId = "AccountId", T::AccountIndex = "AccountIndex")]
 	pub enum Event<T: Config> {
-		/// A account index was assigned. \[index, who\]
-		IndexAssigned(T::AccountId, T::AccountIndex),
-		/// A account index has been freed up (unassigned). \[index\]
-		IndexFreed(T::AccountIndex),
-		/// A account index has been frozen to its current account ID. \[index, who\]
-		IndexFrozen(T::AccountIndex, T::AccountId),
+		/// A account index was assigned.
+		IndexAssigned { who: T::AccountId, index: T::AccountIndex },
+		/// A account index has been freed up (unassigned).
+		IndexFreed { index: T::AccountIndex },
+		/// A account index has been frozen to its current account ID.
+		IndexFrozen { index: T::AccountIndex, who: T::AccountId },
 	}
-
-	/// Old name generated by `decl_event`.
-	#[deprecated(note="use `Event` instead")]
-	pub type RawEvent<T> = Event<T>;
 
 	#[pallet::error]
 	pub enum Error<T> {
@@ -285,28 +259,17 @@ pub mod pallet {
 
 	/// The lookup from index to account.
 	#[pallet::storage]
-	pub type Accounts<T: Config> = StorageMap<
-		_, Blake2_128Concat,
-		T::AccountIndex,
-		(T::AccountId, BalanceOf<T>, bool)
-	>;
+	pub type Accounts<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountIndex, (T::AccountId, BalanceOf<T>, bool)>;
 
 	#[pallet::genesis_config]
+	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
 		pub indices: Vec<(T::AccountIndex, T::AccountId)>,
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self {
-				indices: Default::default(),
-			}
-		}
-	}
-
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
 		fn build(&self) {
 			for (a, b) in &self.indices {
 				<Accounts<T>>::insert(a, (b, <BalanceOf<T>>::zero(), false))
@@ -324,9 +287,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Lookup an address to get an Id, if there's one there.
-	pub fn lookup_address(
-		a: MultiAddress<T::AccountId, T::AccountIndex>
-	) -> Option<T::AccountId> {
+	pub fn lookup_address(a: MultiAddress<T::AccountId, T::AccountIndex>) -> Option<T::AccountId> {
 		match a {
 			MultiAddress::Id(i) => Some(i),
 			MultiAddress::Index(i) => Self::lookup_index(i),

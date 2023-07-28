@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,37 +16,74 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+#![cfg(unix)]
 use assert_cmd::cargo::cargo_bin;
-use std::{convert::TryInto, process::Command, thread, time::Duration};
+use nix::sys::signal::Signal::{self, SIGINT, SIGTERM};
+use std::{
+	process::{self, Command},
+	time::Duration,
+};
 use tempfile::tempdir;
 
-pub mod common;
+use substrate_cli_test_utils as common;
 
-#[test]
-#[cfg(unix)]
-fn running_the_node_works_and_can_be_interrupted() {
-	use nix::sys::signal::{kill, Signal::{self, SIGINT, SIGTERM}};
-	use nix::unistd::Pid;
+#[tokio::test]
+async fn running_the_node_works_and_can_be_interrupted() {
+	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
+		async fn run_command_and_kill(signal: Signal) {
+			let base_path = tempdir().expect("could not create a temp dir");
+			let mut cmd = common::KillChildOnDrop(
+				Command::new(cargo_bin("substrate-node"))
+					.stdout(process::Stdio::piped())
+					.stderr(process::Stdio::piped())
+					.args(&["--dev", "-d"])
+					.arg(base_path.path())
+					.arg("--db=paritydb")
+					.arg("--no-hardware-benchmarks")
+					.spawn()
+					.unwrap(),
+			);
 
-	fn run_command_and_kill(signal: Signal) {
-		let base_path = tempdir().expect("could not create a temp dir");
-		let mut cmd = Command::new(cargo_bin("substrate"))
-			.args(&["--dev", "-d"])
-			.arg(base_path.path())
-			.spawn()
-			.unwrap();
+			let stderr = cmd.stderr.take().unwrap();
 
-		thread::sleep(Duration::from_secs(20));
-		assert!(cmd.try_wait().unwrap().is_none(), "the process should still be running");
-		kill(Pid::from_raw(cmd.id().try_into().unwrap()), signal).unwrap();
-		assert_eq!(
-			common::wait_for(&mut cmd, 30).map(|x| x.success()),
-			Some(true),
-			"the process must exit gracefully after signal {}",
-			signal,
-		);
-	}
+			let ws_url = common::extract_info_from_output(stderr).0.ws_url;
 
-	run_command_and_kill(SIGINT);
-	run_command_and_kill(SIGTERM);
+			common::wait_n_finalized_blocks(3, &ws_url).await;
+
+			cmd.assert_still_running();
+
+			cmd.stop_with_signal(signal);
+
+			// Check if the database was closed gracefully. If it was not,
+			// there may exist a ref cycle that prevents the Client from being dropped properly.
+			//
+			// parity-db only writes the stats file on clean shutdown.
+			let stats_file = base_path.path().join("chains/dev/paritydb/full/stats.txt");
+			assert!(std::path::Path::exists(&stats_file));
+		}
+
+		run_command_and_kill(SIGINT).await;
+		run_command_and_kill(SIGTERM).await;
+	})
+	.await;
+}
+
+#[tokio::test]
+async fn running_two_nodes_with_the_same_ws_port_should_work() {
+	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
+		let mut first_node = common::KillChildOnDrop(common::start_node());
+		let mut second_node = common::KillChildOnDrop(common::start_node());
+
+		let stderr = first_node.stderr.take().unwrap();
+		let ws_url = common::extract_info_from_output(stderr).0.ws_url;
+
+		common::wait_n_finalized_blocks(3, &ws_url).await;
+
+		first_node.assert_still_running();
+		second_node.assert_still_running();
+
+		first_node.stop();
+		second_node.stop();
+	})
+	.await;
 }

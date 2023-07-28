@@ -1,0 +1,5 @@
+error: Only `Result<(), BenchmarkError>` or a blank return type is allowed on benchmark function definitions
+  --> tests/benchmark_ui/bad_return_non_type_path.rs:10:16
+   |
+10 |     fn bench() -> (String, u32) {
+   |                   ^^^^^^^^^^^^^

@@ -1,0 +1,5 @@
+error: `Call` was already declared before. Please remove the duplicate declaration
+ --> $DIR/duplicate_exclude.rs:9:46
+  |
+9 |         System: frame_system exclude_parts { Call, Call },
+  |                                                    ^^^^

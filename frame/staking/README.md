@@ -2,7 +2,7 @@
 
 The Staking module is used to manage funds at stake by network maintainers.
 
-- [`staking::Trait`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html)
+- [`staking::Config`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Module.html)
 
@@ -50,8 +50,12 @@ used.
 
 An account pair can become bonded using the [`bond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.bond) call.
 
-Stash accounts can change their associated controller using the
-[`set_controller`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.set_controller) call.
+Stash accounts can update their associated controller back to their stash account using the
+[`set_controller`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.set_controller)
+call. 
+
+Note: Controller accounts are being deprecated in favor of proxy accounts, so it is no longer
+possible to set a unique address for a stash's controller.
 
 There are three possible roles that any staked account pair can be in: `Validator`, `Nominator`
 and `Idle` (defined in [`StakerStatus`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.StakerStatus.html)). There are three
@@ -133,19 +137,27 @@ The Staking module contains many public storage items and (im)mutable functions.
 ### Example: Rewarding a validator by id.
 
 ```rust
-use frame_support::{decl_module, dispatch};
-use frame_system::ensure_signed;
 use pallet_staking::{self as staking};
 
-pub trait Config: staking::Config {}
+#[frame_support::pallet]
+pub mod pallet {
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-decl_module! {
-    pub struct Module<T: Config> for enum Call where origin: T::Origin {
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
+
+    #[pallet::config]
+    pub trait Config: frame_system::Config + staking::Config {}
+
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
         /// Reward a validator.
-        #[weight = 0]
-        pub fn reward_myself(origin) -> dispatch::DispatchResult {
+        #[pallet::weight(0)]
+        pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
             let reported = ensure_signed(origin)?;
-            <staking::Module<T>>::reward_by_ids(vec![(reported, 10)]);
+            <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
             Ok(())
         }
     }
@@ -157,7 +169,7 @@ decl_module! {
 ### Era payout
 
 The era payout is computed using yearly inflation curve defined at
-[`T::RewardCurve`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html#associatedtype.RewardCurve) as such:
+[`T::RewardCurve`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.RewardCurve) as such:
 
 ```nocompile
 staker_payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokens / era_per_year
@@ -168,7 +180,7 @@ This payout is used to reward stakers as defined in next section
 remaining_payout = max_yearly_inflation * total_tokens / era_per_year - staker_payout
 ```
 The remaining reward is send to the configurable end-point
-[`T::RewardRemainder`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html#associatedtype.RewardRemainder).
+[`T::RewardRemainder`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.RewardRemainder).
 
 ### Reward Calculation
 
@@ -214,7 +226,7 @@ Any funds already placed into stash can be the target of the following operation
 
 The controller account can free a portion (or all) of the funds using the
 [`unbond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.unbond) call. Note that the funds are not immediately
-accessible. Instead, a duration denoted by [`BondingDuration`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Trait.html#associatedtype.BondingDuration)
+accessible. Instead, a duration denoted by [`BondingDuration`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.BondingDuration)
 (in number of eras) must pass until the funds can actually be removed. Once the
 `BondingDuration` is over, the [`withdraw_unbonded`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.withdraw_unbonded)
 call can be used to actually withdraw the funds.

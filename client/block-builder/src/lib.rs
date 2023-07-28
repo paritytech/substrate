@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -28,19 +28,19 @@
 
 use codec::Encode;
 
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Header as HeaderT, Hash, Block as BlockT, HashFor, DigestFor, NumberFor, One},
+use sp_api::{
+	ApiExt, ApiRef, Core, ProvideRuntimeApi, StorageChanges, StorageProof, TransactionOutcome,
 };
 use sp_blockchain::{ApplyExtrinsicFailed, Error};
-use sp_core::ExecutionContext;
-use sp_api::{
-	Core, ApiExt, ApiRef, ProvideRuntimeApi, StorageChanges, StorageProof, TransactionOutcome,
+use sp_core::traits::CallContext;
+use sp_runtime::{
+	legacy,
+	traits::{Block as BlockT, Hash, HashingFor, Header as HeaderT, NumberFor, One},
+	Digest,
 };
 
-pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
-
 use sc_client_api::backend;
+pub use sp_block_builder::BlockBuilder as BlockBuilderApi;
 
 /// Used as parameter to [`BlockBuilderProvider`] to express if proof recording should be enabled.
 ///
@@ -85,7 +85,7 @@ impl From<bool> for RecordProof {
 /// backend to get the state of the block. Furthermore an optional `proof` is included which
 /// can be used to proof that the build block contains the expected data. The `proof` will
 /// only be set when proof recording was activated.
-pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> {
+pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashingFor<Block>>> {
 	/// The actual block that was build.
 	pub block: Block,
 	/// The changes that need to be applied to the backend to get the state of the build block.
@@ -94,7 +94,9 @@ pub struct BuiltBlock<Block: BlockT, StateBackend: backend::StateBackend<HashFor
 	pub proof: Option<StorageProof>,
 }
 
-impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> BuiltBlock<Block, StateBackend> {
+impl<Block: BlockT, StateBackend: backend::StateBackend<HashingFor<Block>>>
+	BuiltBlock<Block, StateBackend>
+{
 	/// Convert into the inner values.
 	pub fn into_inner(self) -> (Block, StorageChanges<StateBackend, Block>, Option<StorageProof>) {
 		(self.block, self.storage_changes, self.proof)
@@ -103,11 +105,11 @@ impl<Block: BlockT, StateBackend: backend::StateBackend<HashFor<Block>>> BuiltBl
 
 /// Block builder provider
 pub trait BlockBuilderProvider<B, Block, RA>
-	where
-		Block: BlockT,
-		B: backend::Backend<Block>,
-		Self: Sized,
-		RA: ProvideRuntimeApi<Block>,
+where
+	Block: BlockT,
+	B: backend::Backend<Block>,
+	Self: Sized,
+	RA: ProvideRuntimeApi<Block>,
 {
 	/// Create a new block, built on top of `parent`.
 	///
@@ -116,15 +118,15 @@ pub trait BlockBuilderProvider<B, Block, RA>
 	/// output of this block builder without having access to the full storage.
 	fn new_block_at<R: Into<RecordProof>>(
 		&self,
-		parent: &BlockId<Block>,
-		inherent_digests: DigestFor<Block>,
+		parent: Block::Hash,
+		inherent_digests: Digest,
 		record_proof: R,
 	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 
 	/// Create a new block, built on the head of the chain.
 	fn new_block(
 		&self,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 	) -> sp_blockchain::Result<BlockBuilder<Block, RA, B>>;
 }
 
@@ -132,7 +134,7 @@ pub trait BlockBuilderProvider<B, Block, RA>
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	extrinsics: Vec<Block::Extrinsic>,
 	api: ApiRef<'a, A::Api>,
-	block_id: BlockId<Block>,
+	version: u32,
 	parent_hash: Block::Hash,
 	backend: &'a B,
 	/// The estimated size of the block header.
@@ -143,7 +145,8 @@ impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
 where
 	Block: BlockT,
 	A: ProvideRuntimeApi<Block> + 'a,
-	A::Api: BlockBuilderApi<Block> + ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
+	A::Api:
+		BlockBuilderApi<Block> + ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>,
 	B: backend::Backend<Block>,
 {
 	/// Create a new instance of builder based on the given `parent_hash` and `parent_number`.
@@ -156,7 +159,7 @@ where
 		parent_hash: Block::Hash,
 		parent_number: NumberFor<Block>,
 		record_proof: RecordProof,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		backend: &'a B,
 	) -> Result<Self, Error> {
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
@@ -175,17 +178,19 @@ where
 			api.record_proof();
 		}
 
-		let block_id = BlockId::Hash(parent_hash);
+		api.set_call_context(CallContext::Onchain);
 
-		api.initialize_block_with_context(
-			&block_id, ExecutionContext::BlockConstruction, &header,
-		)?;
+		api.initialize_block(parent_hash, &header)?;
+
+		let version = api
+			.api_version::<dyn BlockBuilderApi<Block>>(parent_hash)?
+			.ok_or_else(|| Error::VersionInvalid("BlockBuilderApi".to_string()))?;
 
 		Ok(Self {
 			parent_hash,
 			extrinsics: Vec::new(),
 			api,
-			block_id,
+			version,
 			backend,
 			estimated_header_size,
 		})
@@ -195,24 +200,27 @@ where
 	///
 	/// This will ensure the extrinsic can be validly executed (by executing it).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> Result<(), Error> {
-		let block_id = &self.block_id;
+		let parent_hash = self.parent_hash;
 		let extrinsics = &mut self.extrinsics;
+		let version = self.version;
 
 		self.api.execute_in_transaction(|api| {
-			match api.apply_extrinsic_with_context(
-				block_id,
-				ExecutionContext::BlockConstruction,
-				xt.clone(),
-			) {
+			let res = if version < 6 {
+				#[allow(deprecated)]
+				api.apply_extrinsic_before_version_6(parent_hash, xt.clone())
+					.map(legacy::byte_sized_error::convert_to_latest)
+			} else {
+				api.apply_extrinsic(parent_hash, xt.clone())
+			};
+
+			match res {
 				Ok(Ok(_)) => {
 					extrinsics.push(xt);
 					TransactionOutcome::Commit(Ok(()))
-				}
-				Ok(Err(tx_validity)) => {
-					TransactionOutcome::Rollback(
-						Err(ApplyExtrinsicFailed::Validity(tx_validity).into()),
-					)
 				},
+				Ok(Err(tx_validity)) => TransactionOutcome::Rollback(Err(
+					ApplyExtrinsicFailed::Validity(tx_validity).into(),
+				)),
 				Err(e) => TransactionOutcome::Rollback(Err(Error::from(e))),
 			}
 		})
@@ -224,31 +232,24 @@ where
 	/// supplied by `self.api`, combined as [`BuiltBlock`].
 	/// The storage proof will be `Some(_)` when proof recording was enabled.
 	pub fn build(mut self) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
-		let header = self.api.finalize_block_with_context(
-			&self.block_id, ExecutionContext::BlockConstruction
-		)?;
+		let header = self.api.finalize_block(self.parent_hash)?;
 
 		debug_assert_eq!(
 			header.extrinsics_root().clone(),
-			HashFor::<Block>::ordered_trie_root(
+			HashingFor::<Block>::ordered_trie_root(
 				self.extrinsics.iter().map(Encode::encode).collect(),
+				sp_runtime::StateVersion::V0,
 			),
 		);
 
 		let proof = self.api.extract_proof();
 
-		let state = self.backend.state_at(self.block_id)?;
-		let changes_trie_state = backend::changes_tries_state_at_block(
-			&self.block_id,
-			self.backend.changes_trie_storage(),
-		)?;
-		let parent_hash = self.parent_hash;
+		let state = self.backend.state_at(self.parent_hash)?;
 
-		let storage_changes = self.api.into_storage_changes(
-			&state,
-			changes_trie_state.as_ref(),
-			parent_hash,
-		).map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
+		let storage_changes = self
+			.api
+			.into_storage_changes(&state, self.parent_hash)
+			.map_err(sp_blockchain::Error::StorageChanges)?;
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),
@@ -264,16 +265,14 @@ where
 		&mut self,
 		inherent_data: sp_inherents::InherentData,
 	) -> Result<Vec<Block::Extrinsic>, Error> {
-		let block_id = self.block_id;
-		self.api.execute_in_transaction(move |api| {
-			// `create_inherents` should not change any state, to ensure this we always rollback
-			// the transaction.
-			TransactionOutcome::Rollback(api.inherent_extrinsics_with_context(
-				&block_id,
-				ExecutionContext::BlockConstruction,
-				inherent_data
-			))
-		}).map_err(|e| Error::Application(Box::new(e)))
+		let parent_hash = self.parent_hash;
+		self.api
+			.execute_in_transaction(move |api| {
+				// `create_inherents` should not change any state, to ensure this we always rollback
+				// the transaction.
+				TransactionOutcome::Rollback(api.inherent_extrinsics(parent_hash, inherent_data))
+			})
+			.map_err(|e| Error::Application(Box::new(e)))
 	}
 
 	/// Estimate the size of the block in the current state.
@@ -297,13 +296,80 @@ mod tests {
 	use sp_blockchain::HeaderBackend;
 	use sp_core::Blake2Hasher;
 	use sp_state_machine::Backend;
-	use substrate_test_runtime_client::{DefaultTestClientBuilderExt, TestClientBuilderExt};
+	use substrate_test_runtime_client::{
+		runtime::ExtrinsicBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
+	};
 
 	#[test]
 	fn block_building_storage_proof_does_not_include_runtime_by_default() {
 		let builder = substrate_test_runtime_client::TestClientBuilder::new();
 		let backend = builder.backend();
 		let client = builder.build();
+
+		let genesis_hash = client.info().best_hash;
+
+		let block = BlockBuilder::new(
+			&client,
+			genesis_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap()
+		.build()
+		.unwrap();
+
+		let proof = block.proof.expect("Proof is build on request");
+		let genesis_state_root = client.header(genesis_hash).unwrap().unwrap().state_root;
+
+		let backend =
+			sp_state_machine::create_proof_check_backend::<Blake2Hasher>(genesis_state_root, proof)
+				.unwrap();
+
+		assert!(backend
+			.storage(&sp_core::storage::well_known_keys::CODE)
+			.unwrap_err()
+			.contains("Database missing expected key"),);
+	}
+
+	#[test]
+	fn failing_extrinsic_rolls_back_changes_in_storage_proof() {
+		let builder = substrate_test_runtime_client::TestClientBuilder::new();
+		let backend = builder.backend();
+		let client = builder.build();
+
+		let mut block_builder = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap();
+
+		block_builder.push(ExtrinsicBuilder::new_read_and_panic(8).build()).unwrap_err();
+
+		let block = block_builder.build().unwrap();
+
+		let proof_with_panic = block.proof.expect("Proof is build on request").encoded_size();
+
+		let mut block_builder = BlockBuilder::new(
+			&client,
+			client.info().best_hash,
+			client.info().best_number,
+			RecordProof::Yes,
+			Default::default(),
+			&*backend,
+		)
+		.unwrap();
+
+		block_builder.push(ExtrinsicBuilder::new_read(8).build()).unwrap();
+
+		let block = block_builder.build().unwrap();
+
+		let proof_without_panic = block.proof.expect("Proof is build on request").encoded_size();
 
 		let block = BlockBuilder::new(
 			&client,
@@ -312,19 +378,16 @@ mod tests {
 			RecordProof::Yes,
 			Default::default(),
 			&*backend,
-		).unwrap().build().unwrap();
+		)
+		.unwrap()
+		.build()
+		.unwrap();
 
-		let proof = block.proof.expect("Proof is build on request");
+		let proof_empty_block = block.proof.expect("Proof is build on request").encoded_size();
 
-		let backend = sp_state_machine::create_proof_check_backend::<Blake2Hasher>(
-			block.storage_changes.transaction_storage_root,
-			proof,
-		).unwrap();
-
-		assert!(
-			backend.storage(&sp_core::storage::well_known_keys::CODE)
-				.unwrap_err()
-				.contains("Database missing expected key"),
-		);
+		// Ensure that we rolled back the changes of the panicked transaction.
+		assert!(proof_without_panic > proof_with_panic);
+		assert!(proof_without_panic > proof_empty_block);
+		assert_eq!(proof_empty_block, proof_with_panic);
 	}
 }

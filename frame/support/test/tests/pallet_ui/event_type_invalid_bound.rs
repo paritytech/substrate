@@ -6,7 +6,7 @@ mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type Bar;
-		type Event;
+		type RuntimeEvent;
 	}
 
 	#[pallet::pallet]

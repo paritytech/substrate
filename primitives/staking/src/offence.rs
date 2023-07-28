@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,10 +18,10 @@
 //! Common traits and types that are useful for describing offences for usage in environments
 //! that use staking.
 
+use codec::{Decode, Encode};
+use sp_core::Get;
+use sp_runtime::{transaction_validity::TransactionValidityError, DispatchError, Perbill};
 use sp_std::vec::Vec;
-
-use codec::{Encode, Decode};
-use sp_runtime::Perbill;
 
 use crate::SessionIndex;
 
@@ -36,6 +36,29 @@ pub type Kind = [u8; 16];
 /// This counter keeps track of how many times the authority was already reported in the past,
 /// so that we can slash it accordingly.
 pub type OffenceCount = u32;
+
+/// In case of an offence, which conditions get an offending validator disabled.
+#[derive(
+	Clone,
+	Copy,
+	PartialEq,
+	Eq,
+	Hash,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	sp_runtime::RuntimeDebug,
+	scale_info::TypeInfo,
+)]
+pub enum DisableStrategy {
+	/// Independently of slashing, this offence will not disable the offender.
+	Never,
+	/// Only disable the offender if it is also slashed.
+	WhenSlashed,
+	/// Independently of slashing, this offence will always disable the offender.
+	Always,
+}
 
 /// A trait implemented by an offence report.
 ///
@@ -79,15 +102,16 @@ pub trait Offence<Offender> {
 	/// number. Note that for GRANDPA the round number is reset each epoch.
 	fn time_slot(&self) -> Self::TimeSlot;
 
+	/// In which cases this offence needs to disable offenders until the next era starts.
+	fn disable_strategy(&self) -> DisableStrategy {
+		DisableStrategy::WhenSlashed
+	}
+
 	/// A slash fraction of the total exposure that should be slashed for this
-	/// particular offence kind for the given parameters that happened at a singular `TimeSlot`.
+	/// particular offence for the `offenders_count` that happened at a singular `TimeSlot`.
 	///
-	/// `offenders_count` - the count of unique offending authorities. It is >0.
-	/// `validator_set_count` - the cardinality of the validator set at the time of offence.
-	fn slash_fraction(
-		offenders_count: u32,
-		validator_set_count: u32,
-	) -> Perbill;
+	/// `offenders_count` - the count of unique offending authorities for this `TimeSlot`. It is >0.
+	fn slash_fraction(&self, offenders_count: u32) -> Perbill;
 }
 
 /// Errors that may happen on offence reports.
@@ -108,7 +132,7 @@ impl sp_runtime::traits::Printable for OffenceError {
 			Self::Other(e) => {
 				"Other".print();
 				e.print();
-			}
+			},
 		}
 	}
 }
@@ -153,19 +177,16 @@ pub trait OnOffenceHandler<Reporter, Offender, Res> {
 	///
 	/// The `session` parameter is the session index of the offence.
 	///
+	/// The `disable_strategy` parameter decides if the offenders need to be disabled immediately.
+	///
 	/// The receiver might decide to not accept this offence. In this case, the call site is
 	/// responsible for queuing the report and re-submitting again.
 	fn on_offence(
 		offenders: &[OffenceDetails<Reporter, Offender>],
 		slash_fraction: &[Perbill],
 		session: SessionIndex,
-	) -> Result<Res, ()>;
-
-	/// Can an offence be reported now or not. This is an method to short-circuit a call into
-	/// `on_offence`. Ideally, a correct implementation should return `false` if `on_offence` will
-	/// return `Err`. Nonetheless, this is up to the implementation and this trait cannot guarantee
-	/// it.
-	fn can_report() -> bool;
+		disable_strategy: DisableStrategy,
+	) -> Res;
 }
 
 impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res> for () {
@@ -173,19 +194,83 @@ impl<Reporter, Offender, Res: Default> OnOffenceHandler<Reporter, Offender, Res>
 		_offenders: &[OffenceDetails<Reporter, Offender>],
 		_slash_fraction: &[Perbill],
 		_session: SessionIndex,
-	) -> Result<Res, ()> {
-		Ok(Default::default())
+		_disable_strategy: DisableStrategy,
+	) -> Res {
+		Default::default()
 	}
-
-	fn can_report() -> bool { true }
 }
 
 /// A details about an offending authority for a particular kind of offence.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug, scale_info::TypeInfo)]
 pub struct OffenceDetails<Reporter, Offender> {
 	/// The offending authority id
 	pub offender: Offender,
 	/// A list of reporters of offences of this authority ID. Possibly empty where there are no
 	/// particular reporters.
 	pub reporters: Vec<Reporter>,
+}
+
+/// An abstract system to publish, check and process offence evidences.
+///
+/// Implementation details are left opaque and we don't assume any specific usage
+/// scenario for this trait at this level. The main goal is to group together some
+/// common actions required during a typical offence report flow.
+///
+/// Even though this trait doesn't assume too much, this is a general guideline
+/// for a typical usage scenario:
+///
+/// 1. An offence is detected and an evidence is submitted on-chain via the
+///    [`OffenceReportSystem::publish_evidence`] method. This will construct and submit an extrinsic
+///    transaction containing the offence evidence.
+///
+/// 2. If the extrinsic is unsigned then the transaction receiver may want to perform some
+///    preliminary checks before further processing. This is a good place to call the
+///    [`OffenceReportSystem::check_evidence`] method.
+///
+/// 3. Finally the report extrinsic is executed on-chain. This is where the user calls the
+///    [`OffenceReportSystem::process_evidence`] to consume the offence report and enact any
+///    required action.
+pub trait OffenceReportSystem<Reporter, Evidence> {
+	/// Longevity, in blocks, for the evidence report validity.
+	///
+	/// For example, when using the staking pallet this should be set equal
+	/// to the bonding duration in blocks, not eras.
+	type Longevity: Get<u64>;
+
+	/// Publish an offence evidence.
+	///
+	/// Common usage: submit the evidence on-chain via some kind of extrinsic.
+	fn publish_evidence(evidence: Evidence) -> Result<(), ()>;
+
+	/// Check an offence evidence.
+	///
+	/// Common usage: preliminary validity check before execution
+	/// (e.g. for unsigned extrinsic quick checks).
+	fn check_evidence(evidence: Evidence) -> Result<(), TransactionValidityError>;
+
+	/// Process an offence evidence.
+	///
+	/// Common usage: enact some form of slashing directly or by forwarding
+	/// the evidence to a lower level specialized subsystem (e.g. a handler
+	/// implementing `ReportOffence` trait).
+	fn process_evidence(reporter: Reporter, evidence: Evidence) -> Result<(), DispatchError>;
+}
+
+/// Dummy offence report system.
+///
+/// Doesn't do anything special and returns `Ok(())` for all the actions.
+impl<Reporter, Evidence> OffenceReportSystem<Reporter, Evidence> for () {
+	type Longevity = ();
+
+	fn publish_evidence(_evidence: Evidence) -> Result<(), ()> {
+		Ok(())
+	}
+
+	fn check_evidence(_evidence: Evidence) -> Result<(), TransactionValidityError> {
+		Ok(())
+	}
+
+	fn process_evidence(_reporter: Reporter, _evidence: Evidence) -> Result<(), DispatchError> {
+		Ok(())
+	}
 }

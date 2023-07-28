@@ -1,5 +1,5 @@
 error: Invalid pallet::call, must have at least origin arg
-  --> $DIR/call_no_origin.rs:17:3
+  --> $DIR/call_no_origin.rs:17:7
    |
-17 |         fn foo() {}
-   |         ^^
+17 |         pub fn foo() {}
+   |             ^^

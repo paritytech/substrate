@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,30 +18,45 @@
 mod database_params;
 mod import_params;
 mod keystore_params;
+mod message_params;
 mod network_params;
 mod node_key_params;
 mod offchain_worker_params;
+mod prometheus_params;
 mod pruning_params;
+mod runtime_params;
 mod shared_params;
+mod telemetry_params;
 mod transaction_pool_params;
 
-use std::{fmt::Debug, str::FromStr, convert::TryFrom};
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, NumberFor}};
-use sp_core::crypto::Ss58AddressFormat;
-use crate::arg_enums::{OutputType, CryptoScheme};
-use structopt::StructOpt;
+use crate::arg_enums::{CryptoScheme, OutputType};
+use clap::Args;
+use sp_core::crypto::{Ss58AddressFormat, Ss58AddressFormatRegistry};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, NumberFor},
+};
+use std::{fmt::Debug, str::FromStr};
 
-pub use crate::params::database_params::*;
-pub use crate::params::import_params::*;
-pub use crate::params::keystore_params::*;
-pub use crate::params::network_params::*;
-pub use crate::params::node_key_params::*;
-pub use crate::params::offchain_worker_params::*;
-pub use crate::params::pruning_params::*;
-pub use crate::params::shared_params::*;
-pub use crate::params::transaction_pool_params::*;
+pub use crate::params::{
+	database_params::*, import_params::*, keystore_params::*, message_params::*, network_params::*,
+	node_key_params::*, offchain_worker_params::*, prometheus_params::*, pruning_params::*,
+	runtime_params::*, shared_params::*, telemetry_params::*, transaction_pool_params::*,
+};
 
-/// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a decimal.
+/// Parse Ss58AddressFormat
+pub fn parse_ss58_address_format(x: &str) -> Result<Ss58AddressFormat, String> {
+	match Ss58AddressFormatRegistry::try_from(x) {
+		Ok(format_registry) => Ok(format_registry.into()),
+		Err(_) => Err(format!(
+			"Unable to parse variant. Known variants: {:?}",
+			Ss58AddressFormat::all_names()
+		)),
+	}
+}
+
+/// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a
+/// decimal.
 #[derive(Debug, Clone)]
 pub struct GenericNumber(String);
 
@@ -50,10 +65,7 @@ impl FromStr for GenericNumber {
 
 	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
 		if let Some(pos) = block_number.chars().position(|d| !d.is_digit(10)) {
-			Err(format!(
-				"Expected block number, found illegal digit at position: {}",
-				pos,
-			))
+			Err(format!("Expected block number, found illegal digit at position: {}", pos))
 		} else {
 			Ok(Self(block_number.to_owned()))
 		}
@@ -66,24 +78,24 @@ impl GenericNumber {
 	/// See `https://doc.rust-lang.org/std/primitive.str.html#method.parse` for more elaborate
 	/// documentation.
 	pub fn parse<N>(&self) -> Result<N, String>
-		where
-			N: FromStr,
-			N::Err: std::fmt::Debug,
+	where
+		N: FromStr,
+		N::Err: std::fmt::Debug,
 	{
 		FromStr::from_str(&self.0).map_err(|e| format!("Failed to parse block number: {:?}", e))
 	}
 }
 
 /// Wrapper type that is either a `Hash` or the number of a `Block`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockNumberOrHash(String);
 
 impl FromStr for BlockNumberOrHash {
 	type Err = String;
 
 	fn from_str(block_number: &str) -> Result<Self, Self::Err> {
-		if block_number.starts_with("0x") {
-			if let Some(pos) = &block_number[2..].chars().position(|c| !c.is_ascii_hexdigit()) {
+		if let Some(rest) = block_number.strip_prefix("0x") {
+			if let Some(pos) = rest.chars().position(|c| !c.is_ascii_hexdigit()) {
 				Err(format!(
 					"Expected block hash, found illegal hex character at position: {}",
 					2 + pos,
@@ -101,7 +113,6 @@ impl BlockNumberOrHash {
 	/// Parse the inner value as `BlockId`.
 	pub fn parse<B: BlockT>(&self) -> Result<BlockId<B>, String>
 	where
-		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: std::fmt::Debug,
 		NumberFor<B>: FromStr,
 		<NumberFor<B> as FromStr>::Err: std::fmt::Debug,
@@ -109,7 +120,7 @@ impl BlockNumberOrHash {
 		if self.0.starts_with("0x") {
 			Ok(BlockId::Hash(
 				FromStr::from_str(&self.0[2..])
-					.map_err(|e| format!("Failed to parse block hash: {:?}", e))?
+					.map_err(|e| format!("Failed to parse block hash: {:?}", e))?,
 			))
 		} else {
 			GenericNumber(self.0.clone()).parse().map(BlockId::Number)
@@ -117,46 +128,32 @@ impl BlockNumberOrHash {
 	}
 }
 
-
 /// Optional flag for specifying crypto algorithm
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Clone, Args)]
 pub struct CryptoSchemeFlag {
 	/// cryptography scheme
-	#[structopt(
-		long,
-		value_name = "SCHEME",
-		possible_values = &CryptoScheme::variants(),
-		case_insensitive = true,
-		default_value = "Sr25519"
-	)]
+	#[arg(long, value_name = "SCHEME", value_enum, ignore_case = true, default_value_t = CryptoScheme::Sr25519)]
 	pub scheme: CryptoScheme,
 }
 
 /// Optional flag for specifying output type
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Clone, Args)]
 pub struct OutputTypeFlag {
 	/// output format
-	#[structopt(
-		long,
-		value_name = "FORMAT",
-		possible_values = &OutputType::variants(),
-		case_insensitive = true,
-		default_value = "Text"
-	)]
+	#[arg(long, value_name = "FORMAT", value_enum, ignore_case = true, default_value_t = OutputType::Text)]
 	pub output_type: OutputType,
 }
 
 /// Optional flag for specifying network scheme
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Clone, Args)]
 pub struct NetworkSchemeFlag {
 	/// network address format
-	#[structopt(
+	#[arg(
+		short = 'n',
 		long,
 		value_name = "NETWORK",
-		short = "n",
-		possible_values = &Ss58AddressFormat::all_names()[..],
-		parse(try_from_str = Ss58AddressFormat::try_from),
-		case_insensitive = true,
+		ignore_case = true,
+		value_parser = parse_ss58_address_format,
 	)]
 	pub network: Option<Ss58AddressFormat>,
 }

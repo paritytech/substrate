@@ -1,0 +1,5 @@
+error: Number literal must not have a suffix
+  --> tests/pallet_ui/call_index_has_suffix.rs:14:30
+   |
+14 |         #[pallet::call_index(0something)]
+   |                              ^^^^^^^^^^

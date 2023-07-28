@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,18 +15,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Runtime Modules shared primitive types.
+//! # Substrate Runtime Primitives.
+//!
+//! This crate, among other things, contains a large library of types and utilities that are used in
+//! the Substrate runtime, but are not particularly `FRAME`-oriented.
+//!
+//! ## Block, Header and Extrinsics
+//!
+//! Most notable, this crate contains some of the types and trait that enable important
+//! communication between the client and the runtime. This includes:
+//!
+//! - A set of traits to declare what any block/header/extrinsic type should provide.
+//! 	- [`traits::Block`], [`traits::Header`], [`traits::Extrinsic`]
+//! - A set of types that implement these traits, whilst still providing a high degree of
+//!   configurability via generics.
+//! 	- [`generic::Block`], [`generic::Header`], [`generic::UncheckedExtrinsic`] and
+//!    [`generic::CheckedExtrinsic`]
+//!
+//! ## Runtime API Types
+//!
+//! This crate also contains some types that are often used in conjuncture with Runtime APIs. Most
+//! notable:
+//!
+//! - [`ApplyExtrinsicResult`], and [`DispatchOutcome`], which dictate how the client and runtime
+//!   communicate about the success or failure of an extrinsic.
+//! - [`transaction_validity`], which dictates how the client and runtime communicate about the
+//!  validity of an extrinsic while still in the transaction-queue.
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// to allow benchmarking
-#![cfg_attr(feature = "bench", feature(test))]
-#[cfg(feature = "bench")] extern crate test;
-
 #[doc(hidden)]
 pub use codec;
-#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use scale_info;
+#[cfg(feature = "serde")]
 #[doc(hidden)]
 pub use serde;
 #[doc(hidden)]
@@ -34,30 +57,40 @@ pub use sp_std;
 
 #[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
+pub use sp_arithmetic::traits::Saturating;
 
 #[doc(hidden)]
 pub use sp_application_crypto as app_crypto;
 
+pub use sp_core::storage::StateVersion;
 #[cfg(feature = "std")]
 pub use sp_core::storage::{Storage, StorageChild};
 
+use sp_core::{
+	crypto::{self, ByteArray, FromEntropy},
+	ecdsa, ed25519,
+	hash::{H256, H512},
+	sr25519,
+};
 use sp_std::prelude::*;
-use sp_std::convert::TryFrom;
-use sp_core::{crypto::{self, Public}, ed25519, sr25519, ecdsa, hash::{H256, H512}};
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+#[cfg(all(not(feature = "std"), feature = "serde"))]
+use sp_std::alloc::format;
 
 pub mod curve;
 pub mod generic;
+pub mod legacy;
+mod multiaddress;
 pub mod offchain;
+pub mod runtime_logger;
+mod runtime_string;
 #[cfg(feature = "std")]
 pub mod testing;
 pub mod traits;
 pub mod transaction_validity;
-pub mod random_number_generator;
-mod runtime_string;
-mod multiaddress;
-pub mod runtime_logger;
 
 pub use crate::runtime_string::*;
 
@@ -65,29 +98,38 @@ pub use crate::runtime_string::*;
 pub use multiaddress::MultiAddress;
 
 /// Re-export these since they're only "kind of" generic.
-pub use generic::{DigestItem, Digest};
+pub use generic::{Digest, DigestItem};
 
+pub use sp_application_crypto::{BoundToRuntimeAppPublic, RuntimeAppPublic};
 /// Re-export this since it's part of the API of this crate.
-pub use sp_core::{TypeId, crypto::{key_types, KeyTypeId, CryptoType, CryptoTypeId, AccountId32}};
-pub use sp_application_crypto::{RuntimeAppPublic, BoundToRuntimeAppPublic};
+pub use sp_core::{
+	bounded::{BoundedBTreeMap, BoundedBTreeSet, BoundedSlice, BoundedVec, WeakBoundedVec},
+	crypto::{key_types, AccountId32, CryptoType, CryptoTypeId, KeyTypeId},
+	TypeId,
+};
+/// Re-export bounded_vec and bounded_btree_map macros only when std is enabled.
+#[cfg(feature = "std")]
+pub use sp_core::{bounded_btree_map, bounded_vec};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
 
-/// Re-export top-level arithmetic stuff.
-pub use sp_arithmetic::{
-	PerThing, Perquintill, Perbill, Permill, Percent, PerU16, InnerOf, UpperOf,
-	Rational128, FixedI64, FixedI128, FixedU128, FixedPointNumber, FixedPointOperand,
-	traits::SaturatedConversion,
-};
-/// Re-export 128 bit helpers.
-pub use sp_arithmetic::helpers_128bit;
 /// Re-export big_uint stuff.
 pub use sp_arithmetic::biguint;
-
-pub use random_number_generator::RandomNumberGenerator;
+/// Re-export 128 bit helpers.
+pub use sp_arithmetic::helpers_128bit;
+/// Re-export top-level arithmetic stuff.
+pub use sp_arithmetic::{
+	traits::SaturatedConversion, ArithmeticError, FixedI128, FixedI64, FixedPointNumber,
+	FixedPointOperand, FixedU128, FixedU64, InnerOf, PerThing, PerU16, Perbill, Percent, Permill,
+	Perquintill, Rational128, Rounding, UpperOf,
+};
 
 pub use either::Either;
+
+/// The number of bytes of the module-specific `error` field defined in [`ModuleError`].
+/// In FRAME, this is the maximum encoded size of a pallet error type.
+pub const MAX_MODULE_ERROR_ENCODED_SIZE: usize = 4;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -107,7 +149,7 @@ pub type EncodedJustification = Vec<u8>;
 
 /// Collection of justifications for a given block, multiple justifications may
 /// be provided by different consensus engines for the same block.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Justifications(Vec<Justification>);
 
@@ -122,7 +164,7 @@ impl Justifications {
 	/// not inserted.
 	pub fn append(&mut self, justification: Justification) -> bool {
 		if self.get(justification.0).is_some() {
-			return false;
+			return false
 		}
 		self.0.push(justification);
 		true
@@ -132,6 +174,11 @@ impl Justifications {
 	/// exists.
 	pub fn get(&self, engine_id: ConsensusEngineId) -> Option<&EncodedJustification> {
 		self.iter().find(|j| j.0 == engine_id).map(|j| &j.1)
+	}
+
+	/// Remove the encoded justification for the given consensus engine, if it exists.
+	pub fn remove(&mut self, engine_id: ConsensusEngineId) {
+		self.0.retain(|j| j.0 != engine_id)
 	}
 
 	/// Return a copy of the encoded justification for the given consensus
@@ -156,11 +203,11 @@ impl From<Justification> for Justifications {
 	}
 }
 
-use traits::{Verify, Lazy};
+use traits::{Lazy, Verify};
 
-#[cfg(feature = "std")]
-pub use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::traits::IdentifyAccount;
+#[cfg(feature = "serde")]
+pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
@@ -172,14 +219,14 @@ pub trait BuildStorage {
 		Ok(storage)
 	}
 	/// Assimilate the storage for this module into pre-existing overlays.
-	fn assimilate_storage(
-		&self,
-		storage: &mut sp_core::storage::Storage,
-	) -> Result<(), String>;
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String>;
 }
 
 /// Something that can build the genesis storage of a module.
 #[cfg(feature = "std")]
+#[deprecated(
+	note = "`BuildModuleGenesisStorage` is planned to be removed in December 2023. Use `BuildStorage` instead of it."
+)]
 pub trait BuildModuleGenesisStorage<T, I>: Sized {
 	/// Create the module genesis storage into the given `storage` and `child_storage`.
 	fn build_module_genesis_storage(
@@ -190,17 +237,14 @@ pub trait BuildModuleGenesisStorage<T, I>: Sized {
 
 #[cfg(feature = "std")]
 impl BuildStorage for sp_core::storage::Storage {
-	fn assimilate_storage(
-		&self,
-		storage: &mut sp_core::storage::Storage,
-	)-> Result<(), String> {
+	fn assimilate_storage(&self, storage: &mut sp_core::storage::Storage) -> Result<(), String> {
 		storage.top.extend(self.top.iter().map(|(k, v)| (k.clone(), v.clone())));
 		for (k, other_map) in self.children_default.iter() {
 			let k = k.clone();
 			if let Some(map) = storage.children_default.get_mut(&k) {
 				map.data.extend(other_map.data.iter().map(|(k, v)| (k.clone(), v.clone())));
 				if !map.child_info.try_update(&other_map.child_info) {
-					return Err("Incompatible child info update".to_string());
+					return Err("Incompatible child info update".to_string())
 				}
 			} else {
 				storage.children_default.insert(k, other_map.clone());
@@ -212,10 +256,7 @@ impl BuildStorage for sp_core::storage::Storage {
 
 #[cfg(feature = "std")]
 impl BuildStorage for () {
-	fn assimilate_storage(
-		&self,
-		_: &mut sp_core::storage::Storage,
-	) -> Result<(), String> {
+	fn assimilate_storage(&self, _: &mut sp_core::storage::Storage) -> Result<(), String> {
 		Err("`assimilate_storage` not implemented for `()`".into())
 	}
 }
@@ -223,9 +264,9 @@ impl BuildStorage for () {
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 
-/// Signature verify that can work with any known signature types..
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[derive(Eq, PartialEq, Clone, Encode, Decode, RuntimeDebug)]
+/// Signature verify that can work with any known signature types.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {
 	/// An Ed25519 signature.
 	Ed25519(ed25519::Signature),
@@ -244,7 +285,11 @@ impl From<ed25519::Signature> for MultiSignature {
 impl TryFrom<MultiSignature> for ed25519::Signature {
 	type Error = ();
 	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
-		if let MultiSignature::Ed25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSignature::Ed25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -257,7 +302,11 @@ impl From<sr25519::Signature> for MultiSignature {
 impl TryFrom<MultiSignature> for sr25519::Signature {
 	type Error = ();
 	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
-		if let MultiSignature::Sr25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSignature::Sr25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -270,19 +319,17 @@ impl From<ecdsa::Signature> for MultiSignature {
 impl TryFrom<MultiSignature> for ecdsa::Signature {
 	type Error = ();
 	fn try_from(m: MultiSignature) -> Result<Self, Self::Error> {
-		if let MultiSignature::Ecdsa(x) = m { Ok(x) } else { Err(()) }
-	}
-}
-
-impl Default for MultiSignature {
-	fn default() -> Self {
-		Self::Ed25519(Default::default())
+		if let MultiSignature::Ecdsa(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
 /// Public key for any known crypto algorithm.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MultiSigner {
 	/// An Ed25519 identity.
 	Ed25519(ed25519::Public),
@@ -292,9 +339,13 @@ pub enum MultiSigner {
 	Ecdsa(ecdsa::Public),
 }
 
-impl Default for MultiSigner {
-	fn default() -> Self {
-		Self::Ed25519(Default::default())
+impl FromEntropy for MultiSigner {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		Ok(match input.read_byte()? % 3 {
+			0 => Self::Ed25519(FromEntropy::from_entropy(input)?),
+			1 => Self::Sr25519(FromEntropy::from_entropy(input)?),
+			2.. => Self::Ecdsa(FromEntropy::from_entropy(input)?),
+		})
 	}
 }
 
@@ -336,7 +387,11 @@ impl From<ed25519::Public> for MultiSigner {
 impl TryFrom<MultiSigner> for ed25519::Public {
 	type Error = ();
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Ed25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Ed25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -349,7 +404,11 @@ impl From<sr25519::Public> for MultiSigner {
 impl TryFrom<MultiSigner> for sr25519::Public {
 	type Error = ();
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Sr25519(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Sr25519(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -362,7 +421,11 @@ impl From<ecdsa::Public> for MultiSigner {
 impl TryFrom<MultiSigner> for ecdsa::Public {
 	type Error = ();
 	fn try_from(m: MultiSigner) -> Result<Self, Self::Error> {
-		if let MultiSigner::Ecdsa(x) = m { Ok(x) } else { Err(()) }
+		if let MultiSigner::Ecdsa(x) = m {
+			Ok(x)
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -381,24 +444,30 @@ impl Verify for MultiSignature {
 	type Signer = MultiSigner;
 	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
 		match (self, signer) {
-			(Self::Ed25519(ref sig), who) => sig.verify(msg, &ed25519::Public::from_slice(who.as_ref())),
-			(Self::Sr25519(ref sig), who) => sig.verify(msg, &sr25519::Public::from_slice(who.as_ref())),
+			(Self::Ed25519(ref sig), who) => match ed25519::Public::from_slice(who.as_ref()) {
+				Ok(signer) => sig.verify(msg, &signer),
+				Err(()) => false,
+			},
+			(Self::Sr25519(ref sig), who) => match sr25519::Public::from_slice(who.as_ref()) {
+				Ok(signer) => sig.verify(msg, &signer),
+				Err(()) => false,
+			},
 			(Self::Ecdsa(ref sig), who) => {
 				let m = sp_io::hashing::blake2_256(msg.get());
 				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
 					Ok(pubkey) =>
-						&sp_io::hashing::blake2_256(pubkey.as_ref())
-							== <dyn AsRef<[u8; 32]>>::as_ref(who),
+						&sp_io::hashing::blake2_256(pubkey.as_ref()) ==
+							<dyn AsRef<[u8; 32]>>::as_ref(who),
 					_ => false,
 				}
-			}
+			},
 		}
 	}
 }
 
 /// Signature verify that can work with any known signature types..
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AnySignature(H512);
 
 impl Verify for AnySignature {
@@ -407,10 +476,13 @@ impl Verify for AnySignature {
 		let msg = msg.get();
 		sr25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
 			.map(|s| s.verify(msg, signer))
-			.unwrap_or(false)
-		|| ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
-			.map(|s| s.verify(msg, &ed25519::Public::from_slice(signer.as_ref())))
-			.unwrap_or(false)
+			.unwrap_or(false) ||
+			ed25519::Signature::try_from(self.0.as_fixed_bytes().as_ref())
+				.map(|s| match ed25519::Public::from_slice(signer.as_ref()) {
+					Err(()) => false,
+					Ok(signer) => s.verify(msg, &signer),
+				})
+				.unwrap_or(false)
 	}
 }
 
@@ -441,40 +513,96 @@ pub type DispatchResult = sp_std::result::Result<(), DispatchError>;
 /// about the `Dispatchable` that is only known post dispatch.
 pub type DispatchResultWithInfo<T> = sp_std::result::Result<T, DispatchErrorWithPostInfo<T>>;
 
+/// Reason why a pallet call failed.
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ModuleError {
+	/// Module index, matching the metadata module index.
+	pub index: u8,
+	/// Module specific error value.
+	pub error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
+	/// Optional error message.
+	#[codec(skip)]
+	#[cfg_attr(feature = "serde", serde(skip_deserializing))]
+	pub message: Option<&'static str>,
+}
+
+impl PartialEq for ModuleError {
+	fn eq(&self, other: &Self) -> bool {
+		(self.index == other.index) && (self.error == other.error)
+	}
+}
+
+/// Errors related to transactional storage layers.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TransactionalError {
+	/// Too many transactional layers have been spawned.
+	LimitReached,
+	/// A transactional layer was expected, but does not exist.
+	NoLayer,
+}
+
+impl From<TransactionalError> for &'static str {
+	fn from(e: TransactionalError) -> &'static str {
+		match e {
+			TransactionalError::LimitReached => "Too many transactional layers have been spawned",
+			TransactionalError::NoLayer => "A transactional layer was expected, but does not exist",
+		}
+	}
+}
+
+impl From<TransactionalError> for DispatchError {
+	fn from(e: TransactionalError) -> DispatchError {
+		Self::Transactional(e)
+	}
+}
+
 /// Reason why a dispatch call failed.
-#[derive(Eq, Clone, Copy, Encode, Decode, Debug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo, PartialEq, MaxEncodedLen)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DispatchError {
 	/// Some error occurred.
-	Other(#[codec(skip)] #[cfg_attr(feature = "std", serde(skip_deserializing))] &'static str),
+	Other(
+		#[codec(skip)]
+		#[cfg_attr(feature = "serde", serde(skip_deserializing))]
+		&'static str,
+	),
 	/// Failed to lookup some data.
 	CannotLookup,
 	/// A bad origin.
 	BadOrigin,
 	/// A custom error in a module.
-	Module {
-		/// Module index, matching the metadata module index.
-		index: u8,
-		/// Module specific error value.
-		error: u8,
-		/// Optional error message.
-		#[codec(skip)]
-		#[cfg_attr(feature = "std", serde(skip_deserializing))]
-		message: Option<&'static str>,
-	},
+	Module(ModuleError),
 	/// At least one consumer is remaining so the account cannot be destroyed.
 	ConsumerRemaining,
 	/// There are no providers so the account cannot be created.
 	NoProviders,
+	/// There are too many consumers so the account cannot be created.
+	TooManyConsumers,
 	/// An error to do with tokens.
 	Token(TokenError),
+	/// An arithmetic error.
+	Arithmetic(ArithmeticError),
+	/// The number of transactional layers has been reached, or we are not in a transactional
+	/// layer.
+	Transactional(TransactionalError),
+	/// Resources exhausted, e.g. attempt to read/write data which is too large to manipulate.
+	Exhausted,
+	/// The state is corrupt; this is generally not going to fix itself.
+	Corruption,
+	/// Some resource (e.g. a preimage) is unavailable right now. This might fix itself later.
+	Unavailable,
+	/// Root origin is not allowed.
+	RootNotAllowed,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
 /// the `Dispatchable` that is only known post dispatch.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug)]
-pub struct DispatchErrorWithPostInfo<Info> where
-	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub struct DispatchErrorWithPostInfo<Info>
+where
+	Info: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	/// Additional information about the `Dispatchable` which is only known post dispatch.
 	pub post_info: Info,
@@ -486,22 +614,20 @@ impl DispatchError {
 	/// Return the same error but without the attached message.
 	pub fn stripped(self) -> Self {
 		match self {
-			DispatchError::Module { index, error, message: Some(_) }
-				=> DispatchError::Module { index, error, message: None },
+			DispatchError::Module(ModuleError { index, error, message: Some(_) }) =>
+				DispatchError::Module(ModuleError { index, error, message: None }),
 			m => m,
 		}
 	}
 }
 
-impl<T, E> From<E> for DispatchErrorWithPostInfo<T> where
+impl<T, E> From<E> for DispatchErrorWithPostInfo<T>
+where
 	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable + Default,
-	E: Into<DispatchError>
+	E: Into<DispatchError>,
 {
 	fn from(error: E) -> Self {
-		Self {
-			post_info: Default::default(),
-			error: error.into(),
-		}
+		Self { post_info: Default::default(), error: error.into() }
 	}
 }
 
@@ -517,23 +643,15 @@ impl From<crate::traits::BadOrigin> for DispatchError {
 	}
 }
 
-impl From<crate::traits::StoredMapError> for DispatchError {
-	fn from(e: crate::traits::StoredMapError) -> Self {
-		match e {
-			crate::traits::StoredMapError::ConsumerRemaining => Self::ConsumerRemaining,
-			crate::traits::StoredMapError::NoProviders => Self::NoProviders,
-		}
-	}
-}
-
 /// Description of what went wrong when trying to complete an operation on a token.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TokenError {
 	/// Funds are unavailable.
-	NoFunds,
-	/// Account that must exist would die.
-	WouldDie,
+	FundsUnavailable,
+	/// Some part of the balance gives the only provider reference to the account and thus cannot
+	/// be (re)moved.
+	OnlyProvider,
 	/// Account cannot exist with the funds that would be given.
 	BelowMinimum,
 	/// Account cannot be created.
@@ -542,23 +660,30 @@ pub enum TokenError {
 	UnknownAsset,
 	/// Funds exist but are frozen.
 	Frozen,
-	/// An underflow would occur.
-	Underflow,
-	/// An overflow would occur.
-	Overflow,
+	/// Operation is not supported by the asset.
+	Unsupported,
+	/// Account cannot be created for a held balance.
+	CannotCreateHold,
+	/// Withdrawal would cause unwanted loss of account.
+	NotExpendable,
+	/// Account cannot receive the assets.
+	Blocked,
 }
 
 impl From<TokenError> for &'static str {
 	fn from(e: TokenError) -> &'static str {
 		match e {
-			TokenError::NoFunds => "Funds are unavailable",
-			TokenError::WouldDie => "Account that must exist would die",
+			TokenError::FundsUnavailable => "Funds are unavailable",
+			TokenError::OnlyProvider => "Account that must exist would die",
 			TokenError::BelowMinimum => "Account cannot exist with the funds that would be given",
 			TokenError::CannotCreate => "Account cannot be created",
 			TokenError::UnknownAsset => "The asset in question is unknown",
 			TokenError::Frozen => "Funds exist but are frozen",
-			TokenError::Underflow => "An underflow would occur",
-			TokenError::Overflow => "An overflow would occur",
+			TokenError::Unsupported => "Operation is not supported by the asset",
+			TokenError::CannotCreateHold =>
+				"Account cannot be created for recording amount on hold",
+			TokenError::NotExpendable => "Account that is desired to remain would die",
+			TokenError::Blocked => "Account cannot receive the assets",
 		}
 	}
 }
@@ -566,6 +691,12 @@ impl From<TokenError> for &'static str {
 impl From<TokenError> for DispatchError {
 	fn from(e: TokenError) -> DispatchError {
 		Self::Token(e)
+	}
+}
+
+impl From<ArithmeticError> for DispatchError {
+	fn from(e: ArithmeticError) -> DispatchError {
+		Self::Arithmetic(e)
 	}
 }
 
@@ -577,20 +708,29 @@ impl From<&'static str> for DispatchError {
 
 impl From<DispatchError> for &'static str {
 	fn from(err: DispatchError) -> &'static str {
+		use DispatchError::*;
 		match err {
-			DispatchError::Other(msg) => msg,
-			DispatchError::CannotLookup => "Cannot lookup",
-			DispatchError::BadOrigin => "Bad origin",
-			DispatchError::Module { message, .. } => message.unwrap_or("Unknown module error"),
-			DispatchError::ConsumerRemaining => "Consumer remaining",
-			DispatchError::NoProviders => "No providers",
-			DispatchError::Token(e) => e.into(),
+			Other(msg) => msg,
+			CannotLookup => "Cannot lookup",
+			BadOrigin => "Bad origin",
+			Module(ModuleError { message, .. }) => message.unwrap_or("Unknown module error"),
+			ConsumerRemaining => "Consumer remaining",
+			NoProviders => "No providers",
+			TooManyConsumers => "Too many consumers",
+			Token(e) => e.into(),
+			Arithmetic(e) => e.into(),
+			Transactional(e) => e.into(),
+			Exhausted => "Resources exhausted",
+			Corruption => "State corrupt",
+			Unavailable => "Resource unavailable",
+			RootNotAllowed => "Root not allowed",
 		}
 	}
 }
 
-impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str where
-	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str
+where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	fn from(err: DispatchErrorWithPostInfo<T>) -> &'static str {
 		err.error.into()
@@ -599,58 +739,50 @@ impl<T> From<DispatchErrorWithPostInfo<T>> for &'static str where
 
 impl traits::Printable for DispatchError {
 	fn print(&self) {
+		use DispatchError::*;
 		"DispatchError".print();
 		match self {
-			Self::Other(err) => err.print(),
-			Self::CannotLookup => "Cannot lookup".print(),
-			Self::BadOrigin => "Bad origin".print(),
-			Self::Module { index, error, message } => {
+			Other(err) => err.print(),
+			CannotLookup => "Cannot lookup".print(),
+			BadOrigin => "Bad origin".print(),
+			Module(ModuleError { index, error, message }) => {
 				index.print();
 				error.print();
 				if let Some(msg) = message {
 					msg.print();
 				}
-			}
-			Self::ConsumerRemaining => "Consumer remaining".print(),
-			Self::NoProviders => "No providers".print(),
-			Self::Token(e) => {
+			},
+			ConsumerRemaining => "Consumer remaining".print(),
+			NoProviders => "No providers".print(),
+			TooManyConsumers => "Too many consumers".print(),
+			Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();
-			}
+			},
+			Arithmetic(e) => {
+				"Arithmetic error: ".print();
+				<&'static str>::from(*e).print();
+			},
+			Transactional(e) => {
+				"Transactional error: ".print();
+				<&'static str>::from(*e).print();
+			},
+			Exhausted => "Resources exhausted".print(),
+			Corruption => "State corrupt".print(),
+			Unavailable => "Resource unavailable".print(),
+			RootNotAllowed => "Root not allowed".print(),
 		}
 	}
 }
 
-impl<T> traits::Printable for DispatchErrorWithPostInfo<T> where
-	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable
+impl<T> traits::Printable for DispatchErrorWithPostInfo<T>
+where
+	T: Eq + PartialEq + Clone + Copy + Encode + Decode + traits::Printable,
 {
 	fn print(&self) {
 		self.error.print();
 		"PostInfo: ".print();
 		self.post_info.print();
-	}
-}
-
-impl PartialEq for DispatchError {
-	fn eq(&self, other: &Self) -> bool {
-		use DispatchError::*;
-
-		match (self, other) {
-			(CannotLookup, CannotLookup) |
-			(BadOrigin, BadOrigin) |
-			(ConsumerRemaining, ConsumerRemaining) |
-			(NoProviders, NoProviders) => true,
-
-			(Token(l), Token(r)) => l == r,
-			(Other(l), Other(r)) => l == r,
-
-			(
-				Module { index: index_l, error: error_l, .. },
-				Module { index: index_r, error: error_r, .. },
-			) => (index_l == index_r) && (error_l == error_r),
-
-			_ => false,
-		}
 	}
 }
 
@@ -678,23 +810,27 @@ pub type DispatchOutcome = Result<(), DispatchError>;
 ///
 /// Examples of reasons preventing inclusion in a block:
 /// - More block weight is required to process the extrinsic than is left in the block being built.
-///   This doesn't necessarily mean that the extrinsic is invalid, since it can still be
-///   included in the next block if it has enough spare weight available.
-/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such
-///   a transaction in the block doesn't make sense.
+///   This doesn't necessarily mean that the extrinsic is invalid, since it can still be included in
+///   the next block if it has enough spare weight available.
+/// - The sender doesn't have enough funds to pay the transaction inclusion fee. Including such a
+///   transaction in the block doesn't make sense.
 /// - The extrinsic supplied a bad signature. This transaction won't become valid ever.
-pub type ApplyExtrinsicResult = Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
+pub type ApplyExtrinsicResult =
+	Result<DispatchOutcome, transaction_validity::TransactionValidityError>;
 
 /// Same as `ApplyExtrinsicResult` but augmented with `PostDispatchInfo` on success.
 pub type ApplyExtrinsicResultWithInfo<T> =
 	Result<DispatchResultWithInfo<T>, transaction_validity::TransactionValidityError>;
+
+/// The error type used as return type in try runtime hooks.
+pub type TryRuntimeError = DispatchError;
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.
 pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 	sig: &V,
 	item: &T,
-	signer: &<V::Signer as IdentifyAccount>::AccountId
+	signer: &<V::Signer as IdentifyAccount>::AccountId,
 ) -> bool {
 	// The `Lazy<T>` trait expresses something like `X: FnMut<Output = for<'a> &'a T>`.
 	// unfortunately this is a lifetime relationship that can't
@@ -711,10 +847,7 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 		}
 	}
 
-	sig.verify(
-		LazyEncode { inner: || item.encode(), encoded: None },
-		signer,
-	)
+	sig.verify(LazyEncode { inner: || item.encode(), encoded: None }, signer)
 }
 
 /// Checks that `$x` is equal to `$y` with an error rate of `$error`.
@@ -739,7 +872,24 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			($x >= $crate::Saturating::saturating_sub($y, $error)) &&
+				($x <= $crate::Saturating::saturating_add($y, $error)),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
+	};
+}
+
+/// Same as [`assert_eq_error_rate`], but intended to be used with floating point number, or
+/// generally those who do not have over/underflow potentials.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_eq_error_rate_float {
+	($x:expr, $y:expr, $error:expr $(,)?) => {
+		assert!(
+			($x >= $y - $error) && ($x <= $y + $error),
 			"{:?} != {:?} (with error rate {:?})",
 			$x,
 			$y,
@@ -750,20 +900,13 @@ macro_rules! assert_eq_error_rate {
 
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
-#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Default, Encode, Decode, TypeInfo)]
 pub struct OpaqueExtrinsic(Vec<u8>);
 
 impl OpaqueExtrinsic {
 	/// Convert an encoded extrinsic to an `OpaqueExtrinsic`.
 	pub fn from_bytes(mut bytes: &[u8]) -> Result<Self, codec::Error> {
 		Self::decode(&mut bytes)
-	}
-}
-
-#[cfg(feature = "std")]
-impl parity_util_mem::MallocSizeOf for OpaqueExtrinsic {
-	fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
-		self.0.size_of(ops)
 	}
 }
 
@@ -779,16 +922,22 @@ impl sp_std::fmt::Debug for OpaqueExtrinsic {
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl ::serde::Serialize for OpaqueExtrinsic {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: ::serde::Serializer,
+	{
 		codec::Encode::using_encoded(&self.0, |bytes| ::sp_core::bytes::serialize(bytes, seq))
 	}
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 impl<'a> ::serde::Deserialize<'a> for OpaqueExtrinsic {
-	fn deserialize<D>(de: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
+		D: ::serde::Deserializer<'a>,
+	{
 		let r = ::sp_core::bytes::deserialize(de)?;
 		Decode::decode(&mut &r[..])
 			.map_err(|e| ::serde::de::Error::custom(format!("Decode error: {}", e)))
@@ -803,40 +952,6 @@ impl traits::Extrinsic for OpaqueExtrinsic {
 /// Print something that implements `Printable` from the runtime.
 pub fn print(print: impl traits::Printable) {
 	print.print();
-}
-
-/// Batching session.
-///
-/// To be used in runtime only. Outside of runtime, just construct
-/// `BatchVerifier` directly.
-#[must_use = "`verify()` needs to be called to finish batch signature verification!"]
-pub struct SignatureBatching(bool);
-
-impl SignatureBatching {
-	/// Start new batching session.
-	pub fn start() -> Self {
-		sp_io::crypto::start_batch_verify();
-		SignatureBatching(false)
-	}
-
-	/// Verify all signatures submitted during the batching session.
-	#[must_use]
-	pub fn verify(mut self) -> bool {
-		self.0 = true;
-		sp_io::crypto::finish_batch_verify()
-	}
-}
-
-impl Drop for SignatureBatching {
-	fn drop(&mut self) {
-		// Sanity check. If user forgets to actually call `verify()`.
-		//
-		// We should not panic if the current thread is already panicking,
-		// because Rust otherwise aborts the process.
-		if !self.0 && !sp_std::thread::panicking() {
-			panic!("Signature verification has not been called before `SignatureBatching::drop`")
-		}
-	}
 }
 
 /// Describes on what should happen with a storage transaction.
@@ -859,9 +974,13 @@ impl<R> TransactionOutcome<R> {
 
 #[cfg(test)]
 mod tests {
+	use crate::traits::BlakeTwo256;
+
 	use super::*;
-	use codec::{Encode, Decode};
+	use codec::{Decode, Encode};
 	use sp_core::crypto::Pair;
+	use sp_io::TestExternalities;
+	use sp_state_machine::create_proof_check_backend;
 
 	#[test]
 	fn opaque_extrinsic_serialization() {
@@ -871,21 +990,17 @@ mod tests {
 
 	#[test]
 	fn dispatch_error_encoding() {
-		let error = DispatchError::Module {
+		let error = DispatchError::Module(ModuleError {
 			index: 1,
-			error: 2,
+			error: [2, 0, 0, 0],
 			message: Some("error message"),
-		};
+		});
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(encoded, vec![3, 1, 2]);
+		assert_eq!(encoded, vec![3, 1, 2, 0, 0, 0]);
 		assert_eq!(
 			decoded,
-			DispatchError::Module {
-				index: 1,
-				error: 2,
-				message: None,
-			},
+			DispatchError::Module(ModuleError { index: 1, error: [2, 0, 0, 0], message: None })
 		);
 	}
 
@@ -898,11 +1013,20 @@ mod tests {
 			Other("bar"),
 			CannotLookup,
 			BadOrigin,
-			Module { index: 1, error: 1, message: None },
-			Module { index: 1, error: 2, message: None },
-			Module { index: 2, error: 1, message: None },
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: None }),
+			Module(ModuleError { index: 1, error: [2, 0, 0, 0], message: None }),
+			Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: None }),
 			ConsumerRemaining,
 			NoProviders,
+			Token(TokenError::FundsUnavailable),
+			Token(TokenError::OnlyProvider),
+			Token(TokenError::BelowMinimum),
+			Token(TokenError::CannotCreate),
+			Token(TokenError::UnknownAsset),
+			Token(TokenError::Frozen),
+			Arithmetic(ArithmeticError::Overflow),
+			Arithmetic(ArithmeticError::Underflow),
+			Arithmetic(ArithmeticError::DivisionByZero),
 		];
 		for (i, variant) in variants.iter().enumerate() {
 			for (j, other_variant) in variants.iter().enumerate() {
@@ -916,8 +1040,8 @@ mod tests {
 
 		// Ignores `message` field in `Module` variant.
 		assert_eq!(
-			Module { index: 1, error: 1, message: Some("foo") },
-			Module { index: 1, error: 1, message: None},
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: Some("foo") }),
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: None }),
 		);
 	}
 
@@ -938,34 +1062,65 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Signature verification has not been called")]
-	fn batching_still_finishes_when_not_called_directly() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(
-			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
-		);
+	fn execute_and_generate_proof_works() {
+		use codec::Encode;
+		use sp_state_machine::Backend;
+		let mut ext = TestExternalities::default();
+
+		ext.insert(b"a".to_vec(), vec![1u8; 33]);
+		ext.insert(b"b".to_vec(), vec![2u8; 33]);
+		ext.insert(b"c".to_vec(), vec![3u8; 33]);
+		ext.insert(b"d".to_vec(), vec![4u8; 33]);
+
+		let pre_root = *ext.backend.root();
+		let (_, proof) = ext.execute_and_prove(|| {
+			sp_io::storage::get(b"a");
+			sp_io::storage::get(b"b");
+			sp_io::storage::get(b"v");
+			sp_io::storage::get(b"d");
+		});
+
+		let compact_proof = proof.clone().into_compact_proof::<BlakeTwo256>(pre_root).unwrap();
+		let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
+
+		// just an example of how you'd inspect the size of the proof.
+		println!("proof size: {:?}", proof.encoded_size());
+		println!("compact proof size: {:?}", compact_proof.encoded_size());
+		println!("zstd-compressed compact proof size: {:?}", &compressed_proof.len());
+
+		// create a new trie-backed from the proof and make sure it contains everything
+		let proof_check = create_proof_check_backend::<BlakeTwo256>(pre_root, proof).unwrap();
+		assert_eq!(proof_check.storage(b"a",).unwrap().unwrap(), vec![1u8; 33]);
+
+		let _ = ext.execute_and_prove(|| {
+			sp_io::storage::set(b"a", &vec![1u8; 44]);
+		});
+
+		// ensure that these changes are propagated to the backend.
 
 		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			sp_io::crypto::sr25519_verify(
-				&Default::default(),
-				&Vec::new(),
-				&Default::default(),
-			);
+			assert_eq!(sp_io::storage::get(b"a").unwrap(), vec![1u8; 44]);
+			assert_eq!(sp_io::storage::get(b"b").unwrap(), vec![2u8; 33]);
 		});
+	}
+}
+
+// NOTE: we have to test the sp_core stuff also from a different crate to check that the macro
+// can access the sp_core crate.
+#[cfg(test)]
+mod sp_core_tests {
+	use super::*;
+
+	#[test]
+	#[should_panic]
+	fn generate_feature_enabled_macro_panics() {
+		sp_core::generate_feature_enabled_macro!(if_test, test, $);
+		if_test!(panic!("This should panic"));
 	}
 
 	#[test]
-	#[should_panic(expected = "Hey, I'm an error")]
-	fn batching_does_not_panic_while_thread_is_already_panicking() {
-		let mut ext = sp_state_machine::BasicExternalities::default();
-		ext.register_extension(
-			sp_core::traits::TaskExecutorExt::new(sp_core::testing::TaskExecutor::new()),
-		);
-
-		ext.execute_with(|| {
-			let _batching = SignatureBatching::start();
-			panic!("Hey, I'm an error");
-		});
+	fn generate_feature_enabled_macro_works() {
+		sp_core::generate_feature_enabled_macro!(if_not_test, not(test), $);
+		if_not_test!(panic!("This should not panic"));
 	}
 }

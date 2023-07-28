@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -17,18 +17,16 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error::Error;
-use log::info;
-use futures::{future, prelude::*};
-use sp_runtime::traits::{
-	Block as BlockT, NumberFor, One, Zero, SaturatedConversion
-};
-use sp_runtime::generic::BlockId;
 use codec::Encode;
+use futures::{future, prelude::*};
+use log::info;
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, NumberFor, One, SaturatedConversion, Zero},
+};
 
-use std::{io::Write, pin::Pin};
-use sc_client_api::{BlockBackend, UsageProvider};
-use std::sync::Arc;
-use std::task::Poll;
+use sc_client_api::{BlockBackend, HeaderBackend, UsageProvider};
+use std::{io::Write, pin::Pin, sync::Arc, task::Poll};
 
 /// Performs the blocks export.
 pub fn export_blocks<B, C>(
@@ -36,10 +34,10 @@ pub fn export_blocks<B, C>(
 	mut output: impl Write + 'static,
 	from: NumberFor<B>,
 	to: Option<NumberFor<B>>,
-	binary: bool
+	binary: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>>>>
 where
-	C: BlockBackend<B> + UsageProvider<B> + 'static,
+	C: HeaderBackend<B> + BlockBackend<B> + UsageProvider<B> + 'static,
 	B: BlockT,
 {
 	let mut block = from;
@@ -63,7 +61,7 @@ where
 		let client = &client;
 
 		if last < block {
-			return Poll::Ready(Err("Invalid block range specified".into()));
+			return Poll::Ready(Err("Invalid block range specified".into()))
 		}
 
 		if !wrote_header {
@@ -77,23 +75,26 @@ where
 			wrote_header = true;
 		}
 
-		match client.block(&BlockId::number(block))? {
-			Some(block) => {
+		match client
+			.block_hash_from_id(&BlockId::number(block))?
+			.map(|hash| client.block(hash))
+			.transpose()?
+			.flatten()
+		{
+			Some(block) =>
 				if binary {
 					output.write_all(&block.encode())?;
 				} else {
 					serde_json::to_writer(&mut output, &block)
 						.map_err(|e| format!("Error writing JSON: {}", e))?;
-				}
-		},
-			// Reached end of the chain.
+				},
 			None => return Poll::Ready(Ok(())),
 		}
 		if (block % 10000u32.into()).is_zero() {
 			info!("#{}", block);
 		}
 		if block == last {
-			return Poll::Ready(Ok(()));
+			return Poll::Ready(Ok(()))
 		}
 		block += One::one();
 

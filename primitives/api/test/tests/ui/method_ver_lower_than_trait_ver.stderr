@@ -1,0 +1,11 @@
+error: Method version `1` is older than (or equal to) trait version `2`.Methods can't define versions older than the trait version.
+ --> tests/ui/method_ver_lower_than_trait_ver.rs:4:3
+  |
+4 |         #[api_version(1)]
+  |         ^
+
+error: Trait version is set here.
+ --> tests/ui/method_ver_lower_than_trait_ver.rs:2:2
+  |
+2 |     #[api_version(2)]
+  |     ^

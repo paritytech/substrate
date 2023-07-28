@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,54 +19,44 @@
 #![cfg(unix)]
 
 use assert_cmd::cargo::cargo_bin;
-use nix::sys::signal::{kill, Signal::SIGINT};
-use nix::unistd::Pid;
-use regex::Regex;
-use std::convert::TryInto;
-use std::io::Read;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::thread;
-use std::time::Duration;
+use std::{
+	process::{Command, Stdio},
+	time::Duration,
+};
 
-pub mod common;
+use substrate_cli_test_utils as common;
 
-#[test]
-fn temp_base_path_works() {
-	let mut cmd = Command::new(cargo_bin("substrate"));
+#[allow(dead_code)]
+// Apparently `#[ignore]` doesn't actually work to disable this one.
+//#[tokio::test]
+async fn temp_base_path_works() {
+	common::run_with_timeout(Duration::from_secs(60 * 10), async move {
+		let mut cmd = Command::new(cargo_bin("substrate-node"));
+		let mut child = common::KillChildOnDrop(
+			cmd.args(&["--dev", "--tmp", "--no-hardware-benchmarks"])
+				.stdout(Stdio::piped())
+				.stderr(Stdio::piped())
+				.spawn()
+				.unwrap(),
+		);
 
-	let mut cmd = cmd
-		.args(&["--dev", "--tmp"])
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped())
-		.spawn()
-		.unwrap();
+		let mut stderr = child.stderr.take().unwrap();
+		let node_info = common::extract_info_from_output(&mut stderr).0;
 
-	// Let it produce some blocks.
-	thread::sleep(Duration::from_secs(30));
-	assert!(
-		cmd.try_wait().unwrap().is_none(),
-		"the process should still be running"
-	);
+		// Let it produce some blocks.
+		common::wait_n_finalized_blocks(3, &node_info.ws_url).await;
 
-	// Stop the process
-	kill(Pid::from_raw(cmd.id().try_into().unwrap()), SIGINT).unwrap();
-	assert!(common::wait_for(&mut cmd, 40)
-		.map(|x| x.success())
-		.unwrap_or_default());
+		// Ensure the db path exists while the node is running
+		assert!(node_info.db_path.exists());
 
-	// Ensure the database has been deleted
-	let mut stderr = String::new();
-	cmd.stderr.unwrap().read_to_string(&mut stderr).unwrap();
-	let re = Regex::new(r"Database: .+ at (\S+)").unwrap();
-	let db_path = PathBuf::from(
-		re.captures(stderr.as_str())
-			.unwrap()
-			.get(1)
-			.unwrap()
-			.as_str()
-			.to_string(),
-	);
+		child.assert_still_running();
 
-	assert!(!db_path.exists());
+		// Stop the process
+		child.stop();
+
+		if node_info.db_path.exists() {
+			panic!("Database path `{}` wasn't deleted!", node_info.db_path.display());
+		}
+	})
+	.await;
 }

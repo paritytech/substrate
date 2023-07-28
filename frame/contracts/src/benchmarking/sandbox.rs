@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,45 +15,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-///! For instruction benchmarking we do no instantiate a full contract but merely the
-///! sandbox to execute the wasm code. This is because we do not need the full
-///! environment that provides the seal interface as imported functions.
-
-use super::{
-	Config,
-	code::WasmModule,
+/// ! For instruction benchmarking we do not instantiate a full contract but merely the
+/// ! sandbox to execute the Wasm code. This is because we do not need the full
+/// ! environment that provides the seal interface as imported functions.
+use super::{code::WasmModule, Config};
+use crate::wasm::{
+	AllowDeprecatedInterface, AllowUnstableInterface, Determinism, Environment, WasmBlob,
 };
-use sp_core::crypto::UncheckedFrom;
-use sp_sandbox::{EnvironmentDefinitionBuilder, Instance, Memory};
+use sp_core::Get;
+use wasmi::{errors::LinkerError, Func, Linker, StackLimits, Store};
 
-/// Minimal execution environment without any exported functions.
+/// Minimal execution environment without any imported functions.
 pub struct Sandbox {
-	instance: Instance<()>,
-	_memory: Option<Memory>,
+	entry_point: Func,
+	store: Store<()>,
 }
 
 impl Sandbox {
 	/// Invoke the `call` function of a contract code and panic on any execution error.
 	pub fn invoke(&mut self) {
-		self.instance.invoke("call", &[], &mut ()).unwrap();
+		self.entry_point.call(&mut self.store, &[], &mut []).unwrap();
 	}
 }
 
-impl<T: Config> From<&WasmModule<T>> for Sandbox
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	/// Creates an instance from the supplied module and supplies as much memory
-	/// to the instance as the module declares as imported.
+impl<T: Config> From<&WasmModule<T>> for Sandbox {
+	/// Creates an instance from the supplied module.
+	/// Sets the execution engine fuel level to `u64::MAX`.
 	fn from(module: &WasmModule<T>) -> Self {
-		let mut env_builder = EnvironmentDefinitionBuilder::new();
-		let memory = module.add_memory(&mut env_builder);
-		let instance = Instance::new(&module.code, &env_builder, &mut ())
-			.expect("Failed to create benchmarking Sandbox instance");
-		Self {
-			instance,
-			_memory: memory,
-		}
+		let (mut store, _memory, instance) = WasmBlob::<T>::instantiate::<EmptyEnv, _>(
+			&module.code,
+			(),
+			&<T>::Schedule::get(),
+			Determinism::Relaxed,
+			StackLimits::default(),
+			// We are testing with an empty environment anyways
+			AllowDeprecatedInterface::No,
+		)
+		.expect("Failed to create benchmarking Sandbox instance");
+
+		// Set fuel for wasmi execution.
+		store
+			.add_fuel(u64::MAX)
+			.expect("We've set up engine to fuel consuming mode; qed");
+
+		let entry_point = instance.get_export(&store, "call").unwrap().into_func().unwrap();
+		Self { entry_point, store }
+	}
+}
+
+struct EmptyEnv;
+
+impl Environment<()> for EmptyEnv {
+	fn define(
+		_: &mut Store<()>,
+		_: &mut Linker<()>,
+		_: AllowUnstableInterface,
+		_: AllowDeprecatedInterface,
+	) -> Result<(), LinkerError> {
+		Ok(())
 	}
 }

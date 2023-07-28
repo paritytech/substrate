@@ -1,0 +1,36 @@
+error: `Pallet` does not have #[pallet::genesis_config] defined, perhaps you should remove `Config` from construct_runtime?
+  --> tests/construct_runtime_ui/undefined_genesis_config_part.rs:5:1
+   |
+5  |   #[frame_support::pallet]
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+48 | / construct_runtime! {
+49 | |     pub struct Runtime
+50 | |     {
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config<T>, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Config},
+53 | |     }
+54 | | }
+   | |_- in this macro invocation
+   |
+   = note: this error originates in the macro `pallet::__substrate_genesis_config_check::is_genesis_config_defined` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0412]: cannot find type `GenesisConfig` in module `pallet`
+  --> tests/construct_runtime_ui/undefined_genesis_config_part.rs:48:1
+   |
+48 | / construct_runtime! {
+49 | |     pub struct Runtime
+50 | |     {
+51 | |         System: frame_system expanded::{}::{Pallet, Call, Storage, Config<T>, Event<T>},
+52 | |         Pallet: pallet expanded::{}::{Pallet, Config},
+53 | |     }
+54 | | }
+   | |_^ not found in `pallet`
+   |
+   = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider importing one of these items
+   |
+1  + use frame_system::GenesisConfig;
+   |
+1  + use test_pallet::GenesisConfig;
+   |

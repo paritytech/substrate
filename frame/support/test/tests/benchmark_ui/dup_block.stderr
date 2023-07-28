@@ -1,0 +1,5 @@
+error: Only one #[extrinsic_call] or #[block] attribute is allowed per benchmark.
+  --> tests/benchmark_ui/dup_block.rs:14:3
+   |
+14 |         #[block]
+   |         ^

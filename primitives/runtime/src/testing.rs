@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +17,28 @@
 
 //! Testing utilities.
 
-use serde::{Serialize, Serializer, Deserialize, de::Error as DeError, Deserializer};
-use std::{fmt::{self, Debug}, ops::Deref, cell::RefCell};
-use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{
-	self, Checkable, Applyable, BlakeTwo256, OpaqueKeys,
-	SignedExtension, Dispatchable, DispatchInfoOf, PostDispatchInfoOf,
+use crate::{
+	codec::{Codec, Decode, Encode, MaxEncodedLen},
+	generic,
+	scale_info::TypeInfo,
+	traits::{
+		self, Applyable, BlakeTwo256, Checkable, DispatchInfoOf, Dispatchable, OpaqueKeys,
+		PostDispatchInfoOf, SignaturePayload, SignedExtension, ValidateUnsigned,
+	},
+	transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
+	ApplyExtrinsicResultWithInfo, KeyTypeId,
 };
-use crate::traits::ValidateUnsigned;
-use crate::{generic, KeyTypeId, CryptoTypeId, ApplyExtrinsicResultWithInfo};
-pub use sp_core::{H256, sr25519};
-use sp_core::{crypto::{CryptoType, Dummy, key_types, Public}, U256};
-use crate::transaction_validity::{TransactionValidity, TransactionValidityError, TransactionSource};
+use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
+use sp_core::{
+	crypto::{key_types, ByteArray, CryptoType, Dummy},
+	U256,
+};
+pub use sp_core::{sr25519, H256};
+use std::{
+	cell::RefCell,
+	fmt::{self, Debug},
+	ops::Deref,
+};
 
 /// A dummy type which can be used instead of regular cryptographic primitives.
 ///
@@ -36,7 +46,22 @@ use crate::transaction_validity::{TransactionValidity, TransactionValidityError,
 /// 2. Can be converted to any `Public` key.
 /// 3. Implements `RuntimeAppPublic` so it can be used instead of regular application-specific
 ///    crypto.
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode, Debug, Hash, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(
+	Default,
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	Debug,
+	Hash,
+	Serialize,
+	Deserialize,
+	PartialOrd,
+	Ord,
+	MaxEncodedLen,
+	TypeInfo,
+)]
 pub struct UintAuthorityId(pub u64);
 
 impl From<u64> for UintAuthorityId {
@@ -52,10 +77,10 @@ impl From<UintAuthorityId> for u64 {
 }
 
 impl UintAuthorityId {
-	/// Convert this authority id into a public key.
-	pub fn to_public_key<T: Public>(&self) -> T {
+	/// Convert this authority ID into a public key.
+	pub fn to_public_key<T: ByteArray>(&self) -> T {
 		let bytes: [u8; 32] = U256::from(self.0).into();
-		T::from_slice(&bytes)
+		T::from_slice(&bytes).unwrap()
 	}
 }
 
@@ -68,7 +93,10 @@ impl AsRef<[u8]> for UintAuthorityId {
 		// Unsafe, i know, but it's test code and it's just there because it's really convenient to
 		// keep `UintAuthorityId` as a u64 under the hood.
 		unsafe {
-			std::slice::from_raw_parts(&self.0 as *const u64 as *const _, std::mem::size_of::<u64>())
+			std::slice::from_raw_parts(
+				&self.0 as *const u64 as *const _,
+				std::mem::size_of::<u64>(),
+			)
 		}
 	}
 }
@@ -80,14 +108,13 @@ thread_local! {
 
 impl UintAuthorityId {
 	/// Set the list of keys returned by the runtime call for all keys of that type.
-	pub fn set_all_keys<T: Into<UintAuthorityId>>(keys: impl IntoIterator<Item=T>) {
+	pub fn set_all_keys<T: Into<UintAuthorityId>>(keys: impl IntoIterator<Item = T>) {
 		ALL_KEYS.with(|l| *l.borrow_mut() = keys.into_iter().map(Into::into).collect())
 	}
 }
 
 impl sp_application_crypto::RuntimeAppPublic for UintAuthorityId {
 	const ID: KeyTypeId = key_types::DUMMY;
-	const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"dumm");
 
 	type Signature = TestSignature;
 
@@ -129,10 +156,6 @@ impl OpaqueKeys for UintAuthorityId {
 	}
 }
 
-impl crate::BoundToRuntimeAppPublic for UintAuthorityId {
-	type Public = Self;
-}
-
 impl traits::IdentifyAccount for UintAuthorityId {
 	type AccountId = u64;
 
@@ -142,7 +165,7 @@ impl traits::IdentifyAccount for UintAuthorityId {
 }
 
 /// A dummy signature type, to match `UintAuthorityId`.
-#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Debug, Hash, Serialize, Deserialize, Encode, Decode, TypeInfo)]
 pub struct TestSignature(pub u64, pub Vec<u8>);
 
 impl traits::Verify for TestSignature {
@@ -154,10 +177,10 @@ impl traits::Verify for TestSignature {
 }
 
 /// Digest item
-pub type DigestItem = generic::DigestItem<H256>;
+pub type DigestItem = generic::DigestItem;
 
 /// Header Digest
-pub type Digest = generic::Digest<H256>;
+pub type Digest = generic::Digest;
 
 /// Block Header
 pub type Header = generic::Header<u64, BlakeTwo256>;
@@ -176,12 +199,10 @@ impl Header {
 }
 
 /// An opaque extrinsic wrapper type.
-#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
-impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt>
-where Xt: parity_util_mem::MallocSizeOf
-{
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
 	type Call = ();
 	type SignaturePayload = ();
 
@@ -191,7 +212,10 @@ where Xt: parity_util_mem::MallocSizeOf
 }
 
 impl<Xt: Encode> serde::Serialize for ExtrinsicWrapper<Xt> {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: ::serde::Serializer,
+	{
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
@@ -211,7 +235,7 @@ impl<Xt> Deref for ExtrinsicWrapper<Xt> {
 }
 
 /// Testing block
-#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, parity_util_mem::MallocSizeOf)]
+#[derive(PartialEq, Eq, Clone, Serialize, Debug, Encode, Decode, TypeInfo)]
 pub struct Block<Xt> {
 	/// Block header
 	pub header: Header,
@@ -219,8 +243,13 @@ pub struct Block<Xt> {
 	pub extrinsics: Vec<Xt>,
 }
 
-impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic> traits::Block
-	for Block<Xt>
+impl<Xt> traits::HeaderProvider for Block<Xt> {
+	type HeaderT = Header;
+}
+
+impl<
+		Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug + traits::Extrinsic,
+	> traits::Block for Block<Xt>
 {
 	type Extrinsic = Xt;
 	type Header = Header;
@@ -243,7 +272,10 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + Clone + Eq + Debug 
 	}
 }
 
-impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
+impl<'a, Xt> Deserialize<'a> for Block<Xt>
+where
+	Block<Xt>: Decode,
+{
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
 		let r = <Vec<u8>>::deserialize(de)?;
 		Decode::decode(&mut &r[..])
@@ -251,14 +283,23 @@ impl<'a, Xt> Deserialize<'a> for Block<Xt> where Block<Xt>: Decode {
 	}
 }
 
+/// The signature payload of a `TestXt`.
+type TxSingaturePayload<Extra> = (u64, Extra);
+
+impl<Extra: TypeInfo> SignaturePayload for TxSingaturePayload<Extra> {
+	type SignatureAddress = u64;
+	type Signature = ();
+	type SignatureExtra = Extra;
+}
+
 /// Test transaction, tuple of (sender, call, signed_extra)
 /// with index only used if sender is some.
 ///
 /// If sender is some then the transaction is signed otherwise it is unsigned.
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
 pub struct TestXt<Call, Extra> {
 	/// Signature of the extrinsic.
-	pub signature: Option<(u64, Extra)>,
+	pub signature: Option<TxSingaturePayload<Extra>>,
 	/// Call of the extrinsic.
 	pub call: Call,
 }
@@ -270,11 +311,14 @@ impl<Call, Extra> TestXt<Call, Extra> {
 	}
 }
 
-// Non-opaque extrinsics always 0.
-parity_util_mem::malloc_size_of_is_0!(any: TestXt<Call, Extra>);
-
-impl<Call, Extra> Serialize for TestXt<Call, Extra> where TestXt<Call, Extra>: Encode {
-	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: Serializer {
+impl<Call, Extra> Serialize for TestXt<Call, Extra>
+where
+	TestXt<Call, Extra>: Encode,
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
 		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
 	}
 }
@@ -287,12 +331,24 @@ impl<Call, Extra> Debug for TestXt<Call, Extra> {
 
 impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Call, Extra> {
 	type Checked = Self;
-	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> { Ok(self) }
+	fn check(self, _: &Context) -> Result<Self::Checked, TransactionValidityError> {
+		Ok(self)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked_i_know_what_i_am_doing(
+		self,
+		_: &Context,
+	) -> Result<Self::Checked, TransactionValidityError> {
+		unreachable!()
+	}
 }
 
-impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
+impl<Call: Codec + Sync + Send + TypeInfo, Extra: TypeInfo> traits::Extrinsic
+	for TestXt<Call, Extra>
+{
 	type Call = Call;
-	type SignaturePayload = (u64, Extra);
+	type SignaturePayload = TxSingaturePayload<Extra>;
 
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
@@ -303,23 +359,33 @@ impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra>
 	}
 }
 
-impl<Call, Extra> traits::ExtrinsicMetadata for TestXt<Call, Extra> where
+impl<Call, Extra> traits::ExtrinsicMetadata for TestXt<Call, Extra>
+where
 	Call: Codec + Sync + Send,
-	Extra: SignedExtension<AccountId=u64, Call=Call>,
+	Extra: SignedExtension<AccountId = u64, Call = Call>,
 {
 	type SignedExtensions = Extra;
 	const VERSION: u8 = 0u8;
 }
 
-impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
-	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Dispatchable<Origin=Origin>,
-	Extra: SignedExtension<AccountId=u64, Call=Call>,
+impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra>
+where
+	Call: 'static
+		+ Sized
+		+ Send
+		+ Sync
+		+ Clone
+		+ Eq
+		+ Codec
+		+ Debug
+		+ Dispatchable<RuntimeOrigin = Origin>,
+	Extra: SignedExtension<AccountId = u64, Call = Call>,
 	Origin: From<Option<u64>>,
 {
 	type Call = Call;
 
 	/// Checks to see if this is a valid *transaction*. It returns information on it if so.
-	fn validate<U: ValidateUnsigned<Call=Self::Call>>(
+	fn validate<U: ValidateUnsigned<Call = Self::Call>>(
 		&self,
 		source: TransactionSource,
 		info: &DispatchInfoOf<Self::Call>,
@@ -336,7 +402,7 @@ impl<Origin, Call, Extra> Applyable for TestXt<Call, Extra> where
 
 	/// Executes all necessary logic needed prior to dispatch and deconstructs into function call,
 	/// index and sender.
-	fn apply<U: ValidateUnsigned<Call=Self::Call>>(
+	fn apply<U: ValidateUnsigned<Call = Self::Call>>(
 		self,
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,

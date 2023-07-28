@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,23 +20,22 @@
 #[cfg(feature = "std")]
 use std::fmt;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use sp_std::prelude::*;
-use sp_core::RuntimeDebug;
-use crate::codec::{Codec, Encode, Decode};
-use crate::traits::{
-	self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeMallocSizeOf,
-	NumberFor,
+use crate::{
+	codec::{Codec, Decode, Encode},
+	traits::{
+		self, Block as BlockT, Header as HeaderT, MaybeSerialize, MaybeSerializeDeserialize,
+		Member, NumberFor,
+	},
+	Justifications,
 };
-use crate::Justifications;
+use sp_core::RuntimeDebug;
+use sp_std::prelude::*;
 
 /// Something to identify a block.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub enum BlockId<Block: BlockT> {
 	/// Identify by block header hash.
 	Hash(Block::Hash),
@@ -46,13 +45,26 @@ pub enum BlockId<Block: BlockT> {
 
 impl<Block: BlockT> BlockId<Block> {
 	/// Create a block ID from a hash.
-	pub fn hash(hash: Block::Hash) -> Self {
+	pub const fn hash(hash: Block::Hash) -> Self {
 		BlockId::Hash(hash)
 	}
 
 	/// Create a block ID from a number.
-	pub fn number(number: NumberFor<Block>) -> Self {
+	pub const fn number(number: NumberFor<Block>) -> Self {
 		BlockId::Number(number)
+	}
+
+	/// Check if this block ID refers to the pre-genesis state.
+	pub fn is_pre_genesis(&self) -> bool {
+		match self {
+			BlockId::Hash(hash) => hash == &Default::default(),
+			BlockId::Number(_) => false,
+		}
+	}
+
+	/// Create a block ID for a pre-genesis state.
+	pub fn pre_genesis() -> Self {
+		BlockId::Hash(Default::default())
 	}
 }
 
@@ -66,21 +78,28 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 }
 
 /// Abstraction over a substrate block.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, parity_util_mem::MallocSizeOf))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Header, Extrinsic: MaybeSerialize> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+pub struct Block<Header, Extrinsic> {
 	/// The block header.
 	pub header: Header,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<Extrinsic>,
 }
 
-impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
+impl<Header, Extrinsic> traits::HeaderProvider for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
-	Extrinsic: Member + Codec + traits::Extrinsic + MaybeMallocSizeOf,
+{
+	type HeaderT = Header;
+}
+
+impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
+where
+	Header: HeaderT + MaybeSerializeDeserialize,
+	Extrinsic: Member + Codec + traits::Extrinsic,
 {
 	type Extrinsic = Extrinsic;
 	type Header = Header;
@@ -105,9 +124,9 @@ where
 
 /// Abstraction over a substrate block and justification.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 pub struct SignedBlock<Block> {
 	/// Full block.
 	pub block: Block,

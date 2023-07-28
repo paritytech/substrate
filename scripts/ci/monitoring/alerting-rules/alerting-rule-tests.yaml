@@ -1,0 +1,239 @@
+rule_files:
+    - /dev/stdin
+
+evaluation_interval: 1m
+
+tests:
+    - interval: 1m
+      input_series:
+          - series: 'substrate_sub_libp2p_peers_count{
+              job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
+            }'
+            values: '3 2+0x4 1+0x9' # 3 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1
+
+          - series: 'substrate_sub_txpool_validations_scheduled{
+              job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
+            }'
+            values: '11+1x10 22+2x30 10043x5'
+
+          - series: 'substrate_sub_txpool_validations_finished{
+              job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
+            }'
+            values: '0+1x42 42x5'
+
+          - series: 'substrate_block_height{
+              status="best", job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
+            }'
+            values: '1+1x3 4+0x13' # 1 2 3 4 4 4 4 4 4 4 4 4 ...
+
+          - series: 'substrate_block_height{
+              status="finalized",
+              job="substrate",
+              pod="substrate-abcdef01234-abcdef",
+              instance="substrate-abcdef01234-abcdef",
+            }'
+            values: '1+1x3 4+0x13' # 1 2 3 4 4 4 4 4 4 4 4 4 ...
+
+      alert_rule_test:
+
+          ######################################################################
+          # Block production
+          ######################################################################
+
+          - eval_time: 6m
+            alertname: BlockProductionSlow
+            exp_alerts:
+          - eval_time: 7m
+            alertname: BlockProductionSlow
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                      status: best
+                  exp_annotations:
+                      message: "Best block on instance
+                      substrate-abcdef01234-abcdef increases by less than 1 per
+                      minute for more than 3 minutes."
+
+          - eval_time: 14m
+            alertname: BlockProductionSlow
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                      status: best
+                  exp_annotations:
+                      message: "Best block on instance
+                      substrate-abcdef01234-abcdef increases by less than 1 per
+                      minute for more than 3 minutes."
+                - exp_labels:
+                      severity: critical
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                      status: best
+                  exp_annotations:
+                      message: "Best block on instance
+                      substrate-abcdef01234-abcdef increases by less than 1 per
+                      minute for more than 10 minutes."
+
+          ######################################################################
+          # Block finalization
+          ######################################################################
+
+          - eval_time: 6m
+            alertname: BlockFinalizationSlow
+            exp_alerts:
+          - eval_time: 7m
+            alertname: BlockFinalizationSlow
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                      status: finalized
+                  exp_annotations:
+                      message: "Finalized block on instance
+                      substrate-abcdef01234-abcdef increases by less than 1 per
+                      minute for more than 3 minutes."
+
+          - eval_time: 14m
+            alertname: BlockFinalizationSlow
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                      status: finalized
+                  exp_annotations:
+                      message: "Finalized block on instance
+                      substrate-abcdef01234-abcdef increases by less than 1 per
+                      minute for more than 3 minutes."
+                - exp_labels:
+                      severity: critical
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                      status: finalized
+                  exp_annotations:
+                      message: "Finalized block on instance
+                      substrate-abcdef01234-abcdef increases by less than 1 per
+                      minute for more than 10 minutes."
+
+          ######################################################################
+          # Transaction queue
+          ######################################################################
+
+          - eval_time: 11m
+            alertname: TransactionQueueSizeIncreasing
+            # Number of validations scheduled and finished both grow at a rate
+            # of 1 in the first 10 minutes, thereby the queue is not increasing
+            # in size, thus don't expect an alert.
+            exp_alerts:
+          - eval_time: 22m
+            alertname: TransactionQueueSizeIncreasing
+            # Number of validations scheduled is growing twice as fast as the
+            # number of validations finished after minute 10. Thus expect
+            # warning alert after 20 minutes.
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                  exp_annotations:
+                      message: "The transaction pool size on node
+                      substrate-abcdef01234-abcdef has been monotonically
+                      increasing for more than 10 minutes."
+          - eval_time: 43m
+            alertname: TransactionQueueSizeIncreasing
+            # Number of validations scheduled is growing twice as fast as the
+            # number of validations finished after minute 10. Thus expect
+            # both warning and critical alert after 40 minutes.
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                  exp_annotations:
+                      message: "The transaction pool size on node
+                      substrate-abcdef01234-abcdef has been monotonically
+                      increasing for more than 10 minutes."
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                  exp_annotations:
+                      message: "The transaction pool size on node
+                      substrate-abcdef01234-abcdef has been monotonically
+                      increasing for more than 30 minutes."
+          - eval_time: 49m
+            alertname: TransactionQueueSizeHigh
+            # After minute 43 the number of validations scheduled jumps up
+            # drastically while the number of validations finished stays the
+            # same. Thus expect an alert.
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                  exp_annotations:
+                      message: "The transaction pool size on node
+                      substrate-abcdef01234-abcdef has been above 10_000 for more
+                      than 5 minutes."
+
+          ######################################################################
+          # Networking
+          ######################################################################
+
+          - eval_time: 3m # Values: 3 2 2
+            alertname: NumberOfPeersLow
+            exp_alerts:
+          - eval_time: 4m # Values: 2 2 2
+            alertname: NumberOfPeersLow
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                  exp_annotations:
+                      message: "The node substrate-abcdef01234-abcdef has less
+                      than 3 peers for more than 3 minutes"
+
+          - eval_time: 16m # Values: 3 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 1
+            alertname: NumberOfPeersLow
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                  exp_annotations:
+                      message: "The node substrate-abcdef01234-abcdef has less
+                      than 3 peers for more than 3 minutes"
+                - exp_labels:
+                      severity: critical
+                      pod: substrate-abcdef01234-abcdef
+                      instance: substrate-abcdef01234-abcdef
+                      job: substrate
+                  exp_annotations:
+                      message: "The node substrate-abcdef01234-abcdef has less
+                      than 3 peers for more than 15 minutes"

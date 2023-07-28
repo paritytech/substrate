@@ -1,0 +1,17 @@
+Description: Block building
+Network: ./block-building.toml
+Creds: config
+
+alice: reports node_roles is 4
+bob: reports node_roles is 4
+
+alice: reports peers count is at least 1
+bob: reports peers count is at least 1
+
+alice: reports block height is at least 5 within 20 seconds
+bob: reports block height is at least 5 within 20 seconds
+
+alice: count of log lines containing "error" is 0 within 2 seconds
+bob: count of log lines containing "error" is 0 within 2 seconds
+
+alice: js-script ./transaction-gets-finalized.js within 30 seconds

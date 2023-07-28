@@ -1,0 +1,5 @@
+error: expected `extra` or `skip_meta`
+ --> tests/benchmark_ui/unrecognized_option.rs:9:32
+  |
+9 |     #[benchmark(skip_meta, extra, bad)]
+  |                                   ^^^
