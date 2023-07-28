@@ -30,11 +30,10 @@
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
-use std::{fmt::Debug, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
+use std::{fmt::Debug, marker::PhantomData, pin::Pin, sync::Arc};
 
+use codec::Codec;
 use futures::prelude::*;
-
-use codec::{Codec, Decode, Encode};
 
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, StateAction};
@@ -48,7 +47,7 @@ use sp_application_crypto::AppPublic;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_slots::Slot;
-use sp_core::crypto::{Pair, Public};
+use sp_core::crypto::Pair;
 use sp_inherents::CreateInherentDataProviders;
 use sp_keystore::KeystorePtr;
 use sp_runtime::traits::{Block as BlockT, Header, Member, NumberFor};
@@ -172,9 +171,9 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, Error>(
 	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, NumberFor<B>>,
 ) -> Result<impl Future<Output = ()>, ConsensusError>
 where
-	P: Pair + Send + Sync,
-	P::Public: AppPublic + Hash + Member + Encode + Decode,
-	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
+	P: Pair,
+	P::Public: AppPublic + Member,
+	P::Signature: TryFrom<Vec<u8>> + Member + Codec,
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
 	C::Api: AuraApi<B, AuthorityId<P>>,
@@ -281,9 +280,9 @@ where
 	C::Api: AuraApi<B, AuthorityId<P>>,
 	PF: Environment<B, Error = Error> + Send + Sync + 'static,
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
-	P: Pair + Send + Sync,
-	P::Public: AppPublic + Hash + Member + Encode + Decode,
-	P::Signature: TryFrom<Vec<u8>> + Hash + Member + Encode + Decode,
+	P: Pair,
+	P::Public: AppPublic + Member,
+	P::Signature: TryFrom<Vec<u8>> + Member + Codec,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<ConsensusError> + 'static,
 	SO: SyncOracle + Send + Sync + Clone,
@@ -303,7 +302,7 @@ where
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		compatibility_mode,
-		_key_type: PhantomData::<P>,
+		_phantom: PhantomData::<fn() -> P>,
 	}
 }
 
@@ -320,7 +319,7 @@ struct AuraWorker<C, E, I, P, SO, L, BS, N> {
 	max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
 	compatibility_mode: CompatibilityMode<N>,
-	_key_type: PhantomData<P>,
+	_phantom: PhantomData<fn() -> P>,
 }
 
 #[async_trait::async_trait]
@@ -333,9 +332,9 @@ where
 	E: Environment<B, Error = Error> + Send + Sync,
 	E::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
-	P: Pair + Send + Sync,
-	P::Public: AppPublic + Public + Member + Encode + Decode + Hash,
-	P::Signature: TryFrom<Vec<u8>> + Member + Encode + Decode + Hash + Debug,
+	P: Pair,
+	P::Public: AppPublic + Member,
+	P::Signature: TryFrom<Vec<u8>> + Member + Codec,
 	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
@@ -806,10 +805,10 @@ mod tests {
 			force_authoring: false,
 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 			telemetry: None,
-			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
 			max_block_proposal_slot_portion: None,
 			compatibility_mode: Default::default(),
+			_phantom: PhantomData::<fn() -> AuthorityPair>,
 		};
 
 		let head = Header::new(
@@ -856,10 +855,10 @@ mod tests {
 			force_authoring: false,
 			backoff_authoring_blocks: Option::<()>::None,
 			telemetry: None,
-			_key_type: PhantomData::<AuthorityPair>,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
 			max_block_proposal_slot_portion: None,
 			compatibility_mode: Default::default(),
+			_phantom: PhantomData::<fn() -> AuthorityPair>,
 		};
 
 		let head = client.expect_header(client.info().genesis_hash).unwrap();
