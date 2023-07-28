@@ -76,7 +76,7 @@ pub mod pallet {
 	pub enum Event {
 		/// The pallet has been (re)initialized.
 		PalletInitialized {
-			/// The pallet initialization state.
+			/// Whether the pallet has been re-initialized.
 			reinit: bool,
 		},
 		/// The computation limit has been updated.
