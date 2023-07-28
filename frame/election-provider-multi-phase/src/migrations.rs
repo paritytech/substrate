@@ -44,6 +44,10 @@
 /// - Stores the new data in the storage with the updated format.
 /// - Updates the current storage version to 1.
 ///
+/// In this migration, the storage value type `SubmissionIndicesOf` for the storage item `SignedSubmissionIndices` is changing from
+/// `BoundedBTreeMap<ElectionScore, u32, SignedMaxSubmissions>` to `BoundedVec<(ElectionScore, BlockNumber, u32), SignedMaxSubmissions>` to allow multiple submissions of same election score to be submitted.
+/// See https://github.com/paritytech/substrate/pull/14645 for more details about this update.
+///
 /// If `SignedSubmissionIndices` does not exist, the migration proceeds without performing
 /// any changes, and only updates the storage version.
 ///
