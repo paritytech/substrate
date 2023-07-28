@@ -399,11 +399,7 @@ impl ProtocolController {
 				PeerState::Connected(direction)
 			},
 			None => {
-				trace!(
-					target: LOG_TARGET,
-					"Adding reserved node {peer_id} on {:?}.",
-					self.set_id,
-				);
+				trace!(target: LOG_TARGET, "Adding reserved node {peer_id} on {:?}.", self.set_id,);
 				PeerState::NotConnected
 			},
 		};
@@ -426,8 +422,7 @@ impl ProtocolController {
 			None => {
 				warn!(
 					target: LOG_TARGET,
-					"Trying to remove unknown reserved node {peer_id} from {:?}.",
-					self.set_id,
+					"Trying to remove unknown reserved node {peer_id} from {:?}.", self.set_id,
 				);
 				return
 			},
@@ -524,8 +519,7 @@ impl ProtocolController {
 		if self.reserved_nodes.contains_key(&peer_id) {
 			debug!(
 				target: LOG_TARGET,
-				"Ignoring request to disconnect reserved peer {peer_id} from {:?}.",
-				self.set_id,
+				"Ignoring request to disconnect reserved peer {peer_id} from {:?}.", self.set_id,
 			);
 			return
 		}
@@ -546,8 +540,7 @@ impl ProtocolController {
 			None => {
 				debug!(
 					target: LOG_TARGET,
-					"Trying to disconnect unknown peer {peer_id} from {:?}.",
-					self.set_id,
+					"Trying to disconnect unknown peer {peer_id} from {:?}.", self.set_id,
 				);
 			},
 		}

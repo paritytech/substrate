@@ -249,7 +249,7 @@ pub struct StorageQuery<Key> {
 	pub key: Key,
 	/// The type of the storage query.
 	#[serde(rename = "type")]
-	pub queue_type: StorageQueryType,
+	pub query_type: StorageQueryType,
 }
 
 /// The type of the storage query.
@@ -558,7 +558,7 @@ mod tests {
 	#[test]
 	fn chain_head_storage_query() {
 		// Item with Value.
-		let item = StorageQuery { key: "0x1", queue_type: StorageQueryType::Value };
+		let item = StorageQuery { key: "0x1", query_type: StorageQueryType::Value };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"value"}"#;
@@ -568,7 +568,7 @@ mod tests {
 		assert_eq!(dec, item);
 
 		// Item with Hash.
-		let item = StorageQuery { key: "0x1", queue_type: StorageQueryType::Hash };
+		let item = StorageQuery { key: "0x1", query_type: StorageQueryType::Hash };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"hash"}"#;
@@ -578,7 +578,7 @@ mod tests {
 		assert_eq!(dec, item);
 
 		// Item with DescendantsValues.
-		let item = StorageQuery { key: "0x1", queue_type: StorageQueryType::DescendantsValues };
+		let item = StorageQuery { key: "0x1", query_type: StorageQueryType::DescendantsValues };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"descendants-values"}"#;
@@ -588,7 +588,7 @@ mod tests {
 		assert_eq!(dec, item);
 
 		// Item with DescendantsHashes.
-		let item = StorageQuery { key: "0x1", queue_type: StorageQueryType::DescendantsHashes };
+		let item = StorageQuery { key: "0x1", query_type: StorageQueryType::DescendantsHashes };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"descendants-hashes"}"#;
@@ -599,7 +599,7 @@ mod tests {
 
 		// Item with Merkle.
 		let item =
-			StorageQuery { key: "0x1", queue_type: StorageQueryType::ClosestDescendantMerkleValue };
+			StorageQuery { key: "0x1", query_type: StorageQueryType::ClosestDescendantMerkleValue };
 		// Encode
 		let ser = serde_json::to_string(&item).unwrap();
 		let exp = r#"{"key":"0x1","type":"closest-descendant-merkle-value"}"#;

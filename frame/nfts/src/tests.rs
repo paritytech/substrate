@@ -23,7 +23,7 @@ use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::Dispatchable,
 	traits::{
-		tokens::nonfungibles_v2::{Destroy, Mutate},
+		tokens::nonfungibles_v2::{Create, Destroy, Mutate},
 		Currency, Get,
 	},
 };
@@ -3677,4 +3677,42 @@ fn pre_signed_attributes_should_work() {
 			Error::<Test>::IncorrectData
 		);
 	})
+}
+
+#[test]
+fn basic_create_collection_with_id_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Nfts::create_collection_with_id(
+				0u32,
+				&account(1),
+				&account(1),
+				&default_collection_config(),
+			),
+			Error::<Test>::WrongSetting
+		);
+
+		Balances::make_free_balance_be(&account(1), 100);
+		Balances::make_free_balance_be(&account(2), 100);
+
+		assert_ok!(Nfts::create_collection_with_id(
+			0u32,
+			&account(1),
+			&account(1),
+			&collection_config_with_all_settings_enabled(),
+		));
+
+		assert_eq!(collections(), vec![(account(1), 0)]);
+
+		// CollectionId already taken.
+		assert_noop!(
+			Nfts::create_collection_with_id(
+				0u32,
+				&account(2),
+				&account(2),
+				&collection_config_with_all_settings_enabled(),
+			),
+			Error::<Test>::CollectionIdInUse
+		);
+	});
 }
