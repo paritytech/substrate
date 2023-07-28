@@ -60,7 +60,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		"
          pub mod codegen {{
 		  use crate::NoopMigration;
+		  /// The latest migration version, pulled from the latest migration file.
 		  pub const LATEST_MIGRATION_VERSION: u16 = {version};
+		  /// The Migration Steps used for benchmarking, the migration framework.
 		  pub type BenchMigrations = (NoopMigration<{}>, NoopMigration<{}>);
 		}}",
 		version - 1,
