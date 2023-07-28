@@ -1301,7 +1301,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// General assertions:
 	///
-	/// * `ReferendumCount` must always be equal to the number of referenda in [`ReferendumInfoFor`].
+	/// * [`ReferendumCount`] must always be equal to the number of referenda in [`ReferendumInfoFor`].
 	/// * Referendum indices in [`MetadataOf`] must also be stored in [`ReferendumInfoFor`].
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
@@ -1360,7 +1360,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Looking at tracks:
 	///
 	/// * The referendum indices stored in [`TrackQueue`] must exist as keys in the
-	///  `ReferendumInfoFor` storage map.
+	///  [`ReferendumInfoFor`] storage map.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn try_state_tracks() -> Result<(), sp_runtime::TryRuntimeError> {
 		T::Tracks::tracks().iter().try_for_each(|track| {
