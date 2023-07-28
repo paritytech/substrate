@@ -30,7 +30,6 @@
 
 use crate::{
 	blocks::BlockCollection,
-	engine::{PollBlockAnnounceValidation, PreValidateBlockAnnounce},
 	schema::v1::{StateRequest, StateResponse},
 	state::StateSync,
 	warp::{WarpProofImportResult, WarpSync},
@@ -59,8 +58,8 @@ use sc_network_common::{
 	role::Roles,
 	sync::{
 		message::{
-			BlockAnnouncesHandshake, BlockAttributes, BlockData, BlockRequest, BlockResponse,
-			Direction, FromBlock,
+			BlockAnnounce, BlockAnnouncesHandshake, BlockAttributes, BlockData, BlockRequest,
+			BlockResponse, Direction, FromBlock,
 		},
 		warp::{EncodedProof, WarpProofRequest, WarpSyncParams, WarpSyncPhase, WarpSyncProgress},
 		BadPeer, ChainSync as ChainSyncT, ImportResult, Metrics, OnBlockData, OnBlockJustification,
@@ -1039,6 +1038,91 @@ where
 		}
 	}
 
+	fn on_validated_block_announce(
+		&mut self,
+		is_best: bool,
+		who: PeerId,
+		announce: &BlockAnnounce<B::Header>,
+	) {
+		let number = *announce.header.number();
+		let hash = announce.header.hash();
+		let parent_status =
+			self.block_status(announce.header.parent_hash()).unwrap_or(BlockStatus::Unknown);
+		let known_parent = parent_status != BlockStatus::Unknown;
+		let ancient_parent = parent_status == BlockStatus::InChainPruned;
+
+		let known = self.is_known(&hash);
+		let peer = if let Some(peer) = self.peers.get_mut(&who) {
+			peer
+		} else {
+			error!(target: "sync", "💔 Called `on_validated_block_announce` with a bad peer ID");
+			return
+		};
+
+		if let PeerSyncState::AncestorSearch { .. } = peer.state {
+			trace!(target: "sync", "Peer {} state is ancestor search.", who);
+			return
+		}
+
+		if is_best {
+			// update their best block
+			peer.best_number = number;
+			peer.best_hash = hash;
+		}
+
+		// If the announced block is the best they have and is not ahead of us, our common number
+		// is either one further ahead or it's the one they just announced, if we know about it.
+		if is_best {
+			if known && self.best_queued_number >= number {
+				self.update_peer_common_number(&who, number);
+			} else if announce.header.parent_hash() == &self.best_queued_hash ||
+				known_parent && self.best_queued_number >= number
+			{
+				self.update_peer_common_number(&who, number - One::one());
+			}
+		}
+		self.allowed_requests.add(&who);
+
+		// known block case
+		if known || self.is_already_downloading(&hash) {
+			trace!(target: "sync", "Known block announce from {}: {}", who, hash);
+			if let Some(target) = self.fork_targets.get_mut(&hash) {
+				target.peers.insert(who);
+			}
+			return
+		}
+
+		if ancient_parent {
+			trace!(
+				target: "sync",
+				"Ignored ancient block announced from {}: {} {:?}",
+				who,
+				hash,
+				announce.header,
+			);
+			return
+		}
+
+		if self.status().state == SyncState::Idle {
+			trace!(
+				target: "sync",
+				"Added sync target for block announced from {}: {} {:?}",
+				who,
+				hash,
+				announce.summary(),
+			);
+			self.fork_targets
+				.entry(hash)
+				.or_insert_with(|| ForkTarget {
+					number,
+					parent_hash: Some(*announce.header.parent_hash()),
+					peers: Default::default(),
+				})
+				.peers
+				.insert(who);
+		}
+	}
+
 	fn peer_disconnected(&mut self, who: &PeerId) {
 		self.blocks.clear_peer_download(who);
 		if let Some(gap_sync) = &mut self.gap_sync {
@@ -1389,121 +1473,6 @@ where
 			}
 		}
 		self.allowed_requests.set_all();
-	}
-
-	/// This will finish processing of the block announcement.
-	fn finish_block_announce_validation(
-		&mut self,
-		pre_validation_result: PreValidateBlockAnnounce<B::Header>,
-	) -> PollBlockAnnounceValidation<B::Header> {
-		let (announce, is_best, who) = match pre_validation_result {
-			PreValidateBlockAnnounce::Failure { who, disconnect } => {
-				debug!(
-					target: "sync",
-					"Failed announce validation: {:?}, disconnect: {}",
-					who,
-					disconnect,
-				);
-				return PollBlockAnnounceValidation::Failure { who, disconnect }
-			},
-			PreValidateBlockAnnounce::Process { announce, is_new_best, who } =>
-				(announce, is_new_best, who),
-			PreValidateBlockAnnounce::Error { .. } | PreValidateBlockAnnounce::Skip => {
-				debug!(
-					target: "sync",
-					"Ignored announce validation",
-				);
-				return PollBlockAnnounceValidation::Skip
-			},
-		};
-
-		trace!(
-			target: "sync",
-			"Finished block announce validation: from {:?}: {:?}. local_best={}",
-			who,
-			announce.summary(),
-			is_best,
-		);
-
-		let number = *announce.header.number();
-		let hash = announce.header.hash();
-		let parent_status =
-			self.block_status(announce.header.parent_hash()).unwrap_or(BlockStatus::Unknown);
-		let known_parent = parent_status != BlockStatus::Unknown;
-		let ancient_parent = parent_status == BlockStatus::InChainPruned;
-
-		let known = self.is_known(&hash);
-		let peer = if let Some(peer) = self.peers.get_mut(&who) {
-			peer
-		} else {
-			error!(target: "sync", "💔 Called on_block_announce with a bad peer ID");
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
-		};
-
-		if let PeerSyncState::AncestorSearch { .. } = peer.state {
-			trace!(target: "sync", "Peer state is ancestor search.");
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
-		}
-
-		if is_best {
-			// update their best block
-			peer.best_number = number;
-			peer.best_hash = hash;
-		}
-
-		// If the announced block is the best they have and is not ahead of us, our common number
-		// is either one further ahead or it's the one they just announced, if we know about it.
-		if is_best {
-			if known && self.best_queued_number >= number {
-				self.update_peer_common_number(&who, number);
-			} else if announce.header.parent_hash() == &self.best_queued_hash ||
-				known_parent && self.best_queued_number >= number
-			{
-				self.update_peer_common_number(&who, number - One::one());
-			}
-		}
-		self.allowed_requests.add(&who);
-
-		// known block case
-		if known || self.is_already_downloading(&hash) {
-			trace!(target: "sync", "Known block announce from {}: {}", who, hash);
-			if let Some(target) = self.fork_targets.get_mut(&hash) {
-				target.peers.insert(who);
-			}
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
-		}
-
-		if ancient_parent {
-			trace!(
-				target: "sync",
-				"Ignored ancient block announced from {}: {} {:?}",
-				who,
-				hash,
-				announce.header,
-			);
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
-		}
-
-		if self.status().state == SyncState::Idle {
-			trace!(
-				target: "sync",
-				"Added sync target for block announced from {}: {} {:?}",
-				who,
-				hash,
-				announce.summary(),
-			);
-			self.fork_targets
-				.entry(hash)
-				.or_insert_with(|| ForkTarget {
-					number,
-					parent_hash: Some(*announce.header.parent_hash()),
-					peers: Default::default(),
-				})
-				.peers
-				.insert(who);
-		}
-
-		PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 	}
 
 	/// Restart the sync process. This will reset all pending block requests and return an iterator
@@ -2901,7 +2870,7 @@ fn validate_blocks<Block: BlockT>(
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::{engine::PreValidateBlockAnnounce, service::network::NetworkServiceProvider};
+	use crate::service::network::NetworkServiceProvider;
 	use futures::executor::block_on;
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_network_common::{
@@ -3089,11 +3058,7 @@ mod test {
 			data: Some(Vec::new()),
 		};
 
-		sync.finish_block_announce_validation(PreValidateBlockAnnounce::Process {
-			announce,
-			is_new_best: true,
-			who: peer_id,
-		});
+		sync.on_validated_block_announce(true, peer_id, &announce);
 	}
 
 	/// Create a block response from the given `blocks`.

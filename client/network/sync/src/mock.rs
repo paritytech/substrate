@@ -22,7 +22,7 @@
 use futures::task::Poll;
 use libp2p::PeerId;
 use sc_network_common::sync::{
-	message::{BlockData, BlockRequest, BlockResponse},
+	message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse},
 	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification,
 	OpaqueBlockResponse, PeerInfo, SyncStatus,
 };
@@ -71,6 +71,12 @@ mockall::mock! {
 			success: bool,
 		);
 		fn on_block_finalized(&mut self, hash: &Block::Hash, number: NumberFor<Block>);
+		fn on_validated_block_announce(
+			&mut self,
+			is_best: bool,
+			who: PeerId,
+			announce: &BlockAnnounce<Block::Header>,
+		);
 		fn peer_disconnected(&mut self, who: &PeerId);
 		fn metrics(&self) -> Metrics;
 		fn block_response_into_blocks(

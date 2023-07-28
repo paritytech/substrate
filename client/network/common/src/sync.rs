@@ -22,7 +22,7 @@ pub mod message;
 pub mod metrics;
 pub mod warp;
 
-use crate::{role::Roles, types::ReputationChange};
+use crate::{role::Roles, sync::message::BlockAnnounce, types::ReputationChange};
 use futures::Stream;
 
 use libp2p_identity::PeerId;
@@ -376,6 +376,14 @@ pub trait ChainSync<Block: BlockT>: Send {
 	/// Notify about finalization of the given block.
 	fn on_block_finalized(&mut self, hash: &Block::Hash, number: NumberFor<Block>);
 
+	/// Notify about pre-validated block announcement.
+	fn on_validated_block_announce(
+		&mut self,
+		is_best: bool,
+		who: PeerId,
+		announce: &BlockAnnounce<Block::Header>,
+	);
+
 	/// Call when a peer has disconnected.
 	/// Canceled obsolete block request may result in some blocks being ready for
 	/// import, so this functions checks for such blocks and returns them.
@@ -392,10 +400,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 	) -> Result<Vec<BlockData<Block>>, String>;
 
 	/// Advance the state of `ChainSync`
-	///
-	/// Internally calls [`ChainSync::poll_block_announce_validation()`] and
-	/// this function should be polled until it returns [`Poll::Pending`] to
-	/// consume all pending events.
 	fn poll(&mut self, cx: &mut std::task::Context) -> Poll<()>;
 
 	/// Send block request to peer
