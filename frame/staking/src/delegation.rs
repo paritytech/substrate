@@ -80,7 +80,7 @@ impl<T: Config> Delegation<T> {
 		let delegator_balance = T::Currency::free_balance(&delegator);
 		ensure!(value >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 		ensure!(delegator_balance >= value, Error::<T>::InsufficientBond);
-		ensure!(delegatee != delegator, Error::<T>::CannotDelegateSelf);
+		ensure!(delegatee != delegator, Error::<T>::CannotDelegate);
 
 		// A delegator cannot receive delegations.
 		if <Delegators<T>>::contains_key(&delegatee) {
@@ -99,7 +99,7 @@ impl<T: Config> Delegation<T> {
 			// add to existing delegation.
 			let (current_delegatee, current_delegation) =
 				delegation.expect("checked delegation exists above; qed");
-			ensure!(current_delegatee == delegatee, Error::<T>::MultipleDelegationTargets);
+			ensure!(current_delegatee == delegatee, Error::<T>::CannotDelegate);
 			new_delegation_amount = new_delegation_amount.saturating_add(current_delegation);
 		}
 
@@ -113,21 +113,6 @@ impl<T: Config> Delegation<T> {
 		T::Currency::set_lock(DELEGATING_ID, &delegator, value, WithdrawReasons::all());
 
 		Ok(())
-	}
-
-	/// move locked funds from delegatee to a delegator and migrate the funds as delegation based
-	/// stake.
-	pub(crate) fn migrate_into(
-		delegatee: T::AccountId,
-		delegator: T::AccountId,
-		value: BalanceOf<T>,
-	) -> DispatchResult {
-		// (1) Unlock value at delegatee with StakingID.
-		// (2) transfer to delegator.
-		// (3) lock with delegating_id.
-		// (4) Update Ledger
-		// (5) Verify no changes needed in Staking Ledger
-		todo!()
 	}
 
 	pub(crate) fn withdraw(

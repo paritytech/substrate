@@ -1805,7 +1805,21 @@ impl<T: Config> DelegatedStakeInterface for Pallet<T> {
 		delegatee: Self::AccountId,
 		value: Self::Balance,
 	) -> sp_runtime::DispatchResult {
-		Delegation::<T>::migrate_into(delegatee, delegator, value)
+		ensure!(value >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
+		// ledger for delegatee account should always be bonded by stash.
+		let mut ledger = Self::ledger(&delegatee).ok_or(Error::<T>::NotStash)?;
+		ensure!(ledger.active > value + T::Currency::minimum_balance(), Error::<T>::NotEnoughFunds);
+
+		// direct staked balance of delegatee => total staked balance - delegated balance?
+		// from this direct balance, they can migrate to delegated balance.
+
+		// (1) Unlock value at delegatee with StakingID.
+		// (2) transfer to delegator.
+		// (3) lock with delegating_id.
+		// (4) Update Ledger
+		// (5) Verify no changes needed in Staking Ledger
+		// Delegation::<T>::migrate_into(delegatee, delegator, value)
+		todo!()
 	}
 
 	fn unbond(delegatee: Self::AccountId, value: Self::Balance) -> sp_runtime::DispatchResult {

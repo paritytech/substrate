@@ -784,14 +784,13 @@ pub mod pallet {
 		CommissionTooLow,
 		/// Some bound is not met.
 		BoundNotMet,
-		/// Can not delegate to multiple Delegatees.
-		MultipleDelegationTargets,
 		/// Can not delegate to another delegator.
 		CannotReceiveDelegation,
-		/// A delegatee cannot delegate.
+		/// Delegation not allowed. This could happen if 1) existing delegatee tries to delegate,
+		/// 2) an account tries delegating to self, 3) tries to delegate to multiple Delegatees.
 		CannotDelegate,
-		/// Can't delegate to self.
-		CannotDelegateSelf,
+		/// The account does not have enough funds to perform the operation.
+		NotEnoughFunds,
 	}
 
 	#[pallet::hooks]
