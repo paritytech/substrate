@@ -98,8 +98,16 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AddDummy { account: T::AccountId },
-		SetBar { account: T::AccountId, balance: BalanceOf<T> },
+		/// An account ID has been added to our Dummy storage.
+		AddDummy {
+			/// The account ID to put in storage.
+			account: T::AccountId },
+		/// A new balance has been added to our Bar storage map.
+		SetBar {
+			/// The account ID put in storage.
+			account: T::AccountId,
+			/// The balance value.
+			balance: BalanceOf<T> },
 	}
 
 	/// The MEL requirement for bounded pallets is skipped by `dev_mode`.
