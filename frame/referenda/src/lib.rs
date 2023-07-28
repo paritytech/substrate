@@ -418,9 +418,9 @@ pub mod pallet {
 	}
 
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), sp_runtime::TryRuntimeError> {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), sp_runtime::TryRuntimeError> {
 			Self::do_try_state()?;
 			Ok(())
 		}
@@ -1346,7 +1346,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					if let Some(deciding) = status.deciding {
 						ensure!(
 							deciding.since <
-								deciding.confirming.unwrap_or(T::BlockNumber::max_value()),
+								deciding.confirming.unwrap_or(BlockNumberFor::<T>::max_value()),
 							"Deciding status cannot begin before confirming stage."
 						)
 					}
