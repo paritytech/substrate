@@ -323,13 +323,13 @@ where
 /// Handler for when a new account for `asset` has been created.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnAccountCreated<AccountId, AssetId> {
-	/// A new account `who` has been registered.
+	/// A new account `who` has been registered for `asset`.
 	fn on_new_account(asset: AssetId, who: &AccountId);
 }
 
 /// The account with the given id was reaped for `asset`.
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 pub trait OnAccountKilled<AccountId, AssetId> {
-	/// The account with the given id was reaped.
+	/// The account with the given asset and id was reaped.
 	fn on_killed_account(asset: AssetId, who: &AccountId);
 }
