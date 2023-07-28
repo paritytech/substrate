@@ -94,6 +94,7 @@ pub mod crypto {
 	};
 	app_crypto!(sr25519, KEY_TYPE);
 
+	/// A struct to generate the signatures for the authorities.
 	pub struct TestAuthId;
 
 	impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for TestAuthId {
@@ -295,7 +296,11 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
-		NewPrice { price: u32, maybe_who: Option<T::AccountId> },
+		NewPrice {
+			/// The new price.
+			price: u32,
+			/// The account who updated the price, if any.
+			maybe_who: Option<T::AccountId> },
 	}
 
 	#[pallet::validate_unsigned]
