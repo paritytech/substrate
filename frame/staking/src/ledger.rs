@@ -5,7 +5,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Zero, Perquintill, Rounding, Saturating};
-use sp_staking::{EraIndex, OnStakingUpdate, StakingAccount};
+use sp_staking::{EraIndex, OnStakingUpdate, Stake, StakingAccount};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{log, BalanceOf, Bonded, Config, Error, Ledger, UnlockChunk, STAKING_ID};
@@ -49,6 +49,12 @@ pub struct StakingLedger<T: Config> {
 	/// Use [`controller`] function to get the controller associated with the ledger.
 	#[codec(skip)]
 	controller: Option<T::AccountId>,
+}
+
+impl<T: Config> Into<Stake<BalanceOf<T>>> for &StakingLedger<T> {
+	fn into(self) -> Stake<BalanceOf<T>> {
+		Stake { total: self.total, active: self.active }
+	}
 }
 
 impl<T: Config> StakingLedger<T> {
@@ -155,23 +161,28 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Inserts/updates a staking ledger account.
 	///
-	/// The staking locks of the stash account are updated accordingly.
+	/// Bonds the ledger if it was not yet, signaling that this is a new ledger. The staking locks
+	/// of the stash account are updated accordingly.
 	///
 	/// Note: To ensure lock consistency, all the [`Ledger`] storage updates should be made through
 	/// this helper function.
 	pub(crate) fn update(&self) -> Result<(), Error<T>> {
+		let mut prev_stake: Stake<BalanceOf<T>> = self.into();
+
+		if <Bonded<T>>::get(&self.stash).is_none() {
+			// not bonded yet, new ledger. Note: controllers are deprecated, stash is the
+			// controller.
+			<Bonded<T>>::insert(&self.stash, &self.stash);
+			prev_stake = Stake::default();
+		}
+
 		T::Currency::set_lock(STAKING_ID, &self.stash, self.total, WithdrawReasons::all());
 		Ledger::<T>::insert(&self.controller().ok_or(Error::<T>::NotController)?, &self);
 
-		Ok(())
-	}
-
-	/// Helper to bond a new stash.
-	///
-	/// Note: as the controller accounts are being deprecated, the stash account is the same as the
-	/// controller account.
-	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
-		<Bonded<T>>::insert(&self.stash, &self.stash);
+		<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_stake_update(
+			&self.stash,
+			Some(prev_stake),
+		);
 
 		Ok(())
 	}
@@ -180,6 +191,8 @@ impl<T: Config> StakingLedger<T> {
 	/// storage items and updates the stash staking lock.
 	pub(crate) fn kill(stash: &T::AccountId) -> Result<(), Error<T>> {
 		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
+
+        // TODO(gpestana): on_validator/nominator_remove
 
 		<Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController).map(|ledger| {
 			T::Currency::remove_lock(STAKING_ID, &ledger.stash);
