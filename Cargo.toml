@@ -382,17 +382,3 @@ inherits = "release"
 lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
-
-# [patch."https://github.com/w3f/ring-vrf"]
-# bandersnatch_vrfs = { git = "https://github.com/davxy/ring-vrf", branch = "refactory-and-tests" }
-# bandersnatch_vrfs = { path = "/mnt/ssd/develop/w3f/ring-vrf/bandersnatch_vrfs" }
-
-# [patch."https://github.com/w3f/fflonk"]
-# fflonk = { git = "https://github.com/davxy/fflonk", branch = "working-fork" }
-# fflonk = { path = "/mnt/ssd/develop/w3f/fflonk" }
-
-# [patch."https://github.com/w3f/ring-proof"]
-# common = { git = "https://github.com/davxy/ring-proof", branch = "working-fork" }
-# ring = { git = "https://github.com/davxy/ring-proof", branch = "working-fork" }
-# common = { path = "/mnt/ssd/develop/w3f/ring-proof/common" }
-# ring = { path = "/mnt/ssd/develop/w3f/ring-proof/ring" }
