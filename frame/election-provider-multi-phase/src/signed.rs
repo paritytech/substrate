@@ -17,6 +17,8 @@
 
 //! The signed phase implementation.
 
+#![deny(missing_docs)]
+
 use crate::{
 	unsigned::MinerConfig, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution,
 	ReadySolution, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
