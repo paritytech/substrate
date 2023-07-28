@@ -26,11 +26,21 @@ fn get_latest_version() -> u16 {
 	std::fs::read_dir("src/migration")
 		.expect("Folder `src/migration` not found.")
 		.filter_map(|entry| {
-			let file_name = entry.ok()?.file_name();
+			let file_name = entry.as_ref().ok()?.file_name();
 			let file_name = file_name.to_str()?;
 			if file_name.starts_with('v') && file_name.ends_with(".rs") {
 				let version = &file_name[1..&file_name.len() - 3];
 				let version = version.parse::<u16>().ok()?;
+
+				// Ensure that the version matches the one defined in the file.
+				let path = entry.unwrap().path();
+				let file_content = std::fs::read_to_string(&path).ok()?;
+				assert!(
+					file_content.contains(&format!("const VERSION: u16 = {}", version)),
+					"Invalid MigrationStep::VERSION in {:?}",
+					path
+				);
+
 				return Some(version)
 			}
 			None
