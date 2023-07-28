@@ -352,6 +352,20 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 	fn enable_transfer(_collection: &Self::CollectionId, _item: &Self::ItemId) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
+
+	/// Disable the `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn disable_collection_transfer(_collection: &Self::CollectionId) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
+
+	/// Re-enable the `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn enable_collection_transfer(_collection: &Self::CollectionId) -> DispatchResult {
+		Err(TokenError::Unsupported.into())
+	}
 }
 
 /// Trait for buying non-fungible items.

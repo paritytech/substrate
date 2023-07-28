@@ -185,6 +185,14 @@ pub trait Transfer<AccountId>: Inspect<AccountId> {
 	///
 	/// By default, this is not a supported operation.
 	fn enable_transfer(item: &Self::ItemId) -> DispatchResult;
+	/// Disable the `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn disable_collection_transfer() -> DispatchResult;
+	/// Re-enable the `collection` transfer.
+	///
+	/// By default, this is not a supported operation.
+	fn enable_collection_transfer() -> DispatchResult;
 }
 
 /// Convert a `nonfungibles` trait implementation into a `nonfungible` trait implementation by
@@ -325,5 +333,11 @@ impl<
 	}
 	fn enable_transfer(item: &Self::ItemId) -> DispatchResult {
 		<F as nonfungibles::Transfer<AccountId>>::enable_transfer(&A::get(), item)
+	}
+	fn disable_collection_transfer() -> DispatchResult {
+		<F as nonfungibles::Transfer<AccountId>>::disable_collection_transfer(&A::get())
+	}
+	fn enable_collection_transfer() -> DispatchResult {
+		<F as nonfungibles::Transfer<AccountId>>::enable_collection_transfer(&A::get())
 	}
 }

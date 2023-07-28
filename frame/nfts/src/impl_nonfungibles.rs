@@ -345,6 +345,21 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
 		)
 	}
+
+	fn disable_collection_transfer(collection: &Self::CollectionId) -> DispatchResult {
+		<Self as Mutate<T::AccountId, ItemConfig>>::set_collection_attribute(
+			collection,
+			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
+			&[],
+		)
+	}
+
+	fn enable_collection_transfer(collection: &Self::CollectionId) -> DispatchResult {
+		<Self as Mutate<T::AccountId, ItemConfig>>::clear_collection_attribute(
+			collection,
+			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
+		)
+	}
 }
 
 impl<T: Config<I>, I: 'static> Buy<T::AccountId, ItemPrice<T,I>> for Pallet<T, I> {
