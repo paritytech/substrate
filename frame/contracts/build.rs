@@ -49,7 +49,7 @@ fn get_latest_version() -> u16 {
 		.expect("Failed to find any files matching the 'src/migration/vxx.rs' pattern.")
 }
 
-/// Generates a module that exposes the latest migration version.
+/// Generates a module that exposes the latest migration version, and the benchmark migrations type.
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let out_dir = std::env::var("OUT_DIR")?;
 	let path = std::path::Path::new(&out_dir).join("migration_codegen.rs");
