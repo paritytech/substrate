@@ -46,8 +46,11 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_example_basic.
 pub trait WeightInfo {
+	/// Calculates the weight for `set_dummy`.
 	fn set_dummy_benchmark() -> Weight;
+	/// Calculates the weight for `accumulate_dummy`.
 	fn accumulate_dummy() -> Weight;
+	/// Calculates the weight for `sort_vector`.
 	fn sort_vector(x: u32, ) -> Weight;
 }
 

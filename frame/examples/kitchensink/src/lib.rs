@@ -129,6 +129,7 @@ pub mod pallet {
 	pub type Foo<T> = StorageValue<Value = u32>;
 
 	#[pallet::type_value]
+	/// The default value for when `Foo` is queried and has no value assigned to it.
 	pub fn DefaultForFoo() -> u32 {
 		1
 	}
@@ -182,7 +183,9 @@ pub mod pallet {
 	/// It can be generic over `T` or not, depending on whether it is or not.
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
+		/// A u32 value to be initialized in genesis.
 		pub foo: u32,
+		/// A block number value to be initialized in genesis.
 		pub bar: BlockNumberFor<T>,
 	}
 
@@ -217,9 +220,9 @@ pub mod pallet {
 		}
 	}
 
-	/// The event type. This exactly like a normal Rust enum.
+	/// The event type. This is exactly like a normal Rust enum.
 	///
-	/// It can or cannot be generic over `<T: Config>`. Note that unlike a normal enum, if none of
+	/// It can be generic over `<T: Config>` but does not have to be. Note that unlike a normal enum, if none of
 	/// the variants actually use `<T: Config>`, the macro will generate a hidden `PhantomData`
 	/// variant.
 	///
@@ -234,7 +237,12 @@ pub mod pallet {
 		SomethingHappened(u32),
 		/// A simple struct-style variant. Note that we use `AccountId` from `T` because `T:
 		/// Config`, which by extension implies `T: frame_system::Config`.
-		SomethingDetailedHappened { at: u32, to: T::AccountId },
+		SomethingDetailedHappened {
+			/// Some number.
+			at: u32,
+			/// Some account.
+			to: T::AccountId
+		},
 		/// Another variant.
 		SomeoneJoined(T::AccountId),
 	}
@@ -242,7 +250,9 @@ pub mod pallet {
 	/// The error enum. Must always be generic over `<T>`, which is expanded to `<T: Config>`.
 	#[pallet::error]
 	pub enum Error<T> {
+		/// Indicates that something did not go as expected.
 		SomethingWentWrong,
+		/// Indicates that something broke.
 		SomethingBroke,
 	}
 
@@ -293,6 +303,7 @@ pub mod pallet {
 	/// pallets into an aggregate enum.
 	#[pallet::composite_enum]
 	pub enum HoldReason {
+		/// The hold reason.
 		Staking,
 	}
 

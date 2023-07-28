@@ -24,8 +24,12 @@ mod events {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Event documentation should end with an array that provides descriptive names for event
-		/// parameters. [something, who]
-		SomethingStored { something: u32, who: T::AccountId },
+		/// A value was stored.
+		SomethingStored {
+			/// The new value stored.
+			something: u32,
+			/// The account ID of the caller.
+			who: T::AccountId
+		},
 	}
 }

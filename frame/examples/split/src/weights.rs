@@ -35,7 +35,9 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for pallet_template.
 pub trait WeightInfo {
+	/// Calculates the weight for `do_something`.
 	fn do_something() -> Weight;
+	/// Calculates the weight for `cause_error`.
 	fn cause_error() -> Weight;
 }
 

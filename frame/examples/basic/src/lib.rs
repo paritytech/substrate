@@ -365,7 +365,7 @@ pub mod pallet {
 	/// `frame_system::Config` should always be included.
 	#[pallet::config]
 	pub trait Config: pallet_balances::Config + frame_system::Config {
-		// Setting a constant config parameter from the runtime
+		/// A constant config parameter from the runtime.
 		#[pallet::constant]
 		type MagicNumber: Get<Self::Balance>;
 
@@ -562,24 +562,31 @@ pub mod pallet {
 		}
 	}
 
+	/// The Dummy events enum which is just a normal Rust `enum`.
+	/// 
 	/// Events are a simple means of reporting specific conditions and
 	/// circumstances that have happened that users, Dapps and/or chain explorers would find
 	/// interesting and otherwise difficult to detect.
 	#[pallet::event]
-	/// This attribute generate the function `deposit_event` to deposit one of this pallet event,
-	/// it is optional, it is also possible to provide a custom implementation.
+	/// This attribute generates the function `deposit_event` to deposit one of this pallet event.
+	/// It is optional and it is also possible to provide a custom implementation.
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		// Just a normal `enum`, here's a dummy event to ensure it compiles.
-		/// Dummy event, just here so there's a generic type that's used.
+		/// A dummy value has been accumulated.
 		AccumulateDummy {
+			/// The balance increase when this event was emitted.
 			balance: BalanceOf<T>,
 		},
+		/// A dummy value has been set.
 		SetDummy {
+			/// The balance that has been set.
 			balance: BalanceOf<T>,
 		},
+		/// A bar value has been set.
 		SetBar {
+			/// The account ID put in storage.
 			account: T::AccountId,
+			/// The balance value.
 			balance: BalanceOf<T>,
 		},
 	}
@@ -620,8 +627,11 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(frame_support::DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
+		/// The dummy balance value initialized at genesis.
 		pub dummy: T::Balance,
+		/// The bar vector initialized at genesis.
 		pub bar: Vec<(T::AccountId, T::Balance)>,
+		/// The foo balance value initialized at genesis.
 		pub foo: T::Balance,
 	}
 
