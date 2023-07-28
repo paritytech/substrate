@@ -85,9 +85,6 @@ use sp_runtime::{
 };
 use sp_std::{fmt::Debug, prelude::*};
 
-#[cfg(any(test, feature = "try-runtime"))]
-use sp_runtime::TryRuntimeError;
-
 mod branch;
 pub mod migration;
 mod types;
@@ -422,7 +419,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), TryRuntimeError> {
+		fn try_state(_n: T::BlockNumber) -> Result<(), sp_runtime::TryRuntimeError> {
 			Self::do_try_state()?;
 			Ok(())
 		}
@@ -1306,7 +1303,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// * `ReferendumCount` must always be equal to the number of referenda in `ReferendumInfoFor`.
 	/// * Referendum indices in `MetadataOf` must also be stored in `ReferendumInfoFor`.
 	#[cfg(any(feature = "try-runtime", test))]
-	fn do_try_state() -> Result<(), TryRuntimeError> {
+	fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
 		ensure!(
 			ReferendumCount::<T, I>::get() as usize ==
 				ReferendumInfoFor::<T, I>::iter_keys().count(),
@@ -1336,7 +1333,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// * If alarm is set the nudge call has to be at most `UndecidingTimeout` blocks away
 	///  from the submission block.
 	#[cfg(any(feature = "try-runtime", test))]
-	fn try_state_referenda_info() -> Result<(), TryRuntimeError> {
+	fn try_state_referenda_info() -> Result<(), sp_runtime::TryRuntimeError> {
 		ReferendumInfoFor::<T, I>::iter().try_for_each(|(_, referendum)| {
 			match referendum {
 				ReferendumInfo::Ongoing(status) => {
@@ -1364,10 +1361,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// * The referendum indices stored in `TrackQueue` must exist as keys in the
 	///  `ReferendumInfoFor` storage map.
 	#[cfg(any(feature = "try-runtime", test))]
-	fn try_state_tracks() -> Result<(), TryRuntimeError> {
+	fn try_state_tracks() -> Result<(), sp_runtime::TryRuntimeError> {
 		T::Tracks::tracks().iter().try_for_each(|track| {
 			TrackQueue::<T, I>::get(track.0).iter().try_for_each(
-				|(referendum_index, _)| -> Result<(), TryRuntimeError> {
+				|(referendum_index, _)| -> Result<(), sp_runtime::TryRuntimeError> {
 					ensure!(
 					ReferendumInfoFor::<T, I>::contains_key(referendum_index),
 					"`ReferendumIndex` inside the `TrackQueue` should be a key in `ReferendumInfoFor`"
