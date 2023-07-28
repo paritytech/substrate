@@ -49,10 +49,10 @@
 //! ### Example
 //!
 //! 1. Multiple local spends approved by spend origins and received by a beneficiary.
-#![doc = docify::embed!("frame/treasury/src/tests.rs", spend_local_origin_works)]
+#![doc = docify::embed!("src/tests.rs", spend_local_origin_works)]
 //!
 //! 2. Approve a spend of some asset kind and claim it.
-#![doc = docify::embed!("frame/treasury/src/tests.rs", spend_payout_works)]
+#![doc = docify::embed!("src/tests.rs", spend_payout_works)]
 //!
 //! ## Pallet API
 //!

@@ -28,7 +28,7 @@ sp-runtime = { version = "24.0.0", default-features = false, path = "../../primi
 sp-std = { version = "8.0.0", default-features = false, path = "../../primitives/std" }
 sp-core = { version = "21.0.0", default-features = false, path = "../../primitives/core" }
 
-docify = "0.1.13"
+docify = "0.2.0"
 
 [dev-dependencies]
 sp-io = { version = "23.0.0", path = "../../primitives/io" }
