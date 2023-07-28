@@ -25,6 +25,7 @@
 //! `Compute` and `Storage` parameters the pallet consumes the adequate amount
 //! of weight.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "runtime-benchmarks")]
