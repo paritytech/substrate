@@ -2,6 +2,9 @@
 
 The `Substrate` project is an ***OPENISH Open Source Project***
 
+Contributors are invited to our `#frame-contributors` channel on the Polkadot Discord for support and coordination:  
+[![Discord](https://img.shields.io/discord/722223075629727774?style=for-the-badge&logo=discord&label=Discord)](https://dot.li/discord)
+
 ## What?
 
 Individuals making significant and valuable contributions are given commit-access to a project to contribute as they see fit. A project is more like an open wiki than a standard guarded open source project.
