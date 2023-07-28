@@ -19,7 +19,6 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-include!(concat!(env!("OUT_DIR"), "/generated_version.rs"));
 mod code;
 mod sandbox;
 use self::{
@@ -31,7 +30,9 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{v09, v10, v11, v12, v13, MigrationStep},
+	migration::{
+		generated_version::LATEST_MIGRATION_VERSION, v09, v10, v11, v12, v13, MigrationStep,
+	},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -274,7 +275,7 @@ benchmarks! {
 	// This benchmarks the weight of executing Migration::migrate to execute a noop migration.
 	#[pov_mode = Measured]
 	migration_noop {
-		let version = generated_version::LATEST_MIGRATION_VERSION;
+		let version = LATEST_MIGRATION_VERSION;
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), version);
 	}:  {
 		Migration::<T>::migrate(Weight::MAX)
@@ -285,7 +286,7 @@ benchmarks! {
 	// This benchmarks the weight of dispatching migrate to execute 1 `NoopMigraton`
 	#[pov_mode = Measured]
 	migrate {
-		let latest_version = generated_version::LATEST_MIGRATION_VERSION;
+		let latest_version = LATEST_MIGRATION_VERSION;
 		StorageVersion::new(latest_version - 2).put::<Pallet<T>>();
 		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
 		let caller: T::AccountId = whitelisted_caller();
@@ -298,7 +299,7 @@ benchmarks! {
 	// This benchmarks the weight of running on_runtime_upgrade when there are no migration in progress.
 	#[pov_mode = Measured]
 	on_runtime_upgrade_noop {
-		let latest_version = generated_version::LATEST_MIGRATION_VERSION;
+		let latest_version = LATEST_MIGRATION_VERSION;
 		assert_eq!(StorageVersion::get::<Pallet<T>>(), latest_version);
 	}:  {
 		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
@@ -309,7 +310,7 @@ benchmarks! {
 	// This benchmarks the weight of running on_runtime_upgrade when there is a migration in progress.
 	#[pov_mode = Measured]
 	on_runtime_upgrade_in_progress {
-		let latest_version = generated_version::LATEST_MIGRATION_VERSION;
+		let latest_version = LATEST_MIGRATION_VERSION;
 		StorageVersion::new(latest_version - 2).put::<Pallet<T>>();
 		let v = vec![42u8].try_into().ok();
 		MigrationInProgress::<T>::set(v.clone());
@@ -323,7 +324,7 @@ benchmarks! {
 	// This benchmarks the weight of running on_runtime_upgrade when there is a migration to process.
 	#[pov_mode = Measured]
 	on_runtime_upgrade {
-		let latest_version = generated_version::LATEST_MIGRATION_VERSION;
+		let latest_version = LATEST_MIGRATION_VERSION;
 		StorageVersion::new(latest_version - 2).put::<Pallet<T>>();
 	}:  {
 		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()

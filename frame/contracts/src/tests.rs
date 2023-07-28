@@ -17,8 +17,6 @@
 
 mod pallet_dummy;
 
-include!(concat!(env!("OUT_DIR"), "/generated_version.rs"));
-
 use self::test_utils::{ensure_stored, expected_deposit, hash};
 use crate::{
 	self as pallet_contracts,
@@ -27,6 +25,7 @@ use crate::{
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
 	},
 	exec::{Frame, Key},
+	migration::generated_version::LATEST_MIGRATION_VERSION,
 	storage::DeletionQueueManager,
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
@@ -439,8 +438,8 @@ parameter_types! {
 	pub static UnstableInterface: bool = true;
 }
 
-const VERSION_N_MINUS_ONE: u16 = generated_version::LATEST_MIGRATION_VERSION - 1;
-const VERSION_N: u16 = generated_version::LATEST_MIGRATION_VERSION;
+const VERSION_N_MINUS_ONE: u16 = LATEST_MIGRATION_VERSION - 1;
+const VERSION_N: u16 = LATEST_MIGRATION_VERSION;
 
 impl Config for Test {
 	type Time = Timestamp;
@@ -614,7 +613,6 @@ fn calling_plain_account_fails() {
 
 #[test]
 fn migration_on_idle_hooks_works() {
-	use generated_version::LATEST_MIGRATION_VERSION;
 	// Defines expectations of how many migration steps can be done given the weight limit.
 	let tests = [
 		(Weight::zero(), LATEST_MIGRATION_VERSION - 2),

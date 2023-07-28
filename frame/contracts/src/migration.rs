@@ -61,6 +61,7 @@ pub mod v10;
 pub mod v11;
 pub mod v12;
 pub mod v13;
+include!(concat!(env!("OUT_DIR"), "/generated_version.rs"));
 
 use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
 use codec::{Codec, Decode};
@@ -522,7 +523,10 @@ impl MigrateSequence for Tuple {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::tests::{generated_version::LATEST_MIGRATION_VERSION, ExtBuilder, Test};
+	use crate::{
+		migration::generated_version::LATEST_MIGRATION_VERSION,
+		tests::{ExtBuilder, Test},
+	};
 
 	#[derive(Default, Encode, Decode, MaxEncodedLen)]
 	struct MockMigration<const N: u16> {
@@ -615,7 +619,10 @@ mod test {
 					);
 				}
 
-				assert_eq!( TestMigration::migrate(Weight::MAX).0, MigrateResult::NoMigrationInProgress);
+				assert_eq!(
+					TestMigration::migrate(Weight::MAX).0,
+					MigrateResult::NoMigrationInProgress
+				);
 				assert_eq!(StorageVersion::get::<Pallet<Test>>(), LATEST_MIGRATION_VERSION);
 			});
 	}
