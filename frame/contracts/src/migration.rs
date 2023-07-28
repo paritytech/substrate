@@ -615,10 +615,7 @@ mod test {
 					);
 				}
 
-				assert_eq!(
-					TestMigration::migrate(Weight::MAX).0,
-					MigrateResult::NoMigrationInProgress
-				);
+				assert_eq!( TestMigration::migrate(Weight::MAX).0, MigrateResult::NoMigrationInProgress);
 				assert_eq!(StorageVersion::get::<Pallet<Test>>(), LATEST_MIGRATION_VERSION);
 			});
 	}
