@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "execution-debug")]
+use crate::execution_reporter::ExecutionReporter;
 use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
@@ -903,10 +905,21 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
+			#[cfg(feature = "execution-debug")]
+			T::ExecutionReporter::before_call(executable.code_hash(), entry_point, &input_data);
+
 			// Call into the Wasm blob.
 			let output = executable
 				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
+
+			#[cfg(feature = "execution-debug")]
+			T::ExecutionReporter::after_call(
+				executable.code_hash(),
+				entry_point,
+				&input_data,
+				&output,
+			);
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {

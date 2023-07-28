@@ -96,6 +96,8 @@ mod storage;
 mod wasm;
 
 pub mod chain_extension;
+#[cfg(feature = "execution-debug")]
+pub mod execution_reporter;
 pub mod migration;
 pub mod weights;
 
@@ -137,7 +139,7 @@ pub use weights::WeightInfo;
 
 pub use crate::{
 	address::{AddressGenerator, DefaultAddressGenerator},
-	exec::Frame,
+	exec::{ExportedFunction, Frame},
 	migration::{MigrateSequence, Migration, NoopMigration},
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
@@ -350,6 +352,9 @@ pub mod pallet {
 		/// type Migrations = (v10::Migration<Runtime>,);
 		/// ```
 		type Migrations: MigrateSequence;
+
+		#[cfg(feature = "execution-debug")]
+		type ExecutionReporter: execution_reporter::ExecutionReporter<CodeHash<Self>>;
 	}
 
 	#[pallet::hooks]
