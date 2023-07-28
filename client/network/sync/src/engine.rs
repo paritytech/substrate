@@ -605,11 +605,7 @@ where
 	/// in the task before being polled once. So, it is required to call
 	/// [`SyncingEngine::poll_block_announce_validation`] to ensure that the future is
 	/// registered properly and will wake up the task when being ready.
-	fn push_block_announce_validation(
-		&mut self,
-		who: PeerId,
-		announce: BlockAnnounce<B::Header>,
-	) {
+	fn push_block_announce_validation(&mut self, who: PeerId, announce: BlockAnnounce<B::Header>) {
 		let hash = announce.header.hash();
 
 		let peer = match self.peers.get_mut(&who) {
@@ -1069,9 +1065,13 @@ where
 			}
 		}
 
-		// poll `ChainSync` last because of a block announcement was received through the
-		// event stream between `SyncingEngine` and `Protocol` and the validation finished
-		// right after it as queued, the resulting block request (if any) can be sent right away.
+		// Drive `ChainSync`.
+		while let Poll::Ready(()) = self.chain_sync.poll(cx) {}
+
+		// Poll block announce validations last, because if a block announcement was received
+		// through the event stream between `SyncingEngine` and `Protocol` and the validation
+		// finished right after it as queued, the resulting block request (if any) can be sent
+		// right away.
 		while let Poll::Ready(result) = self.poll_block_announce_validation(cx) {
 			self.process_block_announce_validation_result(result);
 		}
