@@ -75,6 +75,7 @@ mod double128 {
 	}
 
 	/// Returns 2^128 / a
+    /// `checked_div()` could be used here but is not possible to `unwrap()` inside a `const fn`
 	const fn div128(a: u128) -> u128 {
 		(neg128(a) / a).wrapping_add(1)
 	}
@@ -155,7 +156,7 @@ mod double128 {
 
 		pub const fn div(mut self, rhs: u128) -> (Self, u128) {
 			if rhs == 1 {
-				return (self, 0)
+				return (self, 0);
 			}
 
 			// (self === a; rhs === b)
@@ -182,6 +183,21 @@ mod double128 {
 	}
 }
 
+/* NOTE
+ * the same behaviour of `rational_mul_correction` can be replicated here, but implies changing all
+ * the test to expect u128 instead of Option<u128>
+
+pub const fn multiply_by_rational_with_rounding(
+	a: u128,
+	b: u128,
+	c: u128,
+	r: Rounding,
+) -> u128 {
+	checked_multiply_by_rational_with_rounding(a, b, c, r)
+		.expect("tries to overflow")
+}
+*/
+
 /// Returns `a * b / c` (wrapping to 128 bits) or `None` in the case of
 /// overflow.
 pub const fn multiply_by_rational_with_rounding(
@@ -192,7 +208,7 @@ pub const fn multiply_by_rational_with_rounding(
 ) -> Option<u128> {
 	use double128::Double128;
 	if c == 0 {
-		return None
+		return None;
 	}
 	let (result, remainder) = Double128::product_of(a, b).div(c);
 	let mut result: u128 = match result.try_into_u128() {
@@ -217,7 +233,7 @@ pub const fn multiply_by_rational_with_rounding(
 pub const fn sqrt(mut n: u128) -> u128 {
 	// Modified from https://github.com/derekdreery/integer-sqrt-rs (Apache/MIT).
 	if n == 0 {
-		return 0
+		return 0;
 	}
 
 	// Compute bit, the largest power of 4 <= n

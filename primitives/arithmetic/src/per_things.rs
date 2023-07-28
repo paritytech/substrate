@@ -19,8 +19,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::traits::{
-	BaseArithmetic, Bounded, CheckedAdd, CheckedMul, CheckedSub, One, SaturatedConversion,
-	Saturating, UniqueSaturatedInto, Unsigned, Zero,
+	BaseArithmetic, Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, One,
+	SaturatedConversion, Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
 use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
@@ -146,7 +146,7 @@ pub trait PerThing:
 	/// Return the next lower value to `self` or `self` if it is already zero.
 	fn less_epsilon(self) -> Self {
 		if self.is_zero() {
-			return self
+			return self;
 		}
 		Self::from_parts(self.deconstruct() - One::one())
 	}
@@ -155,7 +155,7 @@ pub trait PerThing:
 	/// zero.
 	fn try_less_epsilon(self) -> Result<Self, Self> {
 		if self.is_zero() {
-			return Err(self)
+			return Err(self);
 		}
 		Ok(Self::from_parts(self.deconstruct() - One::one()))
 	}
@@ -163,7 +163,7 @@ pub trait PerThing:
 	/// Return the next higher value to `self` or `self` if it is already one.
 	fn plus_epsilon(self) -> Self {
 		if self.is_one() {
-			return self
+			return self;
 		}
 		Self::from_parts(self.deconstruct() + One::one())
 	}
@@ -172,7 +172,7 @@ pub trait PerThing:
 	/// one.
 	fn try_plus_epsilon(self) -> Result<Self, Self> {
 		if self.is_one() {
-			return Err(self)
+			return Err(self);
 		}
 		Ok(Self::from_parts(self.deconstruct() + One::one()))
 	}
@@ -455,10 +455,12 @@ impl Rounding {
 		match (rounding, negative) {
 			(Low, true) | (Major, _) | (High, false) => Up,
 			(High, true) | (Minor, _) | (Low, false) => Down,
-			(NearestPrefMajor, _) | (NearestPrefHigh, false) | (NearestPrefLow, true) =>
-				NearestPrefUp,
-			(NearestPrefMinor, _) | (NearestPrefLow, false) | (NearestPrefHigh, true) =>
-				NearestPrefDown,
+			(NearestPrefMajor, _) | (NearestPrefHigh, false) | (NearestPrefLow, true) => {
+				NearestPrefUp
+			},
+			(NearestPrefMinor, _) | (NearestPrefLow, false) | (NearestPrefHigh, true) => {
+				NearestPrefDown
+			},
 		}
 	}
 }
@@ -479,7 +481,7 @@ where
 	P::Inner: Into<N>,
 {
 	let maximum: N = P::ACCURACY.into();
-	let c = rational_mul_correction::<N, P>(x.clone(), P::ACCURACY, part, rounding);
+	let c = rational_mul_correction::<N, P>(x.clone(), P::ACCURACY, part, rounding).unwrap();
 	(x / part.into()).saturating_mul(maximum).saturating_add(c)
 }
 
@@ -492,15 +494,34 @@ where
 {
 	let maximum: N = P::ACCURACY.into();
 	let part_n: N = part.into();
-	let c = rational_mul_correction::<N, P>(x.clone(), part, P::ACCURACY, rounding);
+	let c = rational_mul_correction::<N, P>(x.clone(), part, P::ACCURACY, rounding).unwrap();
 	(x / maximum) * part_n + c
+}
+
+/// Wrapper to make all the default name safe. Checking if &denon is zero should cover denom_n
+/// and denom_upper
+fn rational_mul_correction<N, P>(x: N, numer: P::Inner, denom: P::Inner, rounding: Rounding) -> Option<N>
+where
+	N: MultiplyArg + UniqueSaturatedInto<P::Inner>,
+	P: PerThing,
+	P::Inner: Into<N>,
+{
+	if P::Inner::is_zero(&denom) {
+		return None;
+	}
+	Some(unchecked_rational_mul_correction::<N, P>(x, numer, denom, rounding))
 }
 
 /// Compute the error due to integer division in the expression `x / denom * numer`.
 ///
 /// Take the remainder of `x / denom` and multiply by  `numer / denom`. The result can be added
 /// to `x / denom * numer` for an accurate result.
-fn rational_mul_correction<N, P>(x: N, numer: P::Inner, denom: P::Inner, rounding: Rounding) -> N
+fn unchecked_rational_mul_correction<N, P>(
+	x: N,
+	numer: P::Inner,
+	denom: P::Inner,
+	rounding: Rounding,
+) -> N
 where
 	N: MultiplyArg + UniqueSaturatedInto<P::Inner>,
 	P: PerThing,
@@ -1018,6 +1039,23 @@ macro_rules! implement_per_thing {
 			#[inline]
 			fn checked_mul(&self, rhs: &Self) -> Option<Self> {
 				Some(*self * *rhs)
+			}
+		}
+
+		/// # Note
+		/// I am not sure if this is the best way to div safely for PerThings
+		impl CheckedDiv for $name {
+			#[inline]
+			fn checked_div(&self, rhs: &Self) -> Option<Self> {
+				let _p = self.0;
+				let q = rhs.0;
+
+				if q.is_zero() {
+					return None
+				}
+
+				//Some(Self::from_rational(p, q))
+				Some(*self / *rhs)
 			}
 		}
 
@@ -1547,7 +1585,7 @@ macro_rules! implement_per_thing {
 			#[test]
 			fn rational_mul_correction_works() {
 				assert_eq!(
-					super::rational_mul_correction::<$type, $name>(
+					super::unchecked_rational_mul_correction::<$type, $name>(
 						<$type>::max_value(),
 						<$type>::max_value(),
 						<$type>::max_value(),
@@ -1556,7 +1594,7 @@ macro_rules! implement_per_thing {
 					0,
 				);
 				assert_eq!(
-					super::rational_mul_correction::<$type, $name>(
+					super::unchecked_rational_mul_correction::<$type, $name>(
 						<$type>::max_value() - 1,
 						<$type>::max_value(),
 						<$type>::max_value(),
@@ -1565,7 +1603,7 @@ macro_rules! implement_per_thing {
 					<$type>::max_value() - 1,
 				);
 				assert_eq!(
-					super::rational_mul_correction::<$upper_type, $name>(
+					super::unchecked_rational_mul_correction::<$upper_type, $name>(
 						((<$type>::max_value() - 1) as $upper_type).pow(2),
 						<$type>::max_value(),
 						<$type>::max_value(),
@@ -1575,7 +1613,7 @@ macro_rules! implement_per_thing {
 				);
 				// ((max^2 - 1) % max) * max / max == max - 1
 				assert_eq!(
-					super::rational_mul_correction::<$upper_type, $name>(
+					super::unchecked_rational_mul_correction::<$upper_type, $name>(
 						(<$type>::max_value() as $upper_type).pow(2) - 1,
 						<$type>::max_value(),
 						<$type>::max_value(),
@@ -1585,7 +1623,7 @@ macro_rules! implement_per_thing {
 				);
 				// (max % 2) * max / 2 == max / 2
 				assert_eq!(
-					super::rational_mul_correction::<$upper_type, $name>(
+					super::unchecked_rational_mul_correction::<$upper_type, $name>(
 						(<$type>::max_value() as $upper_type).pow(2),
 						<$type>::max_value(),
 						2 as $type,
@@ -1595,7 +1633,7 @@ macro_rules! implement_per_thing {
 				);
 				// ((max^2 - 1) % max) * 2 / max == 2 (rounded up)
 				assert_eq!(
-					super::rational_mul_correction::<$upper_type, $name>(
+					super::unchecked_rational_mul_correction::<$upper_type, $name>(
 						(<$type>::max_value() as $upper_type).pow(2) - 1,
 						2 as $type,
 						<$type>::max_value(),
@@ -1605,7 +1643,7 @@ macro_rules! implement_per_thing {
 				);
 				// ((max^2 - 1) % max) * 2 / max == 1 (rounded down)
 				assert_eq!(
-					super::rational_mul_correction::<$upper_type, $name>(
+					super::unchecked_rational_mul_correction::<$upper_type, $name>(
 						(<$type>::max_value() as $upper_type).pow(2) - 1,
 						2 as $type,
 						<$type>::max_value(),
@@ -1737,6 +1775,23 @@ macro_rules! implement_per_thing {
 					Some($name::from_percent(0))
 				);
 			}
+
+            #[test]
+            fn test_basic_checked_div() {
+                assert_eq!(
+                    $name::from_parts($max).checked_div(&$name::from_parts($max)),
+                    Some($name::from_percent(100))
+                );
+				assert_eq!(
+					$name::from_percent(100).checked_div(&$name::from_percent(100)),
+					Some($name::from_percent(100))
+				);
+                /// Division by zero
+                assert_eq!(
+                    $name::from_percent(0).checked_div(&$name::from_percent(0)),
+                    None
+                );
+            }
 		}
 	};
 }
