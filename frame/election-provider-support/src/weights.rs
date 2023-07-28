@@ -45,7 +45,9 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_election_provider_support_benchmarking.
 pub trait WeightInfo {
+	/// Returns the weight for the Phragmen voting algorithm.
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight;
+	/// Returns the weight for the PhragMMS voting algorithm.
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight;
 }
 
