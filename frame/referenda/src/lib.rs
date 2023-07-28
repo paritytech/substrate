@@ -1301,7 +1301,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// General assertions:
 	///
-	/// * `ReferendumCount` must always be equal to the number of referenda in `ReferendumInfoFor`.
+	/// * `ReferendumCount` must always be equal to the number of referenda in [`ReferendumInfoFor`].
 	/// * Referendum indices in [`MetadataOf`] must also be stored in [`ReferendumInfoFor`].
 	#[cfg(any(feature = "try-runtime", test))]
 	fn do_try_state() -> Result<(), sp_runtime::TryRuntimeError> {
@@ -1331,7 +1331,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// * There must exist track info for the track of the referendum.
 	/// * The deciding stage has to begin before confirmation period.
-	/// * If alarm is set the nudge call has to be at most `UndecidingTimeout` blocks away
+	/// * If alarm is set the nudge call has to be at most [`UndecidingTimeout`] blocks away
 	///  from the submission block.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn try_state_referenda_info() -> Result<(), sp_runtime::TryRuntimeError> {
@@ -1359,7 +1359,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Looking at tracks:
 	///
-	/// * The referendum indices stored in `TrackQueue` must exist as keys in the
+	/// * The referendum indices stored in [`TrackQueue`] must exist as keys in the
 	///  `ReferendumInfoFor` storage map.
 	#[cfg(any(feature = "try-runtime", test))]
 	fn try_state_tracks() -> Result<(), sp_runtime::TryRuntimeError> {

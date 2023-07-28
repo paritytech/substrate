@@ -188,14 +188,6 @@ pub mod test {
 		}
 	}
 
-	fn increment_referendum_index() {
-		ReferendumCount::<T, ()>::mutate(|x| {
-			let r = *x;
-			*x += 1;
-			r
-		});
-	}
-
 	#[test]
 	pub fn referendum_status_v0() {
 		// make sure the bytes of the encoded referendum v0 is decodable.
@@ -211,7 +203,7 @@ pub mod test {
 			// create and insert into the storage an ongoing referendum v0.
 			let status_v0 = create_status_v0();
 			let ongoing_v0 = v0::ReferendumInfoOf::<T, ()>::Ongoing(status_v0.clone());
-			increment_referendum_index();
+			ReferendumCount::<T, ()>::mutate(|x| x.saturating_inc());
 			v0::ReferendumInfoFor::<T, ()>::insert(2, ongoing_v0);
 			// create and insert into the storage an approved referendum v0.
 			let approved_v0 = v0::ReferendumInfoOf::<T, ()>::Approved(
@@ -219,7 +211,7 @@ pub mod test {
 				Deposit { who: 1, amount: 10 },
 				Some(Deposit { who: 2, amount: 20 }),
 			);
-			increment_referendum_index();
+			ReferendumCount::<T, ()>::mutate(|x| x.saturating_inc());
 			v0::ReferendumInfoFor::<T, ()>::insert(5, approved_v0);
 			// run migration from v0 to v1.
 			v1::MigrateV0ToV1::<T, ()>::on_runtime_upgrade();
