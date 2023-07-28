@@ -453,13 +453,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			check(details)?;
 
-<<<<<<< HEAD
-			Account::<T, I>::try_mutate(id, beneficiary, |t| -> DispatchResult {
-				let new_balance = t.balance.saturating_add(amount);
-				ensure!(new_balance >= details.min_balance, TokenError::BelowMinimum);
-				if t.balance.is_zero() {
-					t.sufficient = Self::new_account(id, beneficiary, details)?;
-=======
 			Account::<T, I>::try_mutate(&id, beneficiary, |maybe_account| -> DispatchResult {
 				match maybe_account {
 					Some(ref mut account) => {
@@ -471,12 +464,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						ensure!(amount >= details.min_balance, TokenError::BelowMinimum);
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: amount,
-							reason: Self::new_account(beneficiary, details, None)?,
+							reason: Self::new_account(id, beneficiary, details, None)?,
 							status: AccountStatus::Liquid,
 							extra: T::Extra::default(),
 						});
 					},
->>>>>>> f81f8ebfdd7c93c39ccf9205b5a91e8496f4b0b2
 				}
 				Ok(())
 			})?;
@@ -653,16 +645,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			debug_assert!(source_account.balance >= debit, "checked in prep; qed");
 			source_account.balance = source_account.balance.saturating_sub(debit);
 
-<<<<<<< HEAD
-			Account::<T, I>::try_mutate(id, &dest, |a| -> DispatchResult {
-				// Calculate new balance; this will not saturate since it's already checked in prep.
-				debug_assert!(a.balance.checked_add(&credit).is_some(), "checked in prep; qed");
-				let new_balance = a.balance.saturating_add(credit);
-
-				// Create a new account if there wasn't one already.
-				if a.balance.is_zero() {
-					a.sufficient = Self::new_account(id, &dest, details)?;
-=======
 			Account::<T, I>::try_mutate(&id, &dest, |maybe_account| -> DispatchResult {
 				match maybe_account {
 					Some(ref mut account) => {
@@ -678,11 +660,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						*maybe_account = Some(AssetAccountOf::<T, I> {
 							balance: credit,
 							status: AccountStatus::Liquid,
-							reason: Self::new_account(dest, details, None)?,
+							reason: Self::new_account(id, dest, details, None)?,
 							extra: T::Extra::default(),
 						});
 					},
->>>>>>> f81f8ebfdd7c93c39ccf9205b5a91e8496f4b0b2
 				}
 				Ok(())
 			})?;
