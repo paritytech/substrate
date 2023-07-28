@@ -1,5 +1,4 @@
 // This file is part of Substrate.
-mod pallet_dummy;
 
 // Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -15,6 +14,10 @@ mod pallet_dummy;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+mod pallet_dummy;
+
+include!(concat!(env!("OUT_DIR"), "/generated_version.rs"));
 
 use self::test_utils::{ensure_stored, expected_deposit, hash};
 use crate::{
@@ -436,6 +439,9 @@ parameter_types! {
 	pub static UnstableInterface: bool = true;
 }
 
+const VERSION_N_MINUS_ONE: u16 = generated_version::LATEST_MIGRATION_VERSION - 1;
+const VERSION_N: u16 = generated_version::LATEST_MIGRATION_VERSION;
+
 impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
@@ -457,7 +463,7 @@ impl Config for Test {
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = UnstableInterface;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
-	type Migrations = (NoopMigration<1>, NoopMigration<2>);
+	type Migrations = (NoopMigration<VERSION_N_MINUS_ONE>, NoopMigration<VERSION_N>);
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
 }
@@ -608,19 +614,23 @@ fn calling_plain_account_fails() {
 
 #[test]
 fn migration_on_idle_hooks_works() {
+	use generated_version::LATEST_MIGRATION_VERSION;
 	// Defines expectations of how many migration steps can be done given the weight limit.
 	let tests = [
-		(Weight::zero(), 0),
-		(<Test as Config>::WeightInfo::migrate() + 1.into(), 1),
-		(Weight::MAX, 2),
+		(Weight::zero(), LATEST_MIGRATION_VERSION - 2),
+		(<Test as Config>::WeightInfo::migrate() + 1.into(), LATEST_MIGRATION_VERSION - 1),
+		(Weight::MAX, LATEST_MIGRATION_VERSION),
 	];
 
 	for (weight, expected_version) in tests {
-		ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
-			MigrationInProgress::<Test>::set(Some(Default::default()));
-			Contracts::on_idle(System::block_number(), weight);
-			assert_eq!(StorageVersion::get::<Pallet<Test>>(), expected_version);
-		});
+		ExtBuilder::default()
+			.set_storage_version(LATEST_MIGRATION_VERSION - 2)
+			.build()
+			.execute_with(|| {
+				MigrationInProgress::<Test>::set(Some(Default::default()));
+				Contracts::on_idle(System::block_number(), weight);
+				assert_eq!(StorageVersion::get::<Pallet<Test>>(), expected_version);
+			});
 	}
 }
 
