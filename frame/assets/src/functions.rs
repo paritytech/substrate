@@ -44,6 +44,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub(super) fn new_account(
+		what: T::AssetId,
 		who: &T::AccountId,
 		d: &mut AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>,
 	) -> Result<bool, DispatchError> {
@@ -57,6 +58,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			false
 		};
 		d.accounts = accounts;
+		T::OnAccountCreated::on_new_account(what, who);
 		Ok(is_sufficient)
 	}
 
@@ -73,6 +75,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			frame_system::Pallet::<T>::dec_consumers(who);
 		}
 		d.accounts = d.accounts.saturating_sub(1);
+		T::OnAccountKilled::on_killed_account(what, who);
 		T::Freezer::died(what, who)
 	}
 
@@ -310,7 +313,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let new_balance = t.balance.saturating_add(amount);
 				ensure!(new_balance >= details.min_balance, TokenError::BelowMinimum);
 				if t.balance.is_zero() {
-					t.sufficient = Self::new_account(beneficiary, details)?;
+					t.sufficient = Self::new_account(id, beneficiary, details)?;
 				}
 				t.balance = new_balance;
 				Ok(())
@@ -457,7 +460,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				// Create a new account if there wasn't one already.
 				if a.balance.is_zero() {
-					a.sufficient = Self::new_account(&dest, details)?;
+					a.sufficient = Self::new_account(id, &dest, details)?;
 				}
 
 				a.balance = new_balance;

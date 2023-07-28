@@ -42,6 +42,9 @@ construct_runtime!(
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
+
+pub type AccountId = u64;
+
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
@@ -52,7 +55,7 @@ impl frame_system::Config for Test {
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u64;
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
@@ -90,10 +93,43 @@ parameter_types! {
 	pub const MetadataDepositPerByte: u64 = 1;
 }
 
+thread_local! {
+	static NEW_ACCOUNT: RefCell<Option<(AssetId, AccountId)>> = RefCell::new(Default::default());
+	static KILLED_ACCOUNT: RefCell<Option<(AssetId, AccountId)>> = RefCell::new(Default::default());
+}
+
+pub struct NewAccount;
+impl NewAccount {
+	pub fn get() -> Option<(AssetId, AccountId)> {
+		NEW_ACCOUNT.with(|a| a.borrow().clone())
+	}
+}
+
+impl OnAccountCreated<AccountId, AssetId> for NewAccount {
+	fn on_new_account(asset: AssetId, who: &AccountId) {
+		NEW_ACCOUNT.with(|a| *a.borrow_mut() = Some((asset, *who)));
+	}
+}
+
+pub struct KilledAccount;
+impl KilledAccount {
+	pub fn get() -> Option<(AssetId, AccountId)> {
+		KILLED_ACCOUNT.with(|a| a.borrow().clone())
+	}
+}
+
+impl OnAccountKilled<AccountId, AssetId> for KilledAccount {
+	fn on_killed_account(asset: AssetId, who: &AccountId) {
+		KILLED_ACCOUNT.with(|a| *a.borrow_mut() = Some((asset, *who)));
+	}
+}
+
+pub type AssetId = u32;
+
 impl Config for Test {
 	type Event = Event;
 	type Balance = u64;
-	type AssetId = u32;
+	type AssetId = AssetId;
 	type Currency = Balances;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = AssetDeposit;
@@ -104,6 +140,8 @@ impl Config for Test {
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
 	type Extra = ();
+	type OnAccountCreated = NewAccount;
+	type OnAccountKilled = KilledAccount;
 }
 
 use std::cell::RefCell;
