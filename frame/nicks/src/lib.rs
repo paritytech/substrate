@@ -36,6 +36,7 @@
 //! * `clear_name` - Remove an account's associated name; the deposit is returned.
 //! * `kill_name` - Forcibly remove the associated name; the deposit is lost.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::traits::{Currency, OnUnbalanced, ReservableCurrency};
