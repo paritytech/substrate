@@ -1808,11 +1808,10 @@ impl<T: Config> DelegatedStakeInterface for Pallet<T> {
 		Delegation::<T>::migrate_into(delegatee, delegator, value)
 	}
 
-	fn unbond(delegatee: &Self::AccountId, value: Self::Balance) -> sp_runtime::DispatchResult {
-		// Self::unbond(RawOrigin::Signed(delegatee).into(), value)
-		// 	.map_err(|with_post| with_post.error)
-		// 	.map(|_| ())
-		todo!("unbond")
+	fn unbond(delegatee: Self::AccountId, value: Self::Balance) -> sp_runtime::DispatchResult {
+		Self::unbond(RawOrigin::Signed(delegatee).into(), value)
+			.map_err(|with_post| with_post.error)
+			.map(|_| ())
 	}
 
 	fn withdraw_unbonded(

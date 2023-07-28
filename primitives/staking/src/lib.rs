@@ -326,7 +326,7 @@ pub trait DelegatedStakeInterface {
 	/// Unbond some funds from a delegator.
 	///
 	/// Similar to [`StakingInterface::unbond`].
-	fn unbond(delegatee: &Self::AccountId, value: Self::Balance) -> DispatchResult;
+	fn unbond(delegatee: Self::AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// Remove delegation of some or all funds available for unlock at the current era.
 	///
