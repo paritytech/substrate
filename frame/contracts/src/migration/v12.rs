@@ -102,7 +102,10 @@ pub type CodeInfoOf<T: Config, OldCurrency> =
 pub type PristineCode<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, Vec<u8>>;
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_old_dummy_code<T: Config>(len: usize, account: T::AccountId) {
+pub fn store_old_dummy_code<T: Config, OldCurrency>(len: usize, account: T::AccountId)
+where
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
+{
 	use sp_runtime::traits::Hash;
 
 	let code = vec![42u8; len];
@@ -119,7 +122,7 @@ pub fn store_old_dummy_code<T: Config>(len: usize, account: T::AccountId) {
 	old::CodeStorage::<T>::insert(hash, module);
 
 	let info = old::OwnerInfo { owner: account, deposit: u32::MAX.into(), refcount: u64::MAX };
-	old::OwnerInfoOf::<T, ()>::insert(hash, info);
+	old::OwnerInfoOf::<T, OldCurrency>::insert(hash, info);
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]

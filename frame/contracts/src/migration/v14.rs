@@ -74,7 +74,11 @@ pub mod old {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_dummy_code<T: Config>() {
+pub fn store_dummy_code<T: Config, OldCurrency>()
+where
+	T: Config,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
+{
 	use frame_benchmarking::account;
 	use sp_runtime::traits::Hash;
 	use sp_std::vec;
@@ -90,7 +94,7 @@ pub fn store_dummy_code<T: Config>() {
 		determinism: Determinism::Enforced,
 		code_len: len,
 	};
-	old::CodeInfoOf::<T, ()>::insert(hash, info);
+	old::CodeInfoOf::<T, OldCurrency>::insert(hash, info);
 }
 
 #[cfg(feature = "try-runtime")]
@@ -121,7 +125,7 @@ impl<T, OldCurrency> MigrationStep for Migration<T, OldCurrency>
 where
 	T: Config,
 	OldCurrency: 'static + ReservableCurrency<<T as frame_system::Config>::AccountId>,
-	BalanceOf<T>: From<old::BalanceOf<T, OldCurrency>>,
+	BalanceOf<T>: From<OldCurrency::Balance>,
 {
 	const VERSION: u16 = 14;
 

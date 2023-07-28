@@ -37,7 +37,10 @@ use crate::{
 use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::v1::{account, benchmarks, whitelisted_caller};
 use frame_support::{
-	self, pallet_prelude::StorageVersion, traits::fungible::InspectHold, weights::Weight,
+	self,
+	pallet_prelude::StorageVersion,
+	traits::{fungible::InspectHold, ReservableCurrency},
+	weights::Weight,
 };
 use frame_system::RawOrigin;
 use pallet_balances;
@@ -258,9 +261,31 @@ benchmarks! {
 	#[pov_mode = Measured]
 	v12_migration_step {
 		let c in 0 .. T::MaxCodeLen::get();
-		type Balances = ();
-		v12::store_old_dummy_code::<T>(c as usize, account::<T::AccountId>("account", 0, 0));
-		let mut m = v12::Migration::<T, Balances, Balances, Balances>::default();
+		v12::store_old_dummy_code::<
+			T,
+			pallet_balances::Pallet<T>
+		>(c as usize, account::<T::AccountId>("account", 0, 0));
+
+		struct OldDepositPerItem<T, Currency>(PhantomData<(T,Currency)>);
+
+		type OldDepositPerByte<T, Currency> = OldDepositPerItem<T, Currency>;
+
+		impl<T, Currency> Get<v12::old::BalanceOf<T, Currency>> for OldDepositPerItem<T, Currency>
+		where
+			T: Config,
+			Currency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
+		{
+			fn get() -> v12::old::BalanceOf<T, Currency> {
+				v12::old::BalanceOf::<T, Currency>::default()
+			}
+		}
+
+		let mut m = v12::Migration::<
+			T,
+			pallet_balances::Pallet<T>,
+			OldDepositPerItem<T, pallet_balances::Pallet<T>>,
+			OldDepositPerByte<T, pallet_balances::Pallet<T>>
+		>::default();
 	}: {
 		m.step();
 	}
@@ -281,9 +306,127 @@ benchmarks! {
 	// This benchmarks the v14 migration step (Move code owners' reserved balance to be held instead).
 	#[pov_mode = Measured]
 	v14_migration_step {
-		type Balances = ();
-		v14::store_dummy_code::<T>();
-		let mut m = v14::Migration::<T, Balances>::default();
+		use frame_support::traits::{BalanceStatus, Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons};
+		use sp_runtime::DispatchResult;
+
+		struct MockBalance;
+
+		impl<AccountId> Currency<AccountId> for MockBalance {
+			type Balance = u32;
+			type PositiveImbalance = ();
+			type NegativeImbalance = ();
+			fn total_balance(_: &AccountId) -> Self::Balance {
+				0
+			}
+			fn can_slash(_: &AccountId, _: Self::Balance) -> bool {
+				true
+			}
+			fn total_issuance() -> Self::Balance {
+				0
+			}
+			fn minimum_balance() -> Self::Balance {
+				0
+			}
+			fn burn(_: Self::Balance) -> Self::PositiveImbalance {
+				()
+			}
+			fn issue(_: Self::Balance) -> Self::NegativeImbalance {
+				()
+			}
+			fn pair(_: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+				((), ())
+			}
+			fn free_balance(_: &AccountId) -> Self::Balance {
+				0
+			}
+			fn ensure_can_withdraw(
+				_: &AccountId,
+				_: Self::Balance,
+				_: WithdrawReasons,
+				_: Self::Balance,
+			) -> DispatchResult {
+				Ok(())
+			}
+			fn transfer(
+				_: &AccountId,
+				_: &AccountId,
+				_: Self::Balance,
+				_: ExistenceRequirement,
+			) -> DispatchResult {
+				Ok(())
+			}
+			fn slash(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+				((), 0)
+			}
+			fn deposit_into_existing(
+				_: &AccountId,
+				_: Self::Balance,
+			) -> Result<Self::PositiveImbalance, DispatchError> {
+				Ok(())
+			}
+			fn resolve_into_existing(
+				_: &AccountId,
+				_: Self::NegativeImbalance,
+			) -> Result<(), Self::NegativeImbalance> {
+				Ok(())
+			}
+			fn deposit_creating(_: &AccountId, _: Self::Balance) -> Self::PositiveImbalance {
+				()
+			}
+			fn resolve_creating(_: &AccountId, _: Self::NegativeImbalance) {}
+			fn withdraw(
+				_: &AccountId,
+				_: Self::Balance,
+				_: WithdrawReasons,
+				_: ExistenceRequirement,
+			) -> Result<Self::NegativeImbalance, DispatchError> {
+				Ok(())
+			}
+			fn settle(
+				_: &AccountId,
+				_: Self::PositiveImbalance,
+				_: WithdrawReasons,
+				_: ExistenceRequirement,
+			) -> Result<(), Self::PositiveImbalance> {
+				Ok(())
+			}
+			fn make_free_balance_be(
+				_: &AccountId,
+				_: Self::Balance,
+			) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
+				SignedImbalance::Positive(())
+			}
+		}
+
+		impl<AccountId> ReservableCurrency<AccountId> for MockBalance {
+			fn can_reserve(_: &AccountId, _: Self::Balance) -> bool {
+				true
+			}
+			fn slash_reserved(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+				((), 0)
+			}
+			fn reserved_balance(_: &AccountId) -> Self::Balance {
+				0
+			}
+			fn reserve(_: &AccountId, _: Self::Balance) -> DispatchResult {
+				Ok(())
+			}
+			fn unreserve(_: &AccountId, _: Self::Balance) -> Self::Balance {
+				0
+			}
+			fn repatriate_reserved(
+				_: &AccountId,
+				_: &AccountId,
+				_: Self::Balance,
+				_: BalanceStatus,
+			) -> Result<Self::Balance, DispatchError> {
+				Ok(0)
+			}
+		}
+
+		v14::store_dummy_code::<T, MockBalance>();
+
+		let mut m = v14::Migration::<T, MockBalance>::default();
 	}: {
 		m.step();
 	}
