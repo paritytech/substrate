@@ -75,11 +75,17 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event {
 		/// The pallet has been (re)initialized.
-		PalletInitialized { reinit: bool },
+		PalletInitialized {
+			/// The pallet initialization state.
+			reinit: bool },
 		/// The computation limit has been updated.
-		ComputationLimitSet { compute: FixedU64 },
+		ComputationLimitSet {
+			/// The computation limit.
+			compute: FixedU64 },
 		/// The storage limit has been updated.
-		StorageLimitSet { storage: FixedU64 },
+		StorageLimitSet {
+			/// The storage limit.
+			storage: FixedU64 },
 	}
 
 	#[pallet::error]
@@ -131,10 +137,14 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[derive(DefaultNoBound)]
 	pub struct GenesisConfig<T: Config> {
+		/// The compute limit.
 		pub compute: FixedU64,
+		/// The storage limit.
 		pub storage: FixedU64,
+		/// The amount of trash data for wasting proof size. 
 		pub trash_data_count: u32,
 		#[serde(skip)]
+		/// The required configuration field.
 		pub _config: sp_std::marker::PhantomData<T>,
 	}
 
