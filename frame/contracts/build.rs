@@ -61,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
          pub mod codegen {{
 		  use crate::NoopMigration;
 		  pub const LATEST_MIGRATION_VERSION: u16 = {version};
-		  pub type Migrations = (NoopMigration<{}>, NoopMigration<{}>);
+		  pub type BenchMigrations = (NoopMigration<{}>, NoopMigration<{}>);
 		}}",
 		version - 1,
 		version
