@@ -281,7 +281,7 @@ impl TraitPair for Pair {
 
 	/// Sign raw data.
 	fn sign(&self, data: &[u8]) -> Signature {
-		let data = vrf::VrfSignData::new(SIGNING_CTX, &[data], vrf::VrfIosVec::default());
+		let data = vrf::VrfSignData::new_unchecked(SIGNING_CTX, &[data], None);
 		self.vrf_sign(&data).signature
 	}
 
@@ -289,7 +289,7 @@ impl TraitPair for Pair {
 	///
 	/// Returns `true` if the signature is good.
 	fn verify<M: AsRef<[u8]>>(signature: &Self::Signature, data: M, public: &Self::Public) -> bool {
-		let data = vrf::VrfSignData::new(SIGNING_CTX, &[data.as_ref()], vrf::VrfIosVec::default());
+		let data = vrf::VrfSignData::new_unchecked(SIGNING_CTX, &[data.as_ref()], None);
 		let signature =
 			vrf::VrfSignature { signature: *signature, vrf_outputs: vrf::VrfIosVec::default() };
 		public.vrf_verify(&data, &signature)
@@ -331,17 +331,8 @@ pub mod vrf {
 
 	impl VrfInput {
 		/// Construct a new VRF input.
-		///
-		/// Each `message_data` tuple has the form (sub-domain, actual-data).
-		pub fn new(domain: &'static [u8], message_data: &[(&[u8], &[u8])]) -> Self {
-			let mut buf = Vec::new();
-			message_data.into_iter().for_each(|(sub_domain, data)| {
-				buf.extend_from_slice(sub_domain);
-				buf.extend_from_slice(&sub_domain.len().to_le_bytes());
-				buf.extend_from_slice(data);
-				buf.extend_from_slice(&data.len().to_le_bytes());
-			});
-			let msg = Message { domain, message: buf.as_slice() };
+		pub fn new(domain: impl AsRef<[u8]>, data: impl AsRef<[u8]>) -> Self {
+			let msg = Message { domain: domain.as_ref(), message: data.as_ref() };
 			VrfInput(msg.into_vrf_input())
 		}
 	}
@@ -394,6 +385,7 @@ pub mod vrf {
 	///
 	/// The `vrf_inputs` is a sequence of [`VrfInput`]s to be signed and which
 	/// are used to construct the [`VrfOutput`]s in the signature.
+	#[derive(Clone)]
 	pub struct VrfSignData {
 		/// VRF inputs to be signed.
 		pub vrf_inputs: VrfIosVec<VrfInput>,
@@ -402,41 +394,52 @@ pub mod vrf {
 	}
 
 	impl VrfSignData {
-		/// Construct a new signable data instance.
+		/// Construct a new data to be signed.
 		///
 		/// The `transcript_data` is used to construct the *Fiat-Shamir* `Transcript`.
-		///
-		/// Refer to the [`VrfSignData`] for more details.
-		pub fn new<T: Into<VrfIosVec<VrfInput>>>(
-			label: &'static [u8],
-			transcript_data: &[&[u8]],
-			vrf_inputs: T,
-		) -> Self {
-			let mut transcript = Transcript::new_labeled(label);
-			transcript_data.iter().for_each(|data| transcript.append_slice(data));
-			VrfSignData { transcript, vrf_inputs: vrf_inputs.into() }
-		}
-
-		/// Construct a new data to be signed from an iterator of [`VrfInput`]s.
-		///
 		/// Fails if the `vrf_inputs` yields more elements than [`MAX_VRF_IOS`]
-		// TODO @davxy: maybe we can just provide one constructor...
-		pub fn from_iter<T: IntoIterator<Item = VrfInput>>(
+		///
+		/// Refer to the [`VrfSignData`] for more details about the usage of
+		/// `transcript_data` and `vrf_inputs`
+		pub fn new(
 			label: &'static [u8],
-			transcript_data: &[&[u8]],
-			vrf_inputs: T,
+			transcript_data: impl IntoIterator<Item = impl AsRef<[u8]>>,
+			vrf_inputs: impl IntoIterator<Item = VrfInput>,
 		) -> Result<Self, ()> {
 			let vrf_inputs: Vec<VrfInput> = vrf_inputs.into_iter().collect();
-			let bounded = VrfIosVec::try_from(vrf_inputs).map_err(|_| ())?;
-			Ok(Self::new(label, transcript_data, bounded))
+			if vrf_inputs.len() > MAX_VRF_IOS as usize {
+				return Err(())
+			}
+			Ok(Self::new_unchecked(label, transcript_data, vrf_inputs))
 		}
 
-		/// Appends a message to the transcript
+		/// Construct a new data to be signed.
+		///
+		/// The `transcript_data` is used to construct the *Fiat-Shamir* `Transcript`.
+		/// At most the first [`MAX_VRF_IOS`] elements of `vrf_inputs` are used.
+		///
+		/// Refer to the [`VrfSignData`] for more details about the usage of
+		/// `transcript_data` and `vrf_inputs`
+		pub fn new_unchecked(
+			label: &'static [u8],
+			transcript_data: impl IntoIterator<Item = impl AsRef<[u8]>>,
+			vrf_inputs: impl IntoIterator<Item = VrfInput>,
+		) -> Self {
+			let vrf_inputs: Vec<VrfInput> = vrf_inputs.into_iter().collect();
+			let vrf_inputs = VrfIosVec::truncate_from(vrf_inputs);
+			let mut transcript = Transcript::new_labeled(label);
+			transcript_data
+				.into_iter()
+				.for_each(|data| transcript.append_slice(data.as_ref()));
+			VrfSignData { transcript, vrf_inputs }
+		}
+
+		/// Append a raw message to the transcript.
 		pub fn push_transcript_data(&mut self, data: &[u8]) {
 			self.transcript.append_slice(data);
 		}
 
-		/// Appends a [`VrfInput`] to the vrf inputs to be signed.
+		/// Append a [`VrfInput`] to the vrf inputs to be signed.
 		///
 		/// On failure, gives back the [`VrfInput`] parameter.
 		pub fn push_vrf_input(&mut self, vrf_input: VrfInput) -> Result<(), VrfInput> {
@@ -812,13 +815,25 @@ mod tests {
 	}
 
 	#[test]
-	fn backend_assumptions_check() {
+	fn assumptions_sanity_check() {
+		// Backend
 		let ring_ctx = RingContext::new_testing();
 		let pair = SecretKey::from_seed(DEV_SEED);
 		let public = pair.to_public();
 
 		assert_eq!(public.0.size_of_serialized(), PUBLIC_SERIALIZED_LEN);
 		assert_eq!(ring_ctx.max_keyset_size(), RING_DOMAIN_SIZE - 257);
+
+		// Wrapper
+		let inputs: Vec<_> = (0..MAX_VRF_IOS - 1).map(|_| VrfInput::new(b"", &[])).collect();
+		let mut sign_data = VrfSignData::new(b"", &[b""], inputs).unwrap();
+		let res = sign_data.push_vrf_input(VrfInput::new(b"", b""));
+		assert!(res.is_ok());
+		let res = sign_data.push_vrf_input(VrfInput::new(b"", b""));
+		assert!(res.is_err());
+		let inputs: Vec<_> = (0..MAX_VRF_IOS + 1).map(|_| VrfInput::new(b"", b"")).collect();
+		let res = VrfSignData::new(b"mydata", &[b"tdata"], inputs);
+		assert!(res.is_err());
 	}
 
 	#[test]
@@ -847,11 +862,11 @@ mod tests {
 		let pair = Pair::from_seed(DEV_SEED);
 		let public = pair.public();
 
-		let i1 = VrfInput::new(b"in1", &[(b"dom1", b"foo"), (b"dom2", b"bar")]);
-		let i2 = VrfInput::new(b"in2", &[(b"domx", b"hello")]);
-		let i3 = VrfInput::new(b"in3", &[(b"domy", b"yay"), (b"domz", b"nay")]);
+		let i1 = VrfInput::new(b"dom1", b"foo");
+		let i2 = VrfInput::new(b"dom2", b"bar");
+		let i3 = VrfInput::new(b"dom3", b"baz");
 
-		let data = VrfSignData::from_iter(b"mydata", &[b"tdata"], [i1, i2, i3]).unwrap();
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"tdata"], [i1, i2, i3]);
 
 		let signature = pair.vrf_sign(&data);
 
@@ -863,18 +878,16 @@ mod tests {
 		let pair = Pair::from_seed(DEV_SEED);
 		let public = pair.public();
 
-		let i1 = VrfInput::new(b"in1", &[(b"dom1", b"foo"), (b"dom2", b"bar")]);
-		let i2 = VrfInput::new(b"in2", &[(b"domx", b"hello")]);
+		let i1 = VrfInput::new(b"dom1", b"foo");
+		let i2 = VrfInput::new(b"dom2", b"bar");
 
-		let data =
-			VrfSignData::from_iter(b"mydata", &[b"tdata"], [i1.clone(), i2.clone()]).unwrap();
-
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"aaaa"], [i1.clone(), i2.clone()]);
 		let signature = pair.vrf_sign(&data);
 
-		let data = VrfSignData::from_iter(b"mydata", &[b"data"], [i1, i2.clone()]).unwrap();
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"bbb"], [i1, i2.clone()]);
 		assert!(!public.vrf_verify(&data, &signature));
 
-		let data = VrfSignData::from_iter(b"mydata", &[b"tdata"], [i2]).unwrap();
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"aaa"], [i2]);
 		assert!(!public.vrf_verify(&data, &signature));
 	}
 
@@ -882,10 +895,10 @@ mod tests {
 	fn vrf_make_bytes_matches() {
 		let pair = Pair::from_seed(DEV_SEED);
 
-		let i1 = VrfInput::new(b"in1", &[(b"dom1", b"foo"), (b"dom2", b"bar")]);
-		let i2 = VrfInput::new(b"in2", &[(b"domx", b"hello")]);
-		let data =
-			VrfSignData::from_iter(b"mydata", &[b"tdata"], [i1.clone(), i2.clone()]).unwrap();
+		let i1 = VrfInput::new(b"dom1", b"foo");
+		let i2 = VrfInput::new(b"dom2", b"bar");
+
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"tdata"], [i1.clone(), i2.clone()]);
 		let signature = pair.vrf_sign(&data);
 
 		let o10 = pair.make_bytes::<32>(b"ctx1", &i1);
@@ -903,10 +916,10 @@ mod tests {
 		// It doesn't contribute to serialized length.
 		let pair = Pair::from_seed(DEV_SEED);
 
-		let i1 = VrfInput::new(b"in1", &[(b"dom1", b"foo"), (b"dom2", b"bar")]);
-		let i2 = VrfInput::new(b"in2", &[(b"domx", b"hello")]);
-		let data =
-			VrfSignData::from_iter(b"mydata", &[b"tdata"], [i1.clone(), i2.clone()]).unwrap();
+		let i1 = VrfInput::new(b"dom1", b"foo");
+		let i2 = VrfInput::new(b"dom2", b"bar");
+
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"tdata"], [i1.clone(), i2.clone()]);
 		let expected = pair.vrf_sign(&data);
 
 		let bytes = expected.encode();
@@ -918,7 +931,7 @@ mod tests {
 		let decoded = VrfSignature::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(expected, decoded);
 
-		let data = VrfSignData::from_iter(b"mydata", &[b"tdata"], []).unwrap();
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"tdata"], []);
 		let expected = pair.vrf_sign(&data);
 
 		let bytes = expected.encode();
@@ -940,11 +953,11 @@ mod tests {
 		let prover_idx = 3;
 		pks[prover_idx] = pair.public();
 
-		let i1 = VrfInput::new(b"in1", &[(b"dom1", b"foo"), (b"dom2", b"bar")]);
-		let i2 = VrfInput::new(b"in2", &[(b"domx", b"hello")]);
-		let i3 = VrfInput::new(b"in3", &[(b"domy", b"yay"), (b"domz", b"nay")]);
+		let i1 = VrfInput::new(b"dom1", b"foo");
+		let i2 = VrfInput::new(b"dom2", b"bar");
+		let i3 = VrfInput::new(b"dom3", b"baz");
 
-		let data = VrfSignData::from_iter(b"mydata", &[b"tdata"], [i1, i2, i3]).unwrap();
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"tdata"], [i1, i2, i3]);
 
 		let prover = ring_ctx.prover(&pks, prover_idx).unwrap();
 		let signature = pair.ring_vrf_sign(&data, &prover);
@@ -966,11 +979,11 @@ mod tests {
 		let prover_idx = 3;
 		pks[prover_idx] = pair.public();
 
-		let i1 = VrfInput::new(b"in1", &[(b"dom1", b"foo"), (b"dom2", b"bar")]);
-		let i2 = VrfInput::new(b"in2", &[(b"domx", b"hello")]);
-		let i3 = VrfInput::new(b"in3", &[(b"domy", b"yay"), (b"domz", b"nay")]);
+		let i1 = VrfInput::new(b"dom1", b"foo");
+		let i2 = VrfInput::new(b"dom2", b"bar");
+		let i3 = VrfInput::new(b"dom3", b"baz");
 
-		let data = VrfSignData::from_iter(b"mydata", &[b"tdata"], [i1, i2, i3]).unwrap();
+		let data = VrfSignData::new_unchecked(b"mydata", &[b"tdata"], [i1, i2, i3]);
 
 		let prover = ring_ctx.prover(&pks, prover_idx).unwrap();
 		let expected = pair.ring_vrf_sign(&data, &prover);
