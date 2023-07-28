@@ -2301,8 +2301,22 @@ mod tests {
 	use crate::codec::{Decode, Encode, Input};
 	use sp_core::{
 		crypto::{Pair, UncheckedFrom},
-		ecdsa,
+		ecdsa, ed25519, sr25519,
 	};
+
+	macro_rules! signature_verify_test {
+		($algorithm:ident) => {
+			let msg = &b"test-message"[..];
+			let wrong_msg = &b"test-msg"[..];
+			let (pair, _) = $algorithm::Pair::generate();
+
+			let signature = pair.sign(&msg);
+			assert!($algorithm::Pair::verify(&signature, msg, &pair.public()));
+
+			assert!(signature.verify(msg, &pair.public()));
+			assert!(!signature.verify(wrong_msg, &pair.public()));
+		};
+	}
 
 	mod t {
 		use sp_application_crypto::{app_crypto, sr25519};
@@ -2414,14 +2428,9 @@ mod tests {
 	}
 
 	#[test]
-	fn ecdsa_verify_works() {
-		let msg = &b"test-message"[..];
-		let (pair, _) = ecdsa::Pair::generate();
-
-		let signature = pair.sign(&msg);
-		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
-
-		assert!(signature.verify(msg, &pair.public()));
-		assert!(signature.verify(msg, &pair.public()));
+	fn signature_verify_works() {
+		signature_verify_test!(ed25519);
+		signature_verify_test!(sr25519);
+		signature_verify_test!(ecdsa);
 	}
 }
