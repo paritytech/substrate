@@ -306,127 +306,189 @@ benchmarks! {
 	// This benchmarks the v14 migration step (Move code owners' reserved balance to be held instead).
 	#[pov_mode = Measured]
 	v14_migration_step {
-		use frame_support::traits::{BalanceStatus, Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons};
-		use sp_runtime::DispatchResult;
+		mod mock {
+			use frame_support::traits::{BalanceStatus, Currency, ExistenceRequirement, Imbalance, ReservableCurrency,
+				SameOrOther, SignedImbalance, TryDrop, WithdrawReasons};
+			use sp_runtime::{DispatchResult, Saturating, DispatchError};
+			use sp_std::ops::Div;
 
-		struct MockBalance;
+			#[derive(Default)]
+			pub struct MockBalance;
 
-		impl<AccountId> Currency<AccountId> for MockBalance {
-			type Balance = u32;
-			type PositiveImbalance = ();
-			type NegativeImbalance = ();
-			fn total_balance(_: &AccountId) -> Self::Balance {
-				0
+			impl TryDrop for MockBalance {
+				fn try_drop(self) -> Result<(), Self> {
+					Ok(())
+				}
 			}
-			fn can_slash(_: &AccountId, _: Self::Balance) -> bool {
-				true
+
+			impl<Balance: Default> Imbalance<Balance> for MockBalance {
+				type Opposite = MockBalance;
+				fn zero() -> Self {
+					MockBalance::default()
+				}
+				fn drop_zero(self) -> Result<(), Self> {
+					Ok(())
+				}
+				fn split(self, _: Balance) -> (Self, Self) {
+					(MockBalance::default(), MockBalance::default())
+				}
+				fn ration(self, _: u32, _: u32) -> (Self, Self)
+				where
+					Balance: From<u32> + Saturating + Div<Output = Balance>,
+				{
+					(MockBalance::default(), MockBalance::default())
+				}
+				fn split_merge(self, _: Balance, _: (Self, Self)) -> (Self, Self) {
+					(MockBalance::default(), MockBalance::default())
+				}
+				fn ration_merge(self, _: u32, _: u32, _: (Self, Self)) -> (Self, Self)
+				where
+					Balance: From<u32> + Saturating + Div<Output = Balance>,
+				{
+					(MockBalance::default(), MockBalance::default())
+				}
+				fn split_merge_into(self, _: Balance, _: &mut (Self, Self)) {}
+				fn ration_merge_into(self, _: u32, _: u32, _: &mut (Self, Self))
+				where
+					Balance: From<u32> + Saturating + Div<Output = Balance>,
+				{
+				}
+				fn merge(self, _: Self) -> Self {
+					MockBalance::default()
+				}
+				fn merge_into(self, _: &mut Self) {}
+				fn maybe_merge(self, _: Option<Self>) -> Self {
+					MockBalance::default()
+				}
+				fn subsume(&mut self, _: Self) {}
+				fn maybe_subsume(&mut self, _: Option<Self>) {
+					()
+				}
+				fn offset(self, _: Self::Opposite) -> SameOrOther<Self, Self::Opposite> {
+					SameOrOther::None
+				}
+				fn peek(&self) -> Balance {
+					Default::default()
+				}
 			}
-			fn total_issuance() -> Self::Balance {
-				0
+
+			impl<AccountId> Currency<AccountId> for MockBalance {
+				type Balance = u32;
+				type PositiveImbalance = MockBalance;
+				type NegativeImbalance = MockBalance;
+				fn total_balance(_: &AccountId) -> Self::Balance {
+					0
+				}
+				fn can_slash(_: &AccountId, _: Self::Balance) -> bool {
+					true
+				}
+				fn total_issuance() -> Self::Balance {
+					0
+				}
+				fn minimum_balance() -> Self::Balance {
+					0
+				}
+				fn burn(_: Self::Balance) -> Self::PositiveImbalance {
+					MockBalance::default()
+				}
+				fn issue(_: Self::Balance) -> Self::NegativeImbalance {
+					MockBalance::default()
+				}
+				fn pair(_: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+					(MockBalance::default(), MockBalance::default())
+				}
+				fn free_balance(_: &AccountId) -> Self::Balance {
+					0
+				}
+				fn ensure_can_withdraw(
+					_: &AccountId,
+					_: Self::Balance,
+					_: WithdrawReasons,
+					_: Self::Balance,
+				) -> DispatchResult {
+					Ok(())
+				}
+				fn transfer(
+					_: &AccountId,
+					_: &AccountId,
+					_: Self::Balance,
+					_: ExistenceRequirement,
+				) -> DispatchResult {
+					Ok(())
+				}
+				fn slash(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+					(MockBalance::default(), 0)
+				}
+				fn deposit_into_existing(
+					_: &AccountId,
+					_: Self::Balance,
+				) -> Result<Self::PositiveImbalance, DispatchError> {
+					Ok(MockBalance::default())
+				}
+				fn resolve_into_existing(
+					_: &AccountId,
+					_: Self::NegativeImbalance,
+				) -> Result<(), Self::NegativeImbalance> {
+					Ok(())
+				}
+				fn deposit_creating(_: &AccountId, _: Self::Balance) -> Self::PositiveImbalance {
+					MockBalance::default()
+				}
+				fn resolve_creating(_: &AccountId, _: Self::NegativeImbalance) {}
+				fn withdraw(
+					_: &AccountId,
+					_: Self::Balance,
+					_: WithdrawReasons,
+					_: ExistenceRequirement,
+				) -> Result<Self::NegativeImbalance, DispatchError> {
+					Ok(MockBalance::default())
+				}
+				fn settle(
+					_: &AccountId,
+					_: Self::PositiveImbalance,
+					_: WithdrawReasons,
+					_: ExistenceRequirement,
+				) -> Result<(), Self::PositiveImbalance> {
+					Ok(())
+				}
+				fn make_free_balance_be(
+					_: &AccountId,
+					_: Self::Balance,
+				) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
+					SignedImbalance::Positive(MockBalance::default())
+				}
 			}
-			fn minimum_balance() -> Self::Balance {
-				0
-			}
-			fn burn(_: Self::Balance) -> Self::PositiveImbalance {
-				()
-			}
-			fn issue(_: Self::Balance) -> Self::NegativeImbalance {
-				()
-			}
-			fn pair(_: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
-				((), ())
-			}
-			fn free_balance(_: &AccountId) -> Self::Balance {
-				0
-			}
-			fn ensure_can_withdraw(
-				_: &AccountId,
-				_: Self::Balance,
-				_: WithdrawReasons,
-				_: Self::Balance,
-			) -> DispatchResult {
-				Ok(())
-			}
-			fn transfer(
-				_: &AccountId,
-				_: &AccountId,
-				_: Self::Balance,
-				_: ExistenceRequirement,
-			) -> DispatchResult {
-				Ok(())
-			}
-			fn slash(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
-				((), 0)
-			}
-			fn deposit_into_existing(
-				_: &AccountId,
-				_: Self::Balance,
-			) -> Result<Self::PositiveImbalance, DispatchError> {
-				Ok(())
-			}
-			fn resolve_into_existing(
-				_: &AccountId,
-				_: Self::NegativeImbalance,
-			) -> Result<(), Self::NegativeImbalance> {
-				Ok(())
-			}
-			fn deposit_creating(_: &AccountId, _: Self::Balance) -> Self::PositiveImbalance {
-				()
-			}
-			fn resolve_creating(_: &AccountId, _: Self::NegativeImbalance) {}
-			fn withdraw(
-				_: &AccountId,
-				_: Self::Balance,
-				_: WithdrawReasons,
-				_: ExistenceRequirement,
-			) -> Result<Self::NegativeImbalance, DispatchError> {
-				Ok(())
-			}
-			fn settle(
-				_: &AccountId,
-				_: Self::PositiveImbalance,
-				_: WithdrawReasons,
-				_: ExistenceRequirement,
-			) -> Result<(), Self::PositiveImbalance> {
-				Ok(())
-			}
-			fn make_free_balance_be(
-				_: &AccountId,
-				_: Self::Balance,
-			) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
-				SignedImbalance::Positive(())
+
+			impl<AccountId> ReservableCurrency<AccountId> for MockBalance {
+				fn can_reserve(_: &AccountId, _: Self::Balance) -> bool {
+					true
+				}
+				fn slash_reserved(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+					(MockBalance::default(), 0)
+				}
+				fn reserved_balance(_: &AccountId) -> Self::Balance {
+					0
+				}
+				fn reserve(_: &AccountId, _: Self::Balance) -> DispatchResult {
+					Ok(())
+				}
+				fn unreserve(_: &AccountId, _: Self::Balance) -> Self::Balance {
+					0
+				}
+				fn repatriate_reserved(
+					_: &AccountId,
+					_: &AccountId,
+					_: Self::Balance,
+					_: BalanceStatus,
+				) -> Result<Self::Balance, DispatchError> {
+					Ok(0)
+				}
 			}
 		}
 
-		impl<AccountId> ReservableCurrency<AccountId> for MockBalance {
-			fn can_reserve(_: &AccountId, _: Self::Balance) -> bool {
-				true
-			}
-			fn slash_reserved(_: &AccountId, _: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
-				((), 0)
-			}
-			fn reserved_balance(_: &AccountId) -> Self::Balance {
-				0
-			}
-			fn reserve(_: &AccountId, _: Self::Balance) -> DispatchResult {
-				Ok(())
-			}
-			fn unreserve(_: &AccountId, _: Self::Balance) -> Self::Balance {
-				0
-			}
-			fn repatriate_reserved(
-				_: &AccountId,
-				_: &AccountId,
-				_: Self::Balance,
-				_: BalanceStatus,
-			) -> Result<Self::Balance, DispatchError> {
-				Ok(0)
-			}
-		}
+		v14::store_dummy_code::<T, mock::MockBalance>();
 
-		v14::store_dummy_code::<T, MockBalance>();
-
-		let mut m = v14::Migration::<T, MockBalance>::default();
+		let mut m = v14::Migration::<T, mock::MockBalance>::default();
 	}: {
 		m.step();
 	}
