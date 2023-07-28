@@ -77,15 +77,18 @@ pub mod pallet {
 		/// The pallet has been (re)initialized.
 		PalletInitialized {
 			/// The pallet initialization state.
-			reinit: bool },
+			reinit: bool,
+		},
 		/// The computation limit has been updated.
 		ComputationLimitSet {
 			/// The computation limit.
-			compute: FixedU64 },
+			compute: FixedU64,
+		},
 		/// The storage limit has been updated.
 		StorageLimitSet {
 			/// The storage limit.
-			storage: FixedU64 },
+			storage: FixedU64,
+		},
 	}
 
 	#[pallet::error]
@@ -141,7 +144,7 @@ pub mod pallet {
 		pub compute: FixedU64,
 		/// The storage limit.
 		pub storage: FixedU64,
-		/// The amount of trash data for wasting proof size. 
+		/// The amount of trash data for wasting proof size.
 		pub trash_data_count: u32,
 		#[serde(skip)]
 		/// The required configuration field.
