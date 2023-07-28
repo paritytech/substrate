@@ -16,7 +16,7 @@
 // limitations under the License.
 
 #[cfg(feature = "execution-debug")]
-use crate::execution_reporter::ExecutionReporter;
+use crate::execution_observer::ExecutionObserver;
 use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
@@ -906,7 +906,7 @@ where
 			self.initial_transfer()?;
 
 			#[cfg(feature = "execution-debug")]
-			T::ExecutionReporter::before_call(executable.code_hash(), entry_point, &input_data);
+			T::ExecutionObserver::before_call(executable.code_hash(), entry_point, &input_data);
 
 			// Call into the Wasm blob.
 			let output = executable
@@ -914,7 +914,7 @@ where
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
 			#[cfg(feature = "execution-debug")]
-			T::ExecutionReporter::after_call(
+			T::ExecutionObserver::after_call(
 				executable.code_hash(),
 				entry_point,
 				&input_data,

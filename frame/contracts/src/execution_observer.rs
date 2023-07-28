@@ -8,7 +8,7 @@ use pallet_contracts_primitives::ExecReturnValue;
 ///
 /// This definitely *should not* be used in any production or benchmarking setting, since handling
 /// callbacks might be arbitrarily expensive and thus significantly influence performance.
-pub trait ExecutionReporter<CodeHash> {
+pub trait ExecutionObserver<CodeHash> {
 	/// Called just before the execution of a contract.
 	///
 	/// # Arguments

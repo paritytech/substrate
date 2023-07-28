@@ -97,7 +97,7 @@ mod wasm;
 
 pub mod chain_extension;
 #[cfg(feature = "execution-debug")]
-pub mod execution_reporter;
+pub mod execution_observer;
 pub mod migration;
 pub mod weights;
 
@@ -354,7 +354,7 @@ pub mod pallet {
 		type Migrations: MigrateSequence;
 
 		#[cfg(feature = "execution-debug")]
-		type ExecutionReporter: execution_reporter::ExecutionReporter<CodeHash<Self>>;
+		type ExecutionObserver: execution_observer::ExecutionObserver<CodeHash<Self>>;
 	}
 
 	#[pallet::hooks]
