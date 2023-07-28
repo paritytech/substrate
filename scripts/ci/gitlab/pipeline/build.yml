@@ -26,9 +26,46 @@
       --extra-dependencies "$EXTRA_DEPENDENCIES"
       --companion-overrides "$COMPANION_OVERRIDES"
 
+.check-runtime-migration:
+  extends:
+    - .check-dependent-project
+    - .test-refs-no-trigger-prs-only
+  variables:
+    DEPENDENT_REPO: polkadot
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      polkadot: release-v*
+    COMPANION_CHECK_COMMAND: >
+      time cargo build --release --locked -p "$NETWORK"-runtime &&
+      time cargo run --locked --release --features try-runtime try-runtime \
+          --runtime ./target/release/wbuild/"$NETWORK"-runtime/target/wasm32-unknown-unknown/release/"$NETWORK"_runtime.wasm \
+          --chain=${NETWORK}-dev \
+          on-runtime-upgrade --checks=pre-and-post live --uri wss://${NETWORK}-try-runtime-node.parity-chains.parity.io:443
+
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
 # parent-child pipelines but that's more complicated.
+
+check-runtime-migration-polkadot:
+  extends:
+    - .check-runtime-migration
+  variables:
+    NETWORK: polkadot
+
+check-runtime-migration-kusama:
+  extends: .check-runtime-migration
+  variables:
+    NETWORK: kusama
+
+check-runtime-migration-rococo:
+  extends: .check-runtime-migration
+  variables:
+    NETWORK: rococo
+
+check-runtime-migration-westend:
+  extends: .check-runtime-migration
+  variables:
+    NETWORK: westend
 
 check-dependent-polkadot:
   extends: .check-dependent-project
