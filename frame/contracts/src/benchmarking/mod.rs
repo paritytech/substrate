@@ -1069,12 +1069,15 @@ benchmarks! {
 		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
 		let beneficiary_bytes = beneficiary.encode();
 		let beneficiary_len = beneficiary_bytes.len();
+		let caller = whitelisted_caller();
+
+		T::Currency::set_balance(&caller, caller_funding::<T>());
 
 		// Maximize the delegate_dependencies to account for the worst-case scenario.
 		let code_hashes = (0..T::MaxDelegateDependencies::get())
 			.map(|i| {
 				let new_code = WasmModule::<T>::dummy_with_bytes(65 + i);
-				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Contracts::<T>::store_code_raw(new_code.code, caller.clone())?;
 				Ok(new_code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
@@ -1991,7 +1994,9 @@ benchmarks! {
 		let hashes = (0..r)
 			.map(|i| {
 				let code = WasmModule::<T>::dummy_with_bytes(i);
-				Contracts::<T>::store_code_raw(code.code, whitelisted_caller())?;
+				let caller = whitelisted_caller();
+				T::Currency::set_balance(&caller, caller_funding::<T>());
+				Contracts::<T>::store_code_raw(code.code, caller)?;
 				Ok(code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
@@ -2111,7 +2116,9 @@ benchmarks! {
 					])),
 					.. Default::default()
 				});
-				Contracts::<T>::store_code_raw(code.code, whitelisted_caller())?;
+				let caller = whitelisted_caller();
+				T::Currency::set_balance(&caller, caller_funding::<T>());
+				Contracts::<T>::store_code_raw(code.code, caller)?;
 				Ok(code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
@@ -2215,7 +2222,9 @@ benchmarks! {
 		let hash = callee_code.hash;
 		let hash_bytes = callee_code.hash.encode();
 		let hash_len = hash_bytes.len();
-		Contracts::<T>::store_code_raw(callee_code.code, whitelisted_caller())?;
+		let caller = whitelisted_caller();
+		T::Currency::set_balance(&caller, caller_funding::<T>());
+		Contracts::<T>::store_code_raw(callee_code.code, caller)?;
 		let value: BalanceOf<T> =  t.into();
 		let value_bytes = value.encode();
 
@@ -2557,7 +2566,9 @@ benchmarks! {
 		let code_hashes = (0..r)
 			.map(|i| {
 				let new_code = WasmModule::<T>::dummy_with_bytes(i);
-				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				let caller = whitelisted_caller();
+				T::Currency::set_balance(&caller, caller_funding::<T>());
+				Contracts::<T>::store_code_raw(new_code.code, caller)?;
 				Ok(new_code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
@@ -2598,7 +2609,9 @@ benchmarks! {
 		let code_hashes = (0..r)
 			.map(|i| {
 				let new_code = WasmModule::<T>::dummy_with_bytes(65 + i);
-				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				let caller = whitelisted_caller();
+				T::Currency::set_balance(&caller, caller_funding::<T>());
+				Contracts::<T>::store_code_raw(new_code.code, caller)?;
 				Ok(new_code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
@@ -2634,7 +2647,9 @@ benchmarks! {
 		let code_hashes = (0..r)
 			.map(|i| {
 				let new_code = WasmModule::<T>::dummy_with_bytes(65 + i);
-				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				let caller = whitelisted_caller();
+				T::Currency::set_balance(&caller, caller_funding::<T>());
+				Contracts::<T>::store_code_raw(new_code.code, caller)?;
 				Ok(new_code.hash)
 			})
 			.collect::<Result<Vec<_>, &'static str>>()?;
