@@ -486,8 +486,9 @@ benchmarks! {
 			}
 		}
 
-		v14::store_dummy_code::<T, mock::MockBalance>();
-
+		let account = account::<T::AccountId>("account", 0, 0);
+		T::Currency::set_balance(&account, caller_funding::<T>());
+		v14::store_dummy_code::<T, mock::MockBalance>(account);
 		let mut m = v14::Migration::<T, mock::MockBalance>::default();
 	}: {
 		m.step();

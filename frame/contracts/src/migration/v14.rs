@@ -74,12 +74,11 @@ pub mod old {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_dummy_code<T: Config, OldCurrency>()
+pub fn store_dummy_code<T: Config, OldCurrency>(account: T::AccountId)
 where
 	T: Config,
 	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
 {
-	use frame_benchmarking::account;
 	use sp_runtime::traits::Hash;
 	use sp_std::vec;
 
@@ -88,8 +87,8 @@ where
 	let hash = T::Hashing::hash(&code);
 
 	let info = old::CodeInfo {
-		owner: account::<T::AccountId>("account", 0, 0),
-		deposit: u32::MAX.into(),
+		owner: account,
+		deposit: 10_000u32.into(),
 		refcount: u64::MAX,
 		determinism: Determinism::Enforced,
 		code_len: len,
@@ -159,31 +158,28 @@ where
 			}
 
 			let unreserved = code_info.deposit.saturating_sub(remaining);
+			let amount = BalanceOf::<T>::from(unreserved);
 
-			T::Currency::hold(
-				&HoldReason::StorageDepositReserve.into(),
-				&code_info.owner,
-				unreserved.into(),
-			)
-			.map(|_| {
-				log::debug!(
-					target: LOG_TARGET,
-					"{:?} held on the code owner's account 0x{:?} for code {:?}.",
-					unreserved,
-					HexDisplay::from(&code_info.owner.encode()),
-					hash,
-				);
-			})
-			.unwrap_or_else(|err| {
-				log::error!(
-					target: LOG_TARGET,
-					"Failed to hold {:?} from the code owner's account 0x{:?} for code {:?}, reason: {:?}.",
-					unreserved,
-					HexDisplay::from(&code_info.owner.encode()),
-					hash,
-					err
-				);
-			});
+			T::Currency::hold(&HoldReason::StorageDepositReserve.into(), &code_info.owner, amount)
+				.map(|_| {
+					log::debug!(
+						target: LOG_TARGET,
+						"{:?} held on the code owner's account 0x{:?} for code {:?}.",
+						amount,
+						HexDisplay::from(&code_info.owner.encode()),
+						hash,
+					);
+				})
+				.unwrap_or_else(|err| {
+					log::error!(
+						target: LOG_TARGET,
+						"Failed to hold {:?} from the code owner's account 0x{:?} for code {:?}, reason: {:?}.",
+						amount,
+						HexDisplay::from(&code_info.owner.encode()),
+						hash,
+						err
+					);
+				});
 
 			self.last_code_hash = Some(hash);
 			(IsFinished::No, T::WeightInfo::v14_migration_step())
