@@ -236,13 +236,13 @@ impl Default for ExtBuilder {
 impl ExtBuilder {
 	pub fn build(self) -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
-    let balances = vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100), (6, 100)];
-    pallet_balances::GenesisConfig::<Test> { balances }
-      .assimilate_storage(&mut t)
-      .unwrap();
-    let mut ext = sp_io::TestExternalities::new(t);
-    ext.execute_with(|| System::set_block_number(1));
-    ext
+		let balances = vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100), (6, 100)];
+		pallet_balances::GenesisConfig::<Test> { balances }
+			.assimilate_storage(&mut t)
+			.unwrap();
+		let mut ext = sp_io::TestExternalities::new(t);
+		ext.execute_with(|| System::set_block_number(1));
+		ext
 	}
 
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
