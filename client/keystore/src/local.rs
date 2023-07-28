@@ -263,9 +263,6 @@ impl Keystore for LocalKeystore {
 		self.sign::<bandersnatch::Pair>(key_type, public, msg)
 	}
 
-	// TODO @davxy
-	// Maybe we can expose just this bandersnatch sign (the above one reduces to this with
-	// input len = 0)
 	#[cfg(feature = "bandersnatch-experimental")]
 	fn bandersnatch_vrf_sign(
 		&self,

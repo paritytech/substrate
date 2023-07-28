@@ -64,9 +64,8 @@ const RING_PROOF_SERIALIZED_LEN: usize = 592;
 //   512        →  74 KB
 //  1024        → 147 KB
 //  2048        → 295 KB
-// TODO @swasilyev: This is quite big... can we do anything about it?
-// Looks like the relationship is:
-//  serialized_size(ring_size) = 144·(ring_size + 2) + 4
+// NOTE: This is quite big but looks like there is an upcoming fix
+// in the backend.
 const RING_CONTEXT_SERIALIZED_LEN: usize = 147752;
 
 /// Bandersnatch public key.
@@ -317,6 +316,8 @@ pub mod vrf {
 	};
 
 	/// Max number of inputs/outputs which can be handled by the VRF signing procedures.
+	/// The number is quite arbitrary and fullfils the current usage of the primitive.
+	/// If required it can be extended in the future.
 	pub const MAX_VRF_IOS: u32 = 3;
 
 	/// Bounded vector used for VRF inputs and outputs.
@@ -329,15 +330,10 @@ pub mod vrf {
 	pub struct VrfInput(pub(super) bandersnatch_vrfs::VrfInput);
 
 	impl VrfInput {
-		/// Build a new VRF input.
+		/// Construct a new VRF input.
 		///
-		/// Each message tuple has the form: message_data := (sub-domain, data).
+		/// Each `message_data` tuple has the form (sub-domain, actual-data).
 		pub fn new(domain: &'static [u8], message_data: &[(&[u8], &[u8])]) -> Self {
-			// TODO @burdges (temporary hack?)
-			// In sassafras we want to construct a single `VrfInput` from multiple datas
-			// E.g. the ticket score uses: epoch-randomness, attempt-index, epoch-index
-			// Currently, `bandersnatch_vrfs::Message` has a single (domain, data) fields,
-			// so we need a workaround here...
 			let mut buf = Vec::new();
 			message_data.into_iter().for_each(|(sub_domain, data)| {
 				buf.extend_from_slice(sub_domain);
@@ -352,7 +348,7 @@ pub mod vrf {
 
 	/// VRF (pre)output derived from [`VrfInput`] using a [`VrfSecret`].
 	///
-	/// This is used to produce a verifiable arbitrary number of "random" bytes.
+	/// This is used to produce an arbitrary number of verifiable *random* bytes.
 	#[derive(Clone, Debug, PartialEq, Eq)]
 	pub struct VrfOutput(pub(super) bandersnatch_vrfs::VrfPreOut);
 
@@ -389,7 +385,15 @@ pub mod vrf {
 		}
 	}
 
-	/// A Fiat-Shamir transcript and a sequence of [`VrfInput`]s ready to be signed.
+	/// A *Fiat-Shamir* transcript and a sequence of [`VrfInput`]s ready to be signed.
+	///
+	/// The `transcript` will be used as messages for the *Fiat-Shamir*
+	/// transform part of the scheme. This data keeps the signature secure
+	/// but doesn't contribute to the actual VRF output. If unsure just give
+	/// it a unique label depending on the actual usage of the signing data.
+	///
+	/// The `vrf_inputs` is a sequence of [`VrfInput`]s to be signed and which
+	/// are used to construct the [`VrfOutput`]s in the signature.
 	pub struct VrfSignData {
 		/// VRF inputs to be signed.
 		pub vrf_inputs: VrfIosVec<VrfInput>,
@@ -400,12 +404,9 @@ pub mod vrf {
 	impl VrfSignData {
 		/// Construct a new signable data instance.
 		///
-		/// The `transcript_data` will be used as messages for the Fiat-Shamir
-		/// transform part of the scheme. If unsure just give it a unique label
-		/// depending on the actual usage of the signing data
-		/// (TODO @burges: or leave it empty? There is already the `label` field for
-		/// contextualization). The `vrf_inputs` is a sequence of [`VrfInput`]s to be signed and
-		/// which contribute to the actual output bytes produced via the VRF.
+		/// The `transcript_data` is used to construct the *Fiat-Shamir* `Transcript`.
+		///
+		/// Refer to the [`VrfSignData`] for more details.
 		pub fn new<T: Into<VrfIosVec<VrfInput>>>(
 			label: &'static [u8],
 			transcript_data: &[&[u8]],
@@ -442,11 +443,11 @@ pub mod vrf {
 			self.vrf_inputs.try_push(vrf_input)
 		}
 
-		/// Create challenge from input transcript within the signing data.
+		/// Create challenge from the transcript contained within the signing data.
 		pub fn challenge<const N: usize>(&self) -> [u8; N] {
 			let mut output = [0; N];
-			let mut t = self.transcript.clone();
-			let mut reader = t.challenge(b"Prehashed for Ed25519");
+			let mut transcript = self.transcript.clone();
+			let mut reader = transcript.challenge(b"Prehashed for bandersnatch");
 			reader.read_bytes(&mut output);
 			output
 		}
@@ -472,8 +473,7 @@ pub mod vrf {
 	#[cfg(feature = "full_crypto")]
 	impl VrfSecret for Pair {
 		fn vrf_sign(&self, data: &Self::VrfSignData) -> Self::VrfSignature {
-			// Hack used because backend signature type is generic over the number of ios
-			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
+			// Workaround to overcome backend signature generic over the number of IOs.
 			match data.vrf_inputs.len() {
 				0 => self.vrf_sign_gen::<0>(data),
 				1 => self.vrf_sign_gen::<1>(data),
@@ -502,8 +502,7 @@ pub mod vrf {
 			if preouts_len != data.vrf_inputs.len() {
 				return false
 			}
-			// Hack used because backend signature type is generic over the number of ios
-			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
+			// Workaround to overcome backend signature generic over the number of IOs.
 			match preouts_len {
 				0 => self.vrf_verify_gen::<0>(data, signature),
 				1 => self.vrf_verify_gen::<1>(data, signature),
@@ -700,8 +699,7 @@ pub mod ring_vrf {
 		/// The signature is valid if the signing [`Pair`] is part of the ring from which
 		/// the [`RingProver`] has been derived.
 		pub fn ring_vrf_sign(&self, data: &VrfSignData, prover: &RingProver) -> RingVrfSignature {
-			// Hack used because backend signature type is generic over the number of ios
-			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
+			// Workaround to overcome backend signature generic over the number of IOs.
 			match data.vrf_inputs.len() {
 				0 => self.ring_vrf_sign_gen::<0>(data, prover),
 				1 => self.ring_vrf_sign_gen::<1>(data, prover),
@@ -754,8 +752,7 @@ pub mod ring_vrf {
 			if preouts_len != data.vrf_inputs.len() {
 				return false
 			}
-			// Hack used because backend signature type is generic over the number of ios.
-			// TODO @burdges can we provide a Vec version in `bandersnatch_vrfs` crate?
+			// Workaround to overcome backend signature generic over the number of IOs.
 			match preouts_len {
 				0 => self.verify_gen::<0>(data, verifier),
 				1 => self.verify_gen::<1>(data, verifier),
