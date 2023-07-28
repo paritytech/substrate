@@ -1263,7 +1263,6 @@ where
 		salt: &[u8],
 	) -> Result<(AccountIdOf<T>, ExecReturnValue), ExecError> {
 		let executable = E::from_storage(code_hash, self.gas_meter_mut())?;
-
 		let nonce = self.next_nonce();
 		let executable = self.push_frame(
 			FrameArgs::Instantiate {

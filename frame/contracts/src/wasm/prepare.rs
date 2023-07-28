@@ -18,6 +18,7 @@
 //! This module takes care of loading, checking and preprocessing of a
 //! wasm module before execution. It also extracts some essential information
 //! from a module.
+
 use crate::{
 	chain_extension::ChainExtension,
 	storage::meter::Diff,

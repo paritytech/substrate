@@ -101,14 +101,6 @@ pub mod weights;
 
 #[cfg(test)]
 mod tests;
-pub use crate::{
-	address::{AddressGenerator, DefaultAddressGenerator},
-	exec::Frame,
-	migration::{MigrateSequence, Migration, NoopMigration},
-	pallet::*,
-	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
-	wasm::Determinism,
-};
 use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
@@ -145,6 +137,15 @@ use sp_runtime::{
 	FixedPointOperand,
 };
 use sp_std::{fmt::Debug, prelude::*};
+
+pub use crate::{
+	address::{AddressGenerator, DefaultAddressGenerator},
+	exec::Frame,
+	migration::{MigrateSequence, Migration, NoopMigration},
+	pallet::*,
+	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
+	wasm::Determinism,
+};
 pub use weights::WeightInfo;
 
 #[cfg(doc)]
