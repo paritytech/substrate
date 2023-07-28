@@ -16,7 +16,6 @@
 // limitations under the License.
 
 //! Add `delegate_dependencies` to `ContractInfo`.
-//! Use `Identity` instead of `Twox64Concat` for hashing keys of the `ContractInfoOf` storage map
 //! See <https://github.com/paritytech/substrate/pull/14079>.
 
 use crate::{
@@ -74,7 +73,7 @@ pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::Co
 
 #[storage_alias]
 pub type ContractInfoOf<T: Config> =
-	StorageMap<Pallet<T>, Identity, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
+	StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
 
 #[derive(Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
