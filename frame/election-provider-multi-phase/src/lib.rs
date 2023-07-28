@@ -227,6 +227,7 @@
 //! account the weight of encode/decode in the `submit_unsigned` given its priority. Nonetheless,
 //! all operations on the solution and the snapshot are worthy of taking this into account.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
