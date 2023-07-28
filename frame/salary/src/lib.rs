@@ -126,14 +126,14 @@ pub mod pallet {
 		/// The number of blocks between sequential payout cycles is the sum of this and
 		/// `PayoutPeriod`.
 		#[pallet::constant]
-		type RegistrationPeriod: Get<Self::BlockNumber>;
+		type RegistrationPeriod: Get<BlockNumberFor<Self>>;
 
 		/// The number of blocks within a cycle which accounts have to claim the payout.
 		///
 		/// The number of blocks between sequential payout cycles is the sum of this and
 		/// `RegistrationPeriod`.
 		#[pallet::constant]
-		type PayoutPeriod: Get<Self::BlockNumber>;
+		type PayoutPeriod: Get<BlockNumberFor<Self>>;
 
 		/// The total budget per cycle.
 		///
@@ -142,11 +142,10 @@ pub mod pallet {
 		type Budget: Get<BalanceOf<Self, I>>;
 	}
 
-	pub type CycleIndexOf<T> = <T as frame_system::Config>::BlockNumber;
+	pub type CycleIndexOf<T> = BlockNumberFor<T>;
 	pub type BalanceOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Balance;
 	pub type IdOf<T, I> = <<T as Config<I>>::Paymaster as Pay>::Id;
-	pub type StatusOf<T, I> =
-		StatusType<CycleIndexOf<T>, <T as frame_system::Config>::BlockNumber, BalanceOf<T, I>>;
+	pub type StatusOf<T, I> = StatusType<CycleIndexOf<T>, BlockNumberFor<T>, BalanceOf<T, I>>;
 	pub type ClaimantStatusOf<T, I> = ClaimantStatus<CycleIndexOf<T>, BalanceOf<T, I>, IdOf<T, I>>;
 
 	/// The overall status of the system.
@@ -389,7 +388,7 @@ pub mod pallet {
 		pub fn last_active(who: &T::AccountId) -> Result<CycleIndexOf<T>, DispatchError> {
 			Ok(Claimant::<T, I>::get(&who).ok_or(Error::<T, I>::NotInducted)?.last_active)
 		}
-		pub fn cycle_period() -> T::BlockNumber {
+		pub fn cycle_period() -> BlockNumberFor<T> {
 			T::RegistrationPeriod::get() + T::PayoutPeriod::get()
 		}
 		fn do_payout(who: T::AccountId, beneficiary: T::AccountId) -> DispatchResult {

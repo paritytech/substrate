@@ -265,7 +265,6 @@ mod tests {
 				)),
 				wasm_method: Default::default(),
 				wasm_runtime_overrides: None,
-				execution_strategies: Default::default(),
 				rpc_addr: None,
 				rpc_max_connections: Default::default(),
 				rpc_cors: None,
@@ -401,7 +400,7 @@ mod tests {
 			},
 		);
 
-		let Some(output) = output else { return } ;
+		let Some(output) = output else { return };
 
 		let stderr = dbg!(String::from_utf8(output.stderr).unwrap());
 

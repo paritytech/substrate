@@ -41,21 +41,6 @@ use wasmi::{
 /// compiler toolchains might not support specifying other modules than "env" for memory imports.
 pub const IMPORT_MODULE_MEMORY: &str = "env";
 
-/// Determines whether a module should be instantiated during preparation.
-pub enum TryInstantiate {
-	/// Do the instantiation to make sure that the module is valid.
-	///
-	/// This should be used if a module is only uploaded but not executed. We need
-	/// to make sure that it can be actually instantiated.
-	Instantiate,
-	/// Skip the instantiation during preparation.
-	///
-	/// This makes sense when the preparation takes place as part of an instantiation. Then
-	/// this instantiation would fail the whole transaction and an extra check is not
-	/// necessary.
-	Skip,
-}
-
 /// The inner deserialized module is valid and contains only allowed WebAssembly features.
 /// This is checked by loading it into wasmi interpreter `engine`.
 pub struct LoadedModule {
@@ -79,7 +64,7 @@ impl LoadedModule {
 		config
 			.wasm_multi_value(false)
 			.wasm_mutable_global(false)
-			.wasm_sign_extension(false)
+			.wasm_sign_extension(true)
 			.wasm_bulk_memory(false)
 			.wasm_reference_types(false)
 			.wasm_tail_call(false)
@@ -183,8 +168,8 @@ impl LoadedModule {
 					let _ = import.ty().func().ok_or("expected a function")?;
 
 					if !<T as Config>::ChainExtension::enabled() &&
-						import.name().as_bytes() == b"seal_call_chain_extension" ||
-						import.name().as_bytes() == b"call_chain_extension"
+						(import.name().as_bytes() == b"seal_call_chain_extension" ||
+							import.name().as_bytes() == b"call_chain_extension")
 					{
 						return Err("Module uses chain extensions but chain extensions are disabled")
 					}
@@ -237,7 +222,6 @@ fn validate<E, T>(
 	code: &[u8],
 	schedule: &Schedule<T>,
 	determinism: Determinism,
-	try_instantiate: TryInstantiate,
 ) -> Result<(), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
@@ -261,23 +245,22 @@ where
 	//
 	// - It doesn't use any unknown imports.
 	// - It doesn't explode the wasmi bytecode generation.
-	if matches!(try_instantiate, TryInstantiate::Instantiate) {
-		// We don't actually ever run any code so we can get away with a minimal stack which
-		// reduces the amount of memory that needs to be zeroed.
-		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
-		WasmBlob::<T>::instantiate::<E, _>(
-			&code,
-			(),
-			schedule,
-			determinism,
-			stack_limits,
-			AllowDeprecatedInterface::No,
-		)
-		.map_err(|err| {
-			log::debug!(target: LOG_TARGET, "{}", err);
-			(Error::<T>::CodeRejected.into(), "New code rejected on wasmi instantiation!")
-		})?;
-	}
+	//
+	// We don't actually ever execute this instance so we can get away with a minimal stack which
+	// reduces the amount of memory that needs to be zeroed.
+	let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
+	WasmBlob::<T>::instantiate::<E, _>(
+		&code,
+		(),
+		schedule,
+		determinism,
+		stack_limits,
+		AllowDeprecatedInterface::No,
+	)
+	.map_err(|err| {
+		log::debug!(target: LOG_TARGET, "{}", err);
+		(Error::<T>::CodeRejected.into(), "New code rejected on wasmi instantiation!")
+	})?;
 
 	Ok(())
 }
@@ -295,20 +278,20 @@ pub fn prepare<E, T>(
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
 	determinism: Determinism,
-	try_instantiate: TryInstantiate,
 ) -> Result<WasmBlob<T>, (DispatchError, &'static str)>
 where
 	E: Environment<()>,
 	T: Config,
 {
-	validate::<E, T>(code.as_ref(), schedule, determinism, try_instantiate)?;
+	validate::<E, T>(code.as_ref(), schedule, determinism)?;
 
 	// Calculate deposit for storing contract code and `code_info` in two different storage items.
-	let bytes_added = code.len().saturating_add(<CodeInfo<T>>::max_encoded_len()) as u32;
+	let code_len = code.len() as u32;
+	let bytes_added = code_len.saturating_add(<CodeInfo<T>>::max_encoded_len() as u32);
 	let deposit = Diff { bytes_added, items_added: 2, ..Default::default() }
 		.update_contract::<T>(None)
 		.charge_or_zero();
-	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0 };
+	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0, code_len };
 	let code_hash = T::Hashing::hash(&code);
 
 	Ok(WasmBlob { code, code_info, code_hash })
@@ -338,6 +321,7 @@ pub mod benchmarking {
 			// this is a helper function for benchmarking which skips deposit collection
 			deposit: Default::default(),
 			refcount: 0,
+			code_len: code.len() as u32,
 			determinism,
 		};
 		let code_hash = T::Hashing::hash(&code);
@@ -416,7 +400,6 @@ mod tests {
 					&schedule,
 					ALICE,
 					Determinism::Enforced,
-					TryInstantiate::Instantiate,
 				);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
 			}
@@ -686,6 +669,22 @@ mod tests {
 				(import "env" "memory" (memory 1 1))
 				(func (export "call"))
 				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(
+			signed_extension_works,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 1))
+				(func (export "deploy"))
+				(func (export "call"))
+				(func (param i32) (result i32)
+					local.get 0
+					i32.extend8_s
+				)
 			)
 			"#,
 			Ok(_)

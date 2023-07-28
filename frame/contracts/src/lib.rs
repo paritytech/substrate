@@ -75,8 +75,8 @@
 //!   allowed to code owner.
 //! * [`Pallet::set_code`] - Changes the code of an existing contract. Only allowed to `Root`
 //!   origin.
-//! * [`Pallet::migrate`] - Runs migration steps of curent multi-block migration in priority, before
-//!   [`Hooks::on_idle`][frame_support::traits::Hooks::on_idle] activates.
+//! * [`Pallet::migrate`] - Runs migration steps of current multi-block migration in priority,
+//!   before [`Hooks::on_idle`][frame_support::traits::Hooks::on_idle] activates.
 //!
 //! ## Usage
 //!
@@ -105,7 +105,7 @@ use crate::{
 	exec::{AccountIdOf, ErrorOrigin, ExecError, Executable, Key, Stack as ExecStack},
 	gas::GasMeter,
 	storage::{meter::Meter as StorageMeter, ContractInfo, DeletionQueueManager},
-	wasm::{CodeInfo, TryInstantiate, WasmBlob},
+	wasm::{CodeInfo, WasmBlob},
 };
 use codec::{Codec, Decode, Encode, HasCompact};
 use environmental::*;
@@ -183,10 +183,11 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::Perbill;
 
 	/// The current storage version.
 	#[cfg(not(any(test, feature = "runtime-benchmarks")))]
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(12);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
 
 	/// Hard coded storage version for running tests that depend on the current storage version.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
@@ -209,7 +210,7 @@ pub mod pallet {
 		/// be instantiated from existing codes that use this deprecated functionality. It will
 		/// be removed eventually. Hence for new `pallet-contracts` deployments it is okay
 		/// to supply a dummy implementation for this type (because it is never used).
-		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
+		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
 
 		/// The currency in which fees are paid and contract balances are held.
 		type Currency: ReservableCurrency<Self::AccountId> // TODO: Move to fungible traits
@@ -290,6 +291,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type DepositPerItem: Get<BalanceOf<Self>>;
 
+		/// The percentage of the storage deposit that should be held for using a code hash.
+		/// Instantiating a contract, or calling [`chain_extension::Ext::add_delegate_dependency`]
+		/// protects the code from being removed. In order to prevent abuse these actions are
+		/// protected with a percentage of the code deposit.
+		#[pallet::constant]
+		type CodeHashLockupDepositPercent: Get<Perbill>;
+
 		/// The address generator used to generate the addresses of contracts.
 		type AddressGenerator: AddressGenerator<Self>;
 
@@ -304,6 +312,11 @@ pub mod pallet {
 		/// The maximum allowable length in bytes for storage keys.
 		#[pallet::constant]
 		type MaxStorageKeyLen: Get<u32>;
+
+		/// The maximum number of delegate_dependencies that a contract can lock with
+		/// [`chain_extension::Ext::add_delegate_dependency`].
+		#[pallet::constant]
+		type MaxDelegateDependencies: Get<u32>;
 
 		/// Make contract callable functions marked as `#[unstable]` available.
 		///
@@ -325,23 +338,23 @@ pub mod pallet {
 		///
 		/// # Examples
 		/// ```
-		/// use pallet_contracts::migration::{v9, v10, v11};
+		/// use pallet_contracts::migration::{v10, v11};
 		/// # struct Runtime {};
-		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// type Migrations = (v10::Migration<Runtime>, v11::Migration<Runtime>);
 		/// ```
 		///
 		/// If you have a single migration step, you can use a tuple with a single element:
 		/// ```
-		/// use pallet_contracts::migration::v9;
+		/// use pallet_contracts::migration::v10;
 		/// # struct Runtime {};
-		/// type Migrations = (v9::Migration<Runtime>,);
+		/// type Migrations = (v10::Migration<Runtime>,);
 		/// ```
 		type Migrations: MigrateSequence;
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_idle(_block: T::BlockNumber, mut remaining_weight: Weight) -> Weight {
+		fn on_idle(_block: BlockNumberFor<T>, mut remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
 
 			loop {
@@ -695,26 +708,42 @@ pub mod pallet {
 			salt: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
 			Migration::<T>::ensure_migrated()?;
+			let origin = ensure_signed(origin)?;
 			let code_len = code.len() as u32;
+
+			let (module, upload_deposit) = Self::try_upload_code(
+				origin.clone(),
+				code,
+				storage_deposit_limit.clone().map(Into::into),
+				Determinism::Enforced,
+				None,
+			)?;
+
+			// Reduces the storage deposit limit by the amount that was reserved for the upload.
+			let storage_deposit_limit =
+				storage_deposit_limit.map(|limit| limit.into().saturating_sub(upload_deposit));
+
 			let data_len = data.len() as u32;
 			let salt_len = salt.len() as u32;
 			let common = CommonInput {
-				origin: Origin::from_runtime_origin(origin)?,
+				origin: Origin::from_account_id(origin),
 				value,
 				data,
 				gas_limit,
-				storage_deposit_limit: storage_deposit_limit.map(Into::into),
+				storage_deposit_limit,
 				debug_message: None,
 			};
+
 			let mut output =
-				InstantiateInput::<T> { code: Code::Upload(code), salt }.run_guarded(common);
+				InstantiateInput::<T> { code: WasmCode::Wasm(module), salt }.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
+
 			output.gas_meter.into_dispatch_result(
-				output.result.map(|(_address, result)| result),
+				output.result.map(|(_address, output)| output),
 				T::WeightInfo::instantiate_with_code(code_len, data_len, salt_len),
 			)
 		}
@@ -748,8 +777,8 @@ pub mod pallet {
 				storage_deposit_limit: storage_deposit_limit.map(Into::into),
 				debug_message: None,
 			};
-			let mut output =
-				InstantiateInput::<T> { code: Code::Existing(code_hash), salt }.run_guarded(common);
+			let mut output = InstantiateInput::<T> { code: WasmCode::CodeHash(code_hash), salt }
+				.run_guarded(common);
 			if let Ok(retval) = &output.result {
 				if retval.1.did_revert() {
 					output.result = Err(<Error<T>>::ContractReverted.into());
@@ -945,6 +974,14 @@ pub mod pallet {
 		MigrationInProgress,
 		/// Migrate dispatch call was attempted but no migration was performed.
 		NoMigrationPerformed,
+		/// The contract has reached its maximum number of delegate dependencies.
+		MaxDelegateDependenciesReached,
+		/// The dependency was not found in the contract's delegate dependencies.
+		DelegateDependencyNotFound,
+		/// The contract already depends on the given delegate dependency.
+		DelegateDependencyAlreadyExists,
+		/// Can not add a delegate dependency to the code hash of the contract itself.
+		CannotAddSelfAsDelegateDependency,
 	}
 
 	/// A mapping from a contract's code hash to its code.
@@ -1052,9 +1089,15 @@ struct CallInput<T: Config> {
 	determinism: Determinism,
 }
 
+/// Reference to an existing code hash or a new wasm module.
+enum WasmCode<T: Config> {
+	Wasm(WasmBlob<T>),
+	CodeHash(CodeHash<T>),
+}
+
 /// Input specific to a contract instantiation invocation.
 struct InstantiateInput<T: Config> {
-	code: Code<CodeHash<T>>,
+	code: WasmCode<T>,
 	salt: Vec<u8>,
 }
 
@@ -1099,7 +1142,7 @@ struct InternalOutput<T: Config, O> {
 
 /// Helper trait to wrap contract execution entry points into a single function
 /// [`Invokable::run_guarded`].
-trait Invokable<T: Config> {
+trait Invokable<T: Config>: Sized {
 	/// What is returned as a result of a successful invocation.
 	type Output;
 
@@ -1111,7 +1154,7 @@ trait Invokable<T: Config> {
 	///
 	/// We enforce a re-entrancy guard here by initializing and checking a boolean flag through a
 	/// global reference.
-	fn run_guarded(&self, common: CommonInput<T>) -> InternalOutput<T, Self::Output> {
+	fn run_guarded(self, common: CommonInput<T>) -> InternalOutput<T, Self::Output> {
 		// Set up a global reference to the boolean flag used for the re-entrancy guard.
 		environmental!(executing_contract: bool);
 
@@ -1159,11 +1202,8 @@ trait Invokable<T: Config> {
 	/// contract or a instantiation of a new one.
 	///
 	/// Called by dispatchables and public functions through the [`Invokable::run_guarded`].
-	fn run(
-		&self,
-		common: CommonInput<T>,
-		gas_meter: GasMeter<T>,
-	) -> InternalOutput<T, Self::Output>;
+	fn run(self, common: CommonInput<T>, gas_meter: GasMeter<T>)
+		-> InternalOutput<T, Self::Output>;
 
 	/// This method ensures that the given `origin` is allowed to invoke the current `Invokable`.
 	///
@@ -1175,7 +1215,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 	type Output = ExecReturnValue;
 
 	fn run(
-		&self,
+		self,
 		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
@@ -1201,7 +1241,7 @@ impl<T: Config> Invokable<T> for CallInput<T> {
 			value,
 			data.clone(),
 			debug_message,
-			*determinism,
+			determinism,
 		);
 
 		match storage_meter.try_into_deposit(&origin) {
@@ -1223,8 +1263,8 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 	type Output = (AccountIdOf<T>, ExecReturnValue);
 
 	fn run(
-		&self,
-		mut common: CommonInput<T>,
+		self,
+		common: CommonInput<T>,
 		mut gas_meter: GasMeter<T>,
 	) -> InternalOutput<T, Self::Output> {
 		let mut storage_deposit = Default::default();
@@ -1233,37 +1273,15 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 			let InstantiateInput { salt, .. } = self;
 			let CommonInput { origin: contract_origin, .. } = common;
 			let origin = contract_origin.account_id()?;
-			let (extra_deposit, executable) = match &self.code {
-				Code::Upload(binary) => {
-					let executable = WasmBlob::from_code(
-						binary.clone(),
-						&schedule,
-						origin.clone(),
-						Determinism::Enforced,
-						TryInstantiate::Skip,
-					)
-					.map_err(|(err, msg)| {
-						common
-							.debug_message
-							.as_mut()
-							.map(|buffer| buffer.try_extend(&mut msg.bytes()));
-						err
-					})?;
-					// The open deposit will be charged during execution when the
-					// uploaded module does not already exist. This deposit is not part of the
-					// storage meter because it is not transferred to the contract but
-					// reserved on the uploading account.
-					(executable.open_deposit(&executable.code_info()), executable)
-				},
-				Code::Existing(hash) =>
-					(Default::default(), WasmBlob::from_storage(*hash, &mut gas_meter)?),
+
+			let executable = match self.code {
+				WasmCode::Wasm(module) => module,
+				WasmCode::CodeHash(code_hash) => WasmBlob::from_storage(code_hash, &mut gas_meter)?,
 			};
+
 			let contract_origin = Origin::from_account_id(origin.clone());
-			let mut storage_meter = StorageMeter::new(
-				&contract_origin,
-				common.storage_deposit_limit,
-				common.value.saturating_add(extra_deposit),
-			)?;
+			let mut storage_meter =
+				StorageMeter::new(&contract_origin, common.storage_deposit_limit, common.value)?;
 			let CommonInput { value, data, debug_message, .. } = common;
 			let result = ExecStack::<T, WasmBlob<T>>::run_instantiate(
 				origin.clone(),
@@ -1277,9 +1295,7 @@ impl<T: Config> Invokable<T> for InstantiateInput<T> {
 				debug_message,
 			);
 
-			storage_deposit = storage_meter
-				.try_into_deposit(&contract_origin)?
-				.saturating_add(&StorageDeposit::Charge(extra_deposit));
+			storage_deposit = storage_meter.try_into_deposit(&contract_origin)?;
 			result
 		};
 		InternalOutput { result: try_exec(), gas_meter, storage_deposit }
@@ -1383,7 +1399,7 @@ impl<T: Config> Pallet<T> {
 		origin: T::AccountId,
 		value: BalanceOf<T>,
 		gas_limit: Weight,
-		storage_deposit_limit: Option<BalanceOf<T>>,
+		mut storage_deposit_limit: Option<BalanceOf<T>>,
 		code: Code<CodeHash<T>>,
 		data: Vec<u8>,
 		salt: Vec<u8>,
@@ -1397,6 +1413,45 @@ impl<T: Config> Pallet<T> {
 		} else {
 			None
 		};
+		// collect events if CollectEvents is UnsafeCollect
+		let events = || {
+			if collect_events == CollectEvents::UnsafeCollect {
+				Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
+			} else {
+				None
+			}
+		};
+
+		let (code, upload_deposit): (WasmCode<T>, BalanceOf<T>) = match code {
+			Code::Upload(code) => {
+				let result = Self::try_upload_code(
+					origin.clone(),
+					code,
+					storage_deposit_limit.map(Into::into),
+					Determinism::Enforced,
+					debug_message.as_mut(),
+				);
+
+				let (module, deposit) = match result {
+					Ok(result) => result,
+					Err(error) =>
+						return ContractResult {
+							gas_consumed: Zero::zero(),
+							gas_required: Zero::zero(),
+							storage_deposit: Default::default(),
+							debug_message: debug_message.unwrap_or(Default::default()).into(),
+							result: Err(error),
+							events: events(),
+						},
+				};
+
+				storage_deposit_limit =
+					storage_deposit_limit.map(|l| l.saturating_sub(deposit.into()));
+				(WasmCode::Wasm(module), deposit)
+			},
+			Code::Existing(hash) => (WasmCode::CodeHash(hash), Default::default()),
+		};
+
 		let common = CommonInput {
 			origin: Origin::from_account_id(origin),
 			value,
@@ -1405,13 +1460,8 @@ impl<T: Config> Pallet<T> {
 			storage_deposit_limit,
 			debug_message: debug_message.as_mut(),
 		};
+
 		let output = InstantiateInput::<T> { code, salt }.run_guarded(common);
-		// collect events if CollectEvents is UnsafeCollect
-		let events = if collect_events == CollectEvents::UnsafeCollect {
-			Some(System::<T>::read_events_no_consensus().map(|e| *e).collect())
-		} else {
-			None
-		};
 		ContractInstantiateResult {
 			result: output
 				.result
@@ -1419,9 +1469,11 @@ impl<T: Config> Pallet<T> {
 				.map_err(|e| e.error),
 			gas_consumed: output.gas_meter.gas_consumed(),
 			gas_required: output.gas_meter.gas_required(),
-			storage_deposit: output.storage_deposit,
+			storage_deposit: output
+				.storage_deposit
+				.saturating_add(&StorageDeposit::Charge(upload_deposit)),
 			debug_message: debug_message.unwrap_or_default().to_vec(),
-			events,
+			events: events(),
 		}
 	}
 
@@ -1436,17 +1488,31 @@ impl<T: Config> Pallet<T> {
 		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		Migration::<T>::ensure_migrated()?;
+		let (module, deposit) =
+			Self::try_upload_code(origin, code, storage_deposit_limit, determinism, None)?;
+		Ok(CodeUploadReturnValue { code_hash: *module.code_hash(), deposit })
+	}
+
+	/// Uploads new code and returns the Wasm blob and deposit amount collected.
+	fn try_upload_code(
+		origin: T::AccountId,
+		code: Vec<u8>,
+		storage_deposit_limit: Option<BalanceOf<T>>,
+		determinism: Determinism,
+		mut debug_message: Option<&mut DebugBufferVec<T>>,
+	) -> Result<(WasmBlob<T>, BalanceOf<T>), DispatchError> {
 		let schedule = T::Schedule::get();
-		let module =
-			WasmBlob::from_code(code, &schedule, origin, determinism, TryInstantiate::Instantiate)
-				.map_err(|(err, _)| err)?;
-		let deposit = module.open_deposit(&module.code_info());
+		let mut module =
+			WasmBlob::from_code(code, &schedule, origin, determinism).map_err(|(err, msg)| {
+				debug_message.as_mut().map(|d| d.try_extend(msg.bytes()));
+				err
+			})?;
+		let deposit = module.store_code()?;
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
 		}
-		let result = CodeUploadReturnValue { code_hash: *module.code_hash(), deposit };
-		module.store()?;
-		Ok(result)
+
+		Ok((module, deposit))
 	}
 
 	/// Query storage of a specified contract under a specified key.
@@ -1490,7 +1556,7 @@ impl<T: Config> Pallet<T> {
 		owner: T::AccountId,
 	) -> frame_support::dispatch::DispatchResult {
 		let schedule = T::Schedule::get();
-		WasmBlob::store_code_unchecked(code, &schedule, owner)?;
+		WasmBlob::<T>::from_code_unchecked(code, &schedule, owner)?.store_code()?;
 		Ok(())
 	}
 

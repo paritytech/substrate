@@ -28,7 +28,7 @@ use futures::{
 	channel::mpsc::{channel, Receiver, Sender},
 	prelude::*,
 };
-use libp2p::PeerId;
+use libp2p_identity::PeerId;
 use log::trace;
 use prometheus_endpoint::Registry;
 use sp_runtime::traits::Block as BlockT;
@@ -330,12 +330,13 @@ impl<B: BlockT> futures::future::FusedFuture for GossipEngine<B> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{multiaddr::Multiaddr, ValidationResult, ValidatorContext};
+	use crate::{ValidationResult, ValidatorContext};
 	use futures::{
 		channel::mpsc::{unbounded, UnboundedSender},
 		executor::{block_on, block_on_stream},
 		future::poll_fn,
 	};
+	use multiaddr::Multiaddr;
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network::{
 		config::MultiaddrWithPeerId, NetworkBlock, NetworkEventStream, NetworkNotification,
