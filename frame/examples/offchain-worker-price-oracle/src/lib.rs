@@ -180,6 +180,7 @@ pub mod pallet {
 	#[pallet::getter(fn prices)]
 	pub(super) type Prices<T: Config> = StorageValue<_, BoundedVec<u32, T::MaxPrices>, ValueQuery>;
 
+	/// Authorities allowed to submit the price.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> =
