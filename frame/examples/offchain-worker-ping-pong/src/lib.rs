@@ -334,7 +334,6 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(1)]
-		#[pallet::weight(0)]
 		pub fn pong_signed(origin: OriginFor<T>, nonce: u32) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
@@ -348,7 +347,6 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(2)]
-		#[pallet::weight(0)]
 		pub fn pong_unsigned(
 			origin: OriginFor<T>,
 			_block_number: BlockNumberFor<T>,
@@ -372,7 +370,6 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(3)]
-		#[pallet::weight(0)]
 		pub fn pong_unsigned_with_signed_payload(
 			origin: OriginFor<T>,
 			pong_payload: PongPayload<T::Public, BlockNumberFor<T>>,
@@ -395,7 +392,6 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(4)]
-		#[pallet::weight(0)]
 		pub fn add_authority(
 			origin: OriginFor<T>,
 			authority: T::AccountId,
@@ -418,7 +414,6 @@ pub mod pallet {
 		}
 
 		#[pallet::call_index(5)]
-		#[pallet::weight(0)]
 		pub fn remove_authority(
 			origin: OriginFor<T>,
 			authority: T::AccountId,
