@@ -48,7 +48,7 @@ use frame_support::{
 	traits::{
 		tokens::nonfungibles_v2::{
 			Buy as NonFungiblesBuy, Inspect as NonFungiblesInspect,
-			InspectEnumerable as NonFungiblesInspectEnumerable,
+			InspectEnumerable as NonFungiblesInspectEnumerable, Transfer
 		},
 		Currency, ExistenceRequirement, ReservableCurrency,
 	},
@@ -101,7 +101,7 @@ pub mod pallet {
 				ItemPrice<Self>,
 				ItemId = Self::NftItemId,
 				CollectionId = Self::NftCollectionId,
-			>;
+			> + Transfer<Self::AccountId>;
 
 		/// The maximum number of royalty recipients.
 		#[pallet::constant]
@@ -351,6 +351,8 @@ pub mod pallet {
 			}
 			ensure!(sum == Permill::one(), Error::<T>::InvalidRoyaltyPercentage);
 
+			Self::do_lock_nft(collection_id, item_id)?;
+
 			ItemRoyalty::<T>::insert(
 				(collection_id, item_id),
 				RoyaltyConfig::<T::AccountId, BalanceOf<T>, T::MaxRecipients> {
@@ -488,8 +490,7 @@ pub mod pallet {
 			let item_price =
 				T::Nfts::item_price(&collection_id, &item_id).ok_or(Error::<T>::NotForSale)?;
 
-			T::Nfts::buy_item(&collection_id, &item_id, &origin, &bid_price)?;
-
+			// Retrieve the Royalty
 			// Item royalty supersedes collection royalty
 			let mut item_royalty: RoyaltyConfig<T::AccountId, BalanceOf<T>, T::MaxRecipients>;
 			if let Some(nft_item_royalty) = <ItemRoyalty<T>>::get((collection_id, item_id)) {
@@ -498,6 +499,11 @@ pub mod pallet {
 				item_royalty = <CollectionRoyalty<T>>::get(collection_id)
 					.ok_or(Error::<T>::NoRoyaltyExists)?;
 			}
+			
+			// If exists, unlock and buy
+			Self::do_unlock_nft(collection_id, item_id)?;
+
+			T::Nfts::buy_item(&collection_id, &item_id, &origin, &bid_price)?;
 
 			let royalty_amount_to_pay = item_royalty.royalty_percentage * item_price;
 
@@ -620,5 +626,21 @@ pub mod pallet {
 
 			Ok(())
 		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		/// Transfer the NFT and Disable buys and Swaps from the account holding that NFT to the pallet's account.
+		fn do_lock_nft(nft_collection_id: T::NftCollectionId, nft_id: T::NftItemId) -> DispatchResult {
+			T::Nfts::disable_transfer(&nft_collection_id, &nft_id)
+		}
+
+		/// Transfer the NFT to the account returning the tokens.
+		fn do_unlock_nft(
+			nft_collection_id: T::NftCollectionId,
+			nft_id: T::NftItemId,
+		) -> DispatchResult {
+			T::Nfts::enable_transfer(&nft_collection_id, &nft_id)
+		}
+		
 	}
 }
