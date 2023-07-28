@@ -30,9 +30,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{
-		generated_version::LATEST_MIGRATION_VERSION, v09, v10, v11, v12, v13, MigrationStep,
-	},
+	migration::{codegen::LATEST_MIGRATION_VERSION, v09, v10, v11, v12, v13, MigrationStep},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };

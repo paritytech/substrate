@@ -25,14 +25,14 @@ use crate::{
 		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig,
 	},
 	exec::{Frame, Key},
-	migration::generated_version::LATEST_MIGRATION_VERSION,
+	migration::codegen::LATEST_MIGRATION_VERSION,
 	storage::DeletionQueueManager,
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
-	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress,
-	NoopMigration, Origin, Pallet, PristineCode, Schedule,
+	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, Origin,
+	Pallet, PristineCode, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -438,9 +438,6 @@ parameter_types! {
 	pub static UnstableInterface: bool = true;
 }
 
-const VERSION_N_MINUS_ONE: u16 = LATEST_MIGRATION_VERSION - 1;
-const VERSION_N: u16 = LATEST_MIGRATION_VERSION;
-
 impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
@@ -462,7 +459,7 @@ impl Config for Test {
 	type MaxStorageKeyLen = ConstU32<128>;
 	type UnsafeUnstableInterface = UnstableInterface;
 	type MaxDebugBufferLen = ConstU32<{ 2 * 1024 * 1024 }>;
-	type Migrations = (NoopMigration<VERSION_N_MINUS_ONE>, NoopMigration<VERSION_N>);
+	type Migrations = crate::migration::codegen::Migrations;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
 }

@@ -61,7 +61,7 @@ pub mod v10;
 pub mod v11;
 pub mod v12;
 pub mod v13;
-include!(concat!(env!("OUT_DIR"), "/generated_version.rs"));
+include!(concat!(env!("OUT_DIR"), "/migration_codegen.rs"));
 
 use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
 use codec::{Codec, Decode};
@@ -524,7 +524,7 @@ impl MigrateSequence for Tuple {
 mod test {
 	use super::*;
 	use crate::{
-		migration::generated_version::LATEST_MIGRATION_VERSION,
+		migration::codegen::LATEST_MIGRATION_VERSION,
 		tests::{ExtBuilder, Test},
 	};
 

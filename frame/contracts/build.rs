@@ -50,15 +50,21 @@ fn get_latest_version() -> u16 {
 }
 
 /// Generates a module that exposes the latest migration version.
-fn main() {
-	let out_dir = std::env::var("OUT_DIR").unwrap();
-	let path = std::path::Path::new(&out_dir).join("generated_version.rs");
-	let mut f = std::fs::File::create(&path).unwrap();
-
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+	let out_dir = std::env::var("OUT_DIR")?;
+	let path = std::path::Path::new(&out_dir).join("migration_codegen.rs");
+	let mut f = std::fs::File::create(&path)?;
+	let version = get_latest_version();
 	write!(
 		f,
-		"pub mod generated_version {{ pub const LATEST_MIGRATION_VERSION: u16 = {}; }}",
-		get_latest_version()
-	)
-	.unwrap();
+		"
+         pub mod codegen {{
+		  use crate::NoopMigration;
+		  pub const LATEST_MIGRATION_VERSION: u16 = {version};
+		  pub type Migrations = (NoopMigration<{}>, NoopMigration<{}>);
+		}}",
+		version - 1,
+		version
+	)?;
+	Ok(())
 }
