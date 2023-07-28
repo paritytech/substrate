@@ -1070,7 +1070,7 @@ where
 
 		// Poll block announce validations last, because if a block announcement was received
 		// through the event stream between `SyncingEngine` and `Protocol` and the validation
-		// finished right after it as queued, the resulting block request (if any) can be sent
+		// finished right after it is queued, the resulting block request (if any) can be sent
 		// right away.
 		while let Poll::Ready(result) = self.poll_block_announce_validation(cx) {
 			self.process_block_announce_validation_result(result);
