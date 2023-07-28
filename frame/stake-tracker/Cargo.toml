@@ -1,6 +1,6 @@
 [package]
 name = "pallet-stake-tracker"
-version = "0.1.0"
+version = "4.0.0-dev"
 description = "FRAME stake tracker pallet"
 authors = ["Parity Technologies <admin@parity.io>"]
 homepage = "https://substrate.io"

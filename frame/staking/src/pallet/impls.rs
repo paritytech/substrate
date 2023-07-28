@@ -40,7 +40,7 @@ use sp_runtime::{
 use sp_staking::{
 	currency_to_vote::CurrencyToVote,
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, Stake,
+	EraIndex, OnStakingUpdate, SessionIndex, Stake,
 	StakingAccount::{self, Controller, Stash},
 	StakingInterface,
 };
@@ -901,9 +901,11 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		if !Nominators::<T>::contains_key(who) {
 			// maybe update sorted list.
-			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
-				.defensive_unwrap_or_default();
-		}
+			<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_nominator_add(
+				who,
+			);
+        }
+
 		Nominators::<T>::insert(who, nominations);
 
 		debug_assert_eq!(
@@ -923,7 +925,10 @@ impl<T: Config> Pallet<T> {
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		let outcome = if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
-			let _ = T::VoterList::on_remove(who).defensive();
+			<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_nominator_remove(
+				who,
+				Self::nominations(who).unwrap_or_default(),
+			);
 			true
 		} else {
 			false
@@ -947,8 +952,9 @@ impl<T: Config> Pallet<T> {
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
 		if !Validators::<T>::contains_key(who) {
 			// maybe update sorted list.
-			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
-				.defensive_unwrap_or_default();
+			<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_validator_add(
+				who,
+			);
 		}
 		Validators::<T>::insert(who, prefs);
 
@@ -967,8 +973,9 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		let outcome = if Validators::<T>::contains_key(who) {
-			Validators::<T>::remove(who);
-			let _ = T::VoterList::on_remove(who).defensive();
+			<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_validator_remove(
+				who,
+			);
 			true
 		} else {
 			false

@@ -24,8 +24,8 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
+		Currency, DefensiveResult, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
+		LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
 	},
 	weights::Weight,
 	BoundedVec,
@@ -217,8 +217,9 @@ pub mod pallet {
 		/// Something that provides a best-effort sorted list of voters aka electing nominators,
 		/// used for NPoS election.
 		///
-		/// The changes to nominators are reported to this. Moreover, each validator's self-vote is
-		/// also reported as one independent vote.
+		/// The changes to nominators are reported to this through the `T::EventListeners`
+		/// implementor. Moreover, each validator's self-vote is also reported as one independent
+		/// vote.
 		///
 		/// To keep the load off the chain as much as possible, changes made to the staked amount
 		/// via rewards and slashes are not reported and thus need to be manually fixed by the
@@ -227,14 +228,11 @@ pub mod pallet {
 		/// Invariant: what comes out of this list will always be a nominator.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
-		/// WIP: This is a noop as of now, the actual business logic that's described below is going
-		/// to be introduced in a follow-up PR.
-		///
 		/// Something that provides a best-effort sorted list of targets aka electable validators,
 		/// used for NPoS election.
 		///
-		/// The changes to the approval stake of each validator are reported to this. This means any
-		/// change to:
+		/// The changes to the approval stake of each validator are reported to this through the
+		/// `T::EventListeners` implementor. This means any change to:
 		/// 1. The stake of any validator or nominator.
 		/// 2. The targets of any nominator
 		/// 3. The role of any staker (e.g. validator -> chilled, nominator -> validator, etc)
@@ -247,7 +245,7 @@ pub mod pallet {
 		/// validators, they can chill at any point, and their approval stakes will still be
 		/// recorded. This implies that what comes out of iterating this list MIGHT NOT BE AN ACTIVE
 		/// VALIDATOR.
-		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
+		type TargetList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can
 		/// have. Effectively determines how many unique eras a staker may be
@@ -867,11 +865,10 @@ pub mod pallet {
 					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			);
-			ledger.update()?;
 
 			// You're auto-bonded forever, here. We might improve this by only bonding when
 			// you actually validate/nominate and remove once you unbond __everything__.
-			ledger.bond()?;
+			ledger.update()?;
 			<Payee<T>>::insert(&stash, payee);
 
 			Ok(())
@@ -917,11 +914,6 @@ pub mod pallet {
 
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				ledger.update()?;
-				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&stash) {
-					let _ =
-						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
-				}
 
 				Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
 			}
@@ -1019,12 +1011,6 @@ pub mod pallet {
 				};
 				// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 				ledger.update()?;
-
-				// update this staker in the sorted list, if they exist in it.
-				if T::VoterList::contains(&ledger.stash) {
-					let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-						.defensive();
-				}
 
 				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
@@ -1522,10 +1508,6 @@ pub mod pallet {
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			ledger.update()?;
-			if T::VoterList::contains(&ledger.stash) {
-				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
-					.defensive();
-			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
 				.saturating_add(initial_unlocking)

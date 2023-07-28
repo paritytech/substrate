@@ -176,10 +176,17 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_nominator_add(who: &T::AccountId) {
-		let _ = T::VoterList::on_insert(who.clone(), Self::active_vote_of(who)).defensive_proof(
+        let nominator_vote = Self::active_vote_of(who);
+
+		let _ = T::VoterList::on_insert(who.clone(), nominator_vote).defensive_proof(
 			"the nominator is not part of the VoterList, as per the contract with \
                 staking; qed.",
 		);
+
+        // TODO(gpestana): is this needed?
+        //for t in <T::Staking as StakingInterface>::nominations(who).unwrap_or_default() {
+		//    Self::update_score::<T::TargetList>(&t, StakeImbalance::Positive(nominator_vote))
+        //}
 	}
 
 	fn on_validator_add(who: &T::AccountId) {
@@ -187,6 +194,9 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			"the validator is not part of the TargetList, as per the contract \
                 with staking; qed.",
 		);
+
+        // validator is also a voter.
+        Self::on_nominator_add(who);
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>) {
@@ -208,6 +218,9 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		let _ = T::TargetList::on_remove(&who).defensive_proof(
 			"the validator exists in the list as per the contract with staking; qed.",
 		);
+
+        // validator is also a voter, but has only self-vote.
+        Self::on_nominator_remove(who, vec![]);
 	}
 
 	// Note: this is called upon added or removed nominations, nominator's stake remains the same.

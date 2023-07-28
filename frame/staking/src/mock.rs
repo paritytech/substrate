@@ -18,7 +18,9 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
+use frame_election_provider_support::{
+	onchain, SequentialPhragmen, SortedListProvider, VoteWeight,
+};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
@@ -98,7 +100,9 @@ frame_support::construct_runtime!(
 		Staking: pallet_staking,
 		Session: pallet_session,
 		Historical: pallet_session::historical,
+		StakeTracker: pallet_stake_tracker,
 		VoterBagsList: pallet_bags_list::<Instance1>,
+		TargetBagsList: pallet_bags_list::<Instance2>,
 	}
 );
 
@@ -248,6 +252,23 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Test {
 	type Score = VoteWeight;
 }
 
+type TargetBagsListInstance = pallet_bags_list::Instance2;
+impl pallet_bags_list::Config<TargetBagsListInstance> for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	// Staking is the source of truth for target bags list.
+	type ScoreProvider = Staking;
+	type BagThresholds = BagThresholds;
+	type Score = VoteWeight;
+}
+
+impl pallet_stake_tracker::Config for Test {
+	type Currency = Balances;
+	type Staking = Staking;
+	type VoterList = VoterBagsList;
+	type TargetList = TargetBagsList;
+}
+
 pub struct OnChainSeqPhragmen;
 impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
@@ -274,6 +295,16 @@ parameter_types! {
 
 pub struct EventListenerMock;
 impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
+	fn on_nominator_add(who: &AccountId) {
+		<VoterBagsList as SortedListProvider<AccountId>>::on_insert(*who, Staking::weight_of(who))
+			.unwrap();
+	}
+
+	fn on_nominator_remove(who: &AccountId, _nominations: Vec<AccountId>) {
+		// TODO(gpestana): add target list; update target list; update/add tests
+		<VoterBagsList as SortedListProvider<AccountId>>::on_remove(who).unwrap()
+	}
+
 	fn on_slash(
 		_pool_account: &AccountId,
 		slashed_bonded: Balance,
@@ -306,10 +337,10 @@ impl crate::pallet::pallet::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = VoterBagsList;
-	type TargetList = UseValidatorsMap<Self>;
+	type TargetList = TargetBagsList;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
-	type EventListeners = EventListenerMock;
+	type EventListeners = StakeTracker;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
