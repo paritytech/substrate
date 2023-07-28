@@ -31,8 +31,8 @@ use codec::{Decode, DecodeAll, Encode};
 use futures::{channel::oneshot, stream::StreamExt};
 use libp2p::PeerId;
 use log::debug;
-use lru::LruCache;
 use prost::Message;
+use schnellru::{ByLength, LruMap};
 use sc_client_api::BlockBackend;
 use sc_network::{
 	config::ProtocolId,
@@ -50,7 +50,6 @@ use sp_runtime::{
 use std::{
 	cmp::min,
 	hash::{Hash, Hasher},
-	num::NonZeroUsize,
 	sync::Arc,
 	time::Duration,
 };
@@ -144,7 +143,7 @@ pub struct BlockRequestHandler<B: BlockT, Client> {
 	/// Maps from request to number of times we have seen this request.
 	///
 	/// This is used to check if a peer is spamming us with the same request.
-	seen_requests: LruCache<SeenRequestsKey<B>, SeenRequestsValue>,
+	seen_requests: LruMap<SeenRequestsKey<B>, SeenRequestsValue>,
 }
 
 impl<B, Client> BlockRequestHandler<B, Client>
@@ -162,7 +161,8 @@ where
 	) -> BlockRelayParams<B> {
 		// Reserve enough request slots for one request per peer when we are at the maximum
 		// number of peers.
-		let (tx, request_receiver) = async_channel::bounded(num_peer_hint);
+		let capacity = std::cmp::max(num_peer_hint, 1);
+		let (tx, request_receiver) = async_channel::bounded(capacity);
 
 		let mut protocol_config = generate_protocol_config(
 			protocol_id,
@@ -175,9 +175,8 @@ where
 		);
 		protocol_config.inbound_queue = Some(tx);
 
-		let capacity =
-			NonZeroUsize::new(num_peer_hint.max(1) * 2).expect("cache capacity is not zero");
-		let seen_requests = LruCache::new(capacity);
+		let capacity = ByLength::new(num_peer_hint.max(1) as u32 * 2);
+		let seen_requests = LruMap::new(capacity);
 
 		BlockRelayParams {
 			server: Box::new(Self { client, request_receiver, seen_requests }),
@@ -248,7 +247,7 @@ where
 			.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
 			.is_empty();
 
-		match self.seen_requests.get_mut(&key) {
+		match self.seen_requests.get(&key) {
 			Some(SeenRequestsValue::First) => {},
 			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
 				*requests = requests.saturating_add(1);
@@ -262,7 +261,7 @@ where
 				}
 			},
 			None => {
-				self.seen_requests.put(key.clone(), SeenRequestsValue::First);
+				self.seen_requests.insert(key.clone(), SeenRequestsValue::First);
 			},
 		}
 
@@ -289,7 +288,7 @@ where
 				.iter()
 				.any(|b| !b.header.is_empty() || !b.body.is_empty() || b.is_empty_justification)
 			{
-				if let Some(value) = self.seen_requests.get_mut(&key) {
+				if let Some(value) = self.seen_requests.get(&key) {
 					// If this is the first time we have processed this request, we need to change
 					// it to `Fulfilled`.
 					if let SeenRequestsValue::First = value {

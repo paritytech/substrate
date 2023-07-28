@@ -35,6 +35,7 @@ mod keyword {
 	syn::custom_keyword!(Call);
 	syn::custom_keyword!(Storage);
 	syn::custom_keyword!(Event);
+	syn::custom_keyword!(Error);
 	syn::custom_keyword!(Config);
 	syn::custom_keyword!(Origin);
 	syn::custom_keyword!(Inherent);
@@ -45,6 +46,7 @@ mod keyword {
 	syn::custom_keyword!(SlashReason);
 	syn::custom_keyword!(exclude_parts);
 	syn::custom_keyword!(use_parts);
+	syn::custom_keyword!(expanded);
 }
 
 /// Declaration of a runtime.
@@ -56,13 +58,14 @@ mod keyword {
 pub enum RuntimeDeclaration {
 	Implicit(ImplicitRuntimeDeclaration),
 	Explicit(ExplicitRuntimeDeclaration),
+	ExplicitExpanded(ExplicitRuntimeDeclaration),
 }
 
 /// Declaration of a runtime with some pallet with implicit declaration of parts.
 #[derive(Debug)]
 pub struct ImplicitRuntimeDeclaration {
 	pub name: Ident,
-	pub where_section: WhereSection,
+	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<PalletDeclaration>,
 }
 
@@ -70,7 +73,7 @@ pub struct ImplicitRuntimeDeclaration {
 #[derive(Debug)]
 pub struct ExplicitRuntimeDeclaration {
 	pub name: Ident,
-	pub where_section: WhereSection,
+	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<Pallet>,
 	pub pallets_token: token::Brace,
 }
@@ -87,7 +90,7 @@ impl Parse for RuntimeDeclaration {
 		}
 
 		let name = input.parse::<syn::Ident>()?;
-		let where_section = input.parse()?;
+		let where_section = if input.peek(token::Where) { Some(input.parse()?) } else { None };
 		let pallets =
 			input.parse::<ext::Braces<ext::Punctuated<PalletDeclaration, Token![,]>>>()?;
 		let pallets_token = pallets.token;
@@ -106,12 +109,20 @@ impl Parse for RuntimeDeclaration {
 					pallets,
 					pallets_token,
 				})),
+			PalletsConversion::ExplicitExpanded(pallets) =>
+				Ok(RuntimeDeclaration::ExplicitExpanded(ExplicitRuntimeDeclaration {
+					name,
+					where_section,
+					pallets,
+					pallets_token,
+				})),
 		}
 	}
 }
 
 #[derive(Debug)]
 pub struct WhereSection {
+	pub span: Span,
 	pub block: syn::TypePath,
 	pub node_block: syn::TypePath,
 	pub unchecked_extrinsic: syn::TypePath,
@@ -120,6 +131,7 @@ pub struct WhereSection {
 impl Parse for WhereSection {
 	fn parse(input: ParseStream) -> Result<Self> {
 		input.parse::<token::Where>()?;
+
 		let mut definitions = Vec::new();
 		while !input.peek(token::Brace) {
 			let definition: WhereDefinition = input.parse()?;
@@ -143,7 +155,7 @@ impl Parse for WhereSection {
 			);
 			return Err(Error::new(*kind_span, msg))
 		}
-		Ok(Self { block, node_block, unchecked_extrinsic })
+		Ok(Self { span: input.span(), block, node_block, unchecked_extrinsic })
 	}
 }
 
@@ -188,6 +200,8 @@ impl Parse for WhereDefinition {
 /// The declaration of a pallet.
 #[derive(Debug, Clone)]
 pub struct PalletDeclaration {
+	/// Is this pallet fully expanded?
+	pub is_expanded: bool,
 	/// The name of the pallet, e.g.`System` in `System: frame_system`.
 	pub name: Ident,
 	/// Optional attributes tagged right above a pallet declaration.
@@ -233,6 +247,7 @@ impl Parse for PalletDeclaration {
 			let _: Token![>] = input.parse()?;
 			res
 		} else if !(input.peek(Token![::]) && input.peek3(token::Brace)) &&
+			!input.peek(keyword::expanded) &&
 			!input.peek(keyword::exclude_parts) &&
 			!input.peek(keyword::use_parts) &&
 			!input.peek(Token![=]) &&
@@ -246,10 +261,21 @@ impl Parse for PalletDeclaration {
 			None
 		};
 
+		// Check if the pallet is fully expanded.
+		let (is_expanded, extra_parts) = if input.peek(keyword::expanded) {
+			let _: keyword::expanded = input.parse()?;
+			let _: Token![::] = input.parse()?;
+			(true, parse_pallet_parts(input)?)
+		} else {
+			(false, vec![])
+		};
+
 		// Parse for explicit parts
 		let pallet_parts = if input.peek(Token![::]) && input.peek3(token::Brace) {
 			let _: Token![::] = input.parse()?;
-			Some(parse_pallet_parts(input)?)
+			let mut parts = parse_pallet_parts(input)?;
+			parts.extend(extra_parts.into_iter());
+			Some(parts)
 		} else if !input.peek(keyword::exclude_parts) &&
 			!input.peek(keyword::use_parts) &&
 			!input.peek(Token![=]) &&
@@ -260,7 +286,7 @@ impl Parse for PalletDeclaration {
 				"Unexpected tokens, expected one of `::{`, `exclude_parts`, `use_parts`, `=`, `,`",
 			))
 		} else {
-			None
+			is_expanded.then_some(extra_parts)
 		};
 
 		// Parse for specified parts
@@ -288,7 +314,7 @@ impl Parse for PalletDeclaration {
 			None
 		};
 
-		Ok(Self { attrs, name, path, instance, pallet_parts, specified_parts, index })
+		Ok(Self { is_expanded, attrs, name, path, instance, pallet_parts, specified_parts, index })
 	}
 }
 
@@ -371,6 +397,7 @@ pub enum PalletPartKeyword {
 	Call(keyword::Call),
 	Storage(keyword::Storage),
 	Event(keyword::Event),
+	Error(keyword::Error),
 	Config(keyword::Config),
 	Origin(keyword::Origin),
 	Inherent(keyword::Inherent),
@@ -393,6 +420,8 @@ impl Parse for PalletPartKeyword {
 			Ok(Self::Storage(input.parse()?))
 		} else if lookahead.peek(keyword::Event) {
 			Ok(Self::Event(input.parse()?))
+		} else if lookahead.peek(keyword::Error) {
+			Ok(Self::Error(input.parse()?))
 		} else if lookahead.peek(keyword::Config) {
 			Ok(Self::Config(input.parse()?))
 		} else if lookahead.peek(keyword::Origin) {
@@ -423,6 +452,7 @@ impl PalletPartKeyword {
 			Self::Call(_) => "Call",
 			Self::Storage(_) => "Storage",
 			Self::Event(_) => "Event",
+			Self::Error(_) => "Error",
 			Self::Config(_) => "Config",
 			Self::Origin(_) => "Origin",
 			Self::Inherent(_) => "Inherent",
@@ -441,7 +471,7 @@ impl PalletPartKeyword {
 
 	/// Returns the names of all pallet parts that allow to have a generic argument.
 	fn all_generic_arg() -> &'static [&'static str] {
-		&["Event", "Origin", "Config"]
+		&["Event", "Error", "Origin", "Config"]
 	}
 }
 
@@ -452,6 +482,7 @@ impl ToTokens for PalletPartKeyword {
 			Self::Call(inner) => inner.to_tokens(tokens),
 			Self::Storage(inner) => inner.to_tokens(tokens),
 			Self::Event(inner) => inner.to_tokens(tokens),
+			Self::Error(inner) => inner.to_tokens(tokens),
 			Self::Config(inner) => inner.to_tokens(tokens),
 			Self::Origin(inner) => inner.to_tokens(tokens),
 			Self::Inherent(inner) => inner.to_tokens(tokens),
@@ -554,6 +585,8 @@ fn parse_pallet_parts_no_generic(input: ParseStream) -> Result<Vec<PalletPartNoG
 /// The final definition of a pallet with the resulting fixed index and explicit parts.
 #[derive(Debug, Clone)]
 pub struct Pallet {
+	/// Is this pallet fully expanded?
+	pub is_expanded: bool,
 	/// The name of the pallet, e.g.`System` in `System: frame_system`.
 	pub name: Ident,
 	/// Either automatically infered, or defined (e.g. `MyPallet ...  = 3,`).
@@ -586,9 +619,35 @@ impl Pallet {
 }
 
 /// Result of a conversion of a declaration of pallets.
+///
+/// # State Transitions
+///
+/// ```ignore
+/// +----------+    +----------+    +------------------+
+/// | Implicit | -> | Explicit | -> | ExplicitExpanded |
+/// +----------+    +----------+    +------------------+
+/// ```
 enum PalletsConversion {
+	/// Pallets implicitely declare parts.
+	///
+	/// `System: frame_system`.
 	Implicit(Vec<PalletDeclaration>),
+	/// Pallets explicitly declare parts.
+	///
+	/// `System: frame_system::{Pallet, Call}`
+	///
+	/// However, for backwards compatibility with Polkadot/Kusama
+	/// we must propagate some other parts to the pallet by default.
 	Explicit(Vec<Pallet>),
+	/// Pallets explicitly declare parts that are fully expanded.
+	///
+	/// This is the end state that contains extra parts included by
+	/// default by Subtrate.
+	///
+	/// `System: frame_system expanded::{Error} ::{Pallet, Call}`
+	///
+	/// For this example, the `Pallet`, `Call` and `Error` parts are collected.
+	ExplicitExpanded(Vec<Pallet>),
 }
 
 /// Convert from the parsed pallet declaration to their final information.
@@ -604,6 +663,7 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 	let mut indices = HashMap::new();
 	let mut last_index: Option<u8> = None;
 	let mut names = HashMap::new();
+	let mut is_expanded = true;
 
 	let pallets = pallets
 		.into_iter()
@@ -698,7 +758,10 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 				})
 				.collect::<Result<Vec<_>>>()?;
 
+			is_expanded &= pallet.is_expanded;
+
 			Ok(Pallet {
+				is_expanded: pallet.is_expanded,
 				name: pallet.name,
 				index: final_index,
 				path: pallet.path,
@@ -709,5 +772,9 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 		})
 		.collect::<Result<Vec<_>>>()?;
 
-	Ok(PalletsConversion::Explicit(pallets))
+	if is_expanded {
+		Ok(PalletsConversion::ExplicitExpanded(pallets))
+	} else {
+		Ok(PalletsConversion::Explicit(pallets))
+	}
 }

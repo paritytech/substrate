@@ -716,7 +716,7 @@ fn report_equivocation_has_valid_weight() {
 	// the weight depends on the size of the validator set,
 	// but there's a lower bound of 100 validators.
 	assert!((1..=100)
-		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.map(|validators| <Test as Config>::WeightInfo::report_equivocation(validators, 1000))
 		.collect::<Vec<_>>()
 		.windows(2)
 		.all(|w| w[0] == w[1]));
@@ -724,7 +724,7 @@ fn report_equivocation_has_valid_weight() {
 	// after 100 validators the weight should keep increasing
 	// with every extra validator.
 	assert!((100..=1000)
-		.map(<Test as Config>::WeightInfo::report_equivocation)
+		.map(|validators| <Test as Config>::WeightInfo::report_equivocation(validators, 1000))
 		.collect::<Vec<_>>()
 		.windows(2)
 		.all(|w| w[0].ref_time() < w[1].ref_time()));

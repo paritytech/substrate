@@ -96,7 +96,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		};
 
 		// Running the command and capturing the output.
-		let output = Command::new(cargo_bin("substrate"))
+		let output = Command::new(cargo_bin("substrate-node"))
 			.args(&arguments)
 			.arg(&base_path)
 			.arg(&self.exported_blocks_file)
@@ -160,7 +160,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 
 	/// Runs the `revert` command.
 	fn run_revert(&self) {
-		let output = Command::new(cargo_bin("substrate"))
+		let output = Command::new(cargo_bin("substrate-node"))
 			.args(&["revert", "--dev", "-d"])
 			.arg(&self.base_path.path())
 			.output()

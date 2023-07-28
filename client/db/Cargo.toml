@@ -44,7 +44,7 @@ quickcheck = { version = "1.0.3", default-features = false }
 kitchensink-runtime = { path = "../../bin/node/runtime" }
 sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-array-bytes = "4.1"
+array-bytes = "6.1"
 
 [features]
 default = []

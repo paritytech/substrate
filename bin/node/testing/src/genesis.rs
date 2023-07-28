@@ -50,6 +50,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Run
 	RuntimeGenesisConfig {
 		system: SystemConfig {
 			code: code.map(|x| x.to_vec()).unwrap_or_else(|| wasm_binary_unwrap().to_vec()),
+			..Default::default()
 		},
 		indices: IndicesConfig { indices: vec![] },
 		balances: BalancesConfig { balances: endowed },
@@ -76,8 +77,12 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Run
 			invulnerables: vec![alice(), bob(), charlie()],
 			..Default::default()
 		},
-		babe: BabeConfig { authorities: vec![], epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG) },
-		grandpa: GrandpaConfig { authorities: vec![] },
+		babe: BabeConfig {
+			authorities: vec![],
+			epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG),
+			..Default::default()
+		},
+		grandpa: GrandpaConfig { authorities: vec![], _config: Default::default() },
 		im_online: Default::default(),
 		authority_discovery: Default::default(),
 		democracy: Default::default(),
@@ -100,6 +105,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Run
 			compute: Default::default(),
 			storage: Default::default(),
 			trash_data_count: Default::default(),
+			..Default::default()
 		},
 	}
 }
