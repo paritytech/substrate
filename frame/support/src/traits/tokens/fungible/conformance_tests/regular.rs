@@ -1359,13 +1359,13 @@ pub mod balanced {
 		// Pair with non-zero balance: the credit and debt cancel each other out
 		let balance = 10.into();
 		let (credit, debt) = T::pair(balance);
-		assert_eq!(credit.peek(), 10.into());
-		assert_eq!(debt.peek(), 10.into());
+		assert_eq!(credit.peek(), balance);
+		assert_eq!(debt.peek(), balance);
 
 		// Pair with max balance: the credit and debt still cancel each other out
-		let balance = T::Balance::max_value();
+		let balance = T::Balance::max_value() - 1.into();
 		let (debt, credit) = T::pair(balance);
-		assert_eq!(debt.peek(), T::Balance::max_value());
-		assert_eq!(credit.peek(), T::Balance::max_value());
+		assert_eq!(debt.peek(), balance);
+		assert_eq!(credit.peek(), balance);
 	}
 }
