@@ -330,7 +330,7 @@ where
 						len as u32, info, post_info, tip,
 					);
 
-					if let Some(PayByAsset { id, max_fee }) = asset_id {
+					if let Some(PayByAsset { id, .. }) = asset_id {
 						let (used_for_fee, received_exchanged, asset_consumed) = already_withdrawn;
 						let converted_fee = T::OnChargeAssetTransaction::correct_and_deposit_fee(
 							&who,
@@ -341,7 +341,6 @@ where
 							used_for_fee.into(),
 							received_exchanged.into(),
 							id.clone(),
-							max_fee,
 							asset_consumed.into(),
 						)?;
 

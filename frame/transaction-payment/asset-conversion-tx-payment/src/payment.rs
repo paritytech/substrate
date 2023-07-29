@@ -70,7 +70,6 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		fee_paid: LiquidityInfoOf<T>,
 		received_exchanged: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
-		max_fee: Option<AssetBalanceOf<T>>, //TODO!
 		initial_asset_consumed: AssetBalanceOf<T>,
 	) -> Result<AssetBalanceOf<T>, TransactionValidityError>;
 }
@@ -153,7 +152,6 @@ where
 		fee_paid: LiquidityInfoOf<T>,
 		received_exchanged: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
-		max_fee: Option<AssetBalanceOf<T>>,
 		initial_asset_consumed: AssetBalanceOf<T>,
 	) -> Result<AssetBalanceOf<T>, TransactionValidityError> {
 		// Refund the native asset to the account that paid the fees (`who`).
@@ -174,15 +172,6 @@ where
 			// If this fails, the account might have dropped below the existential balance or there
 			// is not enough liquidity left in the pool. In that case we don't throw an error and
 			// the account will keep the native currency.
-
-			let amount_out_min = if let Some(max_fee) = max_fee {
-				let worst_native_to_asset_rate = T::HigherPrecisionBalance::from(max_fee) /
-					T::HigherPrecisionBalance::from(corrected_fee);
-				Some(T::HigherPrecisionBalance::from(swap_back) * worst_native_to_asset_rate)
-			} else {
-				None
-			};
-
 			match CON::swap_exact_tokens_for_tokens(
 				who.clone(), // we already deposited the native to `who`
 				vec![
@@ -191,7 +180,7 @@ where
 				],
 				T::HigherPrecisionBalance::from(swap_back), /* amount of the native asset to
 				                                             * convert to `asset_id` */
-				amount_out_min,
+				None,        // because rate will be similar to pre-dispatch
 				who.clone(), // we will refund to `who`
 				false,       // no need to keep alive
 			)
