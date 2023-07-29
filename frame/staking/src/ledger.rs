@@ -173,6 +173,18 @@ impl<T: Config> StakingLedger<T> {
 		Ok(())
 	}
 
+	// Bonds a ledger.
+	//
+	// This method is just syntatic sugar of [`Self::update`] with a check that returns an error if
+	// the ledger has is already bonded to ensure that the method behaves as expected.
+	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
+		if <Bonded<T>>::get(&self.stash).is_some() {
+			Err(Error::<T>::AlreadyBonded)
+		} else {
+			self.update()
+		}
+	}
+
 	/// Clears all data related to a staking ledger and its bond in both [`Ledger`] and [`Bonded`]
 	/// storage items and updates the stash staking lock.
 	pub(crate) fn kill(stash: &T::AccountId) -> Result<(), Error<T>> {
