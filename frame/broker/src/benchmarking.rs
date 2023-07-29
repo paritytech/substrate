@@ -469,6 +469,7 @@ mod benches {
 			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let recipient: T::AccountId = account("recipient", 0, SEED);
+		T::Currency::set_balance(&recipient.clone(), T::Currency::minimum_balance());
 
 		Broker::<T>::do_pool(region, None, recipient.clone(), Final)
 			.map_err(|_| BenchmarkError::Weightless)?;
