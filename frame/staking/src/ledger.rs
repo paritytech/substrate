@@ -155,7 +155,7 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Inserts/updates a staking ledger account.
 	///
-	/// Bonds the ledger if it was not bonded yet, signaling that this is a new ledger. The staking
+	/// Bonds the ledger if it is not bonded yet, signalling that this is a new ledger. The staking
 	/// locks of the stash account are updated accordingly.
 	///
 	/// Note: To ensure lock consistency, all the [`Ledger`] storage updates should be made through
