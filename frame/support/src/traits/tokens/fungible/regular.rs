@@ -65,7 +65,7 @@ pub trait Inspect<AccountId>: Sized {
 	/// indefinitely.
 	///
 	/// For the amount of the balance which is currently free to be removed from the account without
-	/// error, use `reducible_balance`.
+	/// error, use [`Inspect::reducible_balance`].
 	///
 	/// For the amount of the balance which may eventually be free to be removed from the account,
 	/// use `balance()`.
@@ -75,7 +75,7 @@ pub trait Inspect<AccountId>: Sized {
 	/// subsystems of the chain ("on hold" or "reserved").
 	///
 	/// In general this isn't especially useful outside of tests, and for practical purposes, you'll
-	/// want to use `reducible_balance()`.
+	/// want to use [`Inspect::reducible_balance`].
 	fn balance(who: &AccountId) -> Self::Balance;
 
 	/// Get the maximum amount that `who` can withdraw/transfer successfully based on whether the
@@ -83,7 +83,7 @@ pub trait Inspect<AccountId>: Sized {
 	/// reduction and potentially go below user-level restrictions on the minimum amount of the
 	/// account.
 	///
-	/// Always less than or equal to `balance()`.
+	/// Always less than or equal to [`Inspect::balance`].
 	fn reducible_balance(
 		who: &AccountId,
 		preservation: Preservation,
@@ -107,7 +107,7 @@ pub trait Inspect<AccountId>: Sized {
 	fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance>;
 }
 
-/// Special dust type which can be type-safely converted into a `Credit`.
+/// Special dust type which can be type-safely converted into a [`Credit`].
 #[must_use]
 pub struct Dust<A, T: Inspect<A>>(pub T::Balance);
 
@@ -124,20 +124,20 @@ impl<A, T: Balanced<A>> Dust<A, T> {
 /// Do not use this directly unless you want trouble, since it allows you to alter account balances
 /// without keeping the issuance up to date. It has no safeguards against accidentally creating
 /// token imbalances in your system leading to accidental inflation or deflation. It's really just
-/// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
+/// for the underlying datatype to implement so the user gets the much safer [`Balanced`] trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
-	/// Create some dust and handle it with `Self::handle_dust`. This is an unbalanced operation
-	/// and it must only be used when an account is modified in a raw fashion, outside of the entire
-	/// fungibles API. The `amount` is capped at `Self::minimum_balance() - 1`.
+	/// Create some dust and handle it with [`Unbalanced::handle_dust`]. This is an unbalanced
+	/// operation and it must only be used when an account is modified in a raw fashion, outside of
+	/// the entire fungibles API. The `amount` is capped at [`Inspect::minimum_balance()`] - 1`.
 	///
 	/// This should not be reimplemented.
 	fn handle_raw_dust(amount: Self::Balance) {
 		Self::handle_dust(Dust(amount.min(Self::minimum_balance().saturating_sub(One::one()))))
 	}
 
-	/// Do something with the dust which has been destroyed from the system. `Dust` can be converted
-	/// into a `Credit` with the `Balanced` trait impl.
+	/// Do something with the dust which has been destroyed from the system. [`Dust`] can be
+	/// converted into a [`Credit`] with the [`Balanced`] trait impl.
 	fn handle_dust(dust: Dust<AccountId, Self>);
 
 	/// Forcefully set the balance of `who` to `amount`.
@@ -153,9 +153,9 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// or would overflow) then an `Err` is returned.
 	///
 	/// If `Ok` is returned then its inner, then `Some` is the amount which was discarded as dust
-	/// due to existential deposit requirements. The default implementation of `decrease_balance`
-	/// and `increase_balance` converts this into an `Imbalance` and then passes it into
-	/// `handle_dust`.
+	/// due to existential deposit requirements. The default implementation of
+	/// [`Unbalanced::decrease_balance`] and [`Unbalanced::increase_balance`] converts this into an
+	/// [`Imbalance`] and then passes it into [`Unbalanced::handle_dust`].
 	fn write_balance(
 		who: &AccountId,
 		amount: Self::Balance,
@@ -166,14 +166,14 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 
 	/// Reduce the balance of `who` by `amount`.
 	///
-	/// If `precision` is `Exact` and it cannot be reduced by that amount for
-	/// some reason, return `Err` and don't reduce it at all. If `precision` is `BestEffort`, then
+	/// If `precision` is [`Exact`] and it cannot be reduced by that amount for
+	/// some reason, return `Err` and don't reduce it at all. If `precision` is [`BestEffort`], then
 	/// reduce the balance of `who` by the most that is possible, up to `amount`.
 	///
 	/// In either case, if `Ok` is returned then the inner is the amount by which is was reduced.
 	/// Minimum balance will be respected and thus the returned amount may be up to
-	/// `Self::minimum_balance() - 1` greater than `amount` in the case that the reduction caused
-	/// the account to be deleted.
+	/// [`Inspect::minimum_balance()`] - 1` greater than `amount` in the case that the reduction
+	/// caused the account to be deleted.
 	fn decrease_balance(
 		who: &AccountId,
 		mut amount: Self::Balance,
@@ -203,7 +203,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// If it cannot be increased by that amount for some reason, return `Err` and don't increase
 	/// it at all. If Ok, return the imbalance.
 	/// Minimum balance will be respected and an error will be returned if
-	/// `amount < Self::minimum_balance()` when the account of `who` is zero.
+	/// amount < [`Inspect::minimum_balance()`] when the account of `who` is zero.
 	fn increase_balance(
 		who: &AccountId,
 		amount: Self::Balance,
@@ -273,8 +273,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 	/// Attempt to decrease the `asset` balance of `who` by `amount`.
 	///
-	/// Equivalent to `burn_from`, except with an expectation that within the bounds of some
-	/// universal issuance, the total assets `suspend`ed and `resume`d will be equivalent. The
+	/// Equivalent to [`Mutate::burn_from`], except with an expectation that within the bounds of
+	/// some universal issuance, the total assets `suspend`ed and `resume`d will be equivalent. The
 	/// implementation may be configured such that the total assets suspended may never be less than
 	/// the total assets resumed (which is the invariant for an issuing system), or the reverse
 	/// (which the invariant in a non-issuing system).
@@ -293,8 +293,8 @@ pub trait Mutate<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 	/// Attempt to increase the `asset` balance of `who` by `amount`.
 	///
-	/// Equivalent to `mint_into`, except with an expectation that within the bounds of some
-	/// universal issuance, the total assets `suspend`ed and `resume`d will be equivalent. The
+	/// Equivalent to [`Mutate::mint_into`], except with an expectation that within the bounds of
+	/// some universal issuance, the total assets `suspend`ed and `resume`d will be equivalent. The
 	/// implementation may be configured such that the total assets suspended may never be less than
 	/// the total assets resumed (which is the invariant for an issuing system), or the reverse
 	/// (which the invariant in a non-issuing system).
@@ -373,7 +373,7 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::Balance>
 /// A fungible token class where any creation and deletion of tokens is semi-explicit and where the
 /// total supply is maintained automatically.
 ///
-/// This is auto-implemented when a token class has `Unbalanced` implemented.
+/// This is auto-implemented when a token class has [`Unbalanced`] implemented.
 pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// The type for managing what happens when an instance of `Debt` is dropped without being used.
 	type OnDropDebt: HandleImbalanceDrop<Self::Balance>;
@@ -382,7 +382,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	type OnDropCredit: HandleImbalanceDrop<Self::Balance>;
 
 	/// Reduce the total issuance by `amount` and return the according imbalance. The imbalance will
-	/// typically be used to reduce an account by the same amount with e.g. `settle`.
+	/// typically be used to reduce an account by the same amount with e.g. [`Balanced::settle`].
 	///
 	/// This is infallible, but doesn't guarantee that the entire `amount` is burnt, for example
 	/// in the case of underflow.
@@ -397,7 +397,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 	/// Increase the total issuance by `amount` and return the according imbalance. The imbalance
 	/// will typically be used to increase an account by the same amount with e.g.
-	/// `resolve_into_existing` or `resolve_creating`.
+	/// [`Balanced::resolve`].
 	///
 	/// This is infallible, but doesn't guarantee that the entire `amount` is issued, for example
 	/// in the case of overflow.
@@ -414,18 +414,18 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	///
 	/// This is just the same as burning and issuing the same amount and has no effect on the
 	/// total issuance.
-	fn pair(amount: Self::Balance) -> (Debt<AccountId, Self>, Credit<AccountId, Self>) {
-		(Self::rescind(amount), Self::issue(amount))
+	fn pair(amount: Self::Balance) -> (Credit<AccountId, Self>, Debt<AccountId, Self>) {
+		(Self::issue(amount), Self::rescind(amount))
 	}
 
 	/// Mints `value` into the account of `who`, creating it as needed.
 	///
 	/// If `precision` is `BestEffort` and `value` in full could not be minted (e.g. due to
-	/// overflow), then the maximum is minted, up to `value`. If `precision` is `Exact`, then
+	/// overflow), then the maximum is minted, up to `value`. If `precision` is [`Exact`], then
 	/// exactly `value` must be minted into the account of `who` or the operation will fail with an
 	/// `Err` and nothing will change.
 	///
-	/// If the operation is successful, this will return `Ok` with a `Debt` of the total value
+	/// If the operation is successful, this will return `Ok` with a [`Debt`] of the total value
 	/// added to the account.
 	fn deposit(
 		who: &AccountId,
@@ -439,8 +439,8 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 
 	/// Removes `value` balance from `who` account if possible.
 	///
-	/// If `precision` is `BestEffort` and `value` in full could not be removed (e.g. due to
-	/// underflow), then the maximum is removed, up to `value`. If `precision` is `Exact`, then
+	/// If `precision` is [`BestEffort`] and `value` in full could not be removed (e.g. due to
+	/// underflow), then the maximum is removed, up to `value`. If `precision` is [`Exact`], then
 	/// exactly `value` must be removed from the account of `who` or the operation will fail with an
 	/// `Err` and nothing will change.
 	///
@@ -448,7 +448,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// If the account needed to be deleted, then slightly more than `value` may be removed from the
 	/// account owning since up to (but not including) minimum balance may also need to be removed.
 	///
-	/// If the operation is successful, this will return `Ok` with a `Credit` of the total value
+	/// If the operation is successful, this will return `Ok` with a [`Credit`] of the total value
 	/// removed from the account.
 	fn withdraw(
 		who: &AccountId,
@@ -466,7 +466,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 	/// cannot be countered, then nothing is changed and the original `credit` is returned in an
 	/// `Err`.
 	///
-	/// Please note: If `credit.peek()` is less than `Self::minimum_balance()`, then `who` must
+	/// Please note: If `credit.peek()` is less than [`Inspect::minimum_balance()`], then `who` must
 	/// already exist for this to succeed.
 	fn resolve(
 		who: &AccountId,
@@ -493,7 +493,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> + Unbalanced<AccountId> {
 		let amount = debt.peek();
 		let credit = match Self::withdraw(who, amount, Exact, preservation, Polite) {
 			Err(_) => return Err(debt),
-			Ok(d) => d,
+			Ok(c) => c,
 		};
 
 		match credit.offset(debt) {

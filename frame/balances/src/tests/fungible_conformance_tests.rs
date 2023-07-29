@@ -114,6 +114,36 @@ macro_rules! regular_unbalanced_tests {
 	};
 }
 
+macro_rules! regular_balanced_tests {
+    ($path:path, $ext_deposit:expr, $($name:ident),*) => {
+		$(
+			paste! {
+				#[test]
+				fn [< regular_balanced_ $name _existential_deposit_ $ext_deposit>]() {
+					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
+					builder.build_and_execute_with(|| {
+						$path::$name::<
+							Balances,
+							<Test as frame_system::Config>::AccountId,
+						>();
+					});
+				}
+			}
+		)*
+	};
+	($path:path, $ext_deposit:expr) => {
+		regular_unbalanced_tests!(
+			$path,
+			$ext_deposit,
+			issue_and_resolve_credit,
+			rescind_and_settle_debt,
+			deposit,
+			withdraw,
+			pair
+		);
+	};
+}
+
 regular_mutate_tests!(conformance_tests::regular::mutate, 1);
 regular_mutate_tests!(conformance_tests::regular::mutate, 5);
 regular_mutate_tests!(conformance_tests::regular::mutate, 1000);
@@ -121,3 +151,7 @@ regular_mutate_tests!(conformance_tests::regular::mutate, 1000);
 regular_unbalanced_tests!(conformance_tests::regular::unbalanced, 1);
 regular_unbalanced_tests!(conformance_tests::regular::unbalanced, 5);
 regular_unbalanced_tests!(conformance_tests::regular::unbalanced, 1000);
+
+regular_balanced_tests!(conformance_tests::regular::balanced, 1);
+regular_balanced_tests!(conformance_tests::regular::balanced, 5);
+regular_balanced_tests!(conformance_tests::regular::balanced, 1000);
