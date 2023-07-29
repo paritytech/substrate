@@ -544,6 +544,7 @@ pub mod pallet {
 		/// - `initial_price`: The price of Bulk Coretime in the first sale.
 		/// - `core_count`: The number of cores which can be allocated.
 		#[pallet::call_index(4)]
+		#[pallet::weight(T::WeightInfo::start_sales((*core_count).into()))]
 		pub fn start_sales(
 			origin: OriginFor<T>,
 			initial_price: BalanceOf<T>,
@@ -769,6 +770,7 @@ pub mod pallet {
 		/// - `origin`: Must be Root or pass `AdminOrigin`.
 		/// - `core_count`: The desired number of cores to be made available.
 		#[pallet::call_index(18)]
+		#[pallet::weight(T::WeightInfo::request_core_count((*core_count).into()))]
 		pub fn request_core_count(origin: OriginFor<T>, core_count: CoreIndex) -> DispatchResult {
 			T::AdminOrigin::ensure_origin_or_root(origin)?;
 			Self::do_request_core_count(core_count)?;
