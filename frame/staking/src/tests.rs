@@ -5908,6 +5908,27 @@ mod ledger {
 	}
 
 	#[test]
+	fn bond_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert!(!StakingLedger::<Test>::is_bonded(StakingAccount::Stash(42)));
+			assert!(<Bonded<Test>>::get(&42).is_none());
+
+			let mut ledger: StakingLedger<Test> = StakingLedger::default_from(42);
+
+			assert_ok!(ledger.bond());
+			assert!(StakingLedger::<Test>::is_bonded(StakingAccount::Stash(42)));
+			assert!(<Bonded<Test>>::get(&42).is_some());
+
+			// cannot bond again.
+			assert_noop!(ledger.bond(), Error::<Test>::AlreadyBonded);
+
+			// once bonded, update works as expected.
+			ledger.claimed_rewards = bounded_vec![1];
+			assert_ok!(ledger.update());
+		})
+	}
+
+	#[test]
 	fn is_bonded_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			assert!(!StakingLedger::<Test>::is_bonded(StakingAccount::Stash(42)));

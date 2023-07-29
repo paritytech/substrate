@@ -702,6 +702,7 @@ pub mod pallet {
 		ForceEra { mode: Forcing },
 	}
 
+	#[derive(PartialEq)]
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Not a controller account.
