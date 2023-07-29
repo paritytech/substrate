@@ -29,6 +29,7 @@ use frame_election_provider_support::{
 use frame_support::{
 	construct_runtime,
 	dispatch::DispatchClass,
+	ensure,
 	instances::{Instance1, Instance2},
 	ord_parameter_types,
 	pallet_prelude::Get,
@@ -1889,6 +1890,8 @@ impl OnUnbalanced<Credit<AccountId, Balances>> for IntoAuthor {
 
 parameter_types! {
 	pub storage CoreCount: CoreIndex = 20;
+	pub storage CoretimeCredit: Option<(AccountId, Balance)> = None;
+	pub storage CoretimeRevenue: (BlockNumber, Balance) = Default::default();
 }
 
 pub struct CoretimeProvider;
@@ -1903,7 +1906,9 @@ impl CoretimeInterface for CoretimeProvider {
 		CoreCount::set(&count);
 	}
 	fn request_revenue_info_at(_when: Self::BlockNumber) {}
-	fn credit_account(_who: Self::AccountId, _amount: Self::Balance) {}
+	fn credit_account(who: Self::AccountId, amount: Self::Balance) {
+		CoretimeCredit::set(&Some((who, amount)));
+	}
 	fn assign_core(
 		_core: CoreIndex,
 		_begin: Self::BlockNumber,
@@ -1915,7 +1920,18 @@ impl CoretimeInterface for CoretimeProvider {
 		Some(CoreCount::get())
 	}
 	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
-		Some((10u32.into(), 0u32.into()))
+		Some(CoretimeRevenue::get())
+	}
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	fn bump() {}
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	fn spend_instantaneous(who: Self::AccountId, price: Self::Balance) -> Result<(), ()> {
+		let mut c = CoretimeCredit::get().ok_or(())?;
+		ensure!(c.0 == who, ());
+		c.1 = c.1.saturating_sub(price);
+		CoretimeCredit::set(&Some(c));
+		CoretimeRevenue::set(&(10u32.into(), price));
+		Ok(())
 	}
 }
 

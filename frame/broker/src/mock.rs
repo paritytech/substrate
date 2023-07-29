@@ -142,17 +142,7 @@ impl CoretimeInterface for TestCoretimeProvider {
 	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
 		NotifyRevenueInfo::mutate(|s| s.pop())
 	}
-}
-impl TestCoretimeProvider {
-	pub fn spend_instantaneous(who: u64, price: u64) -> Result<(), ()> {
-		let mut c = CoretimeCredit::get();
-		ensure!(CoretimeInPool::get() > 0, ());
-		c.insert(who, c.get(&who).ok_or(())?.checked_sub(price).ok_or(())?);
-		CoretimeCredit::set(c);
-		CoretimeSpending::mutate(|v| v.push((Self::latest(), price)));
-		Ok(())
-	}
-	pub fn bump() {
+	fn bump() {
 		let mut pool_size = CoretimeInPool::get();
 		let mut workplan = CoretimeWorkplan::get();
 		let mut usage = CoretimeUsage::get();
@@ -176,6 +166,14 @@ impl TestCoretimeProvider {
 		CoretimeInPool::set(pool_size);
 		CoretimeWorkplan::set(workplan);
 		CoretimeUsage::set(usage);
+	}
+	fn spend_instantaneous(who: u64, price: u64) -> Result<(), ()> {
+		let mut c = CoretimeCredit::get();
+		ensure!(CoretimeInPool::get() > 0, ());
+		c.insert(who, c.get(&who).ok_or(())?.checked_sub(price).ok_or(())?);
+		CoretimeCredit::set(c);
+		CoretimeSpending::mutate(|v| v.push((Self::latest(), price)));
+		Ok(())
 	}
 }
 
