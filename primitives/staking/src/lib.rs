@@ -297,6 +297,7 @@ pub trait DelegatedStakeInterface {
 	/// Delegate some funds to a new staker.
 	///
 	/// Similar to [`StakingInterface::bond`].
+	/// todo: delegated_bond()
 	fn delegated_bond_new(
 		delegator: Self::AccountId,
 		delegatee: Self::AccountId,
@@ -317,6 +318,7 @@ pub trait DelegatedStakeInterface {
 	///
 	/// Moves locked funds from the delegatee's account to the delegator's account and restake it as
 	/// a delegator.
+	/// todo: Rename it to something more general since migrate sounds temporary
 	fn delegated_bond_migrate(
 		delegator: Self::AccountId,
 		delegatee: Self::AccountId,
