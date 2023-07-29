@@ -47,6 +47,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		call: &T::RuntimeCall,
 		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		asset_id: Self::AssetId,
+		max_fee: Option<AssetBalanceOf<T>>,
 		fee: Self::Balance,
 		tip: Self::Balance,
 	) -> Result<
@@ -69,6 +70,7 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		fee_paid: LiquidityInfoOf<T>,
 		received_exchanged: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
+		max_fee: Option<AssetBalanceOf<T>>, //TODO!
 		initial_asset_consumed: AssetBalanceOf<T>,
 	) -> Result<AssetBalanceOf<T>, TransactionValidityError>;
 }
@@ -84,7 +86,8 @@ where
 	T: Config,
 	C: Inspect<<T as frame_system::Config>::AccountId>,
 	CON: Swap<T::AccountId, T::HigherPrecisionBalance, T::MultiAssetId>,
-	T::HigherPrecisionBalance: From<BalanceOf<T>> + TryInto<AssetBalanceOf<T>>,
+	T::HigherPrecisionBalance:
+		From<BalanceOf<T>> + From<AssetBalanceOf<T>> + TryInto<AssetBalanceOf<T>>,
 	T::MultiAssetId: From<AssetIdOf<T>>,
 	BalanceOf<T>: IsType<<C as Inspect<<T as frame_system::Config>::AccountId>>::Balance>,
 {
@@ -103,6 +106,7 @@ where
 		call: &T::RuntimeCall,
 		info: &DispatchInfoOf<T::RuntimeCall>,
 		asset_id: Self::AssetId,
+		max_fee: Option<AssetBalanceOf<T>>,
 		fee: BalanceOf<T>,
 		tip: BalanceOf<T>,
 	) -> Result<
@@ -118,7 +122,7 @@ where
 			who.clone(),
 			vec![asset_id.into(), T::MultiAssetIdConverter::get_native()],
 			T::HigherPrecisionBalance::from(native_asset_required),
-			None,
+			max_fee.map(|fee| fee.into()),
 			who.clone(),
 			true,
 		)
@@ -149,6 +153,7 @@ where
 		fee_paid: LiquidityInfoOf<T>,
 		received_exchanged: Self::LiquidityInfo,
 		asset_id: Self::AssetId,
+		max_fee: Option<AssetBalanceOf<T>>,
 		initial_asset_consumed: AssetBalanceOf<T>,
 	) -> Result<AssetBalanceOf<T>, TransactionValidityError> {
 		// Refund the native asset to the account that paid the fees (`who`).
@@ -169,6 +174,15 @@ where
 			// If this fails, the account might have dropped below the existential balance or there
 			// is not enough liquidity left in the pool. In that case we don't throw an error and
 			// the account will keep the native currency.
+
+			let amount_out_min = if let Some(max_fee) = max_fee {
+				let worst_native_to_asset_rate = T::HigherPrecisionBalance::from(max_fee) /
+					T::HigherPrecisionBalance::from(fee_paid);
+				Some(T::HigherPrecisionBalance::from(swap_back) * worst_native_to_asset_rate)
+			} else {
+				None
+			};
+
 			match CON::swap_exact_tokens_for_tokens(
 				who.clone(), // we already deposited the native to `who`
 				vec![
@@ -177,7 +191,7 @@ where
 				],
 				T::HigherPrecisionBalance::from(swap_back), /* amount of the native asset to
 				                                             * convert to `asset_id` */
-				None,        // no minimum amount back
+				amount_out_min,
 				who.clone(), // we will refund to `who`
 				false,       // no need to keep alive
 			)
