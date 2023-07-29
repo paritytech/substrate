@@ -70,11 +70,7 @@ const NPOS_MAX_ITERATIONS_COEFFICIENT: u32 = 2;
 impl<T: Config> Pallet<T> {
 	/// Fetches the ledger associated with a controller or stash account, if any.
 	pub fn ledger(account: StakingAccount<T::AccountId>) -> Option<StakingLedger<T>> {
-		if let Some(ledger) = StakingLedger::<T>::get(account) {
-			Some(ledger)
-		} else {
-			None
-		}
+		StakingLedger::<T>::get(account)
 	}
 
 	/// Fetches the controller bonded to a stash account, if any.
