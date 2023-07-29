@@ -39,6 +39,7 @@ impl<T: Config> Pallet<T> {
 
 	pub(crate) fn do_set_lease(task: TaskId, until: Timeslice) -> DispatchResult {
 		let mut r = Leases::<T>::get();
+		ensure!(until > Self::current_timeslice(), Error::<T>::AlreadyExpired);
 		r.try_push(LeaseRecordItem { until, task })
 			.map_err(|_| Error::<T>::TooManyLeases)?;
 		Leases::<T>::put(r);
@@ -327,7 +328,7 @@ impl<T: Config> Pallet<T> {
 			payout.saturating_accrue(p);
 			pool_record.private_contributions.saturating_reduce(contributed_parts);
 
-			let remaining_payout = total_payout.saturating_sub(payout);
+			let remaining_payout = total_payout.saturating_sub(p);
 			if !remaining_payout.is_zero() && pool_record.private_contributions > 0 {
 				pool_record.maybe_payout = Some(remaining_payout);
 				InstaPoolHistory::<T>::insert(r, &pool_record);
