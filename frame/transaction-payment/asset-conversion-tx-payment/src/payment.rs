@@ -177,7 +177,7 @@ where
 
 			let amount_out_min = if let Some(max_fee) = max_fee {
 				let worst_native_to_asset_rate = T::HigherPrecisionBalance::from(max_fee) /
-					T::HigherPrecisionBalance::from(fee_paid);
+					T::HigherPrecisionBalance::from(corrected_fee);
 				Some(T::HigherPrecisionBalance::from(swap_back) * worst_native_to_asset_rate)
 			} else {
 				None
