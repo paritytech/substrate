@@ -2299,6 +2299,8 @@ pub trait BlockNumberProvider {
 mod tests {
 	use super::*;
 	use crate::codec::{Decode, Encode, Input};
+	#[cfg(feature = "bls-experimental")]
+	use sp_core::{bls377, bls381};
 	use sp_core::{
 		crypto::{Pair, UncheckedFrom},
 		ecdsa, ed25519, sr25519,
@@ -2428,9 +2430,27 @@ mod tests {
 	}
 
 	#[test]
-	fn signature_verify_works() {
+	fn ed25519_verify_works() {
 		signature_verify_test!(ed25519);
+	}
+
+	#[test]
+	fn sr25519_verify_works() {
 		signature_verify_test!(sr25519);
+	}
+
+	#[test]
+	fn ecdsa_verify_works() {
 		signature_verify_test!(ecdsa);
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls377_verify_works() {
+		signature_verify_test!(bls377)
+	}
+
+	#[cfg(feature = "bls-experimental")]
+	fn bls381_verify_works() {
+		signature_verify_test!(bls381)
 	}
 }
