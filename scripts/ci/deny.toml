@@ -96,6 +96,7 @@ exceptions = [
     { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-transaction-pool" },
     { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "sc-transaction-pool-api" },
     { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "subkey" },
+    { allow = ["GPL-3.0 WITH Classpath-exception-2.0"], name = "substrate" },
 ]
 
 # Some crates don't have (easily) machine readable licensing information,

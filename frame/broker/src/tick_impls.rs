@@ -27,7 +27,7 @@ impl<T: Config> Pallet<T> {
 		let mut meter = WeightMeter::max_limit();
 
 		if Self::process_core_count(&mut status) {
-			meter.consume(T::WeightInfo::process_core_count());
+			meter.consume(T::WeightInfo::process_core_count(status.core_count.into()));
 		}
 
 		if Self::process_revenue() {
@@ -40,7 +40,7 @@ impl<T: Config> Pallet<T> {
 				if commit_timeslice >= sale.region_begin {
 					// Sale can be rotated.
 					Self::rotate_sale(sale, &config, &status);
-					meter.consume(T::WeightInfo::rotate_sale());
+					meter.consume(T::WeightInfo::rotate_sale(status.core_count.into()));
 				}
 			}
 

@@ -16,28 +16,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{
-	fs,
-	path::{Path, PathBuf},
-};
+//! Substrate's chain spec builder utility.
+//!
+//! A chain-spec is short for `chain-configuration`. See the [`sc-chain-spec`] for more information.
+//!
+//! Note that this binary is analogous to the `build-spec` subcommand, contained in typical
+//! substrate-based nodes. This particular binary is capable of building a more sophisticated chain
+//! specification that can be used with the substrate-node, ie. [`node-cli`].
+//!
+//! See [`ChainSpecBuilder`] for a list of available commands.
+//!
+//! [`sc-chain-spec`]: ../sc_chain_spec/index.html
+//! [`node-cli`]: ../node_cli/index.html
+
+use std::path::{Path, PathBuf};
 
 use ansi_term::Style;
 use clap::Parser;
-use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
 use node_cli::chain_spec::{self, AccountId};
 use sc_keystore::LocalKeystore;
-use sp_core::{
-	crypto::{ByteArray, Ss58Codec},
-	sr25519,
-};
+use sp_core::crypto::{ByteArray, Ss58Codec};
 use sp_keystore::KeystorePtr;
 
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
 #[derive(Parser)]
 #[command(rename_all = "kebab-case")]
-enum ChainSpecBuilder {
+pub enum ChainSpecBuilder {
 	/// Create a new chain spec with the given authorities, endowed and sudo
 	/// accounts.
 	New {
@@ -87,7 +93,7 @@ enum ChainSpecBuilder {
 
 impl ChainSpecBuilder {
 	/// Returns the path where the chain spec should be saved.
-	fn chain_spec_path(&self) -> &Path {
+	pub fn chain_spec_path(&self) -> &Path {
 		match self {
 			ChainSpecBuilder::New { chain_spec_path, .. } => chain_spec_path.as_path(),
 			ChainSpecBuilder::Generate { chain_spec_path, .. } => chain_spec_path.as_path(),
@@ -115,7 +121,8 @@ fn genesis_constructor(
 	)
 }
 
-fn generate_chain_spec(
+/// Generate the chain spec using the given seeds and accounts.
+pub fn generate_chain_spec(
 	authority_seeds: Vec<String>,
 	nominator_accounts: Vec<String>,
 	endowed_accounts: Vec<String>,
@@ -161,7 +168,11 @@ fn generate_chain_spec(
 	chain_spec.as_json(false)
 }
 
-fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> Result<(), String> {
+/// Generate the authority keys and store them in the given `keystore_path`.
+pub fn generate_authority_keys_and_store(
+	seeds: &[String],
+	keystore_path: &Path,
+) -> Result<(), String> {
 	for (n, seed) in seeds.iter().enumerate() {
 		let keystore: KeystorePtr =
 			LocalKeystore::open(keystore_path.join(format!("auth-{}", n)), None)
@@ -192,7 +203,8 @@ fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> 
 	Ok(())
 }
 
-fn print_seeds(
+/// Print the given seeds
+pub fn print_seeds(
 	authority_seeds: &[String],
 	nominator_seeds: &[String],
 	endowed_seeds: &[String],
@@ -226,67 +238,4 @@ fn print_seeds(
 
 	println!("{}", header.paint("Sudo seed"));
 	println!("//{}", sudo_seed);
-}
-
-fn main() -> Result<(), String> {
-	#[cfg(build_type = "debug")]
-	println!(
-		"The chain spec builder builds a chain specification that includes a Substrate runtime \
-		 compiled as WASM. To ensure proper functioning of the included runtime compile (or run) \
-		 the chain spec builder binary in `--release` mode.\n",
-	);
-
-	let builder = ChainSpecBuilder::parse();
-	let chain_spec_path = builder.chain_spec_path().to_path_buf();
-
-	let (authority_seeds, nominator_accounts, endowed_accounts, sudo_account) = match builder {
-		ChainSpecBuilder::Generate { authorities, nominators, endowed, keystore_path, .. } => {
-			let authorities = authorities.max(1);
-			let rand_str = || -> String {
-				OsRng.sample_iter(&Alphanumeric).take(32).map(char::from).collect()
-			};
-
-			let authority_seeds = (0..authorities).map(|_| rand_str()).collect::<Vec<_>>();
-			let nominator_seeds = (0..nominators).map(|_| rand_str()).collect::<Vec<_>>();
-			let endowed_seeds = (0..endowed).map(|_| rand_str()).collect::<Vec<_>>();
-			let sudo_seed = rand_str();
-
-			print_seeds(&authority_seeds, &nominator_seeds, &endowed_seeds, &sudo_seed);
-
-			if let Some(keystore_path) = keystore_path {
-				generate_authority_keys_and_store(&authority_seeds, &keystore_path)?;
-			}
-
-			let nominator_accounts = nominator_seeds
-				.into_iter()
-				.map(|seed| {
-					chain_spec::get_account_id_from_seed::<sr25519::Public>(&seed).to_ss58check()
-				})
-				.collect();
-
-			let endowed_accounts = endowed_seeds
-				.into_iter()
-				.map(|seed| {
-					chain_spec::get_account_id_from_seed::<sr25519::Public>(&seed).to_ss58check()
-				})
-				.collect();
-
-			let sudo_account =
-				chain_spec::get_account_id_from_seed::<sr25519::Public>(&sudo_seed).to_ss58check();
-
-			(authority_seeds, nominator_accounts, endowed_accounts, sudo_account)
-		},
-		ChainSpecBuilder::New {
-			authority_seeds,
-			nominator_accounts,
-			endowed_accounts,
-			sudo_account,
-			..
-		} => (authority_seeds, nominator_accounts, endowed_accounts, sudo_account),
-	};
-
-	let json =
-		generate_chain_spec(authority_seeds, nominator_accounts, endowed_accounts, sudo_account)?;
-
-	fs::write(chain_spec_path, json).map_err(|err| err.to_string())
 }

@@ -8,11 +8,24 @@ on:
 jobs:
   ping_matrix:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        channel:
+          - name: 'General: Rust, Polkadot, Substrate'
+            room: '!aJymqQYtCjjqImFLSb:parity.io'
+            pre-release: false
+
     steps:
       - name: send message
-        uses: s3krit/matrix-message-action@v0.0.3
+        uses: s3krit/matrix-message-action@70ad3fb812ee0e45ff8999d6af11cafad11a6ecf # v0.0.3
         with:
-          room_id: ${{ secrets.MATRIX_ROOM_ID }}
-          access_token: ${{ secrets.MATRIX_ACCESS_TOKEN }}
-          message: "**${{github.event.repository.full_name}}:** A release has been ${{github.event.action}}<br/>Release version [${{github.event.release.tag_name}}](${{github.event.release.html_url}})<br/><br/>***Description:***<br/>${{github.event.release.body}}<br/>"
-          server: "matrix.parity.io"
+          room_id: ${{ matrix.channel.room }}
+          access_token: ${{ secrets.RELEASENOTES_MATRIX_V2_ACCESS_TOKEN }}
+          server: "m.parity.io"
+          message: |
+            ***${{github.event.repository.full_name}}:*** A release has been ${{github.event.action}}<br/>
+            Release version [${{github.event.release.tag_name}}](${{github.event.release.html_url}})
+
+            -----
+
+            ${{github.event.release.body}}<br/>

@@ -101,6 +101,14 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the collection of item.
+		///
+		/// SAFETY: The functions in the `Incrementable` trait are fallible. If the functions
+		/// of the implementation both return `None`, the automatic CollectionId generation
+		/// should not be used. So the `create` and `force_create` extrinsics and the
+		/// `create_collection` function will return an `UnknownCollection` Error. Instead use
+		/// the `create_collection_with_id` function. However, if the `Incrementable` trait
+		/// implementation has an incremental order, the `create_collection_with_id` function
+		/// should not be used as it can claim a value in the ID sequence.
 		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + Incrementable;
 
 		/// The type used to identify a unique item within a collection.
@@ -476,7 +484,7 @@ pub mod pallet {
 		/// Mint settings for a collection had changed.
 		CollectionMintSettingsUpdated { collection: T::CollectionId },
 		/// Event gets emitted when the `NextCollectionId` gets incremented.
-		NextCollectionIdIncremented { next_id: T::CollectionId },
+		NextCollectionIdIncremented { next_id: Option<T::CollectionId> },
 		/// The price was set for the item.
 		ItemPriceSet {
 			collection: T::CollectionId,
@@ -665,8 +673,9 @@ pub mod pallet {
 			admin: AccountIdLookupOf<T>,
 			config: CollectionConfigFor<T, I>,
 		) -> DispatchResult {
-			let collection =
-				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
+			let collection = NextCollectionId::<T, I>::get()
+				.or(T::CollectionId::initial_value())
+				.ok_or(Error::<T, I>::UnknownCollection)?;
 
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -684,7 +693,10 @@ pub mod pallet {
 				config,
 				T::CollectionDeposit::get(),
 				Event::Created { collection, creator: owner, owner: admin },
-			)
+			)?;
+
+			Self::set_next_collection_id(collection);
+			Ok(())
 		}
 
 		/// Issue a new collection of non-fungible items from a privileged origin.
@@ -712,8 +724,9 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			let collection =
-				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
+			let collection = NextCollectionId::<T, I>::get()
+				.or(T::CollectionId::initial_value())
+				.ok_or(Error::<T, I>::UnknownCollection)?;
 
 			Self::do_create_collection(
 				collection,
@@ -722,7 +735,10 @@ pub mod pallet {
 				config,
 				Zero::zero(),
 				Event::ForceCreated { collection, owner },
-			)
+			)?;
+
+			Self::set_next_collection_id(collection);
+			Ok(())
 		}
 
 		/// Destroy a collection of fungible items.

@@ -142,9 +142,7 @@ mod benches {
 	}
 
 	#[benchmark]
-	fn unreserve(
-		n: Linear<0, { T::MaxReservedCores::get().saturating_sub(1) }>,
-	) -> Result<(), BenchmarkError> {
+	fn unreserve() -> Result<(), BenchmarkError> {
 		// Assume Reservations to be filled for worst case
 		setup_reservations::<T>(T::MaxReservedCores::get());
 
@@ -152,7 +150,7 @@ mod benches {
 			T::AdminOrigin::try_successful_origin().map_err(|_| BenchmarkError::Weightless)?;
 
 		#[extrinsic_call]
-		_(origin as T::RuntimeOrigin, n);
+		_(origin as T::RuntimeOrigin, 0);
 
 		assert_eq!(
 			Reservations::<T>::get().len(),
@@ -451,7 +449,7 @@ mod benches {
 
 	#[benchmark]
 	fn claim_revenue(
-		m: Linear<0, { new_config_record::<T>().region_length }>,
+		m: Linear<1, { new_config_record::<T>().region_length }>,
 	) -> Result<(), BenchmarkError> {
 		let core = setup_and_start_sale::<T>()?;
 
@@ -462,22 +460,38 @@ mod benches {
 			&caller.clone(),
 			T::Currency::minimum_balance().saturating_add(10u32.into()),
 		);
+		T::Currency::set_balance(
+			&Broker::<T>::account_id(),
+			T::Currency::minimum_balance().saturating_add(200u32.into()),
+		);
 
 		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
 			.map_err(|_| BenchmarkError::Weightless)?;
 
 		let recipient: T::AccountId = account("recipient", 0, SEED);
+		T::Currency::set_balance(&recipient.clone(), T::Currency::minimum_balance());
 
 		Broker::<T>::do_pool(region, None, recipient.clone(), Final)
 			.map_err(|_| BenchmarkError::Weightless)?;
 
+		let revenue = 10u32.into();
+		InstaPoolHistory::<T>::insert(
+			region.begin,
+			InstaPoolHistoryRecord {
+				private_contributions: 4u32.into(),
+				system_contributions: 3u32.into(),
+				maybe_payout: Some(revenue),
+			},
+		);
+
 		#[extrinsic_call]
 		_(RawOrigin::Signed(caller), region, m);
 
+		assert!(InstaPoolHistory::<T>::get(region.begin).is_none());
 		assert_last_event::<T>(
 			Event::RevenueClaimPaid {
 				who: recipient,
-				amount: 0u32.into(), // Todo: fix the conditions for this benchmark
+				amount: 200u32.into(),
 				next: if m < new_config_record::<T>().region_length {
 					Some(RegionId { begin: 4.saturating_add(m), core, mask: CoreMask::complete() })
 				} else {
@@ -585,6 +599,33 @@ mod benches {
 			}
 			.into(),
 		);
+
+		Ok(())
+	}
+
+	#[benchmark]
+	fn drop_history() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+		let when = 5u32.into();
+		let revenue = 10u32.into();
+
+		advance_to::<T>(25);
+
+		let caller: T::AccountId = whitelisted_caller();
+		InstaPoolHistory::<T>::insert(
+			when,
+			InstaPoolHistoryRecord {
+				private_contributions: 4u32.into(),
+				system_contributions: 3u32.into(),
+				maybe_payout: Some(revenue),
+			},
+		);
+
+		#[extrinsic_call]
+		_(RawOrigin::Signed(caller), when);
+
+		assert!(InstaPoolHistory::<T>::get(when).is_none());
+		assert_last_event::<T>(Event::HistoryDropped { when, revenue }.into());
 
 		Ok(())
 	}
