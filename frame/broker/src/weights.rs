@@ -51,7 +51,7 @@ use core::marker::PhantomData;
 pub trait WeightInfo {
 	fn configure() -> Weight;
 	fn reserve() -> Weight;
-	fn unreserve(n: u32, ) -> Weight;
+	fn unreserve() -> Weight;
 	fn set_lease() -> Weight;
 	fn start_sales(n: u32, ) -> Weight;
 	fn purchase() -> Weight;
@@ -65,6 +65,7 @@ pub trait WeightInfo {
 	fn purchase_credit() -> Weight;
 	fn drop_region() -> Weight;
 	fn drop_contribution() -> Weight;
+	fn drop_history() -> Weight;
 	fn drop_renewal() -> Weight;
 	fn request_core_count(n: u32, ) -> Weight;
 	fn process_core_count(n: u32, ) -> Weight;
@@ -101,15 +102,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	/// Storage: `Broker::Reservations` (r:1 w:1)
 	/// Proof: `Broker::Reservations` (`max_values`: Some(1), `max_size`: Some(6011), added: 6506, mode: `MaxEncodedLen`)
-	/// The range of component `n` is `[0, 4]`.
-	fn unreserve(n: u32, ) -> Weight {
+	fn unreserve() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `6218`
 		//  Estimated: `7496`
 		// Minimum execution time: 20_863_000 picoseconds.
 		Weight::from_parts(22_435_696, 7496)
 			// Standard Error: 11_196
-			.saturating_add(Weight::from_parts(344, 0).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(344, 0))
 			.saturating_add(T::DbWeight::get().reads(1_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
@@ -331,6 +331,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2_u64))
 			.saturating_add(T::DbWeight::get().writes(1_u64))
 	}
+
+	fn drop_history() -> Weight {
+		Weight::from_parts(27_763_000, 4698)
+			.saturating_add(T::DbWeight::get().reads(2_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 	/// Storage: UNKNOWN KEY `0x18194fcb5c1fcace44d2d0a004272614` (r:0 w:1)
 	/// Proof: UNKNOWN KEY `0x18194fcb5c1fcace44d2d0a004272614` (r:0 w:1)
 	/// The range of component `n` is `[0, 1000]`.
@@ -447,15 +453,14 @@ impl WeightInfo for () {
 	}
 	/// Storage: `Broker::Reservations` (r:1 w:1)
 	/// Proof: `Broker::Reservations` (`max_values`: Some(1), `max_size`: Some(6011), added: 6506, mode: `MaxEncodedLen`)
-	/// The range of component `n` is `[0, 4]`.
-	fn unreserve(n: u32, ) -> Weight {
+	fn unreserve() -> Weight {
 		// Proof Size summary in bytes:
 		//  Measured:  `6218`
 		//  Estimated: `7496`
 		// Minimum execution time: 20_863_000 picoseconds.
 		Weight::from_parts(22_435_696, 7496)
 			// Standard Error: 11_196
-			.saturating_add(Weight::from_parts(344, 0).saturating_mul(n.into()))
+			.saturating_add(Weight::from_parts(344, 0))
 			.saturating_add(RocksDbWeight::get().reads(1_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
 	}
@@ -660,6 +665,12 @@ impl WeightInfo for () {
 		//  Measured:  `601`
 		//  Estimated: `3533`
 		// Minimum execution time: 34_722_000 picoseconds.
+		Weight::from_parts(36_341_000, 3533)
+			.saturating_add(RocksDbWeight::get().reads(3_u64))
+			.saturating_add(RocksDbWeight::get().writes(1_u64))
+	}
+
+	fn drop_history() -> Weight {
 		Weight::from_parts(36_341_000, 3533)
 			.saturating_add(RocksDbWeight::get().reads(3_u64))
 			.saturating_add(RocksDbWeight::get().writes(1_u64))
