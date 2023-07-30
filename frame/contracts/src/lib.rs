@@ -187,7 +187,7 @@ pub mod pallet {
 
 	/// The current storage version.
 	#[cfg(not(any(test, feature = "runtime-benchmarks")))]
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(12);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
 
 	/// Hard coded storage version for running tests that depend on the current storage version.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
@@ -1022,7 +1022,7 @@ pub mod pallet {
 	/// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
 	#[pallet::storage]
 	pub(crate) type ContractInfoOf<T: Config> =
-		StorageMap<_, Identity, T::AccountId, ContractInfo<T>>;
+		StorageMap<_, Twox64Concat, T::AccountId, ContractInfo<T>>;
 
 	/// Evicted contracts that await child trie deletion.
 	///
