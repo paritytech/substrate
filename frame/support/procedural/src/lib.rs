@@ -22,7 +22,6 @@
 mod benchmark;
 mod clone_no_bound;
 mod construct_runtime;
-mod construct_runtime_v2;
 mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
@@ -38,12 +37,13 @@ mod storage_alias;
 mod transactional;
 mod tt_macro;
 
+use frame_support_procedural_tools::generate_crate_access_2018;
 use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
-use syn::{parse_macro_input, ItemImpl};
+use syn::{parse_macro_input, Error, ItemImpl, ItemMod};
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -300,7 +300,7 @@ fn counter_prefix(prefix: &str) -> String {
 /// }
 /// ```
 #[proc_macro]
-#[deprecated(note = "Will be removed soon; use the attribute `#[pallet]` macro instead.
+#[deprecated(note = "Will be removed after July 2023; use the attribute `#[pallet]` macro instead.
 	For more info, see: <https://github.com/paritytech/substrate/pull/13705>")]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)
@@ -416,6 +416,11 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
 }
 
+#[proc_macro_attribute]
+pub fn construct_runtime_v2(attr: TokenStream, item: TokenStream) -> TokenStream {
+	construct_runtime_v2::construct_runtime(attr, item)
+}
+
 /// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify
 /// pallet information.
 ///
@@ -468,6 +473,8 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By default, dev
 ///   mode pallets will assume a weight of zero (`0`) if a weight is not specified. This is
 ///   equivalent to specifying `#[weight(0)]` on all calls that do not specify a weight.
+/// * Call index no longer needs to be specified on every `#[pallet::call]` declaration. By default,
+///   dev mode pallets will assume a call index based on the order of the call.
 /// * All storages are marked as unbounded, meaning you do not need to implement `MaxEncodedLen` on
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.
@@ -854,7 +861,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type RuntimeOrigin = RuntimeOrigin;
 ///     type OnSetCode = ();
 ///     type PalletInfo = PalletInfo;
-///     type Header = Header;
+///     type Block = Block;
 ///     // We decide to override this one.
 ///     type AccountData = pallet_balances::AccountData<u64>;
 /// }
@@ -871,7 +878,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type BlockWeights = ();
 ///     type BlockLength = ();
 ///     type DbWeight = ();
-///     type Index = u64;
+///     type Nonce = u64;
 ///     type BlockNumber = u64;
 ///     type Hash = sp_core::hash::H256;
 ///     type Hashing = sp_runtime::traits::BlakeTwo256;
@@ -900,13 +907,13 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type RuntimeOrigin = RuntimeOrigin;
 ///     type OnSetCode = ();
 ///     type PalletInfo = PalletInfo;
-///     type Header = Header;
+///     type Block = Block;
 ///     type AccountData = pallet_balances::AccountData<u64>;
 ///     type Version = <TestDefaultConfig as DefaultConfig>::Version;
 ///     type BlockWeights = <TestDefaultConfig as DefaultConfig>::BlockWeights;
 ///     type BlockLength = <TestDefaultConfig as DefaultConfig>::BlockLength;
 ///     type DbWeight = <TestDefaultConfig as DefaultConfig>::DbWeight;
-///     type Index = <TestDefaultConfig as DefaultConfig>::Index;
+///     type Nonce = <TestDefaultConfig as DefaultConfig>::Nonce;
 ///     type BlockNumber = <TestDefaultConfig as DefaultConfig>::BlockNumber;
 ///     type Hash = <TestDefaultConfig as DefaultConfig>::Hash;
 ///     type Hashing = <TestDefaultConfig as DefaultConfig>::Hashing;
@@ -953,28 +960,6 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// # Advanced Usage
 ///
-/// ## Importing & Re-Exporting
-///
-/// Since `#[derive_impl(..)]` is a
-/// [`macro_magic`](https://docs.rs/macro_magic/latest/macro_magic/)-based attribute macro, special
-/// care must be taken when importing and re-exporting it. Glob imports will work properly, such as
-/// `use frame_support::*` to bring `derive_impl` into scope, however any other use statements
-/// involving `derive_impl` should have
-/// [`#[macro_magic::use_attr]`](https://docs.rs/macro_magic/latest/macro_magic/attr.use_attr.html)
-/// attached or your use statement will fail to fully bring the macro into scope.
-///
-/// This brings `derive_impl` into scope in the current context:
-/// ```ignore
-/// #[use_attr]
-/// use frame_support::derive_impl;
-/// ```
-///
-/// This brings `derive_impl` into scope and publicly re-exports it from the current context:
-/// ```ignore
-/// #[use_attr]
-/// pub use frame_support::derive_impl;
-/// ```
-///
 /// ## Expansion
 ///
 /// The `#[derive_impl(default_impl_path as disambiguation_path)]` attribute will expand to the
@@ -988,7 +973,18 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// Items that lack a `syn::Ident` for whatever reason are first checked to see if they exist,
 /// verbatim, in the local/destination trait before they are copied over, so you should not need to
 /// worry about collisions between identical unnamed items.
-#[import_tokens_attr(frame_support::macro_magic)]
+#[import_tokens_attr {
+    format!(
+        "{}::macro_magic",
+        match generate_crate_access_2018("frame-support") {
+            Ok(path) => Ok(path),
+            Err(_) => generate_crate_access_2018("frame"),
+        }
+        .expect("Failed to find either `frame-support` or `frame` in `Cargo.toml` dependencies.")
+        .to_token_stream()
+        .to_string()
+    )
+}]
 #[with_custom_parsing(derive_impl::DeriveImplAttrArgs)]
 #[proc_macro_attribute]
 pub fn derive_impl(attrs: TokenStream, input: TokenStream) -> TokenStream {
@@ -1035,8 +1031,41 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 /// 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 /// }
 /// ```
+///
+/// ## Advanced Usage
+///
 /// This macro acts as a thin wrapper around macro_magic's `#[export_tokens]`. See the docs
-/// [here](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) for more info.
+/// [here](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) for more
+/// info.
+///
+/// There are some caveats when applying a `use` statement to bring a
+/// `#[register_default_impl]` item into scope. If you have a `#[register_default_impl]`
+/// defined in `my_crate::submodule::MyItem`, it is currently not sufficient to do something
+/// like:
+///
+/// ```ignore
+/// use my_crate::submodule::MyItem;
+/// #[derive_impl(MyItem as Whatever)]
+/// ```
+///
+/// This will fail with a mysterious message about `__export_tokens_tt_my_item` not being
+/// defined.
+///
+/// You can, however, do any of the following:
+/// ```ignore
+/// // partial path works
+/// use my_crate::submodule;
+/// #[derive_impl(submodule::MyItem as Whatever)]
+/// ```
+/// ```ignore
+/// // full path works
+/// #[derive_impl(my_crate::submodule::MyItem as Whatever)]
+/// ```
+/// ```ignore
+/// // wild-cards work
+/// use my_crate::submodule::*;
+/// #[derive_impl(MyItem as Whatever)]
+/// ```
 #[proc_macro_attribute]
 pub fn register_default_impl(attrs: TokenStream, tokens: TokenStream) -> TokenStream {
 	// ensure this is a impl statement
@@ -1535,7 +1564,7 @@ pub fn unbounded(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::whitelist_storage]
-/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+/// pub(super) type Number<T: Config> = StorageValue<_, frame_system::pallet_prelude::BlockNumberFor::<T>, ValueQuery>;
 /// ```
 ///
 /// NOTE: As with all `pallet::*` attributes, this one _must_ be written as
@@ -1627,8 +1656,7 @@ pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 /// The macro will add the following attribute:
 /// * `#[cfg(feature = "std")]`
 ///
-/// The macro will implement `sp_runtime::BuildModuleGenesisStorage` using `()` as a second
-/// generic for non-instantiable pallets.
+/// The macro will implement `sp_runtime::BuildStorage`.
 #[proc_macro_attribute]
 pub fn genesis_build(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
@@ -1740,7 +1768,112 @@ pub fn composite_enum(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// Can be attached to a module. Doing so will declare that module as importable into a pallet
+/// via [`#[import_section]`](`macro@import_section`).
+///
+/// Note that sections are imported by their module name/ident, and should be referred to by
+/// their _full path_ from the perspective of the target pallet. Do not attempt to make use
+/// of `use` statements to bring pallet sections into scope, as this will not work (unless
+/// you do so as part of a wildcard import, in which case it will work).
+///
+/// ## Naming Logistics
+///
+/// Also note that because of how `#[pallet_section]` works, pallet section names must be
+/// globally unique _within the crate in which they are defined_. For more information on
+/// why this must be the case, see macro_magic's
+/// [`#[export_tokens]`](https://docs.rs/macro_magic/latest/macro_magic/attr.export_tokens.html) macro.
+///
+/// Optionally, you may provide an argument to `#[pallet_section]` such as
+/// `#[pallet_section(some_ident)]`, in the event that there is another pallet section in
+/// same crate with the same ident/name. The ident you specify can then be used instead of
+/// the module's ident name when you go to import it via `#[import_section]`.
 #[proc_macro_attribute]
-pub fn construct_runtime_v2(attr: TokenStream, item: TokenStream) -> TokenStream {
-	construct_runtime_v2::construct_runtime(attr, item)
+pub fn pallet_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	let tokens_clone = tokens.clone();
+	// ensure this can only be attached to a module
+	let _mod = parse_macro_input!(tokens_clone as ItemMod);
+
+	// use macro_magic's export_tokens as the internal implementation otherwise
+	match macro_magic::mm_core::export_tokens_internal(attr, tokens, false) {
+		Ok(tokens) => tokens.into(),
+		Err(err) => err.to_compile_error().into(),
+	}
+}
+
+/// An attribute macro that can be attached to a module declaration. Doing so will
+/// Imports the contents of the specified external pallet section that was defined
+/// previously using [`#[pallet_section]`](`macro@pallet_section`).
+///
+/// ## Example
+/// ```ignore
+/// #[import_section(some_section)]
+/// #[pallet]
+/// pub mod pallet {
+///     // ...
+/// }
+/// ```
+/// where `some_section` was defined elsewhere via:
+/// ```ignore
+/// #[pallet_section]
+/// pub mod some_section {
+///     // ...
+/// }
+/// ```
+///
+/// This will result in the contents of `some_section` being _verbatim_ imported into
+/// the pallet above. Note that since the tokens for `some_section` are essentially
+/// copy-pasted into the target pallet, you cannot refer to imports that don't also
+/// exist in the target pallet, but this is easily resolved by including all relevant
+/// `use` statements within your pallet section, so they are imported as well, or by
+/// otherwise ensuring that you have the same imports on the target pallet.
+///
+/// It is perfectly permissible to import multiple pallet sections into the same pallet,
+/// which can be done by having multiple `#[import_section(something)]` attributes
+/// attached to the pallet.
+///
+/// Note that sections are imported by their module name/ident, and should be referred to by
+/// their _full path_ from the perspective of the target pallet.
+#[import_tokens_attr {
+    format!(
+        "{}::macro_magic",
+        match generate_crate_access_2018("frame-support") {
+            Ok(path) => Ok(path),
+            Err(_) => generate_crate_access_2018("frame"),
+        }
+        .expect("Failed to find either `frame-support` or `frame` in `Cargo.toml` dependencies.")
+        .to_token_stream()
+        .to_string()
+    )
+}]
+#[proc_macro_attribute]
+pub fn import_section(attr: TokenStream, tokens: TokenStream) -> TokenStream {
+	let foreign_mod = parse_macro_input!(attr as ItemMod);
+	let mut internal_mod = parse_macro_input!(tokens as ItemMod);
+
+	// check that internal_mod is a pallet module
+	if !internal_mod.attrs.iter().any(|attr| {
+		if let Some(last_seg) = attr.path().segments.last() {
+			last_seg.ident == "pallet"
+		} else {
+			false
+		}
+	}) {
+		return Error::new(
+			internal_mod.ident.span(),
+			"`#[import_section]` can only be applied to a valid pallet module",
+		)
+		.to_compile_error()
+		.into()
+	}
+
+	if let Some(ref mut content) = internal_mod.content {
+		if let Some(foreign_content) = foreign_mod.content {
+			content.1.extend(foreign_content.1);
+		}
+	}
+
+	quote! {
+		#internal_mod
+	}
+	.into()
 }

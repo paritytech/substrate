@@ -27,9 +27,9 @@ use frame_support::{
 use pallet_session::historical as pallet_session_historical;
 use sp_core::H256;
 use sp_runtime::{
-	testing::{Header, TestXt, UintAuthorityId},
+	testing::{TestXt, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	Permill,
+	BuildStorage, Permill,
 };
 use sp_staking::{
 	offence::{OffenceError, ReportOffence},
@@ -39,16 +39,12 @@ use sp_staking::{
 use crate as imonline;
 use crate::Config;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 type Block = frame_system::mocking::MockBlock<Runtime>;
 
 frame_support::construct_runtime!(
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub struct Runtime
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		ImOnline: imonline::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Historical: pallet_session_historical::{Pallet},
@@ -105,7 +101,7 @@ impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let t = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 	let mut result: sp_io::TestExternalities = t.into();
 	// Set the default keys, otherwise session will discard the validator.
 	result.execute_with(|| {
@@ -123,14 +119,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -217,7 +212,6 @@ impl Config for Runtime {
 	type WeightInfo = ();
 	type MaxKeys = ConstU32<10_000>;
 	type MaxPeerInHeartbeats = ConstU32<10_000>;
-	type MaxPeerDataEncodingSize = ConstU32<1_000>;
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

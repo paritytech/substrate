@@ -24,7 +24,9 @@ use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
 use frame_benchmarking::v1::{account, benchmarks_instance_pallet, whitelisted_caller};
-use frame_system::{Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin};
+use frame_system::{
+	pallet_prelude::BlockNumberFor, Call as SystemCall, Pallet as System, RawOrigin as SystemOrigin,
+};
 
 const SEED: u32 = 0;
 
@@ -131,7 +133,7 @@ benchmarks_instance_pallet! {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
 		assert_last_event::<T, I>(
-			Event::MemberExecuted { proposal_hash, result: Err(DispatchError::BadOrigin) }.into()
+			Event::MemberExecuted { proposal_hash, result: Ok(()) }.into()
 		);
 	}
 
@@ -162,7 +164,7 @@ benchmarks_instance_pallet! {
 		let proposal_hash = T::Hashing::hash_of(&proposal);
 		// Note that execution fails due to mis-matched origin
 		assert_last_event::<T, I>(
-			Event::Executed { proposal_hash, result: Err(DispatchError::BadOrigin) }.into()
+			Event::Executed { proposal_hash, result: Ok(()) }.into()
 		);
 	}
 
@@ -441,7 +443,7 @@ benchmarks_instance_pallet! {
 	verify {
 		// The last proposal is removed.
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Err(DispatchError::BadOrigin) }.into());
+		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Ok(()) }.into());
 	}
 
 	close_disapproved {
@@ -516,7 +518,7 @@ benchmarks_instance_pallet! {
 			false,
 		)?;
 
-		System::<T>::set_block_number(T::BlockNumber::max_value());
+		System::<T>::set_block_number(BlockNumberFor::<T>::max_value());
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 
 		// Prime nay will close it as disapproved
@@ -588,14 +590,14 @@ benchmarks_instance_pallet! {
 		}
 
 		// caller is prime, prime already votes aye by creating the proposal
-		System::<T>::set_block_number(T::BlockNumber::max_value());
+		System::<T>::set_block_number(BlockNumberFor::<T>::max_value());
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 
 		// Prime aye will close it as approved
 	}: close(SystemOrigin::Signed(caller), last_hash, p - 1, Weight::MAX, bytes_in_storage)
 	verify {
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
-		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Err(DispatchError::BadOrigin) }.into());
+		assert_last_event::<T, I>(Event::Executed { proposal_hash: last_hash, result: Ok(()) }.into());
 	}
 
 	disapprove_proposal {
@@ -637,7 +639,7 @@ benchmarks_instance_pallet! {
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
 
-		System::<T>::set_block_number(T::BlockNumber::max_value());
+		System::<T>::set_block_number(BlockNumberFor::<T>::max_value());
 		assert_eq!(Collective::<T, I>::proposals().len(), p as usize);
 
 	}: _(SystemOrigin::Root, last_hash)

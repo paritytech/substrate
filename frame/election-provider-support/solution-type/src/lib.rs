@@ -252,10 +252,16 @@ where
 
 fn imports() -> Result<TokenStream2> {
 	match crate_name("frame-election-provider-support") {
-		Ok(FoundCrate::Itself) => Ok(quote! { use crate as _feps; }),
+		Ok(FoundCrate::Itself) => Ok(quote! {
+			use crate as _feps;
+			use _feps::private as _fepsp;
+		}),
 		Ok(FoundCrate::Name(frame_election_provider_support)) => {
 			let ident = syn::Ident::new(&frame_election_provider_support, Span::call_site());
-			Ok(quote!( extern crate #ident as _feps; ))
+			Ok(quote!(
+					use #ident as _feps;
+					use _feps::private as _fepsp;
+			))
 		},
 		Err(e) => Err(syn::Error::new(Span::call_site(), e)),
 	}

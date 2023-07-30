@@ -31,18 +31,14 @@ use frame_system::{EnsureSigned, EnsureSignedBy};
 use sp_arithmetic::Permill;
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{AccountIdConversion, BlakeTwo256, IdentityLookup},
+	BuildStorage,
 };
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Balances: pallet_balances,
@@ -58,13 +54,12 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
@@ -178,12 +173,12 @@ impl Config for Test {
 	type MultiAssetId = NativeOrAssetId<u32>;
 	type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
 
-	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 10000), (2, 20000), (3, 30000), (4, 40000)],

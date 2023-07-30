@@ -30,7 +30,7 @@ mod txpool;
 
 use clap::Parser;
 
-use node_testing::bench::{BlockType, DatabaseType as BenchDataBaseType, KeyTypes, Profile};
+use node_testing::bench::{BlockType, DatabaseType as BenchDataBaseType, KeyTypes};
 
 use crate::{
 	common::SizeType,
@@ -85,31 +85,28 @@ fn main() {
 
 	let mut import_benchmarks = Vec::new();
 
-	for profile in [Profile::Wasm, Profile::Native] {
-		for size in [
-			SizeType::Empty,
-			SizeType::Small,
-			SizeType::Medium,
-			SizeType::Large,
-			SizeType::Full,
-			SizeType::Custom(opt.transactions.unwrap_or(0)),
+	for size in [
+		SizeType::Empty,
+		SizeType::Small,
+		SizeType::Medium,
+		SizeType::Large,
+		SizeType::Full,
+		SizeType::Custom(opt.transactions.unwrap_or(0)),
+	] {
+		for block_type in [
+			BlockType::RandomTransfersKeepAlive,
+			BlockType::RandomTransfersReaping,
+			BlockType::Noop,
 		] {
-			for block_type in [
-				BlockType::RandomTransfersKeepAlive,
-				BlockType::RandomTransfersReaping,
-				BlockType::Noop,
-			] {
-				for database_type in [BenchDataBaseType::RocksDb, BenchDataBaseType::ParityDb] {
-					import_benchmarks.push((profile, size, block_type, database_type));
-				}
+			for database_type in [BenchDataBaseType::RocksDb, BenchDataBaseType::ParityDb] {
+				import_benchmarks.push((size, block_type, database_type));
 			}
 		}
 	}
 
 	let benchmarks = matrix!(
-		(profile, size, block_type, database_type) in import_benchmarks.into_iter() =>
+		(size, block_type, database_type) in import_benchmarks.into_iter() =>
 			ImportBenchmarkDescription {
-				profile,
 				key_types: KeyTypes::Sr25519,
 				size,
 				block_type,
@@ -138,14 +135,12 @@ fn main() {
 			.iter().map(move |db_type| (size, db_type)))
 			=> TrieWriteBenchmarkDescription { database_size: *size, database_type: *db_type },
 		ConstructionBenchmarkDescription {
-			profile: Profile::Wasm,
 			key_types: KeyTypes::Sr25519,
 			block_type: BlockType::RandomTransfersKeepAlive,
 			size: SizeType::Medium,
 			database_type: BenchDataBaseType::RocksDb,
 		},
 		ConstructionBenchmarkDescription {
-			profile: Profile::Wasm,
 			key_types: KeyTypes::Sr25519,
 			block_type: BlockType::RandomTransfersKeepAlive,
 			size: SizeType::Large,

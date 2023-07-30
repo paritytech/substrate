@@ -86,7 +86,7 @@ pub mod pallet {
 	use sp_std::{fmt::Display, prelude::*};
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -338,12 +338,12 @@ pub mod pallet {
 			T::PalletId::get().into_account_truncating()
 		}
 
-		/// Transfer the NFT from the account holding that NFT to the pallet's account.
+		/// Prevent further transferring of NFT.
 		fn do_lock_nft(nft_collection_id: T::NftCollectionId, nft_id: T::NftId) -> DispatchResult {
 			T::Nfts::disable_transfer(&nft_collection_id, &nft_id)
 		}
 
-		/// Transfer the NFT to the account returning the tokens.
+		/// Remove the transfer lock and transfer the NFT to the account returning the tokens.
 		fn do_unlock_nft(
 			nft_collection_id: T::NftCollectionId,
 			nft_id: T::NftId,

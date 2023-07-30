@@ -12,7 +12,7 @@ description = "FRAME pallet for whitelisting call, and dispatch from specific or
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.2.2", default-features = false, features = ["derive", "max-encoded-len"] }
+codec = { package = "parity-scale-codec", version = "3.6.1", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }

@@ -18,7 +18,7 @@
 //! Functions for the Assets pallet.
 
 use super::*;
-use frame_support::{traits::Get, BoundedVec};
+use frame_support::{defensive, traits::Get, BoundedVec};
 
 #[must_use]
 pub(super) enum DeadConsequence {
@@ -194,12 +194,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			}
 
-			let is_provider = false;
-			let is_required = is_provider && !frame_system::Pallet::<T>::can_dec_provider(who);
-			let must_keep_alive = keep_alive || is_required;
-
 			if rest < details.min_balance {
-				if must_keep_alive {
+				if keep_alive {
 					WouldDie
 				} else {
 					ReducedToZero(rest)
@@ -231,9 +227,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				frozen.checked_add(&details.min_balance).ok_or(ArithmeticError::Overflow)?;
 			account.balance.saturating_sub(required)
 		} else {
-			let is_provider = false;
-			let is_required = is_provider && !frame_system::Pallet::<T>::can_dec_provider(who);
-			if keep_alive || is_required {
+			if keep_alive {
 				// We want to keep the account around.
 				account.balance.saturating_sub(details.min_balance)
 			} else {
@@ -766,11 +760,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				// Should only destroy accounts while the asset is in a destroying state
 				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
-
-				for (who, v) in Account::<T, I>::drain_prefix(&id) {
-					let _ = Self::dead_account(&who, &mut details, &v.reason, true);
-					dead_accounts.push(who);
-					if dead_accounts.len() >= (max_items as usize) {
+				for (i, (who, mut v)) in Account::<T, I>::iter_prefix(&id).enumerate() {
+					// unreserve the existence deposit if any
+					if let Some((depositor, deposit)) = v.reason.take_deposit_from() {
+						T::Currency::unreserve(&depositor, deposit);
+					} else if let Some(deposit) = v.reason.take_deposit() {
+						T::Currency::unreserve(&who, deposit);
+					}
+					if let Remove = Self::dead_account(&who, &mut details, &v.reason, false) {
+						Account::<T, I>::remove(&id, &who);
+						dead_accounts.push(who);
+					} else {
+						// deposit may have been released, need to update `Account`
+						Account::<T, I>::insert(&id, &who, v);
+						defensive!("destroy did not result in dead account?!");
+					}
+					if i + 1 >= (max_items as usize) {
 						break
 					}
 				}

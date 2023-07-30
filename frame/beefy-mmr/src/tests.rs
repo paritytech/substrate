@@ -164,7 +164,7 @@ fn should_update_authorities() {
 		// check current authority set
 		assert_eq!(0, auth_set.id);
 		assert_eq!(2, auth_set.len);
-		let want = array_bytes::hex_n_into_unchecked::<H256, 32>(
+		let want = array_bytes::hex_n_into_unchecked::<_, H256, 32>(
 			"176e73f1bf656478b728e28dd1a7733c98621b8acf830bff585949763dca7a96",
 		);
 		assert_eq!(want, auth_set.root);
@@ -184,7 +184,7 @@ fn should_update_authorities() {
 		assert_eq!(1, auth_set.id);
 		// check next auth set
 		assert_eq!(2, next_auth_set.id);
-		let want = array_bytes::hex_n_into_unchecked::<H256, 32>(
+		let want = array_bytes::hex_n_into_unchecked::<_, H256, 32>(
 			"9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5",
 		);
 		assert_eq!(2, next_auth_set.len);
@@ -200,7 +200,7 @@ fn should_update_authorities() {
 		assert_eq!(2, auth_set.id);
 		// check next auth set
 		assert_eq!(3, next_auth_set.id);
-		let want = array_bytes::hex_n_into_unchecked::<H256, 32>(
+		let want = array_bytes::hex_n_into_unchecked::<_, H256, 32>(
 			"9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5",
 		);
 		assert_eq!(2, next_auth_set.len);
