@@ -206,6 +206,7 @@ pub mod pallet {
 	/// Contains default types suitable for various environments
 	pub mod config_preludes {
 		use super::*;
+		use sp_runtime::traits::ConstU64;
 
 		/// Provides a viable default config that can be used with
 		/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
@@ -242,6 +243,9 @@ pub mod pallet {
 			type Block = ();
 			#[pallet::verbatim]
 			type PalletInfo = ();
+			type BaseCallFilter = frame_support::traits::Everything;
+			type BlockHashCount = ConstU64<10>;
+			type OnSetCode = ();
 		}
 	}
 
@@ -259,7 +263,7 @@ pub mod pallet {
 
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
-		#[pallet::no_default]
+		#[pallet::no_bounds]
 		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
@@ -338,7 +342,7 @@ pub mod pallet {
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
-		#[pallet::no_default]
+		#[pallet::no_bounds]
 		type BlockHashCount: Get<BlockNumberFor<Self>>;
 
 		/// The weight of runtime database operations the runtime can invoke.
@@ -387,7 +391,7 @@ pub mod pallet {
 		/// [`Pallet::update_code_in_storage`]).
 		/// It's unlikely that this needs to be customized, unless you are writing a parachain using
 		/// `Cumulus`, where the actual code change is deferred.
-		#[pallet::no_default]
+		#[pallet::no_bounds]
 		type OnSetCode: SetCode<Self>;
 
 		/// The maximum number of consumers allowed on a single account.
