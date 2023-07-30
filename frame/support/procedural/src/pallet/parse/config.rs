@@ -34,6 +34,7 @@ mod keyword {
 	syn::custom_keyword!(frame_system);
 	syn::custom_keyword!(disable_frame_system_supertrait_check);
 	syn::custom_keyword!(no_default);
+	syn::custom_keyword!(no_bounds);
 	syn::custom_keyword!(constant);
 }
 
@@ -59,7 +60,7 @@ pub struct ConfigDef {
 	/// Contains default sub-trait items (instantiated by `#[pallet::config(with_default)]`).
 	/// Vec will be empty if `#[pallet::config(with_default)]` is not specified or if there are
 	/// no trait items
-	pub default_sub_trait: Vec<syn::TraitItem>,
+	pub default_sub_trait: Vec<(syn::TraitItem, bool)>,
 }
 
 /// Input definition for a constant in pallet config.
@@ -136,6 +137,8 @@ impl syn::parse::Parse for DisableFrameSystemSupertraitCheck {
 pub enum PalletAttrType {
 	#[peek(keyword::no_default, name = "no_default")]
 	NoDefault(keyword::no_default),
+	#[peek(keyword::no_bounds, name = "no_bounds")]
+	NoBounds(keyword::no_bounds),
 	#[peek(keyword::constant, name = "constant")]
 	Constant(keyword::constant),
 }
@@ -348,6 +351,7 @@ impl ConfigDef {
 
 			let mut already_no_default = false;
 			let mut already_constant = false;
+			let mut already_no_bounds = false;
 
 			while let Ok(Some(pallet_attr)) =
 				helper::take_first_item_pallet_attr::<PalletAttr>(trait_item)
@@ -384,11 +388,27 @@ impl ConfigDef {
 						}
 						already_no_default = true;
 					},
+					(PalletAttrType::NoBounds(_), _) => {
+						if !enable_default {
+							return Err(syn::Error::new(
+								pallet_attr._bracket.span.join(),
+								"`#[pallet:no_bounds]` can only be used if `#[pallet::config(with_default)]` \
+								has been specified"
+							))
+						}
+						if already_no_bounds {
+							return Err(syn::Error::new(
+								pallet_attr._bracket.span.join(),
+								"Duplicate #[pallet::no_bounds] attribute not allowed.",
+							))
+						}
+						already_no_bounds = true;
+					},
 				}
 			}
 
 			if !already_no_default && !is_event && enable_default {
-				default_sub_trait.push(trait_item.clone());
+				default_sub_trait.push((trait_item.clone(), already_no_bounds));
 			}
 		}
 

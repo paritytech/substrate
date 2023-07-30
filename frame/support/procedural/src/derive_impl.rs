@@ -22,7 +22,48 @@ use macro_magic::mm_core::ForeignPath;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;
-use syn::{parse2, parse_quote, spanned::Spanned, Ident, ImplItem, ItemImpl, Path, Result, Token};
+use syn::{parse2, parse_quote, spanned::Spanned, Ident, ImplItem, ItemImpl, Path, Result, token, Token};
+
+mod keyword {
+	syn::custom_keyword!(pallet);
+	syn::custom_keyword!(verbatim);
+}
+
+#[derive(derive_syn_parse::Parse, PartialEq, Eq)]
+pub enum PalletAttrType {
+	#[peek(keyword::verbatim, name = "verbatim")]
+	Verbatim(keyword::verbatim),
+}
+
+#[derive(derive_syn_parse::Parse)]
+pub struct PalletAttr {
+	_pound: Token![#],
+	#[bracket]
+	_bracket: token::Bracket,
+	#[inside(_bracket)]
+	_pallet: keyword::pallet,
+	#[prefix(Token![::] in _bracket)]
+	#[inside(_bracket)]
+	typ: PalletAttrType,
+}
+
+fn take_first_item_pallet_attr<Attr>(
+	item: &mut syn::ImplItemType,
+) -> syn::Result<Option<Attr>>
+where
+	Attr: syn::parse::Parse,
+{
+	let attrs = &mut item.attrs;
+
+	if let Some(index) = attrs.iter().position(|attr| {
+		attr.path().segments.first().map_or(false, |segment| segment.ident == "pallet")
+	}) {
+		let pallet_attr = attrs.remove(index);
+		Ok(Some(syn::parse2(pallet_attr.into_token_stream())?))
+	} else {
+		Ok(None)
+	}
+}
 
 #[derive(Parse)]
 pub struct DeriveImplAttrArgs {
@@ -96,7 +137,19 @@ fn combine_impls(
 				// do not copy colliding items that have an ident
 				return None
 			}
-			if matches!(item, ImplItem::Type(_)) {
+			if let ImplItem::Type(item) = item.clone() {
+				let mut item = item.clone();
+				while let Ok(Some(pallet_attr)) = take_first_item_pallet_attr::<PalletAttr>(&mut item)
+				{
+					match pallet_attr.typ {
+						PalletAttrType::Verbatim(_) => {
+							let modified_item: ImplItem = parse_quote! {
+								type #ident = #ident;
+							};
+							return Some(modified_item)
+						}
+					}
+				}
 				// modify and insert uncolliding type items
 				let modified_item: ImplItem = parse_quote! {
 					type #ident = <#default_impl_path as #disambiguation_path>::#ident;

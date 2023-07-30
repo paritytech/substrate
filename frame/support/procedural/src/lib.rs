@@ -1004,6 +1004,16 @@ pub fn no_default(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+#[proc_macro_attribute]
+pub fn no_bounds(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+#[proc_macro_attribute]
+pub fn verbatim(_: TokenStream, tokens: TokenStream) -> TokenStream {
+	tokens
+}
+
 /// Attach this attribute to an impl statement that you want to use with
 /// [`#[derive_impl(..)]`](`macro@derive_impl`).
 ///

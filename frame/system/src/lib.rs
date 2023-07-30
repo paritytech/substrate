@@ -205,7 +205,7 @@ pub mod pallet {
 
 	/// Contains default types suitable for various environments
 	pub mod config_preludes {
-		use super::DefaultConfig;
+		use super::*;
 
 		/// Provides a viable default config that can be used with
 		/// [`derive_impl`](`frame_support::derive_impl`) to derive a testing pallet config
@@ -232,6 +232,10 @@ pub mod pallet {
 			type BlockWeights = ();
 			type BlockLength = ();
 			type DbWeight = ();
+			#[pallet::verbatim]
+			type RuntimeCall = ();
+			#[pallet::verbatim]
+			type Block = ();
 		}
 	}
 
@@ -267,7 +271,7 @@ pub mod pallet {
 			+ OriginTrait<Call = Self::RuntimeCall, AccountId = Self::AccountId>;
 
 		/// The aggregated `RuntimeCall` type.
-		#[pallet::no_default]
+		#[pallet::no_bounds]
 		type RuntimeCall: Parameter
 			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ Debug
@@ -322,7 +326,7 @@ pub mod pallet {
 
 		/// The Block type used by the runtime. This is used by `construct_runtime` to retrieve the
 		/// extrinsics or other block specific data as needed.
-		#[pallet::no_default]
+		#[pallet::no_bounds]
 		type Block: Parameter + Member + traits::Block<Hash = Self::Hash>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
