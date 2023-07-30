@@ -233,9 +233,13 @@ pub mod pallet {
 			type BlockLength = ();
 			type DbWeight = ();
 			#[pallet::verbatim]
+			type RuntimeOrigin = ();
+			#[pallet::verbatim]
 			type RuntimeCall = ();
 			#[pallet::verbatim]
 			type Block = ();
+			#[pallet::verbatim]
+			type PalletInfo = ();
 		}
 	}
 
@@ -264,7 +268,7 @@ pub mod pallet {
 		type BlockLength: Get<limits::BlockLength>;
 
 		/// The `RuntimeOrigin` type used by dispatchable calls.
-		#[pallet::no_default]
+		#[pallet::no_bounds]
 		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
@@ -348,7 +352,7 @@ pub mod pallet {
 		/// runtime.
 		///
 		/// For tests it is okay to use `()` as type, however it will provide "useless" data.
-		#[pallet::no_default]
+		#[pallet::no_bounds]
 		type PalletInfo: PalletInfo;
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
