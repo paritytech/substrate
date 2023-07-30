@@ -154,6 +154,7 @@ impl ExtBuilder {
 			.unwrap();
 		let mut ext = sp_io::TestExternalities::new(t);
 		ext.execute_with(|| {
+			// sp_tracing::try_init_simple(); // Add this line
 			System::set_block_number(1);
 			Vesting::do_try_state().unwrap();
 		});
