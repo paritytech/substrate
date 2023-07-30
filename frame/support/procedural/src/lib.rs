@@ -22,6 +22,7 @@
 mod benchmark;
 mod clone_no_bound;
 mod construct_runtime;
+mod construct_runtime_v2;
 mod crate_version;
 mod debug_no_bound;
 mod default_no_bound;
