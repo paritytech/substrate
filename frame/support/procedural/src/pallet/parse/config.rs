@@ -407,7 +407,7 @@ impl ConfigDef {
 				}
 			}
 
-			if !already_no_default && !is_event && enable_default {
+			if !already_no_default && enable_default {
 				default_sub_trait.push((trait_item.clone(), already_no_bounds));
 			}
 		}

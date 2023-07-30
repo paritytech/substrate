@@ -233,6 +233,8 @@ pub mod pallet {
 			type BlockLength = ();
 			type DbWeight = ();
 			#[pallet::verbatim]
+			type RuntimeEvent = ();
+			#[pallet::verbatim]
 			type RuntimeOrigin = ();
 			#[pallet::verbatim]
 			type RuntimeCall = ();
@@ -248,6 +250,7 @@ pub mod pallet {
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: 'static + Eq + Clone {
 		/// The aggregated event type of the runtime.
+		#[pallet::no_bounds]
 		type RuntimeEvent: Parameter
 			+ Member
 			+ From<Event<Self>>
