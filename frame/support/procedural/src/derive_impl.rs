@@ -139,8 +139,7 @@ fn combine_impls(
 			}
 			if let ImplItem::Type(item) = item.clone() {
 				let mut item = item.clone();
-				while let Ok(Some(pallet_attr)) =
-					take_first_item_pallet_attr::<PalletAttr>(&mut item)
+				if let Ok(Some(pallet_attr)) = take_first_item_pallet_attr::<PalletAttr>(&mut item)
 				{
 					match pallet_attr.typ {
 						PalletAttrType::Verbatim(_) => {
