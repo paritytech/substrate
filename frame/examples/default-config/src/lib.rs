@@ -128,7 +128,6 @@ pub mod tests {
 		// have an _independent_ default.
 		type BlockHashCount = ConstU64<10>;
 		type BaseCallFilter = frame_support::traits::Everything;
-		type RuntimeEvent = RuntimeEvent;
 		type OnSetCode = ();
 
 		// all of this is coming from `frame_system::config_preludes::TestDefaultConfig`.
