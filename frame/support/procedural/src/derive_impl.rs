@@ -22,7 +22,9 @@ use macro_magic::mm_core::ForeignPath;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use std::collections::HashSet;
-use syn::{parse2, parse_quote, spanned::Spanned, Ident, ImplItem, ItemImpl, Path, Result, token, Token};
+use syn::{
+	parse2, parse_quote, spanned::Spanned, token, Ident, ImplItem, ItemImpl, Path, Result, Token,
+};
 
 mod keyword {
 	syn::custom_keyword!(pallet);
@@ -47,9 +49,7 @@ pub struct PalletAttr {
 	typ: PalletAttrType,
 }
 
-fn take_first_item_pallet_attr<Attr>(
-	item: &mut syn::ImplItemType,
-) -> syn::Result<Option<Attr>>
+fn take_first_item_pallet_attr<Attr>(item: &mut syn::ImplItemType) -> syn::Result<Option<Attr>>
 where
 	Attr: syn::parse::Parse,
 {
@@ -139,7 +139,8 @@ fn combine_impls(
 			}
 			if let ImplItem::Type(item) = item.clone() {
 				let mut item = item.clone();
-				while let Ok(Some(pallet_attr)) = take_first_item_pallet_attr::<PalletAttr>(&mut item)
+				while let Ok(Some(pallet_attr)) =
+					take_first_item_pallet_attr::<PalletAttr>(&mut item)
 				{
 					match pallet_attr.typ {
 						PalletAttrType::Verbatim(_) => {
@@ -147,7 +148,7 @@ fn combine_impls(
 								type #ident = #ident;
 							};
 							return Some(modified_item)
-						}
+						},
 					}
 				}
 				// modify and insert uncolliding type items
