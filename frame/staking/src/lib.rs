@@ -645,10 +645,7 @@ pub struct StashOf<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> Convert<T::AccountId, Option<T::AccountId>> for StashOf<T> {
 	fn convert(controller: T::AccountId) -> Option<T::AccountId> {
-		match StakingLedger::<T>::get(StakingAccount::Controller(controller)) {
-			Some(ledger) => Some(ledger.stash),
-			_ => None,
-		}
+		StakingLedger::<T>::paired_account(StakingAccount::Controller(controller))
 	}
 }
 
