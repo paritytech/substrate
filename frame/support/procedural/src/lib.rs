@@ -20,18 +20,15 @@
 #![recursion_limit = "512"]
 
 mod benchmark;
-mod clone_no_bound;
+mod no_bound;
 mod construct_runtime;
 mod crate_version;
-mod debug_no_bound;
-mod default_no_bound;
 mod derive_impl;
 mod dummy_part_checker;
 mod key_prefix;
 mod match_and_insert;
 mod pallet;
 mod pallet_error;
-mod partial_eq_no_bound;
 mod storage_alias;
 mod transactional;
 mod tt_macro;
@@ -418,13 +415,13 @@ pub fn require_transactional(attr: TokenStream, input: TokenStream) -> TokenStre
 /// Derive [`Clone`] but do not bound any generic. Docs are at `frame_support::CloneNoBound`.
 #[proc_macro_derive(CloneNoBound)]
 pub fn derive_clone_no_bound(input: TokenStream) -> TokenStream {
-	clone_no_bound::derive_clone_no_bound(input)
+	no_bound::clone::derive_clone_no_bound(input)
 }
 
 /// Derive [`Debug`] but do not bound any generics. Docs are at `frame_support::DebugNoBound`.
 #[proc_macro_derive(DebugNoBound)]
 pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
-	debug_no_bound::derive_debug_no_bound(input)
+	no_bound::debug::derive_debug_no_bound(input)
 }
 
 /// Derive [`Debug`], if `std` is enabled it uses `frame_support::DebugNoBound`, if `std` is not
@@ -433,7 +430,7 @@ pub fn derive_debug_no_bound(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(RuntimeDebugNoBound)]
 pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
 	if cfg!(any(feature = "std", feature = "try-runtime")) {
-		debug_no_bound::derive_debug_no_bound(input)
+		no_bound::debug::derive_debug_no_bound(input)
 	} else {
 		let input: syn::DeriveInput = match syn::parse(input) {
 			Ok(input) => input,
@@ -460,7 +457,7 @@ pub fn derive_runtime_debug_no_bound(input: TokenStream) -> TokenStream {
 /// `frame_support::PartialEqNoBound`.
 #[proc_macro_derive(PartialEqNoBound)]
 pub fn derive_partial_eq_no_bound(input: TokenStream) -> TokenStream {
-	partial_eq_no_bound::derive_partial_eq_no_bound(input)
+	no_bound::partial_eq::derive_partial_eq_no_bound(input)
 }
 
 /// derive Eq but do no bound any generic. Docs are at `frame_support::EqNoBound`.
@@ -485,7 +482,7 @@ pub fn derive_eq_no_bound(input: TokenStream) -> TokenStream {
 /// derive `Default` but do no bound any generic. Docs are at `frame_support::DefaultNoBound`.
 #[proc_macro_derive(DefaultNoBound, attributes(default))]
 pub fn derive_default_no_bound(input: TokenStream) -> TokenStream {
-	default_no_bound::derive_default_no_bound(input)
+	no_bound::default::derive_default_no_bound(input)
 }
 
 #[proc_macro]
