@@ -20,12 +20,12 @@ use frame_support::traits::fungible::{conformance_tests, Inspect, Mutate};
 use paste::paste;
 
 macro_rules! generate_tests {
-	// Match for tests requiring a dust trap
-    ($base_path:path, regular, mutate, $ext_deposit:expr, $($test_name:ident),*) => {
+	// Handle a conformance test that requires special testing with and without a dust trap.
+    (dust_trap_variation, $base_path:path, $scope:expr, $trait:ident, $ext_deposit:expr, $($test_name:ident),*) => {
 		$(
 			paste! {
 				#[test]
-				fn [<regular_mutate_ $test_name _existential_deposit_ $ext_deposit _dust_trap_on >]() {
+				fn [<$trait _ $scope _ $test_name _existential_deposit_ $ext_deposit _dust_trap_on >]() {
 					// Some random trap account.
 					let trap_account = <Test as frame_system::Config>::AccountId::from(65174286u64);
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit).dust_trap(trap_account);
@@ -39,7 +39,7 @@ macro_rules! generate_tests {
 				}
 
 				#[test]
-				fn [< regular_mutate_ $test_name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
+				fn [< $trait _ $scope _ $test_name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
 					builder.build_and_execute_with(|| {
 						$base_path::regular::mutate::$test_name::<
@@ -51,7 +51,7 @@ macro_rules! generate_tests {
 			}
 		)*
 	};
-	// All other tests don't need testing with a dust trap
+	// Regular conformance test
     ($base_path:path, $scope:expr, $trait:ident, $ext_deposit:expr, $($test_name:ident),*) => {
 		$(
 			paste! {
@@ -69,6 +69,15 @@ macro_rules! generate_tests {
 		)*
 	};
 	($base_path:path, $ext_deposit:expr) => {
+		// regular::mutate
+		generate_tests!(
+			dust_trap_variation,
+			$base_path,
+			regular,
+			mutate,
+			$ext_deposit,
+			transfer_expendable_dust
+		);
 		generate_tests!(
 			$base_path,
 			regular,
@@ -87,7 +96,6 @@ macro_rules! generate_tests {
 			shelve_insufficient_funds,
 			transfer_success,
 			transfer_expendable_all,
-			transfer_expendable_dust,
 			transfer_protect_preserve,
 			set_balance_mint_success,
 			set_balance_burn_success,
@@ -100,6 +108,7 @@ macro_rules! generate_tests {
 			reducible_balance_expendable,
 			reducible_balance_protect_preserve
 		);
+		// regular::unbalanced
 		generate_tests!(
 			$base_path,
 			regular,
@@ -112,6 +121,7 @@ macro_rules! generate_tests {
 			set_total_issuance,
 			deactivate_and_reactivate
 		);
+		// regular::balanced
 		generate_tests!(
 			$base_path,
 			regular,

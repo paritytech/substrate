@@ -30,7 +30,7 @@ pub mod mutate {
 	///
 	/// It ensures that account balances and total issuance values are updated correctly after
 	/// minting tokens into two distinct accounts.
-	pub fn mint_into_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn mint_into_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -62,7 +62,7 @@ pub mod mutate {
 	///
 	/// This test ensures that minting tokens beyond the maximum balance value for an account
 	/// returns an error and does not change the account balance or total issuance values.
-	pub fn mint_into_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn mint_into_overflow<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -92,7 +92,7 @@ pub mod mutate {
 	///
 	/// This test verifies that minting tokens below the minimum balance for an account
 	/// returns an error and has no impact on the account balance or total issuance values.
-	pub fn mint_into_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn mint_into_below_minimum<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -122,7 +122,7 @@ pub mod mutate {
 	///
 	/// This test checks that burning tokens with [`Precision::Exact`] correctly reduces the account
 	/// balance and total issuance values by the burned amount.
-	pub fn burn_from_exact_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn burn_from_exact_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -157,7 +157,7 @@ pub mod mutate {
 	/// This test verifies that the burning tokens with best-effort precision correctly reduces the
 	/// account balance and total issuance values by the reducible balance when attempting to burn
 	/// an amount greater than the reducible balance.
-	pub fn burn_from_best_effort_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn burn_from_best_effort_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -201,7 +201,7 @@ pub mod mutate {
 	///
 	/// This test verifies that burning an amount greater than the account's balance with exact
 	/// precision returns an error and does not change the account balance or total issuance values.
-	pub fn burn_from_exact_insufficient_funds<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn burn_from_exact_insufficient_funds<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -232,7 +232,7 @@ pub mod mutate {
 	///
 	/// This test verifies that restoring an amount into each account updates their balances and the
 	/// total issuance values correctly.
-	pub fn restore_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn restore_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -264,7 +264,7 @@ pub mod mutate {
 	///
 	/// This test verifies that restoring an amount beyond the maximum balance returns an error and
 	/// does not change the account balance or total issuance values.
-	pub fn restore_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn restore_overflow<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -292,7 +292,7 @@ pub mod mutate {
 	///
 	/// This test verifies that restoring an amount below the minimum balance returns an error and
 	/// does not change the account balance or total issuance values.
-	pub fn restore_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn restore_below_minimum<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -322,7 +322,7 @@ pub mod mutate {
 	///
 	/// This test verifies that shelving an amount from an account reduces the account balance and
 	/// total issuance values by the shelved amount.
-	pub fn shelve_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn shelve_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -358,7 +358,7 @@ pub mod mutate {
 	///
 	/// This test verifies that attempting to shelve an amount greater than the account's balance
 	/// returns an error and does not change the account balance or total issuance values.
-	pub fn shelve_insufficient_funds<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn shelve_insufficient_funds<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -387,7 +387,7 @@ pub mod mutate {
 	///
 	/// This test verifies that transferring an amount between two accounts with updates the account
 	/// balances and maintains correct total issuance and active issuance values.
-	pub fn transfer_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn transfer_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -422,7 +422,7 @@ pub mod mutate {
 	/// This test verifies that transferring the entire balance from one account to another with
 	/// when preservation is expendable updates the account balances and maintains the total
 	/// issuance and active issuance values.
-	pub fn transfer_expendable_all<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn transfer_expendable_all<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -531,7 +531,7 @@ pub mod mutate {
 	/// This test verifies that attempting to transfer the entire balance with returns an error when
 	/// preservation should not allow it, and the account balances, total issuance, and active
 	/// issuance values remain unchanged.
-	pub fn transfer_protect_preserve<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn transfer_protect_preserve<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -580,7 +580,7 @@ pub mod mutate {
 	///
 	/// This test verifies that minting a balance using `set_balance` updates the account balance,
 	/// total issuance, and active issuance correctly.
-	pub fn set_balance_mint_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn set_balance_mint_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -611,7 +611,7 @@ pub mod mutate {
 	///
 	/// This test verifies that burning a balance using `set_balance` updates the account balance,
 	/// total issuance, and active issuance correctly.
-	pub fn set_balance_burn_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn set_balance_burn_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -640,7 +640,7 @@ pub mod mutate {
 
 	/// Test [`Inspect::can_deposit`] works correctly returns [`DepositConsequence::Success`]
 	/// when depositing an amount that should succeed.
-	pub fn can_deposit_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn can_deposit_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -659,7 +659,7 @@ pub mod mutate {
 
 	/// Test [`Inspect::can_deposit`] returns [`DepositConsequence::BelowMinimum`] when depositing
 	/// below the minimum balance.
-	pub fn can_deposit_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn can_deposit_below_minimum<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -681,7 +681,7 @@ pub mod mutate {
 
 	/// Test [`Inspect::can_deposit`] returns [`DepositConsequence::Overflow`] when
 	/// depositing an amount that would overflow.
-	pub fn can_deposit_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn can_deposit_overflow<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -700,7 +700,7 @@ pub mod mutate {
 
 	/// Test [`Inspect::can_withdraw`] returns [`WithdrawConsequence::Success`] when withdrawing an
 	/// amount that should succeed.
-	pub fn can_withdraw_success<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn can_withdraw_success<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -719,7 +719,7 @@ pub mod mutate {
 
 	/// Test [`Inspect::can_withdraw`] returns [`WithdrawConsequence::ReducedToZero`] when
 	/// withdrawing an amount that would reduce the account balance below the minimum balance.
-	pub fn can_withdraw_reduced_to_zero<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn can_withdraw_reduced_to_zero<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -740,7 +740,7 @@ pub mod mutate {
 
 	/// Test [`Inspect::can_withdraw`] returns [`WithdrawConsequence::BalanceLow`] when withdrawing
 	/// an amount that would result in an account balance below the current balance.
-	pub fn can_withdraw_balance_low<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn can_withdraw_balance_low<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -763,7 +763,7 @@ pub mod mutate {
 
 	/// Test [`Mutate::reducible_balance`] returns the full account balance when called with
 	/// [`Preservation::Expendable`].
-	pub fn reducible_balance_expendable<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn reducible_balance_expendable<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
@@ -781,7 +781,7 @@ pub mod mutate {
 	/// Tests [`Inspect::reducible_balance`] returns the [`Inspect::balance`] -
 	/// [`Inspect::minimum_balance`] when called with either [`Preservation::Protect`] or
 	/// [`Preservation::Preserve`].
-	pub fn reducible_balance_protect_preserve<T, AccountId>(_dust_trap: Option<AccountId>)
+	pub fn reducible_balance_protect_preserve<T, AccountId>()
 	where
 		T: Mutate<AccountId>,
 		<T as Inspect<AccountId>>::Balance: AtLeast8BitUnsigned + Debug,
