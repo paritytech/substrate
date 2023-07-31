@@ -151,7 +151,9 @@ impl<T: Config> Pallet<T> {
 		Workplan::<T>::insert((sale.region_begin, core), &workload);
 
 		let begin = sale.region_end;
-		let price = record.price + config.renewal_bump * record.price;
+		let price_cap = record.price + config.renewal_bump * record.price;
+		let now = frame_system::Pallet::<T>::block_number();
+		let price = Self::sale_price(&sale, now).min(price_cap);
 		let new_record = AllowedRenewalRecord { price, completion: Complete(workload) };
 		AllowedRenewals::<T>::remove(renewal_id);
 		AllowedRenewals::<T>::insert(AllowedRenewalId { core, when: begin }, &new_record);
