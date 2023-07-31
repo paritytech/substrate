@@ -66,8 +66,8 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Returns a new instance of a staking ledger.
 	///
-	/// The `Ledger` storage is not mutated. In order to do that, [`update`] must be called on the
-	/// returned staking ledger.
+	/// The `Ledger` storage is not mutated. In order to store, `fn update` must be called on
+	/// the returned staking ledger.
 	///
 	/// Note: as the controller accounts are being deprecated, the stash account is the same as the
 	/// controller account.
