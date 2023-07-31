@@ -780,8 +780,8 @@ where
 
 								// Make sure that the newly added block announce validation future
 								// was polled once to be registered in the task.
-								if let Poll::Ready(res) =
-									self.block_announce_validator.poll_block_announce_validation(cx)
+								if let Poll::Ready(Some(res)) =
+									self.block_announce_validator.poll_next_unpin(cx)
 								{
 									self.process_block_announce_validation_result(res)
 								}
@@ -812,9 +812,7 @@ where
 		// through the event stream between `SyncingEngine` and `Protocol` and the validation
 		// finished right after it is queued, the resulting block request (if any) can be sent
 		// right away.
-		while let Poll::Ready(result) =
-			self.block_announce_validator.poll_block_announce_validation(cx)
-		{
+		while let Poll::Ready(Some(result)) = self.block_announce_validator.poll_next_unpin(cx) {
 			self.process_block_announce_validation_result(result);
 		}
 

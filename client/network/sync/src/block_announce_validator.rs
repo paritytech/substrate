@@ -18,7 +18,7 @@
 
 //! `BlockAnnounceValidator` is responsible for async validation of block announcements.
 
-use futures::{stream::FuturesUnordered, Future, FutureExt, StreamExt};
+use futures::{stream::FuturesUnordered, Future, FutureExt, Stream, StreamExt};
 use libp2p::PeerId;
 use log::{debug, error, trace, warn};
 use sc_network_common::sync::message::BlockAnnounce;
@@ -27,7 +27,7 @@ use sp_runtime::traits::{Block as BlockT, Header, Zero};
 use std::{
 	collections::{hash_map::Entry, HashMap},
 	pin::Pin,
-	task::Poll,
+	task::{Context, Poll},
 };
 
 /// Maximum number of concurrent block announce validations.
@@ -228,52 +228,6 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 		);
 	}
 
-	/// Poll for finished block announce validations and notify `ChainSync`.
-	pub(crate) fn poll_block_announce_validation(
-		&mut self,
-		cx: &mut std::task::Context,
-	) -> Poll<BlockAnnounceValidationResult<B::Header>> {
-		match self.validations.poll_next_unpin(cx) {
-			Poll::Ready(Some(pre_validation)) => {
-				self.deallocate_slot_for_block_announce_validation(pre_validation.peer_id());
-
-				let res = match pre_validation {
-					PreValidateBlockAnnounce::Process { is_new_best, peer_id, announce } => {
-						trace!(
-							target: "sync",
-							"Finished block announce validation: from {:?}: {:?}. local_best={}",
-							peer_id,
-							announce.summary(),
-							is_new_best,
-						);
-
-						BlockAnnounceValidationResult::Process { is_new_best, peer_id, announce }
-					},
-					PreValidateBlockAnnounce::Failure { peer_id, disconnect } => {
-						debug!(
-							target: "sync",
-							"Failed announce validation: {:?}, disconnect: {}",
-							peer_id,
-							disconnect,
-						);
-						BlockAnnounceValidationResult::Failure { peer_id, disconnect }
-					},
-					PreValidateBlockAnnounce::Error { peer_id } => {
-						debug!(
-							target: "sync",
-							"Ignored announce validation from {:?} due to internal validation error",
-							peer_id,
-						);
-						BlockAnnounceValidationResult::Skip
-					},
-				};
-
-				Poll::Ready(res)
-			},
-			_ => Poll::Pending,
-		}
-	}
-
 	/// Checks if there is a slot for a block announce validation.
 	///
 	/// The total number and the number per peer of concurrent block announce validations
@@ -340,6 +294,53 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 					);
 				},
 			},
+		}
+	}
+}
+
+impl<B: BlockT> Stream for BlockAnnounceValidator<B> {
+	type Item = BlockAnnounceValidationResult<B::Header>;
+
+	/// Poll for finished block announce validations. The stream never terminates.
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		match self.validations.poll_next_unpin(cx) {
+			Poll::Ready(Some(pre_validation)) => {
+				self.deallocate_slot_for_block_announce_validation(pre_validation.peer_id());
+
+				let res = match pre_validation {
+					PreValidateBlockAnnounce::Process { is_new_best, peer_id, announce } => {
+						trace!(
+							target: "sync",
+							"Finished block announce validation: from {:?}: {:?}. local_best={}",
+							peer_id,
+							announce.summary(),
+							is_new_best,
+						);
+
+						BlockAnnounceValidationResult::Process { is_new_best, peer_id, announce }
+					},
+					PreValidateBlockAnnounce::Failure { peer_id, disconnect } => {
+						debug!(
+							target: "sync",
+							"Failed announce validation: {:?}, disconnect: {}",
+							peer_id,
+							disconnect,
+						);
+						BlockAnnounceValidationResult::Failure { peer_id, disconnect }
+					},
+					PreValidateBlockAnnounce::Error { peer_id } => {
+						debug!(
+							target: "sync",
+							"Ignored announce validation from {:?} due to internal validation error",
+							peer_id,
+						);
+						BlockAnnounceValidationResult::Skip
+					},
+				};
+
+				Poll::Ready(Some(res))
+			},
+			_ => Poll::Pending,
 		}
 	}
 }
