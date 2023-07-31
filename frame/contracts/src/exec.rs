@@ -1316,7 +1316,7 @@ where
 	}
 
 	fn transfer(&mut self, to: &T::AccountId, value: BalanceOf<T>) -> DispatchResult {
-		Self::transfer(Preservation::Protect, &self.top_frame().account_id, to, value)
+		Self::transfer(Preservation::Preserve, &self.top_frame().account_id, to, value)
 	}
 
 	fn get_storage(&mut self, key: &Key<T>) -> Option<Vec<u8>> {
