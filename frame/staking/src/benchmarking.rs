@@ -73,7 +73,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	upper_bound: u32,
 	dead_controller: bool,
 	unique_controller: bool,
-	destination_opt: PayoutDestinationOpt,
+	destination_opt: PayoutDestinationOpt<T::AccountId>,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
