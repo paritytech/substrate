@@ -28,9 +28,9 @@ use crate::{
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
-	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress,
-	NoopMigration, Origin, Pallet, PristineCode, Schedule, AutoLimit,
+	AutoLimit, BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo,
+	ContractInfoOf, DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error,
+	MigrationInProgress, NoopMigration, Origin, Pallet, PristineCode, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -657,8 +657,7 @@ fn auto_migration_control_works() {
 		assert_eq!(AutoLimit::<Test>::get(), Some(weight));
 
 		assert_noop!(
-			Contracts::control_auto_migration(
-				RuntimeOrigin::signed(ALICE), None),
+			Contracts::control_auto_migration(RuntimeOrigin::signed(ALICE), None),
 			sp_runtime::traits::BadOrigin,
 		);
 	})

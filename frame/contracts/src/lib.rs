@@ -363,17 +363,20 @@ pub mod pallet {
 				let mut consumed_weight = Weight::zero();
 
 				loop {
-					let (result, weight) = Migration::<T>::migrate(migration_weight_limit.saturating_sub(consumed_weight));
+					let (result, weight) = Migration::<T>::migrate(
+						migration_weight_limit.saturating_sub(consumed_weight),
+					);
 					consumed_weight.saturating_accrue(weight);
-	
+
 					match result {
-						// There is not enough weight to perform a migration, or make any progress, we
-						// just return the remaining weight.
-						NoMigrationPerformed | InProgress { steps_done: 0 } => return remaining_weight.saturating_sub(consumed_weight),
+						// There is not enough weight to perform a migration, or make any progress,
+						// we just return the remaining weight.
+						NoMigrationPerformed | InProgress { steps_done: 0 } =>
+							return remaining_weight.saturating_sub(consumed_weight),
 						// Migration is still in progress, we can start the next step.
 						InProgress { .. } => continue,
-						// Either no migration is in progress, or we are done with all migrations, we
-						// can do some more other work with the remaining weight.
+						// Either no migration is in progress, or we are done with all migrations,
+						// we can do some more other work with the remaining weight.
 						Completed | NoMigrationInProgress => break,
 					}
 				}
