@@ -20,7 +20,7 @@ use frame_support::traits::fungible::{conformance_tests, Inspect, Mutate};
 use paste::paste;
 
 macro_rules! generate_tests {
-	// Match for tests what require testing with a dust trap
+	// Match for tests requiring a dust trap
     ($base_path:path, regular, mutate, $ext_deposit:expr, $($test_name:ident),*) => {
 		$(
 			paste! {
