@@ -315,7 +315,7 @@ where
 				},
 				InterceptRequest::Readiness => {
 					let health = parse_rpc_response(res.into_body()).await?;
-					if health.is_syncing && health.peers > 0 {
+					if !health.is_syncing && health.peers > 0 {
 						http_ok_response(Body::empty())
 					} else {
 						http_internal_error()
