@@ -32,7 +32,7 @@ use sp_core::H256;
 use sp_io;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	testing::{Header, UintAuthorityId},
+	testing::UintAuthorityId,
 	traits::{IdentityLookup, Zero},
 	BuildStorage,
 };
@@ -46,7 +46,7 @@ pub const BLOCK_TIME: u64 = 1000;
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
-pub(crate) type AccountIndex = u64;
+pub(crate) type Nonce = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
 
@@ -86,14 +86,10 @@ pub fn is_disabled(controller: AccountId) -> bool {
 	Session::disabled_validators().contains(&validator_index)
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Authorship: pallet_authorship,
@@ -131,14 +127,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();

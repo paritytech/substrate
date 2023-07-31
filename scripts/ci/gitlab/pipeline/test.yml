@@ -162,7 +162,7 @@ cargo-check-try-runtime-and-experimental:
     - .test-refs
   script:
     - rusty-cachier snapshot create
-    - time cargo check --locked --features try-runtime,experimental
+    - time cargo check --workspace --locked --features try-runtime,experimental
     - rusty-cachier cache upload
 
 test-deterministic-wasm:
@@ -305,7 +305,7 @@ quick-benchmarks:
     WASM_BUILD_RUSTFLAGS: "-C debug-assertions -D warnings"
   script:
     - rusty-cachier snapshot create
-    - time cargo run --locked --release --features runtime-benchmarks -- benchmark pallet --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
+    - time cargo run --locked --release -p node-cli --features runtime-benchmarks -- benchmark pallet --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
     - rusty-cachier cache upload
 
 test-frame-examples-compile-to-wasm:

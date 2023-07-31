@@ -166,11 +166,11 @@ fn ensure_valid_return_type(item_fn: &ItemFn) -> Result<()> {
 	if let ReturnType::Type(_, typ) = &item_fn.sig.output {
 		let non_unit = |span| return Err(Error::new(span, "expected `()`"));
 		let Type::Path(TypePath { path, qself: _ }) = &**typ else {
-				return Err(Error::new(
+			return Err(Error::new(
 					typ.span(),
 					"Only `Result<(), BenchmarkError>` or a blank return type is allowed on benchmark function definitions",
 				))
-			};
+		};
 		let seg = path
 			.segments
 			.last()
@@ -780,7 +780,7 @@ fn expand_benchmark(
 			let call_name = match *expr_call.func {
 				Expr::Path(expr_path) => {
 					// normal function call
-					let Some(segment) = expr_path.path.segments.last() else { return call_err(); };
+					let Some(segment) = expr_path.path.segments.last() else { return call_err() };
 					segment.ident.to_string()
 				},
 				Expr::Infer(_) => {

@@ -26,6 +26,7 @@ use std::io;
 /// Local keystore implementation
 mod local;
 pub use local::LocalKeystore;
+pub use sp_keystore::Keystore;
 
 /// Keystore error.
 #[derive(Debug, thiserror::Error)]

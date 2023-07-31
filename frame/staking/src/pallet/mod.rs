@@ -88,7 +88,7 @@ pub mod pallet {
 		/// The staking balance.
 		type Currency: LockableCurrency<
 			Self::AccountId,
-			Moment = Self::BlockNumber,
+			Moment = BlockNumberFor<Self>,
 			Balance = Self::CurrencyBalance,
 		>;
 		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
@@ -119,14 +119,14 @@ pub mod pallet {
 		/// Something that provides the election functionality.
 		type ElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 			// we only accept an election provider that has staking as data provider.
 			DataProvider = Pallet<Self>,
 		>;
 		/// Something that provides the election functionality at genesis.
 		type GenesisElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 			DataProvider = Pallet<Self>,
 		>;
 
@@ -201,7 +201,7 @@ pub mod pallet {
 
 		/// Something that can estimate the next session change, accurately or as a best effort
 		/// guess.
-		type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
+		type NextNewSession: EstimateNextNewSession<BlockNumberFor<Self>>;
 
 		/// The maximum number of nominators rewarded for each validator.
 		///
@@ -797,16 +797,12 @@ pub mod pallet {
 					<T::GenesisElectionProvider as ElectionProviderBase>::MaxWinners::get()
 			);
 
-			sp_std::if_std! {
-				sp_io::TestExternalities::new_empty().execute_with(||
-					assert!(
-						T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
-						"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
-						T::SlashDeferDuration::get(),
-						T::BondingDuration::get(),
-					)
-				);
-			}
+			assert!(
+				T::SlashDeferDuration::get() < T::BondingDuration::get() || T::BondingDuration::get() == 0,
+				"As per documentation, slash defer duration ({}) should be less than bonding duration ({}).",
+				T::SlashDeferDuration::get(),
+				T::BondingDuration::get(),
+			)
 		}
 
 		#[cfg(feature = "try-runtime")]

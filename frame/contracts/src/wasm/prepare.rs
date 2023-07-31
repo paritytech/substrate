@@ -64,7 +64,7 @@ impl LoadedModule {
 		config
 			.wasm_multi_value(false)
 			.wasm_mutable_global(false)
-			.wasm_sign_extension(false)
+			.wasm_sign_extension(true)
 			.wasm_bulk_memory(false)
 			.wasm_reference_types(false)
 			.wasm_tail_call(false)
@@ -168,8 +168,8 @@ impl LoadedModule {
 					let _ = import.ty().func().ok_or("expected a function")?;
 
 					if !<T as Config>::ChainExtension::enabled() &&
-						import.name().as_bytes() == b"seal_call_chain_extension" ||
-						import.name().as_bytes() == b"call_chain_extension"
+						(import.name().as_bytes() == b"seal_call_chain_extension" ||
+							import.name().as_bytes() == b"call_chain_extension")
 					{
 						return Err("Module uses chain extensions but chain extensions are disabled")
 					}
@@ -286,11 +286,12 @@ where
 	validate::<E, T>(code.as_ref(), schedule, determinism)?;
 
 	// Calculate deposit for storing contract code and `code_info` in two different storage items.
-	let bytes_added = code.len().saturating_add(<CodeInfo<T>>::max_encoded_len()) as u32;
+	let code_len = code.len() as u32;
+	let bytes_added = code_len.saturating_add(<CodeInfo<T>>::max_encoded_len() as u32);
 	let deposit = Diff { bytes_added, items_added: 2, ..Default::default() }
 		.update_contract::<T>(None)
 		.charge_or_zero();
-	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0 };
+	let code_info = CodeInfo { owner, deposit, determinism, refcount: 0, code_len };
 	let code_hash = T::Hashing::hash(&code);
 
 	Ok(WasmBlob { code, code_info, code_hash })
@@ -320,6 +321,7 @@ pub mod benchmarking {
 			// this is a helper function for benchmarking which skips deposit collection
 			deposit: Default::default(),
 			refcount: 0,
+			code_len: code.len() as u32,
 			determinism,
 		};
 		let code_hash = T::Hashing::hash(&code);
@@ -667,6 +669,22 @@ mod tests {
 				(import "env" "memory" (memory 1 1))
 				(func (export "call"))
 				(func (export "deploy"))
+			)
+			"#,
+			Ok(_)
+		);
+
+		prepare_test!(
+			signed_extension_works,
+			r#"
+			(module
+				(import "env" "memory" (memory 1 1))
+				(func (export "deploy"))
+				(func (export "call"))
+				(func (param i32) (result i32)
+					local.get 0
+					i32.extend8_s
+				)
 			)
 			"#,
 			Ok(_)

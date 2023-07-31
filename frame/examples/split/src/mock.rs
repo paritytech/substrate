@@ -17,16 +17,13 @@
 
 use crate as pallet_template;
 use frame_support::{derive_impl, sp_runtime::BuildStorage};
+use sp_core::ConstU64;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		TemplatePallet: pallet_template,
@@ -37,6 +34,8 @@ frame_support::construct_runtime!(
 /// details.
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
+	type Block = Block;
+	type BlockHashCount = ConstU64<10>;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
