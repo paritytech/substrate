@@ -26,9 +26,8 @@ pub mod mutate {
 	use sp_arithmetic::traits::AtLeast8BitUnsigned;
 	use sp_runtime::traits::{Bounded, Zero};
 
-	/// Test the `mint_into` function for successful token minting.
+	/// Test [`Mutate::mint_into`] for successful token minting.
 	///
-	/// This test checks the `mint_into` function in the `Mutate` trait implementation for type `T`.
 	/// It ensures that account balances and total issuance values are updated correctly after
 	/// minting tokens into two distinct accounts.
 	pub fn mint_into_success<T, AccountId>(_dust_trap: Option<AccountId>)
@@ -59,7 +58,7 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + amount_0 + amount_1);
 	}
 
-	/// Test the `mint_into` function for overflow prevention.
+	/// Test [`Mutate::mint_into`] for overflow prevention.
 	///
 	/// This test ensures that minting tokens beyond the maximum balance value for an account
 	/// returns an error and does not change the account balance or total issuance values.
@@ -89,7 +88,7 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + amount);
 	}
 
-	/// Test the `mint_into` function for handling balances below the minimum value.
+	/// Test [`Mutate::mint_into`] for handling balances below the minimum value.
 	///
 	/// This test verifies that minting tokens below the minimum balance for an account
 	/// returns an error and has no impact on the account balance or total issuance values.
@@ -119,10 +118,10 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance);
 	}
 
-	/// Test the `burn_from` function for successfully burning an exact amount of tokens.
+	/// Test [`Mutate::burn_from`] for successfully burning an exact amount of tokens.
 	///
-	/// This test checks that the `burn_from` function with `Precision::Exact` correctly
-	/// reduces the account balance and total issuance values by the burned amount.
+	/// This test checks that burning tokens with [`Precision::Exact`] correctly reduces the account
+	/// balance and total issuance values by the burned amount.
 	pub fn burn_from_exact_success<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -153,11 +152,11 @@ pub mod mutate {
 		);
 	}
 
-	/// Test the `burn_from` function for successfully burning tokens with a best-effort approach.
+	/// Test [`Mutate::burn_from`] for successfully burning tokens with [`Precision::BestEffort`].
 	///
-	/// This test verifies that the `burn_from` function with `Precision::BestEffort` correctly
-	/// reduces the account balance and total issuance values by the reducible balance when
-	/// attempting to burn an amount greater than the reducible balance.
+	/// This test verifies that the burning tokens with best-effort precision correctly reduces the
+	/// account balance and total issuance values by the reducible balance when attempting to burn
+	/// an amount greater than the reducible balance.
 	pub fn burn_from_best_effort_success<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -197,11 +196,11 @@ pub mod mutate {
 		);
 	}
 
-	/// Test the `burn_from` function for handling insufficient funds with `Precision::Exact`.
+	/// Test [`Mutate::burn_from`] handling of insufficient funds when called with
+	/// [`Precision::Exact`].
 	///
-	/// This test verifies that burning an amount greater than the account's balance with
-	/// `Precision::Exact` returns an error and does not change the account balance or total
-	/// issuance values.
+	/// This test verifies that burning an amount greater than the account's balance with exact
+	/// precision returns an error and does not change the account balance or total issuance values.
 	pub fn burn_from_exact_insufficient_funds<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -229,7 +228,7 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance);
 	}
 
-	/// Test the `restore` function for successful restoration.
+	/// Test [`Mutate::restore`] for successful restoration.
 	///
 	/// This test verifies that restoring an amount into each account updates their balances and the
 	/// total issuance values correctly.
@@ -261,7 +260,7 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + amount_0 + amount_1);
 	}
 
-	/// Test the `restore` function for handling balance overflow.
+	/// Test [`Mutate::restore`] handles balance overflow.
 	///
 	/// This test verifies that restoring an amount beyond the maximum balance returns an error and
 	/// does not change the account balance or total issuance values.
@@ -289,7 +288,7 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + amount);
 	}
 
-	/// Test the `restore` function for handling restoration below the minimum balance.
+	/// Test [`Mutate::restore`] handles restoration below the minimum balance.
 	///
 	/// This test verifies that restoring an amount below the minimum balance returns an error and
 	/// does not change the account balance or total issuance values.
@@ -319,7 +318,7 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance);
 	}
 
-	/// Test the `shelve` function for successful shelving.
+	/// Test [`Mutate::shelve`] for successful shelving.
 	///
 	/// This test verifies that shelving an amount from an account reduces the account balance and
 	/// total issuance values by the shelved amount.
@@ -355,7 +354,7 @@ pub mod mutate {
 		);
 	}
 
-	/// Test the `shelve` function for handling insufficient funds.
+	/// Test [`Mutate::shelve`] handles insufficient funds correctly.
 	///
 	/// This test verifies that attempting to shelve an amount greater than the account's balance
 	/// returns an error and does not change the account balance or total issuance values.
@@ -384,11 +383,10 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance);
 	}
 
-	/// Test the `transfer` function for a successful transfer.
+	/// Test [`Mutate::transfer`] for a successful transfer.
 	///
-	/// This test verifies that transferring an amount between two accounts with
-	/// `Preservation::Expendable` updates the account balances and maintains the total issuance and
-	/// active issuance values.
+	/// This test verifies that transferring an amount between two accounts with updates the account
+	/// balances and maintains correct total issuance and active issuance values.
 	pub fn transfer_success<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -418,12 +416,12 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
 	}
 
-	/// Test the `transfer` function with `Preservation::Expendable` for transferring the entire
-	/// balance.
+	/// Test calling [`Mutate::transfer`] with [`Preservation::Expendable`] correctly transfers the
+	/// entire balance.
 	///
 	/// This test verifies that transferring the entire balance from one account to another with
-	/// `Preservation::Expendable` updates the account balances and maintains the total issuance and
-	/// active issuance values.
+	/// when preservation is expendable updates the account balances and maintains the total
+	/// issuance and active issuance values.
 	pub fn transfer_expendable_all<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -454,18 +452,16 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
 	}
 
-	/// Test the transfer function with Preservation::Expendable for transferring amounts that
-	/// leaves an account with less than the minimum balance.
+	/// Test calling [`Mutate::transfer`] function with [`Preservation::Expendable`] and an amount
+	/// that results in some dust.
 	///
-	/// This test verifies that when transferring an amount using Preservation::Expendable and an
-	/// account will be left with less than the minimum balance, the account balances are updated,
-	/// dust is collected properly depending on whether a dust_trap exists, and the total issuance
-	/// and active issuance values remain consistent.
+	/// This test verifies that dust is handled correctly when an account is reaped, with and
+	/// without a dust trap.
 	///
 	/// # Parameters
 	///
-	/// - dust_trap: An optional account identifier to which dust will be collected. If None, dust
-	///   will be removed from the total and active issuance.
+	/// - dust_trap: An optional account identifier to which dust will be collected. If `None`, dust
+	///   is expected to be removed from the total and active issuance.
 	pub fn transfer_expendable_dust<T, AccountId>(dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -529,12 +525,12 @@ pub mod mutate {
 		}
 	}
 
-	/// Test the `transfer` function with `Preservation::Protect` and `Preservation::Preserve` for
+	/// Test [`Mutate::transfer`] with [`Preservation::Protect`] and [`Preservation::Preserve`]
 	/// transferring the entire balance.
 	///
-	/// This test verifies that attempting to transfer the entire balance with
-	/// `Preservation::Protect` or `Preservation::Preserve` returns an error, and the account
-	/// balances, total issuance, and active issuance values remain unchanged.
+	/// This test verifies that attempting to transfer the entire balance with returns an error when
+	/// preservation should not allow it, and the account balances, total issuance, and active
+	/// issuance values remain unchanged.
 	pub fn transfer_protect_preserve<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -580,9 +576,9 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + initial_balance * 2.into());
 	}
 
-	/// Test the set_balance function for successful minting.
+	/// Test [`Mutate::set_balance`] mints balances correctly.
 	///
-	/// This test verifies that minting a balance using set_balance updates the account balance,
+	/// This test verifies that minting a balance using `set_balance` updates the account balance,
 	/// total issuance, and active issuance correctly.
 	pub fn set_balance_mint_success<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
@@ -611,9 +607,9 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + expected_new);
 	}
 
-	/// Test the set_balance function for successful burning.
+	/// Test [`Mutate::set_balance`] burns balances correctly.
 	///
-	/// This test verifies that burning a balance using set_balance updates the account balance,
+	/// This test verifies that burning a balance using `set_balance` updates the account balance,
 	/// total issuance, and active issuance correctly.
 	pub fn set_balance_burn_success<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
@@ -642,10 +638,8 @@ pub mod mutate {
 		assert_eq!(T::active_issuance(), initial_active_issuance + expected_new);
 	}
 
-	/// Test the can_deposit function for returning a success value.
-	///
-	/// This test verifies that the can_deposit function returns DepositConsequence::Success when
-	/// depositing a reasonable amount.
+	/// Test [`Inspect::can_deposit`] works correctly returns [`DepositConsequence::Success`]
+	/// when depositing an amount that should succeed.
 	pub fn can_deposit_success<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -663,10 +657,8 @@ pub mod mutate {
 		assert_eq!(ret, DepositConsequence::Success);
 	}
 
-	/// Test the can_deposit function for returning a minimum balance error.
-	///
-	/// This test verifies that the can_deposit function returns DepositConsequence::BelowMinimum
-	/// when depositing below the minimum balance.
+	/// Test [`Inspect::can_deposit`] returns [`DepositConsequence::BelowMinimum`] when depositing
+	/// below the minimum balance.
 	pub fn can_deposit_below_minimum<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -687,10 +679,8 @@ pub mod mutate {
 		assert_eq!(ret, DepositConsequence::BelowMinimum);
 	}
 
-	/// Test the can_deposit function for returning an overflow error.
-	///
-	/// This test verifies that the can_deposit function returns DepositConsequence::Overflow when
-	/// depositing an amount that would cause an overflow.
+	/// Test [`Inspect::can_deposit`] returns [`DepositConsequence::Overflow`] when
+	/// depositing an amount that would overflow.
 	pub fn can_deposit_overflow<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -708,10 +698,8 @@ pub mod mutate {
 		assert_eq!(ret, DepositConsequence::Overflow);
 	}
 
-	/// Test the can_withdraw function for returning a success value.
-	///
-	/// This test verifies that the can_withdraw function returns WithdrawConsequence::Success when
-	/// withdrawing a reasonable amount.
+	/// Test [`Inspect::can_withdraw`] returns [`WithdrawConsequence::Success`] when withdrawing an
+	/// amount that should succeed.
 	pub fn can_withdraw_success<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -729,10 +717,8 @@ pub mod mutate {
 		assert_eq!(ret, WithdrawConsequence::Success);
 	}
 
-	/// Test the can_withdraw function for withdrawal resulting in a reduced balance of zero.
-	///
-	/// This test verifies that the can_withdraw function returns WithdrawConsequence::ReducedToZero
-	/// when withdrawing an amount that would reduce the account balance below the minimum balance.
+	/// Test [`Inspect::can_withdraw`] returns [`WithdrawConsequence::ReducedToZero`] when
+	/// withdrawing an amount that would reduce the account balance below the minimum balance.
 	pub fn can_withdraw_reduced_to_zero<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -752,11 +738,8 @@ pub mod mutate {
 		assert_eq!(ret, WithdrawConsequence::ReducedToZero(T::minimum_balance() - 1.into()));
 	}
 
-	/// Test the can_withdraw function for returning a low balance error.
-	///
-	/// This test verifies that the can_withdraw function returns WithdrawConsequence::BalanceLow
-	/// when withdrawing an amount that would result in an account balance below the current
-	/// balance.
+	/// Test [`Inspect::can_withdraw`] returns [`WithdrawConsequence::BalanceLow`] when withdrawing
+	/// an amount that would result in an account balance below the current balance.
 	pub fn can_withdraw_balance_low<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -778,10 +761,8 @@ pub mod mutate {
 		assert_eq!(ret, WithdrawConsequence::BalanceLow);
 	}
 
-	/// Test the reducible_balance function with Preservation::Expendable.
-	///
-	/// This test verifies that the reducible_balance function returns the full account balance when
-	/// using Preservation::Expendable.
+	/// Test [`Mutate::reducible_balance`] returns the full account balance when called with
+	/// [`Preservation::Expendable`].
 	pub fn reducible_balance_expendable<T, AccountId>(_dust_trap: Option<AccountId>)
 	where
 		T: Mutate<AccountId>,
@@ -797,10 +778,7 @@ pub mod mutate {
 		assert_eq!(ret, initial_balance);
 	}
 
-	/// Conformance tests for [`Inspect::reducible_balance`] function with [`Preservation::Protect`]
-	/// and [`Preservation::Preserve`].
-	///
-	/// Verifies [`Inspect::reducible_balance`] returns the [`Inspect::balance`] -
+	/// Tests [`Inspect::reducible_balance`] returns the [`Inspect::balance`] -
 	/// [`Inspect::minimum_balance`] when called with either [`Preservation::Protect`] or
 	/// [`Preservation::Preserve`].
 	pub fn reducible_balance_protect_preserve<T, AccountId>(_dust_trap: Option<AccountId>)
