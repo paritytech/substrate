@@ -165,9 +165,11 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 				.assimilate_storage(storage),
 		}?;
 
-		storage
-			.top
-			.insert(sp_core::storage::well_known_keys::CODE.to_vec(), self.code.clone());
+		if !self.code.is_empty() {
+			storage
+				.top
+				.insert(sp_core::storage::well_known_keys::CODE.to_vec(), self.code.clone());
+		}
 
 		Ok(())
 	}
@@ -593,10 +595,12 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 				}),
 		};
 
-		raw_genesis.top.insert(
-			StorageKey(sp_core::storage::well_known_keys::CODE.to_vec()),
-			StorageData(self.code.clone()),
-		);
+		if !self.code.is_empty() {
+			raw_genesis.top.insert(
+				StorageKey(sp_core::storage::well_known_keys::CODE.to_vec()),
+				StorageData(self.code.clone()),
+			);
+		}
 
 		Ok(ChainSpecJsonContainer {
 			client_spec: self.client_spec.clone(),
@@ -949,6 +953,23 @@ mod tests {
 	}
 
 	#[test]
+	fn check_if_code_is_valid_for_raw_without_code() {
+		let spec = ChainSpec::<()>::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/raw_no_code.json").to_vec(),
+		))
+		.unwrap();
+
+		let j = from_str::<Value>(&spec.as_json(true).unwrap()).unwrap();
+		std::fs::write("/tmp/11.json", serde_json::to_string_pretty(&j).unwrap());
+
+		let mut path = VecDeque::from(["genesis", "raw", "top", "0x3a636f6465"].map(String::from));
+		assert!(json_eval_value_at_key(&j, &mut path, &|v| { *v == "0x010101" }));
+
+		let mut path = ["code"].map(String::from).into();
+		assert!(!json_contains_path(&j, &mut path));
+	}
+
+	#[test]
 	fn check_if_code_is_removed_from_raw_with_encoded() {
 		let spec = ChainSpec::<()>::from_json_bytes(Cow::Owned(
 			include_bytes!("../res/raw_with_code.json").to_vec(),
@@ -1007,6 +1028,21 @@ mod tests {
 			.top
 			.get(&well_known_keys::CODE.to_vec())
 			.map(|v| *v == vec![6, 7, 8])
+			.unwrap())
+	}
+
+	#[test]
+	fn check_code_in_assimilated_storage_for_raw_without_code() {
+		let spec = ChainSpec::<()>::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/raw_no_code.json").to_vec(),
+		))
+		.unwrap();
+
+		let storage = spec.build_storage().unwrap();
+		assert!(storage
+			.top
+			.get(&well_known_keys::CODE.to_vec())
+			.map(|v| *v == vec![1, 1, 1])
 			.unwrap())
 	}
 }
