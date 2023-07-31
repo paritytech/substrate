@@ -293,9 +293,9 @@ impl<T: Config> Pallet<T> {
 	/// to pay the right payee for the given staker account.
 	fn make_payout(stash: &T::AccountId, amount: BalanceOf<T>) -> Option<PositiveImbalanceOf<T>> {
 		// NOTE: temporary getter while `Payee` -> `Payees` lazy migration is taking place.
-		// Can replace with `dest = Self:payees(stash)` once migration is done.
+		// Can replace with `dest = Self:payees(stash);` once migration is done.
 		let dest =
-			Self::get_payout_destination(stash, Self::bonded(stash).expect("bonded stash, qed."));
+			Self::bonded(stash).and_then(|c| Some(Self::get_payout_destination(stash, c)))?;
 
 		// Closure to handle the `Stake` payout destination, used in `Stake` and `Split` variants.
 		let payout_destination_stake = |a: BalanceOf<T>| -> Option<PositiveImbalanceOf<T>> {
