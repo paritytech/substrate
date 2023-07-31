@@ -110,6 +110,7 @@ impl CoretimeInterface for TestCoretimeProvider {
 		if when > Self::latest() {
 			panic!("Asking for revenue info in the future {:?} {:?}", when, Self::latest());
 		}
+
 		let mut total = 0;
 		CoretimeSpending::mutate(|s| {
 			s.retain(|(n, a)| {
@@ -141,6 +142,14 @@ impl CoretimeInterface for TestCoretimeProvider {
 	}
 	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
 		NotifyRevenueInfo::mutate(|s| s.pop())
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_core_count(count: u16) {
+		NotifyCoreCount::mutate(|s| s.insert(0, count));
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_revenue_info(when: Self::BlockNumber, revenue: Self::Balance) {
+		NotifyRevenueInfo::mutate(|s| s.push((when, revenue)));
 	}
 }
 impl TestCoretimeProvider {

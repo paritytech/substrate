@@ -53,7 +53,7 @@ pub trait CoretimeInterface {
 	type AccountId: Parameter;
 
 	/// A (Relay-chain-side) balance.
-	type Balance;
+	type Balance: AtLeast32BitUnsigned;
 
 	/// A (Relay-chain-side) block number.
 	type BlockNumber: AtLeast32BitUnsigned
@@ -122,6 +122,18 @@ pub trait CoretimeInterface {
 	/// notified of revenue information. The Relay-chain must be configured to ensure that only a
 	/// single revenue information destination exists.
 	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)>;
+
+	/// Ensure that core count is updated to the provided value.
+	///
+	/// This is only used for benchmarking.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_core_count(count: u16);
+
+	/// Ensure that revenue information is updated to the provided value.
+	///
+	/// This is only used for benchmarking.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_revenue_info(when: Self::BlockNumber, revenue: Self::Balance);
 }
 
 impl CoretimeInterface for () {
@@ -147,4 +159,8 @@ impl CoretimeInterface for () {
 	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
 		None
 	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_core_count(_count: u16) {}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_revenue_info(_when: Self::BlockNumber, _revenue: Self::Balance) {}
 }
