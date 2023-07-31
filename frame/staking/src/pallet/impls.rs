@@ -172,8 +172,12 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		let account = StakingAccount::Stash(validator_stash.clone());
-		let mut ledger = Self::ledger(account.clone())
-			.or_else(|e| Err(e.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))))?;
+		let mut ledger = Self::ledger(account.clone()).or_else(|_| {
+			if StakingLedger::<T>::is_bonded(account) {
+				Err(Error::<T>::NotController.into())
+			} else {
+				Err(Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))
+			}
 		})?;
 
 		ledger
@@ -300,8 +304,8 @@ impl<T: Config> Pallet<T> {
 			RewardDestination::Controller => Self::bonded(stash)
 				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
 			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
-			RewardDestination::Staked =>
-				if let Some(mut ledger) = Self::ledger(Stash(stash.clone())).ok() {
+			RewardDestination::Staked => Self::ledger(Stash(stash.clone()))
+				.and_then(|mut ledger| {
 					ledger.active += amount;
 					ledger.total += amount;
 					let r = T::Currency::deposit_into_existing(stash, amount).ok();
@@ -310,10 +314,9 @@ impl<T: Config> Pallet<T> {
 						.update()
 						.defensive_proof("ledger fetched from storage, so it exists; qed.");
 
-					r
-				} else {
-					None
-				},
+					Ok(r)
+				})
+				.unwrap_or_default(),
 			RewardDestination::Account(dest_account) =>
 				Some(T::Currency::deposit_creating(&dest_account, amount)),
 			RewardDestination::None => None,

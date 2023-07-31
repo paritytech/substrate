@@ -1245,7 +1245,10 @@ pub mod pallet {
 			// the bonded map and ledger are mutated directly as this extrinsic is related to a
 			// (temporary) passive migration.
 			Self::ledger(StakingAccount::Stash(stash.clone())).map(|ledger| {
-				let controller = ledger.controller().ok_or(Error::<T>::NotController)?;
+				let controller = ledger.controller()
+                    .defensive_proof("ledger was fetched used the StakingInterface, so controller field must exist; qed.")
+                    .ok_or(Error::<T>::NotController)?;
+
 				if controller == stash {
 					// stash is already its own controller.
 					return Err(Error::<T>::AlreadyPaired.into())
