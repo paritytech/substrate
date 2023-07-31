@@ -21,7 +21,7 @@
 
 use crate::{
 	block_announce_validator::{
-		BlockAnnounceValidator as BlockAnnounceValidatorStream, PollBlockAnnounceValidation,
+		BlockAnnounceValidationResult, BlockAnnounceValidator as BlockAnnounceValidatorStream,
 	},
 	service::{self, chain_sync::ToServiceCommand},
 	ChainSync, ClientError, SyncingService,
@@ -477,11 +477,11 @@ where
 	/// Process the result of the block announce validation.
 	fn process_block_announce_validation_result(
 		&mut self,
-		validation_result: PollBlockAnnounceValidation<B::Header>,
+		validation_result: BlockAnnounceValidationResult<B::Header>,
 	) {
 		match validation_result {
-			PollBlockAnnounceValidation::Skip => {},
-			PollBlockAnnounceValidation::Process { is_new_best, peer_id, announce } => {
+			BlockAnnounceValidationResult::Skip => {},
+			BlockAnnounceValidationResult::Process { is_new_best, peer_id, announce } => {
 				self.chain_sync.on_validated_block_announce(is_new_best, peer_id, &announce);
 
 				self.update_peer_info(&peer_id);
@@ -492,7 +492,7 @@ where
 					}
 				}
 			},
-			PollBlockAnnounceValidation::Failure { peer_id, disconnect } => {
+			BlockAnnounceValidationResult::Failure { peer_id, disconnect } => {
 				if disconnect {
 					self.network_service
 						.disconnect_peer(peer_id, self.block_announce_protocol_name.clone());

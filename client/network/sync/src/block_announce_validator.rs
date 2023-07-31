@@ -83,7 +83,7 @@ impl<H> PreValidateBlockAnnounce<H> {
 
 /// Result of [`BlockAnnounceValidator::poll_block_announce_validation`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum PollBlockAnnounceValidation<H> {
+pub(crate) enum BlockAnnounceValidationResult<H> {
 	/// The announcement failed at validation.
 	///
 	/// The peer reputation should be decreased.
@@ -118,15 +118,14 @@ enum AllocateSlotForBlockAnnounceValidation {
 
 pub(crate) struct BlockAnnounceValidator<B: BlockT> {
 	/// A type to check incoming block announcements.
-	block_announce_validator:
-		Box<dyn sp_consensus::block_validation::BlockAnnounceValidator<B> + Send>,
+	validator: Box<dyn sp_consensus::block_validation::BlockAnnounceValidator<B> + Send>,
 
 	/// All block announcements that are currently being validated.
-	block_announce_validation:
+	validations:
 		FuturesUnordered<Pin<Box<dyn Future<Output = PreValidateBlockAnnounce<B::Header>> + Send>>>,
 
-	/// Stats per peer about the number of concurrent block announce validations.
-	block_announce_validation_per_peer_stats: HashMap<PeerId, usize>,
+	/// Number of concurrent block announce validations per peer.
+	validations_per_peer: HashMap<PeerId, usize>,
 }
 
 impl<B: BlockT> BlockAnnounceValidator<B> {
@@ -134,9 +133,9 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 		validator: Box<dyn sp_consensus::block_validation::BlockAnnounceValidator<B> + Send>,
 	) -> Self {
 		Self {
-			block_announce_validator: validator,
-			block_announce_validation: Default::default(),
-			block_announce_validation_per_peer_stats: Default::default(),
+			validator,
+			validations: Default::default(),
+			validations_per_peer: Default::default(),
 		}
 	}
 
@@ -195,9 +194,9 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 
 		// Let external validator check the block announcement.
 		let assoc_data = announce.data.as_ref().map_or(&[][..], |v| v.as_slice());
-		let future = self.block_announce_validator.validate(header, assoc_data);
+		let future = self.validator.validate(header, assoc_data);
 
-		self.block_announce_validation.push(
+		self.validations.push(
 			async move {
 				match future.await {
 					Ok(Validation::Success { is_new_best }) => PreValidateBlockAnnounce::Process {
@@ -233,8 +232,8 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 	pub(crate) fn poll_block_announce_validation(
 		&mut self,
 		cx: &mut std::task::Context,
-	) -> Poll<PollBlockAnnounceValidation<B::Header>> {
-		match self.block_announce_validation.poll_next_unpin(cx) {
+	) -> Poll<BlockAnnounceValidationResult<B::Header>> {
+		match self.validations.poll_next_unpin(cx) {
 			Poll::Ready(Some(pre_validation)) => {
 				self.deallocate_slot_for_block_announce_validation(pre_validation.peer_id());
 
@@ -248,7 +247,7 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 							is_new_best,
 						);
 
-						PollBlockAnnounceValidation::Process { is_new_best, peer_id, announce }
+						BlockAnnounceValidationResult::Process { is_new_best, peer_id, announce }
 					},
 					PreValidateBlockAnnounce::Failure { peer_id, disconnect } => {
 						debug!(
@@ -257,7 +256,7 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 							peer_id,
 							disconnect,
 						);
-						PollBlockAnnounceValidation::Failure { peer_id, disconnect }
+						BlockAnnounceValidationResult::Failure { peer_id, disconnect }
 					},
 					PreValidateBlockAnnounce::Error { peer_id } => {
 						debug!(
@@ -265,7 +264,7 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 							"Ignored announce validation from {:?} due to internal validation error",
 							peer_id,
 						);
-						PollBlockAnnounceValidation::Skip
+						BlockAnnounceValidationResult::Skip
 					},
 				};
 
@@ -290,11 +289,11 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 		&mut self,
 		peer_id: &PeerId,
 	) -> AllocateSlotForBlockAnnounceValidation {
-		if self.block_announce_validation.len() >= MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS {
+		if self.validations.len() >= MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS {
 			return AllocateSlotForBlockAnnounceValidation::TotalMaximumSlotsReached
 		}
 
-		match self.block_announce_validation_per_peer_stats.entry(*peer_id) {
+		match self.validations_per_peer.entry(*peer_id) {
 			Entry::Vacant(entry) => {
 				entry.insert(1);
 				AllocateSlotForBlockAnnounceValidation::Allocated
@@ -313,7 +312,7 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 	/// Should be called when a block announce validation is finished, to update the slots
 	/// of the peer that send the block announce.
 	fn deallocate_slot_for_block_announce_validation(&mut self, peer_id: &PeerId) {
-		match self.block_announce_validation_per_peer_stats.entry(*peer_id) {
+		match self.validations_per_peer.entry(*peer_id) {
 			Entry::Vacant(_) => {
 				error!(
 					target: "sync",
