@@ -90,7 +90,7 @@ parameter_types! {
 	pub static CoretimeSpending: Vec<(u32, u64)> = Default::default();
 	pub static CoretimeWorkplan: BTreeMap<(u32, CoreIndex), Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
 	pub static CoretimeUsage: BTreeMap<CoreIndex, Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
-	pub static CoretimeInPool: CoreMaskBitCount = Default::default();
+	pub static CoretimeInPool: CoreMaskBitCount = 0;
 	pub static NotifyCoreCount: Vec<u16> = Default::default();
 	pub static NotifyRevenueInfo: Vec<(u32, u64)> = Default::default();
 }
