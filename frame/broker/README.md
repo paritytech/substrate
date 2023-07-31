@@ -24,15 +24,3 @@ indicates usage of a single core one time over a timeslice.
 														| <-------\
 price fixed, unsold assigned to instapool, system cores reserved -/
 ```
-
-## TODO
-
-- More Events
-
-- Benchmarks
-- Weights
-- Final docs
-- Tests
-  - Tests for dropping out of date storage
-  - Tests for core count changes
-  - Tests for every error

@@ -1194,7 +1194,9 @@ pub mod pallet {
 					()
 				);
 			} else {
-				let MultiAssetIdConversionResult::Converted(asset_id) = T::MultiAssetIdConverter::try_convert(asset) else {
+				let MultiAssetIdConversionResult::Converted(asset_id) =
+					T::MultiAssetIdConverter::try_convert(asset)
+				else {
 					return Err(())
 				};
 				let minimal = T::Assets::minimum_balance(asset_id);
