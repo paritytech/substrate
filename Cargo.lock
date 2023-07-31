@@ -9887,6 +9887,7 @@ dependencies = [
  "array-bytes",
  "async-channel",
  "async-trait",
+ "event-listener",
  "fork-tree",
  "futures",
  "futures-timer",

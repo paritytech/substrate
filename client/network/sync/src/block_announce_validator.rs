@@ -18,6 +18,7 @@
 
 //! `BlockAnnounceValidator` is responsible for async validation of block announcements.
 
+use event_listener::{Event, EventListener};
 use futures::{stream::FuturesUnordered, Future, FutureExt, Stream, StreamExt};
 use libp2p::PeerId;
 use log::{debug, error, trace, warn};
@@ -124,6 +125,10 @@ pub(crate) struct BlockAnnounceValidator<B: BlockT> {
 		FuturesUnordered<Pin<Box<dyn Future<Output = PreValidateBlockAnnounce<B::Header>> + Send>>>,
 	/// Number of concurrent block announce validations per peer.
 	validations_per_peer: HashMap<PeerId, usize>,
+	/// Wake-up event when new validations are pushed.
+	event: Event,
+	/// Listener for wake-up events in [`Stream::poll_next`] implementation.
+	event_listener: Option<EventListener>,
 }
 
 impl<B: BlockT> BlockAnnounceValidator<B> {
@@ -134,6 +139,8 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 			validator,
 			validations: Default::default(),
 			validations_per_peer: Default::default(),
+			event: Event::new(),
+			event_listener: None,
 		}
 	}
 
@@ -224,12 +231,13 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 			}
 			.boxed(),
 		);
+
+		// Make sure [`Stream::poll_next`] is woken up.
+		self.event.notify(1);
 	}
 
 	// TODO: merge this code into future above.
-	fn handle_pre_validation(
-		pre_validation: PreValidateBlockAnnounce<B::Header>,
-	) -> BlockAnnounceValidationResult<B::Header> {
+	fn handle_pre_validation(pre_validation: PreValidateBlockAnnounce<B::Header>) -> BlockAnnounceValidationResult<B::Header> {
 		match pre_validation {
 			PreValidateBlockAnnounce::Process { is_new_best, peer_id, announce } => {
 				trace!(
@@ -337,15 +345,26 @@ impl<B: BlockT> Stream for BlockAnnounceValidator<B> {
 
 	/// Poll for finished block announce validations. The stream never terminates.
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-		match self.validations.poll_next_unpin(cx) {
-			Poll::Ready(Some(pre_validation)) => {
-				self.deallocate_slot_for_block_announce_validation(pre_validation.peer_id());
+		loop {
+			match self.validations.poll_next_unpin(cx) {
+				Poll::Ready(Some(pre_validation)) => {
+					self.event_listener = None;
 
-				let validation = Self::handle_pre_validation(pre_validation);
+					self.deallocate_slot_for_block_announce_validation(pre_validation.peer_id());
 
-				Poll::Ready(Some(validation))
-			},
-			_ => Poll::Pending,
+					let res = Self::handle_pre_validation(pre_validation);
+
+					return Poll::Ready(Some(res))
+				},
+				Poll::Ready(None) => {
+					if self.event_listener.is_none() {
+						self.event_listener = Some(self.event.listen());
+					}
+
+					// TODO: poll `event_listener`.
+				},
+				_ => return Poll::Pending,
+			}
 		}
 	}
 }
