@@ -20,13 +20,13 @@
 #![recursion_limit = "512"]
 
 mod benchmark;
-mod no_bound;
 mod construct_runtime;
 mod crate_version;
 mod derive_impl;
 mod dummy_part_checker;
 mod key_prefix;
 mod match_and_insert;
+mod no_bound;
 mod pallet;
 mod pallet_error;
 mod storage_alias;
