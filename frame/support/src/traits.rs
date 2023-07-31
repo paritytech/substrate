@@ -80,8 +80,10 @@ pub use metadata::{
 };
 
 mod hooks;
+#[allow(deprecated)]
+pub use hooks::GenesisBuild;
 pub use hooks::{
-	GenesisBuild, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize,
+	BuildGenesisConfig, Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize,
 	OnRuntimeUpgrade, OnTimestampSet,
 };
 
@@ -109,8 +111,9 @@ pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, St
 
 mod messages;
 pub use messages::{
-	EnqueueMessage, ExecuteOverweightError, Footprint, NoopServiceQueues, ProcessMessage,
-	ProcessMessageError, QueuePausedQuery, ServiceQueues, TransformOrigin,
+	EnqueueMessage, EnqueueWithOrigin, ExecuteOverweightError, Footprint, HandleMessage,
+	NoopServiceQueues, ProcessMessage, ProcessMessageError, QueuePausedQuery, ServiceQueues,
+	TransformOrigin,
 };
 
 #[cfg(feature = "try-runtime")]

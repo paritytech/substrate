@@ -183,10 +183,11 @@ pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::Perbill;
 
 	/// The current storage version.
 	#[cfg(not(any(test, feature = "runtime-benchmarks")))]
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(12);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
 
 	/// Hard coded storage version for running tests that depend on the current storage version.
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
@@ -209,7 +210,7 @@ pub mod pallet {
 		/// be instantiated from existing codes that use this deprecated functionality. It will
 		/// be removed eventually. Hence for new `pallet-contracts` deployments it is okay
 		/// to supply a dummy implementation for this type (because it is never used).
-		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
+		type Randomness: Randomness<Self::Hash, BlockNumberFor<Self>>;
 
 		/// The currency in which fees are paid and contract balances are held.
 		type Currency: ReservableCurrency<Self::AccountId> // TODO: Move to fungible traits
@@ -290,6 +291,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type DepositPerItem: Get<BalanceOf<Self>>;
 
+		/// The percentage of the storage deposit that should be held for using a code hash.
+		/// Instantiating a contract, or calling [`chain_extension::Ext::add_delegate_dependency`]
+		/// protects the code from being removed. In order to prevent abuse these actions are
+		/// protected with a percentage of the code deposit.
+		#[pallet::constant]
+		type CodeHashLockupDepositPercent: Get<Perbill>;
+
 		/// The address generator used to generate the addresses of contracts.
 		type AddressGenerator: AddressGenerator<Self>;
 
@@ -304,6 +312,11 @@ pub mod pallet {
 		/// The maximum allowable length in bytes for storage keys.
 		#[pallet::constant]
 		type MaxStorageKeyLen: Get<u32>;
+
+		/// The maximum number of delegate_dependencies that a contract can lock with
+		/// [`chain_extension::Ext::add_delegate_dependency`].
+		#[pallet::constant]
+		type MaxDelegateDependencies: Get<u32>;
 
 		/// Make contract callable functions marked as `#[unstable]` available.
 		///
@@ -325,23 +338,23 @@ pub mod pallet {
 		///
 		/// # Examples
 		/// ```
-		/// use pallet_contracts::migration::{v9, v10, v11};
+		/// use pallet_contracts::migration::{v10, v11};
 		/// # struct Runtime {};
-		/// type Migrations = (v9::Migration<Runtime>, v10::Migration<Runtime>, v11::Migration<Runtime>);
+		/// type Migrations = (v10::Migration<Runtime>, v11::Migration<Runtime>);
 		/// ```
 		///
 		/// If you have a single migration step, you can use a tuple with a single element:
 		/// ```
-		/// use pallet_contracts::migration::v9;
+		/// use pallet_contracts::migration::v10;
 		/// # struct Runtime {};
-		/// type Migrations = (v9::Migration<Runtime>,);
+		/// type Migrations = (v10::Migration<Runtime>,);
 		/// ```
 		type Migrations: MigrateSequence;
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_idle(_block: T::BlockNumber, mut remaining_weight: Weight) -> Weight {
+		fn on_idle(_block: BlockNumberFor<T>, mut remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
 
 			loop {
@@ -730,7 +743,7 @@ pub mod pallet {
 			}
 
 			output.gas_meter.into_dispatch_result(
-				output.result.map(|(_address, result)| result),
+				output.result.map(|(_address, output)| output),
 				T::WeightInfo::instantiate_with_code(code_len, data_len, salt_len),
 			)
 		}
@@ -961,6 +974,14 @@ pub mod pallet {
 		MigrationInProgress,
 		/// Migrate dispatch call was attempted but no migration was performed.
 		NoMigrationPerformed,
+		/// The contract has reached its maximum number of delegate dependencies.
+		MaxDelegateDependenciesReached,
+		/// The dependency was not found in the contract's delegate dependencies.
+		DelegateDependencyNotFound,
+		/// The contract already depends on the given delegate dependency.
+		DelegateDependencyAlreadyExists,
+		/// Can not add a delegate dependency to the code hash of the contract itself.
+		CannotAddSelfAsDelegateDependency,
 	}
 
 	/// A mapping from a contract's code hash to its code.

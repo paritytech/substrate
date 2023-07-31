@@ -35,7 +35,6 @@
 // --no-median-slopes
 // --no-min-squares
 // --extrinsic=*
-// --execution=wasm
 // --wasm-execution=compiled
 // --heap-pages=4096
 // --output=./frame/nfts/src/weights.rs

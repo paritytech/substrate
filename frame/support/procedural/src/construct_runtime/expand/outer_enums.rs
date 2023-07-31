@@ -100,9 +100,7 @@ pub fn expand_outer_enum(
 	let enum_name_ident = Ident::new(enum_ty.struct_name(), Span::call_site());
 
 	for pallet_decl in pallet_decls {
-		let Some(pallet_entry) = pallet_decl.find_part(enum_name_str) else {
-			continue
-		};
+		let Some(pallet_entry) = pallet_decl.find_part(enum_name_str) else { continue };
 
 		let path = &pallet_decl.path;
 		let pallet_name = &pallet_decl.name;

@@ -20,11 +20,11 @@ use frame_election_provider_support::VoteWeight;
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
-	FixedU128, Perbill,
+	BuildStorage, FixedU128, Perbill,
 };
 
 type AccountId = u128;
-type AccountIndex = u32;
+type Nonce = u32;
 type BlockNumber = u64;
 type Balance = u128;
 
@@ -34,14 +34,13 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = sp_runtime::testing::Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
@@ -175,12 +174,9 @@ impl pallet_nomination_pools::Config for Runtime {
 impl crate::Config for Runtime {}
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
+
 frame_support::construct_runtime!(
-	pub struct Runtime where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic
+	pub struct Runtime
 	{
 		System: frame_system::{Pallet, Call, Event<T>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
@@ -192,7 +188,7 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+	let mut storage = frame_system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 	let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
 		min_join_bond: 2,
 		min_create_bond: 2,

@@ -62,14 +62,12 @@ use sp_core::{
 		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, StorageChild, StorageData,
 		StorageKey,
 	},
-	traits::SpawnNamed,
+	traits::{CallContext, SpawnNamed},
 };
-#[cfg(feature = "test-helpers")]
-use sp_keystore::KeystorePtr;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{
-		Block as BlockT, BlockIdTo, HashFor, Header as HeaderT, NumberFor, One,
+		Block as BlockT, BlockIdTo, HashingFor, Header as HeaderT, NumberFor, One,
 		SaturatedConversion, Zero,
 	},
 	Digest, Justification, Justifications, StateVersion,
@@ -161,7 +159,6 @@ pub fn new_in_mem<E, Block, G, RA>(
 	backend: Arc<in_mem::Backend<Block>>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<KeystorePtr>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -181,7 +178,6 @@ where
 		backend,
 		executor,
 		genesis_block_builder,
-		keystore,
 		spawn_handle,
 		prometheus_registry,
 		telemetry,
@@ -224,7 +220,6 @@ pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
 	genesis_block_builder: G,
-	keystore: Option<KeystorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
@@ -239,12 +234,7 @@ where
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
 {
-	let extensions = ExecutionExtensions::new(
-		Default::default(),
-		keystore,
-		sc_offchain::OffchainDb::factory_from_backend(&*backend),
-		Arc::new(executor.clone()),
-	);
+	let extensions = ExecutionExtensions::new(None, Arc::new(executor.clone()));
 
 	let call_executor =
 		LocalCallExecutor::new(backend.clone(), executor, config.clone(), extensions)?;
@@ -875,12 +865,12 @@ where
 			// We should enact state, but don't have any storage changes, so we need to execute the
 			// block.
 			(true, None, Some(ref body)) => {
-				let runtime_api = self.runtime_api();
-				let execution_context = import_block.origin.into();
+				let mut runtime_api = self.runtime_api();
 
-				runtime_api.execute_block_with_context(
+				runtime_api.set_call_context(CallContext::Onchain);
+
+				runtime_api.execute_block(
 					*parent_hash,
-					execution_context,
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
 
@@ -1277,11 +1267,11 @@ where
 		// this is a read proof, using version V0 or V1 is equivalent.
 		let root = state.storage_root(std::iter::empty(), StateVersion::V0).0;
 
-		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
+		let (proof, count) = prove_range_read_with_child_with_size::<_, HashingFor<Block>>(
 			state, size_limit, start_key,
 		)?;
 		let proof = proof
-			.into_compact_proof::<HashFor<Block>>(root)
+			.into_compact_proof::<HashingFor<Block>>(root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		Ok((proof, count))
 	}
@@ -1404,16 +1394,16 @@ where
 		proof: CompactProof,
 		start_key: &[Vec<u8>],
 	) -> sp_blockchain::Result<(KeyValueStates, usize)> {
-		let mut db = sp_state_machine::MemoryDB::<HashFor<Block>>::new(&[]);
+		let mut db = sp_state_machine::MemoryDB::<HashingFor<Block>>::new(&[]);
 		// Compact encoding
-		let _ = sp_trie::decode_compact::<sp_state_machine::LayoutV0<HashFor<Block>>, _, _>(
+		let _ = sp_trie::decode_compact::<sp_state_machine::LayoutV0<HashingFor<Block>>, _, _>(
 			&mut db,
 			proof.iter_compact_encoded_nodes(),
 			Some(&root),
 		)
 		.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		let proving_backend = sp_state_machine::TrieBackendBuilder::new(db, root).build();
-		let state = read_range_proof_check_with_child_on_proving_backend::<HashFor<Block>>(
+		let state = read_range_proof_check_with_child_on_proving_backend::<HashingFor<Block>>(
 			&proving_backend,
 			start_key,
 		)?;
@@ -1727,7 +1717,8 @@ where
 				params.overlayed_changes,
 				Some(params.storage_transaction_cache),
 				params.recorder,
-				params.context,
+				params.call_context,
+				params.extensions,
 			)
 			.map_err(Into::into)
 	}
@@ -1738,6 +1729,18 @@ where
 
 	fn state_at(&self, at: Block::Hash) -> Result<Self::StateBackend, sp_api::ApiError> {
 		self.state_at(at).map_err(Into::into)
+	}
+
+	fn initialize_extensions(
+		&self,
+		at: Block::Hash,
+		extensions: &mut sp_externalities::Extensions,
+	) -> Result<(), sp_api::ApiError> {
+		let block_number = self.expect_block_number_from_id(&BlockId::Hash(at))?;
+
+		extensions.merge(self.executor.execution_extensions().extensions(at, block_number));
+
+		Ok(())
 	}
 }
 

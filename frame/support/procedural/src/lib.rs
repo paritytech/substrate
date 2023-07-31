@@ -862,7 +862,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type RuntimeOrigin = RuntimeOrigin;
 ///     type OnSetCode = ();
 ///     type PalletInfo = PalletInfo;
-///     type Header = Header;
+///     type Block = Block;
 ///     // We decide to override this one.
 ///     type AccountData = pallet_balances::AccountData<u64>;
 /// }
@@ -879,7 +879,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type BlockWeights = ();
 ///     type BlockLength = ();
 ///     type DbWeight = ();
-///     type Index = u64;
+///     type Nonce = u64;
 ///     type BlockNumber = u64;
 ///     type Hash = sp_core::hash::H256;
 ///     type Hashing = sp_runtime::traits::BlakeTwo256;
@@ -908,13 +908,13 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 ///     type RuntimeOrigin = RuntimeOrigin;
 ///     type OnSetCode = ();
 ///     type PalletInfo = PalletInfo;
-///     type Header = Header;
+///     type Block = Block;
 ///     type AccountData = pallet_balances::AccountData<u64>;
 ///     type Version = <TestDefaultConfig as DefaultConfig>::Version;
 ///     type BlockWeights = <TestDefaultConfig as DefaultConfig>::BlockWeights;
 ///     type BlockLength = <TestDefaultConfig as DefaultConfig>::BlockLength;
 ///     type DbWeight = <TestDefaultConfig as DefaultConfig>::DbWeight;
-///     type Index = <TestDefaultConfig as DefaultConfig>::Index;
+///     type Nonce = <TestDefaultConfig as DefaultConfig>::Nonce;
 ///     type BlockNumber = <TestDefaultConfig as DefaultConfig>::BlockNumber;
 ///     type Hash = <TestDefaultConfig as DefaultConfig>::Hash;
 ///     type Hashing = <TestDefaultConfig as DefaultConfig>::Hashing;
@@ -1565,7 +1565,7 @@ pub fn unbounded(_: TokenStream, _: TokenStream) -> TokenStream {
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::whitelist_storage]
-/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+/// pub(super) type Number<T: Config> = StorageValue<_, frame_system::pallet_prelude::BlockNumberFor::<T>, ValueQuery>;
 /// ```
 ///
 /// NOTE: As with all `pallet::*` attributes, this one _must_ be written as
@@ -1657,8 +1657,7 @@ pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 /// The macro will add the following attribute:
 /// * `#[cfg(feature = "std")]`
 ///
-/// The macro will implement `sp_runtime::BuildModuleGenesisStorage` using `()` as a second
-/// generic for non-instantiable pallets.
+/// The macro will implement `sp_runtime::BuildStorage`.
 #[proc_macro_attribute]
 pub fn genesis_build(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
