@@ -131,7 +131,7 @@ impl<T: Config> StakingLedger<T> {
 			})
 			.ok_or_else(|| {
 				// this should not happen.
-				log!(debug, "staking account is bonded but ledger does not exist, unexpected.");
+				log!(debug, "staking account is bonded but ledger does not exist or it is in a bad state, unexpected.");
 				Error::<T>::NotController
 			})
 	}
