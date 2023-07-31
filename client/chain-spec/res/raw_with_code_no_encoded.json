@@ -1,0 +1,19 @@
+{
+  "name": "TestName",
+  "id": "test_id",
+  "chainType": "Local",
+  "bootNodes": [],
+  "telemetryEndpoints": null,
+  "protocolId": null,
+  "properties": null,
+  "codeSubstitutes": {},
+  "genesis": {
+    "raw": {
+      "top": {
+        "0x3a65787472696e7369635f696e646578": "0x00000000"
+      },
+      "childrenDefault": {}
+    }
+  },
+  "code": "0x060708"
+}

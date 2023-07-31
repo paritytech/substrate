@@ -40,9 +40,9 @@ use std::{
 #[serde(rename_all = "camelCase")]
 enum GenesisBuildAction {
 	#[serde(alias = "RuntimePatch")]
-	Patch(serde_json::Value),
+	Patch(json::Value),
 	#[serde(alias = "Runtime")]
-	Full(serde_json::Value),
+	Full(json::Value),
 }
 
 #[allow(deprecated)]
@@ -137,10 +137,6 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 
 impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 	fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
-		storage
-			.top
-			.insert(sp_core::storage::well_known_keys::CODE.to_vec(), self.code.clone());
-
 		match self.genesis.resolve()? {
 			#[allow(deprecated)]
 			Genesis::Runtime(gc) => gc.assimilate_storage(storage),
@@ -168,6 +164,10 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 				.get_storage_for_patch(patch)?
 				.assimilate_storage(storage),
 		}?;
+
+		storage
+			.top
+			.insert(sp_core::storage::well_known_keys::CODE.to_vec(), self.code.clone());
 
 		Ok(())
 	}
@@ -216,9 +216,9 @@ enum Genesis<G> {
 	/// State root hash of the genesis storage.
 	StateRootHash(StorageData),
 	/// Full runtime genesis config.
-	RuntimeConfig(serde_json::Value),
+	RuntimeConfig(json::Value),
 	/// Patch for default runtime genesis config.
-	RuntimeConfigPatch(serde_json::Value),
+	RuntimeConfigPatch(json::Value),
 }
 
 /// A configuration of a client. Does not include runtime storage initialization.
@@ -348,12 +348,12 @@ impl<G, E> ChainSpecBuilder<G, E> {
 		self
 	}
 
-	pub fn with_genesis_config_patch(mut self, patch: serde_json::Value) -> Self {
+	pub fn with_genesis_config_patch(mut self, patch: json::Value) -> Self {
 		self.genesis_build_action = Some(GenesisBuildAction::Patch(patch));
 		self
 	}
 
-	pub fn with_genesis_config(mut self, config: serde_json::Value) -> Self {
+	pub fn with_genesis_config(mut self, config: json::Value) -> Self {
 		self.genesis_build_action = Some(GenesisBuildAction::Full(config));
 		self
 	}
@@ -563,30 +563,45 @@ struct ChainSpecJsonContainer<G, E> {
 	#[serde(flatten)]
 	client_spec: ClientSpec<E>,
 	genesis: Genesis<G>,
-	#[serde(with = "sp_core::bytes")]
+	#[serde(with = "sp_core::bytes", skip_serializing_if = "Vec::is_empty")]
 	code: Vec<u8>,
 }
 
 impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	fn json_container(&self, raw: bool) -> Result<ChainSpecJsonContainer<G, E>, String> {
-		let genesis = match (raw, self.genesis.resolve()?) {
-			(true, Genesis::RuntimeConfigPatch(patch)) => Genesis::Raw(RawGenesis::from(
-				RuntimeCaller::new(&self.code[..]).get_storage_for_patch(patch)?,
-			)),
-			(true, Genesis::RuntimeConfig(config)) => Genesis::Raw(RawGenesis::from(
-				RuntimeCaller::new(&self.code[..]).get_storage_for_config(config)?,
-			)),
+		let mut raw_genesis = match (raw, self.genesis.resolve()?) {
+			(true, Genesis::RuntimeConfigPatch(patch)) => {
+				let storage = RuntimeCaller::new(&self.code[..]).get_storage_for_patch(patch)?;
+				RawGenesis::from(storage)
+			},
+			(true, Genesis::RuntimeConfig(config)) => {
+				let storage = RuntimeCaller::new(&self.code[..]).get_storage_for_config(config)?;
+				RawGenesis::from(storage)
+			},
 			#[allow(deprecated)]
 			(true, Genesis::Runtime(g)) => {
 				let storage = g.build_storage()?;
-				Genesis::Raw(RawGenesis::from(storage))
+				RawGenesis::from(storage)
 			},
-			(_, genesis) => genesis,
+			(true, Genesis::Raw(raw)) => raw,
+
+			(_, genesis) =>
+				return Ok(ChainSpecJsonContainer {
+					client_spec: self.client_spec.clone(),
+					genesis,
+					code: self.code.clone(),
+				}),
 		};
+
+		raw_genesis.top.insert(
+			StorageKey(sp_core::storage::well_known_keys::CODE.to_vec()),
+			StorageData(self.code.clone()),
+		);
+
 		Ok(ChainSpecJsonContainer {
 			client_spec: self.client_spec.clone(),
-			genesis,
-			code: self.code.clone(),
+			genesis: Genesis::Raw(raw_genesis),
+			code: vec![],
 		})
 	}
 
@@ -674,9 +689,11 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use serde_json::json;
+	use serde_json::{from_str, json, Value};
 	use sp_application_crypto::Ss58Codec;
+	use sp_core::storage::well_known_keys;
 	use sp_keyring::AccountKeyring;
+	use std::collections::VecDeque;
 
 	#[derive(Debug, Serialize, Deserialize)]
 	struct Genesis(BTreeMap<String, String>);
@@ -769,16 +786,38 @@ mod tests {
 		}
 	}
 
-	fn remove_code_key_from_json(json: &str) -> serde_json::Value {
-		serde_json::from_str::<serde_json::Value>(json)
-			.map(|mut c| {
-				c.as_object_mut().map(|j| {
-					j.remove_entry("code").unwrap();
-					// .expect("code field should be in blob returned by ChainSpec.as_json");
-				});
-				c
+	fn json_eval_value_at_key(
+		doc: &Value,
+		path: &mut VecDeque<String>,
+		fun: &dyn Fn(&Value) -> bool,
+	) -> bool {
+		if path.len() == 1 {
+			doc.as_object().map_or(false, |o| o.get(&path[0]).map_or(false, |v| fun(v)))
+		} else {
+			let key = path.pop_front().unwrap();
+			doc.as_object().map_or(false, |o| {
+				o.get(&key).map_or(false, |v| json_eval_value_at_key(v, path, fun))
 			})
-			.unwrap()
+		}
+	}
+
+	fn json_contains_path(doc: &Value, path: &mut VecDeque<String>) -> bool {
+		json_eval_value_at_key(doc, path, &|_| true)
+	}
+
+	fn zeroize_code_key_in_json(encoded: bool, json: &str) -> Value {
+		let mut json = from_str::<Value>(json).unwrap();
+		let (zeroing_patch, mut path) = if encoded {
+			(
+				json!({"genesis":{"raw":{"top":{"0x3a636f6465":"0x0"}}}}),
+				["genesis", "raw", "top", "0x3a636f6465"].map(String::from).into(),
+			)
+		} else {
+			(json!({"code":"0x0"}), ["code"].map(String::from).into())
+		};
+		assert!(json_contains_path(&json, &mut path));
+		json_patch::merge(&mut json, &zeroing_patch);
+		json
 	}
 
 	#[test]
@@ -811,19 +850,20 @@ mod tests {
 
 		// std::fs::write("/tmp/patch.json", output.as_json(false).unwrap());
 		// std::fs::write("/tmp/patch_raw.json", output.as_json(true).unwrap());
-		let acutal = output.as_json(false).unwrap();
-		let acutal_raw = output.as_json(true).unwrap();
 
-		let expected = include_str!("../res/substrate_test_runtime_from_patch.json");
-		let expected_raw = include_str!("../res/substrate_test_runtime_from_patch__raw.json");
+		let actual = output.as_json(false).unwrap();
+		let actual_raw = output.as_json(true).unwrap();
 
-		//'code' may chang so let's remove it. Only ensure it is there:
-		let actual = remove_code_key_from_json(acutal.as_str());
-		let actual_raw = remove_code_key_from_json(acutal_raw.as_str());
+		let expected =
+			from_str::<Value>(include_str!("../res/substrate_test_runtime_from_patch.json"))
+				.unwrap();
+		let expected_raw =
+			from_str::<Value>(include_str!("../res/substrate_test_runtime_from_patch__raw.json"))
+				.unwrap();
 
-		// Removing key changes order of keys, so modify expected too:
-		let expected = remove_code_key_from_json(expected);
-		let expected_raw = remove_code_key_from_json(expected_raw);
+		//wasm blob may change overtime so let's zero it. Also ensure it is there:
+		let actual = zeroize_code_key_in_json(false, actual.as_str());
+		let actual_raw = zeroize_code_key_in_json(true, actual_raw.as_str());
 
 		assert_eq!(actual, expected);
 		assert_eq!(actual_raw, expected_raw);
@@ -840,25 +880,25 @@ mod tests {
 			.with_extensions(Default::default())
 			.with_chain_type(ChainType::Local)
 			.with_code(substrate_test_runtime::wasm_binary_unwrap().into())
-			.with_genesis_config(serde_json::from_str(j).unwrap())
+			.with_genesis_config(from_str(j).unwrap())
 			.build();
 
 		// std::fs::write("/tmp/config.json", output.as_json(false).unwrap());
 		// std::fs::write("/tmp/config_raw.json", output.as_json(true).unwrap());
 
-		let acutal = output.as_json(false).unwrap();
-		let acutal_raw = output.as_json(true).unwrap();
+		let actual = output.as_json(false).unwrap();
+		let actual_raw = output.as_json(true).unwrap();
 
-		let expected = include_str!("../res/substrate_test_runtime_from_config.json");
-		let expected_raw = include_str!("../res/substrate_test_runtime_from_config__raw.json");
+		let expected =
+			from_str::<Value>(include_str!("../res/substrate_test_runtime_from_config.json"))
+				.unwrap();
+		let expected_raw =
+			from_str::<Value>(include_str!("../res/substrate_test_runtime_from_config__raw.json"))
+				.unwrap();
 
-		//'code' may chang so let's remove it. Only ensure it is there:
-		let actual = remove_code_key_from_json(acutal.as_str());
-		let actual_raw = remove_code_key_from_json(acutal_raw.as_str());
-
-		// Removing key changes order of keys, so modify expected too:
-		let expected = remove_code_key_from_json(expected);
-		let expected_raw = remove_code_key_from_json(expected_raw);
+		//wasm blob may change overtime so let's zero it. Also ensure it is there:
+		let actual = zeroize_code_key_in_json(false, actual.as_str());
+		let actual_raw = zeroize_code_key_in_json(true, actual_raw.as_str());
 
 		assert_eq!(actual, expected);
 		assert_eq!(actual_raw, expected_raw);
@@ -868,7 +908,6 @@ mod tests {
 	fn chain_spec_as_json_fails_with_invalid_config() {
 		sp_tracing::try_init_simple();
 		let j = include_str!(
-			// "../../../test-utils/runtime/src/test_json/default_genesis_config_invalid_2.json"
 			"../../../test-utils/runtime/src/test_json/default_genesis_config_invalid_2.json"
 		);
 		let output: ChainSpec<()> = ChainSpecBuilder::new()
@@ -877,10 +916,13 @@ mod tests {
 			.with_extensions(Default::default())
 			.with_chain_type(ChainType::Local)
 			.with_code(substrate_test_runtime::wasm_binary_unwrap().into())
-			.with_genesis_config(serde_json::from_str(j).unwrap())
+			.with_genesis_config(from_str(j).unwrap())
 			.build();
 
-		assert_eq!( output.as_json(true), Err("Invalid JSON blob: unknown field `babex`, expected one of `system`, `babe`, `substrateTest`, `balances` at line 1 column 8".to_string()) );
+		assert_eq!(
+			output.as_json(true),
+			Err("Invalid JSON blob: unknown field `babex`, expected one of `system`, `babe`, `substrateTest`, `balances` at line 1 column 8".to_string())
+		);
 	}
 
 	#[test]
@@ -904,5 +946,67 @@ mod tests {
 			.build();
 
 		assert!(output.as_json(true).unwrap_err().contains("Invalid JSON blob: unknown field `invalid_pallet`, expected one of `system`, `babe`, `substrateTest`, `balances`"));
+	}
+
+	#[test]
+	fn check_if_code_is_removed_from_raw_with_encoded() {
+		let spec = ChainSpec::<()>::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/raw_with_code.json").to_vec(),
+		))
+		.unwrap();
+
+		let j = from_str::<Value>(&spec.as_json(true).unwrap()).unwrap();
+
+		let mut path = VecDeque::from(["genesis", "raw", "top", "0x3a636f6465"].map(String::from));
+		assert!(json_eval_value_at_key(&j, &mut path, &|v| { *v == "0x060708" }));
+
+		let mut path = ["code"].map(String::from).into();
+		assert!(!json_contains_path(&j, &mut path));
+	}
+
+	#[test]
+	fn check_if_code_is_removed_from_raw_without_encoded() {
+		let spec = ChainSpec::<()>::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/raw_with_code_no_encoded.json").to_vec(),
+		))
+		.unwrap();
+
+		let j = from_str::<Value>(&spec.as_json(true).unwrap()).unwrap();
+
+		let mut path = ["genesis", "raw", "top", "0x3a636f6465"].map(String::from).into();
+		assert!(json_eval_value_at_key(&j, &mut path, &|v| { *v == "0x060708" }));
+
+		let mut path = ["code"].map(String::from).into();
+		assert!(!json_contains_path(&j, &mut path));
+	}
+
+	#[test]
+	fn check_code_in_assimilated_storage_for_raw_with_encoded() {
+		let spec = ChainSpec::<()>::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/raw_with_code.json").to_vec(),
+		))
+		.unwrap();
+
+		let storage = spec.build_storage().unwrap();
+		assert!(storage
+			.top
+			.get(&well_known_keys::CODE.to_vec())
+			.map(|v| *v == vec![6, 7, 8])
+			.unwrap())
+	}
+
+	#[test]
+	fn check_code_in_assimilated_storage_for_raw_without_encoded() {
+		let spec = ChainSpec::<()>::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/raw_with_code_no_encoded.json").to_vec(),
+		))
+		.unwrap();
+
+		let storage = spec.build_storage().unwrap();
+		assert!(storage
+			.top
+			.get(&well_known_keys::CODE.to_vec())
+			.map(|v| *v == vec![6, 7, 8])
+			.unwrap())
 	}
 }
