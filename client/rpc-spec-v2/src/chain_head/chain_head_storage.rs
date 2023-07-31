@@ -70,10 +70,10 @@ fn is_key_queryable(key: &[u8]) -> bool {
 }
 
 /// The result of making a query call.
-type QueryResult = Result<Option<StorageResult<String>>, ChainHeadStorageEvent<String>>;
+type QueryResult = Result<Option<StorageResult>, ChainHeadStorageEvent>;
 
 /// The result of iterating over keys.
-type QueryIterResult = Result<Vec<StorageResult<String>>, ChainHeadStorageEvent<String>>;
+type QueryIterResult = Result<Vec<StorageResult>, ChainHeadStorageEvent>;
 
 impl<Client, Block, BE> ChainHeadStorage<Client, Block, BE>
 where
@@ -96,13 +96,13 @@ where
 
 		result
 			.map(|opt| {
-				QueryResult::Ok(opt.map(|storage_data| StorageResult::<String> {
+				QueryResult::Ok(opt.map(|storage_data| StorageResult {
 					key: hex_string(&key.0),
 					result: StorageResultType::Value(hex_string(&storage_data.0)),
 				}))
 			})
 			.unwrap_or_else(|err| {
-				QueryResult::Err(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
+				QueryResult::Err(ChainHeadStorageEvent::Error(ErrorEvent {
 					error: err.to_string(),
 				}))
 			})
@@ -123,13 +123,13 @@ where
 
 		result
 			.map(|opt| {
-				QueryResult::Ok(opt.map(|storage_data| StorageResult::<String> {
+				QueryResult::Ok(opt.map(|storage_data| StorageResult {
 					key: hex_string(&key.0),
 					result: StorageResultType::Hash(hex_string(&storage_data.as_ref())),
 				}))
 			})
 			.unwrap_or_else(|err| {
-				QueryResult::Err(ChainHeadStorageEvent::<String>::Error(ErrorEvent {
+				QueryResult::Err(ChainHeadStorageEvent::Error(ErrorEvent {
 					error: err.to_string(),
 				}))
 			})
@@ -148,9 +148,7 @@ where
 		} else {
 			self.client.storage_keys(hash, Some(key), None)
 		}
-		.map_err(|err| {
-			ChainHeadStorageEvent::<String>::Error(ErrorEvent { error: err.to_string() })
-		})?;
+		.map_err(|err| ChainHeadStorageEvent::Error(ErrorEvent { error: err.to_string() }))?;
 
 		let mut ret = Vec::with_capacity(MAX_ITER_ITEMS);
 		let mut keys_iter = keys_iter.take(MAX_ITER_ITEMS);
@@ -178,7 +176,7 @@ where
 	) {
 		if let Some(child_key) = child_key.as_ref() {
 			if !is_key_queryable(child_key.storage_key()) {
-				let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
+				let _ = sink.send(&ChainHeadStorageEvent::Done);
 				return
 			}
 		}
@@ -242,6 +240,6 @@ where
 			let _ = sink.send(&event);
 		}
 
-		let _ = sink.send(&ChainHeadStorageEvent::<String>::Done);
+		let _ = sink.send(&ChainHeadStorageEvent::Done);
 	}
 }
