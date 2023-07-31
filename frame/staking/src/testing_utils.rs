@@ -36,7 +36,7 @@ const SEED: u32 = 0;
 
 // A helper enum to configure a payout destination without knowing the stash and controller
 // accounts beforehand.
-#[derive(PartialEq)]
+#[derive(PartialEq, Copy, Clone)]
 pub enum PayoutDestinationOpt<AccountId> {
 	Stake,
 	Controller,
@@ -46,7 +46,7 @@ pub enum PayoutDestinationOpt<AccountId> {
 
 // Options for splitting payouts. These are used to alias the stash and controller accounts, which
 // are not know at the time at usage.
-#[derive(PartialEq)]
+#[derive(PartialEq, Copy, Clone)]
 pub enum PayoutSplitOpt {
 	Stash,
 	Controller,
