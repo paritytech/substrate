@@ -209,7 +209,7 @@
 //! expose.
 
 mod expand;
-mod parse;
+pub mod parse;
 
 use cfg_expr::Predicate;
 use frame_support_procedural_tools::{
@@ -798,7 +798,7 @@ fn decl_static_assertions(
 	}
 }
 
-fn check_pallet_number(input: TokenStream2, pallet_num: usize) -> Result<()> {
+pub fn check_pallet_number(input: TokenStream2, pallet_num: usize) -> Result<()> {
 	let max_pallet_num = {
 		if cfg!(feature = "tuples-96") {
 			96

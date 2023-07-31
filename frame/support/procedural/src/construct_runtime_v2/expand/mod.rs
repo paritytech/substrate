@@ -18,12 +18,24 @@
 mod runtime_struct;
 
 use crate::construct_runtime_v2::Def;
-use quote::ToTokens;
+use crate::construct_runtime_v2::parse::pallets::AllPalletsDeclaration;
 
 pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
     let runtime_struct = runtime_struct::expand_runtime_struct(&mut def);
 
-    quote::quote!(
-		#runtime_struct
-	)
+    match def.pallets {
+        (AllPalletsDeclaration::Implicit(decl), result) => {
+            println!("Implicit {}", result.clone());
+            result
+        }
+        (AllPalletsDeclaration::Explicit(decl), result) => {
+            println!("Explicit");
+            result
+        }
+        (AllPalletsDeclaration::ExplicitExpanded(decl), _) => {
+            quote::quote!(
+                #runtime_struct
+            )
+        }
+    }
 }
