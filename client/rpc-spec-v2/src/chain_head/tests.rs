@@ -403,24 +403,23 @@ async fn get_body() {
 
 #[tokio::test]
 async fn call_runtime() {
-	let (_client, api, _sub, sub_id, block) = setup_api().await;
+	let (_client, api, mut block_sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
 	let invalid_hash = hex_string(&INVALID_HASH);
 
-	// Subscription ID is stale the disjoint event is emitted.
-	let mut sub = api
-		.subscribe(
+	// Subscription ID is invalid.
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_call",
 			["invalid_sub_id", &block_hash, "BabeApi_current_epoch", "0x00"],
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
-	assert_eq!(event, ChainHeadEvent::<String>::Disjoint);
+	assert_matches!(response, MethodResponse::LimitReached);
 
-	// Valid subscription ID with invalid block hash will error.
+	// Block hash is invalid.
 	let err = api
-		.subscribe(
+		.call::<_, serde_json::Value>(
 			"chainHead_unstable_call",
 			[&sub_id, &invalid_hash, "BabeApi_current_epoch", "0x00"],
 		)
@@ -432,8 +431,9 @@ async fn call_runtime() {
 
 	// Pass an invalid parameters that cannot be decode.
 	let err = api
-		.subscribe(
+		.call::<_, serde_json::Value>(
 			"chainHead_unstable_call",
+			// 0x0 is invalid.
 			[&sub_id, &block_hash, "BabeApi_current_epoch", "0x0"],
 		)
 		.await
@@ -442,34 +442,43 @@ async fn call_runtime() {
 		Error::Call(CallError::Custom(ref err)) if err.code() == 2003 && err.message().contains("Invalid parameter")
 	);
 
+	// Valid call.
 	let alice_id = AccountKeyring::Alice.to_account_id();
 	// Hex encoded scale encoded bytes representing the call parameters.
 	let call_parameters = hex_string(&alice_id.encode());
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_call",
 			[&sub_id, &block_hash, "AccountNonceApi_account_nonce", &call_parameters],
 		)
 		.await
 		.unwrap();
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
 
+	// Response propagated to `chainHead_follow`.
 	assert_matches!(
-			get_next_event::<ChainHeadEvent<String>>(&mut sub).await,
-			ChainHeadEvent::Done(done) if done.result == "0x0000000000000000"
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationCallDone(done) if done.operation_id == operation_id && done.output == "0x0000000000000000"
 	);
 
 	// The `current_epoch` takes no parameters and not draining the input buffer
 	// will cause the execution to fail.
-	let mut sub = api
-		.subscribe(
-			"chainHead_unstable_call",
-			[&sub_id, &block_hash, "BabeApi_current_epoch", "0x00"],
-		)
+	let response: MethodResponse = api
+		.call("chainHead_unstable_call", [&sub_id, &block_hash, "BabeApi_current_epoch", "0x00"])
 		.await
 		.unwrap();
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	// Error propagated to `chainHead_follow`.
 	assert_matches!(
-			get_next_event::<ChainHeadEvent<String>>(&mut sub).await,
-			ChainHeadEvent::Error(event) if event.error.contains("Execution failed")
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationError(error) if error.operation_id == operation_id && error.error.contains("Execution failed")
 	);
 }
 
@@ -515,7 +524,7 @@ async fn call_runtime_without_flag() {
 	let alice_id = AccountKeyring::Alice.to_account_id();
 	let call_parameters = hex_string(&alice_id.encode());
 	let err = api
-		.subscribe(
+		.call::<_, serde_json::Value>(
 			"chainHead_unstable_call",
 			[&sub_id, &block_hash, "AccountNonceApi_account_nonce", &call_parameters],
 		)
