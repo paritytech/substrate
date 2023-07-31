@@ -57,7 +57,7 @@ use crate::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
-	traits::{Currency, Get, Imbalance, OnUnbalanced},
+	traits::{Currency, Defensive, Get, Imbalance, OnUnbalanced},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -598,8 +598,8 @@ pub fn do_slash<T: Config>(
 	slash_era: EraIndex,
 ) {
 	let mut ledger = match Pallet::<T>::ledger(sp_staking::StakingAccount::Stash(stash.clone())) {
-		Some(ledger) => ledger,
-		None => return, // nothing to do.
+		Ok(ledger) => ledger,
+		Err(_) => return, // nothing to do.
 	};
 
 	let value = ledger.slash(value, T::Currency::minimum_balance(), slash_era);
@@ -613,8 +613,9 @@ pub fn do_slash<T: Config>(
 			*reward_payout = reward_payout.saturating_sub(missing);
 		}
 
-		// calling `fn Pallet::ledger` ensures that the returned ledger exists in storage, qed.
-		let _ = ledger.update();
+		let _ = ledger
+			.update()
+			.defensive_proof("ledger fetched from storage so it exists in storage; qed.");
 
 		// trigger the event
 		<Pallet<T>>::deposit_event(super::Event::<T>::Slashed {

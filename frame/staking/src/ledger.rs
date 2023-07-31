@@ -58,7 +58,7 @@ impl<T: Config> Into<Stake<BalanceOf<T>>> for &StakingLedger<T> {
 }
 
 impl<T: Config> StakingLedger<T> {
-	#[cfg(any(test, runtime_benchmarks))]
+	#[cfg(any(feature = "runtime-benchmarks", test))]
 	pub fn default_from(stash: T::AccountId) -> Self {
 		Self {
 			stash,
@@ -119,32 +119,27 @@ impl<T: Config> StakingLedger<T> {
 		}
 	}
 
-	/// Returns a staking ledger, if it is bonded and it exists.
+	/// Returns a staking ledger, if it is bonded and it exists in storage.
 	///
 	/// This getter can be called with either a controller or stash account, provided that the
 	/// account is properly wrapped in the respective [`StakingAccount`] variant. This is meant to
 	/// abstract the concept of controller/stash accounts to the caller.
-	pub(crate) fn get(account: StakingAccount<T::AccountId>) -> Option<StakingLedger<T>> {
-		let controller = if let Some(controller) = match account {
-			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash),
-			StakingAccount::Controller(controller) => Some(controller),
-		} {
-			controller
-		} else {
-			return None
-		};
+	pub(crate) fn get(account: StakingAccount<T::AccountId>) -> Result<StakingLedger<T>, Error<T>> {
+		let controller = match account {
+			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash),
+			StakingAccount::Controller(controller) => Ok(controller),
+		}?;
 
-		match <Ledger<T>>::get(&controller).map(|mut ledger| {
-			ledger.controller = Some(controller.clone());
-			ledger
-		}) {
-			Some(ledger) => Some(ledger),
-			None => {
+		<Ledger<T>>::get(&controller)
+			.map(|mut ledger| {
+				ledger.controller = Some(controller.clone());
+				ledger
+			})
+			.ok_or_else(|| {
 				// this should not happen.
-				log!(debug, "staking account is bonded but ledger does not exist, unexpected.");
-				None
-			},
-		}
+				log!(debug, "staking account is bonded but ledger does not exist or it is in a bad state, unexpected.");
+				Error::<T>::NotController
+			})
 	}
 
 	/// Returns the controller account of a staking ledger.
@@ -161,8 +156,8 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Inserts/updates a staking ledger account.
 	///
-	/// Bonds the ledger if it was not yet, signaling that this is a new ledger. The staking locks
-	/// of the stash account are updated accordingly.
+	/// Bonds the ledger if it is not bonded yet, signalling that this is a new ledger. The staking
+	/// locks of the stash account are updated accordingly.
 	///
 	/// Note: To ensure lock consistency, all the [`Ledger`] storage updates should be made through
 	/// this helper function.
@@ -185,6 +180,18 @@ impl<T: Config> StakingLedger<T> {
 		);
 
 		Ok(())
+	}
+
+	// Bonds a ledger.
+	//
+	// This method is just syntatic sugar of [`Self::update`] with a check that returns an error if
+	// the ledger has is already bonded to ensure that the method behaves as expected.
+	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
+		if <Bonded<T>>::get(&self.stash).is_some() {
+			Err(Error::<T>::AlreadyBonded)
+		} else {
+			self.update()
+		}
 	}
 
 	/// Clears all data related to a staking ledger and its bond in both [`Ledger`] and [`Bonded`]
