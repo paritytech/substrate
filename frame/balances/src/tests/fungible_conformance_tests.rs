@@ -19,18 +19,19 @@ use super::*;
 use frame_support::traits::fungible::{conformance_tests, Inspect, Mutate};
 use paste::paste;
 
-macro_rules! regular_mutate_tests {
-    ($path:path, $ext_deposit:expr, $($name:ident),*) => {
+macro_rules! generate_tests {
+	// Match for tests what require testing with a dust trap
+    ($base_path:path, regular, mutate, $ext_deposit:expr, $($test_name:ident),*) => {
 		$(
 			paste! {
 				#[test]
-				fn [<regular_mutate_ $name _existential_deposit_ $ext_deposit _dust_trap_on >]() {
+				fn [<regular_mutate_ $test_name _existential_deposit_ $ext_deposit _dust_trap_on >]() {
 					// Some random trap account.
 					let trap_account = <Test as frame_system::Config>::AccountId::from(65174286u64);
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit).dust_trap(trap_account);
 					builder.build_and_execute_with(|| {
 						Balances::set_balance(&trap_account, Balances::minimum_balance());
-						$path::$name::<
+						$base_path::regular::mutate::$test_name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
 						>(Some(trap_account));
@@ -38,10 +39,10 @@ macro_rules! regular_mutate_tests {
 				}
 
 				#[test]
-				fn [< regular_mutate_ $name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
+				fn [< regular_mutate_ $test_name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
 					builder.build_and_execute_with(|| {
-						$path::$name::<
+						$base_path::regular::mutate::$test_name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
 						>(None);
@@ -50,9 +51,28 @@ macro_rules! regular_mutate_tests {
 			}
 		)*
 	};
-	($path:path, $ext_deposit:expr) => {
-		regular_mutate_tests!(
-			$path,
+	// All other tests don't need testing with a dust trap
+    ($base_path:path, $scope:expr, $trait:ident, $ext_deposit:expr, $($test_name:ident),*) => {
+		$(
+			paste! {
+				#[test]
+				fn [< $trait _ $scope _ $test_name _existential_deposit_ $ext_deposit>]() {
+					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
+					builder.build_and_execute_with(|| {
+						$base_path::$scope::$trait::$test_name::<
+							Balances,
+							<Test as frame_system::Config>::AccountId,
+						>();
+					});
+				}
+			}
+		)*
+	};
+	($base_path:path, $ext_deposit:expr) => {
+		generate_tests!(
+			$base_path,
+			regular,
+			mutate,
 			$ext_deposit,
 			mint_into_success,
 			mint_into_overflow,
@@ -80,29 +100,10 @@ macro_rules! regular_mutate_tests {
 			reducible_balance_expendable,
 			reducible_balance_protect_preserve
 		);
-	};
-}
-
-macro_rules! regular_unbalanced_tests {
-    ($path:path, $ext_deposit:expr, $($name:ident),*) => {
-		$(
-			paste! {
-				#[test]
-				fn [< regular_unbalanced_ $name _existential_deposit_ $ext_deposit>]() {
-					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
-					builder.build_and_execute_with(|| {
-						$path::$name::<
-							Balances,
-							<Test as frame_system::Config>::AccountId,
-						>();
-					});
-				}
-			}
-		)*
-	};
-	($path:path, $ext_deposit:expr) => {
-		regular_unbalanced_tests!(
-			$path,
+		generate_tests!(
+			$base_path,
+			regular,
+			unbalanced,
 			$ext_deposit,
 			write_balance,
 			decrease_balance_expendable,
@@ -111,29 +112,10 @@ macro_rules! regular_unbalanced_tests {
 			set_total_issuance,
 			deactivate_and_reactivate
 		);
-	};
-}
-
-macro_rules! regular_balanced_tests {
-    ($path:path, $ext_deposit:expr, $($name:ident),*) => {
-		$(
-			paste! {
-				#[test]
-				fn [< regular_balanced_ $name _existential_deposit_ $ext_deposit>]() {
-					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
-					builder.build_and_execute_with(|| {
-						$path::$name::<
-							Balances,
-							<Test as frame_system::Config>::AccountId,
-						>();
-					});
-				}
-			}
-		)*
-	};
-	($path:path, $ext_deposit:expr) => {
-		regular_unbalanced_tests!(
-			$path,
+		generate_tests!(
+			$base_path,
+			regular,
+			balanced,
 			$ext_deposit,
 			issue_and_resolve_credit,
 			rescind_and_settle_debt,
@@ -144,14 +126,6 @@ macro_rules! regular_balanced_tests {
 	};
 }
 
-regular_mutate_tests!(conformance_tests::regular::mutate, 1);
-regular_mutate_tests!(conformance_tests::regular::mutate, 5);
-regular_mutate_tests!(conformance_tests::regular::mutate, 1000);
-
-regular_unbalanced_tests!(conformance_tests::regular::unbalanced, 1);
-regular_unbalanced_tests!(conformance_tests::regular::unbalanced, 5);
-regular_unbalanced_tests!(conformance_tests::regular::unbalanced, 1000);
-
-regular_balanced_tests!(conformance_tests::regular::balanced, 1);
-regular_balanced_tests!(conformance_tests::regular::balanced, 5);
-regular_balanced_tests!(conformance_tests::regular::balanced, 1000);
+generate_tests!(conformance_tests, 1);
+generate_tests!(conformance_tests, 5);
+generate_tests!(conformance_tests, 1000);
