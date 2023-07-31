@@ -172,12 +172,8 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		let account = StakingAccount::Stash(validator_stash.clone());
-		let mut ledger = Self::ledger(account.clone()).or_else(|_| {
-			if StakingLedger::<T>::is_bonded(account) {
-				Err(Error::<T>::NotController.into())
-			} else {
-				Err(Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0)))
-			}
+		let mut ledger = Self::ledger(account.clone())
+			.or_else(|e| Err(e.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))))?;
 		})?;
 
 		ledger
