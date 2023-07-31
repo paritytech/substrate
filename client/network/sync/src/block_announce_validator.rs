@@ -81,7 +81,7 @@ impl<H> PreValidateBlockAnnounce<H> {
 	}
 }
 
-/// Result of [`BlockAnnounceValidator::poll_block_announce_validation`].
+/// Item that yields [`Stream`] implementation of [`BlockAnnounceValidator`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum BlockAnnounceValidationResult<H> {
 	/// The announcement failed at validation.
@@ -119,11 +119,9 @@ enum AllocateSlotForBlockAnnounceValidation {
 pub(crate) struct BlockAnnounceValidator<B: BlockT> {
 	/// A type to check incoming block announcements.
 	validator: Box<dyn sp_consensus::block_validation::BlockAnnounceValidator<B> + Send>,
-
 	/// All block announcements that are currently being validated.
 	validations:
 		FuturesUnordered<Pin<Box<dyn Future<Output = PreValidateBlockAnnounce<B::Header>> + Send>>>,
-
 	/// Number of concurrent block announce validations per peer.
 	validations_per_peer: HashMap<PeerId, usize>,
 }
@@ -228,6 +226,42 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 		);
 	}
 
+	// TODO: merge this code into future above.
+	fn handle_pre_validation(
+		pre_validation: PreValidateBlockAnnounce<B::Header>,
+	) -> BlockAnnounceValidationResult<B::Header> {
+		match pre_validation {
+			PreValidateBlockAnnounce::Process { is_new_best, peer_id, announce } => {
+				trace!(
+					target: "sync",
+					"Finished block announce validation: from {:?}: {:?}. local_best={}",
+					peer_id,
+					announce.summary(),
+					is_new_best,
+				);
+
+				BlockAnnounceValidationResult::Process { is_new_best, peer_id, announce }
+			},
+			PreValidateBlockAnnounce::Failure { peer_id, disconnect } => {
+				debug!(
+					target: "sync",
+					"Failed announce validation: {:?}, disconnect: {}",
+					peer_id,
+					disconnect,
+				);
+				BlockAnnounceValidationResult::Failure { peer_id, disconnect }
+			},
+			PreValidateBlockAnnounce::Error { peer_id } => {
+				debug!(
+					target: "sync",
+					"Ignored announce validation from {:?} due to internal validation error",
+					peer_id,
+				);
+				BlockAnnounceValidationResult::Skip
+			},
+		}
+	}
+
 	/// Checks if there is a slot for a block announce validation.
 	///
 	/// The total number and the number per peer of concurrent block announce validations
@@ -307,38 +341,9 @@ impl<B: BlockT> Stream for BlockAnnounceValidator<B> {
 			Poll::Ready(Some(pre_validation)) => {
 				self.deallocate_slot_for_block_announce_validation(pre_validation.peer_id());
 
-				let res = match pre_validation {
-					PreValidateBlockAnnounce::Process { is_new_best, peer_id, announce } => {
-						trace!(
-							target: "sync",
-							"Finished block announce validation: from {:?}: {:?}. local_best={}",
-							peer_id,
-							announce.summary(),
-							is_new_best,
-						);
+				let validation = Self::handle_pre_validation(pre_validation);
 
-						BlockAnnounceValidationResult::Process { is_new_best, peer_id, announce }
-					},
-					PreValidateBlockAnnounce::Failure { peer_id, disconnect } => {
-						debug!(
-							target: "sync",
-							"Failed announce validation: {:?}, disconnect: {}",
-							peer_id,
-							disconnect,
-						);
-						BlockAnnounceValidationResult::Failure { peer_id, disconnect }
-					},
-					PreValidateBlockAnnounce::Error { peer_id } => {
-						debug!(
-							target: "sync",
-							"Ignored announce validation from {:?} due to internal validation error",
-							peer_id,
-						);
-						BlockAnnounceValidationResult::Skip
-					},
-				};
-
-				Poll::Ready(Some(res))
+				Poll::Ready(Some(validation))
 			},
 			_ => Poll::Pending,
 		}
