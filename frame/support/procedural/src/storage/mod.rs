@@ -18,14 +18,8 @@
 //! `decl_storage` input definition and expansion.
 
 mod genesis_config;
-mod getters;
 mod instance_trait;
-mod metadata;
 mod parse;
-mod print_pallet_upgrade;
-mod storage_info;
-mod storage_struct;
-mod store_trait;
 
 pub(crate) use instance_trait::INHERENT_INSTANCE_NAME;
 
@@ -463,45 +457,4 @@ impl HasherKind {
 			HasherKind::Identity => quote!(StorageHasherIR::Identity),
 		}
 	}
-}
-
-/// Full implementation of decl_storage.
-pub fn decl_storage_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-	let def = syn::parse_macro_input!(input as DeclStorageDef);
-	let def_ext = DeclStorageDefExt::from(def);
-
-	print_pallet_upgrade::maybe_print_pallet_upgrade(&def_ext);
-
-	let scrate = &def_ext.hidden_crate;
-	let scrate_decl = &def_ext.hidden_imports;
-	let store_trait = store_trait::decl_and_impl(&def_ext);
-	let getters = getters::impl_getters(&def_ext);
-	let metadata = metadata::impl_metadata(&def_ext);
-	let instance_trait = instance_trait::decl_and_impl(&def_ext);
-	let genesis_config = genesis_config::genesis_config_and_build_storage(&def_ext);
-	let storage_struct = storage_struct::decl_and_impl(&def_ext);
-	let storage_info = storage_info::impl_storage_info(&def_ext);
-
-	quote!(
-		use #scrate::{
-			StorageValue as _,
-			StorageMap as _,
-			StorageDoubleMap as _,
-			StorageNMap as _,
-			StoragePrefixedMap as _,
-			IterableStorageMap as _,
-			IterableStorageNMap as _,
-			IterableStorageDoubleMap as _,
-		};
-
-		#scrate_decl
-		#store_trait
-		#getters
-		#metadata
-		#instance_trait
-		#genesis_config
-		#storage_struct
-		#storage_info
-	)
-	.into()
 }

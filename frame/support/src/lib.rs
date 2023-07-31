@@ -69,11 +69,7 @@ pub use tt_call::*;
 pub mod dispatch;
 mod hash;
 pub mod storage;
-#[macro_use]
-pub mod event;
 pub mod inherent;
-#[macro_use]
-pub mod error;
 pub mod crypto;
 pub mod dispatch_context;
 pub mod instances;
@@ -531,7 +527,7 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	construct_runtime, decl_storage, match_and_insert, transactional, PalletError,
+	construct_runtime, match_and_insert, transactional, PalletError,
 	RuntimeDebugNoBound,
 };
 
