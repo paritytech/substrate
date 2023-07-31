@@ -808,7 +808,7 @@ pub mod unbalanced {
 	use sp_arithmetic::{traits::AtLeast8BitUnsigned, ArithmeticError};
 	use sp_runtime::{traits::Bounded, TokenError};
 
-	/// Conformance tests for [`Unbalanced::write_balance`].
+	/// Tests [`Unbalanced::write_balance`].
 	///
 	/// We don't need to test the Error case for this function, because the trait makes no
 	/// assumptions about the ways it can fail. That is completely an implementation detail.
@@ -853,8 +853,7 @@ pub mod unbalanced {
 		}
 	}
 
-	/// Tests for [`Unbalanced::decrease_balance`] used with preservation
-	/// [`Preservation::Expendable`].
+	/// Tests [`Unbalanced::decrease_balance`] called with [`Preservation::Expendable`].
 	pub fn decrease_balance_expendable<T, AccountId>()
 	where
 		T: Unbalanced<AccountId>,
@@ -910,8 +909,7 @@ pub mod unbalanced {
 		assert_eq!(T::balance(&account_0), 0.into());
 	}
 
-	/// Tests for [`Unbalanced::decrease_balance`] used with preservation
-	/// [`Preservation::Preserve`].
+	/// Tests [`Unbalanced::decrease_balance`] called with [`Preservation::Preserve`].
 	pub fn decrease_balance_preserve<T, AccountId>()
 	where
 		T: Unbalanced<AccountId>,
@@ -954,7 +952,7 @@ pub mod unbalanced {
 		assert_eq!(T::balance(&account_0), T::minimum_balance());
 	}
 
-	/// Conformance tests for [`Unbalanced::increase_balance`].
+	/// Tests [`Unbalanced::increase_balance`].
 	pub fn increase_balance<T, AccountId>()
 	where
 		T: Unbalanced<AccountId>,
@@ -1010,7 +1008,7 @@ pub mod unbalanced {
 		assert_eq!(T::balance(&account_0), T::Balance::max_value());
 	}
 
-	/// Conformance tests for [`Unbalanced::set_total_issuance`].
+	/// Tests [`Unbalanced::set_total_issuance`].
 	pub fn set_total_issuance<T, AccountId>()
 	where
 		T: Unbalanced<AccountId>,
@@ -1035,7 +1033,7 @@ pub mod unbalanced {
 		}
 	}
 
-	/// Conformance tests for [`Unbalanced::deactivate`] and [`Unbalanced::reactivate`].
+	/// Tests [`Unbalanced::deactivate`] and [`Unbalanced::reactivate`].
 	pub fn deactivate_and_reactivate<T, AccountId>()
 	where
 		T: Unbalanced<AccountId>,
@@ -1082,8 +1080,8 @@ pub mod balanced {
 	use sp_arithmetic::{traits::AtLeast8BitUnsigned, ArithmeticError};
 	use sp_runtime::{traits::Bounded, TokenError};
 
-	/// Conformance tests for issuing and resolving [`Credit`] imbalances with [`Balanced::issue`]
-	/// and [`Balanced::resolve`].
+	/// Tests issuing and resolving [`Credit`] imbalances with [`Balanced::issue`] and
+	/// [`Balanced::resolve`].
 	pub fn issue_and_resolve_credit<T, AccountId>()
 	where
 		T: Balanced<AccountId>,
@@ -1138,8 +1136,8 @@ pub mod balanced {
 		assert_eq!(T::balance(&account), balance_before);
 	}
 
-	/// Conformance tests for issuing and resolving [`Debt`] imbalances with [`Balanced::rescind`]
-	/// and [`Balanced::settle`].
+	/// Tests issuing and resolving [`Debt`] imbalances with [`Balanced::rescind`] and
+	/// [`Balanced::settle`].
 	pub fn rescind_and_settle_debt<T, AccountId>()
 	where
 		T: Balanced<AccountId>,
@@ -1210,7 +1208,7 @@ pub mod balanced {
 		assert_eq!(T::balance(&account), 0.into());
 	}
 
-	/// Conformance tests for [`Balanced::deposit`].
+	/// Tests [`Balanced::deposit`].
 	pub fn deposit<T, AccountId>()
 	where
 		T: Balanced<AccountId>,
@@ -1256,7 +1254,7 @@ pub mod balanced {
 		assert_eq!(T::balance(&account), T::Balance::max_value());
 	}
 
-	/// Conformance tests for [`Balanced::withdraw`].
+	/// Tests [`Balanced::withdraw`].
 	pub fn withdraw<T, AccountId>()
 	where
 		T: Balanced<AccountId>,
@@ -1322,7 +1320,7 @@ pub mod balanced {
 		assert_eq!(T::balance(&account), 0.into());
 	}
 
-	/// Conformance tests for [`Balanced::pair`].
+	/// Tests [`Balanced::pair`].
 	pub fn pair<T, AccountId>()
 	where
 		T: Balanced<AccountId>,
