@@ -338,10 +338,10 @@ impl OpaqueKeyOwnershipProof {
 }
 
 sp_api::decl_runtime_apis! {
-		/// API necessary for BEEFY voters.
-		#[api_version(3)]
+	/// API necessary for BEEFY voters.
+	#[api_version(3)]
 	pub trait BeefyApi<AuthorityId> where
-	AuthorityId : Codec + RuntimeAppPublic,
+		AuthorityId : Codec + RuntimeAppPublic,
 	{
 		/// Return the block number where BEEFY consensus is enabled/started
 		fn beefy_genesis() -> Option<NumberFor<Block>>;
