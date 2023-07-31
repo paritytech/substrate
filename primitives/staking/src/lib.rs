@@ -48,9 +48,9 @@ pub enum StakingAccount<AccountId> {
 }
 
 impl<AccountId> From<AccountId> for StakingAccount<AccountId> {
-    fn from(account: AccountId) -> Self {
-        StakingAccount::Stash(account)
-    }
+	fn from(account: AccountId) -> Self {
+		StakingAccount::Stash(account)
+	}
 }
 
 /// Representation of the status of a staker.

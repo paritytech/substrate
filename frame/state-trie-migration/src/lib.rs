@@ -1618,7 +1618,7 @@ pub(crate) mod remote_tests {
 	use remote_externalities::Mode;
 	use sp_core::H256;
 	use sp_runtime::{
-		traits::{Block as BlockT, HashFor, Header as _, One, Zero},
+		traits::{Block as BlockT, HashingFor, Header as _, One, Zero},
 		DeserializeOwned,
 	};
 	use thousands::Separable;
@@ -1698,7 +1698,7 @@ pub(crate) mod remote_tests {
 			});
 
 			let compact_proof =
-				proof.clone().into_compact_proof::<HashFor<Block>>(last_state_root).unwrap();
+				proof.clone().into_compact_proof::<HashingFor<Block>>(last_state_root).unwrap();
 			log::info!(
 				target: LOG_TARGET,
 				"proceeded to #{}, weight: [{} / {}], proof: [{} / {} / {}]",

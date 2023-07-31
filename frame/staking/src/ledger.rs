@@ -72,8 +72,8 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Returns a new instance of a staking ledger.
 	///
-	/// The `Ledger` storage is not mutated. In order to do that, [`update`] must be called on the
-	/// returned staking ledger.
+	/// The `Ledger` storage is not mutated. In order to store, `fn update` must be called on
+	/// the returned staking ledger.
 	///
 	/// Note: as the controller accounts are being deprecated, the stash account is the same as the
 	/// controller account.
@@ -114,8 +114,8 @@ impl<T: Config> StakingLedger<T> {
 	/// Returns whether a given account is bonded.
 	pub(crate) fn is_bonded(account: StakingAccount<T::AccountId>) -> bool {
 		match account {
-			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash).is_some(),
-			StakingAccount::Controller(controller) => <Ledger<T>>::get(controller).is_some(),
+			StakingAccount::Stash(stash) => <Bonded<T>>::contains_key(stash),
+			StakingAccount::Controller(controller) => <Ledger<T>>::contains_key(controller),
 		}
 	}
 
@@ -135,11 +135,7 @@ impl<T: Config> StakingLedger<T> {
 				ledger.controller = Some(controller.clone());
 				ledger
 			})
-			.ok_or_else(|| {
-				// this should not happen.
-				log!(debug, "staking account is bonded but ledger does not exist or it is in a bad state, unexpected.");
-				Error::<T>::NotController
-			})
+			.ok_or_else(|| Error::<T>::NotController)
 	}
 
 	/// Returns the controller account of a staking ledger.
@@ -164,7 +160,7 @@ impl<T: Config> StakingLedger<T> {
 	pub(crate) fn update(&self) -> Result<(), Error<T>> {
 		let mut prev_stake: Stake<BalanceOf<T>> = self.into();
 
-		if <Bonded<T>>::get(&self.stash).is_none() {
+		if !<Bonded<T>>::contains_key(&self.stash) {
 			// not bonded yet, new ledger. Note: controllers are deprecated, stash is the
 			// controller.
 			<Bonded<T>>::insert(&self.stash, &self.stash);
@@ -184,10 +180,10 @@ impl<T: Config> StakingLedger<T> {
 
 	// Bonds a ledger.
 	//
-	// This method is just syntatic sugar of [`Self::update`] with a check that returns an error if
+	// This method is just syntactic sugar of [`Self::update`] with a check that returns an error if
 	// the ledger has is already bonded to ensure that the method behaves as expected.
 	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
-		if <Bonded<T>>::get(&self.stash).is_some() {
+		if <Bonded<T>>::contains_key(&self.stash) {
 			Err(Error::<T>::AlreadyBonded)
 		} else {
 			self.update()
@@ -432,6 +428,8 @@ impl<T: Config> StakingLedger<T> {
 	}
 }
 
+// This structs makes it easy to write tests to compare staking ledgers fetched from storage. This
+// is required because the controller field is not stored in storage and it is private.
 #[cfg(test)]
 #[derive(frame_support::DebugNoBound, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct StakingLedgerInspect<T: Config> {

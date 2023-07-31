@@ -35,7 +35,8 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If the reserve balance of `who`
-	/// is less than `value`, then a non-zero second item will be returned.
+	/// is less than `value`, then the second item will be equal to the value not able to be
+	/// slashed.
 	fn slash_reserved(
 		who: &AccountId,
 		value: Self::Balance,
@@ -46,9 +47,6 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	///
 	/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
 	/// that are still 'owned' by the account holder, but which are suspendable.
-	///
-	/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
-	/// is deleted: specifically, `ReservedBalance`.
 	///
 	/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 	/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
@@ -63,13 +61,8 @@ pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
 	/// Moves up to `value` from reserved balance to free balance. This function cannot fail.
 	///
 	/// As much funds up to `value` will be moved as possible. If the reserve balance of `who`
-	/// is less than `value`, then the remaining amount will be returned.
-	///
-	/// # NOTES
-	///
-	/// - This is different from `reserve`.
-	/// - If the remaining reserved balance is less than `ExistentialDeposit`, it will
-	/// invoke `on_reserved_too_low` and could reap the account.
+	/// is less than `value`, then the remaining amount will be returned. This is different
+	/// behavior than `reserve`.
 	fn unreserve(who: &AccountId, value: Self::Balance) -> Self::Balance;
 
 	/// Moves up to `value` from reserved balance of account `slashed` to balance of account
