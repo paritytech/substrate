@@ -21,7 +21,7 @@ use super::{ConfigOp, Event, *};
 use crate::ledger::StakingLedgerInspect;
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
+	assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
 	pallet_prelude::*,
 	traits::{Currency, Get, ReservableCurrency},
@@ -170,7 +170,7 @@ fn basic_setup_works() {
 			}
 		);
 		// Account 1 does not control any stash
-		assert_eq!(Staking::ledger(1.into()), None);
+		assert_err!(Staking::ledger(1.into()), Error::<Test>::NotStash);
 
 		// ValidatorPrefs are default
 		assert_eq_uvec!(
@@ -1944,14 +1944,14 @@ fn bond_with_no_staked_value() {
 
 			// not yet removed.
 			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(1), 0));
-			assert!(Staking::ledger(1.into()).is_some());
+			assert!(Staking::ledger(1.into()).is_ok());
 			assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 			mock::start_active_era(3);
 
 			// poof. Account 1 is removed from the staking system.
 			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(1), 0));
-			assert!(Staking::ledger(1.into()).is_none());
+			assert!(Staking::ledger(1.into()).is_err());
 			assert_eq!(Balances::locks(&1).len(), 0);
 		});
 }
@@ -5517,7 +5517,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 
 		// decoding will fail now since Staking Ledger is in corrupt state
 		HistoryDepth::set(history_depth - 1);
-		assert_eq!(Staking::ledger(4.into()), None);
+		assert!(Staking::ledger(4.into()).is_err());
 
 		// make sure stakers still cannot claim rewards that they are not meant to
 		assert_noop!(
@@ -5618,7 +5618,7 @@ fn reducing_max_unlocking_chunks_abrupt() {
 		MaxUnlockingChunks::set(2);
 		start_active_era(10);
 		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 300, RewardDestination::Staked));
-		assert!(matches!(Staking::ledger(3.into()), Some(_)));
+		assert!(matches!(Staking::ledger(3.into()), Ok(_)));
 
 		// when staker unbonds
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(3), 20));
@@ -5628,7 +5628,7 @@ fn reducing_max_unlocking_chunks_abrupt() {
 		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
 			bounded_vec![UnlockChunk { value: 20 as Balance, era: 13 as EraIndex }];
 		assert!(matches!(Staking::ledger(3.into()),
-			Some(StakingLedger {
+			Ok(StakingLedger {
 				unlocking,
 				..
 			}) if unlocking==expected_unlocking));
@@ -5640,7 +5640,7 @@ fn reducing_max_unlocking_chunks_abrupt() {
 		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
 			bounded_vec![UnlockChunk { value: 20, era: 13 }, UnlockChunk { value: 50, era: 14 }];
 		assert!(matches!(Staking::ledger(3.into()),
-			Some(StakingLedger {
+			Ok(StakingLedger {
 				unlocking,
 				..
 			}) if unlocking==expected_unlocking));
@@ -5871,17 +5871,20 @@ mod ledger {
 	fn get_ledger_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// stash does not exist
-			assert_eq!(StakingLedger::<Test>::get(StakingAccount::Stash(42)), None);
+			assert_noop!(
+				StakingLedger::<Test>::get(StakingAccount::Stash(42)),
+				Error::<Test>::NotStash
+			);
 
 			// bonded and paired
 			assert_eq!(<Bonded<Test>>::get(&11), Some(11));
 
 			match StakingLedger::<Test>::get(StakingAccount::Stash(11)) {
-				Some(ledger) => {
+				Ok(ledger) => {
 					assert_eq!(ledger.controller(), Some(11));
 					assert_eq!(ledger.stash, 11);
 				},
-				None => panic!("staking ledger must exist"),
+				Err(_) => panic!("staking ledger must exist"),
 			};
 
 			// bond manually stash with different controller. This is deprecated but the migration
@@ -5890,19 +5893,19 @@ mod ledger {
 			assert_eq!(<Bonded<Test>>::get(&200), Some(100));
 
 			match StakingLedger::<Test>::get(StakingAccount::Stash(200)) {
-				Some(ledger) => {
+				Ok(ledger) => {
 					assert_eq!(ledger.controller(), Some(100));
 					assert_eq!(ledger.stash, 200);
 				},
-				None => panic!("staking ledger must exist"),
+				Err(_) => panic!("staking ledger must exist"),
 			};
 
 			match StakingLedger::<Test>::get(StakingAccount::Controller(100)) {
-				Some(ledger) => {
+				Ok(ledger) => {
 					assert_eq!(ledger.controller(), Some(100));
 					assert_eq!(ledger.stash, 200);
 				},
-				None => panic!("staking ledger must exist"),
+				Err(_) => panic!("staking ledger must exist"),
 			};
 		})
 	}

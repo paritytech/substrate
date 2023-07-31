@@ -113,32 +113,27 @@ impl<T: Config> StakingLedger<T> {
 		}
 	}
 
-	/// Returns a staking ledger, if it is bonded and it exists.
+	/// Returns a staking ledger, if it is bonded and it exists in storage.
 	///
 	/// This getter can be called with either a controller or stash account, provided that the
 	/// account is properly wrapped in the respective [`StakingAccount`] variant. This is meant to
 	/// abstract the concept of controller/stash accounts to the caller.
-	pub(crate) fn get(account: StakingAccount<T::AccountId>) -> Option<StakingLedger<T>> {
-		let controller = if let Some(controller) = match account {
-			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash),
-			StakingAccount::Controller(controller) => Some(controller),
-		} {
-			controller
-		} else {
-			return None
-		};
+	pub(crate) fn get(account: StakingAccount<T::AccountId>) -> Result<StakingLedger<T>, Error<T>> {
+		let controller = match account {
+			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash),
+			StakingAccount::Controller(controller) => Ok(controller),
+		}?;
 
-		match <Ledger<T>>::get(&controller).map(|mut ledger| {
-			ledger.controller = Some(controller.clone());
-			ledger
-		}) {
-			Some(ledger) => Some(ledger),
-			None => {
+		<Ledger<T>>::get(&controller)
+			.map(|mut ledger| {
+				ledger.controller = Some(controller.clone());
+				ledger
+			})
+			.ok_or_else(|| {
 				// this should not happen.
 				log!(debug, "staking account is bonded but ledger does not exist, unexpected.");
-				None
-			},
-		}
+				Error::<T>::NotController
+			})
 	}
 
 	/// Returns the controller account of a staking ledger.

@@ -841,10 +841,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
-				None => Ok(()),
-				Some(_) => Err(Error::<T>::AlreadyBonded),
-			}?;
+			Self::ledger(StakingAccount::Stash(stash.clone()))
+				.map_or(Ok(()), |_| Err(Error::<T>::AlreadyBonded))?;
 
 			// Reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
@@ -903,10 +901,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
-			let mut ledger = match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
-				None => Err(Error::<T>::NotStash),
-				Some(ledger) => Ok(ledger),
-			}?;
+			let mut ledger = Self::ledger(StakingAccount::Stash(stash.clone()))?;
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
@@ -960,9 +955,8 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let unlocking = Self::ledger(Controller(controller.clone()))
-				.map(|l| l.unlocking.len())
-				.ok_or(Error::<T>::NotController)?;
+			let unlocking =
+				Self::ledger(Controller(controller.clone())).map(|l| l.unlocking.len())?;
 
 			// if there are no unlocking chunks available, try to withdraw chunks older than
 			// `BondingDuration` to proceed with the unbonding.
@@ -978,8 +972,7 @@ pub mod pallet {
 
 			// we need to fetch the ledger again because it may have been mutated in the call
 			// to `Self::do_withdraw_unbonded` above.
-			let mut ledger =
-				Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
+			let mut ledger = Self::ledger(Controller(controller))?;
 			let mut value = value.min(ledger.active);
 
 			ensure!(
@@ -1087,7 +1080,7 @@ pub mod pallet {
 		pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger = Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller))?;
 
 			ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
@@ -1133,11 +1126,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger =
-				match StakingLedger::<T>::get(StakingAccount::Controller(controller.clone())) {
-					Some(ledger) => Ok(ledger),
-					None => Err(Error::<T>::NotController),
-				}?;
+			let ledger = Self::ledger(StakingAccount::Controller(controller.clone()))?;
 
 			ensure!(ledger.active >= MinNominatorBond::<T>::get(), Error::<T>::InsufficientBond);
 			let stash = &ledger.stash;
@@ -1203,10 +1192,7 @@ pub mod pallet {
 		pub fn chill(origin: OriginFor<T>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
-			let ledger = match StakingLedger::<T>::get(StakingAccount::Controller(controller)) {
-				Some(ledger) => Ok(ledger),
-				None => Err(Error::<T>::NotController),
-			}?;
+			let ledger = Self::ledger(StakingAccount::Controller(controller))?;
 
 			Self::chill_stash(&ledger.stash);
 			Ok(())
@@ -1231,7 +1217,7 @@ pub mod pallet {
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller))?;
 			let stash = &ledger.stash;
 			<Payee<T>>::insert(stash, payee);
 			Ok(())
@@ -1258,21 +1244,18 @@ pub mod pallet {
 
 			// the bonded map and ledger are mutated directly as this extrinsic is related to a
 			// (temporary) passive migration.
-			match StakingLedger::<T>::get(StakingAccount::Stash(stash.clone())) {
-				None => Err(Error::<T>::NotStash.into()),
-				Some(ledger) => {
-					let controller = ledger.controller().ok_or(Error::<T>::NotController)?;
-					if controller == stash {
-						// stash is already its own controller.
-						return Err(Error::<T>::AlreadyPaired.into())
-					}
-					// update bond and ledger.
-					<Ledger<T>>::remove(controller);
-					<Bonded<T>>::insert(&stash, &stash);
-					<Ledger<T>>::insert(&stash, ledger);
-					Ok(())
-				},
-			}
+			Self::ledger(StakingAccount::Stash(stash.clone())).map(|ledger| {
+				let controller = ledger.controller().ok_or(Error::<T>::NotController)?;
+				if controller == stash {
+					// stash is already its own controller.
+					return Err(Error::<T>::AlreadyPaired.into())
+				}
+				// update bond and ledger.
+				<Ledger<T>>::remove(controller);
+				<Bonded<T>>::insert(&stash, &stash);
+				<Ledger<T>>::insert(&stash, ledger);
+				Ok(())
+			})?
 		}
 
 		/// Sets the ideal number of validators.
@@ -1511,7 +1494,7 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller))?;
 			ensure!(!ledger.unlocking.is_empty(), Error::<T>::NoUnlockChunk);
 
 			let initial_unlocking = ledger.unlocking.len() as u32;
@@ -1589,7 +1572,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::kick(who.len() as u32))]
 		pub fn kick(origin: OriginFor<T>, who: Vec<AccountIdLookupOf<T>>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
-			let ledger = Self::ledger(Controller(controller)).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller))?;
 			let stash = &ledger.stash;
 
 			for nom_stash in who
@@ -1698,8 +1681,7 @@ pub mod pallet {
 		pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
 			// Anyone can call this function.
 			let caller = ensure_signed(origin)?;
-			let ledger =
-				Self::ledger(Controller(controller.clone())).ok_or(Error::<T>::NotController)?;
+			let ledger = Self::ledger(Controller(controller.clone()))?;
 			let stash = ledger.stash;
 
 			// In order for one user to chill another user, the following conditions must be met:
