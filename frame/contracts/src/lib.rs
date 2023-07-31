@@ -160,9 +160,12 @@ type EventRecordOf<T> =
 	EventRecord<<T as frame_system::Config>::RuntimeEvent, <T as frame_system::Config>::Hash>;
 
 #[cfg(feature = "unsafe-debug")]
-trait UnsafeDebug<T>: execution_observer::ExecutionObserver<CodeHash<T>> {}
+trait UnsafeDebug<T: frame_system::Config>: execution_observer::ExecutionObserver<CodeHash<T>> {}
 #[cfg(feature = "unsafe-debug")]
-impl<T, D> UnsafeDebug<T> for D where D: execution_observer::ExecutionObserver<CodeHash<T>> {}
+impl<T: frame_system::Config, D> UnsafeDebug<T> for D where
+	D: execution_observer::ExecutionObserver<CodeHash<T>>
+{
+}
 
 /// The old weight type.
 ///
