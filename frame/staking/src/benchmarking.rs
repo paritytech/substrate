@@ -73,7 +73,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	upper_bound: u32,
 	dead_controller: bool,
 	unique_controller: bool,
-	destination: PayoutDestination<T::AccountId>,
+	destination_opt: PayoutDestinationOpt,
 ) -> Result<(T::AccountId, Vec<(T::AccountId, T::AccountId)>), &'static str> {
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
@@ -81,9 +81,9 @@ pub fn create_validator_with_nominators<T: Config>(
 	let mut points_individual = Vec::new();
 
 	let (v_stash, v_controller) = if unique_controller {
-		create_unique_stash_controller::<T>(0, 100, destination.clone(), false)?
+		create_unique_stash_controller::<T>(0, 100, destination_opt.clone(), false)?
 	} else {
-		create_stash_controller::<T>(0, 100, destination.clone())?
+		create_stash_controller::<T>(0, 100, destination_opt.clone())?
 	};
 
 	let validator_prefs =
@@ -100,9 +100,9 @@ pub fn create_validator_with_nominators<T: Config>(
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0..upper_bound {
 		let (n_stash, n_controller) = if !dead_controller {
-			create_stash_controller::<T>(u32::MAX - i, 100, destination.clone())?
+			create_stash_controller::<T>(u32::MAX - i, 100, destination_opt)?
 		} else {
-			create_unique_stash_controller::<T>(u32::MAX - i, 100, destination.clone(), true)?
+			create_unique_stash_controller::<T>(u32::MAX - i, 100, destination_opt, true)?
 		};
 		if i < n {
 			Staking::<T>::nominate(
@@ -576,14 +576,10 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			true,
 			true,
-			PayoutDestination::Stake,
+			PayoutDestinationOpt::Split((Perbill::from_percent(50), PayoutSplitOpt::Controller)),
 		)?;
 
 		let validator_controller = <Bonded<T>>::get(&validator).unwrap();
-
-		// Re-set the controller account as split reward destination.
-		Staking::<T>::set_payee(RawOrigin::Signed(validator_controller.clone()).into(), PayoutDestination::Split((Perbill::from_percent(50), validator_controller.clone())))?;
-
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
 		<ErasValidatorPrefs<T>>::insert(current_era, validator.clone(), <Staking<T>>::validators(&validator));
@@ -594,9 +590,6 @@ benchmarks! {
 		for (_, controller) in &nominators {
 			let balance = T::Currency::free_balance(controller);
 			ensure!(balance.is_zero(), "Controller has balance, but should be dead.");
-
-			// Re-set the controller account as payout destination.
-			Staking::<T>::set_payee(RawOrigin::Signed(controller.clone()).into(), PayoutDestination::Split((Perbill::from_percent(50), controller.clone())))?;
 		}
 	}: payout_stakers(RawOrigin::Signed(caller), validator, current_era)
 	verify {
@@ -618,10 +611,8 @@ benchmarks! {
 			T::MaxNominatorRewardedPerValidator::get() as u32,
 			false,
 			true,
-			PayoutDestination::Stake,
+			PayoutDestinationOpt::Split((Perbill::from_percent(50), PayoutSplitOpt::Stash)),
 		)?;
-		// re-set the validator payee to a split destination.
-		Staking::<T>::set_payee(RawOrigin::Signed(validator.clone()).into(), PayoutDestination::Split((Perbill::from_percent(50), validator.clone())))?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
@@ -633,8 +624,6 @@ benchmarks! {
 		for (stash, _) in &nominators {
 			let balance = T::Currency::free_balance(stash);
 			nominator_balances_before.push(balance);
-			// re-set the moninator payee to a split destination.
-			Staking::<T>::set_payee(RawOrigin::Signed(stash.clone()).into(), PayoutDestination::Split((Perbill::from_percent(50), stash.clone())))?;
 		}
 	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
 	verify {
@@ -937,7 +926,7 @@ benchmarks! {
 
 		// Create a validator with a commission of 50%
 		let (stash, controller) =
-			create_stash_controller::<T>(1, 1, PayoutDestination::Stake)?;
+			create_stash_controller::<T>(1, 1, Default::default())?;
 		let validator_prefs =
 			ValidatorPrefs { commission: Perbill::from_percent(50), ..Default::default() };
 		Staking::<T>::validate(RawOrigin::Signed(controller).into(), validator_prefs)?;
@@ -1017,7 +1006,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
-				PayoutDestination::Stake,
+				PayoutDestinationOpt::Stake,
 			)
 			.unwrap();
 
@@ -1047,7 +1036,7 @@ mod tests {
 				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				false,
-				PayoutDestination::Stake,
+				PayoutDestinationOpt::Stake,
 			)
 			.unwrap();
 

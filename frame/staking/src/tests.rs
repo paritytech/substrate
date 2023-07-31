@@ -234,7 +234,7 @@ fn change_controller_works() {
 		let (stash, controller) = testing_utils::create_unique_stash_controller::<Test>(
 			0,
 			100,
-			PayoutDestination::Stake,
+			Default::default(),
 			false,
 		)
 		.unwrap();
@@ -708,9 +708,12 @@ fn nominating_and_rewards_should_work() {
 fn set_payee_also_updates_payee_destination() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Given
-		let (stash, _) =
-			testing_utils::create_stash_controller::<Test>(12, 13, PayoutDestination::Stake)
-				.unwrap();
+		let (stash, _) = testing_utils::create_stash_controller::<Test>(
+			12,
+			13,
+			testing_utils::PayoutDestinationOpt::Stake,
+		)
+		.unwrap();
 		Payees::<Test>::remove(stash);
 		// Value to be migrated
 		Payee::<Test>::insert(stash, RewardDestination::Stash);
@@ -739,9 +742,12 @@ fn update_payee_works() {
 		);
 
 		// Given
-		let (stash, controller) =
-			testing_utils::create_stash_controller::<Test>(12, 13, PayoutDestination::Stake)
-				.unwrap();
+		let (stash, controller) = testing_utils::create_stash_controller::<Test>(
+			12,
+			13,
+			testing_utils::PayoutDestinationOpt::Stake,
+		)
+		.unwrap();
 		Payees::<Test>::remove(stash);
 		// Value to be migrated
 		Payee::<Test>::insert(stash, RewardDestination::Staked);
@@ -762,9 +768,12 @@ fn update_payee_charges_on_invalid_migration() {
 		// `update_payee` is used to lazily migrate `Payee` records into `Payees` records.
 
 		// Given
-		let (stash, controller) =
-			testing_utils::create_stash_controller::<Test>(12, 13, PayoutDestination::Stake)
-				.unwrap();
+		let (stash, controller) = testing_utils::create_stash_controller::<Test>(
+			12,
+			13,
+			testing_utils::PayoutDestinationOpt::Stake,
+		)
+		.unwrap();
 		Payees::<Test>::remove(stash);
 
 		// When
@@ -787,9 +796,12 @@ fn get_destination_payout_migrates_payee() {
 		// records if they have not already been.
 
 		// Given
-		let (stash, controller) =
-			testing_utils::create_stash_controller::<Test>(12, 13, PayoutDestination::Stake)
-				.unwrap();
+		let (stash, controller) = testing_utils::create_stash_controller::<Test>(
+			12,
+			13,
+			testing_utils::PayoutDestinationOpt::Stake,
+		)
+		.unwrap();
 		Payees::<Test>::remove(stash);
 		Payee::<Test>::insert(stash, RewardDestination::Staked);
 
@@ -868,7 +880,7 @@ fn double_staking_should_fail() {
 		let (stash, controller) = testing_utils::create_unique_stash_controller::<Test>(
 			0,
 			arbitrary_value,
-			PayoutDestination::default(),
+			Default::default(),
 			false,
 		)
 		.unwrap();
@@ -902,7 +914,7 @@ fn double_controlling_attempt_should_fail() {
 		let (stash, _) = testing_utils::create_unique_stash_controller::<Test>(
 			0,
 			arbitrary_value,
-			PayoutDestination::default(),
+			Default::default(),
 			false,
 		)
 		.unwrap();
@@ -4282,7 +4294,7 @@ fn payout_creates_controller() {
 		let (stash, controller) = testing_utils::create_unique_stash_controller::<Test>(
 			0,
 			100,
-			PayoutDestination::Stake,
+			Default::default(),
 			false,
 		)
 		.unwrap();
@@ -5098,7 +5110,7 @@ fn capped_stakers_works() {
 			let (_, controller) = testing_utils::create_stash_controller::<Test>(
 				i + 10_000_000,
 				100,
-				PayoutDestination::Stake,
+				testing_utils::PayoutDestinationOpt::Stake,
 			)
 			.unwrap();
 			assert_ok!(Staking::validate(
@@ -5109,9 +5121,12 @@ fn capped_stakers_works() {
 		}
 
 		// but no more
-		let (_, last_validator) =
-			testing_utils::create_stash_controller::<Test>(1337, 100, PayoutDestination::Stake)
-				.unwrap();
+		let (_, last_validator) = testing_utils::create_stash_controller::<Test>(
+			1337,
+			100,
+			testing_utils::PayoutDestinationOpt::Stake,
+		)
+		.unwrap();
 
 		assert_noop!(
 			Staking::validate(RuntimeOrigin::signed(last_validator), ValidatorPrefs::default()),
@@ -5124,7 +5139,7 @@ fn capped_stakers_works() {
 			let (_, controller) = testing_utils::create_stash_controller::<Test>(
 				i + 20_000_000,
 				100,
-				PayoutDestination::Stake,
+				testing_utils::PayoutDestinationOpt::Stake,
 			)
 			.unwrap();
 			assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![1]));
@@ -5135,7 +5150,7 @@ fn capped_stakers_works() {
 		let (_, last_nominator) = testing_utils::create_stash_controller::<Test>(
 			30_000_000,
 			100,
-			PayoutDestination::Stake,
+			testing_utils::PayoutDestinationOpt::Stake,
 		)
 		.unwrap();
 		assert_noop!(
