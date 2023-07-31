@@ -908,7 +908,7 @@ where
 			#[cfg(feature = "unsafe-debug")]
 			{
 				let code_hash = executable.code_hash().clone();
-				T::UnsafeDebug::before_call(&code_hash, entry_point, &input_data);
+				T::Debug::before_call(&code_hash, entry_point, &input_data);
 			}
 
 			// Call into the Wasm blob.
@@ -917,7 +917,7 @@ where
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
 			#[cfg(feature = "unsafe-debug")]
-			T::UnsafeDebug::after_call(&code_hash, entry_point, &input_data, &output);
+			T::Debug::after_call(&code_hash, entry_point, &input_data, &output);
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {
