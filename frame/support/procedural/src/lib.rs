@@ -32,7 +32,6 @@ mod match_and_insert;
 mod pallet;
 mod pallet_error;
 mod partial_eq_no_bound;
-mod storage;
 mod storage_alias;
 mod transactional;
 mod tt_macro;
@@ -42,8 +41,9 @@ use macro_magic::import_tokens_attr;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use std::{cell::RefCell, str::FromStr};
-pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use syn::{parse_macro_input, Error, ItemImpl, ItemMod};
+
+pub(crate) const INHERENT_INSTANCE_NAME: &str = "__InherentHiddenInstance";
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
