@@ -17,7 +17,6 @@
 
 //! `decl_storage` input definition and expansion.
 
-mod genesis_config;
 mod instance_trait;
 mod parse;
 
