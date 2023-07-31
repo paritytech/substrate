@@ -160,7 +160,10 @@ type EventRecordOf<T> =
 	EventRecord<<T as frame_system::Config>::RuntimeEvent, <T as frame_system::Config>::Hash>;
 
 #[cfg(feature = "unsafe-debug")]
-trait UnsafeDebug<T: frame_system::Config>: execution_observer::ExecutionObserver<CodeHash<T>> {}
+pub trait UnsafeDebug<T: frame_system::Config>:
+	execution_observer::ExecutionObserver<CodeHash<T>>
+{
+}
 #[cfg(feature = "unsafe-debug")]
 impl<T: frame_system::Config, D> UnsafeDebug<T> for D where
 	D: execution_observer::ExecutionObserver<CodeHash<T>>
