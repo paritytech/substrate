@@ -301,15 +301,8 @@ pub mod pallet {
 		///
 		/// Tries to come as close to the limit as possible.
 		pub(crate) fn waste_at_most_ref_time(meter: &mut WeightMeter) {
-<<<<<<< HEAD
-			let Ok(n) = Self::calculate_ref_time_iters(&meter) else {
-				return
-			};
-			meter.defensive_saturating_accrue(T::WeightInfo::waste_ref_time_iter(n));
-=======
 			let Ok(n) = Self::calculate_ref_time_iters(&meter) else { return };
 			meter.consume(T::WeightInfo::waste_ref_time_iter(n));
->>>>>>> master
 
 			let clobber = Self::waste_ref_time_iter(vec![0u8; 64], n);
 
