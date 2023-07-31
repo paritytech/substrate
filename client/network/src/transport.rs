@@ -96,7 +96,7 @@ pub fn build_transport(
 	};
 
 	let transport = transport
-		.upgrade(upgrade::Version::V1Lazy)
+		.upgrade(upgrade::Version::V1)
 		.authenticate(authentication_config)
 		.multiplex(multiplexing_config)
 		.timeout(Duration::from_secs(20))
