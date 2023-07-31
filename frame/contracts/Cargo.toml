@@ -89,4 +89,4 @@ runtime-benchmarks = [
 	"wasm-instrument",
 ]
 try-runtime = ["frame-support/try-runtime"]
-execution-debug = []
+unsafe-debug = []

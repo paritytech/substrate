@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "execution-debug")]
+#[cfg(feature = "unsafe-debug")]
 use crate::execution_observer::ExecutionObserver;
 use crate::{
 	gas::GasMeter,
@@ -905,21 +905,19 @@ where
 			// Every non delegate call or instantiate also optionally transfers the balance.
 			self.initial_transfer()?;
 
-			#[cfg(feature = "execution-debug")]
-			T::ExecutionObserver::before_call(executable.code_hash(), entry_point, &input_data);
+			#[cfg(feature = "unsafe-debug")]
+			{
+				let code_hash = executable.code_hash().clone();
+				T::UnsafeDebug::before_call(&code_hash, entry_point, &input_data);
+			}
 
 			// Call into the Wasm blob.
 			let output = executable
-				.execute(self, &entry_point, input_data)
+				.execute(self, &entry_point, input_data.clone())
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
-			#[cfg(feature = "execution-debug")]
-			T::ExecutionObserver::after_call(
-				executable.code_hash(),
-				entry_point,
-				&input_data,
-				&output,
-			);
+			#[cfg(feature = "unsafe-debug")]
+			T::UnsafeDebug::after_call(&code_hash, entry_point, &input_data, &output);
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {
