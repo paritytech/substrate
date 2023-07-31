@@ -970,8 +970,6 @@ pub mod pallet {
 		StorageDepositNotEnoughFunds,
 		/// More storage was created than allowed by the storage deposit limit.
 		StorageDepositLimitExhausted,
-		/// Some storage deposit could not be held.
-		StorageDepositNotHeld,
 		/// Code removal was denied because the code is still in use by at least one contract.
 		CodeInUse,
 		/// The contract ran to completion but decided to revert its storage changes.

@@ -3587,7 +3587,7 @@ fn upload_code_not_enough_balance() {
 				Some(codec::Compact(1_000)),
 				Determinism::Enforced
 			),
-			<Error<Test>>::StorageDepositNotHeld,
+			<Error<Test>>::StorageDepositNotEnoughFunds,
 		);
 
 		assert_eq!(System::events(), vec![]);
@@ -4288,7 +4288,7 @@ fn slash_cannot_kill_account() {
 		// We need to hold some balances in order to have something to slash. As slashing can only
 		// affect balances held under certain HoldReason.
 		<Test as Config>::Currency::hold(
-			&HoldReason::StorageDepositReserve.into(),
+			&HoldReason::CodeUploadDepositReserve.into(),
 			&addr,
 			balance_held,
 		)
@@ -4300,7 +4300,7 @@ fn slash_cannot_kill_account() {
 		// The account does not get destroyed because of the consumer reference.
 		// Slashing can for example happen if the contract takes part in staking.
 		let _ = <Test as Config>::Currency::slash(
-			&HoldReason::StorageDepositReserve.into(),
+			&HoldReason::CodeUploadDepositReserve.into(),
 			&addr,
 			<Test as Config>::Currency::total_balance(&addr),
 		);
@@ -5043,7 +5043,7 @@ fn deposit_limit_honors_liquidity_restrictions() {
 
 		// check that the hold is honored
 		<Test as Config>::Currency::hold(
-			&HoldReason::StorageDepositReserve.into(),
+			&HoldReason::CodeUploadDepositReserve.into(),
 			&BOB,
 			bobs_balance - ED,
 		)

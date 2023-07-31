@@ -21,7 +21,7 @@
 use crate::{
 	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
-	AccountIdOf, CodeHash, Config, Determinism, Pallet, Weight, LOG_TARGET,
+	AccountIdOf, BalanceOf, CodeHash, Config, Determinism, Pallet, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -126,22 +126,19 @@ where
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
-pub struct Migration<T: Config, OldCurrency, OldDepositPerByte, OldDepositPerItem>
+pub struct Migration<T: Config, OldCurrency>
 where
 	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
-	OldDepositPerByte: Get<old::BalanceOf<T, OldCurrency>>,
-	OldDepositPerItem: Get<old::BalanceOf<T, OldCurrency>>,
+	OldCurrency::Balance: From<BalanceOf<T>>,
 {
 	last_code_hash: Option<CodeHash<T>>,
-	_phantom: PhantomData<(OldCurrency, OldDepositPerByte, OldDepositPerItem)>,
+	_phantom: PhantomData<OldCurrency>,
 }
 
-impl<T: Config, OldCurrency, OldDepositPerByte, OldDepositPerItem> MigrationStep
-	for Migration<T, OldCurrency, OldDepositPerByte, OldDepositPerItem>
+impl<T: Config, OldCurrency> MigrationStep for Migration<T, OldCurrency>
 where
 	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
-	OldDepositPerByte: Get<old::BalanceOf<T, OldCurrency>>,
-	OldDepositPerItem: Get<old::BalanceOf<T, OldCurrency>>,
+	OldCurrency::Balance: From<BalanceOf<T>>,
 {
 	const VERSION: u16 = 12;
 
@@ -182,8 +179,8 @@ where
 			// 3. Calculate the deposit amount for storage after the migration, given current
 			// prices.
 			// 4. Calculate real deposit amount to be reserved after the migration.
-			let price_per_byte = OldDepositPerByte::get();
-			let price_per_item = OldDepositPerItem::get();
+			let price_per_byte = T::DepositPerByte::get();
+			let price_per_item = T::DepositPerItem::get();
 			let bytes_before = module
 				.encoded_size()
 				.saturating_add(code_len)
@@ -207,7 +204,7 @@ where
 			let info = CodeInfo::<T, OldCurrency> {
 				determinism: module.determinism,
 				owner: old_info.owner,
-				deposit,
+				deposit: deposit.into(),
 				refcount: old_info.refcount,
 				code_len: code_len as u32,
 			};

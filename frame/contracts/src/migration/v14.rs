@@ -160,26 +160,30 @@ where
 			let unreserved = code_info.deposit.saturating_sub(remaining);
 			let amount = BalanceOf::<T>::from(unreserved);
 
-			T::Currency::hold(&HoldReason::StorageDepositReserve.into(), &code_info.owner, amount)
-				.map(|_| {
-					log::debug!(
-						target: LOG_TARGET,
-						"{:?} held on the code owner's account 0x{:?} for code {:?}.",
-						amount,
-						HexDisplay::from(&code_info.owner.encode()),
-						hash,
-					);
-				})
-				.unwrap_or_else(|err| {
-					log::error!(
-						target: LOG_TARGET,
-						"Failed to hold {:?} from the code owner's account 0x{:?} for code {:?}, reason: {:?}.",
-						amount,
-						HexDisplay::from(&code_info.owner.encode()),
-						hash,
-						err
-					);
-				});
+			T::Currency::hold(
+				&HoldReason::CodeUploadDepositReserve.into(),
+				&code_info.owner,
+				amount,
+			)
+			.map(|_| {
+				log::debug!(
+					target: LOG_TARGET,
+					"{:?} held on the code owner's account 0x{:?} for code {:?}.",
+					amount,
+					HexDisplay::from(&code_info.owner.encode()),
+					hash,
+				);
+			})
+			.unwrap_or_else(|err| {
+				log::error!(
+					target: LOG_TARGET,
+					"Failed to hold {:?} from the code owner's account 0x{:?} for code {:?}, reason: {:?}.",
+					amount,
+					HexDisplay::from(&code_info.owner.encode()),
+					hash,
+					err
+				);
+			});
 
 			self.last_code_hash = Some(hash);
 			(IsFinished::No, T::WeightInfo::v14_migration_step())
@@ -225,7 +229,7 @@ where
 		let count = owner_balance_allocation.len();
 		for (owner, old_balance_allocation) in owner_balance_allocation {
 			let held =
-				T::Currency::balance_on_hold(&HoldReason::StorageDepositReserve.into(), &owner);
+				T::Currency::balance_on_hold(&HoldReason::CodeUploadDepositReserve.into(), &owner);
 			log::debug!(
 				target: LOG_TARGET,
 				"Validating storage deposit for owner 0x{:?}, reserved: {:?}, held: {:?}",

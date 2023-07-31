@@ -239,11 +239,11 @@ impl<T: Config> WasmBlob<T> {
 				None => {
 					let deposit = self.code_info.deposit;
 					T::Currency::hold(
-						&HoldReason::StorageDepositReserve.into(),
+						&HoldReason::CodeUploadDepositReserve.into(),
 						&self.code_info.owner,
 						deposit,
 					)
-					.map_err(|_| <Error<T>>::StorageDepositNotHeld)?;
+					.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
 
 					<Pallet<T>>::deposit_event(
 						vec![T::Hashing::hash_of(&self.code_info.owner)],
@@ -270,7 +270,7 @@ impl<T: Config> WasmBlob<T> {
 				ensure!(code_info.refcount == 0, <Error<T>>::CodeInUse);
 				ensure!(&code_info.owner == origin, BadOrigin);
 				let _ = T::Currency::release(
-					&HoldReason::StorageDepositReserve.into(),
+					&HoldReason::CodeUploadDepositReserve.into(),
 					&code_info.owner,
 					code_info.deposit,
 					BestEffort,
