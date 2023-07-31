@@ -627,6 +627,7 @@ fn migration_on_idle_hooks_works() {
 
 #[test]
 fn migration_on_idle_limit_works() {
+	// Limiting weight consumption works
 	ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
 		MigrationInProgress::<Test>::set(Some(Default::default()));
 		// Limit to exactly one migration
@@ -635,6 +636,7 @@ fn migration_on_idle_limit_works() {
 		assert_eq!(StorageVersion::get::<Pallet<Test>>(), 1);
 	});
 
+	// When disabled, auto migrations don't occur
 	ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
 		MigrationInProgress::<Test>::set(Some(Default::default()));
 		// Disable migrations
@@ -642,6 +644,24 @@ fn migration_on_idle_limit_works() {
 		Contracts::on_idle(System::block_number(), Weight::MAX);
 		assert_eq!(StorageVersion::get::<Pallet<Test>>(), 0);
 	});
+}
+
+#[test]
+fn auto_migration_control_works() {
+	ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
+		assert_ok!(Contracts::control_auto_migration(RuntimeOrigin::root(), None));
+		assert_eq!(AutoLimit::<Test>::get(), None);
+
+		let weight = Weight::from_parts(19, 23);
+		assert_ok!(Contracts::control_auto_migration(RuntimeOrigin::root(), Some(weight)));
+		assert_eq!(AutoLimit::<Test>::get(), Some(weight));
+
+		assert_noop!(
+			Contracts::control_auto_migration(
+				RuntimeOrigin::signed(ALICE), None),
+			sp_runtime::traits::BadOrigin,
+		);
+	})
 }
 
 #[test]
