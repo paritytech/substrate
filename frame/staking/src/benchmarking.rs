@@ -100,9 +100,9 @@ pub fn create_validator_with_nominators<T: Config>(
 	// Give the validator n nominators, but keep total users in the system the same.
 	for i in 0..upper_bound {
 		let (n_stash, n_controller) = if !dead_controller {
-			create_stash_controller::<T>(u32::MAX - i, 100, destination_opt)?
+			create_stash_controller::<T>(u32::MAX - i, 100, destination_opt.clone())?
 		} else {
-			create_unique_stash_controller::<T>(u32::MAX - i, 100, destination_opt, true)?
+			create_unique_stash_controller::<T>(u32::MAX - i, 100, destination_opt.clone(), true)?
 		};
 		if i < n {
 			Staking::<T>::nominate(
