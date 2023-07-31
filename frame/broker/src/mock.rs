@@ -90,7 +90,8 @@ parameter_types! {
 	pub static CoretimeSpending: Vec<(u32, u64)> = Default::default();
 	pub static CoretimeWorkplan: BTreeMap<(u32, CoreIndex), Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
 	pub static CoretimeUsage: BTreeMap<CoreIndex, Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
-	pub static CoretimeInPool: CoreMaskBitCount = 0;
+	pub static CoretimeInPool: CoreMaskBitCount = Default::default();
+	pub static CoretimeOverriddenRevenue: (u32, u64) = Default::default();
 	pub static NotifyCoreCount: Vec<u16> = Default::default();
 	pub static NotifyRevenueInfo: Vec<(u32, u64)> = Default::default();
 }
@@ -110,6 +111,13 @@ impl CoretimeInterface for TestCoretimeProvider {
 		if when > Self::latest() {
 			panic!("Asking for revenue info in the future {:?} {:?}", when, Self::latest());
 		}
+
+		let (block_number, revenue) = CoretimeOverriddenRevenue::get();
+		if when == block_number {
+			NotifyRevenueInfo::mutate(|s| s.insert(0, (when, revenue)));
+			return
+		}
+
 		let mut total = 0;
 		CoretimeSpending::mutate(|s| {
 			s.retain(|(n, a)| {
@@ -141,6 +149,14 @@ impl CoretimeInterface for TestCoretimeProvider {
 	}
 	fn check_notify_revenue_info() -> Option<(Self::BlockNumber, Self::Balance)> {
 		NotifyRevenueInfo::mutate(|s| s.pop())
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_core_count(count: u16) {
+		NotifyCoreCount::mutate(|s| s.insert(0, count));
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn ensure_notify_revenue_info(when: Self::BlockNumber, revenue: Self::Balance) {
+		CoretimeOverriddenRevenue::set((when, revenue));
 	}
 }
 impl TestCoretimeProvider {

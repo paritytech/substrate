@@ -676,7 +676,7 @@ mod benches {
 
 		let core_count = n.try_into().unwrap();
 
-		Broker::<T>::do_request_core_count(core_count).map_err(|_| BenchmarkError::Weightless)?;
+		<T::Coretime as CoretimeInterface>::ensure_notify_core_count(core_count);
 
 		let mut status = Status::<T>::get().ok_or(BenchmarkError::Weightless)?;
 
@@ -690,17 +690,61 @@ mod benches {
 		Ok(())
 	}
 
-	// Todo: Fix conditions for worst case
 	#[benchmark]
-	fn process_revenue() {
+	fn process_revenue() -> Result<(), BenchmarkError> {
+		setup_and_start_sale::<T>()?;
+
+		advance_to::<T>(2);
+
+		let caller: T::AccountId = whitelisted_caller();
+		T::Currency::set_balance(
+			&caller.clone(),
+			T::Currency::minimum_balance().saturating_add(30u32.into()),
+		);
+		T::Currency::set_balance(&Broker::<T>::account_id(), T::Currency::minimum_balance());
+
+		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
+			.map_err(|_| BenchmarkError::Weightless)?;
+
+		let recipient: T::AccountId = account("recipient", 0, SEED);
+
+		Broker::<T>::do_pool(region, None, recipient, Final)
+			.map_err(|_| BenchmarkError::Weightless)?;
+
+		let beneficiary: RelayAccountIdOf<T> = account("beneficiary", 0, SEED);
+		Broker::<T>::do_purchase_credit(caller.clone(), 20u32.into(), beneficiary.clone())
+			.map_err(|_| BenchmarkError::Weightless)?;
+
+		advance_to::<T>(8);
+
+		<T::Coretime as CoretimeInterface>::ensure_notify_revenue_info(10u32.into(), 10u32.into());
+
+		advance_to::<T>(11);
+
+		InstaPoolHistory::<T>::insert(
+			4u32,
+			InstaPoolHistoryRecord {
+				private_contributions: 1u32.into(),
+				system_contributions: 9u32.into(),
+				maybe_payout: None,
+			},
+		);
+
 		#[block]
 		{
 			Broker::<T>::process_revenue();
 		}
 
 		assert_last_event::<T>(
-			Event::HistoryDropped { when: 4u32.into(), revenue: 0u32.into() }.into(),
+			Event::ClaimsReady {
+				when: 4u32.into(),
+				system_payout: 9u32.into(),
+				private_payout: 1u32.into(),
+			}
+			.into(),
 		);
+
+		Ok(())
 	}
 
 	#[benchmark]
