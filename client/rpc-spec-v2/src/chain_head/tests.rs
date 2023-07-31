@@ -1,5 +1,7 @@
 use crate::chain_head::{
-	event::{ChainHeadStorageEvent, StorageQuery, StorageQueryType, StorageResultType},
+	event::{
+		ChainHeadStorageEvent, MethodResponse, StorageQuery, StorageQueryType, StorageResultType,
+	},
 	test_utils::ChainHeadMockClient,
 };
 
@@ -330,29 +332,34 @@ async fn get_body() {
 	let block_hash = format!("{:?}", block.header.hash());
 	let invalid_hash = hex_string(&INVALID_HASH);
 
-	// Subscription ID is stale the disjoint event is emitted.
-	let mut sub = api
-		.subscribe("chainHead_unstable_body", ["invalid_sub_id", &invalid_hash])
+	// Subscription ID is invalid.
+	let response: MethodResponse = api
+		.call("chainHead_unstable_body", ["invalid_sub_id", &invalid_hash])
 		.await
 		.unwrap();
-	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
-	assert_eq!(event, ChainHeadEvent::<String>::Disjoint);
+	assert_matches!(response, MethodResponse::LimitReached);
 
-	// Valid subscription ID with invalid block hash will error.
+	// Block hash is invalid.
 	let err = api
-		.subscribe("chainHead_unstable_body", [&sub_id, &invalid_hash])
+		.call::<_, serde_json::Value>("chainHead_unstable_body", [&sub_id, &invalid_hash])
 		.await
 		.unwrap_err();
 	assert_matches!(err,
 		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
 	);
 
-	// Obtain valid the body (list of extrinsics).
-	let mut sub = api.subscribe("chainHead_unstable_body", [&sub_id, &block_hash]).await.unwrap();
-	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
-	// Block contains no extrinsics.
-	assert_matches!(event,
-		ChainHeadEvent::Done(done) if done.result == "0x00"
+	// Valid call.
+	let response: MethodResponse =
+		api.call("chainHead_unstable_body", [&sub_id, &block_hash]).await.unwrap();
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	// Response propagated to `chainHead_follow`.
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationBodyDone(done) if done.operation_id == operation_id && done.value.is_empty()
 	);
 
 	// Import a block with extrinsics.
@@ -378,12 +385,19 @@ async fn get_body() {
 		FollowEvent::BestBlockChanged(_)
 	);
 
-	let mut sub = api.subscribe("chainHead_unstable_body", [&sub_id, &block_hash]).await.unwrap();
-	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
-	// Hex encoded scale encoded string for the vector of extrinsics.
-	let expected = hex_string(&block.extrinsics.encode());
-	assert_matches!(event,
-		ChainHeadEvent::Done(done) if done.result == expected
+	// Valid call to a block with extrinsics.
+	let response: MethodResponse =
+		api.call("chainHead_unstable_body", [&sub_id, &block_hash]).await.unwrap();
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	// Response propagated to `chainHead_follow`.
+	let expected_tx = hex_string(&block.extrinsics[0].encode());
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationBodyDone(done) if done.operation_id == operation_id && done.value == vec![expected_tx]
 	);
 }
 
