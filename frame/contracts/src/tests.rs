@@ -30,7 +30,7 @@ use crate::{
 	weights::WeightInfo,
 	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
 	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress,
-	NoopMigration, Origin, Pallet, PristineCode, Schedule,
+	NoopMigration, Origin, Pallet, PristineCode, Schedule, AutoLimit,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -618,10 +618,30 @@ fn migration_on_idle_hooks_works() {
 	for (weight, expected_version) in tests {
 		ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
 			MigrationInProgress::<Test>::set(Some(Default::default()));
+			AutoLimit::<Test>::set(Some(Weight::MAX));
 			Contracts::on_idle(System::block_number(), weight);
 			assert_eq!(StorageVersion::get::<Pallet<Test>>(), expected_version);
 		});
 	}
+}
+
+#[test]
+fn migration_on_idle_limit_works() {
+	ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
+		MigrationInProgress::<Test>::set(Some(Default::default()));
+		// Limit to exactly one migration
+		AutoLimit::<Test>::set(Some(<Test as Config>::WeightInfo::migrate() + 1.into()));
+		Contracts::on_idle(System::block_number(), Weight::MAX);
+		assert_eq!(StorageVersion::get::<Pallet<Test>>(), 1);
+	});
+
+	ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
+		MigrationInProgress::<Test>::set(Some(Default::default()));
+		// Disable migrations
+		AutoLimit::<Test>::set(None);
+		Contracts::on_idle(System::block_number(), Weight::MAX);
+		assert_eq!(StorageVersion::get::<Pallet<Test>>(), 0);
+	});
 }
 
 #[test]

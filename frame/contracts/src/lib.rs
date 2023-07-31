@@ -357,20 +357,28 @@ pub mod pallet {
 		fn on_idle(_block: BlockNumberFor<T>, mut remaining_weight: Weight) -> Weight {
 			use migration::MigrateResult::*;
 
-			loop {
-				let (result, weight) = Migration::<T>::migrate(remaining_weight);
-				remaining_weight.saturating_reduce(weight);
+			remaining_weight.saturating_reduce(T::DbWeight::get().writes(1));
+			if let Some(limit) = AutoLimit::<T>::get() {
+				let migration_weight_limit = remaining_weight.min(limit);
+				let mut consumed_weight = Weight::zero();
 
-				match result {
-					// There is not enough weight to perform a migration, or make any progress, we
-					// just return the remaining weight.
-					NoMigrationPerformed | InProgress { steps_done: 0 } => return remaining_weight,
-					// Migration is still in progress, we can start the next step.
-					InProgress { .. } => continue,
-					// Either no migration is in progress, or we are done with all migrations, we
-					// can do some more other work with the remaining weight.
-					Completed | NoMigrationInProgress => break,
+				loop {
+					let (result, weight) = Migration::<T>::migrate(migration_weight_limit.saturating_sub(consumed_weight));
+					consumed_weight.saturating_accrue(weight);
+	
+					match result {
+						// There is not enough weight to perform a migration, or make any progress, we
+						// just return the remaining weight.
+						NoMigrationPerformed | InProgress { steps_done: 0 } => return remaining_weight.saturating_sub(consumed_weight),
+						// Migration is still in progress, we can start the next step.
+						InProgress { .. } => continue,
+						// Either no migration is in progress, or we are done with all migrations, we
+						// can do some more other work with the remaining weight.
+						Completed | NoMigrationInProgress => break,
+					}
 				}
+
+				remaining_weight.saturating_reduce(consumed_weight);
 			}
 
 			ContractInfo::<T>::process_deletion_queue_batch(remaining_weight)
@@ -816,6 +824,23 @@ pub mod pallet {
 				},
 			}
 		}
+
+		/// Control the automatic migration.
+		///
+		/// If configured to `None`, disables auto migration.
+		/// If `Some(weight)`, allows it to consume up to `weight` per `on_idle` call.
+		///
+		/// The dispatch origin of this call must be root.
+		#[pallet::call_index(10)]
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		pub fn control_auto_migration(
+			origin: OriginFor<T>,
+			maybe_config: Option<Weight>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			AutoLimit::<T>::put(maybe_config);
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -1042,6 +1067,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type MigrationInProgress<T: Config> =
 		StorageValue<_, migration::Cursor, OptionQuery>;
+
+	/// The limits that are imposed on automatic migrations.
+	///
+	/// If set to None, then no automatic migration happens.
+	#[pallet::storage]
+	pub type AutoLimit<T> = StorageValue<_, Option<Weight>, ValueQuery>;
 }
 
 /// The type of origins supported by the contracts pallet.
