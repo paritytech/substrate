@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Substrate mixnet service. This implements the [Substrate Mix Network
-//! Specification](https://github.com/paritytech/mixnet-spec).
+//! Specification](https://paritytech.github.io/mixnet-spec/).
 
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
