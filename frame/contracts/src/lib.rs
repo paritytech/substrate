@@ -1007,8 +1007,8 @@ pub mod pallet {
 	/// A reason for the pallet contracts placing a hold on funds.
 	#[pallet::composite_enum]
 	pub enum HoldReason {
-		/// The Pallet has reserved it for storage deposit.
-		StorageDepositReserve,
+		/// The Pallet has reserved it for storing code on-chain.
+		CodeUploadDepositReserve,
 	}
 
 	/// A mapping from a contract's code hash to its code.
