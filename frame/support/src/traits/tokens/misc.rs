@@ -18,7 +18,7 @@
 //! Miscellaneous types.
 
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
-use sp_arithmetic::traits::{AtLeast32BitUnsigned, CheckedNeg, Zero};
+use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
 use sp_runtime::{traits::Convert, ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
@@ -231,14 +231,7 @@ impl<T: FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxE
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
 pub trait Balance:
-	AtLeast32BitUnsigned
-	+ FullCodec
-	+ Copy
-	+ Default
-	+ Debug
-	+ scale_info::TypeInfo
-	+ MaxEncodedLen
-	+ CheckedNeg
+	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo + MaxEncodedLen
 {
 }
 impl<
@@ -248,8 +241,7 @@ impl<
 			+ Default
 			+ Debug
 			+ scale_info::TypeInfo
-			+ MaxEncodedLen
-			+ CheckedNeg,
+			+ MaxEncodedLen,
 	> Balance for T
 {
 }
