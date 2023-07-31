@@ -67,5 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		}}",
 		version - 1,
 	)?;
+
+	println!("cargo:rerun-if-changed=src/migration");
 	Ok(())
 }
