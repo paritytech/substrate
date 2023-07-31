@@ -1133,7 +1133,7 @@ where
 			Origin::Root if value.is_zero() => return Ok(()),
 			Origin::Root => return DispatchError::RootNotAllowed.into(),
 		};
-		Self::transfer(Preservation::Protect, &caller, &frame.account_id, value)
+		Self::transfer(Preservation::Preserve, &caller, &frame.account_id, value)
 	}
 
 	/// Reference to the current (top) frame.
