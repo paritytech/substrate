@@ -620,6 +620,8 @@ benchmarks! {
 			true,
 			PayoutDestination::Stake,
 		)?;
+		// re-set the validator payee to a split destination.
+		Staking::<T>::set_payee(RawOrigin::Signed(validator.clone()).into(), PayoutDestination::Split((Perbill::from_percent(50), validator.clone())))?;
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		// set the commission for this particular era as well.
@@ -631,6 +633,8 @@ benchmarks! {
 		for (stash, _) in &nominators {
 			let balance = T::Currency::free_balance(stash);
 			nominator_balances_before.push(balance);
+			// re-set the moninator payee to a split destination.
+			Staking::<T>::set_payee(RawOrigin::Signed(stash.clone()).into(), PayoutDestination::Split((Perbill::from_percent(50), stash.clone())))?;
 		}
 	}: payout_stakers(RawOrigin::Signed(caller), validator.clone(), current_era)
 	verify {
