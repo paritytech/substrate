@@ -814,9 +814,26 @@ where
 				);
 			},
 			Entry::Occupied(mut entry) => {
-				*entry.get_mut() = entry.get().saturating_sub(1);
-				if *entry.get() == 0 {
-					entry.remove();
+				match entry.get().checked_sub(1) {
+					Some(value) => {
+						if value == 0 {
+							entry.remove();
+						} else {
+							*entry.get_mut() = value;
+						}
+					}
+					None => {
+						entry.remove();
+
+						error!(
+							target: "sync",
+							"Invalid (zero) block announce validation slot counter for peer {peer_id}.",
+						);
+						debug_assert!(
+							false,
+							"Invalid (zero) block announce validation slot counter for peer {peer_id}.",
+						);
+					}
 				}
 			},
 		}
