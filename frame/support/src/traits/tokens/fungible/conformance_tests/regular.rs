@@ -761,7 +761,7 @@ pub mod mutate {
 		assert_eq!(ret, WithdrawConsequence::BalanceLow);
 	}
 
-	/// Test [`Mutate::reducible_balance`] returns the full account balance when called with
+	/// Test [`Inspect::reducible_balance`] returns the full account balance when called with
 	/// [`Preservation::Expendable`].
 	pub fn reducible_balance_expendable<T, AccountId>()
 	where
@@ -778,7 +778,7 @@ pub mod mutate {
 		assert_eq!(ret, initial_balance);
 	}
 
-	/// Tests [`Inspect::reducible_balance`] returns the [`Inspect::balance`] -
+	/// Tests [`Inspect::reducible_balance`] returns [`Inspect::balance`] -
 	/// [`Inspect::minimum_balance`] when called with either [`Preservation::Protect`] or
 	/// [`Preservation::Preserve`].
 	pub fn reducible_balance_protect_preserve<T, AccountId>()
