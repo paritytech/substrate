@@ -91,7 +91,6 @@ parameter_types! {
 	pub static CoretimeWorkplan: BTreeMap<(u32, CoreIndex), Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
 	pub static CoretimeUsage: BTreeMap<CoreIndex, Vec<(CoreAssignment, PartsOf57600)>> = Default::default();
 	pub static CoretimeInPool: CoreMaskBitCount = Default::default();
-	pub static CoretimeOverriddenRevenue: (u32, u64) = Default::default();
 	pub static NotifyCoreCount: Vec<u16> = Default::default();
 	pub static NotifyRevenueInfo: Vec<(u32, u64)> = Default::default();
 }
@@ -110,12 +109,6 @@ impl CoretimeInterface for TestCoretimeProvider {
 	fn request_revenue_info_at(when: Self::BlockNumber) {
 		if when > Self::latest() {
 			panic!("Asking for revenue info in the future {:?} {:?}", when, Self::latest());
-		}
-
-		let (block_number, revenue) = CoretimeOverriddenRevenue::get();
-		if when == block_number {
-			NotifyRevenueInfo::mutate(|s| s.insert(0, (when, revenue)));
-			return
 		}
 
 		let mut total = 0;
@@ -156,7 +149,7 @@ impl CoretimeInterface for TestCoretimeProvider {
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn ensure_notify_revenue_info(when: Self::BlockNumber, revenue: Self::Balance) {
-		CoretimeOverriddenRevenue::set((when, revenue));
+		NotifyRevenueInfo::mutate(|s| s.push((when, revenue)));
 	}
 }
 impl TestCoretimeProvider {

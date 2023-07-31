@@ -703,23 +703,7 @@ mod benches {
 		);
 		T::Currency::set_balance(&Broker::<T>::account_id(), T::Currency::minimum_balance());
 
-		let region = Broker::<T>::do_purchase(caller.clone(), 10u32.into())
-			.map_err(|_| BenchmarkError::Weightless)?;
-
-		let recipient: T::AccountId = account("recipient", 0, SEED);
-
-		Broker::<T>::do_pool(region, None, recipient, Final)
-			.map_err(|_| BenchmarkError::Weightless)?;
-
-		let beneficiary: RelayAccountIdOf<T> = account("beneficiary", 0, SEED);
-		Broker::<T>::do_purchase_credit(caller.clone(), 20u32.into(), beneficiary.clone())
-			.map_err(|_| BenchmarkError::Weightless)?;
-
-		advance_to::<T>(8);
-
 		<T::Coretime as CoretimeInterface>::ensure_notify_revenue_info(10u32.into(), 10u32.into());
-
-		advance_to::<T>(11);
 
 		InstaPoolHistory::<T>::insert(
 			4u32,
