@@ -906,10 +906,9 @@ where
 			self.initial_transfer()?;
 
 			#[cfg(feature = "unsafe-debug")]
-			{
-				let code_hash = executable.code_hash().clone();
-				T::Debug::before_call(&code_hash, entry_point, &input_data);
-			}
+			let code_hash = executable.code_hash().clone();
+			#[cfg(feature = "unsafe-debug")]
+			T::Debug::before_call(&code_hash, entry_point, &input_data);
 
 			// Call into the Wasm blob.
 			let output = executable

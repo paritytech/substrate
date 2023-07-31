@@ -1,4 +1,4 @@
-use crate::{exec::ExportedFunction, CodeHash, Config};
+use crate::exec::ExportedFunction;
 use pallet_contracts_primitives::ExecReturnValue;
 
 /// Defines the interface between pallet contracts and the outside observer.
