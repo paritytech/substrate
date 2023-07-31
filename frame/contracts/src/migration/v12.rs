@@ -21,15 +21,11 @@
 use crate::{
 	migration::{IsFinished, MigrationStep},
 	weights::WeightInfo,
-	AccountIdOf, CodeHash, Config, Determinism, Pallet, Weight, LOG_TARGET,
+	AccountIdOf, BalanceOf, CodeHash, Config, Determinism, Pallet, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
 use frame_support::{
-	codec,
-	pallet_prelude::*,
-	storage_alias,
-	traits::{fungible::Inspect, ReservableCurrency},
-	DefaultNoBound, Identity,
+	codec, pallet_prelude::*, storage_alias, traits::ReservableCurrency, DefaultNoBound, Identity,
 };
 use scale_info::prelude::format;
 use sp_core::hexdisplay::HexDisplay;
@@ -50,11 +46,7 @@ pub mod old {
 	#[scale_info(skip_type_params(T, OldCurrency))]
 	pub struct OwnerInfo<T: Config, OldCurrency>
 	where
-		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-			+ Inspect<
-				<T as frame_system::Config>::AccountId,
-				Balance = old::BalanceOf<T, OldCurrency>,
-			>,
+		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 	{
 		pub owner: AccountIdOf<T>,
 		#[codec(compact)]
@@ -91,8 +83,7 @@ pub mod old {
 #[scale_info(skip_type_params(T, OldCurrency))]
 pub struct CodeInfo<T: Config, OldCurrency>
 where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 {
 	owner: AccountIdOf<T>,
 	#[codec(compact)]
@@ -113,9 +104,7 @@ pub type PristineCode<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, 
 #[cfg(feature = "runtime-benchmarks")]
 pub fn store_old_dummy_code<T: Config, OldCurrency>(len: usize, account: T::AccountId)
 where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>
-		+ 'static,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
 {
 	use sp_runtime::traits::Hash;
 
@@ -137,25 +126,19 @@ where
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
-pub struct Migration<T: Config, OldCurrency, OldDepositPerByte, OldDepositPerItem>
+pub struct Migration<T: Config, OldCurrency>
 where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>,
-	OldDepositPerByte: Get<old::BalanceOf<T, OldCurrency>>,
-	OldDepositPerItem: Get<old::BalanceOf<T, OldCurrency>>,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
+	OldCurrency::Balance: From<BalanceOf<T>>,
 {
 	last_code_hash: Option<CodeHash<T>>,
-	_phantom: PhantomData<(OldCurrency, OldDepositPerByte, OldDepositPerItem)>,
+	_phantom: PhantomData<OldCurrency>,
 }
 
-impl<T: Config, OldCurrency, OldDepositPerByte, OldDepositPerItem> MigrationStep
-	for Migration<T, OldCurrency, OldDepositPerByte, OldDepositPerItem>
+impl<T: Config, OldCurrency> MigrationStep for Migration<T, OldCurrency>
 where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>
-		+ 'static,
-	OldDepositPerByte: Get<old::BalanceOf<T, OldCurrency>>,
-	OldDepositPerItem: Get<old::BalanceOf<T, OldCurrency>>,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
+	OldCurrency::Balance: From<BalanceOf<T>>,
 {
 	const VERSION: u16 = 12;
 
@@ -196,8 +179,8 @@ where
 			// 3. Calculate the deposit amount for storage after the migration, given current
 			// prices.
 			// 4. Calculate real deposit amount to be reserved after the migration.
-			let price_per_byte = OldDepositPerByte::get();
-			let price_per_item = OldDepositPerItem::get();
+			let price_per_byte = T::DepositPerByte::get();
+			let price_per_item = T::DepositPerItem::get();
 			let bytes_before = module
 				.encoded_size()
 				.saturating_add(code_len)
@@ -221,7 +204,7 @@ where
 			let info = CodeInfo::<T, OldCurrency> {
 				determinism: module.determinism,
 				owner: old_info.owner,
-				deposit,
+				deposit: deposit.into(),
 				refcount: old_info.refcount,
 				code_len: code_len as u32,
 			};

@@ -15,117 +15,86 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Update the code owner balance, make the storage deposit reserved balance to be held instead.
+//! Add `delegate_dependencies` to `ContractInfo`.
+//! See <https://github.com/paritytech/substrate/pull/14079>.
 
 use crate::{
-	exec::AccountIdOf,
 	migration::{IsFinished, MigrationStep},
+	storage::DepositAccount,
 	weights::WeightInfo,
-	BalanceOf, CodeHash, Config, Determinism, HoldReason, Pallet, Weight, LOG_TARGET,
+	BalanceOf, CodeHash, Config, Pallet, TrieId, Weight, LOG_TARGET,
 };
 use codec::{Decode, Encode};
-#[cfg(feature = "try-runtime")]
-use environmental::Vec;
-#[cfg(feature = "try-runtime")]
-use frame_support::traits::fungible::Inspect;
-#[cfg(feature = "try-runtime")]
-use frame_support::traits::fungible::InspectHold;
-use frame_support::{
-	codec,
-	pallet_prelude::*,
-	storage_alias,
-	traits::{fungible::MutateHold, ReservableCurrency},
-	DefaultNoBound,
-};
-use sp_core::hexdisplay::HexDisplay;
-#[cfg(feature = "try-runtime")]
-use sp_runtime::TryRuntimeError;
-use sp_runtime::{traits::Zero, Saturating};
-#[cfg(feature = "try-runtime")]
-use sp_std::collections::btree_map::BTreeMap;
+use frame_support::{codec, pallet_prelude::*, storage_alias, DefaultNoBound};
+use sp_runtime::BoundedBTreeMap;
+use sp_std::prelude::*;
 
 mod old {
+	use crate::storage::DepositAccount;
+
 	use super::*;
 
-	pub type BalanceOf<T, OldCurrency> = <OldCurrency as frame_support::traits::Currency<
-		<T as frame_system::Config>::AccountId,
-	>>::Balance;
-
-	#[derive(Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
-	#[codec(mel_bound())]
-	#[scale_info(skip_type_params(T, OldCurrency))]
-	pub struct CodeInfo<T, OldCurrency>
-	where
-		T: Config,
-		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
-	{
-		pub owner: AccountIdOf<T>,
-		#[codec(compact)]
-		pub deposit: old::BalanceOf<T, OldCurrency>,
-		#[codec(compact)]
-		pub refcount: u64,
-		pub determinism: Determinism,
-		pub code_len: u32,
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	#[scale_info(skip_type_params(T))]
+	pub struct ContractInfo<T: Config> {
+		pub trie_id: TrieId,
+		pub deposit_account: DepositAccount<T>,
+		pub code_hash: CodeHash<T>,
+		pub storage_bytes: u32,
+		pub storage_items: u32,
+		pub storage_byte_deposit: BalanceOf<T>,
+		pub storage_item_deposit: BalanceOf<T>,
+		pub storage_base_deposit: BalanceOf<T>,
 	}
 
 	#[storage_alias]
-	pub type CodeInfoOf<T: Config, OldCurrency> =
-		StorageMap<Pallet<T>, Twox64Concat, CodeHash<T>, CodeInfo<T, OldCurrency>>;
+	pub type ContractInfoOf<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::AccountId,
+		ContractInfo<T>,
+	>;
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-pub fn store_dummy_code<T, OldCurrency>()
-where
-	T: Config,
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
-{
-	use frame_benchmarking::account;
-	use sp_runtime::traits::Hash;
-	use sp_std::vec;
-
-	let len = T::MaxCodeLen::get();
-	let code = vec![42u8; len as usize];
-	let hash = T::Hashing::hash(&code);
-
-	let info = old::CodeInfo {
-		owner: account::<T::AccountId>("account", 0, 0),
-		deposit: u32::MAX.into(),
-		refcount: u64::MAX,
-		determinism: Determinism::Enforced,
-		code_len: len,
+pub fn store_old_contract_info<T: Config>(account: T::AccountId, info: crate::ContractInfo<T>) {
+	let info = old::ContractInfo {
+		trie_id: info.trie_id.clone(),
+		deposit_account: info.deposit_account().clone(),
+		code_hash: info.code_hash,
+		storage_bytes: Default::default(),
+		storage_items: Default::default(),
+		storage_byte_deposit: Default::default(),
+		storage_item_deposit: Default::default(),
+		storage_base_deposit: Default::default(),
 	};
-	old::CodeInfoOf::<T, OldCurrency>::insert(hash, info);
+	old::ContractInfoOf::<T>::insert(account, info);
 }
 
-#[cfg(feature = "try-runtime")]
-#[derive(Encode, Decode)]
-/// Accounts for the balance allocation of a code owner.
-struct BalanceAllocation<T, OldCurrency>
-where
-	T: Config,
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
-{
-	/// Total reserved balance as storage deposit for the owner.
-	reserved: old::BalanceOf<T, OldCurrency>,
-	/// Total balance of the owner.
-	total: old::BalanceOf<T, OldCurrency>,
+#[storage_alias]
+pub type ContractInfoOf<T: Config> =
+	StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, ContractInfo<T>>;
+
+#[derive(Encode, Decode, CloneNoBound, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T))]
+pub struct ContractInfo<T: Config> {
+	trie_id: TrieId,
+	deposit_account: DepositAccount<T>,
+	code_hash: CodeHash<T>,
+	storage_bytes: u32,
+	storage_items: u32,
+	storage_byte_deposit: BalanceOf<T>,
+	storage_item_deposit: BalanceOf<T>,
+	storage_base_deposit: BalanceOf<T>,
+	delegate_dependencies: BoundedBTreeMap<CodeHash<T>, BalanceOf<T>, T::MaxDelegateDependencies>,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
-pub struct Migration<T, OldCurrency>
-where
-	T: Config,
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
-{
-	last_code_hash: Option<CodeHash<T>>,
-	_phantom: PhantomData<(T, OldCurrency)>,
+pub struct Migration<T: Config> {
+	last_account: Option<T::AccountId>,
 }
 
-impl<T, OldCurrency> MigrationStep for Migration<T, OldCurrency>
-where
-	T: Config,
-	OldCurrency: 'static + ReservableCurrency<<T as frame_system::Config>::AccountId>,
-{
+impl<T: Config> MigrationStep for Migration<T> {
 	const VERSION: u16 = 13;
 
 	fn max_step_weight() -> Weight {
@@ -133,151 +102,33 @@ where
 	}
 
 	fn step(&mut self) -> (IsFinished, Weight) {
-		let mut iter = if let Some(last_hash) = self.last_code_hash.take() {
-			old::CodeInfoOf::<T, OldCurrency>::iter_from(
-				old::CodeInfoOf::<T, OldCurrency>::hashed_key_for(last_hash),
-			)
+		let mut iter = if let Some(last_account) = self.last_account.take() {
+			old::ContractInfoOf::<T>::iter_from(old::ContractInfoOf::<T>::hashed_key_for(
+				last_account,
+			))
 		} else {
-			old::CodeInfoOf::<T, OldCurrency>::iter()
+			old::ContractInfoOf::<T>::iter()
 		};
 
-		if let Some((hash, code_info)) = iter.next() {
-			log::debug!(target: LOG_TARGET, "Migrating storage deposit for 0x{:?}", HexDisplay::from(&code_info.owner.encode()));
-
-			let remaining = OldCurrency::unreserve(&code_info.owner, code_info.deposit);
-
-			if remaining > Zero::zero() {
-				log::warn!(
-					target: LOG_TARGET,
-					"Code owner's account 0x{:?} for code {:?} has some non-unreservable deposit {:?} from a total of {:?} that will remain in reserved.",
-					HexDisplay::from(&code_info.owner.encode()),
-					hash,
-					remaining,
-					code_info.deposit
-				);
-			}
-
-			let unreserved = code_info.deposit.saturating_sub(remaining);
-
-			let amount = if let Ok(amount) = BalanceOf::<T>::decode(&mut &unreserved.encode()[..]) {
-				amount
-			} else {
-				log::error!(
-					target: LOG_TARGET,
-					"Failed to decode unreserved amount {:?} for code {:?}.",
-					unreserved,
-					hash
-				);
-				Zero::zero()
+		if let Some((key, old)) = iter.next() {
+			log::debug!(target: LOG_TARGET, "Migrating contract {:?}", key);
+			let info = ContractInfo {
+				trie_id: old.trie_id,
+				deposit_account: old.deposit_account,
+				code_hash: old.code_hash,
+				storage_bytes: old.storage_bytes,
+				storage_items: old.storage_items,
+				storage_byte_deposit: old.storage_byte_deposit,
+				storage_item_deposit: old.storage_item_deposit,
+				storage_base_deposit: old.storage_base_deposit,
+				delegate_dependencies: Default::default(),
 			};
-
-			T::Currency::hold(&HoldReason::StorageDepositReserve.into(), &code_info.owner, amount)
-				.map(|_| {
-					log::debug!(
-						target: LOG_TARGET,
-						"{:?} held on the code owner's account 0x{:?} for code {:?}.",
-						unreserved,
-						HexDisplay::from(&code_info.owner.encode()),
-						hash,
-					);
-				})
-				.unwrap_or_else(|err| {
-					log::error!(
-						target: LOG_TARGET,
-						"Failed to hold {:?} from the code owner's account 0x{:?} for code {:?}, reason: {:?}.",
-						unreserved,
-						HexDisplay::from(&code_info.owner.encode()),
-						hash,
-						err
-					);
-				});
-
-			self.last_code_hash = Some(hash);
+			ContractInfoOf::<T>::insert(key.clone(), info);
+			self.last_account = Some(key);
 			(IsFinished::No, T::WeightInfo::v13_migration_step())
 		} else {
-			log::debug!(target: LOG_TARGET, "No more storage deposit to migrate");
+			log::debug!(target: LOG_TARGET, "No more contracts to migrate");
 			(IsFinished::Yes, T::WeightInfo::v13_migration_step())
 		}
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade_step() -> Result<Vec<u8>, TryRuntimeError> {
-		let info: Vec<_> = old::CodeInfoOf::<T, OldCurrency>::iter().collect();
-
-		let mut owner_balance_allocation =
-			BTreeMap::<AccountIdOf<T>, BalanceAllocation<T, OldCurrency>>::new();
-
-		// Calculates the balance allocation by accumulating the storage deposits of all codes owned
-		// by an owner.
-		for (_, code_info) in info {
-			owner_balance_allocation
-				.entry(code_info.owner.clone())
-				.and_modify(|alloc| {
-					alloc.reserved = alloc.reserved.saturating_add(code_info.deposit);
-				})
-				.or_insert(BalanceAllocation {
-					reserved: code_info.deposit,
-					total: OldCurrency::total_balance(&code_info.owner),
-				});
-		}
-
-		Ok(owner_balance_allocation.encode())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	fn post_upgrade_step(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-		let owner_balance_allocation =
-			<BTreeMap<AccountIdOf<T>, BalanceAllocation<T, OldCurrency>> as Decode>::decode(
-				&mut &state[..],
-			)
-			.expect("pre_upgrade_step provides a valid state; qed");
-
-		let mut total_held: BalanceOf<T> = Zero::zero();
-		let count = owner_balance_allocation.len();
-		for (owner, old_balance_allocation) in owner_balance_allocation {
-			let held =
-				T::Currency::balance_on_hold(&HoldReason::StorageDepositReserve.into(), &owner);
-			log::debug!(
-				target: LOG_TARGET,
-				"Validating storage deposit for owner 0x{:?}, reserved: {:?}, held: {:?}",
-				HexDisplay::from(&owner.encode()),
-				old_balance_allocation.reserved,
-				held
-			);
-			ensure!(
-				held == BalanceOf::<T>::decode(&mut &old_balance_allocation.reserved.encode()[..])
-					.unwrap(),
-				"Held amount mismatch"
-			);
-
-			log::debug!(
-				target: LOG_TARGET,
-				"Validating total balance for owner 0x{:?}, new: {:?}, old: {:?}",
-				HexDisplay::from(&owner.encode()),
-				T::Currency::total_balance(&owner),
-				old_balance_allocation.total
-			);
-			ensure!(
-				T::Currency::total_balance(&owner) ==
-					BalanceOf::<T>::decode(&mut &old_balance_allocation.total.encode()[..])
-						.unwrap(),
-				"Balance mismatch "
-			);
-			total_held += held;
-		}
-
-		log::info!(
-			target: LOG_TARGET,
-			"Code owners processed: {:?}.",
-			count
-		);
-
-		log::info!(
-			target: LOG_TARGET,
-			"Total held amount for storage deposit: {:?}",
-			total_held
-		);
-
-		Ok(())
 	}
 }

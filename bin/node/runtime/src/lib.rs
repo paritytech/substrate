@@ -1145,9 +1145,11 @@ impl pallet_asset_rate::Config for Runtime {
 	type UpdateOrigin = EnsureRoot<AccountId>;
 	type Balance = Balance;
 	type Currency = Balances;
-	type AssetId = u32;
+	type AssetKind = u32;
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_asset_rate::weights::SubstrateWeight<Runtime>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {
@@ -1223,6 +1225,7 @@ parameter_types! {
 	pub const DepositPerByte: Balance = deposit(0, 1);
 	pub const DefaultDepositLimit: Balance = deposit(1024, 1024 * 1024);
 	pub Schedule: pallet_contracts::Schedule<Runtime> = Default::default();
+	pub CodeHashLockupDepositPercent: Perbill = Perbill::from_percent(30);
 }
 
 impl pallet_contracts::Config for Runtime {
@@ -1257,6 +1260,8 @@ impl pallet_contracts::Config for Runtime {
 	type Migrations = ();
 	#[cfg(feature = "runtime-benchmarks")]
 	type Migrations = (NoopMigration<1>, NoopMigration<2>);
+	type MaxDelegateDependencies = ConstU32<32>;
+	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 }
 
 impl pallet_sudo::Config for Runtime {

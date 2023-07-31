@@ -18,10 +18,10 @@
 //! This module contains functions to meter the storage deposit.
 
 use crate::{
-	storage::ContractInfo, BalanceOf, Config, Error, Event, HoldReason, Inspect, Origin, Pallet,
-	System,
+	storage::ContractInfo, BalanceOf, CodeInfo, Config, Error, Event, HoldReason, Inspect, Origin,
+	Pallet, StorageDeposit as Deposit, System,
 };
-use codec::Encode;
+
 use frame_support::{
 	dispatch::{fmt::Debug, DispatchError},
 	ensure,
@@ -34,7 +34,6 @@ use frame_support::{
 	},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
-use pallet_contracts_primitives::StorageDeposit as Deposit;
 use sp_api::HashT;
 use sp_runtime::{
 	traits::{Saturating, Zero},
@@ -413,12 +412,23 @@ where
 	T: Config,
 	E: Ext<T>,
 {
-	/// Charge `diff` from the meter.
+	/// Charges `diff` from the meter.
 	pub fn charge(&mut self, diff: &Diff) {
 		match &mut self.own_contribution {
 			Contribution::Alive(own) => *own = own.saturating_add(diff),
 			_ => panic!("Charge is never called after termination; qed"),
 		};
+	}
+
+	/// Adds a deposit charge.
+	///
+	/// Use this method instead of [`Self::charge`] when the charge is not the result of a storage
+	/// change. This is the case when a `delegate_dependency` is added or removed, or when the
+	/// `code_hash` is updated. [`Self::charge`] cannot be used here because we keep track of the
+	/// deposit charge separately from the storage charge.
+	pub fn charge_deposit(&mut self, contract: T::AccountId, amount: DepositOf<T>) {
+		self.total_deposit = self.total_deposit.saturating_add(&amount);
+		self.charges.push(Charge { contract, amount, terminated: false });
 	}
 
 	/// Charge from `origin` a storage deposit plus the ed for contract instantiation.
@@ -428,34 +438,58 @@ where
 		&mut self,
 		origin: &T::AccountId,
 		contract: &T::AccountId,
-		info: &mut ContractInfo<T>,
+		contract_info: &mut ContractInfo<T>,
+		code_info: &CodeInfo<T>,
 	) -> Result<DepositOf<T>, DispatchError> {
 		debug_assert!(self.is_alive());
-
 		let ed = Pallet::<T>::min_balance();
-		let storage_deposit =
-			Diff { bytes_added: info.encoded_size() as u32, items_added: 1, ..Default::default() }
-				.update_contract::<T>(None);
+		// <<<<<<< HEAD
+		// 		let storage_deposit =
+		// 			Diff { bytes_added: info.encoded_size() as u32, items_added: 1, ..Default::default() }
+		// 				.update_contract::<T>(None);
 
-		// Instantiate needs to transfer the deposit plus the minimum balance in order to pull the
-		// contract account into existence.
-		let deposit = storage_deposit.saturating_add(&Deposit::Charge(ed));
-		if (deposit.charge_or_zero()) > self.limit {
+		// 		// Instantiate needs to transfer the deposit plus the minimum balance in order to pull
+		// the 		// contract account into existence.
+		// 		let deposit = storage_deposit.saturating_add(&Deposit::Charge(ed));
+		// 		if (deposit.charge_or_zero()) > self.limit {
+		// =======
+
+		let deposit = contract_info.update_base_deposit(&code_info);
+		if deposit > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
+
+		let deposit = Deposit::Charge(deposit);
 
 		// We do not increase `own_contribution` because this will be charged later when the
 		// contract execution does conclude and hence would lead to a double charge.
 		self.total_deposit = deposit.clone();
-		info.storage_base_deposit = deposit.charge_or_zero();
 
-		// We need to make sure that the contract's account itself exists, by adding the ED.
-		T::Currency::transfer(origin, contract, ed, Preservation::Protect)?;
+		// <<<<<<< HEAD
+		// 		// We need to make sure that the contract's account itself exists, by adding the ED.
+		// 		T::Currency::transfer(origin, contract, ed, Preservation::Protect)?;
+		// =======
+		// 		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
+		// 		// However, we need to charge immediately so that the account is created before
+		// 		// charges possibly below the ed are collected and fail.
+		// 		E::charge(
+		// 			origin,
+		// 			contract_info.deposit_account(),
+		// 			&deposit.saturating_sub(&Deposit::Charge(ed)),
+		// 			false,
+		// 		)?;
+
+		// 		System::<T>::inc_consumers(contract_info.deposit_account())?;
+
+		// We also need to make sure that the contract's account itself exists.
+		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
+		// 		System::<T>::inc_consumers(contract)?;
+		// >>>>>>> jg/13643-contracts-migrate-to-fungible-traits
 
 		// Charge storage deposit.
-		E::charge(origin, contract, &storage_deposit, false)?;
+		E::charge(origin, contract, &deposit, false)?;
 
-		Ok(storage_deposit)
+		Ok(deposit)
 	}
 
 	/// Call to tell the meter that the currently executing contract was executed.
@@ -516,7 +550,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 		// We are sending the `min_leftover` and the `min_balance` from the origin
 		// account as part of a contract call. Hence origin needs to have those left over
 		// as free balance after accounting for all deposits.
-		let max = T::Currency::reducible_balance(origin, Preservation::Protect, Polite)
+		let max = T::Currency::reducible_balance(origin, Preservation::Preserve, Polite)
 			.saturating_sub(min_leftover)
 			.saturating_sub(Pallet::<T>::min_balance());
 		let default = max.min(T::DefaultDepositLimit::get());
@@ -536,7 +570,9 @@ impl<T: Config> Ext<T> for ReservingExt {
 		_terminated: bool,
 	) -> Result<(), DispatchError> {
 		match amount {
+			Deposit::Charge(amount) | Deposit::Refund(amount) if amount.is_zero() => return Ok(()),
 			Deposit::Charge(amount) => {
+				// <<<<<<< HEAD
 				System::<T>::inc_providers(contract);
 				// This could fail if the `origin` does not have enough liquidity. Ideally, though,
 				// this should have been checked before with `check_limit`.
@@ -562,6 +598,10 @@ impl<T: Config> Ext<T> for ReservingExt {
 						amount: *amount,
 					},
 				);
+				// =======
+				// 				T::Currency::transfer(origin, deposit_account, *amount, Preservation::Preserve)?;
+				// Ok(())
+				// >>>>>>> jg/13643-contracts-migrate-to-fungible-traits
 			},
 			Deposit::Refund(amount) => {
 				let transferred = T::Currency::transfer_on_hold(
@@ -712,6 +752,7 @@ mod tests {
 			storage_byte_deposit: info.bytes_deposit,
 			storage_item_deposit: info.items_deposit,
 			storage_base_deposit: Default::default(),
+			delegate_dependencies: Default::default(),
 		}
 	}
 

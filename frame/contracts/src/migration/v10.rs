@@ -54,11 +54,7 @@ mod old {
 	#[scale_info(skip_type_params(T, OldCurrency))]
 	pub struct ContractInfo<T: Config, OldCurrency>
 	where
-		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-			+ Inspect<
-				<T as frame_system::Config>::AccountId,
-				Balance = old::BalanceOf<T, OldCurrency>,
-			>,
+		OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 	{
 		pub trie_id: TrieId,
 		pub code_hash: CodeHash<T>,
@@ -83,9 +79,7 @@ pub fn store_old_contract_info<T: Config, OldCurrency>(
 	account: T::AccountId,
 	info: crate::ContractInfo<T>,
 ) where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>
-		+ 'static,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId> + 'static,
 {
 	let info = old::ContractInfo {
 		trie_id: info.trie_id,
@@ -115,8 +109,7 @@ impl<T: Config> Deref for DepositAccount<T> {
 #[scale_info(skip_type_params(T, OldCurrency))]
 pub struct ContractInfo<T: Config, OldCurrency>
 where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>,
+	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>,
 {
 	pub trie_id: TrieId,
 	deposit_account: DepositAccount<T>,
@@ -129,11 +122,7 @@ where
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, DefaultNoBound)]
-pub struct Migration<T: Config, OldCurrency>
-where
-	OldCurrency: ReservableCurrency<<T as frame_system::Config>::AccountId>
-		+ Inspect<<T as frame_system::Config>::AccountId, Balance = old::BalanceOf<T, OldCurrency>>,
-{
+pub struct Migration<T: Config, OldCurrency = ()> {
 	last_account: Option<T::AccountId>,
 	_phantom: PhantomData<(T, OldCurrency)>,
 }
