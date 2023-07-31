@@ -70,7 +70,7 @@ impl frame_system::Config for Test {
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = Aura;
-	type MinimumPeriod = ConstU64<{SLOT_DURATION / 2}>;
+	type MinimumPeriod = ConstU64<{ SLOT_DURATION / 2 }>;
 	type WeightInfo = ();
 }
 
