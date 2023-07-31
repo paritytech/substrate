@@ -8,7 +8,7 @@
   "properties": null,
   "codeSubstitutes": {},
   "genesis": {
-    "runtimeConfigPatch": {
+    "runtimeGenesisConfigPatch": {
       "babe": {
         "epochConfig": {
           "allowed_slots": "PrimaryAndSecondaryPlainSlots",

@@ -70,11 +70,7 @@ impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
 }
 
 impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
-	/// Get the default `GenesisConfig` as a JSON blob.
-	///
-	/// This function instantiates the default `GenesisConfig` struct for the runtime and serializes
-	/// it into a JSON blob. It returns a `Vec<u8>` containing the JSON representation of the
-	/// default `GenesisConfig`.
+	/// Calls [`sp_genesis_builder::GenesisBuilder::create_default_config`] provided by runtime.
 	pub fn get_default_config(&self) -> core::result::Result<Value, String> {
 		let mut t = BasicExternalities::new_empty();
 		let call_result = self
@@ -85,14 +81,7 @@ impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
 		Ok(from_slice(&default_config[..]).expect("returned value is json. qed."))
 	}
 
-	/// Build `GenesisConfig` from a JSON blob not using any defaults and store it in the storage.
-	///
-	/// This function deserializes the full `GenesisConfig` from the given JSON blob and puts it
-	/// into the storage. If the provided JSON blob is incorrect or incomplete or the
-	/// deserialization fails, an error is returned.
-	///
-	/// Please note that provided json blob must contain all `GenesisConfig` fields, no defaults
-	/// will be used.
+	/// Calls [`sp_genesis_builder::GenesisBuilder::build_config`] provided by runtime.
 	pub fn get_storage_for_config(&self, config: Value) -> core::result::Result<Storage, String> {
 		let mut ext = BasicExternalities::new_empty();
 
@@ -118,10 +107,11 @@ impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
 	///
 	/// The patching process modifies the default `GenesisConfig` according to the following rules:
 	/// 1. Existing keys in the default configuration will be overridden by the corresponding values
-	/// in the patch. 2. If a key exists in the patch but not in the default configuration, it will
-	/// be added to the resulting `GenesisConfig`. 3. Keys in the default configuration that have
-	/// null values in the patch will be removed from the resulting    `GenesisConfig`. This is
-	/// helpful for changing enum variant value.
+	///    in the patch.
+	/// 2. If a key exists in the patch but not in the default configuration, it will be added to
+	///    the resulting `GenesisConfig`.
+	/// 3. Keys in the default configuration that have null values in the patch will be removed from
+	///    the resulting  `GenesisConfig`. This is helpful for changing enum variant value.
 	///
 	/// Please note that the patch may contain full `GenesisConfig`.
 	pub fn get_storage_for_patch(&self, patch: Value) -> core::result::Result<Storage, String> {

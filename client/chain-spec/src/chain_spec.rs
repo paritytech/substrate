@@ -39,7 +39,6 @@ use std::{
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 enum GenesisBuildAction {
-	#[serde(alias = "RuntimePatch")]
 	Patch(json::Value),
 	#[serde(alias = "Runtime")]
 	Full(json::Value),
@@ -128,9 +127,9 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 			},
 			// maybe a Factory for getting GenesisBuilderApi command?
 			Self::GenesisBuilderApi(GenesisBuildAction::Full(config)) =>
-				Ok(Genesis::RuntimeConfig(config.clone())),
+				Ok(Genesis::RuntimeGenesisConfig(config.clone())),
 			Self::GenesisBuilderApi(GenesisBuildAction::Patch(patch)) =>
-				Ok(Genesis::RuntimeConfigPatch(patch.clone())),
+				Ok(Genesis::RuntimeGenesisConfigPatch(patch.clone())),
 		}
 	}
 }
@@ -157,10 +156,10 @@ impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
 			// it, but Substrate itself isn't capable of loading chain specs with just a hash at the
 			// moment.
 			Genesis::StateRootHash(_) => Err("Genesis storage in hash format not supported".into()),
-			Genesis::RuntimeConfig(config) => RuntimeCaller::new(&self.code[..])
+			Genesis::RuntimeGenesisConfig(config) => RuntimeCaller::new(&self.code[..])
 				.get_storage_for_config(config)?
 				.assimilate_storage(storage),
-			Genesis::RuntimeConfigPatch(patch) => RuntimeCaller::new(&self.code[..])
+			Genesis::RuntimeGenesisConfigPatch(patch) => RuntimeCaller::new(&self.code[..])
 				.get_storage_for_patch(patch)?
 				.assimilate_storage(storage),
 		}?;
@@ -218,9 +217,9 @@ enum Genesis<G> {
 	/// State root hash of the genesis storage.
 	StateRootHash(StorageData),
 	/// Full runtime genesis config.
-	RuntimeConfig(json::Value),
+	RuntimeGenesisConfig(json::Value),
 	/// Patch for default runtime genesis config.
-	RuntimeConfigPatch(json::Value),
+	RuntimeGenesisConfigPatch(json::Value),
 }
 
 /// A configuration of a client. Does not include runtime storage initialization.
@@ -265,7 +264,7 @@ struct ClientSpec<E> {
 /// We use `Option` here since `()` is not flattenable by serde.
 pub type NoExtension = Option<()>;
 
-#[allow(missing_docs)]
+/// Builder for creating [`ChainSpec`] instances.
 pub struct ChainSpecBuilder<G, E = NoExtension> {
 	name: Option<String>,
 	id: Option<String>,
@@ -281,8 +280,8 @@ pub struct ChainSpecBuilder<G, E = NoExtension> {
 	_genesis: PhantomData<G>,
 }
 
-#[allow(missing_docs)] //todo: add doc!
 impl<G, E> ChainSpecBuilder<G, E> {
+	/// Creates new builder instance with no defaults.
 	pub fn new() -> Self {
 		Self {
 			name: None,
@@ -300,66 +299,79 @@ impl<G, E> ChainSpecBuilder<G, E> {
 		}
 	}
 
+	/// Sets spec name. Must be called.
 	pub fn with_name(mut self, name: &str) -> Self {
 		self.name = Some(name.into());
 		self
 	}
 
+	/// Sets spec id. Must be called.
 	pub fn with_id(mut self, id: &str) -> Self {
 		self.id = Some(id.into());
 		self
 	}
 
+	/// Sets type of the chain. Must be called.
 	pub fn with_chain_type(mut self, chain_type: ChainType) -> Self {
 		self.chain_type = Some(chain_type);
 		self
 	}
 
+	/// Sets a list of bootnode addresses.
 	pub fn with_boot_nodes(mut self, boot_nodes: Vec<MultiaddrWithPeerId>) -> Self {
 		self.boot_nodes = Some(boot_nodes);
 		self
 	}
 
+	/// Sets telemetry endpoints.
 	pub fn with_telemetry_endpoints(mut self, telemetry_endpoints: TelemetryEndpoints) -> Self {
 		self.telemetry_endpoints = Some(telemetry_endpoints);
 		self
 	}
 
+	/// Sets network protocol id.
 	pub fn with_protocol_id(mut self, protocol_id: &str) -> Self {
 		self.protocol_id = Some(protocol_id.into());
 		self
 	}
 
+	/// Sets optional network fork identifier.
 	pub fn with_fork_id(mut self, fork_id: &str) -> Self {
 		self.fork_id = Some(fork_id.into());
 		self
 	}
 
+	/// Sets additional loosly-typed properties of the chain.
 	pub fn with_properties(mut self, properties: Properties) -> Self {
 		self.properties = Some(properties);
 		self
 	}
 
+	/// Sets chain spec extensions. Must be called.
 	pub fn with_extensions(mut self, extensions: E) -> Self {
 		self.extensions = Some(extensions);
 		self
 	}
 
+	/// Sets the code. Must be called.
 	pub fn with_code(mut self, code: &[u8]) -> Self {
 		self.code = Some(code.into());
 		self
 	}
 
+	/// Sets the JSON patch for runtime's GenesisConfig.
 	pub fn with_genesis_config_patch(mut self, patch: json::Value) -> Self {
 		self.genesis_build_action = Some(GenesisBuildAction::Patch(patch));
 		self
 	}
 
+	/// Sets the full runtime's GenesisConfig JSON.
 	pub fn with_genesis_config(mut self, config: json::Value) -> Self {
 		self.genesis_build_action = Some(GenesisBuildAction::Full(config));
 		self
 	}
 
+	/// Builds the [`ChainSpec`] instance using provided settings
 	pub fn build(self) -> ChainSpec<G, E> {
 		let client_spec = ClientSpec {
 			name: self.name.expect("with_name must be called."),
@@ -572,11 +584,11 @@ struct ChainSpecJsonContainer<G, E> {
 impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 	fn json_container(&self, raw: bool) -> Result<ChainSpecJsonContainer<G, E>, String> {
 		let mut raw_genesis = match (raw, self.genesis.resolve()?) {
-			(true, Genesis::RuntimeConfigPatch(patch)) => {
+			(true, Genesis::RuntimeGenesisConfigPatch(patch)) => {
 				let storage = RuntimeCaller::new(&self.code[..]).get_storage_for_patch(patch)?;
 				RawGenesis::from(storage)
 			},
-			(true, Genesis::RuntimeConfig(config)) => {
+			(true, Genesis::RuntimeGenesisConfig(config)) => {
 				let storage = RuntimeCaller::new(&self.code[..]).get_storage_for_config(config)?;
 				RawGenesis::from(storage)
 			},
@@ -790,7 +802,26 @@ mod tests {
 		}
 	}
 
-	fn json_eval_value_at_key(
+	macro_rules! json_path {
+		[ $($x:expr),+ ] => {
+			VecDeque::<String>::from([$($x),+].map(String::from))
+		};
+	}
+
+	/// The `fun` will be called with the value at `path`.
+	///
+	/// If exists, the value at given `path` will be passed to the `fun` and the result of `fun`
+	/// call will be returned. Otherwise false is returned.
+	/// `path` will be modified.
+	///
+	/// # Examples
+	/// ```
+	/// use serde_json::{from_str, json, Value};
+	/// let doc = json!({"a":{"b":{"c":"5"}}});
+	/// let mut path = ["a", "b", "c"].map(String::from).into();
+	/// assert!(json_eval_value_at_key(&doc, &mut path, &|v| { assert_eq!(v,"5"); true }));
+	/// ```
+	pub fn json_eval_value_at_key(
 		doc: &Value,
 		path: &mut VecDeque<String>,
 		fun: &dyn Fn(&Value) -> bool,
@@ -809,15 +840,36 @@ mod tests {
 		json_eval_value_at_key(doc, path, &|_| true)
 	}
 
+	#[test]
+	// some tests for json path utils
+	fn test_json_eval_value_at_key() {
+		let doc = json!({"a":{"b1":"20","b":{"c":{"d":"10"}}}});
+
+		assert!(json_eval_value_at_key(&doc, &mut json_path!["a", "b1"], &|v| { *v == "20" }));
+		assert!(json_eval_value_at_key(&doc, &mut json_path!["a", "b", "c", "d"], &|v| {
+			*v == "10"
+		}));
+		assert!(!json_eval_value_at_key(&doc, &mut json_path!["a", "c", "d"], &|_| { true }));
+		assert!(!json_eval_value_at_key(&doc, &mut json_path!["d"], &|_| { true }));
+
+		assert!(json_contains_path(&doc, &mut json_path!["a", "b1"]));
+		assert!(json_contains_path(&doc, &mut json_path!["a", "b"]));
+		assert!(json_contains_path(&doc, &mut json_path!["a", "b", "c"]));
+		assert!(json_contains_path(&doc, &mut json_path!["a", "b", "c", "d"]));
+		assert!(!json_contains_path(&doc, &mut json_path!["a", "b", "c", "d", "e"]));
+		assert!(!json_contains_path(&doc, &mut json_path!["a", "b", "b1"]));
+		assert!(!json_contains_path(&doc, &mut json_path!["d"]));
+	}
+
 	fn zeroize_code_key_in_json(encoded: bool, json: &str) -> Value {
 		let mut json = from_str::<Value>(json).unwrap();
 		let (zeroing_patch, mut path) = if encoded {
 			(
 				json!({"genesis":{"raw":{"top":{"0x3a636f6465":"0x0"}}}}),
-				["genesis", "raw", "top", "0x3a636f6465"].map(String::from).into(),
+				json_path!["genesis", "raw", "top", "0x3a636f6465"],
 			)
 		} else {
-			(json!({"code":"0x0"}), ["code"].map(String::from).into())
+			(json!({"code":"0x0"}), json_path!["code"])
 		};
 		assert!(json_contains_path(&json, &mut path));
 		json_patch::merge(&mut json, &zeroing_patch);
@@ -852,9 +904,6 @@ mod tests {
 			}))
 			.build();
 
-		// std::fs::write("/tmp/patch.json", output.as_json(false).unwrap());
-		// std::fs::write("/tmp/patch_raw.json", output.as_json(true).unwrap());
-
 		let actual = output.as_json(false).unwrap();
 		let actual_raw = output.as_json(true).unwrap();
 
@@ -886,9 +935,6 @@ mod tests {
 			.with_code(substrate_test_runtime::wasm_binary_unwrap().into())
 			.with_genesis_config(from_str(j).unwrap())
 			.build();
-
-		// std::fs::write("/tmp/config.json", output.as_json(false).unwrap());
-		// std::fs::write("/tmp/config_raw.json", output.as_json(true).unwrap());
 
 		let actual = output.as_json(false).unwrap();
 		let actual_raw = output.as_json(true).unwrap();
@@ -960,13 +1006,13 @@ mod tests {
 		.unwrap();
 
 		let j = from_str::<Value>(&spec.as_json(true).unwrap()).unwrap();
-		std::fs::write("/tmp/11.json", serde_json::to_string_pretty(&j).unwrap());
 
-		let mut path = VecDeque::from(["genesis", "raw", "top", "0x3a636f6465"].map(String::from));
-		assert!(json_eval_value_at_key(&j, &mut path, &|v| { *v == "0x010101" }));
-
-		let mut path = ["code"].map(String::from).into();
-		assert!(!json_contains_path(&j, &mut path));
+		assert!(json_eval_value_at_key(
+			&j,
+			&mut json_path!["genesis", "raw", "top", "0x3a636f6465"],
+			&|v| { *v == "0x010101" }
+		));
+		assert!(!json_contains_path(&j, &mut json_path!["code"]));
 	}
 
 	#[test]
@@ -978,11 +1024,13 @@ mod tests {
 
 		let j = from_str::<Value>(&spec.as_json(true).unwrap()).unwrap();
 
-		let mut path = VecDeque::from(["genesis", "raw", "top", "0x3a636f6465"].map(String::from));
-		assert!(json_eval_value_at_key(&j, &mut path, &|v| { *v == "0x060708" }));
+		assert!(json_eval_value_at_key(
+			&j,
+			&mut json_path!["genesis", "raw", "top", "0x3a636f6465"],
+			&|v| { *v == "0x060708" }
+		));
 
-		let mut path = ["code"].map(String::from).into();
-		assert!(!json_contains_path(&j, &mut path));
+		assert!(!json_contains_path(&j, &mut json_path!["code"]));
 	}
 
 	#[test]
@@ -994,11 +1042,13 @@ mod tests {
 
 		let j = from_str::<Value>(&spec.as_json(true).unwrap()).unwrap();
 
-		let mut path = ["genesis", "raw", "top", "0x3a636f6465"].map(String::from).into();
-		assert!(json_eval_value_at_key(&j, &mut path, &|v| { *v == "0x060708" }));
+		assert!(json_eval_value_at_key(
+			&j,
+			&mut json_path!["genesis", "raw", "top", "0x3a636f6465"],
+			&|v| { *v == "0x060708" }
+		));
 
-		let mut path = ["code"].map(String::from).into();
-		assert!(!json_contains_path(&j, &mut path));
+		assert!(!json_contains_path(&j, &mut json_path!["code"]));
 	}
 
 	#[test]
