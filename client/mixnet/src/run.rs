@@ -46,9 +46,12 @@ use sc_network::{
 	Event::{NotificationStreamClosed, NotificationStreamOpened, NotificationsReceived},
 	NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo, ProtocolName,
 };
-use sc_transaction_pool_api::TransactionPool;
-use sp_api::ProvideRuntimeApi;
+use sc_transaction_pool_api::{
+	LocalTransactionPool, OffchainTransactionPoolFactory, TransactionPool,
+};
+use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_consensus::SyncOracle;
+use sp_keystore::{KeystoreExt, KeystorePtr};
 use sp_mixnet::{runtime_api::MixnetApi, types::Mixnode};
 use sp_runtime::{
 	generic::BlockId,
@@ -141,7 +144,8 @@ fn time_until(instant: Instant) -> Duration {
 	instant.saturating_duration_since(Instant::now())
 }
 
-/// Run the mixnet service.
+/// Run the mixnet service. If `keystore` is `None`, the service will not attempt to register the
+/// local node as a mixnode, even if `config.register` is `true`.
 pub async fn run<B, C, S, N, P>(
 	config: Config,
 	mut api_backend: ApiBackend,
@@ -150,13 +154,14 @@ pub async fn run<B, C, S, N, P>(
 	network: Arc<N>,
 	protocol_name: ProtocolName,
 	transaction_pool: Arc<P>,
+	keystore: Option<KeystorePtr>,
 ) where
 	B: Block,
 	C: BlockchainEvents<B> + ProvideRuntimeApi<B> + HeaderBackend<B>,
 	C::Api: MixnetApi<B>,
 	S: SyncOracle,
 	N: NetworkStateInfo + NetworkEventStream + NetworkNotification + NetworkPeers,
-	P: TransactionPool<Block = B>,
+	P: TransactionPool<Block = B> + LocalTransactionPool<Block = B> + 'static,
 {
 	let local_peer_id = network.local_peer_id();
 	let Some(local_peer_id) = to_core_peer_id(&local_peer_id) else {
@@ -165,6 +170,9 @@ pub async fn run<B, C, S, N, P>(
 			mixnet not running");
 		return
 	};
+
+	let offchain_transaction_pool_factory =
+		OffchainTransactionPoolFactory::new(transaction_pool.clone());
 
 	let mut mixnet = Mixnet::new(config.core);
 	// It would make sense to reset this to 0 when the session changes, but registrations aren't
@@ -177,8 +185,11 @@ pub async fn run<B, C, S, N, P>(
 
 	let mut finality_notifications = client.finality_notification_stream();
 	// Import notifications only used for triggering registration attempts
-	let mut import_notifications =
-		if config.substrate.register { Some(client.import_notification_stream()) } else { None };
+	let mut import_notifications = if config.substrate.register && keystore.is_some() {
+		Some(client.import_notification_stream())
+	} else {
+		None
+	};
 	let mut network_events = network.event_stream("mixnet").fuse();
 	let mut next_forward_packet_delay = MaybeInfDelay::new(None);
 	let mut next_authored_packet_delay = MaybeInfDelay::new(None);
@@ -216,7 +227,11 @@ pub async fn run<B, C, S, N, P>(
 
 			notification = next_import_notification => {
 				if notification.is_new_best && (*notification.header.number() >= min_register_block) {
-					let api = client.runtime_api();
+					let mut api = client.runtime_api();
+					api.register_extension(KeystoreExt(keystore.clone().expect(
+						"Import notification stream only setup if we have a keystore")));
+					api.register_extension(offchain_transaction_pool_factory
+						.offchain_transaction_pool(notification.hash));
 					let session_index = mixnet.session_status().current_index;
 					let mixnode = Mixnode {
 						kx_public: *mixnet.next_kx_public(),

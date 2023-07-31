@@ -418,6 +418,7 @@ pub fn new_full_base(
 			network.clone(),
 			mixnet_protocol_name,
 			transaction_pool.clone(),
+			Some(keystore_container.keystore()),
 		);
 		task_manager.spawn_handle().spawn("mixnet", None, mixnet);
 	}

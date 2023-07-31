@@ -30,6 +30,7 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sp-core = { version = "21.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.27.0", path = "../../primitives/keystore" }
 sp-mixnet = { version = "0.1.0-dev", path = "../../primitives/mixnet" }
 sp-runtime = { version = "24.0.0", path = "../../primitives/runtime" }
 thiserror = "1.0"
