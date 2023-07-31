@@ -106,7 +106,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// The local external addresses.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Listen addresses. Do **NOT** include a trailing `/p2p/` with our `PeerId`.
-	listen_addresses: Arc<Mutex<Vec<Multiaddr>>>,
+	listen_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
 	/// The `KeyPair` that defines the `PeerId` of the local node.
@@ -413,7 +413,7 @@ where
 		}
 
 		let external_addresses = Arc::new(Mutex::new(Vec::new()));
-		let listen_addresses = Arc::new(Mutex::new(Vec::new()));
+		let listen_addresses = Arc::new(Mutex::new(HashSet::new()));
 		let peers_notifications_sinks = Arc::new(Mutex::new(HashMap::new()));
 
 		let service = Arc::new(NetworkService {
@@ -699,7 +699,7 @@ where
 
 	/// Returns the listener addresses (without trailing `/p2p/` with our `PeerId`).
 	fn listen_addresses(&self) -> Vec<Multiaddr> {
-		self.listen_addresses.lock().clone()
+		self.listen_addresses.lock().iter().cloned().collect()
 	}
 
 	/// Returns the local Peer ID.
@@ -1125,7 +1125,7 @@ where
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
-	listen_addresses: Arc<Mutex<Vec<Multiaddr>>>,
+	listen_addresses: Arc<Mutex<HashSet<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	num_connected: Arc<AtomicUsize>,
 	/// The network service that can be extracted and shared through the codebase.
@@ -1189,10 +1189,6 @@ where
 		{
 			let external_addresses = self.network_service.external_addresses().cloned().collect();
 			*self.external_addresses.lock() = external_addresses;
-
-			let listen_addresses =
-				self.network_service.listeners().map(ToOwned::to_owned).collect();
-			*self.listen_addresses.lock() = listen_addresses;
 		}
 
 		if let Some(metrics) = self.metrics.as_ref() {
@@ -1602,12 +1598,14 @@ where
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.listeners_local_addresses.inc();
 				}
+				self.listen_addresses.lock().insert(address.clone());
 			},
 			SwarmEvent::ExpiredListenAddr { address, .. } => {
 				info!(target: "sub-libp2p", "📪 No longer listening on {}", address);
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.listeners_local_addresses.dec();
 				}
+				self.listen_addresses.lock().remove(&address);
 			},
 			SwarmEvent::OutgoingConnectionError { connection_id, peer_id, error } => {
 				if let Some(peer_id) = peer_id {
@@ -1712,6 +1710,12 @@ where
 				if let Some(metrics) = self.metrics.as_ref() {
 					metrics.listeners_local_addresses.sub(addresses.len() as u64);
 				}
+				let mut listen_addresses = self.listen_addresses.lock();
+				for addr in &addresses {
+					listen_addresses.remove(addr);
+				}
+				drop(listen_addresses);
+
 				let addrs =
 					addresses.into_iter().map(|a| a.to_string()).collect::<Vec<_>>().join(", ");
 				match reason {
