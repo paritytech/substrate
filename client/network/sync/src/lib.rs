@@ -88,6 +88,7 @@ use std::{
 
 pub use service::chain_sync::SyncingService;
 
+mod block_announce_validator;
 mod extra_requests;
 mod schema;
 
