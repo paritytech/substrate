@@ -780,9 +780,7 @@ fn expand_benchmark(
 			let call_name = match *expr_call.func {
 				Expr::Path(expr_path) => {
 					// normal function call
-					let Some(segment) = expr_path.path.segments.last() else {
-						return call_err()
-					};
+					let Some(segment) = expr_path.path.segments.last() else { return call_err() };
 					segment.ident.to_string()
 				},
 				Expr::Infer(_) => {

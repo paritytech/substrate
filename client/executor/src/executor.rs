@@ -88,6 +88,7 @@ pub struct WasmExecutorBuilder<H> {
 	method: WasmExecutionMethod,
 	onchain_heap_alloc_strategy: Option<HeapAllocStrategy>,
 	offchain_heap_alloc_strategy: Option<HeapAllocStrategy>,
+	ignore_onchain_heap_pages: bool,
 	max_runtime_instances: usize,
 	cache_path: Option<PathBuf>,
 	allow_missing_host_functions: bool,
@@ -104,6 +105,7 @@ impl<H> WasmExecutorBuilder<H> {
 			method: WasmExecutionMethod::default(),
 			onchain_heap_alloc_strategy: None,
 			offchain_heap_alloc_strategy: None,
+			ignore_onchain_heap_pages: false,
 			max_runtime_instances: 2,
 			runtime_cache_size: 4,
 			allow_missing_host_functions: false,
@@ -134,6 +136,14 @@ impl<H> WasmExecutorBuilder<H> {
 		heap_alloc_strategy: HeapAllocStrategy,
 	) -> Self {
 		self.offchain_heap_alloc_strategy = Some(heap_alloc_strategy);
+		self
+	}
+
+	/// Create the wasm executor and follow/ignore onchain heap pages value.
+	///
+	/// By default this the onchain heap pages value is followed.
+	pub fn with_ignore_onchain_heap_pages(mut self, ignore_onchain_heap_pages: bool) -> Self {
+		self.ignore_onchain_heap_pages = ignore_onchain_heap_pages;
 		self
 	}
 
@@ -193,6 +203,7 @@ impl<H> WasmExecutorBuilder<H> {
 			default_onchain_heap_alloc_strategy: unwrap_heap_pages(
 				self.onchain_heap_alloc_strategy,
 			),
+			ignore_onchain_heap_pages: self.ignore_onchain_heap_pages,
 			cache: Arc::new(RuntimeCache::new(
 				self.max_runtime_instances,
 				self.cache_path.clone(),
@@ -214,6 +225,8 @@ pub struct WasmExecutor<H> {
 	default_onchain_heap_alloc_strategy: HeapAllocStrategy,
 	/// The heap allocation strategy for offchain Wasm calls.
 	default_offchain_heap_alloc_strategy: HeapAllocStrategy,
+	/// Ignore onchain heap pages value.
+	ignore_onchain_heap_pages: bool,
 	/// WASM runtime cache.
 	cache: Arc<RuntimeCache>,
 	/// The path to a directory which the executor can leverage for a file cache, e.g. put there
@@ -230,6 +243,7 @@ impl<H> Clone for WasmExecutor<H> {
 			method: self.method,
 			default_onchain_heap_alloc_strategy: self.default_onchain_heap_alloc_strategy,
 			default_offchain_heap_alloc_strategy: self.default_offchain_heap_alloc_strategy,
+			ignore_onchain_heap_pages: self.ignore_onchain_heap_pages,
 			cache: self.cache.clone(),
 			cache_path: self.cache_path.clone(),
 			allow_missing_host_functions: self.allow_missing_host_functions,
@@ -276,6 +290,7 @@ where
 			default_offchain_heap_alloc_strategy: unwrap_heap_pages(
 				default_heap_pages.map(|h| HeapAllocStrategy::Static { extra_pages: h as _ }),
 			),
+			ignore_onchain_heap_pages: false,
 			cache: Arc::new(RuntimeCache::new(
 				max_runtime_instances,
 				cache_path.clone(),
@@ -486,10 +501,14 @@ where
 			"Executing function",
 		);
 
-		let on_chain_heap_alloc_strategy = runtime_code
-			.heap_pages
-			.map(|h| HeapAllocStrategy::Static { extra_pages: h as _ })
-			.unwrap_or_else(|| self.default_onchain_heap_alloc_strategy);
+		let on_chain_heap_alloc_strategy = if self.ignore_onchain_heap_pages {
+			self.default_onchain_heap_alloc_strategy
+		} else {
+			runtime_code
+				.heap_pages
+				.map(|h| HeapAllocStrategy::Static { extra_pages: h as _ })
+				.unwrap_or_else(|| self.default_onchain_heap_alloc_strategy)
+		};
 
 		let heap_alloc_strategy = match context {
 			CallContext::Offchain => self.default_offchain_heap_alloc_strategy,
@@ -518,10 +537,14 @@ where
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		let on_chain_heap_pages = runtime_code
-			.heap_pages
-			.map(|h| HeapAllocStrategy::Static { extra_pages: h as _ })
-			.unwrap_or_else(|| self.default_onchain_heap_alloc_strategy);
+		let on_chain_heap_pages = if self.ignore_onchain_heap_pages {
+			self.default_onchain_heap_alloc_strategy
+		} else {
+			runtime_code
+				.heap_pages
+				.map(|h| HeapAllocStrategy::Static { extra_pages: h as _ })
+				.unwrap_or_else(|| self.default_onchain_heap_alloc_strategy)
+		};
 
 		self.with_instance(
 			runtime_code,
@@ -631,10 +654,14 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 			"Executing function",
 		);
 
-		let on_chain_heap_alloc_strategy = runtime_code
-			.heap_pages
-			.map(|h| HeapAllocStrategy::Static { extra_pages: h as _ })
-			.unwrap_or_else(|| self.wasm.default_onchain_heap_alloc_strategy);
+		let on_chain_heap_alloc_strategy = if self.wasm.ignore_onchain_heap_pages {
+			self.wasm.default_onchain_heap_alloc_strategy
+		} else {
+			runtime_code
+				.heap_pages
+				.map(|h| HeapAllocStrategy::Static { extra_pages: h as _ })
+				.unwrap_or_else(|| self.wasm.default_onchain_heap_alloc_strategy)
+		};
 
 		let heap_alloc_strategy = match context {
 			CallContext::Offchain => self.wasm.default_offchain_heap_alloc_strategy,

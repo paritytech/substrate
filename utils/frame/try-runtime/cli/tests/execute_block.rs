@@ -33,7 +33,7 @@ async fn block_execution_works() {
 
 	common::run_with_timeout(Duration::from_secs(60), async move {
 		fn execute_block(ws_url: &str, at: Hash) -> Child {
-			Command::new(cargo_bin("substrate"))
+			Command::new(cargo_bin("substrate-node"))
 				.stdout(process::Stdio::piped())
 				.stderr(process::Stdio::piped())
 				.args(&["try-runtime", "--runtime=existing"])
