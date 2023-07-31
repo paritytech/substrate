@@ -46,7 +46,6 @@ use frame_support::{
 	ensure,
 	traits::{fungible::MutateHold, tokens::Precision::BestEffort},
 };
-use sp_api::HashT;
 use sp_core::Get;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
@@ -245,18 +244,13 @@ impl<T: Config> WasmBlob<T> {
 					)
 					.map_err(|_| <Error<T>>::StorageDepositNotEnoughFunds)?;
 
-					<Pallet<T>>::deposit_event(
-						vec![T::Hashing::hash_of(&self.code_info.owner)],
-						Event::StorageDepositHeld {
-							who: self.code_info.owner.clone(),
-							amount: deposit,
-						},
-					);
-
 					self.code_info.refcount = 0;
 					<PristineCode<T>>::insert(code_hash, &self.code);
 					*stored_code_info = Some(self.code_info.clone());
-					<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeStored { code_hash });
+					<Pallet<T>>::deposit_event(
+						vec![code_hash],
+						Event::CodeStored { code_hash, deposit_held: deposit },
+					);
 					Ok(deposit)
 				},
 			}
@@ -275,18 +269,14 @@ impl<T: Config> WasmBlob<T> {
 					code_info.deposit,
 					BestEffort,
 				);
-
-				<Pallet<T>>::deposit_event(
-					vec![T::Hashing::hash_of(&code_info.owner)],
-					Event::StorageDepositReleased {
-						who: code_info.owner.clone(),
-						amount: code_info.deposit,
-					},
-				);
+				let deposit_released = code_info.deposit;
 
 				*existing = None;
 				<PristineCode<T>>::remove(&code_hash);
-				<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeRemoved { code_hash });
+				<Pallet<T>>::deposit_event(
+					vec![code_hash],
+					Event::CodeRemoved { code_hash, deposit_released },
+				);
 				Ok(())
 			} else {
 				Err(<Error<T>>::CodeNotFound.into())

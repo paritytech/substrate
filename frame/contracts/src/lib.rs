@@ -849,7 +849,7 @@ pub mod pallet {
 		},
 
 		/// Code with the specified hash has been stored.
-		CodeStored { code_hash: T::Hash },
+		CodeStored { code_hash: T::Hash, deposit_held: BalanceOf<T> },
 
 		/// A custom event emitted by the contract.
 		ContractEmitted {
@@ -861,7 +861,7 @@ pub mod pallet {
 		},
 
 		/// A code with the specified hash was removed.
-		CodeRemoved { code_hash: T::Hash },
+		CodeRemoved { code_hash: T::Hash, deposit_released: BalanceOf<T> },
 
 		/// A contract's code was updated.
 		ContractCodeUpdated {
@@ -901,12 +901,6 @@ pub mod pallet {
 			/// The code hash that was delegate called.
 			code_hash: CodeHash<T>,
 		},
-
-		/// Some funds have been held as storage deposit.
-		StorageDepositHeld { who: T::AccountId, amount: BalanceOf<T> },
-
-		/// Some funds have been released as storage deposit.
-		StorageDepositReleased { who: T::AccountId, amount: BalanceOf<T> },
 	}
 
 	#[pallet::error]

@@ -3523,21 +3523,14 @@ fn upload_code_works() {
 
 		assert_eq!(
 			System::events(),
-			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
-						who: ALICE,
-						amount: deposit_expected,
-					}),
-					topics: vec![hash(&ALICE)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![code_hash],
-				},
-			]
+			vec![EventRecord {
+				phase: Phase::Initialization,
+				event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+					code_hash,
+					deposit_held: deposit_expected
+				}),
+				topics: vec![code_hash],
+			},]
 		);
 	});
 }
@@ -3619,30 +3612,18 @@ fn remove_code_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
-						who: ALICE,
-						amount: deposit_expected,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+						code_hash,
+						deposit_held: deposit_expected
 					}),
-					topics: vec![hash(&ALICE)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(
-						pallet_contracts::Event::StorageDepositReleased {
-							who: ALICE,
-							amount: deposit_expected,
-						}
-					),
-					topics: vec![hash(&ALICE)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeRemoved { code_hash }),
+					event: RuntimeEvent::Contracts(crate::Event::CodeRemoved {
+						code_hash,
+						deposit_released: deposit_expected
+					}),
 					topics: vec![code_hash],
 				},
 			]
@@ -3676,21 +3657,14 @@ fn remove_code_wrong_origin() {
 
 		assert_eq!(
 			System::events(),
-			vec![
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
-						who: ALICE,
-						amount: deposit_expected,
-					}),
-					topics: vec![hash(&ALICE)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![code_hash],
-				},
-			]
+			vec![EventRecord {
+				phase: Phase::Initialization,
+				event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+					code_hash,
+					deposit_held: deposit_expected
+				}),
+				topics: vec![code_hash],
+			},]
 		);
 	});
 }
@@ -3784,15 +3758,10 @@ fn instantiate_with_zero_balance_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
-						who: ALICE,
-						amount: deposit_expected,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+						code_hash,
+						deposit_held: deposit_expected
 					}),
-					topics: vec![hash(&ALICE)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![code_hash],
 				},
 				EventRecord {
@@ -3896,15 +3865,10 @@ fn instantiate_with_below_existential_deposit_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(pallet_contracts::Event::StorageDepositHeld {
-						who: ALICE,
-						amount: deposit_expected,
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored {
+						code_hash,
+						deposit_held: deposit_expected
 					}),
-					topics: vec![hash(&ALICE)],
-				},
-				EventRecord {
-					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![code_hash],
 				},
 				EventRecord {
