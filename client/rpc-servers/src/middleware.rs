@@ -373,7 +373,9 @@ async fn parse_rpc_response(body: Body) -> Result<Health, Box<dyn Error + Send +
 enum InterceptRequest {
 	/// Proxy `/health` to `system_health`.
 	Health,
-	/// Proxy `/health/readiness`.
+	/// Checks if node has at least one peer and is not doing major syncing.
+	///
+	/// Returns HTTP status code 200 on success otherwise HTTP status code 500 is returned.
 	Readiness,
 	/// Treat as a ordinary RPC call and don't modify the request or response.
 	No,
