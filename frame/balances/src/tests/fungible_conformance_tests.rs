@@ -31,7 +31,7 @@ macro_rules! generate_tests {
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit).dust_trap(trap_account);
 					builder.build_and_execute_with(|| {
 						Balances::set_balance(&trap_account, Balances::minimum_balance());
-						$base_path::regular::mutate::$test_name::<
+						$base_path::$scope::$trait::$test_name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
 						>(Some(trap_account));
@@ -42,7 +42,7 @@ macro_rules! generate_tests {
 				fn [< $trait _ $scope _ $test_name _existential_deposit_ $ext_deposit _dust_trap_off >]() {
 					let builder = ExtBuilder::default().existential_deposit($ext_deposit);
 					builder.build_and_execute_with(|| {
-						$base_path::regular::mutate::$test_name::<
+						$base_path::$scope::$trait::$test_name::<
 							Balances,
 							<Test as frame_system::Config>::AccountId,
 						>(None);
