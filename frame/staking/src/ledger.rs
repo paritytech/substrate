@@ -199,7 +199,29 @@ impl<T: Config> StakingLedger<T> {
 	pub(crate) fn kill(stash: &T::AccountId) -> Result<(), Error<T>> {
 		let controller = <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash)?;
 
-        // TODO(gpestana): on_validator/nominator_remove
+		// call on validator remove or on nominator remove
+		// Note: does this need to be called *before* the ledger remove?? probably not,
+		// we just need to pass the nominations if nominator in
+
+		//<T::EventListeners as OnStakingUpdate::<T::AccountId, BalanceOf<T>>>::on_
+		use sp_staking::{StakerStatus, StakingInterface};
+
+		match crate::Pallet::<T>::status(stash).defensive_unwrap_or(StakerStatus::Idle) {
+			StakerStatus::Validator => <T::EventListeners as OnStakingUpdate<
+				T::AccountId,
+				BalanceOf<T>,
+			>>::on_validator_remove(stash),
+			StakerStatus::Nominator(_) => {
+				let nominations =
+					crate::Pallet::<T>::nominators(stash).unwrap_or_default().targets.into();
+
+				<T::EventListeners as OnStakingUpdate<
+				T::AccountId,
+				BalanceOf<T>,
+			>>::on_nominator_remove(stash, nominations)
+			},
+			StakerStatus::Idle => (),
+		};
 
 		<Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController).map(|ledger| {
 			T::Currency::remove_lock(STAKING_ID, &ledger.stash);

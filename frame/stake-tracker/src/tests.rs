@@ -34,7 +34,7 @@ fn setup_works() {
 
 	ExtBuilder::default().populate_lists().build_and_execute(|| {
 		assert!(!TestNominators::get().is_empty());
-		assert_eq!(VoterBagsList::count(), 2);
+		assert_eq!(VoterBagsList::count(), 4); // 2x nominators + 2x validators
 
 		assert!(!TestValidators::get().is_empty());
 		assert_eq!(TargetBagsList::count(), 2);
@@ -64,7 +64,7 @@ fn on_add_stakers_works() {
 		assert_eq!(VoterBagsList::get_score(&1).unwrap(), 100);
 
 		add_validator(10, 200);
-		assert_eq!(VoterBagsList::count(), 1);
+		assert_eq!(VoterBagsList::count(), 2); // 1x validator + 1x nominator
 		assert_eq!(TargetBagsList::count(), 1);
 		assert_eq!(TargetBagsList::get_score(&10).unwrap(), 200);
 	})
@@ -119,14 +119,14 @@ fn on_remove_stakers_with_nominations_works() {
 #[test]
 fn on_slash_works() {
 	ExtBuilder::default().populate_lists().build_and_execute(|| {
-		assert_eq!(get_scores::<VoterBagsList>(), vec![(1, 100), (2, 100)]);
+		assert_eq!(get_scores::<VoterBagsList>(), vec![(10, 100), (11, 100), (1, 100), (2, 100)]);
 		assert_eq!(get_scores::<TargetBagsList>(), vec![(10, 300), (11, 200)]);
 
 		// slash nominator 2.
 		slash(2, 10, Default::default());
 
 		// voters list is not updated automatically upon slash.
-		assert_eq!(get_scores::<VoterBagsList>(), vec![(1, 100), (2, 100)]);
+		assert_eq!(get_scores::<VoterBagsList>(), vec![(10, 100), (11, 100), (1, 100), (2, 100)]);
 
 		// targets list nominated by the slashed nominator are affected.
 		assert_eq!(<StakingMock as StakingInterface>::nominations(&2).unwrap(), vec![10, 11]);

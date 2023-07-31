@@ -900,7 +900,7 @@ impl<T: Config> Pallet<T> {
 			<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_nominator_add(
 				who,
 			);
-        }
+		}
 
 		Nominators::<T>::insert(who, nominations);
 

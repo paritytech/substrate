@@ -507,6 +507,7 @@ impl ExtBuilder {
 				// an idle validator
 				(41, 41, self.balance_factor * 1000, StakerStatus::<AccountId>::Idle),
 			];
+
 			// optionally add a nominator
 			if self.nominate {
 				stakers.push((

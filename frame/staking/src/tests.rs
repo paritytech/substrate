@@ -195,7 +195,7 @@ fn basic_setup_works() {
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 
 		assert_eq!(
-			Staking::eras_stakers(active_era(), 11),
+			Staking::eras_stakers(active_era(), 21),
 			Exposure {
 				total: 1125,
 				own: 1000,
@@ -203,7 +203,7 @@ fn basic_setup_works() {
 			},
 		);
 		assert_eq!(
-			Staking::eras_stakers(active_era(), 21),
+			Staking::eras_stakers(active_era(), 11),
 			Exposure {
 				total: 1375,
 				own: 1000,

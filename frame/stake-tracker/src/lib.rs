@@ -146,7 +146,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			match T::Staking::status(who).defensive_unwrap_or(StakerStatus::Idle) {
 				StakerStatus::Nominator(_) => {
 					let _ = T::VoterList::on_update(who, voter_weight)
-						.defensive_proof("Nominator's position in voter list updated; qed.");
+						.defensive_proof("Nominator's position in voter list updated; qed."); // TODO(gpestana): check this defensive out
 
 					if let Some(prev_stake) = prev_stake {
 						// updates vote weight of nominatied targets accordingly.
@@ -176,17 +176,25 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_nominator_add(who: &T::AccountId) {
-        let nominator_vote = Self::active_vote_of(who);
+		let nominator_vote = Self::active_vote_of(who);
 
 		let _ = T::VoterList::on_insert(who.clone(), nominator_vote).defensive_proof(
 			"the nominator is not part of the VoterList, as per the contract with \
                 staking; qed.",
 		);
 
-        // TODO(gpestana): is this needed?
-        //for t in <T::Staking as StakingInterface>::nominations(who).unwrap_or_default() {
-		//    Self::update_score::<T::TargetList>(&t, StakeImbalance::Positive(nominator_vote))
-        //}
+		// on_nominator_add could be called on a validator. If who is a nominator, update the vote
+		// weight of the nominations if they exist.
+		match T::Staking::status(who) {
+			Ok(StakerStatus::Nominator(nominations)) =>
+				for t in nominations {
+					Self::update_score::<T::TargetList>(
+						&t,
+						StakeImbalance::Positive(nominator_vote),
+					)
+				},
+			Ok(StakerStatus::Idle) | Ok(StakerStatus::Validator) | Err(_) => (), // nada.
+		};
 	}
 
 	fn on_validator_add(who: &T::AccountId) {
@@ -195,8 +203,8 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
                 with staking; qed.",
 		);
 
-        // validator is also a voter.
-        Self::on_nominator_add(who);
+		// validator is also a voter.
+		Self::on_nominator_add(who);
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>) {
@@ -219,8 +227,8 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			"the validator exists in the list as per the contract with staking; qed.",
 		);
 
-        // validator is also a voter, but has only self-vote.
-        Self::on_nominator_remove(who, vec![]);
+		// validator is also a voter, but has only self-vote.
+		Self::on_nominator_remove(who, vec![]);
 	}
 
 	// Note: this is called upon added or removed nominations, nominator's stake remains the same.

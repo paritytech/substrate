@@ -309,6 +309,7 @@ use frame_support::{
 use ledger::StakingLedger;
 use scale_info::TypeInfo;
 use sp_runtime::{
+	bounded_vec,
 	curve::PiecewiseLinear,
 	traits::{AtLeast32BitUnsigned, Convert, StaticLookup, Zero},
 	Perbill, RuntimeDebug,
@@ -448,6 +449,12 @@ pub struct Nominations<T: Config> {
 	///
 	/// NOTE: this for future proofing and is thus far not used.
 	pub suppressed: bool,
+}
+
+impl<T: Config> Default for Nominations<T> {
+	fn default() -> Self {
+		Self { targets: bounded_vec![], submitted_in: 0, suppressed: false }
+	}
 }
 
 /// The amount of exposure (to slashing) than an individual nominator has.
