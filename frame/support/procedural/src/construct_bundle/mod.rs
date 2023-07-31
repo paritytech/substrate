@@ -356,6 +356,7 @@ fn construct_runtime_final_expansion(
 			"`System` pallet declaration is feature gated, please remove any `#[cfg]` attributes",
 		))
 	}
+	let pallets = pallets.clone().into_iter().filter(|decl| decl.name != SYSTEM_PALLET_NAME).collect::<Vec<_>>();
 
 	let features = pallets
 		.iter()

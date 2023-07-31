@@ -270,8 +270,8 @@ pub mod pallet {
 		#[pallet::no_default]
 		type RuntimeCall: Parameter
 			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
-			+ Debug
-			+ From<Call<Self>>;
+			+ Debug;
+			// + From<Call<Self>>;
 
 		/// This stores the number of previous transactions associated with a sender account.
 		type Nonce: Parameter

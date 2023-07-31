@@ -49,7 +49,7 @@ pub mod pallet {
 		// 	+ GetDispatchInfo
 		// 	+ From<Call<Self>>;
 
-		type BaseCallFilter: Contains<Call<Self>>;
+		// type BaseCallFilter: Contains<Call<Self>>;
 
 		// type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, <Self as Config>::RuntimeOrigin>>
 		// 	+ From<RawOrigin<Self::AccountId>>
@@ -109,30 +109,30 @@ pub mod pallet {
 		// 	frame_support::sp_std::marker::PhantomData<T>,
 		// 	frame_support::Never,
 		// ),
+		// #[codec(index = 0u8)]
+    	// System(frame_system::Event<Pallet<T>>),
 		#[codec(index = 0u8)]
-    	System(frame_system::Event<Pallet<T>>),
-		#[codec(index = 1u8)]
     	Template(pallet_template::Event<Pallet<T>>),
-		#[codec(index = 2u8)]
+		#[codec(index = 1u8)]
     	Template_2(pallet_template_2::Event<Pallet<T>>),
 	}
 
-	impl<T: Config> From<frame_system::Event<Pallet<T>>> for Event<T> {
-		fn from(x: frame_system::Event<Pallet<T>>) -> Self {
-			Self::System(x)
-		}
-	}
+	// impl<T: Config> From<frame_system::Event<Pallet<T>>> for Event<T> {
+	// 	fn from(x: frame_system::Event<Pallet<T>>) -> Self {
+	// 		Self::System(x)
+	// 	}
+	// }
 	
-	impl<T: Config> TryInto<frame_system::Event<Pallet<T>>> for Event<T> {
-		type Error = ();
+	// impl<T: Config> TryInto<frame_system::Event<Pallet<T>>> for Event<T> {
+	// 	type Error = ();
 
-		fn try_into(self) -> frame_support::sp_std::result::Result<frame_system::Event<Pallet<T>>, Self::Error> {
-			match self {
-				Self::System(evt) => Ok(evt),
-				_ => Err(()),
-			}
-		}
-	}
+	// 	fn try_into(self) -> frame_support::sp_std::result::Result<frame_system::Event<Pallet<T>>, Self::Error> {
+	// 		match self {
+	// 			Self::System(evt) => Ok(evt),
+	// 			_ => Err(()),
+	// 		}
+	// 	}
+	// }
 
 	impl<T: Config> From<pallet_template::Event<Pallet<T>>> for Event<T> {
 		fn from(x: pallet_template::Event<Pallet<T>>) -> Self {
@@ -185,16 +185,15 @@ pub mod pallet {
 		type BlockWeights = <T as frame_system::Config>::BlockWeights;
 		type BlockLength = <T as frame_system::Config>::BlockLength;
 		type DbWeight = <T as frame_system::Config>::DbWeight;
-		type RuntimeOrigin = Origin<T>; //<T as frame_system::Config>::RuntimeOrigin;
-		type RuntimeCall = Call<T>;  //<T as frame_system::Config>::RuntimeCall;
-		type Index = <T as frame_system::Config>::Index;
-		type BlockNumber = <T as frame_system::Config>::BlockNumber;
+		type RuntimeOrigin = <T as frame_system::Config>::RuntimeOrigin;
+		type RuntimeCall = <T as frame_system::Config>::RuntimeCall;
+		type Nonce = <T as frame_system::Config>::Nonce;
+		type Block = <T as frame_system::Config>::Block;
 		type Hash = <T as frame_system::Config>::Hash;
 		type Hashing = <T as frame_system::Config>::Hashing;
 		type AccountId = <T as frame_system::Config>::AccountId;
 		type Lookup = <T as frame_system::Config>::Lookup;
-		type Header = <T as frame_system::Config>::Header;
-		type RuntimeEvent = Event<T>;
+		type RuntimeEvent = <T as frame_system::Config>::RuntimeEvent;
 		type BlockHashCount = <T as frame_system::Config>::BlockHashCount;
 		type Version = <T as frame_system::Config>::Version;
 		type PalletInfo = <T as frame_system::Config>::PalletInfo;
@@ -208,12 +207,12 @@ pub mod pallet {
 	}
 
 	impl<T: Config> pallet_template::Config for Pallet<T> {
-		type RuntimeEvent = Event<T>;
+		type RuntimeEvent = <T as frame_system::Config>::RuntimeEvent;//Event<T>;
 		type WeightInfo = pallet_template::weights::SubstrateWeight<T>;
 	}
 
 	impl<T: Config> pallet_template_2::Config for Pallet<T> {
-		type RuntimeEvent = Event<T>;
+		type RuntimeEvent = <T as frame_system::Config>::RuntimeEvent;//Event<T>;
 		type WeightInfo = pallet_template_2::weights::SubstrateWeight<T>;
 	}
 
