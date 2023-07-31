@@ -30,6 +30,7 @@
 //!   [`pallet::DefaultConfig`].
 //! - Notice how [`pallet::DefaultConfig`] is independent of [`frame_system::Config`].
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[frame_support::pallet]

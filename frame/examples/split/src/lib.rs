@@ -23,6 +23,7 @@
 //!
 //! Note that this is purely experimental at this point.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Re-export pallet items so that they can be accessed from the crate namespace.

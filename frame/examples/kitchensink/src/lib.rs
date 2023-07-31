@@ -25,6 +25,7 @@
 //! clauses on `T`. These will both incur additional complexity to the syntax, but are not discussed
 //! here.
 
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Re-export pallet items so that they can be accessed from the crate namespace.
