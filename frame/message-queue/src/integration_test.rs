@@ -23,7 +23,7 @@
 use crate::{
 	mock::{
 		new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo, NumMessagesProcessed,
-		SuspendedQueues,
+		YieldingQueues,
 	},
 	mock_helpers::MessageOrigin,
 	*,
@@ -37,22 +37,15 @@ use frame_support::{
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::Pareto;
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use std::collections::{BTreeMap, BTreeSet};
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
@@ -63,14 +56,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -96,6 +88,7 @@ impl Config for Test {
 	type MessageProcessor = CountingMessageProcessor;
 	type Size = u32;
 	type QueueChangeHandler = ();
+	type QueuePausedQuery = ();
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
 	type ServiceWeight = ServiceWeight;
@@ -207,7 +200,7 @@ fn stress_test_queue_suspension() {
 				to_resume,
 				per_queue.len()
 			);
-			SuspendedQueues::set(suspended.iter().map(|q| MessageOrigin::Everywhere(*q)).collect());
+			YieldingQueues::set(suspended.iter().map(|q| MessageOrigin::Everywhere(*q)).collect());
 
 			// Pick a fraction of all messages currently in queue and process them.
 			let resumed_messages =
@@ -229,7 +222,7 @@ fn stress_test_queue_suspension() {
 		process_all_messages(resumed_messages);
 		msgs_remaining -= resumed_messages;
 
-		let resumed = SuspendedQueues::take();
+		let resumed = YieldingQueues::take();
 		log::info!("Resumed all {} suspended queues", resumed.len());
 		log::info!("Processing all remaining {} messages", msgs_remaining);
 		process_all_messages(msgs_remaining);

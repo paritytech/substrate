@@ -17,7 +17,6 @@
 
 use crate::{
 	common::API_VERSION_ATTRIBUTE,
-	runtime_metadata::generate_impl_runtime_metadata,
 	utils::{
 		extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
 		extract_parameter_names_types_and_borrows, generate_crate_access,
@@ -225,16 +224,19 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 	Ok(quote!(
 		pub struct RuntimeApi {}
-		/// Implements all runtime apis for the client side.
 		#crate_::std_enabled! {
+			/// Implements all runtime apis for the client side.
 			pub struct RuntimeApiImpl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block> + 'static> {
 				call: &'static C,
-				commit_on_success: std::cell::RefCell<bool>,
+				transaction_depth: std::cell::RefCell<u16>,
 				changes: std::cell::RefCell<#crate_::OverlayedChanges>,
 				storage_transaction_cache: std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, C::StateBackend>
 				>,
 				recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
+				call_context: #crate_::CallContext,
+				extensions: std::cell::RefCell<#crate_::Extensions>,
+				extensions_generated_for: std::cell::RefCell<std::option::Option<Block::Hash>>,
 			}
 
 			impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
@@ -248,11 +250,15 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				) -> R where Self: Sized {
 					self.start_transaction();
 
-					*std::cell::RefCell::borrow_mut(&self.commit_on_success) = false;
+					*std::cell::RefCell::borrow_mut(&self.transaction_depth) += 1;
 					let res = call(self);
-					*std::cell::RefCell::borrow_mut(&self.commit_on_success) = true;
+					std::cell::RefCell::borrow_mut(&self.transaction_depth)
+						.checked_sub(1)
+						.expect("Transactions are opened and closed together; qed");
 
-					self.commit_or_rollback(std::matches!(res, #crate_::TransactionOutcome::Commit(_)));
+					self.commit_or_rollback_transaction(
+						std::matches!(res, #crate_::TransactionOutcome::Commit(_))
+					);
 
 					res.into_inner()
 				}
@@ -318,6 +324,14 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 							state_version,
 						)
 					}
+
+				fn set_call_context(&mut self, call_context: #crate_::CallContext) {
+					self.call_context = call_context;
+				}
+
+				fn register_extension<E: #crate_::Extension>(&mut self, extension: E) {
+					std::cell::RefCell::borrow_mut(&self.extensions).register(extension);
+				}
 			}
 
 			impl<Block: #crate_::BlockT, C> #crate_::ConstructRuntimeApi<Block, C>
@@ -332,61 +346,59 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				) -> #crate_::ApiRef<'a, Self::RuntimeApi> {
 					RuntimeApiImpl {
 						call: unsafe { std::mem::transmute(call) },
-						commit_on_success: true.into(),
+						transaction_depth: 0.into(),
 						changes: std::default::Default::default(),
 						recorder: std::default::Default::default(),
 						storage_transaction_cache: std::default::Default::default(),
+						call_context: #crate_::CallContext::Offchain,
+						extensions: std::default::Default::default(),
+						extensions_generated_for: std::default::Default::default(),
 					}.into()
 				}
 			}
 
 			impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C> {
-				fn commit_or_rollback(&self, commit: bool) {
+				fn commit_or_rollback_transaction(&self, commit: bool) {
 					let proof = "\
 					We only close a transaction when we opened one ourself.
 					Other parts of the runtime that make use of transactions (state-machine)
 					also balance their transactions. The runtime cannot close client initiated
 					transactions; qed";
-					if *std::cell::RefCell::borrow(&self.commit_on_success) {
-						let res = if commit {
-							let res = if let Some(recorder) = &self.recorder {
-								#crate_::ProofRecorder::<Block>::commit_transaction(&recorder)
-							} else {
-								Ok(())
-							};
 
-							let res2 = #crate_::OverlayedChanges::commit_transaction(
-								&mut std::cell::RefCell::borrow_mut(&self.changes)
-							);
-
-							// Will panic on an `Err` below, however we should call commit
-							// on the recorder and the changes together.
-							std::result::Result::and(res, std::result::Result::map_err(res2, drop))
+					let res = if commit {
+						let res = if let Some(recorder) = &self.recorder {
+							#crate_::ProofRecorder::<Block>::commit_transaction(&recorder)
 						} else {
-							let res = if let Some(recorder) = &self.recorder {
-								#crate_::ProofRecorder::<Block>::rollback_transaction(&recorder)
-							} else {
-								Ok(())
-							};
-
-							let res2 = #crate_::OverlayedChanges::rollback_transaction(
-								&mut std::cell::RefCell::borrow_mut(&self.changes)
-							);
-
-							// Will panic on an `Err` below, however we should call commit
-							// on the recorder and the changes together.
-							std::result::Result::and(res, std::result::Result::map_err(res2, drop))
+							Ok(())
 						};
 
-						std::result::Result::expect(res, proof);
-					}
+						let res2 = #crate_::OverlayedChanges::commit_transaction(
+							&mut std::cell::RefCell::borrow_mut(&self.changes)
+						);
+
+						// Will panic on an `Err` below, however we should call commit
+						// on the recorder and the changes together.
+						std::result::Result::and(res, std::result::Result::map_err(res2, drop))
+					} else {
+						let res = if let Some(recorder) = &self.recorder {
+							#crate_::ProofRecorder::<Block>::rollback_transaction(&recorder)
+						} else {
+							Ok(())
+						};
+
+						let res2 = #crate_::OverlayedChanges::rollback_transaction(
+							&mut std::cell::RefCell::borrow_mut(&self.changes)
+						);
+
+						// Will panic on an `Err` below, however we should call commit
+						// on the recorder and the changes together.
+						std::result::Result::and(res, std::result::Result::map_err(res2, drop))
+					};
+
+					std::result::Result::expect(res, proof);
 				}
 
 				fn start_transaction(&self) {
-					if !*std::cell::RefCell::borrow(&self.commit_on_success) {
-						return
-					}
-
 					#crate_::OverlayedChanges::start_transaction(
 						&mut std::cell::RefCell::borrow_mut(&self.changes)
 					);
@@ -482,11 +494,16 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			fn __runtime_api_internal_call_api_at(
 				&self,
 				at: <__SrApiBlock__ as #crate_::BlockT>::Hash,
-				context: #crate_::ExecutionContext,
 				params: std::vec::Vec<u8>,
 				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
 			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
-				self.start_transaction();
+				// If we are not already in a transaction, we should create a new transaction
+				// and then commit/roll it back at the end!
+				let transaction_depth = *std::cell::RefCell::borrow(&self.transaction_depth);
+
+				if transaction_depth == 0 {
+					self.start_transaction();
+				}
 
 				let res = (|| {
 					let version = #crate_::CallApiAt::<__SrApiBlock__>::runtime_version_at(
@@ -494,14 +511,34 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 						at,
 					)?;
 
+					match &mut *std::cell::RefCell::borrow_mut(&self.extensions_generated_for) {
+						Some(generated_for) => {
+							if *generated_for != at {
+								return std::result::Result::Err(
+									#crate_::ApiError::UsingSameInstanceForDifferentBlocks
+								)
+							}
+						},
+						generated_for @ None => {
+							#crate_::CallApiAt::<__SrApiBlock__>::initialize_extensions(
+								self.call,
+								at,
+								&mut std::cell::RefCell::borrow_mut(&self.extensions),
+							)?;
+
+							*generated_for = Some(at);
+						}
+					}
+
 					let params = #crate_::CallApiAtParams {
 						at,
 						function: (*fn_name)(version),
 						arguments: params,
 						overlayed_changes: &self.changes,
 						storage_transaction_cache: &self.storage_transaction_cache,
-						context,
+						call_context: self.call_context,
 						recorder: &self.recorder,
+						extensions: &self.extensions,
 					};
 
 					#crate_::CallApiAt::<__SrApiBlock__>::call_api_at(
@@ -510,7 +547,9 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					)
 				})();
 
-				self.commit_or_rollback(std::result::Result::is_ok(&res));
+				if transaction_depth == 0 {
+					self.commit_or_rollback_transaction(std::result::Result::is_ok(&res));
+				}
 
 				res
 			}
@@ -553,7 +592,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 		where_clause.predicates.push(parse_quote! {
 			RuntimeApiImplCall::StateBackend:
-				#crate_::StateBackend<#crate_::HashFor<__SrApiBlock__>>
+				#crate_::StateBackend<#crate_::HashingFor<__SrApiBlock__>>
 		});
 
 		where_clause.predicates.push(parse_quote! { &'static RuntimeApiImplCall: Send });
@@ -687,7 +726,11 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 	let runtime_api_versions = generate_runtime_api_versions(api_impls)?;
 	let wasm_interface = generate_wasm_interface(api_impls)?;
 	let api_impls_for_runtime_api = generate_api_impl_for_runtime_api(api_impls)?;
-	let runtime_metadata = generate_impl_runtime_metadata(api_impls)?;
+
+	#[cfg(feature = "frame-metadata")]
+	let runtime_metadata = crate::runtime_metadata::generate_impl_runtime_metadata(api_impls)?;
+	#[cfg(not(feature = "frame-metadata"))]
+	let runtime_metadata = quote!();
 
 	let impl_ = quote!(
 		#base_runtime_api

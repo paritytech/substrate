@@ -37,7 +37,10 @@ use schnorrkel::{
 use sp_std::vec::Vec;
 
 use crate::{
-	crypto::{ByteArray, CryptoType, CryptoTypeId, Derive, Public as TraitPublic, UncheckedFrom},
+	crypto::{
+		ByteArray, CryptoType, CryptoTypeId, Derive, FromEntropy, Public as TraitPublic,
+		UncheckedFrom,
+	},
 	hash::{H256, H512},
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -88,6 +91,14 @@ impl Clone for Pair {
 			secret: schnorrkel::SecretKey::from_bytes(&self.0.secret.to_bytes()[..])
 				.expect("key is always the correct size; qed"),
 		})
+	}
+}
+
+impl FromEntropy for Public {
+	fn from_entropy(input: &mut impl codec::Input) -> Result<Self, codec::Error> {
+		let mut result = Self([0u8; 32]);
+		input.read(&mut result.0[..])?;
+		Ok(result)
 	}
 }
 
@@ -229,7 +240,7 @@ impl Serialize for Signature {
 	where
 		S: Serializer,
 	{
-		serializer.serialize_str(&array_bytes::bytes2hex("", self.as_ref()))
+		serializer.serialize_str(&array_bytes::bytes2hex("", self))
 	}
 }
 
@@ -494,12 +505,8 @@ impl TraitPair for Pair {
 	}
 
 	fn verify<M: AsRef<[u8]>>(sig: &Self::Signature, message: M, pubkey: &Self::Public) -> bool {
-		let Ok(signature) = schnorrkel::Signature::from_bytes(sig.as_ref()) else {
-			return false
-		};
-		let Ok(public) = PublicKey::from_bytes(pubkey.as_ref()) else {
-			return false
-		};
+		let Ok(signature) = schnorrkel::Signature::from_bytes(sig.as_ref()) else { return false };
+		let Ok(public) = PublicKey::from_bytes(pubkey.as_ref()) else { return false };
 		public.verify_simple(SIGNING_CTX, message.as_ref(), &signature).is_ok()
 	}
 

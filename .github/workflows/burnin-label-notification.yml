@@ -6,12 +6,19 @@ on:
 jobs:
   notify-devops:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        channel:
+          - name: 'Team: DevOps'
+            room: '!lUslSijLMgNcEKcAiE:parity.io'
+
     steps:
       - name: Notify devops
-        if: github.event.label.name == 'A1-needsburnin'
-        uses: s3krit/matrix-message-action@v0.0.3
+        if: startsWith(github.event.label.name, 'A1-')
+        uses: s3krit/matrix-message-action@70ad3fb812ee0e45ff8999d6af11cafad11a6ecf # v0.0.3
         with:
-          room_id: ${{ secrets.POLKADOT_DEVOPS_MATRIX_ROOM_ID }}
-          access_token: ${{ secrets.POLKADOT_DEVOPS_MATRIX_ACCESS_TOKEN }}
-          message: "@room Burn-in request received for [${{ github.event.pull_request.title }}](${{ github.event.pull_request.html_url }})"
-          server: "matrix.parity.io"
+          room_id: ${{ matrix.channel.room }}
+          access_token: ${{ secrets.RELEASENOTES_MATRIX_V2_ACCESS_TOKEN }}
+          server: "m.parity.io"
+          message: |
+            @room Burn-in request received for [${{ github.event.pull_request.title }}](${{ github.event.pull_request.html_url }})

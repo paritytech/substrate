@@ -41,7 +41,7 @@ use sp_runtime::{
 
 use crate::{
 	authorities::{AuthoritySet, DelayKind, PendingChange, SharedAuthoritySet},
-	environment::finalize_block,
+	environment,
 	justification::GrandpaJustification,
 	notification::GrandpaJustificationSender,
 	AuthoritySetChanges, ClientForGrandpa, CommandOrError, Error, NewAuthoritySet, VoterCommand,
@@ -59,6 +59,7 @@ use crate::{
 /// object.
 pub struct GrandpaBlockImport<Backend, Block: BlockT, Client, SC> {
 	inner: Arc<Client>,
+	justification_import_period: u32,
 	select_chain: SC,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
@@ -74,6 +75,7 @@ impl<Backend, Block: BlockT, Client, SC: Clone> Clone
 	fn clone(&self) -> Self {
 		GrandpaBlockImport {
 			inner: self.inner.clone(),
+			justification_import_period: self.justification_import_period,
 			select_chain: self.select_chain.clone(),
 			authority_set: self.authority_set.clone(),
 			send_voter_commands: self.send_voter_commands.clone(),
@@ -648,26 +650,39 @@ where
 
 		match grandpa_justification {
 			Some(justification) => {
-				let import_res = self.import_justification(
-					hash,
+				if environment::should_process_justification(
+					&*self.inner,
+					self.justification_import_period,
 					number,
-					(GRANDPA_ENGINE_ID, justification),
 					needs_justification,
-					initial_sync,
-				);
+				) {
+					let import_res = self.import_justification(
+						hash,
+						number,
+						(GRANDPA_ENGINE_ID, justification),
+						needs_justification,
+						initial_sync,
+					);
 
-				import_res.unwrap_or_else(|err| {
-					if needs_justification {
-						debug!(
-							target: LOG_TARGET,
-							"Requesting justification from peers due to imported block #{} that enacts authority set change with invalid justification: {}",
-							number,
-							err
-						);
-						imported_aux.bad_justification = true;
-						imported_aux.needs_justification = true;
-					}
-				});
+					import_res.unwrap_or_else(|err| {
+						if needs_justification {
+							debug!(
+								target: LOG_TARGET,
+								"Requesting justification from peers due to imported block #{} that enacts authority set change with invalid justification: {}",
+								number,
+								err
+							);
+							imported_aux.bad_justification = true;
+							imported_aux.needs_justification = true;
+						}
+					});
+				} else {
+					debug!(
+						target: LOG_TARGET,
+						"Ignoring unnecessary justification for block #{}",
+						number,
+					);
+				}
 			},
 			None =>
 				if needs_justification {
@@ -695,6 +710,7 @@ where
 impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Client, SC> {
 	pub(crate) fn new(
 		inner: Arc<Client>,
+		justification_import_period: u32,
 		select_chain: SC,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 		send_voter_commands: TracingUnboundedSender<VoterCommand<Block::Hash, NumberFor<Block>>>,
@@ -733,6 +749,7 @@ impl<Backend, Block: BlockT, Client, SC> GrandpaBlockImport<Backend, Block, Clie
 
 		GrandpaBlockImport {
 			inner,
+			justification_import_period,
 			select_chain,
 			authority_set,
 			send_voter_commands,
@@ -783,7 +800,7 @@ where
 			Ok(justification) => justification,
 		};
 
-		let result = finalize_block(
+		let result = environment::finalize_block(
 			self.inner.clone(),
 			&self.authority_set,
 			None,

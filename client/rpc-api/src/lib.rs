@@ -22,6 +22,7 @@
 
 #![warn(missing_docs)]
 
+mod error;
 mod policy;
 
 pub use policy::DenyUnsafe;

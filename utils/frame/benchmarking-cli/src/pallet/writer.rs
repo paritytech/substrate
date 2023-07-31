@@ -90,7 +90,6 @@ struct CmdData {
 	repeat: u32,
 	lowest_range_values: Vec<u32>,
 	highest_range_values: Vec<u32>,
-	execution: String,
 	wasm_execution: String,
 	chain: String,
 	db_cache: u32,
@@ -375,7 +374,7 @@ fn get_benchmark_data(
 	}
 }
 
-// Create weight file from benchmark data and Handlebars template.
+/// Create weight file from benchmark data and Handlebars template.
 pub(crate) fn write_results(
 	batches: &[BenchmarkBatchSplitResults],
 	storage_info: &[StorageInfo],
@@ -384,7 +383,7 @@ pub(crate) fn write_results(
 	default_pov_mode: PovEstimationMode,
 	path: &PathBuf,
 	cmd: &PalletCmd,
-) -> Result<(), std::io::Error> {
+) -> Result<(), sc_cli::Error> {
 	// Use custom template if provided.
 	let template: String = match &cmd.template {
 		Some(template_file) => fs::read_to_string(template_file)?,
@@ -425,7 +424,6 @@ pub(crate) fn write_results(
 		repeat: cmd.repeat,
 		lowest_range_values: cmd.lowest_range_values.clone(),
 		highest_range_values: cmd.highest_range_values.clone(),
-		execution: format!("{:?}", cmd.execution),
 		wasm_execution: cmd.wasm_method.to_string(),
 		chain: format!("{:?}", cmd.shared_params.chain),
 		db_cache: cmd.database_cache_size,
@@ -492,10 +490,21 @@ pub(crate) fn write_results(
 		created_files.push(file_path);
 	}
 
-	for file in created_files.iter().duplicates() {
-		// This can happen when there are multiple instances of a pallet deployed
-		// and `--output` forces the output of all instances into the same file.
-		println!("Multiple benchmarks were written to the same file: {:?}.", file);
+	let overwritten_files = created_files.iter().duplicates().collect::<Vec<_>>();
+	if !overwritten_files.is_empty() {
+		let msg = format!(
+			"Multiple results were written to the same file. This can happen when \
+		there are multiple instances of a pallet deployed and `--output` forces the output of all \
+		instances into the same file. Use `--unsafe-overwrite-results` to ignore this error. The \
+		affected files are: {:?}",
+			overwritten_files
+		);
+
+		if cmd.unsafe_overwrite_results {
+			println!("{msg}");
+		} else {
+			return Err(msg.into())
+		}
 	}
 	Ok(())
 }
@@ -655,7 +664,7 @@ pub(crate) fn process_storage_results(
 				match key_info {
 					Some(key_info) => {
 						let comment = format!(
-							"Storage: {} {} (r:{} w:{})",
+							"Storage: `{}::{}` (r:{} w:{})",
 							String::from_utf8(key_info.pallet_name.clone())
 								.expect("encoded from string"),
 							String::from_utf8(key_info.storage_name.clone())
@@ -667,7 +676,7 @@ pub(crate) fn process_storage_results(
 					},
 					None => {
 						let comment = format!(
-							"Storage: unknown `0x{}` (r:{} w:{})",
+							"Storage: UNKNOWN KEY `0x{}` (r:{} w:{})",
 							HexDisplay::from(key),
 							reads,
 							writes,
@@ -689,7 +698,7 @@ pub(crate) fn process_storage_results(
 						) {
 							Some(new_pov) => {
 								let comment = format!(
-									"Proof: {} {} (max_values: {:?}, max_size: {:?}, added: {}, mode: {:?})",
+									"Proof: `{}::{}` (`max_values`: {:?}, `max_size`: {:?}, added: {}, mode: `{:?}`)",
 									String::from_utf8(key_info.pallet_name.clone())
 										.expect("encoded from string"),
 									String::from_utf8(key_info.storage_name.clone())
@@ -707,7 +716,7 @@ pub(crate) fn process_storage_results(
 								let item = String::from_utf8(key_info.storage_name.clone())
 									.expect("encoded from string");
 								let comment = format!(
-									"Proof Skipped: {} {} (max_values: {:?}, max_size: {:?}, mode: {:?})",
+									"Proof: `{}::{}` (`max_values`: {:?}, `max_size`: {:?}, mode: `{:?}`)",
 									pallet, item, key_info.max_values, key_info.max_size,
 									used_pov_mode,
 								);
@@ -717,7 +726,7 @@ pub(crate) fn process_storage_results(
 					},
 					None => {
 						let comment = format!(
-							"Proof Skipped: unknown `0x{}` (r:{} w:{})",
+							"Proof: UNKNOWN KEY `0x{}` (r:{} w:{})",
 							HexDisplay::from(key),
 							reads,
 							writes,
