@@ -28,9 +28,9 @@ use crate::{
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
-	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress,
-	NoopMigration, Origin, Pallet, PristineCode, Schedule,
+	AutoLimit, BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo,
+	ContractInfoOf, DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error,
+	MigrationInProgress, NoopMigration, Origin, Pallet, PristineCode, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -618,10 +618,49 @@ fn migration_on_idle_hooks_works() {
 	for (weight, expected_version) in tests {
 		ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
 			MigrationInProgress::<Test>::set(Some(Default::default()));
+			AutoLimit::<Test>::set(Some(Weight::MAX));
 			Contracts::on_idle(System::block_number(), weight);
 			assert_eq!(StorageVersion::get::<Pallet<Test>>(), expected_version);
 		});
 	}
+}
+
+#[test]
+fn migration_on_idle_limit_works() {
+	// Limiting weight consumption works
+	ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
+		MigrationInProgress::<Test>::set(Some(Default::default()));
+		// Limit to exactly one migration
+		AutoLimit::<Test>::set(Some(<Test as Config>::WeightInfo::migrate() + 1.into()));
+		Contracts::on_idle(System::block_number(), Weight::MAX);
+		assert_eq!(StorageVersion::get::<Pallet<Test>>(), 1);
+	});
+
+	// When disabled, auto migrations don't occur
+	ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
+		MigrationInProgress::<Test>::set(Some(Default::default()));
+		// Disable migrations
+		AutoLimit::<Test>::set(None);
+		Contracts::on_idle(System::block_number(), Weight::MAX);
+		assert_eq!(StorageVersion::get::<Pallet<Test>>(), 0);
+	});
+}
+
+#[test]
+fn auto_migration_control_works() {
+	ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
+		assert_ok!(Contracts::control_auto_migration(RuntimeOrigin::root(), None));
+		assert_eq!(AutoLimit::<Test>::get(), None);
+
+		let weight = Weight::from_parts(19, 23);
+		assert_ok!(Contracts::control_auto_migration(RuntimeOrigin::root(), Some(weight)));
+		assert_eq!(AutoLimit::<Test>::get(), Some(weight));
+
+		assert_noop!(
+			Contracts::control_auto_migration(RuntimeOrigin::signed(ALICE), None),
+			sp_runtime::traits::BadOrigin,
+		);
+	})
 }
 
 #[test]
