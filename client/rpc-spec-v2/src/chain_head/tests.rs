@@ -1,7 +1,5 @@
 use crate::chain_head::{
-	event::{
-		ChainHeadStorageEvent, MethodResponse, StorageQuery, StorageQueryType, StorageResultType,
-	},
+	event::{MethodResponse, StorageQuery, StorageQueryType, StorageResultType},
 	test_utils::ChainHeadMockClient,
 };
 
@@ -543,9 +541,9 @@ async fn get_storage_hash() {
 	let invalid_hash = hex_string(&INVALID_HASH);
 	let key = hex_string(&KEY);
 
-	// Subscription ID is stale the disjoint event is emitted.
-	let mut sub = api
-		.subscribe(
+	// Subscription ID is invalid.
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				"invalid_sub_id",
@@ -555,12 +553,11 @@ async fn get_storage_hash() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_eq!(event, ChainHeadStorageEvent::Disjoint);
+	assert_matches!(response, MethodResponse::LimitReached);
 
-	// Valid subscription ID with invalid block hash will error.
+	// Block hash is invalid.
 	let err = api
-		.subscribe(
+		.call::<_, serde_json::Value>(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -575,8 +572,8 @@ async fn get_storage_hash() {
 	);
 
 	// Valid call without storage at the key.
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -586,9 +583,15 @@ async fn get_storage_hash() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
 	// The `Done` event is generated directly since the key does not have any value associated.
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 
 	// Import a new block with storage changes.
 	let mut builder = client.new_block(Default::default()).unwrap();
@@ -608,9 +611,8 @@ async fn get_storage_hash() {
 	);
 
 	// Valid call with storage at the key.
-	let expected_hash = format!("{:?}", Blake2Hasher::hash(&VALUE));
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -620,17 +622,30 @@ async fn get_storage_hash() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash));
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	let expected_hash = format!("{:?}", Blake2Hasher::hash(&VALUE));
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
+				res.items.len() == 1 &&
+				res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash)
+	);
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 
 	// Child value set in `setup_api`.
 	let child_info = hex_string(&CHILD_STORAGE_KEY);
 	let genesis_hash = format!("{:?}", client.genesis_hash());
-	let expected_hash = format!("{:?}", Blake2Hasher::hash(&CHILD_VALUE));
-	let mut sub = api
-		.subscribe(
+
+	// Valid call with storage at the key.
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -641,10 +656,22 @@ async fn get_storage_hash() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash));
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	let expected_hash = format!("{:?}", Blake2Hasher::hash(&CHILD_VALUE));
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
+				res.items.len() == 1 &&
+				res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash)
+	);
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 }
 
 #[tokio::test]
@@ -670,10 +697,8 @@ async fn get_storage_multi_query_iter() {
 	);
 
 	// Valid call with storage at the key.
-	let expected_hash = format!("{:?}", Blake2Hasher::hash(&VALUE));
-	let expected_value = hex_string(&VALUE);
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -692,22 +717,34 @@ async fn get_storage_multi_query_iter() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 2 &&
-		res.items[0].key == key &&
-		res.items[1].key == key &&
-		res.items[0].result == StorageResultType::Hash(expected_hash) &&
-		res.items[1].result == StorageResultType::Value(expected_value));
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	let expected_hash = format!("{:?}", Blake2Hasher::hash(&VALUE));
+	let expected_value = hex_string(&VALUE);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
+			res.items.len() == 2 &&
+			res.items[0].key == key &&
+			res.items[1].key == key &&
+			res.items[0].result == StorageResultType::Hash(expected_hash) &&
+			res.items[1].result == StorageResultType::Value(expected_value)
+	);
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 
 	// Child value set in `setup_api`.
 	let child_info = hex_string(&CHILD_STORAGE_KEY);
 	let genesis_hash = format!("{:?}", client.genesis_hash());
 	let expected_hash = format!("{:?}", Blake2Hasher::hash(&CHILD_VALUE));
 	let expected_value = hex_string(&CHILD_VALUE);
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -727,14 +764,24 @@ async fn get_storage_multi_query_iter() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 2 &&
-		res.items[0].key == key &&
-		res.items[1].key == key &&
-		res.items[0].result == StorageResultType::Hash(expected_hash) &&
-		res.items[1].result == StorageResultType::Value(expected_value));
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
+			res.items.len() == 2 &&
+			res.items[0].key == key &&
+			res.items[1].key == key &&
+			res.items[0].result == StorageResultType::Hash(expected_hash) &&
+			res.items[1].result == StorageResultType::Value(expected_value)
+	);
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 }
 
 #[tokio::test]
@@ -744,9 +791,9 @@ async fn get_storage_value() {
 	let invalid_hash = hex_string(&INVALID_HASH);
 	let key = hex_string(&KEY);
 
-	// Subscription ID is stale the disjoint event is emitted.
-	let mut sub = api
-		.subscribe(
+	// Subscription ID is invalid.
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				"invalid_sub_id",
@@ -756,12 +803,11 @@ async fn get_storage_value() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_eq!(event, ChainHeadStorageEvent::Disjoint);
+	assert_matches!(response, MethodResponse::LimitReached);
 
-	// Valid subscription ID with invalid block hash will error.
+	// Block hash is invalid.
 	let err = api
-		.subscribe(
+		.call::<_, serde_json::Value>(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -776,8 +822,8 @@ async fn get_storage_value() {
 	);
 
 	// Valid call without storage at the key.
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -787,9 +833,15 @@ async fn get_storage_value() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
 	// The `Done` event is generated directly since the key does not have any value associated.
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 
 	// Import a new block with storage changes.
 	let mut builder = client.new_block(Default::default()).unwrap();
@@ -809,9 +861,8 @@ async fn get_storage_value() {
 	);
 
 	// Valid call with storage at the key.
-	let expected_value = hex_string(&VALUE);
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -821,17 +872,29 @@ async fn get_storage_value() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value));
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	let expected_value = hex_string(&VALUE);
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
+				res.items.len() == 1 &&
+				res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value)
+	);
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 
 	// Child value set in `setup_api`.
-	let child_info = hex_string(b"child");
+	let child_info = hex_string(&CHILD_STORAGE_KEY);
 	let genesis_hash = format!("{:?}", client.genesis_hash());
-	let expected_value = hex_string(&CHILD_VALUE);
-	let mut sub = api
-		.subscribe(
+
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -842,15 +905,28 @@ async fn get_storage_value() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value));
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+
+	let expected_value = hex_string(&CHILD_VALUE);
+
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageItems(res) if res.operation_id == operation_id &&
+				res.items.len() == 1 &&
+				res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value)
+	);
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 }
 
 #[tokio::test]
-async fn get_storage_wrong_key() {
-	let (mut _client, api, mut _block_sub, sub_id, block) = setup_api().await;
+async fn get_storage_non_queryable_key() {
+	let (mut _client, api, mut block_sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
 	let key = hex_string(&KEY);
 
@@ -858,8 +934,9 @@ async fn get_storage_wrong_key() {
 	let mut prefixed_key = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
 	prefixed_key.extend_from_slice(&KEY);
 	let prefixed_key = hex_string(&prefixed_key);
-	let mut sub = api
-		.subscribe(
+
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -869,15 +946,22 @@ async fn get_storage_wrong_key() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+	// The `Done` event is generated directly since the key is not queryable.
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 
 	// Key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
 	prefixed_key.extend_from_slice(&KEY);
 	let prefixed_key = hex_string(&prefixed_key);
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -887,15 +971,22 @@ async fn get_storage_wrong_key() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+	// The `Done` event is generated directly since the key is not queryable.
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 
 	// Child key is prefixed by CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
-	prefixed_key.extend_from_slice(b"child");
+	prefixed_key.extend_from_slice(CHILD_STORAGE_KEY);
 	let prefixed_key = hex_string(&prefixed_key);
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -906,15 +997,22 @@ async fn get_storage_wrong_key() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+	// The `Done` event is generated directly since the key is not queryable.
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 
 	// Child key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
 	let mut prefixed_key = well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
-	prefixed_key.extend_from_slice(b"child");
+	prefixed_key.extend_from_slice(CHILD_STORAGE_KEY);
 	let prefixed_key = hex_string(&prefixed_key);
-	let mut sub = api
-		.subscribe(
+	let response: MethodResponse = api
+		.call(
 			"chainHead_unstable_storage",
 			rpc_params![
 				&sub_id,
@@ -925,8 +1023,15 @@ async fn get_storage_wrong_key() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::Done);
+	let operation_id = match response {
+		MethodResponse::Started(started) => started.operation_id,
+		MethodResponse::LimitReached => panic!("Expected started response"),
+	};
+	// The `Done` event is generated directly since the key is not queryable.
+	assert_matches!(
+			get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+			FollowEvent::OperationStorageDone(done) if done.operation_id == operation_id
+	);
 }
 
 #[tokio::test]
