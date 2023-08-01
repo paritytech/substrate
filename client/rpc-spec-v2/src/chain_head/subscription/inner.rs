@@ -673,6 +673,9 @@ mod tests {
 		Client, ClientBlockImportExt, GenesisInit,
 	};
 
+	/// Maximum number of ongoing operations per subscription ID.
+	const MAX_OPERATIONS_PER_SUB: usize = 16;
+
 	fn init_backend() -> (
 		Arc<sc_client_api::in_mem::Backend<Block>>,
 		Arc<Client<sc_client_api::in_mem::Backend<Block>>>,
@@ -831,7 +834,8 @@ mod tests {
 	fn subscription_lock_block() {
 		let builder = TestClientBuilder::new();
 		let backend = builder.backend();
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 
 		let id = "abc".to_string();
 		let hash = H256::random();
@@ -863,7 +867,8 @@ mod tests {
 		let hash = block.header.hash();
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 		let id = "abc".to_string();
 
 		let _stop = subs.insert_subscription(id.clone(), true).unwrap();
@@ -892,7 +897,8 @@ mod tests {
 		let hash = block.header.hash();
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 		let id = "abc".to_string();
 
 		let _stop = subs.insert_subscription(id.clone(), true).unwrap();
@@ -940,7 +946,8 @@ mod tests {
 		let hash_3 = block.header.hash();
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 		let id_1 = "abc".to_string();
 		let id_2 = "abcd".to_string();
 
@@ -985,7 +992,8 @@ mod tests {
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
 		// Maximum number of pinned blocks is 2.
-		let mut subs = SubscriptionsInner::new(2, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(2, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 		let id_1 = "abc".to_string();
 		let id_2 = "abcd".to_string();
 
@@ -1035,7 +1043,8 @@ mod tests {
 		futures::executor::block_on(client.import(BlockOrigin::Own, block.clone())).unwrap();
 
 		// Maximum number of pinned blocks is 2 and maximum pin duration is 5 second.
-		let mut subs = SubscriptionsInner::new(2, Duration::from_secs(5), backend);
+		let mut subs =
+			SubscriptionsInner::new(2, Duration::from_secs(5), MAX_OPERATIONS_PER_SUB, backend);
 		let id_1 = "abc".to_string();
 		let id_2 = "abcd".to_string();
 
@@ -1084,7 +1093,8 @@ mod tests {
 	fn subscription_check_stop_event() {
 		let builder = TestClientBuilder::new();
 		let backend = builder.backend();
-		let mut subs = SubscriptionsInner::new(10, Duration::from_secs(10), backend);
+		let mut subs =
+			SubscriptionsInner::new(10, Duration::from_secs(10), MAX_OPERATIONS_PER_SUB, backend);
 
 		let id = "abc".to_string();
 
