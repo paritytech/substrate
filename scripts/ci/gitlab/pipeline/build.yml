@@ -36,8 +36,8 @@
       substrate: polkadot-v*
       polkadot: release-v*
     COMPANION_CHECK_COMMAND: >
-      time cargo build --release --locked -p "$NETWORK"-runtime &&
-      time cargo run --locked --release --features try-runtime try-runtime \
+      time cargo build --release -p "$NETWORK"-runtime &&
+      time cargo run --release --features try-runtime try-runtime \
           --runtime ./target/release/wbuild/"$NETWORK"-runtime/target/wasm32-unknown-unknown/release/"$NETWORK"_runtime.wasm \
           --chain=${NETWORK}-dev \
           on-runtime-upgrade --checks=pre-and-post live --uri wss://${NETWORK}-try-runtime-node.parity-chains.parity.io:443
