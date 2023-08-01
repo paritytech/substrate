@@ -265,7 +265,6 @@ impl<T: Config> Pallet<T> {
 
 		// Lets now calculate how this is split to the nominators.
 		// Reward only the clipped exposures. Note this is not necessarily sorted.
-
 		for nominator in exposure.others.iter() {
 			let nominator_exposure_part = Perbill::from_rational(nominator.value, exposure.total);
 
@@ -409,7 +408,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Start a new era. It does:
-	// * Increment `active_era.index`,
+	/// * Increment `active_era.index`,
 	/// * reset `active_era.start`,
 	/// * update `BondedEras` and apply slashes.
 	fn start_era(start_session: SessionIndex) {

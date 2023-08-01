@@ -1,3 +1,35 @@
+// This file is part of Substrate.
+
+// Copyright (C) Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! A Ledger implementation for stakers.
+//!
+//! A [`StakingLedger`] encapsulates all the state and logic related to the stake of bonded
+//! stakers, namely:
+//! * [`Bonded`]: mutates and reads the state of the controller <> stash bond map (to be deprecated
+//! soon);
+//! * [`Ledger`]: mutates and reads the state of all the stakers. The [`Ledger`] storage item stores
+//!   instances of [`StakingLedger`] keyed by the staker's controller account and should be mutated
+//!   and read through the [`StakingLedger`] API;
+//! * Staking locks: mutates the locks for staking.
+//!
+//! NOTE: All the storage operations related to the staking ledger (both reads and writes) *MUST* be
+//! performed through the methods exposed by the [`StakingLedger`] implementation in order to ensure
+//! state consistency.
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{Defensive, Get, LockableCurrency, WithdrawReasons},
@@ -14,8 +46,9 @@ use crate::{log, BalanceOf, Bonded, Config, Error, Ledger, UnlockChunk, STAKING_
 
 /// The ledger of a (bonded) stash.
 ///
-/// Note: All the reads and mutations to the `Ledger` and `Bonded` storage items *MUST* be performed
-/// through the methods exposed by this struct to ensure data and staking lock consistency.
+/// Note: All the reads and mutations to the [`Ledger`] and [`Bonded`] storage items *MUST* be
+/// performed through the methods exposed by this struct to ensure data and staking lock
+/// consistency.
 #[derive(
 	PartialEqNoBound,
 	EqNoBound,
@@ -74,8 +107,8 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Returns a new instance of a staking ledger.
 	///
-	/// The `Ledger` storage is not mutated. In order to store, `fn update` must be called on
-	/// the returned staking ledger.
+	/// The [`Ledger`] storage is not mutated. In order to store, `StakingLedger::update` must be
+	/// called on the returned staking ledger.
 	///
 	/// Note: as the controller accounts are being deprecated, the stash account is the same as the
 	/// controller account.
@@ -92,7 +125,7 @@ impl<T: Config> StakingLedger<T> {
 			total: total_stake,
 			unlocking,
 			claimed_rewards,
-			// controllers are deprecated and map 1-1 to stashes.
+			// controllers are deprecated and mapped 1-1 to stashes.
 			controller: Some(stash),
 		}
 	}
@@ -125,7 +158,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// This getter can be called with either a controller or stash account, provided that the
 	/// account is properly wrapped in the respective [`StakingAccount`] variant. This is meant to
-	/// abstract the concept of controller/stash accounts to the caller.
+	/// abstract the concept of controller/stash accounts from the caller.
 	pub(crate) fn get(account: StakingAccount<T::AccountId>) -> Result<StakingLedger<T>, Error<T>> {
 		let controller = match account {
 			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash),
@@ -142,9 +175,9 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Returns the controller account of a staking ledger.
 	///
-	/// Note: it will fallback into querying the `Bonded` storage with the ledger stash if the
+	/// Note: it will fallback into querying the [`Bonded`] storage with the ledger stash if the
 	/// controller is not set in `self`, which most likely means that self was fetched directly from
-	/// `Ledger` instead of through the methods exposed in `StakingLedger`. If the ledger does not
+	/// [`Ledger`] instead of through the methods exposed in [`StakingLedger`]. If the ledger does not
 	/// exist in storage, it returns `None`.
 	pub(crate) fn controller(&self) -> Option<T::AccountId> {
 		self.controller
@@ -182,8 +215,9 @@ impl<T: Config> StakingLedger<T> {
 
 	// Bonds a ledger.
 	//
-	// This method is just syntactic sugar of [`Self::update`] with a check that returns an error if
-	// the ledger has is already bonded to ensure that the method behaves as expected.
+	// This method is just syntactic sugar of [`Self::update`], with an additional check that
+	// returns an error if the ledger is already bonded. This ensures the method behaves as
+	// expected.
 	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
 		if <Bonded<T>>::contains_key(&self.stash) {
 			Err(Error::<T>::AlreadyBonded)
