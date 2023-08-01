@@ -84,7 +84,7 @@ impl<T: Config> StakingLedger<T> {
 			total: total_stake,
 			unlocking,
 			claimed_rewards,
-			// controllers are deprecated and map 1-1 to stashes.
+			// controllers are deprecated and mapped 1-1 to stashes.
 			controller: Some(stash),
 		}
 	}
