@@ -551,7 +551,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 					deposit_account,
 					origin,
 					*amount,
-					// We can safely make it `Expendable` because our own consumer prevents an
+					// We can safely make it `Expendable` because our own consumer prevents a
 					// removal.
 					Preservation::Expendable,
 				)?;
