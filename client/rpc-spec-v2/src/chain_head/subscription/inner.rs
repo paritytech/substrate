@@ -108,9 +108,6 @@ impl BlockStateMachine {
 	}
 }
 
-/// Maximum number of ongoing operations per subscription ID.
-const MAX_OPERATIONS_PER_SUB: usize = 16;
-
 /// Ongoing number of operations shared across methods.
 #[derive(Clone)]
 struct OngoingOperations {
@@ -419,6 +416,8 @@ pub struct SubscriptionsInner<Block: BlockT, BE: Backend<Block>> {
 	global_max_pinned_blocks: usize,
 	/// The maximum duration that a block is allowed to be pinned per subscription.
 	local_max_pin_duration: Duration,
+	/// The maximum number of ongoing operations per subscription.
+	max_ongoing_operations: usize,
 	/// Map the subscription ID to internal details of the subscription.
 	subs: HashMap<String, SubscriptionState<Block>>,
 	/// Backend pinning / unpinning blocks.
@@ -432,12 +431,14 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 	pub fn new(
 		global_max_pinned_blocks: usize,
 		local_max_pin_duration: Duration,
+		max_ongoing_operations: usize,
 		backend: Arc<BE>,
 	) -> Self {
 		SubscriptionsInner {
 			global_blocks: Default::default(),
 			global_max_pinned_blocks,
 			local_max_pin_duration,
+			max_ongoing_operations,
 			subs: Default::default(),
 			backend,
 		}
@@ -457,7 +458,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 				with_runtime,
 				tx_stop: Some(tx_stop),
 				response_sender,
-				ongoing_operations: OngoingOperations::new(MAX_OPERATIONS_PER_SUB),
+				ongoing_operations: OngoingOperations::new(self.max_ongoing_operations),
 				next_operation_id: 0,
 				blocks: Default::default(),
 			};

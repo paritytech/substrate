@@ -40,12 +40,14 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionManagement<Block, BE> {
 	pub fn new(
 		global_max_pinned_blocks: usize,
 		local_max_pin_duration: Duration,
+		max_ongoing_operations: usize,
 		backend: Arc<BE>,
 	) -> Self {
 		SubscriptionManagement {
 			inner: RwLock::new(SubscriptionsInner::new(
 				global_max_pinned_blocks,
 				local_max_pin_duration,
+				max_ongoing_operations,
 				backend,
 			)),
 		}

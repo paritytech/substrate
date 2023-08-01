@@ -53,6 +53,41 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 pub(crate) const LOG_TARGET: &str = "rpc-spec-v2";
 
+/// The configuration of [`ChainHead`].
+pub struct ChainHeadConfig {
+	/// The maximum number of pinned blocks across all subscriptions.
+	pub global_max_pinned_blocks: usize,
+	/// The maximum duration that a block is allowed to be pinned per subscription.
+	pub subscription_max_pinned_duration: Duration,
+	/// The maximum number of ongoing operations per subscription.
+	pub subscription_max_ongoing_operations: usize,
+}
+
+/// Maximum pinned blocks across all connections.
+/// This number is large enough to consider immediate blocks.
+/// Note: This should never exceed the `PINNING_CACHE_SIZE` from client/db.
+const MAX_PINNED_BLOCKS: usize = 512;
+
+/// Any block of any subscription should not be pinned more than
+/// this constant. When a subscription contains a block older than this,
+/// the subscription becomes subject to termination.
+/// Note: This should be enough for immediate blocks.
+const MAX_PINNED_SECONDS: u64 = 60;
+
+/// The maximum number of ongoing operations per subscription.
+/// Note: The lower limit imposed by the spec is 16.
+const MAX_ONGOING_OPERATIONS: usize = 16;
+
+impl Default for ChainHeadConfig {
+	fn default() -> Self {
+		ChainHeadConfig {
+			global_max_pinned_blocks: MAX_PINNED_BLOCKS,
+			subscription_max_pinned_duration: Duration::from_secs(MAX_PINNED_SECONDS),
+			subscription_max_ongoing_operations: MAX_ONGOING_OPERATIONS,
+		}
+	}
+}
+
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE: Backend<Block>, Block: BlockT, Client> {
 	/// Substrate client.
@@ -76,8 +111,7 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 		backend: Arc<BE>,
 		executor: SubscriptionTaskExecutor,
 		genesis_hash: GenesisHash,
-		max_pinned_blocks: usize,
-		max_pinned_duration: Duration,
+		config: ChainHeadConfig,
 	) -> Self {
 		let genesis_hash = hex_string(&genesis_hash.as_ref());
 		Self {
@@ -85,8 +119,9 @@ impl<BE: Backend<Block>, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 			backend: backend.clone(),
 			executor,
 			subscriptions: Arc::new(SubscriptionManagement::new(
-				max_pinned_blocks,
-				max_pinned_duration,
+				config.global_max_pinned_blocks,
+				config.subscription_max_pinned_duration,
+				config.subscription_max_ongoing_operations,
 				backend,
 			)),
 			genesis_hash,
