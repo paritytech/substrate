@@ -480,7 +480,7 @@ where
 		validation_result: BlockAnnounceValidationResult<B::Header>,
 	) {
 		match validation_result {
-			BlockAnnounceValidationResult::Skip => {},
+			BlockAnnounceValidationResult::Skip { peer_id: _ } => {},
 			BlockAnnounceValidationResult::Process { is_new_best, peer_id, announce } => {
 				self.chain_sync.on_validated_block_announce(is_new_best, peer_id, &announce);
 
