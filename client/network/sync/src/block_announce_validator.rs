@@ -237,7 +237,9 @@ impl<B: BlockT> BlockAnnounceValidator<B> {
 	}
 
 	// TODO: merge this code into future above.
-	fn handle_pre_validation(pre_validation: PreValidateBlockAnnounce<B::Header>) -> BlockAnnounceValidationResult<B::Header> {
+	fn handle_pre_validation(
+		pre_validation: PreValidateBlockAnnounce<B::Header>,
+	) -> BlockAnnounceValidationResult<B::Header> {
 		match pre_validation {
 			PreValidateBlockAnnounce::Process { is_new_best, peer_id, announce } => {
 				trace!(
@@ -345,26 +347,90 @@ impl<B: BlockT> Stream for BlockAnnounceValidator<B> {
 
 	/// Poll for finished block announce validations. The stream never terminates.
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+		// Note: the wake-up code below is modeled after `async-channel`.
+		// See https://github.com/smol-rs/async-channel/blob/4cae9cb0cbbd7c3c0518438e03a01e312b303e59/src/lib.rs#L787-L825
 		loop {
-			match self.validations.poll_next_unpin(cx) {
-				Poll::Ready(Some(pre_validation)) => {
-					self.event_listener = None;
+			// Wait for wake-up event if we are in a waiting state after `self.validations`
+			// was deplenished.
+			if let Some(listener) = self.event_listener.as_mut() {
+				match listener.poll_unpin(cx) {
+					Poll::Ready(()) => self.event_listener = None,
+					Poll::Pending => return Poll::Pending,
+				}
+			}
 
-					self.deallocate_slot_for_block_announce_validation(pre_validation.peer_id());
+			loop {
+				match self.validations.poll_next_unpin(cx) {
+					Poll::Ready(Some(pre_validation)) => {
+						self.event_listener = None;
 
-					let res = Self::handle_pre_validation(pre_validation);
+						self.deallocate_slot_for_block_announce_validation(
+							pre_validation.peer_id(),
+						);
 
-					return Poll::Ready(Some(res))
-				},
-				Poll::Ready(None) => {
-					if self.event_listener.is_none() {
+						let res = Self::handle_pre_validation(pre_validation);
+
+						return Poll::Ready(Some(res))
+					},
+					Poll::Ready(None) => {},
+					Poll::Pending => return Poll::Pending,
+				}
+
+				// `self.validations` was deplenished, start/continue waiting for a wake-up event.
+				match self.event_listener {
+					Some(_) => {
+						// Go back to the outer loop to wait for a wake-up event.
+						break
+					},
+					None => {
+						// Create listener and go polling `self.validations` again in case it was
+						// populated just before the listener was created.
 						self.event_listener = Some(self.event.listen());
-					}
-
-					// TODO: poll `event_listener`.
-				},
-				_ => return Poll::Pending,
+					},
+				}
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::task::Poll;
+
+	use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
+
+	/// `Stream` implementation for `BlockAnnounceValidator` relies on the undocumented
+	/// feature that `FuturesUnordered` can be polled and repeatedly yield
+	/// `Poll::Ready(None)` before any futures were added into it.
+	#[tokio::test]
+	async fn empty_futures_unordered_can_be_polled() {
+		let mut unordered = FuturesUnordered::<BoxFuture<()>>::default();
+
+		futures::future::poll_fn(|cx| {
+			assert_eq!(unordered.poll_next_unpin(cx), Poll::Ready(None));
+			assert_eq!(unordered.poll_next_unpin(cx), Poll::Ready(None));
+
+			Poll::Ready(())
+		})
+		.await;
+	}
+
+	/// `Stream` implementation for `BlockAnnounceValidator` relies on the undocumented
+	/// feature that `FuturesUnordered` can be polled and repeatedly yield
+	/// `Poll::Ready(None)` after all the futures in it have resolved.
+	#[tokio::test]
+	async fn deplenished_futures_unordered_can_be_polled() {
+		let mut unordered = FuturesUnordered::<BoxFuture<()>>::default();
+
+		unordered.push(futures::future::ready(()).boxed());
+		assert_eq!(unordered.next().await, Some(()));
+
+		futures::future::poll_fn(|cx| {
+			assert_eq!(unordered.poll_next_unpin(cx), Poll::Ready(None));
+			assert_eq!(unordered.poll_next_unpin(cx), Poll::Ready(None));
+
+			Poll::Ready(())
+		})
+		.await;
 	}
 }
