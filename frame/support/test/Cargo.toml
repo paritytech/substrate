@@ -49,11 +49,10 @@ std = [
 	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
-	"sp-state-machine",
 	"sp-std/std",
 	"sp-version/std",
 	"test-pallet/std",
-	"sp-state-machine?/std"
+	"sp-state-machine/std"
 ]
 experimental = ["frame-support/experimental"]
 try-runtime = [
