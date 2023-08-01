@@ -915,7 +915,7 @@ mod tests {
 	#[test]
 	fn generate_chain_spec_with_full_config_works() {
 		let j =
-			include_str!("../../../test-utils/runtime/src/test_json/default_genesis_config.json");
+			include_str!("../../../test-utils/runtime/res/default_genesis_config.json");
 		let output: ChainSpec<()> = ChainSpecBuilder::new()
 			.with_name("TestName")
 			.with_id("test_id")
@@ -946,7 +946,7 @@ mod tests {
 	#[test]
 	fn chain_spec_as_json_fails_with_invalid_config() {
 		let j = include_str!(
-			"../../../test-utils/runtime/src/test_json/default_genesis_config_invalid_2.json"
+			"../../../test-utils/runtime/res/default_genesis_config_invalid_2.json"
 		);
 		let output: ChainSpec<()> = ChainSpecBuilder::new()
 			.with_name("TestName")

@@ -1299,7 +1299,7 @@ mod tests {
 		#[test]
 		fn build_config_from_json_works() {
 			sp_tracing::try_init_simple();
-			let j = include_str!("test_json/default_genesis_config.json");
+			let j = include_str!("../res/default_genesis_config.json");
 
 			let mut t = BasicExternalities::new_empty();
 			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).unwrap();
@@ -1319,7 +1319,7 @@ mod tests {
 		#[test]
 		fn build_config_from_invalid_json_fails() {
 			sp_tracing::try_init_simple();
-			let j = include_str!("test_json/default_genesis_config_invalid.json");
+			let j = include_str!("../res/default_genesis_config_invalid.json");
 			let mut t = BasicExternalities::new_empty();
 			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).unwrap();
 			let r = BuildResult::decode(&mut &r[..]).unwrap();
@@ -1334,7 +1334,7 @@ mod tests {
 		#[test]
 		fn build_config_from_invalid_json_fails_2() {
 			sp_tracing::try_init_simple();
-			let j = include_str!("test_json/default_genesis_config_invalid_2.json");
+			let j = include_str!("../res/default_genesis_config_invalid_2.json");
 			let mut t = BasicExternalities::new_empty();
 			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).unwrap();
 			let r = BuildResult::decode(&mut &r[..]).unwrap();
@@ -1349,7 +1349,7 @@ mod tests {
 		#[test]
 		fn build_config_from_incomplete_json_fails() {
 			sp_tracing::try_init_simple();
-			let j = include_str!("test_json/default_genesis_config_incomplete.json");
+			let j = include_str!("../res/default_genesis_config_incomplete.json");
 
 			let mut t = BasicExternalities::new_empty();
 			let r = executor_call(&mut t, "GenesisBuilder_build_config", &j.encode()).unwrap();
