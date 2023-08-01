@@ -767,6 +767,7 @@ mod tests {
 			tx_stop: None,
 			response_sender,
 			next_operation_id: 0,
+			ongoing_operations: OngoingOperations::new(MAX_OPERATIONS_PER_SUB),
 			blocks: Default::default(),
 		};
 
@@ -796,6 +797,7 @@ mod tests {
 			tx_stop: None,
 			response_sender,
 			next_operation_id: 0,
+			ongoing_operations: OngoingOperations::new(MAX_OPERATIONS_PER_SUB),
 			blocks: Default::default(),
 		};
 
@@ -834,7 +836,7 @@ mod tests {
 		let hash = H256::random();
 
 		// Subscription not inserted.
-		let err = subs.lock_block(&id, hash).unwrap_err();
+		let err = subs.lock_block(&id, hash, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 
 		let _stop = subs.insert_subscription(id.clone(), true).unwrap();
@@ -842,13 +844,13 @@ mod tests {
 		assert!(subs.insert_subscription(id.clone(), true).is_none());
 
 		// No block hash.
-		let err = subs.lock_block(&id, hash).unwrap_err();
+		let err = subs.lock_block(&id, hash, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::BlockHashAbsent);
 
 		subs.remove_subscription(&id);
 
 		// No subscription.
-		let err = subs.lock_block(&id, hash).unwrap_err();
+		let err = subs.lock_block(&id, hash, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 	}
 
@@ -868,7 +870,7 @@ mod tests {
 		// First time we are pinning the block.
 		assert_eq!(subs.pin_block(&id, hash).unwrap(), true);
 
-		let block = subs.lock_block(&id, hash).unwrap();
+		let block = subs.lock_block(&id, hash, 1).unwrap();
 		// Subscription started with runtime updates
 		assert_eq!(block.has_runtime(), true);
 
@@ -878,7 +880,7 @@ mod tests {
 
 		// Unpin the block.
 		subs.unpin_block(&id, hash).unwrap();
-		let err = subs.lock_block(&id, hash).unwrap_err();
+		let err = subs.lock_block(&id, hash, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::BlockHashAbsent);
 	}
 
@@ -1006,10 +1008,10 @@ mod tests {
 		assert_eq!(err, SubscriptionManagementError::ExceededLimits);
 
 		// Ensure both subscriptions are removed.
-		let err = subs.lock_block(&id_1, hash_1).unwrap_err();
+		let err = subs.lock_block(&id_1, hash_1, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 
-		let err = subs.lock_block(&id_2, hash_1).unwrap_err();
+		let err = subs.lock_block(&id_2, hash_1, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 
 		assert!(subs.global_blocks.get(&hash_1).is_none());
@@ -1056,10 +1058,10 @@ mod tests {
 		assert_eq!(err, SubscriptionManagementError::ExceededLimits);
 
 		// Ensure both subscriptions are removed.
-		let err = subs.lock_block(&id_1, hash_1).unwrap_err();
+		let err = subs.lock_block(&id_1, hash_1, 1).unwrap_err();
 		assert_eq!(err, SubscriptionManagementError::SubscriptionAbsent);
 
-		let _block_guard = subs.lock_block(&id_2, hash_1).unwrap();
+		let _block_guard = subs.lock_block(&id_2, hash_1, 1).unwrap();
 
 		assert_eq!(*subs.global_blocks.get(&hash_1).unwrap(), 1);
 		assert!(subs.global_blocks.get(&hash_2).is_none());
