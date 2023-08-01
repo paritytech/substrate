@@ -532,8 +532,8 @@ async fn get_storage_hash() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
-	assert_eq!(event, ChainHeadStorageEvent::<String>::Disjoint);
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	assert_eq!(event, ChainHeadStorageEvent::Disjoint);
 
 	// Valid subscription ID with invalid block hash will error.
 	let err = api
@@ -563,7 +563,7 @@ async fn get_storage_hash() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	// The `Done` event is generated directly since the key does not have any value associated.
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
@@ -597,9 +597,9 @@ async fn get_storage_hash() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash));
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash));
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child value set in `setup_api`.
@@ -618,9 +618,9 @@ async fn get_storage_hash() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash));
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Hash(expected_hash));
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 }
 
@@ -669,13 +669,13 @@ async fn get_storage_multi_query_iter() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 2 &&
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 2 &&
 		res.items[0].key == key &&
 		res.items[1].key == key &&
 		res.items[0].result == StorageResultType::Hash(expected_hash) &&
 		res.items[1].result == StorageResultType::Value(expected_value));
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child value set in `setup_api`.
@@ -704,13 +704,13 @@ async fn get_storage_multi_query_iter() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 2 &&
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 2 &&
 		res.items[0].key == key &&
 		res.items[1].key == key &&
 		res.items[0].result == StorageResultType::Hash(expected_hash) &&
 		res.items[1].result == StorageResultType::Value(expected_value));
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 }
 
@@ -733,8 +733,8 @@ async fn get_storage_value() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
-	assert_eq!(event, ChainHeadStorageEvent::<String>::Disjoint);
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	assert_eq!(event, ChainHeadStorageEvent::Disjoint);
 
 	// Valid subscription ID with invalid block hash will error.
 	let err = api
@@ -764,7 +764,7 @@ async fn get_storage_value() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	// The `Done` event is generated directly since the key does not have any value associated.
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
@@ -798,9 +798,9 @@ async fn get_storage_value() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value));
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value));
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child value set in `setup_api`.
@@ -819,9 +819,9 @@ async fn get_storage_value() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
-	assert_matches!(event, ChainHeadStorageEvent::<String>::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value));
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadStorageEvent::Items(res) if res.items.len() == 1 && res.items[0].key == key && res.items[0].result == StorageResultType::Value(expected_value));
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 }
 
@@ -846,7 +846,7 @@ async fn get_storage_wrong_key() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
@@ -864,7 +864,7 @@ async fn get_storage_wrong_key() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child key is prefixed by CHILD_STORAGE_KEY_PREFIX.
@@ -883,7 +883,7 @@ async fn get_storage_wrong_key() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 
 	// Child key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
@@ -902,7 +902,7 @@ async fn get_storage_wrong_key() {
 		)
 		.await
 		.unwrap();
-	let event: ChainHeadStorageEvent<String> = get_next_event(&mut sub).await;
+	let event: ChainHeadStorageEvent = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadStorageEvent::Done);
 }
 
