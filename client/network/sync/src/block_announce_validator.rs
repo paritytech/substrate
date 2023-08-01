@@ -344,9 +344,13 @@ impl<B: BlockT> Stream for BlockAnnounceValidator<B> {
 
 #[cfg(test)]
 mod tests {
-	use std::task::Poll;
-
+	use super::*;
+	use crate::block_announce_validator::AllocateSlotForBlockAnnounceValidation;
 	use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
+	use libp2p::PeerId;
+	use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
+	use std::task::Poll;
+	use substrate_test_runtime_client::runtime::Block;
 
 	/// `Stream` implementation for `BlockAnnounceValidator` relies on the undocumented
 	/// feature that `FuturesUnordered` can be polled and repeatedly yield
@@ -381,5 +385,100 @@ mod tests {
 			Poll::Ready(())
 		})
 		.await;
+	}
+
+	#[test]
+	fn allocate_one_validation_slot() {
+		let mut validator =
+			BlockAnnounceValidator::<Block>::new(Box::new(DefaultBlockAnnounceValidator {}));
+		let peer_id = PeerId::random();
+
+		assert!(matches!(
+			validator.allocate_slot_for_block_announce_validation(&peer_id),
+			AllocateSlotForBlockAnnounceValidation::Allocated,
+		));
+	}
+
+	#[test]
+	fn allocate_validation_slots_for_two_peers() {
+		let mut validator =
+			BlockAnnounceValidator::<Block>::new(Box::new(DefaultBlockAnnounceValidator {}));
+		let peer_id_1 = PeerId::random();
+		let peer_id_2 = PeerId::random();
+
+		assert!(matches!(
+			validator.allocate_slot_for_block_announce_validation(&peer_id_1),
+			AllocateSlotForBlockAnnounceValidation::Allocated,
+		));
+		assert!(matches!(
+			validator.allocate_slot_for_block_announce_validation(&peer_id_2),
+			AllocateSlotForBlockAnnounceValidation::Allocated,
+		));
+	}
+
+	#[test]
+	fn maximum_validation_slots_per_peer() {
+		let mut validator =
+			BlockAnnounceValidator::<Block>::new(Box::new(DefaultBlockAnnounceValidator {}));
+		let peer_id = PeerId::random();
+
+		for _ in 0..MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS_PER_PEER {
+			assert!(matches!(
+				validator.allocate_slot_for_block_announce_validation(&peer_id),
+				AllocateSlotForBlockAnnounceValidation::Allocated,
+			));
+		}
+
+		assert!(matches!(
+			validator.allocate_slot_for_block_announce_validation(&peer_id),
+			AllocateSlotForBlockAnnounceValidation::MaximumPeerSlotsReached,
+		));
+	}
+
+	#[test]
+	fn validation_slots_per_peer_deallocated() {
+		let mut validator =
+			BlockAnnounceValidator::<Block>::new(Box::new(DefaultBlockAnnounceValidator {}));
+		let peer_id = PeerId::random();
+
+		for _ in 0..MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS_PER_PEER {
+			assert!(matches!(
+				validator.allocate_slot_for_block_announce_validation(&peer_id),
+				AllocateSlotForBlockAnnounceValidation::Allocated,
+			));
+		}
+
+		assert!(matches!(
+			validator.allocate_slot_for_block_announce_validation(&peer_id),
+			AllocateSlotForBlockAnnounceValidation::MaximumPeerSlotsReached,
+		));
+
+		validator.deallocate_slot_for_block_announce_validation(&peer_id);
+
+		assert!(matches!(
+			validator.allocate_slot_for_block_announce_validation(&peer_id),
+			AllocateSlotForBlockAnnounceValidation::Allocated,
+		));
+	}
+
+	#[test]
+	fn maximum_validation_slots_for_all_peers() {
+		let mut validator =
+			BlockAnnounceValidator::<Block>::new(Box::new(DefaultBlockAnnounceValidator {}));
+
+		for _ in 0..MAX_CONCURRENT_BLOCK_ANNOUNCE_VALIDATIONS {
+			validator.validations.push(
+				futures::future::ready(BlockAnnounceValidationResult::Skip {
+					peer_id: PeerId::random(),
+				})
+				.boxed(),
+			)
+		}
+
+		let peer_id = PeerId::random();
+		assert!(matches!(
+			validator.allocate_slot_for_block_announce_validation(&peer_id),
+			AllocateSlotForBlockAnnounceValidation::TotalMaximumSlotsReached,
+		));
 	}
 }
