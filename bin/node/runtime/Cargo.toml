@@ -366,3 +366,6 @@ try-runtime = [
 	"pallet-vesting/try-runtime",
 	"pallet-whitelist/try-runtime",
 ]
+unsafe-debug = [
+	"pallet-contracts/unsafe-debug",
+]
