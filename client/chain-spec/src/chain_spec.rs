@@ -457,7 +457,7 @@ impl<G, E> ChainSpec<G, E> {
 
 	/// Create hardcoded spec.
 	#[deprecated(
-		note = "`from_genesis` is planned to be removed in December 2023. Use [`builder()`] instead."
+		note = "`from_genesis` is planned to be removed in December 2023. Use `builder()` instead."
 	)]
 	// deprecated note: Genesis<G>::Runtime + GenesisSource::Factory shall also be removed
 	pub fn from_genesis<F: Fn() -> G + 'static + Send + Sync>(
@@ -609,13 +609,13 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 		})
 	}
 
-	/// Dump the configuration to JSON string.
+	/// Dump the chain specification to JSON string.
 	///
 	/// During conversion to `raw` format, the `ChainSpec::code` field will be removed and placed
 	/// into `RawGenesis` as `genesis::top::raw::0x3a636f6465` (which is
 	/// [`sp_core::storage::well_known_keys::CODE`]). If the spec is already in `raw` format, and
 	/// contains `genesis::top::raw::0x3a636f6465` field it will be updated with content of `code`
-	/// field.
+	/// field (if present).
 	pub fn as_json(&self, raw: bool) -> Result<String, String> {
 		let container = self.json_container(raw)?;
 		json::to_string_pretty(&container).map_err(|e| format!("Error generating spec json: {}", e))
