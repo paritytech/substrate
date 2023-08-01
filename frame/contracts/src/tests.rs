@@ -5461,7 +5461,6 @@ fn add_remove_delegate_dependency_works() {
 	const ED: u64 = 2000;
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let _ = Balances::set_balance(&ALICE, 1_000_000);
-		let meter_storage_deposit = 132;
 
 		// Instantiate with add_delegate_dependency should fail since the code is not yet on chain.
 		assert_err!(
@@ -5487,7 +5486,7 @@ fn add_remove_delegate_dependency_works() {
 				&HoldReason::StorageDepositReserve.into(),
 				&addr_caller
 			),
-			dependency_deposit + deposit
+			dependency_deposit + contract.storage_base_deposit() - ED
 		);
 
 		// Removing the code should fail, since we have added a dependency.
@@ -5521,7 +5520,13 @@ fn add_remove_delegate_dependency_works() {
 		// Dependency should be removed, and deposit should be returned.
 		let contract = test_utils::get_contract(&addr_caller);
 		assert!(contract.delegate_dependencies().is_empty());
-		assert_eq!(test_utils::get_balance(contract.deposit_account()), ED);
+		assert_eq!(
+			test_utils::get_balance_on_hold(
+				&HoldReason::StorageDepositReserve.into(),
+				&addr_caller
+			),
+			contract.storage_base_deposit() - ED
+		);
 
 		// Removing an unexisting dependency should fail.
 		assert_err!(
@@ -5550,7 +5555,10 @@ fn add_remove_delegate_dependency_works() {
 		// Call terminate should work, and return the deposit.
 		let balance_before = test_utils::get_balance(&ALICE);
 		assert_ok!(call(&addr_caller, &terminate_input).result);
-		assert_eq!(test_utils::get_balance(&ALICE), balance_before + 2 * ED + dependency_deposit);
+		assert_eq!(
+			test_utils::get_balance(&ALICE),
+			balance_before + contract.storage_base_deposit() + dependency_deposit
+		);
 
 		// Terminate should also remove the dependency, so we can remove the code.
 		assert_ok!(Contracts::remove_code(RuntimeOrigin::signed(ALICE), code_hash));
