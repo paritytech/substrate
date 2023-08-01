@@ -12,7 +12,7 @@ use crate::{log, BalanceOf, Bonded, Config, Error, Ledger, UnlockChunk, STAKING_
 
 /// The ledger of a (bonded) stash.
 ///
-/// Note: All the reads and mutations to the `Ledger` and `Bonded` storage items *MUST* be performed
+/// Note: All the reads and mutations to the [`Ledger`] and [`Bonded`] storage items *MUST* be performed
 /// through the methods exposed by this struct to ensure data and staking lock consistency.
 #[derive(
 	PartialEqNoBound,
