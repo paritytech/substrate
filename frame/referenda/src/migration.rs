@@ -199,10 +199,11 @@ pub mod test {
 
 	#[test]
 	fn migration_v0_to_v1_works() {
-		new_test_ext().execute_with(|| {
+		ExtBuilder::default().build_and_execute(|| {
 			// create and insert into the storage an ongoing referendum v0.
 			let status_v0 = create_status_v0();
 			let ongoing_v0 = v0::ReferendumInfoOf::<T, ()>::Ongoing(status_v0.clone());
+			ReferendumCount::<T, ()>::mutate(|x| x.saturating_inc());
 			v0::ReferendumInfoFor::<T, ()>::insert(2, ongoing_v0);
 			// create and insert into the storage an approved referendum v0.
 			let approved_v0 = v0::ReferendumInfoOf::<T, ()>::Approved(
@@ -210,6 +211,7 @@ pub mod test {
 				Deposit { who: 1, amount: 10 },
 				Some(Deposit { who: 2, amount: 20 }),
 			);
+			ReferendumCount::<T, ()>::mutate(|x| x.saturating_inc());
 			v0::ReferendumInfoFor::<T, ()>::insert(5, approved_v0);
 			// run migration from v0 to v1.
 			v1::MigrateV0ToV1::<T, ()>::on_runtime_upgrade();

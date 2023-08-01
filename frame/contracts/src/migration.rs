@@ -61,6 +61,7 @@ pub mod v10;
 pub mod v11;
 pub mod v12;
 pub mod v13;
+include!(concat!(env!("OUT_DIR"), "/migration_codegen.rs"));
 
 use crate::{weights::WeightInfo, Config, Error, MigrationInProgress, Pallet, Weight, LOG_TARGET};
 use codec::{Codec, Decode};
@@ -522,7 +523,10 @@ impl MigrateSequence for Tuple {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use crate::tests::{ExtBuilder, Test};
+	use crate::{
+		migration::codegen::LATEST_MIGRATION_VERSION,
+		tests::{ExtBuilder, Test},
+	};
 
 	#[derive(Default, Encode, Decode, MaxEncodedLen)]
 	struct MockMigration<const N: u16> {
@@ -544,6 +548,11 @@ mod test {
 				(IsFinished::No, Weight::from_all(1))
 			}
 		}
+	}
+
+	#[test]
+	fn test_storage_version_matches_last_migration_file() {
+		assert_eq!(StorageVersion::new(LATEST_MIGRATION_VERSION), crate::pallet::STORAGE_VERSION);
 	}
 
 	#[test]
@@ -584,7 +593,7 @@ mod test {
 		type TestMigration = Migration<Test>;
 
 		ExtBuilder::default().build().execute_with(|| {
-			assert_eq!(StorageVersion::get::<Pallet<Test>>(), 2);
+			assert_eq!(StorageVersion::get::<Pallet<Test>>(), LATEST_MIGRATION_VERSION);
 			assert_eq!(TestMigration::migrate(Weight::MAX).0, MigrateResult::NoMigrationInProgress)
 		});
 	}
@@ -593,21 +602,28 @@ mod test {
 	fn migration_works() {
 		type TestMigration = Migration<Test, false>;
 
-		ExtBuilder::default().set_storage_version(0).build().execute_with(|| {
-			assert_eq!(StorageVersion::get::<Pallet<Test>>(), 0);
-			TestMigration::on_runtime_upgrade();
-			for (version, status) in
-				[(1, MigrateResult::InProgress { steps_done: 1 }), (2, MigrateResult::Completed)]
-			{
-				assert_eq!(TestMigration::migrate(Weight::MAX).0, status);
-				assert_eq!(
-					<Pallet<Test>>::on_chain_storage_version(),
-					StorageVersion::new(version)
-				);
-			}
+		ExtBuilder::default()
+			.set_storage_version(LATEST_MIGRATION_VERSION - 2)
+			.build()
+			.execute_with(|| {
+				assert_eq!(StorageVersion::get::<Pallet<Test>>(), LATEST_MIGRATION_VERSION - 2);
+				TestMigration::on_runtime_upgrade();
+				for (version, status) in [
+					(LATEST_MIGRATION_VERSION - 1, MigrateResult::InProgress { steps_done: 1 }),
+					(LATEST_MIGRATION_VERSION, MigrateResult::Completed),
+				] {
+					assert_eq!(TestMigration::migrate(Weight::MAX).0, status);
+					assert_eq!(
+						<Pallet<Test>>::on_chain_storage_version(),
+						StorageVersion::new(version)
+					);
+				}
 
-			assert_eq!(TestMigration::migrate(Weight::MAX).0, MigrateResult::NoMigrationInProgress);
-			assert_eq!(StorageVersion::get::<Pallet<Test>>(), 2);
-		});
+				assert_eq!(
+					TestMigration::migrate(Weight::MAX).0,
+					MigrateResult::NoMigrationInProgress
+				);
+				assert_eq!(StorageVersion::get::<Pallet<Test>>(), LATEST_MIGRATION_VERSION);
+			});
 	}
 }
