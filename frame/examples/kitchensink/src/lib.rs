@@ -208,6 +208,7 @@ pub mod pallet {
 	/// macro takes care of the marshalling of arguments and dispatch.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// A simple dispatchable that takes a single `u32` argument, writes it to storage, emits an event.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_foo_benchmark())]
 		pub fn set_foo(
