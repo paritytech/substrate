@@ -267,6 +267,10 @@ pub enum RuntimeCosts {
 	AccountEntranceCount,
 	/// Weight of calling `instantiation_nonce`
 	InstantationNonce,
+	/// Weight of calling `add_delegate_dependency`
+	AddDelegateDependency,
+	/// Weight of calling `remove_delegate_dependency`
+	RemoveDelegateDependency,
 }
 
 impl RuntimeCosts {
@@ -348,6 +352,8 @@ impl RuntimeCosts {
 			ReentrantCount => s.reentrance_count,
 			AccountEntranceCount => s.account_reentrance_count,
 			InstantationNonce => s.instantiation_nonce,
+			AddDelegateDependency => s.add_delegate_dependency,
+			RemoveDelegateDependency => s.remove_delegate_dependency,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -1573,9 +1579,6 @@ pub mod env {
 	/// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
 	/// supplying the sentinel value of `SENTINEL` to `output_ptr` or `address_ptr`.
 	///
-	/// `value` must be at least the minimum balance. Otherwise the instantiation fails and the
-	/// contract is not created.
-	///
 	/// # Parameters
 	///
 	/// - `code_hash_ptr`: a pointer to the buffer that contains the initializer code.
@@ -2091,7 +2094,7 @@ pub mod env {
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	///
-	/// The data is encoded as (T::Hash, T::BlockNumber).
+	/// The data is encoded as (T::Hash, frame_system::pallet_prelude::BlockNumberFor::<T>).
 	///
 	/// # Changes from v0
 	///
@@ -2820,5 +2823,31 @@ pub mod env {
 	fn instantiation_nonce(ctx: _, _memory: _) -> Result<u64, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::InstantationNonce)?;
 		Ok(ctx.ext.nonce())
+	}
+
+	/// Adds a new delegate dependency to the contract.
+	///
+	/// # Parameters
+	///
+	/// - `code_hash_ptr`: A pointer to the code hash of the dependency.
+	#[unstable]
+	fn add_delegate_dependency(ctx: _, memory: _, code_hash_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::AddDelegateDependency)?;
+		let code_hash = ctx.read_sandbox_memory_as(memory, code_hash_ptr)?;
+		ctx.ext.add_delegate_dependency(code_hash)?;
+		Ok(())
+	}
+
+	/// Removes the delegate dependency from the contract.
+	///
+	/// # Parameters
+	///
+	/// - `code_hash_ptr`: A pointer to the code hash of the dependency.
+	#[unstable]
+	fn remove_delegate_dependency(ctx: _, memory: _, code_hash_ptr: u32) -> Result<(), TrapReason> {
+		ctx.charge_gas(RuntimeCosts::RemoveDelegateDependency)?;
+		let code_hash = ctx.read_sandbox_memory_as(memory, code_hash_ptr)?;
+		ctx.ext.remove_delegate_dependency(&code_hash)?;
+		Ok(())
 	}
 }

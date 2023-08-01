@@ -30,7 +30,7 @@ use self::{
 };
 use crate::{
 	exec::{AccountIdOf, Key},
-	migration::{v10, v11, v12, v9, MigrationStep},
+	migration::{codegen::LATEST_MIGRATION_VERSION, v09, v10, v11, v12, v13, MigrationStep},
 	wasm::CallFlags,
 	Pallet as Contracts, *,
 };
@@ -216,8 +216,8 @@ benchmarks! {
 	#[pov_mode = Measured]
 	v9_migration_step {
 		let c in 0 .. T::MaxCodeLen::get();
-		v9::store_old_dummy_code::<T>(c as usize);
-		let mut m = v9::Migration::<T>::default();
+		v09::store_old_dummy_code::<T>(c as usize);
+		let mut m = v09::Migration::<T>::default();
 	}: {
 		m.step();
 	}
@@ -257,32 +257,48 @@ benchmarks! {
 		m.step();
 	}
 
+	// This benchmarks the v13 migration step (Add delegate_dependencies field).
+	#[pov_mode = Measured]
+	v13_migration_step {
+		let contract = <Contract<T>>::with_caller(
+			whitelisted_caller(), WasmModule::dummy(), vec![],
+		)?;
+
+		v13::store_old_contract_info::<T>(contract.account_id.clone(), contract.info()?);
+		let mut m = v13::Migration::<T>::default();
+	}: {
+		m.step();
+	}
+
 	// This benchmarks the weight of executing Migration::migrate to execute a noop migration.
 	#[pov_mode = Measured]
 	migration_noop {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+		let version = LATEST_MIGRATION_VERSION;
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), version);
 	}:  {
 		Migration::<T>::migrate(Weight::MAX)
 	} verify {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), version);
 	}
 
 	// This benchmarks the weight of dispatching migrate to execute 1 `NoopMigraton`
 	#[pov_mode = Measured]
 	migrate {
-		StorageVersion::new(0).put::<Pallet<T>>();
+		let latest_version = LATEST_MIGRATION_VERSION;
+		StorageVersion::new(latest_version - 2).put::<Pallet<T>>();
 		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade();
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 	}: _(origin, Weight::MAX)
 	verify {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), latest_version - 1);
 	}
 
 	// This benchmarks the weight of running on_runtime_upgrade when there are no migration in progress.
 	#[pov_mode = Measured]
 	on_runtime_upgrade_noop {
-		assert_eq!(StorageVersion::get::<Pallet<T>>(), 2);
+		let latest_version = LATEST_MIGRATION_VERSION;
+		assert_eq!(StorageVersion::get::<Pallet<T>>(), latest_version);
 	}:  {
 		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
 	} verify {
@@ -292,7 +308,8 @@ benchmarks! {
 	// This benchmarks the weight of running on_runtime_upgrade when there is a migration in progress.
 	#[pov_mode = Measured]
 	on_runtime_upgrade_in_progress {
-		StorageVersion::new(0).put::<Pallet<T>>();
+		let latest_version = LATEST_MIGRATION_VERSION;
+		StorageVersion::new(latest_version - 2).put::<Pallet<T>>();
 		let v = vec![42u8].try_into().ok();
 		MigrationInProgress::<T>::set(v.clone());
 	}:  {
@@ -305,7 +322,8 @@ benchmarks! {
 	// This benchmarks the weight of running on_runtime_upgrade when there is a migration to process.
 	#[pov_mode = Measured]
 	on_runtime_upgrade {
-		StorageVersion::new(0).put::<Pallet<T>>();
+		let latest_version = LATEST_MIGRATION_VERSION;
+		StorageVersion::new(latest_version - 2).put::<Pallet<T>>();
 	}:  {
 		<Migration::<T, false> as frame_support::traits::OnRuntimeUpgrade>::on_runtime_upgrade()
 	} verify {
@@ -832,20 +850,48 @@ benchmarks! {
 		let beneficiary = account::<T::AccountId>("beneficiary", 0, 0);
 		let beneficiary_bytes = beneficiary.encode();
 		let beneficiary_len = beneficiary_bytes.len();
+
+		// Maximize the delegate_dependencies to account for the worst-case scenario.
+		let code_hashes = (0..T::MaxDelegateDependencies::get())
+			.map(|i| {
+				let new_code = WasmModule::<T>::dummy_with_bytes(65 + i);
+				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Ok(new_code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		let code_hash_len = code_hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let code_hashes_bytes = code_hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
-			imported_functions: vec![ImportedFunction {
-				module: "seal0",
-				name: "seal_terminate",
-				params: vec![ValueType::I32, ValueType::I32],
-				return_type: None,
-			}],
+			imported_functions: vec![
+				ImportedFunction {
+					module: "seal0",
+					name: "seal_terminate",
+					params: vec![ValueType::I32, ValueType::I32],
+					return_type: None,
+				},
+				ImportedFunction {
+					module: "seal0",
+					name: "add_delegate_dependency",
+					params: vec![ValueType::I32],
+					return_type: None,
+				}
+			],
 			data_segments: vec![
 				DataSegment {
 					offset: 0,
 					value: beneficiary_bytes,
 				},
+				DataSegment {
+					offset: beneficiary_len as u32,
+					value: code_hashes_bytes,
+				},
 			],
+			deploy_body: Some(body::repeated_dyn(r, vec![
+				Counter(beneficiary_len as u32, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(1)),
+			])),
 			call_body: Some(body::repeated(r, &[
 				Instruction::I32Const(0), // beneficiary_ptr
 				Instruction::I32Const(beneficiary_len as i32), // beneficiary_len
@@ -2320,6 +2366,89 @@ benchmarks! {
 				Counter(0, code_hash_len as u32), // code_hash_ptr
 				Regular(Instruction::Call(0)),
 				Regular(Instruction::Drop),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	#[pov_mode = Measured]
+	add_delegate_dependency {
+		let r in 0 .. T::MaxDelegateDependencies::get();
+		let code_hashes = (0..r)
+			.map(|i| {
+				let new_code = WasmModule::<T>::dummy_with_bytes(65 + i);
+				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Ok(new_code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+		let code_hash_len = code_hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let code_hashes_bytes = code_hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "add_delegate_dependency",
+				params: vec![ValueType::I32],
+				return_type: None,
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: code_hashes_bytes,
+				},
+			],
+			call_body: Some(body::repeated_dyn(r, vec![
+				Counter(0, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(0)),
+			])),
+			.. Default::default()
+		});
+		let instance = Contract::<T>::new(code, vec![])?;
+		let origin = RawOrigin::Signed(instance.caller.clone());
+	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
+
+	remove_delegate_dependency {
+		let r in 0 .. T::MaxDelegateDependencies::get();
+		let code_hashes = (0..r)
+			.map(|i| {
+				let new_code = WasmModule::<T>::dummy_with_bytes(65 + i);
+				Contracts::<T>::store_code_raw(new_code.code, whitelisted_caller())?;
+				Ok(new_code.hash)
+			})
+			.collect::<Result<Vec<_>, &'static str>>()?;
+
+		let code_hash_len = code_hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
+		let code_hashes_bytes = code_hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
+
+		let code = WasmModule::<T>::from(ModuleDefinition {
+			memory: Some(ImportedMemory::max::<T>()),
+			imported_functions: vec![ImportedFunction {
+				module: "seal0",
+				name: "remove_delegate_dependency",
+				params: vec![ValueType::I32],
+				return_type: None,
+			}, ImportedFunction {
+				module: "seal0",
+				name: "add_delegate_dependency",
+				params: vec![ValueType::I32],
+				return_type: None
+			}],
+			data_segments: vec![
+				DataSegment {
+					offset: 0,
+					value: code_hashes_bytes,
+				},
+			],
+			deploy_body: Some(body::repeated_dyn(r, vec![
+				Counter(0, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(1)),
+			])),
+			call_body: Some(body::repeated_dyn(r, vec![
+				Counter(0, code_hash_len as u32), // code_hash_ptr
+				Regular(Instruction::Call(0)),
 			])),
 			.. Default::default()
 		});

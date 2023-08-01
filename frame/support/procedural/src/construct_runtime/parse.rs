@@ -65,7 +65,7 @@ pub enum RuntimeDeclaration {
 #[derive(Debug)]
 pub struct ImplicitRuntimeDeclaration {
 	pub name: Ident,
-	pub where_section: WhereSection,
+	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<PalletDeclaration>,
 }
 
@@ -73,7 +73,7 @@ pub struct ImplicitRuntimeDeclaration {
 #[derive(Debug)]
 pub struct ExplicitRuntimeDeclaration {
 	pub name: Ident,
-	pub where_section: WhereSection,
+	pub where_section: Option<WhereSection>,
 	pub pallets: Vec<Pallet>,
 	pub pallets_token: token::Brace,
 }
@@ -90,7 +90,7 @@ impl Parse for RuntimeDeclaration {
 		}
 
 		let name = input.parse::<syn::Ident>()?;
-		let where_section = input.parse()?;
+		let where_section = if input.peek(token::Where) { Some(input.parse()?) } else { None };
 		let pallets =
 			input.parse::<ext::Braces<ext::Punctuated<PalletDeclaration, Token![,]>>>()?;
 		let pallets_token = pallets.token;
@@ -122,6 +122,7 @@ impl Parse for RuntimeDeclaration {
 
 #[derive(Debug)]
 pub struct WhereSection {
+	pub span: Span,
 	pub block: syn::TypePath,
 	pub node_block: syn::TypePath,
 	pub unchecked_extrinsic: syn::TypePath,
@@ -130,6 +131,7 @@ pub struct WhereSection {
 impl Parse for WhereSection {
 	fn parse(input: ParseStream) -> Result<Self> {
 		input.parse::<token::Where>()?;
+
 		let mut definitions = Vec::new();
 		while !input.peek(token::Brace) {
 			let definition: WhereDefinition = input.parse()?;
@@ -153,7 +155,7 @@ impl Parse for WhereSection {
 			);
 			return Err(Error::new(*kind_span, msg))
 		}
-		Ok(Self { block, node_block, unchecked_extrinsic })
+		Ok(Self { span: input.span(), block, node_block, unchecked_extrinsic })
 	}
 }
 
