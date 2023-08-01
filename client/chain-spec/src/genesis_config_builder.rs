@@ -128,7 +128,6 @@ mod tests {
 
 	#[test]
 	fn get_default_config_works() {
-		sp_tracing::try_init_simple();
 		let config =
 			GenesisConfigBuilderRuntimeCaller::new(substrate_test_runtime::wasm_binary_unwrap())
 				.get_default_config()
@@ -139,8 +138,6 @@ mod tests {
 
 	#[test]
 	fn get_storage_for_patch_works() {
-		sp_tracing::try_init_simple();
-
 		let patch = json!({
 			"babe": {
 				"epochConfig": {

@@ -34,8 +34,6 @@ log = { version = "0.4.17", default-features = false }
 array-bytes = { version = "6.1" } #debug
 
 [dev-dependencies]
-sp-tracing = { version = "10.0.0", path = "../../primitives/tracing" }
-kitchensink-runtime = { path = "../../bin/node/runtime" }
 substrate-test-runtime = { path = "../../test-utils/runtime" }
 sp-keyring = { version = "24.0.0", path = "../../primitives/keyring" }
 sp-application-crypto = { version = "23.0.0", default-features = false, path = "../../primitives/application-crypto", features = ["serde"]  }

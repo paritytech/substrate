@@ -204,6 +204,8 @@ enum Genesis<G> {
 }
 
 /// A configuration of a client. Does not include runtime storage initialization.
+/// Note: `genesis` and `code` are ignored due to way how the chain specification is serialized into JSON file. Refer to
+/// [`ChainSpecJsonContainer`], which flattens [`ClientSpec`] and denies uknown fields.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 struct ClientSpec<E> {
@@ -867,7 +869,6 @@ mod tests {
 
 	#[test]
 	fn generate_chain_spec_with_patch_works() {
-		sp_tracing::try_init_simple();
 		let output: ChainSpec<()> = ChainSpecBuilder::new()
 			.with_name("TestName")
 			.with_id("test_id")
@@ -913,7 +914,6 @@ mod tests {
 
 	#[test]
 	fn generate_chain_spec_with_full_config_works() {
-		sp_tracing::try_init_simple();
 		let j =
 			include_str!("../../../test-utils/runtime/src/test_json/default_genesis_config.json");
 		let output: ChainSpec<()> = ChainSpecBuilder::new()
@@ -945,7 +945,6 @@ mod tests {
 
 	#[test]
 	fn chain_spec_as_json_fails_with_invalid_config() {
-		sp_tracing::try_init_simple();
 		let j = include_str!(
 			"../../../test-utils/runtime/src/test_json/default_genesis_config_invalid_2.json"
 		);
@@ -966,7 +965,6 @@ mod tests {
 
 	#[test]
 	fn chain_spec_as_json_fails_with_invalid_patch() {
-		sp_tracing::try_init_simple();
 		let output: ChainSpec<()> = ChainSpecBuilder::new()
 			.with_name("TestName")
 			.with_id("test_id")

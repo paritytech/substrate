@@ -861,7 +861,6 @@ fn should_import_block_with_test_client() {
 #[test]
 fn default_config_as_json_works() {
 	sp_tracing::try_init_simple();
-	// let mut t = BasicExternalities::new_empty();
 	let mut t = new_test_ext(compact_code_unwrap());
 	let r = executor_call(&mut t, "GenesisBuilder_create_default_config", &vec![], false)
 		.0

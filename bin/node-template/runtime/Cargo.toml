@@ -38,6 +38,7 @@ sp-std = { version = "8.0.0", default-features = false, path = "../../../primiti
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "22.0.0", default-features = false, path = "../../../primitives/version", features=["serde"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["alloc"] }
+sp-genesis-builder = { version = "0.1.0-dev", default-features = false, path = "../../../primitives/genesis-builder" }
 
 # Used for the node template's RPCs
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
@@ -87,6 +88,8 @@ std = [
 	"sp-transaction-pool/std",
 	"sp-version/std",
 	"substrate-wasm-builder",
+	"serde_json/std",
+	"sp-genesis-builder/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
@@ -113,3 +116,6 @@ try-runtime = [
 	"pallet-timestamp/try-runtime",
 	"pallet-transaction-payment/try-runtime",
 ]
+
+#Enabling this flag will disable GenesisBuilder API implementation in runtime.
+disable-genesis-builder = []
