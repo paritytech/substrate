@@ -14,7 +14,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 pallet-example-basic = { default-features = false, path = "./basic" }
 pallet-default-config-example = { default-features = false, path = "./default-config" }
-pallet-example-offchain-worker = { default-features = false, path = "./offchain-worker" }
+pallet-example-offchain-worker-ping-pong = { default-features = false, path = "./offchain-worker-ping-pong" }
+pallet-example-offchain-worker-price-oracle = { default-features = false, path = "./offchain-worker-price-oracle" }
 pallet-example-kitchensink = { default-features = false, path = "./kitchensink" }
 pallet-dev-mode = { default-features = false, path = "./dev-mode" }
 pallet-example-split = { default-features = false, path = "./split" }
@@ -24,7 +25,8 @@ default = [ "std" ]
 std = [
     "pallet-example-basic/std",
     "pallet-default-config-example/std",
-    "pallet-example-offchain-worker/std",
+    "pallet-example-offchain-worker-ping-pong/std",
+    "pallet-example-offchain-worker-price-oracle/std",
     "pallet-example-kitchensink/std",
     "pallet-dev-mode/std",
     "pallet-example-split/std",
@@ -32,7 +34,8 @@ std = [
 try-runtime = [
     "pallet-example-basic/try-runtime",
     "pallet-default-config-example/try-runtime",
-    "pallet-example-offchain-worker/try-runtime",
+    "pallet-example-offchain-worker-ping-pong/try-runtime",
+    "pallet-example-offchain-worker-price-oracle/try-runtime",
     "pallet-example-kitchensink/try-runtime",
     "pallet-dev-mode/try-runtime",
     "pallet-example-split/try-runtime",

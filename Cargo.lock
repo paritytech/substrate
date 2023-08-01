@@ -6227,7 +6227,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-example-offchain-worker"
+name = "pallet-example-offchain-worker-ping-pong"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "lite-json",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-keystore",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-example-offchain-worker-price-oracle"
 version = "4.0.0-dev"
 dependencies = [
  "frame-support",
@@ -6266,7 +6283,8 @@ dependencies = [
  "pallet-dev-mode",
  "pallet-example-basic",
  "pallet-example-kitchensink",
- "pallet-example-offchain-worker",
+ "pallet-example-offchain-worker-ping-pong",
+ "pallet-example-offchain-worker-price-oracle",
  "pallet-example-split",
 ]
 

@@ -321,7 +321,9 @@ test-frame-examples-compile-to-wasm:
     RUST_BACKTRACE: 1
   script:
     - rusty-cachier snapshot create
-    - cd ./frame/examples/offchain-worker/
+    - cd ./frame/examples/offchain-worker-ping-pong/
+    - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
+    - cd ../offchain-worker-price-oracle/
     - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
     - cd ../basic
     - cargo build --locked --target=wasm32-unknown-unknown --no-default-features
