@@ -244,19 +244,18 @@ pub mod pallet {
 		/// Submit new price to the list via unsigned transaction.
 		///
 		/// Works exactly like the `submit_price` function, but since we allow sending the
-		/// transaction without a signature, and hence without paying any fees,
-		/// we need a way to make sure that only some transactions are accepted.
-		/// This function can be called only once every `T::UnsignedInterval` blocks.
-		/// Transactions that call that function are de-duplicated on the pool level
-		/// via `validate_unsigned` implementation and also are rendered invalid if
-		/// the function has already been called in current "session".
+		/// transaction without a signature, and hence without paying any fees, we need a way to
+		/// make sure that only some transactions are accepted. This function can be called only
+		/// once every `T::UnsignedInterval` blocks. Transactions that call that function are
+		/// de-duplicated on the pool level via `validate_unsigned` implementation and also are
+		/// rendered invalid if the function has already been called in current "session".
 		///
-		/// It's important to specify `weight` for unsigned calls as well, because even though
-		/// they don't charge fees, we still don't want a single block to contain unlimited
-		/// number of such transactions.
+		/// It's important to specify `weight` for unsigned calls as well,
+		/// because even though they don't charge fees, we still don't want a single block to
+		/// contain unlimited number of such transactions.
 		///
-		/// This example is not focused on correctness of the oracle itself, but rather its
-		/// purpose is to showcase offchain worker capabilities.
+		/// This example is not focused on correctness of the oracle itself, but rather its purpose
+		/// is to showcase offchain worker capabilities.
 		#[pallet::call_index(1)]
 		#[pallet::weight({0})]
 		pub fn submit_price_unsigned(
@@ -322,7 +321,8 @@ pub mod pallet {
 			/// The new price.
 			price: u32,
 			/// The account who updated the price, if any.
-			maybe_who: Option<T::AccountId> },
+			maybe_who: Option<T::AccountId>,
+		},
 	}
 
 	#[pallet::validate_unsigned]
