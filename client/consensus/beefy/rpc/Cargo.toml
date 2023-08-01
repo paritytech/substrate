@@ -11,7 +11,7 @@ homepage = "https://substrate.io"
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.6.1", features = ["derive"] }
 futures = "0.3.21"
-jsonrpsee = { version = "0.16.2", features = ["client-core", "server", "macros"] }
+jsonrpsee = { version = "0.19.0", features = ["client-core", "server", "macros"] }
 log = "0.4"
 parking_lot = "0.12.1"
 serde = { version = "1.0.163", features = ["derive"] }
