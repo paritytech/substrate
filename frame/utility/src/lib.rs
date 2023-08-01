@@ -203,7 +203,7 @@ pub mod pallet {
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			// Do not allow the `None` origin.
-			if ensure_none(origin.clone()).is_ok() {
+			if ensure_unsigned(origin.clone()).is_ok() {
 				return Err(BadOrigin.into())
 			}
 
@@ -325,7 +325,7 @@ pub mod pallet {
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			// Do not allow the `None` origin.
-			if ensure_none(origin.clone()).is_ok() {
+			if ensure_unsigned(origin.clone()).is_ok() {
 				return Err(BadOrigin.into())
 			}
 
@@ -434,7 +434,7 @@ pub mod pallet {
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			// Do not allow the `None` origin.
-			if ensure_none(origin.clone()).is_ok() {
+			if ensure_unsigned(origin.clone()).is_ok() {
 				return Err(BadOrigin.into())
 			}
 

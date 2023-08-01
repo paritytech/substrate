@@ -70,7 +70,7 @@ mod pallet_test {
 		#[pallet::call_index(1)]
 		#[pallet::weight({0})]
 		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
-			let _sender = ensure_none(origin)?;
+			let _sender = ensure_unsigned(origin)?;
 			Ok(())
 		}
 	}

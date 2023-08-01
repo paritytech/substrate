@@ -770,7 +770,7 @@ mod tests {
 			}
 
 			pub fn some_unsigned_message(origin: OriginFor<T>) -> DispatchResult {
-				frame_system::ensure_none(origin)?;
+				frame_system::ensure_unsigned(origin)?;
 				Ok(())
 			}
 
@@ -786,7 +786,7 @@ mod tests {
 
 			#[pallet::weight((0, DispatchClass::Mandatory))]
 			pub fn inherent_call(origin: OriginFor<T>) -> DispatchResult {
-				frame_system::ensure_none(origin)?;
+				frame_system::ensure_unsigned(origin)?;
 				Ok(())
 			}
 

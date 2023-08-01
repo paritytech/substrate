@@ -126,7 +126,7 @@
 //!
 //! // What origins are used and supported in this pallet (root, signed, none)
 //! // i.e. root when <code>\`ensure_root\`</code> used
-//! // i.e. none when <code>\`ensure_none\`</code> used
+//! // i.e. none when <code>\`ensure_unsigned\`</code> used
 //! // i.e. signed when <code>\`ensure_signed\`</code> used
 //!
 //! <code>\`inherent\`</code> <INSERT_DESCRIPTION>
@@ -440,7 +440,7 @@ pub mod pallet {
 	// to the above bullets: `::Signed(AccountId)`, `::Root` and `::None`. You should always match
 	// against them as the first thing you do in your function. There are three convenience calls
 	// in system that do the matching for you and return a convenient result: `ensure_signed`,
-	// `ensure_root` and `ensure_none`.
+	// `ensure_root` and `ensure_unsigned`.
 	#[pallet::call(weight(<T as Config>::WeightInfo))]
 	impl<T: Config> Pallet<T> {
 		/// This is your public interface. Be extremely careful.
