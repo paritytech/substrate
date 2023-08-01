@@ -310,19 +310,22 @@ pub mod pallet {
 		Staking,
 	}
 
-	/// Allows the pallet to validate some unsigned transaction. See
-	/// [`sp_runtime::traits::ValidateUnsigned`] for more info.
+	/// Allows the pallet to validate some unsigned transaction. See [`sp_runtime::traits::ValidateUnsigned`] for more info.
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
-		fn validate_unsigned(_: TransactionSource, _: &Self::Call) -> TransactionValidity {
+
+		/// Validates an unsigned transaction.
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			unimplemented!()
 		}
 
-		fn pre_dispatch(_: &Self::Call) -> Result<(), TransactionValidityError> {
+		/// Pre-dispatch checks for an unsigned call.
+		fn pre_dispatch(call: &Self::Call) -> Result<(), TransactionValidityError> {
 			unimplemented!()
 		}
 	}
+
 
 	/// Allows the pallet to provide some inherent. See [`frame_support::inherent::ProvideInherent`]
 	/// for more info.
@@ -331,13 +334,16 @@ pub mod pallet {
 		type Call = Call<T>;
 		type Error = MakeFatalError<()>;
 
+		/// The inherent identifier used to recognize the inherent in the runtime.
 		const INHERENT_IDENTIFIER: [u8; 8] = *b"test1234";
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+		/// Creates an inherent call based on the given inherent data.
+		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
 
-		fn is_inherent(_call: &Self::Call) -> bool {
+		/// Checks if the given call is an inherent call for this pallet.
+		fn is_inherent(call: &Self::Call) -> bool {
 			unimplemented!()
 		}
 	}
