@@ -384,7 +384,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Block as BlockT, NumberFor},
 	DeserializeOwned, Digest,
 };
-use sp_state_machine::{CompactProof, OverlayedChanges, StateMachine, TrieBackendBuilder};
+use sp_state_machine::{CompactProof, StateMachine, TrieBackendBuilder};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
@@ -854,16 +854,15 @@ fn ensure_try_runtime<Block: BlockT, HostFns: HostFunctions>(
 /// Execute the given `method` and `data` on top of `ext`, returning the results (encoded) and the
 /// state `changes`.
 pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
-	ext: &TestExternalities,
+	ext: &mut TestExternalities,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
 	mut extensions: Extensions,
-) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
-	let mut changes = Default::default();
+) -> sc_cli::Result<((), Vec<u8>)> {
 	let encoded_results = StateMachine::new(
 		&ext.backend,
-		&mut changes,
+		&mut ext.overlay,
 		executor,
 		method,
 		data,
@@ -875,7 +874,7 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
-	Ok((changes, encoded_results))
+	Ok(((), encoded_results))
 }
 
 /// Same as [`state_machine_call`], but it also computes and prints the storage proof in different
@@ -883,26 +882,25 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 ///
 /// Make sure [`LOG_TARGET`] is enabled in logging.
 pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunctions>(
-	ext: &TestExternalities,
+	ext: &mut TestExternalities,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
 	mut extensions: Extensions,
 	maybe_export_proof: Option<PathBuf>,
-) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
+) -> sc_cli::Result<((), Vec<u8>)> {
 	use parity_scale_codec::Encode;
 
-	let mut changes = Default::default();
-	let backend = ext.backend.clone();
+	let backend = ext.as_backend();
 	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 	let proving_backend =
 		TrieBackendBuilder::wrap(&backend).with_recorder(Default::default()).build();
 	let runtime_code = runtime_code_backend.runtime_code()?;
 
-	let pre_root = *backend.root();
+	let pre_root = *ext.as_backend().root();
 	let encoded_results = StateMachine::new(
 		&proving_backend,
-		&mut changes,
+		&mut ext.overlay,
 		executor,
 		method,
 		data,
@@ -996,7 +994,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 
 	log::debug!(target: LOG_TARGET, "{} executed without errors.", method);
 
-	Ok((changes, encoded_results))
+	Ok(((), encoded_results))
 }
 
 pub(crate) fn rpc_err_handler(error: impl Debug) -> &'static str {

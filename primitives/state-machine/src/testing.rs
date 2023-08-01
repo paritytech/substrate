@@ -45,7 +45,7 @@ where
 	H::Out: codec::Codec + Ord,
 {
 	/// The overlay changed storage.
-	overlay: OverlayedChanges,
+	pub overlay: OverlayedChanges,
 	offchain_db: TestPersistentOffchainDB,
 	storage_transaction_cache:
 		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H>,

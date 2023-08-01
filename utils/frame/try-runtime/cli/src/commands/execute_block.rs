@@ -97,7 +97,7 @@ where
 	HostFns: HostFunctions,
 {
 	let executor = build_executor::<HostFns>(&shared);
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
+	let mut ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
 	// get the block number associated with this block.
 	let block_ws_uri = command.block_ws_uri::<Block>();
@@ -127,7 +127,7 @@ where
 	let payload = (block.clone(), state_root_check, signature_check, command.try_state).encode();
 
 	let _ = state_machine_call_with_proof::<Block, HostFns>(
-		&ext,
+		&mut ext,
 		&executor,
 		"TryRuntime_execute_block",
 		&payload,
