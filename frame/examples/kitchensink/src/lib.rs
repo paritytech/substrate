@@ -208,7 +208,8 @@ pub mod pallet {
 	/// macro takes care of the marshalling of arguments and dispatch.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// A simple dispatchable that takes a single `u32` argument, writes it to storage, emits an event.
+		/// A simple dispatchable that takes a single `u32` argument, writes it to storage, emits an
+		/// event.
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set_foo_benchmark())]
 		pub fn set_foo(
@@ -224,9 +225,9 @@ pub mod pallet {
 
 	/// The event type. This is exactly like a normal Rust enum.
 	///
-	/// It can be generic over `<T: Config>` but does not have to be. Note that unlike a normal enum, if none of
-	/// the variants actually use `<T: Config>`, the macro will generate a hidden `PhantomData`
-	/// variant.
+	/// It can be generic over `<T: Config>` but does not have to be. Note that unlike a normal
+	/// enum, if none of the variants actually use `<T: Config>`, the macro will generate a hidden
+	/// `PhantomData` variant.
 	///
 	/// The `generate_deposit` macro generates a function on `Pallet` called `deposit_event` which
 	/// will properly convert the error type of your pallet into `RuntimeEvent` (recall `type
@@ -243,7 +244,7 @@ pub mod pallet {
 			/// Some number.
 			at: u32,
 			/// Some account.
-			to: T::AccountId
+			to: T::AccountId,
 		},
 		/// Another variant.
 		SomeoneJoined(T::AccountId),

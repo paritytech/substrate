@@ -531,12 +531,14 @@ pub mod pallet {
 
 		/// A privileged call. In this case, it resets our dummy value to something new.
 		///
-		/// The `origin` parameter is ROOT because it's not (directly) from an extrinsic, but rather the system as a whole
-		/// has decided to execute it. Different runtimes have different reasons for allowing privileged calls to be executed - we don't need
-		/// to care why. Because it's privileged, we can assume it's a one-off operation, and substantial processing/storage/memory can be used without worrying about gameability or attack scenarios.
+		/// The `origin` parameter is ROOT because it's not (directly) from an extrinsic, but rather
+		/// the system as a whole has decided to execute it. Different runtimes have different
+		/// reasons for allowing privileged calls to be executed - we don't need to care why.
+		/// Because it's privileged, we can assume it's a one-off operation, and substantial
+		/// processing/storage/memory can be used without worrying about gameability or attack
+		/// scenarios.
 		///
-		/// The weight for this extrinsic, we use our own weight object `WeightForSetDummy` to
-		/// determine its weight.
+		/// We use our own weight object `WeightForSetDummy` to determine the weight of this call.
 		#[pallet::call_index(1)]
 		#[pallet::weight(WeightForSetDummy::<T>(<BalanceOf<T>>::from(100u32)))]
 		pub fn set_dummy(
@@ -562,7 +564,7 @@ pub mod pallet {
 	}
 
 	/// The Dummy events enum which is just a normal Rust `enum`.
-	/// 
+	///
 	/// Events are a simple means of reporting specific conditions and
 	/// circumstances that have happened that users, Dapps and/or chain explorers would find
 	/// interesting and otherwise difficult to detect.

@@ -29,7 +29,7 @@ mod events {
 			/// The new value stored.
 			something: u32,
 			/// The account ID of the caller.
-			who: T::AccountId
+			who: T::AccountId,
 		},
 	}
 }
