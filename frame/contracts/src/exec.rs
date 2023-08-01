@@ -2521,7 +2521,7 @@ mod tests {
 					),
 					Ok((address, ref output)) if output.data == vec![80, 65, 83, 83] => address
 				);
-				let meter_storage_deposit = 147;
+				let meter_storage_deposit = 132;
 
 				// Check that the newly created account has the expected code hash and
 				// there are instantiation event.
@@ -2634,7 +2634,7 @@ mod tests {
 					min_balance * 10,
 				)
 				.unwrap();
-				let meter_storage_deposit = 147;
+				let meter_storage_deposit = 132;
 
 				assert_matches!(
 					MockStack::run_call(

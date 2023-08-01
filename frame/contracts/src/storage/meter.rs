@@ -389,7 +389,6 @@ where
 	///
 	/// This drops the root meter in order to make sure it is only called when the whole
 	/// execution did finish.
-
 	pub fn try_into_deposit(self, origin: &Origin<T>) -> Result<DepositOf<T>, DispatchError> {
 		// Only refund or charge deposit if the origin is not root.
 		let origin = match origin {
@@ -455,15 +454,25 @@ where
 		// contract execution does conclude and hence would lead to a double charge.
 		self.total_deposit = deposit.clone();
 
-		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
-		// However, we need to charge immediately so that the account is created before
-		// charges possibly below the ed are collected and fail.
-		E::charge(origin, contract, &deposit.saturating_sub(&Deposit::Charge(ed)), false)?;
+		// We also need to make sure that the contract's account itself exists.
+		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
 
 		System::<T>::inc_consumers(contract)?;
 
-		// We also need to make sure that the contract's account itself exists.
-		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
+		E::charge(origin, contract, &deposit.saturating_sub(&Deposit::Charge(ed)), false)?;
+
+		// TODO: should the `ed` be transferred back to the origin in case the charge fails?
+		// .map_err(|e| {
+		// 	let _ = T::Currency::transfer(
+		// 		contract,
+		// 		origin,
+		// 		transferred_ed,
+		// 		Preservation::Expendable,
+		// 	)
+		// 	.map_err(|e| e);
+		// 	System::<T>::dec_consumers(contract);
+		// 	e
+		// });
 
 		Ok(deposit)
 	}
@@ -562,6 +571,7 @@ impl<T: Config> Ext<T> for ReservingExt {
 					Fortitude::Polite,
 				)
 				.map_err(|e| {
+					// TODO: handle partial mutation rollback
 					let _ = System::<T>::dec_providers(contract);
 					e
 				})?;
