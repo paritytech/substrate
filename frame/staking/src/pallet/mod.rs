@@ -24,8 +24,8 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, DefensiveResult, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
-		LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
+		Currency, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
+		EstimateNextNewSession, Get, LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
 	},
 	weights::Weight,
 	BoundedVec,

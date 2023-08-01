@@ -149,7 +149,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 						.defensive_proof("Nominator's position in voter list updated; qed."); // TODO(gpestana): check this defensive out
 
 					if let Some(prev_stake) = prev_stake {
-						// updates vote weight of nominatied targets accordingly.
+						// updates vote weight of nominated targets accordingly.
 						let prev_voter_weight = Self::to_vote(prev_stake.active);
 
 						let stake_imbalance = if prev_voter_weight > voter_weight {
@@ -251,6 +251,9 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		slashed_active: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<sp_staking::EraIndex, BalanceOf<T>>,
 	) {
+
+        println!("wer're on slash bb: {stash}");
+
 		let slashed_amount: BalanceOf<T> = slashed_unlocking
 			.values()
 			.fold(Default::default(), |acc: BalanceOf<T>, u| acc.saturating_add(*u))

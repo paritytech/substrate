@@ -5,7 +5,9 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Zero, Perquintill, Rounding, Saturating};
-use sp_staking::{EraIndex, OnStakingUpdate, Stake, StakingAccount};
+use sp_staking::{
+	EraIndex, OnStakingUpdate, Stake, StakerStatus, StakingAccount, StakingInterface,
+};
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{log, BalanceOf, Bonded, Config, Error, Ledger, UnlockChunk, STAKING_ID};
@@ -158,13 +160,13 @@ impl<T: Config> StakingLedger<T> {
 	/// Note: To ensure lock consistency, all the [`Ledger`] storage updates should be made through
 	/// this helper function.
 	pub(crate) fn update(&self) -> Result<(), Error<T>> {
-		let mut prev_stake: Stake<BalanceOf<T>> = self.into();
+		let mut prev_stake = Some(self.into());
 
 		if !<Bonded<T>>::contains_key(&self.stash) {
 			// not bonded yet, new ledger. Note: controllers are deprecated, stash is the
 			// controller.
 			<Bonded<T>>::insert(&self.stash, &self.stash);
-			prev_stake = Stake::default();
+			prev_stake = None;
 		}
 
 		T::Currency::set_lock(STAKING_ID, &self.stash, self.total, WithdrawReasons::all());
@@ -172,7 +174,7 @@ impl<T: Config> StakingLedger<T> {
 
 		<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_stake_update(
 			&self.stash,
-			Some(prev_stake),
+			prev_stake,
 		);
 
 		Ok(())
@@ -198,9 +200,6 @@ impl<T: Config> StakingLedger<T> {
 		// call on validator remove or on nominator remove
 		// Note: does this need to be called *before* the ledger remove?? probably not,
 		// we just need to pass the nominations if nominator in
-
-		//<T::EventListeners as OnStakingUpdate::<T::AccountId, BalanceOf<T>>>::on_
-		use sp_staking::{StakerStatus, StakingInterface};
 
 		match crate::Pallet::<T>::status(stash).defensive_unwrap_or(StakerStatus::Idle) {
 			StakerStatus::Validator => <T::EventListeners as OnStakingUpdate<

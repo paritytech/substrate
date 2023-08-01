@@ -977,10 +977,20 @@ impl<T: Config> Pallet<T> {
 			<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_validator_remove(
 				who,
 			);
+            Validators::<T>::remove(who);
 			true
 		} else {
 			false
 		};
+
+        println!("");
+        println!("Removed validator who {who}: ({outcome})");
+        println!("> nominators:");
+        let _: Vec<_> = Nominators::<T>::iter().map(|n| println!("{:?}", n)).collect();
+        println!("> validators:");
+        let _: Vec<_> = Validators::<T>::iter().map(|n| println!("{:?}", n)).collect();
+        println!("> voterlist");
+        let _: Vec<_> = T::VoterList::iter().map(|n| println!("{:?}", n)).collect();
 
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
