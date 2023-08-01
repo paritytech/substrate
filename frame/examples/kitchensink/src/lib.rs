@@ -310,7 +310,8 @@ pub mod pallet {
 		Staking,
 	}
 
-	/// Allows the pallet to validate some unsigned transaction. See [`sp_runtime::traits::ValidateUnsigned`] for more info.
+	/// Allows the pallet to validate some unsigned transaction. See
+	/// [`sp_runtime::traits::ValidateUnsigned`] for more info.
 	#[pallet::validate_unsigned]
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
@@ -325,7 +326,6 @@ pub mod pallet {
 			unimplemented!()
 		}
 	}
-
 
 	/// Allows the pallet to provide some inherent. See [`frame_support::inherent::ProvideInherent`]
 	/// for more info.
