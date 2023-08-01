@@ -21,7 +21,9 @@ use crate::{core_mask::*, mock::*, *};
 use frame_support::{
 	assert_noop, assert_ok,
 	traits::nonfungible::{Inspect as NftInspect, Transfer},
+	BoundedVec,
 };
+use sp_runtime::traits::Get;
 use CoreAssignment::*;
 use CoretimeTraceItem::*;
 use Finality::*;
@@ -648,5 +650,101 @@ fn partition_then_interlace_works() {
 				),
 			]
 		);
+	});
+}
+
+#[test]
+fn reservations_are_limited() {
+	TestExt::new().execute_with(|| {
+		let schedule = Schedule::truncate_from(vec![ScheduleItem {
+			assignment: Pool,
+			mask: CoreMask::complete(),
+		}]);
+		let max_cores: u32 = <Test as Config>::MaxReservedCores::get();
+		Reservations::<Test>::put(
+			BoundedVec::try_from(vec![schedule.clone(); max_cores as usize]).unwrap(),
+		);
+		assert_noop!(Broker::do_reserve(schedule), Error::<Test>::TooManyReservations);
+	});
+}
+
+#[test]
+fn cannot_unreserve_unknown() {
+	TestExt::new().execute_with(|| {
+		let schedule = Schedule::truncate_from(vec![ScheduleItem {
+			assignment: Pool,
+			mask: CoreMask::complete(),
+		}]);
+		Reservations::<Test>::put(BoundedVec::try_from(vec![schedule.clone(); 1usize]).unwrap());
+		assert_noop!(Broker::do_unreserve(2), Error::<Test>::UnknownReservation);
+	});
+}
+
+#[test]
+fn cannot_set_expired_lease() {
+	TestExt::new().execute_with(|| {
+		advance_to(2);
+		let current_timeslice = Broker::current_timeslice();
+		assert_noop!(
+			Broker::do_set_lease(1000, current_timeslice.saturating_sub(1)),
+			Error::<Test>::AlreadyExpired
+		);
+	});
+}
+
+#[test]
+fn leases_are_limited() {
+	TestExt::new().execute_with(|| {
+		let max_leases: u32 = <Test as Config>::MaxLeasedCores::get();
+		Leases::<Test>::put(
+			BoundedVec::try_from(vec![
+				LeaseRecordItem { task: 1u32, until: 10u32 };
+				max_leases as usize
+			])
+			.unwrap(),
+		);
+		assert_noop!(Broker::do_set_lease(1000, 10), Error::<Test>::TooManyLeases);
+	});
+}
+
+#[test]
+fn purchase_requires_valid_status_and_sale_info() {
+	TestExt::new().execute_with(|| {
+		assert_noop!(Broker::do_purchase(1, 100), Error::<Test>::Uninitialized);
+
+		let status = StatusRecord {
+			core_count: 2,
+			private_pool_size: 0,
+			system_pool_size: 0,
+			last_committed_timeslice: 0,
+			last_timeslice: 1,
+		};
+		Status::<Test>::put(&status);
+		assert_noop!(Broker::do_purchase(1, 100), Error::<Test>::NoSales);
+
+		let mut dummy_sale = SaleInfoRecord {
+			sale_start: 0,
+			leadin_length: 0,
+			price: 200,
+			sellout_price: None,
+			region_begin: 0,
+			region_end: 3,
+			first_core: 3,
+			ideal_cores_sold: 0,
+			cores_offered: 1,
+			cores_sold: 2,
+		};
+		SaleInfo::<Test>::put(&dummy_sale);
+		assert_noop!(Broker::do_purchase(1, 100), Error::<Test>::Unavailable);
+
+		dummy_sale.first_core = 1;
+		SaleInfo::<Test>::put(&dummy_sale);
+		assert_noop!(Broker::do_purchase(1, 100), Error::<Test>::SoldOut);
+
+		assert_ok!(Broker::do_start_sales(200, 1));
+		assert_noop!(Broker::do_purchase(1, 100), Error::<Test>::TooEarly);
+
+		advance_to(2);
+		assert_noop!(Broker::do_purchase(1, 100), Error::<Test>::Overpriced);
 	});
 }
