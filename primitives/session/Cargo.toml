@@ -33,4 +33,5 @@ std = [
 	"sp-staking/std",
 	"sp-std/std",
 	"sp-keystore",
+	"sp-keystore?/std"
 ]
