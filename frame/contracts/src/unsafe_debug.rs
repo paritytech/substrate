@@ -2,6 +2,8 @@ use crate::exec::ExportedFunction;
 use crate::CodeHash;
 use pallet_contracts_primitives::ExecReturnValue;
 
+/// Umbrella trait for all interfaces that serves for debugging, but are not suitable for any
+/// production or benchmarking use.
 pub trait UnsafeDebug<T: frame_system::Config>: ExecutionObserver<CodeHash<T>> {}
 
 impl<T: frame_system::Config, D> UnsafeDebug<T> for D where D: ExecutionObserver<CodeHash<T>> {}
@@ -39,3 +41,5 @@ pub trait ExecutionObserver<CodeHash> {
 	) {
 	}
 }
+
+impl<CodeHash> ExecutionObserver<CodeHash> for () {}

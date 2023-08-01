@@ -354,7 +354,7 @@ pub mod pallet {
 		type Migrations: MigrateSequence;
 
 		#[cfg(feature = "unsafe-debug")]
-		type Debug: UnsafeDebug<Self>;
+		type Debug: unsafe_debug::UnsafeDebug<Self>;
 	}
 
 	#[pallet::hooks]
