@@ -906,17 +906,19 @@ where
 			self.initial_transfer()?;
 
 			#[cfg(feature = "unsafe-debug")]
-			let code_hash = executable.code_hash().clone();
-			#[cfg(feature = "unsafe-debug")]
-			T::Debug::before_call(&code_hash, entry_point, &input_data);
+			let (code_hash, input_clone) = {
+				let code_hash = executable.code_hash().clone();
+				T::Debug::before_call(&code_hash, entry_point, &input_data);
+				(code_hash, input_data.clone())
+			};
 
 			// Call into the Wasm blob.
 			let output = executable
-				.execute(self, &entry_point, input_data.clone())
+				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
 			#[cfg(feature = "unsafe-debug")]
-			T::Debug::after_call(&code_hash, entry_point, &input_data, &output);
+			T::Debug::after_call(&code_hash, entry_point, &input_clone, &output);
 
 			// Avoid useless work that would be reverted anyways.
 			if output.did_revert() {
