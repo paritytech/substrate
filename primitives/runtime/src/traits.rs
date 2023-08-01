@@ -18,7 +18,6 @@
 //! Primitives for the runtime modules.
 
 use crate::{
-	codec::{Codec, Decode, Encode, MaxEncodedLen},
 	generic::Digest,
 	scale_info::{MetaType, StaticTypeInfo, TypeInfo},
 	transaction_validity::{
@@ -27,6 +26,7 @@ use crate::{
 	},
 	DispatchResult,
 };
+use codec::{Codec, Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use impl_trait_for_tuples::impl_for_tuples;
 #[cfg(feature = "serde")]
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -339,6 +339,33 @@ impl<T, A: TryInto<T>> TryMorph<A> for TryMorphInto<T> {
 	}
 }
 
+/// Implementation of `Morph` to retrieve just the first element of a tuple.
+pub struct TakeFirst;
+impl<T1> Morph<(T1,)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1,)) -> T1 {
+		a.0
+	}
+}
+impl<T1, T2> Morph<(T1, T2)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1, T2)) -> T1 {
+		a.0
+	}
+}
+impl<T1, T2, T3> Morph<(T1, T2, T3)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1, T2, T3)) -> T1 {
+		a.0
+	}
+}
+impl<T1, T2, T3, T4> Morph<(T1, T2, T3, T4)> for TakeFirst {
+	type Outcome = T1;
+	fn morph(a: (T1, T2, T3, T4)) -> T1 {
+		a.0
+	}
+}
+
 /// Create a `Morph` and/or `TryMorph` impls with a simple closure-like expression.
 ///
 /// # Examples
@@ -512,13 +539,25 @@ macro_rules! morph_types {
 morph_types! {
 	/// Morpher to disregard the source value and replace with another.
 	pub type Replace<V: TypedGet> = |_| -> V::Type { V::get() };
+
 	/// Mutator which reduces a scalar by a particular amount.
 	pub type ReduceBy<N: TypedGet> = |r: N::Type| -> N::Type {
 		r.checked_sub(&N::get()).unwrap_or(Zero::zero())
 	} where N::Type: CheckedSub | Zero;
+
+	/// A `TryMorph` implementation to reduce a scalar by a particular amount, checking for
+	/// underflow.
+	pub type CheckedReduceBy<N: TypedGet>: TryMorph = |r: N::Type| -> Result<N::Type, ()> {
+		r.checked_sub(&N::get()).ok_or(())
+	} where N::Type: CheckedSub;
+
+	/// A `TryMorph` implementation to enforce an upper limit for a result of the outer morphed type.
+	pub type MorphWithUpperLimit<L: TypedGet, M>: TryMorph = |r: L::Type| -> Result<L::Type, ()> {
+		M::try_morph(r).map(|m| m.min(L::get()))
+	} where L::Type: Ord, M: TryMorph<L::Type, Outcome = L::Type>;
 }
 
-/// Extensible conversion trait. Generic over both source and destination types.
+/// Infallible conversion trait. Generic over both source and destination types.
 pub trait Convert<A, B> {
 	/// Make conversion.
 	fn convert(a: A) -> B;
@@ -527,6 +566,161 @@ pub trait Convert<A, B> {
 impl<A, B: Default> Convert<A, B> for () {
 	fn convert(_: A) -> B {
 		Default::default()
+	}
+}
+
+/// Reversing infallible conversion trait. Generic over both source and destination types.
+///
+/// This specifically reverses the conversion.
+pub trait ConvertBack<A, B>: Convert<A, B> {
+	/// Make conversion back.
+	fn convert_back(b: B) -> A;
+}
+
+/// Fallible conversion trait returning an [Option]. Generic over both source and destination types.
+pub trait MaybeConvert<A, B> {
+	/// Attempt to make conversion.
+	fn maybe_convert(a: A) -> Option<B>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A: Clone, B> MaybeConvert<A, B> for Tuple {
+	fn maybe_convert(a: A) -> Option<B> {
+		for_tuples!( #(
+			match Tuple::maybe_convert(a.clone()) {
+				Some(b) => return Some(b),
+				None => {},
+			}
+		)* );
+		None
+	}
+}
+
+/// Reversing fallible conversion trait returning an [Option]. Generic over both source and
+/// destination types.
+pub trait MaybeConvertBack<A, B>: MaybeConvert<A, B> {
+	/// Attempt to make conversion back.
+	fn maybe_convert_back(b: B) -> Option<A>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A: Clone, B: Clone> MaybeConvertBack<A, B> for Tuple {
+	fn maybe_convert_back(b: B) -> Option<A> {
+		for_tuples!( #(
+			match Tuple::maybe_convert_back(b.clone()) {
+				Some(a) => return Some(a),
+				None => {},
+			}
+		)* );
+		None
+	}
+}
+
+/// Fallible conversion trait which returns the argument in the case of being unable to convert.
+/// Generic over both source and destination types.
+pub trait TryConvert<A, B> {
+	/// Attempt to make conversion. If returning [Result::Err], the inner must always be `a`.
+	fn try_convert(a: A) -> Result<B, A>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A, B> TryConvert<A, B> for Tuple {
+	fn try_convert(a: A) -> Result<B, A> {
+		for_tuples!( #(
+			let a = match Tuple::try_convert(a) {
+				Ok(b) => return Ok(b),
+				Err(a) => a,
+			};
+		)* );
+		Err(a)
+	}
+}
+
+/// Reversing fallible conversion trait which returns the argument in the case of being unable to
+/// convert back. Generic over both source and destination types.
+pub trait TryConvertBack<A, B>: TryConvert<A, B> {
+	/// Attempt to make conversion back. If returning [Result::Err], the inner must always be `b`.
+
+	fn try_convert_back(b: B) -> Result<A, B>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A, B> TryConvertBack<A, B> for Tuple {
+	fn try_convert_back(b: B) -> Result<A, B> {
+		for_tuples!( #(
+			let b = match Tuple::try_convert_back(b) {
+				Ok(a) => return Ok(a),
+				Err(b) => b,
+			};
+		)* );
+		Err(b)
+	}
+}
+
+/// Definition for a bi-directional, fallible conversion between two types.
+pub trait MaybeEquivalence<A, B> {
+	/// Attempt to convert reference of `A` into value of `B`, returning `None` if not possible.
+	fn convert(a: &A) -> Option<B>;
+	/// Attempt to convert reference of `B` into value of `A`, returning `None` if not possible.
+	fn convert_back(b: &B) -> Option<A>;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+impl<A, B> MaybeEquivalence<A, B> for Tuple {
+	fn convert(a: &A) -> Option<B> {
+		for_tuples!( #(
+			match Tuple::convert(a) {
+				Some(b) => return Some(b),
+				None => {},
+			}
+		)* );
+		None
+	}
+	fn convert_back(b: &B) -> Option<A> {
+		for_tuples!( #(
+			match Tuple::convert_back(b) {
+				Some(a) => return Some(a),
+				None => {},
+			}
+		)* );
+		None
+	}
+}
+
+/// Adapter which turns a [Get] implementation into a [Convert] implementation which always returns
+/// in the same value no matter the input.
+pub struct ConvertToValue<T>(sp_std::marker::PhantomData<T>);
+impl<X, Y, T: Get<Y>> Convert<X, Y> for ConvertToValue<T> {
+	fn convert(_: X) -> Y {
+		T::get()
+	}
+}
+impl<X, Y, T: Get<Y>> MaybeConvert<X, Y> for ConvertToValue<T> {
+	fn maybe_convert(_: X) -> Option<Y> {
+		Some(T::get())
+	}
+}
+impl<X, Y, T: Get<Y>> MaybeConvertBack<X, Y> for ConvertToValue<T> {
+	fn maybe_convert_back(_: Y) -> Option<X> {
+		None
+	}
+}
+impl<X, Y, T: Get<Y>> TryConvert<X, Y> for ConvertToValue<T> {
+	fn try_convert(_: X) -> Result<Y, X> {
+		Ok(T::get())
+	}
+}
+impl<X, Y, T: Get<Y>> TryConvertBack<X, Y> for ConvertToValue<T> {
+	fn try_convert_back(y: Y) -> Result<X, Y> {
+		Err(y)
+	}
+}
+impl<X, Y, T: Get<Y>> MaybeEquivalence<X, Y> for ConvertToValue<T> {
+	fn convert(_: &X) -> Option<Y> {
+		Some(T::get())
+	}
+	fn convert_back(_: &Y) -> Option<X> {
+		None
 	}
 }
 
@@ -542,19 +736,100 @@ impl<T> ConvertBack<T, T> for Identity {
 		a
 	}
 }
+impl<T> MaybeConvert<T, T> for Identity {
+	fn maybe_convert(a: T) -> Option<T> {
+		Some(a)
+	}
+}
+impl<T> MaybeConvertBack<T, T> for Identity {
+	fn maybe_convert_back(a: T) -> Option<T> {
+		Some(a)
+	}
+}
+impl<T> TryConvert<T, T> for Identity {
+	fn try_convert(a: T) -> Result<T, T> {
+		Ok(a)
+	}
+}
+impl<T> TryConvertBack<T, T> for Identity {
+	fn try_convert_back(a: T) -> Result<T, T> {
+		Ok(a)
+	}
+}
+impl<T: Clone> MaybeEquivalence<T, T> for Identity {
+	fn convert(a: &T) -> Option<T> {
+		Some(a.clone())
+	}
+	fn convert_back(a: &T) -> Option<T> {
+		Some(a.clone())
+	}
+}
 
 /// A structure that performs standard conversion using the standard Rust conversion traits.
 pub struct ConvertInto;
-impl<A, B: From<A>> Convert<A, B> for ConvertInto {
+impl<A: Into<B>, B> Convert<A, B> for ConvertInto {
 	fn convert(a: A) -> B {
 		a.into()
 	}
 }
+impl<A: Into<B>, B> MaybeConvert<A, B> for ConvertInto {
+	fn maybe_convert(a: A) -> Option<B> {
+		Some(a.into())
+	}
+}
+impl<A: Into<B>, B: Into<A>> MaybeConvertBack<A, B> for ConvertInto {
+	fn maybe_convert_back(b: B) -> Option<A> {
+		Some(b.into())
+	}
+}
+impl<A: Into<B>, B> TryConvert<A, B> for ConvertInto {
+	fn try_convert(a: A) -> Result<B, A> {
+		Ok(a.into())
+	}
+}
+impl<A: Into<B>, B: Into<A>> TryConvertBack<A, B> for ConvertInto {
+	fn try_convert_back(b: B) -> Result<A, B> {
+		Ok(b.into())
+	}
+}
+impl<A: Clone + Into<B>, B: Clone + Into<A>> MaybeEquivalence<A, B> for ConvertInto {
+	fn convert(a: &A) -> Option<B> {
+		Some(a.clone().into())
+	}
+	fn convert_back(b: &B) -> Option<A> {
+		Some(b.clone().into())
+	}
+}
 
-/// Extensible conversion trait. Generic over both source and destination types.
-pub trait ConvertBack<A, B>: Convert<A, B> {
-	/// Make conversion back.
-	fn convert_back(b: B) -> A;
+/// A structure that performs standard conversion using the standard Rust conversion traits.
+pub struct TryConvertInto;
+impl<A: Clone + TryInto<B>, B> MaybeConvert<A, B> for TryConvertInto {
+	fn maybe_convert(a: A) -> Option<B> {
+		a.clone().try_into().ok()
+	}
+}
+impl<A: Clone + TryInto<B>, B: Clone + TryInto<A>> MaybeConvertBack<A, B> for TryConvertInto {
+	fn maybe_convert_back(b: B) -> Option<A> {
+		b.clone().try_into().ok()
+	}
+}
+impl<A: Clone + TryInto<B>, B> TryConvert<A, B> for TryConvertInto {
+	fn try_convert(a: A) -> Result<B, A> {
+		a.clone().try_into().map_err(|_| a)
+	}
+}
+impl<A: Clone + TryInto<B>, B: Clone + TryInto<A>> TryConvertBack<A, B> for TryConvertInto {
+	fn try_convert_back(b: B) -> Result<A, B> {
+		b.clone().try_into().map_err(|_| b)
+	}
+}
+impl<A: Clone + TryInto<B>, B: Clone + TryInto<A>> MaybeEquivalence<A, B> for TryConvertInto {
+	fn convert(a: &A) -> Option<B> {
+		a.clone().try_into().ok()
+	}
+	fn convert_back(b: &B) -> Option<A> {
+		b.clone().try_into().ok()
+	}
 }
 
 /// Convenience type to work around the highly unergonomic syntax needed
@@ -684,18 +959,7 @@ pub trait Hash:
 	+ Hasher<Out = <Self as Hash>::Output>
 {
 	/// The hash type produced.
-	type Output: Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ sp_std::hash::Hash
-		+ AsRef<[u8]>
-		+ AsMut<[u8]>
-		+ Copy
-		+ Default
-		+ Encode
-		+ Decode
-		+ MaxEncodedLen
-		+ TypeInfo;
+	type Output: HashOutput;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output {
@@ -712,6 +976,47 @@ pub trait Hash:
 
 	/// The Patricia tree root of the given mapping.
 	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, state_version: StateVersion) -> Self::Output;
+}
+
+/// Super trait with all the attributes for a hashing output.
+pub trait HashOutput:
+	Member
+	+ MaybeSerializeDeserialize
+	+ MaybeDisplay
+	+ MaybeFromStr
+	+ Debug
+	+ sp_std::hash::Hash
+	+ AsRef<[u8]>
+	+ AsMut<[u8]>
+	+ Copy
+	+ Ord
+	+ Default
+	+ Encode
+	+ Decode
+	+ EncodeLike
+	+ MaxEncodedLen
+	+ TypeInfo
+{
+}
+
+impl<T> HashOutput for T where
+	T: Member
+		+ MaybeSerializeDeserialize
+		+ MaybeDisplay
+		+ MaybeFromStr
+		+ Debug
+		+ sp_std::hash::Hash
+		+ AsRef<[u8]>
+		+ AsMut<[u8]>
+		+ Copy
+		+ Ord
+		+ Default
+		+ Encode
+		+ Decode
+		+ EncodeLike
+		+ MaxEncodedLen
+		+ TypeInfo
+{
 }
 
 /// Blake2-256 Hash implementation.
@@ -732,12 +1037,12 @@ impl Hasher for BlakeTwo256 {
 impl Hash for BlakeTwo256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
-		sp_io::trie::blake2_256_root(input, version)
-	}
-
 	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
 		sp_io::trie::blake2_256_ordered_root(input, version)
+	}
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
+		sp_io::trie::blake2_256_root(input, version)
 	}
 }
 
@@ -759,12 +1064,12 @@ impl Hasher for Keccak256 {
 impl Hash for Keccak256 {
 	type Output = sp_core::H256;
 
-	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
-		sp_io::trie::keccak_256_root(input, version)
-	}
-
 	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
 		sp_io::trie::keccak_256_ordered_root(input, version)
+	}
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
+		sp_io::trie::keccak_256_root(input, version)
 	}
 }
 
@@ -849,31 +1154,24 @@ pub trait IsMember<MemberId> {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Header:
+	Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + TypeInfo + 'static
+{
 	/// Header number.
 	type Number: Member
 		+ MaybeSerializeDeserialize
+		+ MaybeFromStr
 		+ Debug
 		+ sp_std::hash::Hash
 		+ Copy
 		+ MaybeDisplay
 		+ AtLeast32BitUnsigned
-		+ Codec
-		+ sp_std::str::FromStr;
-	/// Header hash type
-	type Hash: Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ sp_std::hash::Hash
-		+ Ord
-		+ Copy
-		+ MaybeDisplay
 		+ Default
-		+ SimpleBitOps
-		+ Codec
-		+ AsRef<[u8]>
-		+ AsMut<[u8]>
-		+ TypeInfo;
+		+ TypeInfo
+		+ MaxEncodedLen
+		+ FullCodec;
+	/// Header hash type
+	type Hash: HashOutput;
 	/// Hashing algorithm
 	type Hashing: Hash<Output = Self::Hash>;
 
@@ -917,29 +1215,52 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 's
 	}
 }
 
+// Something that provides the Header Type. Only for internal usage and should only be used
+// via `HeaderFor` or `BlockNumberFor`.
+//
+// This is needed to fix the "cyclical" issue in loading Header/BlockNumber as part of a
+// `pallet::call`. Essentially, `construct_runtime` aggregates all calls to create a `RuntimeCall`
+// that is then used to define `UncheckedExtrinsic`.
+// ```ignore
+// pub type UncheckedExtrinsic =
+// 	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+// ```
+// This `UncheckedExtrinsic` is supplied to the `Block`.
+// ```ignore
+// pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+// ```
+// So, if we do not create a trait outside of `Block` that doesn't have `Extrinsic`, we go into a
+// recursive loop leading to a build error.
+//
+// Note that this is a workaround for a compiler bug and should be removed when the compiler
+// bug is fixed.
+#[doc(hidden)]
+pub trait HeaderProvider {
+	/// Header type.
+	type HeaderT: Header;
+}
+
 /// Something which fulfills the abstract idea of a Substrate block. It has types for
 /// `Extrinsic` pieces of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'static {
+pub trait Block:
+	HeaderProvider<HeaderT = <Self as Block>::Header>
+	+ Clone
+	+ Send
+	+ Sync
+	+ Codec
+	+ Eq
+	+ MaybeSerialize
+	+ Debug
+	+ 'static
+{
 	/// Type for extrinsics.
 	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	/// Header type.
-	type Header: Header<Hash = Self::Hash>;
+	type Header: Header<Hash = Self::Hash> + MaybeSerializeDeserialize;
 	/// Block hash type.
-	type Hash: Member
-		+ MaybeSerializeDeserialize
-		+ Debug
-		+ sp_std::hash::Hash
-		+ Ord
-		+ Copy
-		+ MaybeDisplay
-		+ Default
-		+ SimpleBitOps
-		+ Codec
-		+ AsRef<[u8]>
-		+ AsMut<[u8]>
-		+ TypeInfo;
+	type Hash: HashOutput;
 
 	/// Returns a reference to the header.
 	fn header(&self) -> &Self::Header;
@@ -961,14 +1282,14 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerialize + Debug + 'st
 /// Something that acts like an `Extrinsic`.
 pub trait Extrinsic: Sized {
 	/// The function call.
-	type Call;
+	type Call: TypeInfo;
 
 	/// The payload we carry for signed extrinsics.
 	///
 	/// Usually it will contain a `Signature` and
 	/// may include some additional data that are specific to signed
 	/// extrinsics.
-	type SignaturePayload;
+	type SignaturePayload: SignaturePayload;
 
 	/// Is this `Extrinsic` signed?
 	/// If no information are available about signed/unsigned, `None` should be returned.
@@ -987,6 +1308,31 @@ pub trait Extrinsic: Sized {
 	}
 }
 
+/// Something that acts like a [`SignaturePayload`](Extrinsic::SignaturePayload) of an
+/// [`Extrinsic`].
+pub trait SignaturePayload {
+	/// The type of the address that signed the extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type SignatureAddress: TypeInfo;
+
+	/// The signature type of the extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type Signature: TypeInfo;
+
+	/// The additional data that is specific to the signed extrinsic.
+	///
+	/// Particular to a signed extrinsic.
+	type SignatureExtra: TypeInfo;
+}
+
+impl SignaturePayload for () {
+	type SignatureAddress = ();
+	type Signature = ();
+	type SignatureExtra = ();
+}
+
 /// Implementor is an [`Extrinsic`] and provides metadata about this extrinsic.
 pub trait ExtrinsicMetadata {
 	/// The format version of the `Extrinsic`.
@@ -999,7 +1345,7 @@ pub trait ExtrinsicMetadata {
 }
 
 /// Extract the hashing type for a block.
-pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
+pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Extract the digest type for a block.
@@ -1762,7 +2108,7 @@ macro_rules! impl_opaque_keys_inner {
 /// }
 /// ```
 #[macro_export]
-#[cfg(feature = "std")]
+#[cfg(any(feature = "serde", feature = "std"))]
 macro_rules! impl_opaque_keys {
 	{
 		$( #[ $attr:meta ] )*
@@ -1792,7 +2138,7 @@ macro_rules! impl_opaque_keys {
 }
 
 #[macro_export]
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), not(feature = "serde")))]
 #[doc(hidden)]
 macro_rules! impl_opaque_keys {
 	{

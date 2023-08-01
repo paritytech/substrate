@@ -75,7 +75,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		let frame_system = &def.frame_system;
 		quote::quote! {
 			impl<#type_impl_gen>
-				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+				#frame_support::traits::Hooks<#frame_system::pallet_prelude::BlockNumberFor::<T>>
 				for #pallet_ident<#type_use_gen> #where_clause {}
 		}
 	} else {
@@ -105,7 +105,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 					current_version,
 				);
 
-				return Err("On chain and current storage version do not match. Missing runtime upgrade?");
+				return Err("On chain and current storage version do not match. Missing runtime upgrade?".into());
 			}
 		}
 	} else {
@@ -128,7 +128,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				);
 
 				return Err("On chain storage version set, while the pallet doesn't \
-							have the `#[pallet::storage_version(VERSION)]` attribute.");
+							have the `#[pallet::storage_version(VERSION)]` attribute.".into());
 			}
 		}
 	};
@@ -137,50 +137,50 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		#hooks_impl
 
 		impl<#type_impl_gen>
-			#frame_support::traits::OnFinalize<<T as #frame_system::Config>::BlockNumber>
+			#frame_support::traits::OnFinalize<#frame_system::pallet_prelude::BlockNumberFor::<T>>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
-			fn on_finalize(n: <T as #frame_system::Config>::BlockNumber) {
+			fn on_finalize(n: #frame_system::pallet_prelude::BlockNumberFor::<T>) {
 				#frame_support::sp_tracing::enter_span!(
 					#frame_support::sp_tracing::trace_span!("on_finalize")
 				);
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						#frame_system::pallet_prelude::BlockNumberFor::<T>
 					>
 				>::on_finalize(n)
 			}
 		}
 
 		impl<#type_impl_gen>
-			#frame_support::traits::OnIdle<<T as #frame_system::Config>::BlockNumber>
+			#frame_support::traits::OnIdle<#frame_system::pallet_prelude::BlockNumberFor::<T>>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_idle(
-				n: <T as #frame_system::Config>::BlockNumber,
+				n: #frame_system::pallet_prelude::BlockNumberFor::<T>,
 				remaining_weight: #frame_support::weights::Weight
 			) -> #frame_support::weights::Weight {
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						#frame_system::pallet_prelude::BlockNumberFor::<T>
 					>
 				>::on_idle(n, remaining_weight)
 			}
 		}
 
 		impl<#type_impl_gen>
-			#frame_support::traits::OnInitialize<<T as #frame_system::Config>::BlockNumber>
+			#frame_support::traits::OnInitialize<#frame_system::pallet_prelude::BlockNumberFor::<T>>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn on_initialize(
-				n: <T as #frame_system::Config>::BlockNumber
+				n: #frame_system::pallet_prelude::BlockNumberFor::<T>
 			) -> #frame_support::weights::Weight {
 				#frame_support::sp_tracing::enter_span!(
 					#frame_support::sp_tracing::trace_span!("on_initialize")
 				);
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						#frame_system::pallet_prelude::BlockNumberFor::<T>
 					>
 				>::on_initialize(n)
 			}
@@ -205,40 +205,40 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						#frame_system::pallet_prelude::BlockNumberFor::<T>
 					>
 				>::on_runtime_upgrade()
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, &'static str> {
+			fn pre_upgrade() -> Result<#frame_support::sp_std::vec::Vec<u8>, #frame_support::sp_runtime::TryRuntimeError> {
 				<
 					Self
 					as
-					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+					#frame_support::traits::Hooks<#frame_system::pallet_prelude::BlockNumberFor::<T>>
 				>::pre_upgrade()
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			fn post_upgrade(state: #frame_support::sp_std::vec::Vec<u8>) -> Result<(), #frame_support::sp_runtime::TryRuntimeError> {
 				#post_storage_version_check
 
 				<
 					Self
 					as
-					#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber>
+					#frame_support::traits::Hooks<#frame_system::pallet_prelude::BlockNumberFor::<T>>
 				>::post_upgrade(state)
 			}
 		}
 
 		impl<#type_impl_gen>
-			#frame_support::traits::OffchainWorker<<T as #frame_system::Config>::BlockNumber>
+			#frame_support::traits::OffchainWorker<#frame_system::pallet_prelude::BlockNumberFor::<T>>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
-			fn offchain_worker(n: <T as #frame_system::Config>::BlockNumber) {
+			fn offchain_worker(n: #frame_system::pallet_prelude::BlockNumberFor::<T>) {
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						#frame_system::pallet_prelude::BlockNumberFor::<T>
 					>
 				>::offchain_worker(n)
 			}
@@ -251,28 +251,30 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			for #pallet_ident<#type_use_gen> #where_clause
 			{
 				fn integrity_test() {
-					<
-						Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
-						>
+					#frame_support::sp_io::TestExternalities::default().execute_with(|| {
+						<
+							Self as #frame_support::traits::Hooks<
+								#frame_system::pallet_prelude::BlockNumberFor::<T>
+							>
 						>::integrity_test()
+					});
 				}
 			}
 		}
 
 		#[cfg(feature = "try-runtime")]
 		impl<#type_impl_gen>
-			#frame_support::traits::TryState<<T as #frame_system::Config>::BlockNumber>
+			#frame_support::traits::TryState<#frame_system::pallet_prelude::BlockNumberFor::<T>>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
 			fn try_state(
-				n: <T as #frame_system::Config>::BlockNumber,
+				n: #frame_system::pallet_prelude::BlockNumberFor::<T>,
 				_s: #frame_support::traits::TryStateSelect
-			) -> Result<(), &'static str> {
+			) -> Result<(), #frame_support::sp_runtime::TryRuntimeError> {
 				#log_try_state
 				<
 					Self as #frame_support::traits::Hooks<
-						<T as #frame_system::Config>::BlockNumber
+						#frame_system::pallet_prelude::BlockNumberFor::<T>
 					>
 				>::try_state(n)
 			}

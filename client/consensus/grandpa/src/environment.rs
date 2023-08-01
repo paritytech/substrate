@@ -40,6 +40,8 @@ use sc_client_api::{
 	utils::is_descendent_of,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_transaction_pool_api::OffchainTransactionPoolFactory;
+use sp_api::ApiExt;
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::SelectChain as SelectChainT;
 use sp_consensus_grandpa::{
@@ -444,6 +446,7 @@ pub(crate) struct Environment<
 	pub(crate) metrics: Option<Metrics>,
 	pub(crate) justification_sender: Option<GrandpaJustificationSender<Block>>,
 	pub(crate) telemetry: Option<TelemetryHandle>,
+	pub(crate) offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
 	pub(crate) _phantom: PhantomData<Backend>,
 }
 
@@ -570,8 +573,13 @@ where
 		// submit equivocation report at **best** block
 		let equivocation_proof = EquivocationProof::new(authority_set.set_id, equivocation);
 
-		self.client
-			.runtime_api()
+		let mut runtime_api = self.client.runtime_api();
+
+		runtime_api.register_extension(
+			self.offchain_tx_pool_factory.offchain_transaction_pool(best_block_hash),
+		);
+
+		runtime_api
 			.submit_report_equivocation_unsigned_extrinsic(
 				best_block_hash,
 				equivocation_proof,
@@ -1094,7 +1102,7 @@ where
 		finalize_block(
 			self.client.clone(),
 			&self.authority_set,
-			Some(self.config.justification_period.into()),
+			Some(self.config.justification_generation_period),
 			hash,
 			number,
 			(round, commit).into(),
@@ -1307,6 +1315,38 @@ where
 		.or_else(|| Some((target_header.hash(), *target_header.number()))))
 }
 
+/// Whether we should process a justification for the given block.
+///
+/// This can be used to decide whether to import a justification (when
+/// importing a block), or whether to generate a justification from a
+/// commit (when validating). Justifications for blocks that change the
+/// authority set will always be processed, otherwise we'll only process
+/// justifications if the last one was `justification_period` blocks ago.
+pub(crate) fn should_process_justification<BE, Block, Client>(
+	client: &Client,
+	justification_period: u32,
+	number: NumberFor<Block>,
+	enacts_change: bool,
+) -> bool
+where
+	Block: BlockT,
+	BE: BackendT<Block>,
+	Client: ClientForGrandpa<Block, BE>,
+{
+	if enacts_change {
+		return true
+	}
+
+	let last_finalized_number = client.info().finalized_number;
+
+	// keep the first justification before reaching the justification period
+	if last_finalized_number.is_zero() {
+		return true
+	}
+
+	last_finalized_number / justification_period.into() != number / justification_period.into()
+}
+
 /// Finalize the given block and apply any authority set changes. If an
 /// authority set change is enacted then a justification is created (if not
 /// given) and stored with the block when finalizing it.
@@ -1314,7 +1354,7 @@ where
 pub(crate) fn finalize_block<BE, Block, Client>(
 	client: Arc<Client>,
 	authority_set: &SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-	justification_period: Option<NumberFor<Block>>,
+	justification_generation_period: Option<u32>,
 	hash: Block::Hash,
 	number: NumberFor<Block>,
 	justification_or_commit: JustificationOrCommit<Block>,
@@ -1385,22 +1425,13 @@ where
 		let (justification_required, justification) = match justification_or_commit {
 			JustificationOrCommit::Justification(justification) => (true, justification),
 			JustificationOrCommit::Commit((round_number, commit)) => {
-				let mut justification_required =
-					// justification is always required when block that enacts new authorities
-					// set is finalized
-					status.new_set_block.is_some();
+				let enacts_change = status.new_set_block.is_some();
 
-				// justification is required every N blocks to be able to prove blocks
-				// finalization to remote nodes
-				if !justification_required {
-					if let Some(justification_period) = justification_period {
-						let last_finalized_number = client.info().finalized_number;
-						justification_required = (!last_finalized_number.is_zero() ||
-							number - last_finalized_number == justification_period) &&
-							(last_finalized_number / justification_period !=
-								number / justification_period);
-					}
-				}
+				let justification_required = justification_generation_period
+					.map(|period| {
+						should_process_justification(&*client, period, number, enacts_change)
+					})
+					.unwrap_or(enacts_change);
 
 				let justification =
 					GrandpaJustification::from_commit(&client, round_number, commit)?;

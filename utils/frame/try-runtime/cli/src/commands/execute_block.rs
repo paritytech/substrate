@@ -68,7 +68,6 @@ pub struct ExecuteBlockCmd {
 impl ExecuteBlockCmd {
 	fn block_ws_uri<Block: BlockT>(&self) -> String
 	where
-		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		match (&self.block_ws_uri, &self.state) {
@@ -91,7 +90,6 @@ pub(crate) async fn execute_block<Block, HostFns>(
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
 	Block::Hash: serde::de::DeserializeOwned,
 	Block::Header: serde::de::DeserializeOwned,

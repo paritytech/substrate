@@ -117,6 +117,11 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	///
 	/// Default implementation is that all items are transferable.
 	fn can_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> bool {
+		use PalletAttributes::TransferDisabled;
+		match Self::has_system_attribute(&collection, &item, TransferDisabled) {
+			Ok(transfer_disabled) if transfer_disabled => return false,
+			_ => (),
+		}
 		match (
 			CollectionConfigOf::<T, I>::get(collection),
 			ItemConfigOf::<T, I>::get(collection, item),
@@ -127,6 +132,18 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 				true,
 			_ => false,
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> InspectRole<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+	fn is_issuer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
+		Self::has_role(collection, who, CollectionRole::Issuer)
+	}
+	fn is_admin(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
+		Self::has_role(collection, who, CollectionRole::Admin)
+	}
+	fn is_freezer(collection: &Self::CollectionId, who: &<T as SystemConfig>::AccountId) -> bool {
+		Self::has_role(collection, who, CollectionRole::Freezer)
 	}
 }
 
@@ -145,8 +162,9 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 			Error::<T, I>::WrongSetting
 		);
 
-		let collection =
-			NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
+		let collection = NextCollectionId::<T, I>::get()
+			.or(T::CollectionId::initial_value())
+			.ok_or(Error::<T, I>::UnknownCollection)?;
 
 		Self::do_create_collection(
 			collection,
@@ -156,7 +174,39 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 			T::CollectionDeposit::get(),
 			Event::Created { collection, creator: who.clone(), owner: admin.clone() },
 		)?;
+
+		Self::set_next_collection_id(collection);
+
 		Ok(collection)
+	}
+
+	/// Create a collection of nonfungible items with `collection` Id to be owned by `who` and
+	/// managed by `admin`. Should be only used for applications that do not have an
+	/// incremental order for the collection IDs and is a replacement for the auto id creation.
+	///
+	///
+	/// SAFETY: This function can break the pallet if it is used in combination with the auto
+	/// increment functionality, as it can claim a value in the ID sequence.
+	fn create_collection_with_id(
+		collection: T::CollectionId,
+		who: &T::AccountId,
+		admin: &T::AccountId,
+		config: &CollectionConfigFor<T, I>,
+	) -> Result<(), DispatchError> {
+		// DepositRequired can be disabled by calling the force_create() only
+		ensure!(
+			!config.has_disabled_setting(CollectionSetting::DepositRequired),
+			Error::<T, I>::WrongSetting
+		);
+
+		Self::do_create_collection(
+			collection,
+			who.clone(),
+			admin.clone(),
+			*config,
+			T::CollectionDeposit::get(),
+			Event::Created { collection, creator: who.clone(), owner: admin.clone() },
+		)
 	}
 }
 
@@ -321,6 +371,30 @@ impl<T: Config<I>, I: 'static> Transfer<T::AccountId> for Pallet<T, I> {
 		destination: &T::AccountId,
 	) -> DispatchResult {
 		Self::do_transfer(*collection, *item, destination.clone(), |_, _| Ok(()))
+	}
+
+	fn disable_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+		let transfer_disabled =
+			Self::has_system_attribute(&collection, &item, PalletAttributes::TransferDisabled)?;
+		// Can't lock the item twice
+		if transfer_disabled {
+			return Err(Error::<T, I>::ItemLocked.into())
+		}
+
+		<Self as Mutate<T::AccountId, ItemConfig>>::set_attribute(
+			collection,
+			item,
+			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
+			&[],
+		)
+	}
+
+	fn enable_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> DispatchResult {
+		<Self as Mutate<T::AccountId, ItemConfig>>::clear_attribute(
+			collection,
+			item,
+			&PalletAttributes::<Self::CollectionId>::TransferDisabled.encode(),
+		)
 	}
 }
 

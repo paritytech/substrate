@@ -27,24 +27,19 @@ use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
 // or public keys. `u64` is used as the `AccountId` and no `Signature`s are required.
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
 // Reexport crate as its pallet name for construct_runtime.
 use crate as pallet_example_basic;
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 // For testing the pallet, we construct a mock runtime.
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Example: pallet_example_basic::{Pallet, Call, Storage, Config<T>, Event<T>},
 	}
@@ -56,14 +51,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
@@ -89,7 +83,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = ();
 	type MaxHolds = ();
 }
 
@@ -102,7 +96,7 @@ impl Config for Test {
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let t = GenesisConfig {
+	let t = RuntimeGenesisConfig {
 		// We use default for brevity, but you can configure as desired if needed.
 		system: Default::default(),
 		balances: Default::default(),

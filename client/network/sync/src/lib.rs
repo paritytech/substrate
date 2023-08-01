@@ -78,7 +78,7 @@ use sp_consensus::{
 };
 use sp_runtime::{
 	traits::{
-		Block as BlockT, CheckedSub, Hash, HashFor, Header as HeaderT, NumberFor, One,
+		Block as BlockT, CheckedSub, Hash, HashingFor, Header as HeaderT, NumberFor, One,
 		SaturatedConversion, Zero,
 	},
 	EncodedJustification, Justifications,
@@ -148,7 +148,7 @@ const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
 pub(crate) const MAX_BLOCKS_IN_RESPONSE: usize = 128;
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sent us a message that led to a
 	/// database read error.
 	pub const BLOCKCHAIN_READ_ERROR: Rep = Rep::new(-(1 << 16), "DB Error");
@@ -515,8 +515,12 @@ where
 				phase: WarpSyncPhase::DownloadingBlocks(gap_sync.best_queued_number),
 				total_bytes: 0,
 			}),
-			(None, SyncMode::Warp, _) =>
-				Some(WarpSyncProgress { phase: WarpSyncPhase::AwaitingPeers, total_bytes: 0 }),
+			(None, SyncMode::Warp, _) => Some(WarpSyncProgress {
+				phase: WarpSyncPhase::AwaitingPeers {
+					required_peers: MIN_PEERS_TO_START_WARP_SYNC,
+				},
+				total_bytes: 0,
+			}),
 			(Some(sync), _, _) => Some(sync.progress()),
 			_ => None,
 		};
@@ -997,19 +1001,6 @@ where
 		};
 
 		Ok(self.validate_and_queue_blocks(new_blocks, gap))
-	}
-
-	fn process_block_response_data(&mut self, blocks_to_import: Result<OnBlockData<B>, BadPeer>) {
-		match blocks_to_import {
-			Ok(OnBlockData::Import(origin, blocks)) => self.import_blocks(origin, blocks),
-			Ok(OnBlockData::Request(peer, req)) => self.send_block_request(peer, req),
-			Ok(OnBlockData::Continue) => {},
-			Err(BadPeer(id, repu)) => {
-				self.network_service
-					.disconnect_peer(id, self.block_announce_protocol_name.clone());
-				self.network_service.report_peer(id, repu);
-			},
-		}
 	}
 
 	fn on_block_justification(
@@ -1495,7 +1486,6 @@ where
 		match self.mode {
 			SyncMode::Full =>
 				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
-			SyncMode::Light => BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
 			SyncMode::LightState { storage_chain_mode: false, .. } | SyncMode::Warp =>
 				BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION | BlockAttributes::BODY,
 			SyncMode::LightState { storage_chain_mode: true, .. } =>
@@ -1508,7 +1498,6 @@ where
 	fn skip_execution(&self) -> bool {
 		match self.mode {
 			SyncMode::Full => false,
-			SyncMode::Light => true,
 			SyncMode::LightState { .. } => true,
 			SyncMode::Warp => true,
 		}
@@ -1753,18 +1742,6 @@ where
 				announce.header,
 			);
 			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
-		}
-
-		let requires_additional_data = self.mode != SyncMode::Light || !known_parent;
-		if !requires_additional_data {
-			trace!(
-				target: "sync",
-				"Importing new header announced from {}: {} {:?}",
-				who,
-				hash,
-				announce.header,
-			);
-			return PollBlockAnnounceValidation::ImportHeader { is_best, announce, who }
 		}
 
 		if self.status().state == SyncState::Idle {
@@ -3160,7 +3137,7 @@ fn validate_blocks<Block: BlockT>(
 		}
 		if let (Some(header), Some(body)) = (&b.header, &b.body) {
 			let expected = *header.extrinsics_root();
-			let got = HashFor::<Block>::ordered_trie_root(
+			let got = HashingFor::<Block>::ordered_trie_root(
 				body.iter().map(Encode::encode).collect(),
 				sp_runtime::StateVersion::V0,
 			);

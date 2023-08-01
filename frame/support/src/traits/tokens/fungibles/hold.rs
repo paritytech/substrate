@@ -98,7 +98,7 @@ pub trait Inspect<AccountId>: super::Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> DispatchResult {
-		ensure!(Self::hold_available(asset, reason, who), TokenError::CannotCreateHold);
+		ensure!(Self::hold_available(asset.clone(), reason, who), TokenError::CannotCreateHold);
 		ensure!(
 			amount <= Self::reducible_balance(asset, who, Protect, Force),
 			TokenError::FundsUnavailable
@@ -173,7 +173,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		mut amount: Self::Balance,
 		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
-		let old_balance = Self::balance_on_hold(asset, reason, who);
+		let old_balance = Self::balance_on_hold(asset.clone(), reason, who);
 		if let BestEffort = precision {
 			amount = amount.min(old_balance);
 		}
@@ -193,7 +193,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 		precision: Precision,
 	) -> Result<Self::Balance, DispatchError> {
-		let old_balance = Self::balance_on_hold(asset, reason, who);
+		let old_balance = Self::balance_on_hold(asset.clone(), reason, who);
 		let new_balance = if let BestEffort = precision {
 			old_balance.saturating_add(amount)
 		} else {
@@ -221,11 +221,13 @@ pub trait Balanced<AccountId>: super::Balanced<AccountId> + Unbalanced<AccountId
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> (Credit<AccountId, Self>, Self::Balance) {
-		let decrease = Self::decrease_balance_on_hold(asset, reason, who, amount, BestEffort)
-			.unwrap_or(Default::default());
+		let decrease =
+			Self::decrease_balance_on_hold(asset.clone(), reason, who, amount, BestEffort)
+				.unwrap_or(Default::default());
 		let credit =
 			Imbalance::<Self::AssetId, Self::Balance, Self::OnDropCredit, Self::OnDropDebt>::new(
-				asset, decrease,
+				asset.clone(),
+				decrease,
 			);
 		Self::done_slash(asset, reason, who, decrease);
 		(credit, amount.saturating_sub(decrease))
@@ -255,10 +257,10 @@ pub trait Mutate<AccountId>:
 		// NOTE: This doesn't change the total balance of the account so there's no need to
 		// check liquidity.
 
-		Self::ensure_can_hold(asset, reason, who, amount)?;
+		Self::ensure_can_hold(asset.clone(), reason, who, amount)?;
 		// Should be infallible now, but we proceed softly anyway.
-		Self::decrease_balance(asset, who, amount, Exact, Protect, Force)?;
-		Self::increase_balance_on_hold(asset, reason, who, amount, BestEffort)?;
+		Self::decrease_balance(asset.clone(), who, amount, Exact, Protect, Force)?;
+		Self::increase_balance_on_hold(asset.clone(), reason, who, amount, BestEffort)?;
 		Self::done_hold(asset, reason, who, amount);
 		Ok(())
 	}
@@ -281,13 +283,16 @@ pub trait Mutate<AccountId>:
 
 		// We want to make sure we can deposit the amount in advance. If we can't then something is
 		// very wrong.
-		ensure!(Self::can_deposit(asset, who, amount, Extant) == Success, TokenError::CannotCreate);
+		ensure!(
+			Self::can_deposit(asset.clone(), who, amount, Extant) == Success,
+			TokenError::CannotCreate
+		);
 		// Get the amount we can actually take from the hold. This might be less than what we want
 		// if we're only doing a best-effort.
-		let amount = Self::decrease_balance_on_hold(asset, reason, who, amount, precision)?;
+		let amount = Self::decrease_balance_on_hold(asset.clone(), reason, who, amount, precision)?;
 		// Increase the main balance by what we took. We always do a best-effort here because we
 		// already checked that we can deposit before.
-		let actual = Self::increase_balance(asset, who, amount, BestEffort)?;
+		let actual = Self::increase_balance(asset.clone(), who, amount, BestEffort)?;
 		Self::done_release(asset, reason, who, actual);
 		Ok(actual)
 	}
@@ -310,14 +315,17 @@ pub trait Mutate<AccountId>:
 		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		// We must check total-balance requirements if `!force`.
-		let liquid = Self::reducible_total_balance_on_hold(asset, who, force);
+		let liquid = Self::reducible_total_balance_on_hold(asset.clone(), who, force);
 		if let BestEffort = precision {
 			amount = amount.min(liquid);
 		} else {
 			ensure!(amount <= liquid, TokenError::Frozen);
 		}
-		let amount = Self::decrease_balance_on_hold(asset, reason, who, amount, precision)?;
-		Self::set_total_issuance(asset, Self::total_issuance(asset).saturating_sub(amount));
+		let amount = Self::decrease_balance_on_hold(asset.clone(), reason, who, amount, precision)?;
+		Self::set_total_issuance(
+			asset.clone(),
+			Self::total_issuance(asset.clone()).saturating_sub(amount),
+		);
 		Self::done_burn_held(asset, reason, who, amount);
 		Ok(amount)
 	}
@@ -348,8 +356,8 @@ pub trait Mutate<AccountId>:
 		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
 		// We must check total-balance requirements if `!force`.
-		let have = Self::balance_on_hold(asset, reason, source);
-		let liquid = Self::reducible_total_balance_on_hold(asset, source, force);
+		let have = Self::balance_on_hold(asset.clone(), reason, source);
+		let liquid = Self::reducible_total_balance_on_hold(asset.clone(), source, force);
 		if let BestEffort = precision {
 			amount = amount.min(liquid).min(have);
 		} else {
@@ -360,19 +368,20 @@ pub trait Mutate<AccountId>:
 		// We want to make sure we can deposit the amount in advance. If we can't then something is
 		// very wrong.
 		ensure!(
-			Self::can_deposit(asset, dest, amount, Extant) == Success,
+			Self::can_deposit(asset.clone(), dest, amount, Extant) == Success,
 			TokenError::CannotCreate
 		);
 		ensure!(
-			mode == Free || Self::hold_available(asset, reason, dest),
+			mode == Free || Self::hold_available(asset.clone(), reason, dest),
 			TokenError::CannotCreateHold
 		);
 
-		let amount = Self::decrease_balance_on_hold(asset, reason, source, amount, precision)?;
+		let amount =
+			Self::decrease_balance_on_hold(asset.clone(), reason, source, amount, precision)?;
 		let actual = if mode == OnHold {
-			Self::increase_balance_on_hold(asset, reason, dest, amount, precision)?
+			Self::increase_balance_on_hold(asset.clone(), reason, dest, amount, precision)?
 		} else {
-			Self::increase_balance(asset, dest, amount, precision)?
+			Self::increase_balance(asset.clone(), dest, amount, precision)?
 		};
 		Self::done_transfer_on_hold(asset, reason, source, dest, actual);
 		Ok(actual)
@@ -405,14 +414,14 @@ pub trait Mutate<AccountId>:
 		expendability: Preservation,
 		force: Fortitude,
 	) -> Result<Self::Balance, DispatchError> {
-		ensure!(Self::hold_available(asset, reason, dest), TokenError::CannotCreateHold);
+		ensure!(Self::hold_available(asset.clone(), reason, dest), TokenError::CannotCreateHold);
 		ensure!(
-			Self::can_deposit(asset, dest, amount, Extant) == Success,
+			Self::can_deposit(asset.clone(), dest, amount, Extant) == Success,
 			TokenError::CannotCreate
 		);
 		let actual =
-			Self::decrease_balance(asset, source, amount, precision, expendability, force)?;
-		Self::increase_balance_on_hold(asset, reason, dest, actual, precision)?;
+			Self::decrease_balance(asset.clone(), source, amount, precision, expendability, force)?;
+		Self::increase_balance_on_hold(asset.clone(), reason, dest, actual, precision)?;
 		Self::done_transfer_on_hold(asset, reason, source, dest, actual);
 		Ok(actual)
 	}

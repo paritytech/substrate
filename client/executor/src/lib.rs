@@ -49,7 +49,6 @@ pub use sp_core::traits::Externalities;
 pub use sp_version::{NativeVersion, RuntimeVersion};
 #[doc(hidden)]
 pub use sp_wasm_interface;
-pub use wasmi;
 
 pub use sc_executor_common::{
 	error,

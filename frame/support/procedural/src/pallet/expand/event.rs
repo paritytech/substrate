@@ -97,12 +97,9 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	}
 
 	if get_doc_literals(&event_item.attrs).is_empty() {
-		event_item.attrs.push(syn::parse_quote!(
-			#[doc = r"
-			The [event](https://docs.substrate.io/main-docs/build/events-errors/) emitted
-			by this pallet.
-			"]
-		));
+		event_item
+			.attrs
+			.push(syn::parse_quote!(#[doc = "The `Event` enum of this pallet"]));
 	}
 
 	// derive some traits because system event require Clone, FullCodec, Eq, PartialEq and Debug

@@ -34,12 +34,11 @@
 //! - If provided, a ["requests processing"](ProtocolConfig::inbound_queue) channel
 //! is used to handle incoming requests.
 
-use crate::{types::ProtocolName, ReputationChange};
-
-use futures::{
-	channel::{mpsc, oneshot},
-	prelude::*,
+use crate::{
+	peer_store::BANNED_THRESHOLD, peerset::PeersetHandle, types::ProtocolName, ReputationChange,
 };
+
+use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{Endpoint, Multiaddr},
 	request_response::{self, Behaviour, Codec, Message, ProtocolSupport, ResponseChannel},
@@ -51,8 +50,6 @@ use libp2p::{
 	},
 	PeerId,
 };
-
-use sc_peerset::{PeersetHandle, BANNED_THRESHOLD};
 
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -126,7 +123,7 @@ pub struct ProtocolConfig {
 	/// other peers. If this is `Some` but the channel is closed, then the local node will
 	/// advertise support for this protocol, but any incoming request will lead to an error being
 	/// sent back.
-	pub inbound_queue: Option<mpsc::Sender<IncomingRequest>>,
+	pub inbound_queue: Option<async_channel::Sender<IncomingRequest>>,
 }
 
 /// A single request received by a peer on a request-response protocol.
@@ -259,8 +256,10 @@ pub struct RequestResponsesBehaviour {
 	///
 	/// Contains the underlying libp2p request-response [`Behaviour`], plus an optional
 	/// "response builder" used to build responses for incoming requests.
-	protocols:
-		HashMap<ProtocolName, (Behaviour<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>)>,
+	protocols: HashMap<
+		ProtocolName,
+		(Behaviour<GenericCodec>, Option<async_channel::Sender<IncomingRequest>>),
+	>,
 
 	/// Pending requests, passed down to a request-response [`Behaviour`], awaiting a reply.
 	pending_requests:
@@ -295,7 +294,10 @@ struct MessageRequest {
 	request: Vec<u8>,
 	channel: ResponseChannel<Result<Vec<u8>, ()>>,
 	protocol: ProtocolName,
-	resp_builder: Option<futures::channel::mpsc::Sender<IncomingRequest>>,
+	// A builder used for building responses for incoming requests. Note that we use
+	// `async_channel` and not `mpsc` on purpose, because `mpsc::channel` allocates an extra
+	// message slot for every cloned `Sender` and this breaks a back-pressure mechanism.
+	resp_builder: Option<async_channel::Sender<IncomingRequest>>,
 	// Once we get incoming request we save all params, create an async call to Peerset
 	// to get the reputation of the peer.
 	get_peer_reputation: Pin<Box<dyn Future<Output = Result<i32, ()>> + Send>>,
@@ -329,13 +331,13 @@ impl RequestResponsesBehaviour {
 				ProtocolSupport::Outbound
 			};
 
-			let rq_rp = Behaviour::new(
+			let rq_rp = Behaviour::with_codec(
 				GenericCodec {
 					max_request_size: protocol.max_request_size,
 					max_response_size: protocol.max_response_size,
 				},
-				iter::once(protocol.name.as_bytes().to_vec())
-					.chain(protocol.fallback_names.iter().map(|name| name.as_bytes().to_vec()))
+				iter::once(protocol.name.clone())
+					.chain(protocol.fallback_names)
 					.zip(iter::repeat(protocol_support)),
 				cfg,
 			);
@@ -371,6 +373,8 @@ impl RequestResponsesBehaviour {
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
 	) {
+		log::trace!(target: "sub-libp2p", "send request to {target} ({protocol_name:?}), {} bytes", request.len());
+
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol_name) {
 			if protocol.is_connected(target) || connect.should_connect() {
 				let request_id = protocol.send_request(target, request);
@@ -401,7 +405,7 @@ impl RequestResponsesBehaviour {
 impl NetworkBehaviour for RequestResponsesBehaviour {
 	type ConnectionHandler =
 		MultiHandler<String, <Behaviour<GenericCodec> as NetworkBehaviour>::ConnectionHandler>;
-	type OutEvent = Event;
+	type ToSwarm = Event;
 
 	fn handle_pending_inbound_connection(
 		&mut self,
@@ -517,9 +521,9 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 				for (p, _) in self.protocols.values_mut() {
 					NetworkBehaviour::on_swarm_event(p, FromSwarm::ListenerError(e));
 				},
-			FromSwarm::ExpiredExternalAddr(e) =>
+			FromSwarm::ExternalAddrExpired(e) =>
 				for (p, _) in self.protocols.values_mut() {
-					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExpiredExternalAddr(e));
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExternalAddrExpired(e));
 				},
 			FromSwarm::NewListener(e) =>
 				for (p, _) in self.protocols.values_mut() {
@@ -529,9 +533,13 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 				for (p, _) in self.protocols.values_mut() {
 					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExpiredListenAddr(e));
 				},
-			FromSwarm::NewExternalAddr(e) =>
+			FromSwarm::NewExternalAddrCandidate(e) =>
 				for (p, _) in self.protocols.values_mut() {
-					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewExternalAddr(e));
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::NewExternalAddrCandidate(e));
+				},
+			FromSwarm::ExternalAddrConfirmed(e) =>
+				for (p, _) in self.protocols.values_mut() {
+					NetworkBehaviour::on_swarm_event(p, FromSwarm::ExternalAddrConfirmed(e));
 				},
 			FromSwarm::AddressChange(e) =>
 				for (p, _) in self.protocols.values_mut() {
@@ -566,7 +574,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
 		'poll_all: loop {
 			if let Some(message_request) = self.message_request.take() {
 				// Now we can can poll `MessageRequest` until we get the reputation
@@ -614,14 +622,18 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							continue 'poll_all
 						}
 
+						log::trace!(target: "sub-libp2p", "request received from {peer} ({protocol:?}), {} bytes", request.len());
+
 						let (tx, rx) = oneshot::channel();
 
 						// Submit the request to the "response builder" passed by the user at
 						// initialization.
-						if let Some(mut resp_builder) = resp_builder {
+						if let Some(resp_builder) = resp_builder {
 							// If the response builder is too busy, silently drop `tx`. This
 							// will be reported by the corresponding request-response [`Behaviour`]
 							// through an `InboundFailure::Omission` event.
+							// Note that we use `async_channel::bounded` and not `mpsc::channel`
+							// because the latter allocates an extra slot for every cloned sender.
 							let _ = resp_builder.try_send(IncomingRequest {
 								peer,
 								payload: request,
@@ -671,6 +683,8 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 
 				if let Ok(payload) = result {
 					if let Some((protocol, _)) = self.protocols.get_mut(&*protocol_name) {
+						log::trace!(target: "sub-libp2p", "send response to {peer} ({protocol_name:?}), {} bytes", payload.len());
+
 						if protocol.send_response(inner_channel, Ok(payload)).is_err() {
 							// Note: Failure is handled further below when receiving
 							// `InboundFailure` event from request-response [`Behaviour`].
@@ -719,10 +733,18 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								handler,
 								event: ((*protocol).to_string(), event),
 							}),
-						ToSwarm::ReportObservedAddr { address, score } =>
-							return Poll::Ready(ToSwarm::ReportObservedAddr { address, score }),
 						ToSwarm::CloseConnection { peer_id, connection } =>
 							return Poll::Ready(ToSwarm::CloseConnection { peer_id, connection }),
+						ToSwarm::NewExternalAddrCandidate(observed) =>
+							return Poll::Ready(ToSwarm::NewExternalAddrCandidate(observed)),
+						ToSwarm::ExternalAddrConfirmed(addr) =>
+							return Poll::Ready(ToSwarm::ExternalAddrConfirmed(addr)),
+						ToSwarm::ExternalAddrExpired(addr) =>
+							return Poll::Ready(ToSwarm::ExternalAddrExpired(addr)),
+						ToSwarm::ListenOn { opts } =>
+							return Poll::Ready(ToSwarm::ListenOn { opts }),
+						ToSwarm::RemoveListener { id } =>
+							return Poll::Ready(ToSwarm::RemoveListener { id }),
 					};
 
 					match ev {
@@ -766,6 +788,12 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								.remove(&(protocol.clone(), request_id).into())
 							{
 								Some((started, pending_response)) => {
+									log::trace!(
+										target: "sub-libp2p",
+										"received response from {peer} ({protocol:?}), {} bytes",
+										response.as_ref().map_or(0usize, |response| response.len()),
+									);
+
 									let delivered = pending_response
 										.send(response.map_err(|()| RequestFailure::Refused))
 										.map_err(|_| RequestFailure::Obsolete);
@@ -918,7 +946,7 @@ pub struct GenericCodec {
 
 #[async_trait::async_trait]
 impl Codec for GenericCodec {
-	type Protocol = Vec<u8>;
+	type Protocol = ProtocolName;
 	type Request = Vec<u8>;
 	type Response = Result<Vec<u8>, ()>;
 
@@ -1036,11 +1064,8 @@ impl Codec for GenericCodec {
 mod tests {
 	use super::*;
 
-	use futures::{
-		channel::{mpsc, oneshot},
-		executor::LocalPool,
-		task::Spawn,
-	};
+	use crate::peerset::{Peerset, PeersetConfig, SetConfig};
+	use futures::{channel::oneshot, executor::LocalPool, task::Spawn};
 	use libp2p::{
 		core::{
 			transport::{MemoryTransport, Transport},
@@ -1051,7 +1076,6 @@ mod tests {
 		swarm::{Executor, Swarm, SwarmBuilder, SwarmEvent},
 		Multiaddr,
 	};
-	use sc_peerset::{Peerset, PeersetConfig, SetConfig};
 	use std::{iter, time::Duration};
 
 	struct TokioExecutor(tokio::runtime::Runtime);
@@ -1112,7 +1136,7 @@ mod tests {
 		// Build swarms whose behaviour is [`RequestResponsesBehaviour`].
 		let mut swarms = (0..2)
 			.map(|_| {
-				let (tx, mut rx) = mpsc::channel::<IncomingRequest>(64);
+				let (tx, mut rx) = async_channel::bounded::<IncomingRequest>(64);
 
 				pool.spawner()
 					.spawn_obj(
@@ -1215,7 +1239,7 @@ mod tests {
 		// Build swarms whose behaviour is [`RequestResponsesBehaviour`].
 		let mut swarms = (0..2)
 			.map(|_| {
-				let (tx, mut rx) = mpsc::channel::<IncomingRequest>(64);
+				let (tx, mut rx) = async_channel::bounded::<IncomingRequest>(64);
 
 				pool.spawner()
 					.spawn_obj(
@@ -1353,8 +1377,8 @@ mod tests {
 		};
 
 		let (mut swarm_2, mut swarm_2_handler_1, mut swarm_2_handler_2, listen_add_2, peerset) = {
-			let (tx_1, rx_1) = mpsc::channel(64);
-			let (tx_2, rx_2) = mpsc::channel(64);
+			let (tx_1, rx_1) = async_channel::bounded(64);
+			let (tx_2, rx_2) = async_channel::bounded(64);
 
 			let protocol_configs = vec![
 				ProtocolConfig {

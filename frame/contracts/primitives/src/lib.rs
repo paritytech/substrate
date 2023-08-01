@@ -105,6 +105,8 @@ pub enum ContractAccessError {
 	DoesntExist,
 	/// Storage key cannot be decoded from the provided input data.
 	KeyDecodingFailed,
+	/// Storage is migrating. Try again later.
+	MigrationInProgress,
 }
 
 bitflags! {
@@ -157,12 +159,6 @@ pub enum Code<Hash> {
 	Upload(Vec<u8>),
 	/// The code hash of an on-chain wasm blob.
 	Existing(Hash),
-}
-
-impl<T: Into<Vec<u8>>, Hash> From<T> for Code<Hash> {
-	fn from(from: T) -> Self {
-		Code::Upload(from.into())
-	}
 }
 
 /// The amount of balance that was either charged or refunded in order to pay for storage.

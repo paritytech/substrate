@@ -22,21 +22,16 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage, Perbill,
 };
 
-type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
 	}
 );
 
@@ -96,13 +91,12 @@ impl Config for Test {
 	type BlockLength = RuntimeBlockLength;
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
-	type Index = u64;
-	type BlockNumber = u64;
+	type Nonce = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<10>;
 	type DbWeight = DbWeight;
@@ -126,7 +120,7 @@ pub const CALL: &<Test as Config>::RuntimeCall =
 /// Create new externalities for `System` module tests.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities =
-		GenesisConfig::default().build_storage().unwrap().into();
+		RuntimeGenesisConfig::default().build_storage().unwrap().into();
 	// Add to each test the initial weight of a block
 	ext.execute_with(|| {
 		System::register_extra_weight_unchecked(

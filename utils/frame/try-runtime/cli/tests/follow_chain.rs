@@ -17,49 +17,47 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #![cfg(unix)]
+#![cfg(feature = "try-runtime")]
 
-#[cfg(feature = "try-runtime")]
-mod tests {
-	use assert_cmd::cargo::cargo_bin;
-	use regex::Regex;
-	use std::{
-		process::{self},
-		time::Duration,
-	};
-	use substrate_cli_test_utils as common;
-	use tokio::process::{Child, Command};
+use assert_cmd::cargo::cargo_bin;
+use regex::Regex;
+use std::{
+	process::{self},
+	time::Duration,
+};
+use substrate_cli_test_utils as common;
+use tokio::process::{Child, Command};
 
-	#[tokio::test]
-	async fn follow_chain_works() {
-		// Build substrate so binaries used in the test use the latest code.
-		common::build_substrate(&["--features=try-runtime"]);
+#[tokio::test]
+async fn follow_chain_works() {
+	// Build substrate so binaries used in the test use the latest code.
+	common::build_substrate(&["--features=try-runtime"]);
 
-		common::run_with_timeout(Duration::from_secs(60), async move {
-			fn start_follow(ws_url: &str) -> Child {
-				Command::new(cargo_bin("substrate"))
-					.stdout(process::Stdio::piped())
-					.stderr(process::Stdio::piped())
-					.args(&["try-runtime", "--runtime=existing"])
-					.args(&["follow-chain", format!("--uri={}", ws_url).as_str()])
-					.kill_on_drop(true)
-					.spawn()
-					.unwrap()
-			}
+	common::run_with_timeout(Duration::from_secs(60), async move {
+		fn start_follow(ws_url: &str) -> Child {
+			Command::new(cargo_bin("substrate-node"))
+				.stdout(process::Stdio::piped())
+				.stderr(process::Stdio::piped())
+				.args(&["try-runtime", "--runtime=existing"])
+				.args(&["follow-chain", format!("--uri={}", ws_url).as_str()])
+				.kill_on_drop(true)
+				.spawn()
+				.unwrap()
+		}
 
-			// Start a node and wait for it to begin finalizing blocks
-			let mut node = common::KillChildOnDrop(common::start_node());
-			let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
-			common::wait_n_finalized_blocks(1, &ws_url).await;
+		// Start a node and wait for it to begin finalizing blocks
+		let mut node = common::KillChildOnDrop(common::start_node());
+		let ws_url = common::extract_info_from_output(node.stderr.take().unwrap()).0.ws_url;
+		common::wait_n_finalized_blocks(1, &ws_url).await;
 
-			// Kick off the follow-chain process and wait for it to process at least 3 blocks.
-			let mut follow = start_follow(&ws_url);
-			let re = Regex::new(r#".*executed block ([3-9]|[1-9]\d+).*"#).unwrap();
-			let matched =
-				common::wait_for_stream_pattern_match(follow.stderr.take().unwrap(), re).await;
+		// Kick off the follow-chain process and wait for it to process at least 3 blocks.
+		let mut follow = start_follow(&ws_url);
+		let re = Regex::new(r#".*executed block ([3-9]|[1-9]\d+).*"#).unwrap();
+		let matched =
+			common::wait_for_stream_pattern_match(follow.stderr.take().unwrap(), re).await;
 
-			// Assert that the follow-chain process has followed at least 3 blocks.
-			assert!(matches!(matched, Ok(_)));
-		})
-		.await;
-	}
+		// Assert that the follow-chain process has followed at least 3 blocks.
+		assert!(matched.is_ok());
+	})
+	.await;
 }

@@ -90,7 +90,7 @@ impl TempDatabase {
 			},
 			DatabaseType::ParityDb => Arc::new(ParityDbWrapper({
 				let mut options = parity_db::Options::with_columns(self.0.path(), 1);
-				let mut column_options = &mut options.columns[0];
+				let column_options = &mut options.columns[0];
 				column_options.ref_counted = true;
 				column_options.preimage = true;
 				column_options.uniform = true;

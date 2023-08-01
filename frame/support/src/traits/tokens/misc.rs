@@ -221,10 +221,10 @@ impl WithdrawReasons {
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
 pub trait AssetId:
-	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+	FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
 {
 }
-impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
+impl<T: FullCodec + Clone + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
 	for T
 {
 }
@@ -262,8 +262,8 @@ pub trait ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> {
 	) -> Result<OutBalance, Self::Error>;
 }
 
-/// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
-/// downstream to extend logic of Uniques current functionality.
+/// Trait to handle NFT locking mechanism to ensure interactions with the asset can be implemented
+/// downstream to extend logic of Uniques/Nfts current functionality.
 pub trait Locker<CollectionId, ItemId> {
 	/// Check if the asset should be locked and prevent interactions with the asset from executing.
 	fn is_locked(collection: CollectionId, item: ItemId) -> bool;

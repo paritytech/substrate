@@ -241,7 +241,7 @@ use frame_support::{
 	weights::Weight,
 	DefaultNoBound, EqNoBound, PartialEqNoBound,
 };
-use frame_system::{ensure_none, offchain::SendTransactionTypes};
+use frame_system::{ensure_none, offchain::SendTransactionTypes, pallet_prelude::BlockNumberFor};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
 	traits::{CheckedAdd, Zero},
@@ -256,6 +256,9 @@ use sp_runtime::{
 	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
 };
 use sp_std::prelude::*;
+
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -582,10 +585,10 @@ pub mod pallet {
 
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
-		type UnsignedPhase: Get<Self::BlockNumber>;
+		type UnsignedPhase: Get<BlockNumberFor<Self>>;
 		/// Duration of the signed phase.
 		#[pallet::constant]
-		type SignedPhase: Get<Self::BlockNumber>;
+		type SignedPhase: Get<BlockNumberFor<Self>>;
 
 		/// The minimum amount of improvement to the solution score that defines a solution as
 		/// "better" in the Signed phase.
@@ -602,7 +605,7 @@ pub mod pallet {
 		/// For example, if it is 5, that means that at least 5 blocks will elapse between attempts
 		/// to submit the worker's solution.
 		#[pallet::constant]
-		type OffchainRepeat: Get<Self::BlockNumber>;
+		type OffchainRepeat: Get<BlockNumberFor<Self>>;
 
 		/// The priority of the unsigned transaction submitted in the unsigned-phase
 		#[pallet::constant]
@@ -682,13 +685,13 @@ pub mod pallet {
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 		>;
 
 		/// Configuration for the fallback.
 		type Fallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 			DataProvider = Self::DataProvider,
 			MaxWinners = Self::MaxWinners,
 		>;
@@ -699,7 +702,7 @@ pub mod pallet {
 		/// BoundedExecution<_>` if the test-net is not expected to have thousands of nominators.
 		type GovernanceFallback: InstantElectionProvider<
 			AccountId = Self::AccountId,
-			BlockNumber = Self::BlockNumber,
+			BlockNumber = BlockNumberFor<Self>,
 			DataProvider = Self::DataProvider,
 			MaxWinners = Self::MaxWinners,
 		>;
@@ -744,7 +747,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(now: T::BlockNumber) -> Weight {
+		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
 			let next_election = T::DataProvider::next_election_prediction(now).max(now);
 
 			let signed_deadline = T::SignedPhase::get() + T::UnsignedPhase::get();
@@ -821,7 +824,7 @@ pub mod pallet {
 			}
 		}
 
-		fn offchain_worker(now: T::BlockNumber) {
+		fn offchain_worker(now: BlockNumberFor<T>) {
 			use sp_runtime::offchain::storage_lock::{BlockAndTime, StorageLock};
 
 			// Create a lock with the maximum deadline of number of blocks in the unsigned phase.
@@ -883,7 +886,7 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn try_state(_n: T::BlockNumber) -> Result<(), &'static str> {
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
 			Self::do_try_state()
 		}
 	}
@@ -1152,7 +1155,11 @@ pub mod pallet {
 		/// An account has been slashed for submitting an invalid signed submission.
 		Slashed { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// There was a phase transition in a given round.
-		PhaseTransitioned { from: Phase<T::BlockNumber>, to: Phase<T::BlockNumber>, round: u32 },
+		PhaseTransitioned {
+			from: Phase<BlockNumberFor<T>>,
+			to: Phase<BlockNumberFor<T>>,
+			round: u32,
+		},
 	}
 
 	/// Error of the pallet that can be returned in response to dispatches.
@@ -1254,7 +1261,7 @@ pub mod pallet {
 	/// Current phase.
 	#[pallet::storage]
 	#[pallet::getter(fn current_phase)]
-	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<T::BlockNumber>, ValueQuery>;
+	pub type CurrentPhase<T: Config> = StorageValue<_, Phase<BlockNumberFor<T>>, ValueQuery>;
 
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	///
@@ -1340,13 +1347,13 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 }
 
 impl<T: Config> Pallet<T> {
 	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
 	/// acquired with success.
-	fn do_synchronized_offchain_worker(now: T::BlockNumber) {
+	fn do_synchronized_offchain_worker(now: BlockNumberFor<T>) {
 		let current_phase = Self::current_phase();
 		log!(trace, "lock for offchain worker acquired. Phase = {:?}", current_phase);
 		match current_phase {
@@ -1372,7 +1379,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Phase transition helper.
-	pub(crate) fn phase_transition(to: Phase<T::BlockNumber>) {
+	pub(crate) fn phase_transition(to: Phase<BlockNumberFor<T>>) {
 		log!(info, "Starting phase {:?}, round {}.", to, Self::round());
 		Self::deposit_event(Event::PhaseTransitioned {
 			from: <CurrentPhase<T>>::get(),
@@ -1579,7 +1586,7 @@ impl<T: Config> Pallet<T> {
 
 #[cfg(feature = "try-runtime")]
 impl<T: Config> Pallet<T> {
-	fn do_try_state() -> Result<(), &'static str> {
+	fn do_try_state() -> Result<(), TryRuntimeError> {
 		Self::try_state_snapshot()?;
 		Self::try_state_signed_submissions_map()?;
 		Self::try_state_phase_off()
@@ -1588,7 +1595,7 @@ impl<T: Config> Pallet<T> {
 	// [`Snapshot`] state check. Invariants:
 	// - [`DesiredTargets`] exists if and only if [`Snapshot`] is present.
 	// - [`SnapshotMetadata`] exist if and only if [`Snapshot`] is present.
-	fn try_state_snapshot() -> Result<(), &'static str> {
+	fn try_state_snapshot() -> Result<(), TryRuntimeError> {
 		if <Snapshot<T>>::exists() &&
 			<SnapshotMetadata<T>>::exists() &&
 			<DesiredTargets<T>>::exists()
@@ -1600,7 +1607,7 @@ impl<T: Config> Pallet<T> {
 		{
 			Ok(())
 		} else {
-			Err("If snapshot exists, metadata and desired targets should be set too. Otherwise, none should be set.")
+			Err("If snapshot exists, metadata and desired targets should be set too. Otherwise, none should be set.".into())
 		}
 	}
 
@@ -1608,28 +1615,34 @@ impl<T: Config> Pallet<T> {
 	// - All [`SignedSubmissionIndices`] are present in [`SignedSubmissionsMap`], and no more;
 	// - [`SignedSubmissionNextIndex`] is not present in [`SignedSubmissionsMap`];
 	// - [`SignedSubmissionIndices`] is sorted by election score.
-	fn try_state_signed_submissions_map() -> Result<(), &'static str> {
+	fn try_state_signed_submissions_map() -> Result<(), TryRuntimeError> {
 		let mut last_score: ElectionScore = Default::default();
 		let indices = <SignedSubmissionIndices<T>>::get();
 
 		for (i, indice) in indices.iter().enumerate() {
 			let submission = <SignedSubmissionsMap<T>>::get(indice.2);
 			if submission.is_none() {
-				return Err("All signed submissions indices must be part of the submissions map")
+				return Err(
+					"All signed submissions indices must be part of the submissions map".into()
+				)
 			}
 
 			if i == 0 {
 				last_score = indice.0
 			} else {
 				if last_score.strict_threshold_better(indice.0, Perbill::zero()) {
-					return Err("Signed submission indices vector must be ordered by election score")
+					return Err(
+						"Signed submission indices vector must be ordered by election score".into()
+					)
 				}
 				last_score = indice.0;
 			}
 		}
 
 		if <SignedSubmissionsMap<T>>::iter().nth(indices.len()).is_some() {
-			return Err("Signed submissions map length should be the same as the indices vec length")
+			return Err(
+				"Signed submissions map length should be the same as the indices vec length".into()
+			)
 		}
 
 		match <SignedSubmissionNextIndex<T>>::get() {
@@ -1637,7 +1650,8 @@ impl<T: Config> Pallet<T> {
 			next =>
 				if <SignedSubmissionsMap<T>>::get(next).is_some() {
 					return Err(
-						"The next submissions index should not be in the submissions maps already",
+						"The next submissions index should not be in the submissions maps already"
+							.into(),
 					)
 				} else {
 					Ok(())
@@ -1647,12 +1661,12 @@ impl<T: Config> Pallet<T> {
 
 	// [`Phase::Off`] state check. Invariants:
 	// - If phase is `Phase::Off`, [`Snapshot`] must be none.
-	fn try_state_phase_off() -> Result<(), &'static str> {
+	fn try_state_phase_off() -> Result<(), TryRuntimeError> {
 		match Self::current_phase().is_off() {
 			false => Ok(()),
 			true =>
 				if <Snapshot<T>>::get().is_some() {
-					Err("Snapshot must be none when in Phase::Off")
+					Err("Snapshot must be none when in Phase::Off".into())
 				} else {
 					Ok(())
 				},
@@ -1662,7 +1676,7 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
-	type BlockNumber = T::BlockNumber;
+	type BlockNumber = BlockNumberFor<T>;
 	type Error = ElectionError<T>;
 	type MaxWinners = T::MaxWinners;
 	type DataProvider = T::DataProvider;

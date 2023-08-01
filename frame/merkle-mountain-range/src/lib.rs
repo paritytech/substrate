@@ -57,6 +57,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{log, weights::Weight};
+use frame_system::pallet_prelude::{BlockNumberFor, HeaderFor};
 use sp_mmr_primitives::utils;
 use sp_runtime::{
 	traits::{self, One, Saturating},
@@ -91,7 +92,7 @@ pub struct ParentNumberAndHash<T: frame_system::Config> {
 }
 
 impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
-	type LeafData = (<T as frame_system::Config>::BlockNumber, <T as frame_system::Config>::Hash);
+	type LeafData = (BlockNumberFor<T>, <T as frame_system::Config>::Hash);
 
 	fn leaf_data() -> Self::LeafData {
 		(
@@ -113,12 +114,13 @@ type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>
 
 /// Hashing used for the pallet.
 pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
+/// Hash type used for the pallet.
+pub(crate) type HashOf<T, I> = <<T as Config<I>>::Hashing as traits::Hash>::Output;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
@@ -146,24 +148,7 @@ pub mod pallet {
 		///
 		/// Then we create a tuple of these two hashes, SCALE-encode it (concatenate) and
 		/// hash, to obtain a new MMR inner node - the new peak.
-		type Hashing: traits::Hash<Output = <Self as Config<I>>::Hash>;
-
-		/// The hashing output type.
-		///
-		/// This type is actually going to be stored in the MMR.
-		/// Required to be provided again, to satisfy trait bounds for storage items.
-		type Hash: traits::Member
-			+ traits::MaybeSerializeDeserialize
-			+ sp_std::fmt::Debug
-			+ sp_std::hash::Hash
-			+ AsRef<[u8]>
-			+ AsMut<[u8]>
-			+ Copy
-			+ Default
-			+ codec::Codec
-			+ codec::EncodeLike
-			+ scale_info::TypeInfo
-			+ MaxEncodedLen;
+		type Hashing: traits::Hash;
 
 		/// Data stored in the leaf nodes.
 		///
@@ -189,7 +174,7 @@ pub mod pallet {
 		/// apart from having it in the storage. For instance you might output it in the header
 		/// digest (see [`frame_system::Pallet::deposit_log`]) to make it available for Light
 		/// Clients. Hook complexity should be `O(1)`.
-		type OnNewRoot: primitives::OnNewRoot<<Self as Config<I>>::Hash>;
+		type OnNewRoot: primitives::OnNewRoot<HashOf<Self, I>>;
 
 		/// Weights for this pallet.
 		type WeightInfo: WeightInfo;
@@ -198,8 +183,7 @@ pub mod pallet {
 	/// Latest MMR Root hash.
 	#[pallet::storage]
 	#[pallet::getter(fn mmr_root_hash)]
-	pub type RootHash<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, <T as Config<I>>::Hash, ValueQuery>;
+	pub type RootHash<T: Config<I>, I: 'static = ()> = StorageValue<_, HashOf<T, I>, ValueQuery>;
 
 	/// Current size of the MMR (number of leaves).
 	#[pallet::storage]
@@ -213,11 +197,11 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn mmr_peak)]
 	pub type Nodes<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, NodeIndex, <T as Config<I>>::Hash, OptionQuery>;
+		StorageMap<_, Identity, NodeIndex, HashOf<T, I>, OptionQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_initialize(_n: T::BlockNumber) -> Weight {
+		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
 			let peaks_before = sp_mmr_primitives::utils::NodesUtils::new(leaves).number_of_peaks();
@@ -282,11 +266,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		pos: NodeIndex,
 		parent_hash: <T as frame_system::Config>::Hash,
 	) -> sp_std::prelude::Vec<u8> {
-		NodesUtils::node_temp_offchain_key::<<T as frame_system::Config>::Header>(
-			&T::INDEXING_PREFIX,
-			pos,
-			parent_hash,
-		)
+		NodesUtils::node_temp_offchain_key::<HeaderFor<T>>(&T::INDEXING_PREFIX, pos, parent_hash)
 	}
 
 	/// Build canonical offchain key for node `pos` in MMR.
@@ -302,7 +282,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn leaf_index_to_parent_block_num(
 		leaf_index: LeafIndex,
 		leaves_count: LeafIndex,
-	) -> <T as frame_system::Config>::BlockNumber {
+	) -> BlockNumberFor<T> {
 		// leaves are zero-indexed and were added one per block since pallet activation,
 		// while block numbers are one-indexed, so block number that added `leaf_idx` is:
 		// `block_num = block_num_when_pallet_activated + leaf_idx + 1`
@@ -314,16 +294,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Convert a block number into a leaf index.
-	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, Error>
+	fn block_num_to_leaf_index(block_num: BlockNumberFor<T>) -> Result<LeafIndex, Error>
 	where
 		T: frame_system::Config,
 	{
-		let first_mmr_block = utils::first_mmr_block_num::<T::Header>(
+		let first_mmr_block = utils::first_mmr_block_num::<HeaderFor<T>>(
 			<frame_system::Pallet<T>>::block_number(),
 			Self::mmr_leaves(),
 		)?;
 
-		utils::block_num_to_leaf_index::<T::Header>(block_num, first_mmr_block)
+		utils::block_num_to_leaf_index::<HeaderFor<T>>(block_num, first_mmr_block)
 	}
 
 	/// Generate an MMR proof for the given `block_numbers`.
@@ -336,9 +316,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_proof(
-		block_numbers: Vec<T::BlockNumber>,
-		best_known_block_number: Option<T::BlockNumber>,
-	) -> Result<(Vec<LeafOf<T, I>>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
+		block_numbers: Vec<BlockNumberFor<T>>,
+		best_known_block_number: Option<BlockNumberFor<T>>,
+	) -> Result<(Vec<LeafOf<T, I>>, primitives::Proof<HashOf<T, I>>), primitives::Error> {
 		// check whether best_known_block_number provided, else use current best block
 		let best_known_block_number =
 			best_known_block_number.unwrap_or_else(|| <frame_system::Pallet<T>>::block_number());
@@ -359,7 +339,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Return the on-chain MMR root hash.
-	pub fn mmr_root() -> <T as Config<I>>::Hash {
+	pub fn mmr_root() -> HashOf<T, I> {
 		Self::mmr_root_hash()
 	}
 
@@ -371,7 +351,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// or the proof is invalid.
 	pub fn verify_leaves(
 		leaves: Vec<LeafOf<T, I>>,
-		proof: primitives::Proof<<T as Config<I>>::Hash>,
+		proof: primitives::Proof<HashOf<T, I>>,
 	) -> Result<(), primitives::Error> {
 		if proof.leaf_count > Self::mmr_leaves() ||
 			proof.leaf_count == 0 ||

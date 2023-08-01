@@ -19,7 +19,7 @@
 //!
 //! Given a committee `A` and an edge weight vector `w`, a balanced solution is one that
 //!
-//! 1.  it maximizes the sum of member supports, i.e `Argmax { sum(support(c)) }`. for all `c` in
+//! 1. it maximizes the sum of member supports, i.e `Argmax { sum(support(c)) }`. for all `c` in
 //! `A`.
 //! 2. it minimizes the sum of supports squared, i.e `Argmin { sum(support(c).pow(2)) }` for all `c`
 //! in `A`.

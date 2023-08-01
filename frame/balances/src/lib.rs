@@ -120,7 +120,7 @@
 //! use frame_support::traits::{WithdrawReasons, LockableCurrency};
 //! use sp_runtime::traits::Bounded;
 //! pub trait Config: frame_system::Config {
-//! 	type Currency: LockableCurrency<Self::AccountId, Moment=Self::BlockNumber>;
+//! 	type Currency: LockableCurrency<Self::AccountId, Moment=frame_system::pallet_prelude::BlockNumberFor<Self>>;
 //! }
 //! # struct StakingLedger<T: Config> {
 //! # 	stash: <T as frame_system::Config>::AccountId,
@@ -166,8 +166,6 @@ mod types;
 pub mod weights;
 
 use codec::{Codec, MaxEncodedLen};
-#[cfg(feature = "std")]
-use frame_support::traits::GenesisBuild;
 use frame_support::{
 	ensure,
 	pallet_prelude::DispatchResult,
@@ -193,7 +191,9 @@ use sp_runtime::{
 	ArithmeticError, DispatchError, FixedPointOperand, Perbill, RuntimeDebug, TokenError,
 };
 use sp_std::{cmp, fmt::Debug, mem, prelude::*, result};
-pub use types::{AccountData, BalanceLock, DustCleaner, IdAmount, Reasons, ReserveData};
+pub use types::{
+	AccountData, BalanceLock, DustCleaner, ExtraFlags, IdAmount, Reasons, ReserveData,
+};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
@@ -257,8 +257,8 @@ pub mod pallet {
 		/// Use of reserves is deprecated in favour of holds. See `https://github.com/paritytech/substrate/pull/12951/`
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
-		/// The ID type for holds.
-		type HoldIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
+		/// The overarching hold reason.
+		type RuntimeHoldReason: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
 		/// The ID type for freezes.
 		type FreezeIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
@@ -437,7 +437,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		T::AccountId,
-		BoundedVec<IdAmount<T::HoldIdentifier, T::Balance>, T::MaxHolds>,
+		BoundedVec<IdAmount<T::RuntimeHoldReason, T::Balance>, T::MaxHolds>,
 		ValueQuery,
 	>;
 
@@ -463,7 +463,7 @@ pub mod pallet {
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+	impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
 		fn build(&self) {
 			let total = self.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n);
 
@@ -497,25 +497,8 @@ pub mod pallet {
 		}
 	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config<I>, I: 'static> GenesisConfig<T, I> {
-		/// Direct implementation of `GenesisBuild::build_storage`.
-		///
-		/// Kept in order not to break dependency.
-		pub fn build_storage(&self) -> Result<sp_runtime::Storage, String> {
-			<Self as GenesisBuild<T, I>>::build_storage(self)
-		}
-
-		/// Direct implementation of `GenesisBuild::assimilate_storage`.
-		///
-		/// Kept in order not to break dependency.
-		pub fn assimilate_storage(&self, storage: &mut sp_runtime::Storage) -> Result<(), String> {
-			<Self as GenesisBuild<T, I>>::assimilate_storage(self, storage)
-		}
-	}
-
 	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		#[cfg(not(feature = "insecure_zero_ed"))]
 		fn integrity_test() {
 			assert!(
@@ -539,11 +522,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set the regular balance of a given account; it also takes a reserved balance but this
@@ -562,7 +545,7 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,
 			#[pallet::compact] old_reserved: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = Self::ed();
@@ -590,7 +573,7 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::BalanceSet { who, free: new_free });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Exactly as `transfer_allow_death`, except the origin must be root and the source account
@@ -601,12 +584,12 @@ pub mod pallet {
 			source: AccountIdLookupOf<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let source = T::Lookup::lookup(source)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Same as the [`transfer_allow_death`] call, but with a check that the transfer will not
@@ -620,11 +603,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Preserve)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Transfer the entire transferable balance from the caller account.
@@ -722,11 +705,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 			<Self as fungible::Mutate<_>>::transfer(&source, &dest, value, Expendable)?;
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Set the regular balance of a given account.
@@ -741,7 +724,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 			let existential_deposit = Self::ed();
@@ -765,7 +748,7 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::BalanceSet { who, free: new_free });
-			Ok(().into())
+			Ok(())
 		}
 	}
 

@@ -23,7 +23,7 @@
 pub mod on_demand_backend;
 pub mod on_demand_ext;
 use async_recursion::async_recursion;
-use codec::{Decode, Encode};
+use codec::{Compact, Decode, Encode};
 use indicatif::{ProgressBar, ProgressStyle};
 use jsonrpsee::{
 	core::params::ArrayParams,
@@ -57,16 +57,59 @@ use tokio_retry::{strategy::FixedInterval, Retry};
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
 type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
+type SnapshotVersion = Compact<u16>;
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_HTTP_ENDPOINT: &str = "https://rpc.polkadot.io:443";
+const SNAPSHOT_VERSION: SnapshotVersion = Compact(2);
+
 /// The snapshot that we store on disk.
 #[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
+	snapshot_version: SnapshotVersion,
 	state_version: StateVersion,
 	block_hash: B::Hash,
-	raw_storage: Vec<(H256, Vec<u8>)>,
+	// <Vec<Key, (Value, MemoryDbRefCount)>>
+	raw_storage: Vec<(H256, (Vec<u8>, i32))>,
 	storage_root: H256,
+}
+
+impl<B: BlockT> Snapshot<B> {
+	pub fn new(
+		state_version: StateVersion,
+		block_hash: B::Hash,
+		raw_storage: Vec<(H256, (Vec<u8>, i32))>,
+		storage_root: H256,
+	) -> Self {
+		Self {
+			snapshot_version: SNAPSHOT_VERSION,
+			state_version,
+			block_hash,
+			raw_storage,
+			storage_root,
+		}
+	}
+
+	fn load(path: &PathBuf) -> Result<Snapshot<B>, &'static str> {
+		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
+		// The first item in the SCALE encoded struct bytes is the snapshot version. We decode and
+		// check that first, before proceeding to decode the rest of the snapshot.
+		let maybe_version: Result<SnapshotVersion, _> = Decode::decode(&mut &*bytes);
+		match maybe_version {
+			Ok(snapshot_version) => {
+				if snapshot_version != SNAPSHOT_VERSION {
+					return Err(
+						"Unsupported snapshot version detected. Please create a new snapshot.",
+					)
+				}
+				match Decode::decode(&mut &*bytes) {
+					Ok(snapshot) => return Ok(snapshot),
+					Err(_) => Err("Decode failed"),
+				}
+			},
+			Err(_) => Err("Decode failed"),
+		}
+	}
 }
 
 /// An externalities that acts exactly the same as [`sp_io::TestExternalities`] but has a few extra
@@ -546,7 +589,6 @@ where
 			.rpc_get_keys_paged(prefix.clone(), at)
 			.await?
 			.into_iter()
-			.filter(|k| !is_default_child_storage_key(&k.0))
 			.collect::<Vec<_>>();
 		sp.stop_with_message(format!(
 			"✅ Found {} keys ({:.2}s)",
@@ -614,7 +656,14 @@ where
 
 		let mut sp = Spinner::with_timer(Spinners::Dots, "Inserting keys into DB...".into());
 		let start = Instant::now();
-		pending_ext.batch_insert(key_values.clone().into_iter().map(|(k, v)| (k.0, v.0)));
+		pending_ext.batch_insert(key_values.clone().into_iter().filter_map(|(k, v)| {
+			// Don't insert the child keys here, they need to be inserted seperately with all their
+			// data in the load_child_remote function.
+			match is_default_child_storage_key(&k.0) {
+				true => None,
+				false => Some((k.0, v.0)),
+			}
+		}));
 		sp.stop_with_message(format!(
 			"✅ Inserted keys into DB ({:.2}s)",
 			start.elapsed().as_secs_f32()
@@ -732,6 +781,7 @@ where
 			.collect::<Vec<_>>();
 
 		if child_roots.is_empty() {
+			info!(target: LOG_TARGET, "👩‍👦 no child roots found to scrape",);
 			return Ok(Default::default())
 		}
 
@@ -905,15 +955,14 @@ where
 		// If we need to save a snapshot, save the raw storage and root hash to the snapshot.
 		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
 			let (raw_storage, storage_root) = pending_ext.into_raw_snapshot();
-			let snapshot = Snapshot::<B> {
+			let snapshot = Snapshot::<B>::new(
 				state_version,
-				block_hash: self
-					.as_online()
+				self.as_online()
 					.at
 					.expect("set to `Some` in `init_remote_client`; must be called before; qed"),
-				raw_storage: raw_storage.clone(),
+				raw_storage.clone(),
 				storage_root,
-			};
+			);
 			let encoded = snapshot.encode();
 			log::info!(
 				target: LOG_TARGET,
@@ -936,12 +985,6 @@ where
 		Ok(pending_ext)
 	}
 
-	fn load_snapshot(&mut self, path: PathBuf) -> Result<Snapshot<B>, &'static str> {
-		info!(target: LOG_TARGET, "loading data from snapshot {:?}", path);
-		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
-		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
-	}
-
 	async fn do_load_remote(&mut self) -> Result<RemoteExternalities<B>, &'static str> {
 		self.init_remote_client().await?;
 		let block_hash = self.as_online().at_expected();
@@ -961,8 +1004,9 @@ where
 	) -> Result<RemoteExternalities<B>, &'static str> {
 		let mut sp = Spinner::with_timer(Spinners::Dots, "Loading snapshot...".into());
 		let start = Instant::now();
-		let Snapshot { block_hash, state_version, raw_storage, storage_root } =
-			self.load_snapshot(config.state_snapshot.path.clone())?;
+		info!(target: LOG_TARGET, "Loading snapshot from {:?}", &config.state_snapshot.path);
+		let Snapshot { snapshot_version: _, block_hash, state_version, raw_storage, storage_root } =
+			Snapshot::<B>::load(&config.state_snapshot.path)?;
 
 		let mut inner_ext = TestExternalities::new_with_code_and_state(
 			Default::default(),
@@ -1203,25 +1247,61 @@ where
 // 		assert_eq!(ext.block_hash, cached_ext.block_hash);
 // 	}
 
-// 	#[tokio::test]
-// 	async fn offline_else_online_works() {
-// 		const CACHE: &'static str = "offline_else_online_works_data";
-// 		init_logger();
-// 		// this shows that in the second run, we use the remote and create a snapshot.
-// 		Builder::<Block>::new()
-// 			.mode(Mode::OfflineOrElseOnline(
-// 				OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) },
-// 				OnlineConfig {
-// 					pallets: vec!["Proxy".to_owned()],
-// 					child_trie: false,
-// 					state_snapshot: Some(SnapshotConfig::new(CACHE)),
-// 					..Default::default()
-// 				},
-// 			))
-// 			.build()
-// 			.await
-// 			.unwrap()
-// 			.execute_with(|| {});
+	// #[tokio::test]
+	// async fn child_keys_are_loaded() {
+	// 	const CACHE: &'static str = "snapshot_retains_storage";
+	// 	init_logger();
+
+	// 	// create an ext with children keys
+	// 	let child_ext = Builder::<Block>::new()
+	// 		.mode(Mode::Online(OnlineConfig {
+	// 			pallets: vec!["Proxy".to_owned()],
+	// 			child_trie: true,
+	// 			state_snapshot: Some(SnapshotConfig::new(CACHE)),
+	// 			..Default::default()
+	// 		}))
+	// 		.build()
+	// 		.await
+	// 		.unwrap();
+
+	// 	// create an ext without children keys
+	// 	let ext = Builder::<Block>::new()
+	// 		.mode(Mode::Online(OnlineConfig {
+	// 			pallets: vec!["Proxy".to_owned()],
+	// 			child_trie: false,
+	// 			state_snapshot: Some(SnapshotConfig::new(CACHE)),
+	// 			..Default::default()
+	// 		}))
+	// 		.build()
+	// 		.await
+	// 		.unwrap();
+
+	// 	// there should be more keys in the child ext.
+	// 	assert!(
+	// 		child_ext.as_backend().backend_storage().keys().len() >
+	// 			ext.as_backend().backend_storage().keys().len()
+	// 	);
+	// }
+
+	// #[tokio::test]
+	// async fn offline_else_online_works() {
+	// 	const CACHE: &'static str = "offline_else_online_works_data";
+	// 	init_logger();
+	// 	// this shows that in the second run, we use the remote and create a snapshot.
+	// 	Builder::<Block>::new()
+	// 		.mode(Mode::OfflineOrElseOnline(
+	// 			OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) },
+	// 			OnlineConfig {
+	// 				pallets: vec!["Proxy".to_owned()],
+	// 				child_trie: false,
+	// 				state_snapshot: Some(SnapshotConfig::new(CACHE)),
+	// 				..Default::default()
+	// 			},
+	// 		))
+	// 		.build()
+	// 		.await
+	// 		.unwrap()
+	// 		.execute_with(|| {});
 
 // 		// this shows that in the second run, we are not using the remote
 // 		Builder::<Block>::new()

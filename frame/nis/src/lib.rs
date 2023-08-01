@@ -162,11 +162,7 @@ pub mod pallet {
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{
-			fungible::{
-				self,
-				hold::{Inspect as FunHoldInspect, Mutate as FunHoldMutate},
-				Balanced as FunBalanced,
-			},
+			fungible::{self, hold::Mutate as FunHoldMutate, Balanced as FunBalanced},
 			nonfungible::{Inspect as NftInspect, Transfer as NftTransfer},
 			tokens::{
 				Fortitude::Polite,
@@ -190,13 +186,10 @@ pub mod pallet {
 		<<T as Config>::Currency as FunInspect<<T as frame_system::Config>::AccountId>>::Balance;
 	type DebtOf<T> =
 		fungible::Debt<<T as frame_system::Config>::AccountId, <T as Config>::Currency>;
-	type ReceiptRecordOf<T> = ReceiptRecord<
-		<T as frame_system::Config>::AccountId,
-		<T as frame_system::Config>::BlockNumber,
-		BalanceOf<T>,
-	>;
+	type ReceiptRecordOf<T> =
+		ReceiptRecord<<T as frame_system::Config>::AccountId, BlockNumberFor<T>, BalanceOf<T>>;
 	type IssuanceInfoOf<T> = IssuanceInfo<BalanceOf<T>>;
-	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber, BalanceOf<T>>;
+	type SummaryRecordOf<T> = SummaryRecord<BlockNumberFor<T>, BalanceOf<T>>;
 	type BidOf<T> = Bid<BalanceOf<T>, <T as frame_system::Config>::AccountId>;
 	type QueueTotalsTypeOf<T> = BoundedVec<(u32, BalanceOf<T>), <T as Config>::QueueCount>;
 
@@ -216,13 +209,10 @@ pub mod pallet {
 		type Currency: FunInspect<Self::AccountId, Balance = Self::CurrencyBalance>
 			+ FunMutate<Self::AccountId>
 			+ FunBalanced<Self::AccountId>
-			+ FunHoldInspect<Self::AccountId>
-			+ FunHoldMutate<Self::AccountId>;
+			+ FunHoldMutate<Self::AccountId, Reason = Self::RuntimeHoldReason>;
 
-		/// The identifier of the hold reason.
-
-		#[pallet::constant]
-		type HoldReason: Get<<Self::Currency as FunHoldInspect<Self::AccountId>>::Reason>;
+		/// Overarching hold reason.
+		type RuntimeHoldReason: From<HoldReason>;
 
 		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
 		/// `From<u64>`.
@@ -282,7 +272,7 @@ pub mod pallet {
 		/// The base period for the duration queues. This is the common multiple across all
 		/// supported freezing durations that can be bid upon.
 		#[pallet::constant]
-		type BasePeriod: Get<Self::BlockNumber>;
+		type BasePeriod: Get<BlockNumberFor<Self>>;
 
 		/// The minimum amount of funds that may be placed in a bid. Note that this
 		/// does not actually limit the amount which may be represented in a receipt since bids may
@@ -303,7 +293,7 @@ pub mod pallet {
 		/// A larger value results in fewer storage hits each block, but a slower period to get to
 		/// the target.
 		#[pallet::constant]
-		type IntakePeriod: Get<Self::BlockNumber>;
+		type IntakePeriod: Get<BlockNumberFor<Self>>;
 
 		/// The maximum amount of bids that can consolidated into receipts in a single intake. A
 		/// larger value here means less of the block available for transactions should there be a
@@ -313,7 +303,7 @@ pub mod pallet {
 
 		/// The maximum proportion which may be thawed and the period over which it is reset.
 		#[pallet::constant]
-		type ThawThrottle: Get<(Perquintill, Self::BlockNumber)>;
+		type ThawThrottle: Get<(Perquintill, BlockNumberFor<Self>)>;
 	}
 
 	#[pallet::pallet]
@@ -420,7 +410,7 @@ pub mod pallet {
 			/// The identity of the receipt.
 			index: ReceiptIndex,
 			/// The block number at which the receipt may be thawed.
-			expiry: T::BlockNumber,
+			expiry: BlockNumberFor<T>,
 			/// The owner of the receipt.
 			who: T::AccountId,
 			/// The proportion of the effective total issuance which the receipt represents.
@@ -515,7 +505,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_initialize(n: T::BlockNumber) -> Weight {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let mut weight_counter =
 				WeightCounter { used: Weight::zero(), limit: T::MaxIntakeWeight::get() };
 			if T::IntakePeriod::get().is_zero() || (n % T::IntakePeriod::get()).is_zero() {
@@ -569,14 +559,14 @@ pub mod pallet {
 				|q| -> Result<(u32, BalanceOf<T>), DispatchError> {
 					let queue_full = q.len() == T::MaxQueueLen::get() as usize;
 					ensure!(!queue_full || q[0].amount < amount, Error::<T>::BidTooLow);
-					T::Currency::hold(&T::HoldReason::get(), &who, amount)?;
+					T::Currency::hold(&HoldReason::NftReceipt.into(), &who, amount)?;
 
 					// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
 					let mut bid = Bid { amount, who: who.clone() };
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
 						let _ = T::Currency::release(
-							&T::HoldReason::get(),
+							&HoldReason::NftReceipt.into(),
 							&bid.who,
 							bid.amount,
 							BestEffort,
@@ -637,7 +627,7 @@ pub mod pallet {
 			queue.remove(pos);
 			let new_len = queue.len() as u32;
 
-			T::Currency::release(&T::HoldReason::get(), &bid.who, bid.amount, BestEffort)?;
+			T::Currency::release(&HoldReason::NftReceipt.into(), &bid.who, bid.amount, BestEffort)?;
 
 			Queues::<T>::insert(duration, queue);
 			QueueTotals::<T>::mutate(|qs| {
@@ -729,7 +719,7 @@ pub mod pallet {
 			let dropped = receipt.proportion.is_zero();
 
 			if amount > on_hold {
-				T::Currency::release(&T::HoldReason::get(), &who, on_hold, Exact)?;
+				T::Currency::release(&HoldReason::NftReceipt.into(), &who, on_hold, Exact)?;
 				let deficit = amount - on_hold;
 				// Try to transfer deficit from pot to receipt owner.
 				summary.receipts_on_hold.saturating_reduce(on_hold);
@@ -744,7 +734,7 @@ pub mod pallet {
 					// Transfer excess of `on_hold` to the pot if we have now fully compensated for
 					// the receipt.
 					T::Currency::transfer_on_hold(
-						&T::HoldReason::get(),
+						&HoldReason::NftReceipt.into(),
 						&who,
 						&our_account,
 						on_hold,
@@ -760,7 +750,7 @@ pub mod pallet {
 					)?;
 					summary.receipts_on_hold.saturating_reduce(on_hold);
 				}
-				T::Currency::release(&T::HoldReason::get(), &who, amount, Exact)?;
+				T::Currency::release(&HoldReason::NftReceipt.into(), &who, amount, Exact)?;
 			}
 
 			if dropped {
@@ -852,7 +842,7 @@ pub mod pallet {
 			ensure!(owner == who, Error::<T>::NotOwner);
 
 			// Unreserve and transfer the funds to the pot.
-			let reason = T::HoldReason::get();
+			let reason = HoldReason::NftReceipt.into();
 			let us = Self::account_id();
 			T::Currency::transfer_on_hold(&reason, &who, &us, on_hold, Exact, Free, Polite)
 				.map_err(|_| Error::<T>::Unfunded)?;
@@ -903,7 +893,7 @@ pub mod pallet {
 			)?;
 
 			// Transfer the funds from the pot to the owner and reserve
-			let reason = T::HoldReason::get();
+			let reason = HoldReason::NftReceipt.into();
 			let us = Self::account_id();
 			T::Currency::transfer_and_hold(&reason, &us, &who, amount, Exact, Expendable, Polite)?;
 
@@ -959,7 +949,7 @@ pub mod pallet {
 			let mut item = Receipts::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
 			let (owner, on_hold) = item.owner.take().ok_or(Error::<T>::AlreadyCommunal)?;
 
-			let reason = T::HoldReason::get();
+			let reason = HoldReason::NftReceipt.into();
 			T::Currency::transfer_on_hold(&reason, &owner, dest, on_hold, Exact, OnHold, Polite)?;
 
 			item.owner = Some((dest.clone(), on_hold));
@@ -1069,7 +1059,7 @@ pub mod pallet {
 
 		pub(crate) fn process_queue(
 			duration: u32,
-			now: T::BlockNumber,
+			now: BlockNumberFor<T>,
 			our_account: &T::AccountId,
 			issuance: &IssuanceInfo<BalanceOf<T>>,
 			max_bids: u32,
@@ -1113,7 +1103,7 @@ pub mod pallet {
 
 		pub(crate) fn process_bid(
 			mut bid: BidOf<T>,
-			expiry: T::BlockNumber,
+			expiry: BlockNumberFor<T>,
 			_our_account: &T::AccountId,
 			issuance: &IssuanceInfo<BalanceOf<T>>,
 			remaining: &mut BalanceOf<T>,

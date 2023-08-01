@@ -65,7 +65,7 @@ pub mod config;
 pub type Transactions<E> = Vec<E>;
 
 mod rep {
-	use sc_peerset::ReputationChange as Rep;
+	use sc_network::ReputationChange as Rep;
 	/// Reputation change when a peer sends us any transaction.
 	///
 	/// This forces node to verify it, thus the negative value here. Once transaction is verified,
@@ -97,21 +97,19 @@ impl Metrics {
 	}
 }
 
-#[pin_project::pin_project]
 struct PendingTransaction<H> {
-	#[pin]
 	validation: TransactionImportFuture,
 	tx_hash: H,
 }
 
+impl<H> Unpin for PendingTransaction<H> {}
+
 impl<H: ExHashT> Future for PendingTransaction<H> {
 	type Output = (H, TransactionImport);
 
-	fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-		let mut this = self.project();
-
-		if let Poll::Ready(import_result) = Pin::new(&mut this.validation).poll_unpin(cx) {
-			return Poll::Ready((this.tx_hash.clone(), import_result))
+	fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+		if let Poll::Ready(import_result) = self.validation.poll_unpin(cx) {
+			return Poll::Ready((self.tx_hash.clone(), import_result))
 		}
 
 		Poll::Pending
@@ -329,8 +327,8 @@ where
 	fn handle_sync_event(&mut self, event: SyncEvent) {
 		match event {
 			SyncEvent::PeerConnected(remote) => {
-				let addr = iter::once(multiaddr::Protocol::P2p(remote.into()))
-					.collect::<multiaddr::Multiaddr>();
+				let addr =
+					iter::once(multiaddr::Protocol::P2p(remote)).collect::<multiaddr::Multiaddr>();
 				let result = self.network.add_peers_to_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(addr).collect(),

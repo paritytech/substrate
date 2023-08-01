@@ -32,9 +32,6 @@ pub use sp_core::{
 	crypto::{ByteArray, CryptoType, Derive, IsWrappedBy, Public, UncheckedFrom, Wraps},
 	RuntimeDebug,
 };
-#[doc(hidden)]
-#[cfg(all(not(feature = "std"), feature = "serde"))]
-pub use sp_std::alloc::{format, string::String};
 
 #[doc(hidden)]
 pub use codec;
@@ -182,6 +179,13 @@ macro_rules! app_crypto_pair {
 		impl $crate::AppPair for Pair {
 			type Generic = $pair;
 		}
+
+		impl Pair {
+			/// Convert into wrapped generic key pair type.
+			pub fn into_inner(self) -> $pair {
+				self.0
+			}
+		}
 	};
 }
 
@@ -328,6 +332,14 @@ macro_rules! app_crypto_public_common {
 	};
 }
 
+#[doc(hidden)]
+pub mod module_format_string_prelude {
+	#[cfg(all(not(feature = "std"), feature = "serde"))]
+	pub use sp_std::alloc::{format, string::String};
+	#[cfg(feature = "std")]
+	pub use std::{format, string::String};
+}
+
 /// Implements traits for the public key type if `feature = "serde"` is enabled.
 #[cfg(feature = "serde")]
 #[doc(hidden)]
@@ -365,9 +377,7 @@ macro_rules! app_crypto_public_common_if_serde {
 			where
 				D: $crate::serde::Deserializer<'de>,
 			{
-				use $crate::Ss58Codec;
-				#[cfg(all(not(feature = "std"), feature = "serde"))]
-				use $crate::{format, String};
+				use $crate::{module_format_string_prelude::*, Ss58Codec};
 
 				Public::from_ss58check(&String::deserialize(deserializer)?)
 					.map_err(|e| $crate::serde::de::Error::custom(format!("{:?}", e)))

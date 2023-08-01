@@ -55,8 +55,8 @@ use sp_runtime::{
 
 pub use self::{
 	builder::{
-		build_network, build_offchain_workers, new_client, new_db_backend, new_full_client,
-		new_full_parts, new_full_parts_with_genesis_builder, new_native_or_wasm_executor,
+		build_network, new_client, new_db_backend, new_full_client, new_full_parts,
+		new_full_parts_with_genesis_builder, new_native_or_wasm_executor, new_wasm_executor,
 		spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter, SpawnTasksParams,
 		TFullBackend, TFullCallExecutor, TFullClient,
 	},
@@ -211,7 +211,7 @@ async fn build_network_future<
 }
 
 /// Builds a future that processes system RPC requests.
-async fn build_system_rpc_future<
+pub async fn build_system_rpc_future<
 	B: BlockT,
 	C: BlockchainEvents<B>
 		+ HeaderBackend<B>
@@ -237,7 +237,7 @@ async fn build_system_rpc_future<
 		// Answer incoming RPC requests.
 		let Some(req) = rpc_rx.next().await else {
 			debug!("RPC requests stream has terminated, shutting down the system RPC future.");
-			return;
+			return
 		};
 
 		match req {
@@ -255,7 +255,7 @@ async fn build_system_rpc_future<
 				let _ = sender.send(network_service.local_peer_id().to_base58());
 			},
 			sc_rpc::system::Request::LocalListenAddresses(sender) => {
-				let peer_id = (network_service.local_peer_id()).into();
+				let peer_id = network_service.local_peer_id();
 				let p2p_proto_suffix = sc_network::multiaddr::Protocol::P2p(peer_id);
 				let addresses = network_service
 					.listen_addresses()
@@ -419,6 +419,13 @@ where
 pub struct TransactionPoolAdapter<C, P> {
 	pool: Arc<P>,
 	client: Arc<C>,
+}
+
+impl<C, P> TransactionPoolAdapter<C, P> {
+	/// Constructs a new instance of [`TransactionPoolAdapter`].
+	pub fn new(pool: Arc<P>, client: Arc<C>) -> Self {
+		Self { pool, client }
+	}
 }
 
 /// Get transactions for propagation.

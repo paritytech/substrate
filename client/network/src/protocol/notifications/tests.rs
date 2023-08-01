@@ -65,19 +65,24 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 			.timeout(Duration::from_secs(20))
 			.boxed();
 
-		let (peerset, _) = sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig {
-			sets: vec![sc_peerset::SetConfig {
-				in_peers: 25,
-				out_peers: 25,
-				bootnodes: if index == 0 {
-					keypairs.iter().skip(1).map(|keypair| keypair.public().to_peer_id()).collect()
-				} else {
-					vec![]
-				},
-				reserved_nodes: Default::default(),
-				reserved_only: false,
-			}],
-		});
+		let (peerset, handle) =
+			crate::peerset::Peerset::from_config(crate::peerset::PeersetConfig {
+				sets: vec![crate::peerset::SetConfig {
+					in_peers: 25,
+					out_peers: 25,
+					bootnodes: if index == 0 {
+						keypairs
+							.iter()
+							.skip(1)
+							.map(|keypair| keypair.public().to_peer_id())
+							.collect()
+					} else {
+						vec![]
+					},
+					reserved_nodes: Default::default(),
+					reserved_only: false,
+				}],
+			});
 
 		let behaviour = CustomProtoWithAddr {
 			inner: Notifications::new(
@@ -89,6 +94,7 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 					max_notification_size: 1024 * 1024,
 				}),
 			),
+			_peerset_handle: handle,
 			addrs: addrs
 				.iter()
 				.enumerate()
@@ -124,6 +130,8 @@ fn build_nodes() -> (Swarm<CustomProtoWithAddr>, Swarm<CustomProtoWithAddr>) {
 /// Wraps around the `CustomBehaviour` network behaviour, and adds hardcoded node addresses to it.
 struct CustomProtoWithAddr {
 	inner: Notifications,
+	// We need to keep `PeersetHandle` for `Peerset` not to shut down.
+	_peerset_handle: crate::peerset::PeersetHandle,
 	addrs: Vec<(PeerId, Multiaddr)>,
 }
 
@@ -143,7 +151,7 @@ impl std::ops::DerefMut for CustomProtoWithAddr {
 
 impl NetworkBehaviour for CustomProtoWithAddr {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
-	type OutEvent = <Notifications as NetworkBehaviour>::OutEvent;
+	type ToSwarm = <Notifications as NetworkBehaviour>::ToSwarm;
 
 	fn handle_pending_inbound_connection(
 		&mut self,
@@ -221,7 +229,7 @@ impl NetworkBehaviour for CustomProtoWithAddr {
 		&mut self,
 		cx: &mut Context,
 		params: &mut impl PollParameters,
-	) -> Poll<ToSwarm<Self::OutEvent, THandlerInEvent<Self>>> {
+	) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
 		self.inner.poll(cx, params)
 	}
 }
@@ -266,7 +274,7 @@ fn reconnect_after_disconnect() {
 						if service2_state == ServiceState::FirstConnec {
 							service1.behaviour_mut().disconnect_peer(
 								Swarm::local_peer_id(&service2),
-								sc_peerset::SetId::from(0),
+								crate::peerset::SetId::from(0),
 							);
 						}
 					},
@@ -289,7 +297,7 @@ fn reconnect_after_disconnect() {
 						if service1_state == ServiceState::FirstConnec {
 							service1.behaviour_mut().disconnect_peer(
 								Swarm::local_peer_id(&service2),
-								sc_peerset::SetId::from(0),
+								crate::peerset::SetId::from(0),
 							);
 						}
 					},
@@ -307,8 +315,20 @@ fn reconnect_after_disconnect() {
 				_ => {},
 			}
 
+			// Due to the bug in `Notifications`, the disconnected node does not always detect that
+			// it was disconnected. The closed inbound substream is tolerated by design, and the
+			// closed outbound substream is not detected until something is sent into it.
+			// See [PR #13396](https://github.com/paritytech/substrate/pull/13396).
+			// This happens if the disconnecting node reconnects to it fast enough.
+			// In this case the disconnected node does not transit via `ServiceState::NotConnected`
+			// and stays in `ServiceState::FirstConnec`.
+			// TODO: update this once the fix is finally merged.
 			if service1_state == ServiceState::ConnectedAgain &&
-				service2_state == ServiceState::ConnectedAgain
+				service2_state == ServiceState::ConnectedAgain ||
+				service1_state == ServiceState::ConnectedAgain &&
+					service2_state == ServiceState::FirstConnec ||
+				service1_state == ServiceState::FirstConnec &&
+					service2_state == ServiceState::ConnectedAgain
 			{
 				break
 			}

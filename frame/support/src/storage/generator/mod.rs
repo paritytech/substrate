@@ -53,12 +53,12 @@ mod tests {
 		use crate::pallet_prelude::*;
 
 		#[pallet::pallet]
-		pub struct Pallet<T>(PhantomData<T>);
+		pub struct Pallet<T>(_);
 
 		#[pallet::config]
 		#[pallet::disable_frame_system_supertrait_check]
 		pub trait Config: 'static {
-			type BlockNumber;
+			type Block: sp_runtime::traits::Block;
 			type AccountId;
 			type BaseCallFilter: crate::traits::Contains<Self::RuntimeCall>;
 			type RuntimeOrigin;
@@ -102,6 +102,11 @@ mod tests {
 
 		pub mod pallet_prelude {
 			pub type OriginFor<T> = <T as super::Config>::RuntimeOrigin;
+
+			pub type HeaderFor<T> =
+				<<T as super::Config>::Block as sp_runtime::traits::HeaderProvider>::HeaderT;
+
+			pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
 		}
 	}
 
@@ -113,18 +118,14 @@ mod tests {
 
 	crate::construct_runtime!(
 		pub enum Runtime
-		where
-			Block = Block,
-			NodeBlock = Block,
-			UncheckedExtrinsic = UncheckedExtrinsic,
 		{
 			System: self::frame_system,
 		}
 	);
 
 	impl self::frame_system::Config for Runtime {
-		type BlockNumber = BlockNumber;
 		type AccountId = AccountId;
+		type Block = Block;
 		type BaseCallFilter = crate::traits::Everything;
 		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
@@ -148,7 +149,7 @@ mod tests {
 
 	#[test]
 	fn value_translate_works() {
-		let t = GenesisConfig::default().build_storage().unwrap();
+		let t = RuntimeGenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			type Value = self::frame_system::Value<Runtime>;
 
@@ -170,7 +171,7 @@ mod tests {
 
 	#[test]
 	fn map_translate_works() {
-		let t = GenesisConfig::default().build_storage().unwrap();
+		let t = RuntimeGenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			type NumberMap = self::frame_system::NumberMap<Runtime>;
 
@@ -201,7 +202,7 @@ mod tests {
 
 	#[test]
 	fn try_mutate_works() {
-		let t = GenesisConfig::default().build_storage().unwrap();
+		let t = RuntimeGenesisConfig::default().build_storage().unwrap();
 		TestExternalities::new(t).execute_with(|| {
 			type Value = self::frame_system::Value<Runtime>;
 			type NumberMap = self::frame_system::NumberMap<Runtime>;

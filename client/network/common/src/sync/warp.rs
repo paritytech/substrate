@@ -72,7 +72,7 @@ pub trait WarpSyncProvider<Block: BlockT>: Send + Sync {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum WarpSyncPhase<Block: BlockT> {
 	/// Waiting for peers to connect.
-	AwaitingPeers,
+	AwaitingPeers { required_peers: usize },
 	/// Waiting for target block to be received.
 	AwaitingTargetBlock,
 	/// Downloading and verifying grandpa warp proofs.
@@ -90,7 +90,8 @@ pub enum WarpSyncPhase<Block: BlockT> {
 impl<Block: BlockT> fmt::Display for WarpSyncPhase<Block> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Self::AwaitingPeers => write!(f, "Waiting for peers"),
+			Self::AwaitingPeers { required_peers } =>
+				write!(f, "Waiting for {required_peers} peers to be connected"),
 			Self::AwaitingTargetBlock => write!(f, "Waiting for target block to be received"),
 			Self::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
 			Self::DownloadingTargetBlock => write!(f, "Downloading target block"),

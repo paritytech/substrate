@@ -22,8 +22,8 @@ use frame_election_provider_support::{onchain, SequentialPhragmen, VoteWeight};
 use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
-		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, GenesisBuild, Get, Hooks,
-		Imbalance, OnUnbalanced, OneSessionHandler,
+		ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, Get, Hooks, Imbalance,
+		OnUnbalanced, OneSessionHandler,
 	},
 	weights::constants::RocksDbWeight,
 };
@@ -32,8 +32,9 @@ use sp_core::H256;
 use sp_io;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	testing::{Header, UintAuthorityId},
+	testing::UintAuthorityId,
 	traits::{IdentityLookup, Zero},
+	BuildStorage,
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 
@@ -42,7 +43,7 @@ pub const BLOCK_TIME: u64 = 1000;
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
-pub(crate) type AccountIndex = u64;
+pub(crate) type Nonce = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
 
@@ -82,14 +83,10 @@ pub fn is_disabled(controller: AccountId) -> bool {
 	Session::disabled_validators().contains(&validator_index)
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
+	pub enum Test
 	{
 		System: frame_system,
 		Authorship: pallet_authorship,
@@ -127,14 +124,13 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
-	type Index = AccountIndex;
-	type BlockNumber = BlockNumber;
+	type Nonce = Nonce;
 	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
+	type Block = Block;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
@@ -159,7 +155,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 	type FreezeIdentifier = ();
 	type MaxFreezes = ();
-	type HoldIdentifier = ();
+	type RuntimeHoldReason = ();
 	type MaxHolds = ();
 }
 
@@ -236,7 +232,6 @@ parameter_types! {
 	pub static HistoryDepth: u32 = 80;
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
-	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 	pub static MaxWinners: u32 = 100;
 }
 
@@ -268,8 +263,14 @@ impl OnUnbalanced<PositiveImbalanceOf<Test>> for MockReward {
 	}
 }
 
-pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
-impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
+parameter_types! {
+	pub static LedgerSlashPerEra:
+		(BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) =
+		(Zero::zero(), BTreeMap::new());
+}
+
+pub struct EventListenerMock;
+impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 	fn on_slash(
 		_pool_account: &AccountId,
 		slashed_bonded: Balance,
@@ -284,7 +285,7 @@ impl crate::pallet::pallet::Config for Test {
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
+	type CurrencyToVote = ();
 	type RewardRemainder = RewardRemainderMock;
 	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
@@ -305,7 +306,7 @@ impl crate::pallet::pallet::Config for Test {
 	type TargetList = UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = MaxUnlockingChunks;
 	type HistoryDepth = HistoryDepth;
-	type OnStakerSlash = OnStakerSlashMock<Test>;
+	type EventListeners = EventListenerMock;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -424,7 +425,7 @@ impl ExtBuilder {
 	}
 	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		let mut storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
 		let _ = pallet_balances::GenesisConfig::<Test> {
 			balances: vec![

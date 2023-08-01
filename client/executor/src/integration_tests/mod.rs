@@ -24,7 +24,7 @@ use codec::{Decode, Encode};
 use sc_executor_common::{
 	error::Error,
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{HeapAllocStrategy, WasmModule, DEFAULT_HEAP_ALLOC_STRATEGY},
+	wasm_runtime::{HeapAllocStrategy, WasmModule},
 };
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
@@ -50,12 +50,6 @@ type HostFunctions = sp_io::SubstrateHostFunctions;
 macro_rules! test_wasm_execution {
 	($method_name:ident) => {
 		paste::item! {
-			#[test]
-			fn [<$method_name _interpreted>]() {
-				let _ = sp_tracing::try_init_simple();
-				$method_name(WasmExecutionMethod::Interpreted);
-			}
-
 			#[test]
 			fn [<$method_name _compiled_recreate_instance_cow>]() {
 				let _ = sp_tracing::try_init_simple();
@@ -97,15 +91,6 @@ macro_rules! test_wasm_execution {
 			}
 		}
 	};
-
-	(interpreted_only $method_name:ident) => {
-		paste::item! {
-			#[test]
-			fn [<$method_name _interpreted>]() {
-				$method_name(WasmExecutionMethod::Interpreted);
-			}
-		}
-	};
 }
 
 fn call_in_wasm<E: Externalities>(
@@ -144,8 +129,8 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 	match call_in_wasm("test_calling_missing_external", &[], wasm_method, &mut ext).unwrap_err() {
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
-				WasmExecutionMethod::Interpreted => "Other: Function `missing_external` is only a stub. Calling a stub is not allowed.",
-				WasmExecutionMethod::Compiled { .. } => "call to a missing function env:missing_external"
+				WasmExecutionMethod::Compiled { .. } =>
+					"call to a missing function env:missing_external",
 			};
 			assert_eq!(error.message, expected);
 		},
@@ -163,8 +148,8 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 	{
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
-				WasmExecutionMethod::Interpreted => "Other: Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.",
-				WasmExecutionMethod::Compiled { .. } => "call to a missing function env:yet_another_missing_external"
+				WasmExecutionMethod::Compiled { .. } =>
+					"call to a missing function env:yet_another_missing_external",
 			};
 			assert_eq!(error.message, expected);
 		},
@@ -473,9 +458,6 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 				r#"host code panicked while being called by the runtime: Failed to allocate memory: "Allocator ran out of space""#
 			);
 		},
-		Error::RuntimePanicked(error) if wasm_method == WasmExecutionMethod::Interpreted => {
-			assert_eq!(error, r#"Failed to allocate memory: "Allocator ran out of space""#);
-		},
 		error => panic!("unexpected error: {:?}", error),
 	}
 }
@@ -556,25 +538,6 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	// On the second invocation we allocate yet another 768KB (75%) of stack
 	let res = instance.call_export("allocates_huge_stack_array", &false.encode());
 	assert!(res.is_ok());
-}
-
-test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
-fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, DEFAULT_HEAP_ALLOC_STRATEGY);
-	let mut instance = runtime.new_instance().unwrap();
-
-	let heap_base = instance
-		.get_global_const("__heap_base")
-		.expect("`__heap_base` is valid")
-		.expect("`__heap_base` exists")
-		.as_i32()
-		.expect("`__heap_base` is an `i32`");
-
-	let params = (heap_base as u32, 512u32 * 64 * 1024).encode();
-	instance.call_export("check_and_set_in_heap", &params).unwrap();
-
-	// Cal it a second time to check that the heap was freed.
-	instance.call_export("check_and_set_in_heap", &params).unwrap();
 }
 
 test_wasm_execution!(parallel_execution);
@@ -787,7 +750,6 @@ fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
 	match call_in_wasm("test_unreachable_intrinsic", &[], wasm_method, &mut ext).unwrap_err() {
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
-				WasmExecutionMethod::Interpreted => "unreachable",
 				WasmExecutionMethod::Compiled { .. } =>
 					"wasm trap: wasm `unreachable` instruction executed",
 			};
@@ -814,9 +776,6 @@ fn return_huge_len(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 
 	match call_in_wasm("test_return_huge_len", &[], wasm_method, &mut ext).unwrap_err() {
-		Error::Runtime => {
-			assert_matches!(wasm_method, WasmExecutionMethod::Interpreted);
-		},
 		Error::OutputExceedsBounds => {
 			assert_matches!(wasm_method, WasmExecutionMethod::Compiled { .. });
 		},
@@ -843,9 +802,6 @@ fn return_max_memory_offset_plus_one(wasm_method: WasmExecutionMethod) {
 	match call_in_wasm("test_return_max_memory_offset_plus_one", &[], wasm_method, &mut ext)
 		.unwrap_err()
 	{
-		Error::Runtime => {
-			assert_matches!(wasm_method, WasmExecutionMethod::Interpreted);
-		},
 		Error::OutputExceedsBounds => {
 			assert_matches!(wasm_method, WasmExecutionMethod::Compiled { .. });
 		},
@@ -859,9 +815,6 @@ fn return_overflow(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 
 	match call_in_wasm("test_return_overflow", &[], wasm_method, &mut ext).unwrap_err() {
-		Error::Runtime => {
-			assert_matches!(wasm_method, WasmExecutionMethod::Interpreted);
-		},
 		Error::OutputExceedsBounds => {
 			assert_matches!(wasm_method, WasmExecutionMethod::Compiled { .. });
 		},

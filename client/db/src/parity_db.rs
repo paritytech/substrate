@@ -54,16 +54,16 @@ pub fn open<H: Clone + AsRef<[u8]>>(
 			];
 
 			for i in compressed {
-				let mut column = &mut config.columns[i as usize];
+				let column = &mut config.columns[i as usize];
 				column.compression = parity_db::CompressionType::Lz4;
 			}
 
-			let mut state_col = &mut config.columns[columns::STATE as usize];
+			let state_col = &mut config.columns[columns::STATE as usize];
 			state_col.ref_counted = true;
 			state_col.preimage = true;
 			state_col.uniform = true;
 
-			let mut tx_col = &mut config.columns[columns::TRANSACTION as usize];
+			let tx_col = &mut config.columns[columns::TRANSACTION as usize];
 			tx_col.ref_counted = true;
 			tx_col.preimage = true;
 			tx_col.uniform = true;
