@@ -28,7 +28,7 @@
 //!  This is paramount for the success of the pallet since message execution is done in
 //!  `on_initialize` which must _never_ under-estimate its PoV weight. It also needs a frugal PoV
 //!  footprint since PoV is scarce and this is (possibly) done in every block. This must also hold
-//! in  the presence of unpredictable message size distributions.
+//! in the presence of unpredictable message size distributions.
 //! 3. Usable as XCMP, DMP and UMP message/dispatch queue - possibly through adapter types.
 //!
 //! # Design
@@ -39,10 +39,10 @@
 //! which queue it will be stored. Messages are stored by being appended to the last [`Page`] of a
 //! book. Each book keeps track of its pages by indexing `Pages`. The `ReadyRing` contains all
 //! queues which hold at least one unprocessed message and are thereby *ready* to be serviced. The
-//! `ServiceHead` indicates which *ready* queue is the next to be serviced.
-//! The pallet implements [`frame_support::traits::EnqueueMessage`],
-//! [`frame_support::traits::ServiceQueues`] and has [`frame_support::traits::ProcessMessage`] and
-//! [`OnQueueChanged`] hooks to communicate with the outside world.
+//! `ServiceHead` indicates which *ready* queue is the next to be serviced. The pallet implements
+//! [`frame_support::traits::EnqueueMessage`], [`frame_support::traits::ServiceQueues`] and has
+//! [`frame_support::traits::ProcessMessage`] and [`OnQueueChanged`] hooks to communicate with the
+//! outside world.
 //!
 //! NOTE: The storage items are not linked since they are not public.
 //!
@@ -118,12 +118,11 @@
 //! executed automatically through `on_initialize` nor by calling
 //! [`frame_support::traits::ServiceQueues::service_queues`].
 //!
-//! Manual intervention in the form of
-//! [`frame_support::traits::ServiceQueues::execute_overweight`] is necessary. Overweight messages
-//! emit an [`Event::OverweightEnqueued`] event which can be used to extract the arguments for
-//! manual execution. This only works on permanently overweight messages. There is no guarantee that
-//! this will work since the message could be part of a stale page and be reaped before execution
-//! commences.
+//! Manual intervention in the form of [`frame_support::traits::ServiceQueues::execute_overweight`]
+//! is necessary. Overweight messages emit an [`Event::OverweightEnqueued`] event which can be used
+//! to extract the arguments for manual execution. This only works on permanently overweight
+//! messages. There is no guarantee that this will work since the message could be part of a stale
+//! page and be reaped before execution commences.
 //!
 //! # Terminology
 //!

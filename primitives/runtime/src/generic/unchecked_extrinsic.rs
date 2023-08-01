@@ -134,16 +134,16 @@ impl<Address: TypeInfo, Call: TypeInfo, Signature: TypeInfo, Extra: SignedExtens
 	}
 }
 
-impl<Address, AccountId, Call, Signature, Extra, Lookup> Checkable<Lookup>
-	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+impl<LookupSource, AccountId, Call, Signature, Extra, Lookup> Checkable<Lookup>
+	for UncheckedExtrinsic<LookupSource, Call, Signature, Extra>
 where
-	Address: Member + MaybeDisplay,
+	LookupSource: Member + MaybeDisplay,
 	Call: Encode + Member,
 	Signature: Member + traits::Verify,
 	<Signature as traits::Verify>::Signer: IdentifyAccount<AccountId = AccountId>,
 	Extra: SignedExtension<AccountId = AccountId>,
 	AccountId: Member + MaybeDisplay,
-	Lookup: traits::Lookup<Source = Address, Target = AccountId>,
+	Lookup: traits::Lookup<Source = LookupSource, Target = AccountId>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Call, Extra>;
 

@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use super::helper;
-use frame_support_procedural_tools::get_doc_literals;
+use frame_support_procedural_tools::{get_doc_literals, is_using_frame_crate};
 use quote::ToTokens;
 use syn::{spanned::Spanned, token, Token};
 
@@ -153,24 +153,8 @@ pub struct PalletAttr {
 	typ: PalletAttrType,
 }
 
-pub struct ConfigBoundParse(syn::Ident);
-
-impl syn::parse::Parse for ConfigBoundParse {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		let ident = input.parse::<syn::Ident>()?;
-		input.parse::<syn::Token![::]>()?;
-		input.parse::<keyword::Config>()?;
-
-		if input.peek(syn::token::Lt) {
-			input.parse::<syn::AngleBracketedGenericArguments>()?;
-		}
-
-		Ok(Self(ident))
-	}
-}
-
-/// Parse for `IsType<<Sef as $ident::Config>::RuntimeEvent>` and retrieve `$ident`
-pub struct IsTypeBoundEventParse(syn::Ident);
+/// Parse for `IsType<<Sef as $path>::RuntimeEvent>` and retrieve `$path`
+pub struct IsTypeBoundEventParse(syn::Path);
 
 impl syn::parse::Parse for IsTypeBoundEventParse {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -179,15 +163,13 @@ impl syn::parse::Parse for IsTypeBoundEventParse {
 		input.parse::<syn::Token![<]>()?;
 		input.parse::<syn::Token![Self]>()?;
 		input.parse::<syn::Token![as]>()?;
-		let ident = input.parse::<syn::Ident>()?;
-		input.parse::<syn::Token![::]>()?;
-		input.parse::<keyword::Config>()?;
+		let config_path = input.parse::<syn::Path>()?;
 		input.parse::<syn::Token![>]>()?;
 		input.parse::<syn::Token![::]>()?;
 		input.parse::<keyword::RuntimeEvent>()?;
 		input.parse::<syn::Token![>]>()?;
 
-		Ok(Self(ident))
+		Ok(Self(config_path))
 	}
 }
 
@@ -225,7 +207,7 @@ impl syn::parse::Parse for FromEventParse {
 /// Check if trait_item is `type RuntimeEvent`, if so checks its bounds are those expected.
 /// (Event type is reserved type)
 fn check_event_type(
-	frame_system: &syn::Ident,
+	frame_system: &syn::Path,
 	trait_item: &syn::TraitItem,
 	trait_has_instance: bool,
 ) -> syn::Result<bool> {
@@ -240,15 +222,28 @@ fn check_event_type(
 			// Check bound contains IsType and From
 
 			let has_is_type_bound = type_.bounds.iter().any(|s| {
-				syn::parse2::<IsTypeBoundEventParse>(s.to_token_stream())
-					.map_or(false, |b| b.0 == *frame_system)
+				syn::parse2::<IsTypeBoundEventParse>(s.to_token_stream()).map_or(false, |b| {
+					let mut expected_system_config = if is_using_frame_crate(&frame_system) {
+						// in this case, we know that the only valid frame_system path is one that
+						// is `frame_system`, as `frame` re-exports it as such.
+						let fixed_frame_system =
+							syn::parse2::<syn::Path>(quote::quote!(frame_system))
+								.expect("is a valid path; qed");
+						fixed_frame_system
+					} else {
+						frame_system.clone()
+					};
+					expected_system_config
+						.segments
+						.push(syn::PathSegment::from(syn::Ident::new("Config", b.0.span())));
+					b.0 == expected_system_config
+				})
 			});
 
 			if !has_is_type_bound {
 				let msg = format!(
 					"Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must \
-					bound: `IsType<<Self as {}::Config>::RuntimeEvent>`",
-					frame_system,
+					bound: `IsType<<Self as frame_system::Config>::RuntimeEvent>`",
 				);
 				return Err(syn::Error::new(type_.span(), msg))
 			}
@@ -299,7 +294,7 @@ pub fn replace_self_by_t(input: proc_macro2::TokenStream) -> proc_macro2::TokenS
 
 impl ConfigDef {
 	pub fn try_from(
-		frame_system: &syn::Ident,
+		frame_system: &syn::Path,
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
@@ -397,8 +392,32 @@ impl ConfigDef {
 		let disable_system_supertrait_check = attr.is_some();
 
 		let has_frame_system_supertrait = item.supertraits.iter().any(|s| {
-			syn::parse2::<ConfigBoundParse>(s.to_token_stream())
-				.map_or(false, |b| b.0 == *frame_system)
+			syn::parse2::<syn::Path>(s.to_token_stream()).map_or(false, |b| {
+				let mut expected_system_config = if is_using_frame_crate(&frame_system) {
+					// in this case, we know that the only valid supertrait is one that
+					// `frame_system::Config`, as `frame` re-exports it as such.
+					let fixed_frame_system = syn::parse2::<syn::Path>(quote::quote!(frame_system))
+						.expect("is a valid path; qed");
+					fixed_frame_system
+				} else {
+					// a possibly renamed frame-system, which is a direct dependency.
+					frame_system.clone()
+				};
+				expected_system_config
+					.segments
+					.push(syn::PathSegment::from(syn::Ident::new("Config", b.span())));
+				// the parse path (b.0) might be something like `frame_system::Config<...>`, so we
+				// only compare the idents along the path.
+				expected_system_config
+					.segments
+					.into_iter()
+					.map(|ps| ps.ident)
+					.collect::<Vec<_>>() == b
+					.segments
+					.into_iter()
+					.map(|ps| ps.ident)
+					.collect::<Vec<_>>()
+			})
 		});
 
 		if !has_frame_system_supertrait && !disable_system_supertrait_check {
@@ -420,7 +439,8 @@ impl ConfigDef {
 				(try `pub trait Config: frame_system::Config {{ ...` or \
 				`pub trait Config<I: 'static>: frame_system::Config {{ ...`). \
 				To disable this check, use `#[pallet::disable_frame_system_supertrait_check]`",
-				frame_system, found,
+				frame_system.to_token_stream(),
+				found,
 			);
 			return Err(syn::Error::new(item.span(), msg))
 		}

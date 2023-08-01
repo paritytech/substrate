@@ -247,7 +247,7 @@ pub async fn run_instant_seal<B, BI, CB, E, C, TP, SC, CIDP, P>(
 	// instant-seal creates blocks as soon as transactions are imported
 	// into the transaction pool.
 	let commands_stream = pool.import_notification_stream().map(|_| EngineCommand::SealNewBlock {
-		create_empty: false,
+		create_empty: true,
 		finalize: false,
 		parent_hash: None,
 		sender: None,

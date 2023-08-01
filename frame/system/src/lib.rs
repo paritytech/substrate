@@ -233,6 +233,40 @@ pub mod pallet {
 			type BlockLength = ();
 			type DbWeight = ();
 		}
+
+		/// Default configurations of this pallet in a solo-chain environment.
+		///
+		/// ## Considerations:
+		///
+		/// By default, this type makes the following choices:
+		///
+		/// * Use a normal 32 byte account id, with a [`DefaultConfig::Lookup`] that implies no
+		///   'account-indexing' pallet is being used.
+		/// * Given that we don't know anything about the existence of a currency system in scope,
+		///   an [`DefaultConfig::AccountData`] is chosen that has no addition data. overwrite this
+		///   if you use `pallet-balances` or similar.
+		/// * Make sure to overwrite [`DefaultConfig::Version`].
+		/// * 2s block time, and a default 5mb block size is used.
+		pub struct SolochainDefaultConfig;
+
+		#[frame_support::register_default_impl(SolochainDefaultConfig)]
+		impl DefaultConfig for SolochainDefaultConfig {
+			type Nonce = u32;
+			type Hash = sp_core::hash::H256;
+			type Hashing = sp_runtime::traits::BlakeTwo256;
+			type AccountId = sp_runtime::AccountId32;
+			type Lookup = sp_runtime::traits::AccountIdLookup<Self::AccountId, ()>;
+			type MaxConsumers = frame_support::traits::ConstU32<128>;
+			type AccountData = crate::AccountInfo<Self::Nonce, ()>;
+			type OnNewAccount = ();
+			type OnKilledAccount = ();
+			type SystemWeightInfo = ();
+			type SS58Prefix = ();
+			type Version = ();
+			type BlockWeights = ();
+			type BlockLength = ();
+			type DbWeight = ();
+		}
 	}
 
 	/// System configuration trait. Implemented by runtime.
@@ -1796,4 +1830,11 @@ pub mod pallet_prelude {
 
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <HeaderFor<T> as sp_runtime::traits::Header>::Number;
+
+	/// Type alias for the `Extrinsic` associated type of system config.
+	pub type ExtrinsicFor<T> =
+		<<T as crate::Config>::Block as sp_runtime::traits::Block>::Extrinsic;
+
+	/// Type alias for the `RuntimeCall` associated type of system config.
+	pub type RuntimeCallFor<T> = <T as crate::Config>::RuntimeCall;
 }

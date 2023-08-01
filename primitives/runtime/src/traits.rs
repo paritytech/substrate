@@ -226,7 +226,7 @@ pub trait StaticLookup {
 }
 
 /// A lookup implementation returning the input value.
-#[derive(Default)]
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub struct IdentityLookup<T>(PhantomData<T>);
 impl<T: Codec + Clone + PartialEq + Debug + TypeInfo> StaticLookup for IdentityLookup<T> {
 	type Source = T;
@@ -1666,8 +1666,6 @@ impl<AccountId, Call: Dispatchable> SignedExtension for Tuple {
 	}
 }
 
-/// Only for bare bone testing when you don't care about signed extensions at all.
-#[cfg(feature = "std")]
 impl SignedExtension for () {
 	type AccountId = u64;
 	type AdditionalSigned = ();

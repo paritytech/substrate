@@ -1,0 +1,95 @@
+[package]
+name = "frame"
+version = "0.0.1-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "The single package to get you started with building frame pallets and runtimes"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+# external deps
+parity-scale-codec = { version = "3.2.2", default-features = false, features = ["derive"] }
+scale-info = {  version = "2.6.0", default-features = false, features = ["derive"] }
+
+# primitive deps, used for developing FRAME pallets.
+sp-runtime = { default-features = false, path = "../primitives/runtime" }
+sp-std = { default-features = false, path = "../primitives/std" }
+sp-io = { default-features = false, path = "../primitives/io" }
+sp-core = { default-features = false, path = "../primitives/core" }
+sp-arithmetic = { default-features = false, path = "../primitives/arithmetic" }
+
+# frame deps, for developing FRAME pallets.
+frame-support = { default-features = false,  path = "./support" }
+frame-system = { default-features = false,  path = "./system" }
+
+# primitive types used for developing FRAME runtimes.
+sp-version = { default-features = false, path = "../primitives/version", optional = true }
+sp-api = { default-features = false, path = "../primitives/api", optional = true }
+sp-block-builder = { default-features = false, path = "../primitives/block-builder", optional = true }
+sp-transaction-pool = { default-features = false, path = "../primitives/transaction-pool", optional = true }
+sp-offchain = { default-features = false, path = "../primitives/offchain", optional = true }
+sp-session = { default-features = false, path = "../primitives/session", optional = true }
+sp-consensus-aura = { default-features = false, path = "../primitives/consensus/aura", optional = true }
+sp-consensus-grandpa = { default-features = false, path = "../primitives/consensus/grandpa", optional = true }
+sp-inherents = { default-features = false, path = "../primitives/inherents", optional = true }
+
+frame-executive = { default-features = false, path = "../frame/executive", optional = true }
+frame-system-rpc-runtime-api = { default-features = false, path = "../frame/system/rpc/runtime-api", optional = true }
+
+docify = "0.2.0"
+
+[dev-dependencies]
+pallet-examples = { path = "./examples" }
+
+
+[features]
+default = [ "std", "runtime" ]
+std = [
+	# external deps
+	"parity-scale-codec/std",
+	"scale-info/std",
+
+	# primitive deps
+	"sp-runtime/std",
+	"sp-std/std",
+	"sp-io/std",
+	"sp-core/std",
+	"sp-arithmetic/std",
+
+	# frame dpes
+	"frame-support/std",
+	"frame-system/std",
+
+	# Optional deps for runtime feature
+	"sp-version?/std",
+	"sp-api?/std",
+	"sp-block-builder?/std",
+	"sp-transaction-pool?/std",
+	"sp-offchain?/std",
+	"sp-session?/std",
+	"sp-consensus-aura?/std",
+	"sp-consensus-grandpa?/std",
+	"sp-inherents?/std",
+
+	"frame-executive?/std",
+	"frame-system-rpc-runtime-api?/std",
+]
+runtime = [
+	"sp-version",
+	"sp-api",
+	"sp-block-builder",
+	"sp-transaction-pool",
+	"sp-offchain",
+	"sp-session",
+	"sp-consensus-aura",
+	"sp-consensus-grandpa",
+	"sp-inherents",
+
+	"frame-executive",
+	"frame-system-rpc-runtime-api"
+]

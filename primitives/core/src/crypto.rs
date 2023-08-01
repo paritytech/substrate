@@ -937,8 +937,7 @@ pub trait Pair: CryptoType + Sized {
 	///   - the path may be followed by `///`, in which case everything after the `///` is treated
 	/// as a password.
 	/// - If `s` begins with a `/` character it is prefixed with the Substrate public `DEV_PHRASE`
-	///   and
-	/// interpreted as above.
+	///   and interpreted as above.
 	///
 	/// In this case they are interpreted as HDKD junctions; purely numeric items are interpreted as
 	/// integers, non-numeric items as strings. Junctions prefixed with `/` are interpreted as soft

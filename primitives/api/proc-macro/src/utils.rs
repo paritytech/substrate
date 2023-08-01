@@ -15,23 +15,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::common::API_VERSION_ATTRIBUTE;
+use inflector::Inflector;
 use proc_macro2::{Span, TokenStream};
-
+use proc_macro_crate::{crate_name, FoundCrate};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
 	parse_quote, spanned::Spanned, token::And, Attribute, Error, FnArg, GenericArgument, Ident,
 	ImplItem, ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
 };
 
-use quote::{format_ident, quote};
-
-use proc_macro_crate::{crate_name, FoundCrate};
-
-use crate::common::API_VERSION_ATTRIBUTE;
-
-use inflector::Inflector;
-
 /// Generates the access to the `sc_client` crate.
 pub fn generate_crate_access() -> TokenStream {
+	if let Ok(FoundCrate::Name(name)) = crate_name(&"frame") {
+		// TODO: add tes to make sure `frame` always contains `frame::deps::sp_api`.
+		// TODO: handle error.
+		let path = format!("{}::deps::{}", name, "sp_api");
+		let path = syn::parse_str::<syn::Path>(&path).unwrap();
+		return path.into_token_stream()
+	}
+
 	match crate_name("sp-api") {
 		Ok(FoundCrate::Itself) => quote!(sp_api),
 		Ok(FoundCrate::Name(renamed_name)) => {
@@ -261,8 +264,6 @@ pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
 /// Extract the documentation from the provided attributes.
 #[cfg(feature = "frame-metadata")]
 pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
-	use quote::ToTokens;
-
 	attrs
 		.iter()
 		.filter_map(|attr| {

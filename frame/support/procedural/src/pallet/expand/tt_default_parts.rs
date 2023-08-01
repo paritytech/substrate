@@ -94,9 +94,9 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		macro_rules! #default_parts_unique_id {
 			{
 				$caller:tt
-				frame_support = [{ $($frame_support:ident)::* }]
+				your_tt_return = [{ $my_tt_return:path }]
 			} => {
-				$($frame_support)*::tt_return! {
+				$my_tt_return! {
 					$caller
 					tokens = [{
 						expanded::{
@@ -124,9 +124,9 @@ pub fn expand_tt_default_parts(def: &mut Def) -> proc_macro2::TokenStream {
 		macro_rules! #extra_parts_unique_id {
 			{
 				$caller:tt
-				frame_support = [{ $($frame_support:ident)::* }]
+				your_tt_return = [{ $my_tt_return:path }]
 			} => {
-				$($frame_support)*::tt_return! {
+				$my_tt_return! {
 					$caller
 					tokens = [{
 						expanded::{

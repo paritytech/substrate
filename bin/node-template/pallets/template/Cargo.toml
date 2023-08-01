@@ -17,9 +17,11 @@ codec = { package = "parity-scale-codec", version = "3.6.1", default-features = 
 	"derive",
 ] }
 scale-info = { version = "2.5.0", default-features = false, features = ["derive"] }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../../../frame/benchmarking" }
+
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../../frame/system" }
+
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../../../frame/benchmarking" }
 
 [dev-dependencies]
 sp-core = { version = "21.0.0", path = "../../../../primitives/core" }
@@ -30,10 +32,12 @@ sp-runtime = { version = "24.0.0", path = "../../../../primitives/runtime" }
 default = ["std"]
 std = [
 	"codec/std",
-	"frame-benchmarking?/std",
+	"scale-info/std",
+
 	"frame-support/std",
 	"frame-system/std",
-	"scale-info/std",
+
+	"frame-benchmarking?/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

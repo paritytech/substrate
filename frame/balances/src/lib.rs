@@ -213,7 +213,41 @@ pub mod pallet {
 
 	pub type CreditOf<T, I> = Credit<<T as frame_system::Config>::AccountId, Pallet<T, I>>;
 
-	#[pallet::config]
+	pub mod config_preludes {
+		use super::*;
+
+		pub struct TestDefaultConfig;
+		#[frame_support::register_default_impl(TestDefaultConfig)]
+		impl DefaultConfig for TestDefaultConfig {
+			type Balance = u64;
+			type MaxLocks = ConstU32<{ u32::MAX }>;
+			type MaxReserves = ConstU32<{ u32::MAX }>;
+			type MaxFreezes = ConstU32<{ u32::MAX }>;
+			type MaxHolds = ConstU32<{ u32::MAX }>;
+
+			type ReserveIdentifier = ();
+			type FreezeIdentifier = ();
+
+			type WeightInfo = ();
+		}
+
+		pub struct SolochainDefaultConfig;
+		#[frame_support::register_default_impl(SolochainDefaultConfig)]
+		impl DefaultConfig for SolochainDefaultConfig {
+			type Balance = u128;
+			type MaxLocks = ConstU32<{ 128 }>;
+			type MaxReserves = ConstU32<{ 128 }>;
+			type MaxFreezes = ConstU32<{ 128 }>;
+			type MaxHolds = ConstU32<{ 128 }>;
+
+			type ReserveIdentifier = ();
+			type FreezeIdentifier = ();
+
+			type WeightInfo = ();
+		}
+	}
+
+	#[pallet::config(with_default)]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self, I>>
@@ -236,6 +270,7 @@ pub mod pallet {
 			+ FixedPointOperand;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
+		#[pallet::no_default]
 		type DustRemoval: OnUnbalanced<CreditOf<Self, I>>;
 
 		/// The minimum amount required to keep an account open. MUST BE GREATER THAN ZERO!
@@ -247,9 +282,11 @@ pub mod pallet {
 		///
 		/// Bottom line: Do yourself a favour and make it at least one!
 		#[pallet::constant]
+		#[pallet::no_default]
 		type ExistentialDeposit: Get<Self::Balance>;
 
 		/// The means of storing the balances of an account.
+		#[pallet::no_default]
 		type AccountStore: StoredMap<Self::AccountId, AccountData<Self::Balance>>;
 
 		/// The ID type for reserves.
@@ -258,6 +295,7 @@ pub mod pallet {
 		type ReserveIdentifier: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
 		/// The overarching hold reason.
+		#[pallet::no_default]
 		type RuntimeHoldReason: Parameter + Member + MaxEncodedLen + Ord + Copy;
 
 		/// The ID type for freezes.

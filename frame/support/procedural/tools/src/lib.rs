@@ -46,23 +46,49 @@ pub fn generate_crate_access(unique_id: &str, def_crate: &str) -> TokenStream {
 	}
 }
 
+/// Check if the output of [`generate_crate_access_2018`] (or generally another path) is using the
+/// `frame` crate or not.
+pub fn is_using_frame_crate(path: &syn::Path) -> bool {
+	path.segments.first().map(|s| s.ident == "frame").unwrap_or(false)
+}
+
 /// Generate the crate access for the crate using 2018 syntax.
 ///
-/// for `frame-support` output will for example be `frame_support`.
-pub fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Ident, Error> {
-	match crate_name(def_crate) {
+/// If `frame` is in scope, it will use `frame::deps::<def_crate>`. Else, it will try and find
+/// `<def_crate>` directly.
+pub fn generate_crate_access_2018(def_crate: &str) -> Result<syn::Path, Error> {
+	if let Ok(FoundCrate::Name(name)) = crate_name(&"frame") {
+		let path = format!("{}::deps::{}", name, def_crate.to_string().replace("-", "_"));
+		let path = syn::parse_str::<syn::Path>(&path)?;
+		return Ok(path)
+	}
+
+	let ident = match crate_name(def_crate) {
 		Ok(FoundCrate::Itself) => {
 			let name = def_crate.to_string().replace("-", "_");
 			Ok(syn::Ident::new(&name, Span::call_site()))
 		},
 		Ok(FoundCrate::Name(name)) => Ok(Ident::new(&name, Span::call_site())),
 		Err(e) => Err(Error::new(Span::call_site(), e)),
-	}
+	}?;
+
+	Ok(syn::Path::from(ident))
 }
 
 /// Generates the hidden includes that are required to make the macro independent from its scope.
 pub fn generate_hidden_includes(unique_id: &str, def_crate: &str) -> TokenStream {
 	let mod_name = generate_hidden_includes_mod_name(unique_id);
+
+	if let Ok(FoundCrate::Name(name)) = crate_name(&"frame") {
+		let path = format!("{}::deps::{}", name, def_crate.to_string().replace("-", "_"));
+		let path = syn::parse_str::<syn::Path>(&path).expect("is a valid path; qed");
+		return quote::quote!(
+			#[doc(hidden)]
+			mod #mod_name {
+				pub use #path as hidden_include;
+			}
+		)
+	}
 
 	match crate_name(def_crate) {
 		Ok(FoundCrate::Itself) => quote!(),

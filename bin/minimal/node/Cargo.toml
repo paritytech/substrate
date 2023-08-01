@@ -1,0 +1,56 @@
+[package]
+name = "minimal-node"
+version = "4.0.0-dev"
+description = "A fresh FRAME-based Substrate node, ready for hacking."
+authors = ["Substrate DevHub <https://github.com/substrate-developer-hub>"]
+homepage = "https://substrate.io/"
+edition = "2021"
+license = "MIT-0"
+publish = false
+repository = "https://github.com/substrate-developer-hub/substrate-node-template/"
+build = "build.rs"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[[bin]]
+name = "minimal-node"
+
+[dependencies]
+clap = { version = "4.0.9", features = ["derive"] }
+futures = { version = "0.3.21", features = ["thread-pool"] }
+futures-timer = "3.0.1"
+jsonrpsee = { version = "0.16.2", features = ["server"] }
+
+sc-cli = { path = "../../../client/cli" }
+sc-executor = {  path = "../../../client/executor" }
+sc-network = {  path = "../../../client/network" }
+sc-service = {  path = "../../../client/service" }
+sc-telemetry = { path = "../../../client/telemetry" }
+sc-transaction-pool = { path = "../../../client/transaction-pool" }
+sc-transaction-pool-api = { path = "../../../client/transaction-pool/api" }
+sc-consensus = { path = "../../../client/consensus/common" }
+sc-consensus-manual-seal = { path = "../../../client/consensus/manual-seal" }
+sc-rpc-api = { path = "../../../client/rpc-api" }
+sc-basic-authorship = { path = "../../../client/basic-authorship" }
+sc-offchain = { path = "../../../client/offchain" }
+sc-client-api = { path = "../../../client/api" }
+
+sp-timestamp = { path = "../../../primitives/timestamp" }
+sp-keyring = { path = "../../../primitives/keyring" }
+sp-api = { path = "../../../primitives/api" }
+sp-blockchain = { path = "../../../primitives/blockchain" }
+sp-block-builder = { path = "../../../primitives/block-builder" }
+sp-io = { path = "../../../primitives/io" }
+
+
+substrate-frame-rpc-system = { path = "../../../utils/frame/rpc/system" }
+
+frame = { path = "../../../frame" }
+runtime = { package = "minimal-runtime", path = "../runtime" }
+
+[build-dependencies]
+substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build-script-utils" }
+
+[features]
+default = []

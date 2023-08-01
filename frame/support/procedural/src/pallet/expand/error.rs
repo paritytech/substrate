@@ -42,9 +42,9 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 			macro_rules! #error_token_unique_id {
 				{
 					$caller:tt
-					frame_support = [{ $($frame_support:ident)::* }]
+					your_tt_return = [{ $my_tt_return:path }]
 				} => {
-					$($frame_support::)*tt_return! {
+					$my_tt_return! {
 						$caller
 					}
 				};
@@ -170,9 +170,9 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 		macro_rules! #error_token_unique_id {
 			{
 				$caller:tt
-				frame_support = [{ $($frame_support:ident)::* }]
+				your_tt_return = [{ $my_tt_return:path }]
 			} => {
-				$($frame_support::)*tt_return! {
+				$my_tt_return! {
 					$caller
 					error = [{ #error_ident }]
 				}

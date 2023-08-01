@@ -1,0 +1,38 @@
+[package]
+name = "minimal-runtime"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+parity-scale-codec = { version = "3.0.0", default-features = false }
+scale-info = { version = "2.6.0", default-features = false }
+
+# this is a frame-based runtime, thus importing `frame` with runtime feature enabled.
+frame = { path = "../../../frame", default-features = false, features = ["runtime"] }
+
+# pallets that we want to use
+pallet-balances = { path = "../../../frame/balances", default-features = false }
+pallet-sudo = { path = "../../../frame/sudo", default-features = false }
+pallet-timestamp = { path = "../../../frame/timestamp", default-features = false }
+pallet-transaction-payment = { path = "../../../frame/transaction-payment", default-features = false }
+
+[build-dependencies]
+substrate-wasm-builder = { path = "../../../utils/wasm-builder", optional = true }
+
+[features]
+default = ["std"]
+std = [
+	"frame/std",
+
+	"pallet-balances/std",
+	"pallet-sudo/std",
+	"pallet-timestamp/std",
+	"pallet-transaction-payment/std",
+
+	"parity-scale-codec/std",
+	"scale-info/std",
+
+	"substrate-wasm-builder",
+]
+
+

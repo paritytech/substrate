@@ -224,7 +224,7 @@ impl StorageType {
 	/// Generate the actual type declaration.
 	fn generate_type_declaration(
 		&self,
-		crate_: &Ident,
+		crate_: &syn::Path,
 		storage_instance: &StorageInstance,
 		storage_name: &Ident,
 		storage_generics: Option<&SimpleGenerics>,
@@ -550,7 +550,7 @@ struct StorageInstance {
 
 /// Generate the [`StorageInstance`] for the storage alias.
 fn generate_storage_instance(
-	crate_: &Ident,
+	crate_: &syn::Path,
 	storage_name: &Ident,
 	storage_generics: Option<&SimpleGenerics>,
 	storage_where_clause: Option<&WhereClause>,

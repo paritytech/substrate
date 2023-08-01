@@ -248,7 +248,22 @@ where
 	}
 }
 
+/// Implementor of `WeightToFee` such that it maps any unit of weight to a fixed fee.
+pub struct FixedFee<const F: u32, T>(sp_std::marker::PhantomData<T>);
+
+impl<const F: u32, T> WeightToFee for FixedFee<F, T>
+where
+	T: BaseArithmetic + From<u32> + Copy + Unsigned,
+{
+	type Balance = T;
+
+	fn weight_to_fee(_: &Weight) -> Self::Balance {
+		F.into()
+	}
+}
+
 /// Implementor of [`WeightToFee`] that uses a constant multiplier.
+///
 /// # Example
 ///
 /// ```
