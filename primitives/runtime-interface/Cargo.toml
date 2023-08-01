@@ -45,10 +45,6 @@ std = [
 	"codec/std",
 	"sp-externalities/std",
 	"primitive-types/std",
-	"sp-core/std",
-	"sp-io/std",
-	"sp-runtime-interface-test-wasm/std",
-	"sp-state-machine/std",
 ]
 
 # ATTENTION

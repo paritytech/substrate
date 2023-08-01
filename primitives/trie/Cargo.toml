@@ -61,5 +61,4 @@ std = [
 	"tracing",
 	"trie-db/std",
 	"trie-root/std",
-	"sp-runtime/std",
 ]

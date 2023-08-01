@@ -29,5 +29,4 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"scale-info/std",
-	"sp-weights/std",
 ]

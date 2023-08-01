@@ -42,7 +42,6 @@ std = [
 	"sp-mmr-primitives/std",
 	"sp-runtime/std",
 	"sp-std/std",
-	"sp-keystore/std",
 ]
 
 # Serde support without relying on std features.

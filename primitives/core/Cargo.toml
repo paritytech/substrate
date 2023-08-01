@@ -114,7 +114,6 @@ std = [
 	"libsecp256k1/std",
 	"dyn-clonable",
 	"tracing",
-	"sp-externalities?/std",
 ]
 
 # Serde support without relying on std features.

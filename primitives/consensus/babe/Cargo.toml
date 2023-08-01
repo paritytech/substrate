@@ -41,7 +41,6 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-timestamp",
-	"sp-timestamp?/std",
 ]
 
 # Serde support without relying on std features.

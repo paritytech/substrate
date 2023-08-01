@@ -60,7 +60,6 @@ std = [
 	"log",
 	"ed25519-dalek",
 	"ed25519",
-	"sp-keystore?/std",
 ]
 
 with-tracing = [

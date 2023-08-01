@@ -52,5 +52,4 @@ std = [
 	"trie-db/std",
 	"thiserror",
 	"tracing",
-	"sp-runtime/std",
 ]
