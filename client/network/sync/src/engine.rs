@@ -504,11 +504,6 @@ where
 	}
 
 	/// Push a block announce validation.
-	///
-	/// It is required that [`BlockAnnounceValidatorStream::poll_block_announce_validation`] is
-	/// called later to check for finished validations. The result of the validation
-	/// needs to be passed to [`SyncingEngine::process_block_announce_validation_result`]
-	/// to finish the processing.
 	pub fn push_block_announce_validation(
 		&mut self,
 		peer_id: PeerId,
