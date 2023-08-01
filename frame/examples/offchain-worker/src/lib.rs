@@ -274,6 +274,27 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Submit a new price to the list via an unsigned transaction with a signed payload.
+		///
+		/// This function is similar to the `submit_price` function but allows for sending
+		/// transactions without a signature. It is designed to handle cases where some transactions
+		/// are allowed to bypass signature verification and fees. Transactions calling this
+		/// function are de-duplicated at the pool level through the `validate_unsigned`
+		/// implementation and are also rendered invalid if the function has already been called in
+		/// the current "session".
+		///
+		/// The weight of this function is specified in the `#[pallet::weight(...)]` attribute. Even
+		/// though unsigned calls don't charge fees, a weight is assigned to limit the number of
+		/// such transactions per block.
+		///
+		/// # Note
+		///
+		/// - This example is not focused on the correctness of the oracle itself but rather its
+		///   purpose is to showcase offchain worker capabilities.
+		/// - In this example, the `origin` must be `None` to ensure that the function is called via
+		///   an unsigned transaction. The `price_payload` is used to extract the new price and the
+		///   associated public key for signature verification (which is not performed in this
+		///   example).
 		#[pallet::call_index(2)]
 		#[pallet::weight({0})]
 		pub fn submit_price_unsigned_with_signed_payload(
