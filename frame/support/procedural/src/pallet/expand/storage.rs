@@ -636,7 +636,6 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			Metadata::CountedMap { .. } => {
 				let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
 				let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
-	
 				quote::quote_spanned!(storage_def.attr_span =>
 					#(#cfg_attrs)*
 					#[doc(hidden)]
@@ -669,7 +668,6 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 			Metadata::CountedNMap { .. } => {
 				let counter_prefix_struct_ident = counter_prefix_ident(&storage_def.ident);
 				let counter_prefix_struct_const = counter_prefix(&prefix_struct_const);
-	
 				quote::quote_spanned!(storage_def.attr_span =>
 					#(#cfg_attrs)*
 					#[doc(hidden)]
