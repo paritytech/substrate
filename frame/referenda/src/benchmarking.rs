@@ -659,7 +659,7 @@ benchmarks_instance_pallet! {
 
 	impl_benchmark_test_suite!(
 		Referenda,
-		crate::mock::new_test_ext(),
+		crate::mock::ExtBuilder::default().build(),
 		crate::mock::Test
 	);
 }
