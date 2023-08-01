@@ -97,7 +97,7 @@ mod wasm;
 
 pub mod chain_extension;
 pub mod migration;
-#[cfg(feature = "unsafe-debug")]
+#[cfg(any(test, feature = "unsafe-debug"))]
 pub mod unsafe_debug;
 pub mod weights;
 
@@ -353,7 +353,7 @@ pub mod pallet {
 		/// ```
 		type Migrations: MigrateSequence;
 
-		#[cfg(feature = "unsafe-debug")]
+		#[cfg(any(test, feature = "unsafe-debug"))]
 		type Debug: unsafe_debug::UnsafeDebug<Self>;
 	}
 

@@ -1260,7 +1260,7 @@ impl pallet_contracts::Config for Runtime {
 	type Migrations = (NoopMigration<1>, NoopMigration<2>);
 	type MaxDelegateDependencies = ConstU32<32>;
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
-	#[cfg(feature = "unsafe-debug")]
+	#[cfg(any(test, feature = "unsafe-debug"))]
 	type Debug = ();
 }
 
