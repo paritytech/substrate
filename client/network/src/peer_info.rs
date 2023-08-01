@@ -34,8 +34,8 @@ use libp2p::{
 	ping::{Behaviour as Ping, Config as PingConfig, Event as PingEvent},
 	swarm::{
 		behaviour::{
-			AddressChange, ConnectionClosed, ConnectionEstablished, DialFailure,
-			ExternalAddrConfirmed, ExternalAddrExpired, FromSwarm, ListenFailure,
+			AddressChange, ConnectionClosed, ConnectionEstablished, DialFailure, FromSwarm,
+			ListenFailure,
 		},
 		ConnectionDenied, ConnectionHandler, ConnectionHandlerSelect, ConnectionId,
 		NetworkBehaviour, PollParameters, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
@@ -69,6 +69,7 @@ pub struct PeerInfoBehaviour {
 	nodes_info: FnvHashMap<PeerId, NodeInfo>,
 	/// Interval at which we perform garbage collection in `nodes_info`.
 	garbage_collect: Pin<Box<dyn Stream<Item = ()> + Send>>,
+	/// Record keeping of external addresses. Data is queried by the `NetworkService`.
 	external_addresses: ExternalAddresses,
 }
 
@@ -101,17 +102,14 @@ pub struct ExternalAddresses {
 }
 
 impl ExternalAddresses {
-	/// Feed a [`FromSwarm`] event to this struct.
-	pub fn on_swarm_event<THandler>(&mut self, event: FromSwarm<THandler>) {
-		match event {
-			FromSwarm::ExternalAddrConfirmed(ExternalAddrConfirmed { addr }) => {
-				self.addresses.lock().insert(addr.clone());
-			},
-			FromSwarm::ExternalAddrExpired(ExternalAddrExpired { addr }) => {
-				self.addresses.lock().remove(addr);
-			},
-			_ => {},
-		}
+	/// Add an external address.
+	pub fn add(&mut self, addr: Multiaddr) {
+		self.addresses.lock().insert(addr);
+	}
+
+	/// Remove an external address.
+	pub fn remove(&mut self, addr: &Multiaddr) {
+		self.addresses.lock().remove(addr);
 	}
 }
 
@@ -396,8 +394,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 			FromSwarm::ExpiredListenAddr(e) => {
 				self.ping.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
 				self.identify.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
-				self.external_addresses
-					.on_swarm_event(FromSwarm::ExpiredListenAddr::<Self::ConnectionHandler>(e));
+				self.external_addresses.remove(e.addr);
 			},
 			FromSwarm::NewExternalAddrCandidate(e) => {
 				self.ping.on_swarm_event(FromSwarm::NewExternalAddrCandidate(e));
@@ -406,8 +403,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 			FromSwarm::ExternalAddrConfirmed(e) => {
 				self.ping.on_swarm_event(FromSwarm::ExternalAddrConfirmed(e));
 				self.identify.on_swarm_event(FromSwarm::ExternalAddrConfirmed(e));
-				self.external_addresses
-					.on_swarm_event(FromSwarm::ExternalAddrConfirmed::<Self::ConnectionHandler>(e));
+				self.external_addresses.add(e.addr.clone());
 			},
 			FromSwarm::AddressChange(e @ AddressChange { peer_id, old, new, .. }) => {
 				self.ping.on_swarm_event(FromSwarm::AddressChange(e));
