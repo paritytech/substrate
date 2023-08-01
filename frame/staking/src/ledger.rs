@@ -166,8 +166,8 @@ impl<T: Config> StakingLedger<T> {
 
 	// Bonds a ledger.
 	//
-	// This method is just syntactic sugar of [`Self::update`] with a check that returns an error if
-	// the ledger has is already bonded to ensure that the method behaves as expected.
+	// This method is just syntactic sugar of [`Self::update`], with an additional check that returns an error if
+	// the ledger is already bonded. This ensures the method behaves as expected.
 	pub(crate) fn bond(&self) -> Result<(), Error<T>> {
 		if <Bonded<T>>::contains_key(&self.stash) {
 			Err(Error::<T>::AlreadyBonded)
