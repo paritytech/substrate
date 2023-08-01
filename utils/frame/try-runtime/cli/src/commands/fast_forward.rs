@@ -93,7 +93,7 @@ where
 
 /// Call `method` with `data` and return the result. `externalities` will not change.
 async fn dry_run<T: Decode, Block: BlockT, HostFns: HostFunctions>(
-	externalities: &TestExternalities,
+	externalities: &mut TestExternalities,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
@@ -116,23 +116,13 @@ async fn run<Block: BlockT, HostFns: HostFunctions>(
 	method: &'static str,
 	data: &[u8],
 ) -> Result<()> {
-	let (mut changes, _) = state_machine_call::<Block, HostFns>(
+	let ((), _) = state_machine_call::<Block, HostFns>(
 		externalities,
 		executor,
 		method,
 		data,
 		full_extensions(executor.clone()),
 	)?;
-
-	let storage_changes = changes.drain_storage_changes(
-		&externalities.backend,
-		&mut Default::default(),
-		externalities.state_version,
-	)?;
-
-	externalities
-		.backend
-		.apply_transaction(storage_changes.transaction_storage_root, storage_changes.transaction);
 
 	Ok(())
 }

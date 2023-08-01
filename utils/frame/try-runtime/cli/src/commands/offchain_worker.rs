@@ -76,7 +76,7 @@ where
 {
 	let executor = build_executor(&shared);
 	// we first build the externalities with the remote code.
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
+	let mut ext = command.state.into_ext::<Block, HostFns>(&shared, &executor, None, true).await?;
 
 	let header_ws_uri = command.header_ws_uri::<Block>();
 
@@ -91,7 +91,7 @@ where
 	let payload = header.encode();
 
 	let _ = state_machine_call::<Block, HostFns>(
-		&ext,
+		&mut ext,
 		&executor,
 		"OffchainWorkerApi_offchain_worker",
 		&payload,
