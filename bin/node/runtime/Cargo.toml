@@ -296,7 +296,6 @@ runtime-benchmarks = [
 	"pallet-nft-fractionalization/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-whitelist/runtime-benchmarks",
-	"frame-system-benchmarking/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",
