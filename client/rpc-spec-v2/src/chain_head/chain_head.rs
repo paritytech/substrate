@@ -197,12 +197,10 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 	) -> RpcResult<MethodResponse> {
-		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
+		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
-			Err(SubscriptionManagementError::SubscriptionAbsent) => {
-				// Invalid invalid subscription ID.
-				return Ok(MethodResponse::LimitReached)
-			},
+			Err(SubscriptionManagementError::SubscriptionAbsent) |
+			Err(SubscriptionManagementError::ExceededLimits) => return Ok(MethodResponse::LimitReached),
 			Err(SubscriptionManagementError::BlockHashAbsent) => {
 				// Block is not part of the subscription.
 				return Err(ChainHeadRpcError::InvalidBlock.into())
@@ -255,12 +253,10 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 	) -> RpcResult<Option<String>> {
-		let _block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
+		let _block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
-			Err(SubscriptionManagementError::SubscriptionAbsent) => {
-				// Invalid invalid subscription ID.
-				return Ok(None)
-			},
+			Err(SubscriptionManagementError::SubscriptionAbsent) |
+			Err(SubscriptionManagementError::ExceededLimits) => return Ok(None),
 			Err(SubscriptionManagementError::BlockHashAbsent) => {
 				// Block is not part of the subscription.
 				return Err(ChainHeadRpcError::InvalidBlock.into())
@@ -309,21 +305,27 @@ where
 			.transpose()?
 			.map(ChildInfo::new_default_from_vec);
 
-		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
-			Ok(block) => block,
-			Err(SubscriptionManagementError::SubscriptionAbsent) => {
-				// Invalid invalid subscription ID.
-				return Ok(MethodResponse::LimitReached)
-			},
-			Err(SubscriptionManagementError::BlockHashAbsent) => {
-				// Block is not part of the subscription.
-				return Err(ChainHeadRpcError::InvalidBlock.into())
-			},
-			Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
-		};
+		let block_guard =
+			match self.subscriptions.lock_block(&follow_subscription, hash, items.len()) {
+				Ok(block) => block,
+				Err(SubscriptionManagementError::SubscriptionAbsent) |
+				Err(SubscriptionManagementError::ExceededLimits) => return Ok(MethodResponse::LimitReached),
+				Err(SubscriptionManagementError::BlockHashAbsent) => {
+					// Block is not part of the subscription.
+					return Err(ChainHeadRpcError::InvalidBlock.into())
+				},
+				Err(_) => return Err(ChainHeadRpcError::InvalidBlock.into()),
+			};
 
 		let storage_client = ChainHeadStorage::<Client, Block, BE>::new(self.client.clone());
 		let operation_id = block_guard.operation_id();
+
+		// The number of operations we are allowed to execute.
+		let num_operations = block_guard.num_reserved();
+		let discarded = items.len().saturating_sub(num_operations);
+		let mut items = items;
+		items.truncate(num_operations);
+
 		let fut = async move {
 			storage_client.generate_events(block_guard, hash, items, child_trie);
 		};
@@ -332,7 +334,7 @@ where
 			.spawn_blocking("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(MethodResponse::Started(MethodResponseStarted {
 			operation_id,
-			discarded_items: Some(0),
+			discarded_items: Some(discarded),
 		}))
 	}
 
@@ -345,9 +347,10 @@ where
 	) -> RpcResult<MethodResponse> {
 		let call_parameters = Bytes::from(parse_hex_param(call_parameters)?);
 
-		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash) {
+		let block_guard = match self.subscriptions.lock_block(&follow_subscription, hash, 1) {
 			Ok(block) => block,
-			Err(SubscriptionManagementError::SubscriptionAbsent) => {
+			Err(SubscriptionManagementError::SubscriptionAbsent) |
+			Err(SubscriptionManagementError::ExceededLimits) => {
 				// Invalid invalid subscription ID.
 				return Ok(MethodResponse::LimitReached)
 			},

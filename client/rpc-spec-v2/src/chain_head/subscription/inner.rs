@@ -196,6 +196,8 @@ struct SubscriptionState<Block: BlockT> {
 	///
 	/// This object is cloned between methods.
 	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
+	/// The number of ongoing operations.
+	ongoing_operations: OngoingOperations,
 	/// The next operation ID.
 	next_operation_id: usize,
 	/// Track the block hashes available for this subscription.
@@ -316,6 +318,13 @@ impl<Block: BlockT> SubscriptionState<Block> {
 		self.next_operation_id += 1;
 		op_id
 	}
+
+	/// Reserves capacity to execute at least one operation and at most the requested items.
+	///
+	/// For more details see [`PermitOperations`].
+	fn reserve(&self, to_reserve: usize) -> Option<PermitOperations> {
+		self.ongoing_operations.reserve(to_reserve)
+	}
 }
 
 /// Keeps a specific block pinned while the handle is alive.
@@ -326,6 +335,7 @@ pub struct BlockGuard<Block: BlockT, BE: Backend<Block>> {
 	with_runtime: bool,
 	response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
 	operation_id: String,
+	permit_operations: PermitOperations,
 	backend: Arc<BE>,
 }
 
@@ -344,6 +354,7 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 		with_runtime: bool,
 		response_sender: TracingUnboundedSender<FollowEvent<Block::Hash>>,
 		operation_id: usize,
+		permit_operations: PermitOperations,
 		backend: Arc<BE>,
 	) -> Result<Self, SubscriptionManagementError> {
 		backend
@@ -355,6 +366,7 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 			with_runtime,
 			response_sender,
 			operation_id: operation_id.to_string(),
+			permit_operations,
 			backend,
 		})
 	}
@@ -372,6 +384,13 @@ impl<Block: BlockT, BE: Backend<Block>> BlockGuard<Block, BE> {
 	/// The operation ID of this method.
 	pub fn operation_id(&self) -> String {
 		self.operation_id.clone()
+	}
+
+	/// Returns the number of reserved elements for this permit.
+	///
+	/// This can be smaller than the number of items requested.
+	pub fn num_reserved(&self) -> usize {
+		self.permit_operations.num_reserved()
 	}
 }
 
@@ -438,6 +457,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 				with_runtime,
 				tx_stop: Some(tx_stop),
 				response_sender,
+				ongoing_operations: OngoingOperations::new(MAX_OPERATIONS_PER_SUB),
 				next_operation_id: 0,
 				blocks: Default::default(),
 			};
@@ -613,6 +633,7 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 		&mut self,
 		sub_id: &str,
 		hash: Block::Hash,
+		to_reserve: usize,
 	) -> Result<BlockGuard<Block, BE>, SubscriptionManagementError> {
 		let Some(sub) = self.subs.get_mut(sub_id) else {
 			return Err(SubscriptionManagementError::SubscriptionAbsent)
@@ -622,12 +643,17 @@ impl<Block: BlockT, BE: Backend<Block>> SubscriptionsInner<Block, BE> {
 			return Err(SubscriptionManagementError::BlockHashAbsent)
 		}
 
+		let Some(permit_operations) = sub.reserve(to_reserve) else {
+			return Err(SubscriptionManagementError::ExceededLimits)
+		};
+
 		let operation_id = sub.next_operation_id();
 		BlockGuard::new(
 			hash,
 			sub.with_runtime,
 			sub.response_sender.clone(),
 			operation_id,
+			permit_operations,
 			self.backend.clone(),
 		)
 	}
