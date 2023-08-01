@@ -247,7 +247,7 @@ benchmarks_instance_pallet! {
 		let call = Call::<T, I>::create { admin, config: default_collection_config::<T, I>() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
+		assert_last_event::<T, I>(Event::NextCollectionIdIncremented { next_id: Some(T::Helper::collection(1)) }.into());
 	}
 
 	force_create {
@@ -255,7 +255,7 @@ benchmarks_instance_pallet! {
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 	}: _(SystemOrigin::Root, caller_lookup, default_collection_config::<T, I>())
 	verify {
-		assert_last_event::<T, I>(Event::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
+		assert_last_event::<T, I>(Event::NextCollectionIdIncremented { next_id: Some(T::Helper::collection(1)) }.into());
 	}
 
 	destroy {

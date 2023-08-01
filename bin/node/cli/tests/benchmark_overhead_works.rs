@@ -28,7 +28,7 @@ fn benchmark_overhead_works() {
 
 	// Only put 10 extrinsics into the block otherwise it takes forever to build it
 	// especially for a non-release build.
-	let status = Command::new(cargo_bin("substrate"))
+	let status = Command::new(cargo_bin("substrate-node"))
 		.args(&["benchmark", "overhead", "--dev", "-d"])
 		.arg(base_path)
 		.arg("--weight-path")

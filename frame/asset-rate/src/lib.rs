@@ -69,17 +69,19 @@ pub use pallet::*;
 pub use weights::WeightInfo;
 
 #[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
+mod benchmarking;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+#[cfg(feature = "runtime-benchmarks")]
+pub use benchmarking::AssetKindFactory;
 
 // Type alias for `frame_system`'s account id.
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-// This pallet's asset id and balance type.
-type AssetIdOf<T> = <T as Config>::AssetId;
+// This pallet's asset kind and balance type.
+type AssetKindOf<T> = <T as Config>::AssetKind;
 // Generic fungible balance type.
 type BalanceOf<T> = <<T as Config>::Currency as Inspect<AccountIdOf<T>>>::Balance;
 
@@ -115,32 +117,36 @@ pub mod pallet {
 		/// The currency mechanism for this pallet.
 		type Currency: Inspect<Self::AccountId, Balance = Self::Balance>;
 
-		/// The identifier for the class of asset.
-		type AssetId: frame_support::traits::tokens::AssetId;
+		/// The type for asset kinds for which the conversion rate to native balance is set.
+		type AssetKind: Parameter + MaxEncodedLen;
+
+		/// Helper type for benchmarks.
+		#[cfg(feature = "runtime-benchmarks")]
+		type BenchmarkHelper: crate::AssetKindFactory<Self::AssetKind>;
 	}
 
 	/// Maps an asset to its fixed point representation in the native balance.
 	///
-	/// E.g. `native_amount = asset_amount * ConversionRateToNative::<T>::get(asset_id)`
+	/// E.g. `native_amount = asset_amount * ConversionRateToNative::<T>::get(asset_kind)`
 	#[pallet::storage]
 	pub type ConversionRateToNative<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AssetId, FixedU128, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::AssetKind, FixedU128, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		// Some `asset_id` conversion rate was created.
-		AssetRateCreated { asset_id: T::AssetId, rate: FixedU128 },
-		// Some `asset_id` conversion rate was removed.
-		AssetRateRemoved { asset_id: T::AssetId },
-		// Some existing `asset_id` conversion rate was updated from `old` to `new`.
-		AssetRateUpdated { asset_id: T::AssetId, old: FixedU128, new: FixedU128 },
+		// Some `asset_kind` conversion rate was created.
+		AssetRateCreated { asset_kind: T::AssetKind, rate: FixedU128 },
+		// Some `asset_kind` conversion rate was removed.
+		AssetRateRemoved { asset_kind: T::AssetKind },
+		// Some existing `asset_kind` conversion rate was updated from `old` to `new`.
+		AssetRateUpdated { asset_kind: T::AssetKind, old: FixedU128, new: FixedU128 },
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// The given asset ID is unknown.
-		UnknownAssetId,
+		UnknownAssetKind,
 		/// The given asset ID already has an assigned conversion rate and cannot be re-created.
 		AlreadyExists,
 	}
@@ -155,18 +161,18 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
-			asset_id: T::AssetId,
+			asset_kind: T::AssetKind,
 			rate: FixedU128,
 		) -> DispatchResult {
 			T::CreateOrigin::ensure_origin(origin)?;
 
 			ensure!(
-				!ConversionRateToNative::<T>::contains_key(asset_id.clone()),
+				!ConversionRateToNative::<T>::contains_key(asset_kind.clone()),
 				Error::<T>::AlreadyExists
 			);
-			ConversionRateToNative::<T>::set(asset_id.clone(), Some(rate));
+			ConversionRateToNative::<T>::set(asset_kind.clone(), Some(rate));
 
-			Self::deposit_event(Event::AssetRateCreated { asset_id, rate });
+			Self::deposit_event(Event::AssetRateCreated { asset_kind, rate });
 			Ok(())
 		}
 
@@ -178,24 +184,24 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update())]
 		pub fn update(
 			origin: OriginFor<T>,
-			asset_id: T::AssetId,
+			asset_kind: T::AssetKind,
 			rate: FixedU128,
 		) -> DispatchResult {
 			T::UpdateOrigin::ensure_origin(origin)?;
 
 			let mut old = FixedU128::zero();
-			ConversionRateToNative::<T>::mutate(asset_id.clone(), |maybe_rate| {
+			ConversionRateToNative::<T>::mutate(asset_kind.clone(), |maybe_rate| {
 				if let Some(r) = maybe_rate {
 					old = *r;
 					*r = rate;
 
 					Ok(())
 				} else {
-					Err(Error::<T>::UnknownAssetId)
+					Err(Error::<T>::UnknownAssetKind)
 				}
 			})?;
 
-			Self::deposit_event(Event::AssetRateUpdated { asset_id, old, new: rate });
+			Self::deposit_event(Event::AssetRateUpdated { asset_kind, old, new: rate });
 			Ok(())
 		}
 
@@ -205,23 +211,23 @@ pub mod pallet {
 		/// - O(1)
 		#[pallet::call_index(2)]
 		#[pallet::weight(T::WeightInfo::remove())]
-		pub fn remove(origin: OriginFor<T>, asset_id: T::AssetId) -> DispatchResult {
+		pub fn remove(origin: OriginFor<T>, asset_kind: T::AssetKind) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
 
 			ensure!(
-				ConversionRateToNative::<T>::contains_key(asset_id.clone()),
-				Error::<T>::UnknownAssetId
+				ConversionRateToNative::<T>::contains_key(asset_kind.clone()),
+				Error::<T>::UnknownAssetKind
 			);
-			ConversionRateToNative::<T>::remove(asset_id.clone());
+			ConversionRateToNative::<T>::remove(asset_kind.clone());
 
-			Self::deposit_event(Event::AssetRateRemoved { asset_id });
+			Self::deposit_event(Event::AssetRateRemoved { asset_kind });
 			Ok(())
 		}
 	}
 }
 
 /// Exposes conversion of an arbitrary balance of an asset to native balance.
-impl<T> ConversionFromAssetBalance<BalanceOf<T>, AssetIdOf<T>, BalanceOf<T>> for Pallet<T>
+impl<T> ConversionFromAssetBalance<BalanceOf<T>, AssetKindOf<T>, BalanceOf<T>> for Pallet<T>
 where
 	T: Config,
 	BalanceOf<T>: FixedPointOperand + Zero,
@@ -230,10 +236,10 @@ where
 
 	fn from_asset_balance(
 		balance: BalanceOf<T>,
-		asset_id: AssetIdOf<T>,
+		asset_kind: AssetKindOf<T>,
 	) -> Result<BalanceOf<T>, pallet::Error<T>> {
-		let rate = pallet::ConversionRateToNative::<T>::get(asset_id)
-			.ok_or(pallet::Error::<T>::UnknownAssetId.into())?;
+		let rate = pallet::ConversionRateToNative::<T>::get(asset_kind)
+			.ok_or(pallet::Error::<T>::UnknownAssetKind.into())?;
 		Ok(rate.saturating_mul_int(balance))
 	}
 }

@@ -13,6 +13,13 @@ publish = false
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
+[[bin]]
+path = "bin/main.rs"
+name = "chain-spec-builder"
+
+[lib]
+crate-type = ["rlib"]
+
 [dependencies]
 ansi_term = "0.12.1"
 clap = { version = "4.2.5", features = ["derive"] }
