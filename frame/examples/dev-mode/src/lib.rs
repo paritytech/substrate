@@ -63,6 +63,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		// No need to define a `call_index` attribute here because of `dev_mode`.
 		// No need to define a `weight` attribute here because of `dev_mode`.
+		/// Add an account ID to our Dummy storage.
 		pub fn add_dummy(origin: OriginFor<T>, id: T::AccountId) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -81,6 +82,7 @@ pub mod pallet {
 
 		// No need to define a `call_index` attribute here because of `dev_mode`.
 		// No need to define a `weight` attribute here because of `dev_mode`.
+		/// Set a new balance value into our Bar storage map.
 		pub fn set_bar(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
