@@ -150,7 +150,7 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// This getter can be called with either a controller or stash account, provided that the
 	/// account is properly wrapped in the respective [`StakingAccount`] variant. This is meant to
-	/// abstract the concept of controller/stash accounts to the caller.
+	/// abstract the concept of controller/stash accounts from the caller.
 	pub(crate) fn get(account: StakingAccount<T::AccountId>) -> Result<StakingLedger<T>, Error<T>> {
 		let controller = match account {
 			StakingAccount::Stash(stash) => <Bonded<T>>::get(stash).ok_or(Error::<T>::NotStash),
