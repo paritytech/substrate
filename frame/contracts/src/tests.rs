@@ -26,11 +26,12 @@ use crate::{
 	exec::{Frame, Key},
 	storage::DeletionQueueManager,
 	tests::test_utils::{get_contract, get_contract_checked},
+	unsafe_debug::ExecutionObserver,
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
-	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress,
-	NoopMigration, Origin, Pallet, PristineCode, Schedule,
+	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, ExportedFunction,
+	MigrationInProgress, NoopMigration, Origin, Pallet, PristineCode, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -46,7 +47,7 @@ use frame_support::{
 	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system::{EventRecord, Phase};
-use pallet_contracts_primitives::CodeUploadReturnValue;
+use pallet_contracts_primitives::{CodeUploadReturnValue, ExecReturnValue};
 use pretty_assertions::{assert_eq, assert_ne};
 use sp_core::ByteArray;
 use sp_io::hashing::blake2_256;
@@ -56,7 +57,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32, BuildStorage, Perbill, TokenError,
 };
-use std::ops::Deref;
+use std::{cell::RefCell, ops::Deref};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -436,6 +437,48 @@ parameter_types! {
 	pub static UnstableInterface: bool = true;
 }
 
+#[derive(Clone, PartialEq, Eq)]
+struct DebugFrame {
+	code_hash: CodeHash<Test>,
+	call: ExportedFunction,
+	input: Vec<u8>,
+	result: Option<Vec<u8>>,
+}
+
+thread_local! {
+static DEBUG_EXECUTION_TRACE: RefCell<Vec<DebugFrame>> = RefCell::new(Vec::new());
+	}
+
+pub struct TestDebugger;
+impl ExecutionObserver<CodeHash<Test>> for TestDebugger {
+	fn before_call(code_hash: &CodeHash<Test>, entry_point: ExportedFunction, input_data: &[u8]) {
+		DEBUG_EXECUTION_TRACE.with(|d| {
+			d.borrow_mut().push(DebugFrame {
+				code_hash: code_hash.clone(),
+				call: entry_point,
+				input: input_data.to_vec(),
+				result: None,
+			})
+		});
+	}
+
+	fn after_call(
+		code_hash: &CodeHash<Test>,
+		entry_point: ExportedFunction,
+		input_data: &[u8],
+		output: &ExecReturnValue,
+	) {
+		DEBUG_EXECUTION_TRACE.with(|d| {
+			d.borrow_mut().push(DebugFrame {
+				code_hash: code_hash.clone(),
+				call: entry_point,
+				input: input_data.to_vec(),
+				result: Some(output.data.clone()),
+			})
+		});
+	}
+}
+
 impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
@@ -460,6 +503,7 @@ impl Config for Test {
 	type Migrations = (NoopMigration<1>, NoopMigration<2>);
 	type CodeHashLockupDepositPercent = CodeHashLockupDepositPercent;
 	type MaxDelegateDependencies = MaxDelegateDependencies;
+	type Debug = TestDebugger;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
