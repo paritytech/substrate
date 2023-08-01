@@ -167,9 +167,9 @@ impl<T: Config> StakingLedger<T> {
 
 	/// Returns the controller account of a staking ledger.
 	///
-	/// Note: it will fallback into querying the `Bonded` storage with the ledger stash if the
+	/// Note: it will fallback into querying the [`Bonded`] storage with the ledger stash if the
 	/// controller is not set in `self`, which most likely means that self was fetched directly from
-	/// `Ledger` instead of through the methods exposed in `StakingLedger`. If the ledger does not
+	/// [`Ledger`] instead of through the methods exposed in [`StakingLedger`]. If the ledger does not
 	/// exist in storage, it returns `None`.
 	pub(crate) fn controller(&self) -> Option<T::AccountId> {
 		self.controller
