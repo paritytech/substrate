@@ -476,7 +476,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_storage_layer { .. }) {
-				return Ok(ValidTransaction::default());
+				return Ok(ValidTransaction::default())
 			}
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 		}
@@ -1799,9 +1799,9 @@ fn metadata() {
 		},
 	];
 
-	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs.is_empty()
-		&& pallets[0].error.as_ref().unwrap().ty.type_info().docs.is_empty()
-		&& pallets[0].calls.as_ref().unwrap().ty.type_info().docs.is_empty();
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs.is_empty() &&
+		pallets[0].error.as_ref().unwrap().ty.type_info().docs.is_empty() &&
+		pallets[0].calls.as_ref().unwrap().ty.type_info().docs.is_empty();
 
 	if cfg!(feature = "no-metadata-docs") {
 		assert!(empty_doc)
@@ -2387,8 +2387,8 @@ fn post_runtime_upgrade_detects_storage_version_issues() {
 		Example::on_genesis();
 		// The version isn't changed, we should detect it.
 		assert!(
-			Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap_err()
-				== "On chain and current storage version do not match. Missing runtime upgrade?"
+			Executive::try_runtime_upgrade(UpgradeCheckSelect::PreAndPost).unwrap_err() ==
+				"On chain and current storage version do not match. Missing runtime upgrade?"
 					.into()
 		);
 	});

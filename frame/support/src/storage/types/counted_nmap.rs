@@ -1312,9 +1312,9 @@ mod test {
 			let _ = A::clear(u32::max_value(), None);
 			// one of the item has been removed
 			assert!(
-				!A::contains_key((2, 20, 200))
-					&& !A::contains_key((3, 30, 300))
-					&& !A::contains_key((4, 40, 400))
+				!A::contains_key((2, 20, 200)) &&
+					!A::contains_key((3, 30, 300)) &&
+					!A::contains_key((4, 40, 400))
 			);
 			assert_eq!(A::count(), 0);
 
