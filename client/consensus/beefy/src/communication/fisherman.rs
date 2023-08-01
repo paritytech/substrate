@@ -27,7 +27,15 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus_beefy::{
 	check_invalid_fork_proof,
 	crypto::{AuthorityId, Signature},
-	BeefyApi, InvalidForkCommitmentProof, Payload, PayloadProvider, ValidatorSet, VoteMessage, Commitment, OpaqueKeyOwnershipProof, SignedCommitment,
+	BeefyApi,
+	Commitment,
+	InvalidForkCommitmentProof,
+	OpaqueKeyOwnershipProof,
+	Payload,
+	PayloadProvider,
+	SignedCommitment,
+	ValidatorSet,
+	VoteMessage,
 };
 use sp_runtime::{
 	generic::BlockId,
@@ -72,7 +80,10 @@ where
 	R: ProvideRuntimeApi<B> + Send + Sync,
 	R::Api: BeefyApi<B>,
 {
-	fn expected_header_and_payload(&self, number: NumberFor<B>) -> Result<(B::Header, Payload), Error> {
+	fn expected_header_and_payload(
+		&self,
+		number: NumberFor<B>,
+	) -> Result<(B::Header, Payload), Error> {
 		// This should be un-ambiguous since `number` is finalized.
 		let hash = self
 			.backend
@@ -124,25 +135,31 @@ where
 			return Ok(())
 		}
 
-		let offender_ids = proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
+		let offender_ids =
+			proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
 		let runtime_api = self.runtime.runtime_api();
 
 		// generate key ownership proof at that block
-		let key_owner_proofs = offender_ids.iter()
-										   .filter_map(|id| {
-											   match runtime_api.generate_key_ownership_proof(correct_header.hash(), set_id, id.clone()) {
-												   Ok(Some(proof)) => Some(Ok(proof)),
-												   Ok(None) => {
-													   debug!(
-														   target: LOG_TARGET,
-														   "🥩 Invalid fork vote offender not part of the authority set."
-													   );
-													   None
-												   },
-												   Err(e) => Some(Err(Error::RuntimeApi(e))),
-											   }
-										   })
-										   .collect::<Result<_, _>>()?;
+		let key_owner_proofs = offender_ids
+			.iter()
+			.filter_map(|id| {
+				match runtime_api.generate_key_ownership_proof(
+					correct_header.hash(),
+					set_id,
+					id.clone(),
+				) {
+					Ok(Some(proof)) => Some(Ok(proof)),
+					Ok(None) => {
+						debug!(
+							target: LOG_TARGET,
+							"🥩 Invalid fork vote offender not part of the authority set."
+						);
+						None
+					},
+					Err(e) => Some(Err(Error::RuntimeApi(e))),
+				}
+			})
+			.collect::<Result<_, _>>()?;
 
 		// submit invalid fork vote report at **best** block
 		let best_block_hash = self.backend.blockchain().info().best_hash;
@@ -169,25 +186,27 @@ where
 		}
 
 		let hash = correct_header.hash();
-		let offender_ids = proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
+		let offender_ids =
+			proof.signatories.iter().cloned().map(|(id, _sig)| id).collect::<Vec<_>>();
 		let runtime_api = self.runtime.runtime_api();
 
 		// generate key ownership proof at that block
-		let key_owner_proofs = offender_ids.iter()
-										   .filter_map(|id| {
-											   match runtime_api.generate_key_ownership_proof(hash, set_id, id.clone()) {
-												   Ok(Some(proof)) => Some(Ok(proof)),
-												   Ok(None) => {
-													   debug!(
-														   target: LOG_TARGET,
-														   "🥩 Invalid fork vote offender not part of the authority set."
-													   );
-													   None
-												   },
-												   Err(e) => Some(Err(Error::RuntimeApi(e))),
-											   }
-										   })
-										   .collect::<Result<_, _>>()?;
+		let key_owner_proofs = offender_ids
+			.iter()
+			.filter_map(|id| {
+				match runtime_api.generate_key_ownership_proof(hash, set_id, id.clone()) {
+					Ok(Some(proof)) => Some(Ok(proof)),
+					Ok(None) => {
+						debug!(
+							target: LOG_TARGET,
+							"🥩 Invalid fork vote offender not part of the authority set."
+						);
+						None
+					},
+					Err(e) => Some(Err(Error::RuntimeApi(e))),
+				}
+			})
+			.collect::<Result<_, _>>()?;
 
 		// submit invalid fork vote report at **best** block
 		let best_block_hash = self.backend.blockchain().info().best_hash;
@@ -218,7 +237,11 @@ where
 		let (header, expected_payload) = self.expected_header_and_payload(number)?;
 		if vote.commitment.payload != expected_payload {
 			let validator_set = self.active_validator_set_at(&header)?;
-			let proof = InvalidForkCommitmentProof { commitment: vote.commitment, signatories: vec![(vote.id, vote.signature)], expected_payload };
+			let proof = InvalidForkCommitmentProof {
+				commitment: vote.commitment,
+				signatories: vec![(vote.id, vote.signature)],
+				expected_payload,
+			};
 			self.report_invalid_fork_commitments(proof, &header)?;
 		}
 		Ok(())
@@ -255,13 +278,17 @@ where
 				return Ok(())
 			}
 			// report every signer of the bad justification
-			let signatories = validator_set.validators().iter().cloned().zip(signatures.into_iter())
-																		.filter_map(|(id, signature)| signature.map(|sig| (id, sig))).collect();
+			let signatories = validator_set
+				.validators()
+				.iter()
+				.cloned()
+				.zip(signatures.into_iter())
+				.filter_map(|(id, signature)| signature.map(|sig| (id, sig)))
+				.collect();
 
 			let proof = InvalidForkCommitmentProof { commitment, signatories, expected_payload };
 			self.report_invalid_fork_commitments(
-				proof,
-				&header,
+				proof, &header,
 			)?;
 		}
 		Ok(())
