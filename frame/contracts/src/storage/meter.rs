@@ -443,16 +443,6 @@ where
 	) -> Result<DepositOf<T>, DispatchError> {
 		debug_assert!(self.is_alive());
 		let ed = Pallet::<T>::min_balance();
-		// <<<<<<< HEAD
-		// 		let storage_deposit =
-		// 			Diff { bytes_added: info.encoded_size() as u32, items_added: 1, ..Default::default() }
-		// 				.update_contract::<T>(None);
-
-		// 		// Instantiate needs to transfer the deposit plus the minimum balance in order to pull
-		// the 		// contract account into existence.
-		// 		let deposit = storage_deposit.saturating_add(&Deposit::Charge(ed));
-		// 		if (deposit.charge_or_zero()) > self.limit {
-		// =======
 
 		let deposit = contract_info.update_base_deposit(&code_info);
 		if deposit > self.limit {
@@ -465,29 +455,15 @@ where
 		// contract execution does conclude and hence would lead to a double charge.
 		self.total_deposit = deposit.clone();
 
-		// <<<<<<< HEAD
-		// 		// We need to make sure that the contract's account itself exists, by adding the ED.
-		// 		T::Currency::transfer(origin, contract, ed, Preservation::Protect)?;
-		// =======
-		// 		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
-		// 		// However, we need to charge immediately so that the account is created before
-		// 		// charges possibly below the ed are collected and fail.
-		// 		E::charge(
-		// 			origin,
-		// 			contract_info.deposit_account(),
-		// 			&deposit.saturating_sub(&Deposit::Charge(ed)),
-		// 			false,
-		// 		)?;
+		// Normally, deposit charges are deferred to be able to coalesce them with refunds.
+		// However, we need to charge immediately so that the account is created before
+		// charges possibly below the ed are collected and fail.
+		E::charge(origin, contract, &deposit.saturating_sub(&Deposit::Charge(ed)), false)?;
 
-		// 		System::<T>::inc_consumers(contract_info.deposit_account())?;
+		System::<T>::inc_consumers(contract)?;
 
 		// We also need to make sure that the contract's account itself exists.
 		T::Currency::transfer(origin, contract, ed, Preservation::Preserve)?;
-		// 		System::<T>::inc_consumers(contract)?;
-		// >>>>>>> jg/13643-contracts-migrate-to-fungible-traits
-
-		// Charge storage deposit.
-		E::charge(origin, contract, &deposit, false)?;
 
 		Ok(deposit)
 	}

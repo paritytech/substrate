@@ -91,13 +91,11 @@ pub mod test_utils {
 
 	use super::{Contracts, DepositPerByte, DepositPerItem, Hash, SysConfig, Test};
 	use crate::{
-		exec::AccountIdOf,
-		tests::sp_api_hidden_includes_construct_runtime::hidden_include::traits::fungible::Inspect,
-		BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo, ContractInfoOf, Nonce,
-		PristineCode,
+		exec::AccountIdOf, BalanceOf, CodeHash, CodeInfo, CodeInfoOf, Config, ContractInfo,
+		ContractInfoOf, Nonce, PristineCode,
 	};
 	use codec::{Encode, MaxEncodedLen};
-	use frame_support::traits::fungible::Mutate;
+	use frame_support::traits::fungible::{Inspect, InspectHold, Mutate};
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
 		let nonce = <Nonce<Test>>::mutate(|counter| {
@@ -114,6 +112,12 @@ pub mod test_utils {
 	}
 	pub fn get_balance(who: &AccountIdOf<Test>) -> u64 {
 		<Test as Config>::Currency::balance(who)
+	}
+	pub fn get_balance_on_hold(
+		reason: &<Test as Config>::RuntimeHoldReason,
+		who: &AccountIdOf<Test>,
+	) -> u64 {
+		<Test as Config>::Currency::balance_on_hold(reason.into(), who)
 	}
 	pub fn get_contract(addr: &AccountIdOf<Test>) -> ContractInfo<Test> {
 		get_contract_checked(addr).unwrap()
@@ -692,7 +696,7 @@ fn instantiate_and_call_and_deposit_event() {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = Contracts::min_balance();
 		let value = 100;
-		let meter_storage_balance = 131;
+		let meter_storage_deposit = 147;
 
 		// We determine the storage deposit limit after uploading because it depends on ALICEs free
 		// balance which is changed by uploading a module.
@@ -782,7 +786,7 @@ fn instantiate_and_call_and_deposit_event() {
 						pallet_contracts::Event::StorageDepositTransferredAndHeld {
 							from: ALICE,
 							to: addr.clone(),
-							amount: meter_storage_balance,
+							amount: meter_storage_deposit,
 						}
 					),
 					topics: vec![hash(&ALICE), hash(&addr)],
@@ -1175,7 +1179,7 @@ fn deploy_and_call_other_contract() {
 
 	ExtBuilder::default().existential_deposit(1).build().execute_with(|| {
 		let min_balance = Contracts::min_balance();
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 
 		// Create
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
@@ -1419,7 +1423,7 @@ fn cannot_self_destruct_through_draning() {
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let value = 1_000;
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
@@ -1465,7 +1469,7 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
@@ -1575,7 +1579,7 @@ fn self_destruct_works() {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let _ = <Test as Config>::Currency::set_balance(&DJANGO, 1_000_000);
 		let min_balance = Contracts::min_balance();
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 
 		// Instantiate the BOB contract.
 		let addr = Contracts::bare_instantiate(
@@ -3758,7 +3762,7 @@ fn instantiate_with_zero_balance_works() {
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = Contracts::min_balance();
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 
 		// Drop previous events
 		initialize_block(2);
@@ -3855,7 +3859,7 @@ fn instantiate_with_below_existential_deposit_works() {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = Contracts::min_balance();
 		let value = 50;
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 
 		// Drop previous events
 		initialize_block(2);
@@ -3958,7 +3962,7 @@ fn storage_deposit_works() {
 	let (wasm, _code_hash) = compile_module::<Test>("multi_store").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 		let mut deposit = meter_storage_deposit;
 
 		let addr = Contracts::bare_instantiate(
@@ -4100,7 +4104,7 @@ fn storage_deposit_callee_works() {
 	let (wasm_callee, _code_hash_callee) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 		let min_balance = Contracts::min_balance();
 
 		// Create both contracts: Constructors do nothing.
@@ -4244,7 +4248,7 @@ fn slash_cannot_kill_account() {
 	let (wasm, _code_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let value = 700;
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let min_balance = Contracts::min_balance();
 
@@ -4613,7 +4617,7 @@ fn storage_deposit_limit_is_enforced() {
 	let (wasm, _code_hash) = compile_module::<Test>("store_call").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 		let min_balance = Contracts::min_balance();
 
 		// Setting insufficient storage_deposit should fail.
@@ -5010,7 +5014,7 @@ fn deposit_limit_honors_liquidity_restrictions() {
 		let bobs_balance = 1_000;
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let _ = <Test as Config>::Currency::set_balance(&BOB, bobs_balance);
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
@@ -5064,7 +5068,7 @@ fn deposit_limit_honors_existential_deposit() {
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let _ = <Test as Config>::Currency::set_balance(&BOB, 1_000);
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
@@ -5112,7 +5116,7 @@ fn deposit_limit_honors_min_leftover() {
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = <Test as Config>::Currency::set_balance(&ALICE, 1_000_000);
 		let _ = <Test as Config>::Currency::set_balance(&BOB, 1_000);
-		let meter_storage_deposit = 131;
+		let meter_storage_deposit = 147;
 		let min_balance = Contracts::min_balance();
 
 		// Instantiate the BOB contract.
@@ -5457,6 +5461,7 @@ fn add_remove_delegate_dependency_works() {
 	const ED: u64 = 2000;
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let _ = Balances::set_balance(&ALICE, 1_000_000);
+		let meter_storage_deposit = 147;
 
 		// Instantiate with add_delegate_dependency should fail since the code is not yet on chain.
 		assert_err!(
@@ -5477,7 +5482,13 @@ fn add_remove_delegate_dependency_works() {
 
 		let dependency_deposit = &CodeHashLockupDepositPercent::get().mul_ceil(deposit);
 		assert_eq!(contract.delegate_dependencies().get(&code_hash), Some(dependency_deposit));
-		assert_eq!(test_utils::get_balance(contract.deposit_account()), ED + dependency_deposit);
+		assert_eq!(
+			test_utils::get_balance_on_hold(
+				&HoldReason::StorageDepositReserve.into(),
+				&addr_caller
+			),
+			meter_storage_deposit + dependency_deposit
+		);
 
 		// Removing the code should fail, since we have added a dependency.
 		assert_err!(

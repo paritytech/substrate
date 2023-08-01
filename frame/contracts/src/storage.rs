@@ -233,9 +233,9 @@ impl<T: Config> ContractInfo<T> {
 		let upload_deposit = T::CodeHashLockupDepositPercent::get().mul_ceil(code_info.deposit());
 
 		// Instantiate needs to transfer at least the minimum balance in order to pull the
-		// deposit account into existence.
-		// We also add another `ed` here which goes to the contract's own account into existence.
-		let deposit = info_deposit.saturating_add(upload_deposit).max(ed).saturating_add(ed);
+		// contract's own account into existence, as the deposit itself does not contribute to the
+		// `ed`.
+		let deposit = info_deposit.saturating_add(upload_deposit).saturating_add(ed);
 
 		self.storage_base_deposit = deposit;
 		deposit
