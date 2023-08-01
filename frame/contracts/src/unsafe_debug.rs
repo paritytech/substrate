@@ -1,5 +1,4 @@
-use crate::exec::ExportedFunction;
-use crate::CodeHash;
+use crate::{exec::ExportedFunction, CodeHash};
 use pallet_contracts_primitives::ExecReturnValue;
 
 /// Umbrella trait for all interfaces that serves for debugging, but are not suitable for any
