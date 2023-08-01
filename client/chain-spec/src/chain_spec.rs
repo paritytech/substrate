@@ -70,7 +70,8 @@ impl<G> Clone for GenesisSource<G> {
 
 impl<G: RuntimeGenesis> GenesisSource<G> {
 	fn resolve(&self) -> Result<Genesis<G>, String> {
-		/// helper container for deserializeing genesis from the JSON file (ChainSpec JSON file is also supported here)
+		/// helper container for deserializeing genesis from the JSON file (ChainSpec JSON file is
+		/// also supported here)
 		#[derive(Serialize, Deserialize)]
 		struct GenesisContainer<G> {
 			genesis: Genesis<G>,
@@ -188,15 +189,15 @@ impl From<sp_core::storage::Storage> for RawGenesis {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 enum Genesis<G> {
-	/// [Deprecated] Contains the JSON representation of G (the natuve type represting the runtime GenesisConfig struct)
-	/// (will be removed with `ChainSpec::from_genesis`).
+	/// [Deprecated] Contains the JSON representation of G (the natuve type represting the runtime
+	/// GenesisConfig struct) (will be removed with `ChainSpec::from_genesis`).
 	Runtime(G),
 	/// The genesis storage as raw data.
 	Raw(RawGenesis),
 	/// State root hash of the genesis storage.
 	StateRootHash(StorageData),
 	/// Represents the full runtime genesis config in JSON format.
-    /// The contained object is a JSON blob that can be parsed by a compatible runtime.
+	/// The contained object is a JSON blob that can be parsed by a compatible runtime.
 	RuntimeGenesisConfig(json::Value),
 	/// Represents a patch for the default runtime genesis config in JSON format.
 	/// The contained value is a JSON object that can be parsed by a compatible runtime.
@@ -204,8 +205,9 @@ enum Genesis<G> {
 }
 
 /// A configuration of a client. Does not include runtime storage initialization.
-/// Note: `genesis` and `code` are ignored due to way how the chain specification is serialized into JSON file. Refer to
-/// [`ChainSpecJsonContainer`], which flattens [`ClientSpec`] and denies uknown fields.
+/// Note: `genesis` and `code` are ignored due to way how the chain specification is serialized into
+/// JSON file. Refer to [`ChainSpecJsonContainer`], which flattens [`ClientSpec`] and denies uknown
+/// fields.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 struct ClientSpec<E> {
@@ -609,9 +611,10 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 
 	/// Dump the configuration to JSON string.
 	///
-	/// During conversion to `raw` format, the `ChainSpec::code` field will be removed and placed into `RawGenesis` as
-	/// `genesis::top::raw::0x3a636f6465` (which is [`sp_core::storage::well_known_keys::CODE`]). If the spec is already
-	/// in `raw` format, and contains `genesis::top::raw::0x3a636f6465` field it will be updated with content of `code`
+	/// During conversion to `raw` format, the `ChainSpec::code` field will be removed and placed
+	/// into `RawGenesis` as `genesis::top::raw::0x3a636f6465` (which is
+	/// [`sp_core::storage::well_known_keys::CODE`]). If the spec is already in `raw` format, and
+	/// contains `genesis::top::raw::0x3a636f6465` field it will be updated with content of `code`
 	/// field.
 	pub fn as_json(&self, raw: bool) -> Result<String, String> {
 		let container = self.json_container(raw)?;
@@ -914,8 +917,7 @@ mod tests {
 
 	#[test]
 	fn generate_chain_spec_with_full_config_works() {
-		let j =
-			include_str!("../../../test-utils/runtime/res/default_genesis_config.json");
+		let j = include_str!("../../../test-utils/runtime/res/default_genesis_config.json");
 		let output: ChainSpec<()> = ChainSpecBuilder::new()
 			.with_name("TestName")
 			.with_id("test_id")
@@ -945,9 +947,8 @@ mod tests {
 
 	#[test]
 	fn chain_spec_as_json_fails_with_invalid_config() {
-		let j = include_str!(
-			"../../../test-utils/runtime/res/default_genesis_config_invalid_2.json"
-		);
+		let j =
+			include_str!("../../../test-utils/runtime/res/default_genesis_config_invalid_2.json");
 		let output: ChainSpec<()> = ChainSpecBuilder::new()
 			.with_name("TestName")
 			.with_id("test_id")
