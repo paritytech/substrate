@@ -169,10 +169,12 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 	let mut targets = (0..t)
 		.map(|i| {
 			let target = frame_benchmarking::account::<T::AccountId>("Target", i, SEED);
+
 			T::DataProvider::add_target(target.clone());
 			target
 		})
 		.collect::<Vec<_>>();
+
 	// we should always have enough voters to fill.
 	assert!(
 		targets.len() > <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize
@@ -276,7 +278,7 @@ frame_benchmarking::benchmarks! {
 		<MultiPhase::<T>>::create_snapshot_internal(targets, voters, desired_targets)
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.voters, v);
 		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("metadata missing")?.targets, t);
 	}
 
@@ -450,7 +452,7 @@ frame_benchmarking::benchmarks! {
 		<MultiPhase::<T>>::create_snapshot().map_err(|_| "could not create snapshot")?;
 	} verify {
 		assert!(<MultiPhase<T>>::snapshot().is_some());
-		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.voters, v + t);
+		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.voters, v);
 		assert_eq!(<MultiPhase<T>>::snapshot_metadata().ok_or("snapshot missing")?.targets, t);
 	}
 
