@@ -195,26 +195,26 @@ mod tests {
 
 		// when
 		let (witness, _signatures) =
-		        //from signed take a function as the aggregator 
+			// from signed take a function as the aggregator 
 			TestBlsSignedCommitmentWitness::from_signed::<_, _>(signed, |sigs| {
-			    //we are going to aggregate the signatures here
-			    let mut aggregatedsigs: SignatureAggregatorAssumingPoP<TinyBLS377> =
-				SignatureAggregatorAssumingPoP::new(Message::new(b"", b"mock payload"));
+				// we are going to aggregate the signatures here
+				let mut aggregatedsigs: SignatureAggregatorAssumingPoP<TinyBLS377> =
+					SignatureAggregatorAssumingPoP::new(Message::new(b"", b"mock payload"));
 
-			    for sig in sigs {
-				match sig {
-				    Some(sig) =>
-				    {
-					let serialized_sig : Vec<u8> = (*sig.1).to_vec();
-					aggregatedsigs.add_signature(
-					    &w3f_bls::Signature::<TinyBLS377>::from_bytes(
-						serialized_sig.as_slice()
-					     ).unwrap());
-					    },
-				    None => (),
+				for sig in sigs {
+					match sig {
+						Some(sig) => {
+							let serialized_sig : Vec<u8> = (*sig.1).to_vec();
+							aggregatedsigs.add_signature(
+								&w3f_bls::Signature::<TinyBLS377>::from_bytes(
+									serialized_sig.as_slice()
+								).unwrap()
+							);
+						},
+						None => (),
+					}
 				}
-			    }
-			    (&aggregatedsigs).signature().to_bytes()
+				(&aggregatedsigs).signature().to_bytes()
 			});
 
 		// We can't use BlsSignature::try_from because it expected 112Bytes (CP (64) + BLS 48)

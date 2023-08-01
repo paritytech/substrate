@@ -65,10 +65,11 @@ pub trait BeefyAuthorityId<MsgHash: Hash>: RuntimeAppPublic {
 
 /// BEEFY cryptographic types for ECDSA crypto
 ///
-/// This module basically introduces three crypto types:
+/// This module basically introduces four crypto types:
 /// - `ecdsa_crypto::Pair`
 /// - `ecdsa_crypto::Public`
 /// - `ecdsa_crypto::Signature`
+/// - `ecdsa_crypto::AuthorityId`
 ///
 /// Your code should use the above types as concrete types for all crypto related
 /// functionality.
@@ -103,7 +104,7 @@ pub mod ecdsa_crypto {
 
 /// BEEFY cryptographic types for BLS crypto
 ///
-/// This module basically introduces three crypto types:
+/// This module basically introduces four crypto types:
 /// - `bls_crypto::Pair`
 /// - `bls_crypto::Public`
 /// - `bls_crypto::Signature`
