@@ -274,7 +274,10 @@ pub mod pallet {
 		/// against the extracted offender. If both are valid, the offence
 		/// will be reported.
 		#[pallet::call_index(2)]
-		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		#[pallet::weight(T::WeightInfo::report_equivocation(
+			key_owner_proof.validator_count(),
+			T::MaxNominators::get(),
+		))]
 		pub fn report_invalid_fork_commitment(
 			origin: OriginFor<T>,
 			invalid_fork_proof: Box<
@@ -307,7 +310,7 @@ pub mod pallet {
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
 		#[pallet::call_index(3)]
-		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count()))]
+		#[pallet::weight(T::WeightInfo::report_equivocation(key_owner_proof.validator_count(), T::MaxNominators::get(),))]
 		pub fn report_invalid_fork_commitment_unsigned(
 			origin: OriginFor<T>,
 			invalid_fork_proof: Box<
