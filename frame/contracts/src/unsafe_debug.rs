@@ -1,5 +1,10 @@
 use crate::exec::ExportedFunction;
+use crate::CodeHash;
 use pallet_contracts_primitives::ExecReturnValue;
+
+pub trait UnsafeDebug<T: frame_system::Config>: ExecutionObserver<CodeHash<T>> {}
+
+impl<T: frame_system::Config, D> UnsafeDebug<T> for D where D: ExecutionObserver<CodeHash<T>> {}
 
 /// Defines the interface between pallet contracts and the outside observer.
 ///

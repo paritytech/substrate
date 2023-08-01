@@ -96,9 +96,9 @@ mod storage;
 mod wasm;
 
 pub mod chain_extension;
-#[cfg(feature = "unsafe-debug")]
-pub mod execution_observer;
 pub mod migration;
+#[cfg(feature = "unsafe-debug")]
+pub mod unsafe_debug;
 pub mod weights;
 
 #[cfg(test)]
@@ -158,17 +158,6 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 type DebugBufferVec<T> = BoundedVec<u8, <T as Config>::MaxDebugBufferLen>;
 type EventRecordOf<T> =
 	EventRecord<<T as frame_system::Config>::RuntimeEvent, <T as frame_system::Config>::Hash>;
-
-#[cfg(feature = "unsafe-debug")]
-pub trait UnsafeDebug<T: frame_system::Config>:
-	execution_observer::ExecutionObserver<CodeHash<T>>
-{
-}
-#[cfg(feature = "unsafe-debug")]
-impl<T: frame_system::Config, D> UnsafeDebug<T> for D where
-	D: execution_observer::ExecutionObserver<CodeHash<T>>
-{
-}
 
 /// The old weight type.
 ///

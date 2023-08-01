@@ -16,7 +16,7 @@
 // limitations under the License.
 
 #[cfg(feature = "unsafe-debug")]
-use crate::execution_observer::ExecutionObserver;
+use crate::unsafe_debug::ExecutionObserver;
 use crate::{
 	gas::GasMeter,
 	storage::{self, DepositAccount, WriteOutcome},
