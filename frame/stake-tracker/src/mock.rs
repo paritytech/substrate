@@ -281,6 +281,21 @@ pub(crate) fn add_nominator_with_nominations(
 	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_update(&who, vec![]);
 }
 
+pub(crate) fn update_nominations_of(who: AccountId, new_nominations: Nominations) {
+	// add nominations (called at `fn nominate` in staking)
+	let current_nom = TestNominators::get();
+	let (current_stake, prev_nominations) = current_nom.get(&who).unwrap();
+
+	TestNominators::mutate(|n| {
+		n.insert(who, (current_stake.clone(), new_nominations));
+	});
+
+	<StakeTracker as OnStakingUpdate<AccountId, Balance>>::on_nominator_update(
+		&who,
+		prev_nominations.clone(),
+	);
+}
+
 pub(crate) fn add_validator(who: AccountId, stake: Balance) {
 	TestValidators::mutate(|v| {
 		v.insert(who, Stake::<Balance> { active: stake, total: stake });
