@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::channel::oneshot;
+use parking_lot::Mutex;
 use sc_client_api::Backend;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::Block as BlockT;
@@ -104,6 +105,77 @@ impl BlockStateMachine {
 			BlockStateMachine::FullyUnpinned => true,
 			_ => false,
 		}
+	}
+}
+
+/// Maximum number of ongoing operations per subscription ID.
+const MAX_OPERATIONS_PER_SUB: usize = 16;
+
+/// Ongoing number of operations shared across methods.
+#[derive(Clone)]
+struct OngoingOperations {
+	/// Maximum number of operations that can be reserved.
+	max_operations: usize,
+	/// The number of operations.
+	ongoing: Arc<Mutex<usize>>,
+}
+
+impl OngoingOperations {
+	/// Constructs a new [`OngoingOperations`].
+	fn new(max_operations: usize) -> Self {
+		OngoingOperations { max_operations, ongoing: Default::default() }
+	}
+
+	/// Reserves capacity to execute at least one operation and at most the requested items.
+	///
+	/// Dropping [`PermitOperations`] without executing an operation will release
+	/// the reserved capacity.
+	///
+	/// Returns nothing if there's no space available, else returns a permit
+	/// that guarantees that at least one operation can be executed.
+	fn reserve(&self, to_reserve: usize) -> Option<PermitOperations> {
+		let mut ongoing = self.ongoing.lock();
+
+		// The maximum capacity.
+		let capacity = self.max_operations.saturating_sub(*ongoing);
+		// The number of operations we can reserve.
+		let reserved = capacity.min(to_reserve);
+
+		if reserved == 0 {
+			None
+		} else {
+			// Update the ongoing operations.
+			*ongoing = ongoing.saturating_add(reserved);
+			Some(PermitOperations { num_ops: reserved, ongoing: self.ongoing.clone() })
+		}
+	}
+}
+
+/// Permits a number of operations to be executed.
+///
+/// [`PermitOperations`] are returned by [`OngoingOperations::reserve()`] and are used
+/// to guarantee the RPC server can execute the number of operations.
+///
+/// The number of reserved items are given back to the [`OngoingOperations`] on drop.
+struct PermitOperations {
+	/// The number of operations permitted (reserved).
+	num_ops: usize,
+	ongoing: Arc<Mutex<usize>>,
+}
+
+impl PermitOperations {
+	/// Returns the number of reserved elements for this permit.
+	///
+	/// This can be smaller than the number of items requested via [`OngoingOperations::reserve()`].
+	fn num_reserved(&self) -> usize {
+		self.num_ops
+	}
+}
+
+impl Drop for PermitOperations {
+	fn drop(&mut self) {
+		let mut ongoing = self.ongoing.lock();
+		*ongoing = ongoing.saturating_sub(self.num_ops);
 	}
 }
 
@@ -999,5 +1071,31 @@ mod tests {
 		// Check the signal was received.
 		let res = sub_data.rx_stop.try_recv().unwrap();
 		assert!(res.is_some());
+	}
+
+	#[test]
+	fn ongoing_operations() {
+		// The object can hold at most 2 operations.
+		let ops = OngoingOperations::new(2);
+
+		// One operation is reserved.
+		let permit_one = ops.reserve(1).unwrap();
+		assert_eq!(permit_one.num_reserved(), 1);
+
+		// Request 2 operations, however there is capacity only for one.
+		let permit_two = ops.reserve(2).unwrap();
+		// Number of reserved permits is smaller than provided.
+		assert_eq!(permit_two.num_reserved(), 1);
+
+		// Try to reserve operations when there's no space.
+		let permit = ops.reserve(1);
+		assert!(permit.is_none());
+
+		// Release capacity.
+		drop(permit_two);
+
+		// Can reserve again
+		let permit_three = ops.reserve(1).unwrap();
+		assert_eq!(permit_three.num_reserved(), 1);
 	}
 }
