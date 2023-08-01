@@ -5343,6 +5343,7 @@ dependencies = [
  "sp-consensus-aura",
  "sp-consensus-grandpa",
  "sp-core",
+ "sp-genesis-builder",
  "sp-inherents",
  "sp-offchain",
  "sp-runtime",
@@ -8579,7 +8580,6 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "json-patch",
- "kitchensink-runtime",
  "log",
  "memmap2",
  "parity-scale-codec",
@@ -8600,7 +8600,6 @@ dependencies = [
  "sp-keyring",
  "sp-runtime",
  "sp-state-machine",
- "sp-tracing",
  "substrate-test-runtime",
 ]
 
