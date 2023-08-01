@@ -72,7 +72,7 @@ use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{BlockOrigin, BlockStatus};
 use sp_runtime::{
 	traits::{
-		Block as BlockT, CheckedSub, Hash, HashFor, Header as HeaderT, NumberFor, One,
+		Block as BlockT, CheckedSub, Hash, HashingFor, Header as HeaderT, NumberFor, One,
 		SaturatedConversion, Zero,
 	},
 	EncodedJustification, Justifications,
@@ -2847,7 +2847,7 @@ fn validate_blocks<Block: BlockT>(
 		}
 		if let (Some(header), Some(body)) = (&b.header, &b.body) {
 			let expected = *header.extrinsics_root();
-			let got = HashFor::<Block>::ordered_trie_root(
+			let got = HashingFor::<Block>::ordered_trie_root(
 				body.iter().map(Encode::encode).collect(),
 				sp_runtime::StateVersion::V0,
 			);
