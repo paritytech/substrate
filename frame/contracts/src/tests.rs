@@ -32,8 +32,8 @@ use crate::{
 	wasm::{Determinism, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeHash, CodeInfoOf, CollectEvents, Config, ContractInfo, ContractInfoOf,
-	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, MigrationInProgress, Origin,
-	Pallet, PristineCode, Schedule, ExportedFunction
+	DebugInfo, DefaultAddressGenerator, DeletionQueueCounter, Error, ExportedFunction,
+	MigrationInProgress, Origin, Pallet, PristineCode, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
