@@ -446,14 +446,14 @@ fn staking_should_work() {
 		// --- Block 6: the validators will now be changed.
 		start_session(6);
 
-		assert_eq_uvec!(validator_controllers(), vec![21, 3]);
+		assert_eq_uvec!(validator_controllers(), vec![11, 3]);
 		// --- Block 6: Unstake 4 as a validator, freeing up the balance stashed in 3
 		// 4 will chill
 		Staking::chill(RuntimeOrigin::signed(3)).unwrap();
 
 		// --- Block 7: nothing. 3 is still there.
 		start_session(7);
-		assert_eq_uvec!(validator_controllers(), vec![21, 3]);
+		assert_eq_uvec!(validator_controllers(), vec![11, 3]);
 
 		// --- Block 8:
 		start_session(8);

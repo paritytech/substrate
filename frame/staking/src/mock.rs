@@ -800,6 +800,22 @@ pub(crate) fn bond_controller_stash(controller: AccountId, stash: AccountId) -> 
 	Ok(())
 }
 
+#[allow(dead_code)]
+pub(crate) fn get_sorted_targets() -> Vec<(AccountId, VoteWeight)> {
+	<Test as Config>::TargetList::iter()
+		.map(|t| (t, <Test as Config>::TargetList::get_score(&t).unwrap()))
+		.collect::<Vec<_>>()
+		.into()
+}
+
+#[allow(dead_code)]
+pub(crate) fn get_sorted_voters() -> Vec<(AccountId, VoteWeight)> {
+	<Test as Config>::VoterList::iter()
+		.map(|t| (t, <Test as Config>::VoterList::get_score(&t).unwrap()))
+		.collect::<Vec<_>>()
+		.into()
+}
+
 #[macro_export]
 macro_rules! assert_session_era {
 	($session:expr, $era:expr) => {

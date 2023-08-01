@@ -251,9 +251,6 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		slashed_active: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<sp_staking::EraIndex, BalanceOf<T>>,
 	) {
-
-        println!("wer're on slash bb: {stash}");
-
 		let slashed_amount: BalanceOf<T> = slashed_unlocking
 			.values()
 			.fold(Default::default(), |acc: BalanceOf<T>, u| acc.saturating_add(*u))
