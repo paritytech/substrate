@@ -40,7 +40,6 @@ use std::{
 #[serde(rename_all = "camelCase")]
 enum GenesisBuildAction {
 	Patch(json::Value),
-	#[serde(alias = "Runtime")]
 	Full(json::Value),
 }
 
@@ -71,6 +70,7 @@ impl<G> Clone for GenesisSource<G> {
 
 impl<G: RuntimeGenesis> GenesisSource<G> {
 	fn resolve(&self) -> Result<Genesis<G>, String> {
+		/// helper container for deserializeing genesis from the JSON file (ChainSpec JSON file is also supported here)
 		#[derive(Serialize, Deserialize)]
 		struct GenesisContainer<G> {
 			genesis: Genesis<G>,
@@ -92,40 +92,16 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 
 				let genesis: GenesisContainer<G> = json::from_slice(&bytes)
 					.map_err(|e| format!("Error parsing spec file: {}", e))?;
-				Ok(genesis.genesis) //GenesisRuntime (typically)
+				Ok(genesis.genesis)
 			},
 			Self::Binary(buf) => {
 				let genesis: GenesisContainer<G> = json::from_reader(buf.as_ref())
 					.map_err(|e| format!("Error parsing embedded file: {}", e))?;
-				Ok(genesis.genesis) //GenesisRuntime (typically)
+				Ok(genesis.genesis)
 			},
 			#[allow(deprecated)]
 			Self::Factory(f) => Ok(Genesis::Runtime(f())),
-			Self::Storage(storage) => {
-				let top = storage
-					.top
-					.iter()
-					.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
-					.collect();
-
-				let children_default = storage
-					.children_default
-					.iter()
-					.map(|(k, child)| {
-						(
-							StorageKey(k.clone()),
-							child
-								.data
-								.iter()
-								.map(|(k, v)| (StorageKey(k.clone()), StorageData(v.clone())))
-								.collect(),
-						)
-					})
-					.collect();
-
-				Ok(Genesis::Raw(RawGenesis { top, children_default }))
-			},
-			// maybe a Factory for getting GenesisBuilderApi command?
+			Self::Storage(storage) => Ok(Genesis::Raw(RawGenesis::from(storage.clone()))),
 			Self::GenesisBuilderApi(GenesisBuildAction::Full(config)) =>
 				Ok(Genesis::RuntimeGenesisConfig(config.clone())),
 			Self::GenesisBuilderApi(GenesisBuildAction::Patch(patch)) =>
@@ -207,18 +183,23 @@ impl From<sp_core::storage::Storage> for RawGenesis {
 	}
 }
 
+/// Represents different options for the GenesisConfig configuration.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 enum Genesis<G> {
-	/// note: this will be removed together with [`ChainSpec::from_genesis`]
+	/// [Deprecated] Contains the JSON representation of G (the natuve type represting the runtime GenesisConfig struct)
+	/// (will be removed with `ChainSpec::from_genesis`).
 	Runtime(G),
+	/// The genesis storage as raw data.
 	Raw(RawGenesis),
 	/// State root hash of the genesis storage.
 	StateRootHash(StorageData),
-	/// Full runtime genesis config.
+	/// Represents the full runtime genesis config in JSON format.
+    /// The contained object is a JSON blob that can be parsed by a compatible runtime.
 	RuntimeGenesisConfig(json::Value),
-	/// Patch for default runtime genesis config.
+	/// Represents a patch for the default runtime genesis config in JSON format.
+	/// The contained value is a JSON object that can be parsed by a compatible runtime.
 	RuntimeGenesisConfigPatch(json::Value),
 }
 
@@ -281,7 +262,7 @@ pub struct ChainSpecBuilder<G, E = NoExtension> {
 }
 
 impl<G, E> ChainSpecBuilder<G, E> {
-	/// Creates new builder instance with no defaults.
+	/// Creates a new builder instance with no defaults.
 	pub fn new() -> Self {
 		Self {
 			name: None,
@@ -299,19 +280,19 @@ impl<G, E> ChainSpecBuilder<G, E> {
 		}
 	}
 
-	/// Sets spec name. Must be called.
+	/// Sets the spec name. This method must be called.
 	pub fn with_name(mut self, name: &str) -> Self {
 		self.name = Some(name.into());
 		self
 	}
 
-	/// Sets spec id. Must be called.
+	/// Sets the spec ID. This method must be called.
 	pub fn with_id(mut self, id: &str) -> Self {
 		self.id = Some(id.into());
 		self
 	}
 
-	/// Sets type of the chain. Must be called.
+	/// Sets the type of the chain. This method must be called.
 	pub fn with_chain_type(mut self, chain_type: ChainType) -> Self {
 		self.chain_type = Some(chain_type);
 		self
@@ -329,31 +310,31 @@ impl<G, E> ChainSpecBuilder<G, E> {
 		self
 	}
 
-	/// Sets network protocol id.
+	/// Sets the network protocol ID.
 	pub fn with_protocol_id(mut self, protocol_id: &str) -> Self {
 		self.protocol_id = Some(protocol_id.into());
 		self
 	}
 
-	/// Sets optional network fork identifier.
+	/// Sets an optional network fork identifier.
 	pub fn with_fork_id(mut self, fork_id: &str) -> Self {
 		self.fork_id = Some(fork_id.into());
 		self
 	}
 
-	/// Sets additional loosly-typed properties of the chain.
+	/// Sets additional loosely-typed properties of the chain.
 	pub fn with_properties(mut self, properties: Properties) -> Self {
 		self.properties = Some(properties);
 		self
 	}
 
-	/// Sets chain spec extensions. Must be called.
+	/// Sets chain spec extensions. This method must be called.
 	pub fn with_extensions(mut self, extensions: E) -> Self {
 		self.extensions = Some(extensions);
 		self
 	}
 
-	/// Sets the code. Must be called.
+	/// Sets the code. This method must be called.
 	pub fn with_code(mut self, code: &[u8]) -> Self {
 		self.code = Some(code.into());
 		self
@@ -371,7 +352,7 @@ impl<G, E> ChainSpecBuilder<G, E> {
 		self
 	}
 
-	/// Builds the [`ChainSpec`] instance using provided settings
+	/// Builds a [`ChainSpec`] instance using the provided settings.
 	pub fn build(self) -> ChainSpec<G, E> {
 		let client_spec = ClientSpec {
 			name: self.name.expect("with_name must be called."),
@@ -528,6 +509,7 @@ impl<G, E> ChainSpec<G, E> {
 	}
 }
 
+/// Helper structure for deserializing optional `code` attribute from JSON file.
 #[derive(Serialize, Deserialize)]
 struct CodeContainer {
 	#[serde(default, with = "sp_core::bytes")]
@@ -571,6 +553,8 @@ impl<G: serde::de::DeserializeOwned, E: serde::de::DeserializeOwned> ChainSpec<G
 	}
 }
 
+/// Helper structure for serializing (and only serializing) the ChainSpec into JSON file. It
+/// represents the layout of `ChainSpec` JSON file.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ChainSpecJsonContainer<G, E> {
@@ -621,7 +605,12 @@ impl<G: RuntimeGenesis, E: serde::Serialize + Clone + 'static> ChainSpec<G, E> {
 		})
 	}
 
-	/// Dump to json string.
+	/// Dump the configuration to JSON string.
+	///
+	/// During conversion to `raw` format, the `ChainSpec::code` field will be removed and placed into `RawGenesis` as
+	/// `genesis::top::raw::0x3a636f6465` (which is [`sp_core::storage::well_known_keys::CODE`]). If the spec is already
+	/// in `raw` format, and contains `genesis::top::raw::0x3a636f6465` field it will be updated with content of `code`
+	/// field.
 	pub fn as_json(&self, raw: bool) -> Result<String, String> {
 		let container = self.json_container(raw)?;
 		json::to_string_pretty(&container).map_err(|e| format!("Error generating spec json: {}", e))

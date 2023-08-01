@@ -16,12 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-///! Helper for calling GenesisBuilder API from arbitrary wasm blob.
-use std::borrow::Cow;
+//! A helper module for calling the GenesisBuilder API from arbitrary runtime wasm blobs.
 
 use codec::{Decode, Encode};
 use sc_executor::{error::Result, WasmExecutor};
-// use sc_executor_common::runtime_blob::RuntimeBlob;
 use serde_json::{from_slice, Value};
 use sp_core::{
 	storage::Storage,
@@ -29,8 +27,9 @@ use sp_core::{
 };
 use sp_genesis_builder::Result as BuildResult;
 use sp_state_machine::BasicExternalities;
+use std::borrow::Cow;
 
-/// Util that allows to call GenesisBuilder API from the runtime wasm code blob.
+/// A utility that facilitates calling the GenesisBuilder API from the runtime wasm code blob.
 pub struct GenesisConfigBuilderRuntimeCaller<'a> {
 	code: Cow<'a, [u8]>,
 	code_hash: Vec<u8>,
@@ -44,7 +43,7 @@ impl<'a> FetchRuntimeCode for GenesisConfigBuilderRuntimeCaller<'a> {
 }
 
 impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
-	/// Creates new instance using provided code blob.
+	/// Creates new instance using the provided code blob.
 	pub fn new(code: &'a [u8]) -> Self {
 		GenesisConfigBuilderRuntimeCaller {
 			code: code.into(),
@@ -124,6 +123,7 @@ impl<'a> GenesisConfigBuilderRuntimeCaller<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use serde_json::{from_str, json};
 	pub use sp_consensus_babe::{AllowedSlots, BabeEpochConfiguration, Slot};
 
 	#[test]
@@ -134,14 +134,14 @@ mod tests {
 				.get_default_config()
 				.unwrap();
 		let expected = r#"{"system":{},"babe":{"authorities":[],"epochConfig":null},"substrateTest":{"authorities":[]},"balances":{"balances":[]}}"#;
-		assert_eq!(serde_json::from_str::<Value>(expected).unwrap(), config);
+		assert_eq!(from_str::<Value>(expected).unwrap(), config);
 	}
 
 	#[test]
 	fn get_storage_for_patch_works() {
 		sp_tracing::try_init_simple();
 
-		let patch = serde_json::json!({
+		let patch = json!({
 			"babe": {
 				"epochConfig": {
 					"c": [
