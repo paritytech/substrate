@@ -300,6 +300,22 @@ impl<T: Config> CodeInfo<T> {
 	pub fn refcount(&self) -> u64 {
 		self.refcount
 	}
+
+	#[cfg(test)]
+	pub fn new(owner: T::AccountId) -> Self {
+		CodeInfo {
+			owner,
+			deposit: Default::default(),
+			refcount: 0,
+			code_len: 0,
+			determinism: Determinism::Enforced,
+		}
+	}
+
+	/// Returns the deposit of the module.
+	pub fn deposit(&self) -> BalanceOf<T> {
+		self.deposit
+	}
 }
 
 impl<T: Config> Executable<T> for WasmBlob<T> {
@@ -396,6 +412,10 @@ impl<T: Config> Executable<T> for WasmBlob<T> {
 		&self.code_hash
 	}
 
+	fn code_info(&self) -> &CodeInfo<T> {
+		&self.code_info
+	}
+
 	fn code_len(&self) -> u32 {
 		self.code.len() as u32
 	}
@@ -427,7 +447,10 @@ mod tests {
 	use std::{
 		borrow::BorrowMut,
 		cell::RefCell,
-		collections::hash_map::{Entry, HashMap},
+		collections::{
+			hash_map::{Entry, HashMap},
+			HashSet,
+		},
 	};
 
 	#[derive(Debug, PartialEq, Eq)]
@@ -481,6 +504,7 @@ mod tests {
 		sr25519_verify: RefCell<Vec<([u8; 64], Vec<u8>, [u8; 32])>>,
 		code_hashes: Vec<CodeHash<Test>>,
 		caller: Origin<Test>,
+		delegate_dependencies: RefCell<HashSet<CodeHash<Test>>>,
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
@@ -506,6 +530,7 @@ mod tests {
 				ecdsa_recover: Default::default(),
 				caller: Default::default(),
 				sr25519_verify: Default::default(),
+				delegate_dependencies: Default::default(),
 			}
 		}
 	}
@@ -690,6 +715,22 @@ mod tests {
 		}
 		fn nonce(&mut self) -> u64 {
 			995
+		}
+
+		fn add_delegate_dependency(
+			&mut self,
+			code: CodeHash<Self::T>,
+		) -> Result<(), DispatchError> {
+			self.delegate_dependencies.borrow_mut().insert(code);
+			Ok(())
+		}
+
+		fn remove_delegate_dependency(
+			&mut self,
+			code: &CodeHash<Self::T>,
+		) -> Result<(), DispatchError> {
+			self.delegate_dependencies.borrow_mut().remove(code);
+			Ok(())
 		}
 	}
 
@@ -3316,5 +3357,40 @@ mod tests {
 			execute(CODE_RANDOM_3, vec![], MockExt::default()),
 			<Error<Test>>::CodeRejected,
 		);
+	}
+
+	#[test]
+	fn add_remove_delegate_dependency() {
+		const CODE_ADD_REMOVE_DELEGATE_DEPENDENCY: &str = r#"
+(module
+	(import "seal0" "add_delegate_dependency" (func $add_delegate_dependency (param i32)))
+	(import "seal0" "remove_delegate_dependency" (func $remove_delegate_dependency (param i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(call $add_delegate_dependency (i32.const 0))
+		(call $add_delegate_dependency (i32.const 32))
+		(call $remove_delegate_dependency (i32.const 32))
+	)
+	(func (export "deploy"))
+
+	;;  hash1 (32 bytes)
+	(data (i32.const 0)
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+		"\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01\01"
+	)
+
+	;;  hash2 (32 bytes)
+	(data (i32.const 32)
+		"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+		"\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02\02"
+	)
+)
+"#;
+		let mut mock_ext = MockExt::default();
+		assert_ok!(execute(&CODE_ADD_REMOVE_DELEGATE_DEPENDENCY, vec![], &mut mock_ext));
+		let delegate_dependencies: Vec<_> =
+			mock_ext.delegate_dependencies.into_inner().into_iter().collect();
+		assert_eq!(delegate_dependencies.len(), 1);
+		assert_eq!(delegate_dependencies[0].as_bytes(), [1; 32]);
 	}
 }
