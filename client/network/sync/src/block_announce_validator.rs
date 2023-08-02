@@ -306,23 +306,16 @@ impl<B: BlockT> Stream for BlockAnnounceValidator<B> {
 			// Wait for wake-up event if we are in a waiting state after `self.validations`
 			// was deplenished.
 			if let Some(listener) = self.event_listener.as_mut() {
-				match listener.poll_unpin(cx) {
-					Poll::Ready(()) => self.event_listener = None,
-					Poll::Pending => return Poll::Pending,
-				}
+				let () = futures::ready!(listener.poll_unpin(cx));
+				self.event_listener = None;
 			}
 
 			loop {
-				match self.validations.poll_next_unpin(cx) {
-					Poll::Ready(Some(validation)) => {
-						self.event_listener = None;
+				if let Some(validation) = futures::ready!(self.validations.poll_next_unpin(cx)) {
+					self.event_listener = None;
+					self.deallocate_slot_for_block_announce_validation(validation.peer_id());
 
-						self.deallocate_slot_for_block_announce_validation(validation.peer_id());
-
-						return Poll::Ready(Some(validation))
-					},
-					Poll::Ready(None) => {},
-					Poll::Pending => return Poll::Pending,
+					return Poll::Ready(Some(validation))
 				}
 
 				// `self.validations` was deplenished, start/continue waiting for a wake-up event.
