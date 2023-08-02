@@ -177,8 +177,8 @@ impl<T: Config> StakingLedger<T> {
 	///
 	/// Note: it will fallback into querying the [`Bonded`] storage with the ledger stash if the
 	/// controller is not set in `self`, which most likely means that self was fetched directly from
-	/// [`Ledger`] instead of through the methods exposed in [`StakingLedger`]. If the ledger does not
-	/// exist in storage, it returns `None`.
+	/// [`Ledger`] instead of through the methods exposed in [`StakingLedger`]. If the ledger does
+	/// not exist in storage, it returns `None`.
 	pub(crate) fn controller(&self) -> Option<T::AccountId> {
 		self.controller
 			.clone()
@@ -241,8 +241,7 @@ impl<T: Config> StakingLedger<T> {
 				BalanceOf<T>,
 			>>::on_validator_remove(stash),
 			StakerStatus::Nominator(_) => {
-				let nominations =
-					crate::Pallet::<T>::nominators(stash).unwrap_or_default().targets.into();
+				let nominations = crate::Pallet::<T>::nominations(stash).unwrap_or_default();
 
 				<T::EventListeners as OnStakingUpdate<
 				T::AccountId,

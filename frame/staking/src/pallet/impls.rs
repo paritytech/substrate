@@ -900,13 +900,21 @@ impl<T: Config> Pallet<T> {
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
 		if !Nominators::<T>::contains_key(who) {
-			// maybe update sorted list.
+			// new nominator.
 			<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_nominator_add(
 				who,
 			);
-		}
+			Nominators::<T>::insert(who, nominations);
+		} else {
+			// update nominations.
+			let prev_nominations = Self::nominations(who).unwrap_or_default();
+			Nominators::<T>::insert(who, nominations);
 
-		Nominators::<T>::insert(who, nominations);
+			<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_nominator_update(
+				who,
+				prev_nominations,
+			);
+		}
 
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
@@ -976,7 +984,7 @@ impl<T: Config> Pallet<T> {
 			<T::EventListeners as OnStakingUpdate<T::AccountId, BalanceOf<T>>>::on_validator_remove(
 				who,
 			);
-            Validators::<T>::remove(who);
+			Validators::<T>::remove(who);
 			true
 		} else {
 			false

@@ -121,23 +121,23 @@ fn force_unstake_works() {
 #[test]
 fn kill_stash_works() {
 	ExtBuilder::default().build_and_execute(|| {
-        println!("-- 1");
+		println!("-- 1");
 		// Account 11 (also controller) is stashed and locked
 		assert_eq!(Staking::bonded(&11), Some(11));
 		// Adds 2 slashing spans
-        println!("-- 2");
+		println!("-- 2");
 		add_slash(&11);
 		// Only can kill a stash account
-        println!("-- 3");
+		println!("-- 3");
 		assert_noop!(Staking::kill_stash(&12, 0), Error::<Test>::NotStash);
 		// Respects slashing span count
-        println!("-- 4");
+		println!("-- 4");
 		assert_noop!(Staking::kill_stash(&11, 0), Error::<Test>::IncorrectSlashingSpans);
 		// Correct inputs, everything works
-        println!("-- 5");
+		println!("-- 5");
 		assert_ok!(Staking::kill_stash(&11, 2));
 		// No longer bonded.
-        println!("-- 6");
+		println!("-- 6");
 		assert_eq!(Staking::bonded(&11), None);
 	});
 }
