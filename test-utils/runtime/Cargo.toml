@@ -104,6 +104,9 @@ std = [
 	"sp-transaction-pool/std",
 	"trie-db/std",
 	"substrate-wasm-builder",
+	"frame-executive/std",
+	"sc-executor/std",
+	"sp-tracing/std"
 ]
 # Special feature to disable logging
 disable-logging = [ "sp-api/disable-logging" ]

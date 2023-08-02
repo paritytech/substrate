@@ -10635,11 +10635,11 @@ dependencies = [
  "sp-application-crypto",
  "sp-core",
  "sp-io",
- "sp-keystore",
  "sp-mmr-primitives",
  "sp-runtime",
  "sp-std",
  "strum",
+ "w3f-bls",
 ]
 
 [[package]]
@@ -10696,7 +10696,6 @@ dependencies = [
  "futures",
  "hash-db",
  "hash256-std-hasher",
- "hex-literal",
  "impl-serde",
  "lazy_static",
  "libsecp256k1",

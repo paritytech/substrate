@@ -115,6 +115,7 @@ try-runtime = [
 	"pallet-template/try-runtime",
 	"pallet-timestamp/try-runtime",
 	"pallet-transaction-payment/try-runtime",
+	"sp-runtime/try-runtime"
 ]
 
 #Enabling this flag will disable GenesisBuilder API implementation in runtime.

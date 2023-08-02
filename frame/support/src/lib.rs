@@ -1660,9 +1660,14 @@ pub mod pallet_prelude {
 ///   default, dev mode pallets will assume a weight of zero (`0`) if a weight is not
 ///   specified. This is equivalent to specifying `#[weight(0)]` on all calls that do not
 ///   specify a weight.
+/// * Call indices no longer need to be specified on every `#[pallet::call]` declaration. By
+///   default, dev mode pallets will assume a call index based on the order of the call.
 /// * All storages are marked as unbounded, meaning you do not need to implement
 ///   `MaxEncodedLen` on storage types. This is equivalent to specifying `#[pallet::unbounded]`
 ///   on all storage type definitions.
+/// * Storage hashers no longer need to be specified and can be replaced by `_`. In dev mode,
+///   these will be replaced by `Blake2_128Concat`. In case of explicit key-binding, `Hasher`
+///   can simply be ignored when in `dev_mode`.
 ///
 /// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
 /// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
