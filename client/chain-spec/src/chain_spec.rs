@@ -189,8 +189,8 @@ impl From<sp_core::storage::Storage> for RawGenesis {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 enum Genesis<G> {
-	/// [Deprecated] Contains the JSON representation of G (the native type representing the runtime
-	/// GenesisConfig struct) (will be removed with `ChainSpec::from_genesis`).
+	/// [Deprecated] Contains the JSON representation of G (the native type representing the
+	/// runtime GenesisConfig struct) (will be removed with `ChainSpec::from_genesis`).
 	Runtime(G),
 	/// The genesis storage as raw data.
 	Raw(RawGenesis),
